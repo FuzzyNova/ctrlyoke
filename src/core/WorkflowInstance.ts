@@ -55,10 +55,8 @@ import {
   COMPARE_SOURCES,
   CONDITION_ACTIONS,
   DEFAULT_WORKFLOW_NAME,
-  CLI_EVENT_TYPES,
   FINAL_STEP_PHASES,
   MESSAGE_TYPES,
-  OUTPUT_ACTIVITY_KINDS,
   OUTPUT_HISTORY_KINDS,
   PARALLEL_GROUP_ADMISSION,
   getEffectiveParallelGroupWidth,
@@ -93,8 +91,6 @@ import { WorkflowTaggedSink } from "./WorkflowTaggedSink";
 import type {
   CliEvent,
   CliOutput,
-  ContextWindowSyncData,
-  FollowUpResumedData,
   TerminalStartedMessage,
 } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
@@ -149,9 +145,9 @@ import {
   OutputHistoryManager,
   type DefinitionRevisionContext,
 } from "./orchestration/OutputHistoryManager";
-import { getCliEntryKey } from "./orchestration/OutputHistoryTimelineAdapter";
 import { StatusMessageReporter } from "./orchestration/StatusMessageReporter";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
+import { SessionActivityRecorder } from "./orchestration/SessionActivityRecorder";
 import type { PendingParallelGroupRange } from "./ParallelGroupTopology";
 import { IntegrationFactory } from "./IntegrationFactory";
 import { HarnessCapabilityRegistry } from "./HarnessCapabilityRegistry";
@@ -169,11 +165,7 @@ import type { CompatibilityDiagnostic } from "../types/CompatibilityTypes";
 import type { ResolvedProperties } from "../types/ExecutionPropertyTypes";
 import { spawnIdentityHash } from "../types/ExecutionSpawnIdentity";
 import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
-import type {
-  OutputActivityEntry,
-  OutputExecutionTarget,
-  UndoExecutionTarget,
-} from "../types/OutputHistoryTypes";
+import type { OutputExecutionTarget, UndoExecutionTarget } from "../types/OutputHistoryTypes";
 import {
   OutputCaptureBuffer,
   type OutputCaptureCallbacks,
@@ -181,7 +173,6 @@ import {
   type PromptCompleteData,
 } from "./OutputCaptureBuffer";
 import { WorkflowStateMachine } from "./WorkflowStateMachine";
-import { extractTextFromEvents } from "./harness/shared/CliResponseTextExtractor";
 import { buildUsageSelectionWarning } from "./harness/shared/usage/UsageSelectionAssist";
 import {
   getPtyProcessManager,
@@ -328,58 +319,11 @@ export class WorkflowInstance {
 
   /** Per-workflow dashboard sink (wrapped with WorkflowTaggedSink to inject workflowId) */
   private readonly dashboardSink: IDashboardSink | undefined;
+  private readonly sessionActivityRecorder: SessionActivityRecorder;
   private readonly statusMessageReporter: StatusMessageReporter;
 
   /** Manages all output capture Maps and replay logic for background workflows. */
   private readonly outputCaptureBuffer: OutputCaptureBuffer;
-
-  /**
-   * Target/attempt of the most recently completed step's CliOutput — set every
-   * time `captureCompletedOutput`/`captureFinalStepCompletedOutput` fires.
-   * `SessionActivityWatcher`'s resumed activity has no target of its own (it
-   * fires outside any active dispatch), so it is attributed here instead.
-   */
-  private readonly activityIntegrationIds = new WeakMap<
-    HarnessIntegration,
-    string
-  >();
-  private nextActivityIntegrationId = 1;
-  private readonly completedActivityTargets = new Map<
-    string,
-    {
-      target: OutputExecutionTarget;
-      runIndex: number;
-      attemptIndex: number;
-    }
-  >();
-  private readonly latestCompletedActivityBySession = new Map<
-    string,
-    {
-      target: OutputExecutionTarget;
-      runIndex: number;
-      attemptIndex: number;
-    }
-  >();
-  /** Compatibility bridge for callers that do not yet supply integration identity. */
-  private legacyCompletedActivityTarget?: {
-    target: OutputExecutionTarget;
-    runIndex: number;
-    attemptIndex: number;
-  };
-  /** @deprecated Kept only for older in-process callers during target migration. */
-  private lastCompletedActivityTarget?: {
-    target: OutputExecutionTarget;
-    runIndex: number;
-    attemptIndex: number;
-  };
-  /** Events that arrive in the monitor-to-session-watcher handoff window. */
-  private readonly pendingSessionActivityEvents = new Map<string, CliEvent[]>();
-  /** Per-attempt tail of follow-up persistence; see `enqueueFollowUpPersist`. */
-  private readonly followUpPersistQueue = new Map<string, Promise<void>>();
-  private readonly pendingSessionActivityIntegrations = new Map<
-    string,
-    { integration: HarnessIntegration; sessionId: string | undefined }
-  >();
 
   // ─────────────────────────────────────────────────────────────────────────
   // Orchestration helpers
@@ -622,6 +566,14 @@ export class WorkflowInstance {
     this.executionWorkspaceIdentity =
       getExecutionWorkspaceIdentity(executionWorkspace);
     this.outputHistoryManager = new OutputHistoryManager(resolvedWorkspacePath);
+    this.sessionActivityRecorder = new SessionActivityRecorder({
+      id: this.id,
+      dashboardSink: this.dashboardSink,
+      promptQueue: this.promptQueue,
+      outputHistoryManager: this.outputHistoryManager,
+      resolveHistoryFilePath: () => this.resolveHistoryFilePath(),
+      getDefinitionRevisionContext: () => this.getDefinitionRevisionContext(),
+    });
     this.outputHistoryManager.setOutputActivityHandler((entry) =>
       this.publishOutputActivity(entry)
     );
@@ -3772,44 +3724,7 @@ export class WorkflowInstance {
   /** Clear all output capture buffers — called at the start of a fresh (non-continuation) run. */
   private clearOutputBuffers(): void {
     this.outputCaptureBuffer.clear();
-    this.completedActivityTargets.clear();
-    this.latestCompletedActivityBySession.clear();
-    this.legacyCompletedActivityTarget = undefined;
-    this.lastCompletedActivityTarget = undefined;
-    this.pendingSessionActivityEvents.clear();
-    this.pendingSessionActivityIntegrations.clear();
-    this.followUpPersistQueue.clear();
-  }
-
-  private getActivityIntegrationId(integration?: HarnessIntegration): string {
-    if (!integration) {
-      return "legacy";
-    }
-    let id = this.activityIntegrationIds.get(integration);
-    if (!id) {
-      id = `integration:${this.nextActivityIntegrationId++}`;
-      this.activityIntegrationIds.set(integration, id);
-    }
-    return id;
-  }
-
-  private getActivitySessionKey(
-    integration: HarnessIntegration | undefined,
-    sessionId: string | undefined
-  ): string {
-    return `${this.getActivityIntegrationId(integration)}:${sessionId ?? "unknown"}`;
-  }
-
-  private getActivityTargetKey(
-    integration: HarnessIntegration,
-    sessionId: string | undefined,
-    target: OutputExecutionTarget
-  ): string {
-    const targetKey =
-      target.kind === FINAL_STEP_PHASES.QUEUE
-        ? `queue:${target.stepIndex}`
-        : `final:${target.loopIndex}`;
-    return `${this.getActivitySessionKey(integration, sessionId)}:${targetKey}`;
+    this.sessionActivityRecorder.clear();
   }
 
   private recordCompletedActivityTarget(
@@ -3818,389 +3733,43 @@ export class WorkflowInstance {
     attemptIndex: number,
     integration?: HarnessIntegration
   ): void {
-    const activity = { target, runIndex, attemptIndex };
-    if (!integration) {
-      this.legacyCompletedActivityTarget = activity;
-      this.lastCompletedActivityTarget = activity;
-      for (const [sessionKey, pendingEvents] of this
-        .pendingSessionActivityEvents) {
-        const pendingIntegration =
-          this.pendingSessionActivityIntegrations.get(sessionKey);
-        if (pendingIntegration) {
-          this.pendingSessionActivityEvents.delete(sessionKey);
-          this.pendingSessionActivityIntegrations.delete(sessionKey);
-          void this.handleSessionActivityResumed(
-            pendingEvents,
-            pendingIntegration.integration,
-            pendingIntegration.sessionId
-          );
-        }
-      }
-      return;
-    }
-    const sessionId = integration.getActivitySessionId();
-    const sessionKey = this.getActivitySessionKey(integration, sessionId);
-    this.completedActivityTargets.set(
-      this.getActivityTargetKey(integration, sessionId, target),
-      activity
-    );
-    this.latestCompletedActivityBySession.set(sessionKey, activity);
-    const pendingEvents = this.pendingSessionActivityEvents.get(sessionKey);
-    if (!pendingEvents || pendingEvents.length === 0) {
-      return;
-    }
-    this.pendingSessionActivityEvents.delete(sessionKey);
-    void this.handleSessionActivityResumed(
-      pendingEvents,
-      integration,
-      sessionId
+    this.sessionActivityRecorder.recordCompletedActivityTarget(
+      target,
+      runIndex,
+      attemptIndex,
+      integration
     );
   }
 
   private beginActivityTargetCapture(
     integration?: HarnessIntegration,
-    _target?: WorkflowAttemptTarget
+    target?: WorkflowAttemptTarget
   ): void {
-    // The completed target remains addressable until its watcher emits or the
-    // integration is retired. Do not clear siblings when another target starts.
-    if (integration) {
-      this.getActivityIntegrationId(integration);
-    } else {
-      this.legacyCompletedActivityTarget = undefined;
-      this.lastCompletedActivityTarget = undefined;
-      this.pendingSessionActivityEvents.clear();
-      this.pendingSessionActivityIntegrations.clear();
-    }
+    this.sessionActivityRecorder.beginActivityTargetCapture(integration, target);
   }
 
   private getExecutionTargetRunKey(
     target: OutputExecutionTarget | WorkflowAttemptTarget
-  ): `queue:${number}` | `final:${number}` {
-    return target.kind === FINAL_STEP_PHASES.QUEUE
-      ? `queue:${target.stepIndex}`
-      : `final:${target.loopIndex}`;
+  ): ReturnType<SessionActivityRecorder["getExecutionTargetRunKey"]> {
+    return this.sessionActivityRecorder.getExecutionTargetRunKey(target);
   }
 
-  /**
-   * Handle activity observed by `SessionActivityWatcher` after a step's own
-   * dispatch already completed — a harness auto-resuming a backgrounded task,
-   * or a human typing directly into the live TUI. Display-only: forwards to
-   * the live dashboard immediately, then merges into the already-persisted
-   * history entry for the most recently completed step/attempt. Never touches
-   * workflow/queue state.
-   */
   private async handleSessionActivityResumed(
     events: CliEvent[],
     integration?: HarnessIntegration,
     sessionId?: string
   ): Promise<void> {
-    if (events.length === 0) {
-      return;
-    }
-    const sessionKey = this.getActivitySessionKey(integration, sessionId);
-    const activityTarget =
-      this.latestCompletedActivityBySession.get(sessionKey) ??
-      this.legacyCompletedActivityTarget ??
-      this.lastCompletedActivityTarget;
-    if (!activityTarget) {
-      Log.trace(
-        `[inst:${this.id.slice(0, 8)}] Session activity resumed before completed step attribution — buffering`
-      );
-      const pending = this.pendingSessionActivityEvents.get(sessionKey) ?? [];
-      pending.push(...events);
-      this.pendingSessionActivityEvents.set(sessionKey, pending);
-      if (integration) {
-        this.pendingSessionActivityIntegrations.set(sessionKey, {
-          integration,
-          sessionId,
-        });
-      }
-      return;
-    }
-    const { target, runIndex, attemptIndex } = activityTarget;
-
-    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-      this.dashboardSink?.updateCliStreamingEvents(
-        target.stepIndex,
-        events,
-        attemptIndex,
-        runIndex,
-        this.id
-      );
-    } else {
-      this.dashboardSink?.updateFinalStepStreamingEvents(
-        target.loopIndex,
-        events,
-        attemptIndex,
-        runIndex,
-        this.id
-      );
-    }
-
-    // CONTEXT_WINDOW_SYNC is an invisible marker (see CliIntegration.
-    // resumeSessionActivityWatcher) — pull its data out for the tokens/footer
-    // refresh below rather than merging it into the visible event stream.
-    const contentEvents = events.filter(
-      (event) => event.type !== CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC
-    );
-
-    const followUpText = extractTextFromEvents({ events: contentEvents });
-    const latestContextWindowSync = [...events]
-      .reverse()
-      .find((event) => event.type === CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC)
-      ?.data as ContextWindowSyncData | undefined;
-
-    await this.enqueueFollowUpPersist(target, runIndex, attemptIndex, () =>
-      this.persistResumedSessionActivity(
-        target,
-        runIndex,
-        attemptIndex,
-        contentEvents,
-        followUpText,
-        latestContextWindowSync
-          ? {
-              used: latestContextWindowSync.used,
-              size: latestContextWindowSync.size,
-            }
-          : undefined
-      )
+    return this.sessionActivityRecorder.handleSessionActivityResumed(
+      events,
+      integration,
+      sessionId
     );
   }
 
-  /**
-   * Serialize one attempt's follow-up persistence.
-   * `handleSessionActivityResumed` is invoked fire-and-forget from watcher
-   * callbacks, and `persistResumedSessionActivity` is a read-modify-write over
-   * the attempt's stored aggregate (resolve -> merge -> save) with awaits in
-   * between. Overlapping bursts would each merge onto the *pre-burst*
-   * aggregate, so the later save would drop the earlier burst's events —
-   * observed as a follow-up's closing message missing from the newest
-   * `cliOutputRecorded` while an earlier one still had it.
-   */
-  private enqueueFollowUpPersist(
-    target: OutputExecutionTarget,
-    runIndex: number,
-    attemptIndex: number,
-    work: () => Promise<void>
-  ): Promise<void> {
-    const key = getCliEntryKey(target, runIndex, attemptIndex);
-    const tail = (this.followUpPersistQueue.get(key) ?? Promise.resolve()).then(
-      work
-    );
-    // The stored tail never rejects, so one failed burst cannot poison the
-    // chain for the bursts queued behind it.
-    const guarded = tail.catch(() => undefined);
-    this.followUpPersistQueue.set(key, guarded);
-    void guarded.then(() => {
-      if (this.followUpPersistQueue.get(key) === guarded) {
-        this.followUpPersistQueue.delete(key);
-      }
-    });
-    return tail;
-  }
-
-  /**
-   * Persist one follow-up burst: the timeline activity batch the output pane
-   * replays on reload, the mutable working-file response text, and the merged
-   * attempt aggregate. Always runs inside `enqueueFollowUpPersist`.
-   */
-  private async persistResumedSessionActivity(
-    target: OutputExecutionTarget,
-    runIndex: number,
-    attemptIndex: number,
-    contentEvents: CliEvent[],
-    followUpText: string,
-    contextWindow: { used: number; size: number } | undefined
-  ): Promise<void> {
-    const historyFilePath = this.resolveHistoryFilePath();
-
-    // The stored aggregate decides whether this burst opens with the one-time
-    // follow-up divider, so it has to be read before anything is written.
-    let existingOutput: CliOutput | undefined;
-    if (historyFilePath) {
-      try {
-        existingOutput = (
-          await this.outputHistoryManager
-            .getRunOutputResolver()
-            .resolveAttempt(historyFilePath, target, runIndex, attemptIndex)
-        )?.output;
-      } catch (error) {
-        Log.warn(
-          `[inst:${this.id.slice(0, 8)}] Failed to resolve attempt for resumed session activity:`,
-          error
-        );
-      }
-    }
-
-    const existingEvents = existingOutput?.structured?.events ?? [];
-    const hasFollowUpDivider = existingEvents.some(
-      (event) => event.type === CLI_EVENT_TYPES.FOLLOW_UP_RESUMED
-    );
-    // Insert the divider at most once per step/attempt/run — it marks the
-    // boundary between the step's original output and its follow-up activity,
-    // so later batches from the same follow-up burst just append past it. With
-    // no stored aggregate there is nothing to divide from, matching the live
-    // store's `computeStreamingEventsToMerge`.
-    const eventsToAppend: CliEvent[] =
-      contentEvents.length > 0 && existingOutput && !hasFollowUpDivider
-        ? [
-            {
-              type: CLI_EVENT_TYPES.FOLLOW_UP_RESUMED,
-              timestamp: Date.now(),
-              data: { resumedAt: Date.now() } as FollowUpResumedData,
-            },
-            ...contentEvents,
-          ]
-        : contentEvents;
-
-    // Follow-up output is persisted to the timeline before it enters the small
-    // active-only cache. Prior-context consumers always resolve the timeline.
-    // `eventsToAppend` — not `contentEvents` — is what gets recorded, so the
-    // activity entries a history load replays carry the same divider the
-    // aggregate merge below does.
-    if (historyFilePath) {
-      try {
-        await this.outputHistoryManager.recordFollowUpResponse(
-          historyFilePath,
-          target,
-          runIndex,
-          attemptIndex,
-          followUpText,
-          eventsToAppend,
-          contextWindow,
-          this.getDefinitionRevisionContext()
-        );
-      } catch (error) {
-        Log.warn(
-          `[inst:${this.id.slice(0, 8)}] Failed to persist resumed session activity event:`,
-          error
-        );
-      }
-    }
-    if (followUpText) {
-      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-        this.promptQueue.appendPromptResponseText(
-          target.stepIndex,
-          followUpText
-        );
-      } else {
-        this.promptQueue.appendFinalStepResponseText(
-          target.loopIndex,
-          followUpText
-        );
-      }
-    }
-
-    if (!historyFilePath || !existingOutput) {
-      return;
-    }
-    try {
-      const merged: CliOutput = {
-        ...existingOutput,
-        // Mirror PromptQueue.appendPromptResponseText's concatenation so the
-        // persisted timeline response (read by prior-context resolution, see
-        // RunOutputResolver.resolvePriorContextItems) stays in sync with the
-        // mutable working-file cache — otherwise $previous/$all/$step:N
-        // silently drop follow-up activity that fired after the step's Stop
-        // hook but before the next step read prior context.
-        response: existingOutput.response + followUpText,
-        structured: existingOutput.structured
-          ? {
-              ...existingOutput.structured,
-              events: [...existingEvents, ...eventsToAppend],
-            }
-          : undefined,
-        tokens:
-          contextWindow && existingOutput.tokens
-            ? {
-                ...existingOutput.tokens,
-                contextWindowUsed: contextWindow.used,
-                contextWindowSize: contextWindow.size,
-              }
-            : existingOutput.tokens,
-        // timestampMs is the attempt's *start* time (see WorkflowExecutor's
-        // finalization), so re-deriving elapsed from it naturally folds in
-        // follow-up time without needing a separately tracked baseline.
-        elapsed:
-          existingOutput.timestampMs != null
-            ? (Date.now() - existingOutput.timestampMs) / 1000
-            : existingOutput.elapsed,
-      };
-      await this.outputHistoryManager.saveExecutionOutput(
-        historyFilePath,
-        target,
-        [merged],
-        this.getDefinitionRevisionContext()
-      );
-    } catch (error) {
-      Log.warn(
-        `[inst:${this.id.slice(0, 8)}] Failed to persist resumed session activity to history:`,
-        error
-      );
-    }
-  }
-
-  private publishOutputActivity(entry: OutputActivityEntry): void {
-    if (!this.dashboardSink) {
-      return;
-    }
-
-    if (entry.target.kind === FINAL_STEP_PHASES.QUEUE) {
-      if (entry.kind === OUTPUT_ACTIVITY_KINDS.TEXT) {
-        this.dashboardSink.updateCliStreamingChunk(
-          entry.target.stepIndex,
-          entry.text ?? "",
-          entry.phase,
-          this.id,
-          entry.timestampMs,
-          entry.sequence,
-          entry.attemptIndex,
-          entry.runIndex
-        );
-      } else if (
-        entry.kind === OUTPUT_ACTIVITY_KINDS.STRUCTURED &&
-        entry.events
-      ) {
-        this.dashboardSink.updateCliStreamingEvents(
-          entry.target.stepIndex,
-          entry.events,
-          entry.attemptIndex,
-          entry.runIndex,
-          this.id,
-          entry.phase,
-          entry.timestampMs,
-          entry.sequence
-        );
-      }
-      return;
-    }
-
-    if (entry.kind === OUTPUT_ACTIVITY_KINDS.TEXT) {
-      this.dashboardSink.updateFinalStepStreamingChunk(
-        entry.target.loopIndex,
-        entry.text ?? "",
-        entry.phase,
-        this.id,
-        entry.timestampMs,
-        entry.sequence,
-        entry.attemptIndex,
-        entry.runIndex
-      );
-    } else if (
-      entry.kind === OUTPUT_ACTIVITY_KINDS.STRUCTURED &&
-      entry.events
-    ) {
-      this.dashboardSink.updateFinalStepStreamingEvents(
-        entry.target.loopIndex,
-        entry.events,
-        entry.attemptIndex,
-        entry.runIndex,
-        this.id,
-        entry.phase,
-        entry.timestampMs,
-        entry.sequence
-      );
-    }
+  private publishOutputActivity(
+    entry: import("../types/OutputHistoryTypes").OutputActivityEntry
+  ): void {
+    this.sessionActivityRecorder.publishOutputActivity(entry);
   }
 
   private async computeTargetRunIndices(
@@ -5466,18 +5035,18 @@ export class WorkflowInstance {
     this.startStopRequestPolling();
   }
 
-  private startStopRequestPolling(): void {
-    this.stopStopRequestPolling();
-    this.stopRequestPollInterval = setInterval(() => {
-      void this.pollStopRequest();
-    }, 1_000);
-  }
-
   private stopStopRequestPolling(): void {
     if (this.stopRequestPollInterval !== undefined) {
       clearInterval(this.stopRequestPollInterval);
       this.stopRequestPollInterval = undefined;
     }
+  }
+
+  private startStopRequestPolling(): void {
+    this.stopStopRequestPolling();
+    this.stopRequestPollInterval = setInterval(() => {
+      void this.pollStopRequest();
+    }, 1_000);
   }
 
   private async pollStopRequest(): Promise<void> {
