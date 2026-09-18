@@ -4,10 +4,11 @@ import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { suite, test } from "mocha";
+import { ExternalRunWatchCoordinator } from "../../core/orchestration/ExternalRunWatchCoordinator";
 import { ExternalRunWatchSession } from "../../core/orchestration/ExternalRunWatchSession";
+import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
 import { PromptFileWatcher } from "../../core/orchestration/PromptFileWatcher";
 import { PromptQueue } from "../../core/PromptQueue";
-import { WorkflowOrchestrator } from "../../core/WorkflowOrchestrator";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { pathsEqual } from "../../utils/PathCasing";
@@ -443,7 +444,7 @@ suite("external watcher patterns", () => {
     const originalCreateFileSystemWatcher =
       vscode.workspace.createFileSystemWatcher;
     let pattern: vscode.RelativePattern | undefined;
-    let orchestrator: WorkflowOrchestrator | undefined;
+    let coordinator: ExternalRunWatchCoordinator | undefined;
 
     Object.defineProperty(vscode.workspace, "createFileSystemWatcher", {
       configurable: true,
@@ -454,22 +455,29 @@ suite("external watcher patterns", () => {
     });
 
     try {
-      orchestrator = Object.create(
-        WorkflowOrchestrator.prototype
-      ) as WorkflowOrchestrator;
-      (
-        orchestrator as unknown as {
-          fileWatcherFactory: VsCodeFileWatcherFactory;
-        }
-      ).fileWatcherFactory = new VsCodeFileWatcherFactory();
-      (
-        orchestrator as unknown as {
-          setupRunnerJsonCreateWatcher: (
-            workspacePath: string,
-            runsPath: string
-          ) => void;
-        }
-      ).setupRunnerJsonCreateWatcher(workspaceRoot, runsRoot);
+      coordinator = new ExternalRunWatchCoordinator({
+        broadcast: {
+          notifyWorkflowAdded: () => undefined,
+          notifyWorkflowDismissed: () => undefined,
+          notifyWorkflowSummaryUpdated: () => undefined,
+          notifyCliWatchOutput: () => undefined,
+          notifyCliPromptsExtended: () => undefined,
+          updateStepStatus: () => undefined,
+          updateSessionRestored: async () => undefined,
+        },
+        lineageRepository: {
+          listLineageKeys: async () => [],
+          pruneStaleStagingDirs: async () => undefined,
+        },
+        findInstanceForWorkingFile: () => [],
+        retireWorkflow: () => undefined,
+        workspaceRoot,
+        saveState: async () => undefined,
+        getOutputHistoryManager: () => new OutputHistoryManager(workspaceRoot),
+        runnerHostIdentity: observer,
+        fileWatcherFactory: new VsCodeFileWatcherFactory(),
+      });
+      coordinator.setupRunnerJsonCreateWatcher(workspaceRoot, runsRoot);
 
       assert.ok(pattern);
       assert.ok(
@@ -478,10 +486,10 @@ suite("external watcher patterns", () => {
       assert.strictEqual(pattern?.pattern, "*/runner.json");
     } finally {
       const pollInterval =
-        orchestrator === undefined
+        coordinator === undefined
           ? undefined
           : (
-              orchestrator as unknown as {
+              coordinator as unknown as {
                 runnerJsonDiscoveryPollInterval?: ReturnType<
                   typeof setInterval
                 >;

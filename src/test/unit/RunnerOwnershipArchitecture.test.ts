@@ -63,7 +63,7 @@ suite("runner ownership architecture", () => {
     );
     assert.deepStrictEqual(
       watchCallSites.map(toRepositoryPath),
-      ["src/core/WorkflowOrchestrator.ts"],
+      ["src/core/orchestration/ExternalRunWatchCoordinator.ts"],
       "external watch sessions must have one production construction boundary"
     );
 
@@ -80,12 +80,15 @@ suite("runner ownership architecture", () => {
       "external watch sessions must retain typed external-resolution proof"
     );
 
-    const orchestratorSource = fs.readFileSync(
-      path.join(REPOSITORY_ROOT, "src/core/WorkflowOrchestrator.ts"),
+    const coordinatorSource = fs.readFileSync(
+      path.join(
+        REPOSITORY_ROOT,
+        "src/core/orchestration/ExternalRunWatchCoordinator.ts"
+      ),
       "utf8"
     );
     assert.match(
-      orchestratorSource,
+      coordinatorSource,
       /new\s+ExternalRunWatchSession[\s\S]*?currentInspection/,
       "the watch construction must use the resolver's revalidated inspection"
     );

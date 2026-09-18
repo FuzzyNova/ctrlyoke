@@ -42,12 +42,8 @@ import {
 } from "../types/CtrlYokeTypes";
 import {
   ACTION_TYPES,
-  ACTIVE_EXECUTION_STATES,
-  EXTERNAL_EXECUTION_REASONS,
   EXTERNAL_EXECUTION_RESOLUTION_KINDS,
   HARNESS_IDS,
-  FINAL_STEP_PHASES,
-  OUTPUT_HISTORY_KINDS,
   MESSAGE_TYPES,
   PANEL_CLIENT_ID,
   RUNNER_IDS,
@@ -63,8 +59,6 @@ import {
   type HarnessId,
   type QueuePosition,
   type ActionType,
-  type StepStatus,
-  type FinalStepPhase,
   type WorktreeManagementAction,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../types/DashboardConstants";
@@ -73,13 +67,11 @@ import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
 import { WorkflowTaggedSink } from "./WorkflowTaggedSink";
 import type {
   DisposableRegistry,
-  FileWatcher,
   FileWatcherFactory,
   KeyValueStore,
   StatusBarSink,
 } from "./HostPorts";
 import type {
-  CliOutput,
   ActiveTerminalWorkflowRef,
   RunViewLoadedMessage,
   RunSummariesLoadedMessage,
@@ -96,26 +88,17 @@ import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
 import { clearRunSummaryCache } from "./orchestration/RunSummaryCache";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
-import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
-import {
-  ExternalRunWatchSession,
-  type ExternalRunWatchFinishReason,
-} from "./orchestration/ExternalRunWatchSession";
-import {
-  deriveStepStatusesFromRuntime,
-  type StepWithRuntimeStatus,
-} from "../utils/StepStatusDerivation";
 import {
   ExecutionRootCoordinationWatchSession,
   readCoordinationScopeSnapshot,
 } from "./orchestration/ExecutionRootCoordinationWatchSession";
+import type { ExternalExecutionResolution } from "./orchestration/ExternalExecutionResolver";
 import {
-  ExternalExecutionResolver,
-  type ActiveExternalLockInspection,
-  type ExternalExecutionResolution,
-} from "./orchestration/ExternalExecutionResolver";
+  ExternalRunWatchCoordinator,
+  type ExternalRunWatchInstance,
+} from "./orchestration/ExternalRunWatchCoordinator";
 import { readWorkflowLockOwnershipInspection } from "../utils/WorkflowLockInspector";
 import {
   deleteWorkflowStopRequest,
@@ -353,8 +336,9 @@ export interface WorkflowOrchestratorDependencies {
   userInteractionPort?: UserInteractionPort;
 }
 
-export type ResumableSession =
-  Awaited<ReturnType<WorkspaceSessionManager["discoverSessions"]>>[number];
+export type ResumableSession = Awaited<
+  ReturnType<WorkspaceSessionManager["discoverSessions"]>
+>[number];
 
 export class WorkflowOrchestrator {
   // ─────────────────────────────────────────────────────────────────────────
@@ -366,50 +350,11 @@ export class WorkflowOrchestrator {
   private readonly instances: Map<string, WorkflowInstance> = new Map();
   private readonly lineageRepository = new WorkflowLineageRepository();
 
-  /** Externally managed workflows being watched (keyed by workflowId) */
-  private readonly externalRunSessions: Map<
-    string,
-    {
-      session: ExternalRunWatchSession;
-      summary: WorkflowSummary;
-      /**
-       * Last per-step statuses broadcast for this run, so working-file changes
-       * can be diffed into STEP_STATUS_CHANGED messages instead of re-sending
-       * every step on every write.
-       */
-      lastStepStatuses: StepStatus[];
-    }
-  > = new Map();
+  private readonly externalRunWatchCoordinator: ExternalRunWatchCoordinator;
   private readonly coordinationWatchSessions = new Map<
     string,
     ExecutionRootCoordinationWatchSession
   >();
-
-  /** Watcher for *.runner.json creation (Entry Point 3: CLI starts while VS Code is open) */
-  private runnerJsonCreateWatcher?: FileWatcher;
-  /** Polling fallback for VS Code builds that do not deliver external recursive events. */
-  private runnerJsonDiscoveryPollInterval?: ReturnType<typeof setInterval>;
-  /**
-   * Last `runner.json` mtime already handed to `handleRunnerJsonEvent`, keyed by
-   * lock path. The poll fires every second for the host's lifetime, so without
-   * this every stale lock in the runs root would be re-read and re-inspected
-   * on every tick. A new lock has no entry and is processed immediately.
-   */
-  private readonly polledRunnerJsonMtimes = new Map<string, number>();
-  /**
-   * Last logged external-execution decision (as a JSON signature), keyed by
-   * workflowKey. A live lock's heartbeat rewrites `runner.json` every
-   * `HEARTBEAT_INTERVAL_MS` (5s) for the lifetime of every running workflow,
-   * which re-triggers resolution on every tick — without this, a single
-   * long-running self-owned workflow logged thousands of byte-identical
-   * "external execution resolution" lines. Log only when the outcome for a
-   * given lineage actually changes. Lazily created (rather than a field
-   * initializer) so unit-test harnesses that build this class via
-   * `Object.create(WorkflowOrchestrator.prototype)` and wire up only the
-   * fields their scenario touches don't need to know about this cache.
-   */
-  private lastLoggedExternalExecutionDecision?: Map<string, string>;
-  private activationWorktreeOwnership?: WorkspaceWorktreeOwnership;
 
   private readonly PANEL_CLIENT_ID = PANEL_CLIENT_ID;
 
@@ -575,10 +520,20 @@ export class WorkflowOrchestrator {
     // (honors the `.code-workspace` dir and `ctrlyoke.workspaceDirectory`).
     this.currentWorkspaceFolderPath =
       dependencies.workspaceFolderPathResolver();
+    this.externalRunWatchCoordinator = new ExternalRunWatchCoordinator({
+      broadcast: this.dashboardBroadcastHub,
+      lineageRepository: this.lineageRepository,
+      findInstanceForWorkingFile: (workingFilePath) =>
+        this.findInstancesForExternalRunWatch(workingFilePath),
+      retireWorkflow: (workflowId) => this.retireWorkflow(workflowId),
+      workspaceRoot: this.currentWorkspaceFolderPath,
+      saveState: () => this.saveState(),
+      getOutputHistoryManager: () => this.getOutputHistoryManager(),
+      runnerHostIdentity: this.runnerHostIdentity,
+      fileWatcherFactory: this.fileWatcherFactory,
+    });
     if (this.currentWorkspaceFolderPath) {
-      this.ensureCoordinationWatchSession(
-        this.currentWorkspaceFolderPath
-      );
+      this.ensureCoordinationWatchSession(this.currentWorkspaceFolderPath);
       this.harnessUsageService = new HarnessUsageService(
         this.currentWorkspaceFolderPath,
         undefined,
@@ -624,9 +579,7 @@ export class WorkflowOrchestrator {
       this.promptFileParser,
       this.platform
     );
-    this.endConditionEvaluator = new EndConditionEvaluator(
-      this.platform
-    );
+    this.endConditionEvaluator = new EndConditionEvaluator(this.platform);
     this.workflowCommandHandler = new WorkflowCommandHandler(
       this.userFeedbackSink
     );
@@ -1122,7 +1075,7 @@ export class WorkflowOrchestrator {
     }
 
     // External-run session
-    const externalEntry = this.externalRunSessions.get(workflowId);
+    const externalEntry = this.externalRunWatchCoordinator.getEntry(workflowId);
     if (externalEntry) {
       send({
         type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED,
@@ -1131,7 +1084,7 @@ export class WorkflowOrchestrator {
       });
       // Update viewerRegistry before the await for the same reason as above.
       this.setViewedWorkflowId(clientId, workflowId);
-      await this.sendExternalRunFullStateToDashboard(
+      await this.externalRunWatchCoordinator.sendExternalRunFullStateToDashboard(
         workflowId,
         externalEntry,
         sink
@@ -1231,7 +1184,7 @@ export class WorkflowOrchestrator {
           this.retiredInstances.get(workflowId);
         const summary =
           instance?.getSummary() ??
-          this.externalRunSessions.get(workflowId)?.summary;
+          this.externalRunWatchCoordinator.getEntry(workflowId)?.summary;
         if (!summary?.workflowKey || !summary.runRef) {
           return undefined;
         }
@@ -1260,12 +1213,11 @@ export class WorkflowOrchestrator {
   /** Return summaries without exposing WorkflowInstance internals */
   getWorkflowSummaries(): WorkflowSummary[] {
     const vsSummaries = [...this.instances.values()].map((w) => w.getSummary());
-    const externalRunSummaries = [...this.externalRunSessions.values()].map(
-      (entry) => entry.summary
-    );
+    const externalRunSummaries =
+      this.externalRunWatchCoordinator.getSummaries();
     const summaries = [...vsSummaries, ...externalRunSummaries];
     Log.trace(
-      `[getWorkflowSummaries] registry has ${this.instances.size} instances + ${this.externalRunSessions.size} external sessions, viewed=${this.getViewedWorkflowId(this.PANEL_CLIENT_ID)?.slice(0, 8) ?? "null"}: ${summaries.map((s) => `inst:${s.id.slice(0, 8)}(${s.executionState},fp=${s.filePath ? path.basename(s.filePath) : "?"})`).join(", ") || "(none)"}`
+      `[getWorkflowSummaries] registry has ${this.instances.size} instances + ${externalRunSummaries.length} external sessions, viewed=${this.getViewedWorkflowId(this.PANEL_CLIENT_ID)?.slice(0, 8) ?? "null"}: ${summaries.map((s) => `inst:${s.id.slice(0, 8)}(${s.executionState},fp=${s.filePath ? path.basename(s.filePath) : "?"})`).join(", ") || "(none)"}`
     );
     return summaries;
   }
@@ -1296,7 +1248,7 @@ export class WorkflowOrchestrator {
       "";
 
     // Check for an external-run session first
-    const externalEntry = this.externalRunSessions.get(workflowId);
+    const externalEntry = this.externalRunWatchCoordinator.getEntry(workflowId);
     if (externalEntry) {
       // setViewedWorkflowId is normally called inside replayWorkflowStateTo; call
       // it explicitly here so the viewer registry stays consistent when skipping.
@@ -1479,42 +1431,8 @@ export class WorkflowOrchestrator {
   async ensureExternalRunWatchSession(
     workingFilePath: string
   ): Promise<boolean> {
-    const workflowId =
-      WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath)
-        ?.workflowKey ?? "";
-    if (!workflowId) {
-      return false;
-    }
-
-    // Already tracked — nothing to do
-    if (this.externalRunSessions.has(workflowId)) {
-      return true;
-    }
-
-    const workspaceFolderPath = this.currentWorkspaceFolderPath;
-    if (!workspaceFolderPath) {
-      return false;
-    }
-
-    const resolution = await this.resolveExternalExecutionForPath(
-      workingFilePath,
-      workspaceFolderPath
-    );
-    if (
-      resolution.kind !==
-      EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN
-    ) {
-      return false;
-    }
-
-    Log.info(
-      `[WorkflowOrchestrator] ensureExternalRunWatchSession: registering external watch session for "${workflowId}" (watcher hadn't fired yet)`
-    );
-    // Session creation revalidates this proof immediately before registration.
-    return await this.startExternalRunWatchSession(
-      workingFilePath,
-      workspaceFolderPath,
-      resolution.inspection
+    return this.externalRunWatchCoordinator.ensureExternalRunWatchSession(
+      workingFilePath
     );
   }
 
@@ -1522,28 +1440,10 @@ export class WorkflowOrchestrator {
     workingFilePath: string,
     workspaceFolderPath: string
   ): Promise<ExternalExecutionResolution> {
-    return new ExternalExecutionResolver(
-      workspaceFolderPath,
-      this.runnerHostIdentity,
-      {
-        onDecision: (decision) => {
-          const key = decision.workflowKey ?? workingFilePath;
-          const signature = JSON.stringify(decision);
-          const cache = (this.lastLoggedExternalExecutionDecision ??=
-            new Map());
-          if (cache.get(key) === signature) {
-            return;
-          }
-          cache.set(key, signature);
-          const message = `[WorkflowOrchestrator] external execution resolution: ${signature}`;
-          if (decision.locality === WORKFLOW_LOCK_LOCALITIES.INDETERMINATE) {
-            Log.warn(message);
-          } else {
-            Log.debug(message);
-          }
-        },
-      }
-    ).resolve(workingFilePath);
+    return this.externalRunWatchCoordinator.resolveExternalExecutionForPath(
+      workingFilePath,
+      workspaceFolderPath
+    );
   }
 
   /**
@@ -1556,49 +1456,10 @@ export class WorkflowOrchestrator {
     workingFilePath: string,
     resolution: ExternalExecutionResolution
   ): boolean {
-    if (
-      resolution.kind !== EXTERNAL_EXECUTION_RESOLUTION_KINDS.NOT_EXTERNAL ||
-      (resolution.reason !== EXTERNAL_EXECUTION_REASONS.SELF_OWNED &&
-        resolution.reason !== EXTERNAL_EXECUTION_REASONS.INDETERMINATE_OWNER)
-    ) {
-      return false;
-    }
-
-    const hasResidentExecution = [
-      ...this.instances.values(),
-      ...this.retiredInstances.values(),
-    ].some((instance) => {
-      const summary = instance.getSummary();
-      return (
-        sameWorkingFilePath(summary.workingFilePath, workingFilePath) &&
-        isExecutionOwnerState(instance.getQueueState().status)
-      );
-    });
-    if (hasResidentExecution) {
-      return false;
-    }
-
-    const address =
-      WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath);
-    const diagnostic = {
-      event: "workflow-ownership-invariant",
-      workflowKey: address?.workflowKey,
-      runRef: address?.runRef,
-      locality:
-        resolution.reason === EXTERNAL_EXECUTION_REASONS.SELF_OWNED
-          ? "self-owned-but-untracked"
-          : "indeterminate-owner",
-      decision: "preserve-non-mutating",
-    } as const;
-    const message =
-      `[WorkflowOrchestrator] active run ownership requires reconciliation: ` +
-      JSON.stringify(diagnostic);
-    if (resolution.reason === EXTERNAL_EXECUTION_REASONS.SELF_OWNED) {
-      Log.error(message);
-    } else {
-      Log.warn(message);
-    }
-    return true;
+    return this.externalRunWatchCoordinator.shouldDeclineUntrackedOwnership(
+      workingFilePath,
+      resolution
+    );
   }
 
   /**
@@ -2290,63 +2151,14 @@ export class WorkflowOrchestrator {
    * ExternalRunWatchSession.onFinished() → workflow transitions to STOPPED automatically.
    */
   async stopExternalRunSession(workflowId: string): Promise<void> {
-    const entry = this.externalRunSessions.get(workflowId);
-    if (!entry) {
-      Log.warn(
-        `[WorkflowOrchestrator] stopExternalRunSession: no external run session found for workflowId="${workflowId}"`
-      );
-      return;
-    }
-
-    const workspaceFolderPath = this.currentWorkspaceFolderPath;
-    if (!workspaceFolderPath || !entry.summary.workingFilePath) {
-      Log.warn(
-        `[WorkflowOrchestrator] stopExternalRunSession: no active external run for workflowId="${workflowId}"`
-      );
-      return;
-    }
-
-    const resolution = await this.resolveExternalExecutionForPath(
-      entry.summary.workingFilePath,
-      workspaceFolderPath
-    );
-    // Intentional runner-type policy after resolver proof: SIGTERM is only the
-    // CLI transport; locality comes exclusively from external resolution.
-    if (
-      resolution.kind !==
-        EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN ||
-      resolution.inspection.lock.runner !== RUNNER_IDS.CLI ||
-      resolution.inspection.lock.ownerToken !== entry.session.getOwnerToken()
-    ) {
-      Log.warn(
-        `[WorkflowOrchestrator] stopExternalRunSession: external lock acquisition is no longer owned by the tracked session for workflowId="${workflowId}"`
-      );
-      return;
-    }
-    const lock = resolution.inspection.lock;
-
-    Log.info(
-      `[WorkflowOrchestrator] stopExternalRunSession: sending stop request to ${lock.runner} pid=${lock.pid} for workflowId="${workflowId}"`
-    );
-    try {
-      process.kill(lock.pid, "SIGTERM");
-    } catch (err) {
-      // ESRCH = process already dead — that's fine, the session will clean itself up
-      const code = (err as NodeJS.ErrnoException).code;
-      if (code !== "ESRCH") {
-        Log.warn(
-          `[WorkflowOrchestrator] stopExternalRunSession: process.kill(${lock.pid}) failed:`,
-          err
-        );
-      }
-    }
+    return this.externalRunWatchCoordinator.stopExternalRunSession(workflowId);
   }
 
   /** Ask a live sibling VS Code instance to stop through its owner-token sentinel. */
   async requestVscodeStop(
     workflowId: string
   ): Promise<"picked-up" | "timed-out" | "unavailable"> {
-    const entry = this.externalRunSessions.get(workflowId);
+    const entry = this.externalRunWatchCoordinator.getEntry(workflowId);
     if (!entry) return "unavailable";
 
     const workspaceFolderPath = this.currentWorkspaceFolderPath;
@@ -2408,7 +2220,7 @@ export class WorkflowOrchestrator {
 
   /** Ownership discovered for the workspace root during activation, if any. */
   getActivationWorktreeOwnership(): WorkspaceWorktreeOwnership | undefined {
-    return this.activationWorktreeOwnership;
+    return this.externalRunWatchCoordinator.getActivationWorktreeOwnership();
   }
 
   async clearWorkflow(): Promise<void> {
@@ -3275,7 +3087,9 @@ export class WorkflowOrchestrator {
     if (binding.has(clientId)) return null;
 
     const boundId = this.getViewedWorkflowId(clientId);
-    const resident = this.externalRunSessions.has(address.workflowKey)
+    const resident = this.externalRunWatchCoordinator.hasSession(
+      address.workflowKey
+    )
       ? address.workflowKey
       : this.findInstanceForLineage(address.workflowKey)?.id;
     if (boundId === resident) return null;
@@ -3541,8 +3355,8 @@ export class WorkflowOrchestrator {
         workflowId: announcedWorkflowId,
         workingFilePath:
           announcedInstance?.getSummary().workingFilePath ??
-          this.externalRunSessions.get(announcedWorkflowId)?.summary
-            .workingFilePath ??
+          this.externalRunWatchCoordinator.getEntry(announcedWorkflowId)
+            ?.summary.workingFilePath ??
           null,
         // Announcing before the snapshot must not read as a backend-initiated
         // switch: without the requestId the client cancels its own in-flight
@@ -3857,7 +3671,7 @@ export class WorkflowOrchestrator {
         return instance.getExecutionRunRef() ?? state.runRef;
       }
     }
-    const external = this.externalRunSessions.get(workflowKey);
+    const external = this.externalRunWatchCoordinator.getEntry(workflowKey);
     return external
       ? WorkflowPaths.parseWorkingFileAddressFromPath(
           external.summary.workingFilePath ?? ""
@@ -3895,7 +3709,8 @@ export class WorkflowOrchestrator {
     }
     const runAddress = mutation.address;
     let latest:
-      { definitionRevision: number; descriptorRevision: number } | undefined;
+      | { definitionRevision: number; descriptorRevision: number }
+      | undefined;
     await this.applyRunAddressedMutation(
       runAddress,
       (instance) => instance.updateWorkflowName(workflowName),
@@ -3947,7 +3762,8 @@ export class WorkflowOrchestrator {
         resolution.kind ===
         EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN
       ) {
-        const existingExternalEntry = this.externalRunSessions.get(workflowId);
+        const existingExternalEntry =
+          this.externalRunWatchCoordinator.getEntry(workflowId);
         if (existingExternalEntry) {
           Log.debug(
             `[WorkflowOrchestrator] loadWorkingFile: "${workflowId}" is externally managed (session exists) — switching view`
@@ -3967,7 +3783,7 @@ export class WorkflowOrchestrator {
         Log.debug(
           `[WorkflowOrchestrator] loadWorkingFile: "${workflowId}" has a proven external lock — starting external run watch session`
         );
-        await this.startExternalRunWatchSession(
+        await this.externalRunWatchCoordinator.startExternalRunWatchSession(
           filePath,
           workspaceFolderPath,
           resolution.inspection
@@ -4512,7 +4328,8 @@ export class WorkflowOrchestrator {
     }
     const runAddress = mutation.address;
     let latest:
-      { definitionRevision: number; descriptorRevision: number } | undefined;
+      | { definitionRevision: number; descriptorRevision: number }
+      | undefined;
     await this.applyRunAddressedMutation(
       runAddress,
       (instance) =>
@@ -5955,24 +5772,12 @@ export class WorkflowOrchestrator {
     }
     this.instances.clear();
 
-    // Dispose all external watch sessions
-    for (const entry of this.externalRunSessions.values()) {
-      entry.session.dispose();
-    }
-    this.externalRunSessions.clear();
+    this.externalRunWatchCoordinator.dispose();
 
     for (const session of this.coordinationWatchSessions?.values() ?? []) {
       session.dispose();
     }
     this.coordinationWatchSessions?.clear();
-
-    // Dispose the runner.json create watcher
-    this.runnerJsonCreateWatcher?.dispose();
-    if (this.runnerJsonDiscoveryPollInterval !== undefined) {
-      clearInterval(this.runnerJsonDiscoveryPollInterval);
-      this.runnerJsonDiscoveryPollInterval = undefined;
-    }
-    this.polledRunnerJsonMtimes.clear();
 
     // The extension owns the injected status sink. Its StatusBarManager is
     // registered with context.subscriptions at construction time.
@@ -5990,6 +5795,21 @@ export class WorkflowOrchestrator {
   // ─────────────────────────────────────────────────────────────────────────
   // Private helpers
   // ─────────────────────────────────────────────────────────────────────────
+
+  private findInstancesForExternalRunWatch(
+    workingFilePath: string,
+    includeRetired = false
+  ): ReadonlyArray<ExternalRunWatchInstance> {
+    const instances = includeRetired
+      ? [...this.instances.values(), ...this.retiredInstances.values()]
+      : [...this.instances.values()];
+    return instances.filter((instance) =>
+      sameWorkingFilePath(
+        instance.getSummary().workingFilePath,
+        workingFilePath
+      )
+    );
+  }
 
   /**
    * Find a workflow instance regardless of whether it is currently executing
@@ -6147,7 +5967,9 @@ export class WorkflowOrchestrator {
   }
 
   private setHasQueuedStepsContext(state: QueueState | undefined): void {
-    this.statusBarSink?.setHasQueuedStepsContext((state?.steps.length ?? 0) > 0);
+    this.statusBarSink?.setHasQueuedStepsContext(
+      (state?.steps.length ?? 0) > 0
+    );
   }
 
   private isWorkflowViewedByAnyClient(workflowId: string): boolean {
@@ -6594,998 +6416,15 @@ export class WorkflowOrchestrator {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
   // CLI Watch Mode
   // ─────────────────────────────────────────────────────────────────────────
 
-  /**
-   * Normalize stale locks and set up watchers for any active externally managed workflows.
-   * Called during initialize() after harness initialization.
-   */
   private async setupExternalRunWatching(): Promise<void> {
-    const workspaceFolderPath = this.currentWorkspaceFolderPath;
-    if (!workspaceFolderPath) {
-      return;
-    }
-
-    const runsRootDir = WorkflowPaths.runsRoot(workspaceFolderPath);
-
-    // VS Code cannot reliably observe an external directory that does not
-    // exist yet. Create the project state and .runs directories before
-    // installing the discovery watcher below.
-    try {
-      await fs.promises.mkdir(runsRootDir, { recursive: true });
-    } catch (err) {
-      Log.warn(
-        `[WorkflowOrchestrator] setupExternalRunWatching: unable to create runs root "${runsRootDir}" — external-run discovery watcher not installed:`,
-        err
-      );
-      return;
-    }
-
-    // Normalize stale locks and retain every lineage with active liveness. The
-    // external-execution resolver below is the authority for locality.
-    let activeRunPaths: string[];
-    let recoveredPaths: string[];
-    try {
-      const workflowKeys =
-        await this.lineageRepository.listLineageKeys(workspaceFolderPath);
-      const normalized = await WorkflowLockManager.normalizeStaleLocks(
-        workspaceFolderPath,
-        workflowKeys
-      );
-      activeRunPaths = normalized.activeRunFiles;
-      recoveredPaths = normalized.recoveredRunFiles;
-    } catch (err) {
-      Log.warn(
-        "[WorkflowOrchestrator] setupExternalRunWatching: normalizeStaleLocks failed:",
-        err
-      );
-      activeRunPaths = [];
-      recoveredPaths = [];
-    }
-
-    // Prune `.creating-*` staging dirs orphaned by an allocateRun that never reached
-    // finalizeAllocatedRun (crash, disk full, thrown validation error). Kept off the
-    // blocks above/below so a failure here can't discard their recovery results.
-    try {
-      const workflowKeys =
-        await this.lineageRepository.listLineageKeys(workspaceFolderPath);
-      for (const workflowKey of workflowKeys) {
-        await this.lineageRepository.pruneStaleStagingDirs(
-          workspaceFolderPath,
-          workflowKey
-        );
-      }
-    } catch (err) {
-      Log.warn(
-        "[WorkflowOrchestrator] setupExternalRunWatching: pruneStaleStagingDirs failed:",
-        err
-      );
-    }
-
-    // Close out history manifests left RUNNING by the dead owner. Kept off the
-    // block above so a recovery failure cannot discard active paths and silently
-    // leave externally managed workflows unwatched.
-    try {
-      const historyManager = new OutputHistoryManager(workspaceFolderPath);
-      for (const recoveredPath of recoveredPaths) {
-        const recoveredAddress = WorkflowPaths.parseRunFilePath(
-          workspaceFolderPath,
-          recoveredPath
-        );
-        if (!recoveredAddress) {
-          continue;
-        }
-        let stepCount = 0;
-        try {
-          const recoveredWorkingFile = JSON.parse(
-            await fs.promises.readFile(recoveredPath, "utf8")
-          ) as { steps?: unknown[] };
-          stepCount = recoveredWorkingFile.steps?.length ?? 0;
-        } catch {
-          // The history manifest can still be finalized without a step count.
-        }
-        await historyManager.recoverInterruptedRun(
-          recoveredAddress.workflowKey,
-          stepCount
-        );
-      }
-    } catch (err) {
-      Log.warn(
-        "[WorkflowOrchestrator] setupExternalRunWatching: interrupted-run recovery failed:",
-        err
-      );
-    }
-
-    // Create an external-run watch session for each active workflow (Entry Point 1).
-    const startupExternalPaths = new Set(activeRunPaths);
-    for (const workingFilePath of startupExternalPaths) {
-      await this.startExternalRunWatchSessionIfExternal(
-        workingFilePath,
-        workspaceFolderPath
-      );
-    }
-
-    // Entry Point 3: Watch for new runner.json files created while VS Code is open
-    this.setupRunnerJsonCreateWatcher(workspaceFolderPath, runsRootDir);
+    return this.externalRunWatchCoordinator.setupExternalRunWatching();
   }
 
-  /** Read-only activation report for managed and user-owned Git worktrees. */
   private async discoverWorktreesOnActivation(): Promise<void> {
-    const workspaceFolderPath = this.currentWorkspaceFolderPath;
-    if (!workspaceFolderPath) return;
-    this.activationWorktreeOwnership = undefined;
-
-    try {
-      const report = await new WorktreeManager().discoverActivationState({
-        sourceCheckoutRoot: workspaceFolderPath,
-      });
-      const inUse = report.worktrees.filter((entry) => entry.inUse);
-      const prunable = report.worktrees.filter((entry) => entry.prunableReason);
-      this.activationWorktreeOwnership = report.currentManagedWorktree;
-
-      Log.info(
-        `[WorktreeRecovery] activation discovered ${report.worktrees.length} worktree(s), ` +
-          `${report.recoverableManagedWorktrees.length} recoverable managed, ` +
-          `${report.staleManagedWorktrees.length} stale managed record(s), ` +
-          `${prunable.length} prunable entr${prunable.length === 1 ? "y" : "ies"}.`
-      );
-      for (const entry of inUse) {
-        const owners = entry.leaseOwners
-          .map(
-            ({ lease, ageMs }) =>
-              `workflow ${lease.workflowKey}, run ${lease.runRef}; ` +
-              `${lease.runner} instance ${lease.instanceId}, PID ${lease.pid}; ` +
-              `state root ${lease.stateRoot}; lease age ${Math.floor(ageMs / 1000)}s`
-          )
-          .join(" | ");
-        Log.warn(
-          `[WorktreeRecovery] worktree in use: ${entry.worktreePath} — ${owners}`
-        );
-      }
-      for (const entry of prunable) {
-        Log.warn(
-          `[WorktreeRecovery] Git reports a prunable worktree entry: ${entry.worktreePath}` +
-            `${entry.prunableReason ? ` (${entry.prunableReason})` : ""}. No automatic prune was performed.`
-        );
-      }
-      for (const record of report.staleManagedWorktrees) {
-        Log.warn(
-          `[WorktreeRecovery] managed worktree requires reconciliation: ${record.branchName} at ${record.worktreePath}. ` +
-            "Activation is read-only; no directory or branch was deleted."
-        );
-      }
-    } catch (error) {
-      Log.warn("[WorktreeRecovery] activation discovery failed:", error);
-    }
-  }
-
-  /**
-   * Watch for new *.runner.json files so we detect when the CLI starts a workflow
-   * while VS Code is already open.
-   */
-  private setupRunnerJsonCreateWatcher(
-    workspaceFolderPath: string,
-    runsRootDir: string
-  ): void {
-    const watcher = this.fileWatcherFactory.create(runsRootDir, "*/runner.json");
-    this.runnerJsonCreateWatcher = watcher;
-
-    watcher.onDidCreate(async (filePath) => {
-      Log.debug(
-        `[WorkflowOrchestrator] runner.json created: ${path.basename(filePath)}`
-      );
-      await this.handleRunnerJsonEvent(filePath, workspaceFolderPath);
-    });
-
-    // Fallback for Windows: atomic file creation via rename (writeFile+rename)
-    // may deliver a "change" event instead of "create". CLI heartbeats (every 5s)
-    // also use atomic rename, so this fires ~5s after CLI start at the latest.
-    watcher.onDidChange(async (filePath) => {
-      await this.handleRunnerJsonEvent(filePath, workspaceFolderPath);
-    });
-
-    // VS Code 1.133 on Windows did not deliver the recursive event for a
-    // runner file created below an external RelativePattern base. Keep the
-    // watcher for hosts that do support it, but poll the small lineage-root
-    // directory as a reliable discovery fallback.
-    this.runnerJsonDiscoveryPollInterval = setInterval(() => {
-      void this.pollRunnerJsonDiscovery(runsRootDir, workspaceFolderPath);
-    }, 1_000);
-  }
-
-  private async pollRunnerJsonDiscovery(
-    runsRootDir: string,
-    workspaceFolderPath: string
-  ): Promise<void> {
-    try {
-      const entries = await fs.promises.readdir(runsRootDir, {
-        withFileTypes: true,
-      });
-      const seenRunnerPaths = new Set<string>();
-      await Promise.all(
-        entries
-          .filter((entry) => entry.isDirectory())
-          // The lineage directory name *is* the workflowKey, so an already
-          // watched run can be skipped without touching the filesystem.
-          .filter((entry) => !this.externalRunSessions.has(entry.name))
-          .map(async (entry) => {
-            // WorkflowPaths owns every `.runs` path; it rejects a directory
-            // name that is not a valid workflowKey, which is not a lineage.
-            let runnerPath: string;
-            try {
-              runnerPath = WorkflowPaths.runnerLockPath(
-                workspaceFolderPath,
-                entry.name as WorkflowKey
-              );
-            } catch {
-              return;
-            }
-            let mtimeMs: number;
-            try {
-              ({ mtimeMs } = await fs.promises.stat(runnerPath));
-            } catch {
-              return;
-            }
-            seenRunnerPaths.add(runnerPath);
-            if (this.polledRunnerJsonMtimes.get(runnerPath) === mtimeMs) {
-              return;
-            }
-            this.polledRunnerJsonMtimes.set(runnerPath, mtimeMs);
-            await this.handleRunnerJsonEvent(runnerPath, workspaceFolderPath);
-          })
-      );
-      // Drop locks that have been released so a later run at the same path is
-      // treated as new rather than being suppressed by a remembered mtime.
-      for (const trackedPath of this.polledRunnerJsonMtimes.keys()) {
-        if (!seenRunnerPaths.has(trackedPath)) {
-          this.polledRunnerJsonMtimes.delete(trackedPath);
-          // The lineage directory name is the workflowKey the decision log is
-          // keyed by; forget it too so a later run at the same lineage logs
-          // its first resolution instead of being suppressed as unchanged.
-          this.lastLoggedExternalExecutionDecision?.delete(
-            path.basename(path.dirname(trackedPath))
-          );
-        }
-      }
-    } catch (err) {
-      Log.warn(
-        `[WorkflowOrchestrator] pollRunnerJsonDiscovery: unable to scan "${runsRootDir}":`,
-        err
-      );
-    }
-  }
-
-  private async handleRunnerJsonEvent(
-    lockFilePath: string,
-    workspaceFolderPath: string
-  ): Promise<void> {
-    const workflowKey = path.basename(
-      path.dirname(lockFilePath)
-    ) as WorkflowKey;
-    const lockInspection = await readWorkflowLockOwnershipInspection(
-      workspaceFolderPath,
-      workflowKey,
-      this.runnerHostIdentity
-    );
-    if (lockInspection.liveness !== WORKFLOW_LOCK_LIVENESS.ACTIVE) {
-      return;
-    }
-    const lock = lockInspection.lock;
-
-    // The lock itself names the exact lineage/run — no path-basename derivation needed.
-    const workflowId = lock.workflowKey;
-    const workingFilePath = WorkflowPaths.runFilePath(
-      workspaceFolderPath,
-      lock.workflowKey,
-      lock.runRef
-    );
-
-    // The deduped "external execution resolution" decision log below (and the
-    // startExternalRunWatchSession logs further down) already cover this
-    // event; a per-call trace here would repeat on every 5s heartbeat.
-    const resolution = await this.resolveExternalExecutionForPath(
-      workingFilePath,
-      workspaceFolderPath
-    );
-    if (
-      resolution.kind !==
-      EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN
-    ) {
-      return;
-    }
-
-    if (this.externalRunSessions.has(workflowId)) {
-      return;
-    }
-
-    await this.startExternalRunWatchSession(
-      workingFilePath,
-      workspaceFolderPath,
-      resolution.inspection
-    );
-  }
-
-  /**
-   * Create and start an external-run watch session for a CLI- or sibling-VSCode-managed workflow.
-   * Reads the working file, builds a WorkflowSummary, and registers the session.
-   */
-  private async startExternalRunWatchSessionIfExternal(
-    workingFilePath: string,
-    workspaceFolderPath: string
-  ): Promise<boolean> {
-    const resolution = await this.resolveExternalExecutionForPath(
-      workingFilePath,
-      workspaceFolderPath
-    );
-    return resolution.kind ===
-      EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN
-      ? this.startExternalRunWatchSession(
-          workingFilePath,
-          workspaceFolderPath,
-          resolution.inspection
-        )
-      : false;
-  }
-
-  private async startExternalRunWatchSession(
-    workingFilePath: string,
-    workspaceFolderPath: string,
-    inspection: ActiveExternalLockInspection
-  ): Promise<boolean> {
-    const address =
-      WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath);
-    if (!address?.runRef) {
-      Log.warn(
-        `[WorkflowOrchestrator] startExternalRunWatchSession: "${workingFilePath}" is not a promoted run file — skipping`
-      );
-      return false;
-    }
-    const { workflowKey, runRef } = address;
-    const workflowId = workflowKey;
-
-    if (
-      inspection.lock.workflowKey !== workflowKey ||
-      inspection.lock.runRef !== runRef
-    ) {
-      Log.warn(
-        `[WorkflowOrchestrator] startExternalRunWatchSession: external proof does not match "${workingFilePath}" — skipping`
-      );
-      return false;
-    }
-
-    // Re-resolve immediately before registration to close the handoff race
-    // between the caller's proof and this session's ownership.
-    const currentResolution = await this.resolveExternalExecutionForPath(
-      workingFilePath,
-      workspaceFolderPath
-    );
-    if (
-      currentResolution.kind !==
-      EXTERNAL_EXECUTION_RESOLUTION_KINDS.EXTERNAL_ACTIVE_RUN
-    ) {
-      return false;
-    }
-    const currentInspection = currentResolution.inspection;
-    if (
-      currentInspection.lock.ownerToken !== inspection.lock.ownerToken ||
-      currentInspection.lock.workflowKey !== inspection.lock.workflowKey ||
-      currentInspection.lock.runRef !== inspection.lock.runRef
-    ) {
-      Log.info(
-        `[WorkflowOrchestrator] startExternalRunWatchSession: external lock acquisition changed for "${workflowId}" — skipping stale proof`
-      );
-      return false;
-    }
-
-    const workingFile = currentResolution.workingFile;
-
-    const executionState = workingFile._runtime?.executionState;
-    if (!executionState || !ACTIVE_EXECUTION_STATES.has(executionState)) {
-      Log.info(
-        `[WorkflowOrchestrator] startExternalRunWatchSession: "${workflowId}" has a live ${currentInspection.lock.runner} lock but persisted state is ${executionState ?? "missing"} — skipping external watch session`
-      );
-      return false;
-    }
-
-    const externalOwner = {
-      locality: WORKFLOW_LOCK_LOCALITIES.EXTERNAL,
-      runner: currentInspection.lock.runner,
-    };
-
-    // Retire any existing VS Code WorkflowInstance tracking this same working file.
-    // This prevents a conflict where VS Code auto-loaded the workflow in PAUSED state
-    // and the CLI is now taking over execution. Without this, the PAUSED instance
-    // stays in the Running Workflows section alongside the external watch session.
-    //
-    // This loop is reached only after the resolver proved an external owner. It
-    // still must not retire a local instance that is genuinely mid-step
-    // (RUNNING/PAUSING/CANCELLING): only a PAUSED tracking instance has no
-    // in-flight harness turn and can safely yield to the external owner.
-    for (const [instanceId, instance] of [...this.instances.entries()]) {
-      const localSummary = instance.getSummary();
-      if (!sameWorkingFilePath(localSummary.workingFilePath, workingFilePath)) {
-        continue;
-      }
-      const hasInFlightStep =
-        localSummary.executionState === EXECUTION_STATES.RUNNING ||
-        localSummary.executionState === EXECUTION_STATES.PAUSING ||
-        localSummary.executionState === EXECUTION_STATES.CANCELLING;
-      if (hasInFlightStep) {
-        Log.info(
-          `[WorkflowOrchestrator] startExternalRunWatchSession: "${workflowId}" is already owned by this process's in-flight WorkflowInstance inst:${instanceId.slice(0, 8)} (executionState=${localSummary.executionState}) — skipping external watch session instead of retiring it`
-        );
-        return false;
-      }
-      if (localSummary.executionState !== EXECUTION_STATES.PAUSED) {
-        continue;
-      }
-      Log.info(
-        `[WorkflowOrchestrator] startExternalRunWatchSession: retiring conflicting WorkflowInstance inst:${instanceId.slice(0, 8)} for "${workflowId}"`
-      );
-      this.retireWorkflow(instanceId);
-      break;
-    }
-
-    const currentIndex = workingFile._runtime?.currentIndex ?? 0;
-    const totalSteps = workingFile.steps?.length ?? 0;
-
-    const summary: WorkflowSummary = {
-      id: workflowId,
-      workflowKey,
-      runRef,
-      workflowName: workingFile.workflowName ?? workflowId,
-      filePath: workingFilePath,
-      workingFilePath,
-      executionState,
-      currentStep: currentIndex,
-      totalSteps,
-      startedAt: workingFile.startedAt,
-      externalOwner,
-      tokenTotals: workingFile._runtime?.tokenTotals,
-      worktree: workingFile._runtime?.worktree,
-    };
-
-    const session = new ExternalRunWatchSession(
-      workingFilePath,
-      workflowKey,
-      runRef,
-      workspaceFolderPath,
-      currentInspection,
-      this.runnerHostIdentity,
-      (partialSummary, updatedSteps) => {
-        // Merge partial update into stored summary
-        const entry = this.externalRunSessions.get(workflowId);
-        if (!entry) {
-          return;
-        }
-        const prevTotalSteps = entry.summary.totalSteps;
-        const updatedSummary: WorkflowSummary = {
-          ...entry.summary,
-          ...partialSummary,
-          externalOwner,
-        };
-        entry.summary = updatedSummary;
-        this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(updatedSummary);
-
-        // A summary carries only the position, so without this the dashboard's
-        // per-step statuses stay frozen at whatever the last full-state push
-        // recorded. That is invisible while the run is RUNNING (usePromptStatus
-        // falls back to position) and becomes visible the instant it reaches a
-        // terminal state: the step that actually failed renders with its stale
-        // status and the error badge lands on a later, never-executed step.
-        this.broadcastExternalRunStepStatuses(
-          workflowId,
-          entry,
-          updatedSteps,
-          updatedSummary
-        );
-
-        // If the CLI extended the queue, send the new prompts so the WorkflowStepsPanel reflects them
-        if (updatedSummary.totalSteps > prevTotalSteps) {
-          const provider = this.dashboardBroadcastHub;
-          fs.promises
-            .readFile(workingFilePath, "utf8")
-            .then((content) => {
-              const wf = JSON.parse(content) as {
-                steps?: unknown[];
-                definitionRevision?: number;
-                parallelGroups?: import("../types/CtrlYokeTypes").ParallelGroupDefinition[];
-              };
-              if (wf.steps) {
-                Log.info(
-                  `[WorkflowOrchestrator] CLI extended queue for "${workflowId}": ${prevTotalSteps} ${updatedSummary.totalSteps} steps`
-                );
-                provider.notifyCliPromptsExtended(
-                  workflowId,
-                  wf.steps,
-                  wf.definitionRevision ?? 1,
-                  wf.parallelGroups
-                );
-              }
-            })
-            .catch((err) => {
-              Log.warn(
-                `[WorkflowOrchestrator] onUpdate: failed to read working file for queue extension:`,
-                err
-              );
-            });
-        }
-      },
-      (historyFilePath) => {
-        this.handleExternalRunWatchOutput(workflowId, historyFilePath);
-      },
-      (reason) => {
-        this.handleExternalRunFinished(workflowId, workingFilePath, reason);
-      }
-    );
-
-    this.externalRunSessions.set(workflowId, {
-      session,
-      summary,
-      lastStepStatuses: deriveStepStatusesFromRuntime(
-        (workingFile.steps as StepWithRuntimeStatus[] | undefined) ?? [],
-        currentIndex,
-        executionState
-      ),
-    });
-    await session.start();
-
-    // The initial post-watcher read can discover that the run completed during
-    // startup and remove the session through onFinished. Do not announce a
-    // watch that no longer exists.
-    const activeEntry = this.externalRunSessions.get(workflowId);
-    if (activeEntry?.session !== session) {
-      return false;
-    }
-
-    // Notify the dashboard so the workflow appears in the Running section
-    this.dashboardBroadcastHub.notifyWorkflowAdded(activeEntry.summary);
-    Log.info(
-      `[WorkflowOrchestrator] external run watch session started for "${workflowId}" (runner=${externalOwner.runner})`
-    );
-    return true;
-  }
-
-  /**
-   * Push STEP_STATUS_CHANGED for every step whose derived status moved since
-   * the last broadcast for this external run.
-   *
-   * Diffed rather than re-sent wholesale because the working file is rewritten
-   * on every `_runtime` mutation by an out-of-process writer, and each message
-   * fans out to every connected dashboard client (see
-   * `WORKING_FILE_CHANGE_THROTTLE_MS` in `ExternalRunWatchSession`).
-   */
-  private broadcastExternalRunStepStatuses(
-    workflowId: string,
-    entry: { lastStepStatuses: StepStatus[] },
-    steps: readonly StepWithRuntimeStatus[],
-    summary: WorkflowSummary
-  ): void {
-    const statuses = deriveStepStatusesFromRuntime(
-      steps,
-      summary.currentStep ?? 0,
-      summary.executionState
-    );
-    for (const [index, status] of statuses.entries()) {
-      if (entry.lastStepStatuses[index] === status) {
-        continue;
-      }
-      this.dashboardBroadcastHub.updateStepStatus(
-        index,
-        { state: status },
-        undefined,
-        workflowId
-      );
-    }
-    entry.lastStepStatuses = statuses;
-  }
-
-  /**
-   * Send full workflow state to the dashboard when switching to an externally managed workflow.
-   * Sends SESSION_RESTORED with the current prompts, then replays all captured outputs.
-   * When `sink` is provided, sends only to that single client (per-client replay);
-   * otherwise broadcasts to all clients via the hub.
-   */
-  private async sendExternalRunFullStateToDashboard(
-    workflowId: string,
-    externalEntry: {
-      session: ExternalRunWatchSession;
-      summary: WorkflowSummary;
-      lastStepStatuses: StepStatus[];
-    },
-    sink?: IDashboardSink
-  ): Promise<void> {
-    const workingFilePath = externalEntry.summary.workingFilePath;
-    if (!workingFilePath) {
-      return;
-    }
-
-    // Read the latest working file to get current prompt list and step position
-    let steps: WorkflowStep[] = [];
-    let currentIndex = externalEntry.summary.currentStep ?? 0;
-    let finalStep: WorkflowStep | null = null;
-    let finalStepRuntime:
-      | {
-          status?: StepStatus;
-          loopCount: number;
-          phase: FinalStepPhase;
-        }
-      | undefined;
-
-    try {
-      const content = await fs.promises.readFile(workingFilePath, "utf8");
-      const workingFile = JSON.parse(content) as WorkingFile;
-      steps = ((workingFile.steps as WorkflowStep[]) ?? []).map((p) => ({
-        ...p,
-        // Strip any existing status so loadWorkflow sets it from the results array
-        status: undefined as unknown as string,
-      })) as WorkflowStep[];
-      currentIndex = workingFile._runtime?.currentIndex ?? currentIndex;
-      finalStep = (workingFile.finalStep as WorkflowStep | undefined) ?? null;
-      finalStepRuntime = workingFile._runtime?.finalStep
-        ? {
-            status: workingFile._runtime.finalStep.status,
-            loopCount: workingFile._runtime.finalStep.loopCount,
-            phase: workingFile._runtime.finalStep.phase,
-          }
-        : undefined;
-    } catch (err) {
-      Log.warn(
-        `[WorkflowOrchestrator] sendExternalRunFullStateToDashboard: could not read working file:`,
-        err
-      );
-    }
-
-    const statuses = deriveStepStatusesFromRuntime(
-      steps,
-      currentIndex,
-      externalEntry.summary.executionState
-    );
-    const results = statuses.map((status) => ({ status }));
-    // Keep the diff baseline aligned with what this client now displays, so the
-    // next working-file change sends only what actually moved.
-    externalEntry.lastStepStatuses = statuses;
-
-    const fileName = path.basename(workingFilePath);
-    const target: IDashboardSink = sink ?? this.dashboardBroadcastHub;
-    await target.updateSessionRestored(
-      fileName,
-      steps,
-      results,
-      externalEntry.summary.executionState,
-      currentIndex,
-      externalEntry.summary.workflowName,
-      finalStep,
-      finalStepRuntime,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      // Deliberately no `definitionRevision`: switching a client onto an
-      // external run replaces its displayed workflow and publishes no address
-      // of its own, so a revision here would be misread as a replay of the
-      // outgoing workflow and preserve that workflow's view address. The steps
-      // above were just read from disk, so there is no staleness for the
-      // webview's regressive-snapshot guard to catch either.
-      undefined
-    );
-
-    // Replay all captured CLI outputs from the active history file
-    const historyFilePath = externalEntry.session.getActiveHistoryFilePath();
-    if (historyFilePath) {
-      if (sink) {
-        // Per-client replay: send directly to the sink without updating lastKnown counts
-        await this.replayExternalHistoryFileTo(historyFilePath, sink);
-      } else {
-        await this.replayExternalWatchHistoryFile(workflowId, historyFilePath);
-      }
-    }
-  }
-
-  /**
-   * Replay external watch history outputs to a single explicit sink.
-   * Does NOT update lastKnownOutputCount — used for per-client replays only.
-   */
-  private async replayExternalHistoryFileTo(
-    historyFilePath: string,
-    sink: IDashboardSink
-  ): Promise<void> {
-    try {
-      const history =
-        await this.getOutputHistoryManager().loadHistory(historyFilePath);
-      for (const entry of history.orderedEntries) {
-        if (
-          entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
-          entry.target.kind === FINAL_STEP_PHASES.QUEUE
-        ) {
-          const stepIndex = (
-            entry.target as {
-              kind: typeof FINAL_STEP_PHASES.QUEUE;
-              stepIndex: number;
-            }
-          ).stepIndex;
-          sink.updateCliOutput(stepIndex, entry.cliOutput as CliOutput);
-        }
-      }
-    } catch (err) {
-      Log.warn(
-        `[WorkflowOrchestrator] replayExternalHistoryFileTo: failed:`,
-        err
-      );
-    }
-  }
-
-  /**
-   * Replay all captured CLI outputs from a history file to the dashboard.
-   * Updates lastKnownOutputByStep so subsequent incremental updates don't re-send.
-   */
-  private async replayExternalWatchHistoryFile(
-    workflowId: string,
-    historyFilePath: string
-  ): Promise<void> {
-    const entry = this.externalRunSessions.get(workflowId);
-    if (!entry) {
-      return;
-    }
-
-    try {
-      const history =
-        await this.getOutputHistoryManager().loadHistory(historyFilePath);
-
-      const cliOutputsByStep = new Map<number, unknown[]>();
-      for (const historyEntry of history.orderedEntries) {
-        if (
-          historyEntry.kind === OUTPUT_HISTORY_KINDS.CLI &&
-          historyEntry.target.kind === FINAL_STEP_PHASES.QUEUE
-        ) {
-          const stepIndex = (
-            historyEntry.target as {
-              kind: typeof FINAL_STEP_PHASES.QUEUE;
-              stepIndex: number;
-            }
-          ).stepIndex;
-          const arr = cliOutputsByStep.get(stepIndex) ?? [];
-          arr.push(historyEntry.cliOutput);
-          cliOutputsByStep.set(stepIndex, arr);
-        }
-      }
-
-      for (const [stepIndex, outputs] of cliOutputsByStep) {
-        // Update lastKnown so subsequent incremental handleExternalRunWatchOutput calls
-        // don't re-send these outputs
-        entry.session.getAndUpdateLastKnownOutputCount(
-          stepIndex,
-          outputs.length
-        );
-
-        // Send ALL outputs from the beginning (full replay, not diff)
-        for (let i = 0; i < outputs.length; i++) {
-          this.dashboardBroadcastHub.notifyCliWatchOutput(
-            workflowId,
-            stepIndex,
-            outputs[i] as CliOutput
-          );
-        }
-      }
-    } catch (err) {
-      Log.warn(
-        `[WorkflowOrchestrator] replayExternalWatchHistoryFile: failed to read history file:`,
-        err
-      );
-    }
-  }
-
-  /**
-   * Handle output change notifications from an ExternalRunWatchSession.
-   * Reads the history file and sends new outputs to the dashboard.
-   */
-  private handleExternalRunWatchOutput(
-    workflowId: string,
-    historyFilePath: string
-  ): void {
-    const entry = this.externalRunSessions.get(workflowId);
-    if (!entry) {
-      return;
-    }
-
-    this.getOutputHistoryManager()
-      .loadHistory(historyFilePath)
-      .then((history) => {
-        const cliOutputsByStep = new Map<number, unknown[]>();
-        for (const historyEntry of history.orderedEntries) {
-          if (
-            historyEntry.kind === OUTPUT_HISTORY_KINDS.CLI &&
-            historyEntry.target.kind === FINAL_STEP_PHASES.QUEUE
-          ) {
-            const stepIndex = (
-              historyEntry.target as {
-                kind: typeof FINAL_STEP_PHASES.QUEUE;
-                stepIndex: number;
-              }
-            ).stepIndex;
-            const arr = cliOutputsByStep.get(stepIndex) ?? [];
-            arr.push(historyEntry.cliOutput);
-            cliOutputsByStep.set(stepIndex, arr);
-          }
-        }
-
-        for (const [stepIndex, outputs] of cliOutputsByStep) {
-          const lastKnown = entry.session.getAndUpdateLastKnownOutputCount(
-            stepIndex,
-            outputs.length
-          );
-
-          // Send only new outputs
-          for (let i = lastKnown; i < outputs.length; i++) {
-            this.dashboardBroadcastHub.notifyCliWatchOutput(
-              workflowId,
-              stepIndex,
-              outputs[i] as CliOutput
-            );
-          }
-        }
-      })
-      .catch((err: unknown) => {
-        Log.warn(
-          `[WorkflowOrchestrator] handleExternalRunWatchOutput: failed to read history file:`,
-          err
-        );
-      });
-  }
-
-  /**
-   * Handle external session completion (lock deleted, heartbeat stale, or ownership changed).
-   * Reads the final working file state, normalizes if needed, and updates the dashboard.
-   */
-  private handleExternalRunFinished(
-    workflowId: string,
-    workingFilePath: string,
-    reason: ExternalRunWatchFinishReason
-  ): void {
-    const entry = this.externalRunSessions.get(workflowId);
-    if (!entry) {
-      return;
-    }
-
-    Log.info(
-      `[WorkflowOrchestrator] external run session finished for "${workflowId}" (reason=${reason})`
-    );
-
-    // Dispose the session first so watchers stop firing
-    entry.session.dispose();
-    this.externalRunSessions.delete(workflowId);
-
-    // A lock replacement is not completion of the replacement run. Re-resolve
-    // from the current lock after removing the old session so an active
-    // successor can be watched without inheriting the old owner's cleanup.
-    if (reason === "ownership-changed") {
-      const workspaceFolderPath = this.currentWorkspaceFolderPath;
-      const workflowKey = entry.summary.workflowKey;
-      if (workspaceFolderPath && workflowKey) {
-        void this.restartExternalRunWatchSession(
-          workspaceFolderPath,
-          workflowKey
-        ).catch((error) => {
-          Log.warn(
-            `[WorkflowOrchestrator] failed to restart external watch session for "${workflowKey}":`,
-            error
-          );
-          this.dashboardBroadcastHub.notifyWorkflowDismissed(workflowId);
-        });
-      } else {
-        this.dashboardBroadcastHub.notifyWorkflowDismissed(workflowId);
-      }
-      return;
-    }
-
-    // Read final working file state
-    fs.promises
-      .readFile(workingFilePath, "utf8")
-      .then(async (content) => {
-        const workingFile = JSON.parse(content) as {
-          _runtime?: {
-            executionState?: string;
-            currentIndex?: number;
-            tokenTotals?: WorkflowSummary["tokenTotals"];
-          };
-          steps?: StepWithRuntimeStatus[];
-          workflowName?: string;
-          startedAt?: number;
-        };
-
-        let finalState =
-          workingFile._runtime?.executionState ?? EXECUTION_STATES.STOPPED;
-
-        // If still shows "running", normalize to "stopped" on disk
-        if (finalState === EXECUTION_STATES.RUNNING) {
-          finalState = EXECUTION_STATES.STOPPED;
-          if (workingFile._runtime) {
-            workingFile._runtime.executionState = EXECUTION_STATES.STOPPED;
-          }
-          try {
-            const tmpPath = workingFilePath + ".tmp";
-            await fs.promises.writeFile(
-              tmpPath,
-              JSON.stringify(workingFile, null, 2),
-              "utf8"
-            );
-            await fs.promises.rename(tmpPath, workingFilePath);
-          } catch (writeErr) {
-            Log.warn(
-              `[WorkflowOrchestrator] handleExternalRunFinished: failed to normalize working file:`,
-              writeErr
-            );
-          }
-        }
-
-        const finalSummary: WorkflowSummary = {
-          ...entry.summary,
-          executionState: finalState as WorkflowSummary["executionState"],
-          currentStep:
-            workingFile._runtime?.currentIndex ?? entry.summary.currentStep,
-          totalSteps: workingFile.steps?.length ?? entry.summary.totalSteps,
-          externalOwner: undefined, // no longer externally managed
-          tokenTotals: workingFile._runtime?.tokenTotals,
-        };
-
-        // This — not the working-file watcher — is what delivers a CLI run's
-        // *final* step layout. `handleExternalRunFinished` runs first on the
-        // lock-deleted path and has already removed the session, so the last
-        // `handleWorkingFileChange` finds no entry and its onUpdate returns
-        // early. Without a push here the dashboard keeps whatever per-step
-        // statuses it last had while executionState flips to ERROR, which is
-        // exactly how the error badge ends up on a never-executed step.
-        // Sent before the summary so the terminal state never lands on a stale
-        // step layout.
-        this.broadcastExternalRunStepStatuses(
-          workflowId,
-          entry,
-          workingFile.steps ?? [],
-          finalSummary
-        );
-
-        // Update the dashboard: send final state then dismiss from Running section
-        this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(finalSummary);
-        this.dashboardBroadcastHub.notifyWorkflowDismissed(workflowId);
-
-        void this.saveState();
-      })
-      .catch((err) => {
-        Log.warn(
-          `[WorkflowOrchestrator] handleExternalRunFinished: failed to read working file:`,
-          err
-        );
-        // Still dismiss from the dashboard
-        this.dashboardBroadcastHub.notifyWorkflowDismissed(workflowId);
-      });
-  }
-
-  private async restartExternalRunWatchSession(
-    workspaceFolderPath: string,
-    workflowKey: WorkflowKey
-  ): Promise<void> {
-    const lockInspection = await readWorkflowLockOwnershipInspection(
-      workspaceFolderPath,
-      workflowKey,
-      this.runnerHostIdentity
-    );
-    if (lockInspection.liveness !== WORKFLOW_LOCK_LIVENESS.ACTIVE) {
-      this.dashboardBroadcastHub.notifyWorkflowDismissed(workflowKey);
-      return;
-    }
-    const lock = lockInspection.lock;
-    const workingFilePath = WorkflowPaths.runFilePath(
-      workspaceFolderPath,
-      workflowKey,
-      lock.runRef
-    );
-    const started = await this.startExternalRunWatchSessionIfExternal(
-      workingFilePath,
-      workspaceFolderPath
-    );
-    if (!started) {
-      this.dashboardBroadcastHub.notifyWorkflowDismissed(workflowKey);
-    }
+    return this.externalRunWatchCoordinator.discoverWorktreesOnActivation();
   }
 }

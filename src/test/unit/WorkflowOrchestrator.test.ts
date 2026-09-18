@@ -12,23 +12,37 @@ import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryMana
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
-import { ExternalRunWatchSession } from "../../core/orchestration/ExternalRunWatchSession";
+import { ExternalExecutionResolver } from "../../core/orchestration/ExternalExecutionResolver";
 import { TypedEmitter } from "../../utils/TypedEmitter";
 import { WebviewUserInteractionPort } from "../../ui/WebviewUserInteractionPort";
 import { initPtyProcessManager } from "../../core/harness/PtyProcessManager";
 import { MockPlatform } from "../helpers/mockHarness";
 import {
   ACTION_TYPES,
+  EXTERNAL_EXECUTION_REASONS,
+  EXTERNAL_EXECUTION_RESOLUTION_KINDS,
   EXECUTION_STATES,
   MESSAGE_TYPES,
   PANEL_CLIENT_ID,
   QUEUE_POSITION,
   RUNNER_IDS,
-  STEP_STATUS,
   VSCODE_CONTEXT_KEYS,
   WORKFLOW_VIEW_ADDRESS_KIND,
-  type ExecutionState,
 } from "../../types/DashboardConstants";
+
+function createEmptyExternalRunWatchCoordinator() {
+  return {
+    getEntry: () => undefined,
+    hasSession: () => false,
+    ensureExternalRunWatchSession: async () => false,
+    resolveExternalExecutionForPath: async () => ({
+      kind: EXTERNAL_EXECUTION_RESOLUTION_KINDS.NOT_EXTERNAL,
+      reason: EXTERNAL_EXECUTION_REASONS.TERMINAL_RUN,
+    }),
+    shouldDeclineUntrackedOwnership: () => false,
+    getActivationWorktreeOwnership: () => undefined,
+  };
+}
 
 function createOrchestratorHarness() {
   const orchestrator = Object.create(
@@ -76,7 +90,8 @@ function createLineageBindingHarness() {
     ],
   ]);
   internal.retiredInstances = new Map<string, unknown>();
-  internal.externalRunSessions = new Map<string, unknown>();
+  internal.externalRunWatchCoordinator =
+    createEmptyExternalRunWatchCoordinator();
   internal.viewerRegistry = new Map([["client-a", "instance-bound"]]);
   internal.viewAddressRegistry = new Map();
   internal.viewMessageSinks = new Map();
@@ -342,290 +357,6 @@ suite("WorkflowOrchestrator startup auto-load gating", () => {
 });
 
 suite("WorkflowOrchestrator SESSION_RESTORED revision forwarding", () => {
-  test("omits the definition revision for external replays", async () => {
-    const workspace = await fs.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-session-revision-")
-    );
-    try {
-      const workingFilePath = path.join(workspace, "workflow.json");
-      await fs.writeFile(
-        workingFilePath,
-        JSON.stringify({
-          workflowName: "external workflow",
-          startedAt: 0,
-          definitionRevision: 11,
-          steps: [{ prompt: "step" }],
-        })
-      );
-      const calls: unknown[][] = [];
-      const orchestrator = Object.create(
-        WorkflowOrchestrator.prototype
-      ) as WorkflowOrchestrator;
-      const internal = orchestrator as any;
-      internal.dashboardBroadcastHub = {
-        updateSessionRestored: (...args: unknown[]) => calls.push(args),
-      };
-
-      await internal.sendExternalRunFullStateToDashboard("external-run", {
-        session: { getActiveHistoryFilePath: () => undefined },
-        summary: {
-          workingFilePath,
-          workflowName: "external workflow",
-          executionState: EXECUTION_STATES.RUNNING,
-          currentStep: 0,
-        },
-      });
-
-      assert.strictEqual(calls.length, 1);
-      // Switching a client onto an external run replaces its displayed
-      // workflow and publishes no address of its own. A revision here makes
-      // the webview classify the untagged SESSION_RESTORED as a replay of the
-      // workflow already on screen and keep that workflow's view address.
-      assert.strictEqual(calls[0][12], undefined);
-    } finally {
-      await fs.rm(workspace, { recursive: true, force: true });
-    }
-  });
-
-  test("derives step results from each step's own _runtime, not position vs. currentIndex", async () => {
-    // Reproduces the manual error/warning test's real bug: a terminal script
-    // failure (stopWorkflow) leaves `_runtime.currentIndex` one past the step
-    // that actually failed (`commitStepOutcomeAndAdvance` always advances
-    // past the settled step). A watching dashboard must still show the FAILED
-    // badge on the step that failed, and PENDING (never RUNNING/FAILED) on
-    // the step after it, which never executed.
-    const workspace = await fs.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-external-run-results-")
-    );
-    try {
-      const workingFilePath = path.join(workspace, "workflow.json");
-      await fs.writeFile(
-        workingFilePath,
-        JSON.stringify({
-          workflowName: "error showcase",
-          startedAt: 0,
-          definitionRevision: 1,
-          _runtime: { currentIndex: 2, executionState: EXECUTION_STATES.ERROR },
-          steps: [
-            {
-              prompt: "ok",
-              _runtime: {
-                completedAt: 1,
-                terminalStatus: STEP_STATUS.COMPLETED,
-              },
-            },
-            {
-              prompt: "terminal failure",
-              _runtime: { completedAt: 2, terminalStatus: STEP_STATUS.FAILED },
-            },
-            { prompt: "never executes" },
-          ],
-        })
-      );
-      const calls: unknown[][] = [];
-      const orchestrator = Object.create(
-        WorkflowOrchestrator.prototype
-      ) as WorkflowOrchestrator;
-      const internal = orchestrator as any;
-      internal.dashboardBroadcastHub = {
-        updateSessionRestored: (...args: unknown[]) => calls.push(args),
-      };
-
-      await internal.sendExternalRunFullStateToDashboard("external-run", {
-        session: { getActiveHistoryFilePath: () => undefined },
-        summary: {
-          workingFilePath,
-          workflowName: "error showcase",
-          executionState: EXECUTION_STATES.ERROR,
-          currentStep: 2,
-        },
-      });
-
-      assert.strictEqual(calls.length, 1);
-      const results = calls[0][2] as Array<{ status: string }>;
-      assert.strictEqual(results[0].status, STEP_STATUS.COMPLETED);
-      assert.strictEqual(results[1].status, STEP_STATUS.FAILED);
-      assert.strictEqual(results[2].status, STEP_STATUS.PENDING);
-    } finally {
-      await fs.rm(workspace, { recursive: true, force: true });
-    }
-  });
-
-  test("pushes per-step status changes as a watched external run progresses", () => {
-    // The full-state push only happens when a client switches onto the run, so
-    // without this the dashboard's per-step statuses stay frozen at that
-    // snapshot for the rest of the run. That is invisible while the run is
-    // RUNNING (usePromptStatus falls back to position) and becomes the
-    // "error badge on the wrong row" bug the moment it goes terminal.
-    const calls: Array<{ index: number; state: string; workflowId: string }> =
-      [];
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
-    const internal = orchestrator as any;
-    internal.dashboardBroadcastHub = {
-      updateStepStatus: (
-        index: number,
-        status: { state: string },
-        _details: unknown,
-        workflowId: string
-      ) => calls.push({ index, state: status.state, workflowId }),
-    };
-
-    // Snapshot the dashboard already has: step 1 done, step 2 in flight.
-    const entry = {
-      lastStepStatuses: [
-        STEP_STATUS.COMPLETED,
-        STEP_STATUS.RUNNING,
-        STEP_STATUS.PENDING,
-        STEP_STATUS.PENDING,
-        STEP_STATUS.PENDING,
-      ] as string[],
-    };
-    // Disk now: steps 2 and 3 completed, step 4 failed terminally, and
-    // currentIndex has already advanced past it.
-    const steps = [
-      { _runtime: { completedAt: 1, terminalStatus: STEP_STATUS.COMPLETED } },
-      { _runtime: { completedAt: 2, terminalStatus: STEP_STATUS.COMPLETED } },
-      { _runtime: { completedAt: 3, terminalStatus: STEP_STATUS.COMPLETED } },
-      { _runtime: { completedAt: 4, terminalStatus: STEP_STATUS.FAILED } },
-      {},
-    ];
-
-    internal.broadcastExternalRunStepStatuses("external-run", entry, steps, {
-      currentStep: 4,
-      executionState: EXECUTION_STATES.ERROR,
-    });
-
-    // Step 1 was already COMPLETED for this client, so it must not be re-sent.
-    assert.deepStrictEqual(calls, [
-      { index: 1, state: STEP_STATUS.COMPLETED, workflowId: "external-run" },
-      { index: 2, state: STEP_STATUS.COMPLETED, workflowId: "external-run" },
-      { index: 3, state: STEP_STATUS.FAILED, workflowId: "external-run" },
-    ]);
-    // The never-executed step 5 stays PENDING — it is the row the error badge
-    // used to land on.
-    assert.deepStrictEqual(entry.lastStepStatuses, [
-      STEP_STATUS.COMPLETED,
-      STEP_STATUS.COMPLETED,
-      STEP_STATUS.COMPLETED,
-      STEP_STATUS.FAILED,
-      STEP_STATUS.PENDING,
-    ]);
-
-    // A second change with nothing new must broadcast nothing at all.
-    calls.length = 0;
-    internal.broadcastExternalRunStepStatuses("external-run", entry, steps, {
-      currentStep: 4,
-      executionState: EXECUTION_STATES.ERROR,
-    });
-    assert.deepStrictEqual(calls, []);
-  });
-
-  test("sends the final step layout when a watched external run finishes", async () => {
-    // The lock-deleted path reaches handleExternalRunFinished *before* the
-    // working file watcher's last change, and it removes the session first —
-    // so that last onUpdate finds no entry and returns early. This is the only
-    // message left that can correct the step layout, and when it didn't, the
-    // dashboard flipped to ERROR still holding the statuses from whenever the
-    // client switched onto the run: the failed step rendered stale and the
-    // error badge landed on the never-executed step after it.
-    const workspace = await fs.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-external-run-finished-")
-    );
-    try {
-      const workingFilePath = path.join(workspace, "workflow.json");
-      await fs.writeFile(
-        workingFilePath,
-        JSON.stringify({
-          workflowName: "error showcase",
-          _runtime: { currentIndex: 4, executionState: EXECUTION_STATES.ERROR },
-          steps: [
-            {
-              _runtime: {
-                completedAt: 1,
-                terminalStatus: STEP_STATUS.COMPLETED,
-              },
-            },
-            {
-              _runtime: {
-                completedAt: 2,
-                terminalStatus: STEP_STATUS.COMPLETED,
-              },
-            },
-            {
-              _runtime: {
-                completedAt: 3,
-                terminalStatus: STEP_STATUS.COMPLETED,
-              },
-            },
-            {
-              _runtime: { completedAt: 4, terminalStatus: STEP_STATUS.FAILED },
-            },
-            {},
-          ],
-        })
-      );
-
-      const statusCalls: Array<{ index: number; state: string }> = [];
-      let dismissed = false;
-      const orchestrator = Object.create(
-        WorkflowOrchestrator.prototype
-      ) as WorkflowOrchestrator;
-      const internal = orchestrator as any;
-      internal.dashboardBroadcastHub = {
-        updateStepStatus: (index: number, status: { state: string }) =>
-          statusCalls.push({ index, state: status.state }),
-        notifyWorkflowSummaryUpdated: () => undefined,
-        notifyWorkflowDismissed: () => {
-          dismissed = true;
-        },
-      };
-      internal.saveState = () => undefined;
-      internal.externalRunSessions = new Map([
-        [
-          "external-run",
-          {
-            session: { dispose: () => undefined },
-            summary: {
-              workflowKey: "error-showcase",
-              currentStep: 1,
-              totalSteps: 5,
-              executionState: EXECUTION_STATES.RUNNING,
-            },
-            // What the dashboard was last told: step 2 still in flight.
-            lastStepStatuses: [
-              STEP_STATUS.COMPLETED,
-              STEP_STATUS.RUNNING,
-              STEP_STATUS.PENDING,
-              STEP_STATUS.PENDING,
-              STEP_STATUS.PENDING,
-            ],
-          },
-        ],
-      ]);
-
-      internal.handleExternalRunFinished(
-        "external-run",
-        workingFilePath,
-        "lock-deleted"
-      );
-      // handleExternalRunFinished reads the working file asynchronously.
-      for (let i = 0; i < 100 && !dismissed; i++) {
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      }
-      assert.ok(dismissed, "run should have been dismissed");
-
-      assert.deepStrictEqual(statusCalls, [
-        { index: 1, state: STEP_STATUS.COMPLETED },
-        { index: 2, state: STEP_STATUS.COMPLETED },
-        { index: 3, state: STEP_STATUS.FAILED },
-      ]);
-    } finally {
-      await fs.rm(workspace, { recursive: true, force: true });
-    }
-  });
-
   test("replays a lineage-less instance as a replacement, not a replay", async () => {
     const replayCalls: Array<{ asReplacement?: boolean } | undefined> = [];
     const orchestrator = Object.create(
@@ -645,7 +376,8 @@ suite("WorkflowOrchestrator SESSION_RESTORED revision forwarding", () => {
     };
     internal.instances = new Map([["inst-new", instance]]);
     internal.retiredInstances = new Map();
-    internal.externalRunSessions = new Map();
+    internal.externalRunWatchCoordinator =
+      createEmptyExternalRunWatchCoordinator();
     internal.getActiveTerminalWorkflowRefs = () => [];
     internal.setViewedWorkflowId = () => {};
     internal.loadRunViewForClient = async () => {
@@ -931,11 +663,33 @@ suite("WorkflowOrchestrator triggerAutoLoad view-ownership", () => {
     let settledWith: string | null | undefined;
 
     internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
-    internal.currentWorkspaceFolderPath = options.workspacePath ?? path.join(os.tmpdir(), "ctrlyoke-ws");
+    internal.currentWorkspaceFolderPath =
+      options.workspacePath ?? path.join(os.tmpdir(), "ctrlyoke-ws");
     internal.runnerHostIdentity = {
       runner: RUNNER_IDS.VSCODE,
       hostInstanceId: "observer-host",
       pid: process.pid,
+    };
+    internal.externalRunWatchCoordinator = {
+      ...createEmptyExternalRunWatchCoordinator(),
+      resolveExternalExecutionForPath: (
+        workingFilePath: string,
+        workspaceRoot: string
+      ) =>
+        new ExternalExecutionResolver(
+          workspaceRoot,
+          internal.runnerHostIdentity
+        ).resolve(workingFilePath),
+      shouldDeclineUntrackedOwnership: (
+        _workingFilePath: string,
+        resolution: {
+          kind: string;
+          reason?: string;
+        }
+      ) =>
+        resolution.kind === EXTERNAL_EXECUTION_RESOLUTION_KINDS.NOT_EXTERNAL &&
+        (resolution.reason === EXTERNAL_EXECUTION_REASONS.SELF_OWNED ||
+          resolution.reason === EXTERNAL_EXECUTION_REASONS.INDETERMINATE_OWNER),
     };
     internal.startupPanelViewedId = options.startupPanelViewedId;
     internal.viewerRegistry = new Map<string, string | null>([
@@ -1220,7 +974,8 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     internal.viewMessageSinks = new Map();
     internal.instances = new Map([[workflowId, instance]]);
     internal.retiredInstances = new Map();
-    internal.externalRunSessions = new Map();
+    internal.externalRunWatchCoordinator =
+      createEmptyExternalRunWatchCoordinator();
     internal.getActiveTerminalWorkflowRefs = () => [];
     internal.readAddressedRunView = async () => ({
       workingFile: {
@@ -1301,7 +1056,8 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         },
       ],
     ]);
-    internal.externalRunSessions = new Map();
+    internal.externalRunWatchCoordinator =
+      createEmptyExternalRunWatchCoordinator();
 
     assert.deepStrictEqual(orchestrator.getViewAddress("client-a"), {
       workflowKey,
@@ -1337,7 +1093,8 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         },
       ],
     ]);
-    internal.externalRunSessions = new Map();
+    internal.externalRunWatchCoordinator =
+      createEmptyExternalRunWatchCoordinator();
 
     assert.strictEqual(internal.findExecutionRunRef(workflowKey), undefined);
   });
@@ -1882,7 +1639,8 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       const internal = orchestrator as any;
       internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
-      internal.externalRunSessions = new Map();
+      internal.externalRunWatchCoordinator =
+        createEmptyExternalRunWatchCoordinator();
       internal.viewAddressRegistry = new Map([
         [
           PANEL_CLIENT_ID,
@@ -2037,7 +1795,8 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       const internal = orchestrator as any;
       internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
-      internal.externalRunSessions = new Map();
+      internal.externalRunWatchCoordinator =
+        createEmptyExternalRunWatchCoordinator();
       // The requester (the run-navigation panel's client) is viewing an
       // unrelated lineage, not this one at all — proving delete no longer
       // requires the target to be the client's own viewed run.
@@ -2163,7 +1922,8 @@ suite("WorkflowOrchestrator handleClientReady", () => {
           },
         ],
       ]);
-      internal.externalRunSessions = new Map();
+      internal.externalRunWatchCoordinator =
+        createEmptyExternalRunWatchCoordinator();
       internal.viewAddressRegistry = new Map([
         [
           PANEL_CLIENT_ID,
@@ -2309,7 +2069,8 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       ],
     ]);
     internal.retiredInstances = new Map();
-    internal.externalRunSessions = new Map();
+    internal.externalRunWatchCoordinator =
+      createEmptyExternalRunWatchCoordinator();
     internal.getActiveTerminalWorkflowRefs = () => [];
     internal.loadRunViewForClient = async (
       address: unknown,
@@ -2386,7 +2147,8 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         ],
       ]);
       internal.retiredInstances = new Map();
-      internal.externalRunSessions = new Map();
+      internal.externalRunWatchCoordinator =
+        createEmptyExternalRunWatchCoordinator();
       internal.bindClientToAddressedLineage = async () => workflowId;
       internal.resolveAddressFilePath = () => workingFilePath;
       internal.findExecutionRunRef = () => null;
@@ -2551,7 +2313,8 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         ],
       ]);
       internal.retiredInstances = new Map();
-      internal.externalRunSessions = new Map();
+      internal.externalRunWatchCoordinator =
+        createEmptyExternalRunWatchCoordinator();
       internal.bindClientToAddressedLineage = async () => workflowId;
       internal.resolveAddressFilePath = () => workingFilePath;
       // Nothing is executing in this lineage — the addressed run is history.
@@ -2640,7 +2403,8 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       internal.viewMessageSinks = new Map();
       internal.instances = new Map();
       internal.retiredInstances = new Map();
-      internal.externalRunSessions = new Map();
+      internal.externalRunWatchCoordinator =
+        createEmptyExternalRunWatchCoordinator();
       internal.bindClientToAddressedLineage = async (
         _address: unknown,
         _send: unknown,
@@ -2761,7 +2525,8 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         ],
       ]);
       internal.retiredInstances = new Map();
-      internal.externalRunSessions = new Map();
+      internal.externalRunWatchCoordinator =
+        createEmptyExternalRunWatchCoordinator();
       internal.bindClientToAddressedLineage = async () => workflowId;
       internal.resolveAddressFilePath = () => workingFilePath;
       internal.findExecutionRunRef = () => runRef;
@@ -2893,7 +2658,8 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       ],
     ]);
     internal.retiredInstances = new Map();
-    internal.externalRunSessions = new Map();
+    internal.externalRunWatchCoordinator =
+      createEmptyExternalRunWatchCoordinator();
     internal.getActiveTerminalWorkflowRefs = () => [];
     internal.loadRunViewForClient = async () => {
       operations.push("run-view");
@@ -3022,7 +2788,8 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
         ],
       ]);
       internal.retiredInstances = new Map();
-      internal.externalRunSessions = new Map();
+      internal.externalRunWatchCoordinator =
+        createEmptyExternalRunWatchCoordinator();
       internal.loadFreshInstanceAndReplay = async () => {
         throw new Error("An idle run edit must not fork a draft");
       };
@@ -3132,7 +2899,8 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
         ],
       ]);
       internal.retiredInstances = new Map();
-      internal.externalRunSessions = new Map();
+      internal.externalRunWatchCoordinator =
+        createEmptyExternalRunWatchCoordinator();
       internal.loadFreshInstanceAndReplay = () => {
         throw new Error("An executing run must not fork a draft for settings");
       };
@@ -3167,7 +2935,8 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
     );
     const ownerToken = WorkflowLockManager.generateOwnerToken();
     let workflowKey:
-      import("../../types/CtrlYokeTypes").WorkflowKey | undefined;
+      | import("../../types/CtrlYokeTypes").WorkflowKey
+      | undefined;
     try {
       const sourceManager = new WorkingFileManager({
         getWorkingFilePath: () => undefined,
@@ -3246,7 +3015,8 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
       ]);
       internal.instances = new Map();
       internal.retiredInstances = new Map([[retained.id, retained]]);
-      internal.externalRunSessions = new Map();
+      internal.externalRunWatchCoordinator =
+        createEmptyExternalRunWatchCoordinator();
 
       await orchestrator.prepareWorkflowPropertiesMutation(
         {
@@ -3327,7 +3097,8 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
       internal.lineageRepository = repository;
       internal.instances = new Map();
       internal.retiredInstances = new Map();
-      internal.externalRunSessions = new Map();
+      internal.externalRunWatchCoordinator =
+        createEmptyExternalRunWatchCoordinator();
       internal.viewAddressRegistry = new Map([
         [
           "client-a",
@@ -3450,7 +3221,8 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
       internal.lineageRepository = repository;
       internal.instances = new Map();
       internal.retiredInstances = new Map();
-      internal.externalRunSessions = new Map();
+      internal.externalRunWatchCoordinator =
+        createEmptyExternalRunWatchCoordinator();
       internal.viewAddressRegistry = new Map([
         [
           "client-a",
@@ -3544,7 +3316,8 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
         ["unrelated-instance", unrelatedInstance],
       ]);
       internal.retiredInstances = new Map();
-      internal.externalRunSessions = new Map();
+      internal.externalRunWatchCoordinator =
+        createEmptyExternalRunWatchCoordinator();
 
       await orchestrator.deletePromptFromQueue(
         {
@@ -3662,7 +3435,8 @@ suite("WorkflowOrchestrator loadWorkflowForClient path matching", () => {
       getSummary: () => ({ workingFilePath: nativePath }),
     };
 
-    internal.externalRunSessions = new Map();
+    internal.externalRunWatchCoordinator =
+      createEmptyExternalRunWatchCoordinator();
     internal.instances = new Map<string, any>([["live-1", liveInstance]]);
     internal.retiredInstances = new Map<string, any>();
     internal.ensureExternalRunWatchSession = async () => false;
@@ -3702,385 +3476,6 @@ suite("WorkflowOrchestrator loadWorkflowForClient path matching", () => {
       workflowId: "live-1",
     });
     assert.strictEqual(replayedId, "live-1");
-  });
-});
-
-suite("WorkflowOrchestrator external-run watch routing", () => {
-  async function createLiveRun(
-    workspace: string,
-    runner: typeof RUNNER_IDS.CLI | typeof RUNNER_IDS.VSCODE,
-    name: string,
-    executionState: ExecutionState = EXECUTION_STATES.RUNNING,
-    hostInstanceId = `${name}-host`
-  ): Promise<{
-    workflowKey: import("../../types/CtrlYokeTypes").WorkflowKey;
-    filePath: string;
-  }> {
-    const workflowKey =
-      `${name}-workflow` as import("../../types/CtrlYokeTypes").WorkflowKey;
-    const runRef =
-      "run-2026-08-25T00-00-00-000Z" as import("../../types/CtrlYokeTypes").RunRef;
-    const filePath = WorkflowPaths.runFilePath(workspace, workflowKey, runRef);
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.writeFile(
-      filePath,
-      JSON.stringify({
-        workflowName: name,
-        startedAt: Date.now(),
-        steps: [{ prompt: "live" }],
-        _runtime: { currentIndex: 0, executionState },
-      }),
-      "utf8"
-    );
-    await fs.writeFile(
-      WorkflowLockManager.getLockPath(workspace, workflowKey),
-      JSON.stringify({
-        schemaVersion: 2,
-        workflowKey,
-        runRef,
-        runner,
-        pid: process.pid,
-        ownerToken: `${name}-owner`,
-        hostInstanceId,
-        executionInstanceId: `${name}-instance`,
-        startedAt: Date.now(),
-        lastHeartbeat: Date.now(),
-      }),
-      "utf8"
-    );
-    return { workflowKey, filePath };
-  }
-
-  function createWatchHarness(
-    workspace: string,
-    runnerHostIdentity = {
-      runner: RUNNER_IDS.VSCODE,
-      hostInstanceId: "observer-host",
-      pid: 999999,
-    }
-  ) {
-    const orchestrator = Object.create(
-      WorkflowOrchestrator.prototype
-    ) as WorkflowOrchestrator;
-    const internal = orchestrator as any;
-    internal.currentWorkspaceFolderPath = workspace;
-    internal.runnerHostIdentity = runnerHostIdentity;
-    internal.instances = new Map();
-    internal.retiredInstances = new Map();
-    internal.externalRunSessions = new Map();
-    internal.viewerRegistry = new Map();
-    internal.externallyCreatedInstanceIds = new Set();
-    internal.announcedExternalWorkflowIds = new Set();
-    internal.dashboardBroadcastHub = {
-      notifyWorkflowAdded: () => undefined,
-      notifyWorkflowSummaryUpdated: () => undefined,
-      notifyWorkflowDismissed: () => undefined,
-    };
-    internal.setViewedWorkflowId = () => undefined;
-    internal.replayWorkflowStateTo = async () => undefined;
-    internal.workspaceState = { update: async () => undefined };
-    return { orchestrator, internal };
-  }
-
-  function createFakeInstance(workingFilePath: string, executionState: string) {
-    return {
-      getSummary: () => ({
-        workingFilePath,
-        executionState,
-        workflowName: "local",
-      }),
-      getQueueState: () => ({ status: executionState }),
-      dispose: () => undefined,
-    };
-  }
-
-  test("registers a live sibling-VSCode lock as a read-only watch at startup", async () => {
-    const workspace = await fs.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-vscode-watch-startup-")
-    );
-    const originalStart = ExternalRunWatchSession.prototype.start;
-    ExternalRunWatchSession.prototype.start = async () => undefined;
-    try {
-      const run = await createLiveRun(workspace, RUNNER_IDS.VSCODE, "sibling");
-      const { internal } = createWatchHarness(workspace);
-      internal.lineageRepository = {
-        listLineageKeys: async () => [run.workflowKey],
-        pruneStaleStagingDirs: async () => undefined,
-      };
-      internal.setupRunnerJsonCreateWatcher = () => undefined;
-
-      await internal.setupExternalRunWatching();
-
-      const entry = internal.externalRunSessions.get(run.workflowKey);
-      assert.ok(entry, "startup should register an external watch session");
-      assert.ok(entry.summary.externalOwner);
-      assert.strictEqual(entry.summary.externalOwner.locality, "external");
-      assert.strictEqual(entry.summary.externalOwner.runner, RUNNER_IDS.VSCODE);
-      assert.strictEqual(entry.summary.workingFilePath, run.filePath);
-      assert.strictEqual(
-        internal.instances.size,
-        0,
-        "must not adopt a local instance"
-      );
-    } finally {
-      ExternalRunWatchSession.prototype.start = originalStart;
-      await fs.rm(workspace, { recursive: true, force: true });
-    }
-  });
-
-  test("does not register a self-owned active lock at startup", async () => {
-    const workspace = await fs.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-self-vscode-watch-startup-")
-    );
-    const originalStart = ExternalRunWatchSession.prototype.start;
-    ExternalRunWatchSession.prototype.start = async () => undefined;
-    try {
-      const run = await createLiveRun(
-        workspace,
-        RUNNER_IDS.VSCODE,
-        "self-startup",
-        EXECUTION_STATES.RUNNING,
-        "observer-host"
-      );
-      const { internal } = createWatchHarness(workspace, {
-        runner: RUNNER_IDS.VSCODE,
-        hostInstanceId: "observer-host",
-        pid: process.pid,
-      });
-      internal.lineageRepository = {
-        listLineageKeys: async () => [run.workflowKey],
-        pruneStaleStagingDirs: async () => undefined,
-      };
-      internal.setupRunnerJsonCreateWatcher = () => undefined;
-
-      await internal.setupExternalRunWatching();
-
-      assert.strictEqual(
-        internal.externalRunSessions.size,
-        0,
-        "startup must not watch this host's own run as external"
-      );
-    } finally {
-      ExternalRunWatchSession.prototype.start = originalStart;
-      await fs.rm(workspace, { recursive: true, force: true });
-    }
-  });
-
-  test("does not synthesize a running watch for a completed run whose inject PTY retains the lock", async () => {
-    const workspace = await fs.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-completed-retained-lock-")
-    );
-    const originalStart = ExternalRunWatchSession.prototype.start;
-    ExternalRunWatchSession.prototype.start = async () => undefined;
-    try {
-      const run = await createLiveRun(
-        workspace,
-        RUNNER_IDS.VSCODE,
-        "completed-retained",
-        EXECUTION_STATES.COMPLETED
-      );
-      const { orchestrator, internal } = createWatchHarness(workspace);
-
-      const started = await orchestrator.ensureExternalRunWatchSession(
-        run.filePath
-      );
-
-      assert.strictEqual(
-        started,
-        false,
-        "the persisted terminal state must outrank the still-live reservation lock"
-      );
-      assert.strictEqual(
-        internal.externalRunSessions.size,
-        0,
-        "a second window must not show the completed run as externally running"
-      );
-    } finally {
-      ExternalRunWatchSession.prototype.start = originalStart;
-      await fs.rm(workspace, { recursive: true, force: true });
-    }
-  });
-
-  test("routes both live external runners through the watch path for view loads", async () => {
-    const workspace = await fs.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-external-view-watch-")
-    );
-    const originalStart = ExternalRunWatchSession.prototype.start;
-    ExternalRunWatchSession.prototype.start = async () => undefined;
-    try {
-      for (const [runner] of [
-        [RUNNER_IDS.CLI, RUNNER_IDS.CLI],
-        [RUNNER_IDS.VSCODE, RUNNER_IDS.VSCODE],
-      ] as const) {
-        const run = await createLiveRun(workspace, runner, `${runner}-view`);
-        const { orchestrator, internal } = createWatchHarness(workspace);
-        let freshLoad = false;
-        internal.loadFreshInstanceAndReplay = async () => {
-          freshLoad = true;
-        };
-
-        await orchestrator.loadWorkflowForClient(
-          run.filePath,
-          () => undefined,
-          `client-${runner}`,
-          { skipReplay: true }
-        );
-
-        assert.strictEqual(freshLoad, false);
-        const externalOwner = internal.externalRunSessions.get(run.workflowKey)
-          ?.summary.externalOwner;
-        assert.ok(externalOwner);
-        assert.strictEqual(externalOwner.locality, "external");
-        assert.strictEqual(externalOwner.runner, runner);
-      }
-    } finally {
-      ExternalRunWatchSession.prototype.start = originalStart;
-      await fs.rm(workspace, { recursive: true, force: true });
-    }
-  });
-
-  test("routes a live external working-file load to the watch path", async () => {
-    const workspace = await fs.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-vscode-working-watch-")
-    );
-    const originalStart = ExternalRunWatchSession.prototype.start;
-    ExternalRunWatchSession.prototype.start = async () => undefined;
-    try {
-      const run = await createLiveRun(workspace, RUNNER_IDS.VSCODE, "working");
-      const { orchestrator, internal } = createWatchHarness(workspace);
-      let freshInstance = false;
-      internal.loadFreshInstance = async () => {
-        freshInstance = true;
-      };
-
-      await orchestrator.loadWorkingFile(run.filePath);
-
-      assert.strictEqual(freshInstance, false);
-      const externalOwner = internal.externalRunSessions.get(run.workflowKey)
-        ?.summary.externalOwner;
-      assert.ok(externalOwner);
-      assert.strictEqual(externalOwner.locality, "external");
-      assert.strictEqual(externalOwner.runner, RUNNER_IDS.VSCODE);
-    } finally {
-      ExternalRunWatchSession.prototype.start = originalStart;
-      await fs.rm(workspace, { recursive: true, force: true });
-    }
-  });
-
-  test("checks workflow roots when reloading a retired active working file", async () => {
-    const workspace = await fs.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-vscode-working-retired-")
-    );
-    try {
-      const filePath = path.join(workspace, "workflow.ctrlyoke.json");
-      const { orchestrator, internal } = createWatchHarness(workspace);
-      const retiredInstance = {
-        id: "retired-workflow",
-        getSummary: () => ({ workingFilePath: filePath }),
-      };
-      let approvalChecks = 0;
-      internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
-      internal.retiredInstances.set(retiredInstance.id, retiredInstance);
-      internal.approvePendingWorkflowExternalRootsForClient = async () => {
-        approvalChecks += 1;
-        return [];
-      };
-
-      await orchestrator.loadWorkingFile(filePath);
-
-      assert.strictEqual(approvalChecks, 1);
-    } finally {
-      await fs.rm(workspace, { recursive: true, force: true });
-    }
-  });
-
-  test("does not retire a locally in-flight WorkflowInstance for its own active lock", async () => {
-    // Regression: an active lock may be this very process's own
-    // lock for a workflow it is already executing. startExternalRunWatchSession must not
-    // retire a genuinely RUNNING/PAUSING/CANCELLING local instance in favor of a
-    // read-only watch of itself.
-    const workspace = await fs.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-self-lock-no-retire-")
-    );
-    const originalStart = ExternalRunWatchSession.prototype.start;
-    ExternalRunWatchSession.prototype.start = async () => undefined;
-    try {
-      const run = await createLiveRun(
-        workspace,
-        RUNNER_IDS.VSCODE,
-        "self",
-        EXECUTION_STATES.RUNNING,
-        "observer-host"
-      );
-      const { internal } = createWatchHarness(workspace, {
-        runner: RUNNER_IDS.VSCODE,
-        hostInstanceId: "observer-host",
-        pid: process.pid,
-      });
-      const instanceId = "self-inst";
-      internal.instances.set(
-        instanceId,
-        createFakeInstance(run.filePath, EXECUTION_STATES.RUNNING)
-      );
-
-      await internal.startExternalRunWatchSessionIfExternal(
-        run.filePath,
-        workspace
-      );
-
-      assert.strictEqual(
-        internal.instances.has(instanceId),
-        true,
-        "the in-flight local instance must survive"
-      );
-      assert.strictEqual(
-        internal.externalRunSessions.size,
-        0,
-        "no external watch session should be registered over a live local instance"
-      );
-    } finally {
-      ExternalRunWatchSession.prototype.start = originalStart;
-      await fs.rm(workspace, { recursive: true, force: true });
-    }
-  });
-
-  test("retires a locally PAUSED WorkflowInstance when the CLI takes over the same run", async () => {
-    // The retire loop exists for exactly this case: VS Code auto-loaded the workflow
-    // in PAUSED state and a live runner is now driving it — that PAUSED instance has
-    // no in-flight step, so it's safe (and correct) to yield to the watch session.
-    const workspace = await fs.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-paused-retire-")
-    );
-    const originalStart = ExternalRunWatchSession.prototype.start;
-    ExternalRunWatchSession.prototype.start = async () => undefined;
-    try {
-      const run = await createLiveRun(workspace, RUNNER_IDS.CLI, "takeover");
-      const { internal } = createWatchHarness(workspace);
-      const instanceId = "paused-inst";
-      internal.instances.set(
-        instanceId,
-        createFakeInstance(run.filePath, EXECUTION_STATES.PAUSED)
-      );
-
-      await internal.startExternalRunWatchSessionIfExternal(
-        run.filePath,
-        workspace
-      );
-
-      assert.strictEqual(
-        internal.instances.has(instanceId),
-        false,
-        "the paused local instance should be retired in favor of the CLI watch session"
-      );
-      const externalOwner = internal.externalRunSessions.get(run.workflowKey)
-        ?.summary.externalOwner;
-      assert.ok(externalOwner);
-      assert.strictEqual(externalOwner.locality, "external");
-      assert.strictEqual(externalOwner.runner, RUNNER_IDS.CLI);
-    } finally {
-      ExternalRunWatchSession.prototype.start = originalStart;
-      await fs.rm(workspace, { recursive: true, force: true });
-    }
   });
 });
 
@@ -4574,7 +3969,8 @@ suite("WorkflowOrchestrator addressed start position", () => {
       internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
       internal.retiredInstances = new Map();
-      internal.externalRunSessions = new Map();
+      internal.externalRunWatchCoordinator =
+        createEmptyExternalRunWatchCoordinator();
       internal.viewAddressRegistry = new Map([
         [
           PANEL_CLIENT_ID,
@@ -4706,7 +4102,8 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
     internal.currentWorkspaceFolderPath = workspace;
     internal.instances = new Map(instance ? [["active", instance]] : []);
     internal.retiredInstances = new Map();
-    internal.externalRunSessions = new Map();
+    internal.externalRunWatchCoordinator =
+      createEmptyExternalRunWatchCoordinator();
     internal.viewerRegistry = new Map();
     internal.viewAddressRegistry = new Map([
       [
@@ -5178,7 +4575,8 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
       internal.currentWorkspaceFolderPath = workspace;
       internal.instances = new Map();
       internal.retiredInstances = new Map();
-      internal.externalRunSessions = new Map();
+      internal.externalRunWatchCoordinator =
+        createEmptyExternalRunWatchCoordinator();
       internal.viewAddressRegistry = new Map([
         [
           PANEL_CLIENT_ID,

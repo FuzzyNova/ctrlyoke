@@ -6,8 +6,10 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
 import { WorkflowOrchestrator } from "../../core/WorkflowOrchestrator";
+import { ExternalRunWatchCoordinator } from "../../core/orchestration/ExternalRunWatchCoordinator";
 import { ExternalExecutionResolver } from "../../core/orchestration/ExternalExecutionResolver";
 import { ExternalRunWatchSession } from "../../core/orchestration/ExternalRunWatchSession";
+import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
 import { RunContinuationService } from "../../core/orchestration/RunContinuationService";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import {
@@ -34,6 +36,7 @@ const RUN_REF = "run-2026-08-28T00-00-00-000Z" as RunRef;
 interface HostHarness {
   orchestrator: WorkflowOrchestrator;
   internal: any;
+  coordinator: ExternalRunWatchCoordinator;
   identity: RunnerHostIdentity;
   resolver: ExternalExecutionResolver;
   decisions: unknown[];
@@ -177,11 +180,9 @@ function createHost(
   internal.runnerHostIdentity = identity;
   internal.instances = new Map();
   internal.retiredInstances = new Map();
-  internal.externalRunSessions = new Map();
   internal.viewerRegistry = new Map([[PANEL_CLIENT_ID, null]]);
   internal.viewAddressRegistry = new Map();
   internal.viewMessageSinks = new Map();
-  internal.polledRunnerJsonMtimes = new Map();
   internal.externallyCreatedInstanceIds = new Set();
   internal.announcedExternalWorkflowIds = new Set();
   internal.lineageExecutionOwners = new Map();
@@ -196,7 +197,6 @@ function createHost(
     updateStepStatus: () => undefined,
   };
   internal.workspaceState = { update: async () => undefined };
-  internal.setupRunnerJsonCreateWatcher = () => undefined;
   internal.lineageRepository = {
     listLineageKeys: async () => [WORKFLOW_KEY],
     pruneStaleStagingDirs: async () => undefined,
@@ -214,9 +214,46 @@ function createHost(
   // covered separately in WorkflowOrchestrator.test.ts, so stub it here.
   internal.approvePendingWorkflowExternalRootsForClient = async () => [];
 
+  const coordinator = new ExternalRunWatchCoordinator({
+    broadcast: internal.dashboardBroadcastHub,
+    lineageRepository: internal.lineageRepository,
+    findInstanceForWorkingFile: (filePath: string, includeRetired = false) => {
+      const instances = [
+        ...internal.instances.values(),
+        ...(includeRetired ? [...internal.retiredInstances.values()] : []),
+      ];
+      return instances.filter(
+        (instance: any) =>
+          instance.getSummary().workingFilePath?.replace(/\\/g, "/") ===
+          filePath.replace(/\\/g, "/")
+      );
+    },
+    retireWorkflow: (workflowId: string) => {
+      const instance = internal.instances.get(workflowId);
+      if (instance) {
+        internal.instances.delete(workflowId);
+        internal.retiredInstances.set(workflowId, instance);
+      }
+    },
+    workspaceRoot,
+    saveState: async () => undefined,
+    getOutputHistoryManager: () => new OutputHistoryManager(workspaceRoot),
+    runnerHostIdentity: identity,
+    fileWatcherFactory: {
+      create: () => ({
+        onDidCreate: () => ({ dispose: () => undefined }),
+        onDidChange: () => ({ dispose: () => undefined }),
+        onDidDelete: () => ({ dispose: () => undefined }),
+        dispose: () => undefined,
+      }),
+    },
+  });
+  internal.externalRunWatchCoordinator = coordinator;
+
   return {
     orchestrator,
     internal,
+    coordinator,
     identity,
     resolver,
     decisions,
@@ -310,8 +347,8 @@ suite("multi-instance runner ownership regression", () => {
       // external session; the sibling gets a watch pinned to the exact run.
       await hostA.internal.setupExternalRunWatching();
       await hostB.internal.setupExternalRunWatching();
-      assert.strictEqual(hostA.internal.externalRunSessions.size, 0);
-      const siblingEntry = hostB.internal.externalRunSessions.get(WORKFLOW_KEY);
+      assert.strictEqual(hostA.coordinator.getSummaries().length, 0);
+      const siblingEntry = hostB.coordinator.getEntry(WORKFLOW_KEY);
       assert.ok(siblingEntry);
       assert.deepStrictEqual(siblingEntry.summary.externalOwner, {
         locality: "external",
@@ -339,7 +376,7 @@ suite("multi-instance runner ownership regression", () => {
       hostB.internal.dashboardReadyAt = now;
       hostB.internal.resolveStartupAutoLoad = () => undefined;
       await hostB.internal.triggerAutoLoad();
-      assert.strictEqual(hostB.internal.externalRunSessions.size, 1);
+      assert.strictEqual(hostB.coordinator.getSummaries().length, 1);
       assert.strictEqual(hostA.added.length, 0);
 
       // Explicit dashboard and working-file loads reuse the sibling watch;
@@ -358,9 +395,9 @@ suite("multi-instance runner ownership regression", () => {
         { skipReplay: true }
       );
       await hostA.orchestrator.loadWorkingFile(workingFilePath);
-      assert.strictEqual(hostA.internal.externalRunSessions.size, 0);
+      assert.strictEqual(hostA.coordinator.getSummaries().length, 0);
       assert.strictEqual(hostA.added.length, 0);
-      assert.strictEqual(hostB.internal.externalRunSessions.size, 1);
+      assert.strictEqual(hostB.coordinator.getSummaries().length, 1);
 
       // The sibling cannot continue/mutate the live run directly.
       await assert.rejects(
@@ -396,12 +433,12 @@ suite("multi-instance runner ownership regression", () => {
 
       // File-watcher/poll discovery is exercised after replacing the current
       // observation, and still resolves the same owner proof.
-      hostB.internal.externalRunSessions.clear();
-      await hostB.internal.pollRunnerJsonDiscovery(
+      hostB.coordinator.dispose();
+      await hostB.coordinator.pollRunnerJsonDiscovery(
         WorkflowPaths.runsRoot(workspaceRoot),
         workspaceRoot
       );
-      assert.strictEqual(hostB.internal.externalRunSessions.size, 1);
+      assert.strictEqual(hostB.coordinator.getSummaries().length, 1);
 
       // Pause/resume writes are observed by the sibling while the owner keeps
       // the lock and local execution record.
@@ -412,34 +449,30 @@ suite("multi-instance runner ownership regression", () => {
         }
       ).handleWorkingFileChange();
       assert.strictEqual(
-        hostB.internal.externalRunSessions.get(WORKFLOW_KEY).summary
-          .executionState,
+        hostB.coordinator.getEntry(WORKFLOW_KEY)!.summary.executionState,
         EXECUTION_STATES.PAUSED
       );
       await writeRunState(workingFilePath, EXECUTION_STATES.RUNNING);
       await (
-        hostB.internal.externalRunSessions.get(WORKFLOW_KEY)
-          .session as unknown as {
+        hostB.coordinator.getEntry(WORKFLOW_KEY)!.session as unknown as {
           handleWorkingFileChange: () => Promise<void>;
         }
       ).handleWorkingFileChange();
       assert.strictEqual(
-        hostB.internal.externalRunSessions.get(WORKFLOW_KEY).summary
-          .executionState,
+        hostB.coordinator.getEntry(WORKFLOW_KEY)!.summary.executionState,
         EXECUTION_STATES.RUNNING
       );
 
       // Terminal persisted state wins over the retained named-worktree lock.
       await writeRunState(workingFilePath, EXECUTION_STATES.COMPLETED, 1);
-      const currentSiblingSession = hostB.internal.externalRunSessions.get(
-        WORKFLOW_KEY
-      ).session as ExternalRunWatchSession;
+      const currentSiblingSession = hostB.coordinator.getEntry(WORKFLOW_KEY)!
+        .session as ExternalRunWatchSession;
       await (
         currentSiblingSession as unknown as {
           handleWorkingFileChange: () => Promise<void>;
         }
       ).handleWorkingFileChange();
-      await waitFor(() => hostB.internal.externalRunSessions.size === 0);
+      await waitFor(() => hostB.coordinator.getSummaries().length === 0);
       assert.strictEqual(
         (await hostA.resolver.resolve(workingFilePath)).kind,
         "not-external"
@@ -492,6 +525,8 @@ suite("multi-instance runner ownership regression", () => {
     } finally {
       ConfigurationUtils.shouldAutoLoadRecentSession = originalShouldAutoLoad;
       ExternalRunWatchSession.prototype.start = originalStart;
+      hostA.coordinator.dispose();
+      hostB.coordinator.dispose();
       await stopLiveChild(child);
       await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
@@ -557,7 +592,7 @@ suite("multi-instance runner ownership regression", () => {
         /self-owned execution is not tracked/i
       );
 
-      assert.strictEqual(host.internal.externalRunSessions.size, 0);
+      assert.strictEqual(host.coordinator.getSummaries().length, 0);
       assert.deepStrictEqual(host.added, []);
       assert.deepStrictEqual(host.dismissed, []);
       assert.deepStrictEqual(host.freshLoads, []);
@@ -600,6 +635,7 @@ suite("multi-instance runner ownership regression", () => {
         )
       );
     } finally {
+      host.coordinator.dispose();
       ConfigurationUtils.shouldAutoLoadRecentSession = originalShouldAutoLoad;
       await WorkflowLockManager.releaseLock(
         workspaceRoot,
