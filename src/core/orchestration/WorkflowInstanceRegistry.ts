@@ -26,15 +26,14 @@ import type { UserFeedbackSink } from "../UserFeedbackSink";
 import type { UserInteractionPort } from "../../ui/UserInteractionPort";
 import { getPtyProcessManager } from "../harness/PtyProcessManager";
 import { Log } from "../../utils/Log";
+import type { RunViewPublisherRegistryPort } from "./RunViewPublisher";
 
 export interface LineageExecutionClaim {
   instanceId: string;
   promoted: boolean;
 }
 
-export function isExecutionOwnerState(
-  status: QueueState["status"]
-): boolean {
+export function isExecutionOwnerState(status: QueueState["status"]): boolean {
   return (
     status === EXECUTION_STATES.RUNNING ||
     status === EXECUTION_STATES.PAUSING ||
@@ -94,7 +93,9 @@ export interface WorkflowInstanceRegistryBuildPort {
 }
 
 export interface WorkflowInstanceRegistryBroadcastPort {
-  readonly notifyWorkflowAdded: (summary: ReturnType<WorkflowInstance["getSummary"]>) => void;
+  readonly notifyWorkflowAdded: (
+    summary: ReturnType<WorkflowInstance["getSummary"]>
+  ) => void;
   readonly notifyWorkflowSummaryUpdated: (
     summary: ReturnType<WorkflowInstance["getSummary"]>
   ) => void;
@@ -102,8 +103,7 @@ export interface WorkflowInstanceRegistryBroadcastPort {
 }
 
 /** Narrow host services used by the instance registry and its lifecycle listener. */
-export interface WorkflowInstanceRegistryHost
-  extends WorkflowInstanceRegistryBuildPort {
+export interface WorkflowInstanceRegistryHost extends WorkflowInstanceRegistryBuildPort {
   readonly panelClientId: string;
   readonly getStoredPanelSend: () => ((message: unknown) => void) | undefined;
   readonly replayWorkflowStateTo: (
@@ -133,7 +133,7 @@ export interface WorkflowInstanceRegistryHost
 }
 
 /** Owns workflow instances, retirement, lineage binding, and client viewers. */
-export class WorkflowInstanceRegistry {
+export class WorkflowInstanceRegistry implements RunViewPublisherRegistryPort {
   private readonly instances = new Map<string, WorkflowInstance>();
   private readonly retiredInstances = new Map<string, WorkflowInstance>();
   private readonly viewerRegistry = new Map<string, string | null>();
@@ -212,7 +212,9 @@ export class WorkflowInstanceRegistry {
     filePath?: string
   ): Promise<WorkflowInstance | undefined> {
     if (!this.host) {
-      throw new Error("WorkflowInstanceRegistry host is required to create a workflow");
+      throw new Error(
+        "WorkflowInstanceRegistry host is required to create a workflow"
+      );
     }
     const currentPanelId = this.getViewedWorkflowId(this.panelClientId);
     Log.debug(
@@ -325,7 +327,9 @@ export class WorkflowInstanceRegistry {
     const activePtySessions = ptyManager
       ? ptyManager
           .getSessionsForWorkflow(workflowId)
-          .filter((session) => session.status === TERMINAL_SESSION_STATUS.RUNNING)
+          .filter(
+            (session) => session.status === TERMINAL_SESSION_STATUS.RUNNING
+          )
       : [];
     const hasActivePty = activePtySessions.length > 0;
     Log.debug(
@@ -374,7 +378,9 @@ export class WorkflowInstanceRegistry {
   }
 
   findInstance(workflowId: string): WorkflowInstance | undefined {
-    return this.instances.get(workflowId) ?? this.retiredInstances.get(workflowId);
+    return (
+      this.instances.get(workflowId) ?? this.retiredInstances.get(workflowId)
+    );
   }
 
   getActiveInstance(): WorkflowInstance {
@@ -403,7 +409,9 @@ export class WorkflowInstanceRegistry {
     return id ? (this.findInstance(id) ?? null) : null;
   }
 
-  findInstanceForLineage(workflowKey: WorkflowKey): WorkflowInstance | undefined {
+  findInstanceForLineage(
+    workflowKey: WorkflowKey
+  ): WorkflowInstance | undefined {
     const matches = (instance: WorkflowInstance) =>
       instance.getQueueState().workflowKey === workflowKey;
     const live = [...this.instances.values()].filter(matches);
@@ -480,7 +488,8 @@ export class WorkflowInstanceRegistry {
   }
 
   registerClient(clientId: string, send?: (message: unknown) => void): void {
-    if (!this.viewerRegistry.has(clientId)) this.viewerRegistry.set(clientId, null);
+    if (!this.viewerRegistry.has(clientId))
+      this.viewerRegistry.set(clientId, null);
     if (!this.viewAddressRegistry.has(clientId)) {
       this.viewAddressRegistry.set(clientId, null);
     }
@@ -534,13 +543,17 @@ export class WorkflowInstanceRegistry {
     }
   }
 
-  adoptInstanceLineageAddress(instance: WorkflowInstance, state: QueueState): void {
+  adoptInstanceLineageAddress(
+    instance: WorkflowInstance,
+    state: QueueState
+  ): void {
     const address = lineageAddressOf(state);
     for (const [clientId, viewedInstanceId] of this.viewerRegistry) {
       if (viewedInstanceId !== instance.id) continue;
       if (
         address?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
-        this.viewAddressRegistry.get(clientId)?.workflowKey === address.workflowKey
+        this.viewAddressRegistry.get(clientId)?.workflowKey ===
+          address.workflowKey
       ) {
         continue;
       }
@@ -550,7 +563,9 @@ export class WorkflowInstanceRegistry {
 
   buildWorkflowInstanceForHost(): WorkflowInstance {
     if (!this.host) {
-      throw new Error("WorkflowInstanceRegistry host is required to build an instance");
+      throw new Error(
+        "WorkflowInstanceRegistry host is required to build an instance"
+      );
     }
     const host = this.host;
     const instance = new WorkflowInstance(
@@ -603,7 +618,9 @@ export class WorkflowInstanceRegistry {
           });
         }
       }
-      const isExternallyCreated = this.externallyCreatedInstanceIds.has(instance.id);
+      const isExternallyCreated = this.externallyCreatedInstanceIds.has(
+        instance.id
+      );
       const needsExternalAnnounce =
         isExternallyCreated &&
         !this.announcedExternalWorkflowIds.has(instance.id);

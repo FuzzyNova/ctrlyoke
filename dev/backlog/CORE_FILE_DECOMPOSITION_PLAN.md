@@ -8,7 +8,7 @@
 > to 7,591 lines, so citations in §1/§4 drift by roughly 30 lines (e.g.
 > `buildWorkflowInstance` is at 6261, not 6229; `validateExplicitContinuationTarget`
 > at 5119, not 5081). **Always locate a method by symbol name, never by line
-> number.** Method *lengths* and the state-ownership claims below were re-measured
+> number.** Method _lengths_ and the state-ownership claims below were re-measured
 > and are accurate.
 >
 > **Verdict in one line:** yes, split them — but by lifting out the _state each
@@ -503,18 +503,18 @@ Each phase updates this table as it lands, so the next session can tell what is
 already done without re-deriving it from `git log`. Keep the "Notes" column to
 one line — deviations, deferrals, or a reassessment outcome.
 
-| Phase                                | Status      | Commit | Notes |
-| ------------------------------------ | ----------- | ------ | ----- |
-| Decoupling plan, Phase 1             | ✅ Done     | (prior) | Verified 2026-09-17: options-object ctor, no `vscode` imports in either file. |
-| §4.1 `ExternalRunWatchCoordinator`   | ✅ Done     | 7cbcc7d6 | Added `fileWatcherFactory` to the narrow host port because the coordinator owns watcher setup; updated affected object-create harnesses. |
-| §5.2 `SessionActivityRecorder`       | ✅ Done     | ce340986 | Extracted resumed-session activity state and persistence with a narrow port; carried the parent assertions into its own suite. |
-| §5.3 `RunnerLockCoordinator`         | ✅ Done     | 4f5b2825 | Extracted lock acquire/heartbeat/stop polling/release state and added stale-runner-lock recovery coverage. |
-| §4.2 `WorkflowInstanceRegistry`      | ✅ Done     | 643db76b | Extracted instance lifecycle, lineage selection, viewer/address registries, and external-instance announcement state; 55 legacy `Object.create` doubles remain. |
-| §4.3 `RunViewPublisher`              | Not started | —      | |
-| Test-double retirement               | Not started | —      | Retire `Object.create` doubles; delete the three defensive accessors. |
-| §5.4 `ExecutionWorkspaceProvisioner` | Not started | —      | Has a stop-and-reassess gate; record the outcome here either way. |
-| §4.4 `RunLifecycleService`           | Not started | —      | |
-| §5.1 `ExecutionStartupPipeline`      | Not started | —      | Split across two sessions: phase extraction, then context/startup + failure invariants. |
+| Phase                                | Status      | Commit   | Notes                                                                                                                                                                                                                       |
+| ------------------------------------ | ----------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Decoupling plan, Phase 1             | ✅ Done     | (prior)  | Verified 2026-09-17: options-object ctor, no `vscode` imports in either file.                                                                                                                                               |
+| §4.1 `ExternalRunWatchCoordinator`   | ✅ Done     | 7cbcc7d6 | Added `fileWatcherFactory` to the narrow host port because the coordinator owns watcher setup; updated affected object-create harnesses.                                                                                    |
+| §5.2 `SessionActivityRecorder`       | ✅ Done     | ce340986 | Extracted resumed-session activity state and persistence with a narrow port; carried the parent assertions into its own suite.                                                                                              |
+| §5.3 `RunnerLockCoordinator`         | ✅ Done     | 4f5b2825 | Extracted lock acquire/heartbeat/stop polling/release state and added stale-runner-lock recovery coverage.                                                                                                                  |
+| §4.2 `WorkflowInstanceRegistry`      | ✅ Done     | 643db76b | Extracted instance lifecycle, lineage selection, viewer/address registries, and external-instance announcement state; 55 legacy `Object.create` doubles remain.                                                             |
+| §4.3 `RunViewPublisher`              | ✅ Done     | 713845fb | Extracted addressed-view reads, identity/revision publication, invalidation, and focused tests. Smoke: hosted dashboard served HTTP 200; browser/revision interaction was not exercised because Playwright was unavailable. |
+| Test-double retirement               | In progress | —        | 49 `Object.create` uses remain in `WorkflowOrchestrator.test.ts`; the three defensive accessors remain as planned.                                                                                                          |
+| §5.4 `ExecutionWorkspaceProvisioner` | Not started | —        | Has a stop-and-reassess gate; record the outcome here either way.                                                                                                                                                           |
+| §4.4 `RunLifecycleService`           | Not started | —        |                                                                                                                                                                                                                             |
+| §5.1 `ExecutionStartupPipeline`      | Not started | —        | Split across two sessions: phase extraction, then context/startup + failure invariants.                                                                                                                                     |
 
 **Optional, not scheduled:** the `EphemeralPromptRunner` filler noted in §5.4
 (~340 lines, region 3427–3750) remains available but is not on the critical path
