@@ -58,12 +58,18 @@ export function createHistorySearchLinePrefilter(
  * Streams candidate documents from every JSONL shard in a directory.
  * Documents are parsed only after the raw-line prefilter passes, and no
  * parsed documents are retained by this generator.
+ *
+ * `signal`, when provided and already or later aborted, stops the scan
+ * between shards **and** between lines — a shard-only check still leaves a
+ * multi-second tail on a large shard, which is long enough to matter when a
+ * superseded query is being cancelled in favor of a newer one.
  */
 export async function* streamHistorySearchDocuments(
   documentsDirectory: string,
   normalizedQuery: string,
   options: HistorySearchScanOptions,
-  onDocumentScanned?: HistorySearchDocumentScannedCallback
+  onDocumentScanned?: HistorySearchDocumentScannedCallback,
+  signal?: AbortSignal
 ): AsyncGenerator<HistorySearchDocument, void, undefined> {
   const prefilter = createHistorySearchLinePrefilter(normalizedQuery, options);
   let shardEntries: import("fs").Dirent[];
@@ -86,10 +92,16 @@ export async function* streamHistorySearchDocuments(
     .sort((left, right) => left.localeCompare(right));
 
   for (const shardName of shardNames) {
+    if (signal?.aborted) {
+      return;
+    }
     try {
       for await (const rawLine of streamFileLines(
         path.join(documentsDirectory, shardName)
       )) {
+        if (signal?.aborted) {
+          return;
+        }
         if (rawLine.trim().length === 0) {
           continue;
         }

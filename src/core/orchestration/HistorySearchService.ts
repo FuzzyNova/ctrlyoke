@@ -24,6 +24,7 @@ import { Log } from "../../utils/Log";
 import { logMemoryUsage } from "../../utils/MemoryDiagnostics";
 import { FileLockTimeoutError } from "../../utils/FileLockUtils";
 import {
+  HistorySearchCancelledError,
   MAX_INDEXED_TEXT_LENGTH,
   type IndexRebuildProgressCallback,
 } from "./HistorySearchIndexService";
@@ -67,7 +68,8 @@ export class HistorySearchService {
   async search(
     query: string | HistorySearchQuery,
     workspaceFolderPath: string,
-    onRebuildProgress?: IndexRebuildProgressCallback
+    onRebuildProgress?: IndexRebuildProgressCallback,
+    signal?: AbortSignal
   ): Promise<HistorySearchResponse> {
     const request =
       typeof query === "string"
@@ -78,8 +80,14 @@ export class HistorySearchService {
     try {
       return await getSharedHistorySearchIndexService(
         workspaceFolderPath
-      ).search(request, workspaceFolderPath, onRebuildProgress);
+      ).search(request, workspaceFolderPath, onRebuildProgress, signal);
     } catch (error) {
+      if (error instanceof HistorySearchCancelledError) {
+        // Superseded by a newer search — not a failure, so it must not fall
+        // through to the disk-scan fallback below (that would spend the
+        // exact full-history-read cost this cancellation exists to avoid).
+        throw error;
+      }
       const reason =
         error instanceof FileLockTimeoutError
           ? `lock still contended after its extended timeout (${getErrorMessage(error)})`

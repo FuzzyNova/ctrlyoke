@@ -47,6 +47,18 @@ const RESULT_LIMIT = 50;
 const HISTORY_RESULT_ESTIMATE = 108;
 
 /**
+ * A single query scan still costs ~20s against a large real-world history
+ * (see dev/backlog/HISTORY_SEARCH_RESPONSIVE_QUERY_PLAN.md) until the
+ * recency-ordered early-termination scan (plan option A) lands. The
+ * extension host now cancels a superseded search almost for free (see
+ * WebviewMessageRouter's SEARCH_HISTORY handler), but that only stops
+ * *wasted* scans — a longer pause here also cuts down how many full scans a
+ * typing burst issues in the first place. Bring this back toward 400ms once
+ * option A lands and a scan is no longer this expensive.
+ */
+export const HISTORY_SEARCH_DEBOUNCE_MS = 600;
+
+/**
  * Shared centered column for the search bar, result summary, and result list so
  * all three stay aligned on wide screens instead of hugging opposite edges.
  */
@@ -272,7 +284,7 @@ export function HistorySearchDrawer() {
 
     const timeoutId = window.setTimeout(() => {
       issueSearch(filtersRef.current);
-    }, 400);
+    }, HISTORY_SEARCH_DEBOUNCE_MS);
 
     return () => window.clearTimeout(timeoutId);
   }, [issueSearch, query, setHistorySearchResults, trimmedQuery]);
@@ -388,7 +400,7 @@ export function HistorySearchDrawer() {
     const timeoutId = window.setTimeout(() => {
       pathSearchPendingRef.current = false;
       issueSearch(filtersRef.current);
-    }, 400);
+    }, HISTORY_SEARCH_DEBOUNCE_MS);
 
     return () => window.clearTimeout(timeoutId);
   }, [

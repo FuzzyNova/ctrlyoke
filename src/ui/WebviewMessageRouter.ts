@@ -85,6 +85,7 @@ import {
   type WebviewClientContext,
 } from "./WebviewClientContext";
 import { HistorySearchService } from "../core/orchestration/HistorySearchService";
+import { HistorySearchCancelledError } from "../core/orchestration/HistorySearchIndexService";
 import { WorkflowVariantService } from "../core/orchestration/WorkflowVariantService";
 import { redactExecutionPreview } from "../types/PreviewRedactor";
 import {
@@ -182,6 +183,13 @@ export class WebviewMessageRouter {
     string,
     WorkflowVariantRequestCacheEntry
   >();
+  // One entry per client with an in-flight (or just-completed) history
+  // search. A new SEARCH_HISTORY message aborts whatever is here for that
+  // client before it is superseded — see `route()`.
+  private readonly historySearchAbortControllers = new Map<
+    string,
+    AbortController
+  >();
 
   constructor(
     private readonly defaultPostMessage: PostMessageFn,
@@ -236,11 +244,22 @@ export class WebviewMessageRouter {
       clientId,
       options?.postMessage ?? this.defaultPostMessage
     );
-    const ctx = createWebviewClientContext(
+    let ctx = createWebviewClientContext(
       clientId,
       options?.postMessage ?? this.defaultPostMessage,
       interactionPort
     );
+    if (message?.type === MESSAGE_TYPES.SEARCH_HISTORY) {
+      // Called synchronously, before this message is queued behind whatever
+      // is already routing: every message shares `routeQueue`, so a search
+      // handler already running won't be pre-empted by the queue reaching
+      // this one — it has to notice the abort itself. See the SEARCH_HISTORY
+      // handler and HistorySearchIndexService's scan cancellation.
+      ctx = {
+        ...ctx,
+        historySearchAbortSignal: this.supersedeHistorySearch(clientId),
+      };
+    }
     if (
       message?.type === MESSAGE_TYPES.BATCH_APPROVAL_RESPONSE ||
       message?.type === MESSAGE_TYPES.CHOICE_RESPONSE
@@ -255,9 +274,22 @@ export class WebviewMessageRouter {
     await this.routeQueue;
   }
 
+  /**
+   * Aborts this client's previous in-flight history search, if any, and
+   * returns the signal for the new one.
+   */
+  private supersedeHistorySearch(clientId: string): AbortSignal {
+    this.historySearchAbortControllers.get(clientId)?.abort();
+    const controller = new AbortController();
+    this.historySearchAbortControllers.set(clientId, controller);
+    return controller.signal;
+  }
+
   disposeClient(clientId: string): void {
     this.clientInteractionPorts.get(clientId)?.disposeAllPending();
     this.clientInteractionPorts.delete(clientId);
+    this.historySearchAbortControllers.get(clientId)?.abort();
+    this.historySearchAbortControllers.delete(clientId);
   }
 
   private getClientInteractionPort(
@@ -1371,32 +1403,46 @@ export class WebviewMessageRouter {
         return;
       }
 
-      const response = await this.historySearchService.search(
-        {
-          query,
-          limit,
-          offset:
-            typeof message.offset === "number" && message.offset > 0
-              ? Math.floor(message.offset)
-              : undefined,
-          filters:
-            message.filters && typeof message.filters === "object"
-              ? message.filters
-              : undefined,
-        },
-        workspacePath,
-        (processedRuns, totalRuns) => {
-          ctx.emit({
-            type: MESSAGE_TYPES.SEARCH_INDEX_REBUILD_PROGRESS,
-            processedRuns,
-            totalRuns,
-          });
+      try {
+        const response = await this.historySearchService.search(
+          {
+            query,
+            limit,
+            offset:
+              typeof message.offset === "number" && message.offset > 0
+                ? Math.floor(message.offset)
+                : undefined,
+            filters:
+              message.filters && typeof message.filters === "object"
+                ? message.filters
+                : undefined,
+          },
+          workspacePath,
+          (processedRuns, totalRuns) => {
+            ctx.emit({
+              type: MESSAGE_TYPES.SEARCH_INDEX_REBUILD_PROGRESS,
+              processedRuns,
+              totalRuns,
+            });
+          },
+          ctx.historySearchAbortSignal
+        );
+        ctx.emit({
+          type: MESSAGE_TYPES.SEARCH_HISTORY_RESULTS,
+          ...response,
+        });
+      } catch (error) {
+        if (error instanceof HistorySearchCancelledError) {
+          // A newer search for this client already superseded this one; a
+          // late reply here would overwrite the newer query's results in
+          // the webview's uiStore. Say nothing.
+          Log.debug(
+            `[WebviewMessageRouter] history search superseded: clientId=${ctx.clientId} query="${query}"`
+          );
+          return;
         }
-      );
-      ctx.emit({
-        type: MESSAGE_TYPES.SEARCH_HISTORY_RESULTS,
-        ...response,
-      });
+        throw error;
+      }
     });
 
     table.set(MESSAGE_TYPES.DELETE_RUN_HISTORY, async (message, ctx) => {

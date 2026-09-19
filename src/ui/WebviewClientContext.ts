@@ -28,6 +28,13 @@ export interface WebviewClientContext {
   emit(message: unknown): void;
   /** Host-neutral prompts routed to this client's dashboard. */
   readonly interactionPort?: UserInteractionPort;
+  /**
+   * Set only for a SEARCH_HISTORY message. Aborted by the router the instant
+   * a newer SEARCH_HISTORY message arrives from the same client, so the
+   * handler's in-flight scan can stop scanning a query the client no longer
+   * wants — see `WebviewMessageRouter.route`.
+   */
+  readonly historySearchAbortSignal?: AbortSignal;
 }
 
 export function createWebviewClientContext(

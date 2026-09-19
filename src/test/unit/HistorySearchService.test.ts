@@ -3,6 +3,8 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
 import { HistorySearchService } from "../../core/orchestration/HistorySearchService";
+import { HistorySearchCancelledError } from "../../core/orchestration/HistorySearchIndexService";
+import { Log } from "../../utils/Log";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import {
   CLI_EVENT_TYPES,
@@ -559,6 +561,54 @@ suite("HistorySearchService", () => {
     const afterStaleSource = await service.search("fresh-term", workspaceRoot);
     assert.strictEqual(afterStaleSource.totalCount, 1);
     assert.strictEqual(afterStaleSource.results[0]?.matchContext, "Prompt 2");
+  });
+
+  test("propagates a cancelled search instead of falling back to a disk scan", async () => {
+    const workflowId = "cancelled-fallback-2026-06-09T19-05-00";
+    await writeWorkingFile(workflowId, { workflowName: "Cancelled Workflow" });
+    await createRun(workflowId, 1, 1300, [
+      createStatusDraft(
+        1400,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        "cancelled-fallback-term"
+      ),
+    ]);
+
+    // Warm the index so the abort under test hits the cheap top-of-method
+    // check rather than being incidentally absorbed by a synchronous rebuild.
+    await service.search("warm-up-term-not-matched", workspaceRoot);
+
+    const controller = new AbortController();
+    controller.abort();
+
+    const messages: string[] = [];
+    const originalWarn = Log.warn;
+    Log.warn = (message: string) => {
+      messages.push(message);
+    };
+
+    try {
+      await assert.rejects(
+        service.search(
+          "cancelled-fallback-term",
+          workspaceRoot,
+          undefined,
+          controller.signal
+        ),
+        (error: unknown) => error instanceof HistorySearchCancelledError
+      );
+      // A cancellation is not an index failure: it must never fall back to
+      // the disk scan, which would spend the exact cost the cancellation was
+      // meant to avoid.
+      assert.ok(
+        !messages.some((message) =>
+          message.includes("falling back to disk scan")
+        ),
+        messages.join("\n")
+      );
+    } finally {
+      Log.warn = originalWarn;
+    }
   });
 
   /** Writes a lineage descriptor directly — the test-only equivalent of WorkflowLineageRepository.createLineage. */

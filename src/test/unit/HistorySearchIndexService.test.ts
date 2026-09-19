@@ -3,7 +3,10 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
-import { HistorySearchIndexService } from "../../core/orchestration/HistorySearchIndexService";
+import {
+  HistorySearchCancelledError,
+  HistorySearchIndexService,
+} from "../../core/orchestration/HistorySearchIndexService";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import {
   computeHistorySearchIndexDiff,
@@ -275,6 +278,150 @@ suite("HistorySearchIndexService", () => {
       workspaceRoot
     );
     assert.strictEqual(fileEditPage.results[0]?.eventKind, "fileEdit");
+  });
+
+  test("serves an immediate repeat query from the snapshot without rescanning", async () => {
+    const workflowId = "repeat-query-snapshot-2026-06-09T22-55-00";
+    await createRun(workflowId, 1, 8000, [
+      createStatusDraft(8100, "repeat-query-term"),
+    ]);
+
+    const index = new HistorySearchIndexService();
+    const messages: string[] = [];
+    const originalDebug = Log.debug;
+    Log.debug = (message: string) => {
+      messages.push(message);
+    };
+
+    try {
+      const first = await index.search(
+        { query: "repeat-query-term", limit: 10 },
+        workspaceRoot
+      );
+      assert.strictEqual(first.totalCount, 1);
+
+      messages.length = 0;
+      const second = await index.search(
+        { query: "repeat-query-term", limit: 10 },
+        workspaceRoot
+      );
+
+      assert.deepStrictEqual(second, first);
+      assert.ok(
+        messages.some((message) =>
+          message.includes("search page-0 from snapshot (index unchanged)")
+        ),
+        messages.join("\n")
+      );
+      assert.ok(
+        !messages.some((message) =>
+          message.includes("[HistorySearchIndexService] search start:")
+        ),
+        messages.join("\n")
+      );
+    } finally {
+      Log.debug = originalDebug;
+    }
+  });
+
+  test("re-derives a repeated query once the index has changed", async () => {
+    const firstWorkflowId = "repeat-query-stale-first-2026-06-09T22-56-00";
+    await createRun(firstWorkflowId, 1, 8500, [
+      createStatusDraft(8600, "repeat-query-stale-term"),
+    ]);
+
+    const index = new HistorySearchIndexService();
+    const first = await index.search(
+      { query: "repeat-query-stale-term", limit: 10 },
+      workspaceRoot
+    );
+    assert.strictEqual(first.totalCount, 1);
+
+    const secondWorkflowId = "repeat-query-stale-second-2026-06-09T22-57-00";
+    await createRun(secondWorkflowId, 1, 8700, [
+      createStatusDraft(8800, "repeat-query-stale-term"),
+    ]);
+
+    const messages: string[] = [];
+    const originalDebug = Log.debug;
+    Log.debug = (message: string) => {
+      messages.push(message);
+    };
+
+    try {
+      const second = await index.search(
+        { query: "repeat-query-stale-term", limit: 10 },
+        workspaceRoot
+      );
+
+      assert.strictEqual(second.totalCount, 2);
+      assert.ok(
+        messages.some((message) =>
+          message.includes("freshness check stale: run count changed")
+        ),
+        messages.join("\n")
+      );
+      assert.ok(
+        !messages.some((message) =>
+          message.includes("search page-0 from snapshot (index unchanged)")
+        ),
+        messages.join("\n")
+      );
+    } finally {
+      Log.debug = originalDebug;
+    }
+  });
+
+  test("cancels a search via AbortSignal instead of returning stale-looking results", async () => {
+    const workflowId = "cancelled-search-2026-06-09T22-58-00";
+    await createRun(workflowId, 1, 9000, [
+      createStatusDraft(9100, "cancelled-search-term"),
+    ]);
+
+    const index = new HistorySearchIndexService();
+    // Warm the index so the cancellation check under test is the one at the
+    // top of `search()`, not an incidental rebuild.
+    await index.search(
+      { query: "warm-up-term-not-matched", limit: 10 },
+      workspaceRoot
+    );
+
+    const controller = new AbortController();
+    controller.abort();
+
+    await assert.rejects(
+      index.search(
+        { query: "cancelled-search-term", limit: 10 },
+        workspaceRoot,
+        undefined,
+        controller.signal
+      ),
+      (error: unknown) => error instanceof HistorySearchCancelledError
+    );
+
+    // A cancelled search must leave no trace: the next, un-cancelled request
+    // for the same query must still do a real scan rather than serving
+    // something the cancelled attempt might have cached.
+    const messages: string[] = [];
+    const originalDebug = Log.debug;
+    Log.debug = (message: string) => {
+      messages.push(message);
+    };
+    try {
+      const followUp = await index.search(
+        { query: "cancelled-search-term", limit: 10 },
+        workspaceRoot
+      );
+      assert.strictEqual(followUp.totalCount, 1);
+      assert.ok(
+        !messages.some((message) =>
+          message.includes("search page-0 from snapshot (index unchanged)")
+        ),
+        messages.join("\n")
+      );
+    } finally {
+      Log.debug = originalDebug;
+    }
   });
 
   test("answers a far offset in one request instead of walking pages", async () => {

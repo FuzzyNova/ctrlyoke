@@ -187,6 +187,51 @@ suite("HistorySearchShardScanner", () => {
     await fs.access(firstShardPath);
   });
 
+  test("stops between shards once the signal is aborted", async () => {
+    await writeShard("a-first.jsonl", [createDocument("abort shard match")]);
+    await writeShard("b-second.jsonl", [createDocument("abort shard match")]);
+
+    const controller = new AbortController();
+    const results: HistorySearchDocument[] = [];
+    for await (const document of streamHistorySearchDocuments(
+      documentsDirectory,
+      "abort shard match",
+      INDEXED_KEY_OPTIONS,
+      undefined,
+      controller.signal
+    )) {
+      results.push(document);
+      // Aborting right after the first shard's only document must stop the
+      // scan before it ever opens the second shard.
+      controller.abort();
+    }
+
+    assert.strictEqual(results.length, 1);
+  });
+
+  test("stops between lines within a shard once the signal is aborted", async () => {
+    await writeShard("multi-line.jsonl", [
+      createDocument("abort line match first"),
+      createDocument("abort line match second"),
+    ]);
+
+    const controller = new AbortController();
+    const results: HistorySearchDocument[] = [];
+    for await (const document of streamHistorySearchDocuments(
+      documentsDirectory,
+      "abort line match",
+      INDEXED_KEY_OPTIONS,
+      undefined,
+      controller.signal
+    )) {
+      results.push(document);
+      controller.abort();
+    }
+
+    assert.strictEqual(results.length, 1);
+    assert.strictEqual(results[0]?.text, "abort line match first");
+  });
+
   async function matchingTexts(
     query: string,
     options = INDEXED_KEY_OPTIONS

@@ -47,12 +47,36 @@ const DEFAULT_LIMIT = 50;
 const MAX_SNAPSHOT_RESULTS = 50000;
 
 /**
+ * Upper bound on results retained across *every* cached query snapshot
+ * combined, not a per-query count. A single snapshot can already hold up to
+ * MAX_SNAPSHOT_RESULTS (50,000) results, so capping by entry count would not
+ * be a memory bound — a handful of large snapshots could still blow past any
+ * reasonable footprint. 150,000 is 3x the per-query cap: enough for a few
+ * alternating queries (a query, a refinement, a query typed again) to stay
+ * cached at once without unbounding memory. Oldest entries are evicted first
+ * once a new snapshot would push the total over this budget.
+ */
+const MAX_SNAPSHOT_CACHE_TOTAL_RESULTS = 150000;
+
+/**
  * The full, deduped, sorted result list for one query, kept so that paging
  * through it costs O(page) instead of re-scanning every indexed document.
  */
 interface HistorySearchMatchSnapshot {
-  key: string;
   results: HistorySearchResult[];
+}
+
+/**
+ * Thrown when a search is abandoned because a newer search for the same
+ * client superseded it (see `WebviewMessageRouter`'s SEARCH_HISTORY handler).
+ * Callers must not treat this as a search failure — in particular,
+ * `HistorySearchService.search` must not fall back to a disk scan for it.
+ */
+export class HistorySearchCancelledError extends Error {
+  constructor() {
+    super("History search cancelled: superseded by a newer search");
+    this.name = "HistorySearchCancelledError";
+  }
 }
 
 interface ProjectedHistorySearchMatch {
@@ -76,15 +100,26 @@ export type IndexRebuildProgressCallback = (
 export class HistorySearchIndexService {
   private loadedWorkspacePath?: string;
   private loadedManifest?: HistorySearchIndexManifest;
-  private matchSnapshot?: HistorySearchMatchSnapshot;
+  // Insertion order doubles as recency order (oldest first): a hit is
+  // deleted and re-set to bump it to the newest position, so the map can be
+  // evicted from the front. See `getSnapshot`/`rememberSnapshot`.
+  private readonly matchSnapshots = new Map<
+    string,
+    HistorySearchMatchSnapshot
+  >();
+  private matchSnapshotResultTotal = 0;
   private rebuildPromise?: Promise<void>;
   private rebuildQueued = false;
 
   async search(
     request: HistorySearchQuery,
     workspaceFolderPath: string,
-    onRebuildProgress?: IndexRebuildProgressCallback
+    onRebuildProgress?: IndexRebuildProgressCallback,
+    signal?: AbortSignal
   ): Promise<HistorySearchResponse> {
+    if (signal?.aborted) {
+      throw new HistorySearchCancelledError();
+    }
     const normalizedQuery = request.query.trim();
     if (normalizedQuery.length < MIN_QUERY_LENGTH) {
       return this.emptyResponse(normalizedQuery, "ready");
@@ -99,26 +134,51 @@ export class HistorySearchIndexService {
       request.filters
     );
 
-    // Paging inside a result set the client is already scrolling is answered
-    // from the snapshot its first page came from, with no readiness check and
-    // no rescan. Both halves matter: the freshness check alone costs a stat
-    // per indexed run, and re-deriving matches against a meanwhile-rebuilt
-    // index would renumber every offset underneath the client's scroll
-    // position. A new query (offset 0) always re-derives.
-    const snapshot =
-      offset > 0 && this.matchSnapshot?.key === snapshotKey
-        ? this.matchSnapshot
-        : undefined;
-    if (snapshot) {
-      Log.debug(
-        `[HistorySearchIndexService] search page from snapshot: query="${normalizedQuery}" offset=${offset} matches=${snapshot.results.length} totalMs=${Date.now() - searchStart}`
-      );
-      return this.buildPageResponse(
-        normalizedQuery,
-        snapshot.results,
-        offset,
-        limit
-      );
+    const cachedSnapshot = this.getSnapshot(snapshotKey);
+    if (cachedSnapshot) {
+      // Paging inside a result set the client is already scrolling is
+      // answered from the snapshot its first page came from, with no
+      // readiness check and no rescan. Both halves matter: the freshness
+      // check alone costs a stat per indexed run, and re-deriving matches
+      // against a meanwhile-rebuilt index would renumber every offset
+      // underneath the client's scroll position.
+      if (offset > 0) {
+        Log.debug(
+          `[HistorySearchIndexService] search page from snapshot: query="${normalizedQuery}" offset=${offset} matches=${cachedSnapshot.results.length} totalMs=${Date.now() - searchStart}`
+        );
+        return this.buildPageResponse(
+          normalizedQuery,
+          cachedSnapshot.results,
+          offset,
+          limit
+        );
+      }
+
+      // A re-issued query (offset 0) reuses the snapshot only when the index
+      // has not changed since it was built — checked via the same freshness
+      // signal `ensureReady` uses below, not skipped outright. An immediate
+      // repeat of the same query is the common case this serves; a query
+      // re-issued after the index changed (e.g. a workflow just completed)
+      // must still see the new data, so it falls through to a full rescan.
+      await this.loadIfPossible(workspaceFolderPath);
+      if (signal?.aborted) {
+        throw new HistorySearchCancelledError();
+      }
+      const freshForReuse =
+        this.loadedWorkspacePath === workspaceFolderPath &&
+        this.loadedManifest !== undefined &&
+        (await this.isManifestFresh(workspaceFolderPath, this.loadedManifest));
+      if (freshForReuse) {
+        Log.debug(
+          `[HistorySearchIndexService] search page-0 from snapshot (index unchanged): query="${normalizedQuery}" matches=${cachedSnapshot.results.length} totalMs=${Date.now() - searchStart}`
+        );
+        return this.buildPageResponse(
+          normalizedQuery,
+          cachedSnapshot.results,
+          offset,
+          limit
+        );
+      }
     }
 
     const buildInProgress = Boolean(this.rebuildPromise);
@@ -130,19 +190,27 @@ export class HistorySearchIndexService {
     } else {
       await this.loadIfPossible(workspaceFolderPath);
     }
+    if (signal?.aborted) {
+      throw new HistorySearchCancelledError();
+    }
     const readyDurationMs = Date.now() - searchStart;
 
     const matchStart = Date.now();
-    const { results, documentsScanned } = await this.collectMatches(
+    const { results, documentsScanned, cancelled } = await this.collectMatches(
       workspaceFolderPath,
       normalizedQuery,
-      request.filters
+      request.filters,
+      signal
     );
-    this.matchSnapshot =
-      results.length <= MAX_SNAPSHOT_RESULTS
-        ? { key: snapshotKey, results }
-        : undefined;
-    if (!this.matchSnapshot) {
+    if (cancelled) {
+      Log.debug(
+        `[HistorySearchIndexService] search cancelled: query="${normalizedQuery}" documentsScanned=${documentsScanned} elapsedMs=${Date.now() - searchStart}`
+      );
+      throw new HistorySearchCancelledError();
+    }
+    if (results.length <= MAX_SNAPSHOT_RESULTS) {
+      this.rememberSnapshot(snapshotKey, results);
+    } else {
       Log.info(
         `[HistorySearchIndexService] match snapshot not retained: query="${normalizedQuery}" matches=${results.length} exceeds ${MAX_SNAPSHOT_RESULTS}`
       );
@@ -156,6 +224,52 @@ export class HistorySearchIndexService {
   }
 
   /**
+   * Looks up a cached query snapshot and bumps it to most-recently-used.
+   */
+  private getSnapshot(key: string): HistorySearchMatchSnapshot | undefined {
+    const snapshot = this.matchSnapshots.get(key);
+    if (!snapshot) {
+      return undefined;
+    }
+    this.matchSnapshots.delete(key);
+    this.matchSnapshots.set(key, snapshot);
+    return snapshot;
+  }
+
+  /**
+   * Caches a query's full result list, evicting the oldest entries first if
+   * the new total would exceed `MAX_SNAPSHOT_CACHE_TOTAL_RESULTS`. Always
+   * keeps at least the entry just inserted, even if it alone is over budget.
+   */
+  private rememberSnapshot(key: string, results: HistorySearchResult[]): void {
+    const existing = this.matchSnapshots.get(key);
+    if (existing) {
+      this.matchSnapshotResultTotal -= existing.results.length;
+      this.matchSnapshots.delete(key);
+    }
+    this.matchSnapshots.set(key, { results });
+    this.matchSnapshotResultTotal += results.length;
+
+    while (
+      this.matchSnapshotResultTotal > MAX_SNAPSHOT_CACHE_TOTAL_RESULTS &&
+      this.matchSnapshots.size > 1
+    ) {
+      const oldestKey = this.matchSnapshots.keys().next().value;
+      if (oldestKey === undefined) {
+        break;
+      }
+      const oldest = this.matchSnapshots.get(oldestKey);
+      this.matchSnapshots.delete(oldestKey);
+      this.matchSnapshotResultTotal -= oldest?.results.length ?? 0;
+    }
+  }
+
+  private dropSnapshots(): void {
+    this.matchSnapshots.clear();
+    this.matchSnapshotResultTotal = 0;
+  }
+
+  /**
    * Filters, sorts, projects, and dedupes every indexed document into the
    * complete result list for one query. Deliberately not paged: the dedupe key
    * is derived from the projected result, so the deduped ordinal of a row can
@@ -165,8 +279,13 @@ export class HistorySearchIndexService {
   private async collectMatches(
     workspaceFolderPath: string,
     normalizedQuery: string,
-    filters: HistorySearchFilters | undefined
-  ): Promise<{ results: HistorySearchResult[]; documentsScanned: number }> {
+    filters: HistorySearchFilters | undefined,
+    signal?: AbortSignal
+  ): Promise<{
+    results: HistorySearchResult[];
+    documentsScanned: number;
+    cancelled: boolean;
+  }> {
     const lowered = normalizedQuery.toLowerCase();
     const documentMatches: ProjectedHistorySearchMatch[] = [];
     let documentsScanned = 0;
@@ -182,7 +301,8 @@ export class HistorySearchIndexService {
       },
       () => {
         documentsScanned += 1;
-      }
+      },
+      signal
     )) {
       if (
         !document.text.toLowerCase().includes(lowered) ||
@@ -198,6 +318,13 @@ export class HistorySearchIndexService {
         sequence: document.sequence,
       });
     }
+    // The generator returns early (without throwing) on cancellation, so a
+    // partial scan looks like a legitimate — if incomplete — result unless
+    // checked for here. Report it rather than sorting/dedupe-ing a partial
+    // match set into something that looks like a real answer.
+    if (signal?.aborted) {
+      return { results: [], documentsScanned, cancelled: true };
+    }
     documentMatches.sort(this.compareMatches);
 
     const seen = new Set<string>();
@@ -209,7 +336,7 @@ export class HistorySearchIndexService {
       seen.add(match.dedupeKey);
       results.push(match.result);
     }
-    return { results, documentsScanned };
+    return { results, documentsScanned, cancelled: false };
   }
 
   /**
@@ -355,7 +482,7 @@ export class HistorySearchIndexService {
   private dropLoadedIndex(): void {
     this.loadedWorkspacePath = undefined;
     this.loadedManifest = undefined;
-    this.matchSnapshot = undefined;
+    this.dropSnapshots();
   }
 
   private async rebuild(

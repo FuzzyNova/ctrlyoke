@@ -1,6 +1,8 @@
 # History Search Responsive Query Plan
 
-**Status:** Backlog — not started
+**Status:** In progress — C and D landed (repeat-query snapshot reuse gated on
+freshness, plus superseded-search cancellation); A, B, and E are still
+backlog.
 **Priority:** P0 — this is a live regression in daily use, not a future risk.
 **Predecessor:** `dev/implemented/HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md` removed
 the ~2.16 GB resident index by streaming every shard per query. It fixed the
@@ -191,9 +193,18 @@ postings and reads only candidates.
 Land in this order, because the cheap ones are felt immediately and the
 expensive one is easier to validate once the noise is gone:
 
-1. **C and D first.** Small, self-contained, and together they remove the
-   repeat-scan and the queued-backlog hang that produce the worst of the
-   current experience. Neither depends on A.
+1. **C and D first — landed.** Small, self-contained, and together they remove
+   the repeat-scan and the queued-backlog hang that produce the worst of the
+   current experience. Neither depends on A. C reuses a query's cached
+   snapshot at offset 0 when a freshness check confirms the index hasn't
+   changed (`HistorySearchIndexService.search`), backed by a small
+   total-results-bounded LRU rather than one slot. D threads a cooperative
+   `AbortSignal` through the shard scanner (checked between shards and
+   between lines) and has `WebviewMessageRouter` abort a client's previous
+   in-flight SEARCH_HISTORY the instant a newer one arrives; the drawer's
+   debounce is temporarily raised to 600ms (`HISTORY_SEARCH_DEBOUNCE_MS`)
+   while a scan still costs ~20s. The flat 20s-per-query floor itself is
+   unchanged — that's A below.
 2. **A next — this is the actual fix.** Recency-ordered scan with early
    termination, including the `totalCount` contract change it forces. Treat the
    UI side as part of the same work: `historySearchResults` in `uiStore` is
@@ -242,8 +253,8 @@ aggregate rather than minutes.
       workspace — measured from the session log, not asserted.
 - [ ] Query latency is no longer flat with respect to selectivity: a 21-match
       recent query is materially faster than a full-index pass.
-- [ ] An immediately repeated query does not re-scan.
-- [ ] Typing a multi-word query does not leave superseded scans running.
+- [x] An immediately repeated query does not re-scan.
+- [x] Typing a multi-word query does not leave superseded scans running.
 - [ ] Extension-host working set stays within the chosen cache budget (1 GB if
       option B lands, near-zero growth if it does not), measured after a
       20-search session.
