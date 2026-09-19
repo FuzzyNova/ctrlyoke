@@ -46,6 +46,8 @@ import {
   streamHistorySearchDocuments,
   type HistorySearchShardEntry,
 } from "./HistorySearchShardScanner";
+import { scanHistoryRunDeep } from "./HistoryRunDeepScanner";
+import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 export { MAX_INDEXED_TEXT_LENGTH } from "./historySearchRebuildWorker";
 const MIN_QUERY_LENGTH = 2;
 const DEFAULT_LIMIT = 50;
@@ -164,6 +166,7 @@ export class HistorySearchIndexService {
   private matchSnapshotResultTotal = 0;
   private rebuildPromise?: Promise<void>;
   private rebuildQueued = false;
+  private readonly lineageRepository = new WorkflowLineageRepository();
   private readonly documentCache = new HistorySearchDocumentCache(
     ConfigurationUtils.getHistorySearchCacheBudgetBytes()
   );
@@ -193,7 +196,8 @@ export class HistorySearchIndexService {
     const snapshotKey = this.getSnapshotKey(
       workspaceFolderPath,
       normalizedQuery,
-      request.filters
+      request.filters,
+      Boolean(request.deep)
     );
 
     const cachedSnapshot = this.getSnapshot(snapshotKey);
@@ -230,6 +234,7 @@ export class HistorySearchIndexService {
           workspaceFolderPath,
           normalizedQuery,
           request.filters,
+          Boolean(request.deep),
           offset,
           limit,
           targetCount,
@@ -278,6 +283,7 @@ export class HistorySearchIndexService {
           workspaceFolderPath,
           normalizedQuery,
           request.filters,
+          Boolean(request.deep),
           offset,
           limit,
           targetCount,
@@ -305,7 +311,7 @@ export class HistorySearchIndexService {
     const readyDurationMs = Date.now() - searchStart;
 
     const matchStart = Date.now();
-    const { newResults, complete, cursor, cancelled } =
+    const { newResults, complete, cursor, cancelled, deepScannedRuns } =
       await this.scanForMatches(
         workspaceFolderPath,
         normalizedQuery,
@@ -313,6 +319,7 @@ export class HistorySearchIndexService {
         targetCount,
         0,
         undefined,
+        Boolean(request.deep),
         signal,
         onPartialResults
           ? (resultsSoFar) =>
@@ -329,14 +336,14 @@ export class HistorySearchIndexService {
       );
     if (cancelled) {
       Log.debug(
-        `[HistorySearchIndexService] search cancelled: query="${normalizedQuery}" documentsScanned=${cursor.documentsScanned} elapsedMs=${Date.now() - searchStart}`
+        `[HistorySearchIndexService] search cancelled: query="${normalizedQuery}" deep=${Boolean(request.deep)} deepScannedRuns=${deepScannedRuns} documentsScanned=${cursor.documentsScanned} elapsedMs=${Date.now() - searchStart}`
       );
       throw new HistorySearchCancelledError();
     }
     this.storeSnapshot(snapshotKey, newResults, complete, cursor);
 
     Log.info(
-      `[HistorySearchIndexService] search complete: query="${normalizedQuery}" documentsScanned=${cursor.documentsScanned} matches=${newResults.length} countState=${complete ? HISTORY_SEARCH_COUNT_STATES.EXACT : HISTORY_SEARCH_COUNT_STATES.AT_LEAST} readyMs=${readyDurationMs} matchMs=${Date.now() - matchStart} totalMs=${Date.now() - searchStart} indexState=${this.rebuildPromise ? "building" : "ready"}`
+      `[HistorySearchIndexService] search complete: query="${normalizedQuery}" deep=${Boolean(request.deep)} deepScannedRuns=${deepScannedRuns} documentsScanned=${cursor.documentsScanned} matches=${newResults.length} countState=${complete ? HISTORY_SEARCH_COUNT_STATES.EXACT : HISTORY_SEARCH_COUNT_STATES.AT_LEAST} readyMs=${readyDurationMs} matchMs=${Date.now() - matchStart} totalMs=${Date.now() - searchStart} indexState=${this.rebuildPromise ? "building" : "ready"}`
     );
 
     return this.buildPageResponse(
@@ -360,6 +367,7 @@ export class HistorySearchIndexService {
     workspaceFolderPath: string,
     normalizedQuery: string,
     filters: HistorySearchFilters | undefined,
+    deep: boolean,
     offset: number,
     limit: number,
     targetCount: number,
@@ -368,7 +376,7 @@ export class HistorySearchIndexService {
     onPartialResults?: PartialSearchResultsCallback
   ): Promise<HistorySearchResponse> {
     const matchStart = Date.now();
-    const { newResults, complete, cursor, cancelled } =
+    const { newResults, complete, cursor, cancelled, deepScannedRuns } =
       await this.scanForMatches(
         workspaceFolderPath,
         normalizedQuery,
@@ -376,6 +384,7 @@ export class HistorySearchIndexService {
         targetCount,
         snapshot.results.length,
         snapshot.cursor,
+        deep,
         signal,
         onPartialResults
           ? (resultsSoFar) =>
@@ -392,7 +401,7 @@ export class HistorySearchIndexService {
       );
     if (cancelled) {
       Log.debug(
-        `[HistorySearchIndexService] search cancelled while extending snapshot: query="${normalizedQuery}" documentsScanned=${cursor.documentsScanned}`
+        `[HistorySearchIndexService] search cancelled while extending snapshot: query="${normalizedQuery}" deep=${deep} deepScannedRuns=${deepScannedRuns} documentsScanned=${cursor.documentsScanned}`
       );
       throw new HistorySearchCancelledError();
     }
@@ -400,7 +409,7 @@ export class HistorySearchIndexService {
     this.storeSnapshot(snapshotKey, combined, complete, cursor);
 
     Log.info(
-      `[HistorySearchIndexService] search extended snapshot: query="${normalizedQuery}" resumedAtShard=${snapshot.cursor?.nextShardIndex ?? 0} newDocumentsScanned=${cursor.documentsScanned - (snapshot.cursor?.documentsScanned ?? 0)} totalDocumentsScanned=${cursor.documentsScanned} newMatches=${newResults.length} totalMatches=${combined.length} countState=${complete ? HISTORY_SEARCH_COUNT_STATES.EXACT : HISTORY_SEARCH_COUNT_STATES.AT_LEAST} matchMs=${Date.now() - matchStart} totalMs=${Date.now() - searchStart}`
+      `[HistorySearchIndexService] search extended snapshot: query="${normalizedQuery}" deep=${deep} deepScannedRuns=${deepScannedRuns} resumedAtShard=${snapshot.cursor?.nextShardIndex ?? 0} newDocumentsScanned=${cursor.documentsScanned - (snapshot.cursor?.documentsScanned ?? 0)} totalDocumentsScanned=${cursor.documentsScanned} newMatches=${newResults.length} totalMatches=${combined.length} countState=${complete ? HISTORY_SEARCH_COUNT_STATES.EXACT : HISTORY_SEARCH_COUNT_STATES.AT_LEAST} matchMs=${Date.now() - matchStart} totalMs=${Date.now() - searchStart}`
     );
 
     return this.buildPageResponse(
@@ -515,6 +524,7 @@ export class HistorySearchIndexService {
     targetCount: number | undefined,
     alreadyCollectedCount: number,
     resume: HistorySearchScanCursor | undefined,
+    deep: boolean,
     signal?: AbortSignal,
     onPartialResultsFound?: (newResultsSoFar: HistorySearchResult[]) => void
   ): Promise<{
@@ -522,6 +532,7 @@ export class HistorySearchIndexService {
     complete: boolean;
     cursor: HistorySearchScanCursor;
     cancelled: boolean;
+    deepScannedRuns: number;
   }> {
     const lowered = normalizedQuery.toLowerCase();
     const hasPersistedLowercaseKey =
@@ -547,6 +558,7 @@ export class HistorySearchIndexService {
     const addedDedupeKeys: string[] = [];
     const priorDocumentsScanned = resume?.documentsScanned ?? 0;
     let documentsScannedThisCall = 0;
+    let deepScannedRuns = 0;
 
     const newResults: HistorySearchResult[] = [];
     let groupBuffer: ProjectedHistorySearchMatch[] = [];
@@ -577,6 +589,10 @@ export class HistorySearchIndexService {
         cancelled = true;
         break;
       }
+
+      // The deep pass is deliberately inside this run's existing group buffer:
+      // its results must share the indexed pass's ordering, dedupe, early-stop,
+      // paging, partial-result, and cancellation semantics.
       const shard = shardOrder[index];
       if (
         currentGroupStartedAt !== undefined &&
@@ -654,6 +670,24 @@ export class HistorySearchIndexService {
           consider(document);
         }
       }
+
+      if (
+        deep &&
+        shard.manifestPath !== undefined &&
+        shard.overCapCandidateCount !== 0
+      ) {
+        deepScannedRuns += 1;
+        for await (const document of scanHistoryRunDeep(
+          workspaceFolderPath,
+          shard.manifestPath,
+          normalizedQuery,
+          (workflowKey) =>
+            this.resolveWorkflowName(workspaceFolderPath, workflowKey),
+          signal
+        )) {
+          consider(document);
+        }
+      }
       // The generator returns early (without throwing) on cancellation, so a
       // partial shard scan looks like a legitimate — if incomplete — result
       // unless checked for here.
@@ -675,7 +709,13 @@ export class HistorySearchIndexService {
       for (const key of addedDedupeKeys) {
         seen.delete(key);
       }
-      return { newResults: [], complete: false, cursor, cancelled: true };
+      return {
+        newResults: [],
+        complete: false,
+        cursor,
+        cancelled: true,
+        deepScannedRuns,
+      };
     }
     if (!stoppedEarly) {
       // Reached the true end of the index: the trailing group (the only one
@@ -683,7 +723,34 @@ export class HistorySearchIndexService {
       // needs to be folded in.
       finalizeGroup();
     }
-    return { newResults, complete: !stoppedEarly, cursor, cancelled: false };
+    return {
+      newResults,
+      complete: !stoppedEarly,
+      cursor,
+      cancelled: false,
+      deepScannedRuns,
+    };
+  }
+
+  private async resolveWorkflowName(
+    workspaceFolderPath: string,
+    workflowKey: import("../../types/CtrlYokeTypes").WorkflowKey
+  ): Promise<string> {
+    try {
+      const descriptor = await this.lineageRepository.readDescriptor(
+        workspaceFolderPath,
+        workflowKey
+      );
+      if (descriptor.workflowName?.trim()) {
+        return descriptor.workflowName;
+      }
+    } catch {
+      // Match the rebuild worker's fallback for descriptor-less legacy runs.
+    }
+    return workflowKey.replace(
+      /-\d{4}-\d{2}-\d{2}T\d{2}(?:-\d{2}){2}(?:-\d{3})?Z?$/,
+      ""
+    );
   }
 
   /**
@@ -999,7 +1066,8 @@ export class HistorySearchIndexService {
   private getSnapshotKey(
     workspaceFolderPath: string,
     query: string,
-    filters: HistorySearchFilters | undefined
+    filters: HistorySearchFilters | undefined,
+    deep: boolean
   ): string {
     return crypto
       .createHash("sha256")
@@ -1008,6 +1076,7 @@ export class HistorySearchIndexService {
           workspaceFolderPath,
           query: query.trim().toLowerCase(),
           filters: normalizeHistorySearchFilters(filters),
+          deep,
         })
       )
       .digest("hex");

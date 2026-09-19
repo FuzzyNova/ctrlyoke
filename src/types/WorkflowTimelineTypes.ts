@@ -182,6 +182,8 @@ export interface HistorySearchQuery {
    */
   offset?: number;
   filters?: HistorySearchFilters;
+  /** Also re-read each visited run's events uncapped, to reach matches past `MAX_INDEXED_TEXT_LENGTH`. */
+  deep?: boolean;
 }
 
 export interface HistorySearchFilters {

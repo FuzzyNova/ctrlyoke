@@ -99,6 +99,9 @@ export class HistorySearchService {
       // whole history, so it scans only as far as the requested window and
       // reports what it found. `hasMore` stays optimistic while the scan hit
       // its budget, which is what the virtualized list needs to keep paging.
+      // Deep search is an index-path capability; this legacy fallback stays
+      // capped and intentionally ignores request.deep because it is used only
+      // after the index path has already failed, often under memory pressure.
       const scanned = await this.searchLegacy(
         request.query,
         workspaceFolderPath,

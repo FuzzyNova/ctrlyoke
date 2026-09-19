@@ -153,6 +153,86 @@ suite("HistorySearchIndexService", () => {
     );
   });
 
+  test("interleaves indexed and past-cap matches without duplicate rows", async () => {
+    const term = "mixed-depth-term";
+    await createRun("mixed-depth-2026-09-19T22-02-00", 1, 3000, [
+      createStatusDraft(3100, `${term} in the indexed prefix`),
+      createStatusDraft(
+        3200,
+        `${"x".repeat(MAX_INDEXED_TEXT_LENGTH + 100)}${term}`
+      ),
+    ]);
+
+    const index = new HistorySearchIndexService();
+    const shallow = await index.search(
+      { query: term, limit: 10 },
+      workspaceRoot
+    );
+    const deep = await index.search(
+      { query: term, limit: 10, deep: true },
+      workspaceRoot
+    );
+
+    assert.strictEqual(shallow.totalCount, 1);
+    assert.strictEqual(deep.totalCount, 2);
+    assert.strictEqual(
+      new Set(deep.results.map((result) => result.matchSnippet)).size,
+      2
+    );
+
+    // A shallow snapshot must not answer a deep query, and the deep snapshot
+    // must not replace it when the shallow listing is revisited.
+    const shallowAgain = await index.search(
+      { query: term, limit: 10 },
+      workspaceRoot
+    );
+    assert.strictEqual(shallowAgain.totalCount, 1);
+  });
+
+  test("deep-scans unknown over-cap counts but skips an explicit zero", async () => {
+    const skippedTerm = "deep-count-zero-term";
+    const unknownTerm = "deep-count-unknown-term";
+    await createRun("deep-count-zero-2026-09-19T22-03-00", 1, 4000, [
+      createStatusDraft(
+        4100,
+        `${"x".repeat(MAX_INDEXED_TEXT_LENGTH + 100)}${skippedTerm}`
+      ),
+    ]);
+    await createRun("deep-count-unknown-2026-09-19T22-04-00", 1, 5000, [
+      createStatusDraft(
+        5100,
+        `${"x".repeat(MAX_INDEXED_TEXT_LENGTH + 100)}${unknownTerm}`
+      ),
+    ]);
+
+    await new HistorySearchIndexService().search(
+      { query: "warm-up-deep-count", limit: 10 },
+      workspaceRoot
+    );
+    const manifestPath = getSearchIndexManifestPath();
+    const manifest = await readSearchIndexManifest();
+    const skippedRun = findIndexedRun(manifest, "deep-count-zero");
+    const unknownRun = findIndexedRun(manifest, "deep-count-unknown");
+    assert.ok(skippedRun);
+    assert.ok(unknownRun);
+    skippedRun.overCapCandidateCount = 0;
+    delete unknownRun.overCapCandidateCount;
+    await fs.writeFile(manifestPath, JSON.stringify(manifest), "utf8");
+
+    const index = new HistorySearchIndexService();
+    const skipped = await index.search(
+      { query: skippedTerm, limit: 10, deep: true },
+      workspaceRoot
+    );
+    const unknown = await index.search(
+      { query: unknownTerm, limit: 10, deep: true },
+      workspaceRoot
+    );
+
+    assert.strictEqual(skipped.totalCount, 0);
+    assert.strictEqual(unknown.totalCount, 1);
+  });
+
   test("stores one document shard per run and searches across shards", async () => {
     const firstWorkflowId = "sharded-first-2026-06-09T22-00-00";
     const secondWorkflowId = "sharded-second-2026-06-09T22-01-00";
@@ -716,6 +796,51 @@ suite("HistorySearchIndexService", () => {
     );
 
     const full = await index.search({ query: term, limit: 100 }, workspaceRoot);
+    assert.strictEqual(full.countState, "exact");
+    assert.strictEqual(full.totalCount, totalRuns);
+    assert.strictEqual(full.results.length, totalRuns);
+  });
+
+  test("does not lose deep matches after a resumed scan is cancelled mid-extend", async () => {
+    const term = "cancelled-deep-extend-term";
+    const totalRuns = 40;
+    for (let i = 0; i < totalRuns; i += 1) {
+      await createRun(
+        `cancelled-deep-extend-run-${i}-2026-09-19T22-05-00`,
+        1,
+        30000 + i * 100,
+        [
+          createStatusDraft(
+            30050 + i * 100,
+            `${"x".repeat(MAX_INDEXED_TEXT_LENGTH + 100)}${term}`
+          ),
+        ]
+      );
+    }
+
+    const index = new HistorySearchIndexService();
+    const firstPage = await index.search(
+      { query: term, limit: 5, deep: true },
+      workspaceRoot
+    );
+    assert.strictEqual(firstPage.countState, "atLeast");
+
+    const controller = new AbortController();
+    await assert.rejects(
+      index.search(
+        { query: term, limit: 5, offset: 30, deep: true },
+        workspaceRoot,
+        undefined,
+        controller.signal,
+        () => controller.abort()
+      ),
+      (error: unknown) => error instanceof HistorySearchCancelledError
+    );
+
+    const full = await index.search(
+      { query: term, limit: 100, deep: true },
+      workspaceRoot
+    );
     assert.strictEqual(full.countState, "exact");
     assert.strictEqual(full.totalCount, totalRuns);
     assert.strictEqual(full.results.length, totalRuns);
