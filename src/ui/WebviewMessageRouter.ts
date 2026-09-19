@@ -138,6 +138,7 @@ interface HistorySearchClientRegistration {
 function getHistorySearchListingKey(message: {
   query?: unknown;
   filters?: unknown;
+  deep?: unknown;
 }): string {
   const query =
     typeof message.query === "string" ? message.query.trim().toLowerCase() : "";
@@ -148,6 +149,7 @@ function getHistorySearchListingKey(message: {
   return JSON.stringify({
     query,
     filters: normalizeHistorySearchFilters(filters),
+    deep: message.deep === true,
   });
 }
 
@@ -1493,6 +1495,7 @@ export class WebviewMessageRouter {
               message.filters && typeof message.filters === "object"
                 ? message.filters
                 : undefined,
+            deep: message.deep === true,
           },
           workspacePath,
           (processedRuns, totalRuns) => {

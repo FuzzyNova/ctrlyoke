@@ -199,6 +199,7 @@ export function HistorySearchDrawer() {
   const query = useUiStore((s) => s.historySearchQuery);
   const results = useUiStore((s) => s.historySearchResults);
   const loading = useUiStore((s) => s.historySearchLoading);
+  const deepSearch = useUiStore((s) => s.historySearchDeep);
   const totalCount = useUiStore((s) => s.historySearchTotalCount);
   const countState = useUiStore((s) => s.historySearchCountState);
   const indexState = useUiStore((s) => s.historySearchIndexState);
@@ -209,6 +210,7 @@ export function HistorySearchDrawer() {
   const workflowName = useWorkflowStore((s) => s.workflowName);
   const closeHistorySearch = useUiStore((s) => s.closeHistorySearch);
   const setHistorySearchQuery = useUiStore((s) => s.setHistorySearchQuery);
+  const setHistorySearchDeep = useUiStore((s) => s.setHistorySearchDeep);
   const setHistorySearchFilters = useUiStore((s) => s.setHistorySearchFilters);
   const resetHistorySearchFilters = useUiStore(
     (s) => s.resetHistorySearchFilters
@@ -221,6 +223,8 @@ export function HistorySearchDrawer() {
   const inputRef = useRef<HTMLInputElement>(null);
   const filtersRef = useRef<HistorySearchFilterState>(historySearchFilters);
   filtersRef.current = historySearchFilters;
+  const deepSearchRef = useRef(deepSearch);
+  deepSearchRef.current = deepSearch;
   // `issueSearch` reads the workflow scope through this ref rather than
   // depending on `workflowKey` directly. `displayedViewAddress` (and thus
   // `workflowKey`) changes freely in the background as other workflows run
@@ -257,6 +261,7 @@ export function HistorySearchDrawer() {
         query: trimmedQuery,
         limit: RESULT_LIMIT,
         filters: toHistorySearchFilters(filters, workflowKeyRef.current),
+        ...(deepSearchRef.current ? { deep: true } : {}),
       });
     },
     [setHistorySearchResults, trimmedQuery, vscode]
@@ -372,6 +377,15 @@ export function HistorySearchDrawer() {
     [issueSearch, setHistorySearchFilters]
   );
 
+  const handleDeepSearchChange = useCallback(
+    (nextDeep: boolean) => {
+      deepSearchRef.current = nextDeep;
+      setHistorySearchDeep(nextDeep);
+      issueSearch(filtersRef.current);
+    },
+    [issueSearch, setHistorySearchDeep]
+  );
+
   const handlePathContainsChange = useCallback(
     (pathContains: string) => {
       pathSearchPendingRef.current = true;
@@ -386,6 +400,7 @@ export function HistorySearchDrawer() {
   const handleResetFilters = useCallback(() => {
     pathSearchPendingRef.current = false;
     const defaults = createDefaultHistorySearchFilters();
+    deepSearchRef.current = false;
     resetHistorySearchFilters();
     issueSearch(defaults);
   }, [issueSearch, resetHistorySearchFilters]);
@@ -417,8 +432,8 @@ export function HistorySearchDrawer() {
     () =>
       `history-search:${trimmedQuery}:${JSON.stringify(
         toHistorySearchFilters(historySearchFilters, workflowKey)
-      )}`,
-    [historySearchFilters, trimmedQuery, workflowKey]
+      )}:${deepSearch ? "deep" : "shallow"}`,
+    [deepSearch, historySearchFilters, trimmedQuery, workflowKey]
   );
   const resultsScrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -457,11 +472,13 @@ export function HistorySearchDrawer() {
         limit: RESULT_LIMIT,
         offset,
         filters: toHistorySearchFilters(historySearchFilters, workflowKey),
+        ...(deepSearch ? { deep: true } : {}),
       });
     },
     [
       countState,
       historySearchFilters,
+      deepSearch,
       totalCount,
       trimmedQuery,
       vscode,
@@ -860,10 +877,27 @@ export function HistorySearchDrawer() {
               non-bug). The remedy named here is automatic: opening a result
               arms the output find bar with this same query. */}
           {trimmedQuery.length >= 2 && (
-            <p className="mt-1 text-xs text-description-fg/80">
-              Each result is one matching event, not one occurrence &mdash; open
-              a result to highlight every occurrence in that run&rsquo;s output.
-            </p>
+            <div className="mt-1 flex items-start justify-between gap-3">
+              <p className="text-xs text-description-fg/80">
+                Each result is one matching event, not one occurrence &mdash; open
+                a result to highlight every occurrence in that run&rsquo;s output.
+              </p>
+              <label
+                className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-description-fg"
+                title="Deep search re-reads run history from disk and is slower than the indexed query"
+              >
+                <input
+                  type="checkbox"
+                  checked={deepSearch}
+                  onChange={(event) =>
+                    handleDeepSearchChange(event.target.checked)
+                  }
+                  aria-label="Deep search (slower; re-reads run history from disk)"
+                  className="h-3 w-3 accent-focus-border"
+                />
+                <span>Deep search (slower)</span>
+              </label>
+            </div>
           )}
         </div>
       </div>

@@ -152,6 +152,75 @@ describe("HistorySearchDrawer filters", () => {
     });
   });
 
+  it("sends deep search on the initial query and on paged requests", () => {
+    const view = renderSearch();
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "Deep search (slower; re-reads run history from disk)",
+      })
+    );
+
+    expect(postMessage).toHaveBeenLastCalledWith({
+      type: MESSAGE_TYPES.SEARCH_HISTORY,
+      query: "needle",
+      limit: 50,
+      filters: {},
+      deep: true,
+    });
+
+    act(() => {
+      useUiStore.getState().setHistorySearchResults(results(40), false, {
+        totalCount: 100,
+      });
+    });
+    const scroller =
+      view.container.querySelector<HTMLElement>(".overflow-y-auto");
+    expect(scroller).not.toBeNull();
+    if (!scroller) return;
+
+    act(() => {
+      scroller.scrollTop = 5000;
+      fireEvent.scroll(scroller);
+    });
+
+    expect(postMessage).toHaveBeenLastCalledWith({
+      type: MESSAGE_TYPES.SEARCH_HISTORY,
+      query: "needle",
+      limit: 50,
+      offset: 50,
+      filters: {},
+      deep: true,
+    });
+  });
+
+  it("re-issues the current query as a fresh listing when deep search toggles", () => {
+    renderSearch();
+    act(() => {
+      useUiStore.getState().setHistorySearchResults(results(50), false, {
+        offset: 950,
+        totalCount: 1000,
+      });
+    });
+
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "Deep search (slower; re-reads run history from disk)",
+      })
+    );
+
+    expect(useUiStore.getState().historySearchResults).toEqual([]);
+    expect(useUiStore.getState().historySearchLoading).toBe(true);
+    expect(postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.SEARCH_HISTORY,
+        query: "needle",
+        limit: 50,
+        filters: {},
+        deep: true,
+      })
+    );
+  });
+
   it("re-issues a filtered search immediately and clears the listing", () => {
     renderSearch();
     act(() => {

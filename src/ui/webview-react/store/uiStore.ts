@@ -483,6 +483,7 @@ interface UiState {
    */
   historySearchResults: (HistorySearchResult | undefined)[];
   historySearchQuery: string;
+  historySearchDeep: boolean;
   /**
    * Set only while the first page of a query is outstanding. There is no
    * counterpart for later pages: those replace individual placeholder rows,
@@ -822,6 +823,7 @@ interface UiActions {
   closeHistorySearch: () => void;
   toggleHistorySearch: () => void;
   setHistorySearchQuery: (query: string) => void;
+  setHistorySearchDeep: (deep: boolean) => void;
   setHistorySearchFilters: (filters: HistorySearchFilterState) => void;
   resetHistorySearchFilters: () => void;
   /**
@@ -1109,6 +1111,7 @@ const initialState: UiState = {
   isHistorySearchOpen: false,
   historySearchResults: [],
   historySearchQuery: "",
+  historySearchDeep: false,
   historySearchLoading: false,
   historySearchTotalCount: 0,
   historySearchCountState: HISTORY_SEARCH_COUNT_STATES.EXACT,
@@ -1460,6 +1463,8 @@ export const useUiStore = create<UiState & UiActions>()(
           historySearchCountState: HISTORY_SEARCH_COUNT_STATES.EXACT,
         }),
 
+      setHistorySearchDeep: (deep) => set({ historySearchDeep: deep }),
+
       setHistorySearchFilters: (filters) =>
         set({
           historySearchFilters: filters,
@@ -1472,6 +1477,7 @@ export const useUiStore = create<UiState & UiActions>()(
       resetHistorySearchFilters: () =>
         set({
           historySearchFilters: createDefaultHistorySearchFilters(),
+          historySearchDeep: false,
           historySearchResults: [],
           historySearchLoading: false,
           historySearchTotalCount: 0,
@@ -2287,6 +2293,7 @@ export const useUiStore = create<UiState & UiActions>()(
           isHistorySearchOpen: false,
           historySearchResults: [],
           historySearchQuery: "",
+          historySearchDeep: false,
           historySearchLoading: false,
           historySearchTotalCount: 0,
           historySearchCountState: HISTORY_SEARCH_COUNT_STATES.EXACT,

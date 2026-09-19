@@ -957,6 +957,7 @@ suite("WebviewMessageRouter — license actions", () => {
     interface RecordedSearch {
       offset?: number;
       query: string;
+      deep?: boolean;
       signal?: AbortSignal;
       resolve: () => void;
     }
@@ -972,7 +973,7 @@ suite("WebviewMessageRouter — license actions", () => {
       });
       const historySearchService = {
         search: (
-          request: { query: string; offset?: number },
+          request: { query: string; offset?: number; deep?: boolean },
           _workspacePath: string,
           _onProgress: unknown,
           signal?: AbortSignal
@@ -981,6 +982,7 @@ suite("WebviewMessageRouter — license actions", () => {
             recorded.push({
               query: request.query,
               offset: request.offset,
+              deep: request.deep,
               signal,
               resolve: () =>
                 resolve({
@@ -1081,6 +1083,54 @@ suite("WebviewMessageRouter — license actions", () => {
         await settle();
         recorded[1].resolve();
         await second;
+      } finally {
+        restore();
+      }
+    });
+
+    test("deep and shallow listings supersede each other for the same query", async () => {
+      const recorded: RecordedSearch[] = [];
+      const { router, restore } = buildSearchRouter(recorded);
+      try {
+        const shallow = router.route({
+          type: MESSAGE_TYPES.SEARCH_HISTORY,
+          query: "codemirroreditor",
+          limit: 50,
+        });
+        await settle();
+        assert.strictEqual(recorded.length, 1);
+        assert.strictEqual(recorded[0].deep, false);
+
+        const deep = router.route({
+          type: MESSAGE_TYPES.SEARCH_HISTORY,
+          query: "codemirroreditor",
+          limit: 50,
+          deep: true,
+        });
+        await settle();
+        assert.strictEqual(recorded[0].signal?.aborted, true);
+
+        recorded[0].resolve();
+        await shallow;
+        await settle();
+        assert.strictEqual(recorded.length, 2);
+        assert.strictEqual(recorded[1].deep, true);
+
+        const shallowAgain = router.route({
+          type: MESSAGE_TYPES.SEARCH_HISTORY,
+          query: "codemirroreditor",
+          limit: 50,
+        });
+        await settle();
+        assert.strictEqual(recorded[1].signal?.aborted, true);
+
+        recorded[1].resolve();
+        await deep;
+        await settle();
+        assert.strictEqual(recorded.length, 3);
+        assert.strictEqual(recorded[2].deep, false);
+        recorded[2].resolve();
+        await shallowAgain;
       } finally {
         restore();
       }
