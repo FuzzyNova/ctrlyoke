@@ -28,6 +28,7 @@ import {
   HistorySearchCancelledError,
   MAX_INDEXED_TEXT_LENGTH,
   type IndexRebuildProgressCallback,
+  type PartialSearchResultsCallback,
 } from "./HistorySearchIndexService";
 import { getSharedHistorySearchIndexService } from "./HistorySearchIndexServiceRegistry";
 import {
@@ -70,7 +71,8 @@ export class HistorySearchService {
     query: string | HistorySearchQuery,
     workspaceFolderPath: string,
     onRebuildProgress?: IndexRebuildProgressCallback,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onPartialResults?: PartialSearchResultsCallback
   ): Promise<HistorySearchResponse> {
     const request =
       typeof query === "string"
@@ -81,7 +83,13 @@ export class HistorySearchService {
     try {
       return await getSharedHistorySearchIndexService(
         workspaceFolderPath
-      ).search(request, workspaceFolderPath, onRebuildProgress, signal);
+      ).search(
+        request,
+        workspaceFolderPath,
+        onRebuildProgress,
+        signal,
+        onPartialResults
+      );
     } catch (error) {
       if (error instanceof HistorySearchCancelledError) {
         // Superseded by a newer search — not a failure, so it must not fall

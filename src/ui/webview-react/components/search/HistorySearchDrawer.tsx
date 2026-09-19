@@ -585,18 +585,25 @@ export function HistorySearchDrawer() {
   // rather than anything the reader cares about. Position lives on the rows
   // (see `formatResultOrdinal`), which stay correct mid-scroll because a
   // placeholder knows its own absolute index.
+  //
+  // Shown as soon as `totalCount` is nonzero rather than waiting for
+  // `loading` to clear: a still-running scan now pushes partial results (see
+  // SEARCH_HISTORY_PARTIAL_RESULTS), so a query with a handful of matches can
+  // sit at `loading === true` for the rest of a long scan while already
+  // having a real, if growing, count to show.
   const summaryLabel = useMemo(() => {
-    if (trimmedQuery.length < 2 || loading || totalCount === 0) {
+    if (trimmedQuery.length < 2 || totalCount === 0) {
       return "";
     }
     // "+" marks totalCount as a lower bound rather than the true count — an
-    // early-terminated scan hasn't read far enough to know the real total yet.
+    // early-terminated (or still in-progress) scan hasn't read far enough to
+    // know the real total yet.
     const isExact = countState === HISTORY_SEARCH_COUNT_STATES.EXACT;
     const countLabel = `${totalCount.toLocaleString()}${isExact ? "" : "+"}`;
     return `${countLabel} result${totalCount === 1 && isExact ? "" : "s"}${
       activeFilterCount > 0 ? " (filtered)" : ""
     }`;
-  }, [activeFilterCount, countState, loading, totalCount, trimmedQuery.length]);
+  }, [activeFilterCount, countState, totalCount, trimmedQuery.length]);
 
   const workflowScopeAvailable =
     displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
@@ -807,7 +814,19 @@ export function HistorySearchDrawer() {
 
           {trimmedQuery.length >= 2 && (
             <div className="mt-2 flex h-5 items-center justify-between gap-3 text-sm text-description-fg">
-              <span>{summaryLabel}</span>
+              <span className="flex items-center gap-1.5">
+                {summaryLabel}
+                {/* Once rows have started arriving, the full-page spinner
+                    below stands aside for the list — this inline indicator
+                    is what still says the scan behind it hasn't finished. */}
+                {loading && totalCount > 0 && (
+                  <Icon
+                    name="loading"
+                    className="animate-spin text-xs"
+                    aria-label="Still searching"
+                  />
+                )}
+              </span>
               <span>
                 {indexState === "building"
                   ? "Index updating"
@@ -832,6 +851,10 @@ export function HistorySearchDrawer() {
 
         {trimmedQuery.length >= 2 &&
           loading &&
+          // Once partial rows have started arriving, they replace this
+          // full-page indicator; the inline spinner beside the summary
+          // label above keeps showing the scan is still in progress.
+          totalCount === 0 &&
           (rebuildProgress && rebuildProgress.totalRuns > 0 ? (
             <div className="flex flex-col items-center gap-2 px-3 py-6 text-sm text-description-fg">
               <div className="h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-ctx-bar-track">

@@ -2740,6 +2740,38 @@ export function createMessageHandlers(
   };
 
   // --------------------------------------------------------------------------
+  // SEARCH_HISTORY_PARTIAL_RESULTS - Interim matches while a scan is still
+  // running (see HistorySearchIndexService's onPartialResultsFound). Applied
+  // the same way as the final response, except loading stays true: the scan
+  // this push came from hasn't finished, so more rows (or a larger total) may
+  // still be coming.
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.SEARCH_HISTORY_PARTIAL_RESULTS] = (message) => {
+    const { results, query, offset, totalCount, countState, indexState } =
+      message as {
+        results: HistorySearchResult[];
+        query: string;
+        offset?: number;
+        totalCount?: number;
+        countState?: "exact" | "atLeast";
+        indexState?: "ready" | "building" | "fallback";
+      };
+    const uiStore = useUiStore.getState();
+    // Same guard as the final response: a push that arrives after its query
+    // was superseded (the user kept typing, or issued a new search) must not
+    // land on top of whatever the current query has already shown.
+    if (uiStore.historySearchQuery !== query) {
+      return;
+    }
+    uiStore.setHistorySearchResults(results, true, {
+      offset: offset ? offset : undefined,
+      totalCount,
+      countState,
+      indexState,
+    });
+  };
+
+  // --------------------------------------------------------------------------
   // SEARCH_INDEX_REBUILD_PROGRESS - Pushed while a search is blocked on a
   // full, synchronous index rebuild (see HistorySearchIndexService.rebuild)
   // --------------------------------------------------------------------------

@@ -1427,7 +1427,13 @@ export class WebviewMessageRouter {
               totalRuns,
             });
           },
-          ctx.historySearchAbortSignal
+          ctx.historySearchAbortSignal,
+          (partialResponse) => {
+            ctx.emit({
+              type: MESSAGE_TYPES.SEARCH_HISTORY_PARTIAL_RESULTS,
+              ...partialResponse,
+            });
+          }
         );
         ctx.emit({
           type: MESSAGE_TYPES.SEARCH_HISTORY_RESULTS,

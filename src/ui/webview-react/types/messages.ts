@@ -163,6 +163,7 @@ export {
   type IncomingMessage,
   type SearchHistoryMessage,
   type SearchHistoryResultsMessage,
+  type SearchHistoryPartialResultsMessage,
   type ExecutionPreviewScope,
   type RequestExecutionPreviewMessage,
   type ExecutionPreviewResultMessage,

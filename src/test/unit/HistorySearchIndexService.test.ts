@@ -547,6 +547,83 @@ suite("HistorySearchIndexService", () => {
     );
   });
 
+  test("pushes growing partial results while a scan can't stop early", async () => {
+    // Five runs, one match each, and a limit far above the match count: the
+    // scan can never satisfy `targetCount` early, so it has to read every
+    // shard — exactly the case the partial-results push exists for (a rare
+    // term costing a full scan). Distinct startedAt values (rather than one
+    // run with five documents) are what create the group boundaries a push
+    // fires at.
+    const term = "partial-progress-term";
+    const totalRuns = 5;
+    for (let i = 0; i < totalRuns; i += 1) {
+      await createRun(
+        `partial-progress-run-${i}-2026-06-09T22-35-00`,
+        1,
+        50000 + i * 100,
+        [createStatusDraft(50100 + i * 100, term)]
+      );
+    }
+
+    const index = new HistorySearchIndexService();
+    const partials: HistorySearchResponse[] = [];
+    const response = await index.search(
+      { query: term, limit: 100 },
+      workspaceRoot,
+      undefined,
+      undefined,
+      (partial) => {
+        partials.push(partial);
+      }
+    );
+
+    assert.strictEqual(response.totalCount, 5);
+    assert.strictEqual(response.countState, "exact");
+    assert.ok(partials.length > 0, "expected at least one partial push");
+    assert.ok(
+      partials.length < totalRuns,
+      "the final group's results must arrive with the final response, not duplicated as a partial push first"
+    );
+
+    let previousTotal = 0;
+    for (const partial of partials) {
+      assert.strictEqual(partial.countState, "atLeast");
+      assert.strictEqual(partial.hasMore, true);
+      assert.ok(
+        partial.totalCount > previousTotal,
+        `expected a growing total, got ${partial.totalCount} after ${previousTotal}`
+      );
+      previousTotal = partial.totalCount;
+    }
+    assert.ok(previousTotal < response.totalCount);
+  });
+
+  test("pushes no partial results when the first group already satisfies the page", async () => {
+    // A single run whose one shard both opens and closes the scan: there is
+    // no "next shard differs" transition to push a partial at, since the
+    // group is only finalized once, after the loop ends — matching the
+    // common, already-fast case (see option A) where nothing should fire.
+    const term = "partial-none-needed-term";
+    await createRun("partial-none-needed-2026-06-09T22-36-00", 1, 51000, [
+      createStatusDraft(51100, term),
+    ]);
+
+    const index = new HistorySearchIndexService();
+    const partials: HistorySearchResponse[] = [];
+    const response = await index.search(
+      { query: term, limit: 1 },
+      workspaceRoot,
+      undefined,
+      undefined,
+      (partial) => {
+        partials.push(partial);
+      }
+    );
+
+    assert.strictEqual(response.totalCount, 1);
+    assert.deepStrictEqual(partials, []);
+  });
+
   test("resumes a scan from its retained cursor instead of restarting when paging past the retained prefix", async () => {
     const term = "resume-cursor-term";
     const totalRuns = 40;

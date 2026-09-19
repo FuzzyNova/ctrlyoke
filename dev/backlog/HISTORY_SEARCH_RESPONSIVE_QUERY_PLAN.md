@@ -3,7 +3,9 @@
 **Status:** In progress — A has landed in full (recency-ordered scan,
 early termination, and the `totalCount` contract change it forces), on top of
 the already-landed C and D (repeat-query snapshot reuse gated on freshness,
-plus superseded-search cancellation). B and E are still backlog.
+plus superseded-search cancellation). Progressive result delivery — results
+rendering as they're found during a scan A's early termination can't shortcut
+— has also landed on top of A. B and E are still backlog.
 **Priority:** P0 — this is a live regression in daily use, not a future risk.
 **Predecessor:** `dev/implemented/HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md` removed
 the ~2.16 GB resident index by streaming every shard per query. It fixed the
@@ -43,6 +45,50 @@ is sized one page past the known count so there is always a row to scroll into
 that triggers requesting more, `requestPage`'s `offset >= totalCount` guard
 only blocks once the count is exact, and the summary label appends "+" to mark
 the count as provisional.
+
+## What progressive result delivery landed
+
+A landed's early termination doesn't help the case it explicitly calls out as
+unfixed: a rare term (or one whose matches sit only in old runs) still has to
+read most or all of the index before returning anything, because the scan
+never reaches `targetCount` early. That scan now pushes what it has found
+instead of making the caller wait for it to finish or exhaust the index.
+
+`HistorySearchIndexService.scanForMatches` takes an optional
+`onPartialResultsFound` callback, invoked with every match found so far each
+time a finalized `startedAt` group adds at least one — the same group
+boundary the early-termination check already uses, so a partial push is
+exactly as safe (ordering- and dedupe-wise) as the final response. It is not
+called for a group that matched nothing, which is what keeps this from firing
+once per shard on a large index with a few scattered hits, and it is not
+called for the scan's final group — that one's results arrive with the actual
+response instead of being pushed a second time first. `search()` and
+`extendSnapshotAndRespond` both wire it to a `PartialSearchResultsCallback`
+that wraps each push through the same `buildPageResponse` the final response
+uses (with `complete` forced `false`, since the scan producing it hasn't
+finished), so a caller treats every call — partial or final — identically:
+`countState` is always `"atLeast"` and `hasMore` always `true` on a partial
+push.
+
+`WebviewMessageRouter`'s SEARCH_HISTORY handler passes such a callback
+alongside the existing rebuild-progress one, and relays each push to the
+webview as `SEARCH_HISTORY_PARTIAL_RESULTS` — the same response shape as
+`SEARCH_HISTORY_RESULTS`, just a different message type so the webview can
+tell "more may still come" from "this is final". `uiStore.setHistorySearchResults`
+needed no changes to consume it: a partial push is applied exactly like a
+page response, except `loading` is passed as still `true`. The one new rule
+lives in `useMessageHandler.ts`'s handler for the new message type, and it is
+the same rule the final-response handler already enforced: a push whose
+`query` no longer matches `uiStore.historySearchQuery` (the user has since
+typed something else, or a new search superseded it) is dropped rather than
+applied, so a superseded scan's trailing pushes can never land on top of a
+newer query's results. `HistorySearchDrawer` needed one behavioral change:
+`summaryLabel` used to suppress the count entirely while `loading` was true,
+which was harmless when `loading` and "no results yet" were the same thing —
+they no longer are, so the label now shows as soon as `totalCount` is
+nonzero, and a small inline spinner next to it (rather than the full-page
+"Searching..." block, which now only shows while `totalCount` is still zero)
+signals that the scan behind a nonzero, growing count is still running.
 
 ## The problem in one sentence
 
@@ -310,3 +356,6 @@ aggregate rather than minutes.
       for a query that scans the whole index.
 - [ ] A 20-search session costs seconds in aggregate, compared with the ~416 s
       recorded above.
+- [x] A query whose scan can't stop early (a rare term, or one with matches
+      only in old runs) renders matches as they're found instead of only once
+      the scan finishes or exhausts the index.

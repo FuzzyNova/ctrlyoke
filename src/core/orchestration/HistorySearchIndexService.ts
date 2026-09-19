@@ -130,6 +130,21 @@ export type IndexRebuildProgressCallback = (
   totalRuns: number
 ) => void;
 
+/**
+ * Reports interim matches while a scan is still running, so a caller can
+ * surface results before the requested page is fully satisfied. Only fired
+ * for a scan that has to keep going past what early termination alone can
+ * shortcut — a rare term (or one with matches only in old runs) still reads
+ * most or all of the index before `search()` would otherwise return anything.
+ * Each call carries every match found so far for the request's page window,
+ * not a delta, mirroring how the final response is built
+ * (`buildPageResponse`) so a caller can treat every call — partial or final —
+ * the same way.
+ */
+export type PartialSearchResultsCallback = (
+  partialResponse: HistorySearchResponse
+) => void;
+
 export class HistorySearchIndexService {
   private loadedWorkspacePath?: string;
   private loadedManifest?: HistorySearchIndexManifest;
@@ -148,7 +163,8 @@ export class HistorySearchIndexService {
     request: HistorySearchQuery,
     workspaceFolderPath: string,
     onRebuildProgress?: IndexRebuildProgressCallback,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onPartialResults?: PartialSearchResultsCallback
   ): Promise<HistorySearchResponse> {
     if (signal?.aborted) {
       throw new HistorySearchCancelledError();
@@ -206,7 +222,8 @@ export class HistorySearchIndexService {
           limit,
           targetCount,
           searchStart,
-          signal
+          signal,
+          onPartialResults
         );
       }
 
@@ -253,7 +270,8 @@ export class HistorySearchIndexService {
           limit,
           targetCount,
           searchStart,
-          signal
+          signal,
+          onPartialResults
         );
       }
       // The index changed since the snapshot was built — fall through to a
@@ -283,7 +301,19 @@ export class HistorySearchIndexService {
         targetCount,
         0,
         undefined,
-        signal
+        signal,
+        onPartialResults
+          ? (resultsSoFar) =>
+              onPartialResults(
+                this.buildPageResponse(
+                  normalizedQuery,
+                  resultsSoFar,
+                  offset,
+                  limit,
+                  false
+                )
+              )
+          : undefined
       );
     if (cancelled) {
       Log.debug(
@@ -322,7 +352,8 @@ export class HistorySearchIndexService {
     limit: number,
     targetCount: number,
     searchStart: number,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onPartialResults?: PartialSearchResultsCallback
   ): Promise<HistorySearchResponse> {
     const matchStart = Date.now();
     const { newResults, complete, cursor, cancelled } =
@@ -333,7 +364,19 @@ export class HistorySearchIndexService {
         targetCount,
         snapshot.results.length,
         snapshot.cursor,
-        signal
+        signal,
+        onPartialResults
+          ? (resultsSoFar) =>
+              onPartialResults(
+                this.buildPageResponse(
+                  normalizedQuery,
+                  snapshot.results.concat(resultsSoFar),
+                  offset,
+                  limit,
+                  false
+                )
+              )
+          : undefined
       );
     if (cancelled) {
       Log.debug(
@@ -445,6 +488,13 @@ export class HistorySearchIndexService {
    * retained shard index and dedupe set instead of starting over — see
    * `HistorySearchScanCursor`. Returns *new* results only (not the caller's
    * already-collected prefix); the caller concatenates.
+   *
+   * `onPartialResultsFound`, when provided, is called with the (copied) *new*
+   * results found so far every time a finished group adds at least one — i.e.
+   * at the same group boundaries the early-termination check above uses, so
+   * a partial push is exactly as safe to trust (ordering/dedupe-wise) as a
+   * final one. It is never called for a group that matched nothing, which is
+   * what keeps this from firing once per shard on a large index.
    */
   private async scanForMatches(
     workspaceFolderPath: string,
@@ -453,7 +503,8 @@ export class HistorySearchIndexService {
     targetCount: number | undefined,
     alreadyCollectedCount: number,
     resume: HistorySearchScanCursor | undefined,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onPartialResultsFound?: (newResultsSoFar: HistorySearchResult[]) => void
   ): Promise<{
     newResults: HistorySearchResult[];
     complete: boolean;
@@ -508,7 +559,11 @@ export class HistorySearchIndexService {
         currentGroupStartedAt !== undefined &&
         shard.startedAt !== currentGroupStartedAt
       ) {
+        const countBeforeGroup = newResults.length;
         finalizeGroup();
+        if (onPartialResultsFound && newResults.length > countBeforeGroup) {
+          onPartialResultsFound([...newResults]);
+        }
         if (
           targetCount !== undefined &&
           alreadyCollectedCount + newResults.length >= targetCount
