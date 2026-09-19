@@ -343,12 +343,11 @@ first checkbox sets the direction.
    `useOutputUndoActions.ts`: single entry list, stop filtering blocked
    candidates. Unit tests first (`test/utils/promptUndo.test.ts`,
    `test/hooks/useOutputUndoActions.test.ts`).
-2. **Display name** — extract `getWorkflowNameFromPath` and the header's
-   `pendingRunViewSwitch ?? workflowName ?? path` chain out of
-   `WorkflowStatus.tsx` into a shared helper/hook, repointing each of that
-   file's four inline uses at the _correct_ one of the two per the table in
-   §3.2. Standalone and separately reviewable; §3.2 depends on it, and nothing
-   in it depends on §5.1 — it can land first.
+2. **Display name — done** — extracted `getWorkflowNameFromPath` and the
+   header's `pendingRunViewSwitch ?? workflowName ?? path` chain out of
+   `WorkflowStatus.tsx` into a shared helper/hook. The four inline uses follow
+   the §3.2 table: only the header uses the hook; the synthetic workflow and
+   rename paths use the pure helper without `pendingRunViewSwitch`.
 3. **Dialog** — intent, scope title/subtitle, state chips, direction-exclusive
    selection, footer verb, empty initial selection for `VIEW`.
 
