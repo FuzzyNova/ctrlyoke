@@ -1,6 +1,7 @@
 # History Search Index Residency Plan
 
-**Status:** Implemented — landed (2026-09-18)
+**Status:** Implemented — landed (2026-09-18), with one open follow-up
+(see "Open follow-up: the lowercased key is written but never read")
 **Priority:** P1
 **Predecessor:** `dev/implemented/HISTORY_SEARCH_PERFORMANCE_PLAN.md` (worker
 isolation, incremental rebuild, shared registry). This doc covers the one
@@ -345,18 +346,58 @@ and ran four searches while retaining no results. The OS file cache was not
 forcibly evicted, so "first" means the first pass in a fresh process, not a
 physically cold disk.
 
-| Measurement | Value |
-| --- | ---: |
-| First `codemirror` search, result count 11,631 | **9,277.9 ms** |
-| Warm repeat `codemirror` search, result count 11,631 | **8,793.7 ms** |
-| Process RSS before first search | **47.6 MB** |
-| Process RSS after four searches | **91.3 MB** (**+43.7 MB**) |
-| Peak heap delta during four searches | **+20.6 MB** |
+| Measurement                                          |                      Value |
+| ---------------------------------------------------- | -------------------------: |
+| First `codemirror` search, result count 11,631       |             **9,277.9 ms** |
+| Warm repeat `codemirror` search, result count 11,631 |             **8,793.7 ms** |
+| Process RSS before first search                      |                **47.6 MB** |
+| Process RSS after four searches                      | **91.3 MB** (**+43.7 MB**) |
+| Peak heap delta during four searches                 |               **+20.6 MB** |
 
 The streamed path therefore removes the multi-second index load and keeps
 post-search RSS within a few hundred MB of baseline. Its full shard pass is
 still materially slower than the old resident 602 ms match pass; that is the
 deliberate disk-read trade-off for eliminating index residency.
+
+## Open follow-up: the lowercased key is written but never read (2026-09-18)
+
+Found reviewing the landed work. The spike decided to add a lowercased search
+key to each shard because the raw-line prefilter over existing shards was too
+slow. The write side landed; the read side did not.
+
+`HistorySearchDocument.textLower` is populated by `historySearchRebuildWorker`
+(in `buildRunDocuments` and again through the spread in
+`writeDocumentsShard`, so each text is lowercased twice per rebuild) and by
+`HistorySearchService`'s `searchLegacy` path, where the document is never
+serialized. Nothing reads it: `HistorySearchIndexService.collectMatches`
+verifies with `document.text.toLowerCase()`, and
+`createHistorySearchLinePrefilter` prefilters with `rawLine.toLowerCase()`.
+
+Measured consequences:
+
+- The real index is still `schemaVersion` 4.1.0 (1.6 GB, 1,560 shards), so the
+  `4.2.0` bump means the next real search triggers a full rebuild of every run
+  purely to add this field.
+- Sampling 40 real shards, `text` is **41%** of shard payload, so the field
+  grows the shard set by about 41% (1.6 GB → ~2.3 GB) — not the ~2x estimated
+  in "Spike results" above, which should be corrected.
+- Because the prefilter lowercases the whole raw line, those extra bytes are
+  read and lowercased on every query, so as landed the field makes queries
+  roughly 41% **slower** on their dominant cost.
+
+Either resolution closes it, and the choice should be measured with
+`scripts/bench-history-search-index.mjs` over a copied shard subset rather than
+the live index: delete the field and revert `INDEX_SCHEMA_VERSION` to `4.1.0`
+(the document shape then matches what is already on disk), or keep it and make
+the prefilter test `rawLine.includes(escapedLoweredQuery)` with no per-line
+`toLowerCase()` at all — which is what the spike's decision actually intended,
+and which targets the 19,974.8 ms of the 20,049.2 ms pass that the spike
+attributed to the prefilter.
+
+Until that is settled, the warm-query figure in "Closeout measurements" stands
+at 8,793.7 ms against the old resident match pass of ~602-1,200 ms. If it stays
+in that range, the trigram-postings option (B in "Options") is the indicated
+follow-on, exactly as the Recommendation section anticipated.
 
 ## Acceptance criteria
 
