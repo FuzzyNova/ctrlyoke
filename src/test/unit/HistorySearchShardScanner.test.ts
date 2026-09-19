@@ -16,6 +16,8 @@ import { FINAL_STEP_PHASES } from "../../types/DashboardConstants";
 import type { HistorySearchDocument } from "../../types/WorkflowTimelineTypes";
 
 suite("HistorySearchShardScanner", () => {
+  const INDEXED_KEY_OPTIONS = { hasPersistedLowercaseKey: true };
+  const LEGACY_SHARD_OPTIONS = { hasPersistedLowercaseKey: false };
   let documentsDirectory: string;
 
   setup(async () => {
@@ -70,7 +72,10 @@ suite("HistorySearchShardScanner", () => {
 
     assert.strictEqual(line.includes('"text":"mixed case needle"'), false);
     assert.strictEqual(
-      createHistorySearchLinePrefilter("mixed case needle")(line),
+      createHistorySearchLinePrefilter(
+        "mixed case needle",
+        INDEXED_KEY_OPTIONS
+      )(line),
       true
     );
   });
@@ -110,12 +115,51 @@ suite("HistorySearchShardScanner", () => {
 
       if (expected) {
         assert.strictEqual(
-          createHistorySearchLinePrefilter(query)(line),
+          createHistorySearchLinePrefilter(query, INDEXED_KEY_OPTIONS)(line),
           true,
           `prefilter rejected generated match for query ${JSON.stringify(query)}`
         );
       }
     }
+  });
+
+  test("finds a mixed-case match in shards written before the lowercase key", async () => {
+    // A schema-upgrading rebuild builds into `rebuild-<ts>/` and swaps only at
+    // the end, so a search running beside it streams shards that have no
+    // `textLower`. Matching the lowercased query against those lines directly
+    // would drop every document whose stored text is not already lowercase.
+    const legacyDocument = createLegacyDocument("Using CodeMirror here");
+    await fs.writeFile(
+      path.join(documentsDirectory, "legacy.jsonl"),
+      JSON.stringify(legacyDocument) + "\n",
+      "utf8"
+    );
+
+    assert.deepStrictEqual(
+      await matchingTexts("codemirror", LEGACY_SHARD_OPTIONS),
+      ["Using CodeMirror here"]
+    );
+  });
+
+  test("rejects a legacy line only when the lowercase key is assumed present", () => {
+    const legacyLine = JSON.stringify(
+      createLegacyDocument("Using CodeMirror here")
+    );
+
+    assert.strictEqual(
+      createHistorySearchLinePrefilter(
+        "codemirror",
+        LEGACY_SHARD_OPTIONS
+      )(legacyLine),
+      true
+    );
+    assert.strictEqual(
+      createHistorySearchLinePrefilter(
+        "codemirror",
+        INDEXED_KEY_OPTIONS
+      )(legacyLine),
+      false
+    );
   });
 
   test("ignores a shard deleted after listing it but before reading it", async () => {
@@ -129,7 +173,8 @@ suite("HistorySearchShardScanner", () => {
     const results: HistorySearchDocument[] = [];
     for await (const document of streamHistorySearchDocuments(
       documentsDirectory,
-      "match"
+      "match",
+      INDEXED_KEY_OPTIONS
     )) {
       results.push(document);
       if (document.text === "first match") {
@@ -142,11 +187,15 @@ suite("HistorySearchShardScanner", () => {
     await fs.access(firstShardPath);
   });
 
-  async function matchingTexts(query: string): Promise<string[]> {
+  async function matchingTexts(
+    query: string,
+    options = INDEXED_KEY_OPTIONS
+  ): Promise<string[]> {
     const matches: string[] = [];
     for await (const document of streamHistorySearchDocuments(
       documentsDirectory,
-      query
+      query,
+      options
     )) {
       if (document.text.toLowerCase().includes(query.toLowerCase())) {
         matches.push(document.text);
@@ -166,6 +215,13 @@ suite("HistorySearchShardScanner", () => {
       "utf8"
     );
     return shardPath;
+  }
+
+  function createLegacyDocument(
+    text: string
+  ): Omit<HistorySearchDocument, "textLower"> {
+    const { textLower: _unusedTextLower, ...legacy } = createDocument(text);
+    return legacy;
   }
 
   function createDocument(text: string): HistorySearchDocument {

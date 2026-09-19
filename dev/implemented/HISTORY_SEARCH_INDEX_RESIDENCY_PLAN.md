@@ -385,6 +385,28 @@ landed decision. Its warm-query cost remains far above the old resident
 602–1,200 ms match pass, so the trigram-postings option (B in "Options")
 remains the follow-on if this disk-pass cost is unacceptable.
 
+### The keyed prefilter is coupled to the index schema (guard added in review)
+
+Variant B's prefilter only works on shards that carry `textLower`, and
+matching a lowercased query against a line that lacks it silently drops every
+document whose stored text is not already lowercase. Reviewing the landed
+change found one live path where that could happen: a full rebuild builds into
+`rebuild-<ts>/` and calls `swapIndexFiles` only at the end, so until that swap
+the live `documents/` directory still holds pre-4.2.0 shards — and
+`search()`'s `buildInProgress` branch skips `ensureReady()` and streams that
+directory anyway. On this workspace, where a running workflow triggers a
+refresh on nearly every history append, that window is the whole duration of
+the schema-upgrading rebuild.
+
+`streamHistorySearchDocuments` therefore takes a `HistorySearchScanOptions`
+with `hasPersistedLowercaseKey`, and `HistorySearchIndexService` derives it
+from whether a manifest at the current schema was actually read
+(`hasCurrentSchemaIndex`). Shards without the key fall back to lowercasing the
+line — the cost the key exists to avoid, paid only while an upgrading rebuild
+is in flight. An absent manifest therefore degrades to slow-but-correct, which
+is the right failure direction; assuming the key is present is the one that
+returns wrong answers.
+
 ## Acceptance criteria
 
 - [x] A first shipped streaming search in a fresh process on a 1400+ run
@@ -395,6 +417,8 @@ remains the follow-on if this disk-pass cost is unacceptable.
       increased by 43.7 MB, from 47.6 MB to 91.3 MB, after four searches.
 - [x] Case-insensitive substring matching is unchanged for queries containing
       `"`, `\`, and newlines, with tests for each.
+- [x] The keyed prefilter never silently misses on shards that predate the key,
+      covered by tests for both the keyed and legacy shard shapes.
 - [x] Offset paging and the per-query snapshot keep working: a jump to the last
       page of a several-thousand-result search still costs one request.
 - [x] `search()`'s rebuild-progress reporting to the UI still fires when a

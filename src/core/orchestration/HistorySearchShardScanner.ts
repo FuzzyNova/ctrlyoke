@@ -10,6 +10,19 @@ const NON_ASCII_PATTERN = /[^\x00-\x7f]/;
 export type HistorySearchLinePrefilter = (rawLine: string) => boolean;
 export type HistorySearchDocumentScannedCallback = () => void;
 
+export interface HistorySearchScanOptions {
+  /**
+   * Whether the shards being scanned carry the serialized `textLower` key,
+   * which only exists from index schema 4.2.0 onward. It is false for exactly
+   * one window: a schema-upgrading rebuild builds into `rebuild-<ts>/` and
+   * swaps at the end, so until that swap the live documents directory still
+   * holds pre-4.2.0 shards, and a search running beside it (the
+   * `buildInProgress` path in `HistorySearchIndexService.search`) streams
+   * them.
+   */
+  hasPersistedLowercaseKey: boolean;
+}
+
 /**
  * Creates the cheap candidate check used before parsing a JSONL document.
  *
@@ -17,9 +30,16 @@ export type HistorySearchDocumentScannedCallback = () => void;
  * JSON.stringify applies the same escaping that was used when the shard was
  * written. Queries containing non-ASCII characters skip the check entirely,
  * because Unicode case folding is not a safe byte-level operation.
+ *
+ * Without that key the line holds only the original-case `text`, so matching
+ * the lowercased query against it would silently drop every document whose
+ * stored text is not already lowercase. Those shards fall back to lowercasing
+ * the line — the cost this key exists to avoid, paid only while an upgrading
+ * rebuild is in flight.
  */
 export function createHistorySearchLinePrefilter(
-  normalizedQuery: string
+  normalizedQuery: string,
+  options: HistorySearchScanOptions
 ): HistorySearchLinePrefilter {
   if (NON_ASCII_PATTERN.test(normalizedQuery)) {
     return () => true;
@@ -28,6 +48,9 @@ export function createHistorySearchLinePrefilter(
   const serializedLoweredQuery = JSON.stringify(normalizedQuery.toLowerCase());
   const escapedLoweredQuery = serializedLoweredQuery.slice(1, -1);
 
+  if (!options.hasPersistedLowercaseKey) {
+    return (rawLine) => rawLine.toLowerCase().includes(escapedLoweredQuery);
+  }
   return (rawLine) => rawLine.includes(escapedLoweredQuery);
 }
 
@@ -39,9 +62,10 @@ export function createHistorySearchLinePrefilter(
 export async function* streamHistorySearchDocuments(
   documentsDirectory: string,
   normalizedQuery: string,
+  options: HistorySearchScanOptions,
   onDocumentScanned?: HistorySearchDocumentScannedCallback
 ): AsyncGenerator<HistorySearchDocument, void, undefined> {
-  const prefilter = createHistorySearchLinePrefilter(normalizedQuery);
+  const prefilter = createHistorySearchLinePrefilter(normalizedQuery, options);
   let shardEntries: import("fs").Dirent[];
   try {
     shardEntries = await fs.readdir(documentsDirectory, {

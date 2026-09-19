@@ -365,12 +365,22 @@ async function runShippedScanner(indexDirectory, query) {
   const documentsDirectory = join(indexDirectory, DOCUMENTS_DIRECTORY_NAME);
   const memory = createMemoryTracker();
   const normalizedQuery = query.trim();
+  // The scanner picks its prefilter from whether the shards carry the
+  // serialized lowercase key, so sniff the real shards rather than assume it.
+  const scanOptions = {
+    hasPersistedLowercaseKey:
+      await hasPersistedLowercaseKey(documentsDirectory),
+  };
+  console.log(
+    `shards carry the lowercase key: ${scanOptions.hasPersistedLowercaseKey}`
+  );
 
   async function collect(queryToRun) {
     let matchCount = 0;
     for await (const document of streamHistorySearchDocuments(
       documentsDirectory,
-      queryToRun
+      queryToRun,
+      scanOptions
     )) {
       if (document.text.toLowerCase().includes(queryToRun.toLowerCase())) {
         matchCount += 1;
@@ -488,4 +498,21 @@ try {
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
   process.exitCode = 1;
+}
+
+async function hasPersistedLowercaseKey(documentsDirectory) {
+  const shardNames = (await readdir(documentsDirectory)).filter((name) =>
+    DOCUMENT_SHARD_PATTERN.test(name)
+  );
+  for (const shardName of shardNames) {
+    for await (const line of streamFileLines(
+      join(documentsDirectory, shardName)
+    )) {
+      if (line.trim().length === 0) {
+        continue;
+      }
+      return typeof JSON.parse(line).textLower === "string";
+    }
+  }
+  return false;
 }

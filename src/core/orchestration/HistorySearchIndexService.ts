@@ -173,6 +173,13 @@ export class HistorySearchIndexService {
     for await (const document of streamHistorySearchDocuments(
       this.getDocumentsDir(workspaceFolderPath),
       normalizedQuery,
+      // `loadedManifest` is set only after a manifest at the current schema
+      // was read, so an absent one means the shards on disk may predate the
+      // serialized lowercase key the fast prefilter matches against.
+      {
+        hasPersistedLowercaseKey:
+          this.hasCurrentSchemaIndex(workspaceFolderPath),
+      },
       () => {
         documentsScanned += 1;
       }
@@ -203,6 +210,19 @@ export class HistorySearchIndexService {
       results.push(match.result);
     }
     return { results, documentsScanned };
+  }
+
+  /**
+   * Whether the on-disk index this workspace is about to be scanned from is
+   * known to be at the current schema. Only then do its shards carry the
+   * serialized lowercase key; a search running beside a schema-upgrading
+   * rebuild streams the pre-swap shards, which do not.
+   */
+  private hasCurrentSchemaIndex(workspaceFolderPath: string): boolean {
+    return (
+      this.loadedWorkspacePath === workspaceFolderPath &&
+      this.loadedManifest !== undefined
+    );
   }
 
   private buildPageResponse(
