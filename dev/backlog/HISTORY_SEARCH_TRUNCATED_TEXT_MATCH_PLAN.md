@@ -1,13 +1,15 @@
 # History Search Truncated-Text Match Plan
 
-**Status:** Backlog — not started
+**Status:** Backlog — not started. **Option decided: B** (2026-09-19), on the
+measurement spike below; the acceptance criteria's measurement gate is met.
 **Priority:** P2
 **Related:** `dev/implemented/HISTORY_SEARCH_PERFORMANCE_PLAN.md` (introduced
 `MAX_INDEXED_TEXT_LENGTH` as an OOM guard — background for why this cap exists
 at all). `dev/implemented/HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md` and
 `dev/implemented/HISTORY_SEARCH_RESPONSIVE_QUERY_PLAN.md` — both landed since
 this plan was written, and together they change what option A actually costs;
-see "Sequencing" below, which is the section to read first.
+see "Sequencing" below for why, and "Measurement spike" for what it cost when
+actually measured.
 
 ## The problem in one sentence
 
@@ -50,7 +52,66 @@ difference — it was real, measured data loss:
 That's 115 otherwise-real matches — in one run, for one query — made
 unreachable by the cap. Long AI-generated planning/response text (the
 171 KB example above) is a completely ordinary shape for this product, not an
-edge case, so this isn't rare.
+edge case, so this isn't rare. The workspace-wide spike below confirms how far
+from rare: **68% of all indexed-candidate text in a real 1,563-run history is
+past the cap**, and 83% of runs contain at least one over-cap candidate.
+
+## Measurement spike (2026-09-19)
+
+`scripts/spike-history-search-truncation.mjs` re-extracts every candidate from
+a real history's `events.jsonl` with the production `HistoryCandidateExtractor`
+and **no** `maxTextLength` — the only way to recover the pre-truncation lengths
+the index itself threw away — and sizes each option against the index that was
+actually built from it. Growth is projected from measured constants (the real
+per-document non-text line cost and JSON escape factor of a schema 4.2.0 index),
+and cache fit uses the real `estimateHistorySearchDocumentBytes`.
+
+Run against this project's own user-scoped history
+(`~/.ctrlyoke/projects/ctrlyoke-<hash>`), 3.7 GB of runs and a 2.29 GB index:
+
+| Today                                          | Value                       |
+| ---------------------------------------------- | --------------------------- |
+| Runs indexed / documents / index size          | 1,563 / 1,682,723 / 2.29 GB |
+| Candidates exceeding `MAX_INDEXED_TEXT_LENGTH` | 169,686 (10.1%)             |
+| **Candidate text never indexed**               | **1.47 B chars — 68.25%**   |
+| Runs with at least one over-cap candidate      | **1,302 (83.3%)**           |
+| Longest single candidate                       | 1,032,121 chars             |
+| Runs resident in the 320 MB document cache     | 50                          |
+
+The 68% figure is the one that reframes this plan: the capped index is not a
+complete index with a rare gap at the tail, it is **a fast prefilter over a
+minority of the corpus**. The three-number gate from the acceptance criteria,
+per option (overlap 200 chars for A):
+
+| Option                    | Added documents      | Index on disk              | Runs in 320 MB cache |
+| ------------------------- | -------------------- | -------------------------- | -------------------- |
+| A — overlapping windows   | +911,055 (**1.54x**) | 2.29 → 6.09 GB (**2.66x**) | 50 → **29** (−42%)   |
+| B — capped + per-run scan | **0**                | **unchanged**              | **50** (unchanged)   |
+| C — first/last anchors    | +100,960 (1.06x)     | 2.29 → 2.68 GB (1.20x)     | 50 → 45 (−10%)       |
+
+Option A's disk multiplier is larger than its document multiplier because it is
+not merely adding documents, it is storing the 68% of text that is currently
+discarded — twice over, since 4.2.0 writes `textLower` beside `text`. Raising
+the overlap to 400 chars moves it to 2.88x; overlap sizing is a second-order
+knob, the corpus shape is the cost.
+
+Option C buys very little: it still leaves **1.267 B chars unindexed — 86% of
+today's loss** — because the interior of a long candidate is exactly where the
+missing text is. It is a 1.2x index for a 14% dent in the problem.
+
+The number that decides it is option B's fallback cost, which this plan had
+flagged as its one unknown ("historically-dangerous uncapped disk scan… paid
+for one run's events"). Measured, an uncapped single-run scan is interactive:
+
+| Run size percentile | `events.jsonl` | Uncapped scan |
+| ------------------- | -------------- | ------------- |
+| p50                 | 0.47 MB        | 3 ms          |
+| p90                 | 6.29 MB        | 34 ms         |
+| p99                 | 31.6 MB        | 178 ms        |
+| max                 | 87.2 MB        | 500 ms        |
+
+The whole 3.7 GB history re-extracts uncapped in ~38 s, which also bounds the
+worst case for a rare-term deep scan that walks every run.
 
 ## Why the fix isn't "raise or remove the cap"
 
@@ -77,8 +138,10 @@ typical index.
 - **Coverage:** complete, modulo one sharp edge below.
 - **Memory per document:** unchanged — still bounded at `MAX_INDEXED_TEXT_LENGTH`.
 - **Total document count:** grows only for candidates that were already being
-  truncated. Needs a measurement spike (see below) to know the real blast
-  radius across a large workspace, not just the one run measured above.
+  truncated — **measured at +911,055 documents (1.54x) and a 2.66x index** on a
+  real 1,563-run history. The "overwhelming majority of candidates are
+  unaffected" framing above held (only 10.1% exceed the cap), but it understated
+  the cost badly: those 10.1% carry 68% of the text.
 - **Sharp edge — overlap sizing.** A window overlap shorter than the query
   loses matches that straddle a boundary; too generous an overlap multiplies
   storage. A fixed overlap (e.g. a few hundred chars) covers realistic search
@@ -106,15 +169,20 @@ that runs an uncapped, single-run scan (close in shape to
 whole workspace, so its historically-dangerous "uncapped disk scan" cost is
 paid for one run's events, not the whole history).
 
-- **Memory:** no change to the persisted index's steady-state size.
-- **Coverage:** complete, but discovery is opt-in per run rather than a single
-  query surfacing every match across the workspace in one pass — a real
-  regression from "one search box, one flat result list" if this is the only
-  fix.
+- **Memory:** no change to the persisted index's steady-state size, and none to
+  the document cache's recency window (measured: 50 runs, unchanged).
+- **Coverage:** complete, but discovery is opt-in rather than a single query
+  surfacing every match across the workspace in one pass — a real regression
+  from "one search box, one flat result list" if this is the only fix. See
+  "What the spike changes about option B" for why the trigger cannot be
+  per-run-matched-nothing as written here.
 - **Complexity:** lower than A. No windowing, no dedupe interaction, no
   overlap tuning.
 - **User experience:** requires new UI (the "search this run directly"
   affordance) and a per-run scan path that does not currently exist.
+- **Fallback cost:** measured at 3 ms (p50) / 34 ms (p90) / 178 ms (p99) /
+  500 ms (largest run, 87 MB) — the "historically-dangerous uncapped disk scan"
+  worry does not survive being scoped to one run.
 
 ### C. Anchor windows (first + last N chars only)
 
@@ -124,18 +192,26 @@ document for the last `MAX_INDEXED_TEXT_LENGTH` chars when the candidate
 exceeds `2 * MAX_INDEXED_TEXT_LENGTH`.
 
 - **Memory:** at most 2x today's per-candidate cost, never more, regardless of
-  how long the source text is.
+  how long the source text is. Measured: +100,960 documents (1.06x), 1.20x on
+  disk, cache window 50 → 45 runs.
 - **Coverage:** catches matches at the start or end of long text (openings and
   conclusions of long responses, which is where search terms often land) but
   not the middle — the 171 KB example above would still lose matches sitting
-  in the interior. Strictly better than today, provably incomplete.
+  in the interior. Strictly better than today, provably incomplete, and
+  **measured, not very much better**: 1.267 B chars (86% of today's loss) stay
+  unindexed. The premise that terms "often land" at the start or end does not
+  survive a corpus whose average over-cap candidate is ~10,700 chars — two
+  anchor windows cover 37% of one, and far less of the long tail.
 - **Complexity:** lowest of the three — no overlap tuning, no dedupe
   interaction beyond what already exists for multiple documents per event.
 
 ## Sequencing: both predecessor plans have landed
 
 Two changes since this plan was written move the numbers it reasons about, in
-opposite directions. Read both before picking an option.
+opposite directions. This section framed the questions the spike then answered;
+it is kept because it explains _why_ each measured number matters, and because
+anything that later reopens windowing has to clear these same three costs
+again.
 
 ### Residency is gone, so windowing no longer grows resident heap
 
@@ -156,7 +232,8 @@ candidates).
    grew ~44.6% when the key landed. **Each window option A adds therefore
    costs ~1.45x what this plan originally assumed on disk.** The measurement
    spike in the acceptance criteria has to be run against a 4.2.0 index, not
-   against the older numbers.
+   against the older numbers — it was, and the doubling is why A's on-disk
+   multiplier (2.66x) runs well ahead of its document multiplier (1.54x).
 2. **The document cache's hit rate is a function of documents per run.**
    `HistorySearchDocumentCache` holds parsed documents for the most recent
    runs within a budget (`runs.historySearchCacheMb`, default 320 MB, chosen
@@ -169,12 +246,16 @@ candidates).
    4-15 ms. This is the cost most likely to be missed, because it shows up as
    a latency regression on queries that have nothing to do with long
    documents. The spike must measure cache-resident run count before and
-   after, not just index size.
+   after, not just index size. **Measured, and it is the worst of the three:
+   the cache holds 50 of 1,563 runs today and 29 under option A** — a 42% cut
+   to the recency window that is the whole reason a recent-term query answers
+   in milliseconds.
 3. **More documents per run means more lines scanned before the page fills.**
    The scan is recency-ordered and stops at `offset + limit`, so it reads
    whole runs at a time. Windowing does not change which runs it visits, but
-   it does change how much each one costs. Bounded and probably small;
-   measure it rather than assume.
+   it does change how much each one costs. Bounded and probably small; **not
+   measured** — it is moot under the chosen option, which adds no documents,
+   and would have to be measured by anything that reopens windowing.
 
 ### And windowing collides with the counting model the UI now states
 
@@ -191,21 +272,60 @@ windows, up to two results per event); option B does not have it at all,
 which is a point in its favour that did not exist when this plan was
 written.
 
-## Recommendation
+## Decision: option B
 
-A is still the complete-coverage option and the residency objection to it is
-gone, but it is no longer the obvious pick it briefly looked like: it now
-carries a ~1.45x on-disk multiplier per added window, a document-cache hit-rate
-regression that would show up as latency on unrelated queries, and a direct
-conflict with the one-result-per-event model the drawer now states in prose.
-Measure those three before committing to it.
+The spike settles it, and not narrowly. **A is rejected**: it costs a 2.66x
+index (2.29 → 6.09 GB on one developer's history), cuts the document cache's
+recency window by 42%, and breaks the one-result-per-event model the drawer now
+states in prose — three real prices, two of which land on queries that have
+nothing to do with long documents. **C is rejected**: it closes 14% of the gap
+for a 1.20x index and inherits a miniature version of the same counting-model
+problem, which is the worst ratio of the three. **B is chosen**: zero added
+documents, zero index growth, no cache impact, no change to the counting model,
+and the one cost this plan could not previously size — the uncapped per-run
+scan — measures at 3–500 ms.
 
-B has gained relative standing for the same reasons — it adds no documents, so
-it touches neither the cache nor the counting model — at the cost of the new
-UI and per-run scan path it always required. C remains the small bounded
-improvement, with a milder version of A's counting-model problem.
+That last number is the decisive one. B was originally the conservative
+fallback whose per-run scan was an unpriced risk; measured, it is simply cheap,
+and A's "complete coverage" turns out to be the expensive way to buy something
+B also delivers.
 
-The measurement spike is now the gate, not a formality.
+### What the spike changes about option B
+
+The option as sketched above needs three corrections before it is built. None
+of them change the choice; all of them were invisible before the measurement.
+
+1. **The trigger cannot be "the query matched nothing in this run."** At 68%
+   text loss and 83.3% of runs affected, a run routinely holds _both_ indexed
+   and hidden matches for the same query — that is literally the case that
+   produced this plan (85 capped-matching documents vs 200 uncapped, in a run
+   that matched plenty). Gating the fallback on an empty result would have
+   hidden the exact bug it exists to fix.
+2. **The truncation flag belongs in the index manifest, not on each document.**
+   A per-run over-cap count in `HistorySearchIndexManifest`'s `indexedRuns`
+   entry is ~1,563 numbers, is already loaded before any shard is read (the
+   shard-order pass reads it), and costs nothing in the shards. A per-document
+   `truncated: true` is only visible _after_ paying the shard read it is meant
+   to inform, and pays `textLower`-style storage on every document to describe
+   10.1% of them.
+3. **83.3% of runs qualify, so this is not a rare-exception badge.** A
+   per-result "this run wasn't fully indexed" notice would appear on nearly
+   every row and read as noise. The affordance should be query-level — a deep
+   search the user turns on for the query they are actually running — layered
+   over the recency-ordered, abortable, incrementally-reported scan that
+   `HISTORY_SEARCH_RESPONSIVE_QUERY_PLAN` already built, so it inherits the
+   same early stop (a recent-term query touches a handful of runs, a few
+   hundred ms) and the same cancellation semantics. The ~38 s full-history
+   re-extraction bounds its worst case, and it streams partial results, which
+   is strictly better than the `searchLegacy` disk scan it resembles.
+
+One thing the spike confirms is _not_ a problem: merging deep results with
+indexed ones is safe. `getHistorySearchDocumentDedupeKey` derives
+`matchSnippet` from the first match position, so an uncapped rescan reproduces
+a byte-identical key for any match that was already within the first 2000
+chars — the newly-found matches are exactly the ones that are new. (This is
+also precisely why option A would double-count: its windows produce different
+snippets for the same event.)
 
 ## Non-goals
 
@@ -218,28 +338,43 @@ The measurement spike is now the gate, not a formality.
   That's a separate, working-as-intended difference from `OutputFindBar` and
   out of scope here — but note this is now a constraint rather than merely a
   non-goal: option A would change those semantics as a side effect, which is
-  the conflict described under "Sequencing".
+  the conflict described under "Sequencing". Option B keeps them, so the
+  drawer's copy needs no change.
+- **No growth in the persisted index.** This is now a hard constraint rather
+  than a preference: the chosen option adds no documents and no bytes, and any
+  implementation drift back toward storing more per run reopens the 2.66x /
+  −42%-cache costs the decision rejected.
 
-## Acceptance criteria (for whichever option is picked)
+## Acceptance criteria (option B)
 
-- [ ] A term appearing only in the interior of a long response/diff/tool
-      output is findable via history search (for A) or explicitly surfaced as
-      "not fully indexed, search this run" (for B) or found when it lands in
-      the first/last window (for C, with the interior gap documented as a
-      known limitation).
-- [ ] Per-document stored text size never exceeds `MAX_INDEXED_TEXT_LENGTH`.
-- [ ] A measurement spike against a large real workspace (not just the one run
+- [x] A measurement spike against a large real workspace (not just the one run
       in this doc) quantifies how many documents are actually affected today,
-      to size the true blast radius before committing to an option. Run it
-      against a schema 4.2.0 index and report three numbers, not one: added
-      documents, on-disk growth (remembering `textLower` doubles each
-      document's text), and the change in how many runs fit in the
-      `historySearchCacheMb` budget. `scripts/bench-history-search-document-cache.mjs`
-      is the existing harness for the third.
-- [ ] The drawer's one-result-per-event copy is still true after the change,
-      or was updated in the same commit. See "And windowing collides with the
-      counting model the UI now states".
-- [ ] Tests cover a query landing exactly in a window-boundary overlap region
-      (A), the fallback trigger and scoped scan (B), or a query landing in the
-      indexed interior gap correctly returning no match rather than a wrong
-      one (C).
+      to size the true blast radius before committing to an option, against a
+      schema 4.2.0 index, reporting added documents, on-disk growth
+      (remembering `textLower` doubles each document's text), and the change in
+      how many runs fit in the `historySearchCacheMb` budget. Done by
+      `scripts/spike-history-search-truncation.mjs`; see "Measurement spike"
+      above. (`scripts/bench-history-search-document-cache.mjs` remains the
+      harness for measuring the cache against a _live_ index once B lands.)
+- [ ] A term appearing only in the interior of a long response/diff/tool output
+      is reachable from the drawer without the user knowing which run it is in
+      — i.e. the deep search is reachable from the query, not only from a
+      result row (see "What the spike changes about option B", point 3).
+- [ ] Per-document stored text size never exceeds `MAX_INDEXED_TEXT_LENGTH`,
+      and the persisted index gains no documents and no per-document fields.
+- [ ] The per-run over-cap signal is recorded in the index manifest's
+      `indexedRuns` entry and is usable without reading any shard.
+- [ ] A deep search is abortable and reports incrementally on the same terms as
+      the indexed scan (`HistorySearchCancelledError`, `atLeast` counts,
+      supersession keyed on the listing), and a cancelled one leaves no
+      side effect — the `seenDedupeKeys` sharp edge in
+      `.github/instructions/orchestration.instructions.md`'s
+      `<searchAndRecovery>` applies unchanged.
+- [ ] The drawer's one-result-per-event copy is still true after the change.
+      B preserves it; this criterion exists so a later drift toward windowing
+      does not silently falsify it.
+- [ ] Tests cover the deep-search trigger and scoped scan, a run that has both
+      indexed and past-the-cap matches for the same query (the 85-vs-200 shape
+      that produced this plan — the case a matched-nothing trigger would miss),
+      and that merging deep results with indexed ones produces no duplicate
+      rows.
