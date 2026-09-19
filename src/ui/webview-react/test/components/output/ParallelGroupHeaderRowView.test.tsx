@@ -118,8 +118,15 @@ describe("ParallelGroupHeaderRowView", () => {
       promptUndo: {
         workspacePath: "/repo",
         allStepOutputs: [],
-        undo: { label: "Undo 3 changes", count: 3 },
-        redo: null,
+        summary: {
+          total: 3,
+          undoable: 3,
+          undone: 0,
+          blocked: 0,
+          label: "View 3 changes",
+          compactLabel: "View 3",
+          title: "3 files changed",
+        },
       },
     });
     rerender(
@@ -149,8 +156,15 @@ describe("ParallelGroupHeaderRowView", () => {
       promptUndo: {
         workspacePath: "/repo",
         allStepOutputs: [],
-        undo: null,
-        redo: { label: "Redo 3 changes", count: 3 },
+        summary: {
+          total: 3,
+          undoable: 0,
+          undone: 3,
+          blocked: 0,
+          label: "View 3 changes (all undone)",
+          compactLabel: "View 3",
+          title: "3 files changed · 3 undone, can be redone",
+        },
       },
     });
     render(

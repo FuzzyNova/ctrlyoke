@@ -338,7 +338,7 @@ first checkbox sets the direction.
 
 ## 5. Implementation order
 
-1. **Model** — `promptUndo.ts`: `PromptChangeSummary`, row `direction`, blocked
+1. **Model — done** — `promptUndo.ts`: `PromptChangeSummary`, row `direction`, blocked
    rows surviving aggregation, direction-suffixed aggregate keys.
    `useOutputUndoActions.ts`: single entry list, stop filtering blocked
    candidates. Unit tests first (`test/utils/promptUndo.test.ts`,

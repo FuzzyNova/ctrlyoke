@@ -29,6 +29,7 @@ import {
   SCRIPT_OUTPUT_SOURCES,
   getStreamingChunkKey,
 } from "@/types/messages";
+import { getPromptUndoActionLabels } from "@utils/promptUndo";
 import {
   FILE_OPERATION_KINDS,
   HARNESS_CHART_COLORS,
@@ -721,11 +722,20 @@ describe("outputRows", () => {
     );
     // Both members' files are covered by the one group-wide snapshot, and the
     // label counts those files exactly as a single step's undo does.
-    expect(headerRow?.promptUndo?.undo?.label).toBe("Undo 2 changes");
+    expect(
+      headerRow?.promptUndo
+        ? getPromptUndoActionLabels(headerRow.promptUndo.summary).undo?.label
+        : undefined
+    ).toBe("Undo 2 changes");
     expect(
       result.rows
         .filter((row) => row.rowKind !== OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER)
-        .some((row) => row.promptUndo?.undo || row.promptUndo?.redo)
+        .some((row) => {
+          const summary = row.promptUndo?.summary;
+          return summary
+            ? summary.undoable > 0 || summary.undone > 0
+            : false;
+        })
     ).toBe(false);
   });
 

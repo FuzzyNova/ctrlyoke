@@ -91,6 +91,11 @@ function expandAggregatedWorkflowSelection(
   const selectedSteps = files
     .filter((file) => checkedPaths.has(file.key))
     .flatMap((file) => file.steps)
+    .filter(
+      (step): step is (typeof files)[number]["steps"][number] & {
+        instruction: UndoFileInstruction;
+      } => step.instruction !== null
+    )
     .sort((left, right) => {
       const order =
         workflowTargetOrder(left.target) - workflowTargetOrder(right.target);

@@ -81,6 +81,7 @@ import {
   type OutputFindMatch,
   type RowFindDecoration,
 } from "@utils/outputFind";
+import { getPromptUndoActionLabels } from "@utils/promptUndo";
 import {
   OUTPUT_BLOCK_BASE,
   TOOL_RESULT_LINE,
@@ -1110,6 +1111,9 @@ const CliHeaderRowView: React.FC<{
   onPromptRedo,
 }) => {
   const { output } = row;
+  const promptUndoLabels = row.promptUndo
+    ? getPromptUndoActionLabels(row.promptUndo.summary)
+    : { undo: null, redo: null };
   const timestamp = output.timestampMs ? formatTime(output.timestampMs) : "";
   const executionBadge = formatExecutionBadge(row.runIndex, row.attemptIndex);
   const stepDisplayName =
@@ -1244,33 +1248,33 @@ const CliHeaderRowView: React.FC<{
       {streamingIndicator}
       <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-1 font-normal">
         {hideButton}
-        {row.promptUndo?.undo && (
+        {promptUndoLabels.undo && (
           <button
             type="button"
             onClick={() => onPromptUndo?.(row)}
             style={{ touchAction: "manipulation" }}
-            title={row.promptUndo.undo.label}
+            title={promptUndoLabels.undo.label}
             aria-label="Undo prompt changes"
             className="inline-flex min-w-0 max-w-full items-center gap-1 text-link-fg hover:text-link-active-fg transition-colors"
           >
             <Icon name="discard" className="shrink-0" />
             <span className="min-w-0 truncate">
-              {row.promptUndo.undo.label}
+              {promptUndoLabels.undo.label}
             </span>
           </button>
         )}
-        {row.promptUndo?.redo && (
+        {promptUndoLabels.redo && (
           <button
             type="button"
             onClick={() => onPromptRedo?.(row)}
             style={{ touchAction: "manipulation" }}
-            title={row.promptUndo.redo.label}
+            title={promptUndoLabels.redo.label}
             aria-label="Redo prompt changes"
             className="inline-flex min-w-0 max-w-full items-center gap-1 text-terminal-ansiGreen hover:opacity-80 transition-opacity"
           >
             <Icon name="redo" className="shrink-0" />
             <span className="min-w-0 truncate">
-              {row.promptUndo.redo.label}
+              {promptUndoLabels.redo.label}
             </span>
           </button>
         )}

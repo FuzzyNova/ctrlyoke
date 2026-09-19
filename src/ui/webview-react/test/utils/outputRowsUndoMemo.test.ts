@@ -7,6 +7,7 @@ import {
   FILE_OPERATION_KINDS,
   OUTPUT_ROW_KINDS,
 } from "@root/types/DashboardConstants";
+import { getPromptUndoActionLabels } from "@utils/promptUndo";
 
 // Spy on the real implementation so the assertion is about *call count*, not
 // about a stubbed return value — the labels below still come from the genuine
@@ -16,11 +17,11 @@ vi.mock("@utils/promptUndo", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@utils/promptUndo")>();
   return {
     ...actual,
-    computePromptUndoActions: (
-      ...args: Parameters<typeof actual.computePromptUndoActions>
+    computePromptChangeSummary: (
+      ...args: Parameters<typeof actual.computePromptChangeSummary>
     ) => {
       undoSpy.calls++;
-      return actual.computePromptUndoActions(...args);
+      return actual.computePromptChangeSummary(...args);
     },
   };
 });
@@ -126,17 +127,21 @@ describe("buildOutputRows undo-action memoization", () => {
     const callsForManyMessages = undoSpy.calls;
 
     // The whole point: 20x the messages, same amount of undo computation.
-    // Before this was memoized, `computePromptUndoActions` ran once per
+    // Before this was memoized, `computePromptChangeSummary` ran once per
     // message and cost 6 413 ms of a 6 527 ms build on an 18-step run.
     expect(callsForFewMessages).toBe(1);
     expect(callsForManyMessages).toBe(1);
 
     // And the memo must not change what is rendered.
-    const undoLabel = (rows: ReturnType<typeof buildRows>["rows"]) =>
-      rows.find(
+    const undoLabel = (rows: ReturnType<typeof buildRows>["rows"]) => {
+      const promptUndo = rows.find(
         (row) =>
-          row.rowKind === OUTPUT_ROW_KINDS.CLI_HEADER && row.promptUndo?.undo
-      )?.promptUndo?.undo?.label;
+          row.rowKind === OUTPUT_ROW_KINDS.CLI_HEADER && row.promptUndo
+      )?.promptUndo;
+      return promptUndo
+        ? getPromptUndoActionLabels(promptUndo.summary).undo?.label
+        : undefined;
+    };
 
     expect(undoLabel(few.rows)).toBe("Undo 1 change");
     expect(undoLabel(many.rows)).toBe(undoLabel(few.rows));

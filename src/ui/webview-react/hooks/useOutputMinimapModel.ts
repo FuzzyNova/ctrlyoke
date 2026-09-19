@@ -15,7 +15,8 @@ import {
 import { measurePhase } from "@utils/performanceProfiler";
 import {
   buildUndoDialogInputForPrompt,
-  computePromptUndoActions,
+  computePromptChangeSummary,
+  getPromptUndoActionLabels,
 } from "@utils/promptUndo";
 import type { CliOutput as CliOutputType } from "@/types/cliEvents";
 import { FINAL_STEP_PHASES, STEP_TYPES } from "@/types/messages";
@@ -356,11 +357,12 @@ export function useOutputMinimapModel({
           }
 
           const workspacePath = lastOutput.workingDirectory ?? "";
-          const actions = computePromptUndoActions(
+          const summary = computePromptChangeSummary(
             stepOutputs,
             effectiveUndoRecord,
             groupForLabels ? groupSnapshot : effectiveSnapshot
           );
+          const actions = getPromptUndoActionLabels(summary);
 
           const undoActions: MinimapStep["undoActions"] = {
             redo: actions.redo

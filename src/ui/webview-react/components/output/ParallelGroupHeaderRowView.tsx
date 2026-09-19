@@ -8,6 +8,7 @@ import {
   parallelGroupHeaderTitle,
   type ParallelGroupHeaderRow,
 } from "@utils/outputRows";
+import { getPromptUndoActionLabels } from "@utils/promptUndo";
 import { Icon } from "../shared/Icon";
 
 const SHELL_WORKFLOW_ID = "_shell";
@@ -47,6 +48,9 @@ export interface ParallelGroupHeaderRowViewProps {
 export const ParallelGroupHeaderRowView: React.FC<
   ParallelGroupHeaderRowViewProps
 > = ({ row, onUndo, onRedo }) => {
+  const promptUndoLabels = row.promptUndo
+    ? getPromptUndoActionLabels(row.promptUndo.summary)
+    : { undo: null, redo: null };
   const displayedViewAddress = useUiStore(
     (state) => state.displayedViewAddress
   );
@@ -82,13 +86,13 @@ export const ParallelGroupHeaderRowView: React.FC<
           {parallelGroupHeaderSummaryText(row)}
         </span>
         <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-1">
-          {row.promptUndo?.undo && onUndo && (
+          {promptUndoLabels.undo && onUndo && (
             <button
               type="button"
               className={`${ACTION_CLASS} text-link-fg hover:text-link-active-fg`}
               style={{ touchAction: "manipulation" }}
               title={parallelGroupActionTooltip(
-                row.promptUndo.undo.label,
+                promptUndoLabels.undo.label,
                 row.members.length
               )}
               aria-label="Undo parallel group changes"
@@ -96,17 +100,17 @@ export const ParallelGroupHeaderRowView: React.FC<
             >
               <Icon name="discard" className="shrink-0" />
               <span className="min-w-0 truncate">
-                {row.promptUndo.undo.label}
+                {promptUndoLabels.undo.label}
               </span>
             </button>
           )}
-          {row.promptUndo?.redo && onRedo && (
+          {promptUndoLabels.redo && onRedo && (
             <button
               type="button"
               className={`${ACTION_CLASS} text-terminal-ansiGreen hover:opacity-80`}
               style={{ touchAction: "manipulation" }}
               title={parallelGroupActionTooltip(
-                row.promptUndo.redo.label,
+                promptUndoLabels.redo.label,
                 row.members.length
               )}
               aria-label="Redo parallel group changes"
@@ -114,7 +118,7 @@ export const ParallelGroupHeaderRowView: React.FC<
             >
               <Icon name="redo" className="shrink-0" />
               <span className="min-w-0 truncate">
-                {row.promptUndo.redo.label}
+                {promptUndoLabels.redo.label}
               </span>
             </button>
           )}
