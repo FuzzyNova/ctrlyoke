@@ -10,6 +10,7 @@ import {
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import {
   computeHistorySearchIndexDiff,
+  checkHistorySearchIndexFreshness,
   DOCUMENTS_DIR_NAME,
   DOCUMENTS_SHARD_EXTENSION,
   getDocumentsShardPath,
@@ -902,6 +903,74 @@ suite("HistorySearchIndexService", () => {
     );
   });
 
+  test("records over-cap and zero counts on full rebuilds", async () => {
+    await createRun("over-cap-counted-2026-06-09T22-26-00", 1, 3600, [
+      createStatusDraft(3650, "x".repeat(MAX_INDEXED_TEXT_LENGTH + 1)),
+    ]);
+    await createRun("under-cap-counted-2026-06-09T22-27-00", 1, 3700, [
+      createStatusDraft(3750, "short text"),
+    ]);
+
+    await runHistorySearchRebuild({
+      workspaceFolderPath: workspaceRoot,
+      runHistoryLocation: getFrozenRunHistoryLocation(),
+    });
+
+    const manifest = await readSearchIndexManifest();
+    const countedRun = findIndexedRun(manifest, "over-cap-counted");
+    const underCapRun = findIndexedRun(manifest, "under-cap-counted");
+    assert.ok(countedRun);
+    assert.strictEqual(countedRun.overCapCandidateCount, 1);
+    assert.ok(underCapRun);
+    assert.strictEqual(underCapRun.overCapCandidateCount, 0);
+  });
+
+  test("records over-cap counts on the incremental rebuild path", async () => {
+    await createRun("incremental-count-initial-2026-06-09T22-28-00", 1, 3800, [
+      createStatusDraft(3850, "short initial text"),
+    ]);
+    await runHistorySearchRebuild({
+      workspaceFolderPath: workspaceRoot,
+      runHistoryLocation: getFrozenRunHistoryLocation(),
+    });
+
+    await createRun("incremental-count-added-2026-06-09T22-29-00", 1, 3900, [
+      createStatusDraft(3950, "y".repeat(MAX_INDEXED_TEXT_LENGTH + 1)),
+    ]);
+    await runHistorySearchRebuild({
+      workspaceFolderPath: workspaceRoot,
+      runHistoryLocation: getFrozenRunHistoryLocation(),
+    });
+
+    const manifest = await readSearchIndexManifest();
+    const addedRun = findIndexedRun(manifest, "incremental-count-added");
+    assert.ok(addedRun);
+    assert.strictEqual(addedRun.overCapCandidateCount, 1);
+  });
+
+  test("keeps a manifest without over-cap counts fresh", async () => {
+    await createRun("unknown-count-fresh-2026-06-09T22-30-00", 1, 4000, [
+      createStatusDraft(4050, "fresh without count"),
+    ]);
+    await runHistorySearchRebuild({
+      workspaceFolderPath: workspaceRoot,
+      runHistoryLocation: getFrozenRunHistoryLocation(),
+    });
+
+    const manifestPath = getSearchIndexManifestPath();
+    const manifest = await readSearchIndexManifest();
+    for (const indexedRun of Object.values(manifest.indexedRuns)) {
+      delete indexedRun.overCapCandidateCount;
+    }
+    await fs.writeFile(manifestPath, JSON.stringify(manifest), "utf8");
+
+    const freshness = await checkHistorySearchIndexFreshness(
+      workspaceRoot,
+      manifest
+    );
+    assert.strictEqual(freshness.fresh, true);
+  });
+
   test("propagates a real worker failure to the rebuild caller", async () => {
     const runsRoot = WorkflowPaths.runsRoot(workspaceRoot);
     await fs.rm(runsRoot, { recursive: true, force: true });
@@ -1545,6 +1614,29 @@ suite("HistorySearchIndexService", () => {
       ConfigurationUtils.getHistorySearchCacheBudgetBytes = originalGetBudget;
     }
   });
+
+  async function readSearchIndexManifest(): Promise<HistorySearchIndexManifest> {
+    return JSON.parse(
+      await fs.readFile(getSearchIndexManifestPath(), "utf8")
+    ) as HistorySearchIndexManifest;
+  }
+
+  function getSearchIndexManifestPath(): string {
+    return path.join(
+      projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation()),
+      PATH_CONSTANTS.SEARCH_INDEX_DIR,
+      "manifest.json"
+    );
+  }
+
+  function findIndexedRun(
+    manifest: HistorySearchIndexManifest,
+    workflowIdFragment: string
+  ): HistorySearchIndexManifest["indexedRuns"][string] | undefined {
+    return Object.values(manifest.indexedRuns).find((indexedRun) =>
+      indexedRun.workflowId.includes(workflowIdFragment)
+    );
+  }
 
   async function createRun(
     workflowId: string,

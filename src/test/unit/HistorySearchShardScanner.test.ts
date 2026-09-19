@@ -5,6 +5,7 @@ import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
 import {
   createHistorySearchLinePrefilter,
+  listDocumentShardEntries,
   resolveShardVisitOrder,
   streamHistorySearchDocuments,
 } from "../../core/orchestration/HistorySearchShardScanner";
@@ -293,6 +294,40 @@ suite("HistorySearchShardScanner", () => {
       results.map((document) => document.text),
       ["order-term orphan", "order-term known"]
     );
+  });
+
+  test("carries manifest source metadata only for manifest-known shards", async () => {
+    const knownManifestPath = "run-known-metadata";
+    const knownShardName = getDocumentsShardFileName(knownManifestPath);
+    await writeShard(knownShardName, [
+      createDocument("metadata-term known", 200),
+    ]);
+    await writeShard("unknown-metadata.jsonl", [
+      createDocument("metadata-term unknown", 100),
+    ]);
+
+    const indexedRuns = createIndexedRuns([
+      { manifestPath: knownManifestPath, startedAt: 200 },
+    ]);
+    indexedRuns[knownManifestPath].overCapCandidateCount = 3;
+
+    const entries = await listDocumentShardEntries(
+      documentsDirectory,
+      indexedRuns
+    );
+    const knownEntry = entries.find(
+      (entry) => entry.shardName === knownShardName
+    );
+    const unknownEntry = entries.find(
+      (entry) => entry.shardName === "unknown-metadata.jsonl"
+    );
+
+    assert.ok(knownEntry);
+    assert.strictEqual(knownEntry.manifestPath, knownManifestPath);
+    assert.strictEqual(knownEntry.overCapCandidateCount, 3);
+    assert.ok(unknownEntry);
+    assert.strictEqual(unknownEntry.manifestPath, undefined);
+    assert.strictEqual(unknownEntry.overCapCandidateCount, undefined);
   });
 
   test("groups shards with an equal startedAt deterministically instead of dropping either", async () => {

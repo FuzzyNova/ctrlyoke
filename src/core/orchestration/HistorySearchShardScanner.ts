@@ -46,6 +46,8 @@ export interface HistorySearchScanOptions {
 export interface HistorySearchShardEntry {
   shardName: string;
   startedAt: number;
+  manifestPath?: string;
+  overCapCandidateCount?: number;
 }
 
 /**
@@ -80,24 +82,33 @@ async function resolveShardVisitEntries(
   shardNames: readonly string[],
   indexedRuns: HistorySearchIndexManifest["indexedRuns"] | undefined
 ): Promise<HistorySearchShardEntry[]> {
-  const startedAtByShardName = new Map<string, number>();
+  const indexedRunByShardName = new Map<
+    string,
+    HistorySearchIndexManifest["indexedRuns"][string]
+  >();
   for (const entry of Object.values(indexedRuns ?? {})) {
-    startedAtByShardName.set(
+    indexedRunByShardName.set(
       getDocumentsShardFileName(entry.manifestPath),
-      entry.startedAt
+      entry
     );
   }
 
   const shardsWithStartedAt = await Promise.all(
     shardNames.map(async (shardName) => {
-      const knownStartedAt = startedAtByShardName.get(shardName);
+      const indexedRun = indexedRunByShardName.get(shardName);
       return {
         shardName,
         startedAt:
-          knownStartedAt ??
+          indexedRun?.startedAt ??
           (await deriveShardStartedAt(
             path.join(documentsDirectory, shardName)
           )),
+        ...(indexedRun
+          ? {
+              manifestPath: indexedRun.manifestPath,
+              overCapCandidateCount: indexedRun.overCapCandidateCount,
+            }
+          : {}),
       };
     })
   );

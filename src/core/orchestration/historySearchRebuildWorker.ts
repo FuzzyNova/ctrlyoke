@@ -75,6 +75,7 @@ export interface HistorySearchIndexManifest {
       lastUpdatedAt: number;
       sourceManifestMtimeMs: number;
       sourceEventsMtimeMs: number;
+      overCapCandidateCount?: number;
     }
   >;
 }
@@ -482,13 +483,14 @@ export async function runHistorySearchRebuild(
           metadataCache.set(source.workflowKey, metadata);
         }
 
-        const documents = await buildRunDocuments(
-          manifest,
-          readEventsSafe(source.manifestPath),
-          metadata,
-          source.workflowKey,
-          source.runRef
-        );
+        const { documents, overCapCandidateCount } =
+          await buildRunDocumentsForSource(
+            manifest,
+            source.manifestPath,
+            metadata,
+            source.workflowKey,
+            source.runRef
+          );
         await writeDocumentsShard(
           getDocumentsShardPath(rebuildDir, source.manifestPath),
           documents
@@ -496,7 +498,7 @@ export async function runHistorySearchRebuild(
         documentCount += documents.length;
 
         indexedRuns[path.resolve(source.manifestPath)] =
-          await buildIndexedRunEntry(source, manifest);
+          await buildIndexedRunEntry(source, manifest, overCapCandidateCount);
 
         processedRuns += 1;
         if (processedRuns % PROGRESS_LOG_INTERVAL === 0) {
@@ -588,16 +590,21 @@ async function runIncrementalHistorySearchRebuild(
       metadataCache.set(source.workflowKey, metadata);
     }
 
-    const documents = await buildRunDocuments(
-      runManifest,
-      readEventsSafe(source.manifestPath),
-      metadata,
-      source.workflowKey,
-      source.runRef
-    );
+    const { documents, overCapCandidateCount } =
+      await buildRunDocumentsForSource(
+        runManifest,
+        source.manifestPath,
+        metadata,
+        source.workflowKey,
+        source.runRef
+      );
     await writeDocumentsShardAtomically(shardPath, documents);
     documentCount += documents.length;
-    indexedRuns[manifestKey] = await buildIndexedRunEntry(source, runManifest);
+    indexedRuns[manifestKey] = await buildIndexedRunEntry(
+      source,
+      runManifest,
+      overCapCandidateCount
+    );
     processedRuns += 1;
 
     if (processedRuns % PROGRESS_LOG_INTERVAL === 0) {
@@ -821,7 +828,8 @@ async function writeDocumentsShardAtomically(
 
 async function buildIndexedRunEntry(
   source: WorkflowRunSource,
-  manifest: WorkflowRunManifest
+  manifest: WorkflowRunManifest,
+  overCapCandidateCount: number
 ): Promise<HistorySearchIndexManifest["indexedRuns"][string]> {
   const [manifestStats, eventsStats] = await Promise.all([
     fs.promises.stat(source.manifestPath),
@@ -837,6 +845,7 @@ async function buildIndexedRunEntry(
     lastUpdatedAt: manifest.lastUpdatedAt,
     sourceManifestMtimeMs: manifestStats.mtimeMs,
     sourceEventsMtimeMs: eventsStats?.mtimeMs ?? 0,
+    overCapCandidateCount,
   };
 }
 
@@ -854,12 +863,14 @@ async function readManifestSafe(
 }
 
 async function* readEventsSafe(
-  manifestPath: string
+  manifestPath: string,
+  onStringTruncated?: () => void
 ): AsyncGenerator<WorkflowTimelineEvent, void, undefined> {
   try {
     for await (const event of timelineRecorder.streamEventsForHistorySearch(
       manifestPath,
-      MAX_INDEXED_TEXT_LENGTH
+      MAX_INDEXED_TEXT_LENGTH,
+      onStringTruncated
     )) {
       yield event;
     }
@@ -904,6 +915,29 @@ async function buildRunDocuments(
     runRef,
     workflowName: metadata.workflowName,
   });
+}
+
+async function buildRunDocumentsForSource(
+  manifest: WorkflowRunManifest,
+  manifestPath: string,
+  metadata: WorkflowMetadata,
+  workflowKey: WorkflowKey,
+  runRef: RunRef
+): Promise<{
+  documents: HistorySearchDocument[];
+  overCapCandidateCount: number;
+}> {
+  let overCapCandidateCount = 0;
+  const documents = await buildRunDocuments(
+    manifest,
+    readEventsSafe(manifestPath, () => {
+      overCapCandidateCount += 1;
+    }),
+    metadata,
+    workflowKey,
+    runRef
+  );
+  return { documents, overCapCandidateCount };
 }
 
 async function swapIndexFiles(
