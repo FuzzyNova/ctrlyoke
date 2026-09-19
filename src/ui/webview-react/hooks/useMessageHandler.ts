@@ -2716,13 +2716,15 @@ export function createMessageHandlers(
   // SEARCH_HISTORY_RESULTS - Global history search matches
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.SEARCH_HISTORY_RESULTS] = (message) => {
-    const { results, query, offset, totalCount, indexState } = message as {
-      results: HistorySearchResult[];
-      query: string;
-      offset?: number;
-      totalCount?: number;
-      indexState?: "ready" | "building" | "fallback";
-    };
+    const { results, query, offset, totalCount, countState, indexState } =
+      message as {
+        results: HistorySearchResult[];
+        query: string;
+        offset?: number;
+        totalCount?: number;
+        countState?: "exact" | "atLeast";
+        indexState?: "ready" | "building" | "fallback";
+      };
     const uiStore = useUiStore.getState();
     if (uiStore.historySearchQuery !== query) {
       return;
@@ -2732,6 +2734,7 @@ export function createMessageHandlers(
       // later offset merges into the sparse listing already on screen.
       offset: offset ? offset : undefined,
       totalCount,
+      countState,
       indexState,
     });
   };

@@ -3,6 +3,7 @@ import * as path from "path";
 import {
   HISTORY_EVENT_KINDS,
   HISTORY_MATCH_FIELDS,
+  HISTORY_SEARCH_COUNT_STATES,
 } from "../../types/DashboardConstants";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
 import type { WorkflowKey } from "../../types/CtrlYokeTypes";
@@ -118,6 +119,7 @@ export class HistorySearchService {
         offset,
         results,
         totalCount: scanned.length,
+        countState: HISTORY_SEARCH_COUNT_STATES.AT_LEAST,
         hasMore: scanned.length >= offset + request.limit,
         indexState: "fallback",
       };

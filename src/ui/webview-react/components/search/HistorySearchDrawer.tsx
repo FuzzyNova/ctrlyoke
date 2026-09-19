@@ -21,6 +21,7 @@ import { MESSAGE_TYPES, type HistorySearchResult } from "@/types/messages";
 import {
   KEYBOARD_KEYS,
   HISTORY_EVENT_KINDS,
+  HISTORY_SEARCH_COUNT_STATES,
   OUTPUT_TABS,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
@@ -198,6 +199,7 @@ export function HistorySearchDrawer() {
   const results = useUiStore((s) => s.historySearchResults);
   const loading = useUiStore((s) => s.historySearchLoading);
   const totalCount = useUiStore((s) => s.historySearchTotalCount);
+  const countState = useUiStore((s) => s.historySearchCountState);
   const indexState = useUiStore((s) => s.historySearchIndexState);
   const rebuildProgress = useUiStore((s) => s.historySearchRebuildProgress);
   const historySearchFilters = useUiStore((s) => s.historySearchFilters);
@@ -429,7 +431,16 @@ export function HistorySearchDrawer() {
 
   const requestPage = useCallback(
     (offset: number) => {
-      if (offset <= 0 || offset >= totalCount) {
+      if (offset <= 0) {
+        return;
+      }
+      // `totalCount` is only a hard ceiling once it's exact. While it's a
+      // lower bound (an early-terminated scan), a page at or past it may
+      // still exist — requesting it is what extends the bound.
+      if (
+        offset >= totalCount &&
+        countState === HISTORY_SEARCH_COUNT_STATES.EXACT
+      ) {
         return;
       }
       if (requestedOffsetsRef.current.has(offset)) {
@@ -447,8 +458,23 @@ export function HistorySearchDrawer() {
         filters: toHistorySearchFilters(historySearchFilters, workflowKey),
       });
     },
-    [historySearchFilters, totalCount, trimmedQuery, vscode, workflowKey]
+    [
+      countState,
+      historySearchFilters,
+      totalCount,
+      trimmedQuery,
+      vscode,
+      workflowKey,
+    ]
   );
+  // While the total is a lower bound, the virtualized list is sized one page
+  // past it so there's always a row to scroll into that triggers requesting
+  // more — without this, a `totalCount` capped at the first early-terminated
+  // page would make it physically impossible to scroll further.
+  const virtualizedCount =
+    countState === HISTORY_SEARCH_COUNT_STATES.EXACT
+      ? totalCount
+      : totalCount + RESULT_LIMIT;
   const getItem = useCallback(
     (index: number): HistorySearchResult | undefined => results[index],
     [results]
@@ -541,7 +567,7 @@ export function HistorySearchDrawer() {
     (range: VirtualizedListRange): void => {
       const firstPage = Math.floor(range.overscanStartIndex / RESULT_LIMIT);
       const lastPage = Math.floor(
-        Math.min(range.overscanEndIndex, Math.max(0, totalCount - 1)) /
+        Math.min(range.overscanEndIndex, Math.max(0, virtualizedCount - 1)) /
           RESULT_LIMIT
       );
       for (let page = firstPage; page <= lastPage; page += 1) {
@@ -551,7 +577,7 @@ export function HistorySearchDrawer() {
         }
       }
     },
-    [requestPage, results, totalCount]
+    [requestPage, results, virtualizedCount]
   );
 
   // Deliberately the match count alone, with no "loaded so far" component:
@@ -563,10 +589,14 @@ export function HistorySearchDrawer() {
     if (trimmedQuery.length < 2 || loading || totalCount === 0) {
       return "";
     }
-    return `${totalCount.toLocaleString()} result${totalCount === 1 ? "" : "s"}${
+    // "+" marks totalCount as a lower bound rather than the true count — an
+    // early-terminated scan hasn't read far enough to know the real total yet.
+    const isExact = countState === HISTORY_SEARCH_COUNT_STATES.EXACT;
+    const countLabel = `${totalCount.toLocaleString()}${isExact ? "" : "+"}`;
+    return `${countLabel} result${totalCount === 1 && isExact ? "" : "s"}${
       activeFilterCount > 0 ? " (filtered)" : ""
     }`;
-  }, [activeFilterCount, loading, totalCount, trimmedQuery.length]);
+  }, [activeFilterCount, countState, loading, totalCount, trimmedQuery.length]);
 
   const workflowScopeAvailable =
     displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
@@ -844,7 +874,7 @@ export function HistorySearchDrawer() {
         {totalCount > 0 && (
           <div className={`flex flex-col gap-1 ${CONTENT_COLUMN_CLASS}`}>
             <VirtualizedPagedList
-              totalCount={totalCount}
+              totalCount={virtualizedCount}
               listingId={listingId}
               getItem={getItem}
               getItemKey={getItemKey}

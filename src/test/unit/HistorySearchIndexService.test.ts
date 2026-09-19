@@ -503,6 +503,156 @@ suite("HistorySearchIndexService", () => {
     );
   });
 
+  test("returns a first page without scanning every shard when matches cluster in recent runs", async () => {
+    const term = "shard-scan-budget-term";
+    const totalRuns = 40;
+    for (let i = 0; i < totalRuns; i += 1) {
+      await createRun(
+        `shard-scan-budget-run-${i}-2026-06-09T22-30-00`,
+        1,
+        10000 + i * 100,
+        [createStatusDraft(10100 + i * 100, term)]
+      );
+    }
+
+    const index = new HistorySearchIndexService();
+    const messages: string[] = [];
+    const originalInfo = Log.info;
+    Log.info = (message: string) => {
+      messages.push(message);
+    };
+
+    let response: HistorySearchResponse;
+    try {
+      response = await index.search({ query: term, limit: 5 }, workspaceRoot);
+    } finally {
+      Log.info = originalInfo;
+    }
+
+    assert.strictEqual(response.results.length, 5);
+    assert.strictEqual(response.totalCount, 5);
+    assert.strictEqual(response.countState, "atLeast");
+    assert.strictEqual(response.hasMore, true);
+
+    const completeLine = messages.find((message) =>
+      message.includes("[HistorySearchIndexService] search complete:")
+    );
+    assert.ok(completeLine, messages.join("\n"));
+    const scannedMatch = completeLine?.match(/documentsScanned=(\d+)/);
+    assert.ok(scannedMatch, completeLine);
+    const documentsScanned = Number(scannedMatch?.[1]);
+    assert.ok(
+      documentsScanned <= 10,
+      `expected an early-terminated scan to read only a handful of the ${totalRuns} shards, read ${documentsScanned}`
+    );
+  });
+
+  test("resumes a scan from its retained cursor instead of restarting when paging past the retained prefix", async () => {
+    const term = "resume-cursor-term";
+    const totalRuns = 40;
+    for (let i = 0; i < totalRuns; i += 1) {
+      await createRun(
+        `resume-cursor-run-${i}-2026-06-09T22-31-00`,
+        1,
+        20000 + i * 100,
+        [createStatusDraft(20100 + i * 100, term)]
+      );
+    }
+
+    const index = new HistorySearchIndexService();
+    await index.search({ query: term, limit: 5 }, workspaceRoot);
+
+    const messages: string[] = [];
+    const originalInfo = Log.info;
+    Log.info = (message: string) => {
+      messages.push(message);
+    };
+
+    let response: HistorySearchResponse;
+    try {
+      response = await index.search(
+        { query: term, limit: 5, offset: 30 },
+        workspaceRoot
+      );
+    } finally {
+      Log.info = originalInfo;
+    }
+
+    assert.strictEqual(response.offset, 30);
+    assert.strictEqual(response.results.length, 5);
+    assert.strictEqual(response.totalCount, 35);
+    assert.strictEqual(response.countState, "atLeast");
+
+    const extendedLine = messages.find((message) =>
+      message.includes("[HistorySearchIndexService] search extended snapshot:")
+    );
+    assert.ok(extendedLine, messages.join("\n"));
+    const newScannedMatch = extendedLine?.match(/newDocumentsScanned=(\d+)/);
+    assert.ok(newScannedMatch, extendedLine);
+    const newDocumentsScanned = Number(newScannedMatch?.[1]);
+    assert.ok(
+      newDocumentsScanned <= 31,
+      `expected resuming to scan only the ~30 shards past the retained prefix, scanned ${newDocumentsScanned}`
+    );
+  });
+
+  test("matches a full scan's ordering and dedupe for the same query when paged incrementally", async () => {
+    // Runs b/c tie on startedAt (a multi-shard group early termination must
+    // finish before stopping), and d records the same response twice at the
+    // same attempt (a dedupe case that must collapse to one result whether
+    // the scan stops early or runs to completion).
+    const term = "dedupe-consistency-term";
+    await createRun("dedupe-consistency-b-2026-06-09T22-32-00", 1, 4000, [
+      createStatusDraft(4100, term),
+    ]);
+    await createRun("dedupe-consistency-c-2026-06-09T22-32-01", 1, 4000, [
+      createStatusDraft(4050, term),
+    ]);
+    await createRun("dedupe-consistency-d-2026-06-09T22-32-02", 1, 3000, [
+      createCliOutputDraft(
+        3100,
+        HARNESS_IDS.CLAUDE_CLI,
+        `${term} duplicate content`,
+        0
+      ),
+      createCliOutputDraft(
+        3150,
+        HARNESS_IDS.CLAUDE_CLI,
+        `${term} duplicate content`,
+        0
+      ),
+    ]);
+    await createRun("dedupe-consistency-a-2026-06-09T22-32-03", 1, 2000, [
+      createStatusDraft(2100, term),
+    ]);
+
+    const fullIndex = new HistorySearchIndexService();
+    const fullResponse = await fullIndex.search(
+      { query: term, limit: 100 },
+      workspaceRoot
+    );
+    assert.strictEqual(fullResponse.countState, "exact");
+    assert.strictEqual(fullResponse.totalCount, 4);
+
+    const earlyIndex = new HistorySearchIndexService();
+    const collected: HistorySearchResponse["results"] = [];
+    for (let offset = 0; ; offset += 1) {
+      const page = await earlyIndex.search(
+        { query: term, limit: 1, offset },
+        workspaceRoot
+      );
+      if (page.results.length === 0) {
+        break;
+      }
+      collected.push(...page.results);
+      if (!page.hasMore) {
+        break;
+      }
+    }
+
+    assert.deepStrictEqual(collected, fullResponse.results);
+  });
+
   test("preserves timestamp and sequence ordering within a run", async () => {
     await createRun("same-run-order-2026-06-09T22-45-00", 1, 4500, [
       createStatusDraft(4510, "same-run-order-term older"),

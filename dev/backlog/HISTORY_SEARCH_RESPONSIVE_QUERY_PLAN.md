@@ -1,20 +1,48 @@
 # History Search Responsive Query Plan
 
-**Status:** In progress — C and D landed (repeat-query snapshot reuse gated on
-freshness, plus superseded-search cancellation). Of A, only the recency-ordered
-shard visit order has landed so far (`streamHistorySearchDocuments` now visits
-shards in descending run `startedAt`, derived from `manifest.indexedRuns` with
-no extra reads, reconciled against the on-disk documents directory so an
-unindexed shard is still scanned rather than skipped); early termination and
-the `totalCount` contract change it needs have not. This ordering step is
-deliberately a no-op for latency on its own — full scan, full sort, same
-`totalCount` — and exists only so the next step's early termination has a
-correct order to stop within. B and E are still backlog.
+**Status:** In progress — A has landed in full (recency-ordered scan,
+early termination, and the `totalCount` contract change it forces), on top of
+the already-landed C and D (repeat-query snapshot reuse gated on freshness,
+plus superseded-search cancellation). B and E are still backlog.
 **Priority:** P0 — this is a live regression in daily use, not a future risk.
 **Predecessor:** `dev/implemented/HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md` removed
 the ~2.16 GB resident index by streaming every shard per query. It fixed the
 memory exposure and regressed query latency by ~17x. This plan buys the
 latency back without reopening the residency problem.
+
+## What A landed
+
+`HistorySearchIndexService.scanForMatches` now stops scanning once a
+`startedAt` group has been fully scanned _and_ the deduped result count
+reaches the requested `offset + limit` — never mid-group, since a tied
+`startedAt` (which can span more than one shard) must be finished before any
+of it can be trusted to be correctly ordered and deduped. A snapshot that
+stopped early records `complete: false` plus a resumption cursor (the
+resolved shard order, the next shard index, the running dedupe set, and the
+running scanned-document count); a later request that needs more than the
+retained prefix resumes scanning from that cursor instead of restarting from
+shard zero (`HistorySearchIndexService.extendSnapshotAndRespond`). The cursor
+is shard-granular, not a mid-shard line offset — a shard is one run, and the
+group-completion rule above already forces a whole shard (or a whole tied
+group of shards) to be scanned before the scan can stop or resume, so a
+line-level cursor would add complexity no single run's size ever justifies.
+
+**The count-exactness decision:** `HistorySearchResponse.countState` (`"exact"`
+| `"atLeast"`, backed by `HISTORY_SEARCH_COUNT_STATES` in
+`DashboardConstants.ts`) makes the distinction explicit in the type rather than
+leaving a lower bound to be mistaken for a real total. No background
+continuation refines a bound in the absence of further requests — the exact
+count is only ever produced as a side effect of a scan that happens to reach
+the true end of the index, either because the requested page needed that much
+or because the user paged deep enough to force it. A query with no matches
+(or whose matches are exhausted before the requested count) still reads
+everything and reports `"exact"`, per the existing "no false negatives"
+invariant. The webview (`HistorySearchDrawer`/`uiStore`) treats `totalCount` as
+a growing lower bound while `countState` is `"atLeast"`: the virtualized list
+is sized one page past the known count so there is always a row to scroll into
+that triggers requesting more, `requestPage`'s `offset >= totalCount` guard
+only blocks once the count is exact, and the summary label appends "+" to mark
+the count as provisional.
 
 ## The problem in one sentence
 
@@ -115,7 +143,7 @@ common case for this product — that is a handful of shards.
 
 ## Options
 
-### A. Recency-ordered scan with early termination
+### A. Recency-ordered scan with early termination — landed
 
 Order shards by `startedAt` desc, stream in that order, emit the page as soon
 as it is full, and stop.
@@ -125,17 +153,27 @@ as it is full, and stop.
 - **Memory:** unchanged — still O(page).
 - **Does not fix:** a query with no matches, or matches only in the oldest
   runs, still reads everything. That tail is what B and E are for.
-- **Sharp edge — `totalCount`.** The response contract carries an exact
-  `totalCount`, and the virtualized list sizes its scrollbar from it. Early
-  termination cannot know it. This is the real cost of the option and must be
-  designed, not discovered: either report a lower bound and refine it from a
-  background continuation, or change the list to tolerate an open-ended total.
-- **Sharp edge — equal `startedAt`.** Two runs can share one; those shards must
-  be processed as a group before emitting, or their interleaved order is wrong.
-- **Sharp edge — deep paging.** Today `offset > 0` is served from a complete
-  snapshot. With early termination the snapshot is a prefix, so paging past it
-  must resume the scan from a retained cursor (shard index + position) rather
-  than restart it.
+- **Sharp edge — `totalCount`, resolved.** The response contract now carries
+  `countState: "exact" | "atLeast"` (`HISTORY_SEARCH_COUNT_STATES` in
+  `DashboardConstants.ts`) alongside `totalCount`, so a lower bound can never
+  be mistaken for the real total. No background continuation refines it — an
+  exact count only ever falls out of a scan that happens to reach the true end
+  of the index. The virtualized list treats an `"atLeast"` total as a growing
+  bound (see the Status section above) rather than needing an open-ended list
+  redesign.
+- **Sharp edge — equal `startedAt`, resolved.** `scanForMatches` buffers a
+  `startedAt` group across however many shards share it, sorts and dedupes the
+  whole group, and only then checks whether the target count has been reached
+  — so a tied group is always processed as a unit before anything in it is
+  finalized, and the target check never fires mid-group.
+- **Sharp edge — deep paging, resolved.** `offset > 0` past the retained prefix
+  now resumes the scan from a retained `HistorySearchScanCursor` (the resolved
+  shard order, the next shard index, the running dedupe set, and the running
+  scanned-document count) instead of restarting from shard zero. The cursor is
+  shard-granular rather than a mid-shard line offset — the group-completion
+  rule above already forces a whole shard to be scanned before the scan can
+  stop or resume, so a single run's size never justifies a finer-grained
+  cursor.
 
 ### B. Bounded most-recent-run document cache
 
@@ -212,12 +250,13 @@ expensive one is easier to validate once the noise is gone:
    debounce is temporarily raised to 600ms (`HISTORY_SEARCH_DEBOUNCE_MS`)
    while a scan still costs ~20s. The flat 20s-per-query floor itself is
    unchanged — that's A below.
-2. **A next — this is the actual fix.** Recency-ordered scan with early
-   termination, including the `totalCount` contract change it forces. Treat the
-   UI side as part of the same work: `historySearchResults` in `uiStore` is
-   already a sparse listing indexed by absolute position, so appending
-   progressively delivered rows fits the existing shape rather than needing a
-   new one.
+2. **A next — this is the actual fix — landed.** Recency-ordered scan with
+   early termination, including the `totalCount`/`countState` contract change
+   it forces. The UI side landed as part of the same work: `historySearchResults`
+   in `uiStore` is a sparse listing indexed by absolute position, so an
+   `"atLeast"` count growing as pages come in fits the existing shape rather
+   than needing a new one — no progressive/streamed delivery of a single page
+   was needed, since each page response now returns quickly on its own.
 3. **B within a 1 GB cap**, measured, once A is in and the cache's job is
    narrow: absorb the first page of recent-term queries entirely.
 4. **E only if the tail still hurts** after 1–3. Do not start here.
@@ -265,9 +304,9 @@ aggregate rather than minutes.
 - [ ] Extension-host working set stays within the chosen cache budget (1 GB if
       option B lands, near-zero growth if it does not), measured after a
       20-search session.
-- [ ] Offset paging still reaches the last page of a several-thousand-result
+- [x] Offset paging still reaches the last page of a several-thousand-result
       search without walking every page.
-- [ ] Result ordering and dedupe are identical to the current implementation
+- [x] Result ordering and dedupe are identical to the current implementation
       for a query that scans the whole index.
 - [ ] A 20-search session costs seconds in aggregate, compared with the ~416 s
       recorded above.

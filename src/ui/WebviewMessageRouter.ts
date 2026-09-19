@@ -14,6 +14,7 @@ import {
   USER_FEEDBACK_SEVERITY,
   isStatusLineTrackingHarnessId,
   END_CONDITION_SCRIPT_TYPES,
+  HISTORY_SEARCH_COUNT_STATES,
   type EndConditionScriptType,
   type UserFeedbackSeverity,
   type WebviewLogLevel,
@@ -1397,6 +1398,7 @@ export class WebviewMessageRouter {
           offset: 0,
           results: [],
           totalCount: 0,
+          countState: HISTORY_SEARCH_COUNT_STATES.EXACT,
           hasMore: false,
           indexState: "fallback",
         });

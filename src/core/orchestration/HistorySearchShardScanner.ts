@@ -33,6 +33,19 @@ export interface HistorySearchScanOptions {
    * first document instead.
    */
   indexedRuns?: HistorySearchIndexManifest["indexedRuns"];
+  /**
+   * A previously resolved shard visit order (see `listDocumentShardEntries`),
+   * used to scan a specific shard (or a specific resumption slice of the
+   * full order) without re-reading the directory or re-deriving every
+   * shard's `startedAt`. When omitted, the order is resolved from scratch.
+   */
+  resolvedShardOrder?: readonly string[];
+}
+
+/** One shard in visit order, with the run `startedAt` it was resolved to. */
+export interface HistorySearchShardEntry {
+  shardName: string;
+  startedAt: number;
 }
 
 /**
@@ -54,6 +67,19 @@ export async function resolveShardVisitOrder(
   shardNames: readonly string[],
   indexedRuns: HistorySearchIndexManifest["indexedRuns"] | undefined
 ): Promise<string[]> {
+  const entries = await resolveShardVisitEntries(
+    documentsDirectory,
+    shardNames,
+    indexedRuns
+  );
+  return entries.map((entry) => entry.shardName);
+}
+
+async function resolveShardVisitEntries(
+  documentsDirectory: string,
+  shardNames: readonly string[],
+  indexedRuns: HistorySearchIndexManifest["indexedRuns"] | undefined
+): Promise<HistorySearchShardEntry[]> {
   const startedAtByShardName = new Map<string, number>();
   for (const entry of Object.values(indexedRuns ?? {})) {
     startedAtByShardName.set(
@@ -76,13 +102,43 @@ export async function resolveShardVisitOrder(
     })
   );
 
-  return shardsWithStartedAt
-    .sort(
-      (left, right) =>
-        right.startedAt - left.startedAt ||
-        left.shardName.localeCompare(right.shardName)
+  return shardsWithStartedAt.sort(
+    (left, right) =>
+      right.startedAt - left.startedAt ||
+      left.shardName.localeCompare(right.shardName)
+  );
+}
+
+/**
+ * Lists every JSONL shard in a documents directory and resolves its visit
+ * order and `startedAt`, in one place — the full-index equivalent of
+ * `resolveShardVisitOrder`, retained (rather than re-derived per request) so
+ * a caller doing early-terminated scanning can compute a resumption index
+ * from `startedAt` without re-reading the directory or re-deriving shards
+ * already accounted for.
+ */
+export async function listDocumentShardEntries(
+  documentsDirectory: string,
+  indexedRuns: HistorySearchIndexManifest["indexedRuns"] | undefined
+): Promise<HistorySearchShardEntry[]> {
+  let shardEntries: import("fs").Dirent[];
+  try {
+    shardEntries = await fs.readdir(documentsDirectory, {
+      withFileTypes: true,
+    });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === FILE_NOT_FOUND_ERROR_CODE) {
+      return [];
+    }
+    throw error;
+  }
+  const shardNames = shardEntries
+    .filter(
+      (entry) =>
+        entry.isFile() && entry.name.endsWith(DOCUMENTS_SHARD_EXTENSION)
     )
-    .map((entry) => entry.shardName);
+    .map((entry) => entry.name);
+  return resolveShardVisitEntries(documentsDirectory, shardNames, indexedRuns);
 }
 
 /**
@@ -157,27 +213,11 @@ export async function* streamHistorySearchDocuments(
   signal?: AbortSignal
 ): AsyncGenerator<HistorySearchDocument, void, undefined> {
   const prefilter = createHistorySearchLinePrefilter(normalizedQuery, options);
-  let shardEntries: import("fs").Dirent[];
-  try {
-    shardEntries = await fs.readdir(documentsDirectory, {
-      withFileTypes: true,
-    });
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === FILE_NOT_FOUND_ERROR_CODE) {
-      return;
-    }
-    throw error;
-  }
-  const shardNames = await resolveShardVisitOrder(
-    documentsDirectory,
-    shardEntries
-      .filter(
-        (entry) =>
-          entry.isFile() && entry.name.endsWith(DOCUMENTS_SHARD_EXTENSION)
-      )
-      .map((entry) => entry.name),
-    options.indexedRuns
-  );
+  const shardNames =
+    options.resolvedShardOrder ??
+    (
+      await listDocumentShardEntries(documentsDirectory, options.indexedRuns)
+    ).map((entry) => entry.shardName);
 
   for (const shardName of shardNames) {
     if (signal?.aborted) {

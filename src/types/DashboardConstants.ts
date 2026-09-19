@@ -2979,6 +2979,15 @@ export const HISTORY_MATCH_FIELDS = {
   ERROR: "error",
 } as const;
 
+/**
+ * Whether `HistorySearchResponse.totalCount` (see `WorkflowTimelineTypes.ts`)
+ * is the true match count or a lower bound from an early-terminated scan.
+ */
+export const HISTORY_SEARCH_COUNT_STATES = {
+  EXACT: "exact",
+  AT_LEAST: "atLeast",
+} as const;
+
 // ============================================================================
 // EXECUTION PHASES - Identity dimension for prompt and condition attempts
 // ============================================================================
