@@ -177,11 +177,38 @@ The name goes in `Modal`'s existing `headerSubtitle` slot — already used this
 way for the single-file path (`UndoChangesDialog.tsx:291-295`) — because step
 and workflow names get long and the title row must not wrap.
 
-**Pass the label in via dialog state; do not read it from a store inside the
-dialog.** The step surfaces already hold `stepLabel`/`stepName` on
-`CliHeaderRow` (`outputRows.ts:237-246`), and reading `workflowStore.workflowName`
-inside the dialog would be wrong whenever a historical run of a different
-lineage is being viewed.
+**Pass the label in via dialog state; do not derive it inside the dialog.** The
+step surfaces already hold `stepLabel`/`stepName` on `CliHeaderRow`
+(`outputRows.ts:237-246`).
+
+**The workflow subtitle is always the name shown in the `WorkflowStatus` header
+— the one the user edits by clicking it — and there is no bare-title
+fallback.** That name is not simply `workflowStore.workflowName`; the header
+derives it (`WorkflowStatus.tsx:392-398`) as
+
+```ts
+pendingRunViewSwitch?.workflowName ??
+  (fileName ? workflowName || getWorkflowNameFromPath(fileName) : DEFAULT_WORKFLOW_NAME)
+```
+
+and the `pendingRunViewSwitch` arm is load-bearing: during a cross-lineage
+switch the store still holds the *previous* workflow's name while the displayed
+address already targets the new one, which is the same trap the header's inline
+rename guards against (`WorkflowStatus.tsx:768-777`). Reading the raw store
+field from the dialog would reproduce that bug — the dialog would title itself
+with the workflow the user just navigated away from.
+
+So **extract the derivation before using it twice.** `getWorkflowNameFromPath`
+is currently module-private at `WorkflowStatus.tsx:1934` and the expression
+above is inlined at four sites in that one file (`:256`, `:396`, `:775`,
+`:787`). Move both into a shared helper (`utils/workflowDisplayName.ts` plus a
+`useWorkflowDisplayName()` hook over the two stores) and have `WorkflowStatus`
+and the dialog's opener read the same value. Per the project's single-source
+rule this is a prerequisite of the subtitle, not a follow-up.
+
+Because the header always names the lineage currently displayed, and the output
+pane shows that same displayed run, the header's name is correct for the dialog
+by construction — including while viewing history.
 
 ### 3.3 One flat list, direction shown per row
 
@@ -250,17 +277,21 @@ first checkbox sets the direction.
    `useOutputUndoActions.ts`: single entry list, stop filtering blocked
    candidates. Unit tests first (`test/utils/promptUndo.test.ts`,
    `test/hooks/useOutputUndoActions.test.ts`).
-2. **Dialog** — intent, scope title/subtitle, state chips, direction-exclusive
+2. **Display name** — extract `getWorkflowNameFromPath` and the header's
+   `pendingRunViewSwitch ?? workflowName ?? path` chain out of
+   `WorkflowStatus.tsx` into a shared helper/hook, and repoint that file's four
+   inline uses at it. Standalone and separately reviewable; §3.2 depends on it.
+3. **Dialog** — intent, scope title/subtitle, state chips, direction-exclusive
    selection, footer verb, empty initial selection for `VIEW`.
-3. **Entry points** — the three surfaces, in one change so they cannot disagree:
+4. **Entry points** — the three surfaces, in one change so they cannot disagree:
    `OutputSectionHeader.tsx`, `OutputRow.tsx` (`CliHeaderRowView`), `OutputMinimap.tsx`
    + `useOutputMinimapModel.ts`. Delete `showCompactWorkflowUndoRedoLabels`
    (`OutputSection.tsx:1286-1290`) — it exists only to fit two buttons side by
    side, and today's mixed state is precisely when it drops the counts the user
    wants kept.
-4. **Leave `FileOperationOutput.tsx` alone**, and verify its path still opens
+5. **Leave `FileOperationOutput.tsx` alone**, and verify its path still opens
    with intent `ACT` and a pre-checked single row.
-5. **Tests** — see §6.
+6. **Tests** — see §6.
 
 ## 6. Testing
 
@@ -276,7 +307,9 @@ Existing suites that must be updated rather than deleted:
   shape, count stability across an undo.
 - `test/components/output/UndoChangesDialog.test.tsx` — the two intents' initial
   selection, direction-exclusive checking, footer verb following the selection,
-  the three titles.
+  the three titles, and the workflow subtitle matching the header's display name
+  (including the mid-switch `pendingRunViewSwitch` case, which is the one the
+  raw store field gets wrong).
 - `test/components/output/FileOperationOutput.test.tsx` — unchanged, and that is
   the point; it should not need edits.
 
@@ -287,18 +320,20 @@ Extension-host tests (`src/test/unit/UndoRedoCoordinator.test.ts`) should be
 untouched — the wire protocol does not change. If a change there becomes
 necessary, that is a signal the design drifted.
 
-## 7. Open decisions
+## 7. Decisions (settled)
 
-- **Workflow subtitle name source.** Recommendation: pass the lineage name
-  through dialog state from the surface that opens it, and fall back to the bare
-  `Workflow changes` title with a `7 files · 2 undone` subtitle when no name is
-  available, rather than reading `workflowStore.workflowName`.
-- **Minimap dot colour.** It currently encodes mixed state as
-  `text-warning-fg` (`OutputMinimap.tsx:678-690`). Suggest keeping the three
-  states (has changes / has undone changes / mixed) since the dot is a status
-  indicator, not an action — but it should be re-derived from
-  `PromptChangeSummary` rather than from two nullable actions.
-- **`(all undone)` wording** when `M === N`, versus plain `(7 undone)`.
+- **Workflow subtitle name source — always the `WorkflowStatus` header name**,
+  the one the user edits inline, derived through the shared helper described in
+  §3.2. There is no bare `Workflow changes` fallback: if the name is empty the
+  helper's own chain (`getWorkflowNameFromPath(fileName)`, then
+  `DEFAULT_WORKFLOW_NAME`) already produces what the header shows, and the
+  dialog must show the same string.
+- **Minimap dot colour stays.** Keep the three states (has changes / has undone
+  changes / mixed, `OutputMinimap.tsx:678-690`) — the dot is a status
+  indicator, not an action, so collapsing the popup's two buttons into one does
+  not collapse it. Re-derive it from `PromptChangeSummary`
+  (`undone > 0 && undoable > 0` → mixed) instead of from two nullable actions.
+- **`(all undone)`** is the wording when `M === N`.
 
 ## 8. Out of scope
 
