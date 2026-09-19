@@ -1,0 +1,383 @@
+#!/usr/bin/env node
+
+/**
+ * Benchmark resident versus streamed history-search index scans.
+ *
+ * Usage:
+ *   node scripts/bench-history-search-index.mjs <.search-index> <query> --mode resident
+ *   node scripts/bench-history-search-index.mjs <.search-index> <query> --mode stream --compare-buffer
+ */
+
+import { createReadStream } from "node:fs";
+import { readdir } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { performance } from "node:perf_hooks";
+
+const DOCUMENTS_DIRECTORY_NAME = "documents";
+const DOCUMENT_SHARD_PATTERN = /\.jsonl$/;
+const SAMPLE_INTERVAL = 8192;
+const MEGABYTE = 1024 * 1024;
+const CARRIAGE_RETURN = "\r";
+const LINE_BREAK_PATTERN = /\r\n?|\n/;
+
+function parseArguments() {
+  const positional = [];
+  let mode;
+  let compareBuffer = false;
+
+  for (let index = 2; index < process.argv.length; index += 1) {
+    const argument = process.argv[index];
+    if (argument === "--mode") {
+      mode = process.argv[++index];
+      continue;
+    }
+    if (argument.startsWith("--mode=")) {
+      mode = argument.slice("--mode=".length);
+      continue;
+    }
+    if (argument === "--compare-buffer") {
+      compareBuffer = true;
+      continue;
+    }
+    if (argument === "--help" || argument === "-h") {
+      printHelp();
+      process.exit(0);
+    }
+    if (argument.startsWith("--")) {
+      throw new Error(`Unknown option: ${argument}`);
+    }
+    positional.push(argument);
+  }
+
+  if (positional.length !== 2) {
+    throw new Error("expected an index directory and a query");
+  }
+  if (mode !== "resident" && mode !== "stream") {
+    throw new Error('--mode must be "resident" or "stream"');
+  }
+  if (compareBuffer && mode !== "stream") {
+    throw new Error("--compare-buffer requires --mode stream");
+  }
+
+  return {
+    indexDirectory: resolve(positional[0]),
+    query: positional[1],
+    mode,
+    compareBuffer,
+  };
+}
+
+function printHelp() {
+  console.log(`Benchmark resident versus streamed history-search index scans.
+
+Usage:
+  node scripts/bench-history-search-index.mjs <.search-index> <query> --mode resident
+  node scripts/bench-history-search-index.mjs <.search-index> <query> --mode stream --compare-buffer
+
+The index directory is read only. --compare-buffer adds a rough raw Buffer
+scan to a streamed run to compare it with UTF-8 string line decoding.`);
+}
+
+async function getShardPaths(indexDirectory) {
+  const documentsDirectory = join(indexDirectory, DOCUMENTS_DIRECTORY_NAME);
+  const entries = await readdir(documentsDirectory, { withFileTypes: true });
+  return entries
+    .filter(
+      (entry) => entry.isFile() && DOCUMENT_SHARD_PATTERN.test(entry.name)
+    )
+    .map((entry) => join(documentsDirectory, entry.name))
+    .sort();
+}
+
+function readMemory() {
+  const usage = process.memoryUsage();
+  return {
+    heapUsed: usage.heapUsed,
+    rss: usage.rss,
+  };
+}
+
+function createMemoryTracker() {
+  const baseline = readMemory();
+  let peak = baseline;
+
+  return {
+    sample() {
+      const current = readMemory();
+      if (current.heapUsed > peak.heapUsed) {
+        peak = current;
+      }
+    },
+    report() {
+      const final = readMemory();
+      return {
+        heapUsedDeltaMb: toMegabytes(final.heapUsed - baseline.heapUsed),
+        rssDeltaMb: toMegabytes(final.rss - baseline.rss),
+        peakHeapUsedMb: toMegabytes(peak.heapUsed),
+        peakHeapDeltaMb: toMegabytes(peak.heapUsed - baseline.heapUsed),
+      };
+    },
+  };
+}
+
+function toMegabytes(bytes) {
+  return Number((bytes / MEGABYTE).toFixed(1));
+}
+
+function asciiLower(value) {
+  let lowered = "";
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    lowered +=
+      code >= 0x41 && code <= 0x5a
+        ? String.fromCharCode(code + 0x20)
+        : character;
+  }
+  return lowered;
+}
+
+function getPrefilterNeedle(query) {
+  // JSON.stringify gives the exact representation used inside a JSON string;
+  // omit its surrounding quotes because the raw line contains the value.
+  const escaped = JSON.stringify(query).slice(1, -1);
+  for (const character of escaped) {
+    if (character.charCodeAt(0) > 0x7f) {
+      return undefined;
+    }
+  }
+  const text = asciiLower(escaped);
+  return { text, failure: buildKmpFailureTable(Buffer.from(text, "ascii")) };
+}
+
+function lineMatchesPrefilter(line, needle) {
+  if (needle === undefined) return true;
+  let matchedLength = 0;
+  for (const character of line) {
+    const code = character.charCodeAt(0);
+    const foldedCode = code >= 0x41 && code <= 0x5a ? code + 0x20 : code;
+    while (
+      matchedLength > 0 &&
+      foldedCode !== needle.text.charCodeAt(matchedLength)
+    ) {
+      matchedLength = needle.failure[matchedLength - 1];
+    }
+    if (foldedCode === needle.text.charCodeAt(matchedLength)) {
+      matchedLength += 1;
+      if (matchedLength === needle.text.length) return true;
+    }
+  }
+  return false;
+}
+
+async function* streamFileLines(filePath) {
+  const stream = createReadStream(filePath, { encoding: "utf8" });
+  let buffered = "";
+
+  try {
+    for await (const chunk of stream) {
+      buffered += chunk;
+      const endsWithCarriageReturn = buffered.endsWith(CARRIAGE_RETURN);
+      const searchable = endsWithCarriageReturn
+        ? buffered.slice(0, -1)
+        : buffered;
+      const parts = searchable.split(LINE_BREAK_PATTERN);
+      buffered =
+        (parts.pop() ?? "") + (endsWithCarriageReturn ? CARRIAGE_RETURN : "");
+      for (const line of parts) {
+        yield line;
+      }
+    }
+
+    if (buffered.length > 0) {
+      const parts = buffered.split(LINE_BREAK_PATTERN);
+      if (parts[parts.length - 1] === "") {
+        parts.pop();
+      }
+      for (const line of parts) {
+        yield line;
+      }
+    }
+  } finally {
+    stream.destroy();
+  }
+}
+
+async function runResident(shardPaths, query) {
+  const memory = createMemoryTracker();
+  const loweredQuery = query.toLowerCase();
+  const documents = [];
+  let documentCount = 0;
+  const loadStart = performance.now();
+
+  for (const shardPath of shardPaths) {
+    for await (const line of streamFileLines(shardPath)) {
+      documents.push(JSON.parse(line));
+      documentCount += 1;
+      if (documentCount % SAMPLE_INTERVAL === 0) {
+        memory.sample();
+      }
+    }
+  }
+  memory.sample();
+  const loadMs = performance.now() - loadStart;
+
+  const matchStart = performance.now();
+  let matchCount = 0;
+  for (const document of documents) {
+    if (document.text.toLowerCase().includes(loweredQuery)) {
+      matchCount += 1;
+    }
+  }
+  const matchMs = performance.now() - matchStart;
+  memory.sample();
+
+  return {
+    mode: "resident",
+    shards: shardPaths.length,
+    documents: documentCount,
+    matches: matchCount,
+    loadMs: roundMs(loadMs),
+    matchMs: roundMs(matchMs),
+    totalMs: roundMs(performance.now() - loadStart),
+    ...memory.report(),
+  };
+}
+
+async function runStream(shardPaths, query, compareBuffer) {
+  const memory = createMemoryTracker();
+  const loweredQuery = query.toLowerCase();
+  const prefilterNeedle = getPrefilterNeedle(query);
+  let lineCount = 0;
+  let candidateCount = 0;
+  let matchCount = 0;
+  let falsePositiveCount = 0;
+  let verificationMs = 0;
+  const totalStart = performance.now();
+
+  for (const shardPath of shardPaths) {
+    for await (const line of streamFileLines(shardPath)) {
+      lineCount += 1;
+      if (!lineMatchesPrefilter(line, prefilterNeedle)) {
+        if (lineCount % SAMPLE_INTERVAL === 0) memory.sample();
+        continue;
+      }
+
+      candidateCount += 1;
+      const verificationStart = performance.now();
+      const document = JSON.parse(line);
+      const matches = document.text.toLowerCase().includes(loweredQuery);
+      verificationMs += performance.now() - verificationStart;
+      if (matches) {
+        matchCount += 1;
+      } else {
+        falsePositiveCount += 1;
+      }
+      if (lineCount % SAMPLE_INTERVAL === 0) memory.sample();
+    }
+  }
+  memory.sample();
+
+  const result = {
+    mode: "stream",
+    shards: shardPaths.length,
+    lines: lineCount,
+    matches: matchCount,
+    candidateCount,
+    falsePositiveCount,
+    prefilter:
+      prefilterNeedle === undefined
+        ? "skipped-non-ascii"
+        : "ascii-case-insensitive",
+    totalMs: roundMs(performance.now() - totalStart),
+    verificationMs: roundMs(verificationMs),
+    scanAndPrefilterMs: roundMs(
+      performance.now() - totalStart - verificationMs
+    ),
+    ...memory.report(),
+  };
+
+  if (compareBuffer) {
+    const bufferStart = performance.now();
+    const bufferHits =
+      prefilterNeedle === undefined
+        ? 0
+        : await scanWithBuffer(shardPaths, prefilterNeedle.text);
+    result.bufferScanMs = roundMs(performance.now() - bufferStart);
+    result.bufferHits = bufferHits;
+  }
+
+  return result;
+}
+
+async function scanWithBuffer(shardPaths, needle) {
+  const pattern = Buffer.from(needle, "ascii");
+  if (pattern.length === 0) return 0;
+  const failure = buildKmpFailureTable(pattern);
+
+  let hits = 0;
+  for (const shardPath of shardPaths) {
+    let matchedLength = 0;
+    for await (const chunk of createReadStream(shardPath)) {
+      for (const byte of chunk) {
+        const foldedByte = byte >= 0x41 && byte <= 0x5a ? byte + 0x20 : byte;
+        while (matchedLength > 0 && foldedByte !== pattern[matchedLength]) {
+          matchedLength = failure[matchedLength - 1];
+        }
+        if (foldedByte === pattern[matchedLength]) {
+          matchedLength += 1;
+          if (matchedLength === pattern.length) {
+            hits += 1;
+            matchedLength = failure[matchedLength - 1];
+          }
+        }
+      }
+    }
+  }
+  return hits;
+}
+
+function buildKmpFailureTable(pattern) {
+  const failure = new Uint32Array(pattern.length);
+  let prefixLength = 0;
+  for (let index = 1; index < pattern.length; index += 1) {
+    while (prefixLength > 0 && pattern[index] !== pattern[prefixLength]) {
+      prefixLength = failure[prefixLength - 1];
+    }
+    if (pattern[index] === pattern[prefixLength]) {
+      prefixLength += 1;
+    }
+    failure[index] = prefixLength;
+  }
+  return failure;
+}
+
+function roundMs(milliseconds) {
+  return Number(milliseconds.toFixed(1));
+}
+
+async function main() {
+  const options = parseArguments();
+  const shardPaths = await getShardPaths(options.indexDirectory);
+  if (shardPaths.length === 0) {
+    throw new Error(`no JSONL shards found under ${options.indexDirectory}`);
+  }
+
+  const result =
+    options.mode === "resident"
+      ? await runResident(shardPaths, options.query)
+      : await runStream(shardPaths, options.query, options.compareBuffer);
+  console.log(
+    JSON.stringify({
+      indexDirectory: options.indexDirectory,
+      query: options.query,
+      ...result,
+    })
+  );
+}
+
+try {
+  await main();
+} catch (error) {
+  console.error(error instanceof Error ? error.message : error);
+  process.exitCode = 1;
+}

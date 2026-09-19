@@ -83,8 +83,9 @@ directly, parsing only the ones that could match.
 - **Memory:** O(page), not O(index). Removes the 1.85 GB baseline outright.
 - **Cold start:** no 31 s load; the first search costs one pass instead.
 - **Cost per query:** a full read of the shard set. Warm page cache makes this
-  far cheaper than the 5.5 s parse (no object allocation), but it is a real
-  per-query cost where today a warm session pays 602 ms.
+  cheaper in memory, but it is a real per-query cost where today a warm session
+  pays only the in-memory match pass. The measurement spike below determines
+  whether the raw-line prefilter is fast enough or needs a persisted key.
 - **Sharp edge — case-insensitivity.** The current match is a
   case-insensitive substring test. A raw-buffer prefilter cannot lowercase
   976 MB cheaply per query. Needs either a lowercased search key written into
@@ -138,7 +139,8 @@ also owns querying, returning only pages over the channel.
 ## Recommendation
 
 Pursue **A**, with a measurement spike first, and treat **B** as the follow-on
-only if A's per-query cost proves unacceptable on this workspace.
+only if A's per-query cost proves unacceptable on this workspace. The spike
+results below select A's lowercased-key variant for this workspace.
 
 The spike is small and worth doing before committing to a design: over the real
 976 MB shard set, measure (1) a full streaming read with a raw substring
@@ -152,11 +154,81 @@ per-query snapshot means a streamed pass happens once per query, not once per
 page, so A's per-query cost is paid at the same frequency the resident scan is
 paid today.
 
+## Spike results (dated 2026-09-18)
+
+The read-only benchmark was run against
+`C:\Users\natha\.ctrlyoke\projects\ctrlyoke-81d730fe53ae\.search-index`.
+At measurement time it contained 1,560 shards and 1,668,399 documents;
+`documents/*.jsonl` occupied 1,641,853,497 bytes (1.642 GB / 1.529 GiB).
+Each row is a fresh Node process. Pass 1 is the first invocation and pass 2 is
+the repeat with the OS page cache hot; Windows' cache was not forcibly evicted
+between runs. Resident runs used `--max-old-space-size=8192` so the benchmark
+could reproduce the live heap rather than fail at Node's default limit.
+
+### Resident mode
+
+`load / match / peak heap delta / RSS delta`, in milliseconds and MB:
+
+| Query        | Pass 1 (first)                         | Pass 2 (repeat)                        |
+| ------------ | -------------------------------------- | -------------------------------------- |
+| `codemirror` | 11,800.1 / 1,216.0 / 2,157.1 / 2,227.0 | 11,513.7 / 1,219.5 / 2,157.3 / 2,229.5 |
+| `the`        | 11,463.8 / 1,229.8 / 2,160.3 / 2,230.2 | 11,501.8 / 1,191.2 / 2,159.4 / 2,234.7 |
+| `zzzzzzzzzz` | 11,578.8 / 967.2 / 2,157.9 / 2,228.7   | 11,530.0 / 1,009.2 / 2,164.4 / 2,239.5 |
+
+The match count was 11,580 for `codemirror`, 402,637 for `the`, and zero for
+`zzzzzzzzzz`. The load cost and roughly 2.16 GB heap residency were effectively
+independent of query selectivity.
+
+### Stream mode
+
+`total / scan+prefilter / parse+verify / peak heap delta / RSS delta`, in
+milliseconds and MB. `candidates / false positives` are counts.
+
+| Query        | Pass 1 (first)                                               | Pass 2 (repeat)                                              |
+| ------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| `codemirror` | 20,049.2 / 19,974.8 / 74.5 / 37.2 / 51.3; 12,190 / 610       | 19,835.2 / 19,762.6 / 72.7 / 33.2 / 48.5; 12,190 / 610       |
+| `the`        | 18,969.9 / 17,026.0 / 1,944.0 / 31.6 / 55.9; 404,280 / 1,643 | 19,114.9 / 17,152.5 / 1,962.4 / 27.5 / 47.4; 404,280 / 1,643 |
+| `zzzzzzzzzz` | 19,383.7 / 19,383.7 / 0.0 / 38.5 / 52.5; 0 / 0               | 19,573.1 / 19,573.2 / 0.0 / 37.6 / 55.7; 0 / 0               |
+
+The streamed pass kept heap growth below 40 MB, but its cost was dominated by
+decoding and scanning every line. Query selectivity did not materially change
+that cost: the almost-never-matching query was still about 19.5 s.
+
+### Prefilter decision
+
+For the `codemirror` pass, the rough raw-Buffer comparison took 6,885.9 ms
+after the string-stream pass took 19,974.8 ms; it found 25,040 raw occurrences,
+which is not a candidate count and is reported only as a scan comparison. The
+Buffer scan was about 2.9x faster, but still about 5.7x slower than the
+resident match pass and more than 11x slower than the 602 ms reference in the
+original table. The string prefilter itself accounted for 19,974.8 ms, versus
+74.5 ms for parsing and verification.
+
+**Decision: the existing shards are not fast enough for the raw-line
+prefilter.** The follow-on Option A implementation must add a lowercased search
+key to each shard; do not implement that change in this measurement spike.
+The orchestration review pass must:
+
+- Change `INDEX_SCHEMA_VERSION` in
+  `src/core/orchestration/historySearchRebuildWorker.ts` from `"4.1.0"` to
+  `"4.2.0"`.
+- Extend `HistorySearchDocument` with a serialized `textLower` field and have
+  `writeDocumentsShard()` in `historySearchRebuildWorker.ts` populate it from
+  the capped `text` before `JSON.stringify()` (the atomic wrapper already calls
+  that function for both full and incremental rebuilds). The streamed query
+  path can then prefilter the escaped lowercase key without folding the whole
+  raw line.
+- Rebuild every shard on the schema bump. The current document shards are
+  1.642 GB; duplicating the capped text as `textLower` adds approximately
+  another 1.642 GB of payload plus JSON field syntax, so the active shard set
+  should be planned at roughly 3.3 GB on disk.
+
 ## Implementation plan (decided 2026-09-18)
 
-Option A is the design being built. The points below were checked against the
-current code and are the contract the staged work follows; the spike (first
-step) may change the _prefilter_ choice, not this shape.
+Option A is the design being built with the lowercased-key prefilter selected
+by the spike above. The points below were checked against the current code and
+are the contract the staged work follows; the deferred schema/worker change is
+not implemented by this spike.
 
 ### What disappears
 
