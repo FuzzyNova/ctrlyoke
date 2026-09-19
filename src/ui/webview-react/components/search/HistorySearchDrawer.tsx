@@ -49,7 +49,7 @@ const HISTORY_RESULT_ESTIMATE = 108;
 
 /**
  * A single query scan still costs ~20s against a large real-world history
- * (see dev/backlog/HISTORY_SEARCH_RESPONSIVE_QUERY_PLAN.md) until the
+ * (see dev/implemented/HISTORY_SEARCH_RESPONSIVE_QUERY_PLAN.md) until the
  * recency-ordered early-termination scan (plan option A) lands. The
  * extension host now cancels a superseded search almost for free (see
  * WebviewMessageRouter's SEARCH_HISTORY handler), but that only stops

@@ -206,8 +206,16 @@ export interface CtrlYokeGlobalSettings {
   runs: {
     maxRuns: number;
     /**
-     * Heap budget, in MB, for caching parsed history-search documents from
-     * the most recently run workflows in memory. The cache is a bounded
+     * Approximate working-set budget, in MB, for caching parsed
+     * history-search documents from the most recently run workflows in
+     * memory. This bounds the extension host's real process memory (RSS),
+     * not the literal byte count `estimateHistorySearchDocumentBytes` sums —
+     * V8/GC overhead untracked by that estimate makes actual RSS run well
+     * above the accounted heap bytes, so the default is calibrated from RSS
+     * measured against a real 1,560-run index
+     * (`scripts/bench-history-search-document-cache.mjs`), not derived from
+     * the byte math alone. Raising this value does not scale RSS 1:1 —
+     * re-measure before trusting a large increase. The cache is a bounded
      * prefix of the existing recency-ordered search scan, not a second data
      * path — a miss just falls back to the streamed disk scan. 0 disables
      * the cache entirely.
@@ -508,7 +516,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
   },
   runs: {
     maxRuns: -1,
-    historySearchCacheMb: 1024,
+    historySearchCacheMb: 320,
   },
   terminal: {
     fontSize: 14,

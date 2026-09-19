@@ -745,7 +745,7 @@
         "historySearchCacheMb": {
           "type": "number",
           "minimum": 0,
-          "description": "Heap budget in MB for caching parsed history-search documents from the most recent runs, evicted oldest-first when the budget is exceeded. 0 disables the cache."
+          "description": "Approximate working-set budget in MB for caching parsed history-search documents from the most recent runs, evicted oldest-first when exceeded. Bounds real extension-host process memory (RSS), not a literal byte count — actual RSS runs above this number due to V8 overhead the estimate can't see, so the default is calibrated from measured RSS on a real index rather than the byte math alone. 0 disables the cache."
         }
       }
     },

@@ -352,7 +352,7 @@ export function GeneralSection({
         </SettingInputRow>
         <SettingInputRow
           label="History search cache (MB, 0 = disabled)"
-          description="Heap budget for caching parsed history-search documents from the most recently run workflows, evicted oldest-first once the budget is exceeded."
+          description="Approximate working-set budget for caching parsed history-search documents from the most recently run workflows, evicted oldest-first once exceeded. Bounds real process memory, not a literal byte count — raising it does not scale memory use 1:1."
           id="runs-history-search-cache-mb"
           path="runs.historySearchCacheMb"
           {...rowProps}

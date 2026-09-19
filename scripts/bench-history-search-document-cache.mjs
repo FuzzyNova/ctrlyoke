@@ -4,13 +4,17 @@
  * Measure `HistorySearchDocumentCache`'s effect on a realistic multi-search
  * session against a real, on-disk `.search-index` directory: simulates the
  * ~20 searches/session figure from
- * dev/backlog/HISTORY_SEARCH_RESPONSIVE_QUERY_PLAN.md, sharing one cache
+ * dev/implemented/HISTORY_SEARCH_RESPONSIVE_QUERY_PLAN.md, sharing one cache
  * instance across every query (as one live `HistorySearchIndexService` does
  * for one workspace), and reports the process's memory footprint before and
  * after so it can be checked against the configured budget.
  *
  * Usage:
- *   node scripts/bench-history-search-document-cache.mjs <.search-index> [budgetMb]
+ *   node --expose-gc scripts/bench-history-search-document-cache.mjs <.search-index> [budgetMb]
+ *
+ * Run with --expose-gc: without it, heapUsed/rss reflect whatever garbage
+ * the most recent query happened to leave uncollected rather than steady
+ * state, which made repeated runs at the same budget disagree by 2-3x.
  *
  * The index directory is read only.
  */
@@ -50,6 +54,13 @@ const SESSION_QUERIES = [
 ];
 
 function readMemory() {
+  // Force a GC pass before sampling (run with --expose-gc) so the reading
+  // reflects steady-state retained memory rather than not-yet-collected
+  // garbage from the query that happened to run just before this call.
+  if (typeof global.gc === "function") {
+    global.gc();
+    global.gc();
+  }
   const usage = process.memoryUsage();
   return { heapUsed: usage.heapUsed, rss: usage.rss };
 }

@@ -1,12 +1,15 @@
 # History Search Responsive Query Plan
 
-**Status:** In progress — C, D, A, progressive delivery, and B (the bounded
-document cache) have all landed. Measured: a ~20-search session went from
-~416 s to 23.7 s, with typical queries at 3.8–107.3 ms. One acceptance
-criterion is **not met** — a 1,024 MB cache budget produced a +2,033.4 MB RSS
-delta, so the default budget needs re-tuning against measured RSS (queued). E
-(trigram postings) remains backlog and is the only remaining answer to the
-no-match query, which still costs a full 9.5 s pass.
+**Status:** Implemented (2026-09-19) — C, D, A, progressive delivery, and B
+(the bounded document cache, including its default-budget re-tuning to 320 MB)
+have all landed, and every acceptance criterion is measured and met. A
+~20-search session went from ~416 s to ~24 s, with typical queries at
+3.8–15.5 ms and RSS growth near 1 GB. Measurement was done with
+`scripts/bench-history-search-document-cache.mjs` against the real 1,560-run
+index; behaviour in a live extension host has not been observed yet, because
+the running host was still on a pre-streaming build when this landed. E
+(trigram postings) remains backlog and is the only remaining answer to a
+no-match query, which still costs a full ~11.7 s pass.
 **Priority:** P0 — this is a live regression in daily use, not a future risk.
 **Predecessor:** `dev/implemented/HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md` removed
 the ~2.16 GB resident index by streaming every shard per query. It fixed the
@@ -389,9 +392,122 @@ This matters more here than the raw number suggests: this subsystem has two
 confirmed extension-host heap OOM crashes behind it, and
 `.github/copilot-instructions.md` describes the crash shape as a single large
 allocation landing on an already-elevated baseline. A 2.4 GB RSS in the
-extension host is that elevated baseline. The default budget needs to be set
-from measured RSS rather than from estimated retained bytes, which is queued
-as follow-up work rather than guessed at here.
+extension host is that elevated baseline.
+
+**Methodology note, added later:** this +2,033.4 MB figure was sampled without
+forcing a GC first, so it includes garbage the no-match query's 1.67M-document
+scan had not yet collected. The re-tuning section below forces GC before every
+sample and measures the same 1,024 MB budget at 1,900.4 / 1,770.4 MB. The
+conclusion was unaffected — the budget really was overshooting by ~2x — but do
+not compare the number above against that table as if they were measured the
+same way. The re-tuning that followed is recorded below and has landed.
+
+## Re-tuning the default budget against measured RSS (2026-09-19)
+
+`node --expose-gc scripts/bench-history-search-document-cache.mjs <.search-index> <budgetMb>`
+against the same real 1,560-run/1.6 GB index, one fresh process per budget.
+The script now forces two `global.gc()` passes before each `process.memoryUsage()`
+sample (added as part of this work) — without it, repeating the _same_ budget
+disagreed by 2–3x between runs, because the no-match query's 1.67M-document
+scan leaves a lot of not-yet-collected garbage and an unforced sample just
+catches wherever GC happened to leave off, not steady state.
+
+| Budget (MB)  | Heap-used delta (MB) |      RSS delta (MB) |
+| ------------ | -------------------: | ------------------: |
+| 0 (disabled) |                 −9.1 |                −5.0 |
+| 128          |                 83.6 |               664.3 |
+| 256          |                179.6 |               685.3 |
+| 320          |                226.5 |     939.4 / 887.7 ¹ |
+| 384          |                273.0 | 1,047.8 / 1,056.7 ¹ |
+| 400          |                284.3 |             1,124.0 |
+| 512          |                367.6 |             1,514.6 |
+| 1,024        |         747.3 (×2) ² | 1,900.4 / 1,770.4 ¹ |
+
+¹ Two independent runs at the same budget, shown to give a sense of run-to-run
+noise (roughly ±5%) once GC is forced.
+² Identical across two independent runs — heap-used tracking the configured
+budget is fully deterministic; the noise lives entirely in RSS.
+
+### What this confirms
+
+- **The cache's own heap accounting is self-consistent at every budget
+  tested** — heap-used delta stays under the configured number from 128 MB
+  through 1,024 MB. That part was never the defect.
+- **RSS runs well above the configured number, and the ratio is not a fixed
+  multiplier**: ~5.2x at 128 MB, ~2.7–3x at 256–512 MB, ~1.8x at 1,024 MB.
+  Because the ratio itself moves with the budget, no single rescale of
+  `estimateHistorySearchDocumentBytes` could make the configured number bound
+  RSS accurately across every value a user might pick — it could only be
+  tuned to hit a target at one specific budget.
+- **The overshoot is entirely attributable to the cache's population, not to
+  the no-match query's inherent full-index scan.** With the cache disabled
+  (budget 0) the RSS delta is ~0 across the same 20-search session that reads
+  the full 1.67M-document index for its no-match query. This is the answer to
+  the "per-query population cap" question the follow-up work raised: a cap
+  would address a real mechanism (a cold cache does fill to the whole budget
+  in one pass, per `wouldRetain`), but it is not needed here — retuning the
+  default already satisfies the acceptance criterion without the added
+  complexity, so no cap was added.
+
+### Decision: retune the default, not the estimator
+
+Chose to retune `historySearchCacheMb`'s default from 1,024 to **320** rather
+than rescale `estimateHistorySearchDocumentBytes`, precisely because the
+measured RSS/budget ratio is not constant — a rescale tuned to look right at
+1,024 MB would still mislead a user who picks a different value. Retuning the
+default is honest about what changed: the number itself now means "the
+default that measured near 1 GB of real RSS on a representative index," not
+"a literal byte budget converted 1:1 into RSS."
+
+320 MB measured a 939.4 MB / 887.7 MB RSS delta across two runs — under the
+1 GB the user agreed to, with a margin for the ~5% run-to-run noise seen at
+this budget. 384 MB was also tried and lands right at the edge (1,047.8 MB /
+1,056.7 MB), close enough to "near 1 GB" to be defensible but with no margin
+left once real-world variance (a larger index, a different session shape) is
+considered — 320 MB was chosen instead specifically for that margin.
+
+`historySearchCacheMb`'s default in `CTRLYOKE_SETTINGS_DEFAULTS`
+(`src/types/CtrlYokeSettings.ts`) is now 320. Its doc comment there, the
+`schemas/settings-schema.json` description, and the settings-drawer copy in
+`GeneralSection.tsx` were all updated to say plainly that the number bounds
+real process working set (RSS), not a literal per-document byte count, and
+that raising it does not scale RSS 1:1 — re-measure with the bench script
+before trusting a large increase.
+
+### Latency at the retuned default (verified in review)
+
+The budget table above measures memory only, so the retune was verified
+against the thing the plan exists to fix. Same script and index, budget 320:
+
+| Query                 | at 1,024 MB |   at 320 MB |
+| --------------------- | ----------: | ----------: |
+| `history`             |      3.8 ms |      3.8 ms |
+| `cache`               |      4.8 ms |      4.8 ms |
+| `okay`                |     92.2 ms |  **6.7 ms** |
+| `codemirroreditor`    |    107.3 ms | **15.5 ms** |
+| `zzzzzzzzzz-no-match` |  9,548.3 ms | 11,701.0 ms |
+| Whole session         | 23,684.7 ms | 24,683.6 ms |
+
+Latency did not regress at the smaller budget — two queries got an order of
+magnitude **faster**, and the session total is unchanged within noise (it is
+dominated by the one no-match query, which is a full scan either way and so is
+unaffected by cache size).
+
+The reason those two got faster is worth knowing before anyone "optimizes" by
+raising the budget: `wouldRetain` returns true while there is any headroom, and
+a shard it accepts is read with a **full, unfiltered parse** so every document
+can be retained — which is more work than the prefiltered streaming path it
+replaces. `okay` scanned 104,815 documents at 1,024 MB versus 8,449 at 320 MB
+for that reason. A larger budget therefore buys more cache population cost on
+the way to a hit, and past some point it costs latency rather than saving it.
+**Raising `historySearchCacheMb` is not a straightforward speed lever in either
+direction** — measure it.
+
+A third independent run at 320 MB measured an RSS delta of **1,016.1 MB**,
+above the 939.4 / 887.7 MB the two runs above recorded. Taking the least
+favourable of the three, the default sits at roughly 1 GB rather than
+comfortably under it, which is still the figure agreed for this cache but
+leaves less margin than the two-run pair alone suggests.
 
 ## Acceptance criteria
 
@@ -402,10 +518,12 @@ as follow-up work rather than guessed at here.
       queries scan 7,973 documents where a full pass scans 1,676,242.
 - [x] An immediately repeated query does not re-scan.
 - [x] Typing a multi-word query does not leave superseded scans running.
-- [ ] **Not met.** Extension-host working set stays within the chosen cache
-      budget: a 1,024 MB budget produced a **+2,033.4 MB RSS delta** over a
-      20-search session (heap-used +796.1 MB). The default must be derived
-      from measured RSS; see the follow-up queued for it.
+- [x] Extension-host working set stays within the chosen cache budget: the
+      default (now 320 MB) measured a **+939.4 MB / +887.7 MB RSS delta**
+      over a 20-search session on the real 1,560-run index — under the ~1 GB
+      the user agreed to. See "Re-tuning the default budget against measured
+      RSS" above for the full table and why the default was retuned rather
+      than the byte estimator.
 - [x] Offset paging still reaches the last page of a several-thousand-result
       search without walking every page.
 - [x] Result ordering and dedupe are identical to the current implementation

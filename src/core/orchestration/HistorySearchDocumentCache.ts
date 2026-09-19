@@ -46,7 +46,7 @@ interface CacheEntry {
  * existing recency-ordered scan. It is a prefix of that same scan, not a
  * second code path: a miss always falls back to the streamed disk scan the
  * service already had, so a miss can only be slow, never wrong (see
- * `dev/backlog/HISTORY_SEARCH_RESPONSIVE_QUERY_PLAN.md`, option B, and the
+ * `dev/implemented/HISTORY_SEARCH_RESPONSIVE_QUERY_PLAN.md`, option B, and the
  * predecessor plan's option D — bounded residency was rejected there only
  * because it split correctness across two paths; this cache does not).
  *
