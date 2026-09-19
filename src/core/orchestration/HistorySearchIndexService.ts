@@ -46,8 +46,12 @@ import {
   streamHistorySearchDocuments,
   type HistorySearchShardEntry,
 } from "./HistorySearchShardScanner";
-import { scanHistoryRunDeep } from "./HistoryRunDeepScanner";
+import {
+  scanHistoryRunDeep,
+  type HistoryWorkflowNameResolver,
+} from "./HistoryRunDeepScanner";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
+import type { WorkflowKey } from "../../types/CtrlYokeTypes";
 export { MAX_INDEXED_TEXT_LENGTH } from "./historySearchRebuildWorker";
 const MIN_QUERY_LENGTH = 2;
 const DEFAULT_LIMIT = 50;
@@ -559,6 +563,8 @@ export class HistorySearchIndexService {
     const priorDocumentsScanned = resume?.documentsScanned ?? 0;
     let documentsScannedThisCall = 0;
     let deepScannedRuns = 0;
+    const resolveWorkflowName =
+      this.createWorkflowNameResolver(workspaceFolderPath);
 
     const newResults: HistorySearchResult[] = [];
     let groupBuffer: ProjectedHistorySearchMatch[] = [];
@@ -681,8 +687,7 @@ export class HistorySearchIndexService {
           workspaceFolderPath,
           shard.manifestPath,
           normalizedQuery,
-          (workflowKey) =>
-            this.resolveWorkflowName(workspaceFolderPath, workflowKey),
+          resolveWorkflowName,
           signal
         )) {
           consider(document);
@@ -732,25 +737,30 @@ export class HistorySearchIndexService {
     };
   }
 
-  private async resolveWorkflowName(
-    workspaceFolderPath: string,
-    workflowKey: import("../../types/CtrlYokeTypes").WorkflowKey
-  ): Promise<string> {
-    try {
-      const descriptor = await this.lineageRepository.readDescriptor(
+  /**
+   * A workflow-name resolver for one scan, memoized across the runs it visits.
+   * Runs of the same lineage cluster heavily in a recency-ordered scan, and a
+   * deep query can visit every run in the history, so resolving per run would
+   * re-read the same handful of descriptors hundreds of times. Scoped to the
+   * scan rather than the service so a renamed lineage shows its new name on
+   * the next query instead of being pinned for the process's life.
+   */
+  private createWorkflowNameResolver(
+    workspaceFolderPath: string
+  ): HistoryWorkflowNameResolver {
+    const cache = new Map<WorkflowKey, string>();
+    return async (workflowKey) => {
+      const cached = cache.get(workflowKey);
+      if (cached !== undefined) {
+        return cached;
+      }
+      const workflowName = await this.lineageRepository.readWorkflowDisplayName(
         workspaceFolderPath,
         workflowKey
       );
-      if (descriptor.workflowName?.trim()) {
-        return descriptor.workflowName;
-      }
-    } catch {
-      // Match the rebuild worker's fallback for descriptor-less legacy runs.
-    }
-    return workflowKey.replace(
-      /-\d{4}-\d{2}-\d{2}T\d{2}(?:-\d{2}){2}(?:-\d{3})?Z?$/,
-      ""
-    );
+      cache.set(workflowKey, workflowName);
+      return workflowName;
+    };
   }
 
   /**

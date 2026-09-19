@@ -886,20 +886,12 @@ async function readWorkflowMetadata(
   workspaceFolderPath: string,
   workflowKey: WorkflowKey
 ): Promise<WorkflowMetadata> {
-  try {
-    const descriptor = await lineageRepository.readDescriptor(
+  return {
+    workflowName: await lineageRepository.readWorkflowDisplayName(
       workspaceFolderPath,
       workflowKey
-    );
-    return {
-      workflowName:
-        descriptor.workflowName?.trim().length > 0
-          ? descriptor.workflowName
-          : deriveWorkflowName(workflowKey),
-    };
-  } catch {
-    return { workflowName: deriveWorkflowName(workflowKey) };
-  }
+    ),
+  };
 }
 
 async function buildRunDocuments(
@@ -1002,9 +994,3 @@ async function statOptional(filePath: string): Promise<fs.Stats | undefined> {
   }
 }
 
-function deriveWorkflowName(workflowId: string): string {
-  return workflowId.replace(
-    /-\d{4}-\d{2}-\d{2}T\d{2}(?:-\d{2}){2}(?:-\d{3})?Z?$/,
-    ""
-  );
-}

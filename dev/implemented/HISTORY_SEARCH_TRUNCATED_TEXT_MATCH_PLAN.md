@@ -8,7 +8,16 @@ that exists today.
 **As built:** The settled option-B design shipped without material deviation.
 `overCapCandidateCount` records the number of source strings shortened during
 indexing — a durable has-hidden-text signal, not an exact candidate count — as
-specified below.
+specified below. Two things the design did not anticipate: threading the
+truncation counter revealed that `truncateHistorySearchEvent` had **no
+`CLI_OUTPUT_EVENTS_APPENDED` branch at all**, so streamed-append events reached
+the extractor untruncated (harmless for stored documents, which the extractor
+capped anyway, but it skipped the pre-truncation memory saving) — that branch
+now exists; and the deep scan's workflow-name resolver is memoized per scan
+(`HistorySearchIndexService.createWorkflowNameResolver`) over a shared
+`WorkflowLineageRepository.readWorkflowDisplayName`, because a deep query can
+visit every run in the history and the descriptor-read-plus-fallback pair had
+accumulated three copies.
 **Priority:** P2
 **Related:** `dev/implemented/HISTORY_SEARCH_PERFORMANCE_PLAN.md` (introduced
 `MAX_INDEXED_TEXT_LENGTH` as an OOM guard — background for why this cap exists

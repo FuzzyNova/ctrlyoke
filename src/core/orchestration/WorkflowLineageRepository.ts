@@ -23,6 +23,14 @@ const DESCRIPTOR_SCHEMA_VERSION = 1;
 /** How long a `.creating-*` staging dir can go without a new write before `pruneStaleStagingDirs` removes it. */
 const STALE_STAGING_DIR_MS = 5 * 60 * 1000;
 
+/** A lineage key minus its run-timestamp suffix, used when no descriptor name exists. */
+export function deriveWorkflowNameFromKey(workflowKey: WorkflowKey): string {
+  return workflowKey.replace(
+    /-\d{4}-\d{2}-\d{2}T\d{2}(?:-\d{2}){2}(?:-\d{3})?Z?$/,
+    ""
+  );
+}
+
 export interface CreatedLineage {
   workflowKey: WorkflowKey;
   descriptor: WorkflowLineageDescriptor;
@@ -179,6 +187,30 @@ export class WorkflowLineageRepository {
       "utf8"
     );
     return JSON.parse(content) as WorkflowLineageDescriptor;
+  }
+
+  /**
+   * The lineage's display name for read-only consumers (history search's
+   * indexer, its disk-scan fallback, and its deep rescan), with the same
+   * fallback all three need: a lineage whose descriptor is missing or nameless
+   * — a legacy run directory, or one being written right now — still has to
+   * render as something, and its key minus the run timestamp suffix is that
+   * something. Single-sourced here because three copies of the pair had
+   * already drifted into existence.
+   */
+  async readWorkflowDisplayName(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey
+  ): Promise<string> {
+    try {
+      const descriptor = await this.readDescriptor(workspaceRoot, workflowKey);
+      if (descriptor.workflowName?.trim().length > 0) {
+        return descriptor.workflowName;
+      }
+    } catch {
+      // Fall through to the key-derived name below.
+    }
+    return deriveWorkflowNameFromKey(workflowKey);
   }
 
   async tryReadDescriptor(

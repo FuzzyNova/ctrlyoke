@@ -295,22 +295,12 @@ export class HistorySearchService {
     workspaceFolderPath: string,
     workflowKey: WorkflowKey
   ): Promise<WorkflowMetadata> {
-    try {
-      const descriptor = await this.lineageRepository.readDescriptor(
+    return {
+      workflowName: await this.lineageRepository.readWorkflowDisplayName(
         workspaceFolderPath,
         workflowKey
-      );
-      return {
-        workflowName:
-          descriptor.workflowName?.trim().length > 0
-            ? descriptor.workflowName
-            : this.deriveWorkflowName(workflowKey),
-      };
-    } catch {
-      return {
-        workflowName: this.deriveWorkflowName(workflowKey),
-      };
-    }
+      ),
+    };
   }
 
   private async readManifestSafe(
@@ -356,10 +346,4 @@ export class HistorySearchService {
     return text.toLowerCase().includes(query.toLowerCase());
   }
 
-  private deriveWorkflowName(workflowId: string): string {
-    return workflowId.replace(
-      /-\d{4}-\d{2}-\d{2}T\d{2}(?:-\d{2}){2}(?:-\d{3})?Z?$/,
-      ""
-    );
-  }
 }
