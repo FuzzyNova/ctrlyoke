@@ -254,6 +254,24 @@ describe("HistorySearchDrawer filters", () => {
     );
   });
 
+  it("explains the one-result-per-event counting model while a query is active", () => {
+    // Without this, a user comparing the drawer's count against the output
+    // find bar's occurrence count concludes results are missing. It lives in
+    // the sticky header because the result list is virtualized and thousands
+    // of rows long, so anything below it is never read.
+    renderSearch();
+    expect(
+      screen.getByText(/one matching event, not one occurrence/)
+    ).toBeInTheDocument();
+
+    act(() => {
+      useUiStore.getState().setHistorySearchQuery("n");
+    });
+    expect(
+      screen.queryByText(/one matching event, not one occurrence/)
+    ).not.toBeInTheDocument();
+  });
+
   it("re-requests a page whose head is loaded but whose tail is still missing", () => {
     // A still-running scan pushes partial results, which can fill the head of
     // a page while its tail is outstanding. Testing only the page's first row

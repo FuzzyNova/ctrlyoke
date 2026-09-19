@@ -48,14 +48,15 @@ const RESULT_LIMIT = 50;
 const HISTORY_RESULT_ESTIMATE = 108;
 
 /**
- * A single query scan still costs ~20s against a large real-world history
- * (see dev/implemented/HISTORY_SEARCH_RESPONSIVE_QUERY_PLAN.md) until the
- * recency-ordered early-termination scan (plan option A) lands. The
- * extension host now cancels a superseded search almost for free (see
- * WebviewMessageRouter's SEARCH_HISTORY handler), but that only stops
- * *wasted* scans — a longer pause here also cuts down how many full scans a
- * typing burst issues in the first place. Bring this back toward 400ms once
- * option A lands and a scan is no longer this expensive.
+ * Raised from 400ms when a single query scan still cost ~20s against a large
+ * real-world history. The recency-ordered early-termination scan (option A in
+ * dev/implemented/HISTORY_SEARCH_RESPONSIVE_QUERY_PLAN.md) has since landed
+ * and put a typical query at 4-15ms, so the original reason is largely gone —
+ * but not entirely: a query with no matches still reads the whole index
+ * (~12s on that workspace), and a typing burst produces exactly those
+ * not-yet-a-word prefixes. Lowering this is safe to try once the trigram
+ * postings sidecar (option E) removes the no-match cost, or sooner with
+ * measurement; it is not a free win today.
  */
 export const HISTORY_SEARCH_DEBOUNCE_MS = 600;
 
@@ -846,6 +847,23 @@ export function HistorySearchDrawer() {
                     : ""}
               </span>
             </div>
+          )}
+
+          {/* Kept in the sticky header rather than under the list: the list is
+              virtualized and thousands of rows long, so a footer would never
+              be read. It exists because history search counts one result per
+              matching event/field while the output find bar counts one per
+              literal occurrence, and a user comparing the two numbers
+              otherwise concludes results are missing (see
+              dev/backlog/HISTORY_SEARCH_TRUNCATED_TEXT_MATCH_PLAN.md, where
+              that comparison is what surfaced a real bug alongside this
+              non-bug). The remedy named here is automatic: opening a result
+              arms the output find bar with this same query. */}
+          {trimmedQuery.length >= 2 && (
+            <p className="mt-1 text-xs text-description-fg/80">
+              Each result is one matching event, not one occurrence &mdash; open
+              a result to highlight every occurrence in that run&rsquo;s output.
+            </p>
           )}
         </div>
       </div>
