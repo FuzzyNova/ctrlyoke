@@ -1,10 +1,14 @@
 # "View N changes" Entry Point Plan
 
-**Status:** In progress — staged as a five-step ctrlyoke workflow on 2026-09-19.
-Spec verified against the tree that day: all cited line numbers are current;
-three file paths, the display-name extraction, the third
-`computePromptUndoActions` consumer, and two affected test files were corrected
-in the same pass.
+**Status:** Implemented and shipped on 2026-09-19 across five steps. The three
+entry-point surfaces now share a neutral change summary and viewer dialog;
+blocked rows remain visible, workflow counts match dialog rows, and the
+display-name derivation is shared with the workflow header. Verified against
+the final tree and git history; the plan is retained here as the implementation
+record.
+**Deferred:** Per-event undo attribution, snapshot or wire-protocol changes,
+and the accepted case where an undone row can render without a diff beside an
+applied row that has one.
 **Priority:** P2
 **Area:** `src/ui/webview-react/` (output pane headers, minimap, undo dialog, `promptUndo.ts`)
 
@@ -138,11 +142,11 @@ blocked count if it does not already expose what the summary needs.
 **There are three consumers of `computePromptUndoActions`, not two**, and the
 third carries the only real performance hazard in this plan:
 
-| Consumer                                | Feeds                                                                                                                    |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `hooks/useOutputMinimapModel.ts:359`    | minimap dot + popup buttons                                                                                              |
+| Consumer                                | Feeds                                                                                                                 |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `hooks/useOutputMinimapModel.ts:359`    | minimap dot + popup buttons                                                                                           |
 | `utils/outputRows.ts:2332`              | `OutputRowPromptUndoMeta.summary` (`outputRows.ts:101-113`) → the **step header** button at `OutputRow.tsx:1247-1265` |
-| `test/utils/outputRowsUndoMemo.test.ts` | mocks it **by name** via `vi.mock`                                                                                       |
+| `test/utils/outputRowsUndoMemo.test.ts` | mocks it **by name** via `vi.mock`                                                                                    |
 
 The `outputRows.ts` call sits behind a deliberate per-target memo,
 `getPromptUndoActionsForTarget` (`outputRows.ts:2325-2335`), whose comment

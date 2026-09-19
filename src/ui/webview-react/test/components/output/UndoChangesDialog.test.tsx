@@ -7,16 +7,26 @@ import {
   expect,
   vi,
 } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+} from "@testing-library/react";
 import { UndoChangesDialog } from "@components/output/UndoChangesDialog";
+import { OutputSectionHeader } from "@components/layout/output-section/OutputSectionHeader";
+import { useOutputUndoActions } from "@hooks/useOutputUndoActions";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import {
   FINAL_STEP_PHASES,
+  FILE_OPERATION_KINDS,
   MESSAGE_TYPES,
   UNDO_DIALOG_INTENTS,
   UNDO_DIALOG_SCOPE_MODES,
   UNDO_REDO_DIRECTIONS,
+  OUTPUT_TABS,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
@@ -373,6 +383,111 @@ describe("UndoChangesDialog", () => {
     render(<DialogWithHeaderName />);
     expect(screen.getByText("Target workflow · 1 file")).toBeInTheDocument();
     expect(screen.queryByText("Previous workflow")).not.toBeInTheDocument();
+  });
+
+  it("keeps blocked-only changes visible and keeps the header count equal to dialog rows", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef,
+      },
+      pendingRunViewSwitch: null,
+    });
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
+    const { result } = renderHook(() =>
+      useOutputUndoActions({
+        allMessages: [
+          {
+            type: "cli",
+            target,
+            timestamp: 1,
+            data: { isStreaming: false },
+          } as never,
+        ],
+        allowUndoActions: true,
+        finalStepWorkspaceSnapshots: {},
+        historyOutputs: null,
+        isViewingHistory: false,
+        lastCliIndexPerStep: new Map([["queue:0", 0]]),
+        stepOutputsMap: new Map([["queue:0", []]]),
+        undoRecords: {},
+        uniqueStepTargets: [target],
+        workspaceSnapshots: {
+          0: {
+            capturedAt: 1,
+            strategy: "filesystem",
+            changedFiles: ["one", "two", "three"].map((name) => ({
+              path: `src/${name}.ts`,
+              changeType: FILE_OPERATION_KINDS.MODIFIED,
+            })),
+          },
+        },
+      })
+    );
+
+    act(() => result.current.handleWorkflowView());
+    const workflowDialogState = result.current.workflowDialogState;
+    if (!workflowDialogState) throw new Error("workflow dialog did not open");
+
+    render(
+      <>
+        <OutputSectionHeader
+          activeOutputTab={OUTPUT_TABS.OUTPUT}
+          activeTerminalSession={null}
+          anyDiffCollapsed={false}
+          hasOutput
+          hiddenOutputCount={0}
+          isFindOpen={false}
+          isExecutionActive={false}
+          isFullscreen={false}
+          isHeaderNarrow={false}
+          isHeaderVeryNarrow={false}
+          isTerminalCompact={false}
+          refCallback={vi.fn()}
+          showTerminalTab={false}
+          terminalCanCloseActiveSession={false}
+          terminalExecutionRunLabel={null}
+          terminalFontSize={14}
+          terminalSessionActive={false}
+          useCompactLabels={false}
+          workflowChangeSummary={result.current.workflowChangeSummary}
+          onCollapseAllDiffs={vi.fn()}
+          onExpandAllDiffs={vi.fn()}
+          onExport={vi.fn()}
+          onToggleFind={vi.fn()}
+          onClearHiddenOutputTargets={vi.fn()}
+          onNewTerminal={vi.fn()}
+          onSelectOutputTab={vi.fn()}
+          onSelectTerminalTab={vi.fn()}
+          onToggleFullscreen={vi.fn()}
+          onTerminalFontSizeChange={vi.fn()}
+          onTerminalSessionClose={vi.fn()}
+          onToggleCollapse={vi.fn()}
+          onWorkflowView={vi.fn()}
+          outputFontSize={14}
+          onOutputFontSizeChange={vi.fn()}
+        />
+        <UndoChangesDialog
+          mode={workflowDialogState.mode}
+          intent={workflowDialogState.intent}
+          target={workflowDialogState.entries[0]!.target}
+          workflowKey={workflowDialogState.address.workflowKey}
+          runRef={workflowDialogState.address.runRef}
+          requestId={workflowDialogState.requestId}
+          onClose={vi.fn()}
+          workflowEntries={workflowDialogState.entries}
+          workflowName={workflowDialogState.workflowName}
+        />
+      </>
+    );
+
+    const rowCount = screen.getAllByText("Cannot undo").length;
+    expect(
+      screen.getByRole("button", { name: "View 3 changes" })
+    ).toBeInTheDocument();
+    expect(result.current.workflowChangeSummary.total).toBe(rowCount);
+    expect(rowCount).toBe(3);
   });
 
   it("applies versioned Expand all and Collapse all commands to dialog diffs", () => {

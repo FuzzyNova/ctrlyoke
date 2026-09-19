@@ -644,6 +644,55 @@ describe("OutputRow auto-expand on hidden active match", () => {
     expect(onPromptView).toHaveBeenCalledWith(row);
   });
 
+  it("renders a change viewer when every step change is blocked", () => {
+    const onPromptView = vi.fn();
+    const row: OutputRenderRow = {
+      key: "header-blocked-changes",
+      target: TARGET,
+      estimateSize: 44,
+      rowKind: OUTPUT_ROW_KINDS.CLI_HEADER,
+      output: {
+        prompt: "Edit files",
+        response: "done",
+        elapsed: 0,
+        isStreaming: false,
+      },
+      stepIndex: 0,
+      isFinalStep: false,
+      stepLabel: "Step 1",
+      attemptIndex: 0,
+      runIndex: 0,
+      promptUndo: {
+        workspacePath: "/repo",
+        allStepOutputs: [],
+        summary: {
+          total: 3,
+          undoable: 0,
+          undone: 0,
+          blocked: 3,
+          label: "View 3 changes",
+          compactLabel: "View 3",
+          title: "3 files changed",
+        },
+      },
+    };
+
+    render(
+      <OutputRow
+        row={row}
+        isExecutionActive={false}
+        onPromptView={onPromptView}
+      />
+    );
+
+    const button = screen.getByRole("button", {
+      name: "View 3 changes",
+    });
+    expect(button).toBeInTheDocument();
+    fireEvent.click(button);
+    expect(onPromptView).toHaveBeenCalledWith(row);
+  });
+
   it("expands a truncated bash command when the active match is hidden", () => {
     const command = `node -e "${"x".repeat(220)} target"`;
     const row = buildBashRow(command, undefined, undefined);
