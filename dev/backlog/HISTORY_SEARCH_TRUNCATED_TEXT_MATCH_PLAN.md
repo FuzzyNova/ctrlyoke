@@ -4,9 +4,10 @@
 **Priority:** P2
 **Related:** `dev/implemented/HISTORY_SEARCH_PERFORMANCE_PLAN.md` (introduced
 `MAX_INDEXED_TEXT_LENGTH` as an OOM guard — background for why this cap exists
-at all). `dev/implemented/HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md` (the
-completed resident-memory work that changes the sequencing of this plan — see
-"Sequencing" below).
+at all). `dev/implemented/HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md` and
+`dev/implemented/HISTORY_SEARCH_RESPONSIVE_QUERY_PLAN.md` — both landed since
+this plan was written, and together they change what option A actually costs;
+see "Sequencing" below, which is the section to read first.
 
 ## The problem in one sentence
 
@@ -32,8 +33,12 @@ workflow, found only 32. Two real bugs were in play:
 Most of the raw 369-vs-32 gap turned out to be an intentional, unrelated
 design difference (history search reports one result per matching event/field,
 `OutputFindBar` reports one per literal occurrence — see the same
-instructions bullet). But truncation was not a semantics difference — it was
-real, measured data loss:
+instructions bullet). **That difference is now stated in the drawer itself**
+("Each result is one matching event, not one occurrence — open a result to
+highlight every occurrence in that run's output", in `HistorySearchDrawer`'s
+sticky header), precisely so the next person doing this arithmetic starts from
+the real gap instead of this one. But truncation was not a semantics
+difference — it was real, measured data loss:
 
 | Measurement (one real run, `ACCESSIBILITY_AND_TESTABILITY_PLAN`) | Value         |
 | ---------------------------------------------------------------- | ------------- |
@@ -127,24 +132,80 @@ exceeds `2 * MAX_INDEXED_TEXT_LENGTH`.
 - **Complexity:** lowest of the three — no overlap tuning, no dedupe
   interaction beyond what already exists for multiple documents per event.
 
-## Sequencing: the residency plan has landed
+## Sequencing: both predecessor plans have landed
+
+Two changes since this plan was written move the numbers it reasons about, in
+opposite directions. Read both before picking an option.
+
+### Residency is gone, so windowing no longer grows resident heap
 
 `dev/implemented/HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md` replaced the
 extension-host's resident-document map with streamed shard queries. Option A
 above (windowing) therefore no longer increases permanently resident heap —
 the additional documents are read from disk as part of the same streamed pass.
-The remaining costs are the on-disk index growth and the window/dedupe design
-described above; measure those before shipping, but residency is no longer the
-reason to block this plan. Option B still avoids index growth, and Option C
-still has bounded growth (at most 2x for affected candidates).
+Residency is no longer a reason to block this plan. Option B still avoids
+index growth, and Option C still has bounded growth (at most 2x for affected
+candidates).
+
+### But three newer costs replaced it, and none of them existed before
+
+1. **Every document is now stored twice.** Index schema 4.2.0 writes a
+   serialized lowercase `textLower` key alongside `text` so the scan's
+   prefilter can compare against it without lowercasing each raw line.
+   Sampling 40 real shards measured `text` at 41% of payload, so the shard set
+   grew ~44.6% when the key landed. **Each window option A adds therefore
+   costs ~1.45x what this plan originally assumed on disk.** The measurement
+   spike in the acceptance criteria has to be run against a 4.2.0 index, not
+   against the older numbers.
+2. **The document cache's hit rate is a function of documents per run.**
+   `HistorySearchDocumentCache` holds parsed documents for the most recent
+   runs within a budget (`runs.historySearchCacheMb`, default 320 MB, chosen
+   by measurement — see the responsive-query plan's re-tuning section).
+   Windowing puts more documents in each recent run, so **fewer runs fit** —
+   and by more than document count alone suggests, because
+   `estimateHistorySearchDocumentBytes` sums _every_ string field, so
+   `textLower` counts against the budget too —
+   and the cache is exactly what takes a recent-term query from ~20 s to
+   4-15 ms. This is the cost most likely to be missed, because it shows up as
+   a latency regression on queries that have nothing to do with long
+   documents. The spike must measure cache-resident run count before and
+   after, not just index size.
+3. **More documents per run means more lines scanned before the page fills.**
+   The scan is recency-ordered and stops at `offset + limit`, so it reads
+   whole runs at a time. Windowing does not change which runs it visits, but
+   it does change how much each one costs. Bounded and probably small;
+   measure it rather than assume.
+
+### And windowing collides with the counting model the UI now states
+
+`HistorySearchDrawer` now tells the user, in prose, that each result is one
+matching event. Option A breaks that: a long response split into N windows
+produces up to N results for what the user sees as one event, and the
+overlap region can produce two near-identical results for a single match
+(already flagged under option A's dedupe interaction). **Whichever option
+ships has to either preserve the one-result-per-event promise or change that
+copy** — silently making the sentence false is worse than the gap this plan
+exists to close, because it re-breaks the exact comparison that first
+surfaced this bug. Option C has the same problem in miniature (two anchor
+windows, up to two results per event); option B does not have it at all,
+which is a point in its favour that did not exist when this plan was
+written.
 
 ## Recommendation
 
-Re-evaluate A now that the residency work has landed: it is the complete
-coverage option without the former permanent-residency penalty, subject to a
-measurement of index growth and the overlap/dedupe behavior. C remains a
-small, bounded improvement if a lower-risk partial fix is preferred, while B
-still requires the new UI and per-run fallback path described above.
+A is still the complete-coverage option and the residency objection to it is
+gone, but it is no longer the obvious pick it briefly looked like: it now
+carries a ~1.45x on-disk multiplier per added window, a document-cache hit-rate
+regression that would show up as latency on unrelated queries, and a direct
+conflict with the one-result-per-event model the drawer now states in prose.
+Measure those three before committing to it.
+
+B has gained relative standing for the same reasons — it adds no documents, so
+it touches neither the cache nor the counting model — at the cost of the new
+UI and per-run scan path it always required. C remains the small bounded
+improvement, with a milder version of A's counting-model problem.
+
+The measurement spike is now the gate, not a formality.
 
 ## Non-goals
 
@@ -155,7 +216,9 @@ still requires the new UI and per-run fallback path described above.
   the problem; the single-window-per-candidate model is.
 - **No change to the document-vs-occurrence result-counting semantics.**
   That's a separate, working-as-intended difference from `OutputFindBar` and
-  out of scope here.
+  out of scope here — but note this is now a constraint rather than merely a
+  non-goal: option A would change those semantics as a side effect, which is
+  the conflict described under "Sequencing".
 
 ## Acceptance criteria (for whichever option is picked)
 
@@ -167,7 +230,15 @@ still requires the new UI and per-run fallback path described above.
 - [ ] Per-document stored text size never exceeds `MAX_INDEXED_TEXT_LENGTH`.
 - [ ] A measurement spike against a large real workspace (not just the one run
       in this doc) quantifies how many documents are actually affected today,
-      to size the true blast radius before committing to an option.
+      to size the true blast radius before committing to an option. Run it
+      against a schema 4.2.0 index and report three numbers, not one: added
+      documents, on-disk growth (remembering `textLower` doubles each
+      document's text), and the change in how many runs fit in the
+      `historySearchCacheMb` budget. `scripts/bench-history-search-document-cache.mjs`
+      is the existing harness for the third.
+- [ ] The drawer's one-result-per-event copy is still true after the change,
+      or was updated in the same commit. See "And windowing collides with the
+      counting model the UI now states".
 - [ ] Tests cover a query landing exactly in a window-boundary overlap region
       (A), the fallback trigger and scoped scan (B), or a query landing in the
       indexed interior gap correctly returning no match rather than a wrong

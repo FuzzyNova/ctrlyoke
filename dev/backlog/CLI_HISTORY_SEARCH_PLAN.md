@@ -7,17 +7,21 @@
 > `history search` and assumes that vocabulary. The two are independently shippable, but search is
 > materially more useful once `history show` exists — see "Sequencing" below.
 >
-> **Related:** `dev/implemented/HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md` (the streaming reader this plan
-> needs and that plan also needs — do not build it twice),
+> **Related:** `dev/implemented/HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md` and
+> `dev/implemented/HISTORY_SEARCH_RESPONSIVE_QUERY_PLAN.md` — **both landed since this plan was
+> written**, and between them they removed most of what this doc called "the hard part". The
+> streaming reader this plan proposed building now exists; see "What the search engine looks like
+> now" below before reading anything here about residency.
 > `dev/backlog/HISTORY_SEARCH_TRUNCATED_TEXT_MATCH_PLAN.md` (the silent-miss gap this command must
-> disclose rather than inherit quietly).
+> disclose rather than inherit quietly), `dev/backlog/HISTORY_SEARCH_BACKGROUND_SCAN_PLAN.md`
+> (why a count can come back provisional, which this command has to report honestly).
 
 ## Problem
 
 ctrlyoke has a good global history search, and it is reachable from exactly one place: the React
 dashboard's `HistorySearchDrawer` (`src/ui/webview-react/components/search/HistorySearchDrawer.tsx`),
 routed through `MESSAGE_TYPES.SEARCH_HISTORY` to `HistorySearchService`
-(`src/ui/WebviewMessageRouter.ts:1353`). It is a human-only surface: a webview message, a debounce,
+(`src/ui/WebviewMessageRouter.ts`). It is a human-only surface: a webview message, a debounce,
 a virtualized list.
 
 Agents have no equivalent. An agent that wants to answer "have we hit this error before, and what
@@ -35,12 +39,12 @@ did we do about it?" across a project's whole run history has nothing to call. W
 Endorsing the framing in the request, with the specific reasons:
 
 1. **Every MCP workflow tool answers for exactly one run, by construction.** `requireRunAddress`
-   (`src/mcp-server.ts:1678`) refuses to serve any workflow tool without a `CTRLYOKE_WORKING_FILE`,
+   (`src/mcp-server.ts`) refuses to serve any workflow tool without a `CTRLYOKE_WORKING_FILE`,
    and its error message already says the words: _"to drive ctrlyoke from outside a workflow, use the
    ctrlyoke CLI."_ Cross-workflow history search has no run to answer for. The one existing
    cross-workflow tool, `global_status`, is deliberately narrow and read-only, and even it is
    documented as "the only tool that reports on workflows other than this server's own"
-   (`mcp-server.ts:1458-1463`). A general search tool with seven filter dimensions and paging is not
+   (`mcp-server.ts`). A general search tool with seven filter dimensions and paging is not
    a second exception of the same size.
 2. **MCP tool schemas are context the model pays for on every turn.** `MCP_TOOL_DEFINITIONS` is
    listed to the harness whenever the ctrlyoke server is attached (`spec-driven-loop` attaches it on
@@ -49,13 +53,13 @@ Endorsing the framing in the request, with the specific reasons:
    most steps never use. A CLI command costs nothing until invoked.
 3. **In-workflow agents can already call the CLI.** They have a shell. `ctrlyoke history search` is
    read-only, so nothing about the attestation boundary in `resolveCallingContext`
-   (`mcp-server.ts:453`) is bypassed by using it — there is no privileged state to reach. The CLI is
+   (`mcp-server.ts`) is bypassed by using it — there is no privileged state to reach. The CLI is
    the supported escape hatch for everything else that isn't run-scoped; search belongs with it.
 4. **It composes.** `... | grep`, `| jq`, `> notes.md`, `--limit 5` for a cheap probe. An MCP tool
    returns one JSON blob into the model's context whether or not the model wanted all of it.
 
 If in-workflow ergonomics ever demand a tool anyway, note there is already a bridge:
-`ctrlyoke-mcp --tool <name> --args <json>` (`runMcpToolCli`, `mcp-server.ts:1872`). That is the
+`ctrlyoke-mcp --tool <name> --args <json>` (`runMcpToolCli`, `mcp-server.ts`). That is the
 cheaper escalation than a new resident tool definition, and it should be considered before
 `MCP_TOOL_DEFINITIONS` grows.
 
@@ -65,7 +69,7 @@ cheaper escalation than a new resident tool definition, and it should be conside
 
 ```
 $ ctrlyoke history search "EPERM" --kind bash --kind response --limit 3
-3 of 41 results · index ready
+3 of 41+ results · index ready
 
 1. Refactor auth middleware · run 4 · Prompt 3 · bash/output · 2026-09-12 14:03
    --workflow a1b2c3d4 --run 4 --step 2
@@ -80,9 +84,10 @@ $ ctrlyoke history search "EPERM" --kind bash --kind response --limit 3
    src/utils/AtomicFileUtils.ts
    …transient codes only; EEXIST/ENOTEMPTY/ENOENT are real answers callers act on…
 
-Matches are per indexed event/field, not per occurrence. Indexed text is capped at 2000
-characters per event, so a term appearing only later in a long output is not findable here —
-use `ctrlyoke history show` on a known run for an exhaustive read.
+41+ is a lower bound: the scan stopped once --limit was satisfied. Use --exact-count for a
+real total. Matches are per indexed event/field, not per occurrence. Indexed text is capped at
+2000 characters per event, so a term appearing only later in a long output is not findable
+here — use `ctrlyoke history show` on a known run for an exhaustive read.
 ```
 
 The second line of each result is the payoff: it is a **copy-pasteable selector** for
@@ -94,27 +99,28 @@ emit the line without `--step` rather than inventing a flag that does not exist 
 
 ### Options
 
-| Option                              | Maps to                               | Notes                                                                                                                                                                                                                   |
-| ----------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `<query>` (positional)              | `HistorySearchQuery.query`            | Required, min 2 chars (`MIN_QUERY_LENGTH`, `HistorySearchIndexService.ts:40`). Substring, case-insensitive — same matcher as the drawer, no regex.                                                                      |
-| `-d, --cwd <path>`                  | workspace root                        | Matches every other command.                                                                                                                                                                                            |
-| `--workflow <key...>`               | `filters.workflowKeys`                | Repeatable. Values come from `history list`.                                                                                                                                                                            |
-| `--this-workflow`                   | `filters.workflowKeys`                | Derives the key from `CTRLYOKE_WORKING_FILE` via `WorkflowPaths.parseWorkingFileAddressFromPath` — the in-workflow agent's equivalent of the drawer's "Only &lt;workflow&gt;" checkbox. Errors if the env var is unset. |
-| `--kind <kind...>`                  | `filters.eventKinds`                  | Validated against `HISTORY_EVENT_KINDS` values (`DashboardConstants.ts:2882`). Invalid value → exit 2 listing the valid set.                                                                                            |
-| `--harness <id...>`                 | `filters.harnesses`                   | Validated against `HARNESS_IDS`.                                                                                                                                                                                        |
-| `--state <state...>`                | `filters.executionStates`             | Run outcome, per `EXECUTION_STATES`.                                                                                                                                                                                    |
-| `--path <substring>`                | `filters.pathContains`                | Same `\\`→`/` + lowercase normalization `HistorySearchFilters.ts` already applies.                                                                                                                                      |
-| `--since <when>` / `--until <when>` | `filters.since` / `.until` (epoch ms) | Accept ISO-8601 and a short relative form (`7d`, `24h`, `30m`). Resolve through one shared parser and reuse it if `history runs` later grows the same flags.                                                            |
-| `--limit <n>`                       | `HistorySearchQuery.limit`            | Default **20** (agents want a probe, not a page); hard-capped at 100, mirroring the router's `Math.min(message.limit, 100)`.                                                                                            |
-| `--offset <n>`                      | `HistorySearchQuery.offset`           | Random-access, same as the drawer's virtualized paging.                                                                                                                                                                 |
-| `--snippet <chars>`                 | see below                             | Context width around the match. Default 100.                                                                                                                                                                            |
-| `--json`                            | output format                         | One versioned JSON result line.                                                                                                                                                                                         |
-| `--no-rebuild`                      | index policy                          | See "The hard part".                                                                                                                                                                                                    |
-| `--no-color`                        | output format                         | Matches other commands.                                                                                                                                                                                                 |
+| Option                              | Maps to                               | Notes                                                                                                                                                                                                                                                            |
+| ----------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<query>` (positional)              | `HistorySearchQuery.query`            | Required, min 2 chars (`MIN_QUERY_LENGTH`, `HistorySearchIndexService.ts`). Substring, case-insensitive — same matcher as the drawer, no regex.                                                                                                                  |
+| `-d, --cwd <path>`                  | workspace root                        | Matches every other command.                                                                                                                                                                                                                                     |
+| `--workflow <key...>`               | `filters.workflowKeys`                | Repeatable. Values come from `history list`.                                                                                                                                                                                                                     |
+| `--this-workflow`                   | `filters.workflowKeys`                | Derives the key from `CTRLYOKE_WORKING_FILE` via `WorkflowPaths.parseWorkingFileAddressFromPath` — the in-workflow agent's equivalent of the drawer's "Only &lt;workflow&gt;" checkbox. Errors if the env var is unset.                                          |
+| `--kind <kind...>`                  | `filters.eventKinds`                  | Validated against `HISTORY_EVENT_KINDS` values (`DashboardConstants.ts`). Invalid value → exit 2 listing the valid set.                                                                                                                                          |
+| `--harness <id...>`                 | `filters.harnesses`                   | Validated against `HARNESS_IDS`.                                                                                                                                                                                                                                 |
+| `--state <state...>`                | `filters.executionStates`             | Run outcome, per `EXECUTION_STATES`.                                                                                                                                                                                                                             |
+| `--path <substring>`                | `filters.pathContains`                | Same `\\`→`/` + lowercase normalization `HistorySearchFilters.ts` already applies.                                                                                                                                                                               |
+| `--since <when>` / `--until <when>` | `filters.since` / `.until` (epoch ms) | Accept ISO-8601 and a short relative form (`7d`, `24h`, `30m`). Resolve through one shared parser and reuse it if `history runs` later grows the same flags.                                                                                                     |
+| `--limit <n>`                       | `HistorySearchQuery.limit`            | Default **20** (agents want a probe, not a page); hard-capped at 100, mirroring the router's `Math.min(message.limit, 100)`. Now also a cost lever: the scan stops as soon as the page is filled, so a smaller limit is genuinely cheaper, not just less output. |
+| `--offset <n>`                      | `HistorySearchQuery.offset`           | Random-access, same as the drawer's virtualized paging.                                                                                                                                                                                                          |
+| `--snippet <chars>`                 | see below                             | Context width around the match. Default 100.                                                                                                                                                                                                                     |
+| `--json`                            | output format                         | One versioned JSON result line.                                                                                                                                                                                                                                  |
+| `--exact-count`                     | forces a complete scan                | Off by default. Without it the scan stops as soon as `--limit` is satisfied and `countState` comes back `"atLeast"` — see "Counting is now opt-in" below.                                                                                                        |
+| `--no-rebuild`                      | index policy                          | See "Rebuild policy".                                                                                                                                                                                                                                            |
+| `--no-color`                        | output format                         | Matches other commands.                                                                                                                                                                                                                                          |
 
-`--snippet` requires a small core change: `projectHistorySearchResult`'s window is hardcoded at 40
-characters before / 60 after, with a 100-character head fallback
-(`HistorySearchResultUtils.ts:58-70`). Parameterize it with those values as defaults so the drawer
+`--snippet` requires a small core change: `projectHistorySearchResult`'s window is still hardcoded
+at 40 characters before / 60 after, with a 100-character head fallback
+(`HistorySearchResultUtils.ts`). Parameterize it with those values as defaults so the drawer
 is unchanged. This matters more for agents than for humans: 100 characters is often too little
 context to decide whether a hit is the one you wanted, and the alternative — a second `history show`
 call per candidate — is far more expensive than widening the snippet.
@@ -135,7 +141,7 @@ streams. Same CLI, two contracts, one reason.
   "offset": 0,
   "limit": 20,
   "totalCount": 41,
-  "totalCountExact": true,
+  "countState": "atLeast",
   "hasMore": true,
   "indexState": "ready",
   "results": [/* HistorySearchResult[], the existing contract, unchanged */]
@@ -149,62 +155,91 @@ serialize it as-is rather than inventing a CLI-specific shape. Run it through
 rest by `TimelineRecorder`, and redacting again at the boundary is the established belt-and-braces
 convention, not a statement that the first pass is untrusted.
 
-`totalCountExact` is new and is explained in the next section.
+`countState` was a CLI-only invention in the original draft (`totalCountExact`). It is now part of
+the core contract — `HistorySearchResponse.countState`, backed by `HISTORY_SEARCH_COUNT_STATES` in
+`DashboardConstants.ts` — so emit it verbatim rather than deriving a second spelling of the same
+fact. Its meaning has also widened, which is the subject of "Counting is now opt-in" below.
 
-## The hard part: a resident index in a one-shot process
+## What the search engine looks like now
 
-This is the design problem the command actually has, and it is not the CLI plumbing.
+**This section replaces the original "The hard part: a resident index in a one-shot process".**
+That section proposed building a streaming query path so a CLI invocation would not pay a 31-second,
+1.8 GB index load on every run. It was right, and it has been built — by
+`dev/implemented/HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md`, exactly as this plan asked (build it once,
+in core, so the dashboard and the CLI cannot drift into two matchers). Nothing in that area is left
+to design; what remains is to know the shape well enough not to misuse it.
 
-`HistorySearchIndexService` answers a query by holding **every indexed document in process memory**
-and scanning them (`collectMatches`, `HistorySearchIndexService.ts:166`). That is a reasonable
-design for the extension host, which pays the load once and amortizes it over a session. It is the
-wrong shape for a process that starts, answers one question, and exits. The measurements in
-`HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md` (1181 lineages / 1430 runs / 983k documents / 976 MB of
-shards) are the numbers a CLI invocation would pay **every time**:
+### 1. The streaming reader exists — use it, do not rebuild it
 
-|                                     |           |
-| ----------------------------------- | --------- |
-| Cold `loadIfPossible()`             | 31,257 ms |
-| Warm `loadIfPossible()`             | 5,544 ms  |
-| Resident set with index loaded      | 1,850 MB  |
-| Freshness check (`isManifestFresh`) | ~350 ms   |
+`src/core/orchestration/HistorySearchShardScanner.ts` is the primitive:
+`listDocumentShardEntries` resolves the shard visit order, `streamHistorySearchDocuments` streams and
+parses only candidate documents, and `createHistorySearchLinePrefilter` is the raw-line candidate
+check. `HistorySearchIndexService` retains no documents — `loadIfPossible` reads the manifest and
+nothing else. The CLI inherits all of this for free by calling `HistorySearchService.search`; there
+is no CLI-specific reader to write.
 
-A 31-second, 1.8 GB `ctrlyoke history search` is not a tool an agent will use twice. Two things
-follow.
+The prefilter has one coupling worth knowing before writing a second caller: it matches against a
+serialized `textLower` key that only exists from index schema 4.2.0, so
+`streamHistorySearchDocuments` takes `hasPersistedLowercaseKey` and must be told the truth about
+whether a manifest at the current schema was actually read. Passing `true` optimistically silently
+drops every document whose stored text is not already lowercase. Going through
+`HistorySearchService.search` avoids the question entirely; reaching past it does not.
 
-### 1. Add a streaming query path, and share it with the residency plan
+### 2. Counting is now opt-in, and this is the real new design question
 
-Rather than `loadIfPossible()` → scan-in-memory, the CLI should stream the shard JSONL files and
-retain only **projected results**, never the source documents:
+`dev/implemented/HISTORY_SEARCH_RESPONSIVE_QUERY_PLAN.md` made the scan recency-ordered and
+early-terminating: it visits shards newest-first and **stops as soon as `offset + limit` results
+have been collected**. `HistorySearchResponse.countState` reports which kind of total came back —
+`"exact"` when the scan reached the true end of the index, `"atLeast"` when it stopped early.
 
-- Shards are already newline-delimited and already read with `streamFileLines`
-  (`HistorySearchIndexService.ts:618-625`), so the reading half exists.
-- For each line: parse, `matchesFilters`, substring-match, and if it hits, project it
-  (`projectHistorySearchResult`) and drop the document. A `HistorySearchResult` is a bounded
-  snippet plus identity fields — hundreds of bytes, against up to `MAX_INDEXED_TEXT_LENGTH` (2000
-  chars) of text per document. Memory becomes **O(matches)** instead of O(index).
-- Sort and dedupe the projected results exactly as `collectMatches` does today (`compareDocuments`
-  then `getHistorySearchDocumentDedupeKey`), then slice the window. The dedupe key is derived from
-  the _projected_ result, which is why the whole match set still has to be walked — that constraint
-  is unchanged and is already documented in `orchestration.instructions.md`.
-- Cap retention at `MAX_SNAPSHOT_RESULTS` (50,000, already the service's own bound). Past the cap,
-  report `totalCountExact: false` and stop counting rather than silently lying — hence the field in
-  the JSON contract above.
+For the drawer this is invisible: the user scrolls, the count climbs, and it becomes exact if they
+reach the end. **A one-shot CLI has no scrolling**, so with the proposed `--limit 20` default the
+answer would essentially always be `"atLeast": 20` — a number that tells an agent nothing. And
+"have we hit this error before, and how often?" is one of the two questions this command exists to
+answer.
 
-**This is the same primitive `HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md` needs for the extension host.**
-Build it once, in core (`HistorySearchIndexService`, or a `HistorySearchIndexReader` it delegates to),
-and let both callers use it. Two streaming readers that disagree about dedupe ordering would be a
-genuinely nasty bug: the dashboard and the CLI would return different result sets for the same
-query. Whichever plan lands first owns the implementation; the other adopts it.
+So the count is now a deliberate choice rather than a free by-product:
 
-If measurement later shows O(matches) is still too much for a degenerate query, the next step is a
-two-pass reader (pass 1 retains only `{dedupeKey, sortKey, shard, line}` tuples to get an exact
-count and the window's identity; pass 2 re-streams only the shards holding the window). Do not build
-that up front — measure first, the way the residency plan's numbers were produced.
+- **Default to the fast, early-terminated scan**, and print the total with a `+` (text) and
+  `countState: "atLeast"` (JSON). This is the cheap probe agents want, and on a recent term it is
+  milliseconds rather than the ~10 s of a full pass.
+- **`--exact-count` forces a complete scan.** Implement it by asking for a target the index cannot
+  satisfy early rather than by adding a second code path — the scan already reports `"exact"`
+  whenever it reaches the end.
+- **Say which one you got, in both output modes.** An agent that reads `20` and reports "20
+  occurrences" when the truth is 1,827 is worse than one that reports nothing.
+- **A zero-result query is always exact and always slow.** It cannot stop early, so it reads the
+  whole index (~12 s on the measured workspace). That is the honest cost of a trustworthy "no",
+  and it is worth stating in `--help`: the fast path is finding things, not failing to.
 
-### 2. Decide the rebuild policy explicitly, and never block silently
+### 3. Turn the document cache off for a one-shot process
 
-`search()` calls `ensureReady()` (`HistorySearchIndexService.ts:254`), which triggers a
+`HistorySearchIndexService` holds a `HistorySearchDocumentCache` sized from
+`ConfigurationUtils.getHistorySearchCacheBudgetBytes()` (the `runs.historySearchCacheMb` setting,
+default 320 MB). It exists to make the _second_ query in a session fast. A CLI process answers one
+query and exits, so every byte it populates is pure waste — and it is worse than neutral: the
+responsive-query plan measured that a shard the cache accepts is read with a **full, unfiltered
+parse** so every document can be retained, which is more work than the prefiltered streaming path it
+replaces. One query with a cold 320 MB budget therefore pays extra parse cost for a cache nobody
+will read.
+
+The CLI should run with the budget at 0. `HistorySearchIndexService.search` re-reads the setting on
+every call, so this needs a real seam — either the options argument proposed below or a CLI-scoped
+config override. Do not leave it at the default and hope; measure the difference, because the same
+plan records that this knob "is not a straightforward speed lever in either direction."
+
+### 4. Per-query snapshots and scan cursors are session state, and a CLI has no session
+
+`matchSnapshots` (the per-listing result cache and its resumption cursor) and the LRU that bounds it
+are what make the drawer's paging cheap across requests. In a one-shot process they are populated
+once and discarded. Nothing breaks — but do not reach for `--offset` expecting it to be cheap the
+way it is in the drawer: from a cold process, `--offset 1000` re-derives the first 1,000 results
+before slicing, because there is no retained prefix to resume from. That is a correctness-neutral
+cost worth one sentence in `--help`.
+
+## Rebuild policy: decide it explicitly, and never block silently
+
+`search()` calls `ensureReady()` (`HistorySearchIndexService.ts`), which triggers a
 **synchronous full rebuild** when the on-disk index is missing or stale. A CLI user is more likely
 to hit that than a dashboard user — the index is refreshed by running workflows and by the extension
 host, so a project whose last activity was days ago, or whose runs were all produced by `ctrlyoke
@@ -224,41 +259,57 @@ Proposed policy:
 - **Always surface `indexState`** in both the text footer and the JSON, so "no results" from a
   `fallback`/`building` index is distinguishable from "no results" from a ready one.
 - **Do not silently take the legacy disk scan.** `HistorySearchService.search`'s `catch` falls back
-  to `searchLegacy` (`HistorySearchService.ts:82-116`), which scans only as far as `offset + limit`
-  and reports `totalCount = scanned.length` — a number that is _not_ the match count. That is
-  acceptable for a drawer that keeps paging; it is actively misleading as a CLI/JSON field. The CLI
-  should either suppress `totalCount` (emit `totalCountExact: false`) or decline the fallback, and
-  must say `indexState: "fallback"` loudly either way. The realistic trigger is not exotic: a
-  concurrent VS Code window holding the index manifest lock past
-  `REBUILD_LOCK_TIMEOUT_MS` (60 s, `historySearchRebuildWorker.ts:57`) throws straight into this path.
+  to `searchLegacy`, which scans only as far as `offset + limit` and reports
+  `totalCount = scanned.length` — a number that is _not_ the match count. The original draft asked
+  the CLI to invent a disclosure for this; it no longer has to, because that path now already
+  returns `countState: "atLeast"` and `indexState: "fallback"`. Report both verbatim, and consider
+  `--no-fallback` for an agent that would rather get an error than a number it has to interpret.
+  The realistic trigger is not exotic: a concurrent VS Code window holding the index manifest lock
+  past `REBUILD_LOCK_TIMEOUT_MS` (60 s, `historySearchRebuildWorker.ts`) throws straight into this
+  path.
+- **Cancellation is not a failure, if it is ever wired up.** `HistorySearchService.search` takes an
+  `AbortSignal` and throws `HistorySearchCancelledError` when it fires. The CLI passes no signal
+  today, so this cannot happen — but if Ctrl+C handling is ever added, that error must exit cleanly
+  rather than falling into the disk-scan fallback, which would spend the exact full-history read
+  the cancellation was asking to avoid.
 
 Keep all of this behind **one** entry point. Extend `HistorySearchService.search` with an options
-argument (`{ allowRebuild, allowLegacyFallback, snippetChars }`) rather than forking a second search
-service for the CLI — the drawer and the CLI must not drift into two matchers.
+argument (`{ allowRebuild, allowLegacyFallback, snippetChars, documentCacheBytes }`) rather than
+forking a second search service for the CLI — the drawer and the CLI must not drift into two
+matchers. The options argument has become more clearly the right shape since this was written:
+`search` has meanwhile grown `signal` and `onPartialResults` as _positional_ parameters, so it is
+now five positional arguments deep and the next one should not be a sixth.
 
-### 3. Rebuilding from the CLI writes the shared index
+### Rebuilding from the CLI writes the shared index
 
 Worth knowing rather than worth preventing: a CLI rebuild writes `.search-index/` under the same
-`projectStateRoot` the extension host uses (`getIndexDir`, `HistorySearchIndexService.ts:666`), so
+`projectStateRoot` the extension host uses (`getIndexDir`, `HistorySearchIndexService.ts`), so
 the work benefits a later dashboard search too. The worker resolves fine from the CLI bundle —
 `getWorkerScriptPath`'s second candidate is `path.join(__dirname, "historySearchRebuildWorker.js")`,
-and esbuild emits `out/historySearchRebuildWorker.js` next to `out/cli.js` (`esbuild.js:399-414`),
-which is also what `.vscodeignore:32` ships. No new build wiring is needed; a test asserting the CLI
+and esbuild emits `out/historySearchRebuildWorker.js` next to `out/cli.js` (`esbuild.js`),
+which is also what `.vscodeignore` ships. No new build wiring is needed; a test asserting the CLI
 can locate the worker is cheap insurance against that layout changing.
 
 ## Honesty about what search cannot find
 
-Two known behaviours will bite agents harder than they bite humans, because an agent treats "no
-results" as an answer and moves on. Both must appear in the command's own output, not only in docs:
+Three known behaviours will bite agents harder than they bite humans, because an agent treats "no
+results" as an answer and moves on. All three must appear in the command's own output, not only in
+docs:
 
 1. **A result is one matching event/field, not one occurrence.** A response mentioning a term 40
    times is one result. Already documented in `orchestration.instructions.md`; an agent comparing
-   `totalCount` against a `grep -c` will otherwise conclude something is broken.
+   `totalCount` against a `grep -c` will otherwise conclude something is broken. The drawer now
+   states this in prose above its result list ("Each result is one matching event, not one
+   occurrence…"); the CLI needs its own wording because it has no such sticky header, and its users
+   are the ones most likely to do the arithmetic.
 2. **Indexed text is truncated at `MAX_INDEXED_TEXT_LENGTH` (2000 chars,
-   `historySearchRebuildWorker.ts:42`) before matching**, so a term that appears only later in a
+   `historySearchRebuildWorker.ts`) before matching**, so a term that appears only later in a
    long output is invisible — on one real workspace this silently dropped >100 otherwise-matching
    documents in a single run (`HISTORY_SEARCH_TRUNCATED_TEXT_MATCH_PLAN.md`). This cap is a
    deliberate OOM defence, not a bug to patch here.
+3. **A total is a lower bound unless `countState` says otherwise.** New since this plan was
+   written, and the most dangerous of the three for an agent, because unlike the other two it makes
+   a _number_ wrong rather than a result absent. See "Counting is now opt-in" above.
 
 So: **never print a bare "No results."** Print the footer shown in the example above, pointing at
 `history show` (or `read_output`, in-workflow) for an exhaustive read of a known run. This is the
@@ -268,7 +319,8 @@ cheapest possible mitigation of a gap this command would otherwise inherit silen
 
 Handler in `src/cli/HistoryInspectionCommands.ts` — the same new file the inspection plan proposes,
 since the two share the bootstrap — following the existing `(options, io) => Promise<void>` shape of
-`pruneHistoryCommand`/`relinkHistoryCommand`, with no `confirmMutation` (nothing mutates).
+`pruneHistoryCommand`/`relinkHistoryCommand` in `src/cli/HistoryCommands.ts`, with no
+`confirmMutation` (nothing mutates).
 
 Registration in `src/cli/HistoryCommandDefinitions.ts` alongside `prune`/`relink`:
 
@@ -288,23 +340,24 @@ history
   .option("--limit <n>", "Maximum results to print (default 20, max 100)")
   .option("--offset <n>", "Absolute index of the first result")
   .option("--snippet <chars>", "Context characters around each match (default 100)")
+  .option("--exact-count", "Scan the whole history so the reported total is exact, not a lower bound")
   .option("--no-rebuild", "Search the existing index without rebuilding a stale one")
   .option("--json", "Emit one versioned JSON result line")
   .option("--no-color")
   .action(...)
 ```
 
-Bootstrap is the same sequence `prepareStepCommand` already performs (`cli.ts:1213-1238`) —
+Bootstrap is the same sequence `prepareStepCommand` already performs (`cli.ts`) —
 `Log.initializeCli`, config backends, `initializeRunHistoryLocation`, `ProjectStateRegistry`
 initialize — and that sequence is now used by three command families, so lift it into one shared
 helper rather than pasting a third copy. `initializeRunHistoryLocation` is non-optional here:
 `getIndexDir` resolves through `getFrozenRunHistoryLocation()`, so skipping it points the search at
 the wrong state root.
 
-Reused building blocks (no new core primitives beyond the streaming reader):
+Reused building blocks — **no new core primitives at all now that the streaming reader has landed**:
 
 - `HistorySearchService.search` — the single search entry point, extended with the options argument
-- the streaming index reader — shared with `HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md`
+- `HistorySearchShardScanner` — the streaming reader, reached through the service, not directly
 - `HISTORY_EVENT_KINDS` / `HARNESS_IDS` / `EXECUTION_STATES` — flag validation, no new string tables
 - `WorkflowPaths.parseWorkingFileAddressFromPath` — `--this-workflow`
 - `secretRedactionService.redactValue` — the `--json` boundary
@@ -322,10 +375,13 @@ Scripts that need a match/no-match signal read `totalCount` from `--json`.
 ### Tests
 
 `src/test/**` (per the routing table): flag parsing and validation, `--this-workflow` derivation,
-the text/JSON renderers, the `indexState`/`totalCountExact` disclosure paths, and — the one worth
-the most — a streaming-reader test asserting it returns the _same ordered, deduped_ results as the
-current in-memory `collectMatches` for a fixture index. That test is what keeps the dashboard and
-the CLI from drifting.
+the text/JSON renderers, and the `indexState`/`countState` disclosure paths. The
+streaming-reader-vs-`collectMatches` equivalence test this plan used to call for is no longer
+needed — there is only one reader now, and `HistorySearchIndexService.test.ts` already covers its
+ordering and dedupe. The test worth the most here instead is **`--exact-count` against a fixture
+index large enough to early-terminate without it**, asserting the same command returns `"atLeast"`
+with a short total and `"exact"` with the real one. That is the behaviour an agent will build on
+and the one nothing else exercises.
 
 ### Docs
 
@@ -339,8 +395,10 @@ natural order is: `history list`/`runs`/`show` first, then `search`. If search s
 selector lines still work for `rerun`/`append`/`step edit`, which already take `--workflow`/`--run`
 today — so shipping first is not blocked, only slightly less useful.
 
-The streaming reader is the one genuine cross-plan dependency. It can land here or in
-`HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md`; it must not land in both.
+**The streaming reader is no longer a cross-plan dependency — it landed with
+`HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md`.** This command has no blocking core work left; what it
+needs from core is an options seam on `HistorySearchService.search` (rebuild policy, fallback
+policy, snippet width, document-cache budget), which is small and local.
 
 ## Risks / open questions
 
@@ -358,8 +416,16 @@ The streaming reader is the one genuine cross-plan dependency. It can land here 
   Deliberately out of scope for a first pass; if it is added later it belongs in core behind an
   explicit `--regex` flag with a match timeout, not as a CLI-only variant.
 - **`--limit` default of 20 vs the drawer's 50.** Chosen for the probe-then-drill workflow an agent
-  actually runs, and because every result costs context. Revisit if it turns out agents mostly want
-  a wide first page.
+  actually runs, and because every result costs context. It now also decides how much of the index
+  gets read, since the scan stops at `offset + limit` — which makes 20 a better default than it
+  was, and makes `--exact-count` the escape hatch rather than a larger `--limit`. Revisit if it
+  turns out agents mostly want a wide first page.
+- **Whether `--exact-count` should be the default after all.** The argument for: an agent asking
+  "how many times have we hit this?" gets a useless answer without it, and unlike a human it will
+  not notice the `+`. The argument against: ~10 s per invocation on a large workspace, paid by every
+  caller including the ones that only wanted the top 3 hits. Left off by default here because the
+  disclosure is cheap and the latency is not, but this is a judgement call worth re-making once
+  there is a real agent using the command.
 - **Relative time parsing (`7d`) is new vocabulary for the CLI.** Keep the parser small and shared;
   if `history runs` later wants `--since`, it must not grow a second dialect.
 - **Where the shared bootstrap helper lives.** `prepareStepCommand` is currently private to
