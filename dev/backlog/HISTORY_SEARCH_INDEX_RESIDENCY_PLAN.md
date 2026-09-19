@@ -340,13 +340,19 @@ step.
       results without a multi-second index load — measured, not asserted.
 - [ ] Extension-host working set after several searches on that workspace stays
       within a few hundred MB of its pre-search baseline.
-- [ ] Case-insensitive substring matching is unchanged for queries containing
+- [x] Case-insensitive substring matching is unchanged for queries containing
       `"`, `\`, and newlines, with tests for each.
-- [ ] Offset paging and the per-query snapshot keep working: a jump to the last
+- [x] Offset paging and the per-query snapshot keep working: a jump to the last
       page of a several-thousand-result search still costs one request.
-- [ ] `search()`'s rebuild-progress reporting to the UI still fires when a
+- [x] `search()`'s rebuild-progress reporting to the UI still fires when a
       rebuild is needed.
-- [ ] Results are identical to the resident implementation over the same index,
+- [x] Results are identical to the resident implementation over the same index,
       including ordering within a run (`timestampMs`/`sequence` ties).
-- [ ] Correct results after an incremental rebuild are still covered, even
+- [x] Correct results after an incremental rebuild are still covered, even
       though the shard-splice mechanism that made them fast is deleted.
+
+The closeout step still needs a measured fresh-extension-host search and
+working-set comparison on the 1400+ run workspace. Those measurements are
+deliberately left unchecked above; the implementation and automated behavior
+criteria are complete, but the real-workspace performance claims should not be
+inferred from unit fixtures.

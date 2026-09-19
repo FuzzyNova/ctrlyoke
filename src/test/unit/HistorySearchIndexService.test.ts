@@ -137,9 +137,13 @@ suite("HistorySearchIndexService", () => {
     )
       .trim()
       .split("\n")
-      .map((line) => JSON.parse(line) as { text: string });
+      .map((line) => JSON.parse(line) as { text: string; textLower: string });
     assert.strictEqual(documents.length, 1);
     assert.strictEqual(documents[0]?.text.length, MAX_INDEXED_TEXT_LENGTH);
+    assert.strictEqual(
+      documents[0]?.textLower,
+      documents[0]?.text.toLowerCase()
+    );
   });
 
   test("stores one document shard per run and searches across shards", async () => {
@@ -312,6 +316,24 @@ suite("HistorySearchIndexService", () => {
         .slice(20)
         .map((result: { matchSnippet: string }) => result.matchSnippet)
     );
+  });
+
+  test("preserves timestamp and sequence ordering within a run", async () => {
+    await createRun("same-run-order-2026-06-09T22-45-00", 1, 4500, [
+      createStatusDraft(4510, "same-run-order-term older"),
+      createStatusDraft(4520, "same-run-order-term newer first"),
+      createStatusDraft(4520, "same-run-order-term newer second"),
+    ]);
+
+    const response = await new HistorySearchIndexService().search(
+      { query: "same-run-order-term", limit: 10 },
+      workspaceRoot
+    );
+
+    assert.strictEqual(response.totalCount, 3);
+    assert.match(response.results[0]?.matchSnippet ?? "", /newer second/);
+    assert.match(response.results[1]?.matchSnippet ?? "", /newer first/);
+    assert.match(response.results[2]?.matchSnippet ?? "", /older/);
   });
 
   test("matches path filters across mixed separators and casing", async () => {
@@ -710,7 +732,6 @@ suite("HistorySearchIndexService", () => {
       await runHistorySearchRebuild({
         workspaceFolderPath: workspaceRoot,
         runHistoryLocation: getFrozenRunHistoryLocation(),
-        retainDocuments: false,
       });
     } finally {
       Log.info = originalInfo;
@@ -798,7 +819,7 @@ suite("HistorySearchIndexService", () => {
     assert.strictEqual(removedResponse.totalCount, 0);
   });
 
-  test("splices an incremental rebuild into retained documents instead of reloading every shard", async () => {
+  test("returns complete results after an incremental rebuild", async () => {
     await createRun("splice-existing-2026-06-09T23-30-00", 1, 20000, [
       createStatusDraft(20100, "splice-existing-term"),
     ]);
@@ -813,43 +834,20 @@ suite("HistorySearchIndexService", () => {
       createStatusDraft(21100, "splice-added-term"),
     ]);
 
-    const messages: string[] = [];
-    const originalDebug = Log.debug;
-    Log.debug = (message: string) => {
-      messages.push(message);
-    };
-    let addedResponse;
-    let existingResponse;
-    try {
-      addedResponse = await index.search(
-        { query: "splice-added-term", limit: 10 },
-        workspaceRoot
-      );
-      existingResponse = await index.search(
-        { query: "splice-existing-term", limit: 10 },
-        workspaceRoot
-      );
-    } finally {
-      Log.debug = originalDebug;
-    }
+    const addedResponse = await index.search(
+      { query: "splice-added-term", limit: 10 },
+      workspaceRoot
+    );
+    const existingResponse = await index.search(
+      { query: "splice-existing-term", limit: 10 },
+      workspaceRoot
+    );
 
-    // The new run must be searchable, the untouched run must survive the
-    // splice, and neither may cost a full re-read of the index from disk.
     assert.strictEqual(addedResponse.totalCount, 1);
     assert.strictEqual(existingResponse.totalCount, 1);
-    assert.ok(
-      messages.some((message) =>
-        message.includes("spliced incremental index update")
-      ),
-      messages.join("\n")
-    );
-    assert.ok(
-      !messages.some((message) => message.includes("loaded index from disk")),
-      messages.join("\n")
-    );
   });
 
-  test("skips a redundant rebuild after waiting for a sibling and loads retained documents", async () => {
+  test("skips a redundant rebuild after waiting for a sibling and returns results", async () => {
     const workflowId = "fresh-index-race-2026-06-09T22-40-00";
     await createRun(workflowId, 1, 5000, [
       createStatusDraft(5100, "fresh-index-race-term"),

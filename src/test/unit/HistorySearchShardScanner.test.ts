@@ -173,6 +173,7 @@ suite("HistorySearchShardScanner", () => {
       eventKind: HISTORY_EVENT_KINDS.STATUS,
       matchField: HISTORY_MATCH_FIELDS.OUTPUT,
       text,
+      textLower: text.toLowerCase(),
     };
   }
 });

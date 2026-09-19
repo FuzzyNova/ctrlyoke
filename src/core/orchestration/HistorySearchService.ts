@@ -507,6 +507,7 @@ export class HistorySearchService {
       eventKind: candidate.eventKind,
       matchField: candidate.matchField,
       text: candidate.text,
+      textLower: candidate.text.toLowerCase(),
       filePath: candidate.filePath,
       harness: outputMetadata?.harness,
       model: outputMetadata?.model,

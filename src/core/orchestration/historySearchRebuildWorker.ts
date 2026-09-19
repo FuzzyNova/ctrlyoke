@@ -34,7 +34,7 @@ import {
   type MatchCandidate,
 } from "./HistoryCandidateExtractor";
 
-export const INDEX_SCHEMA_VERSION = "4.1.0" as const;
+export const INDEX_SCHEMA_VERSION = "4.2.0" as const;
 export const MANIFEST_FILE_NAME = "manifest.json";
 export const DOCUMENTS_DIR_NAME = "documents";
 export const DOCUMENTS_SHARD_EXTENSION = ".jsonl";
@@ -116,22 +116,10 @@ export interface HistorySearchRebuildProgressMessage {
   totalRuns: number;
 }
 
-/**
- * Names the shard files an incremental pass rewrote or deleted, so a host
- * holding the index in memory can splice just those runs instead of re-reading
- * every shard. Absent when the pass took the full-rebuild path (or skipped),
- * because then no such narrow delta exists.
- */
-export interface HistorySearchIncrementalShardDelta {
-  rewrittenShardNames: string[];
-  removedShardNames: string[];
-}
-
 export interface HistorySearchRebuildSuccessMessage {
   type: typeof HISTORY_SEARCH_REBUILD_MESSAGE_TYPES.SUCCESS;
   skipped: boolean;
   freshnessReason?: string;
-  incrementalDelta?: HistorySearchIncrementalShardDelta;
 }
 
 export interface HistorySearchRebuildErrorMessage {
@@ -153,7 +141,6 @@ export interface HistorySearchFreshnessResult {
 export interface HistorySearchRebuildWorkerData {
   workspaceFolderPath: string;
   runHistoryLocation: RunHistoryLocation;
-  retainDocuments: boolean;
   logFilePath?: string;
 }
 
@@ -331,7 +318,6 @@ export async function runHistorySearchRebuild(
   );
   let freshnessReason: string | undefined;
   let skipped = false;
-  let incrementalDelta: HistorySearchIncrementalShardDelta | undefined;
   await withFileLock(
     lockTargetPath,
     async () => {
@@ -419,7 +405,7 @@ export async function runHistorySearchRebuild(
           Log.info(
             `[HistorySearchIndexService] rebuild path: incremental newRuns=${diff.newRuns.length} changedRuns=${diff.changedRuns.length} removedRuns=${diff.removedManifestPaths.length} unchangedRuns=${diff.unchangedManifestPaths.length}`
           );
-          incrementalDelta = await runIncrementalHistorySearchRebuild(
+          await runIncrementalHistorySearchRebuild(
             data,
             indexDir,
             manifestPath,
@@ -445,11 +431,10 @@ export async function runHistorySearchRebuild(
       const listSourcesStart = Date.now();
       const runSources = await listRunSources(data.workspaceFolderPath);
       Log.info(
-        `[HistorySearchIndexService] rebuild starting: runs=${runSources.length} retainDocuments=${data.retainDocuments} listSourcesMs=${Date.now() - listSourcesStart}`
+        `[HistorySearchIndexService] rebuild starting: runs=${runSources.length} listSourcesMs=${Date.now() - listSourcesStart}`
       );
       logMemoryUsage("HistorySearchIndexService rebuild starting", {
         runs: runSources.length,
-        retainDocuments: String(data.retainDocuments),
       });
 
       const documentsDir = path.join(rebuildDir, DOCUMENTS_DIR_NAME);
@@ -537,7 +522,6 @@ export async function runHistorySearchRebuild(
     type: HISTORY_SEARCH_REBUILD_MESSAGE_TYPES.SUCCESS,
     skipped,
     freshnessReason,
-    incrementalDelta,
   };
 }
 
@@ -549,13 +533,11 @@ async function runIncrementalHistorySearchRebuild(
   diff: HistorySearchIndexDiff,
   builtAt: number,
   onProgress?: HistorySearchRebuildProgressCallback
-): Promise<HistorySearchIncrementalShardDelta> {
+): Promise<void> {
   const touchedRuns = diff.newRuns.length + diff.changedRuns.length;
   const indexedRuns = { ...onDiskManifest.indexedRuns };
   const metadataCache = new Map<WorkflowKey, WorkflowMetadata>();
   const rebuildStart = Date.now();
-  const rewrittenShardNames: string[] = [];
-  const removedShardNames: string[] = [];
   let processedRuns = 0;
   let documentCount = 0;
 
@@ -567,7 +549,6 @@ async function runIncrementalHistorySearchRebuild(
     const shardPath = getDocumentsShardPath(indexDir, source.manifestPath);
     if (!runManifest) {
       await fs.promises.rm(shardPath, { force: true });
-      removedShardNames.push(path.basename(shardPath));
       delete indexedRuns[manifestKey];
       processedRuns += 1;
       continue;
@@ -590,7 +571,6 @@ async function runIncrementalHistorySearchRebuild(
       source.runRef
     );
     await writeDocumentsShardAtomically(shardPath, documents);
-    rewrittenShardNames.push(path.basename(shardPath));
     documentCount += documents.length;
     indexedRuns[manifestKey] = await buildIndexedRunEntry(source, runManifest);
     processedRuns += 1;
@@ -609,7 +589,6 @@ async function runIncrementalHistorySearchRebuild(
       removedManifestPath
     );
     await fs.promises.rm(removedShardPath, { force: true });
-    removedShardNames.push(path.basename(removedShardPath));
     delete indexedRuns[removedManifestPath];
   }
 
@@ -627,7 +606,6 @@ async function runIncrementalHistorySearchRebuild(
   Log.info(
     `[HistorySearchIndexService] incremental rebuild complete: newRuns=${diff.newRuns.length} changedRuns=${diff.changedRuns.length} removedRuns=${diff.removedManifestPaths.length} unchangedRuns=${diff.unchangedManifestPaths.length} processedRuns=${processedRuns}/${touchedRuns} documents=${documentCount} totalMs=${Date.now() - rebuildStart}`
   );
-  return { rewrittenShardNames, removedShardNames };
 }
 
 export async function listRunSources(
@@ -787,7 +765,11 @@ async function writeDocumentsShard(
   const stream = fs.createWriteStream(shardPath, { encoding: "utf8" });
   try {
     for (const document of documents) {
-      if (!stream.write(JSON.stringify(document) + "\n")) {
+      const serializedDocument = {
+        ...document,
+        textLower: document.text.toLowerCase(),
+      } satisfies HistorySearchDocument;
+      if (!stream.write(JSON.stringify(serializedDocument) + "\n")) {
         await once(stream, "drain");
       }
     }
@@ -932,6 +914,7 @@ async function buildRunDocuments(
           eventKind: candidate.eventKind,
           matchField: candidate.matchField,
           text: candidate.text,
+          textLower: candidate.text.toLowerCase(),
           filePath: candidate.filePath,
           harness: outputMetadata?.harness,
           model: outputMetadata?.model,

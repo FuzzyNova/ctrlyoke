@@ -3,7 +3,6 @@ import * as fs from "fs";
 import * as path from "path";
 import { Worker } from "worker_threads";
 import {
-  type HistorySearchDocument,
   type HistorySearchFilters,
   type HistorySearchQuery,
   type HistorySearchResponse,
@@ -14,7 +13,6 @@ import { getErrorMessage } from "../../utils/ErrorUtils";
 import { Log } from "../../utils/Log";
 import { projectStateRoot } from "../../utils/ProjectStatePaths";
 import { getFrozenRunHistoryLocation } from "../../utils/RunHistoryStoragePolicy";
-import { streamFileLines } from "../../utils/TextLines";
 import { HISTORY_SEARCH_REBUILD_MESSAGE_TYPES } from "../../types/DashboardConstants";
 import {
   matchesFilters,
@@ -27,15 +25,14 @@ import {
 import {
   checkHistorySearchIndexFreshness,
   DOCUMENTS_DIR_NAME,
-  DOCUMENTS_SHARD_EXTENSION,
   INDEX_SCHEMA_VERSION,
   MANIFEST_FILE_NAME,
   REBUILD_WORKER_MAX_OLD_GENERATION_MB,
-  type HistorySearchIncrementalShardDelta,
   type HistorySearchIndexManifest,
   type HistorySearchRebuildWorkerData,
   type HistorySearchRebuildWorkerMessage,
 } from "./historySearchRebuildWorker";
+import { streamHistorySearchDocuments } from "./HistorySearchShardScanner";
 export { MAX_INDEXED_TEXT_LENGTH } from "./historySearchRebuildWorker";
 const MIN_QUERY_LENGTH = 2;
 const DEFAULT_LIMIT = 50;
@@ -58,6 +55,13 @@ interface HistorySearchMatchSnapshot {
   results: HistorySearchResult[];
 }
 
+interface ProjectedHistorySearchMatch {
+  result: HistorySearchResult;
+  dedupeKey: string;
+  timestampMs: number;
+  sequence: number;
+}
+
 /**
  * Reports progress while `search()` is blocked on a synchronous, full index
  * rebuild (no usable cached index) so a caller can surface something better
@@ -72,14 +76,6 @@ export type IndexRebuildProgressCallback = (
 export class HistorySearchIndexService {
   private loadedWorkspacePath?: string;
   private loadedManifest?: HistorySearchIndexManifest;
-  /**
-   * Loaded documents keyed by the shard file they came from. Sharding is
-   * per-run, so an incremental rebuild can replace just the runs it rewrote
-   * instead of forcing a re-read of the whole index (see
-   * `applyIncrementalShardDelta`).
-   */
-  private shardDocuments = new Map<string, HistorySearchDocument[]>();
-  private documentCount = 0;
   private matchSnapshot?: HistorySearchMatchSnapshot;
   private rebuildPromise?: Promise<void>;
   private rebuildQueued = false;
@@ -137,7 +133,11 @@ export class HistorySearchIndexService {
     const readyDurationMs = Date.now() - searchStart;
 
     const matchStart = Date.now();
-    const results = this.collectMatches(normalizedQuery, request.filters);
+    const { results, documentsScanned } = await this.collectMatches(
+      workspaceFolderPath,
+      normalizedQuery,
+      request.filters
+    );
     this.matchSnapshot =
       results.length <= MAX_SNAPSHOT_RESULTS
         ? { key: snapshotKey, results }
@@ -149,7 +149,7 @@ export class HistorySearchIndexService {
     }
 
     Log.info(
-      `[HistorySearchIndexService] search complete: query="${normalizedQuery}" documentsScanned=${this.documentCount} matches=${results.length} readyMs=${readyDurationMs} matchMs=${Date.now() - matchStart} totalMs=${Date.now() - searchStart} indexState=${this.rebuildPromise ? "building" : "ready"}`
+      `[HistorySearchIndexService] search complete: query="${normalizedQuery}" documentsScanned=${documentsScanned} matches=${results.length} readyMs=${readyDurationMs} matchMs=${Date.now() - matchStart} totalMs=${Date.now() - searchStart} indexState=${this.rebuildPromise ? "building" : "ready"}`
     );
 
     return this.buildPageResponse(normalizedQuery, results, offset, limit);
@@ -162,36 +162,47 @@ export class HistorySearchIndexService {
    * only be known by walking the whole match set — doing that per page is what
    * made a scroll to the end of a large result set O(pages x index size).
    */
-  private collectMatches(
+  private async collectMatches(
+    workspaceFolderPath: string,
     normalizedQuery: string,
     filters: HistorySearchFilters | undefined
-  ): HistorySearchResult[] {
+  ): Promise<{ results: HistorySearchResult[]; documentsScanned: number }> {
     const lowered = normalizedQuery.toLowerCase();
-    const documentMatches: HistorySearchDocument[] = [];
-    for (const documents of this.shardDocuments.values()) {
-      for (const document of documents) {
-        if (
-          document.text.toLowerCase().includes(lowered) &&
-          matchesFilters(document, filters)
-        ) {
-          documentMatches.push(document);
-        }
+    const documentMatches: ProjectedHistorySearchMatch[] = [];
+    let documentsScanned = 0;
+    for await (const document of streamHistorySearchDocuments(
+      this.getDocumentsDir(workspaceFolderPath),
+      normalizedQuery,
+      () => {
+        documentsScanned += 1;
       }
+    )) {
+      if (
+        !document.text.toLowerCase().includes(lowered) ||
+        !matchesFilters(document, filters)
+      ) {
+        continue;
+      }
+      const result = projectHistorySearchResult(document, normalizedQuery);
+      documentMatches.push({
+        result,
+        dedupeKey: getHistorySearchDocumentDedupeKey(document, result),
+        timestampMs: document.timestampMs,
+        sequence: document.sequence,
+      });
     }
-    documentMatches.sort(this.compareDocuments);
+    documentMatches.sort(this.compareMatches);
 
     const seen = new Set<string>();
     const results: HistorySearchResult[] = [];
-    for (const document of documentMatches) {
-      const result = projectHistorySearchResult(document, normalizedQuery);
-      const dedupeKey = getHistorySearchDocumentDedupeKey(document, result);
-      if (seen.has(dedupeKey)) {
+    for (const match of documentMatches) {
+      if (seen.has(match.dedupeKey)) {
         continue;
       }
-      seen.add(dedupeKey);
-      results.push(result);
+      seen.add(match.dedupeKey);
+      results.push(match.result);
     }
-    return results;
+    return { results, documentsScanned };
   }
 
   private buildPageResponse(
@@ -232,7 +243,7 @@ export class HistorySearchIndexService {
           this.rebuildQueued = false;
           passCount += 1;
           const passStart = Date.now();
-          await this.rebuild(workspaceFolderPath, { retainDocuments: false });
+          await this.rebuild(workspaceFolderPath, {});
           Log.debug(
             `[HistorySearchIndexService] refresh pass ${passCount} complete: durationMs=${Date.now() - passStart} requeued=${this.rebuildQueued}`
           );
@@ -277,10 +288,7 @@ export class HistorySearchIndexService {
       "[HistorySearchIndexService] index missing or stale; triggering synchronous rebuild before search"
     );
     const rebuildStart = Date.now();
-    await this.rebuild(workspaceFolderPath, {
-      retainDocuments: true,
-      onProgress: onRebuildProgress,
-    });
+    await this.rebuild(workspaceFolderPath, { onProgress: onRebuildProgress });
     Log.info(
       `[HistorySearchIndexService] synchronous rebuild for search complete: durationMs=${Date.now() - rebuildStart}`
     );
@@ -294,7 +302,6 @@ export class HistorySearchIndexService {
       return;
     }
 
-    const documentsDir = this.getDocumentsDir(workspaceFolderPath);
     const loadStart = Date.now();
     try {
       const manifest = await this.readIndexManifest(workspaceFolderPath);
@@ -302,14 +309,13 @@ export class HistorySearchIndexService {
         Log.info(
           `[HistorySearchIndexService] on-disk index schema mismatch (found ${manifest.schemaVersion}, expected ${INDEX_SCHEMA_VERSION}); will rebuild`
         );
+        this.dropLoadedIndex();
         return;
       }
-      const shardDocuments = await this.readDocumentShards(documentsDir);
       this.loadedWorkspacePath = workspaceFolderPath;
       this.loadedManifest = manifest;
-      this.setShardDocuments(shardDocuments);
       Log.debug(
-        `[HistorySearchIndexService] loaded index from disk: documents=${this.documentCount} shards=${shardDocuments.size} indexedRuns=${Object.keys(manifest.indexedRuns).length} durationMs=${Date.now() - loadStart}`
+        `[HistorySearchIndexService] loaded index manifest from disk: indexedRuns=${Object.keys(manifest.indexedRuns).length} durationMs=${Date.now() - loadStart}`
       );
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
@@ -326,95 +332,15 @@ export class HistorySearchIndexService {
     }
   }
 
-  /**
-   * Replaces only the runs an incremental rebuild rewrote or deleted. The
-   * alternative — dropping everything and calling `loadIfPossible()` — re-reads
-   * and re-parses every shard in the index, which on a large history costs
-   * seconds and is what made a single appended run turn a millisecond rebuild
-   * into a multi-second search.
-   */
-  private async applyIncrementalShardDelta(
-    workspaceFolderPath: string,
-    delta: HistorySearchIncrementalShardDelta
-  ): Promise<boolean> {
-    const documentsDir = this.getDocumentsDir(workspaceFolderPath);
-    const spliceStart = Date.now();
-    try {
-      const manifest = await this.readIndexManifest(workspaceFolderPath);
-      if (manifest.schemaVersion !== INDEX_SCHEMA_VERSION) {
-        return false;
-      }
-      for (const shardName of delta.removedShardNames) {
-        this.removeShard(shardName);
-      }
-      for (const shardName of delta.rewrittenShardNames) {
-        this.removeShard(shardName);
-        const documents = await this.readDocumentShard(
-          path.join(documentsDir, shardName)
-        );
-        if (documents.length > 0) {
-          this.shardDocuments.set(shardName, documents);
-          this.documentCount += documents.length;
-        }
-      }
-      this.loadedWorkspacePath = workspaceFolderPath;
-      this.loadedManifest = manifest;
-      this.matchSnapshot = undefined;
-      Log.debug(
-        `[HistorySearchIndexService] spliced incremental index update: rewrittenShards=${delta.rewrittenShardNames.length} removedShards=${delta.removedShardNames.length} documents=${this.documentCount} durationMs=${Date.now() - spliceStart}`
-      );
-      return true;
-    } catch (error) {
-      Log.warn(
-        `[HistorySearchIndexService] Failed to splice incremental index update; falling back to a full reload: ${getErrorMessage(error)}`
-      );
-      return false;
-    }
-  }
-
-  private removeShard(shardName: string): void {
-    const existing = this.shardDocuments.get(shardName);
-    if (!existing) {
-      return;
-    }
-    this.documentCount -= existing.length;
-    this.shardDocuments.delete(shardName);
-  }
-
-  private setShardDocuments(
-    shardDocuments: Map<string, HistorySearchDocument[]>
-  ): void {
-    this.shardDocuments = shardDocuments;
-    this.documentCount = 0;
-    for (const documents of shardDocuments.values()) {
-      this.documentCount += documents.length;
-    }
-    this.matchSnapshot = undefined;
-  }
-
   private dropLoadedIndex(): void {
     this.loadedWorkspacePath = undefined;
     this.loadedManifest = undefined;
-    this.shardDocuments = new Map();
-    this.documentCount = 0;
     this.matchSnapshot = undefined;
   }
 
-  /**
-   * Rebuilds the on-disk index from history.
-   *
-   * `retainDocuments` controls steady-state memory: the search path keeps the
-   * built documents resident for fast querying, while the refresh path (used by
-   * every `OutputHistoryManager`, one per live workflow) streams straight to
-   * disk and retains nothing — otherwise each write-only instance would hold a
-   * full copy of the index in the extension-host heap. Documents are also
-   * streamed per-run rather than accumulated, so a refresh never materializes
-   * the whole index in memory at once.
-   */
   private async rebuild(
     workspaceFolderPath: string,
     options: {
-      retainDocuments: boolean;
       onProgress?: IndexRebuildProgressCallback;
     }
   ): Promise<void> {
@@ -424,7 +350,6 @@ export class HistorySearchIndexService {
     const data: HistorySearchRebuildWorkerData = {
       workspaceFolderPath,
       runHistoryLocation: getFrozenRunHistoryLocation(),
-      retainDocuments: options.retainDocuments,
       logFilePath: Log.getLogFilePath(),
     };
     const worker = new Worker(this.getWorkerScriptPath(), {
@@ -434,49 +359,21 @@ export class HistorySearchIndexService {
       },
     });
     try {
-      const result = await this.waitForWorker(worker, data, options.onProgress);
+      const result = await this.waitForWorker(worker, options.onProgress);
       if (result.freshnessReason) {
         Log.debug(
           `[HistorySearchIndexService] freshness check stale: ${result.freshnessReason}`
         );
       }
 
-      if (!options.retainDocuments) {
-        // Write-only refresh: drop any in-memory index so refresh-only
-        // instances don't retain a full copy. A later search reloads from disk.
-        this.dropLoadedIndex();
-        if (result.skipped) {
-          Log.info(
-            "[HistorySearchIndexService] rebuild skipped: on-disk index already fresh"
-          );
-        }
-        return;
-      }
-
-      const loadedForWorkspace =
-        this.loadedWorkspacePath === workspaceFolderPath && this.loadedManifest;
-
       if (result.skipped) {
-        // Nothing on disk changed, so whatever is already resident is still
-        // correct. Only a reader holding nothing needs to read.
+        this.dropLoadedIndex();
         await this.loadIfPossible(workspaceFolderPath);
         Log.info(
-          `[HistorySearchIndexService] rebuild skipped: on-disk index already fresh (documents=${this.documentCount})`
+          "[HistorySearchIndexService] rebuild skipped: on-disk index already fresh"
         );
         return;
       }
-
-      if (
-        result.incrementalDelta &&
-        loadedForWorkspace &&
-        (await this.applyIncrementalShardDelta(
-          workspaceFolderPath,
-          result.incrementalDelta
-        ))
-      ) {
-        return;
-      }
-
       this.dropLoadedIndex();
       await this.loadIfPossible(workspaceFolderPath);
     } finally {
@@ -517,7 +414,6 @@ export class HistorySearchIndexService {
 
   private async waitForWorker(
     worker: Worker,
-    data: HistorySearchRebuildWorkerData,
     onProgress?: IndexRebuildProgressCallback
   ): Promise<
     Extract<
@@ -543,7 +439,7 @@ export class HistorySearchIndexService {
           if (!startLogged) {
             startLogged = true;
             Log.info(
-              `[HistorySearchIndexService] rebuild starting: runs=${message.totalRuns} retainDocuments=${data.retainDocuments} worker=true`
+              `[HistorySearchIndexService] rebuild starting: runs=${message.totalRuns} worker=true`
             );
           }
           try {
@@ -579,60 +475,15 @@ export class HistorySearchIndexService {
     });
   }
 
-  private compareDocuments(
-    left: HistorySearchDocument,
-    right: HistorySearchDocument
+  private compareMatches(
+    left: ProjectedHistorySearchMatch,
+    right: ProjectedHistorySearchMatch
   ): number {
     return (
-      right.startedAt - left.startedAt ||
+      right.result.startedAt - left.result.startedAt ||
       right.timestampMs - left.timestampMs ||
       right.sequence - left.sequence
     );
-  }
-
-  private async readDocumentShards(
-    documentsDir: string
-  ): Promise<Map<string, HistorySearchDocument[]>> {
-    const shardEntries = await fs.promises.readdir(documentsDir, {
-      withFileTypes: true,
-    });
-    const shardFiles = shardEntries
-      .filter(
-        (entry) =>
-          entry.isFile() && entry.name.endsWith(DOCUMENTS_SHARD_EXTENSION)
-      )
-      .sort((left, right) => left.name.localeCompare(right.name));
-
-    const shardDocuments = new Map<string, HistorySearchDocument[]>();
-    for (const shardFile of shardFiles) {
-      const documents = await this.readDocumentShard(
-        path.join(documentsDir, shardFile.name)
-      );
-      if (documents.length > 0) {
-        shardDocuments.set(shardFile.name, documents);
-      }
-    }
-    return shardDocuments;
-  }
-
-  private async readDocumentShard(
-    shardPath: string
-  ): Promise<HistorySearchDocument[]> {
-    const documents: HistorySearchDocument[] = [];
-    try {
-      for await (const line of streamFileLines(shardPath)) {
-        if (line.trim().length > 0) {
-          documents.push(JSON.parse(line) as HistorySearchDocument);
-        }
-      }
-    } catch (error) {
-      // A shard that vanished or was replaced mid-read leaves the rest of the
-      // index usable; the next freshness check reindexes that run.
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-        throw error;
-      }
-    }
-    return documents;
   }
 
   private async readIndexManifest(

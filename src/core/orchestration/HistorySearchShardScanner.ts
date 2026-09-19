@@ -8,6 +8,7 @@ const FILE_NOT_FOUND_ERROR_CODE = "ENOENT";
 const NON_ASCII_PATTERN = /[^\x00-\x7f]/;
 
 export type HistorySearchLinePrefilter = (rawLine: string) => boolean;
+export type HistorySearchDocumentScannedCallback = () => void;
 
 /**
  * Creates the cheap candidate check used before parsing a JSONL document.
@@ -37,12 +38,21 @@ export function createHistorySearchLinePrefilter(
  */
 export async function* streamHistorySearchDocuments(
   documentsDirectory: string,
-  normalizedQuery: string
+  normalizedQuery: string,
+  onDocumentScanned?: HistorySearchDocumentScannedCallback
 ): AsyncGenerator<HistorySearchDocument, void, undefined> {
   const prefilter = createHistorySearchLinePrefilter(normalizedQuery);
-  const shardEntries = await fs.readdir(documentsDirectory, {
-    withFileTypes: true,
-  });
+  let shardEntries: import("fs").Dirent[];
+  try {
+    shardEntries = await fs.readdir(documentsDirectory, {
+      withFileTypes: true,
+    });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === FILE_NOT_FOUND_ERROR_CODE) {
+      return;
+    }
+    throw error;
+  }
   const shardNames = shardEntries
     .filter(
       (entry) =>
@@ -56,7 +66,11 @@ export async function* streamHistorySearchDocuments(
       for await (const rawLine of streamFileLines(
         path.join(documentsDirectory, shardName)
       )) {
-        if (rawLine.trim().length === 0 || !prefilter(rawLine)) {
+        if (rawLine.trim().length === 0) {
+          continue;
+        }
+        onDocumentScanned?.();
+        if (!prefilter(rawLine)) {
           continue;
         }
         yield JSON.parse(rawLine) as HistorySearchDocument;

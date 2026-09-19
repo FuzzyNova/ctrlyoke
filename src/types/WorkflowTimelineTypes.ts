@@ -206,6 +206,7 @@ export interface HistorySearchDocument {
   eventKind: HistoryEventKind;
   matchField: HistoryMatchField;
   text: string;
+  textLower: string;
   filePath?: string;
   harness?: string;
   model?: string;
