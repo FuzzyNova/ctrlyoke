@@ -2,7 +2,11 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import type { HistorySearchDocument } from "../../types/WorkflowTimelineTypes";
 import { streamFileLines } from "../../utils/TextLines";
-import { DOCUMENTS_SHARD_EXTENSION } from "./historySearchRebuildWorker";
+import {
+  DOCUMENTS_SHARD_EXTENSION,
+  getDocumentsShardFileName,
+  type HistorySearchIndexManifest,
+} from "./historySearchRebuildWorker";
 
 const FILE_NOT_FOUND_ERROR_CODE = "ENOENT";
 const NON_ASCII_PATTERN = /[^\x00-\x7f]/;
@@ -21,6 +25,87 @@ export interface HistorySearchScanOptions {
    * them.
    */
   hasPersistedLowercaseKey: boolean;
+  /**
+   * The loaded index manifest's `indexedRuns`, used to visit shards in
+   * descending run `startedAt` order without any extra file reads (see
+   * `resolveShardVisitOrder`). Omit only when no manifest could be loaded —
+   * every shard is then treated as unresolved and its order derived from its
+   * first document instead.
+   */
+  indexedRuns?: HistorySearchIndexManifest["indexedRuns"];
+}
+
+/**
+ * Orders shard file names by descending run `startedAt` so that a scan visits
+ * newer runs' documents first — the property the primary sort key
+ * (`compareMatches`'s `startedAt desc`) needs to hold across shards, which is
+ * what lets a later scan stop early once a page is full.
+ *
+ * `indexedRuns` gives the `startedAt` for every shard the manifest knows about
+ * with no extra I/O (one hash per entry, no file reads). A shard present on
+ * disk but absent from the manifest — an in-flight write, a manifest that
+ * failed to load — is never dropped: its `startedAt` is instead derived by
+ * reading its own first document, since every document in a run shares that
+ * run's `startedAt`. Ties (including every shard when no manifest is
+ * available) fall back to file-name order so the result is deterministic.
+ */
+export async function resolveShardVisitOrder(
+  documentsDirectory: string,
+  shardNames: readonly string[],
+  indexedRuns: HistorySearchIndexManifest["indexedRuns"] | undefined
+): Promise<string[]> {
+  const startedAtByShardName = new Map<string, number>();
+  for (const entry of Object.values(indexedRuns ?? {})) {
+    startedAtByShardName.set(
+      getDocumentsShardFileName(entry.manifestPath),
+      entry.startedAt
+    );
+  }
+
+  const shardsWithStartedAt = await Promise.all(
+    shardNames.map(async (shardName) => {
+      const knownStartedAt = startedAtByShardName.get(shardName);
+      return {
+        shardName,
+        startedAt:
+          knownStartedAt ??
+          (await deriveShardStartedAt(
+            path.join(documentsDirectory, shardName)
+          )),
+      };
+    })
+  );
+
+  return shardsWithStartedAt
+    .sort(
+      (left, right) =>
+        right.startedAt - left.startedAt ||
+        left.shardName.localeCompare(right.shardName)
+    )
+    .map((entry) => entry.shardName);
+}
+
+/**
+ * Reads only as far as the first non-blank line of a shard with no manifest
+ * entry, to recover the `startedAt` every document in it shares. A shard that
+ * cannot be read (deleted between listing and this read) or holds no
+ * documents yet sorts last — there is nothing to lose either way, since a
+ * shard with no readable documents contributes no matches.
+ */
+async function deriveShardStartedAt(shardPath: string): Promise<number> {
+  try {
+    for await (const rawLine of streamFileLines(shardPath)) {
+      if (rawLine.trim().length === 0) {
+        continue;
+      }
+      return (JSON.parse(rawLine) as HistorySearchDocument).startedAt;
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== FILE_NOT_FOUND_ERROR_CODE) {
+      throw error;
+    }
+  }
+  return Number.NEGATIVE_INFINITY;
 }
 
 /**
@@ -83,13 +168,16 @@ export async function* streamHistorySearchDocuments(
     }
     throw error;
   }
-  const shardNames = shardEntries
-    .filter(
-      (entry) =>
-        entry.isFile() && entry.name.endsWith(DOCUMENTS_SHARD_EXTENSION)
-    )
-    .map((entry) => entry.name)
-    .sort((left, right) => left.localeCompare(right));
+  const shardNames = await resolveShardVisitOrder(
+    documentsDirectory,
+    shardEntries
+      .filter(
+        (entry) =>
+          entry.isFile() && entry.name.endsWith(DOCUMENTS_SHARD_EXTENSION)
+      )
+      .map((entry) => entry.name),
+    options.indexedRuns
+  );
 
   for (const shardName of shardNames) {
     if (signal?.aborted) {

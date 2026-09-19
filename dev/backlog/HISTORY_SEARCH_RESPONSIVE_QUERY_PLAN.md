@@ -1,8 +1,15 @@
 # History Search Responsive Query Plan
 
 **Status:** In progress — C and D landed (repeat-query snapshot reuse gated on
-freshness, plus superseded-search cancellation); A, B, and E are still
-backlog.
+freshness, plus superseded-search cancellation). Of A, only the recency-ordered
+shard visit order has landed so far (`streamHistorySearchDocuments` now visits
+shards in descending run `startedAt`, derived from `manifest.indexedRuns` with
+no extra reads, reconciled against the on-disk documents directory so an
+unindexed shard is still scanned rather than skipped); early termination and
+the `totalCount` contract change it needs have not. This ordering step is
+deliberately a no-op for latency on its own — full scan, full sort, same
+`totalCount` — and exists only so the next step's early termination has a
+correct order to stop within. B and E are still backlog.
 **Priority:** P0 — this is a live regression in daily use, not a future risk.
 **Predecessor:** `dev/implemented/HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md` removed
 the ~2.16 GB resident index by streaming every shard per query. It fixed the

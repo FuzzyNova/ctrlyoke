@@ -194,6 +194,44 @@ suite("HistorySearchIndexService", () => {
     assert.strictEqual(response.results.length, 2);
   });
 
+  test("orders results by startedAt across shards regardless of creation order, including a tie", async () => {
+    // Runs are created out of startedAt order, and workflow C shares its
+    // startedAt with workflow B, on purpose: the shard scanner now visits
+    // shards in descending startedAt order (an on-disk detail), but the
+    // result order the client sees must be unaffected by either the creation
+    // order or which of the tied shards is visited first.
+    const term = "shard-order-term";
+    await createRun("shard-order-a-2026-06-09T22-20-00", 1, 5000, [
+      createStatusDraft(5100, term),
+    ]);
+    await createRun("shard-order-d-2026-06-09T22-20-03", 1, 3000, [
+      createStatusDraft(3100, term),
+    ]);
+    await createRun("shard-order-b-2026-06-09T22-20-01", 1, 7000, [
+      createStatusDraft(7100, term),
+    ]);
+    await createRun("shard-order-c-2026-06-09T22-20-02", 1, 7000, [
+      createStatusDraft(7050, term),
+    ]);
+
+    const index = new HistorySearchIndexService();
+    const response = await index.search(
+      { query: term, limit: 10 },
+      workspaceRoot
+    );
+
+    assert.strictEqual(response.totalCount, 4);
+    assert.deepStrictEqual(
+      response.results.map((result) => result.workflowKey),
+      [
+        "shard-order-b-2026-06-09T22-20-01",
+        "shard-order-c-2026-06-09T22-20-02",
+        "shard-order-a-2026-06-09T22-20-00",
+        "shard-order-d-2026-06-09T22-20-03",
+      ]
+    );
+  });
+
   test("caches an empty sharded index for a workspace with no history yet", async () => {
     const index = new HistorySearchIndexService();
     const messages: string[] = [];

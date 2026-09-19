@@ -747,6 +747,11 @@ function hashPath(filePath: string): string {
     .digest("hex");
 }
 
+/** The shard file name for a run, derived from its manifest path alone (no I/O). */
+export function getDocumentsShardFileName(manifestPath: string): string {
+  return `${hashPath(manifestPath)}${DOCUMENTS_SHARD_EXTENSION}`;
+}
+
 export function getDocumentsShardPath(
   indexDir: string,
   manifestPath: string
@@ -754,7 +759,7 @@ export function getDocumentsShardPath(
   return path.join(
     indexDir,
     DOCUMENTS_DIR_NAME,
-    `${hashPath(manifestPath)}${DOCUMENTS_SHARD_EXTENSION}`
+    getDocumentsShardFileName(manifestPath)
   );
 }
 

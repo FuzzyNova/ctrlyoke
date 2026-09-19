@@ -5,8 +5,11 @@ import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
 import {
   createHistorySearchLinePrefilter,
+  resolveShardVisitOrder,
   streamHistorySearchDocuments,
 } from "../../core/orchestration/HistorySearchShardScanner";
+import { getDocumentsShardFileName } from "../../core/orchestration/historySearchRebuildWorker";
+import type { HistorySearchIndexManifest } from "../../core/orchestration/historySearchRebuildWorker";
 import {
   HISTORY_EVENT_KINDS,
   HISTORY_MATCH_FIELDS,
@@ -232,6 +235,128 @@ suite("HistorySearchShardScanner", () => {
     assert.strictEqual(results[0]?.text, "abort line match first");
   });
 
+  test("visits shards in descending run startedAt order using the manifest", async () => {
+    await writeShard(getDocumentsShardFileName("run-old"), [
+      createDocument("order-term old", 100),
+    ]);
+    await writeShard(getDocumentsShardFileName("run-new"), [
+      createDocument("order-term new", 300),
+    ]);
+    await writeShard(getDocumentsShardFileName("run-mid"), [
+      createDocument("order-term mid", 200),
+    ]);
+    const indexedRuns = createIndexedRuns([
+      { manifestPath: "run-old", startedAt: 100 },
+      { manifestPath: "run-new", startedAt: 300 },
+      { manifestPath: "run-mid", startedAt: 200 },
+    ]);
+
+    const results: HistorySearchDocument[] = [];
+    for await (const document of streamHistorySearchDocuments(
+      documentsDirectory,
+      "order-term",
+      { ...INDEXED_KEY_OPTIONS, indexedRuns }
+    )) {
+      results.push(document);
+    }
+
+    assert.deepStrictEqual(
+      results.map((document) => document.text),
+      ["order-term new", "order-term mid", "order-term old"]
+    );
+  });
+
+  test("derives startedAt from its first document for a shard the manifest doesn't know about", async () => {
+    // A shard can exist on disk without a manifest entry (an in-flight write,
+    // or a manifest that failed to load). It must still be scanned, and its
+    // position derived from its own content rather than dropped or guessed.
+    await writeShard("orphan-shard.jsonl", [
+      createDocument("order-term orphan", 250),
+    ]);
+    await writeShard(getDocumentsShardFileName("run-known"), [
+      createDocument("order-term known", 100),
+    ]);
+    const indexedRuns = createIndexedRuns([
+      { manifestPath: "run-known", startedAt: 100 },
+    ]);
+
+    const results: HistorySearchDocument[] = [];
+    for await (const document of streamHistorySearchDocuments(
+      documentsDirectory,
+      "order-term",
+      { ...INDEXED_KEY_OPTIONS, indexedRuns }
+    )) {
+      results.push(document);
+    }
+
+    assert.deepStrictEqual(
+      results.map((document) => document.text),
+      ["order-term orphan", "order-term known"]
+    );
+  });
+
+  test("groups shards with an equal startedAt deterministically instead of dropping either", async () => {
+    const tiedShardNameA = getDocumentsShardFileName("run-tied-a");
+    const tiedShardNameB = getDocumentsShardFileName("run-tied-b");
+    await writeShard(tiedShardNameA, [
+      createDocument("order-term tied-a", 200),
+    ]);
+    await writeShard(tiedShardNameB, [
+      createDocument("order-term tied-b", 200),
+    ]);
+    const indexedRuns = createIndexedRuns([
+      { manifestPath: "run-tied-a", startedAt: 200 },
+      { manifestPath: "run-tied-b", startedAt: 200 },
+    ]);
+
+    const order = await resolveShardVisitOrder(
+      documentsDirectory,
+      // Listing order need not match visit order; feed it in reverse.
+      [tiedShardNameB, tiedShardNameA],
+      indexedRuns
+    );
+
+    assert.deepStrictEqual(
+      order,
+      [tiedShardNameA, tiedShardNameB].sort((left, right) =>
+        left.localeCompare(right)
+      )
+    );
+
+    const results: HistorySearchDocument[] = [];
+    for await (const document of streamHistorySearchDocuments(
+      documentsDirectory,
+      "order-term",
+      { ...INDEXED_KEY_OPTIONS, indexedRuns }
+    )) {
+      results.push(document);
+    }
+    assert.deepStrictEqual(
+      new Set(results.map((document) => document.text)),
+      new Set(["order-term tied-a", "order-term tied-b"])
+    );
+  });
+
+  function createIndexedRuns(
+    entries: { manifestPath: string; startedAt: number }[]
+  ): HistorySearchIndexManifest["indexedRuns"] {
+    const indexedRuns: HistorySearchIndexManifest["indexedRuns"] = {};
+    for (const { manifestPath, startedAt } of entries) {
+      indexedRuns[manifestPath] = {
+        manifestPath,
+        eventsPath: `${manifestPath}-events`,
+        workflowId: manifestPath,
+        runId: 1,
+        startedAt,
+        eventCount: 1,
+        lastUpdatedAt: startedAt,
+        sourceManifestMtimeMs: startedAt,
+        sourceEventsMtimeMs: startedAt,
+      };
+    }
+    return indexedRuns;
+  }
+
   async function matchingTexts(
     query: string,
     options = INDEXED_KEY_OPTIONS
@@ -269,14 +394,14 @@ suite("HistorySearchShardScanner", () => {
     return legacy;
   }
 
-  function createDocument(text: string): HistorySearchDocument {
+  function createDocument(text: string, startedAt = 1): HistorySearchDocument {
     return {
       id: `document-${text}`,
       workflowKey: "scanner-workflow" as WorkflowKey,
       runRef: "scanner-run" as RunRef,
       workflowName: "Scanner workflow",
       runId: 1,
-      startedAt: 1,
+      startedAt,
       executionState: "completed",
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,

@@ -298,6 +298,9 @@ export class HistorySearchIndexService {
       {
         hasPersistedLowercaseKey:
           this.hasCurrentSchemaIndex(workspaceFolderPath),
+        indexedRuns: this.hasCurrentSchemaIndex(workspaceFolderPath)
+          ? this.loadedManifest?.indexedRuns
+          : undefined,
       },
       () => {
         documentsScanned += 1;
