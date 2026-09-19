@@ -12,7 +12,7 @@
 > written**, and between them they removed most of what this doc called "the hard part". The
 > streaming reader this plan proposed building now exists; see "What the search engine looks like
 > now" below before reading anything here about residency.
-> `dev/backlog/HISTORY_SEARCH_TRUNCATED_TEXT_MATCH_PLAN.md` (the silent-miss gap this command must
+> `dev/implemented/HISTORY_SEARCH_TRUNCATED_TEXT_MATCH_PLAN.md` (the silent-miss gap this command must
 > disclose rather than inherit quietly), `dev/backlog/HISTORY_SEARCH_BACKGROUND_SCAN_PLAN.md`
 > (why a count can come back provisional, which this command has to report honestly).
 

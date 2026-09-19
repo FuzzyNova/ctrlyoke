@@ -1,9 +1,14 @@
 # History Search Truncated-Text Match Plan
 
-**Status:** Backlog — ready to implement. **Option decided: B** (2026-09-19), on
+**Status:** Implemented. **Option decided: B** (2026-09-19), on
 the measurement spike below; the acceptance criteria's measurement gate is met,
 and "Implementation design (settled)" below fixes the design against the code
 that exists today.
+
+**As built:** The settled option-B design shipped without material deviation.
+`overCapCandidateCount` records the number of source strings shortened during
+indexing — a durable has-hidden-text signal, not an exact candidate count — as
+specified below.
 **Priority:** P2
 **Related:** `dev/implemented/HISTORY_SEARCH_PERFORMANCE_PLAN.md` (introduced
 `MAX_INDEXED_TEXT_LENGTH` as an OOM guard — background for why this cap exists
@@ -32,7 +37,8 @@ workflow, found only 32. Two real bugs were in play:
    all — **fixed** in the change that produced this doc; see
    `.github/instructions/orchestration.instructions.md`'s `<searchAndRecovery>`
    section.
-2. This truncation gap — **not fixed**, is the subject of this doc.
+2. This truncation gap — fixed by the option-B implementation recorded here —
+   was the subject of this doc.
 
 Most of the raw 369-vs-32 gap turned out to be an intentional, unrelated
 design difference (history search reports one result per matching event/field,
@@ -473,30 +479,31 @@ Ordered so each builds only on landed work:
       how many runs fit in the `historySearchCacheMb` budget. Done by
       `scripts/spike-history-search-truncation.mjs`; see "Measurement spike"
       above. (`scripts/bench-history-search-document-cache.mjs` remains the
-      harness for measuring the cache against a _live_ index once B lands.)
-- [ ] A term appearing only in the interior of a long response/diff/tool output
+      harness for measuring the cache against a _live_ index during option-B
+      validation.)
+- [x] A term appearing only in the interior of a long response/diff/tool output
       is reachable from the drawer without the user knowing which run it is in
       — i.e. the deep search is reachable from the query, not only from a
       result row (see "What the spike changes about option B", point 3).
-- [ ] Per-document stored text size never exceeds `MAX_INDEXED_TEXT_LENGTH`,
+- [x] Per-document stored text size never exceeds `MAX_INDEXED_TEXT_LENGTH`,
       and the persisted index gains no documents and no per-document fields.
-- [ ] The per-run over-cap signal is recorded in the index manifest's
+- [x] The per-run over-cap signal is recorded in the index manifest's
       `indexedRuns` entry and is usable without reading any shard.
-- [ ] Adding that signal does not invalidate existing indexes: `INDEX_SCHEMA_VERSION`
+- [x] Adding that signal does not invalidate existing indexes: `INDEX_SCHEMA_VERSION`
       is unchanged and a run with no recorded count is treated as unknown (so it
       is deep-scanned), never as "nothing hidden".
-- [ ] A deep result is only ever produced for a match the capped prefix misses,
+- [x] A deep result is only ever produced for a match the capped prefix misses,
       so no event yields both an indexed and a deep row.
-- [ ] A deep search is abortable and reports incrementally on the same terms as
+- [x] A deep search is abortable and reports incrementally on the same terms as
       the indexed scan (`HistorySearchCancelledError`, `atLeast` counts,
       supersession keyed on the listing), and a cancelled one leaves no
       side effect — the `seenDedupeKeys` sharp edge in
       `.github/instructions/orchestration.instructions.md`'s
       `<searchAndRecovery>` applies unchanged.
-- [ ] The drawer's one-result-per-event copy is still true after the change.
+- [x] The drawer's one-result-per-event copy is still true after the change.
       B preserves it; this criterion exists so a later drift toward windowing
       does not silently falsify it.
-- [ ] Tests cover the deep-search trigger and scoped scan, a run that has both
+- [x] Tests cover the deep-search trigger and scoped scan, a run that has both
       indexed and past-the-cap matches for the same query (the 85-vs-200 shape
       that produced this plan — the case a matched-nothing trigger would miss),
       and that merging deep results with indexed ones produces no duplicate

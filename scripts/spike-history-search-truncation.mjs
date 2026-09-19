@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Measurement spike for dev/backlog/HISTORY_SEARCH_TRUNCATED_TEXT_MATCH_PLAN.md.
+ * Measurement spike for dev/implemented/HISTORY_SEARCH_TRUNCATED_TEXT_MATCH_PLAN.md.
  *
  * Answers the three numbers that plan's acceptance criteria gate an option on,
  * against a real schema-4.2.0 index plus the run history it was built from:

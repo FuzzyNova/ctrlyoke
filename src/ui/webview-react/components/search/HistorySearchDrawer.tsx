@@ -872,7 +872,7 @@ export function HistorySearchDrawer() {
               matching event/field while the output find bar counts one per
               literal occurrence, and a user comparing the two numbers
               otherwise concludes results are missing (see
-              dev/backlog/HISTORY_SEARCH_TRUNCATED_TEXT_MATCH_PLAN.md, where
+              dev/implemented/HISTORY_SEARCH_TRUNCATED_TEXT_MATCH_PLAN.md, where
               that comparison is what surfaced a real bug alongside this
               non-bug). The remedy named here is automatic: opening a result
               arms the output find bar with this same query. */}

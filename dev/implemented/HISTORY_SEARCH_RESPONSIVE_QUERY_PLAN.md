@@ -340,8 +340,9 @@ aggregate rather than minutes.
 - **No SQLite/FTS5**, for the packaging reasons the predecessor plan records.
 - **No reduction in what gets indexed.**
 - **Not the rebuild.** The 91 s full rebuild is real but separate; this plan is
-  about query latency. Note that `dev/backlog/HISTORY_SEARCH_TRUNCATED_TEXT_MATCH_PLAN.md`
-  would grow document count, so sequence it after this work, not before.
+  about query latency. The implemented `dev/implemented/HISTORY_SEARCH_TRUNCATED_TEXT_MATCH_PLAN.md`
+  confirms option B adds no documents; the earlier sequencing concern applied
+  to the rejected option A.
 
 ## Measured after B landed (2026-09-19)
 
