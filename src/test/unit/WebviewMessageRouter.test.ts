@@ -945,4 +945,175 @@ suite("WebviewMessageRouter — license actions", () => {
     );
     assert.deepStrictEqual(panelMessages, []);
   });
+
+  suite("history search supersession", () => {
+    /**
+     * Scrolling a result set issues one SEARCH_HISTORY per page, all for the
+     * same query and filters. Aborting the previous one on every arrival (the
+     * original per-client rule) killed those page requests, and a page that
+     * never answers leaves its rows stuck as placeholders: the drawer asks
+     * for each offset exactly once.
+     */
+    interface RecordedSearch {
+      offset?: number;
+      query: string;
+      signal?: AbortSignal;
+      resolve: () => void;
+    }
+
+    function buildSearchRouter(recorded: RecordedSearch[]): {
+      router: WebviewMessageRouter;
+      restore: () => void;
+    } {
+      const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+      Object.defineProperty(vscode.workspace, "workspaceFolders", {
+        value: [{ uri: vscode.Uri.file(path.join(__dirname, "workspace")) }],
+        configurable: true,
+      });
+      const historySearchService = {
+        search: (
+          request: { query: string; offset?: number },
+          _workspacePath: string,
+          _onProgress: unknown,
+          signal?: AbortSignal
+        ) =>
+          new Promise((resolve) => {
+            recorded.push({
+              query: request.query,
+              offset: request.offset,
+              signal,
+              resolve: () =>
+                resolve({
+                  query: request.query,
+                  offset: request.offset ?? 0,
+                  results: [],
+                  totalCount: 0,
+                  countState: "exact",
+                  hasMore: false,
+                  indexState: "ready",
+                }),
+            });
+          }),
+      };
+      const router = new WebviewMessageRouter(
+        () => {},
+        { sendWorkflowPropertiesToSettings: async () => {} } as any,
+        {} as any,
+        () => undefined as any,
+        historySearchService as any,
+        { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+      );
+      return {
+        router,
+        restore: () =>
+          Object.defineProperty(vscode.workspace, "workspaceFolders", {
+            value: originalWorkspaceFolders,
+            configurable: true,
+          }),
+      };
+    }
+
+    const settle = async (): Promise<void> => {
+      for (let i = 0; i < 5; i += 1) {
+        await Promise.resolve();
+      }
+    };
+
+    test("a page request does not cancel an in-flight search for the same listing", async () => {
+      const recorded: RecordedSearch[] = [];
+      const { router, restore } = buildSearchRouter(recorded);
+      try {
+        const first = router.route({
+          type: MESSAGE_TYPES.SEARCH_HISTORY,
+          query: "codemirroreditor",
+          limit: 50,
+        });
+        await settle();
+        assert.strictEqual(recorded.length, 1);
+
+        const second = router.route({
+          type: MESSAGE_TYPES.SEARCH_HISTORY,
+          query: "codemirroreditor",
+          limit: 50,
+          offset: 50,
+        });
+        await settle();
+        assert.strictEqual(
+          recorded[0].signal?.aborted,
+          false,
+          "a later page of the same listing must not abort the page still running"
+        );
+
+        recorded[0].resolve();
+        await first;
+        await settle();
+        assert.strictEqual(recorded.length, 2);
+        recorded[1].resolve();
+        await second;
+        assert.strictEqual(recorded[1].signal?.aborted, false);
+      } finally {
+        restore();
+      }
+    });
+
+    test("a different query cancels the in-flight search", async () => {
+      const recorded: RecordedSearch[] = [];
+      const { router, restore } = buildSearchRouter(recorded);
+      try {
+        const first = router.route({
+          type: MESSAGE_TYPES.SEARCH_HISTORY,
+          query: "codemirroreditor",
+          limit: 50,
+        });
+        await settle();
+        assert.strictEqual(recorded.length, 1);
+
+        const second = router.route({
+          type: MESSAGE_TYPES.SEARCH_HISTORY,
+          query: "something-else",
+          limit: 50,
+        });
+        await settle();
+        assert.strictEqual(recorded[0].signal?.aborted, true);
+
+        recorded[0].resolve();
+        await first;
+        await settle();
+        recorded[1].resolve();
+        await second;
+      } finally {
+        restore();
+      }
+    });
+
+    test("a changed filter cancels the in-flight search for the old listing", async () => {
+      const recorded: RecordedSearch[] = [];
+      const { router, restore } = buildSearchRouter(recorded);
+      try {
+        const first = router.route({
+          type: MESSAGE_TYPES.SEARCH_HISTORY,
+          query: "codemirroreditor",
+          limit: 50,
+          filters: { harnesses: [HARNESS_IDS.CLAUDE_CLI] },
+        });
+        await settle();
+        const second = router.route({
+          type: MESSAGE_TYPES.SEARCH_HISTORY,
+          query: "codemirroreditor",
+          limit: 50,
+          filters: { harnesses: [HARNESS_IDS.CODEX_CLI] },
+        });
+        await settle();
+        assert.strictEqual(recorded[0].signal?.aborted, true);
+
+        recorded[0].resolve();
+        await first;
+        await settle();
+        recorded[1].resolve();
+        await second;
+      } finally {
+        restore();
+      }
+    });
+  });
 });

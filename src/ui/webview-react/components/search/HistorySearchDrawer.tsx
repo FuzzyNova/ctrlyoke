@@ -565,15 +565,26 @@ export function HistorySearchDrawer() {
   );
   const handleRangeChange = useCallback(
     (range: VirtualizedListRange): void => {
-      const firstPage = Math.floor(range.overscanStartIndex / RESULT_LIMIT);
-      const lastPage = Math.floor(
-        Math.min(range.overscanEndIndex, Math.max(0, virtualizedCount - 1)) /
-          RESULT_LIMIT
+      const lastIndex = Math.min(
+        range.overscanEndIndex,
+        Math.max(0, virtualizedCount - 1)
       );
+      const firstPage = Math.floor(range.overscanStartIndex / RESULT_LIMIT);
+      const lastPage = Math.floor(lastIndex / RESULT_LIMIT);
       for (let page = firstPage; page <= lastPage; page += 1) {
         const offset = page * RESULT_LIMIT;
-        if (results[offset] === undefined) {
-          requestPage(offset);
+        // Every row in the window is checked, not just the page's first:
+        // a still-running scan pushes partial results (see
+        // SEARCH_HISTORY_PARTIAL_RESULTS), which can fill the head of a page
+        // while its tail is still outstanding. Testing only `results[offset]`
+        // reads that half-filled page as loaded and leaves the rest of it
+        // showing placeholders.
+        const pageEnd = Math.min(offset + RESULT_LIMIT - 1, lastIndex);
+        for (let index = offset; index <= pageEnd; index += 1) {
+          if (results[index] === undefined) {
+            requestPage(offset);
+            break;
+          }
         }
       }
     },

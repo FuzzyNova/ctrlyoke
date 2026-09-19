@@ -254,6 +254,46 @@ describe("HistorySearchDrawer filters", () => {
     );
   });
 
+  it("re-requests a page whose head is loaded but whose tail is still missing", () => {
+    // A still-running scan pushes partial results, which can fill the head of
+    // a page while its tail is outstanding. Testing only the page's first row
+    // reads that half-filled page as loaded, and the rows behind it stay
+    // placeholders for good — the listing asks for each offset once.
+    const view = renderSearch();
+    act(() => {
+      useUiStore.getState().setHistorySearchResults(results(50), false, {
+        totalCount: 200,
+        countState: "atLeast",
+      });
+      useUiStore.getState().setHistorySearchResults(results(21), true, {
+        offset: 50,
+        totalCount: 200,
+        countState: "atLeast",
+      });
+    });
+
+    const scroller =
+      view.container.querySelector<HTMLElement>(".overflow-y-auto");
+    expect(scroller).not.toBeNull();
+    if (!scroller) return;
+
+    act(() => {
+      // Past index 70, where the second page stops being filled in.
+      scroller.scrollTop = 7800;
+      fireEvent.scroll(scroller);
+      fireEvent.scroll(scroller);
+    });
+
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.SEARCH_HISTORY,
+        query: "needle",
+        limit: 50,
+        offset: 50,
+      })
+    );
+  });
+
   it("merges a page into the sparse listing at its absolute offset", () => {
     renderSearch();
     act(() => {

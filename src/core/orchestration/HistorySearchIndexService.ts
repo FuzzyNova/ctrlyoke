@@ -534,7 +534,17 @@ export class HistorySearchIndexService {
         documentsDir,
         hasPersistedLowercaseKey ? this.loadedManifest?.indexedRuns : undefined
       ));
+    // Resuming reuses the retained cursor's dedupe set *by reference* rather
+    // than copying it (a copy would cost O(matches so far) on every page of a
+    // large result set). That makes every key added here a mutation of the
+    // caller's retained snapshot, which is only correct while this call's
+    // results are actually kept — a cancelled scan discards its results, so
+    // anything it admitted has to come back out of the set (see the rollback
+    // below). Leaving them in would suppress those documents as "already
+    // seen" when the scan is later resumed, silently dropping real matches
+    // from the result set for the rest of the listing's life.
     const seen = resume?.seenDedupeKeys ?? new Set<string>();
+    const addedDedupeKeys: string[] = [];
     const priorDocumentsScanned = resume?.documentsScanned ?? 0;
     let documentsScannedThisCall = 0;
 
@@ -551,6 +561,7 @@ export class HistorySearchIndexService {
           continue;
         }
         seen.add(match.dedupeKey);
+        addedDedupeKeys.push(match.dedupeKey);
         newResults.push(match.result);
       }
       groupBuffer = [];
@@ -659,6 +670,11 @@ export class HistorySearchIndexService {
       documentsScanned: priorDocumentsScanned + documentsScannedThisCall,
     };
     if (cancelled) {
+      // Undo this call's admissions to the (possibly shared) dedupe set so
+      // the retained cursor is exactly as it was before this scan started.
+      for (const key of addedDedupeKeys) {
+        seen.delete(key);
+      }
       return { newResults: [], complete: false, cursor, cancelled: true };
     }
     if (!stoppedEarly) {

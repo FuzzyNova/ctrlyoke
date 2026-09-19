@@ -87,6 +87,8 @@ import {
 } from "./WebviewClientContext";
 import { HistorySearchService } from "../core/orchestration/HistorySearchService";
 import { HistorySearchCancelledError } from "../core/orchestration/HistorySearchIndexService";
+import { normalizeHistorySearchFilters } from "../core/orchestration/HistorySearchFilters";
+import type { HistorySearchFilters } from "../types/WorkflowTimelineTypes";
 import { WorkflowVariantService } from "../core/orchestration/WorkflowVariantService";
 import { redactExecutionPreview } from "../types/PreviewRedactor";
 import {
@@ -116,6 +118,38 @@ interface WorkflowVariantRequestCacheEntry {
 
 const WORKFLOW_VARIANT_REQUEST_CACHE_TTL_MS = 10 * 60 * 1000;
 const WORKFLOW_VARIANT_REQUEST_CACHE_MAX_ENTRIES = 256;
+
+/**
+ * The history searches one client currently has in flight, all of them for
+ * the same `listingKey`. See `WebviewMessageRouter.beginHistorySearch`.
+ */
+interface HistorySearchClientRegistration {
+  listingKey: string;
+  controllers: Set<AbortController>;
+}
+
+/**
+ * Identifies the result set a SEARCH_HISTORY message belongs to, so paging
+ * requests for one listing can be told apart from a genuinely new search.
+ * Deliberately built from the same normalization the index service keys its
+ * snapshots by (`normalizeHistorySearchFilters`), so two messages that would
+ * be answered from one snapshot are never treated as rival listings here.
+ */
+function getHistorySearchListingKey(message: {
+  query?: unknown;
+  filters?: unknown;
+}): string {
+  const query =
+    typeof message.query === "string" ? message.query.trim().toLowerCase() : "";
+  const filters =
+    message.filters && typeof message.filters === "object"
+      ? (message.filters as HistorySearchFilters)
+      : undefined;
+  return JSON.stringify({
+    query,
+    filters: normalizeHistorySearchFilters(filters),
+  });
+}
 
 function isUserFeedbackSeverity(value: unknown): value is UserFeedbackSeverity {
   return (
@@ -184,12 +218,13 @@ export class WebviewMessageRouter {
     string,
     WorkflowVariantRequestCacheEntry
   >();
-  // One entry per client with an in-flight (or just-completed) history
-  // search. A new SEARCH_HISTORY message aborts whatever is here for that
-  // client before it is superseded — see `route()`.
+  // One entry per client with in-flight history searches, holding every
+  // controller for the listing (query + filters) that client is currently
+  // showing. A SEARCH_HISTORY message for a *different* listing aborts them
+  // all; one for the same listing joins them — see `beginHistorySearch()`.
   private readonly historySearchAbortControllers = new Map<
     string,
-    AbortController
+    HistorySearchClientRegistration
   >();
 
   constructor(
@@ -250,16 +285,19 @@ export class WebviewMessageRouter {
       options?.postMessage ?? this.defaultPostMessage,
       interactionPort
     );
+    let releaseHistorySearch: (() => void) | undefined;
     if (message?.type === MESSAGE_TYPES.SEARCH_HISTORY) {
       // Called synchronously, before this message is queued behind whatever
       // is already routing: every message shares `routeQueue`, so a search
       // handler already running won't be pre-empted by the queue reaching
       // this one — it has to notice the abort itself. See the SEARCH_HISTORY
       // handler and HistorySearchIndexService's scan cancellation.
-      ctx = {
-        ...ctx,
-        historySearchAbortSignal: this.supersedeHistorySearch(clientId),
-      };
+      const registration = this.beginHistorySearch(
+        clientId,
+        getHistorySearchListingKey(message)
+      );
+      ctx = { ...ctx, historySearchAbortSignal: registration.signal };
+      releaseHistorySearch = registration.release;
     }
     if (
       message?.type === MESSAGE_TYPES.BATCH_APPROVAL_RESPONSE ||
@@ -268,28 +306,65 @@ export class WebviewMessageRouter {
       await this.routeSingleMessage(message, ctx);
       return;
     }
-    this.routeQueue = this.routeQueue.then(() =>
-      this.routeSingleMessage(message, ctx)
-    );
+    this.routeQueue = this.routeQueue.then(async () => {
+      try {
+        await this.routeSingleMessage(message, ctx);
+      } finally {
+        releaseHistorySearch?.();
+      }
+    });
 
     await this.routeQueue;
   }
 
   /**
-   * Aborts this client's previous in-flight history search, if any, and
-   * returns the signal for the new one.
+   * Registers a history search for `clientId` and returns its cancellation
+   * signal, aborting only the searches this one actually supersedes.
+   *
+   * Supersession is scoped to the *listing* (query plus filters), not to the
+   * client: scrolling a result set issues one SEARCH_HISTORY per page, and
+   * those are additive — each extends the same scan a little further, and
+   * every one of them owes the webview a response, because a page with no
+   * response leaves its rows stuck as placeholders forever (the webview
+   * requests each offset exactly once). Only a genuinely different listing —
+   * the user typed something else, or changed a filter — makes the in-flight
+   * work worthless, and that is the case worth aborting.
    */
-  private supersedeHistorySearch(clientId: string): AbortSignal {
-    this.historySearchAbortControllers.get(clientId)?.abort();
+  private beginHistorySearch(
+    clientId: string,
+    listingKey: string
+  ): { signal: AbortSignal; release: () => void } {
+    const existing = this.historySearchAbortControllers.get(clientId);
+    let entry = existing;
+    if (existing && existing.listingKey !== listingKey) {
+      for (const controller of existing.controllers) {
+        controller.abort();
+      }
+      entry = undefined;
+    }
+    if (!entry) {
+      entry = { listingKey, controllers: new Set<AbortController>() };
+      this.historySearchAbortControllers.set(clientId, entry);
+    }
+
     const controller = new AbortController();
-    this.historySearchAbortControllers.set(clientId, controller);
-    return controller.signal;
+    entry.controllers.add(controller);
+    const owningEntry = entry;
+    return {
+      signal: controller.signal,
+      release: () => {
+        owningEntry.controllers.delete(controller);
+      },
+    };
   }
 
   disposeClient(clientId: string): void {
     this.clientInteractionPorts.get(clientId)?.disposeAllPending();
     this.clientInteractionPorts.delete(clientId);
-    this.historySearchAbortControllers.get(clientId)?.abort();
+    for (const controller of this.historySearchAbortControllers.get(clientId)
+      ?.controllers ?? []) {
+      controller.abort();
+    }
     this.historySearchAbortControllers.delete(clientId);
   }
 

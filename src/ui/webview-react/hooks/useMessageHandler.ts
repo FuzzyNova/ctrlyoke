@@ -2726,7 +2726,11 @@ export function createMessageHandlers(
         indexState?: "ready" | "building" | "fallback";
       };
     const uiStore = useUiStore.getState();
-    if (uiStore.historySearchQuery !== query) {
+    // Compared trimmed: the store holds the raw input value, while a request
+    // (and so the response echoing it back) always carries the trimmed query.
+    // Untrimmed, a single trailing space made every response for that query
+    // look superseded and get dropped, leaving the drawer spinning forever.
+    if (uiStore.historySearchQuery.trim() !== query) {
       return;
     }
     uiStore.setHistorySearchResults(results, false, {
@@ -2760,7 +2764,7 @@ export function createMessageHandlers(
     // Same guard as the final response: a push that arrives after its query
     // was superseded (the user kept typing, or issued a new search) must not
     // land on top of whatever the current query has already shown.
-    if (uiStore.historySearchQuery !== query) {
+    if (uiStore.historySearchQuery.trim() !== query) {
       return;
     }
     uiStore.setHistorySearchResults(results, true, {

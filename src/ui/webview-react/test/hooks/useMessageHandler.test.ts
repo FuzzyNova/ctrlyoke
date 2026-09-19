@@ -2828,6 +2828,40 @@ describe("history search messages", () => {
     expect(useUiStore.getState().historySearchLoading).toBe(true);
   });
 
+  it("applies results for a query typed with surrounding whitespace", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      // The store holds the raw input value; the request (and the response
+      // echoing it back) carries the trimmed query. Comparing them untrimmed
+      // dropped every response and left the drawer spinning forever.
+      useUiStore.getState().setHistorySearchQuery("needle ");
+      useUiStore.getState().setHistorySearchResults([], true);
+      dispatch(MESSAGE_TYPES.SEARCH_HISTORY_RESULTS, {
+        query: "needle",
+        results: [
+          {
+            workflowKey: "wf-3" as never,
+            runRef: "run-2026-07-20T10-32-00-000Z" as never,
+            workflowName: "Trimmed Workflow",
+            runId: 5,
+            startedAt: 3000,
+            executionState: EXECUTION_STATES.COMPLETED,
+            target: { kind: "queue", stepIndex: 0 },
+            eventKind: "response",
+            matchField: "content",
+            matchSnippet: "needle found here",
+            matchContext: "Prompt 1",
+          },
+        ],
+        hasMore: false,
+      });
+    });
+
+    expect(useUiStore.getState().historySearchResults).toHaveLength(1);
+    expect(useUiStore.getState().historySearchLoading).toBe(false);
+  });
+
   it("applies partial results mid-scan without clearing the loading state", () => {
     renderHook(() => useMessageHandler());
 

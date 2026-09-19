@@ -676,6 +676,50 @@ suite("HistorySearchIndexService", () => {
     );
   });
 
+  test("does not lose matches after a resumed scan is cancelled mid-extend", async () => {
+    // A resumed scan reuses the retained cursor's dedupe set by reference, so
+    // a cancelled extend that had already admitted some matches must put them
+    // back — otherwise those documents look "already seen" when the scan is
+    // resumed later and never appear in any page again.
+    const term = "cancelled-extend-term";
+    const totalRuns = 40;
+    for (let i = 0; i < totalRuns; i += 1) {
+      await createRun(
+        `cancelled-extend-run-${i}-2026-06-09T22-34-00`,
+        1,
+        26000 + i * 100,
+        [createStatusDraft(26050 + i * 100, term)]
+      );
+    }
+
+    const index = new HistorySearchIndexService();
+    const firstPage = await index.search(
+      { query: term, limit: 5 },
+      workspaceRoot
+    );
+    assert.strictEqual(firstPage.countState, "atLeast");
+
+    // Abort from the first partial push: by then the extend has finalized at
+    // least one `startedAt` group, so its dedupe keys are already in the
+    // shared set when the cancellation lands.
+    const controller = new AbortController();
+    await assert.rejects(
+      index.search(
+        { query: term, limit: 5, offset: 30 },
+        workspaceRoot,
+        undefined,
+        controller.signal,
+        () => controller.abort()
+      ),
+      (error: unknown) => error instanceof HistorySearchCancelledError
+    );
+
+    const full = await index.search({ query: term, limit: 100 }, workspaceRoot);
+    assert.strictEqual(full.countState, "exact");
+    assert.strictEqual(full.totalCount, totalRuns);
+    assert.strictEqual(full.results.length, totalRuns);
+  });
+
   test("matches a full scan's ordering and dedupe for the same query when paged incrementally", async () => {
     // Runs b/c tie on startedAt (a multi-shard group early termination must
     // finish before stopping), and d records the same response twice at the
