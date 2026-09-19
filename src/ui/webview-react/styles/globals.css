@@ -734,6 +734,21 @@ button .codicon {
     outline-offset: -1px;
   }
 
+  /* Reserve the scrollbar's track permanently instead of only while it's
+     shown. Without this, VS Code's webview can render the scrollbar as a
+     hover-triggered overlay that doesn't participate in layout — rows then
+     get sized against the full (scrollbar-less) content box, and the
+     trailing action rail's trash button ends up sitting under the track the
+     instant a row is hovered and the scrollbar appears. A plain browser tab
+     doesn't show this: its default scrollbar is always classic (space-
+     reserving) and thin enough that it isn't noticeable even when it does
+     overlap slightly. */
+  .workflow-menu-items,
+  .running-workflow-items,
+  .run-panel-items {
+    scrollbar-gutter: stable;
+  }
+
   /* Browsers disagree about whether rows inside a vertical scroller resolve
      width against the usable content box or under the scrollbar. WorkflowStatus
      measures the usable row width once the dropdown opens so high-contrast
