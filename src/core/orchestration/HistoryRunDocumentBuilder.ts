@@ -18,6 +18,17 @@ export interface HistoryRunDocumentBuilderContext {
   workflowName: string;
 }
 
+export interface HistoryRunDocumentTextProjection {
+  text: string;
+  textLower: string;
+}
+
+export interface HistoryRunDocumentBuildOptions {
+  projectCandidate?: (
+    candidate: MatchCandidate
+  ) => HistoryRunDocumentTextProjection | undefined;
+}
+
 export class HistoryRunDocumentBuilder {
   private readonly candidateExtractor: HistoryCandidateExtractor;
 
@@ -45,7 +56,8 @@ export class HistoryRunDocumentBuilder {
 
   buildEventDocuments(
     event: WorkflowTimelineEvent,
-    context: HistoryRunDocumentBuilderContext
+    context: HistoryRunDocumentBuilderContext,
+    options: HistoryRunDocumentBuildOptions = {}
   ): HistorySearchDocument[] {
     const target = "target" in event ? event.target : undefined;
     if (!target) {
@@ -58,18 +70,30 @@ export class HistoryRunDocumentBuilder {
         ? event.payload.cliOutput.structured?.metadata
         : undefined;
 
-    return candidates.map((candidate, candidateIndex) =>
-      this.buildDocument(
-        context,
-        target,
-        this.getAttemptIndex(event),
-        event.sequence,
-        event.timestampMs,
-        candidate,
-        candidateIndex,
-        outputMetadata
-      )
-    );
+    return candidates.flatMap((candidate, candidateIndex) => {
+      const textProjection = options.projectCandidate
+        ? options.projectCandidate(candidate)
+        : {
+            text: candidate.text,
+            textLower: candidate.text.toLowerCase(),
+          };
+      if (!textProjection) {
+        return [];
+      }
+      return [
+        this.buildDocument(
+          context,
+          target,
+          this.getAttemptIndex(event),
+          event.sequence,
+          event.timestampMs,
+          candidate,
+          candidateIndex,
+          textProjection,
+          outputMetadata
+        ),
+      ];
+    });
   }
 
   private collectEventCandidates(
@@ -111,6 +135,7 @@ export class HistoryRunDocumentBuilder {
     timestampMs: number,
     candidate: MatchCandidate,
     candidateIndex: number,
+    textProjection: HistoryRunDocumentTextProjection,
     outputMetadata?: {
       harness?: string;
       model?: string;
@@ -139,8 +164,8 @@ export class HistoryRunDocumentBuilder {
       timestampMs,
       eventKind: candidate.eventKind,
       matchField: candidate.matchField,
-      text: candidate.text,
-      textLower: candidate.text.toLowerCase(),
+      text: textProjection.text,
+      textLower: textProjection.textLower,
       filePath: candidate.filePath,
       harness: outputMetadata?.harness,
       model: outputMetadata?.model,
