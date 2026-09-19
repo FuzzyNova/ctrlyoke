@@ -311,6 +311,18 @@ pass instead of an in-heap scan; that is an accepted cost for a
   they get direct tests, including a property-style check asserting the
   prefilter is true whenever the real `includes()` test is.
 
+### Scanner primitive landed (2026-09-18)
+
+The standalone matching primitive is now in
+`src/core/orchestration/HistorySearchShardScanner.ts`. Its entry points are
+`createHistorySearchLinePrefilter(normalizedQuery)`, which performs the safe
+raw-line candidate check, and
+`streamHistorySearchDocuments(documentsDirectory, normalizedQuery)`, which
+streams and parses candidate documents without retaining a shard or index.
+Integration with `HistorySearchIndexService`, including the persisted
+lowercased search key and schema bump selected by the spike, remains the next
+step.
+
 ## Non-goals
 
 - **No SQLite/FTS5.** A native module means per-platform prebuilds in a VS Code
