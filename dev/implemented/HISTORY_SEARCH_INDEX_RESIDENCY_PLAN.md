@@ -1,7 +1,6 @@
 # History Search Index Residency Plan
 
-**Status:** Implemented — landed (2026-09-18), with one open follow-up
-(see "Open follow-up: the lowercased key is written but never read")
+**Status:** Implemented — landed (2026-09-18)
 **Priority:** P1
 **Predecessor:** `dev/implemented/HISTORY_SEARCH_PERFORMANCE_PLAN.md` (worker
 isolation, incremental rebuild, shared registry). This doc covers the one
@@ -144,12 +143,13 @@ only if A's per-query cost proves unacceptable on this workspace. The spike
 results below selected A's lowercased-key variant for this workspace, and the
 landed implementation uses it.
 
-The spike is small and worth doing before committing to a design: over the real
-976 MB shard set, measure (1) a full streaming read with a raw substring
-prefilter and (2) the same with a lowercased-key column added to each shard.
-If a warm query lands in the same order as today's 602 ms resident scan, A wins
-outright — it is strictly less code than B, removes 1.85 GB, removes the 31 s
-cold start, and keeps one query path rather than two.
+The spike is small and worth doing before committing to a design: over a
+representative copied subset of the real shard set, measure (1) a full
+streaming read with a raw substring prefilter and (2) the same with a
+lowercased-key column added to each shard. The follow-up measurement below
+selects the keyed variant: it is materially faster than lowercasing every raw
+line, while still removing the 1.85 GB resident baseline and the 31 s cold
+load.
 
 A is also the only option that composes cleanly with what already shipped: the
 per-query snapshot means a streamed pass happens once per query, not once per
@@ -207,19 +207,17 @@ original table. The string prefilter itself accounted for 19,974.8 ms, versus
 74.5 ms for parsing and verification.
 
 **Decision: the existing shards are not fast enough for the raw-line
-prefilter.** The landed Option A implementation adds a lowercased search key to
-each shard. It:
+prefilter.** The streaming implementation uses a lowercased search key in each
+shard, and its prefilter reads that key directly. It:
 
 - uses `INDEX_SCHEMA_VERSION = "4.2.0"` in
   `src/core/orchestration/historySearchRebuildWorker.ts`;
-- extends `HistorySearchDocument` with a serialized `textLower` field and has
-  `writeDocumentsShard()` populate it from the capped `text` before
-  `JSON.stringify()` (the atomic wrapper calls that function for both full and
-  incremental rebuilds); and
-- rebuilds every shard on the schema bump. The current document shards are
-  1.642 GB; duplicating the capped text as `textLower` adds approximately
-  another 1.642 GB of payload plus JSON field syntax, so the active shard set
-  should be planned at roughly 3.3 GB on disk.
+- extends `HistorySearchDocument` with a serialized `textLower` field and
+  computes it once while building each run's documents; `writeDocumentsShard()`
+  serializes that field without lowercasing the text a second time; and
+- rebuilds every shard on the schema bump. Sampling 40 real shards measured
+  `text` at 41% of payload, so duplicating it as `textLower` grows the active
+  shard set by about 41% (1.6 GB → ~2.3 GB), not ~2x.
 
 ## Implementation (decided and landed 2026-09-18)
 
@@ -259,8 +257,10 @@ read live per query rather than from a loaded map:
    the U+2028 / lone-CR hazards documented in `src/utils/TextLines.ts`; a raw
    `Buffer` reader is acceptable if the spike shows it materially faster, but
    it must reproduce `LINE_BREAK_PATTERN` exactly).
-2. Apply a **prefilter** to the raw JSONL line. It must never false-negative;
-   a false positive costs only one wasted `JSON.parse`.
+2. Apply a **prefilter** to the raw JSONL line. For ASCII queries, compare the
+   JSON-escaped lowercased query directly against the serialized `textLower`
+   field, without lowercasing the raw line. It must never false-negative; a
+   false positive costs only one wasted `JSON.parse`.
 3. Parse survivors and re-run the real
    `document.text.toLowerCase().includes(query)` plus `matchesFilters`.
 4. Project, dedupe, and sort exactly as today.
@@ -300,14 +300,13 @@ pass instead of an in-heap scan; that is an accepted cost for a
   escaped quote, a backslash becomes a doubled backslash, newline/tab become
   their two-character escapes, and other control characters become `\uXXXX`
   escapes.
-- **Case.** ASCII case-folding during the comparison is cheap; non-ASCII case
-  folding is not byte-comparable. When the query contains non-ASCII letters
-  the prefilter must degrade permissively (prefilter on an ASCII-only run of
-  the query, or skip prefiltering entirely for that query) rather than risk a
-  miss.
-- These are the only two places option A can silently return wrong answers, so
-  they get direct tests, including a property-style check asserting the
-  prefilter is true whenever the real `includes()` test is.
+- **Case.** The serialized `textLower` field makes ASCII comparison
+  case-sensitive and allocation-free. Non-ASCII case folding is not
+  byte-comparable, so the prefilter skips the check entirely for those
+  queries rather than risk a miss.
+- These are the only two places the streaming path can silently return wrong
+  answers, so they get direct tests, including a property-style check
+  asserting the prefilter is true whenever the real `includes()` test is.
 
 ### Streaming implementation landed (2026-09-18)
 
@@ -320,7 +319,7 @@ streams and parses candidate documents without retaining a shard or index.
 `HistorySearchIndexService.collectMatches` now uses that scanner, while
 `loadIfPossible` reads only the manifest. The rebuild worker writes schema
 `4.2.0` document shards with the serialized `HistorySearchDocument.textLower`
-field through `writeDocumentsShard`.
+field, and the scanner consumes that field through a raw-line `includes()`.
 
 ## Non-goals
 
@@ -335,7 +334,7 @@ field through `writeDocumentsShard`.
 
 ## Closeout measurements (dated 2026-09-18)
 
-The closeout benchmark ran in a fresh Node process against the real index at
+The pre-key closeout benchmark ran in a fresh Node process against the real index at
 `C:\Users\natha\.ctrlyoke\projects\ctrlyoke-81d730fe53ae\.search-index`.
 It loaded the compiled shipped
 `out/core/orchestration/HistorySearchShardScanner.js` directly; loading
@@ -354,50 +353,37 @@ physically cold disk.
 | Process RSS after four searches                      | **91.3 MB** (**+43.7 MB**) |
 | Peak heap delta during four searches                 |               **+20.6 MB** |
 
+These are the pre-key streamed baseline numbers; the real index was still
+schema 4.1.0 at the time and was not rebuilt for the benchmark. The keyed
+follow-up comparison below is the final decision and provides the projected
+full-index query cost.
+
 The streamed path therefore removes the multi-second index load and keeps
 post-search RSS within a few hundred MB of baseline. Its full shard pass is
 still materially slower than the old resident 602 ms match pass; that is the
 deliberate disk-read trade-off for eliminating index residency.
 
-## Open follow-up: the lowercased key is written but never read (2026-09-18)
+### Prefilter closeout comparison
 
-Found reviewing the landed work. The spike decided to add a lowercased search
-key to each shard because the raw-line prefilter over existing shards was too
-slow. The write side landed; the read side did not.
+The final decision was measured with `scripts/bench-history-search-index.mjs`
+against a read-only copy of 252 representative real shards. The original copy
+was 300.8 MB; the generated `textLower` copy was 435.0 MB (44.6% larger).
+Each result is a fresh Node process running `codemirror`; both variants found
+the same 1,663 matching documents. The real 1,560-shard index remained
+untouched.
 
-`HistorySearchDocument.textLower` is populated by `historySearchRebuildWorker`
-(in `buildRunDocuments` and again through the spread in
-`writeDocumentsShard`, so each text is lowercased twice per rebuild) and by
-`HistorySearchService`'s `searchLegacy` path, where the document is never
-serialized. Nothing reads it: `HistorySearchIndexService.collectMatches`
-verifies with `document.text.toLowerCase()`, and
-`createHistorySearchLinePrefilter` prefilters with `rawLine.toLowerCase()`.
+| Variant                   | Copy size | Pass 1 total / scan ms | Pass 2 total / scan ms |        RSS delta |
+| ------------------------- | --------: | ---------------------: | ---------------------: | ---------------: |
+| A: raw-line lowercase     |  300.8 MB |      3,983.5 / 3,972.8 |      4,073.5 / 4,062.6 | +39.2 / +50.2 MB |
+| B: serialized `textLower` |  435.0 MB |      1,764.4 / 1,752.5 |      1,875.6 / 1,863.8 | +52.6 / +39.5 MB |
 
-Measured consequences:
-
-- The real index is still `schemaVersion` 4.1.0 (1.6 GB, 1,560 shards), so the
-  `4.2.0` bump means the next real search triggers a full rebuild of every run
-  purely to add this field.
-- Sampling 40 real shards, `text` is **41%** of shard payload, so the field
-  grows the shard set by about 41% (1.6 GB → ~2.3 GB) — not the ~2x estimated
-  in "Spike results" above, which should be corrected.
-- Because the prefilter lowercases the whole raw line, those extra bytes are
-  read and lowercased on every query, so as landed the field makes queries
-  roughly 41% **slower** on their dominant cost.
-
-Either resolution closes it, and the choice should be measured with
-`scripts/bench-history-search-index.mjs` over a copied shard subset rather than
-the live index: delete the field and revert `INDEX_SCHEMA_VERSION` to `4.1.0`
-(the document shape then matches what is already on disk), or keep it and make
-the prefilter test `rawLine.includes(escapedLoweredQuery)` with no per-line
-`toLowerCase()` at all — which is what the spike's decision actually intended,
-and which targets the 19,974.8 ms of the 20,049.2 ms pass that the spike
-attributed to the prefilter.
-
-Until that is settled, the warm-query figure in "Closeout measurements" stands
-at 8,793.7 ms against the old resident match pass of ~602-1,200 ms. If it stays
-in that range, the trigram-postings option (B in "Options") is the indicated
-follow-on, exactly as the Recommendation section anticipated.
+Scaling the measured passes linearly to the real 1,641,853,497-byte, 1,560-
+shard index implies roughly **20.7–21.2 s** per query for A and
+**9.2–9.8 s** for B. Variant B is about 2.2x faster despite the larger
+payload, because it removes the full-line lowercase allocation. It is the
+landed decision. Its warm-query cost remains far above the old resident
+602–1,200 ms match pass, so the trigram-postings option (B in "Options")
+remains the follow-on if this disk-pass cost is unacceptable.
 
 ## Acceptance criteria
 

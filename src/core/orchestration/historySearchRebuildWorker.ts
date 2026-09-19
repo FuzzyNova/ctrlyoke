@@ -765,11 +765,7 @@ async function writeDocumentsShard(
   const stream = fs.createWriteStream(shardPath, { encoding: "utf8" });
   try {
     for (const document of documents) {
-      const serializedDocument = {
-        ...document,
-        textLower: document.text.toLowerCase(),
-      } satisfies HistorySearchDocument;
-      if (!stream.write(JSON.stringify(serializedDocument) + "\n")) {
+      if (!stream.write(JSON.stringify(document) + "\n")) {
         await once(stream, "drain");
       }
     }

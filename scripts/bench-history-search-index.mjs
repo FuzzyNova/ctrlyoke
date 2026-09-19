@@ -6,6 +6,7 @@
  * Usage:
  *   node scripts/bench-history-search-index.mjs <.search-index> <query> --mode resident
  *   node scripts/bench-history-search-index.mjs <.search-index> <query> --mode stream --compare-buffer
+ *   node scripts/bench-history-search-index.mjs <.search-index> <query> --mode stream-key
  *   node scripts/bench-history-search-index.mjs <.search-index> <query> --mode shipped
  */
 
@@ -55,8 +56,15 @@ function parseArguments() {
   if (positional.length !== 2) {
     throw new Error("expected an index directory and a query");
   }
-  if (mode !== "resident" && mode !== "stream" && mode !== "shipped") {
-    throw new Error('--mode must be "resident", "stream", or "shipped"');
+  if (
+    mode !== "resident" &&
+    mode !== "stream" &&
+    mode !== "stream-key" &&
+    mode !== "shipped"
+  ) {
+    throw new Error(
+      '--mode must be "resident", "stream", "stream-key", or "shipped"'
+    );
   }
   if (compareBuffer && mode !== "stream") {
     throw new Error("--compare-buffer requires --mode stream");
@@ -76,10 +84,13 @@ function printHelp() {
 Usage:
   node scripts/bench-history-search-index.mjs <.search-index> <query> --mode resident
   node scripts/bench-history-search-index.mjs <.search-index> <query> --mode stream --compare-buffer
+  node scripts/bench-history-search-index.mjs <.search-index> <query> --mode stream-key
   node scripts/bench-history-search-index.mjs <.search-index> <query> --mode shipped
 
 The index directory is read only. --compare-buffer adds a rough raw Buffer
 scan to a streamed run to compare it with UTF-8 string line decoding.
+--mode stream-key expects shards with a serialized, lowercased textLower field
+and measures a case-sensitive raw-line includes() against that field.
 --mode shipped loads the compiled HistorySearchShardScanner from out/ and
 measures several real queries without retaining their results.`);
 }
@@ -253,10 +264,17 @@ async function runResident(shardPaths, query) {
   };
 }
 
-async function runStream(shardPaths, query, compareBuffer) {
+async function runStream(
+  shardPaths,
+  query,
+  compareBuffer,
+  useSerializedTextLower
+) {
   const memory = createMemoryTracker();
   const loweredQuery = query.toLowerCase();
-  const prefilterNeedle = getPrefilterNeedle(query);
+  const prefilterNeedle = getPrefilterNeedle(
+    useSerializedTextLower ? loweredQuery : query
+  );
   let lineCount = 0;
   let candidateCount = 0;
   let matchCount = 0;
@@ -267,7 +285,12 @@ async function runStream(shardPaths, query, compareBuffer) {
   for (const shardPath of shardPaths) {
     for await (const line of streamFileLines(shardPath)) {
       lineCount += 1;
-      if (!lineMatchesPrefilter(line, prefilterNeedle)) {
+      const passesPrefilter =
+        prefilterNeedle === undefined ||
+        (useSerializedTextLower
+          ? line.includes(prefilterNeedle.text)
+          : lineMatchesPrefilter(line, prefilterNeedle));
+      if (!passesPrefilter) {
         if (lineCount % SAMPLE_INTERVAL === 0) memory.sample();
         continue;
       }
@@ -288,14 +311,15 @@ async function runStream(shardPaths, query, compareBuffer) {
   memory.sample();
 
   const result = {
-    mode: "stream",
+    mode: useSerializedTextLower ? "stream-key" : "stream",
     shards: shardPaths.length,
     lines: lineCount,
     matches: matchCount,
     candidateCount,
     falsePositiveCount,
-    prefilter:
-      prefilterNeedle === undefined
+    prefilter: useSerializedTextLower
+      ? "serialized-text-lower"
+      : prefilterNeedle === undefined
         ? "skipped-non-ascii"
         : "ascii-case-insensitive",
     totalMs: roundMs(performance.now() - totalStart),
@@ -441,8 +465,15 @@ async function main() {
     options.mode === "resident"
       ? await runResident(shardPaths, options.query)
       : options.mode === "stream"
-        ? await runStream(shardPaths, options.query, options.compareBuffer)
-        : await runShippedScanner(options.indexDirectory, options.query);
+        ? await runStream(
+            shardPaths,
+            options.query,
+            options.compareBuffer,
+            false
+          )
+        : options.mode === "stream-key"
+          ? await runStream(shardPaths, options.query, false, true)
+          : await runShippedScanner(options.indexDirectory, options.query);
   console.log(
     JSON.stringify({
       indexDirectory: options.indexDirectory,

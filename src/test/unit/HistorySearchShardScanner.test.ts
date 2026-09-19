@@ -64,6 +64,17 @@ suite("HistorySearchShardScanner", () => {
     ]);
   });
 
+  test("uses the serialized lowercased text key for ASCII queries", () => {
+    const document = createDocument("A Mixed Case Needle");
+    const line = JSON.stringify(document);
+
+    assert.strictEqual(line.includes('"text":"mixed case needle"'), false);
+    assert.strictEqual(
+      createHistorySearchLinePrefilter("mixed case needle")(line),
+      true
+    );
+  });
+
   test("degrades permissively for a non-ASCII query", async () => {
     const documents = [
       createDocument("A bright Éclair"),
@@ -79,7 +90,7 @@ suite("HistorySearchShardScanner", () => {
     assert.deepStrictEqual(await matchingTexts(query), actualMatches);
   });
 
-  test("never rejects a line whose parsed text really matches", () => {
+  test("never rejects a keyed line whose parsed text really matches", () => {
     const texts = Array.from(
       { length: 32 },
       (_, index) =>

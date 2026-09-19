@@ -13,7 +13,7 @@ export type HistorySearchDocumentScannedCallback = () => void;
 /**
  * Creates the cheap candidate check used before parsing a JSONL document.
  *
- * ASCII queries can be compared against the JSON representation directly:
+ * ASCII queries can be compared against the serialized lowercased text key:
  * JSON.stringify applies the same escaping that was used when the shard was
  * written. Queries containing non-ASCII characters skip the check entirely,
  * because Unicode case folding is not a safe byte-level operation.
@@ -25,10 +25,10 @@ export function createHistorySearchLinePrefilter(
     return () => true;
   }
 
-  const serializedQuery = JSON.stringify(normalizedQuery);
-  const escapedQuery = serializedQuery.slice(1, -1).toLowerCase();
+  const serializedLoweredQuery = JSON.stringify(normalizedQuery.toLowerCase());
+  const escapedLoweredQuery = serializedLoweredQuery.slice(1, -1);
 
-  return (rawLine) => rawLine.toLowerCase().includes(escapedQuery);
+  return (rawLine) => rawLine.includes(escapedLoweredQuery);
 }
 
 /**
