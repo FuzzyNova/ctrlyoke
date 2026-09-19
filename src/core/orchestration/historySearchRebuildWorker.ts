@@ -7,11 +7,7 @@ import type { RunHistoryLocation } from "../../types/CtrlYokeSettings";
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 import { HISTORY_SEARCH_REBUILD_MESSAGE_TYPES } from "../../types/DashboardConstants";
 import {
-  TIMELINE_EVENT_TYPES,
-  type CliOutputEventsAppendedEvent,
-  type CliOutputRecordedEvent,
   type HistorySearchDocument,
-  type StatusMessageRecordedEvent,
   type WorkflowRunManifest,
   type WorkflowTimelineEvent,
 } from "../../types/WorkflowTimelineTypes";
@@ -29,10 +25,7 @@ import {
 } from "../../utils/AtomicFileUtils";
 import { TimelineRecorder } from "./TimelineRecorder";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
-import {
-  HistoryCandidateExtractor,
-  type MatchCandidate,
-} from "./HistoryCandidateExtractor";
+import { HistoryRunDocumentBuilder } from "./HistoryRunDocumentBuilder";
 
 export const INDEX_SCHEMA_VERSION = "4.2.0" as const;
 export const MANIFEST_FILE_NAME = "manifest.json";
@@ -61,9 +54,9 @@ const FRESHNESS_CHECK_CONCURRENCY = 16;
 export const INCREMENTAL_REBUILD_MAX_CHANGED_RATIO = 0.5;
 const timelineRecorder = new TimelineRecorder();
 const lineageRepository = new WorkflowLineageRepository();
-const candidateExtractor = new HistoryCandidateExtractor({
-  maxTextLength: MAX_INDEXED_TEXT_LENGTH,
-});
+const runDocumentBuilder = new HistoryRunDocumentBuilder(
+  MAX_INDEXED_TEXT_LENGTH
+);
 
 export interface HistorySearchIndexManifest {
   schemaVersion: typeof INDEX_SCHEMA_VERSION;
@@ -905,84 +898,12 @@ async function buildRunDocuments(
   workflowKey: WorkflowKey,
   runRef: RunRef
 ): Promise<HistorySearchDocument[]> {
-  const documents: HistorySearchDocument[] = [];
-  try {
-    for await (const event of events) {
-      const candidates = collectEventCandidates(event, candidateExtractor);
-      const target = "target" in event ? event.target : undefined;
-      if (!target) {
-        continue;
-      }
-      const outputMetadata =
-        event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED
-          ? (event as CliOutputRecordedEvent).payload.cliOutput.structured
-              ?.metadata
-          : undefined;
-      documents.push(
-        ...candidates.map((candidate, candidateIndex) => ({
-          id: [
-            workflowKey,
-            runRef,
-            manifest.runId,
-            event.sequence,
-            `${candidate.eventKind}:${candidate.matchField}`,
-            candidateIndex,
-          ].join(":"),
-          workflowKey,
-          runRef,
-          workflowName: metadata.workflowName,
-          runId: manifest.runId,
-          startedAt: manifest.startedAt,
-          executionState: manifest.executionState,
-          target,
-          attemptIndex:
-            event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED
-              ? (event as CliOutputRecordedEvent).attemptIndex
-              : event.eventType ===
-                  TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED
-                ? (event as CliOutputEventsAppendedEvent).attemptIndex
-                : 0,
-          sequence: event.sequence,
-          timestampMs: event.timestampMs,
-          eventKind: candidate.eventKind,
-          matchField: candidate.matchField,
-          text: candidate.text,
-          textLower: candidate.text.toLowerCase(),
-          filePath: candidate.filePath,
-          harness: outputMetadata?.harness,
-          model: outputMetadata?.model,
-          sessionId: outputMetadata?.sessionId,
-        }))
-      );
-    }
-  } catch {
-    // Do not publish a partial shard after a read/parse failure. This matches
-    // readEventsSafe's former all-or-nothing result for the worker path.
-    return [];
-  }
-  return documents;
-}
-
-function collectEventCandidates(
-  event: WorkflowTimelineEvent,
-  candidateExtractor: HistoryCandidateExtractor
-): MatchCandidate[] {
-  switch (event.eventType) {
-    case TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED:
-      return candidateExtractor.collectCliOutputCandidates(
-        (event as CliOutputRecordedEvent).payload.cliOutput
-      );
-    case TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED:
-      return candidateExtractor.collectStructuredEventsCandidates(
-        (event as CliOutputEventsAppendedEvent).payload.events
-      );
-    case TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED:
-      return candidateExtractor.collectStatusCandidates(
-        (event as StatusMessageRecordedEvent).payload.statusMessage.message
-      );
-    default:
-      return [];
-  }
+  return runDocumentBuilder.buildRunDocuments(events, {
+    manifest,
+    workflowKey,
+    runRef,
+    workflowName: metadata.workflowName,
+  });
 }
 
 async function swapIndexFiles(

@@ -1,23 +1,14 @@
 import * as fs from "fs";
 import * as path from "path";
-import {
-  HISTORY_EVENT_KINDS,
-  HISTORY_MATCH_FIELDS,
-  HISTORY_SEARCH_COUNT_STATES,
-} from "../../types/DashboardConstants";
-import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
+import { HISTORY_SEARCH_COUNT_STATES } from "../../types/DashboardConstants";
 import type { WorkflowKey } from "../../types/CtrlYokeTypes";
 import {
-  TIMELINE_EVENT_TYPES,
-  type CliOutputEventsAppendedEvent,
-  type CliOutputRecordedEvent,
-  type HistorySearchDocument,
   type HistorySearchFilters,
   type HistorySearchQuery,
   type HistorySearchResponse,
   type HistorySearchResult,
-  type StatusMessageRecordedEvent,
   type WorkflowRunManifest,
+  type WorkflowTimelineEvent,
 } from "../../types/WorkflowTimelineTypes";
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
@@ -31,10 +22,7 @@ import {
   type PartialSearchResultsCallback,
 } from "./HistorySearchIndexService";
 import { getSharedHistorySearchIndexService } from "./HistorySearchIndexServiceRegistry";
-import {
-  HistoryCandidateExtractor,
-  type MatchCandidate,
-} from "./HistoryCandidateExtractor";
+import { HistoryRunDocumentBuilder } from "./HistoryRunDocumentBuilder";
 import { matchesFilters } from "./HistorySearchFilters";
 import {
   getHistorySearchDocumentDedupeKey,
@@ -63,9 +51,9 @@ export class HistorySearchService {
   // it scanned, which is exactly the "megabyte-per-event verbatim" pattern
   // that path's own cap exists to avoid, and is more likely to run under
   // memory pressure since it only fires when the index path already failed.
-  private readonly candidateExtractor = new HistoryCandidateExtractor({
-    maxTextLength: MAX_INDEXED_TEXT_LENGTH,
-  });
+  private readonly runDocumentBuilder = new HistoryRunDocumentBuilder(
+    MAX_INDEXED_TEXT_LENGTH
+  );
 
   async search(
     query: string | HistorySearchQuery,
@@ -347,190 +335,18 @@ export class HistorySearchService {
   }
 
   private collectEventDocuments(
-    event: {
-      eventType: string;
-      payload: Record<string, unknown>;
-      target?: OutputExecutionTarget;
-      sequence: number;
-      timestampMs: number;
-    },
+    event: WorkflowTimelineEvent,
     manifest: WorkflowRunManifest,
     metadata: WorkflowMetadata,
     workflowKey: WorkflowKey,
     runRef: import("../../types/CtrlYokeTypes").RunRef
-  ): HistorySearchDocument[] {
-    switch (event.eventType) {
-      case TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED:
-        return this.collectCliOutputDocuments(
-          event as CliOutputRecordedEvent,
-          manifest,
-          metadata,
-          workflowKey,
-          runRef
-        );
-      case TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED:
-        return this.collectCliOutputEventsAppendedDocuments(
-          event as CliOutputEventsAppendedEvent,
-          manifest,
-          metadata,
-          workflowKey,
-          runRef
-        );
-      case TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED:
-        return this.collectStatusDocuments(
-          event as StatusMessageRecordedEvent,
-          manifest,
-          metadata,
-          workflowKey,
-          runRef
-        );
-      default:
-        return [];
-    }
-  }
-
-  private collectCliOutputDocuments(
-    event: CliOutputRecordedEvent,
-    manifest: WorkflowRunManifest,
-    metadata: WorkflowMetadata,
-    workflowKey: WorkflowKey,
-    runRef: import("../../types/CtrlYokeTypes").RunRef
-  ): HistorySearchDocument[] {
-    const cliOutput = event.payload.cliOutput;
-    const candidates =
-      this.candidateExtractor.collectCliOutputCandidates(cliOutput);
-
-    return candidates.map((candidate, candidateIndex) =>
-      this.buildDocument(
-        manifest,
-        metadata,
-        workflowKey,
-        runRef,
-        event.target,
-        event.attemptIndex,
-        event.sequence,
-        event.timestampMs,
-        candidate,
-        candidateIndex,
-        cliOutput.structured?.metadata
-      )
-    );
-  }
-
-  /**
-   * `CliOutputEventsAppendedEvent` carries the same structured CLI events
-   * (bash output, tool calls, file edits, text/thinking blocks, …) a
-   * completed `CliOutputRecordedEvent` snapshot carries in
-   * `cliOutput.structured.events` — it's just how that content arrives while
-   * an attempt is still streaming (see `OutputHistoryTimelineAdapter`, which
-   * folds both into the same rendered output). Without this case, any
-   * content that only ever shows up via streamed appends — not reproduced
-   * verbatim in a later completed snapshot — was invisible to history
-   * search even though it's fully searchable in the live output pane's find
-   * bar, which reads the folded/rendered rows rather than raw timeline
-   * events.
-   */
-  private collectCliOutputEventsAppendedDocuments(
-    event: CliOutputEventsAppendedEvent,
-    manifest: WorkflowRunManifest,
-    metadata: WorkflowMetadata,
-    workflowKey: WorkflowKey,
-    runRef: import("../../types/CtrlYokeTypes").RunRef
-  ): HistorySearchDocument[] {
-    const candidates =
-      this.candidateExtractor.collectStructuredEventsCandidates(
-        event.payload.events
-      );
-
-    return candidates.map((candidate, candidateIndex) =>
-      this.buildDocument(
-        manifest,
-        metadata,
-        workflowKey,
-        runRef,
-        event.target,
-        event.attemptIndex,
-        event.sequence,
-        event.timestampMs,
-        candidate,
-        candidateIndex
-      )
-    );
-  }
-
-  private collectStatusDocuments(
-    event: StatusMessageRecordedEvent,
-    manifest: WorkflowRunManifest,
-    metadata: WorkflowMetadata,
-    workflowKey: WorkflowKey,
-    runRef: import("../../types/CtrlYokeTypes").RunRef
-  ): HistorySearchDocument[] {
-    const message = event.payload.statusMessage.message;
-    return [
-      this.buildDocument(
-        manifest,
-        metadata,
-        workflowKey,
-        runRef,
-        event.target,
-        0,
-        event.sequence,
-        event.timestampMs,
-        {
-          eventKind: HISTORY_EVENT_KINDS.STATUS,
-          matchField: HISTORY_MATCH_FIELDS.CONTENT,
-          text: message,
-        },
-        0
-      ),
-    ];
-  }
-
-  private buildDocument(
-    manifest: WorkflowRunManifest,
-    metadata: WorkflowMetadata,
-    workflowKey: WorkflowKey,
-    runRef: import("../../types/CtrlYokeTypes").RunRef,
-    target: OutputExecutionTarget,
-    attemptIndex: number,
-    sequence: number,
-    timestampMs: number,
-    candidate: MatchCandidate,
-    candidateIndex: number,
-    outputMetadata?: {
-      harness?: string;
-      model?: string;
-      sessionId?: string;
-    }
-  ): HistorySearchDocument {
-    return {
-      id: [
-        workflowKey,
-        runRef,
-        manifest.runId,
-        sequence,
-        `${candidate.eventKind}:${candidate.matchField}`,
-        candidateIndex,
-      ].join(":"),
+  ) {
+    return this.runDocumentBuilder.buildEventDocuments(event, {
+      manifest,
       workflowKey,
       runRef,
       workflowName: metadata.workflowName,
-      runId: manifest.runId,
-      startedAt: manifest.startedAt,
-      executionState: manifest.executionState,
-      target,
-      attemptIndex,
-      sequence,
-      timestampMs,
-      eventKind: candidate.eventKind,
-      matchField: candidate.matchField,
-      text: candidate.text,
-      textLower: candidate.text.toLowerCase(),
-      filePath: candidate.filePath,
-      harness: outputMetadata?.harness,
-      model: outputMetadata?.model,
-      sessionId: outputMetadata?.sessionId,
-    };
+    });
   }
 
   private matchesQuery(text: string, query: string): boolean {
