@@ -4,9 +4,9 @@
 **Priority:** P2
 **Related:** `dev/implemented/HISTORY_SEARCH_PERFORMANCE_PLAN.md` (introduced
 `MAX_INDEXED_TEXT_LENGTH` as an OOM guard — background for why this cap exists
-at all). `dev/backlog/HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md` (the still-open
-resident-memory problem this plan's options would make worse if done first —
-see "Sequencing" below).
+at all). `dev/implemented/HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md` (the
+completed resident-memory work that changes the sequencing of this plan — see
+"Sequencing" below).
 
 ## The problem in one sentence
 
@@ -127,32 +127,24 @@ exceeds `2 * MAX_INDEXED_TEXT_LENGTH`.
 - **Complexity:** lowest of the three — no overlap tuning, no dedupe
   interaction beyond what already exists for multiple documents per event.
 
-## Sequencing: this depends on the residency plan, not the other way around
+## Sequencing: the residency plan has landed
 
-`dev/backlog/HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md` documents that the
-current index is fully resident in the extension host's heap
-(`HistorySearchIndexService.shardDocuments`), and that this residency is
-itself an open OOM risk (1.85 GB resident for one measured workspace) — not
-yet fixed. Option A above (windowing) directly increases total document count
-for exactly the large-candidate cases that already dominate that residency
-cost. **Shipping A before the residency plan's streaming approach lands would
-make an already-open OOM risk worse, not just add a new one.** Option B does
-not have this problem (no index growth) and could ship independently. Option C
-has a bounded, small growth (at most 2x for affected candidates) and is
-probably safe either way, but should still be measured against the residency
-numbers before shipping.
+`dev/implemented/HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md` replaced the
+extension-host's resident-document map with streamed shard queries. Option A
+above (windowing) therefore no longer increases permanently resident heap —
+the additional documents are read from disk as part of the same streamed pass.
+The remaining costs are the on-disk index growth and the window/dedupe design
+described above; measure those before shipping, but residency is no longer the
+reason to block this plan. Option B still avoids index growth, and Option C
+still has bounded growth (at most 2x for affected candidates).
 
 ## Recommendation
 
-Do not build A until the residency plan's streaming design (its Option A —
-stream shards per query, hold nothing resident) lands; re-evaluate then, since
-a streaming query path removes the "more documents = more permanently resident
-heap" equation that makes A risky today. In the meantime, C is a small,
-boundedly-safe improvement that meaningfully increases coverage (catches the
-first and last window of long content, where search terms often land) without
-waiting on the residency work, and is a reasonable thing to ship on its own if
-the truncation gap keeps causing user-facing reports before residency is
-addressed.
+Re-evaluate A now that the residency work has landed: it is the complete
+coverage option without the former permanent-residency penalty, subject to a
+measurement of index growth and the overlap/dedupe behavior. C remains a
+small, bounded improvement if a lower-risk partial fix is preferred, while B
+still requires the new UI and per-run fallback path described above.
 
 ## Non-goals
 

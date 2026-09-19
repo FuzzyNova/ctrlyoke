@@ -7,7 +7,7 @@
 > `history search` and assumes that vocabulary. The two are independently shippable, but search is
 > materially more useful once `history show` exists — see "Sequencing" below.
 >
-> **Related:** `dev/backlog/HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md` (the streaming reader this plan
+> **Related:** `dev/implemented/HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md` (the streaming reader this plan
 > needs and that plan also needs — do not build it twice),
 > `dev/backlog/HISTORY_SEARCH_TRUNCATED_TEXT_MATCH_PLAN.md` (the silent-miss gap this command must
 > disclose rather than inherit quietly).

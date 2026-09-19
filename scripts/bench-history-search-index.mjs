@@ -6,12 +6,15 @@
  * Usage:
  *   node scripts/bench-history-search-index.mjs <.search-index> <query> --mode resident
  *   node scripts/bench-history-search-index.mjs <.search-index> <query> --mode stream --compare-buffer
+ *   node scripts/bench-history-search-index.mjs <.search-index> <query> --mode shipped
  */
 
 import { createReadStream } from "node:fs";
 import { readdir } from "node:fs/promises";
+import Module from "node:module";
 import { join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
+import { pathToFileURL } from "node:url";
 
 const DOCUMENTS_DIRECTORY_NAME = "documents";
 const DOCUMENT_SHARD_PATTERN = /\.jsonl$/;
@@ -52,8 +55,8 @@ function parseArguments() {
   if (positional.length !== 2) {
     throw new Error("expected an index directory and a query");
   }
-  if (mode !== "resident" && mode !== "stream") {
-    throw new Error('--mode must be "resident" or "stream"');
+  if (mode !== "resident" && mode !== "stream" && mode !== "shipped") {
+    throw new Error('--mode must be "resident", "stream", or "shipped"');
   }
   if (compareBuffer && mode !== "stream") {
     throw new Error("--compare-buffer requires --mode stream");
@@ -73,9 +76,12 @@ function printHelp() {
 Usage:
   node scripts/bench-history-search-index.mjs <.search-index> <query> --mode resident
   node scripts/bench-history-search-index.mjs <.search-index> <query> --mode stream --compare-buffer
+  node scripts/bench-history-search-index.mjs <.search-index> <query> --mode shipped
 
 The index directory is read only. --compare-buffer adds a rough raw Buffer
-scan to a streamed run to compare it with UTF-8 string line decoding.`);
+scan to a streamed run to compare it with UTF-8 string line decoding.
+--mode shipped loads the compiled HistorySearchShardScanner from out/ and
+measures several real queries without retaining their results.`);
 }
 
 async function getShardPaths(indexDirectory) {
@@ -111,6 +117,10 @@ function createMemoryTracker() {
     report() {
       const final = readMemory();
       return {
+        baselineHeapUsedMb: toMegabytes(baseline.heapUsed),
+        baselineRssMb: toMegabytes(baseline.rss),
+        finalHeapUsedMb: toMegabytes(final.heapUsed),
+        finalRssMb: toMegabytes(final.rss),
         heapUsedDeltaMb: toMegabytes(final.heapUsed - baseline.heapUsed),
         rssDeltaMb: toMegabytes(final.rss - baseline.rss),
         peakHeapUsedMb: toMegabytes(peak.heapUsed),
@@ -309,6 +319,71 @@ async function runStream(shardPaths, query, compareBuffer) {
   return result;
 }
 
+async function runShippedScanner(indexDirectory, query) {
+  const scannerPath = resolve(
+    "out/core/orchestration/HistorySearchShardScanner.js"
+  );
+  const originalLoad = Module._load;
+  Module._load = function loadWithoutVSCode(request, parent, isMain) {
+    if (request === "vscode") {
+      return {};
+    }
+    return originalLoad.call(this, request, parent, isMain);
+  };
+  let streamHistorySearchDocuments;
+  try {
+    ({ streamHistorySearchDocuments } = await import(
+      pathToFileURL(scannerPath).href
+    ));
+  } finally {
+    Module._load = originalLoad;
+  }
+  const documentsDirectory = join(indexDirectory, DOCUMENTS_DIRECTORY_NAME);
+  const memory = createMemoryTracker();
+  const normalizedQuery = query.trim();
+
+  async function collect(queryToRun) {
+    let matchCount = 0;
+    for await (const document of streamHistorySearchDocuments(
+      documentsDirectory,
+      queryToRun
+    )) {
+      if (document.text.toLowerCase().includes(queryToRun.toLowerCase())) {
+        matchCount += 1;
+      }
+    }
+    memory.sample();
+    return matchCount;
+  }
+
+  const firstStart = performance.now();
+  const firstMatches = await collect(normalizedQuery);
+  const firstSearchMs = performance.now() - firstStart;
+
+  const warmStart = performance.now();
+  const warmMatches = await collect(normalizedQuery);
+  const warmRepeatMs = performance.now() - warmStart;
+
+  const comparisonQueries = ["the", "zzzzzzzzzz"];
+  const comparisonMatches = {};
+  for (const comparisonQuery of comparisonQueries) {
+    comparisonMatches[comparisonQuery] = await collect(comparisonQuery);
+  }
+
+  return {
+    mode: "shipped-scanner",
+    implementation: scannerPath,
+    query: normalizedQuery,
+    firstMatches,
+    firstSearchMs: roundMs(firstSearchMs),
+    warmMatches,
+    warmRepeatMs: roundMs(warmRepeatMs),
+    comparisonMatches,
+    searches: 2 + comparisonQueries.length,
+    ...memory.report(),
+  };
+}
+
 async function scanWithBuffer(shardPaths, needle) {
   const pattern = Buffer.from(needle, "ascii");
   if (pattern.length === 0) return 0;
@@ -365,7 +440,9 @@ async function main() {
   const result =
     options.mode === "resident"
       ? await runResident(shardPaths, options.query)
-      : await runStream(shardPaths, options.query, options.compareBuffer);
+      : options.mode === "stream"
+        ? await runStream(shardPaths, options.query, options.compareBuffer)
+        : await runShippedScanner(options.indexDirectory, options.query);
   console.log(
     JSON.stringify({
       indexDirectory: options.indexDirectory,
