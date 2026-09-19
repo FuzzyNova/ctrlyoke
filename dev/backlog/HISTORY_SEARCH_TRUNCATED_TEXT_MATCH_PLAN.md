@@ -1,7 +1,9 @@
 # History Search Truncated-Text Match Plan
 
-**Status:** Backlog — not started. **Option decided: B** (2026-09-19), on the
-measurement spike below; the acceptance criteria's measurement gate is met.
+**Status:** Backlog — ready to implement. **Option decided: B** (2026-09-19), on
+the measurement spike below; the acceptance criteria's measurement gate is met,
+and "Implementation design (settled)" below fixes the design against the code
+that exists today.
 **Priority:** P2
 **Related:** `dev/implemented/HISTORY_SEARCH_PERFORMANCE_PLAN.md` (introduced
 `MAX_INDEXED_TEXT_LENGTH` as an OOM guard — background for why this cap exists
@@ -319,13 +321,129 @@ of them change the choice; all of them were invisible before the measurement.
    re-extraction bounds its worst case, and it streams partial results, which
    is strictly better than the `searchLegacy` disk scan it resembles.
 
-One thing the spike confirms is _not_ a problem: merging deep results with
-indexed ones is safe. `getHistorySearchDocumentDedupeKey` derives
-`matchSnippet` from the first match position, so an uncapped rescan reproduces
-a byte-identical key for any match that was already within the first 2000
-chars — the newly-found matches are exactly the ones that are new. (This is
-also precisely why option A would double-count: its windows produce different
-snippets for the same event.)
+4. **Dedupe-key reproduction is _nearly_ but not exactly byte-identical, so it
+   cannot be the merge's only safeguard.** `getHistorySearchDocumentDedupeKey`
+   derives `matchSnippet` from the first match position, so an uncapped rescan
+   does reproduce the indexed key for almost any match already inside the first
+   2000 chars — but not all of them. `extractSnippet` ends the snippet at
+   `min(text.length, index + query.length + 60)` and appends `…` only when that
+   end is short of the text's end. For a first match at index `i` where
+   `i + query.length + 60 > 2000`, the capped document's snippet stops at 2000
+   with no trailing ellipsis while the uncapped one runs 60 chars further and
+   gains one — different snippet, different key, one duplicate row. That is a
+   ~60-character-wide window per candidate, rare but entirely real on a corpus
+   this size. See the emission rule in "Implementation design" below, which
+   removes the case rather than papering over it. (The near-miss is also
+   precisely why option A would double-count outright: its windows produce
+   different snippets for the same event.)
+
+## Implementation design (settled)
+
+Read against the code as it stands: `HistorySearchIndexService.scanForMatches`
+(recency-ordered, abortable, group-buffered, cursor-resumable),
+`HistorySearchShardScanner`, `historySearchRebuildWorker`,
+`HistoryCandidateExtractor`, `TimelineRecorder.streamEvents` /
+`streamEventsForHistorySearch`, and `WebviewMessageRouter`'s SEARCH_HISTORY
+handler.
+
+1. **The deep pass is interleaved per run inside the existing scan, not run as
+   a second pass afterwards.** `scanForMatches` already visits shards (one
+   shard = one run) in descending `startedAt`, buffers each `startedAt` group,
+   dedupes it, checks the page target only at group boundaries, and can stop
+   early, resume from a cursor, and abort between shards and lines. A deep
+   query keeps all of that: for each shard it visits, after considering the
+   shard's indexed documents it also streams that run's `events.jsonl`
+   uncapped and considers the extra documents **into the same group buffer**.
+   Ordering, dedupe, early termination, incremental `onPartialResultsFound`
+   pushes, `atLeast` counts, cursor resumption and cancellation rollback are
+   then inherited unchanged rather than reimplemented — which is the whole
+   reason the responsive-query plan's machinery is worth reusing. A separate
+   "scan the index, then scan the disk" pass would produce two recency-ordered
+   lists concatenated, which is not one flat list.
+
+2. **A deep pass emits only matches the capped prefix misses.** For each
+   uncapped candidate, if `text.slice(0, MAX_INDEXED_TEXT_LENGTH)` already
+   contains the query, the indexed pass has already reported that event —
+   discard it. Only a candidate whose match exists solely past the cap becomes
+   a deep result. This is what preserves one result per matching event (the
+   drawer's stated model), and it removes the snippet-boundary duplicate
+   described above by construction instead of relying on key equality. The
+   shared `seenDedupeKeys` set still runs over deep results as a backstop.
+
+3. **The per-run over-cap signal goes in the manifest, and the index schema
+   version does _not_ change.** Add an optional `overCapCandidateCount` to
+   `HistorySearchIndexManifest.indexedRuns[*]`. Bumping `INDEX_SCHEMA_VERSION`
+   from 4.2.0 would force every existing index to be discarded and fully
+   rebuilt (2.29 GB and minutes of worker time on the measured history) to gain
+   a field that only lets the deep pass skip the 17% of runs with nothing
+   hidden. Instead the field is optional and **`undefined` means "unknown —
+   must be deep-scanned"**, so behaviour is correct on a pre-existing index
+   from the first query and the counts fill in as runs are re-indexed. Only
+   `overCapCandidateCount === 0` licenses skipping a run's uncapped rescan.
+
+4. **The count is collected where truncation actually happens.** Candidates
+   reach `HistoryCandidateExtractor` already shortened:
+   `TimelineRecorder.streamEventsForHistorySearch` truncates each event's
+   strings via `truncateHistorySearchEvent` before the extractor ever sees
+   them, so the extractor cannot tell an over-cap candidate from an exactly-
+   sized one. Thread an optional truncation callback/counter through
+   `streamEventsForHistorySearch` and accumulate per run in the rebuild worker
+   (both the full and the incremental path). Semantics are "how many source
+   strings were shortened for this run" — a has-hidden-text signal with a
+   useful magnitude, not an exact candidate count, and it is only ever read as
+   `> 0` / `=== 0` / unknown.
+
+5. **Shard entries must carry their run's source paths.**
+   `HistorySearchShardEntry` is `{shardName, startedAt}` today; the deep pass
+   needs the run's `manifestPath` (and thus its `events.jsonl`) plus the
+   over-cap count to act on. `resolveShardVisitEntries` already walks
+   `indexedRuns` to resolve `startedAt`, so carry the entry's `manifestPath`
+   and `overCapCandidateCount` through at the same time — no extra I/O. A
+   shard with no manifest entry (in-flight write, unloadable manifest) has no
+   run source and is simply not deep-scanned; it is still scanned normally.
+
+6. **Memory rules for the uncapped path.** One event, and one candidate, in
+   flight at a time — never an array of a run's uncapped documents. Do not
+   materialize `textLower` for a deep candidate (match with a lowercased
+   `indexOf` on the raw text; the persisted key exists to speed up a JSONL
+   prefilter that does not apply here), and retain nothing beyond the projected
+   `HistorySearchResult`'s bounded snippet. The cap on _stored_ text is
+   unchanged; nothing new is written to the index.
+
+7. **`deep` is part of the listing identity, not just a flag.** Add
+   `deep?: boolean` to `HistorySearchQuery` and `SearchHistoryMessage`, and
+   include it in **both** `HistorySearchIndexService.getSnapshotKey` and
+   `WebviewMessageRouter`'s `getHistorySearchListingKey`. Miss the former and a
+   deep query is answered from the shallow query's cached snapshot; miss the
+   latter and toggling deep either fails to supersede the in-flight shallow
+   scan or, worse, deep paging requests cancel each other.
+
+8. **The disk-scan fallback stays capped.** `HistorySearchService.searchLegacy`
+   runs only when the index path already failed, often under memory pressure;
+   it keeps `MAX_INDEXED_TEXT_LENGTH` and ignores `deep`. Deep search is an
+   index-path capability, and the response's existing `indexState: "fallback"`
+   already tells the UI the answer came from elsewhere.
+
+9. **Surface: a query-level toggle in the drawer's sticky header**, beside the
+   result summary — not a per-result badge (83.3% of runs would carry one) and
+   not a per-run "matched nothing" prompt (the 85-vs-200 case proves a run can
+   hold both indexed and hidden matches for the same query). Toggling it
+   re-issues the current query as a new listing. The existing one-result-per-
+   event sentence stays true and unchanged, per rule 2.
+
+## Implementation steps
+
+Ordered so each builds only on landed work:
+
+1. Extract the shared run-document builder (DRY; no behaviour change).
+2. Record the per-run over-cap signal in the manifest and carry it, with the
+   run's source paths, on `HistorySearchShardEntry`.
+3. Build the uncapped single-run deep scanner module.
+4. Interleave it into `HistorySearchIndexService`'s scan and plumb `deep`
+   through the query contract.
+5. Add the drawer's deep-search toggle and its message/router/store plumbing.
+6. Close out the docs (move this plan to `dev/implemented/`, update
+   `orchestration.instructions.md`) and run the full gate.
 
 ## Non-goals
 
@@ -364,6 +482,11 @@ snippets for the same event.)
       and the persisted index gains no documents and no per-document fields.
 - [ ] The per-run over-cap signal is recorded in the index manifest's
       `indexedRuns` entry and is usable without reading any shard.
+- [ ] Adding that signal does not invalidate existing indexes: `INDEX_SCHEMA_VERSION`
+      is unchanged and a run with no recorded count is treated as unknown (so it
+      is deep-scanned), never as "nothing hidden".
+- [ ] A deep result is only ever produced for a match the capped prefix misses,
+      so no event yields both an indexed and a deep row.
 - [ ] A deep search is abortable and reports incrementally on the same terms as
       the indexed scan (`HistorySearchCancelledError`, `atLeast` counts,
       supersession keyed on the listing), and a cancelled one leaves no
