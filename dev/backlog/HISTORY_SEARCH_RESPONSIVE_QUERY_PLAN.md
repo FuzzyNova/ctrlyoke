@@ -1,11 +1,12 @@
 # History Search Responsive Query Plan
 
-**Status:** In progress — A has landed in full (recency-ordered scan,
-early termination, and the `totalCount` contract change it forces), on top of
-the already-landed C and D (repeat-query snapshot reuse gated on freshness,
-plus superseded-search cancellation). Progressive result delivery — results
-rendering as they're found during a scan A's early termination can't shortcut
-— has also landed on top of A. B and E are still backlog.
+**Status:** In progress — C, D, A, progressive delivery, and B (the bounded
+document cache) have all landed. Measured: a ~20-search session went from
+~416 s to 23.7 s, with typical queries at 3.8–107.3 ms. One acceptance
+criterion is **not met** — a 1,024 MB cache budget produced a +2,033.4 MB RSS
+delta, so the default budget needs re-tuning against measured RSS (queued). E
+(trigram postings) remains backlog and is the only remaining answer to the
+no-match query, which still costs a full 9.5 s pass.
 **Priority:** P0 — this is a live regression in daily use, not a future risk.
 **Predecessor:** `dev/implemented/HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md` removed
 the ~2.16 GB resident index by streaming every shard per query. It fixed the
@@ -339,23 +340,78 @@ aggregate rather than minutes.
   about query latency. Note that `dev/backlog/HISTORY_SEARCH_TRUNCATED_TEXT_MATCH_PLAN.md`
   would grow document count, so sequence it after this work, not before.
 
+## Measured after B landed (2026-09-19)
+
+`node scripts/bench-history-search-document-cache.mjs <.search-index> 1024`
+against the real 1,560-run index (read-only), simulating the reported
+~20-search session with one shared cache instance, as one live
+`HistorySearchIndexService` holds for one workspace.
+
+| Query                 | Matches | Documents scanned |      ms |
+| --------------------- | ------: | ----------------: | ------: |
+| `cache`               |     328 |             7,973 |     4.8 |
+| `history`             |   3,696 |             7,973 |     3.8 |
+| `zzzzzzzzzz-no-match` |      12 |         1,676,242 | 9,548.3 |
+| `okay`                |      51 |           104,815 |    92.2 |
+| `codemirroreditor`    |      60 |           133,691 |   107.3 |
+
+| Session measure          |              Value |
+| ------------------------ | -----------------: |
+| Whole ~20-search session |    **23,684.7 ms** |
+| Baseline RSS / heap used |    379.0 / 89.1 MB |
+| Final RSS / heap used    | 2,412.4 / 885.1 MB |
+| **RSS delta**            |    **+2,033.4 MB** |
+| Heap-used delta          |          +796.1 MB |
+| Configured budget        |           1,024 MB |
+
+### What this confirms
+
+The latency goal is met and then some. `okay` went from 21,543 ms to
+**92.2 ms** and `codemirroreditor` from 20,953 ms to **107.3 ms** — roughly
+200x — and the whole session went from ~416 s to **23.7 s**. `documentsScanned`
+is the mechanism showing through: 7,973 documents instead of 1,672,357, because
+the recency-ordered scan stops as soon as the page is filled. Latency is no
+longer flat with selectivity, which was the defining symptom.
+
+### What this does not meet: the memory budget
+
+The no-match query still reads the whole index (9,548.3 ms over 1,676,242
+documents) exactly as option A predicted, and that full pass is what fills the
+cache. The result is an **RSS delta of 2,033.4 MB against a 1,024 MB budget**.
+
+The cache's own accounting is not obviously wrong — heap-used grew 796.1 MB,
+inside the budget — but RSS is roughly twice the configured number once V8
+overhead, fragmentation, and garbage from parsing 1.67M documents are counted.
+The acceptance criterion is about working set, and by that measure the current
+default fails it at 2x.
+
+This matters more here than the raw number suggests: this subsystem has two
+confirmed extension-host heap OOM crashes behind it, and
+`.github/copilot-instructions.md` describes the crash shape as a single large
+allocation landing on an already-elevated baseline. A 2.4 GB RSS in the
+extension host is that elevated baseline. The default budget needs to be set
+from measured RSS rather than from estimated retained bytes, which is queued
+as follow-up work rather than guessed at here.
+
 ## Acceptance criteria
 
-- [ ] A recent-term query returns its first page in under 1 s on the 1,560-run
-      workspace — measured from the session log, not asserted.
-- [ ] Query latency is no longer flat with respect to selectivity: a 21-match
-      recent query is materially faster than a full-index pass.
+- [x] A recent-term query returns its first page in under 1 s on the 1,560-run
+      workspace — measured at 3.8–107.3 ms over the real index (benchmark
+      against the shipped modules, not the extension-host session log).
+- [x] Query latency is no longer flat with respect to selectivity: recent-term
+      queries scan 7,973 documents where a full pass scans 1,676,242.
 - [x] An immediately repeated query does not re-scan.
 - [x] Typing a multi-word query does not leave superseded scans running.
-- [ ] Extension-host working set stays within the chosen cache budget (1 GB if
-      option B lands, near-zero growth if it does not), measured after a
-      20-search session.
+- [ ] **Not met.** Extension-host working set stays within the chosen cache
+      budget: a 1,024 MB budget produced a **+2,033.4 MB RSS delta** over a
+      20-search session (heap-used +796.1 MB). The default must be derived
+      from measured RSS; see the follow-up queued for it.
 - [x] Offset paging still reaches the last page of a several-thousand-result
       search without walking every page.
 - [x] Result ordering and dedupe are identical to the current implementation
       for a query that scans the whole index.
-- [ ] A 20-search session costs seconds in aggregate, compared with the ~416 s
-      recorded above.
+- [x] A 20-search session costs seconds in aggregate: **23.7 s**, against the
+      ~416 s recorded above.
 - [x] A query whose scan can't stop early (a rare term, or one with matches
       only in old runs) renders matches as they're found instead of only once
       the scan finishes or exhausts the index.

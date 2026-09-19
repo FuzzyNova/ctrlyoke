@@ -195,6 +195,54 @@ export function createHistorySearchLinePrefilter(
   return (rawLine) => rawLine.includes(escapedLoweredQuery);
 }
 
+/** The outcome of a full, unfiltered shard read (see `readShardDocuments`). */
+export interface HistorySearchShardReadResult {
+  documents: HistorySearchDocument[];
+  /**
+   * False when the read stopped before reaching the end of the shard file —
+   * cancelled via `signal`, or the shard vanished mid-read (a concurrent
+   * rebuild replaces shards by atomic rename, so this is a real, if rare,
+   * race rather than a bug). A caller must not cache a partial result: an
+   * incomplete document list masquerading as a complete shard would answer
+   * every future query for it wrong, not just slowly.
+   */
+  complete: boolean;
+}
+
+/**
+ * Reads and parses every document in one shard, with no query prefilter —
+ * used only to populate `HistorySearchDocumentCache`, where every document
+ * (not just today's query's candidates) needs to be retained for future
+ * queries. `streamHistorySearchDocuments` below stays the prefiltered,
+ * nothing-retained path for shards the cache has no room for.
+ */
+export async function readShardDocuments(
+  documentsDirectory: string,
+  shardName: string,
+  signal?: AbortSignal
+): Promise<HistorySearchShardReadResult> {
+  const documents: HistorySearchDocument[] = [];
+  try {
+    for await (const rawLine of streamFileLines(
+      path.join(documentsDirectory, shardName)
+    )) {
+      if (signal?.aborted) {
+        return { documents, complete: false };
+      }
+      if (rawLine.trim().length === 0) {
+        continue;
+      }
+      documents.push(JSON.parse(rawLine) as HistorySearchDocument);
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== FILE_NOT_FOUND_ERROR_CODE) {
+      throw error;
+    }
+    return { documents, complete: false };
+  }
+  return { documents, complete: !signal?.aborted };
+}
+
 /**
  * Streams candidate documents from every JSONL shard in a directory.
  * Documents are parsed only after the raw-line prefilter passes, and no

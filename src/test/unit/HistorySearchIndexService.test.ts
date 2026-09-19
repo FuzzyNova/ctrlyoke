@@ -38,7 +38,10 @@ import { Log } from "../../utils/Log";
 import { getFrozenRunHistoryLocation } from "../../utils/RunHistoryStoragePolicy";
 import { projectStateRoot } from "../../utils/ProjectStatePaths";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
-import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
+import {
+  ConfigurationUtils,
+  PATH_CONSTANTS,
+} from "../../utils/ConfigurationUtils";
 
 suite("HistorySearchIndexService", () => {
   let workspaceRoot: string;
@@ -1387,6 +1390,115 @@ suite("HistorySearchIndexService", () => {
     } finally {
       Log.debug = originalDebug;
       Log.info = originalInfo;
+    }
+  });
+
+  test("serves matches from the document cache without re-reading the shard", async () => {
+    const workflowId = "doc-cache-hit-2026-09-19T00-00-00";
+    await createRun(workflowId, 1, 40000, [
+      createStatusDraft(40100, "doc-cache-warm-term"),
+      createStatusDraft(40200, "doc-cache-second-term"),
+    ]);
+
+    const index = new HistorySearchIndexService();
+    const warm = await index.search(
+      { query: "doc-cache-warm-term", limit: 10 },
+      workspaceRoot
+    );
+    assert.strictEqual(warm.totalCount, 1);
+
+    // Empty the on-disk shard without removing it. The shard must stay in the
+    // directory listing, because that listing — not the cache — decides which
+    // runs a scan visits at all: a cache that resurrected a shard the index no
+    // longer lists would report runs the index does not contain, so deleting
+    // the file would prove the wrong thing. With the file listed but empty, a
+    // disk read yields no documents, and the run's own run-storage manifest
+    // (which freshness checks against) is untouched so nothing triggers a
+    // rebuild. The only way the second query below still finds a match is the
+    // in-memory document cache the first search populated.
+    const source = (await listRunSources(workspaceRoot))[0];
+    assert.ok(source);
+    const indexDir = path.join(
+      projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation()),
+      PATH_CONSTANTS.SEARCH_INDEX_DIR
+    );
+    await fs.writeFile(
+      getDocumentsShardPath(indexDir, source.manifestPath),
+      "",
+      "utf8"
+    );
+
+    const second = await index.search(
+      { query: "doc-cache-second-term", limit: 10 },
+      workspaceRoot
+    );
+    assert.strictEqual(second.totalCount, 1);
+  });
+
+  test("evicts a rewritten run's cached documents after an incremental rebuild", async () => {
+    await createRun("doc-cache-invalidate-2026-09-19T00-01-00", 1, 41000, [
+      createStatusDraft(41100, "doc-cache-invalidate-before-term"),
+    ]);
+
+    const index = new HistorySearchIndexService();
+    const before = await index.search(
+      { query: "doc-cache-invalidate-before-term", limit: 10 },
+      workspaceRoot
+    );
+    assert.strictEqual(before.totalCount, 1);
+
+    const source = (await listRunSources(workspaceRoot))[0];
+    assert.ok(source);
+    await recorder.appendEvents(source.manifestPath, [
+      createStatusDraft(41200, "doc-cache-invalidate-after-term"),
+    ]);
+    await index.enqueueWorkspaceRefresh(workspaceRoot);
+
+    // If the cached (pre-append) document list for this run had survived the
+    // rebuild instead of being evicted, this would still find nothing.
+    const after = await index.search(
+      { query: "doc-cache-invalidate-after-term", limit: 10 },
+      workspaceRoot
+    );
+    assert.strictEqual(after.totalCount, 1);
+  });
+
+  test("a zero-MB history search cache setting disables caching cleanly", async () => {
+    const workflowId = "doc-cache-disabled-2026-09-19T00-02-00";
+    await createRun(workflowId, 1, 42000, [
+      createStatusDraft(42100, "doc-cache-disabled-warm-term"),
+      createStatusDraft(42200, "doc-cache-disabled-second-term"),
+    ]);
+
+    const originalGetBudget =
+      ConfigurationUtils.getHistorySearchCacheBudgetBytes;
+    ConfigurationUtils.getHistorySearchCacheBudgetBytes = () => 0;
+    try {
+      const index = new HistorySearchIndexService();
+      const warm = await index.search(
+        { query: "doc-cache-disabled-warm-term", limit: 10 },
+        workspaceRoot
+      );
+      assert.strictEqual(warm.totalCount, 1);
+
+      const source = (await listRunSources(workspaceRoot))[0];
+      assert.ok(source);
+      const indexDir = path.join(
+        projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation()),
+        PATH_CONSTANTS.SEARCH_INDEX_DIR
+      );
+      await fs.rm(getDocumentsShardPath(indexDir, source.manifestPath));
+
+      // With caching disabled, a query needing this run's documents must go
+      // back to disk and find the shard gone, rather than serving a cached
+      // copy — the mirror image of the cache-hit test above.
+      const second = await index.search(
+        { query: "doc-cache-disabled-second-term", limit: 10 },
+        workspaceRoot
+      );
+      assert.strictEqual(second.totalCount, 0);
+    } finally {
+      ConfigurationUtils.getHistorySearchCacheBudgetBytes = originalGetBudget;
     }
   });
 

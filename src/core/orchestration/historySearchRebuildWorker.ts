@@ -120,6 +120,22 @@ export interface HistorySearchRebuildSuccessMessage {
   type: typeof HISTORY_SEARCH_REBUILD_MESSAGE_TYPES.SUCCESS;
   skipped: boolean;
   freshnessReason?: string;
+  /**
+   * True when every shard was regenerated (schema-version bump, no prior
+   * on-disk index, or the changed-ratio fallback to a full rebuild) — the
+   * host should drop its entire `HistorySearchDocumentCache` rather than try
+   * to reconcile individual entries. Never set when `skipped` is true, since
+   * a skipped rebuild changed nothing on disk.
+   */
+  fullRebuild?: boolean;
+  /**
+   * Exactly the shard file names an *incremental* rebuild rewrote or removed
+   * (derived from `HistorySearchIndexDiff.newRuns`/`changedRuns`/
+   * `removedManifestPaths`), so the host can evict exactly those runs from
+   * `HistorySearchDocumentCache` instead of dropping the whole cache. Present
+   * only for a non-skipped incremental rebuild.
+   */
+  invalidatedShardNames?: string[];
 }
 
 export interface HistorySearchRebuildErrorMessage {
@@ -318,6 +334,8 @@ export async function runHistorySearchRebuild(
   );
   let freshnessReason: string | undefined;
   let skipped = false;
+  let fullRebuild = false;
+  let invalidatedShardNames: string[] | undefined;
   await withFileLock(
     lockTargetPath,
     async () => {
@@ -414,12 +432,24 @@ export async function runHistorySearchRebuild(
             builtAt,
             onProgress
           );
+          invalidatedShardNames = [
+            ...diff.newRuns.map((source) =>
+              getDocumentsShardFileName(source.manifestPath)
+            ),
+            ...diff.changedRuns.map((source) =>
+              getDocumentsShardFileName(source.manifestPath)
+            ),
+            ...diff.removedManifestPaths.map((removedManifestPath) =>
+              getDocumentsShardFileName(removedManifestPath)
+            ),
+          ];
           return;
         }
 
         fullRebuildFallbackReason = `changed ratio ${changedRatio} exceeds ${INCREMENTAL_REBUILD_MAX_CHANGED_RATIO}`;
       }
 
+      fullRebuild = true;
       Log.info(
         `[HistorySearchIndexService] rebuild path: full-rebuild-fallback reason=${fullRebuildFallbackReason}`
       );
@@ -522,6 +552,8 @@ export async function runHistorySearchRebuild(
     type: HISTORY_SEARCH_REBUILD_MESSAGE_TYPES.SUCCESS,
     skipped,
     freshnessReason,
+    fullRebuild: skipped ? undefined : fullRebuild,
+    invalidatedShardNames,
   };
 }
 

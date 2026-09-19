@@ -3,12 +3,16 @@ import * as fs from "fs";
 import * as path from "path";
 import { Worker } from "worker_threads";
 import {
+  type HistorySearchDocument,
   type HistorySearchFilters,
   type HistorySearchQuery,
   type HistorySearchResponse,
   type HistorySearchResult,
 } from "../../types/WorkflowTimelineTypes";
-import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
+import {
+  ConfigurationUtils,
+  PATH_CONSTANTS,
+} from "../../utils/ConfigurationUtils";
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import { Log } from "../../utils/Log";
 import { projectStateRoot } from "../../utils/ProjectStatePaths";
@@ -17,6 +21,7 @@ import {
   HISTORY_SEARCH_COUNT_STATES,
   HISTORY_SEARCH_REBUILD_MESSAGE_TYPES,
 } from "../../types/DashboardConstants";
+import { HistorySearchDocumentCache } from "./HistorySearchDocumentCache";
 import {
   matchesFilters,
   normalizeHistorySearchFilters,
@@ -37,6 +42,7 @@ import {
 } from "./historySearchRebuildWorker";
 import {
   listDocumentShardEntries,
+  readShardDocuments,
   streamHistorySearchDocuments,
   type HistorySearchShardEntry,
 } from "./HistorySearchShardScanner";
@@ -158,6 +164,9 @@ export class HistorySearchIndexService {
   private matchSnapshotResultTotal = 0;
   private rebuildPromise?: Promise<void>;
   private rebuildQueued = false;
+  private readonly documentCache = new HistorySearchDocumentCache(
+    ConfigurationUtils.getHistorySearchCacheBudgetBytes()
+  );
 
   async search(
     request: HistorySearchQuery,
@@ -169,6 +178,9 @@ export class HistorySearchIndexService {
     if (signal?.aborted) {
       throw new HistorySearchCancelledError();
     }
+    this.documentCache.setBudgetBytes(
+      ConfigurationUtils.getHistorySearchCacheBudgetBytes()
+    );
     const normalizedQuery = request.query.trim();
     if (normalizedQuery.length < MIN_QUERY_LENGTH) {
       return this.emptyResponse(normalizedQuery, "ready");
@@ -574,23 +586,12 @@ export class HistorySearchIndexService {
       }
       currentGroupStartedAt = shard.startedAt;
 
-      for await (const document of streamHistorySearchDocuments(
-        documentsDir,
-        normalizedQuery,
-        {
-          hasPersistedLowercaseKey,
-          resolvedShardOrder: [shard.shardName],
-        },
-        () => {
-          documentsScannedThisCall += 1;
-        },
-        signal
-      )) {
+      const consider = (document: HistorySearchDocument): void => {
         if (
           !document.text.toLowerCase().includes(lowered) ||
           !matchesFilters(document, filters)
         ) {
-          continue;
+          return;
         }
         const result = projectHistorySearchResult(document, normalizedQuery);
         groupBuffer.push({
@@ -599,6 +600,48 @@ export class HistorySearchIndexService {
           timestampMs: document.timestampMs,
           sequence: document.sequence,
         });
+      };
+
+      const cachedDocuments = this.documentCache.get(shard.shardName);
+      if (cachedDocuments) {
+        documentsScannedThisCall += cachedDocuments.length;
+        for (const document of cachedDocuments) {
+          consider(document);
+        }
+      } else if (this.documentCache.wouldRetain(shard.startedAt)) {
+        // Worth a full, unfiltered parse so every document in this run can be
+        // retained for future queries, not just today's candidates.
+        const shardRead = await readShardDocuments(
+          documentsDir,
+          shard.shardName,
+          signal
+        );
+        documentsScannedThisCall += shardRead.documents.length;
+        for (const document of shardRead.documents) {
+          consider(document);
+        }
+        if (shardRead.complete) {
+          this.documentCache.set(
+            shard.shardName,
+            shard.startedAt,
+            shardRead.documents
+          );
+        }
+      } else {
+        for await (const document of streamHistorySearchDocuments(
+          documentsDir,
+          normalizedQuery,
+          {
+            hasPersistedLowercaseKey,
+            resolvedShardOrder: [shard.shardName],
+          },
+          () => {
+            documentsScannedThisCall += 1;
+          },
+          signal
+        )) {
+          consider(document);
+        }
       }
       // The generator returns early (without throwing) on cancellation, so a
       // partial shard scan looks like a legitimate — if incomplete — result
@@ -810,12 +853,20 @@ export class HistorySearchIndexService {
       }
 
       if (result.skipped) {
+        // Nothing on disk changed, so every cached shard is still correct.
         this.dropLoadedIndex();
         await this.loadIfPossible(workspaceFolderPath);
         Log.info(
           "[HistorySearchIndexService] rebuild skipped: on-disk index already fresh"
         );
         return;
+      }
+      if (result.fullRebuild) {
+        this.documentCache.clear();
+      } else if (result.invalidatedShardNames) {
+        for (const shardName of result.invalidatedShardNames) {
+          this.documentCache.invalidate(shardName);
+        }
       }
       this.dropLoadedIndex();
       await this.loadIfPossible(workspaceFolderPath);

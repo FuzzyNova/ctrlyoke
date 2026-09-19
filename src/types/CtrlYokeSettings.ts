@@ -205,6 +205,14 @@ export interface CtrlYokeGlobalSettings {
   // Runs (always-on execution history)
   runs: {
     maxRuns: number;
+    /**
+     * Heap budget, in MB, for caching parsed history-search documents from
+     * the most recently run workflows in memory. The cache is a bounded
+     * prefix of the existing recency-ordered search scan, not a second data
+     * path — a miss just falls back to the streamed disk scan. 0 disables
+     * the cache entirely.
+     */
+    historySearchCacheMb: number;
   };
 
   // Terminal
@@ -500,6 +508,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
   },
   runs: {
     maxRuns: -1,
+    historySearchCacheMb: 1024,
   },
   terminal: {
     fontSize: 14,
