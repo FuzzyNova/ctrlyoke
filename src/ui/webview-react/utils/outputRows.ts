@@ -46,7 +46,6 @@ import type { OutputMessage, OutputMessageTarget } from "./outputProjection";
 import { getTargetKey, outputMessageIdentityKey } from "./outputProjection";
 import {
   computePromptChangeSummary,
-  getPromptUndoActionLabels,
 } from "./promptUndo";
 import type { PromptChangeSummary } from "./promptUndo";
 import {
@@ -1112,7 +1111,7 @@ function estimateCliHeaderHeight(
   const lineHeight = Math.max(16, smFontSize * 1.4);
   const actionLines =
     row.promptUndo &&
-    (row.promptUndo.summary.undoable > 0 || row.promptUndo.summary.undone > 0)
+    row.promptUndo.summary.total > 0
       ? 1
       : 0;
 
@@ -1746,7 +1745,7 @@ export function parallelGroupStepCount(
 }
 
 /**
- * Tooltip for a concurrent group's single undo/redo affordance.
+ * Tooltip for a concurrent group's single change-view affordance.
  *
  * The button keeps the ordinary `Undo N changes` label every other undo
  * surface uses — N counts files, so the group reads the same as a step — and
@@ -1776,22 +1775,12 @@ function estimateParallelGroupHeaderHeight(
     ...[parallelGroupHeaderTitle(row), parallelGroupHeaderSummaryText(row)].map(
       parallelGroupHeaderTextWidth
     ),
-    // The undo/redo labels are built with the row, so the estimate sizes the
-    // very strings the header paints; both buttons carry a leading codicon.
-    ...[
-      row.promptUndo
-        ? getPromptUndoActionLabels(row.promptUndo.summary).undo
-        : null,
-      row.promptUndo
-        ? getPromptUndoActionLabels(row.promptUndo.summary).redo
-        : null,
-    ]
-      .filter((action) => action != null)
-      .map(
-        (action) =>
-          parallelGroupHeaderTextWidth(action.label) +
-          PARALLEL_GROUP_HEADER_ACTION_ICON_WIDTH
-      ),
+    ...(row.promptUndo && row.promptUndo.summary.total > 0
+      ? [
+          parallelGroupHeaderTextWidth(row.promptUndo.summary.label) +
+            PARALLEL_GROUP_HEADER_ACTION_ICON_WIDTH,
+        ]
+      : []),
   ];
   const chipItems = [
     PARALLEL_GROUP_HEADER_LABELS.ALL_CHIP,

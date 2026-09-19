@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { useOutputUndoActions } from "@hooks/useOutputUndoActions";
 import { useUiStore } from "@store/uiStore";
 import type { RunRef, WorkflowKey } from "@root/types/CtrlYokeTypes";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import {
+  FINAL_STEP_PHASES,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
 
 const RUN_ADDRESS = {
   workflowKey: "workflow-1" as WorkflowKey,
@@ -56,7 +59,7 @@ describe("useOutputUndoActions", () => {
     const { result } = renderUndoActions();
 
     act(() => {
-      result.current.handleWorkflowUndo();
+      result.current.handleWorkflowView();
     });
 
     expect(result.current.workflowDialogState?.address).toEqual({
@@ -75,9 +78,57 @@ describe("useOutputUndoActions", () => {
     const { result } = renderUndoActions();
 
     act(() => {
-      result.current.handleWorkflowUndo();
+      result.current.handleWorkflowView();
     });
 
     expect(result.current.workflowDialogState).toBeNull();
+  });
+
+  it("keeps blocked candidates in the single workflow entry list", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
+    const { result } = renderHook(() =>
+      useOutputUndoActions({
+        allMessages: [
+          {
+            type: "cli",
+            target,
+            timestamp: 1,
+            data: { isStreaming: false },
+          } as never,
+        ],
+        allowUndoActions: true,
+        finalStepWorkspaceSnapshots: {},
+        historyOutputs: null,
+        isViewingHistory: false,
+        lastCliIndexPerStep: new Map([["queue:0", 0]]),
+        stepOutputsMap: new Map([["queue:0", []]]),
+        undoRecords: {},
+        uniqueStepTargets: [target],
+        workspaceSnapshots: {
+          0: {
+            capturedAt: 1,
+            strategy: "filesystem",
+            changedFiles: [
+              { path: "src/blocked.ts", changeType: "modified" },
+            ],
+          },
+        },
+      })
+    );
+
+    act(() => result.current.handleWorkflowView());
+
+    expect(result.current.workflowChangeSummary).toMatchObject({
+      total: 1,
+      undoable: 0,
+      undone: 0,
+      blocked: 1,
+      label: "View 1 changes",
+    });
+    expect(result.current.workflowDialogState?.entries).toHaveLength(1);
+    expect(
+      result.current.workflowDialogState?.entries[0]?.undoCandidates?.[0]
+        ?.instruction
+    ).toBeNull();
   });
 });

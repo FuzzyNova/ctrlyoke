@@ -591,6 +591,59 @@ describe("OutputRow auto-expand on hidden active match", () => {
     expect(container).toHaveTextContent(label);
   });
 
+  it("renders one neutral change viewer for mixed step state", () => {
+    const onPromptView = vi.fn();
+    const row: OutputRenderRow = {
+      key: "header-view-changes",
+      target: TARGET,
+      estimateSize: 44,
+      rowKind: OUTPUT_ROW_KINDS.CLI_HEADER,
+      output: {
+        prompt: "Edit files",
+        response: "done",
+        elapsed: 0,
+        isStreaming: false,
+      },
+      stepIndex: 0,
+      isFinalStep: false,
+      stepLabel: "Step 1",
+      attemptIndex: 0,
+      runIndex: 0,
+      promptUndo: {
+        workspacePath: "/repo",
+        allStepOutputs: [],
+        summary: {
+          total: 2,
+          undoable: 1,
+          undone: 1,
+          blocked: 0,
+          label: "View 2 changes (1 undone)",
+          compactLabel: "View 2",
+          title: "2 files changed · 1 undone, can be redone",
+        },
+      },
+    };
+
+    render(
+      <OutputRow
+        row={row}
+        isExecutionActive={false}
+        onPromptView={onPromptView}
+      />
+    );
+
+    const button = screen.getByRole("button", {
+      name: "View 2 changes (1 undone)",
+    });
+    expect(button).toHaveClass("text-link-fg");
+    expect(button.querySelector(".codicon-diff")).toBeInTheDocument();
+    expect(button.querySelector(".text-terminal-ansiGreen")).toHaveTextContent(
+      "(1 undone)"
+    );
+    fireEvent.click(button);
+    expect(onPromptView).toHaveBeenCalledWith(row);
+  });
+
   it("expands a truncated bash command when the active match is hidden", () => {
     const command = `node -e "${"x".repeat(220)} target"`;
     const row = buildBashRow(command, undefined, undefined);

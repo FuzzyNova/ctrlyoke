@@ -1074,27 +1074,44 @@ export interface PromptChangeSummary {
   title: string;
 }
 
-/** Transitional labels for the pre-dialog UI, which still renders two buttons. */
-export function getPromptUndoActionLabels(summary: PromptChangeSummary): {
-  undo: { label: string; count: number } | null;
-  redo: { label: string; count: number } | null;
-} {
+export function createPromptChangeSummary(
+  total: number,
+  undoable: number,
+  undone: number,
+  blocked: number
+): PromptChangeSummary {
+  const undoneLabel =
+    undone === 0
+      ? ""
+      : undone === total
+        ? " (all undone)"
+        : ` (${undone} undone)`;
+
   return {
-    undo:
-      summary.undoable > 0
-        ? {
-            label: `Undo ${summary.undoable} change${summary.undoable !== 1 ? "s" : ""}`,
-            count: summary.undoable,
-          }
-        : null,
-    redo:
-      summary.undone > 0
-        ? {
-            label: `Redo ${summary.undone} change${summary.undone !== 1 ? "s" : ""}`,
-            count: summary.undone,
-          }
-        : null,
+    total,
+    undoable,
+    undone,
+    blocked,
+    label: `View ${total} changes${undoneLabel}`,
+    compactLabel: `View ${total}`,
+    title: `${total} file${total !== 1 ? "s" : ""} changed${
+      undone > 0 ? ` · ${undone} undone, can be redone` : ""
+    }`,
   };
+}
+
+export function getPromptChangeLabelParts(
+  summary: PromptChangeSummary,
+  compact = false
+): { main: string; undone: string } {
+  if (compact) return { main: summary.compactLabel, undone: "" };
+  const suffixStart = summary.label.indexOf(" (");
+  return suffixStart < 0
+    ? { main: summary.label, undone: "" }
+    : {
+        main: summary.label.slice(0, suffixStart),
+        undone: summary.label.slice(suffixStart),
+      };
 }
 
 /**
@@ -1134,23 +1151,10 @@ export function computePromptChangeSummary(
         )
       : allCandidates;
   const { undoableCount, blockedCount } = getPromptUndoSummary(candidates);
-  const total = undoableCount + blockedCount + undone;
-  const undoneLabel =
-    undone === 0
-      ? ""
-      : undone === total
-        ? " (all undone)"
-        : ` (${undone} undone)`;
-
-  return {
-    total,
-    undoable: undoableCount,
+  return createPromptChangeSummary(
+    undoableCount + blockedCount + undone,
+    undoableCount,
     undone,
-    blocked: blockedCount,
-    label: `View ${total} changes${undoneLabel}`,
-    compactLabel: `View ${total}`,
-    title: `${total} file${total !== 1 ? "s" : ""} changed${
-      undone > 0 ? ` · ${undone} undone, can be redone` : ""
-    }`,
-  };
+    blockedCount
+  );
 }

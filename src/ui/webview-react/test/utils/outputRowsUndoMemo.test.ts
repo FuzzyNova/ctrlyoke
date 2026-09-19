@@ -7,7 +7,6 @@ import {
   FILE_OPERATION_KINDS,
   OUTPUT_ROW_KINDS,
 } from "@root/types/DashboardConstants";
-import { getPromptUndoActionLabels } from "@utils/promptUndo";
 
 // Spy on the real implementation so the assertion is about *call count*, not
 // about a stubbed return value — the labels below still come from the genuine
@@ -133,17 +132,15 @@ describe("buildOutputRows undo-action memoization", () => {
     expect(callsForManyMessages).toBe(1);
 
     // And the memo must not change what is rendered.
-    const undoLabel = (rows: ReturnType<typeof buildRows>["rows"]) => {
+    const changeLabel = (rows: ReturnType<typeof buildRows>["rows"]) => {
       const promptUndo = rows.find(
         (row) =>
           row.rowKind === OUTPUT_ROW_KINDS.CLI_HEADER && row.promptUndo
       )?.promptUndo;
-      return promptUndo
-        ? getPromptUndoActionLabels(promptUndo.summary).undo?.label
-        : undefined;
+      return promptUndo?.summary.label;
     };
 
-    expect(undoLabel(few.rows)).toBe("Undo 1 change");
-    expect(undoLabel(many.rows)).toBe(undoLabel(few.rows));
+    expect(changeLabel(few.rows)).toBe("View 1 changes");
+    expect(changeLabel(many.rows)).toBe(changeLabel(few.rows));
   });
 });

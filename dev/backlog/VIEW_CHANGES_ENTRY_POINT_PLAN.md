@@ -141,7 +141,7 @@ third carries the only real performance hazard in this plan:
 | Consumer                                | Feeds                                                                                                                    |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `hooks/useOutputMinimapModel.ts:359`    | minimap dot + popup buttons                                                                                              |
-| `utils/outputRows.ts:2332`              | `OutputRowPromptUndoMeta.undo/redo` (`outputRows.ts:101-113`) → the **step header** buttons at `OutputRow.tsx:1247-1276` |
+| `utils/outputRows.ts:2332`              | `OutputRowPromptUndoMeta.summary` (`outputRows.ts:101-113`) → the **step header** button at `OutputRow.tsx:1247-1265` |
 | `test/utils/outputRowsUndoMemo.test.ts` | mocks it **by name** via `vi.mock`                                                                                       |
 
 The `outputRows.ts` call sits behind a deliberate per-target memo,
@@ -173,7 +173,8 @@ vanishing from the aggregate.
 returns **one list of entries**, each carrying both `undoCandidates` and
 `redoInstructions`, instead of today's `{ undoEntries, redoEntries }` pair.
 `workflowUndoRedoData` becomes `workflowChangeEntries` plus a
-`PromptChangeSummary`.
+`PromptChangeSummary`; the summary is computed from the same aggregated rows
+the workflow dialog renders.
 
 Two call sites read the old pair and must move with it:
 `OutputSection.tsx:1286-1290` (see §5.4) and `OutputUndoDialogs.tsx:55`, which
@@ -358,12 +359,15 @@ first checkbox sets the direction.
    display name so a pending cross-lineage switch cannot title it with the
    previous workflow.
 
-4. **Entry points** — the three surfaces, in one change so they cannot disagree:
+4. **Entry points — done** — the three surfaces now share one neutral viewer
+   action and one `PromptChangeSummary`, so they cannot disagree:
    `OutputSectionHeader.tsx`, `OutputRow.tsx` (`CliHeaderRowView`), `OutputMinimap.tsx`
-   - `useOutputMinimapModel.ts`. Delete `showCompactWorkflowUndoRedoLabels`
-     (`OutputSection.tsx:1286-1290`) — it exists only to fit two buttons side by
-     side, and today's mixed state is precisely when it drops the counts the user
-     wants kept.
+   - `useOutputMinimapModel.ts`. The old two-button model and
+     `showCompactWorkflowUndoRedoLabels` are gone; compact labels are driven by
+     `isHeaderNarrow` and keep the count.
+   - Workflow totals come from the direction-suffixed aggregate rows, so
+     repeated files across steps and blocked-only steps count exactly as the
+     workflow dialog displays them.
 5. **Leave `FileOperationOutput.tsx` alone**, and verify its path still opens
    with intent `ACT` and a pre-checked single row.
 6. **Tests** — see §6.

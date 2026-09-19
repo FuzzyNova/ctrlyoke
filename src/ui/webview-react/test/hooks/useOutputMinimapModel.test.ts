@@ -37,8 +37,7 @@ function renderModel(allMessages: OutputMessage[], hiddenAtMs: number) {
       historyOutputs: null,
       isViewingHistory: false,
       lastCliIndexPerStep: new Map(),
-      onOpenMinimapRedoDialog: vi.fn(),
-      onOpenMinimapUndoDialog: vi.fn(),
+      onOpenMinimapDialog: vi.fn(),
       outputFontSize: 14,
       rowLayout: {
         rowStartsByIndex: [0],
@@ -87,8 +86,7 @@ describe("useOutputMinimapModel hidden activity", () => {
           historyOutputs: null,
           isViewingHistory: false,
           lastCliIndexPerStep: new Map(),
-          onOpenMinimapRedoDialog: vi.fn(),
-          onOpenMinimapUndoDialog: vi.fn(),
+          onOpenMinimapDialog: vi.fn(),
           outputFontSize: 14,
           rowLayout: {
             rowStartsByIndex: [0, 10],

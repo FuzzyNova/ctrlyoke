@@ -81,7 +81,7 @@ import {
   type OutputFindMatch,
   type RowFindDecoration,
 } from "@utils/outputFind";
-import { getPromptUndoActionLabels } from "@utils/promptUndo";
+import { getPromptChangeLabelParts } from "@utils/promptUndo";
 import {
   OUTPUT_BLOCK_BASE,
   TOOL_RESULT_LINE,
@@ -192,8 +192,7 @@ interface OutputRowProps {
    * group-wide and rendered on its header row, but the action itself is the
    * same target + meta pair a CLI header carries, so both share one handler.
    */
-  onPromptUndo?: (row: CliHeaderRow | ParallelGroupHeaderRow) => void;
-  onPromptRedo?: (row: CliHeaderRow | ParallelGroupHeaderRow) => void;
+  onPromptView?: (row: CliHeaderRow | ParallelGroupHeaderRow) => void;
   onFileUndo?: (
     row: StructuredEventRow,
     request: OutputRowFileUndoRequest
@@ -1100,20 +1099,19 @@ const CliHeaderRowView: React.FC<{
   isExecutionActive: boolean;
   stepLabelContent?: React.ReactNode;
   stepNameContent?: React.ReactNode;
-  onPromptUndo?: (row: CliHeaderRow) => void;
-  onPromptRedo?: (row: CliHeaderRow) => void;
+  onPromptView?: (row: CliHeaderRow) => void;
 }> = ({
   row,
   isExecutionActive,
   stepLabelContent,
   stepNameContent,
-  onPromptUndo,
-  onPromptRedo,
+  onPromptView,
 }) => {
   const { output } = row;
-  const promptUndoLabels = row.promptUndo
-    ? getPromptUndoActionLabels(row.promptUndo.summary)
-    : { undo: null, redo: null };
+  const promptUndoSummary = row.promptUndo?.summary;
+  const promptUndoLabel = promptUndoSummary
+    ? getPromptChangeLabelParts(promptUndoSummary)
+    : null;
   const timestamp = output.timestampMs ? formatTime(output.timestampMs) : "";
   const executionBadge = formatExecutionBadge(row.runIndex, row.attemptIndex);
   const stepDisplayName =
@@ -1248,33 +1246,23 @@ const CliHeaderRowView: React.FC<{
       {streamingIndicator}
       <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-1 font-normal">
         {hideButton}
-        {promptUndoLabels.undo && (
+        {promptUndoSummary && promptUndoSummary.total > 0 && (
           <button
             type="button"
-            onClick={() => onPromptUndo?.(row)}
+            onClick={() => onPromptView?.(row)}
             style={{ touchAction: "manipulation" }}
-            title={promptUndoLabels.undo.label}
-            aria-label="Undo prompt changes"
+            title={promptUndoSummary.title}
+            aria-label={promptUndoSummary.label}
             className="inline-flex min-w-0 max-w-full items-center gap-1 text-link-fg hover:text-link-active-fg transition-colors"
           >
-            <Icon name="discard" className="shrink-0" />
+            <Icon name="diff" className="shrink-0" />
             <span className="min-w-0 truncate">
-              {promptUndoLabels.undo.label}
-            </span>
-          </button>
-        )}
-        {promptUndoLabels.redo && (
-          <button
-            type="button"
-            onClick={() => onPromptRedo?.(row)}
-            style={{ touchAction: "manipulation" }}
-            title={promptUndoLabels.redo.label}
-            aria-label="Redo prompt changes"
-            className="inline-flex min-w-0 max-w-full items-center gap-1 text-terminal-ansiGreen hover:opacity-80 transition-opacity"
-          >
-            <Icon name="redo" className="shrink-0" />
-            <span className="min-w-0 truncate">
-              {promptUndoLabels.redo.label}
+              {promptUndoLabel?.main}
+              {promptUndoLabel?.undone && (
+                <span className="text-terminal-ansiGreen">
+                  {promptUndoLabel.undone}
+                </span>
+              )}
             </span>
           </button>
         )}
@@ -1696,8 +1684,7 @@ function OutputRowComponent({
   atomicContextReferences = false,
   activeFindMatch,
   isExecutionActive,
-  onPromptUndo,
-  onPromptRedo,
+  onPromptView,
   onFileUndo,
   onDiffCollapsedChange,
   onDiffGapExpand,
@@ -1728,8 +1715,7 @@ function OutputRowComponent({
       content = (
         <ParallelGroupHeaderRowView
           row={row}
-          onUndo={onPromptUndo}
-          onRedo={onPromptRedo}
+          onView={onPromptView}
         />
       );
       break;
@@ -1769,8 +1755,7 @@ function OutputRowComponent({
               ? highlightText(row.stepName, getFieldMatches("header", 1))
               : undefined
           }
-          onPromptUndo={onPromptUndo}
-          onPromptRedo={onPromptRedo}
+          onPromptView={onPromptView}
         />
       );
       break;

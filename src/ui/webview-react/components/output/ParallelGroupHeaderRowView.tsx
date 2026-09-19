@@ -8,7 +8,6 @@ import {
   parallelGroupHeaderTitle,
   type ParallelGroupHeaderRow,
 } from "@utils/outputRows";
-import { getPromptUndoActionLabels } from "@utils/promptUndo";
 import { Icon } from "../shared/Icon";
 
 const SHELL_WORKFLOW_ID = "_shell";
@@ -26,8 +25,7 @@ function chipClass(pressed: boolean): string {
 
 export interface ParallelGroupHeaderRowViewProps {
   row: ParallelGroupHeaderRow;
-  onUndo?: (row: ParallelGroupHeaderRow) => void;
-  onRedo?: (row: ParallelGroupHeaderRow) => void;
+  onView?: (row: ParallelGroupHeaderRow) => void;
 }
 
 /**
@@ -36,21 +34,18 @@ export interface ParallelGroupHeaderRowViewProps {
  *
  * Presentational apart from the filter writes, which go straight to `uiStore`
  * exactly as `StepHiddenRowView`'s "show" button does — that keeps `OutputPane`
- * a generic row renderer. Counts, chip pressed-states, and the group's
- * undo/redo affordances are all resolved by `buildOutputRows`, so the header's
+ * a generic row renderer. Counts, chip pressed-states, and the group's change
+ * summary are all resolved by `buildOutputRows`, so the header's
  * height can be estimated from the same row object the virtualizer sizes.
  *
- * The group owns that undo outright — its members share one workspace snapshot,
- * so no member's own CLI header offers a second copy of the same action. The
- * button carries the same `Undo N changes` label as every other undo surface
- * (N counts files); only its tooltip names the group.
+ * The group owns that viewer entry outright — its members share one workspace
+ * snapshot, so no member's own CLI header offers a second copy of the same
+ * action. Only its tooltip names the group.
  */
 export const ParallelGroupHeaderRowView: React.FC<
   ParallelGroupHeaderRowViewProps
-> = ({ row, onUndo, onRedo }) => {
-  const promptUndoLabels = row.promptUndo
-    ? getPromptUndoActionLabels(row.promptUndo.summary)
-    : { undo: null, redo: null };
+> = ({ row, onView }) => {
+  const promptUndoSummary = row.promptUndo?.summary;
   const displayedViewAddress = useUiStore(
     (state) => state.displayedViewAddress
   );
@@ -86,39 +81,21 @@ export const ParallelGroupHeaderRowView: React.FC<
           {parallelGroupHeaderSummaryText(row)}
         </span>
         <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-1">
-          {promptUndoLabels.undo && onUndo && (
+          {promptUndoSummary && promptUndoSummary.total > 0 && onView && (
             <button
               type="button"
               className={`${ACTION_CLASS} text-link-fg hover:text-link-active-fg`}
               style={{ touchAction: "manipulation" }}
               title={parallelGroupActionTooltip(
-                promptUndoLabels.undo.label,
+                promptUndoSummary.title,
                 row.members.length
               )}
-              aria-label="Undo parallel group changes"
-              onClick={() => onUndo(row)}
+              aria-label={promptUndoSummary.label}
+              onClick={() => onView(row)}
             >
-              <Icon name="discard" className="shrink-0" />
+              <Icon name="diff" className="shrink-0" />
               <span className="min-w-0 truncate">
-                {promptUndoLabels.undo.label}
-              </span>
-            </button>
-          )}
-          {promptUndoLabels.redo && onRedo && (
-            <button
-              type="button"
-              className={`${ACTION_CLASS} text-terminal-ansiGreen hover:opacity-80`}
-              style={{ touchAction: "manipulation" }}
-              title={parallelGroupActionTooltip(
-                promptUndoLabels.redo.label,
-                row.members.length
-              )}
-              aria-label="Redo parallel group changes"
-              onClick={() => onRedo(row)}
-            >
-              <Icon name="redo" className="shrink-0" />
-              <span className="min-w-0 truncate">
-                {promptUndoLabels.redo.label}
+                {promptUndoSummary.label}
               </span>
             </button>
           )}

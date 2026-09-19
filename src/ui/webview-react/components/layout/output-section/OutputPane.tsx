@@ -106,8 +106,7 @@ interface OutputPaneProps {
   onMinimapStepToggle: (step: MinimapStep) => void;
   onMinimapStepSolo: (step: MinimapStep) => void;
   onOutputProfilerRender: React.ProfilerOnRenderCallback;
-  onPromptRedo: (row: CliHeaderRow | ParallelGroupHeaderRow) => void;
-  onPromptUndo: (row: CliHeaderRow | ParallelGroupHeaderRow) => void;
+  onPromptView: (row: CliHeaderRow | ParallelGroupHeaderRow) => void;
   onScroll: React.UIEventHandler<HTMLDivElement>;
   onTouchCancel: React.TouchEventHandler<HTMLDivElement>;
   onTouchEnd: React.TouchEventHandler<HTMLDivElement>;
@@ -139,8 +138,7 @@ function renderOutputRow(
     | "onDiffCollapsedChange"
     | "onDiffGapExpand"
     | "onFileUndo"
-    | "onPromptRedo"
-    | "onPromptUndo"
+    | "onPromptView"
     | "onToolCallExpansionChange"
     | "activeMatch"
     | "hiddenActivityTargetKeys"
@@ -157,8 +155,7 @@ function renderOutputRow(
         props.activeMatch?.rowKey === row.key ? props.activeMatch : null
       }
       isExecutionActive={props.isExecutionActive}
-      onPromptUndo={props.onPromptUndo}
-      onPromptRedo={props.onPromptRedo}
+      onPromptView={props.onPromptView}
       onFileUndo={props.onFileUndo}
       onDiffCollapsedChange={props.onDiffCollapsedChange}
       onDiffGapExpand={props.onDiffGapExpand}
