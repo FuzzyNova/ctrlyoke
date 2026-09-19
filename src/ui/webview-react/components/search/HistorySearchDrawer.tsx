@@ -21,6 +21,7 @@ import { MESSAGE_TYPES, type HistorySearchResult } from "@/types/messages";
 import {
   KEYBOARD_KEYS,
   HISTORY_EVENT_KINDS,
+  HISTORY_SEARCH_COUNT_STATES,
   OUTPUT_TABS,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
@@ -45,6 +46,18 @@ import { Icon } from "../shared/Icon";
 
 const RESULT_LIMIT = 50;
 const HISTORY_RESULT_ESTIMATE = 108;
+
+/**
+ * A single query scan still costs ~20s against a large real-world history
+ * (see dev/implemented/HISTORY_SEARCH_RESPONSIVE_QUERY_PLAN.md) until the
+ * recency-ordered early-termination scan (plan option A) lands. The
+ * extension host now cancels a superseded search almost for free (see
+ * WebviewMessageRouter's SEARCH_HISTORY handler), but that only stops
+ * *wasted* scans — a longer pause here also cuts down how many full scans a
+ * typing burst issues in the first place. Bring this back toward 400ms once
+ * option A lands and a scan is no longer this expensive.
+ */
+export const HISTORY_SEARCH_DEBOUNCE_MS = 600;
 
 /**
  * Shared centered column for the search bar, result summary, and result list so
@@ -186,6 +199,7 @@ export function HistorySearchDrawer() {
   const results = useUiStore((s) => s.historySearchResults);
   const loading = useUiStore((s) => s.historySearchLoading);
   const totalCount = useUiStore((s) => s.historySearchTotalCount);
+  const countState = useUiStore((s) => s.historySearchCountState);
   const indexState = useUiStore((s) => s.historySearchIndexState);
   const rebuildProgress = useUiStore((s) => s.historySearchRebuildProgress);
   const historySearchFilters = useUiStore((s) => s.historySearchFilters);
@@ -272,7 +286,7 @@ export function HistorySearchDrawer() {
 
     const timeoutId = window.setTimeout(() => {
       issueSearch(filtersRef.current);
-    }, 400);
+    }, HISTORY_SEARCH_DEBOUNCE_MS);
 
     return () => window.clearTimeout(timeoutId);
   }, [issueSearch, query, setHistorySearchResults, trimmedQuery]);
@@ -388,7 +402,7 @@ export function HistorySearchDrawer() {
     const timeoutId = window.setTimeout(() => {
       pathSearchPendingRef.current = false;
       issueSearch(filtersRef.current);
-    }, 400);
+    }, HISTORY_SEARCH_DEBOUNCE_MS);
 
     return () => window.clearTimeout(timeoutId);
   }, [
@@ -417,7 +431,16 @@ export function HistorySearchDrawer() {
 
   const requestPage = useCallback(
     (offset: number) => {
-      if (offset <= 0 || offset >= totalCount) {
+      if (offset <= 0) {
+        return;
+      }
+      // `totalCount` is only a hard ceiling once it's exact. While it's a
+      // lower bound (an early-terminated scan), a page at or past it may
+      // still exist — requesting it is what extends the bound.
+      if (
+        offset >= totalCount &&
+        countState === HISTORY_SEARCH_COUNT_STATES.EXACT
+      ) {
         return;
       }
       if (requestedOffsetsRef.current.has(offset)) {
@@ -435,8 +458,23 @@ export function HistorySearchDrawer() {
         filters: toHistorySearchFilters(historySearchFilters, workflowKey),
       });
     },
-    [historySearchFilters, totalCount, trimmedQuery, vscode, workflowKey]
+    [
+      countState,
+      historySearchFilters,
+      totalCount,
+      trimmedQuery,
+      vscode,
+      workflowKey,
+    ]
   );
+  // While the total is a lower bound, the virtualized list is sized one page
+  // past it so there's always a row to scroll into that triggers requesting
+  // more — without this, a `totalCount` capped at the first early-terminated
+  // page would make it physically impossible to scroll further.
+  const virtualizedCount =
+    countState === HISTORY_SEARCH_COUNT_STATES.EXACT
+      ? totalCount
+      : totalCount + RESULT_LIMIT;
   const getItem = useCallback(
     (index: number): HistorySearchResult | undefined => results[index],
     [results]
@@ -529,7 +567,7 @@ export function HistorySearchDrawer() {
     (range: VirtualizedListRange): void => {
       const firstPage = Math.floor(range.overscanStartIndex / RESULT_LIMIT);
       const lastPage = Math.floor(
-        Math.min(range.overscanEndIndex, Math.max(0, totalCount - 1)) /
+        Math.min(range.overscanEndIndex, Math.max(0, virtualizedCount - 1)) /
           RESULT_LIMIT
       );
       for (let page = firstPage; page <= lastPage; page += 1) {
@@ -539,7 +577,7 @@ export function HistorySearchDrawer() {
         }
       }
     },
-    [requestPage, results, totalCount]
+    [requestPage, results, virtualizedCount]
   );
 
   // Deliberately the match count alone, with no "loaded so far" component:
@@ -547,14 +585,25 @@ export function HistorySearchDrawer() {
   // rather than anything the reader cares about. Position lives on the rows
   // (see `formatResultOrdinal`), which stay correct mid-scroll because a
   // placeholder knows its own absolute index.
+  //
+  // Shown as soon as `totalCount` is nonzero rather than waiting for
+  // `loading` to clear: a still-running scan now pushes partial results (see
+  // SEARCH_HISTORY_PARTIAL_RESULTS), so a query with a handful of matches can
+  // sit at `loading === true` for the rest of a long scan while already
+  // having a real, if growing, count to show.
   const summaryLabel = useMemo(() => {
-    if (trimmedQuery.length < 2 || loading || totalCount === 0) {
+    if (trimmedQuery.length < 2 || totalCount === 0) {
       return "";
     }
-    return `${totalCount.toLocaleString()} result${totalCount === 1 ? "" : "s"}${
+    // "+" marks totalCount as a lower bound rather than the true count — an
+    // early-terminated (or still in-progress) scan hasn't read far enough to
+    // know the real total yet.
+    const isExact = countState === HISTORY_SEARCH_COUNT_STATES.EXACT;
+    const countLabel = `${totalCount.toLocaleString()}${isExact ? "" : "+"}`;
+    return `${countLabel} result${totalCount === 1 && isExact ? "" : "s"}${
       activeFilterCount > 0 ? " (filtered)" : ""
     }`;
-  }, [activeFilterCount, loading, totalCount, trimmedQuery.length]);
+  }, [activeFilterCount, countState, totalCount, trimmedQuery.length]);
 
   const workflowScopeAvailable =
     displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
@@ -765,7 +814,19 @@ export function HistorySearchDrawer() {
 
           {trimmedQuery.length >= 2 && (
             <div className="mt-2 flex h-5 items-center justify-between gap-3 text-sm text-description-fg">
-              <span>{summaryLabel}</span>
+              <span className="flex items-center gap-1.5">
+                {summaryLabel}
+                {/* Once rows have started arriving, the full-page spinner
+                    below stands aside for the list — this inline indicator
+                    is what still says the scan behind it hasn't finished. */}
+                {loading && totalCount > 0 && (
+                  <Icon
+                    name="loading"
+                    className="animate-spin text-xs"
+                    aria-label="Still searching"
+                  />
+                )}
+              </span>
               <span>
                 {indexState === "building"
                   ? "Index updating"
@@ -790,6 +851,10 @@ export function HistorySearchDrawer() {
 
         {trimmedQuery.length >= 2 &&
           loading &&
+          // Once partial rows have started arriving, they replace this
+          // full-page indicator; the inline spinner beside the summary
+          // label above keeps showing the scan is still in progress.
+          totalCount === 0 &&
           (rebuildProgress && rebuildProgress.totalRuns > 0 ? (
             <div className="flex flex-col items-center gap-2 px-3 py-6 text-sm text-description-fg">
               <div className="h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-ctx-bar-track">
@@ -832,7 +897,7 @@ export function HistorySearchDrawer() {
         {totalCount > 0 && (
           <div className={`flex flex-col gap-1 ${CONTENT_COLUMN_CLASS}`}>
             <VirtualizedPagedList
-              totalCount={totalCount}
+              totalCount={virtualizedCount}
               listingId={listingId}
               getItem={getItem}
               getItemKey={getItemKey}

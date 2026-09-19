@@ -350,6 +350,22 @@ export function GeneralSection({
             className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
           />
         </SettingInputRow>
+        <SettingInputRow
+          label="History search cache (MB, 0 = disabled)"
+          description="Approximate working-set budget for caching parsed history-search documents from the most recently run workflows, evicted oldest-first once exceeded. Bounds real process memory, not a literal byte count — raising it does not scale memory use 1:1."
+          id="runs-history-search-cache-mb"
+          path="runs.historySearchCacheMb"
+          {...rowProps}
+        >
+          <LocalNumberInput
+            id="runs-history-search-cache-mb"
+            min={0}
+            value={runs.historySearchCacheMb}
+            onCommit={(v) => onUpdate("runs.historySearchCacheMb", v)}
+            parse={(v) => Math.max(0, parseInt(v, 10) || 0)}
+            className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+          />
+        </SettingInputRow>
       </div>
       <div className="pt-3 border-t border-panel-border mt-3">
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">

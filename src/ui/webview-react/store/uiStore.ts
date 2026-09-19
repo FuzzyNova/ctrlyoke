@@ -13,6 +13,7 @@ import { isExecutionFinished } from "../utils/status";
 import type { OutputTab } from "@root/types/DashboardConstants";
 import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
 import type {
+  HistorySearchCountState,
   HistorySearchIndexState,
   HistorySearchFilters,
   HistorySearchResult,
@@ -44,6 +45,7 @@ import {
   meetsToastLevel,
   type UserFeedbackSeverity,
   HISTORY_EVENT_KINDS,
+  HISTORY_SEARCH_COUNT_STATES,
   OUTPUT_SCROLL_TARGET_KINDS,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
@@ -488,6 +490,13 @@ interface UiState {
    */
   historySearchLoading: boolean;
   historySearchTotalCount: number;
+  /**
+   * Whether `historySearchTotalCount` is the true match count or a lower
+   * bound that can still grow as more pages are requested (early-terminated
+   * scan — see `HistorySearchResponse.countState`). `"exact"` by default so a
+   * fresh/empty listing never falsely appears open-ended.
+   */
+  historySearchCountState: HistorySearchCountState;
   historySearchIndexState: HistorySearchIndexState;
   /** Set only while a search is blocked on a full search-index rebuild; null otherwise. */
   historySearchRebuildProgress: {
@@ -825,6 +834,7 @@ interface UiActions {
     options?: {
       offset?: number;
       totalCount?: number;
+      countState?: HistorySearchCountState;
       indexState?: HistorySearchIndexState;
     }
   ) => void;
@@ -1101,6 +1111,7 @@ const initialState: UiState = {
   historySearchQuery: "",
   historySearchLoading: false,
   historySearchTotalCount: 0,
+  historySearchCountState: HISTORY_SEARCH_COUNT_STATES.EXACT,
   historySearchIndexState: "ready",
   historySearchRebuildProgress: null,
   historySearchFilters: createDefaultHistorySearchFilters(),
@@ -1446,6 +1457,7 @@ export const useUiStore = create<UiState & UiActions>()(
         set({
           historySearchQuery: query,
           historySearchTotalCount: 0,
+          historySearchCountState: HISTORY_SEARCH_COUNT_STATES.EXACT,
         }),
 
       setHistorySearchFilters: (filters) =>
@@ -1454,6 +1466,7 @@ export const useUiStore = create<UiState & UiActions>()(
           historySearchResults: [],
           historySearchLoading: false,
           historySearchTotalCount: 0,
+          historySearchCountState: HISTORY_SEARCH_COUNT_STATES.EXACT,
         }),
 
       resetHistorySearchFilters: () =>
@@ -1462,6 +1475,7 @@ export const useUiStore = create<UiState & UiActions>()(
           historySearchResults: [],
           historySearchLoading: false,
           historySearchTotalCount: 0,
+          historySearchCountState: HISTORY_SEARCH_COUNT_STATES.EXACT,
         }),
 
       setHistorySearchResults: (results, loading, options) =>
@@ -1484,6 +1498,11 @@ export const useUiStore = create<UiState & UiActions>()(
               (offset === undefined
                 ? results.length
                 : state.historySearchTotalCount),
+            historySearchCountState:
+              options?.countState ??
+              (offset === undefined
+                ? HISTORY_SEARCH_COUNT_STATES.EXACT
+                : state.historySearchCountState),
             historySearchIndexState:
               options?.indexState ?? state.historySearchIndexState,
             // Progress is only known once a SEARCH_INDEX_REBUILD_PROGRESS push
@@ -2270,6 +2289,7 @@ export const useUiStore = create<UiState & UiActions>()(
           historySearchQuery: "",
           historySearchLoading: false,
           historySearchTotalCount: 0,
+          historySearchCountState: HISTORY_SEARCH_COUNT_STATES.EXACT,
           historySearchIndexState: "ready",
           historySearchRebuildProgress: null,
           historySearchFilters: createDefaultHistorySearchFilters(),

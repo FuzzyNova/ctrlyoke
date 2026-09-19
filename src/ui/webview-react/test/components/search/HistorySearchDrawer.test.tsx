@@ -9,7 +9,10 @@ import {
   it,
   vi,
 } from "vitest";
-import { HistorySearchDrawer } from "@components/search/HistorySearchDrawer";
+import {
+  HISTORY_SEARCH_DEBOUNCE_MS,
+  HistorySearchDrawer,
+} from "@components/search/HistorySearchDrawer";
 import { useWorkflowStore } from "@store/workflowStore";
 import {
   ALL_HISTORY_EVENT_KINDS,
@@ -109,7 +112,7 @@ function renderSearch(
   const view = render(<HistorySearchDrawer />);
 
   act(() => {
-    vi.advanceTimersByTime(400);
+    vi.advanceTimersByTime(HISTORY_SEARCH_DEBOUNCE_MS);
   });
   postMessage.mockClear();
   return view;
@@ -133,7 +136,7 @@ describe("HistorySearchDrawer filters", () => {
     render(<HistorySearchDrawer />);
 
     act(() => {
-      vi.advanceTimersByTime(400);
+      vi.advanceTimersByTime(HISTORY_SEARCH_DEBOUNCE_MS);
     });
 
     // A full selection must not reach the backend as a filter. `harnesses` is
@@ -399,7 +402,7 @@ describe("HistorySearchDrawer filters", () => {
     expect(postMessage).not.toHaveBeenCalled();
 
     act(() => {
-      vi.advanceTimersByTime(399);
+      vi.advanceTimersByTime(HISTORY_SEARCH_DEBOUNCE_MS - 1);
     });
     expect(postMessage).not.toHaveBeenCalled();
 
@@ -569,7 +572,7 @@ describe("HistorySearchDrawer filters", () => {
       });
     });
     act(() => {
-      vi.advanceTimersByTime(400);
+      vi.advanceTimersByTime(HISTORY_SEARCH_DEBOUNCE_MS);
     });
 
     expect(postMessage).not.toHaveBeenCalled();

@@ -3,6 +3,7 @@ import * as path from "path";
 import {
   HISTORY_EVENT_KINDS,
   HISTORY_MATCH_FIELDS,
+  HISTORY_SEARCH_COUNT_STATES,
 } from "../../types/DashboardConstants";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
 import type { WorkflowKey } from "../../types/CtrlYokeTypes";
@@ -24,8 +25,10 @@ import { Log } from "../../utils/Log";
 import { logMemoryUsage } from "../../utils/MemoryDiagnostics";
 import { FileLockTimeoutError } from "../../utils/FileLockUtils";
 import {
+  HistorySearchCancelledError,
   MAX_INDEXED_TEXT_LENGTH,
   type IndexRebuildProgressCallback,
+  type PartialSearchResultsCallback,
 } from "./HistorySearchIndexService";
 import { getSharedHistorySearchIndexService } from "./HistorySearchIndexServiceRegistry";
 import {
@@ -67,7 +70,9 @@ export class HistorySearchService {
   async search(
     query: string | HistorySearchQuery,
     workspaceFolderPath: string,
-    onRebuildProgress?: IndexRebuildProgressCallback
+    onRebuildProgress?: IndexRebuildProgressCallback,
+    signal?: AbortSignal,
+    onPartialResults?: PartialSearchResultsCallback
   ): Promise<HistorySearchResponse> {
     const request =
       typeof query === "string"
@@ -78,8 +83,20 @@ export class HistorySearchService {
     try {
       return await getSharedHistorySearchIndexService(
         workspaceFolderPath
-      ).search(request, workspaceFolderPath, onRebuildProgress);
+      ).search(
+        request,
+        workspaceFolderPath,
+        onRebuildProgress,
+        signal,
+        onPartialResults
+      );
     } catch (error) {
+      if (error instanceof HistorySearchCancelledError) {
+        // Superseded by a newer search — not a failure, so it must not fall
+        // through to the disk-scan fallback below (that would spend the
+        // exact full-history-read cost this cancellation exists to avoid).
+        throw error;
+      }
       const reason =
         error instanceof FileLockTimeoutError
           ? `lock still contended after its extended timeout (${getErrorMessage(error)})`
@@ -110,6 +127,7 @@ export class HistorySearchService {
         offset,
         results,
         totalCount: scanned.length,
+        countState: HISTORY_SEARCH_COUNT_STATES.AT_LEAST,
         hasMore: scanned.length >= offset + request.limit,
         indexState: "fallback",
       };

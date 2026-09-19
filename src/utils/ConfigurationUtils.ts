@@ -1317,6 +1317,17 @@ export const ConfigurationUtils = {
   },
 
   /**
+   * Heap budget, in bytes, for `HistorySearchDocumentCache`'s bounded cache
+   * of parsed history-search documents from the most recent runs. 0 (from a
+   * 0 MB setting) disables the cache.
+   */
+  getHistorySearchCacheBudgetBytes(): number {
+    return (
+      configService.get(CONFIG_KEYS.RUNS).historySearchCacheMb * 1024 * 1024
+    );
+  },
+
+  /**
    * Check if delete confirmation dialogs should be shown
    * When true (default), shows a modal before destructive delete operations.
    */

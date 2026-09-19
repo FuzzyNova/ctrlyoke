@@ -1749,6 +1749,22 @@ export interface SearchHistoryResultsMessage extends HistorySearchResponse {
 }
 
 /**
+ * Extension -> Webview: interim matches pushed while a SEARCH_HISTORY scan is
+ * still running, so results can render as they're found instead of only once
+ * the whole page is ready (see HistorySearchIndexService's early-termination
+ * scan — this is for the queries it can't help: a rare term whose few hits
+ * still cost a long scan). Always carries `countState: "atLeast"` and
+ * `hasMore: true` since the scan that produced it hasn't finished. Superseded
+ * by the eventual SEARCH_HISTORY_RESULTS for the same request, and by nothing
+ * else — a push for a since-superseded query must be dropped the same way the
+ * final response is (see WebviewMessageRouter's SEARCH_HISTORY handler).
+ */
+export interface SearchHistoryPartialResultsMessage
+  extends HistorySearchResponse {
+  type: typeof MESSAGE_TYPES.SEARCH_HISTORY_PARTIAL_RESULTS;
+}
+
+/**
  * Extension -> Webview: pushed while a SEARCH_HISTORY request is blocked on
  * a full, synchronous search-index rebuild (no cached index, or the cached
  * one is stale). Lets the UI show real progress instead of an indefinite
@@ -2775,6 +2791,7 @@ export type IncomingMessage =
   | PromptFileCreatedMessage
   | GlobalSettingsUpdatedMessage
   | SearchHistoryResultsMessage
+  | SearchHistoryPartialResultsMessage
   | OutputHistoryLoadedMessage
   | StepUndoDataUpdatedMessage
   | UndoPromptResultMessage

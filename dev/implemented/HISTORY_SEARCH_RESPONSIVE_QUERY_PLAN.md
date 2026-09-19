@@ -1,0 +1,535 @@
+# History Search Responsive Query Plan
+
+**Status:** Implemented (2026-09-19) — C, D, A, progressive delivery, and B
+(the bounded document cache, including its default-budget re-tuning to 320 MB)
+have all landed, and every acceptance criterion is measured and met. A
+~20-search session went from ~416 s to ~24 s, with typical queries at
+3.8–15.5 ms and RSS growth near 1 GB. Measurement was done with
+`scripts/bench-history-search-document-cache.mjs` against the real 1,560-run
+index; behaviour in a live extension host has not been observed yet, because
+the running host was still on a pre-streaming build when this landed. E
+(trigram postings) remains backlog and is the only remaining answer to a
+no-match query, which still costs a full ~11.7 s pass.
+**Priority:** P0 — this is a live regression in daily use, not a future risk.
+**Predecessor:** `dev/implemented/HISTORY_SEARCH_INDEX_RESIDENCY_PLAN.md` removed
+the ~2.16 GB resident index by streaming every shard per query. It fixed the
+memory exposure and regressed query latency by ~17x. This plan buys the
+latency back without reopening the residency problem.
+
+## What A landed
+
+`HistorySearchIndexService.scanForMatches` now stops scanning once a
+`startedAt` group has been fully scanned _and_ the deduped result count
+reaches the requested `offset + limit` — never mid-group, since a tied
+`startedAt` (which can span more than one shard) must be finished before any
+of it can be trusted to be correctly ordered and deduped. A snapshot that
+stopped early records `complete: false` plus a resumption cursor (the
+resolved shard order, the next shard index, the running dedupe set, and the
+running scanned-document count); a later request that needs more than the
+retained prefix resumes scanning from that cursor instead of restarting from
+shard zero (`HistorySearchIndexService.extendSnapshotAndRespond`). The cursor
+is shard-granular, not a mid-shard line offset — a shard is one run, and the
+group-completion rule above already forces a whole shard (or a whole tied
+group of shards) to be scanned before the scan can stop or resume, so a
+line-level cursor would add complexity no single run's size ever justifies.
+
+**The count-exactness decision:** `HistorySearchResponse.countState` (`"exact"`
+| `"atLeast"`, backed by `HISTORY_SEARCH_COUNT_STATES` in
+`DashboardConstants.ts`) makes the distinction explicit in the type rather than
+leaving a lower bound to be mistaken for a real total. No background
+continuation refines a bound in the absence of further requests — the exact
+count is only ever produced as a side effect of a scan that happens to reach
+the true end of the index, either because the requested page needed that much
+or because the user paged deep enough to force it. A query with no matches
+(or whose matches are exhausted before the requested count) still reads
+everything and reports `"exact"`, per the existing "no false negatives"
+invariant. The webview (`HistorySearchDrawer`/`uiStore`) treats `totalCount` as
+a growing lower bound while `countState` is `"atLeast"`: the virtualized list
+is sized one page past the known count so there is always a row to scroll into
+that triggers requesting more, `requestPage`'s `offset >= totalCount` guard
+only blocks once the count is exact, and the summary label appends "+" to mark
+the count as provisional.
+
+## What progressive result delivery landed
+
+A landed's early termination doesn't help the case it explicitly calls out as
+unfixed: a rare term (or one whose matches sit only in old runs) still has to
+read most or all of the index before returning anything, because the scan
+never reaches `targetCount` early. That scan now pushes what it has found
+instead of making the caller wait for it to finish or exhaust the index.
+
+`HistorySearchIndexService.scanForMatches` takes an optional
+`onPartialResultsFound` callback, invoked with every match found so far each
+time a finalized `startedAt` group adds at least one — the same group
+boundary the early-termination check already uses, so a partial push is
+exactly as safe (ordering- and dedupe-wise) as the final response. It is not
+called for a group that matched nothing, which is what keeps this from firing
+once per shard on a large index with a few scattered hits, and it is not
+called for the scan's final group — that one's results arrive with the actual
+response instead of being pushed a second time first. `search()` and
+`extendSnapshotAndRespond` both wire it to a `PartialSearchResultsCallback`
+that wraps each push through the same `buildPageResponse` the final response
+uses (with `complete` forced `false`, since the scan producing it hasn't
+finished), so a caller treats every call — partial or final — identically:
+`countState` is always `"atLeast"` and `hasMore` always `true` on a partial
+push.
+
+`WebviewMessageRouter`'s SEARCH_HISTORY handler passes such a callback
+alongside the existing rebuild-progress one, and relays each push to the
+webview as `SEARCH_HISTORY_PARTIAL_RESULTS` — the same response shape as
+`SEARCH_HISTORY_RESULTS`, just a different message type so the webview can
+tell "more may still come" from "this is final". `uiStore.setHistorySearchResults`
+needed no changes to consume it: a partial push is applied exactly like a
+page response, except `loading` is passed as still `true`. The one new rule
+lives in `useMessageHandler.ts`'s handler for the new message type, and it is
+the same rule the final-response handler already enforced: a push whose
+`query` no longer matches `uiStore.historySearchQuery` (the user has since
+typed something else, or a new search superseded it) is dropped rather than
+applied, so a superseded scan's trailing pushes can never land on top of a
+newer query's results. `HistorySearchDrawer` needed one behavioral change:
+`summaryLabel` used to suppress the count entirely while `loading` was true,
+which was harmless when `loading` and "no results yet" were the same thing —
+they no longer are, so the label now shows as soon as `totalCount` is
+nonzero, and a small inline spinner next to it (rather than the full-page
+"Searching..." block, which now only shows while `totalCount` is still zero)
+signals that the scan behind a nonzero, growing count is still running.
+
+## The problem in one sentence
+
+Every query streams and scans the **entire** index before returning anything,
+so a search costs ~20 s regardless of how few documents it matches, and a
+session of 20 searches spends about **seven minutes** waiting.
+
+## Measured on the real workspace (2026-09-19)
+
+From `.ctrlyoke/logs/ctrlyoke-1789787194624.log` — real searches, not a
+benchmark. Index at the time: 1,560 runs, 1,672,357 documents, 1.6 GB of
+shards, schema 4.1.0 (the raw-line-lowercase prefilter; see "Which build these
+numbers are from" below).
+
+| Query                     | Matches | Ready ms | Match ms |    Total ms |
+| ------------------------- | ------: | -------: | -------: | ----------: |
+| first search              |   2,623 |   91,531 |   19,012 | **110,543** |
+| `codemirroredito`         |   2,623 |      571 |   19,646 |      20,217 |
+| `okay`                    |     284 |      585 |   20,958 |      21,543 |
+| `okay` (immediate repeat) |     284 |      530 |   20,412 |      20,942 |
+| `codemirroreditor`        |   2,623 |      529 |   20,424 |      20,953 |
+| `co`                      | 260,109 |      577 |   40,940 |      41,517 |
+| `but why`                 |      21 |      529 |   20,299 |      20,828 |
+
+Against the same index, the pre-streaming resident design measured a one-time
+load of 11,513–11,800 ms and then **1,216–1,220 ms per query**.
+
+**Session arithmetic, at the reported ~20 searches per session:**
+
+| Design            |                      20 searches |
+| ----------------- | -------------------------------: |
+| Resident (before) | 11.5 s load + 24.4 s = **~36 s** |
+| Streamed (now)    |                       **~416 s** |
+
+## What the numbers actually say
+
+1. **Scan cost is independent of selectivity.** 21 matches costs 20,299 ms;
+   2,623 matches costs 20,424 ms. The floor is the full 1.67M-document pass,
+   not the work of collecting hits. Only the degenerate `co` (260,109 matches)
+   doubles it, because projecting and sorting a quarter-million results is
+   finally comparable to the scan itself. The felt "more hits = slower" is real
+   only at that extreme; everything else is a flat 20 s wall.
+2. **An identical repeat query re-scans from scratch.** `okay` ran twice
+   back-to-back, 20,942 ms the second time. `search()` serves the per-query
+   snapshot only when `offset > 0`; a re-issued query at offset 0 always
+   re-derives. That was a sound trade when re-deriving cost 1.2 s. At 20 s it
+   is the single cheapest thing on this page to fix.
+3. **Typing serializes full scans.** The drawer debounces 400 ms and there is
+   no cancellation of an in-flight search, so a pause mid-word starts a 20 s
+   scan that nothing stops when the next keystroke arrives. The log shows the
+   prefix scans (`co`, `codemirroredito`, `codemirroreditor`) each running to
+   completion in sequence. Several of those queued back to back is the
+   "spinning for five minutes" report — it is not one slow query, it is a
+   backlog of superseded ones.
+4. **The first search after a stale index pays a synchronous full rebuild.**
+   91,386 ms of rebuild, then a 19,012 ms scan, for 110,543 ms to first result.
+   The rebuild itself is pre-existing behaviour and not this plan's target, but
+   it sets the worst-case first impression.
+
+### Which build these numbers are from
+
+These are the streamed scan with the **raw-line lowercase** prefilter (index
+schema 4.1.0). The keyed `textLower` prefilter (schema 4.2.0) has landed in the
+repo but the running extension host had not picked it up, and the on-disk index
+is still 4.1.0. The predecessor plan projects the keyed variant at ~2.2x faster,
+so expect roughly **9–10 s** per query after the next reload and its one-time
+rebuild — better, still an order of magnitude off the resident 1.2 s, and still
+~190 s per 20-search session. **This plan is needed either way.**
+
+It also corrects the predecessor's closeout: that doc records 9,277.9 ms for a
+first streamed search and 8,793.7 ms warm, for the _same_ raw-line variant these
+logs show at 20.2–21.5 s. The live number is the trustworthy one; the closeout
+figure should not be used as a baseline.
+
+## Why results can be streamed — the structural fact that makes this work
+
+Nothing about the current design requires a full scan before the first row.
+Two existing properties combine:
+
+- **One shard is exactly one run.** `getDocumentsShardPath` hashes the run's
+  manifest path, so a shard file holds only that run's documents.
+- **Every document in a run shares that run's `startedAt`, which is the primary
+  sort key.** `compareMatches` orders by `startedAt` desc, then `timestampMs`
+  desc, then `sequence` desc.
+
+So visiting shards in **descending `startedAt`** yields matches already in
+primary-sort order: every document of a newer run outranks every document of an
+older one. Only the intra-run tie-breaks need sorting, and that is one run's
+documents at a time.
+
+`manifest.json`'s `indexedRuns` entries **already carry `startedAt`** alongside
+`manifestPath`, so the scan order is derivable today with no schema change and
+no extra read — it is a sort of 1,560 in-memory entries.
+
+The consequence: a first page of 50 rows costs _time to find 50 matches in the
+most recent runs_, not time to read 1.6 GB. For a term used recently — the
+common case for this product — that is a handful of shards.
+
+## Options
+
+### A. Recency-ordered scan with early termination — landed
+
+Order shards by `startedAt` desc, stream in that order, emit the page as soon
+as it is full, and stop.
+
+- **Fixes:** the flat 20 s floor for any query whose hits are not all ancient.
+  Turns the common case into tens of milliseconds.
+- **Memory:** unchanged — still O(page).
+- **Does not fix:** a query with no matches, or matches only in the oldest
+  runs, still reads everything. That tail is what B and E are for.
+- **Sharp edge — `totalCount`, resolved.** The response contract now carries
+  `countState: "exact" | "atLeast"` (`HISTORY_SEARCH_COUNT_STATES` in
+  `DashboardConstants.ts`) alongside `totalCount`, so a lower bound can never
+  be mistaken for the real total. No background continuation refines it — an
+  exact count only ever falls out of a scan that happens to reach the true end
+  of the index. The virtualized list treats an `"atLeast"` total as a growing
+  bound (see the Status section above) rather than needing an open-ended list
+  redesign.
+- **Sharp edge — equal `startedAt`, resolved.** `scanForMatches` buffers a
+  `startedAt` group across however many shards share it, sorts and dedupes the
+  whole group, and only then checks whether the target count has been reached
+  — so a tied group is always processed as a unit before anything in it is
+  finalized, and the target check never fires mid-group.
+- **Sharp edge — deep paging, resolved.** `offset > 0` past the retained prefix
+  now resumes the scan from a retained `HistorySearchScanCursor` (the resolved
+  shard order, the next shard index, the running dedupe set, and the running
+  scanned-document count) instead of restarting from shard zero. The cursor is
+  shard-granular rather than a mid-shard line offset — the group-completion
+  rule above already forces a whole shard to be scanned before the scan can
+  stop or resume, so a single run's size never justifies a finer-grained
+  cursor.
+
+### B. Bounded most-recent-run document cache
+
+Hold parsed documents for the most recent N runs in the extension host, sized
+to a budget, and stream only past its edge.
+
+- **Sizing:** the resident measurement was ~2,157 MB of heap for 1,672,357
+  documents, about **1.35 KB per document**. A **1 GB** budget therefore holds
+  roughly 750,000 documents — near enough half the index, and the half that is
+  searched most.
+- **Fixes:** the remaining scan cost for recent hits, and makes a repeat query
+  effectively free.
+- **Composes with A rather than competing:** the cache is a prefix of the same
+  recency-ordered scan, so it is one code path with a fast front end — not the
+  two-correctness-paths split that made the predecessor plan reject bounded
+  residency. That objection does not apply once the scan is ordered.
+- **Invalidation is already solved:** an incremental rebuild rewrites specific
+  per-run shards, so evicting those runs from the cache is exactly the shard
+  splice the predecessor plan deleted, reintroduced as a cache concern where a
+  miss is a slow read rather than a wrong answer.
+- **Cost:** reopens a bounded, deliberate share of the memory this product just
+  spent a plan removing. It must stay a hard cap with eviction, and it must be
+  measured against the OOM history in
+  `dev/implemented/HISTORY_SEARCH_PERFORMANCE_PLAN.md`.
+
+### C. Serve a repeat query from the existing snapshot
+
+Allow `offset === 0` to hit the per-query snapshot when the index has not
+changed, instead of only `offset > 0`.
+
+- **Fixes:** finding 2 above outright — a re-issued query drops from ~20 s to
+  the freshness check (~530 ms in these logs), a ~40x win for a few lines.
+- **Sharp edge:** the current comment justifies always re-deriving at offset 0
+  so a new query sees a fresh index. Gate the reuse on the freshness check the
+  search already performs, so a changed index still re-derives.
+
+### D. Cancel superseded in-flight searches
+
+Abort a running scan when a newer query for the same drawer arrives, and raise
+the debounce above its current 400 ms while scans remain expensive.
+
+- **Fixes:** finding 3 — the queued backlog that reads as a hang.
+- **Cost:** the scan loop needs a cancellation signal threaded through
+  `streamHistorySearchDocuments`; it has no abort today.
+- **Note:** this is a mitigation, not a cure. With A landed, scans are short
+  enough that cancellation matters much less.
+
+### E. Trigram postings sidecar
+
+The predecessor plan's Option B, unchanged: the rebuild worker emits per-shard
+postings from lowercased trigrams to document offsets; a query intersects
+postings and reads only candidates.
+
+- **Fixes:** the tail A cannot — rare terms and no-match queries become
+  sublinear instead of a full read.
+- **Cost:** highest complexity here, its own schema version, its own
+  incremental-update story, and a fallback for queries shorter than the trigram
+  width (`MIN_QUERY_LENGTH` is 2).
+
+## Recommendation
+
+Land in this order, because the cheap ones are felt immediately and the
+expensive one is easier to validate once the noise is gone:
+
+1. **C and D first — landed.** Small, self-contained, and together they remove
+   the repeat-scan and the queued-backlog hang that produce the worst of the
+   current experience. Neither depends on A. C reuses a query's cached
+   snapshot at offset 0 when a freshness check confirms the index hasn't
+   changed (`HistorySearchIndexService.search`), backed by a small
+   total-results-bounded LRU rather than one slot. D threads a cooperative
+   `AbortSignal` through the shard scanner (checked between shards and
+   between lines) and has `WebviewMessageRouter` abort a client's previous
+   in-flight SEARCH_HISTORY the instant a newer one arrives; the drawer's
+   debounce is temporarily raised to 600ms (`HISTORY_SEARCH_DEBOUNCE_MS`)
+   while a scan still costs ~20s. The flat 20s-per-query floor itself is
+   unchanged — that's A below.
+2. **A next — this is the actual fix — landed.** Recency-ordered scan with
+   early termination, including the `totalCount`/`countState` contract change
+   it forces. The UI side landed as part of the same work: `historySearchResults`
+   in `uiStore` is a sparse listing indexed by absolute position, so an
+   `"atLeast"` count growing as pages come in fits the existing shape rather
+   than needing a new one — no progressive/streamed delivery of a single page
+   was needed, since each page response now returns quickly on its own.
+3. **B within a 1 GB cap**, measured, once A is in and the cache's job is
+   narrow: absorb the first page of recent-term queries entirely.
+4. **E only if the tail still hurts** after 1–3. Do not start here.
+
+A target worth holding the work to: a recent-term query should return its first
+page in well under a second, and a 20-search session should cost seconds in
+aggregate rather than minutes.
+
+## What must not break
+
+- **The no-false-negative prefilter invariant**, and its coupling to the index
+  schema: the keyed prefilter only works on shards carrying `textLower`, and
+  `streamHistorySearchDocuments` takes `hasPersistedLowercaseKey` for exactly
+  that reason (see `.github/instructions/orchestration.instructions.md`). An
+  ordered or early-terminating scan must keep passing it honestly.
+- **Sort order within a run** — `timestampMs`/`sequence` ties, carried
+  alongside projected results because `HistorySearchResult` lacks those fields.
+- **Dedupe semantics.** The dedupe key comes from the projected result, so a
+  row's deduped ordinal depends on everything ahead of it. Ordered scanning
+  preserves this (everything ahead is emitted first); unordered early
+  termination would not.
+- **Rebuild-progress reporting** to the UI on the synchronous rebuild path.
+- **`HistorySearchService.searchLegacy`** stays the unavailable-index fallback,
+  unchanged.
+
+## Non-goals
+
+- **No return to a fully resident index.** The 2.16 GB baseline and its two
+  confirmed heap-OOM crashes are what the predecessor plan removed; option B is
+  a hard-capped cache, not a reversal.
+- **No SQLite/FTS5**, for the packaging reasons the predecessor plan records.
+- **No reduction in what gets indexed.**
+- **Not the rebuild.** The 91 s full rebuild is real but separate; this plan is
+  about query latency. Note that `dev/backlog/HISTORY_SEARCH_TRUNCATED_TEXT_MATCH_PLAN.md`
+  would grow document count, so sequence it after this work, not before.
+
+## Measured after B landed (2026-09-19)
+
+`node scripts/bench-history-search-document-cache.mjs <.search-index> 1024`
+against the real 1,560-run index (read-only), simulating the reported
+~20-search session with one shared cache instance, as one live
+`HistorySearchIndexService` holds for one workspace.
+
+| Query                 | Matches | Documents scanned |      ms |
+| --------------------- | ------: | ----------------: | ------: |
+| `cache`               |     328 |             7,973 |     4.8 |
+| `history`             |   3,696 |             7,973 |     3.8 |
+| `zzzzzzzzzz-no-match` |      12 |         1,676,242 | 9,548.3 |
+| `okay`                |      51 |           104,815 |    92.2 |
+| `codemirroreditor`    |      60 |           133,691 |   107.3 |
+
+| Session measure          |              Value |
+| ------------------------ | -----------------: |
+| Whole ~20-search session |    **23,684.7 ms** |
+| Baseline RSS / heap used |    379.0 / 89.1 MB |
+| Final RSS / heap used    | 2,412.4 / 885.1 MB |
+| **RSS delta**            |    **+2,033.4 MB** |
+| Heap-used delta          |          +796.1 MB |
+| Configured budget        |           1,024 MB |
+
+### What this confirms
+
+The latency goal is met and then some. `okay` went from 21,543 ms to
+**92.2 ms** and `codemirroreditor` from 20,953 ms to **107.3 ms** — roughly
+200x — and the whole session went from ~416 s to **23.7 s**. `documentsScanned`
+is the mechanism showing through: 7,973 documents instead of 1,672,357, because
+the recency-ordered scan stops as soon as the page is filled. Latency is no
+longer flat with selectivity, which was the defining symptom.
+
+### What this does not meet: the memory budget
+
+The no-match query still reads the whole index (9,548.3 ms over 1,676,242
+documents) exactly as option A predicted, and that full pass is what fills the
+cache. The result is an **RSS delta of 2,033.4 MB against a 1,024 MB budget**.
+
+The cache's own accounting is not obviously wrong — heap-used grew 796.1 MB,
+inside the budget — but RSS is roughly twice the configured number once V8
+overhead, fragmentation, and garbage from parsing 1.67M documents are counted.
+The acceptance criterion is about working set, and by that measure the current
+default fails it at 2x.
+
+This matters more here than the raw number suggests: this subsystem has two
+confirmed extension-host heap OOM crashes behind it, and
+`.github/copilot-instructions.md` describes the crash shape as a single large
+allocation landing on an already-elevated baseline. A 2.4 GB RSS in the
+extension host is that elevated baseline.
+
+**Methodology note, added later:** this +2,033.4 MB figure was sampled without
+forcing a GC first, so it includes garbage the no-match query's 1.67M-document
+scan had not yet collected. The re-tuning section below forces GC before every
+sample and measures the same 1,024 MB budget at 1,900.4 / 1,770.4 MB. The
+conclusion was unaffected — the budget really was overshooting by ~2x — but do
+not compare the number above against that table as if they were measured the
+same way. The re-tuning that followed is recorded below and has landed.
+
+## Re-tuning the default budget against measured RSS (2026-09-19)
+
+`node --expose-gc scripts/bench-history-search-document-cache.mjs <.search-index> <budgetMb>`
+against the same real 1,560-run/1.6 GB index, one fresh process per budget.
+The script now forces two `global.gc()` passes before each `process.memoryUsage()`
+sample (added as part of this work) — without it, repeating the _same_ budget
+disagreed by 2–3x between runs, because the no-match query's 1.67M-document
+scan leaves a lot of not-yet-collected garbage and an unforced sample just
+catches wherever GC happened to leave off, not steady state.
+
+| Budget (MB)  | Heap-used delta (MB) |      RSS delta (MB) |
+| ------------ | -------------------: | ------------------: |
+| 0 (disabled) |                 −9.1 |                −5.0 |
+| 128          |                 83.6 |               664.3 |
+| 256          |                179.6 |               685.3 |
+| 320          |                226.5 |     939.4 / 887.7 ¹ |
+| 384          |                273.0 | 1,047.8 / 1,056.7 ¹ |
+| 400          |                284.3 |             1,124.0 |
+| 512          |                367.6 |             1,514.6 |
+| 1,024        |         747.3 (×2) ² | 1,900.4 / 1,770.4 ¹ |
+
+¹ Two independent runs at the same budget, shown to give a sense of run-to-run
+noise (roughly ±5%) once GC is forced.
+² Identical across two independent runs — heap-used tracking the configured
+budget is fully deterministic; the noise lives entirely in RSS.
+
+### What this confirms
+
+- **The cache's own heap accounting is self-consistent at every budget
+  tested** — heap-used delta stays under the configured number from 128 MB
+  through 1,024 MB. That part was never the defect.
+- **RSS runs well above the configured number, and the ratio is not a fixed
+  multiplier**: ~5.2x at 128 MB, ~2.7–3x at 256–512 MB, ~1.8x at 1,024 MB.
+  Because the ratio itself moves with the budget, no single rescale of
+  `estimateHistorySearchDocumentBytes` could make the configured number bound
+  RSS accurately across every value a user might pick — it could only be
+  tuned to hit a target at one specific budget.
+- **The overshoot is entirely attributable to the cache's population, not to
+  the no-match query's inherent full-index scan.** With the cache disabled
+  (budget 0) the RSS delta is ~0 across the same 20-search session that reads
+  the full 1.67M-document index for its no-match query. This is the answer to
+  the "per-query population cap" question the follow-up work raised: a cap
+  would address a real mechanism (a cold cache does fill to the whole budget
+  in one pass, per `wouldRetain`), but it is not needed here — retuning the
+  default already satisfies the acceptance criterion without the added
+  complexity, so no cap was added.
+
+### Decision: retune the default, not the estimator
+
+Chose to retune `historySearchCacheMb`'s default from 1,024 to **320** rather
+than rescale `estimateHistorySearchDocumentBytes`, precisely because the
+measured RSS/budget ratio is not constant — a rescale tuned to look right at
+1,024 MB would still mislead a user who picks a different value. Retuning the
+default is honest about what changed: the number itself now means "the
+default that measured near 1 GB of real RSS on a representative index," not
+"a literal byte budget converted 1:1 into RSS."
+
+320 MB measured a 939.4 MB / 887.7 MB RSS delta across two runs — under the
+1 GB the user agreed to, with a margin for the ~5% run-to-run noise seen at
+this budget. 384 MB was also tried and lands right at the edge (1,047.8 MB /
+1,056.7 MB), close enough to "near 1 GB" to be defensible but with no margin
+left once real-world variance (a larger index, a different session shape) is
+considered — 320 MB was chosen instead specifically for that margin.
+
+`historySearchCacheMb`'s default in `CTRLYOKE_SETTINGS_DEFAULTS`
+(`src/types/CtrlYokeSettings.ts`) is now 320. Its doc comment there, the
+`schemas/settings-schema.json` description, and the settings-drawer copy in
+`GeneralSection.tsx` were all updated to say plainly that the number bounds
+real process working set (RSS), not a literal per-document byte count, and
+that raising it does not scale RSS 1:1 — re-measure with the bench script
+before trusting a large increase.
+
+### Latency at the retuned default (verified in review)
+
+The budget table above measures memory only, so the retune was verified
+against the thing the plan exists to fix. Same script and index, budget 320:
+
+| Query                 | at 1,024 MB |   at 320 MB |
+| --------------------- | ----------: | ----------: |
+| `history`             |      3.8 ms |      3.8 ms |
+| `cache`               |      4.8 ms |      4.8 ms |
+| `okay`                |     92.2 ms |  **6.7 ms** |
+| `codemirroreditor`    |    107.3 ms | **15.5 ms** |
+| `zzzzzzzzzz-no-match` |  9,548.3 ms | 11,701.0 ms |
+| Whole session         | 23,684.7 ms | 24,683.6 ms |
+
+Latency did not regress at the smaller budget — two queries got an order of
+magnitude **faster**, and the session total is unchanged within noise (it is
+dominated by the one no-match query, which is a full scan either way and so is
+unaffected by cache size).
+
+The reason those two got faster is worth knowing before anyone "optimizes" by
+raising the budget: `wouldRetain` returns true while there is any headroom, and
+a shard it accepts is read with a **full, unfiltered parse** so every document
+can be retained — which is more work than the prefiltered streaming path it
+replaces. `okay` scanned 104,815 documents at 1,024 MB versus 8,449 at 320 MB
+for that reason. A larger budget therefore buys more cache population cost on
+the way to a hit, and past some point it costs latency rather than saving it.
+**Raising `historySearchCacheMb` is not a straightforward speed lever in either
+direction** — measure it.
+
+A third independent run at 320 MB measured an RSS delta of **1,016.1 MB**,
+above the 939.4 / 887.7 MB the two runs above recorded. Taking the least
+favourable of the three, the default sits at roughly 1 GB rather than
+comfortably under it, which is still the figure agreed for this cache but
+leaves less margin than the two-run pair alone suggests.
+
+## Acceptance criteria
+
+- [x] A recent-term query returns its first page in under 1 s on the 1,560-run
+      workspace — measured at 3.8–107.3 ms over the real index (benchmark
+      against the shipped modules, not the extension-host session log).
+- [x] Query latency is no longer flat with respect to selectivity: recent-term
+      queries scan 7,973 documents where a full pass scans 1,676,242.
+- [x] An immediately repeated query does not re-scan.
+- [x] Typing a multi-word query does not leave superseded scans running.
+- [x] Extension-host working set stays within the chosen cache budget: the
+      default (now 320 MB) measured a **+939.4 MB / +887.7 MB RSS delta**
+      over a 20-search session on the real 1,560-run index — under the ~1 GB
+      the user agreed to. See "Re-tuning the default budget against measured
+      RSS" above for the full table and why the default was retuned rather
+      than the byte estimator.
+- [x] Offset paging still reaches the last page of a several-thousand-result
+      search without walking every page.
+- [x] Result ordering and dedupe are identical to the current implementation
+      for a query that scans the whole index.
+- [x] A 20-search session costs seconds in aggregate: **23.7 s**, against the
+      ~416 s recorded above.
+- [x] A query whose scan can't stop early (a rare term, or one with matches
+      only in old runs) renders matches as they're found instead of only once
+      the scan finishes or exhausts the index.

@@ -1,6 +1,7 @@
 import {
   HISTORY_EVENT_KINDS,
   HISTORY_MATCH_FIELDS,
+  HISTORY_SEARCH_COUNT_STATES,
   type ExecutionPhase,
   type ExecutionState,
 } from "./DashboardConstants";
@@ -158,6 +159,18 @@ export interface HistorySearchResult {
 
 export type HistorySearchIndexState = "ready" | "building" | "fallback";
 
+/**
+ * Whether `HistorySearchResponse.totalCount` is the true match count or a
+ * lower bound. Early termination (see `HistorySearchIndexService`) can answer
+ * a page without scanning the whole index, which means it cannot always know
+ * the real total — `"atLeast"` says so explicitly rather than letting a
+ * partial count be mistaken for an exact one. A consumer must not size a
+ * fixed-length UI (e.g. a scrollbar) from an `"atLeast"` total as if it were
+ * final; `hasMore` still correctly indicates more pages remain.
+ */
+export type HistorySearchCountState =
+  (typeof HISTORY_SEARCH_COUNT_STATES)[keyof typeof HISTORY_SEARCH_COUNT_STATES];
+
 export interface HistorySearchQuery {
   query: string;
   limit: number;
@@ -186,7 +199,9 @@ export interface HistorySearchResponse {
   /** Absolute index of `results[0]` within the full match list. */
   offset: number;
   results: HistorySearchResult[];
+  /** A lower bound when `countState` is `"atLeast"`; the true count when `"exact"`. */
   totalCount: number;
+  countState: HistorySearchCountState;
   hasMore: boolean;
   indexState: HistorySearchIndexState;
 }

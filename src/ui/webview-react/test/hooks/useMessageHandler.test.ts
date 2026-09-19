@@ -2827,6 +2827,86 @@ describe("history search messages", () => {
     expect(useUiStore.getState().historySearchResults).toEqual([]);
     expect(useUiStore.getState().historySearchLoading).toBe(true);
   });
+
+  it("applies partial results mid-scan without clearing the loading state", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      useUiStore.getState().setHistorySearchQuery("needle");
+      useUiStore
+        .getState()
+        .setHistorySearchResults([], true, { totalCount: 0 });
+      dispatch(MESSAGE_TYPES.SEARCH_HISTORY_PARTIAL_RESULTS, {
+        query: "needle",
+        results: [
+          {
+            workflowKey: "wf-1" as never,
+            runRef: "run-2026-07-20T10-30-00-000Z" as never,
+            workflowName: "Search Workflow",
+            runId: 3,
+            startedAt: 1000,
+            executionState: EXECUTION_STATES.COMPLETED,
+            target: { kind: "queue", stepIndex: 0 },
+            eventKind: "response",
+            matchField: "content",
+            matchSnippet: "needle found here",
+            matchContext: "Prompt 1",
+          },
+        ],
+        offset: 0,
+        totalCount: 1,
+        countState: "atLeast",
+        hasMore: true,
+      });
+    });
+
+    // A push mid-scan must land — rows are meant to appear as they're found —
+    // but must not signal completion, since the scan it came from is still
+    // running and more may still arrive.
+    expect(useUiStore.getState().historySearchResults).toHaveLength(1);
+    expect(useUiStore.getState().historySearchTotalCount).toBe(1);
+    expect(useUiStore.getState().historySearchCountState).toBe("atLeast");
+    expect(useUiStore.getState().historySearchLoading).toBe(true);
+  });
+
+  it("discards a partial push for a query the user has since moved on from", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      useUiStore.getState().setHistorySearchQuery("fresh");
+      useUiStore
+        .getState()
+        .setHistorySearchResults([], true, { totalCount: 0 });
+      dispatch(MESSAGE_TYPES.SEARCH_HISTORY_PARTIAL_RESULTS, {
+        query: "stale",
+        results: [
+          {
+            workflowKey: "wf-2" as never,
+            runRef: "run-2026-07-20T10-31-00-000Z" as never,
+            workflowName: "Stale Workflow",
+            runId: 4,
+            startedAt: 2000,
+            executionState: EXECUTION_STATES.COMPLETED,
+            target: { kind: "queue", stepIndex: 1 },
+            eventKind: "prompt",
+            matchField: "content",
+            matchSnippet: "stale result",
+            matchContext: "Prompt 2",
+          },
+        ],
+        offset: 0,
+        totalCount: 1,
+        countState: "atLeast",
+        hasMore: true,
+      });
+    });
+
+    // The now-superseded query's own scan is still producing pushes when the
+    // new query starts; none of them may land on top of the fresh, empty
+    // listing the new query starts from.
+    expect(useUiStore.getState().historySearchResults).toEqual([]);
+    expect(useUiStore.getState().historySearchTotalCount).toBe(0);
+  });
 });
 
 describe("active workflow summaries", () => {
