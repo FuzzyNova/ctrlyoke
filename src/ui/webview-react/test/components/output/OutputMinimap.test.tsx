@@ -147,7 +147,10 @@ describe("OutputMinimap marker colors", () => {
           compactLabel: "View 2",
           title: "2 files changed · 1 undone, can be redone",
         },
-        changeAction: { label: "View 2 changes (1 undone)", onTrigger: vi.fn() },
+        changeAction: {
+          label: "View 2 changes (1 undone)",
+          onTrigger: vi.fn(),
+        },
       }),
       makeStep({
         key: "queue:2",
@@ -157,11 +160,14 @@ describe("OutputMinimap marker colors", () => {
           undoable: 0,
           undone: 1,
           blocked: 0,
-          label: "View 1 changes (all undone)",
+          label: "View 1 change (all undone)",
           compactLabel: "View 1",
           title: "1 file changed · 1 undone, can be redone",
         },
-        changeAction: { label: "View 1 changes (all undone)", onTrigger: vi.fn() },
+        changeAction: {
+          label: "View 1 change (all undone)",
+          onTrigger: vi.fn(),
+        },
       }),
       makeStep({
         key: "queue:3",
@@ -171,11 +177,11 @@ describe("OutputMinimap marker colors", () => {
           undoable: 1,
           undone: 0,
           blocked: 0,
-          label: "View 1 changes",
+          label: "View 1 change",
           compactLabel: "View 1",
           title: "1 file changed",
         },
-        changeAction: { label: "View 1 changes", onTrigger: vi.fn() },
+        changeAction: { label: "View 1 change", onTrigger: vi.fn() },
       }),
     ]);
 

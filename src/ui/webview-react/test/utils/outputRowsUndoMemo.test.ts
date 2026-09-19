@@ -140,7 +140,7 @@ describe("buildOutputRows undo-action memoization", () => {
       return promptUndo?.summary.label;
     };
 
-    expect(changeLabel(few.rows)).toBe("View 1 changes");
+    expect(changeLabel(few.rows)).toBe("View 1 change");
     expect(changeLabel(many.rows)).toBe(changeLabel(few.rows));
   });
 });

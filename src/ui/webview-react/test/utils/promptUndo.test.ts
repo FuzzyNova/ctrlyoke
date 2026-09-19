@@ -659,7 +659,7 @@ describe("computePromptChangeSummary", () => {
       undoable: 0,
       undone: 1,
       blocked: 0,
-      label: "View 1 changes (all undone)",
+      label: "View 1 change (all undone)",
       compactLabel: "View 1",
       title: "1 file changed · 1 undone, can be redone",
     });

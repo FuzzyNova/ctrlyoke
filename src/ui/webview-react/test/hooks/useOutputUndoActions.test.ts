@@ -123,7 +123,7 @@ describe("useOutputUndoActions", () => {
       undoable: 0,
       undone: 0,
       blocked: 1,
-      label: "View 1 changes",
+      label: "View 1 change",
     });
     expect(result.current.workflowDialogState?.entries).toHaveLength(1);
     expect(

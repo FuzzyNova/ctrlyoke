@@ -1092,7 +1092,7 @@ export function createPromptChangeSummary(
     undoable,
     undone,
     blocked,
-    label: `View ${total} changes${undoneLabel}`,
+    label: `View ${total} change${total !== 1 ? "s" : ""}${undoneLabel}`,
     compactLabel: `View ${total}`,
     title: `${total} file${total !== 1 ? "s" : ""} changed${
       undone > 0 ? ` · ${undone} undone, can be redone` : ""
