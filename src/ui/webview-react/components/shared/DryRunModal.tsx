@@ -1524,7 +1524,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
               />
             </div>
           )}
-          <div className="flex min-h-0 flex-1">
+          <div className="flex min-h-0 min-w-0 flex-1">
             {!workflowNarrow && scope.kind === PREVIEW_SCOPES.WORKFLOW && (
               <Rail
                 preview={preview}
@@ -1534,7 +1534,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
             )}
             {selection === PREVIEW_RAIL_SELECTIONS.OVERVIEW &&
             scope.kind === PREVIEW_SCOPES.WORKFLOW ? (
-              <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
                 <OverviewPanel
                   preview={preview}
                   onNavigateToStepTab={handleOverviewTimelineNavigation}
@@ -1576,7 +1576,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
                 }
               />
             ) : (
-              <div className="flex flex-1 items-center justify-center p-6 text-sm text-description-fg">
+              <div className="flex min-w-0 flex-1 items-center justify-center p-6 text-sm text-description-fg">
                 The selected step is not available in this preview.
               </div>
             )}

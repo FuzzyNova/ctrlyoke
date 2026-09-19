@@ -140,14 +140,14 @@ export const Modal: React.FC<ModalProps> = ({
         >
           {/* Header */}
           <div className="flex-shrink-0 px-6 py-4 border-b border-panel-border">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <h2
                 id={titleId}
-                className="text-xl font-semibold text-foreground"
+                className="min-w-0 truncate text-xl font-semibold text-foreground"
               >
                 {title}
               </h2>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-shrink-0 items-center gap-2">
                 {headerActions}
                 <ExitButton onClick={onClose} aria-label="Close modal" />
               </div>
@@ -162,7 +162,7 @@ export const Modal: React.FC<ModalProps> = ({
           {/* Body */}
           <div
             ref={bodyRef}
-            className={`${isFullScreen ? "flex-1 min-h-0 overflow-y-auto" : "max-h-[70vh] overflow-y-auto"} ${bodyClassName} text-foreground`}
+            className={`${isFullScreen ? "flex-1 min-h-0 overflow-y-auto overflow-x-hidden" : "max-h-[70vh] overflow-y-auto overflow-x-hidden"} ${bodyClassName} text-foreground`}
           >
             {children}
           </div>
