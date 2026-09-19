@@ -1,6 +1,6 @@
 # History Search Index Residency Plan
 
-**Status:** Backlog — not started
+**Status:** Backlog — staged for implementation (2026-09-18)
 **Priority:** P1
 **Predecessor:** `dev/implemented/HISTORY_SEARCH_PERFORMANCE_PLAN.md` (worker
 isolation, incremental rebuild, shared registry). This doc covers the one
@@ -152,6 +152,93 @@ per-query snapshot means a streamed pass happens once per query, not once per
 page, so A's per-query cost is paid at the same frequency the resident scan is
 paid today.
 
+## Implementation plan (decided 2026-09-18)
+
+Option A is the design being built. The points below were checked against the
+current code and are the contract the staged work follows; the spike (first
+step) may change the _prefilter_ choice, not this shape.
+
+### What disappears
+
+Residency is entirely private to `HistorySearchIndexService` — no consumer
+touches it (`HistorySearchService.search` and `OutputHistoryManager`'s refresh
+are the only callers, both via `HistorySearchIndexServiceRegistry`). So A
+deletes rather than adds:
+
+- `shardDocuments` / `documentCount` / `setShardDocuments` /
+  `readDocumentShards` / `readDocumentShard`.
+- `applyIncrementalShardDelta` and `removeShard`. The per-run shard splice
+  exists only to patch resident documents; with nothing resident, a rewritten
+  shard is simply read by the next query. `HistorySearchIncrementalShardDelta`
+  and the worker's `rewrittenShardNames`/`removedShardNames` reporting become
+  unused and go with it.
+- `rebuild(..., { retainDocuments })` and
+  `HistorySearchRebuildWorkerData.retainDocuments`. The worker never read that
+  flag for anything but a log line — it always streams shards to disk — and
+  the host-side split between the one reader and the write-only refreshers is
+  exactly what residency created.
+- `loadIfPossible` shrinks to a manifest read. It is still needed:
+  `ensureReady` compares the manifest for freshness, and a schema-version
+  mismatch must still force a rebuild.
+
+### What replaces the match pass
+
+`collectMatches` becomes a streamed pass over the shard directory listing,
+read live per query rather than from a loaded map:
+
+1. For each shard, stream it line by line (`streamFileLines` already handles
+   the U+2028 / lone-CR hazards documented in `src/utils/TextLines.ts`; a raw
+   `Buffer` reader is acceptable if the spike shows it materially faster, but
+   it must reproduce `LINE_BREAK_PATTERN` exactly).
+2. Apply a **prefilter** to the raw JSONL line. It must never false-negative;
+   a false positive costs only one wasted `JSON.parse`.
+3. Parse survivors and re-run the real
+   `document.text.toLowerCase().includes(query)` plus `matchesFilters`.
+4. Project, dedupe, and sort exactly as today.
+
+Tolerate a shard that vanishes mid-pass (`ENOENT`) the way `readDocumentShard`
+does today — a concurrent rebuild replaces shards by atomic rename, so each
+shard read sees either the old or the new content, never a torn one.
+
+### Sort keys are the one non-obvious break
+
+`compareDocuments` sorts on `startedAt`, then `timestampMs`, then `sequence`.
+`HistorySearchResult` carries `startedAt` but **not** `timestampMs` or
+`sequence`. Today that is free because the sort runs over resident documents
+before projection. A streaming pass cannot retain the documents, so it must
+carry those two sort keys alongside each projected result (an internal type —
+do not widen the wire-facing `HistorySearchResult`) and sort on them. Getting
+this wrong silently reorders results within a run, which no existing test
+would catch; the staged work adds one that does.
+
+### Peak memory during the pass
+
+Residency is not the only exposure: `collectMatches` also materializes the
+full projected result list, and `MAX_SNAPSHOT_RESULTS` (50,000) governs only
+whether that list is _retained_, not whether it is built. Keep today's
+behaviour (build the full list, retain it only under the cap) unless the spike
+shows the peak is itself a problem — a degenerate query over ~1M documents is
+the case to measure. Paging past the cap re-runs the pass, which is now a disk
+pass instead of an in-heap scan; that is an accepted cost for a
+
+> 50,000-result query and matches the current non-retained path.
+
+### Prefilter correctness (the part tests must pin down)
+
+- **JSON escaping.** The query must be escaped the way `JSON.stringify` writes
+  it before being compared against a raw line: a double quote becomes an
+  escaped quote, a backslash becomes a doubled backslash, newline/tab become
+  their two-character escapes, and other control characters become `\uXXXX`
+  escapes.
+- **Case.** ASCII case-folding during the comparison is cheap; non-ASCII case
+  folding is not byte-comparable. When the query contains non-ASCII letters
+  the prefilter must degrade permissively (prefilter on an ASCII-only run of
+  the query, or skip prefiltering entirely for that query) rather than risk a
+  miss.
+- These are the only two places option A can silently return wrong answers, so
+  they get direct tests, including a property-style check asserting the
+  prefilter is true whenever the real `includes()` test is.
+
 ## Non-goals
 
 - **No SQLite/FTS5.** A native module means per-platform prebuilds in a VS Code
@@ -175,3 +262,7 @@ paid today.
       page of a several-thousand-result search still costs one request.
 - [ ] `search()`'s rebuild-progress reporting to the UI still fires when a
       rebuild is needed.
+- [ ] Results are identical to the resident implementation over the same index,
+      including ordering within a run (`timestampMs`/`sequence` ties).
+- [ ] Correct results after an incremental rebuild are still covered, even
+      though the shard-splice mechanism that made them fast is deleted.
