@@ -285,8 +285,10 @@ describe("dashboard mount smoke", () => {
     );
     const workflowDialogState: WorkflowDialogState = {
       mode: "undo",
+      intent: "act",
       address: RUN_ADDRESS,
       entries,
+      workflowName: "Smoke workflow",
       requestId: "large-undo-dialog-smoke",
     };
 

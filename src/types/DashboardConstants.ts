@@ -2734,10 +2734,22 @@ export type ContentPreviewLanguage =
 export const UNDO_DIALOG_SCOPE_MODES = {
   PROMPT: "prompt",
   SINGLE_FILE: "singleFile",
+  WORKFLOW: "workflow",
 } as const;
 
 export type UndoDialogScopeMode =
   (typeof UNDO_DIALOG_SCOPE_MODES)[keyof typeof UNDO_DIALOG_SCOPE_MODES];
+
+// ============================================================================
+// UNDO DIALOG INTENTS - Whether the dialog is a viewer or an action sheet
+// ============================================================================
+export const UNDO_DIALOG_INTENTS = {
+  VIEW: "view",
+  ACT: "act",
+} as const;
+
+export type UndoDialogIntent =
+  (typeof UNDO_DIALOG_INTENTS)[keyof typeof UNDO_DIALOG_INTENTS];
 
 // ============================================================================
 // STEP TYPES - Discriminant values for WorkflowStep union type

@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Modal } from "../shared/Modal";
 import { Button } from "../shared/Button";
 import { ExpandCollapseAllDiffsButton } from "../shared/ExpandCollapseAllDiffsButton";
@@ -12,7 +18,13 @@ import { MESSAGE_TYPES } from "../../types/messages";
 import type { UndoFileInstruction } from "../../types/messages";
 import {
   FINAL_STEP_PHASES,
+  UNDO_DIALOG_INTENTS,
   UNDO_DIALOG_SCOPE_MODES,
+  UNDO_REDO_DIRECTIONS,
+} from "@root/types/DashboardConstants";
+import type {
+  UndoDialogIntent,
+  UndoRedoDirection,
 } from "@root/types/DashboardConstants";
 import type { UndoDialogInput } from "../../utils/promptUndo";
 import {
@@ -30,7 +42,8 @@ import { sendMessage } from "../../hooks/useMessageHandler";
 export type { WorkflowStepEntry } from "../../utils/promptUndo";
 
 export interface UndoChangesDialogProps {
-  mode: "undo" | "redo";
+  mode: UndoRedoDirection;
+  intent?: UndoDialogIntent;
   target: OutputExecutionTarget;
   workflowKey: WorkflowKey;
   runRef: RunRef;
@@ -41,6 +54,9 @@ export interface UndoChangesDialogProps {
   requestId: string;
   onClose: () => void;
   workflowEntries?: WorkflowStepEntry[];
+  workflowName?: string;
+  stepLabel?: string;
+  stepName?: string;
 }
 
 const RESULT_STATE = {
@@ -49,15 +65,19 @@ const RESULT_STATE = {
   PARTIAL: "partial",
   ERROR: "error",
 } as const;
-const DIALOG_MODE = { UNDO: "undo", REDO: "redo" } as const;
-
 function getAllSelectableRows(
   model: PromptUndoDialogModel,
-  mode: "undo" | "redo",
-  isWorkflowMode: boolean
+  isWorkflowMode: boolean,
+  activeDirection: UndoRedoDirection
 ) {
-  if (isWorkflowMode) return model.workflowRows;
-  return mode === DIALOG_MODE.REDO ? model.redoRows : model.allUndoRows;
+  if (isWorkflowMode) {
+    return model.workflowRows.filter(
+      (row) => row.direction === activeDirection
+    );
+  }
+  return activeDirection === UNDO_REDO_DIRECTIONS.REDO
+    ? model.redoRows
+    : model.allUndoRows;
 }
 
 function workflowTargetOrder(target: OutputExecutionTarget): number {
@@ -86,11 +106,12 @@ function sameWorkflowTarget(
 function expandAggregatedWorkflowSelection(
   files: AggregatedUndoFile[],
   checkedPaths: Set<string>,
-  mode: "undo" | "redo"
+  activeDirection: UndoRedoDirection
 ): Array<{ target: OutputExecutionTarget; files: UndoFileInstruction[] }> {
   const selectedSteps = files
     .filter((file) => checkedPaths.has(file.key))
     .flatMap((file) => file.steps)
+    .filter((step) => step.direction === activeDirection)
     .filter(
       (step): step is (typeof files)[number]["steps"][number] & {
         instruction: UndoFileInstruction;
@@ -99,7 +120,7 @@ function expandAggregatedWorkflowSelection(
     .sort((left, right) => {
       const order =
         workflowTargetOrder(left.target) - workflowTargetOrder(right.target);
-      return mode === DIALOG_MODE.UNDO ? -order : order;
+      return activeDirection === UNDO_REDO_DIRECTIONS.UNDO ? -order : order;
     });
 
   const entries: Array<{
@@ -118,6 +139,7 @@ function expandAggregatedWorkflowSelection(
 
 export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   mode,
+  intent = UNDO_DIALOG_INTENTS.ACT,
   target,
   workflowKey,
   runRef,
@@ -126,38 +148,62 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   requestId,
   onClose,
   workflowEntries,
+  workflowName,
+  stepLabel,
+  stepName,
 }) => {
   const isWorkflowMode = (workflowEntries?.length ?? 0) > 0;
   const model = useMemo(
-    () =>
-      buildPromptUndoDialogModel({
-        mode,
+    () => {
+      const undoModel = buildPromptUndoDialogModel({
+        mode: UNDO_REDO_DIRECTIONS.UNDO,
         input,
+        workflowEntries,
+      });
+      const redoModel = buildPromptUndoDialogModel({
+        mode: UNDO_REDO_DIRECTIONS.REDO,
         redoInstructions,
         workflowEntries,
-      }),
-    [input, mode, redoInstructions, workflowEntries]
+      });
+
+      return {
+        workflowRows: [...undoModel.workflowRows, ...redoModel.workflowRows],
+        workflowFiles: [
+          ...undoModel.workflowFiles,
+          ...redoModel.workflowFiles,
+        ],
+        redoRows: redoModel.redoRows,
+        tier1Rows: undoModel.tier1Rows,
+        tier2Rows: undoModel.tier2Rows,
+        allUndoRows: undoModel.allUndoRows,
+        groups: isWorkflowMode
+          ? [
+              {
+                key: UNDO_DIALOG_SCOPE_MODES.WORKFLOW,
+                files: [
+                  ...undoModel.workflowRows,
+                  ...redoModel.workflowRows,
+                ],
+              },
+            ]
+          : [...undoModel.groups, ...redoModel.groups],
+      } satisfies PromptUndoDialogModel;
+    },
+    [input, isWorkflowMode, redoInstructions, workflowEntries]
   );
 
   const initialChecked = useMemo(() => {
-    if (isWorkflowMode) {
-      return new Set(
-        model.workflowRows
-          .filter((row) => row.instruction !== null)
-          .map((row) => row.key)
-      );
-    }
-    if (mode === DIALOG_MODE.REDO) {
-      return new Set(model.redoRows.map((row) => row.key));
-    }
+    if (intent === UNDO_DIALOG_INTENTS.VIEW) return new Set<string>();
     return new Set(
-      model.tier1Rows
+      getAllSelectableRows(model, isWorkflowMode, mode)
         .filter((row) => row.instruction !== null)
         .map((row) => row.key)
     );
-  }, [isWorkflowMode, mode, model]);
+  }, [intent, isWorkflowMode, mode, model]);
 
   const [checkedPaths, setCheckedPaths] = useState<Set<string>>(initialChecked);
+  const [activeDirection, setActiveDirection] =
+    useState<UndoRedoDirection>(mode);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   const diffFileListRef = useRef<DiffFileListHandle>(null);
@@ -190,9 +236,16 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
     return () => clearTimeout(timer);
   }, [clearUndoResult, onClose, requestId, undoResult]);
 
-  const selectableRows = getAllSelectableRows(model, mode, isWorkflowMode);
+  const selectableRows = useMemo(
+    () =>
+      model.workflowRows.length > 0 || isWorkflowMode
+        ? model.workflowRows
+        : [...model.allUndoRows, ...model.redoRows],
+    [isWorkflowMode, model.allUndoRows, model.redoRows, model.workflowRows]
+  );
   const checkableRows = selectableRows.filter(
-    (row) => row.instruction !== null
+    (row) =>
+      row.instruction !== null && row.direction === activeDirection
   );
   const checkableCount = checkableRows.length;
   const checkedCount = checkableRows.filter((row) =>
@@ -201,14 +254,23 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   const allCheckableChecked =
     checkedCount === checkableCount && checkableCount > 0;
 
-  function handleToggle(key: string, checked: boolean) {
-    setCheckedPaths((previous) => {
-      const next = new Set(previous);
-      if (checked) next.add(key);
-      else next.delete(key);
-      return next;
-    });
-  }
+  const handleToggle = useCallback(
+    (key: string, checked: boolean) => {
+      const row = selectableRows.find((candidate) => candidate.key === key);
+      if (checked && row && row.direction !== activeDirection) {
+        setActiveDirection(row.direction);
+        setCheckedPaths(new Set([key]));
+        return;
+      }
+      setCheckedPaths((previous) => {
+        const next = new Set(previous);
+        if (checked) next.add(key);
+        else next.delete(key);
+        return next;
+      });
+    },
+    [activeDirection, selectableRows]
+  );
 
   function handleSelectAll() {
     if (allCheckableChecked) {
@@ -223,17 +285,17 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
       const entries = expandAggregatedWorkflowSelection(
         model.workflowFiles,
         checkedPaths,
-        mode
+        activeDirection
       );
       if (entries.length === 0) return;
       setIsSubmitting(true);
       sendMessage(
-        mode === DIALOG_MODE.REDO
+        activeDirection === UNDO_REDO_DIRECTIONS.REDO
           ? MESSAGE_TYPES.REDO_WORKFLOW_CHANGES
           : MESSAGE_TYPES.UNDO_WORKFLOW_CHANGES,
         { data: { requestId, workflowKey, runRef, entries } }
       );
-    } else if (mode === DIALOG_MODE.REDO) {
+    } else if (activeDirection === UNDO_REDO_DIRECTIONS.REDO) {
       const selectedInstructions = model.redoRows
         .filter((row) => checkedPaths.has(row.key))
         .map((row) => row.instruction as UndoFileInstruction);
@@ -282,27 +344,37 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
     setDialogDiffResetVersion((version) => version + 1);
   }
 
-  const isSingleFileUndo =
-    !isWorkflowMode &&
-    mode === DIALOG_MODE.UNDO &&
-    input?.scope.mode === UNDO_DIALOG_SCOPE_MODES.SINGLE_FILE;
-  const dialogTitle = isWorkflowMode
-    ? mode === DIALOG_MODE.REDO
-      ? "Redo workflow changes"
-      : "Undo workflow changes"
-    : mode === DIALOG_MODE.REDO
-      ? "Redo Changes"
-      : "Undo Changes";
+  const scopeMode = isWorkflowMode
+    ? UNDO_DIALOG_SCOPE_MODES.WORKFLOW
+    : input?.scope.mode ?? UNDO_DIALOG_SCOPE_MODES.PROMPT;
+  const dialogTitle =
+    scopeMode === UNDO_DIALOG_SCOPE_MODES.WORKFLOW
+      ? "Workflow changes"
+      : scopeMode === UNDO_DIALOG_SCOPE_MODES.SINGLE_FILE
+        ? "File changes"
+        : "Step changes";
+  const undoneCount = selectableRows.filter(
+    (row) => row.direction === UNDO_REDO_DIRECTIONS.REDO
+  ).length;
+  const changeCountSubtitle = `${selectableRows.length} file${
+    selectableRows.length !== 1 ? "s" : ""
+  }${undoneCount > 0 ? ` · ${undoneCount} undone` : ""}`;
+  // WorkflowDialogState requires this label; the optional prop only supports
+  // the prompt/file dialog shapes that do not need a workflow subtitle.
   const dialogSubtitle =
-    isSingleFileUndo &&
-    input?.scope.mode === UNDO_DIALOG_SCOPE_MODES.SINGLE_FILE
-      ? input.scope.path
-      : undefined;
+    scopeMode === UNDO_DIALOG_SCOPE_MODES.WORKFLOW
+      ? `${workflowName!} · ${changeCountSubtitle}`
+      : input?.scope.mode === UNDO_DIALOG_SCOPE_MODES.SINGLE_FILE
+        ? input.scope.path
+        : [stepLabel, stepName].filter(Boolean).length > 0
+          ? `${[stepLabel, stepName].filter(Boolean).join(" — ")} · ${changeCountSubtitle}`
+          : undefined;
   const confirmLabel =
-    mode === DIALOG_MODE.REDO
-      ? `Redo Selected (${checkedCount})`
-      : `Undo Selected (${checkedCount})`;
-  const submittingLabel = mode === DIALOG_MODE.REDO ? "Redoing…" : "Undoing…";
+    activeDirection === UNDO_REDO_DIRECTIONS.REDO
+      ? `Redo ${checkedCount} file${checkedCount !== 1 ? "s" : ""}`
+      : `Undo ${checkedCount} file${checkedCount !== 1 ? "s" : ""}`;
+  const submittingLabel =
+    activeDirection === UNDO_REDO_DIRECTIONS.REDO ? "Redoing…" : "Undoing…";
 
   const dialogGroups = useMemo<DiffFileGroup[]>(
     () =>
@@ -318,10 +390,21 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
             disabledReason,
             ...file
           } = row;
+          const stateChip =
+            row.direction === UNDO_REDO_DIRECTIONS.REDO ? (
+              <span className="rounded bg-severity-info-bg px-1.5 py-0.5 text-[10px] font-sans font-medium text-terminal-ansiGreen">
+                Undone
+              </span>
+            ) : undefined;
           return {
             key,
             ...file,
-            headerActions: <OpenFileButton path={file.path} />,
+            headerActions: (
+              <>
+                {stateChip}
+                <OpenFileButton path={file.path} />
+              </>
+            ),
             selection: {
               checked: checkedPaths.has(key),
               onChange: (checked: boolean) => handleToggle(key, checked),
@@ -330,38 +413,56 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
           };
         }),
       })),
-    [checkedPaths, model.groups]
+    [checkedPaths, handleToggle, model.groups]
   );
 
+  const hasBothDirections =
+    selectableRows.some(
+      (row) => row.direction === UNDO_REDO_DIRECTIONS.UNDO
+    ) &&
+    selectableRows.some(
+      (row) => row.direction === UNDO_REDO_DIRECTIONS.REDO
+    );
   const selectionSummary =
     checkableCount > 0 && resultState === RESULT_STATE.IDLE ? (
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-description-fg">
-          {checkedCount} of {checkableCount} file
-          {checkableCount !== 1 ? "s" : ""} selected
-        </span>
-        <button
-          type="button"
-          onClick={handleSelectAll}
-          className="text-xs text-link-fg hover:text-link-active-fg transition-colors"
-        >
-          {allCheckableChecked ? "Deselect all" : "Select all"}
-        </button>
+      <div>
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-description-fg">
+            {checkedCount} of {checkableCount} file
+            {checkableCount !== 1 ? "s" : ""} selected
+          </span>
+          <button
+            type="button"
+            onClick={handleSelectAll}
+            className="text-xs text-link-fg hover:text-link-active-fg transition-colors"
+          >
+            {allCheckableChecked ? "Deselect all" : "Select all"}
+          </button>
+        </div>
+        {hasBothDirections && (
+          <p className="mt-1 text-xs text-description-fg">
+            Undo and redo are applied separately.
+          </p>
+        )}
       </div>
     ) : undefined;
 
   const footer = (
     <>
       <Button
-        variant="secondary"
+        variant={
+          intent === UNDO_DIALOG_INTENTS.VIEW ? "primary" : "secondary"
+        }
         size="md"
         onClick={onClose}
         disabled={isSubmitting}
       >
-        Cancel
+        {intent === UNDO_DIALOG_INTENTS.VIEW ? "Close" : "Cancel"}
       </Button>
       <Button
-        variant="primary"
+        variant={
+          intent === UNDO_DIALOG_INTENTS.VIEW ? "secondary" : "primary"
+        }
         size="md"
         onClick={handleConfirm}
         disabled={!canConfirm}
@@ -380,7 +481,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
 
   const emptyMessage = isWorkflowMode
     ? "No file changes found across workflow steps."
-    : mode === DIALOG_MODE.REDO
+    : activeDirection === UNDO_REDO_DIRECTIONS.REDO
       ? "No redo instructions available."
       : input?.scope.mode === UNDO_DIALOG_SCOPE_MODES.SINGLE_FILE
         ? "No file changes found for this diff."
@@ -410,7 +511,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
         <ResultBanner
           result={resultState}
           undoResult={undoResult}
-          mode={mode}
+          mode={activeDirection}
         />
       )}
       <DiffFileList
@@ -436,7 +537,7 @@ interface ResultBannerProps {
         failedFiles: Array<{ path: string; error: string }>;
       }
     | undefined;
-  mode: "undo" | "redo";
+  mode: UndoRedoDirection;
 }
 
 const ResultBanner: React.FC<ResultBannerProps> = ({
@@ -444,8 +545,9 @@ const ResultBanner: React.FC<ResultBannerProps> = ({
   undoResult,
   mode,
 }) => {
-  const successVerb = mode === DIALOG_MODE.REDO ? "re-applied" : "restored";
-  const failVerb = mode === DIALOG_MODE.REDO ? "Redo" : "Undo";
+  const successVerb =
+    mode === UNDO_REDO_DIRECTIONS.REDO ? "re-applied" : "restored";
+  const failVerb = mode === UNDO_REDO_DIRECTIONS.REDO ? "Redo" : "Undo";
   if (result === RESULT_STATE.SUCCESS) {
     return (
       <div className="mb-3 flex gap-2 rounded px-3 py-2 text-xs bg-severity-info-bg text-info-fg border border-info-fg border-opacity-30">

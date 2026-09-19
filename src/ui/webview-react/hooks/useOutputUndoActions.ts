@@ -33,7 +33,12 @@ import { FINAL_STEP_PHASES } from "@/types/messages";
 import type { WorkflowRunAddress } from "@root/types/CtrlYokeTypes";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import { useUiStore } from "@store/uiStore";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import {
+  UNDO_DIALOG_INTENTS,
+  UNDO_REDO_DIRECTIONS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
+import { useWorkflowDisplayName } from "@hooks/useWorkflowDisplayName";
 
 type OutputHistoryView = {
   orderedEntries: OrderedHistoryEntry[];
@@ -111,6 +116,7 @@ export function useOutputUndoActions({
         : null,
     [displayedViewAddress]
   );
+  const workflowDisplayName = useWorkflowDisplayName();
   const [minimapDialogState, setMinimapDialogState] =
     useState<MinimapDialogState | null>(null);
   const [workflowDialogState, setWorkflowDialogState] =
@@ -239,7 +245,8 @@ export function useOutputUndoActions({
     ({ target, input }: OpenMinimapUndoDialogInput) => {
       if (!runAddress) return;
       setMinimapDialogState({
-        mode: "undo",
+        mode: UNDO_REDO_DIRECTIONS.UNDO,
+        intent: UNDO_DIALOG_INTENTS.ACT,
         target,
         address: runAddress,
         input,
@@ -258,7 +265,8 @@ export function useOutputUndoActions({
     }: OpenMinimapRedoDialogInput) => {
       if (!runAddress) return;
       setMinimapDialogState({
-        mode: "redo",
+        mode: UNDO_REDO_DIRECTIONS.REDO,
+        intent: UNDO_DIALOG_INTENTS.ACT,
         target,
         address: runAddress,
         redoInstructions,
@@ -370,22 +378,26 @@ export function useOutputUndoActions({
   const handleWorkflowUndo = useCallback(() => {
     if (!runAddress) return;
     setWorkflowDialogState({
-      mode: "undo",
+      mode: UNDO_REDO_DIRECTIONS.UNDO,
+      intent: UNDO_DIALOG_INTENTS.ACT,
       address: runAddress,
       entries: workflowUndoRedoData.undoEntries,
+      workflowName: workflowDisplayName,
       requestId: generateId(),
     });
-  }, [runAddress, workflowUndoRedoData]);
+  }, [runAddress, workflowDisplayName, workflowUndoRedoData]);
 
   const handleWorkflowRedo = useCallback(() => {
     if (!runAddress) return;
     setWorkflowDialogState({
-      mode: "redo",
+      mode: UNDO_REDO_DIRECTIONS.REDO,
+      intent: UNDO_DIALOG_INTENTS.ACT,
       address: runAddress,
       entries: workflowUndoRedoData.redoEntries,
+      workflowName: workflowDisplayName,
       requestId: generateId(),
     });
-  }, [runAddress, workflowUndoRedoData]);
+  }, [runAddress, workflowDisplayName, workflowUndoRedoData]);
 
   const closeMinimapDialog = useCallback(() => {
     setMinimapDialogState(null);

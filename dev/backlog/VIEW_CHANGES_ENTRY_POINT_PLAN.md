@@ -348,18 +348,15 @@ first checkbox sets the direction.
    `WorkflowStatus.tsx` into a shared helper/hook. The four inline uses follow
    the §3.2 table: only the header uses the hook; the synthetic workflow and
    rename paths use the pure helper without `pendingRunViewSwitch`.
-3. **Dialog** — intent, scope title/subtitle, state chips, direction-exclusive
-   selection, footer verb, empty initial selection for `VIEW`.
+3. **Dialog — done** — intent, scope title/subtitle, state chips,
+   direction-exclusive selection, footer verb, empty initial selection for
+   `VIEW`.
 
-   Fold in the string-constant cleanup while here, since this step already
-   threads `UndoRedoDirection` through the dialog. `mode: "undo" | "redo"` is
-   spelled as a raw literal union at `UndoChangesDialog.tsx:33,56,89,434` and
-   `OutputUndoDialogs.tsx:10,19`, and `UndoChangesDialog.tsx:52` declares a
-   local `DIALOG_MODE = { UNDO: "undo", REDO: "redo" }` that duplicates
-   `UNDO_REDO_DIRECTIONS` verbatim. The project's "no hardcoded strings for
-   flow control" rule makes these one union: `UndoRedoDirection`, with
-   `DIALOG_MODE` deleted. `useOutputUndoActions.ts:261,383` sets `mode: "redo"`
-   literally and moves to the constant too.
+   **§5.3 done.** The dialog and state now use `UndoRedoDirection`, the local
+   `DIALOG_MODE` duplicate is gone, and the hook's direction assignments use
+   `UNDO_REDO_DIRECTIONS`. The workflow dialog also carries the shared header
+   display name so a pending cross-lineage switch cannot title it with the
+   previous workflow.
 
 4. **Entry points** — the three surfaces, in one change so they cannot disagree:
    `OutputSectionHeader.tsx`, `OutputRow.tsx` (`CliHeaderRowView`), `OutputMinimap.tsx`
