@@ -20,6 +20,15 @@ export interface HistoryRunsOptions {
   json?: boolean;
 }
 
+export interface HistoryShowOptions {
+  cwd?: string;
+  workflow: string;
+  run: string;
+  step?: string;
+  json?: boolean;
+  color?: boolean;
+}
+
 export interface HistoryCommandHandlers {
   prune(options: HistoryPruneOptions): Promise<void>;
   relink(
@@ -29,6 +38,7 @@ export interface HistoryCommandHandlers {
   ): Promise<void>;
   list(options: HistoryListOptions): Promise<void>;
   runs(options: HistoryRunsOptions): Promise<void>;
+  show(options: HistoryShowOptions): Promise<void>;
 }
 
 /** Registers lifecycle commands that operate on the user project registry. */
@@ -76,4 +86,24 @@ export function registerHistoryCommands(
     )
     .option("--json", "Output as JSON")
     .action(async (options: HistoryRunsOptions) => handlers.runs(options));
+
+  history
+    .command("show")
+    .description("Print a run's recorded output")
+    .requiredOption("--workflow <key>", "Workflow lineage key")
+    .requiredOption(
+      "--run <ref|runId>",
+      "Target run reference or numeric run ID"
+    )
+    .option("--step <index|final>", "Only show one step's attempts")
+    .option(
+      "-d, --cwd <path>",
+      "Working directory (default: current directory)"
+    )
+    .option(
+      "--json",
+      "Emit NDJSON (one JSON object per line) attempt records instead of formatted text"
+    )
+    .option("--no-color", "Disable color in formatted output")
+    .action(async (options: HistoryShowOptions) => handlers.show(options));
 }

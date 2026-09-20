@@ -1,9 +1,12 @@
 import * as assert from "assert";
+import chalk from "chalk";
 import { Command } from "commander";
-import { suite, test } from "mocha";
+import { setup, suite, teardown, test } from "mocha";
 import {
   EXECUTION_STATES,
   type ExecutionState,
+  FINAL_STEP_PHASES,
+  RUN_OUTPUT_RESOLVER_EVENT_KINDS,
 } from "../../types/DashboardConstants";
 import type {
   RunRef,
@@ -15,16 +18,25 @@ import type { RunNavigationSummary } from "../../core/orchestration/OutputHistor
 import {
   listHistoryCommand,
   runsHistoryCommand,
+  showHistoryCommand,
   type HistoryInspectionCommandDependencies,
   type HistoryInspectionCommandIo,
   type HistoryInspectionLineageRepository,
   type HistoryInspectionOutputHistoryManager,
+  type HistoryInspectionRunOutputResolver,
   type HistoryInspectionWorkspace,
 } from "../../cli/HistoryInspectionCommands";
+import { CliTerminalFormatter } from "../../cli/CliTerminalFormatter";
+import type {
+  ResolvedRunAttemptValue,
+  RunOutputResolverAttemptEvent,
+} from "../../core/orchestration/RunOutputResolver";
+import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
 import {
   registerHistoryCommands,
   type HistoryListOptions,
   type HistoryRunsOptions,
+  type HistoryShowOptions,
 } from "../../cli/HistoryCommandDefinitions";
 
 class TestIo implements HistoryInspectionCommandIo {
@@ -88,6 +100,16 @@ class TestHistoryManager implements HistoryInspectionOutputHistoryManager {
   }
 }
 
+class TestRunOutputResolver implements HistoryInspectionRunOutputResolver {
+  constructor(private readonly events: RunOutputResolverAttemptEvent[]) {}
+
+  async *streamAttempts(
+    _manifestPath: string
+  ): AsyncGenerator<RunOutputResolverAttemptEvent, void, undefined> {
+    yield* this.events;
+  }
+}
+
 function descriptor(
   workflowKey: WorkflowKey,
   overrides: Partial<WorkflowLineageDescriptor> = {}
@@ -121,7 +143,8 @@ function navigation(
 
 function dependencies(
   repository: HistoryInspectionLineageRepository,
-  historyManager: HistoryInspectionOutputHistoryManager
+  historyManager: HistoryInspectionOutputHistoryManager,
+  resolver?: HistoryInspectionRunOutputResolver
 ): HistoryInspectionCommandDependencies {
   const workspace: HistoryInspectionWorkspace = {
     workspaceRoot: "/workspace",
@@ -130,8 +153,46 @@ function dependencies(
   };
   return {
     bootstrapCliWorkspace: async () => workspace,
+    ...(resolver ? { createRunOutputResolver: () => resolver } : {}),
   };
 }
+
+function settledAttempt(
+  target: OutputExecutionTarget,
+  overrides: Partial<ResolvedRunAttemptValue> = {}
+): Extract<
+  RunOutputResolverAttemptEvent,
+  { kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED }
+> {
+  return {
+    kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED,
+    attempt: {
+      target,
+      runIndex: 0,
+      attemptIndex: 0,
+      prompt: "show this prompt",
+      kind: "ai",
+      output: {
+        response: "show this response",
+        elapsed: 1,
+        isStreaming: false,
+      },
+      terminalState: "completed",
+      ...overrides,
+    },
+    unterminated: false,
+  };
+}
+
+let chalkLevel: typeof chalk.level;
+setup(() => {
+  chalkLevel = chalk.level;
+  chalk.level = 0;
+});
+
+teardown(() => {
+  chalk.level = chalkLevel;
+});
 
 suite("CLI history inspection command parser", () => {
   test("registers list and runs with their discovery options", async () => {
@@ -151,6 +212,7 @@ suite("CLI history inspection command parser", () => {
       runs: async (options) => {
         calls.runs = options;
       },
+      show: async () => {},
     });
 
     await program.parseAsync(
@@ -168,6 +230,46 @@ suite("CLI history inspection command parser", () => {
       { from: "user" }
     );
     assert.deepStrictEqual(calls.runs, { workflow: "release", json: true });
+  });
+
+  test("registers show with its selector and NDJSON options", async () => {
+    let showOptions: HistoryShowOptions | undefined;
+    const program = new Command();
+    program.exitOverride();
+    program.configureOutput({ writeErr: () => {} });
+    registerHistoryCommands(program, {
+      prune: async () => {},
+      relink: async () => {},
+      list: async () => {},
+      runs: async () => {},
+      show: async (options) => {
+        showOptions = options;
+      },
+    });
+
+    await program.parseAsync(
+      [
+        "history",
+        "show",
+        "--workflow",
+        "release",
+        "--run",
+        "3",
+        "--step",
+        "final",
+        "--json",
+        "--no-color",
+      ],
+      { from: "user" }
+    );
+
+    assert.deepStrictEqual(showOptions, {
+      workflow: "release",
+      run: "3",
+      step: "final",
+      json: true,
+      color: false,
+    });
   });
 });
 
@@ -325,4 +427,205 @@ suite("CLI history inspection command handlers", () => {
       /Workflow lineage "missing" was not found/
     );
   });
+
+  test("--step final selects final-step loops rather than a queue step", async () => {
+    const key = "release" as WorkflowKey;
+    const manager = new TestHistoryManager(
+      new Map(),
+      new Map([
+        [
+          key,
+          [
+            {
+              workflowKey: key,
+              runRef: "run-2026-09-20T12-00-00-000Z" as RunRef,
+              runDirectory: "/workspace/run-3",
+              runId: 3,
+              startedAt: 1,
+              executionState: EXECUTION_STATES.COMPLETED,
+              definitionRevision: 1,
+              stepCount: 2,
+              hasMixedHarnesses: false,
+              hasMixedModels: false,
+            },
+          ],
+        ],
+      ])
+    );
+    const promptHeaders: number[] = [];
+    const finalLabels: number[] = [];
+    const originalHeader = CliTerminalFormatter.renderPromptHeader;
+    const originalFinalLabel = CliTerminalFormatter.renderFinalStepLabel;
+    CliTerminalFormatter.renderPromptHeader = ((data) => {
+      promptHeaders.push(data.stepIndex);
+    }) as typeof originalHeader;
+    CliTerminalFormatter.renderFinalStepLabel = ((loopIndex) => {
+      finalLabels.push(loopIndex);
+    }) as typeof originalFinalLabel;
+    try {
+      await showHistoryCommand(
+        { workflow: key, run: "3", step: "final" },
+        new TestIo(),
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          manager,
+          new TestRunOutputResolver([
+            settledAttempt({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 }),
+            settledAttempt({
+              kind: FINAL_STEP_PHASES.FINAL_STEP,
+              loopIndex: 0,
+            }),
+            settledAttempt({
+              kind: FINAL_STEP_PHASES.FINAL_STEP,
+              loopIndex: 1,
+            }),
+          ])
+        )
+      );
+    } finally {
+      CliTerminalFormatter.renderPromptHeader = originalHeader;
+      CliTerminalFormatter.renderFinalStepLabel = originalFinalLabel;
+    }
+    assert.deepStrictEqual(promptHeaders, [0, 1]);
+    assert.deepStrictEqual(finalLabels, [0, 1]);
+  });
+
+  test("renders a folded attempt response exactly once", async () => {
+    const key = "release" as WorkflowKey;
+    const manager = historyManagerForShow(key);
+    const chunks: string[] = [];
+    let flushes = 0;
+    const originalChunk = CliTerminalFormatter.renderStreamingChunk;
+    const originalFlush = CliTerminalFormatter.flushStreamingBuffer;
+    CliTerminalFormatter.renderStreamingChunk = ((chunk) => {
+      chunks.push(chunk);
+    }) as typeof originalChunk;
+    CliTerminalFormatter.flushStreamingBuffer = (() => {
+      flushes++;
+    }) as typeof originalFlush;
+    try {
+      await showHistoryCommand(
+        { workflow: key, run: "3" },
+        new TestIo(),
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          manager,
+          new TestRunOutputResolver([
+            settledAttempt(
+              { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+              {
+                output: {
+                  response: "the answer",
+                  elapsed: 1,
+                  isStreaming: false,
+                },
+              }
+            ),
+          ])
+        )
+      );
+    } finally {
+      CliTerminalFormatter.renderStreamingChunk = originalChunk;
+      CliTerminalFormatter.flushStreamingBuffer = originalFlush;
+    }
+    assert.deepStrictEqual(chunks, ["the answer"]);
+    assert.strictEqual(flushes, 1);
+  });
+
+  test("emits redacted NDJSON attempts without invoking the renderer", async () => {
+    const key = "release" as WorkflowKey;
+    const manager = historyManagerForShow(key);
+    const io = new TestIo();
+    const originalHeader = CliTerminalFormatter.renderPromptHeader;
+    let rendered = false;
+    CliTerminalFormatter.renderPromptHeader = (() => {
+      rendered = true;
+    }) as typeof originalHeader;
+    try {
+      await showHistoryCommand(
+        { workflow: key, run: "3", json: true },
+        io,
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          manager,
+          new TestRunOutputResolver([
+            settledAttempt({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 }),
+            {
+              ...settledAttempt({
+                kind: FINAL_STEP_PHASES.QUEUE,
+                stepIndex: 1,
+              }),
+              unterminated: true,
+            },
+          ])
+        )
+      );
+    } finally {
+      CliTerminalFormatter.renderPromptHeader = originalHeader;
+    }
+    assert.strictEqual(rendered, false);
+    assert.strictEqual(io.output.length, 2);
+    for (const line of io.output) {
+      assert.doesNotThrow(() => JSON.parse(line));
+    }
+  });
+
+  test("renders and marks an unterminated attempt", async () => {
+    const key = "release" as WorkflowKey;
+    const manager = historyManagerForShow(key);
+    const statuses: string[] = [];
+    const originalStatus = CliTerminalFormatter.renderStatusMessage;
+    CliTerminalFormatter.renderStatusMessage = ((message) => {
+      statuses.push(message);
+    }) as typeof originalStatus;
+    try {
+      await showHistoryCommand(
+        { workflow: key, run: "3" },
+        new TestIo(),
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          manager,
+          new TestRunOutputResolver([
+            {
+              ...settledAttempt({
+                kind: FINAL_STEP_PHASES.QUEUE,
+                stepIndex: 0,
+              }),
+              unterminated: true,
+            },
+          ])
+        )
+      );
+    } finally {
+      CliTerminalFormatter.renderStatusMessage = originalStatus;
+    }
+    assert.deepStrictEqual(statuses, [
+      "Attempt did not terminate before the recorded history ended",
+    ]);
+  });
 });
+
+function historyManagerForShow(key: WorkflowKey): TestHistoryManager {
+  return new TestHistoryManager(
+    new Map(),
+    new Map([
+      [
+        key,
+        [
+          {
+            workflowKey: key,
+            runRef: "run-2026-09-20T12-00-00-000Z" as RunRef,
+            runDirectory: "/workspace/run-3",
+            runId: 3,
+            startedAt: 1,
+            executionState: EXECUTION_STATES.COMPLETED,
+            definitionRevision: 1,
+            stepCount: 2,
+            hasMixedHarnesses: false,
+            hasMixedModels: false,
+          },
+        ],
+      ],
+    ])
+  );
+}

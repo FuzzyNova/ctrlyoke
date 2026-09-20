@@ -1,7 +1,7 @@
 # CLI History Inspection — discover workflow/run keys and dump run output
 
-> **Status:** Discovery commands implemented (`history list` and `history runs`). The core primitive
-> in step 2 is implemented; `history show` remains planned work.
+> **Status:** Discovery commands and `history show` are implemented. The core primitive in step 2
+> is implemented.
 > Re-verified against the code on 2026-09-20; every file/line citation below was
 > checked, and four claims in the previous draft were **wrong** — see
 > "Corrections to the previous draft" before implementing anything.
@@ -426,10 +426,10 @@ single-blob convention.
   difference in both `--help` and the docs page. `CLI_HISTORY_SEARCH_PLAN.md` deliberately goes the
   other way for `history search --json`, because a search response is bounded by `--limit`; the two
   choices and the one reason for each should be stated together.
-- **`streamAttempts` and interleaved parallel branches — resolved.** Attempts from a parallel group
+- **`streamAttempts` and interleaved parallel branches — resolved by `history show`.** Attempts from a parallel group
   interleave in the timeline, so "the order it settled" is not "the order it started". The
-  generator deliberately yields settle order without sorting, matching live CLI output; callers
-  that want a presentation order can sort the settled values after consuming them.
-- **An attempt that never terminated.** An interrupted run leaves an attempt with no
-  `ATTEMPT_TERMINATED`. `streamAttempts` must yield it at end-of-stream rather than dropping it, and
-  `history show` should mark it — an interrupted run is one of the main reasons to read this output.
+  generator deliberately yields settle order without sorting, matching live CLI output, and
+  `history show` replays that order without sorting.
+- **An attempt that never terminated — resolved by `history show`.** An interrupted run leaves an
+  attempt with no `ATTEMPT_TERMINATED`; `streamAttempts` yields it at end-of-stream and the command
+  renders and marks it as unterminated.

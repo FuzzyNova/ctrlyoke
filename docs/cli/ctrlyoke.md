@@ -11,6 +11,7 @@ ctrlyoke history prune [--yes]
 ctrlyoke history relink <oldPath> <newPath> [--yes]
 ctrlyoke history list [--cwd <path>] [--all] [--json]
 ctrlyoke history runs --workflow <key> [--cwd <path>] [--json]
+ctrlyoke history show --workflow <key> --run <ref|runId> [--step <index|final>]
 ctrlyoke step edit [file] --workflow <key> --run <ref|runId> --index <index> [--prompt <text>]
 ctrlyoke step remove --workflow <key> --run <ref|runId> --index <index>
 ctrlyoke step reorder --workflow <key> --run <ref|runId> --order <indices>
@@ -208,6 +209,23 @@ ctrlyoke history runs --workflow release --json
 The text output includes each run's numeric ID and stable reference, which can
 be passed to commands that accept `--run`. The JSON form is an array of the
 stable `RunSummary` records used by the dashboard.
+
+## `ctrlyoke history show`
+
+Print the recorded output for one run. `--run` accepts either the numeric run
+ID or its stable reference, and `--step` accepts a zero-based queue-step index
+or `final` to show every final-step loop:
+
+```bash
+ctrlyoke history show --workflow release --run 7
+ctrlyoke history show --workflow release --run run-2026-09-20T12-00-00-000Z --step 2
+ctrlyoke history show --workflow release --run 7 --step final --no-color
+```
+
+Pass `--json` to emit one raw attempt record per line as NDJSON. This is
+deliberately different from commands such as `validate --json`, which emit one
+versioned JSON document; NDJSON keeps large runs streamable and includes an
+`unterminated` marker for attempts interrupted before their terminal event.
 
 ## `ctrlyoke step`
 

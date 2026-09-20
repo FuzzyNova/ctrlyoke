@@ -100,6 +100,7 @@ import {
 import {
   listHistoryCommand,
   runsHistoryCommand,
+  showHistoryCommand,
   type HistoryInspectionCommandIo,
 } from "./cli/HistoryInspectionCommands";
 import {
@@ -210,6 +211,10 @@ registerHistoryCommands(program, {
   runs: (options) =>
     handleHistoryCommand(
       runsHistoryCommand(options, createHistoryInspectionCommandIo())
+    ),
+  show: (options) =>
+    handleHistoryCommand(
+      showHistoryCommand(options, createHistoryInspectionCommandIo())
     ),
 });
 
