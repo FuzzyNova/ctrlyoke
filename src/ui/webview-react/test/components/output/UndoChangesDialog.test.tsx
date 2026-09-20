@@ -175,9 +175,7 @@ describe("UndoChangesDialog", () => {
     );
 
     expect(screen.getByRole("checkbox")).not.toBeChecked();
-    expect(
-      screen.getByRole("button", { name: "Undo 0 files" })
-    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Undo 0 files" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
     view.unmount();
 
@@ -195,9 +193,7 @@ describe("UndoChangesDialog", () => {
     );
 
     expect(screen.getByRole("checkbox")).toBeChecked();
-    expect(
-      screen.getByRole("button", { name: "Undo 1 file" })
-    ).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Undo 1 file" })).toBeEnabled();
   });
 
   it("keeps undo and redo selection exclusive and follows the active direction", () => {
@@ -249,16 +245,12 @@ describe("UndoChangesDialog", () => {
 
     fireEvent.click(undoCheckbox);
     expect(undoCheckbox).toBeChecked();
-    expect(
-      screen.getByRole("button", { name: "Undo 1 file" })
-    ).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Undo 1 file" })).toBeEnabled();
 
     fireEvent.click(redoCheckbox);
     expect(undoCheckbox).not.toBeChecked();
     expect(redoCheckbox).toBeChecked();
-    expect(
-      screen.getByRole("button", { name: "Redo 1 file" })
-    ).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Redo 1 file" })).toBeEnabled();
     expect(
       screen.getByText("Undo and redo are applied separately.")
     ).toBeInTheDocument();
@@ -289,7 +281,11 @@ describe("UndoChangesDialog", () => {
         props: {
           workflowName: "Workflow title",
           workflowEntries: [
-            { target: queueTarget, label: "Prompt 1", undoCandidates: [candidate] },
+            {
+              target: queueTarget,
+              label: "Prompt 1",
+              undoCandidates: [candidate],
+            },
           ],
         },
       },
@@ -327,7 +323,9 @@ describe("UndoChangesDialog", () => {
           {...testCase.props}
         />
       );
-      expect(screen.getByRole("heading", { name: testCase.expectedTitle })).toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: testCase.expectedTitle })
+      ).toBeInTheDocument();
       expect(screen.getByText(testCase.expectedSubtitle)).toBeInTheDocument();
       view.unmount();
     }
@@ -879,9 +877,7 @@ describe("UndoChangesDialog", () => {
       screen.getByRole("button", { name: "Select all" })
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Select all" }));
-    fireEvent.click(
-      screen.getByRole("button", { name: "Undo 100 files" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Undo 100 files" }));
 
     const message = sendMessageMock.mock.calls[0]?.[1] as {
       data: { entries: Array<{ files: UndoFileInstruction[] }> };

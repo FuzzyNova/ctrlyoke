@@ -61,8 +61,8 @@ receive a bare `expectedDefinitionRevision` and have no client concept at all; g
 push a UI-session identity into the persistence layer to serve a check that can be made before the
 call is ever issued.
 
-So the ledger does not replace the comparison at the deep check sites. It *reconciles the expected
-value* at the boundary, and the deep sites keep comparing against disk exactly as they do today:
+So the ledger does not replace the comparison at the deep check sites. It _reconciles the expected
+value_ at the boundary, and the deep sites keep comparing against disk exactly as they do today:
 
 ```
 reconcileExpectedDefinitionRevision(key, clientId, expected):
@@ -74,14 +74,14 @@ reconcileExpectedDefinitionRevision(key, clientId, expected):
   return expected              // unchanged; the deep check decides
 ```
 
-`soleAuthorSince - 1` is the floor because the expectation a client holds *before* its first write
+`soleAuthorSince - 1` is the floor because the expectation a client holds _before_ its first write
 is the revision preceding that write.
 
 **The ceiling is equally load-bearing**, and was missing from the first implementation (caught in
 review). Because the ledger is a whitelist rather than a cache, it goes stale whenever a foreign
 writer moves the head. The client then learns the true head by round trip and echoes a revision
-*newer* than anything the ledger recorded. Without `expected <= entry.revision`, that correct
-expectation is reconciled *backwards* to a superseded revision and the on-disk check rejects it —
+_newer_ than anything the ledger recorded. Without `expected <= entry.revision`, that correct
+expectation is reconciled _backwards_ to a superseded revision and the on-disk check rejects it —
 reintroducing the very conflict this design removes, and worse: `reportActionFailure` republishes
 the same head the client already holds, so every retry is downgraded again and the address wedges
 until another client writes or the host restarts.
@@ -95,7 +95,7 @@ prevents that, with no extra read.
 
 ### The descriptor revision is in scope too
 
-Run-*starting* actions (`seedAndExecuteAtRun`, `startNewRunInsteadAtRun`, `continueAtRun`,
+Run-_starting_ actions (`seedAndExecuteAtRun`, `startNewRunInsteadAtRun`, `continueAtRun`,
 `appendAndContinueAtRun`, `setStartPositionAtRun`, `discardContinuationAtRun`,
 `executeDraftAtAddress`) carry **both** tokens, and `retryWithRefreshedRevisions` refreshes both. A
 ledger covering only `definitionRevision` would therefore regress the moment the retry is deleted:
@@ -171,7 +171,7 @@ the wrong reason.
 A second case guards the whitelist property: move the head from outside the ledger (write the run
 file directly, as a CLI/MCP writer would) and assert the client's stale revision is still rejected.
 
-A third case guards the *other* side of that same foreign advance: after it, a client echoing the
+A third case guards the _other_ side of that same foreign advance: after it, a client echoing the
 now-correct head must be able to write. It is the case that catches a reconcile with no ceiling, and
 it fails loudly without one.
 

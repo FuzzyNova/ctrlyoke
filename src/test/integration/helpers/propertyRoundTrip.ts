@@ -59,13 +59,10 @@ const VIEW_ONLY_INSTANCE_ID = "view-only-instance";
  * keeps the run "idle" (static write path) yet still answers getQueueState. */
 const VIEW_ONLY_KEY = "__view_only__" as WorkflowKey;
 
-class SeedRunTestDouble
-  implements
-    Pick<
-      RunLifecycleService,
-      "seedAndExecuteAtRun" | "findResidentInstanceForRun"
-    >
-{
+class SeedRunTestDouble implements Pick<
+  RunLifecycleService,
+  "seedAndExecuteAtRun" | "findResidentInstanceForRun"
+> {
   constructor(
     private readonly workspace: string,
     private readonly repository: WorkflowLineageRepository
@@ -294,7 +291,7 @@ export function createRoundTripHarness(
         expectedDefinitionRevision: definition.definitionRevision ?? 1,
         expectedDescriptorRevision: descriptor.revision,
       };
-  };
+    };
 
   internal.isInitialized = () => true;
   Object.defineProperty(orchestrator, "runLifecycleService", {

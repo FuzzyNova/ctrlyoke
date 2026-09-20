@@ -720,17 +720,13 @@ describe("outputRows", () => {
       (row) => row.rowKind === OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER
     );
     // Both members' files are covered by the one group-wide snapshot.
-    expect(
-      headerRow?.promptUndo?.summary.label
-    ).toBe("View 2 changes");
+    expect(headerRow?.promptUndo?.summary.label).toBe("View 2 changes");
     expect(
       result.rows
         .filter((row) => row.rowKind !== OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER)
         .some((row) => {
           const summary = row.promptUndo?.summary;
-          return summary
-            ? summary.undoable > 0 || summary.undone > 0
-            : false;
+          return summary ? summary.undoable > 0 || summary.undone > 0 : false;
         })
     ).toBe(false);
   });

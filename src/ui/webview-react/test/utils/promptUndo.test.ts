@@ -600,9 +600,7 @@ describe("computePromptChangeSummary", () => {
   const recordWithRedo = (path: string) => ({
     appliedAt: 1,
     restoredFiles: [path],
-    redoInstructions: [
-      { path, action: UNDO_FILE_ACTIONS.DELETE },
-    ],
+    redoInstructions: [{ path, action: UNDO_FILE_ACTIONS.DELETE }],
   });
 
   it("counts undoable and blocked rows and builds the zero-undone labels", () => {
@@ -1188,15 +1186,11 @@ describe("aggregateWorkflowUndoFiles", () => {
     const files = aggregateWorkflowUndoFiles([
       makeWorkflowEntry(
         1,
-        makeWorkflowCandidate(
-          "src/mixed.ts",
-          FILE_OPERATION_KINDS.MODIFIED,
-          {
-            path: "src/mixed.ts",
-            action: UNDO_FILE_ACTIONS.REVERSE_PATCH,
-            structuredPatch: PATCH,
-          }
-        )
+        makeWorkflowCandidate("src/mixed.ts", FILE_OPERATION_KINDS.MODIFIED, {
+          path: "src/mixed.ts",
+          action: UNDO_FILE_ACTIONS.REVERSE_PATCH,
+          structuredPatch: PATCH,
+        })
       ),
       {
         target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 },

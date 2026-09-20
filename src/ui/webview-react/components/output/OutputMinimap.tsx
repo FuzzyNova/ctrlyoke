@@ -679,13 +679,11 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
         const hasUndoable = (summary?.undoable ?? 0) > 0;
         const hasUndone = (summary?.undone ?? 0) > 0;
         const isMixed = hasUndoable && hasUndone;
-        const changeLabel = summary
-          ? getPromptChangeLabelParts(summary)
-          : null;
+        const changeLabel = summary ? getPromptChangeLabelParts(summary) : null;
         const dotColorClass = step.selected
           ? "text-focus-border"
-            : isMixed
-              ? "text-warning-fg"
+          : isMixed
+            ? "text-warning-fg"
             : hasUndone
               ? "text-terminal-ansiGreen"
               : hasChanges

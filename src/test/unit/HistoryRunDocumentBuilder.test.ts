@@ -54,7 +54,10 @@ suite("HistoryRunDocumentBuilder", () => {
     assert.strictEqual(documentsFromRun[3]?.attemptIndex, 0);
     assert.strictEqual(documentsFromRun[0]?.harness, "codex-cli");
     assert.strictEqual(documentsFromRun[0]?.sessionId, "session-1");
-    assert.strictEqual(documentsFromRun[0]?.id, "builder-test:run-1000:7:1:prompt:content:0");
+    assert.strictEqual(
+      documentsFromRun[0]?.id,
+      "builder-test:run-1000:7:1:prompt:content:0"
+    );
   });
 
   async function* streamEvents(

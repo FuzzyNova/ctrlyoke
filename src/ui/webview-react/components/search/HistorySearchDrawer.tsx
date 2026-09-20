@@ -879,8 +879,9 @@ export function HistorySearchDrawer() {
           {trimmedQuery.length >= 2 && (
             <div className="mt-1 flex items-start justify-between gap-3">
               <p className="text-xs text-description-fg/80">
-                Each result is one matching event, not one occurrence &mdash; open
-                a result to highlight every occurrence in that run&rsquo;s output.
+                Each result is one matching event, not one occurrence &mdash;
+                open a result to highlight every occurrence in that run&rsquo;s
+                output.
               </p>
               <label
                 className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-description-fg"

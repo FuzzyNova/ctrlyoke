@@ -44,9 +44,7 @@ import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import { resolveTokenTotal } from "@root/utils/TokenFormatting";
 import type { OutputMessage, OutputMessageTarget } from "./outputProjection";
 import { getTargetKey, outputMessageIdentityKey } from "./outputProjection";
-import {
-  computePromptChangeSummary,
-} from "./promptUndo";
+import { computePromptChangeSummary } from "./promptUndo";
 import type { PromptChangeSummary } from "./promptUndo";
 import {
   buildUndoRecordKey,
@@ -1110,10 +1108,7 @@ function estimateCliHeaderHeight(
   );
   const lineHeight = Math.max(16, smFontSize * 1.4);
   const actionLines =
-    row.promptUndo &&
-    row.promptUndo.summary.total > 0
-      ? 1
-      : 0;
+    row.promptUndo && row.promptUndo.summary.total > 0 ? 1 : 0;
 
   return (
     lineCount * lineHeight +

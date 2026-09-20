@@ -1712,12 +1712,7 @@ function OutputRowComponent({
       content = <div className="h-px" aria-hidden="true" />;
       break;
     case OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER:
-      content = (
-        <ParallelGroupHeaderRowView
-          row={row}
-          onView={onPromptView}
-        />
-      );
+      content = <ParallelGroupHeaderRowView row={row} onView={onPromptView} />;
       break;
     case OUTPUT_ROW_KINDS.STEP_HIDDEN:
       content = (

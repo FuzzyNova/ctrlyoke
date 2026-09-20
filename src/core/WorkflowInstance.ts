@@ -270,8 +270,7 @@ export class WorkflowInstance {
    * no longer describes it — this does.
    */
   private activeWorktreeSettlement:
-    | { merge: boolean; keep: boolean }
-    | undefined;
+    { merge: boolean; keep: boolean } | undefined;
 
   /** Reference to the loaded source prompt file */
   private currentPromptFile?: { filePath: string; promptFile: PromptFile };

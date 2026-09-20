@@ -23,9 +23,7 @@ import {
   OUTPUT_ROW_KINDS,
   UNDO_DIALOG_INTENTS,
 } from "@root/types/DashboardConstants";
-import type {
-  OpenMinimapDialogInput,
-} from "@hooks/useOutputUndoActions";
+import type { OpenMinimapDialogInput } from "@hooks/useOutputUndoActions";
 import type {
   OrderedHistoryEntry,
   StepOutput,
@@ -363,8 +361,7 @@ export function useOutputMinimapModel({
             groupForLabels ? groupSnapshot : effectiveSnapshot
           );
           const alreadyUndone =
-            effectiveUndoRecord != null &&
-            effectiveUndoRecord.isRedone !== true
+            effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true
               ? effectiveUndoRecord.redoInstructions
               : undefined;
           const input = buildUndoDialogInputForPrompt(

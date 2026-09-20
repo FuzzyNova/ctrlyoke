@@ -993,4 +993,3 @@ async function statOptional(filePath: string): Promise<fs.Stats | undefined> {
     return undefined;
   }
 }
-

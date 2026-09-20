@@ -352,7 +352,9 @@ describe("OutputSectionHeader workflow changes action", () => {
       />
     );
 
-    expect(screen.getByRole("button", { name: "View 7 changes (all undone)" })).toHaveTextContent("View 7");
+    expect(
+      screen.getByRole("button", { name: "View 7 changes (all undone)" })
+    ).toHaveTextContent("View 7");
   });
 });
 

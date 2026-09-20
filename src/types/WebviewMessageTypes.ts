@@ -1759,8 +1759,7 @@ export interface SearchHistoryResultsMessage extends HistorySearchResponse {
  * else — a push for a since-superseded query must be dropped the same way the
  * final response is (see WebviewMessageRouter's SEARCH_HISTORY handler).
  */
-export interface SearchHistoryPartialResultsMessage
-  extends HistorySearchResponse {
+export interface SearchHistoryPartialResultsMessage extends HistorySearchResponse {
   type: typeof MESSAGE_TYPES.SEARCH_HISTORY_PARTIAL_RESULTS;
 }
 

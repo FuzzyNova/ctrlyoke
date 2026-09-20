@@ -219,9 +219,7 @@ describe("WorkflowStatus — loaded state", () => {
     });
 
     render(<WorkflowStatus />);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Edit workflow name" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Edit workflow name" }));
 
     expect(
       screen.queryByPlaceholderText("Name your workflow...")

@@ -108,9 +108,7 @@ describe("useOutputUndoActions", () => {
           0: {
             capturedAt: 1,
             strategy: "filesystem",
-            changedFiles: [
-              { path: "src/blocked.ts", changeType: "modified" },
-            ],
+            changedFiles: [{ path: "src/blocked.ts", changeType: "modified" }],
           },
         },
       })

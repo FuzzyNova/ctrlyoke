@@ -3275,8 +3275,7 @@ export class WorkflowOrchestrator {
     }
     const runAddress = mutation.address;
     let latest:
-      | { definitionRevision: number; descriptorRevision: number }
-      | undefined;
+      { definitionRevision: number; descriptorRevision: number } | undefined;
     await this.applyRunAddressedMutation(
       runAddress,
       clientId,
@@ -3941,8 +3940,7 @@ export class WorkflowOrchestrator {
     }
     const runAddress = mutation.address;
     let latest:
-      | { definitionRevision: number; descriptorRevision: number }
-      | undefined;
+      { definitionRevision: number; descriptorRevision: number } | undefined;
     await this.applyRunAddressedMutation(
       runAddress,
       clientId,

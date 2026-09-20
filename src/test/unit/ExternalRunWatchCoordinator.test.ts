@@ -271,7 +271,11 @@ suite("ExternalRunWatchCoordinator dashboard state", () => {
         run.filePath,
         "lock-deleted"
       );
-      for (let i = 0; i < 100 && host.broadcast.updatedSummaries.length === 0; i++) {
+      for (
+        let i = 0;
+        i < 100 && host.broadcast.updatedSummaries.length === 0;
+        i++
+      ) {
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
       const finishedSummary = host.broadcast.updatedSummaries.at(-1);

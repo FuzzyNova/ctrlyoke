@@ -134,8 +134,7 @@ describe("buildOutputRows undo-action memoization", () => {
     // And the memo must not change what is rendered.
     const changeLabel = (rows: ReturnType<typeof buildRows>["rows"]) => {
       const promptUndo = rows.find(
-        (row) =>
-          row.rowKind === OUTPUT_ROW_KINDS.CLI_HEADER && row.promptUndo
+        (row) => row.rowKind === OUTPUT_ROW_KINDS.CLI_HEADER && row.promptUndo
       )?.promptUndo;
       return promptUndo?.summary.label;
     };
