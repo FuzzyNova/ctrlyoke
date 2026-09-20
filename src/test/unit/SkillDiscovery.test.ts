@@ -232,9 +232,7 @@ suite("Execution-root asset discovery", () => {
   });
 
   test("keeps the coordination skill export in placeholder form", async () => {
-    const workspaceRoot = makeTempDir(
-      "ctrlyoke-built-in-coordination-export-"
-    );
+    const workspaceRoot = makeTempDir("ctrlyoke-built-in-coordination-export-");
     try {
       const skills = await SkillExpander.expandSkills(
         [MCP_SKILL_NAMES.COORDINATION],

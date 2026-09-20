@@ -30,7 +30,11 @@ function makeAgedDir(root, name, ageMs) {
 
 test("finds a stale, prefixed directory but not a fresh one", () => {
   withFixtureRoot((root) => {
-    const stale = makeAgedDir(root, "cy-ws-viewer-abc", STALE_TEMP_MAX_AGE_MS + 1000);
+    const stale = makeAgedDir(
+      root,
+      "cy-ws-viewer-abc",
+      STALE_TEMP_MAX_AGE_MS + 1000
+    );
     const fresh = makeAgedDir(root, "cy-ws-viewer-def", 1000);
 
     const found = findStaleTempDirs({ root });
