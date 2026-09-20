@@ -1272,22 +1272,15 @@ const OutputSectionInner: React.FC = () => {
     closeMinimapDialog,
     closeWorkflowDialog,
     handleFileUndo,
-    handlePromptRedo,
-    handlePromptUndo,
-    handleWorkflowRedo,
-    handleWorkflowUndo,
+    handlePromptView,
+    handleWorkflowView,
     minimapDialogState,
-    openMinimapRedoDialog,
-    openMinimapUndoDialog,
+    openMinimapDialog,
     workflowDialogState,
-    workflowUndoRedoData,
+    workflowChangeSummary,
   } = outputUndo;
 
-  const showCompactWorkflowUndoRedoLabels =
-    workflowUndoRedoData.undoEntries.length > 0 &&
-    workflowUndoRedoData.redoEntries.length > 0;
-  const useCompactOutputHeaderLabels =
-    isHeaderNarrow || showCompactWorkflowUndoRedoLabels;
+  const useCompactOutputHeaderLabels = isHeaderNarrow;
 
   const { minimapSteps, stepScrollFractions } = useOutputMinimapModel({
     allMessages,
@@ -1302,8 +1295,7 @@ const OutputSectionInner: React.FC = () => {
     historyOutputs,
     isViewingHistory,
     lastCliIndexPerStep,
-    onOpenMinimapRedoDialog: openMinimapRedoDialog,
-    onOpenMinimapUndoDialog: openMinimapUndoDialog,
+    onOpenMinimapDialog: openMinimapDialog,
     outputFontSize,
     rowLayout,
     rows,
@@ -1601,8 +1593,7 @@ const OutputSectionInner: React.FC = () => {
           terminalFontSize={terminalFontSize}
           terminalSessionActive={terminalSessionActive}
           useCompactLabels={useCompactOutputHeaderLabels}
-          workflowRedoEntries={workflowUndoRedoData.redoEntries}
-          workflowUndoEntries={workflowUndoRedoData.undoEntries}
+          workflowChangeSummary={workflowChangeSummary}
           onCollapseAllDiffs={collapseAllDiffs}
           onExpandAllDiffs={expandAllDiffs}
           onExport={outputExport.openModal}
@@ -1616,8 +1607,7 @@ const OutputSectionInner: React.FC = () => {
           onTerminalSessionClose={handleCloseActiveTerminalSession}
           onToggleFullscreen={handleToggleFullscreen}
           onToggleCollapse={handleToggleOutputCollapse}
-          onWorkflowRedo={handleWorkflowRedo}
-          onWorkflowUndo={handleWorkflowUndo}
+          onWorkflowView={handleWorkflowView}
           outputFontSize={outputFontSize}
         />
       )}
@@ -1687,8 +1677,7 @@ const OutputSectionInner: React.FC = () => {
             onMinimapStepToggle={handleMinimapStepToggle}
             onMinimapStepSolo={handleMinimapStepSolo}
             onOutputProfilerRender={handleOutputProfilerRender}
-            onPromptRedo={handlePromptRedo}
-            onPromptUndo={handlePromptUndo}
+            onPromptView={handlePromptView}
             onScroll={handleScroll}
             onToolCallExpansionChange={handleToolCallExpansionChange}
             onTouchCancel={handleOutputTouchCancel}

@@ -74,8 +74,11 @@ export interface AggregatedUndoFile {
   steps: Array<{
     target: UndoExecutionTarget;
     label: string;
-    instruction: UndoFileInstruction;
+    instruction: UndoFileInstruction | null;
+    direction: UndoRedoDirection;
   }>;
+  direction: UndoRedoDirection;
+  contentCaptureSkipped: boolean;
   /** True when the aggregate diff could not be composed and is only partial. */
   isPartialDiff: boolean;
 }
@@ -86,6 +89,7 @@ export interface PromptUndoDialogRow extends Omit<
   "selection"
 > {
   key: string;
+  direction: UndoRedoDirection;
   instruction: UndoFileInstruction | null;
   hasDiff: boolean;
   disabledReason?: string;
@@ -408,6 +412,7 @@ function buildDiffSource(
 function buildUndoDialogRow(options: {
   key: string;
   path: string;
+  direction: UndoRedoDirection;
   changeType: PromptChangeType;
   instruction: UndoFileInstruction | null;
   oldContent?: string;
@@ -419,6 +424,7 @@ function buildUndoDialogRow(options: {
   return {
     key: options.key,
     path: options.path,
+    direction: options.direction,
     changeType: fromPromptChangeType(options.changeType),
     source: buildDiffSource(oldContent, newContent, structuredPatch),
     language: getLanguageFromPath(options.path),
@@ -501,6 +507,7 @@ interface AggregationPart {
   newContent?: string;
   structuredPatch?: UnifiedDiffHunk[];
   contentCaptureSkipped?: boolean;
+  direction: UndoRedoDirection;
   step: AggregatedUndoFile["steps"][number];
 }
 
@@ -589,13 +596,12 @@ function composeAggregateDiff(
 function buildUndoAggregationPart(
   entry: WorkflowStepEntry,
   candidate: UndoFileCandidate
-): AggregationPart | null {
-  if (!candidate.instruction) return null;
+): AggregationPart {
   const instruction = candidate.instruction;
   let oldContent = candidate.oldContent;
   let newContent = candidate.newContent;
 
-  if (instruction.action === UNDO_FILE_ACTIONS.RESTORE_CONTENT) {
+  if (instruction?.action === UNDO_FILE_ACTIONS.RESTORE_CONTENT) {
     oldContent ??= instruction.contentToRestore;
     if (candidate.changeType === FILE_OPERATION_KINDS.DELETED) newContent = "";
   } else if (candidate.changeType === FILE_OPERATION_KINDS.CREATED) {
@@ -609,7 +615,13 @@ function buildUndoAggregationPart(
     newContent,
     structuredPatch: candidate.structuredPatch,
     contentCaptureSkipped: candidate.contentCaptureSkipped,
-    step: { target: entry.target, label: entry.label, instruction },
+    direction: UNDO_REDO_DIRECTIONS.UNDO,
+    step: {
+      target: entry.target,
+      label: entry.label,
+      instruction,
+      direction: UNDO_REDO_DIRECTIONS.UNDO,
+    },
   };
 }
 
@@ -644,7 +656,13 @@ function buildRedoAggregationPart(
     oldContent,
     newContent,
     structuredPatch: instruction.structuredPatch,
-    step: { target: entry.target, label: entry.label, instruction },
+    direction: UNDO_REDO_DIRECTIONS.REDO,
+    step: {
+      target: entry.target,
+      label: entry.label,
+      instruction,
+      direction: UNDO_REDO_DIRECTIONS.REDO,
+    },
   };
 }
 
@@ -657,55 +675,69 @@ function buildRedoAggregationPart(
 export function aggregateWorkflowUndoFiles(
   entries: WorkflowStepEntry[]
 ): AggregatedUndoFile[] {
-  const partsByFile: AggregationPart[] = [];
+  const aggregates: Array<{
+    path: string;
+    byDirection: Map<UndoRedoDirection, AggregationPart[]>;
+  }> = [];
 
   for (const entry of entries) {
-    if (entry.redoInstructions && entry.redoInstructions.length > 0) {
-      partsByFile.push(
-        ...entry.redoInstructions.map((instruction) =>
-          buildRedoAggregationPart(entry, instruction)
-        )
+    const partsForEntry = [
+      ...(entry.undoCandidates ?? []).map((candidate) =>
+        buildUndoAggregationPart(entry, candidate)
+      ),
+      ...(entry.redoInstructions ?? []).map((instruction) =>
+        buildRedoAggregationPart(entry, instruction)
+      ),
+    ];
+    for (const part of partsForEntry) {
+      const pathAggregate = aggregates.find((aggregate) =>
+        sameFilePath(aggregate.path, part.path)
       );
-    } else {
-      for (const candidate of entry.undoCandidates ?? []) {
-        const part = buildUndoAggregationPart(entry, candidate);
-        if (part) partsByFile.push(part);
-      }
+      const targetAggregate =
+        pathAggregate ??
+        (() => {
+          const created = {
+            path: part.path,
+            byDirection: new Map<UndoRedoDirection, AggregationPart[]>(),
+          };
+          aggregates.push(created);
+          return created;
+        })();
+      const parts = targetAggregate.byDirection.get(part.direction) ?? [];
+      parts.push(part);
+      targetAggregate.byDirection.set(part.direction, parts);
     }
   }
 
-  const aggregates: Array<{ parts: AggregationPart[] }> = [];
-  for (const part of partsByFile) {
-    const existing = aggregates.find((aggregate) =>
-      sameFilePath(aggregate.parts[0].path, part.path)
-    );
-    if (existing) existing.parts.push(part);
-    else aggregates.push({ parts: [part] });
-  }
+  return aggregates.flatMap(({ byDirection }) =>
+    [...byDirection.entries()].flatMap(([direction, parts]) => {
+      const changeType = getNetChangeType(
+        parts[0].changeType,
+        parts[parts.length - 1].changeType
+      );
+      if (!changeType) return [];
 
-  return aggregates.flatMap(({ parts }) => {
-    const changeType = getNetChangeType(
-      parts[0].changeType,
-      parts[parts.length - 1].changeType
-    );
-    if (!changeType) return [];
-
-    const composed = composeAggregateDiff(parts, changeType);
-    return [
-      {
-        key: normalizeFilePath(parts[0].path),
-        path: parts[0].path,
-        changeType,
-        oldContent: composed.oldContent,
-        newContent: composed.newContent,
-        structuredPatch: composed.structuredPatch,
-        steps: parts.map((part) => part.step),
-        isPartialDiff:
-          composed.isPartialDiff ||
-          parts.some((part) => part.contentCaptureSkipped),
-      },
-    ];
-  });
+      const composed = composeAggregateDiff(parts, changeType);
+      return [
+        {
+          key: `${normalizeFilePath(parts[0].path)}::${direction}`,
+          path: parts[0].path,
+          changeType,
+          oldContent: composed.oldContent,
+          newContent: composed.newContent,
+          structuredPatch: composed.structuredPatch,
+          steps: parts.map((part) => part.step),
+          direction,
+          contentCaptureSkipped: parts.some(
+            (part) => part.contentCaptureSkipped === true
+          ),
+          isPartialDiff:
+            composed.isPartialDiff ||
+            parts.some((part) => part.contentCaptureSkipped),
+        },
+      ];
+    })
+  );
 }
 
 function buildAggregatedDialogRow(
@@ -719,11 +751,18 @@ function buildAggregatedDialogRow(
   return {
     key: file.key,
     path: file.path,
+    direction: file.direction,
     changeType: file.changeType,
     source: buildDiffSource(oldContent, newContent, structuredPatch),
     language: getLanguageFromPath(file.path),
     instruction: file.steps[0]?.instruction ?? null,
     hasDiff: hasRenderableDiff({ oldContent, newContent, structuredPatch }),
+    disabledReason:
+      file.steps[0]?.instruction === null
+        ? file.contentCaptureSkipped
+          ? "Content not captured"
+          : "Cannot undo"
+        : undefined,
     note: noteParts.join(" · "),
   };
 }
@@ -736,6 +775,7 @@ function buildRedoDialogRow(
   return {
     key,
     path: instruction.path,
+    direction: UNDO_REDO_DIRECTIONS.REDO,
     changeType: redoInstructionToDiffChangeType(instruction),
     source: buildDiffSource(undefined, undefined, structuredPatch),
     language: getLanguageFromPath(instruction.path),
@@ -751,6 +791,7 @@ function buildCandidateRow(
   return buildUndoDialogRow({
     key,
     path: candidate.path,
+    direction: UNDO_REDO_DIRECTIONS.UNDO,
     changeType: candidate.changeType,
     instruction: candidate.instruction,
     oldContent: candidate.oldContent,
@@ -862,11 +903,13 @@ export function buildPromptUndoDialogModel(options: {
 /** Summarise a list of candidates for display purposes. */
 export function getPromptUndoSummary(candidates: UndoFileCandidate[]): {
   undoableCount: number;
+  blockedCount: number;
   hasTier2: boolean;
   hasNonUndoable: boolean;
 } {
   return {
     undoableCount: candidates.filter((c) => c.instruction !== null).length,
+    blockedCount: candidates.filter((c) => c.instruction === null).length,
     hasTier2: candidates.some(
       (c) => c.tier === UNDO_FILE_CANDIDATE_TIERS.TIER2
     ),
@@ -1020,30 +1063,72 @@ export function buildUndoDialogInputForSpecificEvent(
 // Shared prompt-level undo/redo action computation
 // ============================================================================
 
-/**
- * The available undo and redo actions for a prompt step.
- * Both can be non-null simultaneously — "mixed state" — when the user has
- * undone some files in the step but not all of them.
- */
-export interface PromptUndoActions {
-  undo: { label: string; count: number } | null;
-  redo: { label: string; count: number } | null;
+/** Counts and labels for every change row in a prompt scope. */
+export interface PromptChangeSummary {
+  total: number;
+  undoable: number;
+  undone: number;
+  blocked: number;
+  label: string;
+  compactLabel: string;
+  title: string;
+}
+
+export function createPromptChangeSummary(
+  total: number,
+  undoable: number,
+  undone: number,
+  blocked: number
+): PromptChangeSummary {
+  const undoneLabel =
+    undone === 0
+      ? ""
+      : undone === total
+        ? " (all undone)"
+        : ` (${undone} undone)`;
+
+  return {
+    total,
+    undoable,
+    undone,
+    blocked,
+    label: `View ${total} change${total !== 1 ? "s" : ""}${undoneLabel}`,
+    compactLabel: `View ${total}`,
+    title: `${total} file${total !== 1 ? "s" : ""} changed${
+      undone > 0 ? ` · ${undone} undone, can be redone` : ""
+    }`,
+  };
+}
+
+export function getPromptChangeLabelParts(
+  summary: PromptChangeSummary,
+  compact = false
+): { main: string; undone: string } {
+  if (compact) return { main: summary.compactLabel, undone: "" };
+  const suffixStart = summary.label.indexOf(" (");
+  return suffixStart < 0
+    ? { main: summary.label, undone: "" }
+    : {
+        main: summary.label.slice(0, suffixStart),
+        undone: summary.label.slice(suffixStart),
+      };
 }
 
 /**
- * Compute which prompt-level undo/redo actions are available for a step.
+ * Compute the prompt-level change summary for a step.
  *
- * Used by both CliOutput (header button) and OutputSection (minimap popup)
- * so the logic is never duplicated.
+ * Used by both the output-row header and minimap so the logic is never
+ * duplicated. The caller inputs remain per-target to preserve the memoized
+ * performance boundary in outputRows.ts.
  */
-export function computePromptUndoActions(
+export function computePromptChangeSummary(
   allStepOutputs: CliOutput[],
   effectiveUndoRecord: UndoRecord | undefined,
   effectiveSnapshot: WorkspaceSnapshot | undefined
-): PromptUndoActions {
+): PromptChangeSummary {
   // Redo: files that were previously undone and can be redone.
   // Only available while isRedone is falsy (a redo resets the record).
-  const redoCount =
+  const undone =
     effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true
       ? (effectiveUndoRecord.redoInstructions?.length ?? 0)
       : 0;
@@ -1065,22 +1150,11 @@ export function computePromptUndoActions(
           (c) => !redoInstructions.some((ri) => sameFilePath(c.path, ri.path))
         )
       : allCandidates;
-  const { undoableCount } = getPromptUndoSummary(candidates);
-
-  return {
-    undo:
-      undoableCount > 0
-        ? {
-            label: `Undo ${undoableCount} change${undoableCount !== 1 ? "s" : ""}`,
-            count: undoableCount,
-          }
-        : null,
-    redo:
-      redoCount > 0
-        ? {
-            label: `Redo ${redoCount} change${redoCount !== 1 ? "s" : ""}`,
-            count: redoCount,
-          }
-        : null,
-  };
+  const { undoableCount, blockedCount } = getPromptUndoSummary(candidates);
+  return createPromptChangeSummary(
+    undoableCount + blockedCount + undone,
+    undoableCount,
+    undone,
+    blockedCount
+  );
 }

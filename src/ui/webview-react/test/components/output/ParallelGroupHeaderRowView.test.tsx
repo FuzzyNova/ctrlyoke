@@ -102,68 +102,80 @@ describe("ParallelGroupHeaderRowView", () => {
     );
   });
 
-  it("offers the group's undo only when the row carries an undo action", () => {
-    const onPromptUndo = vi.fn();
+  it("offers the group's changes when the row carries a change summary", () => {
+    const onPromptView = vi.fn();
     const { rerender } = render(
       <OutputRow
         row={buildHeaderRow()}
         isExecutionActive={false}
-        onPromptUndo={onPromptUndo}
+        onPromptView={onPromptView}
       />
     );
 
-    expect(screen.queryByRole("button", { name: /Undo/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /View/ })).toBeNull();
 
     const row = buildHeaderRow({
       promptUndo: {
         workspacePath: "/repo",
         allStepOutputs: [],
-        undo: { label: "Undo 3 changes", count: 3 },
-        redo: null,
+        summary: {
+          total: 3,
+          undoable: 3,
+          undone: 0,
+          blocked: 0,
+          label: "View 3 changes",
+          compactLabel: "View 3",
+          title: "3 files changed",
+        },
       },
     });
     rerender(
       <OutputRow
         row={row}
         isExecutionActive={false}
-        onPromptUndo={onPromptUndo}
+        onPromptView={onPromptView}
       />
     );
 
     const undoButton = screen.getByRole("button", {
-      name: "Undo parallel group changes",
+      name: "View 3 changes",
     });
-    // The label matches every other undo surface; only the tooltip says the
-    // action covers the whole group.
     expect(undoButton).toHaveAttribute(
       "title",
-      "Undo 3 changes across 2 parallel steps"
+      "3 files changed across 2 parallel steps"
     );
     fireEvent.click(undoButton);
-    expect(onPromptUndo).toHaveBeenCalledWith(row);
+    expect(onPromptView).toHaveBeenCalledWith(row);
   });
 
-  it("offers the group's redo on the header once the undo has been applied", () => {
-    const onPromptRedo = vi.fn();
+  it("keeps the undone state in the group's neutral viewer", () => {
+    const onPromptView = vi.fn();
     const row = buildHeaderRow({
       promptUndo: {
         workspacePath: "/repo",
         allStepOutputs: [],
-        undo: null,
-        redo: { label: "Redo 3 changes", count: 3 },
+        summary: {
+          total: 3,
+          undoable: 0,
+          undone: 3,
+          blocked: 0,
+          label: "View 3 changes (all undone)",
+          compactLabel: "View 3",
+          title: "3 files changed · 3 undone, can be redone",
+        },
       },
     });
     render(
       <OutputRow
         row={row}
         isExecutionActive={false}
-        onPromptRedo={onPromptRedo}
+        onPromptView={onPromptView}
       />
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Redo parallel group changes" })
+      screen.getByRole("button", { name: "View 3 changes (all undone)" })
     );
-    expect(onPromptRedo).toHaveBeenCalledWith(row);
+    expect(onPromptView).toHaveBeenCalledWith(row);
   });
 });

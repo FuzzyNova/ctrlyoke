@@ -28,8 +28,15 @@ function renderHeader(overrides: Partial<OutputSectionHeaderProps> = {}) {
       terminalFontSize={14}
       terminalSessionActive={true}
       useCompactLabels={false}
-      workflowRedoEntries={[]}
-      workflowUndoEntries={[]}
+      workflowChangeSummary={{
+        total: 0,
+        undoable: 0,
+        undone: 0,
+        blocked: 0,
+        label: "View 0 changes",
+        compactLabel: "View 0",
+        title: "0 files changed",
+      }}
       onCollapseAllDiffs={noop}
       onExpandAllDiffs={noop}
       onExport={noop}
@@ -43,8 +50,7 @@ function renderHeader(overrides: Partial<OutputSectionHeaderProps> = {}) {
       onTerminalSessionClose={noop}
       onToggleCollapse={noop}
       onToggleFullscreen={noop}
-      onWorkflowRedo={noop}
-      onWorkflowUndo={noop}
+      onWorkflowView={noop}
       outputFontSize={14}
       {...overrides}
     />
@@ -203,8 +209,15 @@ describe("OutputSectionHeader find action", () => {
         terminalFontSize={14}
         terminalSessionActive
         useCompactLabels={false}
-        workflowRedoEntries={[]}
-        workflowUndoEntries={[]}
+        workflowChangeSummary={{
+          total: 0,
+          undoable: 0,
+          undone: 0,
+          blocked: 0,
+          label: "View 0 changes",
+          compactLabel: "View 0",
+          title: "0 files changed",
+        }}
         onCollapseAllDiffs={vi.fn()}
         onExpandAllDiffs={vi.fn()}
         onExport={vi.fn()}
@@ -218,8 +231,7 @@ describe("OutputSectionHeader find action", () => {
         onTerminalSessionClose={vi.fn()}
         onToggleCollapse={vi.fn()}
         onToggleFullscreen={vi.fn()}
-        onWorkflowRedo={vi.fn()}
-        onWorkflowUndo={vi.fn()}
+        onWorkflowView={vi.fn()}
         outputFontSize={14}
       />
     );
@@ -248,6 +260,99 @@ describe("OutputSectionHeader hidden output action", () => {
 
     fireEvent.click(button);
     expect(onClearHiddenOutputTargets).toHaveBeenCalledOnce();
+  });
+});
+
+describe("OutputSectionHeader workflow changes action", () => {
+  const summary = {
+    total: 7,
+    undoable: 5,
+    undone: 0,
+    blocked: 2,
+    label: "View 7 changes",
+    compactLabel: "View 7",
+    title: "7 files changed",
+  } as const;
+
+  it("uses the neutral summary label and tooltip", () => {
+    const onWorkflowView = vi.fn();
+    renderHeader({
+      activeOutputTab: "output",
+      workflowChangeSummary: summary,
+      onWorkflowView,
+    });
+
+    const button = screen.getByRole("button", { name: "View 7 changes" });
+    expect(button).toHaveTextContent("View 7 changes");
+    expect(button).toHaveAttribute("title", "7 files changed");
+    expect(button.querySelector(".codicon-diff")).toBeInTheDocument();
+    fireEvent.click(button);
+    expect(onWorkflowView).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the total stable while the undone count changes", () => {
+    const { rerender } = renderHeader({
+      activeOutputTab: "output",
+      workflowChangeSummary: {
+        ...summary,
+        undone: 3,
+        undoable: 2,
+        label: "View 7 changes (3 undone)",
+        title: "7 files changed · 3 undone, can be redone",
+      },
+    });
+    expect(
+      screen.getByRole("button", { name: "View 7 changes (3 undone)" })
+    ).toHaveTextContent("View 7 changes (3 undone)");
+
+    rerender(
+      <OutputSectionHeader
+        activeOutputTab="output"
+        activeTerminalSession={null}
+        anyDiffCollapsed={false}
+        hasOutput={false}
+        hiddenOutputCount={0}
+        isFindOpen={false}
+        isExecutionActive={true}
+        isFullscreen={false}
+        isHeaderNarrow
+        isHeaderVeryNarrow={false}
+        isTerminalCompact={false}
+        refCallback={vi.fn()}
+        showTerminalTab
+        terminalCanCloseActiveSession={false}
+        terminalExecutionRunLabel={null}
+        terminalFontSize={14}
+        terminalSessionActive
+        useCompactLabels
+        workflowChangeSummary={{
+          ...summary,
+          undone: 7,
+          undoable: 0,
+          blocked: 0,
+          label: "View 7 changes (all undone)",
+          compactLabel: "View 7",
+          title: "7 files changed · 7 undone, can be redone",
+        }}
+        onCollapseAllDiffs={vi.fn()}
+        onExpandAllDiffs={vi.fn()}
+        onExport={vi.fn()}
+        onToggleFind={vi.fn()}
+        onClearHiddenOutputTargets={vi.fn()}
+        onNewTerminal={vi.fn()}
+        onOutputFontSizeChange={vi.fn()}
+        onSelectOutputTab={vi.fn()}
+        onSelectTerminalTab={vi.fn()}
+        onTerminalFontSizeChange={vi.fn()}
+        onTerminalSessionClose={vi.fn()}
+        onToggleCollapse={vi.fn()}
+        onToggleFullscreen={vi.fn()}
+        onWorkflowView={vi.fn()}
+        outputFontSize={14}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "View 7 changes (all undone)" })).toHaveTextContent("View 7");
   });
 });
 

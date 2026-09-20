@@ -11,6 +11,7 @@ import { useUiStore, type RecentWorkflow } from "../../store/uiStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
+import { useWorkflowDisplayName } from "@hooks/useWorkflowDisplayName";
 import { sendMessage } from "../../hooks/useMessageHandler";
 import {
   MESSAGE_TYPES,
@@ -78,6 +79,7 @@ import {
 } from "../../utils/dateRangeFilter";
 import { formatMultiFilterLabel } from "../../utils/filterLabels";
 import { Icon } from "../shared/Icon";
+import { getWorkflowNameFromPath } from "@utils/workflowDisplayName";
 
 interface WorkflowStatusProps {
   className?: string;
@@ -390,11 +392,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // the click visibly took effect before the snapshot lands. Computed early
   // (rather than just before render) since the run-identity badge's opener
   // also needs it to name the lineage it's drilling into.
-  const displayName =
-    pendingRunViewSwitch?.workflowName ??
-    (fileName
-      ? workflowName || getWorkflowNameFromPath(fileName)
-      : DEFAULT_WORKFLOW_NAME);
+  const displayName = useWorkflowDisplayName();
   const isNewWorkflow =
     fileName === DEFAULT_WORKFLOW_NAME && !workflowName && totalSteps === 0;
 
@@ -1927,15 +1925,3 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     </div>
   );
 };
-
-/**
- * Extract workflow name from file path
- */
-function getWorkflowNameFromPath(filePath: string): string {
-  const fileName = filePath.split(/[/\\]/).pop() || filePath;
-  // Source prompt files may use any supported extension; run-scoped workflow
-  // definitions always derive their display name from the lineage descriptor.
-  return fileName
-    .replace(/\.ctrlyoke\.(yaml|yml|json)$/i, "")
-    .replace(/\.(yaml|yml|json)$/i, "");
-}

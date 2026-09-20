@@ -12,6 +12,8 @@ import {
   buildUndoCandidatesForOutputs,
   buildUndoDialogInputForPrompt,
   buildUndoDialogInputForSpecificEvent,
+  aggregateWorkflowUndoFiles,
+  createPromptChangeSummary,
   sameFilePath,
 } from "@utils/promptUndo";
 import type {
@@ -33,7 +35,12 @@ import { FINAL_STEP_PHASES } from "@/types/messages";
 import type { WorkflowRunAddress } from "@root/types/CtrlYokeTypes";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import { useUiStore } from "@store/uiStore";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import {
+  UNDO_DIALOG_INTENTS,
+  UNDO_REDO_DIRECTIONS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
+import { useWorkflowDisplayName } from "@hooks/useWorkflowDisplayName";
 
 type OutputHistoryView = {
   orderedEntries: OrderedHistoryEntry[];
@@ -56,16 +63,14 @@ interface UseOutputUndoActionsInput {
   workspaceSnapshots: Record<number, WorkspaceSnapshot>;
 }
 
-export interface OpenMinimapUndoDialogInput {
+export interface OpenMinimapDialogInput {
   target: UndoExecutionTarget;
-  workspacePath: string;
-  input: MinimapDialogState["input"];
-}
-
-export interface OpenMinimapRedoDialogInput {
-  target: UndoExecutionTarget;
-  workspacePath: string;
+  intent: MinimapDialogState["intent"];
+  input?: MinimapDialogState["input"];
   redoInstructions: MinimapDialogState["redoInstructions"];
+  stepLabel?: string;
+  stepName?: string;
+  mode?: MinimapDialogState["mode"];
 }
 
 /**
@@ -111,18 +116,21 @@ export function useOutputUndoActions({
         : null,
     [displayedViewAddress]
   );
+  const workflowDisplayName = useWorkflowDisplayName();
   const [minimapDialogState, setMinimapDialogState] =
     useState<MinimapDialogState | null>(null);
   const [workflowDialogState, setWorkflowDialogState] =
     useState<WorkflowDialogState | null>(null);
 
-  const workflowUndoRedoData = useMemo(() => {
+  const workflowChangeData = useMemo(() => {
     if (!allowUndoActions) {
-      return { undoEntries: [], redoEntries: [] };
+      return {
+        entries: [],
+        summary: createPromptChangeSummary(0, 0, 0, 0),
+      };
     }
 
-    const undoEntries: WorkflowStepEntry[] = [];
-    const redoEntries: WorkflowStepEntry[] = [];
+    const entries: WorkflowStepEntry[] = [];
 
     for (const msgTarget of uniqueStepTargets) {
       const key = getTargetKey(msgTarget);
@@ -195,10 +203,6 @@ export function useOutputUndoActions({
           ? (effectiveUndoRecord.redoInstructions ?? [])
           : [];
 
-      if (redoInstructions.length > 0) {
-        redoEntries.push({ target: undoTarget, label, redoInstructions });
-      }
-
       const allCandidates = buildUndoCandidatesForOutputs(
         stepOutputs,
         effectiveSnapshot
@@ -212,15 +216,40 @@ export function useOutputUndoActions({
                 )
             )
           : allCandidates;
-      const undoCandidates = candidates.filter(
-        (candidate) => candidate.instruction !== null
-      );
-      if (undoCandidates.length > 0) {
-        undoEntries.push({ target: undoTarget, label, undoCandidates });
+      if (candidates.length > 0 || redoInstructions.length > 0) {
+        entries.push({
+          target: undoTarget,
+          label,
+          undoCandidates: candidates,
+          redoInstructions,
+        });
       }
     }
 
-    return { undoEntries, redoEntries };
+    const files = aggregateWorkflowUndoFiles(entries);
+    const blocked = files.filter(
+      (file) => file.steps[0]?.instruction === null
+    ).length;
+    const undoable = files.filter(
+      (file) =>
+        file.direction === UNDO_REDO_DIRECTIONS.UNDO &&
+        file.steps[0]?.instruction !== null
+    ).length;
+    const undone = files.filter(
+      (file) =>
+        file.direction === UNDO_REDO_DIRECTIONS.REDO &&
+        file.steps[0]?.instruction !== null
+    ).length;
+
+    return {
+      entries,
+      summary: createPromptChangeSummary(
+        files.length,
+        undoable,
+        undone,
+        blocked
+      ),
+    };
   }, [
     allowUndoActions,
     allMessages,
@@ -235,43 +264,38 @@ export function useOutputUndoActions({
     workspaceSnapshots,
   ]);
 
-  const openMinimapUndoDialog = useCallback(
-    ({ target, input }: OpenMinimapUndoDialogInput) => {
+  const openMinimapDialog = useCallback(
+    ({
+      target,
+      input,
+      redoInstructions,
+      intent,
+      stepLabel,
+      stepName,
+      mode = UNDO_REDO_DIRECTIONS.UNDO,
+    }: OpenMinimapDialogInput) => {
       if (!runAddress) return;
       setMinimapDialogState({
-        mode: "undo",
+        mode,
+        intent,
         target,
         address: runAddress,
         input,
-        requestId: generateId(),
-      });
-    },
-    [runAddress]
-  );
-
-  const openMinimapRedoDialog = useCallback(
-    ({
-      target,
-      redoInstructions,
-      // workspacePath remains a UI-only value used to build the diff model.
-      // It is intentionally not persisted in dialog state or sent to the host.
-    }: OpenMinimapRedoDialogInput) => {
-      if (!runAddress) return;
-      setMinimapDialogState({
-        mode: "redo",
-        target,
-        address: runAddress,
         redoInstructions,
+        stepLabel,
+        stepName,
         requestId: generateId(),
       });
     },
     [runAddress]
   );
 
-  const handlePromptUndoMeta = useCallback(
+  const handlePromptViewMeta = useCallback(
     (
       target: OutputMessageTarget,
-      promptUndo: OutputRowPromptUndoMeta | undefined
+      promptUndo: OutputRowPromptUndoMeta | undefined,
+      stepLabel?: string,
+      stepName?: string
     ) => {
       if (!promptUndo || !runAddress) return;
       const undoTarget = toUndoExecutionTarget(target);
@@ -286,37 +310,29 @@ export function useOutputUndoActions({
         promptUndo.workspacePath,
         alreadyUndone
       );
-      openMinimapUndoDialog({
+      openMinimapDialog({
         target: undoTarget,
-        workspacePath: promptUndo.workspacePath,
         input,
+        redoInstructions: alreadyUndone,
+        intent: UNDO_DIALOG_INTENTS.VIEW,
+        stepLabel,
+        stepName,
       });
     },
-    [openMinimapUndoDialog, runAddress]
+    [openMinimapDialog, runAddress]
   );
 
   // Widened past `CliHeaderRow` so a parallel group's header row — which
   // carries the same group-wide `promptUndo` meta — reuses this handler.
-  const handlePromptUndo = useCallback(
+  const handlePromptView = useCallback(
     (row: CliHeaderRow | ParallelGroupHeaderRow) =>
-      handlePromptUndoMeta(row.target, row.promptUndo),
-    [handlePromptUndoMeta]
-  );
-
-  // Widened alongside `handlePromptUndo`: a parallel group's redo is offered on
-  // its header row, whose `target` is the group's first member — the same
-  // target the group's undo record is stored against.
-  const handlePromptRedo = useCallback(
-    (row: CliHeaderRow | ParallelGroupHeaderRow) => {
-      if (!row.promptUndo?.undoRecord?.redoInstructions?.length || !runAddress)
-        return;
-      openMinimapRedoDialog({
-        target: toUndoExecutionTarget(row.target),
-        workspacePath: row.promptUndo.workspacePath,
-        redoInstructions: row.promptUndo.undoRecord.redoInstructions,
-      });
-    },
-    [openMinimapRedoDialog, runAddress]
+      handlePromptViewMeta(
+        row.target,
+        row.promptUndo,
+        "stepLabel" in row ? row.stepLabel : undefined,
+        "stepName" in row ? row.stepName : undefined
+      ),
+    [handlePromptViewMeta]
   );
 
   const handleFileUndo = useCallback(
@@ -335,10 +351,11 @@ export function useOutputUndoActions({
           (item) => sameFilePath(item.path, request.path)
         );
         if (fileRedoInstruction) {
-          openMinimapRedoDialog({
+          openMinimapDialog({
             target,
-            workspacePath,
             redoInstructions: [fileRedoInstruction],
+            intent: UNDO_DIALOG_INTENTS.ACT,
+            mode: UNDO_REDO_DIRECTIONS.REDO,
           });
         }
         return;
@@ -358,34 +375,27 @@ export function useOutputUndoActions({
         }
       );
 
-      openMinimapUndoDialog({
+      openMinimapDialog({
         target,
-        workspacePath,
         input,
+        redoInstructions: undefined,
+        intent: UNDO_DIALOG_INTENTS.ACT,
       });
     },
-    [openMinimapRedoDialog, openMinimapUndoDialog, stepOutputsMap]
+    [openMinimapDialog, stepOutputsMap]
   );
 
-  const handleWorkflowUndo = useCallback(() => {
+  const handleWorkflowView = useCallback(() => {
     if (!runAddress) return;
     setWorkflowDialogState({
-      mode: "undo",
+      mode: UNDO_REDO_DIRECTIONS.UNDO,
+      intent: UNDO_DIALOG_INTENTS.VIEW,
       address: runAddress,
-      entries: workflowUndoRedoData.undoEntries,
+      entries: workflowChangeData.entries,
+      workflowName: workflowDisplayName,
       requestId: generateId(),
     });
-  }, [runAddress, workflowUndoRedoData]);
-
-  const handleWorkflowRedo = useCallback(() => {
-    if (!runAddress) return;
-    setWorkflowDialogState({
-      mode: "redo",
-      address: runAddress,
-      entries: workflowUndoRedoData.redoEntries,
-      requestId: generateId(),
-    });
-  }, [runAddress, workflowUndoRedoData]);
+  }, [runAddress, workflowChangeData.entries, workflowDisplayName]);
 
   const closeMinimapDialog = useCallback(() => {
     setMinimapDialogState(null);
@@ -399,15 +409,13 @@ export function useOutputUndoActions({
     closeMinimapDialog,
     closeWorkflowDialog,
     handleFileUndo,
-    handlePromptRedo,
-    handlePromptUndo,
-    handlePromptUndoMeta,
-    handleWorkflowRedo,
-    handleWorkflowUndo,
+    handlePromptView,
+    handlePromptViewMeta,
+    handleWorkflowView,
     minimapDialogState,
-    openMinimapRedoDialog,
-    openMinimapUndoDialog,
+    openMinimapDialog,
     workflowDialogState,
-    workflowUndoRedoData,
+    workflowChangeEntries: workflowChangeData.entries,
+    workflowChangeSummary: workflowChangeData.summary,
   };
 }

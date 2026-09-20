@@ -2,7 +2,10 @@ import { OUTPUT_TABS, type OutputTab } from "@root/types/DashboardConstants";
 import React from "react";
 import { ExpandCollapseAllDiffsButton } from "@components/shared";
 import { TerminalSessionIcon } from "@components/output/TerminalSessionIcon";
-import type { WorkflowStepEntry } from "@components/output/UndoChangesDialog";
+import {
+  getPromptChangeLabelParts,
+  type PromptChangeSummary,
+} from "@utils/promptUndo";
 import type { TerminalSession } from "@store/terminalStore";
 import { Icon } from "../../shared/Icon";
 
@@ -26,8 +29,7 @@ export interface OutputSectionHeaderProps {
   terminalFontSize: number;
   terminalSessionActive: boolean;
   useCompactLabels: boolean;
-  workflowRedoEntries: WorkflowStepEntry[];
-  workflowUndoEntries: WorkflowStepEntry[];
+  workflowChangeSummary: PromptChangeSummary;
   onCollapseAllDiffs: () => void;
   onExpandAllDiffs: () => void;
   onExport: () => void;
@@ -40,8 +42,7 @@ export interface OutputSectionHeaderProps {
   onTerminalFontSizeChange: (size: number) => void;
   onTerminalSessionClose: () => void;
   onToggleCollapse: () => void;
-  onWorkflowRedo: () => void;
-  onWorkflowUndo: () => void;
+  onWorkflowView: () => void;
   outputFontSize: number;
   onOutputFontSizeChange: (size: number) => void;
 }
@@ -65,8 +66,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
   terminalFontSize,
   terminalSessionActive,
   useCompactLabels,
-  workflowRedoEntries,
-  workflowUndoEntries,
+  workflowChangeSummary,
   onCollapseAllDiffs,
   onExpandAllDiffs,
   onExport,
@@ -79,18 +79,13 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
   onTerminalFontSizeChange,
   onTerminalSessionClose,
   onToggleCollapse,
-  onWorkflowRedo,
-  onWorkflowUndo,
+  onWorkflowView,
   outputFontSize,
   onOutputFontSizeChange,
 }) => {
-  const workflowUndoCount = workflowUndoEntries.reduce(
-    (count, entry) => count + (entry.undoCandidates?.length ?? 0),
-    0
-  );
-  const workflowRedoCount = workflowRedoEntries.reduce(
-    (count, entry) => count + (entry.redoInstructions?.length ?? 0),
-    0
+  const workflowChangeLabel = getPromptChangeLabelParts(
+    workflowChangeSummary,
+    useCompactLabels
   );
 
   return (
@@ -277,42 +272,24 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
                 {hiddenOutputCount} hidden · Show all
               </button>
             )}
-            {workflowUndoEntries.length > 0 && (
+            {workflowChangeSummary.total > 0 && (
               <button
                 type="button"
                 className="flex items-center gap-0.5 px-1 py-0.5 text-xs text-link-fg hover:text-link-active-fg transition-colors min-w-0"
                 style={{ touchAction: "manipulation" }}
-                title={`Undo workflow changes (${workflowUndoCount} file${workflowUndoCount !== 1 ? "s" : ""})`}
-                aria-label="Undo workflow changes"
-                onClick={onWorkflowUndo}
+                title={workflowChangeSummary.title}
+                aria-label={workflowChangeSummary.label}
+                onClick={onWorkflowView}
               >
-                <Icon name="discard" className="codicon-lg flex-shrink-0" />
-                {!isHeaderVeryNarrow && (
-                  <span className="text-nowrap">
-                    {useCompactLabels
-                      ? "Undo"
-                      : `Undo ${workflowUndoCount} change${workflowUndoCount !== 1 ? "s" : ""}`}
-                  </span>
-                )}
-              </button>
-            )}
-            {workflowRedoEntries.length > 0 && (
-              <button
-                type="button"
-                className="flex items-center gap-0.5 px-1 py-0.5 text-xs text-terminal-ansiGreen hover:opacity-80 transition-opacity min-w-0"
-                style={{ touchAction: "manipulation" }}
-                title={`Redo workflow changes (${workflowRedoCount} file${workflowRedoCount !== 1 ? "s" : ""})`}
-                aria-label="Redo workflow changes"
-                onClick={onWorkflowRedo}
-              >
-                <Icon name="redo" className="codicon-lg flex-shrink-0" />
-                {!isHeaderVeryNarrow && (
-                  <span>
-                    {useCompactLabels
-                      ? "Redo"
-                      : `Redo ${workflowRedoCount} change${workflowRedoCount !== 1 ? "s" : ""}`}
-                  </span>
-                )}
+                <Icon name="diff" className="codicon-lg flex-shrink-0" />
+                <span className="text-nowrap">
+                  {workflowChangeLabel.main}
+                  {workflowChangeLabel.undone && (
+                    <span className="text-terminal-ansiGreen">
+                      {workflowChangeLabel.undone}
+                    </span>
+                  )}
+                </span>
               </button>
             )}
             <button

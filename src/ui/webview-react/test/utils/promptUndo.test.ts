@@ -17,6 +17,7 @@ import {
   buildUndoDialogInputForSpecificEvent,
   buildPromptUndoDialogModel,
   aggregateWorkflowUndoFiles,
+  computePromptChangeSummary,
   UNDO_FILE_CANDIDATE_TIERS,
 } from "@utils/promptUndo";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "@/types/cliEvents";
@@ -574,6 +575,7 @@ describe("getPromptUndoSummary", () => {
     ];
     const s = getPromptUndoSummary(candidates);
     expect(s.undoableCount).toBe(1);
+    expect(s.blockedCount).toBe(1);
     expect(s.hasNonUndoable).toBe(true);
   });
 
@@ -587,6 +589,80 @@ describe("getPromptUndoSummary", () => {
       },
     ];
     expect(getPromptUndoSummary(candidates).hasTier2).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// computePromptChangeSummary
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("computePromptChangeSummary", () => {
+  const recordWithRedo = (path: string) => ({
+    appliedAt: 1,
+    restoredFiles: [path],
+    redoInstructions: [
+      { path, action: UNDO_FILE_ACTIONS.DELETE },
+    ],
+  });
+
+  it("counts undoable and blocked rows and builds the zero-undone labels", () => {
+    const summary = computePromptChangeSummary(
+      [],
+      undefined,
+      makeSnapshot([
+        makeCreatedSnap("src/undoable.ts"),
+        makeModifiedSnap("src/blocked.ts", []),
+      ])
+    );
+
+    expect(summary).toMatchObject({
+      total: 2,
+      undoable: 1,
+      undone: 0,
+      blocked: 1,
+      label: "View 2 changes",
+      compactLabel: "View 2",
+      title: "2 files changed",
+    });
+  });
+
+  it("includes undone rows and uses the mixed-state labels", () => {
+    const summary = computePromptChangeSummary(
+      [],
+      recordWithRedo("src/undone.ts"),
+      makeSnapshot([
+        makeCreatedSnap("src/undone.ts"),
+        makeCreatedSnap("src/still-applied.ts"),
+      ])
+    );
+
+    expect(summary).toMatchObject({
+      total: 2,
+      undoable: 1,
+      undone: 1,
+      blocked: 0,
+      label: "View 2 changes (1 undone)",
+      compactLabel: "View 2",
+      title: "2 files changed · 1 undone, can be redone",
+    });
+  });
+
+  it("uses all-undone wording when every row is redoable", () => {
+    const summary = computePromptChangeSummary(
+      [],
+      recordWithRedo("src/undone.ts"),
+      makeSnapshot([makeCreatedSnap("src/undone.ts")])
+    );
+
+    expect(summary).toMatchObject({
+      total: 1,
+      undoable: 0,
+      undone: 1,
+      blocked: 0,
+      label: "View 1 change (all undone)",
+      compactLabel: "View 1",
+      title: "1 file changed · 1 undone, can be redone",
+    });
   });
 });
 
@@ -844,7 +920,7 @@ function makeForwardPatch(
 function makeWorkflowCandidate(
   path: string,
   changeType: FileOperationKind,
-  instruction: UndoFileInstruction,
+  instruction: UndoFileInstruction | null,
   options: Partial<UndoFileCandidate> = {}
 ): UndoFileCandidate {
   return {
@@ -1055,6 +1131,94 @@ describe("aggregateWorkflowUndoFiles", () => {
     expect(files[0]?.steps.map((step) => step.label)).toEqual([
       "Prompt 1",
       "Prompt 2",
+    ]);
+  });
+
+  it("keeps a blocked candidate as a disabled undo row", () => {
+    const files = aggregateWorkflowUndoFiles([
+      {
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        label: "Prompt 1",
+        undoCandidates: [
+          makeWorkflowCandidate(
+            "src/blocked.ts",
+            FILE_OPERATION_KINDS.MODIFIED,
+            null
+          ),
+        ],
+      },
+    ]);
+
+    expect(files).toHaveLength(1);
+    expect(files[0]).toMatchObject({
+      key: "src/blocked.ts::undo",
+      direction: UNDO_REDO_DIRECTIONS.UNDO,
+      steps: [
+        {
+          instruction: null,
+          direction: UNDO_REDO_DIRECTIONS.UNDO,
+        },
+      ],
+    });
+
+    const model = buildPromptUndoDialogModel({
+      mode: UNDO_REDO_DIRECTIONS.UNDO,
+      workflowEntries: [
+        {
+          target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+          label: "Prompt 1",
+          undoCandidates: [
+            makeWorkflowCandidate(
+              "src/blocked.ts",
+              FILE_OPERATION_KINDS.MODIFIED,
+              null
+            ),
+          ],
+        },
+      ],
+    });
+    expect(model.workflowRows[0]).toMatchObject({
+      direction: UNDO_REDO_DIRECTIONS.UNDO,
+      instruction: null,
+      disabledReason: "Cannot undo",
+    });
+  });
+
+  it("keeps mixed directions as adjacent rows for one file", () => {
+    const files = aggregateWorkflowUndoFiles([
+      makeWorkflowEntry(
+        1,
+        makeWorkflowCandidate(
+          "src/mixed.ts",
+          FILE_OPERATION_KINDS.MODIFIED,
+          {
+            path: "src/mixed.ts",
+            action: UNDO_FILE_ACTIONS.REVERSE_PATCH,
+            structuredPatch: PATCH,
+          }
+        )
+      ),
+      {
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 },
+        label: "Prompt 3",
+        redoInstructions: [
+          {
+            path: "src/mixed.ts",
+            action: UNDO_FILE_ACTIONS.RESTORE_CONTENT,
+            contentToRestore: "after",
+          },
+        ],
+      },
+    ]);
+
+    expect(files).toHaveLength(2);
+    expect(files.map((file) => file.key)).toEqual([
+      "src/mixed.ts::undo",
+      "src/mixed.ts::redo",
+    ]);
+    expect(files.map((file) => file.direction)).toEqual([
+      UNDO_REDO_DIRECTIONS.UNDO,
+      UNDO_REDO_DIRECTIONS.REDO,
     ]);
   });
 });

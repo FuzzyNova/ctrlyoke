@@ -15,14 +15,16 @@ import {
 import { measurePhase } from "@utils/performanceProfiler";
 import {
   buildUndoDialogInputForPrompt,
-  computePromptUndoActions,
+  computePromptChangeSummary,
 } from "@utils/promptUndo";
 import type { CliOutput as CliOutputType } from "@/types/cliEvents";
 import { FINAL_STEP_PHASES, STEP_TYPES } from "@/types/messages";
-import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
+import {
+  OUTPUT_ROW_KINDS,
+  UNDO_DIALOG_INTENTS,
+} from "@root/types/DashboardConstants";
 import type {
-  OpenMinimapRedoDialogInput,
-  OpenMinimapUndoDialogInput,
+  OpenMinimapDialogInput,
 } from "@hooks/useOutputUndoActions";
 import type {
   OrderedHistoryEntry,
@@ -67,8 +69,7 @@ interface UseOutputMinimapModelInput {
   undoRecords: Record<string, UndoRecord>;
   uniqueStepTargets: OutputMessage["target"][];
   workspaceSnapshots: Record<number, WorkspaceSnapshot>;
-  onOpenMinimapRedoDialog: (input: OpenMinimapRedoDialogInput) => void;
-  onOpenMinimapUndoDialog: (input: OpenMinimapUndoDialogInput) => void;
+  onOpenMinimapDialog: (input: OpenMinimapDialogInput) => void;
 }
 
 function getStepName(
@@ -137,8 +138,7 @@ export function useOutputMinimapModel({
   undoRecords,
   uniqueStepTargets,
   workspaceSnapshots,
-  onOpenMinimapRedoDialog,
-  onOpenMinimapUndoDialog,
+  onOpenMinimapDialog,
 }: UseOutputMinimapModelInput) {
   const stepScrollFractions = useMemo(
     () =>
@@ -176,7 +176,7 @@ export function useOutputMinimapModel({
           }
         }
 
-        return uniqueStepTargets.flatMap((msgTarget) => {
+        return uniqueStepTargets.flatMap<MinimapStep>((msgTarget) => {
           const key = getTargetKey(msgTarget);
           const firstRowIndex = (
             anchorRowIndexByTarget ?? firstRowIndexByTarget
@@ -249,10 +249,7 @@ export function useOutputMinimapModel({
             ];
           });
 
-          const noActions: MinimapStep["undoActions"] = {
-            undo: null,
-            redo: null,
-          };
+          const noAction = null;
           const stepOutputs = stepOutputsMap.get(key) ?? [];
 
           if (!allowUndoActions) {
@@ -267,7 +264,8 @@ export function useOutputMinimapModel({
                 hidden,
                 selected,
                 hasHiddenActivity,
-                undoActions: noActions,
+                changeAction: noAction,
+                changeSummary: null,
                 diffBlocks,
               },
             ];
@@ -286,7 +284,8 @@ export function useOutputMinimapModel({
                 hidden,
                 selected,
                 hasHiddenActivity,
-                undoActions: noActions,
+                changeAction: noAction,
+                changeSummary: null,
                 diffBlocks,
               },
             ];
@@ -306,7 +305,8 @@ export function useOutputMinimapModel({
                 hidden,
                 selected,
                 hasHiddenActivity,
-                undoActions: noActions,
+                changeAction: noAction,
+                changeSummary: null,
                 diffBlocks,
               },
             ];
@@ -329,7 +329,8 @@ export function useOutputMinimapModel({
                 hidden,
                 selected,
                 hasHiddenActivity,
-                undoActions: noActions,
+                changeAction: noAction,
+                changeSummary: null,
                 diffBlocks,
               },
             ];
@@ -356,62 +357,48 @@ export function useOutputMinimapModel({
           }
 
           const workspacePath = lastOutput.workingDirectory ?? "";
-          const actions = computePromptUndoActions(
+          const summary = computePromptChangeSummary(
             stepOutputs,
             effectiveUndoRecord,
             groupForLabels ? groupSnapshot : effectiveSnapshot
           );
-
-          const undoActions: MinimapStep["undoActions"] = {
-            redo: actions.redo
+          const alreadyUndone =
+            effectiveUndoRecord != null &&
+            effectiveUndoRecord.isRedone !== true
+              ? effectiveUndoRecord.redoInstructions
+              : undefined;
+          const input = buildUndoDialogInputForPrompt(
+            undoTarget,
+            stepOutputs,
+            effectiveSnapshot,
+            workspacePath,
+            alreadyUndone
+          );
+          const changeAction: MinimapStep["changeAction"] =
+            summary.total > 0
               ? {
-                  label: actions.redo.label,
+                  label: summary.label,
                   title: groupForLabels
                     ? parallelGroupActionTooltip(
-                        actions.redo.label,
+                        summary.title,
                         parallelGroupStepCount(groupForLabels)
                       )
-                    : undefined,
+                    : summary.title,
                   onTrigger: () => {
-                    onOpenMinimapRedoDialog({
+                    onOpenMinimapDialog({
                       target: undoTarget,
-                      workspacePath,
-                      redoInstructions: effectiveUndoRecord?.redoInstructions,
-                    });
-                  },
-                }
-              : null,
-            undo: actions.undo
-              ? {
-                  label: actions.undo.label,
-                  title: groupForLabels
-                    ? parallelGroupActionTooltip(
-                        actions.undo.label,
-                        parallelGroupStepCount(groupForLabels)
-                      )
-                    : undefined,
-                  onTrigger: () => {
-                    const alreadyUndone =
-                      effectiveUndoRecord != null &&
-                      effectiveUndoRecord.isRedone !== true
-                        ? effectiveUndoRecord.redoInstructions
-                        : undefined;
-                    const input = buildUndoDialogInputForPrompt(
-                      undoTarget,
-                      stepOutputs,
-                      effectiveSnapshot,
-                      workspacePath,
-                      alreadyUndone
-                    );
-                    onOpenMinimapUndoDialog({
-                      target: undoTarget,
-                      workspacePath,
                       input,
+                      redoInstructions: alreadyUndone,
+                      intent: UNDO_DIALOG_INTENTS.VIEW,
+                      stepLabel: label,
+                      stepName: getStepName(
+                        isFinalStep ? finalStep : steps[stepIndex],
+                        label
+                      ),
                     });
                   },
                 }
-              : null,
-          };
+              : null;
 
           return [
             {
@@ -424,7 +411,8 @@ export function useOutputMinimapModel({
               hidden,
               selected,
               hasHiddenActivity,
-              undoActions,
+              changeAction,
+              changeSummary: summary,
               diffBlocks,
             },
           ];
@@ -443,8 +431,7 @@ export function useOutputMinimapModel({
     historyOutputs,
     isViewingHistory,
     lastCliIndexPerStep,
-    onOpenMinimapRedoDialog,
-    onOpenMinimapUndoDialog,
+    onOpenMinimapDialog,
     outputFontSize,
     parallelGroups,
     rowLayout,

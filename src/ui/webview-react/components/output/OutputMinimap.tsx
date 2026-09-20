@@ -14,6 +14,10 @@ import { type FinalStepPhase } from "../../types/messages";
 import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
 import { getProfilerState, logProfilerEvent } from "@utils/performanceProfiler";
 import { quantizeOutputMinimapBars } from "@utils/outputMinimapBars";
+import {
+  getPromptChangeLabelParts,
+  type PromptChangeSummary,
+} from "@utils/promptUndo";
 import { Icon } from "../shared/Icon";
 
 // ============================================================================
@@ -73,14 +77,9 @@ export interface MinimapStep {
   hidden: boolean;
   selected?: boolean;
   hasHiddenActivity: boolean;
-  /**
-   * Available undo/redo actions for this step.
-   * Both can be non-null in mixed state (some files undone, others not).
-   */
-  undoActions: {
-    undo: MinimapUndoAction | null;
-    redo: MinimapUndoAction | null;
-  };
+  /** One neutral viewer action for every step with at least one change row. */
+  changeAction: MinimapUndoAction | null;
+  changeSummary: PromptChangeSummary | null;
   /** Diff regions within this step — rendered as colored overlays on the rail. */
   diffBlocks: MinimapDiffBlock[];
 }
@@ -106,8 +105,8 @@ interface OutputMinimapProps {
  * - Renders a draggable viewport thumb (replaces the native scrollbar)
  * - Click on the rail background to jump to that scroll position
  * - Click on any marker to scroll to that step's output
- * - Hover to reveal a speech-bubble popup with step info and undo/redo actions
- *   (stacked vertically when both are available — mixed state)
+ * - Hover to reveal a speech-bubble popup with step info and one change-view
+ *   action
  * - Renders colored diff overlays for file edits (red = removed, green = added):
  *   - Collapsed diffs → 5px horizontal line, split red/green proportionally
  *   - Expanded diffs  → row-aligned bands using the live diff's rendered layout
@@ -674,17 +673,22 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
             ? `${declutteredTopsPx[stepPositionIndex]}px`
             : `clamp(3px, ${topPct}%, calc(100% - 3px))`;
         const isPinned = pinnedKey === step.key;
-        const { undo, redo } = step.undoActions;
-        const hasUndo = undo !== null;
-        const hasRedo = redo !== null;
-        const isMixed = hasUndo && hasRedo;
+        const changeAction = step.changeAction;
+        const summary = step.changeSummary;
+        const hasChanges = (summary?.total ?? 0) > 0;
+        const hasUndoable = (summary?.undoable ?? 0) > 0;
+        const hasUndone = (summary?.undone ?? 0) > 0;
+        const isMixed = hasUndoable && hasUndone;
+        const changeLabel = summary
+          ? getPromptChangeLabelParts(summary)
+          : null;
         const dotColorClass = step.selected
           ? "text-focus-border"
-          : isMixed
-            ? "text-warning-fg"
-            : hasRedo
+            : isMixed
+              ? "text-warning-fg"
+            : hasUndone
               ? "text-terminal-ansiGreen"
-              : hasUndo
+              : hasChanges
                 ? "text-link-fg"
                 : "text-description-fg";
         const hideShowLabel = `${step.hidden ? "Show" : "Hide"} ${step.kind === FINAL_STEP_PHASES.FINAL_STEP ? `final step loop ${step.stepIndex + 1}` : `step ${step.stepIndex + 1}`} output`;
@@ -741,41 +745,30 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
                     </button>
                   </div>
 
-                  {/* Redo action (shown above undo in mixed state) */}
-                  {hasRedo && redo && (
+                  {changeAction && (
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         setPinnedKey(null);
-                        redo.onTrigger();
+                        changeAction.onTrigger();
                       }}
                       style={{ touchAction: "manipulation" }}
-                      title={redo.title}
-                      aria-label="Redo workflow changes"
-                      className="flex items-center gap-1 text-xxs text-terminal-ansiGreen hover:opacity-80 transition-opacity leading-tight focus:outline-none"
-                    >
-                      <Icon name="redo" className="text-xxs" />
-                      {redo.label}
-                    </button>
-                  )}
-
-                  {/* Undo action */}
-                  {hasUndo && undo && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPinnedKey(null);
-                        undo.onTrigger();
-                      }}
-                      style={{ touchAction: "manipulation" }}
-                      title={undo.title}
-                      aria-label="Undo workflow changes"
+                      title={changeAction.title}
+                      aria-label={changeAction.label}
                       className="flex items-center gap-1 text-xxs text-link-fg hover:text-link-active-fg transition-colors leading-tight focus:outline-none"
                     >
-                      <Icon name="discard" className="text-xxs" />
-                      {undo.label}
+                      <Icon name="diff" className="text-xxs" />
+                      {changeLabel && (
+                        <>
+                          {changeLabel.main}
+                          {changeLabel.undone && (
+                            <span className="text-terminal-ansiGreen">
+                              {changeLabel.undone}
+                            </span>
+                          )}
+                        </>
+                      )}
                     </button>
                   )}
                 </div>

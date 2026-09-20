@@ -32,6 +32,7 @@ import {
   WORKTREE_MODES,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
+import { getWorkflowNameFromPath } from "@utils/workflowDisplayName";
 
 // The copy assertion covers the standalone queue branch of notifyUser().
 vi.hoisted(() => {
@@ -168,6 +169,10 @@ describe("WorkflowStatus — empty state", () => {
 
 describe("WorkflowStatus — loaded state", () => {
   beforeEach(() => {
+    useUiStore.setState({
+      pendingRunViewSwitch: null,
+      pendingRunViewRequestId: null,
+    });
     useWorkflowStore.setState({
       fileName: "/workspace/my-workflow.ctrlyoke.yaml",
       workflowName: "My Workflow",
@@ -177,6 +182,63 @@ describe("WorkflowStatus — loaded state", () => {
   it("shows workflow name", () => {
     render(<WorkflowStatus />);
     expect(screen.getByText("My Workflow")).toBeInTheDocument();
+  });
+
+  it("shows the pending switch target name while a workflow switch is in flight", () => {
+    useWorkflowStore.setState({
+      fileName: "/workspace/previous-workflow.yaml",
+      workflowName: "Previous Workflow",
+    });
+    useUiStore.setState({
+      pendingRunViewSwitch: {
+        requestId: "request-1",
+        workflowName: "Target Workflow",
+        address: {
+          workflowKey: "target-workflow" as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        },
+      },
+    });
+
+    render(<WorkflowStatus />);
+
+    expect(screen.getByText("Target Workflow")).toBeInTheDocument();
+    expect(screen.queryByText("Previous Workflow")).not.toBeInTheDocument();
+  });
+
+  it("does not start inline rename while a workflow switch is in flight", () => {
+    useUiStore.setState({
+      pendingRunViewSwitch: {
+        requestId: "request-1",
+        workflowName: "Target Workflow",
+        address: {
+          workflowKey: "target-workflow" as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        },
+      },
+    });
+
+    render(<WorkflowStatus />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Edit workflow name" })
+    );
+
+    expect(
+      screen.queryByPlaceholderText("Name your workflow...")
+    ).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["workflow.ctrlyoke.yaml", "workflow"],
+    ["workflow.ctrlyoke.yml", "workflow"],
+    ["workflow.ctrlyoke.json", "workflow"],
+    ["workflow.yaml", "workflow"],
+    ["workflow.yml", "workflow"],
+    ["workflow.json", "workflow"],
+  ])("strips supported extension from %s", (fileName, expectedName) => {
+    expect(getWorkflowNameFromPath(`/workspace/${fileName}`)).toBe(
+      expectedName
+    );
   });
 
   it("removes the external-runner chip while preserving the workflow status row", () => {

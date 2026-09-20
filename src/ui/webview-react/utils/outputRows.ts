@@ -44,8 +44,10 @@ import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import { resolveTokenTotal } from "@root/utils/TokenFormatting";
 import type { OutputMessage, OutputMessageTarget } from "./outputProjection";
 import { getTargetKey, outputMessageIdentityKey } from "./outputProjection";
-import { computePromptUndoActions } from "./promptUndo";
-import type { PromptUndoActions } from "./promptUndo";
+import {
+  computePromptChangeSummary,
+} from "./promptUndo";
+import type { PromptChangeSummary } from "./promptUndo";
 import {
   buildUndoRecordKey,
   computeOutputDiffStats,
@@ -98,18 +100,12 @@ import { resolveStepColor } from "./stepColor";
 import type { HarnessColorSettings } from "@root/types/CtrlYokeSettings";
 import type { StepColorMode } from "@root/types/DashboardConstants";
 
-export interface OutputRowPromptUndoAction {
-  label: string;
-  count: number;
-}
-
 export interface OutputRowPromptUndoMeta {
   workspacePath: string;
   workspaceSnapshot?: WorkspaceSnapshot;
   undoRecord?: UndoRecord;
   allStepOutputs: CliOutputType[];
-  undo: OutputRowPromptUndoAction | null;
-  redo: OutputRowPromptUndoAction | null;
+  summary: PromptChangeSummary;
 }
 
 export interface OutputRowDiffMeta {
@@ -1114,7 +1110,10 @@ function estimateCliHeaderHeight(
   );
   const lineHeight = Math.max(16, smFontSize * 1.4);
   const actionLines =
-    row.promptUndo && (row.promptUndo.undo || row.promptUndo.redo) ? 1 : 0;
+    row.promptUndo &&
+    row.promptUndo.summary.total > 0
+      ? 1
+      : 0;
 
   return (
     lineCount * lineHeight +
@@ -1746,7 +1745,7 @@ export function parallelGroupStepCount(
 }
 
 /**
- * Tooltip for a concurrent group's single undo/redo affordance.
+ * Tooltip for a concurrent group's single change-view affordance.
  *
  * The button keeps the ordinary `Undo N changes` label every other undo
  * surface uses — N counts files, so the group reads the same as a step — and
@@ -1776,15 +1775,12 @@ function estimateParallelGroupHeaderHeight(
     ...[parallelGroupHeaderTitle(row), parallelGroupHeaderSummaryText(row)].map(
       parallelGroupHeaderTextWidth
     ),
-    // The undo/redo labels are built with the row, so the estimate sizes the
-    // very strings the header paints; both buttons carry a leading codicon.
-    ...[row.promptUndo?.undo, row.promptUndo?.redo]
-      .filter((action) => action != null)
-      .map(
-        (action) =>
-          parallelGroupHeaderTextWidth(action.label) +
-          PARALLEL_GROUP_HEADER_ACTION_ICON_WIDTH
-      ),
+    ...(row.promptUndo && row.promptUndo.summary.total > 0
+      ? [
+          parallelGroupHeaderTextWidth(row.promptUndo.summary.label) +
+            PARALLEL_GROUP_HEADER_ACTION_ICON_WIDTH,
+        ]
+      : []),
   ];
   const chipItems = [
     PARALLEL_GROUP_HEADER_LABELS.ALL_CHIP,
@@ -2157,7 +2153,7 @@ export function buildOutputRows(
 ): BuildOutputRowsResult {
   const rows: OutputRenderRow[] = [];
   const stepOutputsMap = new Map<string, CliOutputType[]>();
-  const promptUndoActionsByTarget = new Map<string, PromptUndoActions>();
+  const promptChangeSummariesByTarget = new Map<string, PromptChangeSummary>();
   const lastCliIndexPerStep = new Map<string, number>();
   const lastAttemptRowKeyBasePerStep = new Map<string, string>();
   const uniqueTargets = new Map<string, OutputMessageTarget>();
@@ -2316,21 +2312,21 @@ export function buildOutputRows(
   // Undo actions belong to the *target*, not to the message being rendered:
   // every input here is per-target, and `stepOutputsMap` is fully populated by
   // the pass above before the row loop starts, so the answer cannot change
-  // mid-loop. `computePromptUndoActions` walks every structured event of every
+  // mid-loop. `computePromptChangeSummary` walks every structured event of every
   // attempt the target owns, so calling it per message re-derives one constant
   // answer thousands of times. Measured in the hosted dashboard on an 18-step
   // run (4 653 messages, 19 targets) that was 6 413 ms of a 6 527 ms build —
   // 98 % of it — across 4 652 calls with 19 distinct answers between them.
-  const getPromptUndoActionsForTarget = (
+  const getPromptChangeSummaryForTarget = (
     key: string,
     outputs: CliOutputType[],
     record: UndoRecord | undefined,
     snapshot: WorkspaceSnapshot | undefined
-  ): PromptUndoActions => {
-    const cached = promptUndoActionsByTarget.get(key);
+  ): PromptChangeSummary => {
+    const cached = promptChangeSummariesByTarget.get(key);
     if (cached) return cached;
-    const computed = computePromptUndoActions(outputs, record, snapshot);
-    promptUndoActionsByTarget.set(key, computed);
+    const computed = computePromptChangeSummary(outputs, record, snapshot);
+    promptChangeSummariesByTarget.set(key, computed);
     return computed;
   };
 
@@ -2526,41 +2522,39 @@ export function buildOutputRows(
       ? getConcurrentGroupForStep(input, target.index)
       : undefined;
     if (concurrentGroup && target.index === concurrentGroup.startIndex) {
-      const actions = getPromptUndoActionsForTarget(
+      const summary = getPromptChangeSummaryForTarget(
         targetKey,
         allStepOutputs,
         undoRecord,
         workspaceSnapshot
       );
-      if (actions.undo || actions.redo) {
+      if (summary.total > 0) {
         parallelGroupUndoMeta.set(concurrentGroup.id, {
           workspacePath: output.workingDirectory ?? "",
           workspaceSnapshot,
           undoRecord,
           allStepOutputs,
-          undo: actions.undo,
-          redo: actions.redo,
+          summary,
         });
       }
     }
-    const promptUndoActions =
+    const promptChangeSummary =
       canUndoAttempt && !concurrentGroup
-        ? getPromptUndoActionsForTarget(
+        ? getPromptChangeSummaryForTarget(
             targetKey,
             allStepOutputs,
             undoRecord,
             workspaceSnapshot
           )
-        : { undo: null, redo: null };
+        : undefined;
     const promptUndo =
-      promptUndoActions.undo || promptUndoActions.redo
+      promptChangeSummary && promptChangeSummary.total > 0
         ? {
             workspacePath: output.workingDirectory ?? "",
             workspaceSnapshot,
             undoRecord,
             allStepOutputs,
-            undo: promptUndoActions.undo,
-            redo: promptUndoActions.redo,
+            summary: promptChangeSummary,
           }
         : undefined;
 

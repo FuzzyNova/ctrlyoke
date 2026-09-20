@@ -18,7 +18,8 @@ function makeStep(overrides: Partial<MinimapStep> = {}): MinimapStep {
     label: "research-db",
     hidden: false,
     hasHiddenActivity: false,
-    undoActions: { undo: null, redo: null },
+    changeAction: null,
+    changeSummary: null,
     diffBlocks: [],
     ...overrides,
   };
@@ -137,26 +138,50 @@ describe("OutputMinimap marker colors", () => {
       makeStep({
         key: "queue:1",
         label: "mixed",
-        undoActions: {
-          undo: { label: "Undo", onTrigger: vi.fn() },
-          redo: { label: "Redo", onTrigger: vi.fn() },
+        changeSummary: {
+          total: 2,
+          undoable: 1,
+          undone: 1,
+          blocked: 0,
+          label: "View 2 changes (1 undone)",
+          compactLabel: "View 2",
+          title: "2 files changed · 1 undone, can be redone",
+        },
+        changeAction: {
+          label: "View 2 changes (1 undone)",
+          onTrigger: vi.fn(),
         },
       }),
       makeStep({
         key: "queue:2",
         label: "redo",
-        undoActions: {
-          undo: null,
-          redo: { label: "Redo", onTrigger: vi.fn() },
+        changeSummary: {
+          total: 1,
+          undoable: 0,
+          undone: 1,
+          blocked: 0,
+          label: "View 1 change (all undone)",
+          compactLabel: "View 1",
+          title: "1 file changed · 1 undone, can be redone",
+        },
+        changeAction: {
+          label: "View 1 change (all undone)",
+          onTrigger: vi.fn(),
         },
       }),
       makeStep({
         key: "queue:3",
         label: "undo",
-        undoActions: {
-          undo: { label: "Undo", onTrigger: vi.fn() },
-          redo: null,
+        changeSummary: {
+          total: 1,
+          undoable: 1,
+          undone: 0,
+          blocked: 0,
+          label: "View 1 change",
+          compactLabel: "View 1",
+          title: "1 file changed",
         },
+        changeAction: { label: "View 1 change", onTrigger: vi.fn() },
       }),
     ]);
 

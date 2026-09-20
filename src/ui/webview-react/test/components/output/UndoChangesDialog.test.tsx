@@ -7,17 +7,32 @@ import {
   expect,
   vi,
 } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+} from "@testing-library/react";
 import { UndoChangesDialog } from "@components/output/UndoChangesDialog";
+import { OutputSectionHeader } from "@components/layout/output-section/OutputSectionHeader";
+import { useOutputUndoActions } from "@hooks/useOutputUndoActions";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import {
   FINAL_STEP_PHASES,
+  FILE_OPERATION_KINDS,
   MESSAGE_TYPES,
+  UNDO_DIALOG_INTENTS,
+  UNDO_DIALOG_SCOPE_MODES,
+  UNDO_REDO_DIRECTIONS,
+  OUTPUT_TABS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
 import type { RunRef, WorkflowKey } from "@root/types/CtrlYokeTypes";
 import type { UndoFileCandidate, UndoFileInstruction } from "@/types/messages";
+import { useWorkflowDisplayName } from "@hooks/useWorkflowDisplayName";
 
 const { sendMessageMock } = vi.hoisted(() => ({
   sendMessageMock: vi.fn(),
@@ -123,6 +138,356 @@ describe("UndoChangesDialog", () => {
     expect(
       screen.queryByText("No file changes found for this prompt.")
     ).not.toBeInTheDocument();
+  });
+
+  it("uses intent to control initial selection and the close action", () => {
+    const instruction: UndoFileInstruction = {
+      path: "src/intent.ts",
+      action: "delete",
+    };
+    const input = {
+      scope: { mode: UNDO_DIALOG_SCOPE_MODES.PROMPT, target: queueTarget },
+      eventAttributedFiles: [
+        {
+          path: instruction.path,
+          changeType: "created" as const,
+          tier: "tier1" as const,
+          instruction,
+        },
+      ],
+      snapshotOnlyFiles: [],
+      workspacePath: "C:/dev/ctrlyoke",
+    };
+
+    const view = render(
+      <UndoChangesDialog
+        mode={UNDO_REDO_DIRECTIONS.UNDO}
+        intent={UNDO_DIALOG_INTENTS.VIEW}
+        target={queueTarget}
+        workflowKey={workflowKey}
+        runRef={runRef}
+        input={input}
+        requestId="view-intent"
+        onClose={vi.fn()}
+        stepLabel="Prompt 1"
+        stepName="Review changes"
+      />
+    );
+
+    expect(screen.getByRole("checkbox")).not.toBeChecked();
+    expect(
+      screen.getByRole("button", { name: "Undo 0 files" })
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+    view.unmount();
+
+    render(
+      <UndoChangesDialog
+        mode={UNDO_REDO_DIRECTIONS.UNDO}
+        intent={UNDO_DIALOG_INTENTS.ACT}
+        target={queueTarget}
+        workflowKey={workflowKey}
+        runRef={runRef}
+        input={input}
+        requestId="act-intent"
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("checkbox")).toBeChecked();
+    expect(
+      screen.getByRole("button", { name: "Undo 1 file" })
+    ).toBeEnabled();
+  });
+
+  it("keeps undo and redo selection exclusive and follows the active direction", () => {
+    const undoInstruction: UndoFileInstruction = {
+      path: "src/applied.ts",
+      action: "delete",
+    };
+    const redoInstruction: UndoFileInstruction = {
+      path: "src/undone.ts",
+      action: "restore-content",
+      contentToRestore: "after",
+    };
+
+    render(
+      <UndoChangesDialog
+        mode={UNDO_REDO_DIRECTIONS.UNDO}
+        intent={UNDO_DIALOG_INTENTS.VIEW}
+        target={queueTarget}
+        workflowKey={workflowKey}
+        runRef={runRef}
+        requestId="direction-exclusive"
+        onClose={vi.fn()}
+        workflowName="Workflow"
+        workflowEntries={[
+          {
+            target: queueTarget,
+            label: "Prompt 1",
+            undoCandidates: [
+              {
+                path: undoInstruction.path,
+                changeType: "created" as const,
+                tier: "tier1" as const,
+                instruction: undoInstruction,
+              },
+            ],
+            redoInstructions: [redoInstruction],
+          },
+        ]}
+      />
+    );
+
+    const undoCheckbox = screen.getByRole("checkbox", {
+      name: "Select src/applied.ts",
+    });
+    const redoCheckbox = screen.getByRole("checkbox", {
+      name: "Select src/undone.ts",
+    });
+    expect(screen.getByText("Undone")).toBeInTheDocument();
+
+    fireEvent.click(undoCheckbox);
+    expect(undoCheckbox).toBeChecked();
+    expect(
+      screen.getByRole("button", { name: "Undo 1 file" })
+    ).toBeEnabled();
+
+    fireEvent.click(redoCheckbox);
+    expect(undoCheckbox).not.toBeChecked();
+    expect(redoCheckbox).toBeChecked();
+    expect(
+      screen.getByRole("button", { name: "Redo 1 file" })
+    ).toBeEnabled();
+    expect(
+      screen.getByText("Undo and redo are applied separately.")
+    ).toBeInTheDocument();
+  });
+
+  it("uses scope titles and the supplied labels", () => {
+    const instruction: UndoFileInstruction = {
+      path: "src/title.ts",
+      action: "delete",
+    };
+    const candidate: UndoFileCandidate = {
+      path: instruction.path,
+      changeType: "created",
+      tier: "tier1",
+      instruction,
+    };
+    const input = {
+      scope: { mode: UNDO_DIALOG_SCOPE_MODES.PROMPT, target: queueTarget },
+      eventAttributedFiles: [candidate],
+      snapshotOnlyFiles: [],
+      workspacePath: "C:/dev/ctrlyoke",
+    };
+
+    const cases = [
+      {
+        expectedTitle: "Workflow changes",
+        expectedSubtitle: "Workflow title · 1 file",
+        props: {
+          workflowName: "Workflow title",
+          workflowEntries: [
+            { target: queueTarget, label: "Prompt 1", undoCandidates: [candidate] },
+          ],
+        },
+      },
+      {
+        expectedTitle: "Step changes",
+        expectedSubtitle: "Prompt 1 — Review changes · 1 file",
+        props: { input, stepLabel: "Prompt 1", stepName: "Review changes" },
+      },
+      {
+        expectedTitle: "File changes",
+        expectedSubtitle: "src/title.ts",
+        props: {
+          input: {
+            ...input,
+            scope: {
+              mode: UNDO_DIALOG_SCOPE_MODES.SINGLE_FILE,
+              target: queueTarget,
+              attemptIndex: 0,
+              path: "src/title.ts",
+            },
+          },
+        },
+      },
+    ];
+
+    for (const [index, testCase] of cases.entries()) {
+      const view = render(
+        <UndoChangesDialog
+          mode={UNDO_REDO_DIRECTIONS.UNDO}
+          target={queueTarget}
+          workflowKey={workflowKey}
+          runRef={runRef}
+          requestId={`scope-title-${index}`}
+          onClose={vi.fn()}
+          {...testCase.props}
+        />
+      );
+      expect(screen.getByRole("heading", { name: testCase.expectedTitle })).toBeInTheDocument();
+      expect(screen.getByText(testCase.expectedSubtitle)).toBeInTheDocument();
+      view.unmount();
+    }
+  });
+
+  it("uses the workflow header display name while a lineage switch is pending", () => {
+    useWorkflowStore.setState({
+      fileName: "/workspace/previous-workflow.yaml",
+      workflowName: "Previous workflow",
+    });
+    useUiStore.setState({
+      pendingRunViewSwitch: {
+        requestId: "switch-request",
+        workflowName: "Target workflow",
+        address: {
+          workflowKey: "target-workflow" as WorkflowKey,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        },
+      },
+    });
+
+    const instruction: UndoFileInstruction = {
+      path: "src/switch.ts",
+      action: "delete",
+    };
+    const DialogWithHeaderName = () => (
+      <UndoChangesDialog
+        mode={UNDO_REDO_DIRECTIONS.UNDO}
+        intent={UNDO_DIALOG_INTENTS.VIEW}
+        target={queueTarget}
+        workflowKey={workflowKey}
+        runRef={runRef}
+        requestId="switch-display-name"
+        onClose={vi.fn()}
+        workflowEntries={[
+          {
+            target: queueTarget,
+            label: "Prompt 1",
+            undoCandidates: [
+              {
+                path: instruction.path,
+                changeType: "created" as const,
+                tier: "tier1" as const,
+                instruction,
+              },
+            ],
+          },
+        ]}
+        workflowName={useWorkflowDisplayName()}
+      />
+    );
+
+    render(<DialogWithHeaderName />);
+    expect(screen.getByText("Target workflow · 1 file")).toBeInTheDocument();
+    expect(screen.queryByText("Previous workflow")).not.toBeInTheDocument();
+  });
+
+  it("keeps blocked-only changes visible and keeps the header count equal to dialog rows", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef,
+      },
+      pendingRunViewSwitch: null,
+    });
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
+    const { result } = renderHook(() =>
+      useOutputUndoActions({
+        allMessages: [
+          {
+            type: "cli",
+            target,
+            timestamp: 1,
+            data: { isStreaming: false },
+          } as never,
+        ],
+        allowUndoActions: true,
+        finalStepWorkspaceSnapshots: {},
+        historyOutputs: null,
+        isViewingHistory: false,
+        lastCliIndexPerStep: new Map([["queue:0", 0]]),
+        stepOutputsMap: new Map([["queue:0", []]]),
+        undoRecords: {},
+        uniqueStepTargets: [target],
+        workspaceSnapshots: {
+          0: {
+            capturedAt: 1,
+            strategy: "filesystem",
+            changedFiles: ["one", "two", "three"].map((name) => ({
+              path: `src/${name}.ts`,
+              changeType: FILE_OPERATION_KINDS.MODIFIED,
+            })),
+          },
+        },
+      })
+    );
+
+    act(() => result.current.handleWorkflowView());
+    const workflowDialogState = result.current.workflowDialogState;
+    if (!workflowDialogState) throw new Error("workflow dialog did not open");
+
+    render(
+      <>
+        <OutputSectionHeader
+          activeOutputTab={OUTPUT_TABS.OUTPUT}
+          activeTerminalSession={null}
+          anyDiffCollapsed={false}
+          hasOutput
+          hiddenOutputCount={0}
+          isFindOpen={false}
+          isExecutionActive={false}
+          isFullscreen={false}
+          isHeaderNarrow={false}
+          isHeaderVeryNarrow={false}
+          isTerminalCompact={false}
+          refCallback={vi.fn()}
+          showTerminalTab={false}
+          terminalCanCloseActiveSession={false}
+          terminalExecutionRunLabel={null}
+          terminalFontSize={14}
+          terminalSessionActive={false}
+          useCompactLabels={false}
+          workflowChangeSummary={result.current.workflowChangeSummary}
+          onCollapseAllDiffs={vi.fn()}
+          onExpandAllDiffs={vi.fn()}
+          onExport={vi.fn()}
+          onToggleFind={vi.fn()}
+          onClearHiddenOutputTargets={vi.fn()}
+          onNewTerminal={vi.fn()}
+          onSelectOutputTab={vi.fn()}
+          onSelectTerminalTab={vi.fn()}
+          onToggleFullscreen={vi.fn()}
+          onTerminalFontSizeChange={vi.fn()}
+          onTerminalSessionClose={vi.fn()}
+          onToggleCollapse={vi.fn()}
+          onWorkflowView={vi.fn()}
+          outputFontSize={14}
+          onOutputFontSizeChange={vi.fn()}
+        />
+        <UndoChangesDialog
+          mode={workflowDialogState.mode}
+          intent={workflowDialogState.intent}
+          target={workflowDialogState.entries[0]!.target}
+          workflowKey={workflowDialogState.address.workflowKey}
+          runRef={workflowDialogState.address.runRef}
+          requestId={workflowDialogState.requestId}
+          onClose={vi.fn()}
+          workflowEntries={workflowDialogState.entries}
+          workflowName={workflowDialogState.workflowName}
+        />
+      </>
+    );
+
+    const rowCount = screen.getAllByText("Cannot undo").length;
+    expect(
+      screen.getByRole("button", { name: "View 3 changes" })
+    ).toBeInTheDocument();
+    expect(result.current.workflowChangeSummary.total).toBe(rowCount);
+    expect(rowCount).toBe(3);
   });
 
   it("applies versioned Expand all and Collapse all commands to dialog diffs", () => {
@@ -300,7 +665,7 @@ describe("UndoChangesDialog", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Undo Selected (1)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Undo 1 file" }));
     expect(sendMessageMock).toHaveBeenCalledWith(
       MESSAGE_TYPES.UNDO_PROMPT_CHANGES,
       {
@@ -380,7 +745,7 @@ describe("UndoChangesDialog", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Redo Selected (1)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Redo 1 file" }));
     expect(sendMessageMock).toHaveBeenCalledWith(
       MESSAGE_TYPES.REDO_PROMPT_CHANGES,
       {
@@ -433,7 +798,7 @@ describe("UndoChangesDialog", () => {
         onClose={vi.fn()}
       />
     );
-    fireEvent.click(screen.getByRole("button", { name: "Undo Selected (1)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Undo 1 file" }));
     expect(sendMessageMock).toHaveBeenCalledWith(
       MESSAGE_TYPES.UNDO_WORKFLOW_CHANGES,
       {
@@ -460,7 +825,7 @@ describe("UndoChangesDialog", () => {
         onClose={vi.fn()}
       />
     );
-    fireEvent.click(screen.getByRole("button", { name: "Redo Selected (1)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Redo 1 file" }));
     expect(sendMessageMock).toHaveBeenCalledWith(
       MESSAGE_TYPES.REDO_WORKFLOW_CHANGES,
       {
@@ -515,7 +880,7 @@ describe("UndoChangesDialog", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Select all" }));
     fireEvent.click(
-      screen.getByRole("button", { name: "Undo Selected (100)" })
+      screen.getByRole("button", { name: "Undo 100 files" })
     );
 
     const message = sendMessageMock.mock.calls[0]?.[1] as {
@@ -552,7 +917,7 @@ describe("UndoChangesDialog", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Redo Selected (3)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Redo 3 files" }));
     const message = sendMessageMock.mock.calls[0]?.[1] as {
       data: { entries: Array<{ target: { stepIndex: number } }> };
     };
@@ -651,7 +1016,7 @@ describe("UndoChangesDialog", () => {
     expect(screen.getAllByLabelText("src/shared.ts")).toHaveLength(1);
     expect(screen.getByText("Prompt 1, Prompt 3")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Undo Selected (1)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Undo 1 file" }));
     expect(sendMessageMock).toHaveBeenCalledWith(
       MESSAGE_TYPES.UNDO_WORKFLOW_CHANGES,
       {
