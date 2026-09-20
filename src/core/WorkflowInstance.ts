@@ -1813,6 +1813,7 @@ export class WorkflowInstance {
     | "captureOutputInit"
     | "captureChunk"
     | "captureEvents"
+    | "captureContextWindow"
     | "getBufferedOutput"
     | "captureCompletedOutput"
     | "captureFinalStepOutputInit"
@@ -1859,6 +1860,9 @@ export class WorkflowInstance {
       },
       captureEvents: (stepIndex, events) => {
         this.outputCaptureBuffer.captureEvents(stepIndex, events);
+      },
+      captureContextWindow: (stepIndex, used, size) => {
+        this.outputCaptureBuffer.captureContextWindow(stepIndex, used, size);
       },
       getBufferedOutput: (stepIndex) => {
         return this.outputCaptureBuffer.getBufferedOutput(stepIndex);

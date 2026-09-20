@@ -132,6 +132,18 @@ export class OutputCaptureBuffer {
     StatusMessageEntry[]
   >();
 
+  /**
+   * Latest live context-window reading for a queue step still streaming.
+   * Never persisted (see `PromptQueue.stripHistoryOnlyRuntimeFieldsForUndoRedo`)
+   * — this is the only place a switch back to this workflow mid-step can learn
+   * the running step's current usage without waiting for the harness's next
+   * update.
+   */
+  private readonly contextWindowBuffer = new Map<
+    number,
+    { used: number; size: number }
+  >();
+
   constructor(
     private readonly instanceTag: string,
     private readonly callbacks: OutputCaptureCallbacks
@@ -151,6 +163,7 @@ export class OutputCaptureBuffer {
     this.finalStepOutputBuffer.clear();
     this.finalStepCompletedOutputs.clear();
     this.finalStepStatusMessages.clear();
+    this.contextWindowBuffer.clear();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -239,6 +252,11 @@ export class OutputCaptureBuffer {
     }
   }
 
+  /** Always-on live context-window capture — enables gauge replay on workflow switch. */
+  captureContextWindow(stepIndex: number, used: number, size: number): void {
+    this.contextWindowBuffer.set(stepIndex, { used, size });
+  }
+
   captureCompletedOutput(stepIndex: number, output: any): void {
     const existing = this.completedStepOutputs.get(stepIndex);
     const attemptIndex = output.attemptIndex ?? 0;
@@ -260,8 +278,10 @@ export class OutputCaptureBuffer {
     Log.trace(
       `${this.instanceTag} captureCompletedOutput: step ${stepIndex} attempt ${attemptIndex}, total outputs=${this.completedStepOutputs.get(stepIndex)!.outputs.length}, retryState=${JSON.stringify(this.completedStepOutputs.get(stepIndex)!.retryState ?? null)}`
     );
-    // Step is no longer streaming
+    // Step is no longer streaming. The completed CLI output's own tokens are
+    // the durable source for this step's context-window stat from here on.
     this.stepOutputBuffer.delete(stepIndex);
+    this.contextWindowBuffer.delete(stepIndex);
     // Fire prompt-complete event so standalone CLI can render per-step stats.
     this.callbacks.onPromptComplete({
       stepIndex,
@@ -535,6 +555,17 @@ export class OutputCaptureBuffer {
             buffer.accumulatedEvents,
             buffer.attemptIndex,
             buffer.runIndex
+          );
+        }
+        // Replay the last known live context-window reading so the running
+        // step's gauge is populated immediately, rather than staying empty
+        // until the harness happens to report its next update.
+        const contextWindow = this.contextWindowBuffer.get(stepIndex);
+        if (contextWindow) {
+          dashboardSink.updateContextWindow(
+            stepIndex,
+            contextWindow.used,
+            contextWindow.size
           );
         }
       }

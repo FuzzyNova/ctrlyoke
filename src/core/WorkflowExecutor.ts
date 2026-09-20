@@ -257,6 +257,13 @@ export interface WorkflowExecutionContext {
   ) => void;
   /** Always-on structured event buffer for queue steps — enables replay on workflow switch. */
   captureEvents?: (stepIndex: number, events: CliEvent[]) => void;
+  /**
+   * Always-on live context-window buffer for queue steps — enables the
+   * running-step gauge to be replayed immediately on workflow switch instead
+   * of waiting for the harness's next update (which may be seconds/minutes
+   * away, or never arrive again if the step finishes clean).
+   */
+  captureContextWindow?: (stepIndex: number, used: number, size: number) => void;
   /** Snapshot of in-flight queue output already sent to the dashboard. */
   getBufferedOutput?: (stepIndex: number) => CliOutput | undefined;
   /** Mirror of captureOutputInit for finalStep loops, keyed by loopIndex. */
@@ -4117,6 +4124,7 @@ export class WorkflowExecutor {
           target.kind === FINAL_STEP_PHASES.QUEUE &&
           signedStepIndex !== undefined
         ) {
+          context.captureContextWindow?.(signedStepIndex, used, size);
           context.dashboardProvider?.updateContextWindow(
             signedStepIndex,
             used,

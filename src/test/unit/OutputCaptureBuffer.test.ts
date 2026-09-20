@@ -274,6 +274,99 @@ suite("OutputCaptureBuffer", () => {
     });
   });
 
+  suite("captureContextWindow", () => {
+    test("should replay the latest reading alongside the streaming buffer", () => {
+      const { callbacks } = makeCallbacks();
+      const buffer = new OutputCaptureBuffer("tag", callbacks);
+
+      buffer.captureOutputInit(
+        0,
+        "prompt",
+        undefined,
+        undefined,
+        undefined,
+        100,
+        0,
+        false
+      );
+      buffer.captureContextWindow(0, 1000, 200000);
+      buffer.captureContextWindow(0, 1500, 200000);
+
+      const { sink, calls } = makeDashboardSink();
+      buffer.replayTo(
+        sink,
+        { status: EXECUTION_STATES.RUNNING, currentIndex: 0 },
+        null,
+        "tag"
+      );
+      const contextWindowCalls = calls.filter(
+        (c) => c.method === "updateContextWindow"
+      );
+      assert.strictEqual(contextWindowCalls.length, 1);
+      assert.deepStrictEqual(contextWindowCalls[0].args, [0, 1500, 200000]);
+    });
+
+    test("should not replay a reading for a step that already completed", () => {
+      const { callbacks } = makeCallbacks();
+      const buffer = new OutputCaptureBuffer("tag", callbacks);
+
+      buffer.captureOutputInit(
+        0,
+        "prompt",
+        undefined,
+        undefined,
+        undefined,
+        100,
+        0,
+        false
+      );
+      buffer.captureContextWindow(0, 1000, 200000);
+      buffer.captureCompletedOutput(0, { response: "done" });
+
+      const { sink, calls } = makeDashboardSink();
+      buffer.replayTo(
+        sink,
+        { status: EXECUTION_STATES.RUNNING, currentIndex: 0 },
+        null,
+        "tag"
+      );
+      assert.strictEqual(
+        calls.some((c) => c.method === "updateContextWindow"),
+        false
+      );
+    });
+
+    test("should not replay a reading once cleared", () => {
+      const { callbacks } = makeCallbacks();
+      const buffer = new OutputCaptureBuffer("tag", callbacks);
+
+      buffer.captureOutputInit(
+        0,
+        "prompt",
+        undefined,
+        undefined,
+        undefined,
+        100,
+        0,
+        false
+      );
+      buffer.captureContextWindow(0, 1000, 200000);
+      buffer.clear();
+
+      const { sink, calls } = makeDashboardSink();
+      buffer.replayTo(
+        sink,
+        { status: EXECUTION_STATES.RUNNING, currentIndex: 0 },
+        null,
+        "tag"
+      );
+      assert.strictEqual(
+        calls.some((c) => c.method === "updateContextWindow"),
+        false
+      );
+    });
+  });
+
   suite("getBufferedOutput", () => {
     test("should materialize in-flight output for stop persistence", () => {
       const { callbacks } = makeCallbacks();
