@@ -4,6 +4,7 @@ import type { ComponentProps } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { ScriptCommandEditor } from "@components/shared/ScriptCommandEditor";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
+import { latestPostedMessage } from "../../fixtures/completionRequests";
 
 function renderEditor(
   props: Partial<ComponentProps<typeof ScriptCommandEditor>> = {}
@@ -92,12 +93,10 @@ describe("ScriptCommandEditor", () => {
       ).toBe(true);
     });
 
-    const request = postMessage.mock.calls.find(
-      ([message]) => message.type === MESSAGE_TYPES.SCRIPT_COMPLETIONS_REQUEST
-    )?.[0];
-    if (!request || typeof request.seq !== "number") {
-      throw new Error("Script completion request was not posted");
-    }
+    const request = latestPostedMessage<{ type: string; seq: number }>(
+      postMessage,
+      (message) => message.type === MESSAGE_TYPES.SCRIPT_COMPLETIONS_REQUEST
+    );
 
     fireEvent(
       window,

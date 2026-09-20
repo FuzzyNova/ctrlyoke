@@ -4,6 +4,7 @@ import type { ComponentProps } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { AdditionalArgsEditor } from "@components/shared/AdditionalArgsEditor";
 import { HARNESS_IDS, MESSAGE_TYPES } from "@root/types/DashboardConstants";
+import { latestPostedMessage } from "../../fixtures/completionRequests";
 
 function renderEditor(
   props: Partial<ComponentProps<typeof AdditionalArgsEditor>> = {}
@@ -73,14 +74,16 @@ describe("AdditionalArgsEditor", () => {
         )
       ).toBe(true);
     });
-    const request = postMessage.mock.calls.find(
-      ([message]) =>
+    const request = latestPostedMessage<{
+      type: string;
+      text: string;
+      seq: number;
+    }>(
+      postMessage,
+      (message) =>
         message.type === MESSAGE_TYPES.HARNESS_FLAG_COMPLETIONS_REQUEST &&
         message.text === "--r"
-    )?.[0];
-    if (!request || typeof request.seq !== "number") {
-      throw new Error("Harness flag completion request was not posted");
-    }
+    );
 
     fireEvent(
       window,
@@ -166,14 +169,16 @@ describe("AdditionalArgsEditor", () => {
         )
       ).toBe(true);
     });
-    const request = postMessage.mock.calls.find(
-      ([message]) =>
+    const request = latestPostedMessage<{
+      type: string;
+      text: string;
+      seq: number;
+    }>(
+      postMessage,
+      (message) =>
         message.type === MESSAGE_TYPES.HARNESS_FLAG_COMPLETIONS_REQUEST &&
         message.text === "--reasoning-effort "
-    )?.[0];
-    if (!request || typeof request.seq !== "number") {
-      throw new Error("Harness flag completion request was not posted");
-    }
+    );
 
     fireEvent(
       window,
