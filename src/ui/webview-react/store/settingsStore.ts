@@ -167,17 +167,12 @@ export interface WorkflowProperties {
   mcpServers?: (string | object)[] | null;
   hooks?: UserHookConfig[] | null;
   errorBehavior?: ErrorBehavior | null;
-  endCondition?: {
-    script?: string; // Made optional - fields can be set incrementally
-    env?: Record<string, string>;
-    returns?: string;
-    timeout?: number;
-    maxRetries?: number;
-    retryPrompt?: string;
-    passRetryPrompt?: string;
-    onPass?: string;
-    onFail?: string;
-  } | null;
+  // Both conditions use the canonical shapes. This one used to be an inline
+  // copy and had drifted badly: it still carried the removed `returns` field
+  // and knew nothing about the comparison set (`compareSource`, `operator`,
+  // `expected`, `ignoreCase`, `shell`), so every one of those was untypeable
+  // at the call sites that write them.
+  endCondition?: EndCondition | null;
   preCondition?: PreCondition | null;
   priorContext?: PriorContext;
   additionalArgs?: string | null;

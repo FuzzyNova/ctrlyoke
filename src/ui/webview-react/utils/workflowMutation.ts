@@ -12,7 +12,8 @@ interface MessageTarget {
 
 /** Stable address and optimistic revisions for generic definition mutations. */
 export function getWorkflowDefinitionMutation():
-  WorkflowDefinitionMutation | undefined {
+  | WorkflowDefinitionMutation
+  | undefined {
   const state = useUiStore.getState();
   if (
     !state.displayedViewAddress ||
@@ -26,6 +27,24 @@ export function getWorkflowDefinitionMutation():
     expectedDefinitionRevision: state.displayedDefinitionRevision,
     expectedDescriptorRevision: state.displayedDescriptorRevision,
   };
+}
+
+/**
+ * The keys a workflow-property patch is asking to delete.
+ *
+ * `undefined` is how a patch says "remove this property", and `JSON.stringify`
+ * drops exactly those members on the way to the extension — so the intent has
+ * to travel as an explicit key list beside the patch (see
+ * `utils/WorkflowPropertyPatch.ts`, which re-materializes it on arrival).
+ * Passing an undo snapshot here yields the keys the restored state did not
+ * have, because a snapshot is the full normalized property set.
+ */
+export function clearedWorkflowPropertyKeys(
+  properties: Record<string, unknown>
+): string[] {
+  return Object.entries(properties)
+    .filter(([, value]) => value === undefined)
+    .map(([key]) => key);
 }
 
 /** Attach the shared mutation context for controls that post directly to VS Code. */

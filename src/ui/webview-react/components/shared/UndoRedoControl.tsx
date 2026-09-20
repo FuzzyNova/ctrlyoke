@@ -5,14 +5,12 @@ import {
   useWorkflowTemporalStore,
 } from "@store/workflowStore";
 import type { UndoableWorkflowState, WorkflowStep } from "@store/workflowStore";
-import { useSettingsStore } from "@store/settingsStore";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import {
   mergeRuntimeForUndoRedo,
   rememberUndoRedoRuntime,
 } from "@hooks/useUndoRedoKeyHandler";
-import { MESSAGE_TYPES } from "../../types/messages";
 import { formatShortcut } from "@utils/platform";
 import { STEP_STATUS } from "../../types/messages";
 import {
@@ -21,7 +19,7 @@ import {
   type UndoRedoDirection,
 } from "@root/types/DashboardConstants";
 import { HEADER_BUTTON_SIZES } from "@/constants";
-import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
+import { postUndoRedoSync } from "../../utils/undoRedoSync";
 import { Icon } from "./Icon";
 
 interface UndoRedoControlProps {
@@ -371,23 +369,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
   }, [isOpen]);
 
   const syncToVsCode = useCallback(() => {
-    const ws = useWorkflowStore.getState();
-    const workflowProperties = ws.undoWorkflowProperties;
-    // Sync workflowProperties back to settingsStore so the UI reflects the restored state
-    useSettingsStore.getState().setWorkflowProperties(workflowProperties);
-    postWorkflowDefinitionMutation(vscode, {
-      type: MESSAGE_TYPES.UNDO_REDO_SYNC,
-      steps: ws.steps,
-      parallelGroups: ws.parallelGroups,
-      finalStep: ws.finalStep,
-      workflowProperties,
-      // workflowName is zundo-tracked (partialize/equality/describeChange all
-      // cover it) so Undo/Redo shows it as restorable, but nothing previously
-      // sent the reverted name back to the server — the persisted definition
-      // never actually changed, so the next resync silently overwrote the
-      // local revert back to the un-reverted name.
-      workflowName: ws.workflowName,
-    });
+    postUndoRedoSync(vscode);
   }, [vscode]);
 
   const normalizeAfterHistoryAction = useCallback(

@@ -597,7 +597,8 @@ export interface DevBuildCompletedMessage {
 export interface DevRestartingMessage {
   type: typeof MESSAGE_TYPES.DEV_RESTARTING;
   command:
-    "workbench.action.reloadWindow" | "workbench.action.restartExtensionHost";
+    | "workbench.action.reloadWindow"
+    | "workbench.action.restartExtensionHost";
 }
 
 export interface DevCommandUnavailableMessage {
@@ -2147,6 +2148,12 @@ export interface UndoRedoSyncMessage {
   parallelGroups?: ParallelGroupDefinition[];
   finalStep: WorkflowStep | null;
   workflowProperties: Record<string, unknown>;
+  /**
+   * Property keys the restored snapshot does not have. JSON drops `undefined`
+   * members, so this is the only way an undo can ask for a property to be
+   * removed rather than overwritten — see `utils/WorkflowPropertyPatch.ts`.
+   */
+  clearedWorkflowProperties?: string[];
   workflowName?: string;
   mutation?: WorkflowDefinitionMutation;
 }

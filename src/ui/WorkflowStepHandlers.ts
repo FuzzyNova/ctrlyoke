@@ -2,7 +2,9 @@ import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import {
   MESSAGE_TYPES,
   USER_FEEDBACK_SEVERITY,
+  WORKFLOW_PROPERTY_KEYS,
   WORKFLOW_VIEW_ADDRESS_KIND,
+  type WorkflowPropertyKey,
 } from "../types/DashboardConstants";
 import type {
   AppendAndContinueRunMessage,
@@ -21,6 +23,7 @@ import type {
 } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
+import { restoreClearedWorkflowProperties } from "../utils/WorkflowPropertyPatch";
 import type { WebviewClientContext } from "./WebviewClientContext";
 import type { WebviewSettingsSync } from "./WebviewSettingsSync";
 import type { WorkflowMutationCoordinator } from "./WorkflowMutationCoordinator";
@@ -341,7 +344,10 @@ export class WorkflowStepHandlers {
     const createdWorkingFile =
       await this.settingsSync.handleUpdateWorkflowProperties(
         this.mutationCoordinator.asWorkflowDefinitionMutation(message),
-        message.properties,
+        restoreClearedWorkflowProperties(
+          message.properties,
+          message.clearedProperties
+        ),
         ctx.postMessage,
         ctx.clientId
       );
@@ -418,28 +424,33 @@ export class WorkflowStepHandlers {
       }
     }
     if ("workflowProperties" in message) {
-      const raw = {
-        harness: message.workflowProperties?.harness,
-        model: message.workflowProperties?.model,
-        executionMode: message.workflowProperties?.executionMode,
-        agent: message.workflowProperties?.agent,
-        skills: message.workflowProperties?.skills,
-        resumeSession: message.workflowProperties?.resumeSession,
-        sessionId: message.workflowProperties?.sessionId,
-        mcpServers: message.workflowProperties?.mcpServers,
-        hooks: message.workflowProperties?.hooks,
-        endCondition: message.workflowProperties?.endCondition,
-        preCondition: message.workflowProperties?.preCondition,
-        priorContext: message.workflowProperties?.priorContext,
-        additionalArgs: message.workflowProperties?.additionalArgs,
-        toolPermissions: message.workflowProperties?.toolPermissions,
-      };
-      // Strip undefined values: undo restores known state but should not delete
-      // properties the undo snapshot predates (e.g. toolPermissions seeded after
-      // snapshot capture). Passing undefined would trigger allowDeletes and wipe
-      // the live working file value, causing inject-mode mismatches on the next step.
-      const workflowProperties = Object.fromEntries(
-        Object.entries(raw).filter(([, v]) => v !== undefined)
+      const snapshot = (message.workflowProperties ?? {}) as Record<
+        string,
+        unknown
+      >;
+      // Project through WORKFLOW_PROPERTY_KEYS rather than a list maintained
+      // here. This used to be a hand-written copy of fourteen keys, so every
+      // property it had never heard of — `secrets`, `vars`, `errorBehavior`,
+      // `worktree`, `trustedExternalRoots` — was undoable on screen and never
+      // written back, and each property added since inherited the same silent
+      // gap by default.
+      const restored = Object.fromEntries(
+        WORKFLOW_PROPERTY_KEYS.map((key) => [key, snapshot[key]]).filter(
+          ([, value]) => value !== undefined
+        )
+      );
+      // An undo snapshot is the complete normalized property set, so the keys
+      // the client reports as cleared are the ones the restored state did not
+      // have and must be deleted from the working file. Ignoring them (as this
+      // handler did while it simply stripped every undefined) left undo unable
+      // to take a property back off a workflow at all: every "set X, then undo"
+      // reverted on screen while the file kept X.
+      const workflowProperties = restoreClearedWorkflowProperties(
+        restored,
+        (message.clearedWorkflowProperties as string[] | undefined)?.filter(
+          (key): key is WorkflowPropertyKey =>
+            (WORKFLOW_PROPERTY_KEYS as readonly string[]).includes(key)
+        )
       );
       if (Object.keys(workflowProperties).length > 0) {
         // `syncStepsForUndoRedo`'s static-path write(s) above already advanced

@@ -88,7 +88,10 @@ import {
 } from "../../../../types/DashboardConstants";
 import { getAutoResumePreview } from "../../utils/autoResumePreview";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
-import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
+import {
+  clearedWorkflowPropertyKeys,
+  postWorkflowDefinitionMutation,
+} from "../../utils/workflowMutation";
 import {
   agentWarning,
   modelWarning,
@@ -751,6 +754,11 @@ const WorkflowPropertiesPanelInner: React.FC<{
       postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTIES,
         properties: updates,
+        // JSON drops `undefined` members, so a patch that only clears
+        // properties would arrive empty and be skipped outright — which is how
+        // moving Trusted External Roots back to "Inherit" used to persist
+        // nothing at all.
+        clearedProperties: clearedWorkflowPropertyKeys(updates),
       });
     },
     [vscode]
@@ -2161,7 +2169,9 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       variant={PROMPT_PROPERTIES.PRE_CONDITION}
                       value={
                         effectivePreCondition as
-                          ScriptConditionValue | null | undefined
+                          | ScriptConditionValue
+                          | null
+                          | undefined
                       }
                       onChange={handlePreConditionChange}
                       narrow={isNarrow}
@@ -2218,7 +2228,9 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       variant={PROMPT_PROPERTIES.END_CONDITION}
                       value={
                         effectiveEndCondition as
-                          ScriptConditionValue | null | undefined
+                          | ScriptConditionValue
+                          | null
+                          | undefined
                       }
                       onChange={handleEndConditionChange}
                       narrow={isNarrow}

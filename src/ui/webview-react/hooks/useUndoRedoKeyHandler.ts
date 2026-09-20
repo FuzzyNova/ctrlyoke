@@ -1,15 +1,13 @@
 import { useEffect } from "react";
 import { useWorkflowStore, type WorkflowStep } from "../store/workflowStore";
-import { useSettingsStore } from "../store/settingsStore";
 import { WebviewLog } from "@utils/logger";
 import {
-  MESSAGE_TYPES,
   PROMPT_TERMINAL_STATUS,
   STEP_STATUS,
   type StepStatus,
 } from "../types/messages";
 import { getVsCodeApi } from "./useVsCodeApi";
-import { postWorkflowDefinitionMutation } from "../utils/workflowMutation";
+import { postUndoRedoSync } from "../utils/undoRedoSync";
 
 type RuntimeDecoratedStep = WorkflowStep & {
   status?: StepStatus;
@@ -233,16 +231,8 @@ export function useUndoRedoKeyHandler() {
       });
       useWorkflowStore.temporal.getState().resume();
 
-      const workflowProperties = ws.undoWorkflowProperties;
-      // Sync workflowProperties back to settingsStore so UI reflects the restored state
-      useSettingsStore.getState().setWorkflowProperties(workflowProperties);
-      postWorkflowDefinitionMutation(getVsCodeApi(), {
-        type: MESSAGE_TYPES.UNDO_REDO_SYNC,
-        steps: mergedSteps,
-        parallelGroups: ws.parallelGroups,
-        finalStep: ws.finalStep,
-        workflowProperties,
-      });
+      // Shared with UndoRedoControl's buttons so the two cannot drift again.
+      postUndoRedoSync(getVsCodeApi());
     };
 
     window.addEventListener("keydown", handler, { capture: true });
