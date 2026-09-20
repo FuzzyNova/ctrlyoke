@@ -21,6 +21,7 @@ import type {
   WorkflowKey,
 } from "../../../../types/CtrlYokeTypes";
 import type { WorkflowRunManifest } from "../../../../types/WorkflowTimelineTypes";
+import { renameWithTransientRetry } from "../../../../utils/AtomicFileUtils";
 import { withFileLock } from "../../../../utils/FileLockUtils";
 import {
   assertValidRunRef,
@@ -1018,7 +1019,7 @@ export class LifetimeUsageStore {
     const tempPath = `${this.filePath}.${process.pid}.${Date.now()}.tmp`;
     try {
       await fs.writeFile(tempPath, JSON.stringify(data, null, 2), "utf8");
-      await fs.rename(tempPath, this.filePath);
+      await renameWithTransientRetry(tempPath, this.filePath);
     } catch (error) {
       await fs.rm(tempPath, { force: true }).catch(() => undefined);
       throw error;

@@ -20,6 +20,7 @@ import type {
   WorkflowKey,
   WorkflowTokenTotals,
 } from "../../../../types/CtrlYokeTypes";
+import { renameWithTransientRetry } from "../../../../utils/AtomicFileUtils";
 import { withFileLock } from "../../../../utils/FileLockUtils";
 import { getFrozenRunHistoryLocation } from "../../../../utils/RunHistoryStoragePolicy";
 import { userProjectsRoot } from "../../../../utils/ProjectStatePaths";
@@ -634,7 +635,7 @@ export class ObservedHarnessUsageStore {
     const tempPath = `${this.filePath}.${process.pid}.${Date.now()}.tmp`;
     try {
       await fs.writeFile(tempPath, JSON.stringify(data, null, 2), "utf8");
-      await fs.rename(tempPath, this.filePath);
+      await renameWithTransientRetry(tempPath, this.filePath);
     } catch (error) {
       await fs.rm(tempPath, { force: true }).catch(() => undefined);
       throw error;

@@ -293,6 +293,66 @@ suite("HarnessUsageService", () => {
     );
   });
 
+  test("persists a snapshot even while a reader holds the destination open", async () => {
+    // The regression this pins: persistence replaced the snapshot file with a
+    // bare `fs.rename`, which on Windows is MoveFileEx(REPLACE_EXISTING) and
+    // fails EPERM whenever any other handle on the destination disallows the
+    // delete. `persistProviderSnapshots` swallows its errors, so the write was
+    // simply lost. A reader is not hypothetical — the poll in
+    // `waitForPersistedSnapshot` below is one, which is why the sibling test
+    // above failed only under a loaded `npm test` and passed in isolation.
+    const filePath = providerSnapshotsPath();
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    // Must be a *valid* payload. A malformed one is quarantined on load —
+    // renamed out of the way — which removes the destination the write would
+    // otherwise have had to replace, and with it the collision under test.
+    await fs.writeFile(
+      filePath,
+      JSON.stringify({
+        schemaVersion: 1,
+        snapshots: {
+          [HARNESS_IDS.CLAUDE_CLI]: {
+            harnessId: HARNESS_IDS.CLAUDE_CLI,
+            source: HARNESS_QUOTA_SOURCES.PROVIDER_LIVE,
+            fetchedAt: 500_000_000_000,
+            staleAfterMs: 300_000,
+            windows: [],
+          },
+        },
+      }),
+      "utf8"
+    );
+
+    // Held across the persist, then released well inside the retry budget
+    // (DEFAULT_RENAME_BUDGET_MS, 500ms) so a correct implementation recovers.
+    const reader = await fs.open(filePath, "r");
+    const released = new Promise<void>((resolve) =>
+      setTimeout(() => void reader.close().then(resolve), 100)
+    );
+
+    const service = new HarnessUsageService(
+      workspaceRoot,
+      [new LiveProvider()],
+      undefined,
+      undefined,
+      () => 1_000
+    );
+    await service.initialize();
+    service.ingestProviderUsage(await new LiveProvider().refreshUsage());
+    await released;
+
+    const persisted = await waitForPersistedSnapshot(
+      filePath,
+      HARNESS_IDS.CLAUDE_CLI,
+      1_000_000_000_000
+    );
+    assert.strictEqual(
+      persisted.snapshots[HARNESS_IDS.CLAUDE_CLI]?.fetchedAt,
+      1_000_000_000_000,
+      "a transient sharing failure must be retried, not dropped"
+    );
+  });
+
   test("cancels an in-flight provider probe on disposal", async () => {
     // Providers can own a short-lived subprocess, so host teardown has to be
     // able to cancel one rather than let it outlive the extension.

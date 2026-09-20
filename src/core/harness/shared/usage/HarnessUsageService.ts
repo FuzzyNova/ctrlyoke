@@ -18,7 +18,10 @@ import {
   defaultStaleAfterMs,
   isHarnessQuotaStale,
 } from "../../../../types/UsageTypes";
+import { renameWithTransientRetry } from "../../../../utils/AtomicFileUtils";
+import { getErrorMessage } from "../../../../utils/ErrorUtils";
 import { withFileLock } from "../../../../utils/FileLockUtils";
+import { Log } from "../../../../utils/Log";
 import { providerSnapshotsPath } from "../../../../utils/UsagePaths";
 import { normalizeUsageTimestamp } from "./UsageTimestampUtils";
 import { ObservedHarnessUsageStore } from "./ObservedHarnessUsageStore";
@@ -490,15 +493,20 @@ export class HarnessUsageService {
             mode: 0o600,
           });
           await fs.chmod(tempPath, 0o600);
-          await fs.rename(tempPath, this.providerSnapshotsFile);
+          await renameWithTransientRetry(tempPath, this.providerSnapshotsFile);
           await fs.chmod(this.providerSnapshotsFile, 0o600);
         } catch (error) {
           await fs.unlink(tempPath).catch(() => undefined);
           throw error;
         }
       });
-    } catch {
-      // Provider persistence is best effort and never affects execution.
+    } catch (error) {
+      // Provider persistence is best effort and never affects execution — but
+      // swallowing it silently is what made a dropped snapshot look like a
+      // flaky test rather than a lost write, so say so at debug level.
+      Log.debug(
+        `[HarnessUsageService] provider snapshot persistence failed: ${getErrorMessage(error)}`
+      );
     }
   }
 
