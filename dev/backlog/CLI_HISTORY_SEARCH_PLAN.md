@@ -1,6 +1,6 @@
 # CLI History Search — expose global run-history search to agents
 
-> **Status:** Not implemented. Research/design only — no code changed yet.
+> **Status:** Core seams implemented in step 5 of 6; CLI command/output remains for step 6.
 > Re-verified against the code on 2026-09-20; every file/line citation below was checked, and two
 > claims in the previous draft were **wrong** — see "Corrections to the previous draft".
 >
@@ -18,6 +18,14 @@
 > **Still open:** `dev/backlog/HISTORY_SEARCH_BACKGROUND_SCAN_PLAN.md` (why a count can come back
 > provisional with no way to resolve it from a single page, which this command has to report
 > honestly).
+
+> **Step 5 implementation:** `HistorySearchService.search(query, workspaceFolderPath,
+onRebuildProgress?, signal?, onPartialResults?, options?: HistorySearchOptions)` now accepts
+> `{ allowRebuild?, allowLegacyFallback?, snippetChars? }`. `HistorySearchQuery` now has
+> `exhaustive?: boolean`; exhaustive scans count all deduped matches while retaining only the
+> requested `offset + limit` prefix and do not populate the paging snapshot. `projectHistorySearchResult`
+> and `extractSnippet` accept the optional snippet width, split 40:60 before/after the match, and
+> preserve the existing 40/60/100 defaults.
 
 ## Corrections to the previous draft
 
@@ -247,10 +255,12 @@ So the count is a deliberate choice rather than a free by-product:
   passing a huge `limit` to force it is the wrong lever, because `newResults` retains a
   `HistorySearchResult` for **every** match (`:568, 583`): a common term on a large index would
   materialize hundreds of thousands of projected results to report one number.
-  **Recommendation:** add `exhaustive?: boolean` to `HistorySearchQuery`, make `:199` yield
-  `undefined` for it, and stop pushing into `newResults` once `offset + limit` is reached while
-  continuing to count and to add dedupe keys. That keeps memory at the page size and the `seen`
-  set, which is what an exhaustive drawer scroll already costs.
+- **Shipped:** `HistorySearchQuery.exhaustive` makes the target count `undefined`, so the scan
+  reaches the end of the index. It increments the exact count and adds every dedupe key to `seen`,
+  but stops pushing into `newResults` after `offset + limit`. The truncated result prefix is not
+  stored in `matchSnapshots`, because marking it complete would make a later paged query return
+  an incomplete listing. This keeps retained projected results bounded to the requested window
+  plus the dedupe set while returning `countState: "exact"`.
 - **Say which one you got, in both output modes.** An agent that reads `20` and reports "20
   occurrences" when the truth is 1,827 is worse than one that reports nothing.
 - **A zero-result query is always exact and always slow.** It cannot stop early, so it reads the
@@ -413,7 +423,7 @@ the CLI overlay carries `{ runs: { historySearchCacheMb: 0 } }` rather than `{}`
 `getFrozenRunHistoryLocation()`, so skipping it points the search at the wrong state root and
 returns an empty index rather than an error.
 
-Reused building blocks — **no new core primitives; two small, local core changes**:
+Reused building blocks — **no new core primitives; three small, local core changes**:
 
 - `HistorySearchService.search` — the single search entry point, extended with the options argument
   (`allowRebuild`, `allowLegacyFallback`, `snippetChars`)
@@ -469,7 +479,7 @@ today — so shipping first is not blocked, only slightly less useful. Whichever
 
 **There is no blocking core work left.** What this command needs from core is an options seam on
 `HistorySearchService.search`, an `exhaustive` flag plumbed to an already-existing exhaustive branch,
-and a parameterized snippet width — three small, local changes.
+and a parameterized snippet width — three small, local changes, now implemented.
 
 ## Risks / open questions
 

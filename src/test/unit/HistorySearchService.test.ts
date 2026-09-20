@@ -3,7 +3,10 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
 import { HistorySearchService } from "../../core/orchestration/HistorySearchService";
-import { HistorySearchCancelledError } from "../../core/orchestration/HistorySearchIndexService";
+import {
+  HistorySearchCancelledError,
+  HistorySearchIndexService,
+} from "../../core/orchestration/HistorySearchIndexService";
 import { Log } from "../../utils/Log";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import {
@@ -232,6 +235,130 @@ suite("HistorySearchService", () => {
     const response = await service.search("a", workspaceRoot);
     assert.deepStrictEqual(response.results, []);
     assert.strictEqual(response.totalCount, 0);
+  });
+
+  test("does not rebuild when rebuilds are disallowed", async () => {
+    const workflowId = "no-rebuild-2026-06-09T19-01-00";
+    await createRun(workflowId, 1, 1500, [
+      createStatusDraft(
+        1600,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        "no-rebuild-term"
+      ),
+    ]);
+
+    const response = await service.search(
+      "no-rebuild-term",
+      workspaceRoot,
+      undefined,
+      undefined,
+      undefined,
+      {
+        allowRebuild: false,
+      }
+    );
+
+    assert.deepStrictEqual(response.results, []);
+    assert.strictEqual(response.indexState, "building");
+    await assert.rejects(
+      fs.access(
+        path.join(
+          projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation()),
+          PATH_CONSTANTS.SEARCH_INDEX_DIR,
+          "manifest.json"
+        )
+      ),
+      /ENOENT/
+    );
+  });
+
+  test("can refuse the legacy fallback while preserving cancellation", async () => {
+    const originalSearch = HistorySearchIndexService.prototype.search;
+    HistorySearchIndexService.prototype.search = async () => {
+      throw new Error("synthetic index failure");
+    };
+
+    try {
+      await assert.rejects(
+        service.search(
+          "fallback-refusal-term",
+          workspaceRoot,
+          undefined,
+          undefined,
+          undefined,
+          { allowLegacyFallback: false }
+        ),
+        /synthetic index failure/
+      );
+
+      const controller = new AbortController();
+      controller.abort();
+      HistorySearchIndexService.prototype.search = async () => {
+        throw new HistorySearchCancelledError();
+      };
+      await assert.rejects(
+        service.search(
+          "fallback-cancelled-term",
+          workspaceRoot,
+          undefined,
+          controller.signal,
+          undefined,
+          { allowLegacyFallback: false }
+        ),
+        (error: unknown) => error instanceof HistorySearchCancelledError
+      );
+    } finally {
+      HistorySearchIndexService.prototype.search = originalSearch;
+    }
+  });
+
+  test("widens snippets through the service while preserving the default", async () => {
+    const workflowId = "snippet-width-2026-06-09T19-02-00";
+    await createRun(workflowId, 1, 1700, [
+      createCliOutputDraft(
+        1800,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        {
+          prompt: "",
+          response: `${"a".repeat(80)}snippet-width-term${"b".repeat(90)}`,
+          elapsed: 1,
+          isStreaming: false,
+        }
+      ),
+    ]);
+
+    const defaultResult = (
+      await service.search("snippet-width-term", workspaceRoot)
+    ).results[0];
+    const explicitDefaultResult = (
+      await service.search(
+        { query: "snippet-width-term", limit: 50 },
+        workspaceRoot,
+        undefined,
+        undefined,
+        undefined,
+        { snippetChars: 100 }
+      )
+    ).results[0];
+    const widenedResult = (
+      await service.search(
+        { query: "snippet-width-term", limit: 50 },
+        workspaceRoot,
+        undefined,
+        undefined,
+        undefined,
+        { snippetChars: 200 }
+      )
+    ).results[0];
+
+    assert.strictEqual(
+      defaultResult?.matchSnippet,
+      explicitDefaultResult?.matchSnippet
+    );
+    assert.ok(
+      (widenedResult?.matchSnippet.length ?? 0) >
+        (defaultResult?.matchSnippet.length ?? 0)
+    );
   });
 
   test("keeps file operation kinds distinct and indexes edit paths and diffs", async () => {

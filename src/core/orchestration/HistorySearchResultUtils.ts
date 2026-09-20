@@ -8,9 +8,12 @@ import type {
   HistorySearchResult,
 } from "../../types/WorkflowTimelineTypes";
 
+export const DEFAULT_HISTORY_SEARCH_SNIPPET_CHARS = 100;
+
 export function projectHistorySearchResult(
   document: HistorySearchDocument,
-  query: string
+  query: string,
+  snippetChars: number = DEFAULT_HISTORY_SEARCH_SNIPPET_CHARS
 ): HistorySearchResult {
   return {
     workflowKey: document.workflowKey,
@@ -22,7 +25,7 @@ export function projectHistorySearchResult(
     target: document.target,
     eventKind: document.eventKind,
     matchField: document.matchField,
-    matchSnippet: extractSnippet(document.text, query),
+    matchSnippet: extractSnippet(document.text, query, snippetChars),
     matchContext: formatMatchContext(document.target, document.attemptIndex),
     filePath: document.filePath,
   };
@@ -56,16 +59,28 @@ export function getHistorySearchDocumentDedupeKey(
   ].join("::");
 }
 
-function extractSnippet(text: string, query: string): string {
+/**
+ * Extracts `snippetChars` of context around the first match, split 40:60
+ * before:after the match. The matched query itself is additional context so
+ * the existing default remains 40 characters before and 60 after it.
+ */
+export function extractSnippet(
+  text: string,
+  query: string,
+  snippetChars: number = DEFAULT_HISTORY_SEARCH_SNIPPET_CHARS
+): string {
+  const normalizedSnippetChars = Math.max(0, Math.floor(snippetChars));
   const searchText = text.toLowerCase();
   const searchQuery = query.toLowerCase();
   const index = searchText.indexOf(searchQuery);
   if (index === -1) {
-    return text.slice(0, 100);
+    return text.slice(0, normalizedSnippetChars);
   }
 
-  const start = Math.max(0, index - 40);
-  const end = Math.min(text.length, index + query.length + 60);
+  const beforeChars = Math.floor(normalizedSnippetChars * 0.4);
+  const afterChars = normalizedSnippetChars - beforeChars;
+  const start = Math.max(0, index - beforeChars);
+  const end = Math.min(text.length, index + query.length + afterChars);
   const snippet = text.slice(start, end);
   return `${start > 0 ? "…" : ""}${snippet}${end < text.length ? "…" : ""}`;
 }

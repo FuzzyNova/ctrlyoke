@@ -631,6 +631,52 @@ suite("HistorySearchIndexService", () => {
     );
   });
 
+  test("exhaustive counting retains only the requested result window", async () => {
+    const term = "exhaustive-count-term";
+    const totalRuns = 40;
+    for (let i = 0; i < totalRuns; i += 1) {
+      await createRun(
+        `exhaustive-count-run-${i}-2026-06-09T22-31-00`,
+        1,
+        20000 + i * 100,
+        [createStatusDraft(20050 + i * 100, term)]
+      );
+    }
+
+    const offset = 3;
+    const limit = 5;
+    const earlyIndex = new HistorySearchIndexService();
+    const early = await earlyIndex.search(
+      { query: term, limit },
+      workspaceRoot
+    );
+    assert.strictEqual(early.countState, "atLeast");
+    assert.strictEqual(early.totalCount, limit);
+
+    const index = new HistorySearchIndexService();
+    const response = await index.search(
+      { query: term, limit, offset, exhaustive: true },
+      workspaceRoot
+    );
+
+    assert.strictEqual(response.countState, "exact");
+    assert.strictEqual(response.totalCount, totalRuns);
+    assert.strictEqual(response.results.length, limit);
+    assert.strictEqual(response.hasMore, true);
+    assert.ok(response.results.length <= offset + limit);
+
+    const snapshots = (
+      index as unknown as {
+        matchSnapshots: Map<string, { results: unknown[] }>;
+      }
+    ).matchSnapshots;
+    assert.strictEqual(
+      snapshots.size,
+      0,
+      "a truncated exhaustive result must not poison the paging snapshot"
+    );
+  });
+
   test("pushes growing partial results while a scan can't stop early", async () => {
     // Five runs, one match each, and a limit far above the match count: the
     // scan can never satisfy `targetCount` early, so it has to read every

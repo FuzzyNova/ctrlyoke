@@ -18,6 +18,7 @@ import { FileLockTimeoutError } from "../../utils/FileLockUtils";
 import {
   HistorySearchCancelledError,
   MAX_INDEXED_TEXT_LENGTH,
+  type HistorySearchIndexSearchOptions,
   type IndexRebuildProgressCallback,
   type PartialSearchResultsCallback,
 } from "./HistorySearchIndexService";
@@ -33,6 +34,10 @@ import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 
 const MAX_RESULTS = 50;
 const MIN_QUERY_LENGTH = 2;
+
+export interface HistorySearchOptions extends HistorySearchIndexSearchOptions {
+  allowLegacyFallback?: boolean;
+}
 
 interface WorkflowMetadata {
   workflowName: string;
@@ -60,7 +65,8 @@ export class HistorySearchService {
     workspaceFolderPath: string,
     onRebuildProgress?: IndexRebuildProgressCallback,
     signal?: AbortSignal,
-    onPartialResults?: PartialSearchResultsCallback
+    onPartialResults?: PartialSearchResultsCallback,
+    options?: HistorySearchOptions
   ): Promise<HistorySearchResponse> {
     const request =
       typeof query === "string"
@@ -76,13 +82,17 @@ export class HistorySearchService {
         workspaceFolderPath,
         onRebuildProgress,
         signal,
-        onPartialResults
+        onPartialResults,
+        options
       );
     } catch (error) {
       if (error instanceof HistorySearchCancelledError) {
         // Superseded by a newer search — not a failure, so it must not fall
         // through to the disk-scan fallback below (that would spend the
         // exact full-history-read cost this cancellation exists to avoid).
+        throw error;
+      }
+      if (options?.allowLegacyFallback === false) {
         throw error;
       }
       const reason =
@@ -106,7 +116,8 @@ export class HistorySearchService {
         request.query,
         workspaceFolderPath,
         offset + request.limit,
-        request.filters
+        request.filters,
+        options?.snippetChars
       );
       const results = scanned.slice(offset, offset + request.limit);
       Log.info(
@@ -129,7 +140,8 @@ export class HistorySearchService {
     query: string,
     workspaceFolderPath: string,
     limit: number,
-    filters: HistorySearchFilters | undefined
+    filters: HistorySearchFilters | undefined,
+    snippetChars?: number
   ): Promise<HistorySearchResult[]> {
     const normalizedQuery = query.trim();
     if (normalizedQuery.length < MIN_QUERY_LENGTH) {
@@ -245,7 +257,11 @@ export class HistorySearchService {
               continue;
             }
 
-            const match = projectHistorySearchResult(document, normalizedQuery);
+            const match = projectHistorySearchResult(
+              document,
+              normalizedQuery,
+              snippetChars
+            );
             const dedupeKey = getHistorySearchDocumentDedupeKey(
               document,
               match
