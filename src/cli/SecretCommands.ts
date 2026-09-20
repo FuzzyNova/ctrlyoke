@@ -79,7 +79,6 @@ export function createCliSecretCommandDependencies(
     verbose: false,
     quiet: false,
     json: false,
-    color: true,
     vars: {},
     cliExecutionMode: EXECUTION_MODES.HEADLESS,
   };

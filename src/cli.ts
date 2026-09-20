@@ -503,9 +503,7 @@ async function runCommand(
   options: RunOptions | RerunOptions | AppendOptions | ContinueOptions,
   operation: CliRunOperation = { kind: CLI_RUN_OPERATION_KINDS.RUN }
 ): Promise<void> {
-  if (options.color === false) {
-    process.env.NO_COLOR = "1";
-  }
+  CliTerminalFormatter.setColorEnabled(options.color !== false);
 
   if (
     (operation.kind === CLI_RUN_OPERATION_KINDS.RUN ||
@@ -578,7 +576,6 @@ async function runCommand(
     verbose: options.verbose ?? false,
     quiet: options.quiet ?? false,
     json: options.json ?? false,
-    color: options.color !== false,
     cliExecutionMode: executionMode,
   };
 
@@ -1938,7 +1935,6 @@ async function validateCommand(
       verbose: false,
       quiet: true,
       json: options.json === true,
-      color: false,
       cliExecutionMode: EXECUTION_MODES.HEADLESS,
     });
     configService.setUserBackend(createUserConfigBackend());

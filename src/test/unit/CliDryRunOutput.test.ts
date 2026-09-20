@@ -135,6 +135,45 @@ suite("CLI dry-run output", () => {
     chalk.level = previousChalkLevel;
   });
 
+  /**
+   * `--no-color` used to be implemented as `process.env.NO_COLOR = "1"` inside
+   * the command action, which never took effect: chalk 5 resolves its level
+   * once while the module initializes, and in the bundle that is long before
+   * any action runs. The flag therefore did nothing in a TTY — the only place
+   * it could have mattered, since a redirected stream is already uncoloured.
+   * These two cases pin the mechanism rather than the symptom.
+   */
+  test("setColorEnabled(false) strips colour from subsequent chalk calls", () => {
+    chalk.level = 3;
+    process.env.NO_COLOR = "1";
+    try {
+      assert.strictEqual(
+        chalk.red("x"),
+        "\u001b[31mx\u001b[39m",
+        "an env write after chalk initialized must not be what disables colour"
+      );
+
+      CliTerminalFormatter.setColorEnabled(false);
+
+      assert.strictEqual(chalk.level, 0);
+      assert.strictEqual(chalk.red("x"), "x");
+      assert.strictEqual(chalk.bold(chalk.dim("y")), "y");
+      assert.strictEqual(chalk.hex("#ff0000")("z"), "z");
+    } finally {
+      delete process.env.NO_COLOR;
+    }
+  });
+
+  test("setColorEnabled(true) leaves chalk's own stream detection alone", () => {
+    chalk.level = 0;
+    CliTerminalFormatter.setColorEnabled(true);
+    assert.strictEqual(
+      chalk.level,
+      0,
+      "omitting --no-color must not force colour onto a redirected stream"
+    );
+  });
+
   test("keeps concurrent headless bursts identified by target", () => {
     const output = runFormatterScript(
       `CliTerminalFormatter.renderEvents([{ type: CLI_EVENT_TYPES.TEXT, data: { text: "research" } }], { stepIndex: 1, stepName: "research-auth" });

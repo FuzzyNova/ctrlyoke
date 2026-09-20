@@ -38,7 +38,6 @@ export interface ResolvedCliConfig {
   verbose: boolean;
   quiet: boolean;
   json: boolean;
-  color: boolean;
   /**
    * Variables from --var key=value flags. Merged over workflow-level vars: defaults.
    * Applied as {{key}} substitution in prompt text, model, additionalArgs, hook commands,

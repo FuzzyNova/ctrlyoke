@@ -343,6 +343,26 @@ function formatAskUserQuestionDecline(
  * Used by the standalone ctrlyoke CLI to stream structured output to stdout.
  */
 export class CliTerminalFormatter {
+  /**
+   * Applies a command's `--no-color` decision to every chalk call in the
+   * bundle.
+   *
+   * This must mutate `chalk.level` rather than write `process.env.NO_COLOR`:
+   * chalk 5 resolves its level once while the module initializes, which in the
+   * esbuild bundle happens before any command action runs, so an env write at
+   * action time is silently ignored. A `NO_COLOR` the user exported before
+   * launching ctrlyoke is unaffected — that one is read in time.
+   *
+   * Passing `true` is deliberately a no-op rather than a force-on: it must not
+   * override chalk's own TTY/pipe detection, which is what keeps redirected
+   * output clean without the flag.
+   */
+  static setColorEnabled(enabled: boolean): void {
+    if (!enabled) {
+      chalk.level = 0;
+    }
+  }
+
   /** Renders the live start marker for one workflow parallel group. */
   static renderParallelGroupHeader(
     group: ParallelGroupDefinition,

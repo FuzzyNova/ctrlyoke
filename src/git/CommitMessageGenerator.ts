@@ -279,7 +279,6 @@ export class CommitMessageGenerator {
       verbose: false,
       quiet: true,
       json: false,
-      color: false,
       cliExecutionMode: EXECUTION_MODES.HEADLESS,
     };
 
