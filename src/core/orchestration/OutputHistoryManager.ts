@@ -142,6 +142,15 @@ export interface RunSummaryRecord {
   manifestExecutionState: ExecutionState;
 }
 
+export interface RunNavigationSummary {
+  runCount: number;
+  primaryRunId?: number;
+  primaryRunRef?: RunRef;
+  startedAt?: number;
+  executionState?: ExecutionState;
+  completedAt?: number;
+}
+
 /**
  * OutputHistoryManager
  *
@@ -1130,22 +1139,34 @@ export class OutputHistoryManager {
    */
   async getRunNavigationSummary(
     workflowKey: WorkflowKey
-  ): Promise<{ runCount: number; primaryRunId?: number }> {
+  ): Promise<RunNavigationSummary> {
     const runs = await this.getRunsForWorkflow(workflowKey);
     if (runs.length === 0) {
       return { runCount: 0 };
     }
+    const primaryRunRef = runs[0];
     try {
       const manifest = await this.timelineRecorder.readManifest(
-        this.getHistoryFilePath(workflowKey, runs[0])
+        this.getHistoryFilePath(workflowKey, primaryRunRef)
       );
-      return { runCount: runs.length, primaryRunId: manifest.runId };
+      // This display-only state comes from the manifest and can differ from
+      // RunSummary.executionState, where the working file wins. Keeping this
+      // cheaper path manifest-only is deliberate; do not turn list into the
+      // per-run summary read just to reconcile a display column.
+      return {
+        runCount: runs.length,
+        primaryRunId: manifest.runId,
+        primaryRunRef,
+        startedAt: manifest.startedAt,
+        executionState: manifest.executionState,
+        completedAt: manifest.completedAt,
+      };
     } catch (error) {
       Log.warn(
-        `[OutputHistoryManager] getRunNavigationSummary: latest run manifest unreadable for ${workflowKey}/${runs[0]}:`,
+        `[OutputHistoryManager] getRunNavigationSummary: latest run manifest unreadable for ${workflowKey}/${primaryRunRef}:`,
         error
       );
-      return { runCount: runs.length };
+      return { runCount: runs.length, primaryRunRef };
     }
   }
 

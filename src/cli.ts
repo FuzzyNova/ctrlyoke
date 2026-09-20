@@ -98,6 +98,11 @@ import {
   relinkHistoryCommand,
 } from "./cli/HistoryCommands";
 import {
+  listHistoryCommand,
+  runsHistoryCommand,
+  type HistoryInspectionCommandIo,
+} from "./cli/HistoryInspectionCommands";
+import {
   createStepCommandContext,
   editStepCommand,
   removeStepCommand,
@@ -197,6 +202,14 @@ registerHistoryCommands(program, {
         isInteractive: !!process.stdin.isTTY && !!process.stdout.isTTY,
         confirm: promptYesNo,
       })
+    ),
+  list: (options) =>
+    handleHistoryCommand(
+      listHistoryCommand(options, createHistoryInspectionCommandIo())
+    ),
+  runs: (options) =>
+    handleHistoryCommand(
+      runsHistoryCommand(options, createHistoryInspectionCommandIo())
     ),
 });
 
@@ -1188,6 +1201,13 @@ function handleHistoryCommand(operation: Promise<void>): Promise<void> {
     console.error(chalk.red(`Error: ${message}`));
     process.exit(2);
   });
+}
+
+function createHistoryInspectionCommandIo(): HistoryInspectionCommandIo {
+  return {
+    writeOut: (message) => console.log(message),
+    writeErr: (message) => console.error(message),
+  };
 }
 
 function handleStepCommand(

@@ -9,6 +9,8 @@ ctrlyoke trust-external-roots
 ctrlyoke trust-workflow-external-roots <file>
 ctrlyoke history prune [--yes]
 ctrlyoke history relink <oldPath> <newPath> [--yes]
+ctrlyoke history list [--cwd <path>] [--all] [--json]
+ctrlyoke history runs --workflow <key> [--cwd <path>] [--json]
 ctrlyoke step edit [file] --workflow <key> --run <ref|runId> --index <index> [--prompt <text>]
 ctrlyoke step remove --workflow <key> --run <ref|runId> --index <index>
 ctrlyoke step reorder --workflow <key> --run <ref|runId> --order <indices>
@@ -177,6 +179,35 @@ destinations containing history. A matching empty destination scaffold may be
 replaced automatically. Relinking operates on the user project tree even when
 `storage.runHistoryLocation` is currently `workspace`; changing that setting
 does not migrate history.
+
+## `ctrlyoke history list`
+
+List workflow lineages in the current workspace and discover the keys needed by
+the other history and execution commands:
+
+```bash
+ctrlyoke history list
+ctrlyoke history list --all
+ctrlyoke history list --json
+```
+
+System-generated lineages are hidden by default. The text output shows each
+lineage's key, name, run count, newest run time, and newest manifest state.
+`--json` emits an array containing descriptor metadata and the newest run
+summary.
+
+## `ctrlyoke history runs`
+
+List the runs in one workflow lineage, newest first:
+
+```bash
+ctrlyoke history runs --workflow release
+ctrlyoke history runs --workflow release --json
+```
+
+The text output includes each run's numeric ID and stable reference, which can
+be passed to commands that accept `--run`. The JSON form is an array of the
+stable `RunSummary` records used by the dashboard.
 
 ## `ctrlyoke step`
 

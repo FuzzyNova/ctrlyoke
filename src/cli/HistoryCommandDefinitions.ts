@@ -8,6 +8,18 @@ export interface HistoryRelinkOptions {
   yes?: boolean;
 }
 
+export interface HistoryListOptions {
+  cwd?: string;
+  all?: boolean;
+  json?: boolean;
+}
+
+export interface HistoryRunsOptions {
+  cwd?: string;
+  workflow: string;
+  json?: boolean;
+}
+
 export interface HistoryCommandHandlers {
   prune(options: HistoryPruneOptions): Promise<void>;
   relink(
@@ -15,6 +27,8 @@ export interface HistoryCommandHandlers {
     newPath: string,
     options: HistoryRelinkOptions
   ): Promise<void>;
+  list(options: HistoryListOptions): Promise<void>;
+  runs(options: HistoryRunsOptions): Promise<void>;
 }
 
 /** Registers lifecycle commands that operate on the user project registry. */
@@ -40,4 +54,26 @@ export function registerHistoryCommands(
       async (oldPath: string, newPath: string, options: HistoryRelinkOptions) =>
         handlers.relink(oldPath, newPath, options)
     );
+
+  history
+    .command("list")
+    .description("List workflow lineages in this workspace")
+    .option(
+      "-d, --cwd <path>",
+      "Working directory (default: current directory)"
+    )
+    .option("--all", "Include system-generated lineages")
+    .option("--json", "Output as JSON")
+    .action(async (options: HistoryListOptions) => handlers.list(options));
+
+  history
+    .command("runs")
+    .description("List runs within a workflow lineage")
+    .requiredOption("--workflow <key>", "Workflow lineage key")
+    .option(
+      "-d, --cwd <path>",
+      "Working directory (default: current directory)"
+    )
+    .option("--json", "Output as JSON")
+    .action(async (options: HistoryRunsOptions) => handlers.runs(options));
 }

@@ -1,7 +1,7 @@
 # CLI History Inspection — discover workflow/run keys and dump run output
 
-> **Status:** Not implemented. The core primitive in step 2 is implemented; the CLI commands remain
-> planned work.
+> **Status:** Discovery commands implemented (`history list` and `history runs`). The core primitive
+> in step 2 is implemented; `history show` remains planned work.
 > Re-verified against the code on 2026-09-20; every file/line citation below was
 > checked, and four claims in the previous draft were **wrong** — see
 > "Corrections to the previous draft" before implementing anything.
@@ -15,6 +15,13 @@ attempts flushed at end-of-stream, plus runtime-transition and run-termination f
 retained only for concurrently active attempts, with a just-terminated value held briefly when a
 contiguous follow-up record can still extend it. `resolveAttempt` and `resolveLatestAttempts` are
 both expressed as filters/reductions over `streamAttempts`; the delta/aggregate fold has one owner.
+
+### Step 3 implementation note
+
+`ctrlyoke history list` uses `OutputHistoryManager.getRunNavigationSummary` rather than loading
+every `RunSummary`. The method now returns the newest run's `runRef`, `startedAt`, `completedAt`,
+and manifest-sourced `executionState` alongside its existing run count and numeric ID. This keeps
+the one-shot CLI listing at one directory scan and one newest-run manifest read per lineage.
 
 ## Problem
 
