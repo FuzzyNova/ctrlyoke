@@ -342,7 +342,7 @@ function buildHistorySearchQuery(
   return {
     query: normalizedQuery,
     limit: parseHistorySearchLimit(options.limit),
-    offset: parseHistorySearchInteger(options.offset, "--offset", 0),
+    offset: parseHistorySearchInteger(options.offset, "--offset", 0, 0),
     deep: options.deep === true,
     exhaustive: options.exactCount === true,
     filters: {
@@ -378,17 +378,29 @@ function parseHistorySearchValues<T extends string>(
 }
 
 function parseHistorySearchLimit(value: string | undefined): number {
-  const parsed = parseHistorySearchInteger(value, "--limit", 1);
+  const parsed = parseHistorySearchInteger(
+    value,
+    "--limit",
+    1,
+    HISTORY_SEARCH_DEFAULT_LIMIT
+  );
   return Math.min(parsed, HISTORY_SEARCH_MAX_LIMIT);
 }
 
+/**
+ * `whenMissing` is an explicit parameter rather than a lookup keyed on
+ * `optionName`, which is a display string: coupling a flag's default to the
+ * spelling of its own help text makes renaming the flag silently change what
+ * omitting it means.
+ */
 function parseHistorySearchInteger(
   value: string | undefined,
   optionName: string,
-  minimum: number
+  minimum: number,
+  whenMissing: number
 ): number {
   if (value === undefined) {
-    return optionName === "--limit" ? HISTORY_SEARCH_DEFAULT_LIMIT : 0;
+    return whenMissing;
   }
   if (!/^\d+$/.test(value)) {
     throw new Error(
@@ -405,9 +417,12 @@ function parseHistorySearchInteger(
 }
 
 function requestSnippetChars(options: HistorySearchCommandOptions): number {
-  return options.snippet === undefined
-    ? HISTORY_SEARCH_DEFAULT_SNIPPET_CHARS
-    : parseHistorySearchInteger(options.snippet, "--snippet", 0);
+  return parseHistorySearchInteger(
+    options.snippet,
+    "--snippet",
+    0,
+    HISTORY_SEARCH_DEFAULT_SNIPPET_CHARS
+  );
 }
 
 function renderHistorySearchJson(

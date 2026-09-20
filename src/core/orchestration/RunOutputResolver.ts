@@ -430,37 +430,17 @@ export class RunOutputResolver {
     const openAttempts = new Map<string, OpenAttemptState>();
 
     for await (const event of this.stream(manifestPath)) {
-      if (event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUNTIME_TRANSITION) {
-        for (const [key, state] of openAttempts) {
-          if (!state.terminated) {
-            continue;
-          }
-          openAttempts.delete(key);
-          yield this.createSettledAttemptEvent(state, key);
-        }
-        yield event;
-        continue;
-      }
-      if (event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUN_TERMINATED) {
-        for (const [key, state] of openAttempts) {
-          if (!state.terminated) {
-            continue;
-          }
-          openAttempts.delete(key);
-          yield this.createSettledAttemptEvent(state, key);
-        }
+      if (
+        event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUNTIME_TRANSITION ||
+        event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUN_TERMINATED
+      ) {
+        yield* this.drainSettledAttempts(openAttempts);
         yield event;
         continue;
       }
 
       const key = getAttemptKey(event.attempt);
-      for (const [pendingKey, pendingState] of openAttempts) {
-        if (pendingKey === key || !pendingState.terminated) {
-          continue;
-        }
-        openAttempts.delete(pendingKey);
-        yield this.createSettledAttemptEvent(pendingState, pendingKey);
-      }
+      yield* this.drainSettledAttempts(openAttempts, key);
       const state =
         openAttempts.get(key) ?? this.createOpenAttemptState(event.attempt);
       openAttempts.set(key, state);
@@ -506,6 +486,24 @@ export class RunOutputResolver {
         attempt: this.finishAttemptState(state, key),
         unterminated: !state.terminated,
       };
+    }
+  }
+
+  /**
+   * Release every attempt that has already terminated, except `exceptKey` —
+   * the attempt whose own next record is being folded in, which must stay open
+   * so a contiguous follow-up stays part of the same logical attempt.
+   */
+  private *drainSettledAttempts(
+    openAttempts: Map<string, OpenAttemptState>,
+    exceptKey?: string
+  ): Generator<RunOutputResolverAttemptEvent, void, undefined> {
+    for (const [key, state] of openAttempts) {
+      if (key === exceptKey || !state.terminated) {
+        continue;
+      }
+      openAttempts.delete(key);
+      yield this.createSettledAttemptEvent(state, key);
     }
   }
 

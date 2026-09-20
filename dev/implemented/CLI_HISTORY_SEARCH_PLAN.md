@@ -3,7 +3,7 @@
 > **Status: Implemented.** The CLI command, output contract, tests, and documentation are complete.
 > **Open follow-ups:** regex search, `excludeRunRefs`/`--include-current-run`, and whether
 > `--exact-count` should become the default remain deliberately deferred.
-> Re-verified against the code on 2026-09-20; every file/line citation below was checked, and two
+> Re-verified against the code on 2026-09-20; every file/line citation below was checked, and three
 > claims in the previous draft were **wrong** — see "Corrections to the previous draft".
 >
 > **Sibling:** [`CLI_HISTORY_INSPECTION_PLAN.md`](./CLI_HISTORY_INSPECTION_PLAN.md) adds

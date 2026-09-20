@@ -3,7 +3,7 @@
 > **Status: Implemented.** Discovery commands and `history show` are implemented, including the
 > shared bootstrap and streaming output resolver primitive.
 > Re-verified against the code on 2026-09-20; every file/line citation below was
-> checked, and four claims in the previous draft were **wrong** — see
+> checked, and five claims in the previous draft were **wrong** — see
 > "Corrections to the previous draft" before implementing anything.
 
 ### Step 2 implementation note
@@ -53,7 +53,7 @@ This doc proposes closing both gaps under `history`, as two related but independ
 
 ## Corrections to the previous draft
 
-Read these first; three of them change the implementation, and the fourth was a bug in shipped
+Read these first; four of them change the implementation, and the fourth was a bug in shipped
 code that has since been fixed.
 
 1. **`history show` cannot render `RunOutputResolver.stream()` events one-by-one as they arrive.**
