@@ -39,6 +39,12 @@
    The CLI bootstrap already calls `configService.setCliOverlay({})`; pass
    `{ runs: { historySearchCacheMb: 0 } }` instead. That is the whole fix, it uses the settings
    surface as designed, and it shrinks the proposed options argument by a quarter.
+3. **The registration sketch below shows the wrong shape.** It writes `.action(...)` as an inline
+   closure; every command group in this CLI instead takes a handlers interface and delegates to it
+   (`HistoryCommandHandlers`, `StepCommandHandlers`, `SecretCommandHandlers`, wired from object
+   literals at `cli.ts:184/205/235`). `search` extends the same `HistoryCommandHandlers` the
+   inspection plan's three subcommands extend — see that plan's correction 5, which specifies this
+   once for both documents.
 
 ## Problem
 
@@ -54,9 +60,9 @@ did we do about it?" across a project's whole run history has nothing to call. W
 - **`read_output` (MCP)** — its own run only, addressed by `CTRLYOKE_WORKING_FILE`. An agent can
   page a step's response text and grep it itself. That genuinely covers "search inside my own run"
   and is why this plan does **not** propose an MCP search tool.
-- **Reading `.runs/**/events.jsonl` by hand** — works, is slow, is unbounded (a single run's events
-  file can be megabytes), and reimplements candidate extraction badly. Nothing stops an agent doing
-  this today; the point of this command is that it should not have to.
+- **Reading each run's `events.jsonl` under `.runs/` by hand** — works, is slow, is unbounded (a
+  single run's events file can be megabytes), and reimplements candidate extraction badly. Nothing
+  stops an agent doing this today; the point of this command is that it should not have to.
 
 ## Why the CLI and not an MCP tool
 
@@ -173,7 +179,9 @@ streams. Same CLI, two contracts, one reason.
   "countState": "atLeast",
   "hasMore": true,
   "indexState": "ready",
-  "results": [/* HistorySearchResult[], the existing contract, unchanged */]
+  "results": [
+    /* HistorySearchResult[], the existing contract, unchanged */
+  ]
 }
 ```
 

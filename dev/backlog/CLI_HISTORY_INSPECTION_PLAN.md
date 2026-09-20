@@ -47,8 +47,11 @@ code that has since been fixed.
    naive append-order render therefore prints most of a step's output **twice**. This is the
    single most important change to the design; see "Rendering: fold per attempt, then render".
 2. **`WorkflowPaths.runFilePath` is the wrong path.** It returns the run's working copy
-   `workflow.ctrlyoke.json`. `RunOutputResolver.stream()` takes a _manifest_ path —
-   `WorkflowPaths.manifestPath(workspaceRoot, workflowKey, runRef)` (`WorkflowPaths.ts:298`).
+   `workflow.ctrlyoke.json` (`src/utils/WorkflowPaths.ts:259`). `RunOutputResolver.stream()` takes a
+   _manifest_ path — `WorkflowPaths.manifestPath(workspaceRoot, workflowKey, runRef)`
+   (`src/utils/WorkflowPaths.ts:298`). Note the module lives under `src/utils/`, not
+   `src/core/orchestration/` where most other symbols cited here do; every bare `WorkflowPaths.ts:N`
+   citation below means `src/utils/WorkflowPaths.ts`.
 3. **`RunSummaryCache` does not make repeated `history list` invocations cheap.** It is an
    in-process memory cache; a one-shot CLI process starts cold every time and throws it away on
    exit. The previous draft's "the existing cache should make repeated invocations cheap
@@ -67,6 +70,19 @@ code that has since been fixed.
    dead `color` field is gone. **Every new command's `--no-color` must call that helper** rather
    than reinventing either half. Covered by two cases in
    `src/test/unit/CliDryRunOutput.test.ts`.
+
+5. **The registration sketches below (and in `CLI_HISTORY_SEARCH_PLAN.md`) show the wrong shape.**
+   They write `.action(...)` as an inline closure, but no command group in this CLI is registered
+   that way. All three existing definition modules take a handlers interface and delegate:
+   `HistoryCommandHandlers` (`HistoryCommandDefinitions.ts:11-18`), `StepCommandHandlers`
+   (`StepCommandDefinitions.ts:27-31`), `SecretCommandHandlers` (`SecretCommandDefinitions.ts:32`),
+   each supplied by an object literal in `cli.ts` (`:184`, `:205`, `:235`). The split is the point:
+   the definition module stays a pure, dependency-free description of the command surface, and the
+   handler module is what the unit tests drive directly. **Extend the existing
+   `HistoryCommandHandlers` interface with `list`/`runs`/`show` (and `search`) rather than inventing
+   a second registration style**, and declare each command's options as an exported
+   `History*Options` interface next to the existing `HistoryPruneOptions`/`HistoryRelinkOptions`.
+   Read every `.action(...)` in the sketches below as `handlers.<name>(options)`.
 
 ## Why this belongs under `history`, and how it's scoped differently from `prune`/`relink`
 
