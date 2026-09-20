@@ -306,23 +306,23 @@ re-rendering a _live_ (`RUNNING`) run's in-progress output (this command reads a
 dashboard, not this command — though reading a currently-running run's history up to "now" is
 harmless and should not be specially blocked either).
 
-## Shared bootstrap
+## Shared bootstrap — done
 
-All three subcommands are workspace-scoped, so all three need the sequence `prepareStepCommand`
-already performs (`cli.ts:1214-1239`): `Log.initializeCli`, user + workspace config backends,
-`configService.setCliOverlay({})`, `initializeRunHistoryLocation` (guarded by
-`isRunHistoryLocationInitialized`), and `new ProjectStateRegistry().initialize(workspaceRoot,
-gitToplevel)`.
+The shared bootstrap is implemented in `src/cli/CliWorkspaceBootstrap.ts` as
+`bootstrapCliWorkspace(options, cliOverlay = {})`. It resolves `options.cwd ?? process.cwd()`,
+initializes CLI logging, installs the user and workspace config backends, applies the supplied
+`PartialCtrlYokeSettings` overlay, initializes run-history storage when it has not already been
+frozen, and initializes the project-state registry with the repository toplevel.
 
 `initializeRunHistoryLocation` is **not** optional: `WorkflowPaths.runsRoot` resolves through
 `getFrozenRunHistoryLocation()` (`WorkflowPaths.ts:158-163`), so every lineage and run path these
 commands touch is wrong without it — the commands would silently list nothing rather than fail.
 
-`prepareStepCommand` is currently private to `cli.ts` and returns a `StepCommandContext`
-(`StepCommands.ts:264-281`). Lift the bootstrap half into `src/cli/CliWorkspaceBootstrap.ts`,
-returning `{ workspaceRoot, outputHistoryManager, lineageRepository }`, and have
-`createStepCommandContext` and the three new handlers both build on it. `CLI_HISTORY_SEARCH_PLAN.md`
-needs the same helper as its third caller, so do it once here rather than twice.
+The helper returns `{ workspaceRoot, createOutputHistoryManager, createLineageRepository }`.
+The two service members are lazy factories so existing `step edit`/`remove`/`reorder` commands
+retain their current service-construction timing. `prepareStepCommand` is now a thin wrapper that
+passes the returned `workspaceRoot` to `createStepCommandContext`; the three inspection handlers
+and `CLI_HISTORY_SEARCH_PLAN.md` can use the same helper without duplicating bootstrap logic.
 
 Note that `handleHistoryCommand` (`cli.ts:1188-1194`) already does the right thing for these:
 catch, print `Error: <message>` in red, `process.exit(2)`. Reuse it. Usage/parse errors and "no

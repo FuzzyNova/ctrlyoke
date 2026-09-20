@@ -119,6 +119,7 @@ import {
 } from "./cli/SecretCommands";
 import { getWorkflowSecretGrants } from "./utils/SecretResolver";
 import { resolveCliExecutionMode } from "./cli/CliExecutionMode";
+import { bootstrapCliWorkspace } from "./cli/CliWorkspaceBootstrap";
 import { ExecutionPreviewService } from "./core/ExecutionPreviewService";
 import { HarnessCapabilityRegistry } from "./core/HarnessCapabilityRegistry";
 import type { HarnessCapabilitySource } from "./core/HarnessCapabilityRegistry";
@@ -130,10 +131,7 @@ import {
   getStateHomeWarning,
 } from "./utils/ProjectStateRegistry";
 import { ctrlyokeStateHome } from "./utils/ProjectStatePaths";
-import {
-  initializeRunHistoryLocation,
-  isRunHistoryLocationInitialized,
-} from "./utils/RunHistoryStoragePolicy";
+import { initializeRunHistoryLocation } from "./utils/RunHistoryStoragePolicy";
 import { secretRedactionService } from "./utils/SecretRedactionService";
 import {
   analyzeCliCompatibility,
@@ -620,7 +618,9 @@ async function runCommand(
       ...overlay.defaults,
       toolPermissions: {
         mode: options.permissionMode as
-          "dangerouslyAllowAll" | "allowAll" | "custom",
+          | "dangerouslyAllowAll"
+          | "allowAll"
+          | "custom",
       },
     };
   }
@@ -1211,28 +1211,11 @@ function handleStepCommand(
 async function prepareStepCommand(
   options: StepEditOptions | StepRemoveOptions | StepReorderOptions
 ) {
-  const workspaceRoot = path.resolve(options.cwd ?? process.cwd());
-  Log.initializeCli(workspaceRoot, false);
-
-  const userBackend = createUserConfigBackend();
-  const workspaceBackend = createWorkspaceConfigBackend(workspaceRoot);
-  configService.setUserBackend(userBackend);
-  configService.setWorkspaceBackend(workspaceBackend);
-  configService.setCliOverlay({});
-
-  if (!isRunHistoryLocationInitialized()) {
-    initializeRunHistoryLocation(
-      configService.get("storage").runHistoryLocation
-    );
-  }
-
-  const gitToplevel = await repoToplevel(workspaceRoot);
-  await new ProjectStateRegistry().initialize(
-    workspaceRoot,
-    gitToplevel ?? undefined
+  const workspace = await bootstrapCliWorkspace(options);
+  return createStepCommandContext(
+    workspace.workspaceRoot,
+    cliRunnerHostIdentity
   );
-
-  return createStepCommandContext(workspaceRoot, cliRunnerHostIdentity);
 }
 
 function handleSecretCommand(operation: Promise<void | number>): Promise<void> {
