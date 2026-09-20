@@ -8,6 +8,7 @@ import type {
 import { isScriptStep } from "../../types/CtrlYokeTypes";
 import {
   FINAL_STEP_PHASES,
+  getExecutionPhaseKeySuffix,
   PRIOR_CONTEXT_ITEM_TYPES,
   PRIOR_CONTEXT_KEYWORDS,
   RUN_OUTPUT_RESOLVER_EVENT_KINDS,
@@ -125,6 +126,12 @@ export interface RunOutputProjectionOptions {
   approvedExternalRoots?: readonly string[];
 }
 
+interface OpenAttemptState {
+  value: ResolvedRunAttemptValue;
+  deltas: StreamingCliOutputAccumulator;
+  terminated: boolean;
+}
+
 /**
  * A lossless, append-order projection of response-bearing timeline events.
  * Consumers can process this incrementally instead of materializing an entire
@@ -187,6 +194,28 @@ export type RunOutputResolverEvent =
     };
 
 /**
+ * Settled-attempt projection plus the run-level facts that do not belong to
+ * an individual attempt. Attempts are emitted in timeline settle order; in a
+ * parallel group that can differ from start order, matching live CLI output.
+ */
+export type RunOutputResolverAttemptEvent =
+  | {
+      kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED;
+      attempt: ResolvedRunAttemptValue;
+      /** True when the timeline ended before ATTEMPT_TERMINATED was recorded. */
+      unterminated: boolean;
+    }
+  | {
+      kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUNTIME_TRANSITION;
+      transition: WorkflowRuntimeTransitionPayload;
+    }
+  | {
+      kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUN_TERMINATED;
+      executionState: ExecutionState;
+      stepCount: number;
+    };
+
+/**
  * Streaming, bounded-memory response reader for one run timeline.
  *
  * The resolver deliberately does not use `TimelineRecorder.readEvents()`: it
@@ -218,7 +247,8 @@ export class RunOutputResolver {
   async *streamFromEvents(
     manifest: WorkflowRunManifest,
     events:
-      Iterable<WorkflowTimelineEvent> | AsyncIterable<WorkflowTimelineEvent>
+      | Iterable<WorkflowTimelineEvent>
+      | AsyncIterable<WorkflowTimelineEvent>
   ): AsyncGenerator<RunOutputResolverEvent, void, undefined> {
     let activeDefinition: ResolvedAttemptDefinition | undefined =
       manifest.initialDefinition
@@ -386,6 +416,136 @@ export class RunOutputResolver {
     }
   }
 
+  /**
+   * Fold each attempt's streamed deltas and aggregate into one settled value.
+   * Open-attempt state is discarded as soon as it settles, apart from a
+   * just-terminated value held briefly so contiguous follow-up records remain
+   * part of the same logical attempt. Retained memory stays bounded by the
+   * number of concurrently open attempts. Attempts from a parallel group are
+   * yielded in settle order rather than sorted by target.
+   */
+  async *streamAttempts(
+    manifestPath: string
+  ): AsyncGenerator<RunOutputResolverAttemptEvent, void, undefined> {
+    const openAttempts = new Map<string, OpenAttemptState>();
+
+    for await (const event of this.stream(manifestPath)) {
+      if (event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUNTIME_TRANSITION) {
+        for (const [key, state] of openAttempts) {
+          if (!state.terminated) {
+            continue;
+          }
+          openAttempts.delete(key);
+          yield this.createSettledAttemptEvent(state, key);
+        }
+        yield event;
+        continue;
+      }
+      if (event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUN_TERMINATED) {
+        for (const [key, state] of openAttempts) {
+          if (!state.terminated) {
+            continue;
+          }
+          openAttempts.delete(key);
+          yield this.createSettledAttemptEvent(state, key);
+        }
+        yield event;
+        continue;
+      }
+
+      const key = getAttemptKey(event.attempt);
+      for (const [pendingKey, pendingState] of openAttempts) {
+        if (pendingKey === key || !pendingState.terminated) {
+          continue;
+        }
+        openAttempts.delete(pendingKey);
+        yield this.createSettledAttemptEvent(pendingState, pendingKey);
+      }
+      const state =
+        openAttempts.get(key) ?? this.createOpenAttemptState(event.attempt);
+      openAttempts.set(key, state);
+      state.value.definition =
+        event.attempt.definition ?? state.value.definition;
+
+      switch (event.kind) {
+        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_STARTED:
+          state.value.prompt = event.prompt;
+          state.value.kind = event.attemptKind;
+          state.value.startReason = event.startReason;
+          break;
+        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.OUTPUT:
+          // A fresh aggregate supersedes every delta buffered before it.
+          state.deltas.discard(key);
+          state.value.output = event.attempt.output;
+          state.value.responseText = event.attempt.responseText;
+          state.value.kind = event.attempt.kind;
+          break;
+        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.STREAMING_CHUNK:
+          state.deltas.appendChunk(key, event.chunk);
+          break;
+        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.STREAMING_EVENTS:
+          state.deltas.appendEvents(key, event.events);
+          break;
+        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.SCRIPT_EXECUTION:
+          state.value.scriptOutput = event.scriptOutput;
+          break;
+        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_TERMINATED:
+          state.value.terminalState = event.terminalState;
+          state.value.terminalReason = event.reason;
+          state.terminated = true;
+          break;
+        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.RETRY_SCHEDULED:
+        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.FOLLOW_UP_RESPONSE_APPENDED:
+          break;
+      }
+    }
+
+    for (const [key, state] of openAttempts) {
+      yield {
+        kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED,
+        attempt: this.finishAttemptState(state, key),
+        unterminated: !state.terminated,
+      };
+    }
+  }
+
+  private createOpenAttemptState(
+    attempt: ResolvedRunAttempt
+  ): OpenAttemptState {
+    return {
+      value: { ...attempt },
+      deltas: new StreamingCliOutputAccumulator(),
+      terminated: false,
+    };
+  }
+
+  private createSettledAttemptEvent(
+    state: OpenAttemptState,
+    key: string
+  ): RunOutputResolverAttemptEvent {
+    return {
+      kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED,
+      attempt: this.finishAttemptState(state, key),
+      unterminated: !state.terminated,
+    };
+  }
+
+  private finishAttemptState(
+    state: OpenAttemptState,
+    key: string
+  ): ResolvedRunAttemptValue {
+    if (state.value.output?.isStreaming) {
+      const merged = state.deltas.flush(key, state.value.output);
+      // `responseText` tracks streamed text only — an events-only delta leaves
+      // the aggregate's own responseText authoritative.
+      if (merged.response !== state.value.output.response) {
+        state.value.responseText = merged.response;
+      }
+      state.value.output = merged;
+    }
+    return state.value;
+  }
+
   /** Resolve one attempt's current response, preview output, script result, and terminal state. */
   async resolveAttempt(
     manifestPath: string,
@@ -394,61 +554,15 @@ export class RunOutputResolver {
     attemptIndex: number
   ): Promise<ResolvedRunAttemptValue | undefined> {
     let value: ResolvedRunAttemptValue | undefined;
-    // One attempt's deltas, folded in once after the walk rather than per
-    // batch; see `StreamingCliOutputAccumulator`.
-    const deltas = new StreamingCliOutputAccumulator();
-    const deltaKey = "attempt";
-
-    for await (const event of this.stream(manifestPath)) {
+    for await (const event of this.streamAttempts(manifestPath)) {
       if (
-        event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUN_TERMINATED ||
-        event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUNTIME_TRANSITION ||
+        event.kind !== RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED ||
         !sameAttempt(event.attempt, target, runIndex, attemptIndex)
       ) {
         continue;
       }
-
-      value ??= { ...event.attempt };
-      value.definition = event.attempt.definition ?? value.definition;
-      switch (event.kind) {
-        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_STARTED:
-          value.prompt = event.prompt;
-          value.kind = event.attemptKind;
-          value.startReason = event.startReason;
-          break;
-        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.OUTPUT:
-          // A fresh aggregate supersedes every delta buffered before it.
-          deltas.discard(deltaKey);
-          value.output = event.attempt.output;
-          value.responseText = event.attempt.responseText;
-          value.kind = event.attempt.kind;
-          break;
-        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.STREAMING_CHUNK:
-          deltas.appendChunk(deltaKey, event.chunk);
-          break;
-        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.STREAMING_EVENTS:
-          deltas.appendEvents(deltaKey, event.events);
-          break;
-        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.SCRIPT_EXECUTION:
-          value.scriptOutput = event.scriptOutput;
-          break;
-        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_TERMINATED:
-          value.terminalState = event.terminalState;
-          value.terminalReason = event.reason;
-          break;
-      }
+      value = event.attempt;
     }
-
-    if (value?.output?.isStreaming) {
-      const merged = deltas.flush(deltaKey, value.output);
-      // `responseText` tracks streamed text only — an events-only delta leaves
-      // the aggregate's own responseText authoritative.
-      if (merged.response !== value.output.response) {
-        value.responseText = merged.response;
-      }
-      value.output = merged;
-    }
-
     return value;
   }
 
@@ -464,10 +578,9 @@ export class RunOutputResolver {
     const requested = new Set(targets.map(getTargetKey));
     const latest = new Map<string, ResolvedRunAttemptValue>();
 
-    for await (const event of this.stream(manifestPath)) {
+    for await (const event of this.streamAttempts(manifestPath)) {
       if (
-        event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUN_TERMINATED ||
-        event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUNTIME_TRANSITION ||
+        event.kind !== RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED ||
         !requested.has(getTargetKey(event.attempt.target))
       ) {
         continue;
@@ -476,38 +589,7 @@ export class RunOutputResolver {
       const key = getTargetKey(event.attempt.target);
       const existing = latest.get(key);
       if (!existing || isNewerAttempt(event.attempt, existing)) {
-        latest.set(key, { ...event.attempt });
-      }
-      const value = latest.get(key)!;
-      if (
-        !sameAttempt(
-          event.attempt,
-          value.target,
-          value.runIndex,
-          value.attemptIndex
-        )
-      ) {
-        continue;
-      }
-      value.definition = event.attempt.definition ?? value.definition;
-      switch (event.kind) {
-        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_STARTED:
-          value.prompt = event.prompt;
-          value.kind = event.attemptKind;
-          value.startReason = event.startReason;
-          break;
-        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.OUTPUT:
-          value.output = event.attempt.output;
-          value.responseText = event.attempt.responseText;
-          value.kind = event.attempt.kind;
-          break;
-        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.SCRIPT_EXECUTION:
-          value.scriptOutput = event.scriptOutput;
-          break;
-        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_TERMINATED:
-          value.terminalState = event.terminalState;
-          value.terminalReason = event.reason;
-          break;
+        latest.set(key, event.attempt);
       }
     }
 
@@ -1217,6 +1299,10 @@ function getTargetKey(target: OutputExecutionTarget): string {
   return target.kind === FINAL_STEP_PHASES.QUEUE
     ? queueTargetKey(target.stepIndex)
     : `final:${target.loopIndex}`;
+}
+
+function getAttemptKey(attempt: ResolvedRunAttempt): string {
+  return `${getTargetKey(attempt.target)}:run:${attempt.runIndex}:attempt:${attempt.attemptIndex}${getExecutionPhaseKeySuffix(attempt.phase)}`;
 }
 
 function isNewerAttempt(

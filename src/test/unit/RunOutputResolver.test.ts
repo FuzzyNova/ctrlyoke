@@ -9,6 +9,7 @@ import {
   EXECUTION_STATES,
   EXECUTION_PHASES,
   FINAL_STEP_PHASES,
+  RUN_OUTPUT_RESOLVER_EVENT_KINDS,
 } from "../../types/DashboardConstants";
 import {
   TIMELINE_EVENT_TYPES,
@@ -518,6 +519,260 @@ suite("RunOutputResolver", () => {
       0
     );
     assert.deepStrictEqual(indexZeroItems, []);
+  });
+
+  test("folds streamed deltas and their later aggregate exactly once", async () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    await recorder.appendEvents(manifestPath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+        timestampMs: 1,
+        target,
+        runIndex: 0,
+        attemptIndex: 0,
+        definitionRevision: 1,
+        payload: {
+          kind: "ai",
+          startReason: "initial",
+          prompt: "fold this",
+        },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        timestampMs: 2,
+        target,
+        runIndex: 0,
+        attemptIndex: 0,
+        definitionRevision: 1,
+        responseKind: "ai",
+        payload: {
+          cliOutput: {
+            prompt: "fold this",
+            response: "",
+            elapsed: 0,
+            isStreaming: true,
+          },
+        },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED,
+        timestampMs: 3,
+        target,
+        runIndex: 0,
+        attemptIndex: 0,
+        payload: { chunk: "the " },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED,
+        timestampMs: 4,
+        target,
+        runIndex: 0,
+        attemptIndex: 0,
+        payload: { chunk: "answer" },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        timestampMs: 5,
+        target,
+        runIndex: 0,
+        attemptIndex: 0,
+        definitionRevision: 1,
+        responseKind: "ai",
+        payload: {
+          cliOutput: {
+            prompt: "fold this",
+            response: "the answer",
+            elapsed: 1,
+            isStreaming: false,
+          },
+        },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED,
+        timestampMs: 6,
+        target,
+        runIndex: 0,
+        attemptIndex: 0,
+        definitionRevision: 1,
+        payload: { terminalState: "completed" },
+      },
+    ]);
+
+    const settled = [];
+    for await (const event of new RunOutputResolver(recorder).streamAttempts(
+      manifestPath
+    )) {
+      if (event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED) {
+        settled.push(event);
+      }
+    }
+
+    assert.strictEqual(settled.length, 1);
+    assert.strictEqual(settled[0].attempt.responseText, "the answer");
+    assert.strictEqual(
+      settled[0].attempt.responseText?.split("the answer").length,
+      2,
+      "the aggregate must supersede the earlier deltas rather than append them"
+    );
+    assert.strictEqual(settled[0].unterminated, false);
+  });
+
+  test("yields unterminated attempts at end-of-stream", async () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    await recorder.appendEvents(manifestPath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+        timestampMs: 1,
+        target,
+        runIndex: 0,
+        attemptIndex: 0,
+        definitionRevision: 1,
+        payload: {
+          kind: "ai",
+          startReason: "initial",
+          prompt: "interrupted",
+        },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        timestampMs: 2,
+        target,
+        runIndex: 0,
+        attemptIndex: 0,
+        definitionRevision: 1,
+        responseKind: "ai",
+        payload: {
+          cliOutput: {
+            prompt: "interrupted",
+            response: "",
+            elapsed: 0,
+            isStreaming: true,
+          },
+        },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED,
+        timestampMs: 3,
+        target,
+        runIndex: 0,
+        attemptIndex: 0,
+        payload: { chunk: "partial output" },
+      },
+    ]);
+
+    const settled = [];
+    for await (const event of new RunOutputResolver(recorder).streamAttempts(
+      manifestPath
+    )) {
+      if (event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED) {
+        settled.push(event);
+      }
+    }
+
+    assert.strictEqual(settled.length, 1);
+    assert.strictEqual(settled[0].unterminated, true);
+    assert.strictEqual(settled[0].attempt.responseText, "partial output");
+    assert.strictEqual(settled[0].attempt.terminalState, undefined);
+  });
+
+  test("yields interleaved parallel attempts once in settle order", async () => {
+    const firstTarget = {
+      kind: FINAL_STEP_PHASES.QUEUE,
+      stepIndex: 0,
+    } as const;
+    const secondTarget = {
+      kind: FINAL_STEP_PHASES.QUEUE,
+      stepIndex: 1,
+    } as const;
+    const start = (
+      target: typeof firstTarget | typeof secondTarget,
+      prompt: string
+    ): WorkflowTimelineEventDraft => ({
+      eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+      timestampMs: 1,
+      target,
+      runIndex: 0,
+      attemptIndex: 0,
+      definitionRevision: 1,
+      payload: { kind: "ai", startReason: "initial", prompt },
+    });
+    const output = (
+      target: typeof firstTarget | typeof secondTarget,
+      prompt: string
+    ): WorkflowTimelineEventDraft => ({
+      eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+      timestampMs: 2,
+      target,
+      runIndex: 0,
+      attemptIndex: 0,
+      definitionRevision: 1,
+      responseKind: "ai",
+      payload: {
+        cliOutput: {
+          prompt,
+          response: "",
+          elapsed: 0,
+          isStreaming: true,
+        },
+      },
+    });
+    const chunk = (
+      target: typeof firstTarget | typeof secondTarget,
+      value: string
+    ): WorkflowTimelineEventDraft => ({
+      eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED,
+      timestampMs: 3,
+      target,
+      runIndex: 0,
+      attemptIndex: 0,
+      payload: { chunk: value },
+    });
+    const terminate = (
+      target: typeof firstTarget | typeof secondTarget,
+      timestampMs: number
+    ): WorkflowTimelineEventDraft => ({
+      eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED,
+      timestampMs,
+      target,
+      runIndex: 0,
+      attemptIndex: 0,
+      definitionRevision: 1,
+      payload: { terminalState: "completed" },
+    });
+
+    await recorder.appendEvents(manifestPath, [
+      start(firstTarget, "first"),
+      start(secondTarget, "second"),
+      output(firstTarget, "first"),
+      chunk(firstTarget, "first output"),
+      output(secondTarget, "second"),
+      chunk(secondTarget, "second output"),
+      terminate(secondTarget, 4),
+      chunk(firstTarget, " plus more"),
+      terminate(firstTarget, 5),
+    ]);
+
+    const settled = [];
+    for await (const event of new RunOutputResolver(recorder).streamAttempts(
+      manifestPath
+    )) {
+      if (event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED) {
+        settled.push(event);
+      }
+    }
+
+    assert.deepStrictEqual(
+      settled.map((event) => event.attempt.target),
+      [secondTarget, firstTarget]
+    );
+    assert.deepStrictEqual(
+      settled.map((event) => event.attempt.responseText),
+      ["second output", "first output plus more"]
+    );
+    assert.strictEqual(
+      new Set(settled.map((event) => event.attempt.runIndex)).size,
+      1
+    );
   });
 
   test("streams very large logs without readEvents or response truncation", async () => {

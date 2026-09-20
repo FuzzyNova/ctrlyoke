@@ -1,9 +1,20 @@
 # CLI History Inspection — discover workflow/run keys and dump run output
 
-> **Status:** Not implemented. Research/design only — no code changed yet.
+> **Status:** Not implemented. The core primitive in step 2 is implemented; the CLI commands remain
+> planned work.
 > Re-verified against the code on 2026-09-20; every file/line citation below was
 > checked, and four claims in the previous draft were **wrong** — see
 > "Corrections to the previous draft" before implementing anything.
+
+### Step 2 implementation note
+
+`RunOutputResolver.streamAttempts(manifestPath: string): AsyncGenerator<RunOutputResolverAttemptEvent, void, undefined>`
+is implemented in `src/core/orchestration/RunOutputResolver.ts`. Its discriminated union yields
+settled `ResolvedRunAttemptValue` records in settle order, with `unterminated: true` for open
+attempts flushed at end-of-stream, plus runtime-transition and run-termination facts. Open state is
+retained only for concurrently active attempts, with a just-terminated value held briefly when a
+contiguous follow-up record can still extend it. `resolveAttempt` and `resolveLatestAttempts` are
+both expressed as filters/reductions over `streamAttempts`; the delta/aggregate fold has one owner.
 
 ## Problem
 
@@ -408,11 +419,10 @@ single-blob convention.
   difference in both `--help` and the docs page. `CLI_HISTORY_SEARCH_PLAN.md` deliberately goes the
   other way for `history search --json`, because a search response is bounded by `--limit`; the two
   choices and the one reason for each should be stated together.
-- **`streamAttempts` and interleaved parallel branches.** Attempts from a parallel group interleave
-  in the timeline, so "the order it settled" is not "the order it started". That is the same
-  ordering the live CLI produces, so it is defensible — but `history show` could optionally sort
-  settled attempts by target for readability. Decide when the generator exists and the output can
-  actually be looked at; do not design it blind.
+- **`streamAttempts` and interleaved parallel branches — resolved.** Attempts from a parallel group
+  interleave in the timeline, so "the order it settled" is not "the order it started". The
+  generator deliberately yields settle order without sorting, matching live CLI output; callers
+  that want a presentation order can sort the settled values after consuming them.
 - **An attempt that never terminated.** An interrupted run leaves an attempt with no
   `ATTEMPT_TERMINATED`. `streamAttempts` must yield it at end-of-stream rather than dropping it, and
   `history show` should mark it — an interrupted run is one of the main reasons to read this output.

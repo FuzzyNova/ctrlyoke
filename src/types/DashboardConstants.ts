@@ -3370,6 +3370,7 @@ export type OutputMessageType =
 // RUN OUTPUT RESOLVER EVENT KINDS - Events emitted while reducing a run timeline
 // ============================================================================
 export const RUN_OUTPUT_RESOLVER_EVENT_KINDS = {
+  ATTEMPT_SETTLED: "attemptSettled",
   ATTEMPT_STARTED: "attemptStarted",
   STREAMING_CHUNK: "streamingChunk",
   STREAMING_EVENTS: "streamingEvents",
