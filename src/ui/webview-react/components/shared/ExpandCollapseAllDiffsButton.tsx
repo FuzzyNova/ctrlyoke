@@ -19,7 +19,7 @@ export const ExpandCollapseAllDiffsButton: React.FC<
     onClick={() => (anyDiffCollapsed ? onExpand() : onCollapse())}
   >
     <Icon
-      name={anyDiffCollapsed ? "codicon-diff" : "codicon-diff-ignored"}
+      name={anyDiffCollapsed ? "codicon-expand-all" : "codicon-collapse-all"}
       className="codicon-lg"
     />
   </button>
