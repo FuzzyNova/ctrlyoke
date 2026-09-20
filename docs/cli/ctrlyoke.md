@@ -12,6 +12,7 @@ ctrlyoke history relink <oldPath> <newPath> [--yes]
 ctrlyoke history list [--cwd <path>] [--all] [--json]
 ctrlyoke history runs --workflow <key> [--cwd <path>] [--json]
 ctrlyoke history show --workflow <key> --run <ref|runId> [--step <index|final>]
+ctrlyoke history search <query> [--cwd <path>] [--limit <n>] [--json]
 ctrlyoke step edit [file] --workflow <key> --run <ref|runId> --index <index> [--prompt <text>]
 ctrlyoke step remove --workflow <key> --run <ref|runId> --index <index>
 ctrlyoke step reorder --workflow <key> --run <ref|runId> --order <indices>
@@ -226,6 +227,30 @@ Pass `--json` to emit one raw attempt record per line as NDJSON. This is
 deliberately different from commands such as `validate --json`, which emit one
 versioned JSON document; NDJSON keeps large runs streamable and includes an
 `unterminated` marker for attempts interrupted before their terminal event.
+
+## `ctrlyoke history search`
+
+Search indexed output across this workspace's run history:
+
+```bash
+ctrlyoke history search "EPERM" --kind bash --kind response --limit 3
+ctrlyoke history search "timeout" --this-workflow --deep --exact-count
+ctrlyoke history search "permission" --since 7d --json
+```
+
+Text results include a copy-pasteable `--workflow ... --run ... --step ...`
+selector for `history show`, `rerun`, and step commands. A result represents one
+matching event or field, not one occurrence. Unless `--exact-count` is supplied,
+the reported total is a lower bound and is marked with `+`.
+
+Without `--deep`, matching uses indexed text capped at 2,000 characters per
+event. A term that appears only later in a long output may therefore be missed;
+use `--deep` or inspect a known run with `history show`. The text footer always
+discloses the shallow/deep mode and index/count state.
+
+`--json` emits one versioned JSON result blob bounded by `--limit` (up to 100
+results). This is deliberately different from `history show --json`, which
+emits NDJSON because a run can contain an unbounded stream of attempts.
 
 ## `ctrlyoke step`
 

@@ -1,11 +1,15 @@
 import * as assert from "assert";
 import chalk from "chalk";
 import { Command } from "commander";
+import * as path from "path";
+import { existsSync } from "fs";
 import { setup, suite, teardown, test } from "mocha";
 import {
   EXECUTION_STATES,
   type ExecutionState,
   FINAL_STEP_PHASES,
+  HISTORY_EVENT_KINDS,
+  HISTORY_MATCH_FIELDS,
   RUN_OUTPUT_RESOLVER_EVENT_KINDS,
 } from "../../types/DashboardConstants";
 import type {
@@ -18,7 +22,9 @@ import type { RunNavigationSummary } from "../../core/orchestration/OutputHistor
 import {
   listHistoryCommand,
   runsHistoryCommand,
+  searchHistoryCommand,
   showHistoryCommand,
+  type HistorySearchCommandService,
   type HistoryInspectionCommandDependencies,
   type HistoryInspectionCommandIo,
   type HistoryInspectionLineageRepository,
@@ -36,8 +42,13 @@ import {
   registerHistoryCommands,
   type HistoryListOptions,
   type HistoryRunsOptions,
+  type HistorySearchOptions,
   type HistoryShowOptions,
 } from "../../cli/HistoryCommandDefinitions";
+import type {
+  HistorySearchQuery,
+  HistorySearchResponse,
+} from "../../types/WorkflowTimelineTypes";
 
 class TestIo implements HistoryInspectionCommandIo {
   readonly output: string[] = [];
@@ -110,6 +121,26 @@ class TestRunOutputResolver implements HistoryInspectionRunOutputResolver {
   }
 }
 
+class TestHistorySearchService implements HistorySearchCommandService {
+  request?: string | HistorySearchQuery;
+  options?: Parameters<HistorySearchCommandService["search"]>[5];
+
+  constructor(private readonly response: HistorySearchResponse) {}
+
+  async search(
+    query: string | HistorySearchQuery,
+    _workspaceFolderPath: string,
+    _onRebuildProgress?: Parameters<HistorySearchCommandService["search"]>[2],
+    _signal?: AbortSignal,
+    _onPartialResults?: Parameters<HistorySearchCommandService["search"]>[4],
+    options?: Parameters<HistorySearchCommandService["search"]>[5]
+  ): Promise<HistorySearchResponse> {
+    this.request = query;
+    this.options = options;
+    return this.response;
+  }
+}
+
 function descriptor(
   workflowKey: WorkflowKey,
   overrides: Partial<WorkflowLineageDescriptor> = {}
@@ -144,7 +175,8 @@ function navigation(
 function dependencies(
   repository: HistoryInspectionLineageRepository,
   historyManager: HistoryInspectionOutputHistoryManager,
-  resolver?: HistoryInspectionRunOutputResolver
+  resolver?: HistoryInspectionRunOutputResolver,
+  searchService?: HistorySearchCommandService
 ): HistoryInspectionCommandDependencies {
   const workspace: HistoryInspectionWorkspace = {
     workspaceRoot: "/workspace",
@@ -154,6 +186,9 @@ function dependencies(
   return {
     bootstrapCliWorkspace: async () => workspace,
     ...(resolver ? { createRunOutputResolver: () => resolver } : {}),
+    ...(searchService
+      ? { createHistorySearchService: () => searchService }
+      : {}),
   };
 }
 
@@ -213,6 +248,7 @@ suite("CLI history inspection command parser", () => {
         calls.runs = options;
       },
       show: async () => {},
+      search: async () => {},
     });
 
     await program.parseAsync(
@@ -245,6 +281,7 @@ suite("CLI history inspection command parser", () => {
       show: async (options) => {
         showOptions = options;
       },
+      search: async () => {},
     });
 
     await program.parseAsync(
@@ -269,6 +306,55 @@ suite("CLI history inspection command parser", () => {
       step: "final",
       json: true,
       color: false,
+    });
+  });
+
+  test("registers search with repeatable filters and index policies", async () => {
+    let searchQuery: string | undefined;
+    let searchOptions: HistorySearchOptions | undefined;
+    const program = new Command();
+    program.exitOverride();
+    program.configureOutput({ writeErr: () => {} });
+    registerHistoryCommands(program, {
+      prune: async () => {},
+      relink: async () => {},
+      list: async () => {},
+      runs: async () => {},
+      show: async () => {},
+      search: async (query, options) => {
+        searchQuery = query;
+        searchOptions = options;
+      },
+    });
+
+    await program.parseAsync(
+      [
+        "history",
+        "search",
+        "EPERM",
+        "--workflow",
+        "release",
+        "nightly",
+        "--kind",
+        "bash",
+        "response",
+        "--exact-count",
+        "--deep",
+        "--no-rebuild",
+        "--no-fallback",
+      ],
+      { from: "user" }
+    );
+
+    assert.strictEqual(searchQuery, "EPERM");
+    assert.deepStrictEqual(searchOptions, {
+      workflow: ["release", "nightly"],
+      kind: ["bash", "response"],
+      exactCount: true,
+      deep: true,
+      rebuild: false,
+      fallback: false,
+      color: true,
     });
   });
 });
@@ -604,6 +690,250 @@ suite("CLI history inspection command handlers", () => {
     ]);
   });
 });
+
+suite("CLI history search command", () => {
+  test("passes exact-count, deep, cache, and fallback policies to the service", async () => {
+    const service = new TestHistorySearchService(searchResponse());
+    const io = new TestIo();
+
+    await searchHistoryCommand(
+      "EPERM",
+      {
+        limit: "3",
+        offset: "2",
+        snippet: "140",
+        exactCount: true,
+        deep: true,
+        rebuild: false,
+        fallback: false,
+      },
+      io,
+      dependencies(
+        new TestLineageRepository([], new Map(), new Map()),
+        new TestHistoryManager(new Map(), new Map()),
+        undefined,
+        service
+      )
+    );
+
+    assert.deepStrictEqual(service.request, {
+      query: "EPERM",
+      limit: 3,
+      offset: 2,
+      deep: true,
+      exhaustive: true,
+      filters: {},
+    });
+    assert.deepStrictEqual(service.options, {
+      allowRebuild: false,
+      allowLegacyFallback: false,
+      snippetChars: 140,
+    });
+  });
+
+  test("derives --this-workflow from CTRLYOKE_WORKING_FILE", async () => {
+    const service = new TestHistorySearchService(searchResponse());
+    const originalWorkingFile = process.env.CTRLYOKE_WORKING_FILE;
+    process.env.CTRLYOKE_WORKING_FILE = path.join(
+      "/workspace",
+      "release",
+      "run-2026-09-20T12-00-00-000Z",
+      "workflow.ctrlyoke.json"
+    );
+    try {
+      await searchHistoryCommand(
+        "EPERM",
+        { thisWorkflow: true },
+        new TestIo(),
+        dependencies(
+          new TestLineageRepository([], new Map(), new Map()),
+          new TestHistoryManager(new Map(), new Map()),
+          undefined,
+          service
+        )
+      );
+    } finally {
+      if (originalWorkingFile === undefined) {
+        delete process.env.CTRLYOKE_WORKING_FILE;
+      } else {
+        process.env.CTRLYOKE_WORKING_FILE = originalWorkingFile;
+      }
+    }
+
+    assert.deepStrictEqual(service.request, {
+      query: "EPERM",
+      limit: 20,
+      offset: 0,
+      deep: false,
+      exhaustive: false,
+      filters: { workflowKeys: ["release"] },
+    });
+  });
+
+  test("rejects invalid taxonomy values and missing --this-workflow context", async () => {
+    const command = (options: HistorySearchOptions) =>
+      searchHistoryCommand(
+        "EPERM",
+        options,
+        new TestIo(),
+        dependencies(
+          new TestLineageRepository([], new Map(), new Map()),
+          new TestHistoryManager(new Map(), new Map()),
+          undefined,
+          new TestHistorySearchService(searchResponse())
+        )
+      );
+
+    await assert.rejects(command({ kind: ["not-a-kind"] }), /Valid values: /);
+    await assert.rejects(
+      command({ harness: ["not-a-harness"] }),
+      /Valid values: /
+    );
+    await assert.rejects(command({ state: ["not-a-state"] }), /Valid values: /);
+
+    const originalWorkingFile = process.env.CTRLYOKE_WORKING_FILE;
+    delete process.env.CTRLYOKE_WORKING_FILE;
+    try {
+      await assert.rejects(
+        command({ thisWorkflow: true }),
+        /CTRLYOKE_WORKING_FILE to be set/
+      );
+    } finally {
+      if (originalWorkingFile !== undefined) {
+        process.env.CTRLYOKE_WORKING_FILE = originalWorkingFile;
+      }
+    }
+  });
+
+  test("renders selector lines for queue and final-step targets", async () => {
+    const io = new TestIo();
+    await searchHistoryCommand(
+      "EPERM",
+      {},
+      io,
+      dependencies(
+        new TestLineageRepository([], new Map(), new Map()),
+        new TestHistoryManager(new Map(), new Map()),
+        undefined,
+        new TestHistorySearchService(searchResponse())
+      )
+    );
+
+    const output = io.output.join("\n");
+    assert.match(output, /--workflow release --run run-queue --step 2/);
+    assert.match(output, /--workflow release --run run-final --step final/);
+    assert.match(output, /one matching event or field, not one occurrence/);
+    assert.match(output, /lower bound/);
+    assert.match(output, /--deep/);
+    assert.match(output, /history show/);
+  });
+
+  test("emits one redacted JSON result blob with the response states verbatim", async () => {
+    const io = new TestIo();
+    await searchHistoryCommand(
+      "EPERM",
+      { json: true },
+      io,
+      dependencies(
+        new TestLineageRepository([], new Map(), new Map()),
+        new TestHistoryManager(new Map(), new Map()),
+        undefined,
+        new TestHistorySearchService(searchResponse())
+      )
+    );
+
+    assert.strictEqual(io.output.length, 1);
+    assert.deepStrictEqual(JSON.parse(io.output[0]), {
+      schemaVersion: 1,
+      query: "EPERM",
+      offset: 0,
+      limit: 20,
+      deep: false,
+      totalCount: 4,
+      countState: "atLeast",
+      hasMore: true,
+      indexState: "ready",
+      results: searchResponse().results,
+    });
+  });
+
+  test("parses relative history times", async () => {
+    const now = 1_700_000_000_000;
+    const service = new TestHistorySearchService(searchResponse());
+    const originalNow = Date.now;
+    Date.now = () => now;
+    try {
+      await searchHistoryCommand(
+        "EPERM",
+        { since: "7d", until: "2026-09-20T00:00:00.000Z" },
+        new TestIo(),
+        dependencies(
+          new TestLineageRepository([], new Map(), new Map()),
+          new TestHistoryManager(new Map(), new Map()),
+          undefined,
+          service
+        )
+      );
+    } finally {
+      Date.now = originalNow;
+    }
+
+    const request = service.request as HistorySearchQuery;
+    assert.strictEqual(request.filters?.since, now - 7 * 86_400_000);
+    assert.strictEqual(
+      request.filters?.until,
+      Date.parse("2026-09-20T00:00:00.000Z")
+    );
+  });
+
+  test("keeps the rebuild worker beside the CLI bundle", () => {
+    assert.strictEqual(
+      existsSync(
+        path.resolve(__dirname, "../../historySearchRebuildWorker.js")
+      ),
+      true
+    );
+  });
+});
+
+function searchResponse(): HistorySearchResponse {
+  return {
+    query: "EPERM",
+    offset: 0,
+    totalCount: 4,
+    countState: "atLeast",
+    hasMore: true,
+    indexState: "ready",
+    results: [
+      {
+        workflowKey: "release" as WorkflowKey,
+        runRef: "run-queue" as RunRef,
+        workflowName: "Release",
+        runId: 4,
+        startedAt: 1_700_000_000_000,
+        executionState: EXECUTION_STATES.COMPLETED,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 },
+        eventKind: HISTORY_EVENT_KINDS.BASH,
+        matchField: HISTORY_MATCH_FIELDS.OUTPUT,
+        matchSnippet: "rename raised EPERM",
+        matchContext: "Prompt 3",
+      },
+      {
+        workflowKey: "release" as WorkflowKey,
+        runRef: "run-final" as RunRef,
+        workflowName: "Release",
+        runId: 3,
+        startedAt: 1_699_000_000_000,
+        executionState: EXECUTION_STATES.ERROR,
+        target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
+        eventKind: HISTORY_EVENT_KINDS.RESPONSE,
+        matchField: HISTORY_MATCH_FIELDS.RESPONSE,
+        matchSnippet: "EPERM was handled",
+        matchContext: "Final Step",
+      },
+    ],
+  };
+}
 
 function historyManagerForShow(key: WorkflowKey): TestHistoryManager {
   return new TestHistoryManager(

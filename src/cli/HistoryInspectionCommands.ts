@@ -6,6 +6,7 @@ import type {
   HistoryListOptions,
   HistoryRunsOptions,
   HistoryShowOptions,
+  HistorySearchOptions as HistorySearchCommandOptions,
 } from "./HistoryCommandDefinitions";
 import { resolveCliRunRef } from "./CliRunSelector";
 import { CliTerminalFormatter } from "./CliTerminalFormatter";
@@ -19,10 +20,19 @@ import type { RunSummary } from "../types/WorkflowTimelineTypes";
 import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  HARNESS_IDS,
+  HISTORY_EVENT_KINDS,
+  HISTORY_SEARCH_COUNT_STATES,
   RUN_OUTPUT_RESOLVER_EVENT_KINDS,
   STATUS_MESSAGE_SEVERITY,
 } from "../types/DashboardConstants";
 import type { OutputExecutionTarget } from "../types/OutputHistoryTypes";
+import type {
+  HistoryEventKind,
+  HistorySearchQuery,
+  HistorySearchResponse,
+  HistorySearchResult,
+} from "../types/WorkflowTimelineTypes";
 import {
   type RunOutputResolverAttemptEvent,
   type ResolvedRunAttemptValue,
@@ -37,6 +47,14 @@ import * as WorkflowPaths from "../utils/WorkflowPaths";
 import type { CliOutput } from "../types/WebviewMessageTypes";
 import { SCRIPT_OUTPUT_SOURCES } from "../types/DashboardConstants";
 import { secretRedactionService } from "../utils/SecretRedactionService";
+import { HistorySearchService } from "../core/orchestration/HistorySearchService";
+import type { HistorySearchOptions } from "../core/orchestration/HistorySearchService";
+import type {
+  IndexRebuildProgressCallback,
+  PartialSearchResultsCallback,
+} from "../core/orchestration/HistorySearchIndexService";
+import type { PartialCtrlYokeSettings } from "../types/CtrlYokeSettings";
+import { parseHistoryTime } from "./HistoryTime";
 
 export interface HistoryInspectionCommandIo {
   writeOut(message: string): void;
@@ -68,11 +86,27 @@ export interface HistoryInspectionWorkspace {
 export interface HistoryInspectionCommandDependencies {
   bootstrapCliWorkspace?: (
     options: Pick<
-      HistoryListOptions | HistoryRunsOptions | HistoryShowOptions,
+      | HistoryListOptions
+      | HistoryRunsOptions
+      | HistoryShowOptions
+      | HistorySearchCommandOptions,
       "cwd"
-    >
+    >,
+    cliOverlay?: PartialCtrlYokeSettings
   ) => Promise<HistoryInspectionWorkspace>;
   createRunOutputResolver?: () => HistoryInspectionRunOutputResolver;
+  createHistorySearchService?: () => HistorySearchCommandService;
+}
+
+export interface HistorySearchCommandService {
+  search(
+    query: string | HistorySearchQuery,
+    workspaceFolderPath: string,
+    onRebuildProgress?: IndexRebuildProgressCallback,
+    signal?: AbortSignal,
+    onPartialResults?: PartialSearchResultsCallback,
+    options?: HistorySearchOptions
+  ): Promise<HistorySearchResponse>;
 }
 
 interface HistoryListRow {
@@ -206,6 +240,258 @@ export async function showHistoryCommand(
       );
     }
   }
+}
+
+const HISTORY_SEARCH_DEFAULT_LIMIT = 20;
+const HISTORY_SEARCH_MAX_LIMIT = 100;
+const HISTORY_SEARCH_DEFAULT_SNIPPET_CHARS = 100;
+const HISTORY_SEARCH_MIN_QUERY_LENGTH = 2;
+export const CLI_HISTORY_SEARCH_JSON_SCHEMA_VERSION = 1 as const;
+
+export async function searchHistoryCommand(
+  query: string,
+  options: HistorySearchCommandOptions,
+  io: HistoryInspectionCommandIo,
+  dependencies: HistoryInspectionCommandDependencies = {}
+): Promise<void> {
+  CliTerminalFormatter.setColorEnabled(options.color !== false);
+  const request = buildHistorySearchQuery(query, options);
+  const snippetChars = requestSnippetChars(options);
+  const workspace = await (
+    dependencies.bootstrapCliWorkspace ?? bootstrapCliWorkspace
+  )(options, { runs: { historySearchCacheMb: 0 } });
+  const service =
+    dependencies.createHistorySearchService?.() ?? new HistorySearchService();
+  const response = await service.search(
+    request,
+    workspace.workspaceRoot,
+    (processedRuns, totalRuns) => {
+      io.writeErr(
+        `Rebuilding search index (${processedRuns}/${totalRuns} runs)…`
+      );
+    },
+    undefined,
+    undefined,
+    {
+      allowRebuild: options.rebuild !== false,
+      allowLegacyFallback: options.fallback !== false,
+      snippetChars,
+    }
+  );
+
+  if (options.json) {
+    renderHistorySearchJson(request, response, io);
+    return;
+  }
+  renderHistorySearchText(request, response, io);
+}
+
+function buildHistorySearchQuery(
+  query: string,
+  options: HistorySearchCommandOptions
+): HistorySearchQuery {
+  const normalizedQuery = query.trim();
+  if (normalizedQuery.length < HISTORY_SEARCH_MIN_QUERY_LENGTH) {
+    throw new Error(
+      `History search queries must contain at least ${HISTORY_SEARCH_MIN_QUERY_LENGTH} characters.`
+    );
+  }
+
+  const workflowKeys = [...(options.workflow ?? [])];
+  if (options.thisWorkflow) {
+    const workingFile = process.env.CTRLYOKE_WORKING_FILE;
+    if (!workingFile) {
+      throw new Error(
+        "--this-workflow requires CTRLYOKE_WORKING_FILE to be set."
+      );
+    }
+    const address = WorkflowPaths.parseWorkingFileAddressFromPath(workingFile);
+    if (!address) {
+      throw new Error(
+        `CTRLYOKE_WORKING_FILE does not identify a ctrlyoke workflow file: ${workingFile}`
+      );
+    }
+    if (!workflowKeys.includes(address.workflowKey)) {
+      workflowKeys.push(address.workflowKey);
+    }
+  }
+
+  const eventKinds = parseHistorySearchValues(
+    options.kind,
+    Object.values(HISTORY_EVENT_KINDS),
+    "--kind"
+  );
+  const harnesses = parseHistorySearchValues(
+    options.harness,
+    Object.values(HARNESS_IDS),
+    "--harness"
+  );
+  const executionStates = parseHistorySearchValues(
+    options.state,
+    Object.values(EXECUTION_STATES),
+    "--state"
+  );
+  const now = Date.now();
+  const since = options.since
+    ? parseHistoryTime(options.since, now)
+    : undefined;
+  const until = options.until
+    ? parseHistoryTime(options.until, now)
+    : undefined;
+
+  return {
+    query: normalizedQuery,
+    limit: parseHistorySearchLimit(options.limit),
+    offset: parseHistorySearchInteger(options.offset, "--offset", 0),
+    deep: options.deep === true,
+    exhaustive: options.exactCount === true,
+    filters: {
+      ...(eventKinds ? { eventKinds: eventKinds as HistoryEventKind[] } : {}),
+      ...(workflowKeys.length
+        ? { workflowKeys: workflowKeys as WorkflowKey[] }
+        : {}),
+      ...(harnesses ? { harnesses } : {}),
+      ...(executionStates ? { executionStates } : {}),
+      ...(options.path !== undefined ? { pathContains: options.path } : {}),
+      ...(since !== undefined ? { since } : {}),
+      ...(until !== undefined ? { until } : {}),
+    },
+  };
+}
+
+function parseHistorySearchValues<T extends string>(
+  values: string[] | undefined,
+  allowed: readonly T[],
+  optionName: string
+): T[] | undefined {
+  if (!values) {
+    return undefined;
+  }
+  const allowedSet = new Set<string>(allowed);
+  const invalid = values.find((value) => !allowedSet.has(value));
+  if (invalid !== undefined) {
+    throw new Error(
+      `Invalid ${optionName} value "${invalid}". Valid values: ${allowed.join(", ")}`
+    );
+  }
+  return values.filter((value): value is T => allowedSet.has(value));
+}
+
+function parseHistorySearchLimit(value: string | undefined): number {
+  const parsed = parseHistorySearchInteger(value, "--limit", 1);
+  return Math.min(parsed, HISTORY_SEARCH_MAX_LIMIT);
+}
+
+function parseHistorySearchInteger(
+  value: string | undefined,
+  optionName: string,
+  minimum: number
+): number {
+  if (value === undefined) {
+    return optionName === "--limit" ? HISTORY_SEARCH_DEFAULT_LIMIT : 0;
+  }
+  if (!/^\d+$/.test(value)) {
+    throw new Error(
+      `Invalid ${optionName} value "${value}"; expected an integer.`
+    );
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < minimum) {
+    throw new Error(
+      `Invalid ${optionName} value "${value}"; expected an integer of at least ${minimum}.`
+    );
+  }
+  return parsed;
+}
+
+function requestSnippetChars(options: HistorySearchCommandOptions): number {
+  return options.snippet === undefined
+    ? HISTORY_SEARCH_DEFAULT_SNIPPET_CHARS
+    : parseHistorySearchInteger(options.snippet, "--snippet", 0);
+}
+
+function renderHistorySearchJson(
+  request: HistorySearchQuery,
+  response: HistorySearchResponse,
+  io: HistoryInspectionCommandIo
+): void {
+  io.writeOut(
+    JSON.stringify(
+      secretRedactionService.redactValue({
+        schemaVersion: CLI_HISTORY_SEARCH_JSON_SCHEMA_VERSION,
+        query: response.query,
+        offset: response.offset,
+        limit: request.limit,
+        deep: request.deep === true,
+        totalCount: response.totalCount,
+        countState: response.countState,
+        hasMore: response.hasMore,
+        indexState: response.indexState,
+        results: response.results,
+      })
+    )
+  );
+}
+
+function renderHistorySearchText(
+  request: HistorySearchQuery,
+  response: HistorySearchResponse,
+  io: HistoryInspectionCommandIo
+): void {
+  const total =
+    response.countState === HISTORY_SEARCH_COUNT_STATES.EXACT
+      ? String(response.totalCount)
+      : `${response.totalCount}+`;
+  const mode = request.deep === true ? "deep" : "shallow";
+  io.writeOut(
+    `${response.results.length} of ${total} results · index ${response.indexState} · ${mode}`
+  );
+
+  response.results.forEach((result, index) => {
+    io.writeOut(formatHistorySearchResult(result, index));
+  });
+
+  io.writeOut(
+    "Each result is one matching event or field, not one occurrence."
+  );
+  if (response.countState === HISTORY_SEARCH_COUNT_STATES.EXACT) {
+    io.writeOut("This total is exact.");
+  } else {
+    io.writeOut(
+      "This total is a lower bound because the scan stopped after the requested page; use --exact-count for a real total."
+    );
+  }
+  if (request.deep !== true) {
+    io.writeOut(
+      "This was a shallow search: indexed text is capped at 2000 characters, so use --deep for terms later in long output."
+    );
+  } else {
+    io.writeOut(
+      "This was a deep search over matching runs beyond the indexed text cap."
+    );
+  }
+  io.writeOut(
+    "For an exhaustive read of a known run, use history show with its selector."
+  );
+}
+
+function formatHistorySearchResult(
+  result: HistorySearchResult,
+  index: number
+): string {
+  const step =
+    result.target.kind === FINAL_STEP_PHASES.FINAL_STEP
+      ? "final"
+      : String(result.target.stepIndex);
+  const lines = [
+    `${index + 1}. ${result.workflowName} · run ${result.runId} · ${result.matchContext} · ${result.eventKind}/${result.matchField} · ${formatDate(result.startedAt)}`,
+    `   --workflow ${result.workflowKey} --run ${result.runRef} --step ${step}`,
+  ];
+  if (result.filePath) {
+    lines.push(`   ${result.filePath}`);
+  }
+  lines.push(`   ${result.matchSnippet.replace(/\s+/g, " ").trim()}`);
+  return lines.join("\n");
 }
 
 type HistoryShowStepFilter =

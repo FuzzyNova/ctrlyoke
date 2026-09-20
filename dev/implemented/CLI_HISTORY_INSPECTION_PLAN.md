@@ -1,7 +1,7 @@
 # CLI History Inspection — discover workflow/run keys and dump run output
 
-> **Status:** Discovery commands and `history show` are implemented. The core primitive in step 2
-> is implemented.
+> **Status: Implemented.** Discovery commands and `history show` are implemented, including the
+> shared bootstrap and streaming output resolver primitive.
 > Re-verified against the code on 2026-09-20; every file/line citation below was
 > checked, and four claims in the previous draft were **wrong** — see
 > "Corrections to the previous draft" before implementing anything.
