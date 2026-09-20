@@ -1,12 +1,15 @@
 import * as assert from "assert";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import * as jsYaml from "js-yaml";
 import { suite, teardown, test } from "mocha";
 import { TemplateManager } from "../../core/TemplateManager";
 import { WORKFLOW_FILE_FORMATS } from "../../types/DashboardConstants";
 import { EXECUTION_PROPERTY_KEYS } from "../../types/CtrlYokeTypes";
+import {
+  makeTempDir as createTempDir,
+  removeTempDir,
+} from "../helpers/tempWorkspace";
 
 // parseTemplateMeta and mergeVariablesWithMeta are private but pure — they operate
 // only on strings/objects and never touch the ExtensionContext — so we construct a
@@ -19,14 +22,14 @@ function makeManager(): any {
 const tempDirs: string[] = [];
 
 function makeTempDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-template-test-"));
+  const dir = createTempDir("ctrlyoke-template-test-");
   tempDirs.push(dir);
   return dir;
 }
 
 teardown(() => {
   for (const dir of tempDirs.splice(0)) {
-    fs.rmSync(dir, { recursive: true, force: true });
+    removeTempDir(dir);
   }
 });
 

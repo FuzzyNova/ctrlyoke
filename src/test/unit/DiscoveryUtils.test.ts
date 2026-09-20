@@ -7,6 +7,7 @@ import {
   formatDisplayName,
   isAccessibleDirectory,
 } from "../../utils/DiscoveryUtils";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 suite("DiscoveryUtils", () => {
   // ──────────────────────────────────────────────────────────────────────────
@@ -55,23 +56,14 @@ suite("DiscoveryUtils", () => {
     let tmpFile: string;
     const created: string[] = [];
 
-    afterEach(async () => {
+    afterEach(() => {
       for (const p of created.splice(0)) {
-        try {
-          const s = fs.statSync(p);
-          if (s.isDirectory()) {
-            fs.rmdirSync(p);
-          } else {
-            fs.unlinkSync(p);
-          }
-        } catch {
-          // best-effort cleanup
-        }
+        removeTempDir(p);
       }
     });
 
     test("returns true for an existing directory", async () => {
-      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cy-discovery-"));
+      tmpDir = makeTempDir("cy-discovery-");
       created.push(tmpDir);
       const result = await isAccessibleDirectory(tmpDir);
       assert.strictEqual(result, true);

@@ -1,6 +1,5 @@
 import * as assert from "assert";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { suite, test, setup, teardown } from "mocha";
 import {
@@ -10,6 +9,7 @@ import {
 import { FileConfigBackend } from "../../config/FileConfigBackend";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -443,15 +443,11 @@ suite("FileConfigBackend", () => {
   let tmpDir: string;
 
   setup(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cy-config-test-"));
+    tmpDir = makeTempDir("cy-config-test-");
   });
 
   teardown(() => {
-    try {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    } catch {
-      // best-effort
-    }
+    removeTempDir(tmpDir);
   });
 
   test("getAll() returns {} if file does not exist", () => {

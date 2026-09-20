@@ -1,10 +1,10 @@
 import * as assert from "assert";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { suite, test, setup, teardown } from "mocha";
 import { ExternalRootsTrustStore } from "../../config/ExternalRootsTrustStore";
 import { SecretGrantsTrustStore } from "../../config/SecretGrantsTrustStore";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 suite("SecretGrantsTrustStore", () => {
   let tempDir: string;
@@ -12,13 +12,13 @@ suite("SecretGrantsTrustStore", () => {
   let store: SecretGrantsTrustStore;
 
   setup(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-secret-trust-"));
+    tempDir = makeTempDir("ctrlyoke-secret-trust-");
     storePath = path.join(tempDir, "secret-grants-trust.json");
     store = new SecretGrantsTrustStore(storePath);
   });
 
   teardown(() => {
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   });
 
   const workspaceA = "workspace-a";

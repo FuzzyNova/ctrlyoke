@@ -18,10 +18,10 @@
 
 import * as assert from "assert";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { spawnSync } from "child_process";
 import type { PromptFile } from "../../types/CtrlYokeTypes";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -309,18 +309,16 @@ suite("Harness Hook Tests", function () {
   let recorderScript: string;
 
   setup(function () {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cy-hook-test-"));
+    tmpDir = makeTempDir("cy-hook-test-");
     recorderScript = path.join(tmpDir, "record-hook.js");
     fs.writeFileSync(recorderScript, buildRecorderScript());
   });
 
   teardown(function () {
-    try {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    } catch {
-      // EBUSY on Windows if a harness process still has files open; best-effort cleanup
-      console.log(`  ⚠  Could not clean up ${tmpDir} (may still be in use)`);
-    }
+    // EBUSY on Windows if a harness process still has files open; best-effort cleanup
+    removeTempDir(tmpDir, (dir) =>
+      console.log(`  ⚠  Could not clean up ${dir} (may still be in use)`)
+    );
   });
 
   for (const harness of HARNESSES) {

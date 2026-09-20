@@ -33,9 +33,9 @@
 
 import * as assert from "assert";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import type { PromptFile } from "../../types/CtrlYokeTypes";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import {
   HARNESS_TIMEOUT_MS,
   HARNESS_MODELS,
@@ -67,7 +67,7 @@ suite("Workflow Feature Harness Tests", function () {
   let counterScript: string;
 
   setup(function () {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cy-workflow-test-"));
+    tmpDir = makeTempDir("cy-workflow-test-");
 
     // Write helper scripts to tmpDir once; each test references them by path.
     fileCheckScript = path.join(tmpDir, "file-check.js");
@@ -78,11 +78,9 @@ suite("Workflow Feature Harness Tests", function () {
   });
 
   teardown(function () {
-    try {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    } catch {
-      console.log(`  ⚠  Could not clean up ${tmpDir} (may still be in use)`);
-    }
+    removeTempDir(tmpDir, (dir) =>
+      console.log(`  ⚠  Could not clean up ${dir} (may still be in use)`)
+    );
   });
 
   // -------------------------------------------------------------------------

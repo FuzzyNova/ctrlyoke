@@ -1,8 +1,7 @@
 import * as assert from "assert";
-import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { suite, test, setup, teardown } from "mocha";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import { SecretGrantsTrustStore } from "../../config/SecretGrantsTrustStore";
 import {
   PendingSecretGrantsError,
@@ -47,14 +46,12 @@ suite("SecretGrantsTrustPrompt", () => {
   let store: SecretGrantsTrustStore;
 
   setup(() => {
-    tempDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), "ctrlyoke-secret-grants-prompt-")
-    );
+    tempDir = makeTempDir("ctrlyoke-secret-grants-prompt-");
     store = new SecretGrantsTrustStore(path.join(tempDir, "trust.json"));
   });
 
   teardown(() => {
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   });
 
   const workflow: PromptFile = {

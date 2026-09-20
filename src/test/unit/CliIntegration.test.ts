@@ -4,6 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import { WorkflowInstance } from "../../core/WorkflowInstance";
 import { IntegrationFactory } from "../../core/IntegrationFactory";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import { suite, test, setup, teardown } from "mocha";
 import type * as vscode from "vscode";
 import { CliIntegration } from "../../core/harness/CliIntegration";
@@ -464,9 +465,7 @@ suite("CliIntegration", () => {
   });
 
   test("streams a log-sourced headless response in standalone CLI context", async function () {
-    const workspaceRoot = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-cli-standalone-")
-    );
+    const workspaceRoot = makeTempDir("ctrlyoke-cli-standalone-");
     const rawLogEvents: BaseCliEvent[][] = [
       [],
       [{ type: "text", text: "standalone log response" }],
@@ -558,7 +557,7 @@ suite("CliIntegration", () => {
       streamingDisposable.dispose();
       completeDisposable.dispose();
       integration.dispose();
-      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+      removeTempDir(workspaceRoot);
     }
   });
 
@@ -761,9 +760,7 @@ suite("CliIntegration", () => {
   });
 
   test("sends a failed git reference to the dashboard as a warning", async () => {
-    const workspaceRoot = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-git-warning-pipeline-")
-    );
+    const workspaceRoot = makeTempDir("ctrlyoke-git-warning-pipeline-");
     const missingHash = "0123456789abcdef0123456789abcdef01234567";
     const platform = new MockVsCodePlatform(workspaceRoot);
     const statusMessages: Array<{
@@ -837,7 +834,7 @@ suite("CliIntegration", () => {
       integration.dispose();
       await workflowInstance.shutdown();
       configService.setCliOverlay({});
-      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+      removeTempDir(workspaceRoot);
     }
   });
 
@@ -1896,9 +1893,7 @@ suite("CliIntegration", () => {
   });
 
   test("should clean up workflow artifacts and delegate workspace cleanup", async () => {
-    const workspaceRoot = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-cli-integration-")
-    );
+    const workspaceRoot = makeTempDir("ctrlyoke-cli-integration-");
     const mcpConfigPath = path.join(workspaceRoot, "mcp-config.json");
     const extraPath = path.join(workspaceRoot, "extra-artifact.json");
     let cleanupArgs:
@@ -1935,7 +1930,7 @@ suite("CliIntegration", () => {
         workingFilePath: "workflow.ctrlyoke.json",
       });
     } finally {
-      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+      removeTempDir(workspaceRoot);
     }
   });
 
@@ -2074,16 +2069,12 @@ suite("CliIntegration", () => {
     teardown(() => {
       configService.setCliOverlay({});
       for (const dir of tempDirs) {
-        try {
-          fs.rmSync(dir, { recursive: true, force: true });
-        } catch {
-          // best-effort
-        }
+        removeTempDir(dir);
       }
     });
 
     function mkTempDir(prefix: string): string {
-      const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+      const dir = makeTempDir(prefix);
       tempDirs.push(dir);
       return dir;
     }

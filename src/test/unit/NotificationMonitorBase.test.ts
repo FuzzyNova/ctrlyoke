@@ -1,12 +1,12 @@
 import * as assert from "assert";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
 import {
   NotificationMonitorBase,
   type HookConfig,
 } from "../../core/harness/shared/interfaces/INotificationMonitor";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 class TestNotificationMonitor extends NotificationMonitorBase {
   buildHookConfig(): HookConfig {
@@ -20,9 +20,7 @@ class TestNotificationMonitor extends NotificationMonitorBase {
 
 suite("NotificationMonitorBase", () => {
   test("detects harness error notification files and cleans them up", async () => {
-    const tempDir = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-notify-")
-    );
+    const tempDir = makeTempDir("ctrlyoke-notify-");
     const monitor = new TestNotificationMonitor();
     const sessionId = "session-123";
     const errorFile = path.join(tempDir, `${sessionId}-error.json`);
@@ -54,7 +52,7 @@ suite("NotificationMonitorBase", () => {
       assert.strictEqual(result.data?.sessionId, sessionId);
       assert.strictEqual(fs.existsSync(errorFile), false);
     } finally {
-      await fs.promises.rm(tempDir, { recursive: true, force: true });
+      removeTempDir(tempDir);
     }
   });
 });

@@ -1,8 +1,8 @@
 import * as assert from "assert";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import { AntigravityLogParser } from "../../core/harness/antigravity/AntigravityLogParser";
 import { AntigravityTranscriptReader } from "../../core/harness/antigravity/AntigravityTranscriptReader";
 import { ANTIGRAVITY_TOOL_NAMES } from "../../core/harness/antigravity/AntigravityProtocolConstants";
@@ -18,7 +18,7 @@ import type { BaseCliEvent } from "../../core/harness/shared/interfaces/ILogPars
 async function withTemporaryHome<T>(
   run: (homeDir: string) => Promise<T> | T
 ): Promise<T> {
-  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-agy-home-"));
+  const tempHome = makeTempDir("ctrlyoke-agy-home-");
   const previousHome = process.env.HOME;
   const previousUserProfile = process.env.USERPROFILE;
 
@@ -30,7 +30,7 @@ async function withTemporaryHome<T>(
   } finally {
     process.env.HOME = previousHome;
     process.env.USERPROFILE = previousUserProfile;
-    fs.rmSync(tempHome, { recursive: true, force: true });
+    removeTempDir(tempHome);
   }
 }
 
@@ -122,9 +122,7 @@ suite("AntigravityLogParser", () => {
   suite("readNewLines", () => {
     test("parses session and completion markers from plain text logs", async () => {
       const parser = new AntigravityLogParser();
-      const tempDir = fs.mkdtempSync(
-        path.join(os.tmpdir(), "ctrlyoke-agy-log-")
-      );
+      const tempDir = makeTempDir("ctrlyoke-agy-log-");
       const logPath = path.join(tempDir, "cli-20260705_120000.log");
       const sessionId = "11111111-1111-1111-1111-111111111111";
 
@@ -148,7 +146,7 @@ suite("AntigravityLogParser", () => {
         assert.strictEqual(parser.extractSessionId(events), sessionId);
         assert.strictEqual(parser.isComplete(events[2]), true);
       } finally {
-        fs.rmSync(tempDir, { recursive: true, force: true });
+        removeTempDir(tempDir);
       }
     });
 
@@ -602,9 +600,7 @@ suite("AntigravityLogParser", () => {
     }
 
     test("emits appended entries once and preserves file order", async () => {
-      const tempDir = fs.mkdtempSync(
-        path.join(os.tmpdir(), "ctrlyoke-agy-tail-")
-      );
+      const tempDir = makeTempDir("ctrlyoke-agy-tail-");
       const transcriptPath = path.join(tempDir, "transcript_full.jsonl");
       const reader = new AntigravityTranscriptReader();
       try {
@@ -632,14 +628,12 @@ suite("AntigravityLogParser", () => {
         );
         assert.deepStrictEqual(await reader.readEntries(transcriptPath), []);
       } finally {
-        fs.rmSync(tempDir, { recursive: true, force: true });
+        removeTempDir(tempDir);
       }
     });
 
     test("emits each entry once when reads overlap", async () => {
-      const tempDir = fs.mkdtempSync(
-        path.join(os.tmpdir(), "ctrlyoke-agy-race-")
-      );
+      const tempDir = makeTempDir("ctrlyoke-agy-race-");
       const transcriptPath = path.join(tempDir, "transcript_full.jsonl");
       const reader = new AntigravityTranscriptReader();
       try {
@@ -684,14 +678,12 @@ suite("AntigravityLogParser", () => {
           ["third"]
         );
       } finally {
-        fs.rmSync(tempDir, { recursive: true, force: true });
+        removeTempDir(tempDir);
       }
     });
 
     test("preserves incremental read offset when the retained prefix splits a multi-byte character", async () => {
-      const tempDir = fs.mkdtempSync(
-        path.join(os.tmpdir(), "ctrlyoke-agy-utf8-")
-      );
+      const tempDir = makeTempDir("ctrlyoke-agy-utf8-");
       const transcriptPath = path.join(tempDir, "transcript_full.jsonl");
       const reader = new AntigravityTranscriptReader();
       try {
@@ -719,14 +711,12 @@ suite("AntigravityLogParser", () => {
 
         assert.deepStrictEqual(await reader.readEntries(transcriptPath), []);
       } finally {
-        fs.rmSync(tempDir, { recursive: true, force: true });
+        removeTempDir(tempDir);
       }
     });
 
     test("holds a partial trailing line until the next append", async () => {
-      const tempDir = fs.mkdtempSync(
-        path.join(os.tmpdir(), "ctrlyoke-agy-tail-")
-      );
+      const tempDir = makeTempDir("ctrlyoke-agy-tail-");
       const transcriptPath = path.join(tempDir, "transcript_full.jsonl");
       const reader = new AntigravityTranscriptReader();
       const serialized = JSON.stringify(entry("partial", 1));
@@ -738,14 +728,12 @@ suite("AntigravityLogParser", () => {
         assert.strictEqual(entries.length, 1);
         assert.strictEqual(entries[0].content, "partial");
       } finally {
-        fs.rmSync(tempDir, { recursive: true, force: true });
+        removeTempDir(tempDir);
       }
     });
 
     test("restarts from the beginning when a transcript is replaced or truncated", async () => {
-      const tempDir = fs.mkdtempSync(
-        path.join(os.tmpdir(), "ctrlyoke-agy-tail-")
-      );
+      const tempDir = makeTempDir("ctrlyoke-agy-tail-");
       const transcriptPath = path.join(tempDir, "transcript_full.jsonl");
       const reader = new AntigravityTranscriptReader();
       try {
@@ -767,14 +755,12 @@ suite("AntigravityLogParser", () => {
         assert.strictEqual(replacement.length, 1);
         assert.strictEqual(replacement[0].content, "replacement");
       } finally {
-        fs.rmSync(tempDir, { recursive: true, force: true });
+        removeTempDir(tempDir);
       }
     });
 
     test("skips malformed and unknown transcript variants safely", async () => {
-      const tempDir = fs.mkdtempSync(
-        path.join(os.tmpdir(), "ctrlyoke-agy-tail-")
-      );
+      const tempDir = makeTempDir("ctrlyoke-agy-tail-");
       const transcriptPath = path.join(tempDir, "transcript_full.jsonl");
       const reader = new AntigravityTranscriptReader();
       try {
@@ -791,7 +777,7 @@ suite("AntigravityLogParser", () => {
         assert.strictEqual(entries.length, 1);
         assert.strictEqual(entries[0].content, "valid");
       } finally {
-        fs.rmSync(tempDir, { recursive: true, force: true });
+        removeTempDir(tempDir);
       }
     });
   });

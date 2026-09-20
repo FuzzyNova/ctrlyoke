@@ -1,9 +1,9 @@
 import * as assert from "assert";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
 import { CliPromptPreparer } from "../../core/harness/shared/CliPromptPreparer";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import type { PromptSections } from "../../core/HarnessIntegration";
 import type { PromptStep } from "../../types/CtrlYokeTypes";
 import type { WorkflowContext } from "../../types/WorkflowContextTypes";
@@ -412,9 +412,7 @@ suite("CliPromptPreparer", () => {
   });
 
   test("should attach and rewrite a discovered inline skill without mutating the prompt", async () => {
-    const workspaceRoot = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-inline-skill-")
-    );
+    const workspaceRoot = makeTempDir("ctrlyoke-inline-skill-");
     const skillPath = path.join(
       workspaceRoot,
       ".ctrlyoke",
@@ -470,14 +468,12 @@ suite("CliPromptPreparer", () => {
       );
       assert.strictEqual(prompt.prompt, "/skill:commit");
     } finally {
-      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+      removeTempDir(workspaceRoot);
     }
   });
 
   test("should merge inline skills with explicit skills without duplicates", async () => {
-    const workspaceRoot = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-inline-skill-")
-    );
+    const workspaceRoot = makeTempDir("ctrlyoke-inline-skill-");
     const skillPath = path.join(
       workspaceRoot,
       ".ctrlyoke",
@@ -524,7 +520,7 @@ suite("CliPromptPreparer", () => {
         "using skill: commit now"
       );
     } finally {
-      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+      removeTempDir(workspaceRoot);
     }
   });
 
@@ -590,9 +586,7 @@ suite("CliPromptPreparer", () => {
   });
 
   test("should leave an unknown inline skill and report a diagnostic", async () => {
-    const workspaceRoot = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-inline-skill-")
-    );
+    const workspaceRoot = makeTempDir("ctrlyoke-inline-skill-");
     const preparer = new CliPromptPreparer({
       shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
       buildPromptSections: async (_prompt) =>
@@ -622,7 +616,7 @@ suite("CliPromptPreparer", () => {
         PROMPT_DIAGNOSTIC_CODES.UNKNOWN_SKILL_REFERENCE
       );
     } finally {
-      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+      removeTempDir(workspaceRoot);
     }
   });
 
@@ -1431,9 +1425,7 @@ suite("CliPromptPreparer", () => {
   });
 
   test("plans an oversized direct reference with an approximate token estimate, never reading it", async () => {
-    const workspaceRoot = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-prompt-plan-")
-    );
+    const workspaceRoot = makeTempDir("ctrlyoke-prompt-plan-");
     const referencePath = path.join(workspaceRoot, "large-reference.txt");
     await fs.promises.writeFile(referencePath, "not-read", "utf8");
     const hugeByteCount = 10 * 1024 * 1024 * 1024;
@@ -1489,14 +1481,12 @@ suite("CliPromptPreparer", () => {
       assert.ok(result.diagnostics.length > 0);
     } finally {
       fs.promises.readFile = originalReadFile;
-      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+      removeTempDir(workspaceRoot);
     }
   });
 
   test("plans a direct reference under MAX_CONTENT_SIZE with an exact token count", async () => {
-    const workspaceRoot = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-prompt-plan-")
-    );
+    const workspaceRoot = makeTempDir("ctrlyoke-prompt-plan-");
     const referencePath = path.join(workspaceRoot, "small-reference.ts");
     const fileContent = "export const greeting = 'hello world';\n".repeat(20);
     await fs.promises.writeFile(referencePath, fileContent, "utf8");
@@ -1539,14 +1529,12 @@ suite("CliPromptPreparer", () => {
         Buffer.byteLength(fileContent, "utf8")
       );
     } finally {
-      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+      removeTempDir(workspaceRoot);
     }
   });
 
   test("withholds oversized inline content without a file read", async () => {
-    const workspaceRoot = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-prompt-plan-")
-    );
+    const workspaceRoot = makeTempDir("ctrlyoke-prompt-plan-");
     const originalReadFile = fs.promises.readFile;
     let readFileCalls = 0;
     fs.promises.readFile = (async (
@@ -1594,7 +1582,7 @@ suite("CliPromptPreparer", () => {
       );
     } finally {
       fs.promises.readFile = originalReadFile;
-      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+      removeTempDir(workspaceRoot);
     }
   });
 
@@ -1636,9 +1624,7 @@ suite("CliPromptPreparer", () => {
   });
 
   test("planning does not create categorized files and apply preserves the plan", async () => {
-    const workspaceRoot = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-prompt-plan-")
-    );
+    const workspaceRoot = makeTempDir("ctrlyoke-prompt-plan-");
     try {
       const preparer = new CliPromptPreparer({
         shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
@@ -1689,17 +1675,13 @@ suite("CliPromptPreparer", () => {
         await fs.promises.access(filePath);
       }
     } finally {
-      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+      removeTempDir(workspaceRoot);
     }
   });
 
   test("defers a source-runtime copy until preparePrompt", async () => {
-    const sourceRoot = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-source-copy-")
-    );
-    const executionRoot = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-execution-copy-")
-    );
+    const sourceRoot = makeTempDir("ctrlyoke-source-copy-");
+    const executionRoot = makeTempDir("ctrlyoke-execution-copy-");
     const sourcePath = path.join(sourceRoot, "runtime", "large.log");
     const destinationPath = path.join(executionRoot, "runtime", "large.log");
     const content = Buffer.alloc(MAX_CONTENT_SIZE + 1024, 65);
@@ -1767,18 +1749,14 @@ suite("CliPromptPreparer", () => {
         content
       );
     } finally {
-      await fs.promises.rm(sourceRoot, { recursive: true, force: true });
-      await fs.promises.rm(executionRoot, { recursive: true, force: true });
+      removeTempDir(sourceRoot);
+      removeTempDir(executionRoot);
     }
   });
 
   test("skips identical copies and overwrites stale prompt and log destinations", async () => {
-    const sourceRoot = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-source-copy-")
-    );
-    const executionRoot = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-execution-copy-")
-    );
+    const sourceRoot = makeTempDir("ctrlyoke-source-copy-");
+    const executionRoot = makeTempDir("ctrlyoke-execution-copy-");
     const files = [
       {
         name: "prompt.md",
@@ -1869,8 +1847,8 @@ suite("CliPromptPreparer", () => {
         );
       }
     } finally {
-      await fs.promises.rm(sourceRoot, { recursive: true, force: true });
-      await fs.promises.rm(executionRoot, { recursive: true, force: true });
+      removeTempDir(sourceRoot);
+      removeTempDir(executionRoot);
     }
   });
 
@@ -1903,9 +1881,7 @@ suite("CliPromptPreparer", () => {
   });
 
   test("lists source references when only source reads are present", async () => {
-    const workspaceRoot = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-source-disclosure-")
-    );
+    const workspaceRoot = makeTempDir("ctrlyoke-source-disclosure-");
     const preparer = new CliPromptPreparer({
       shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
       buildPromptSections: async () =>
@@ -1936,7 +1912,7 @@ suite("CliPromptPreparer", () => {
         "Read from source checkout: @runtime/excerpt.log"
       );
     } finally {
-      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+      removeTempDir(workspaceRoot);
     }
   });
 });

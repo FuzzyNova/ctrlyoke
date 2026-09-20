@@ -5,6 +5,7 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test, teardown } from "mocha";
 import { HostedWorkspaceViewerService } from "../../server/HostedWorkspaceViewerService";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import {
   CommitMessageGenerator,
   type CommitResult,
@@ -39,9 +40,7 @@ suite("HostedWorkspaceViewerService", function () {
   const tempRoots: string[] = [];
 
   function createWorkspace(): string {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "cy-ws-viewer-")
-    );
+    const workspaceRoot = makeTempDir("cy-ws-viewer-");
     tempRoots.push(workspaceRoot);
     return workspaceRoot;
   }
@@ -71,18 +70,7 @@ suite("HostedWorkspaceViewerService", function () {
 
   teardown(() => {
     for (const workspaceRoot of tempRoots.splice(0)) {
-      // Windows can hold transient locks on git pack files (which are also
-      // read-only), causing EPERM. maxRetries makes rmSync retry on EPERM.
-      try {
-        fs.rmSync(workspaceRoot, {
-          recursive: true,
-          force: true,
-          maxRetries: 5,
-          retryDelay: 50,
-        });
-      } catch {
-        // Best-effort cleanup of OS temp dirs; ignore residual lock failures.
-      }
+      removeTempDir(workspaceRoot);
     }
   });
 

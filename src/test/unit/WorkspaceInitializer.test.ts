@@ -1,23 +1,23 @@
 import * as assert from "assert";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { suite, test, teardown } from "mocha";
 import { WorkspaceInitializer } from "../../core/orchestration/WorkspaceInitializer";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 suite("WorkspaceInitializer", () => {
   const tempRoots: string[] = [];
 
   function createWorkspace(): string {
-    const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-init-"));
+    const workspaceRoot = makeTempDir("cy-init-");
     tempRoots.push(workspaceRoot);
     return workspaceRoot;
   }
 
   teardown(() => {
     for (const workspaceRoot of tempRoots.splice(0)) {
-      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+      removeTempDir(workspaceRoot);
     }
   });
 

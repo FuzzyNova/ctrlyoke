@@ -44,9 +44,10 @@
  *             suite that is already running cannot be "not run"
  */
 import { spawn } from "node:child_process";
-import { availableParallelism } from "node:os";
+import { availableParallelism, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { cleanStaleTestTempDirs } from "./clean-stale-test-temp.mjs";
 
 const ROOT_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
 const IS_WINDOWS = process.platform === "win32";
@@ -513,6 +514,17 @@ async function main() {
   // honour -- by the time one suite fails the others are already going.
   const serial = bail || process.argv.includes("--serial");
   const plan = planParallelism(availableParallelism());
+
+  // Sweeps up whatever a previous run's crash, kill, or --bail left behind in
+  // the OS temp folder before its own teardown could run -- see
+  // clean-stale-test-temp.mjs. Cheap (a readdir plus a stat per candidate),
+  // so it runs unconditionally rather than behind a flag.
+  const swept = cleanStaleTestTempDirs();
+  if (swept.removed > 0) {
+    process.stdout.write(
+      `Cleaned up ${swept.removed}/${swept.found} stale test temp dir(s) from ${tmpdir()}.\n`
+    );
+  }
 
   process.stdout.write(`\n${RULE}\n ${PREPARE_SCRIPT}\n${RULE}\n`);
   const prepared = await runScript({ script: PREPARE_SCRIPT, live: true });

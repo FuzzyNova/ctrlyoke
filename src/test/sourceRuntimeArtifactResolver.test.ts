@@ -6,6 +6,7 @@ import * as path from "path";
 import { afterEach, suite, test } from "mocha";
 import { getGitIgnoredPaths } from "../utils/GitUtils";
 import { resolveSourceRuntimeArtifacts } from "../utils/SourceRuntimeArtifactResolver";
+import { makeTempDir } from "./helpers/tempWorkspace";
 
 const GIT_COMMIT_SUBCOMMAND = "commit";
 
@@ -189,9 +190,7 @@ suite("SourceRuntimeArtifactResolver", () => {
   }
 
   function createTemporaryDirectory(label: string): string {
-    const directory = fs.mkdtempSync(
-      path.join(os.tmpdir(), `ctrlyoke-${label}-`)
-    );
+    const directory = makeTempDir(`ctrlyoke-${label}-`);
     temporaryDirectories.push(directory);
     return directory;
   }

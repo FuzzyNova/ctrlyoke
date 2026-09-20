@@ -1,8 +1,8 @@
 import * as assert from "assert";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { suite, test, setup, teardown } from "mocha";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import {
   COMPLETION_NOTIFICATION_KINDS,
   COMPLETION_NOTIFICATION_SEVERITY,
@@ -22,10 +22,8 @@ suite("WebPushService", () => {
   let originalFetch: typeof fetch;
   let originalCtrlyokeHome: string | undefined;
 
-  setup(async () => {
-    workspaceRoot = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-web-push-")
-    );
+  setup(() => {
+    workspaceRoot = makeTempDir("ctrlyoke-web-push-");
     originalCtrlyokeHome = process.env.CTRLYOKE_HOME;
     process.env.CTRLYOKE_HOME = workspaceRoot;
     notificationsDir = path.join(
@@ -40,14 +38,14 @@ suite("WebPushService", () => {
     originalFetch = globalThis.fetch;
   });
 
-  teardown(async () => {
+  teardown(() => {
     globalThis.fetch = originalFetch;
     if (originalCtrlyokeHome === undefined) {
       delete process.env.CTRLYOKE_HOME;
     } else {
       process.env.CTRLYOKE_HOME = originalCtrlyokeHome;
     }
-    await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+    removeTempDir(workspaceRoot);
   });
 
   test("generates JWK-backed VAPID keys while preserving public key output", async () => {

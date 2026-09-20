@@ -1,8 +1,8 @@
 import * as assert from "assert";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { QwenLogParser } from "../../core/harness/qwen/QwenLogParser";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 suite("QwenLogParser session discovery", () => {
   const originalHome = process.env.HOME;
@@ -15,13 +15,13 @@ suite("QwenLogParser session discovery", () => {
     if (originalUserProfile === undefined) delete process.env.USERPROFILE;
     else process.env.USERPROFILE = originalUserProfile;
     if (testHome) {
-      fs.rmSync(testHome, { recursive: true, force: true });
+      removeTempDir(testHome);
       testHome = undefined;
     }
   });
 
   test("discovers a resumed session in its original worktree project", async () => {
-    testHome = fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-qwen-home-"));
+    testHome = makeTempDir("ctrlyoke-qwen-home-");
     process.env.HOME = testHome;
     process.env.USERPROFILE = testHome;
 

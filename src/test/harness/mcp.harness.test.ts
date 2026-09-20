@@ -25,7 +25,6 @@
 
 import * as assert from "assert";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import type { PromptFile } from "../../types/CtrlYokeTypes";
 import {
@@ -34,6 +33,7 @@ import {
   runWorkflowFile,
   logAndMaybeSkip,
 } from "./helpers/harnessRunner";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 // ---------------------------------------------------------------------------
 // Suite
@@ -45,15 +45,13 @@ suite("MCP Dynamic Queue Extension Harness Tests", function () {
   let tmpDir: string;
 
   setup(function () {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cy-mcp-test-"));
+    tmpDir = makeTempDir("cy-mcp-test-");
   });
 
   teardown(function () {
-    try {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    } catch {
-      console.log(`  ⚠  Could not clean up ${tmpDir} (may still be in use)`);
-    }
+    removeTempDir(tmpDir, (dir) =>
+      console.log(`  ⚠  Could not clean up ${dir} (may still be in use)`)
+    );
   });
 
   // -------------------------------------------------------------------------

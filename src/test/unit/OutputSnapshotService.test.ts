@@ -1,6 +1,5 @@
 import * as assert from "assert";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { suite, test, afterEach } from "mocha";
 import {
@@ -8,20 +7,19 @@ import {
   writeOutputSnapshotAttachment,
 } from "../../ui/OutputSnapshotService";
 import { outputCaptureCache } from "../../completions/OutputCaptureCache";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 suite("OutputSnapshotService", () => {
   const workspaceRoots: string[] = [];
 
-  afterEach(async () => {
+  afterEach(() => {
     for (const workspaceRoot of workspaceRoots.splice(0)) {
-      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+      removeTempDir(workspaceRoot);
     }
   });
 
   function createWorkspaceRoot(): string {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "ctrlyoke-output-snapshot-")
-    );
+    const workspaceRoot = makeTempDir("ctrlyoke-output-snapshot-");
     workspaceRoots.push(workspaceRoot);
     return workspaceRoot;
   }

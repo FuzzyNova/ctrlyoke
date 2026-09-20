@@ -1,29 +1,36 @@
 import * as assert from "assert";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { suite, test, setup, teardown } from "mocha";
 import { ExternalRootsTrustStore } from "../../config/ExternalRootsTrustStore";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 suite("ExternalRootsTrustStore", () => {
   let tempDir: string;
   let storePath: string;
   let store: ExternalRootsTrustStore;
+  const createdRoots: string[] = [];
 
   setup(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-trust-store-"));
+    tempDir = makeTempDir("ctrlyoke-trust-store-");
     storePath = path.join(tempDir, "external-roots-trust.json");
     store = new ExternalRootsTrustStore(storePath);
   });
 
   teardown(() => {
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
+    for (const root of createdRoots.splice(0)) {
+      removeTempDir(root);
+    }
   });
 
   const workspaceA = "workspace-a";
   const workspaceB = "workspace-b";
-  const rootDir = () =>
-    fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-external-root-"));
+  const rootDir = () => {
+    const dir = makeTempDir("ctrlyoke-external-root-");
+    createdRoots.push(dir);
+    return dir;
+  };
 
   test("getDecision returns undefined for a never-decided root", () => {
     const root = rootDir();

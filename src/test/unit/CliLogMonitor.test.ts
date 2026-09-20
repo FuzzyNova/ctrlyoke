@@ -14,6 +14,7 @@ import { CopilotLogParser } from "../../core/harness/copilot/CopilotLogParser";
 import { AntigravityLogParser } from "../../core/harness/antigravity/AntigravityLogParser";
 import { CLI_EVENT_TYPES, FAILURE_KINDS } from "../../types/DashboardConstants";
 import type { CliEvent, TextData } from "../../types/CliOutputTypes";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 const USER_EVENT_TYPE = "user";
 
@@ -475,9 +476,7 @@ suite("CliLogMonitor", () => {
     // rigged to *never* resolve, to prove live log tailing alone is now
     // enough to release the hold.
     await withZeroDrainDeadline(async () => {
-      const tempDir = fs.mkdtempSync(
-        path.join(os.tmpdir(), "ctrlyoke-claude-monitor-")
-      );
+      const tempDir = makeTempDir("ctrlyoke-claude-monitor-");
       const logPath = path.join(tempDir, "session.jsonl");
 
       try {
@@ -622,7 +621,7 @@ suite("CliLogMonitor", () => {
           "expected the hold to have started waiting on a further Stop"
         );
       } finally {
-        fs.rmSync(tempDir, { recursive: true, force: true });
+        removeTempDir(tempDir);
       }
     });
   });
@@ -639,9 +638,7 @@ suite("CliLogMonitor", () => {
     // shape against the real file-tailing CopilotLogParser (no `readNewLines`/
     // `watchLogFile` overrides) to prove a single confirming Stop now suffices.
     await withZeroDrainDeadline(async () => {
-      const tempDir = fs.mkdtempSync(
-        path.join(os.tmpdir(), "ctrlyoke-copilot-monitor-")
-      );
+      const tempDir = makeTempDir("ctrlyoke-copilot-monitor-");
       const logPath = path.join(tempDir, "events.jsonl");
 
       try {
@@ -782,7 +779,7 @@ suite("CliLogMonitor", () => {
           "Both background tasks finished."
         );
       } finally {
-        fs.rmSync(tempDir, { recursive: true, force: true });
+        removeTempDir(tempDir);
       }
     });
   });
@@ -795,9 +792,7 @@ suite("CliLogMonitor", () => {
     // no second, follow-up Stop to wait for. See the Antigravity gotcha in
     // harness-cli-providers.instructions.md.
     await withZeroDrainDeadline(async () => {
-      const tempHome = fs.mkdtempSync(
-        path.join(os.tmpdir(), "ctrlyoke-agy-monitor-home-")
-      );
+      const tempHome = makeTempDir("ctrlyoke-agy-monitor-home-");
       const previousHome = process.env.HOME;
       const previousUserProfile = process.env.USERPROFILE;
       process.env.HOME = tempHome;
@@ -936,7 +931,7 @@ suite("CliLogMonitor", () => {
       } finally {
         process.env.HOME = previousHome;
         process.env.USERPROFILE = previousUserProfile;
-        fs.rmSync(tempHome, { recursive: true, force: true });
+        removeTempDir(tempHome);
       }
     });
   });

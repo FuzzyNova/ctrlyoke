@@ -1,7 +1,6 @@
 import * as assert from "assert";
 import * as fs from "fs";
 import * as fsp from "fs/promises";
-import * as os from "os";
 import * as path from "path";
 import { suite, setup, teardown, test } from "mocha";
 import { AgentExpander } from "../../utils/AgentExpander";
@@ -13,12 +12,11 @@ import {
 } from "../../types/DashboardConstants";
 import { SkillDiscovery, type SkillInfo } from "../../utils/SkillDiscovery";
 import { SkillExpander } from "../../utils/SkillExpander";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 suite("Execution-root asset discovery", () => {
   test("workspace agents and skills resolve from the supplied root", async () => {
-    const executionRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "ctrlyoke-asset-root-")
-    );
+    const executionRoot = makeTempDir("ctrlyoke-asset-root-");
     const agentPath = path.join(
       executionRoot,
       ".ctrlyoke",
@@ -59,17 +57,13 @@ suite("Execution-root asset discovery", () => {
       assert.ok(skills?.includes("execution skill"));
       assert.ok(!skills?.includes("skill body"));
     } finally {
-      fs.rmSync(executionRoot, { recursive: true, force: true });
+      removeTempDir(executionRoot);
     }
   });
 
   test("embeds an out-of-trust-root user skill verbatim", async () => {
-    const tempHome = fs.mkdtempSync(
-      path.join(os.tmpdir(), "ctrlyoke-skill-home-")
-    );
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "ctrlyoke-skill-workspace-")
-    );
+    const tempHome = makeTempDir("ctrlyoke-skill-home-");
+    const workspaceRoot = makeTempDir("ctrlyoke-skill-workspace-");
     const originalHome = process.env.HOME;
     const originalUserProfile = process.env.USERPROFILE;
     const skillContent =
@@ -114,15 +108,13 @@ suite("Execution-root asset discovery", () => {
       } else {
         process.env.USERPROFILE = originalUserProfile;
       }
-      fs.rmSync(tempHome, { recursive: true, force: true });
-      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+      removeTempDir(tempHome);
+      removeTempDir(workspaceRoot);
     }
   });
 
   test("embeds the built-in MCP skill with live queue-tool references", async () => {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "ctrlyoke-built-in-skill-")
-    );
+    const workspaceRoot = makeTempDir("ctrlyoke-built-in-skill-");
     try {
       const skills = await SkillExpander.expandSkills(
         [MCP_SKILL_NAMES.TOOLS],
@@ -137,7 +129,7 @@ suite("Execution-root asset discovery", () => {
       assert.ok(skills?.includes("<mcp-server.js path>"));
       assert.ok(skills?.includes("<path>"));
     } finally {
-      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+      removeTempDir(workspaceRoot);
     }
   });
 
@@ -152,9 +144,7 @@ suite("Execution-root asset discovery", () => {
   });
 
   test("substitutes execution addresses in generated built-in skills", async () => {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "ctrlyoke-built-in-context-")
-    );
+    const workspaceRoot = makeTempDir("ctrlyoke-built-in-context-");
     try {
       const commitOutputPath = path.join(
         workspaceRoot,
@@ -221,14 +211,12 @@ suite("Execution-root asset discovery", () => {
       assert.ok(coordinationSkills?.includes('--parallel-group-id "group-1"'));
       assert.ok(!coordinationSkills?.includes("<step index>"));
     } finally {
-      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+      removeTempDir(workspaceRoot);
     }
   });
 
   test("embeds the built-in commit-message skill with only its tool reference", async () => {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "ctrlyoke-built-in-commit-skill-")
-    );
+    const workspaceRoot = makeTempDir("ctrlyoke-built-in-commit-skill-");
     try {
       const skills = await SkillExpander.expandSkills(
         [MCP_SKILL_NAMES.COMMIT_MESSAGE],
@@ -239,13 +227,13 @@ suite("Execution-root asset discovery", () => {
       assert.ok(skills?.includes("### submit_commit_message"));
       assert.ok(!skills?.includes("### workflow_status"));
     } finally {
-      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+      removeTempDir(workspaceRoot);
     }
   });
 
   test("keeps the coordination skill export in placeholder form", async () => {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "ctrlyoke-built-in-coordination-export-")
+    const workspaceRoot = makeTempDir(
+      "ctrlyoke-built-in-coordination-export-"
     );
     try {
       const skills = await SkillExpander.expandSkills(
@@ -258,14 +246,12 @@ suite("Execution-root asset discovery", () => {
       assert.ok(skills?.includes("<step index>"));
       assert.ok(skills?.includes("<parallel group id>"));
     } finally {
-      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+      removeTempDir(workspaceRoot);
     }
   });
 
   test("findGitRoot recognizes a linked-worktree .git pointer file", async () => {
-    const worktreeRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "ctrlyoke-linked-worktree-")
-    );
+    const worktreeRoot = makeTempDir("ctrlyoke-linked-worktree-");
     const nestedDirectory = path.join(worktreeRoot, "nested", "src");
 
     try {
@@ -280,7 +266,7 @@ suite("Execution-root asset discovery", () => {
         worktreeRoot
       );
     } finally {
-      fs.rmSync(worktreeRoot, { recursive: true, force: true });
+      removeTempDir(worktreeRoot);
     }
   });
 });
@@ -290,13 +276,13 @@ suite("SkillDiscovery helpers", () => {
   let workspaceRoot: string;
 
   setup(async () => {
-    tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-skills-"));
+    tempRoot = makeTempDir("ctrlyoke-skills-");
     workspaceRoot = path.join(tempRoot, "workspace");
     await fsp.mkdir(workspaceRoot, { recursive: true });
   });
 
-  teardown(async () => {
-    await fsp.rm(tempRoot, { recursive: true, force: true });
+  teardown(() => {
+    removeTempDir(tempRoot);
   });
 
   function skill(name: string, skillPath: string): SkillInfo {

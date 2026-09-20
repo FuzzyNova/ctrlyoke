@@ -1,10 +1,10 @@
 import * as assert from "assert";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { suite, test, afterEach } from "mocha";
 import { TempFileManager } from "../../utils/TempFileManager";
 import { MAX_OUTPUT_SNAPSHOT_BYTES } from "../../types/DashboardConstants";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 suite("TempFileManager", () => {
   let workspaceRoot: string;
@@ -13,7 +13,7 @@ suite("TempFileManager", () => {
 
   // Use a fresh temp workspace dir for each test to keep things isolated
   function freshManager(): TempFileManager {
-    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cy-tmp-"));
+    workspaceRoot = makeTempDir("cy-tmp-");
     return new TempFileManager(workspaceRoot);
   }
 
@@ -27,13 +27,7 @@ suite("TempFileManager", () => {
       }
     }
     // Clean up workspace dirs
-    try {
-      if (workspaceRoot) {
-        fs.rmSync(workspaceRoot, { recursive: true, force: true });
-      }
-    } catch {
-      // best-effort
-    }
+    removeTempDir(workspaceRoot);
   });
 
   // ──────────────────────────────────────────────────────────────────────────

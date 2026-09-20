@@ -1,7 +1,7 @@
 import * as assert from "assert";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import {
   createWeigher,
   mergeShardTimings,
@@ -120,11 +120,11 @@ suite("test timing records", () => {
   let root = "";
 
   setup(async () => {
-    root = fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-timings-"));
+    root = makeTempDir("ctrlyoke-timings-");
   });
 
   teardown(() => {
-    fs.rmSync(root, { recursive: true, force: true });
+    removeTempDir(root);
   });
 
   test("keys a file relative to the test root with forward slashes", () => {

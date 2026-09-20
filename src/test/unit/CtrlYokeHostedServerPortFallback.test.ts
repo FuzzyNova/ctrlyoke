@@ -3,12 +3,12 @@ import { EventEmitter } from "events";
 import { createServer as createHttpServer, Server as HttpServer } from "http";
 import * as fs from "fs";
 import { suite, test } from "mocha";
-import * as os from "os";
 import * as path from "path";
 import { DashboardBroadcastHub } from "../../ui/DashboardBroadcastHub";
 import { CtrlYokeHostedServer } from "../../server/CtrlYokeHostedServer";
 import * as BuildConfig from "../../utils/BuildConfig";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 /**
  * Minimal stand-in for Node's http.Server, driving the same
@@ -300,9 +300,7 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
   });
 
   test("writes its own URL to the dev file when a sibling is detected in dev mode", async () => {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "ctrlyoke-hosted-server-")
-    );
+    const workspaceRoot = makeTempDir("ctrlyoke-hosted-server-");
     const token = "sibling-server-token";
     const sibling = createHostedServer(0, token, undefined, workspaceRoot);
     let second: CtrlYokeHostedServer | undefined;
@@ -332,14 +330,12 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
       second?.dispose();
       restoreDevMode();
       sibling.dispose();
-      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+      removeTempDir(workspaceRoot);
     }
   });
 
   test("does not write a dev URL file outside dev mode, even after a sibling detection", async () => {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "ctrlyoke-hosted-server-")
-    );
+    const workspaceRoot = makeTempDir("ctrlyoke-hosted-server-");
     const token = "sibling-server-token";
     const sibling = createHostedServer(0, token, undefined, workspaceRoot);
     let second: CtrlYokeHostedServer | undefined;
@@ -366,7 +362,7 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
       second?.dispose();
       restoreDevMode();
       sibling.dispose();
-      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+      removeTempDir(workspaceRoot);
     }
   });
 

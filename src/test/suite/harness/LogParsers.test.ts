@@ -2,6 +2,7 @@ import * as assert from "assert";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
+import { makeTempDir, removeTempDir } from "../../helpers/tempWorkspace";
 import { ClaudeLogParser } from "../../../core/harness/claude/ClaudeLogParser";
 import { ClaudeCliProvider } from "../../../core/harness/claude/ClaudeCliProvider";
 import { CopilotLogParser } from "../../../core/harness/copilot/CopilotLogParser";
@@ -70,7 +71,7 @@ import {
  * @returns Absolute path to temp file
  */
 function createTempJsonlFile(events: any[]): string {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-test-"));
+  const tempDir = makeTempDir("ctrlyoke-test-");
   const filePath = path.join(tempDir, "test.jsonl");
   const content = events.map((e) => JSON.stringify(e)).join("\n");
   fs.writeFileSync(filePath, content, "utf8");
@@ -81,17 +82,7 @@ function createTempJsonlFile(events: any[]): string {
  * Cleans up temporary test files
  */
 function cleanupTempFile(filePath: string) {
-  try {
-    const dir = path.dirname(filePath);
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
-    if (fs.existsSync(dir)) {
-      fs.rmdirSync(dir);
-    }
-  } catch (err) {
-    // Ignore cleanup errors
-  }
+  removeTempDir(path.dirname(filePath));
 }
 
 /**

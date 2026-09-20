@@ -1,16 +1,14 @@
 import * as assert from "assert";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
 import { AntigravityNotificationMonitor } from "../../core/harness/antigravity/AntigravityNotificationMonitor";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 suite("AntigravityNotificationMonitor", () => {
   test("supports session start via PreInvocation", async () => {
     const monitor = new AntigravityNotificationMonitor();
-    const tempDir = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-antigravity-notify-")
-    );
+    const tempDir = makeTempDir("ctrlyoke-antigravity-notify-");
 
     try {
       const runId = "run-123";
@@ -40,7 +38,7 @@ suite("AntigravityNotificationMonitor", () => {
       assert.strictEqual(result.data?.sessionId, "conversation-123");
       assert.strictEqual(fs.existsSync(startFile), false);
     } finally {
-      await fs.promises.rm(tempDir, { recursive: true, force: true });
+      removeTempDir(tempDir);
     }
   });
 

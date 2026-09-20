@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test from "node:test";
+import { after, test } from "node:test";
 
 import {
   replaceGeneratedConstants,
@@ -43,8 +43,18 @@ body.vscode-high-contrast-light {
    ============================================================================ */
 `;
 
+const createdDirs = [];
+
+after(() => {
+  for (const dir of createdDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 function writeFixture(name, content, eol) {
-  const path = join(mkdtempSync(join(tmpdir(), "step-palette-")), name);
+  const dir = mkdtempSync(join(tmpdir(), "step-palette-"));
+  createdDirs.push(dir);
+  const path = join(dir, name);
   writeFileSync(path, eol === "\n" ? content : content.split("\n").join(eol));
   return path;
 }

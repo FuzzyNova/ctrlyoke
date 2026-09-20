@@ -18,7 +18,6 @@
 import * as assert from "assert";
 import { spawnSync } from "child_process";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import type {
   McpServerConfig,
@@ -27,6 +26,7 @@ import type {
   UserHookConfig,
 } from "../../types/CtrlYokeTypes";
 import { EXECUTION_MODES } from "../../types/DashboardConstants";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import {
   HARNESS_MODELS,
   HARNESS_TIMEOUT_MS,
@@ -188,7 +188,7 @@ suite("Inline harness configuration regression tests", function () {
   let mcpServerScript: string;
 
   setup(function () {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-inline-harness-"));
+    tmpDir = makeTempDir("ctrlyoke-inline-harness-");
     recorderScript = path.join(tmpDir, "record-hook.js");
     mcpServerScript = path.join(tmpDir, "mcp-probe.js");
     fs.writeFileSync(recorderScript, buildHookRecorderScript());
@@ -196,11 +196,9 @@ suite("Inline harness configuration regression tests", function () {
   });
 
   teardown(function () {
-    try {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    } catch {
-      console.log(`  ⚠  Could not clean up ${tmpDir} (may still be in use)`);
-    }
+    removeTempDir(tmpDir, (dir) =>
+      console.log(`  ⚠  Could not clean up ${dir} (may still be in use)`)
+    );
   });
 
   suite(`OpenCode ${PINNED_HARNESS_VERSIONS[OPENCODE]}`, function () {

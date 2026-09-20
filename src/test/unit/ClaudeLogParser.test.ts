@@ -1,8 +1,8 @@
 import * as assert from "assert";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { ClaudeLogParser } from "../../core/harness/claude/ClaudeLogParser";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 suite("ClaudeLogParser", () => {
   const originalHome = process.env.HOME;
@@ -15,13 +15,13 @@ suite("ClaudeLogParser", () => {
     if (originalUserProfile === undefined) delete process.env.USERPROFILE;
     else process.env.USERPROFILE = originalUserProfile;
     if (testHome) {
-      fs.rmSync(testHome, { recursive: true, force: true });
+      removeTempDir(testHome);
       testHome = undefined;
     }
   });
 
   test("discovers sessions from the default managed-worktree path", async () => {
-    testHome = fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-claude-home-"));
+    testHome = makeTempDir("ctrlyoke-claude-home-");
     process.env.HOME = testHome;
     process.env.USERPROFILE = testHome;
 
@@ -56,7 +56,7 @@ suite("ClaudeLogParser", () => {
   });
 
   test("discovers a resumed session in its original worktree project", async () => {
-    testHome = fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-claude-home-"));
+    testHome = makeTempDir("ctrlyoke-claude-home-");
     process.env.HOME = testHome;
     process.env.USERPROFILE = testHome;
 

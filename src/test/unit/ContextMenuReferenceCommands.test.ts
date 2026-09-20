@@ -1,6 +1,5 @@
 import * as assert from "assert";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { afterEach, suite, test } from "mocha";
@@ -15,6 +14,7 @@ import type {
   ChoiceRequest,
   UserInteractionPort,
 } from "../../ui/UserInteractionPort";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 class RecordingPromptEditorInsertSink implements ContextMenuPromptEditorInsertSink {
   readonly requests: PromptEditorInsertRequest[] = [];
@@ -62,9 +62,15 @@ suite("ContextMenuReferenceCommands", () => {
       value: originalActiveEditor,
     });
     for (const workspaceRoot of workspaceRoots.splice(0)) {
-      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+      removeTempDir(workspaceRoot);
     }
   });
+
+  function trackedTempDir(prefix: string): string {
+    const dir = makeTempDir(prefix);
+    workspaceRoots.push(dir);
+    return dir;
+  }
 
   async function createOutputEditor(): Promise<MockOutputEditor> {
     const document = await vscode.workspace.openTextDocument({
@@ -104,19 +110,13 @@ suite("ContextMenuReferenceCommands", () => {
   }
 
   function createTestWorkspace(): string {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "ctrlyoke-context-menu-workspace-")
-    );
-    workspaceRoots.push(workspaceRoot);
+    const workspaceRoot = trackedTempDir("ctrlyoke-context-menu-workspace-");
     return workspaceRoot;
   }
 
   test("offers trust and inserts absolute references for external targets", async () => {
     const workspaceRoot = createTestWorkspace();
-    const externalRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "ctrlyoke-context-menu-external-")
-    );
-    workspaceRoots.push(externalRoot);
+    const externalRoot = trackedTempDir("ctrlyoke-context-menu-external-");
     const externalFilePath = path.join(externalRoot, "external.ts");
     const externalDirectoryPath = path.join(externalRoot, "nested");
     await fs.promises.writeFile(
@@ -232,10 +232,7 @@ suite("ContextMenuReferenceCommands", () => {
 
   test("inserts an already-trusted external target without prompting", async () => {
     const workspaceRoot = createTestWorkspace();
-    const externalRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "ctrlyoke-context-menu-trusted-")
-    );
-    workspaceRoots.push(externalRoot);
+    const externalRoot = trackedTempDir("ctrlyoke-context-menu-trusted-");
     const externalFilePath = path.join(externalRoot, "trusted.ts");
     const sink = new RecordingPromptEditorInsertSink();
     const originalShowWarningMessage = vscode.window.showWarningMessage;
@@ -253,10 +250,7 @@ suite("ContextMenuReferenceCommands", () => {
 
     test("waits for the panel-ready boundary before asking for trust", async () => {
       const workspaceRoot = createTestWorkspace();
-      const externalRoot = fs.mkdtempSync(
-        path.join(os.tmpdir(), "ctrlyoke-context-menu-ready-")
-      );
-      workspaceRoots.push(externalRoot);
+      const externalRoot = trackedTempDir("ctrlyoke-context-menu-ready-");
       const externalFilePath = path.join(externalRoot, "ready.ts");
       const sink = new RecordingPromptEditorInsertSink();
       const stages: string[] = [];
@@ -318,10 +312,7 @@ suite("ContextMenuReferenceCommands", () => {
 
   test("does not insert an external reference when trust is declined", async () => {
     const workspaceRoot = createTestWorkspace();
-    const externalRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "ctrlyoke-context-menu-declined-")
-    );
-    workspaceRoots.push(externalRoot);
+    const externalRoot = trackedTempDir("ctrlyoke-context-menu-declined-");
     const originalShowWarningMessage = vscode.window.showWarningMessage;
     const originalShouldOfferTrust =
       ConfigurationUtils.shouldOfferTrustForUntrustedFileLinks;
@@ -382,10 +373,7 @@ suite("ContextMenuReferenceCommands", () => {
   });
 
   test("captures the active output selection with a 1-based line range", async () => {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "ctrlyoke-context-menu-")
-    );
-    workspaceRoots.push(workspaceRoot);
+    const workspaceRoot = trackedTempDir("ctrlyoke-context-menu-");
     const editor = await createOutputEditor();
     setActiveEditor(editor);
     const sink = new RecordingPromptEditorInsertSink();
@@ -411,10 +399,7 @@ suite("ContextMenuReferenceCommands", () => {
   });
 
   test("captures the whole active output channel from the toolbar invocation", async () => {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "ctrlyoke-context-menu-")
-    );
-    workspaceRoots.push(workspaceRoot);
+    const workspaceRoot = trackedTempDir("ctrlyoke-context-menu-");
     const editor = await createOutputEditor();
     editor.selection = new vscode.Selection(
       editor.document.positionAt(0),
@@ -443,10 +428,7 @@ suite("ContextMenuReferenceCommands", () => {
     // carries into the attachment filename. writeOutputSnapshotAttachment
     // already returns a quoted reference value, so re-quoting it would
     // produce a malformed "@""..."" token instead of a single "@"..."".
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "ctrlyoke-context-menu-")
-    );
-    workspaceRoots.push(workspaceRoot);
+    const workspaceRoot = trackedTempDir("ctrlyoke-context-menu-");
     const editor = await createOutputEditor();
     editor.selection = new vscode.Selection(
       editor.document.positionAt(0),
@@ -490,10 +472,7 @@ suite("ContextMenuReferenceCommands", () => {
   });
 
   test("does not capture when the passed editor URI is not active", async () => {
-    const workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "ctrlyoke-context-menu-")
-    );
-    workspaceRoots.push(workspaceRoot);
+    const workspaceRoot = trackedTempDir("ctrlyoke-context-menu-");
     const editor = await createOutputEditor();
     setActiveEditor(editor);
     const sink = new RecordingPromptEditorInsertSink();

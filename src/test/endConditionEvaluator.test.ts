@@ -1,7 +1,7 @@
 import * as assert from "assert";
 import * as fs from "fs";
-import * as path from "path";
 import * as os from "os";
+import * as path from "path";
 import * as vscode from "vscode";
 import {
   EndConditionEvaluator,
@@ -10,6 +10,7 @@ import {
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { makeTempDir, removeTempDir } from "./helpers/tempWorkspace";
 
 const childProcess = require("child_process") as typeof import("child_process");
 
@@ -28,9 +29,7 @@ suite("EndConditionEvaluator Tests", () => {
 
   setup(() => {
     // Create a minimal mock PlatformAdapter for testing
-    workspaceRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "ctrlyoke-evaluator-")
-    );
+    workspaceRoot = makeTempDir("ctrlyoke-evaluator-");
     const mockPlatform: PlatformAdapter = {
       getWorkspaceRoot: () => workspaceRoot,
       getWorkspaceRoots: () => (workspaceRoot ? [workspaceRoot] : []),
@@ -43,7 +42,7 @@ suite("EndConditionEvaluator Tests", () => {
 
   teardown(() => {
     evaluator.dispose();
-    fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    removeTempDir(workspaceRoot);
     Object.defineProperty(process, "platform", {
       value: originalPlatform,
       configurable: true,
@@ -696,9 +695,7 @@ suite("EndConditionEvaluator Tests", () => {
     });
 
     test("uses the execution root for cwd and script security", async () => {
-      const executionRoot = fs.mkdtempSync(
-        path.join(os.tmpdir(), "ctrlyoke-execution-root-")
-      );
+      const executionRoot = makeTempDir("ctrlyoke-execution-root-");
       const executionScript = path.join(executionRoot, "condition.js");
       const stateScript = path.join(workspaceRoot, "state-condition.js");
       const executionWorkspace: ExecutionWorkspace = {
@@ -740,7 +737,7 @@ suite("EndConditionEvaluator Tests", () => {
         assert.match(fromState.error ?? "", /Security:/);
       } finally {
         executionEvaluator.dispose();
-        fs.rmSync(executionRoot, { recursive: true, force: true });
+        removeTempDir(executionRoot);
         fs.rmSync(stateScript, { force: true });
       }
     });
@@ -1139,9 +1136,7 @@ suite("EndConditionEvaluator Tests", () => {
     });
 
     test("marks security-rejected paths as errored", async () => {
-      const outsideDir = fs.mkdtempSync(
-        path.join(os.tmpdir(), "ctrlyoke-outside-")
-      );
+      const outsideDir = makeTempDir("ctrlyoke-outside-");
       const scriptPath = path.join(outsideDir, "outside.js");
       fs.writeFileSync(scriptPath, "console.log('outside')");
       try {
@@ -1150,7 +1145,7 @@ suite("EndConditionEvaluator Tests", () => {
         assert.strictEqual(result.errored, true);
         assert.match(result.error ?? "", /Security:/);
       } finally {
-        fs.rmSync(outsideDir, { recursive: true, force: true });
+        removeTempDir(outsideDir);
       }
     });
   });
