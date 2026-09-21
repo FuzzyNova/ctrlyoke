@@ -8,8 +8,20 @@ export interface HistorySearchMatch {
 }
 
 export interface HistorySearchMatcher {
+  /**
+   * Synchronous, in-process match. For a regex this is **unbounded** — it is
+   * the catastrophic-backtracking hazard the worker exists to contain — so
+   * only the matcher worker (which is terminatable) and tests may call it
+   * directly. Every production match site goes through
+   * `findHistorySearchMatch` instead.
+   */
   find(text: string): HistorySearchMatch | undefined;
-  findAsync?(
+  /**
+   * Required, not optional: an implementation without it would silently fall
+   * back to the unbounded `find` above and reinstate the extension-host hang
+   * this design removes. A matcher that needs no worker resolves immediately.
+   */
+  findAsync(
     text: string,
     signal?: AbortSignal
   ): Promise<HistorySearchMatch | undefined>;
@@ -278,6 +290,12 @@ export class RegexHistorySearchMatcher implements HistorySearchMatcher {
     this.requiredLiteral = extractRequiredLiteral(pattern);
   }
 
+  /**
+   * Runs the pattern on the calling thread with no time bound. This is the
+   * hang this whole design exists to prevent, so it is reachable only from
+   * inside `historySearchMatcherWorker` — which the parent can terminate —
+   * and from tests. Production callers use `findHistorySearchMatch`.
+   */
   find(text: string): HistorySearchMatch | undefined {
     this.expression.lastIndex = 0;
     const match = this.expression.exec(text);
@@ -309,14 +327,16 @@ export function createHistorySearchMatcher(
     : new SubstringHistorySearchMatcher(query);
 }
 
+/**
+ * The only sanctioned match entry point for production code. It always takes
+ * the bounded path, so a regex can never be evaluated on the calling thread.
+ */
 export function findHistorySearchMatch(
   matcher: HistorySearchMatcher,
   text: string,
   signal?: AbortSignal
 ): Promise<HistorySearchMatch | undefined> {
-  return matcher.findAsync
-    ? matcher.findAsync(text, signal)
-    : Promise.resolve(matcher.find(text));
+  return matcher.findAsync(text, signal);
 }
 
 export function disposeHistorySearchMatcher(
