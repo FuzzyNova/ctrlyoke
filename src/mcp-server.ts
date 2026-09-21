@@ -47,6 +47,7 @@ import {
   EXECUTION_STATES,
   LOGS_DIR,
   QUEUE_POSITION,
+  type ExecutionState,
 } from "./types/DashboardConstants";
 import type { CapabilitiesFile } from "./types/CapabilitiesTypes";
 import * as WorkflowPaths from "./utils/WorkflowPaths";
@@ -133,6 +134,18 @@ export interface McpToolCallingContext {
   readonly groupMember: boolean;
   readonly via?: CoordinationParticipant["via"];
   readonly groupStartBoundary?: number;
+  /**
+   * The attached run's persisted execution state, read while resolving this
+   * call. Mutation tools are refused unless it is still live — see
+   * `assertRunAcceptsMutation`.
+   */
+  readonly runExecutionState?: ExecutionState;
+  /**
+   * Why this caller is not an attested ctrlyoke step, when it is not. Used
+   * only to explain a refusal: "not available to this participant" is useless
+   * to an agent that cannot see which of several very different causes applied.
+   */
+  readonly unattestedReason?: string;
   readonly address?: {
     workflowKey: WorkflowKey;
     runRef: RunRef;
@@ -161,6 +174,10 @@ function participantAttribution(participant: {
 
 const MCP_CLI_MODE_ENV = "CTRLYOKE_MCP_CLI_MODE";
 const MCP_CLI_MODE_VALUE = "true";
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 function serializeParticipant<T extends { label: string; attested: boolean }>(
   participant: T
@@ -197,6 +214,52 @@ function toolAllowed(name: string, context: McpToolCallingContext): boolean {
     return true;
   }
   return MCP_WORKFLOW_MUTATION_TOOL_NAMES.some((toolName) => toolName === name);
+}
+
+/** Tools that answer without an attached run, named when a refusal cites one. */
+const RUNLESS_TOOL_NAMES = [
+  MCP_GLOBAL_STATUS_TOOL_NAME,
+  MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
+  ...MCP_COORDINATION_TOOL_NAMES,
+] as const;
+
+/**
+ * Say *why* a tool was withheld. The caller is a model choosing what to do
+ * next, so "not available to this MCP participant" is a dead end: it cannot
+ * tell a server with no attached run from one whose run file it could not read
+ * from a genuine permission boundary, and all three want different next moves.
+ */
+function unavailableToolMessage(
+  name: string,
+  context: McpToolCallingContext
+): string {
+  if (context.unattestedReason) {
+    return `${name}: ${context.unattestedReason}. This MCP server answers for exactly one ctrlyoke workflow run, so ${name} has nothing to act on and did nothing. Only ${RUNLESS_TOOL_NAMES.join(", ")} work without an attached run; to drive ctrlyoke from outside a workflow, use the ctrlyoke CLI.`;
+  }
+  return `${name}: this MCP participant may not call ${name}, so nothing was done. Call ${MCP_READ_NOTES_TOOL_NAME} to see the participants sharing this execution root.`;
+}
+
+/**
+ * Mutation tools may only change a run that is still executing.
+ *
+ * ctrlyoke's MCP surface has no lifecycle control (see
+ * `extension.instructions.md`), so it cannot start what it appends to: steps
+ * added to a run that has already settled land in the run file and then sit
+ * there forever, which the caller cannot distinguish from work that will run.
+ * A harness TUI outlives the run that launched it and keeps this server
+ * attached, so typing into a finished workflow's TUI reaches here — the case
+ * this guard exists for. `RunContinuationService` deliberately still allows it
+ * for the dashboard and CLI, which *can* start the run afterwards.
+ */
+function assertRunAcceptsMutation(
+  name: string,
+  context: McpToolCallingContext
+): void {
+  const state = context.runExecutionState;
+  if (state !== undefined && ACTIVE_EXECUTION_STATES.has(state)) return;
+  throw new Error(
+    `${name}: the attached ctrlyoke workflow run is no longer executing (state: ${state ?? EXECUTION_STATES.IDLE}), so nothing was changed. Its queue can only be added to, edited, reordered, or trimmed while the run is live; a settled run's step list is history, and steps written to it would never execute. If this session is a harness left open after its workflow finished, report the remaining work in your reply instead and let the user start a new workflow.`
+  );
 }
 
 const lineageRepository = new WorkflowLineageRepository();
@@ -361,7 +424,12 @@ export class CtrlYokeMCPServer {
     }
     const callingContext = await this.resolveCallingContext(name);
     if (!toolAllowed(name, callingContext)) {
-      throw new Error(`${name}: tool is not available to this MCP participant`);
+      throw new Error(unavailableToolMessage(name, callingContext));
+    }
+    if (
+      MCP_WORKFLOW_MUTATION_TOOL_NAMES.some((toolName) => toolName === name)
+    ) {
+      assertRunAcceptsMutation(name, callingContext);
     }
     const call = validateMcpToolCall(name, args);
     switch (call.name) {
@@ -462,6 +530,8 @@ export class CtrlYokeMCPServer {
       return {
         attested: false,
         groupMember: false,
+        unattestedReason:
+          "no ctrlyoke workflow run is attached to this MCP server (CTRLYOKE_WORKING_FILE is not set)",
         via: cliMode
           ? COORDINATION_PARTICIPANT_VIA.CLI
           : COORDINATION_PARTICIPANT_VIA.MCP,
@@ -476,14 +546,17 @@ export class CtrlYokeMCPServer {
         await fs.readFile(selected.filePath, "utf8")
       ) as WorkingFile;
     } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
       if (cliMode) {
         throw new Error(
-          `CLI coordination address is not a valid live run: ${
-            error instanceof Error ? error.message : String(error)
-          }`
+          `CLI coordination address is not a valid live run: ${detail}`
         );
       }
-      return { attested: false, groupMember: false };
+      return {
+        attested: false,
+        groupMember: false,
+        unattestedReason: `the attached ctrlyoke workflow run could not be read from ${pinnedPath} (${detail})`,
+      };
     }
 
     const runtime = workingFile._runtime;
@@ -580,6 +653,9 @@ export class CtrlYokeMCPServer {
     return {
       attested: !cliMode,
       groupMember: group !== undefined,
+      ...(runtime?.executionState !== undefined
+        ? { runExecutionState: runtime.executionState }
+        : {}),
       via: cliMode
         ? COORDINATION_PARTICIPANT_VIA.CLI
         : COORDINATION_PARTICIPANT_VIA.MCP,
@@ -704,8 +780,28 @@ export class CtrlYokeMCPServer {
     context: McpToolCallingContext
   ) {
     if (!args.text.trim())
-      throw new Error("text is required and cannot be empty");
+      throw new Error(
+        `${MCP_POST_NOTE_TOOL_NAME}: text is required and cannot be empty, so nothing was posted.`
+      );
     const state = await this.getCoordinationState(context);
+    // A directed note is only ever delivered to a participant that reads it
+    // back. Addressing one that does not exist appends an entry nobody is a
+    // recipient of, so the post has to fail rather than report a sequence
+    // number for a note with no audience.
+    if (args.to && args.to.length > 0) {
+      const live = await state.registry.fold();
+      const known = new Set(
+        live.participants.map((participant) => participant.participantId)
+      );
+      const unknown = args.to.filter(
+        (participantId) => !known.has(participantId)
+      );
+      if (unknown.length > 0) {
+        throw new Error(
+          `${MCP_POST_NOTE_TOOL_NAME}: no live participant in this execution root has ID ${unknown.join(", ")}, so the note was not posted and nobody would have read it. Live participants: ${[...known].join(", ") || "(none)"}. Omit "to" to broadcast to the whole board, or call ${MCP_READ_NOTES_TOOL_NAME} to see current participant IDs.`
+        );
+      }
+    }
     const entry = await state.registry.postNote(
       state.lease.participantId,
       args.text,
@@ -815,6 +911,10 @@ export class CtrlYokeMCPServer {
       state.lease.participantId,
       paths
     );
+    // Naming a path you never held releases nothing. `released: []` alone
+    // looks like a successful release of the paths that were asked for, so
+    // say which ones were not yours to release.
+    const notHeld = paths?.filter((value) => !released.includes(value)) ?? [];
     return {
       content: [
         {
@@ -822,6 +922,12 @@ export class CtrlYokeMCPServer {
           text: JSON.stringify(
             {
               released,
+              ...(notHeld.length > 0
+                ? {
+                    notHeld,
+                    note: `You held no claim on ${notHeld.join(", ")}, so ${notHeld.length === 1 ? "it was" : "they were"} not released. Only the participant that claimed a path can release it.`,
+                  }
+                : {}),
               scope: await this.coordinationScope(state, true),
             },
             null,
@@ -840,8 +946,10 @@ export class CtrlYokeMCPServer {
     const selected = await this.resolveRun(MCP_WORKFLOW_STATUS_TOOL_NAME);
     const workingFile = selected.filePath;
 
-    const fileContent = await fs.readFile(workingFile, "utf8");
-    const queueData: WorkingFile = JSON.parse(fileContent);
+    const queueData = await this.readAttachedRun(
+      MCP_WORKFLOW_STATUS_TOOL_NAME,
+      workingFile
+    );
 
     const runtime = queueData._runtime || {
       currentIndex: 0,
@@ -914,7 +1022,9 @@ export class CtrlYokeMCPServer {
     // Validate inputs
     if (steps.length === 0) {
       log("ERROR: Invalid steps array", steps);
-      throw new Error("steps must be a non-empty array");
+      throw new Error(
+        `${MCP_APPEND_STEP_TOOL_NAME}: steps must be a non-empty array, so nothing was added.`
+      );
     }
     if (
       position !== QUEUE_POSITION.NEXT &&
@@ -924,7 +1034,7 @@ export class CtrlYokeMCPServer {
     ) {
       log("ERROR: Invalid position:", position);
       throw new Error(
-        `position must be '${QUEUE_POSITION.NEXT}', '${QUEUE_POSITION.END}', '${QUEUE_POSITION.PARALLEL_WITH_CURRENT}', or a non-negative integer index`
+        `${MCP_APPEND_STEP_TOOL_NAME}: position must be '${QUEUE_POSITION.NEXT}', '${QUEUE_POSITION.END}', '${QUEUE_POSITION.PARALLEL_WITH_CURRENT}', or a non-negative integer index — received ${JSON.stringify(position)}, so nothing was added.`
       );
     }
 
@@ -1108,9 +1218,13 @@ export class CtrlYokeMCPServer {
       lineageRepository,
       target.allowInterruptedRun
     );
-    return this.mutationResponse(MCP_EDIT_STEP_TOOL_NAME, selected, edited, {
-      index,
-    });
+    return this.mutationResponse(
+      MCP_EDIT_STEP_TOOL_NAME,
+      selected,
+      edited,
+      target.definitionRevision,
+      { index }
+    );
   }
 
   /** Handle remove_step for a zero-based pending step index. */
@@ -1139,9 +1253,13 @@ export class CtrlYokeMCPServer {
       lineageRepository,
       target.allowInterruptedRun
     );
-    return this.mutationResponse(MCP_REMOVE_STEP_TOOL_NAME, selected, removed, {
-      index,
-    });
+    return this.mutationResponse(
+      MCP_REMOVE_STEP_TOOL_NAME,
+      selected,
+      removed,
+      target.definitionRevision,
+      { index }
+    );
   }
 
   /** Handle reorder_steps using absolute zero-based pending step indices. */
@@ -1175,10 +1293,19 @@ export class CtrlYokeMCPServer {
       MCP_REORDER_STEPS_TOOL_NAME,
       selected,
       reordered,
+      target.definitionRevision,
       { indices }
     );
   }
 
+  /**
+   * `RunContinuationService` skips the write when a transform reproduces the
+   * definition already on disk, so a mutation can legitimately succeed and
+   * change nothing. Reporting that as a bare `success: true` is the same false
+   * positive this server refuses elsewhere: the caller believes it applied an
+   * edit it did not. The revision is the evidence — it only advances on a real
+   * write — so derive `changed` from it rather than guessing.
+   */
   private mutationResponse(
     operation: string,
     selected: {
@@ -1191,8 +1318,10 @@ export class CtrlYokeMCPServer {
       definitionRevision: number;
       descriptorRevision: number;
     },
+    priorDefinitionRevision: number,
     details: Record<string, unknown>
   ) {
+    const changed = mutation.definitionRevision !== priorDefinitionRevision;
     return {
       content: [
         {
@@ -1201,6 +1330,12 @@ export class CtrlYokeMCPServer {
             {
               success: true,
               operation,
+              changed,
+              ...(changed
+                ? {}
+                : {
+                    note: `${operation} wrote nothing: the step list already matched what you asked for, so this call had no effect.`,
+                  }),
               ...details,
               newQueueSize: mutation.workingFile.steps?.length ?? 0,
               workingFile: selected.filePath,
@@ -1287,8 +1422,10 @@ export class CtrlYokeMCPServer {
     const selected = await this.resolveRun(MCP_READ_OUTPUT_TOOL_NAME);
     const workingFile = selected.filePath;
 
-    const fileContent = await fs.readFile(workingFile, "utf8");
-    const queueData: WorkingFile = JSON.parse(fileContent);
+    const queueData = await this.readAttachedRun(
+      MCP_READ_OUTPUT_TOOL_NAME,
+      workingFile
+    );
     const allSteps = (queueData.steps || []) as WorkflowStep[];
 
     const runtime = queueData._runtime || {
@@ -1312,6 +1449,18 @@ export class CtrlYokeMCPServer {
     ) {
       throw new Error(
         `${MCP_READ_OUTPUT_TOOL_NAME}: group members may only read output before the group's start boundary`
+      );
+    }
+    // Silently dropping an index the caller named reads as "that step produced
+    // nothing", which is the wrong conclusion to hand a model that mis-numbered
+    // its request. Name the bad indices and the range that exists instead.
+    const outOfRange = (args.indices ?? []).filter(
+      (index) =>
+        !Number.isInteger(index) || index < 0 || index >= allSteps.length
+    );
+    if (outOfRange.length > 0) {
+      throw new Error(
+        `${MCP_READ_OUTPUT_TOOL_NAME}: this run has no step ${outOfRange.join(", ")}, so nothing was read. It has ${allSteps.length} step${allSteps.length === 1 ? "" : "s"}${allSteps.length > 0 ? `, so valid zero-based indices are 0 to ${allSteps.length - 1}` : ""}. Call ${MCP_WORKFLOW_STATUS_TOOL_NAME} to see the current step list.`
       );
     }
     const paging = this.parseReadOutputPaging(args, requestedIndices, allSteps);
@@ -1474,6 +1623,13 @@ export class CtrlYokeMCPServer {
         : await lineageRepository.listLineageKeys(this.workspaceRoot);
       log("Found lineages:", workflowKeys.length);
 
+      // A caller that named a workflow is asking about that workflow, so
+      // "not found", "unreadable", and "found but idle" have to stay
+      // distinguishable. Folded into an empty listing they all read as "no
+      // such workflow", which is only one of the three.
+      const narrowed = selector.workflowKey !== undefined;
+      const notes: string[] = [];
+
       const workflows = await Promise.all(
         workflowKeys.map(async (workflowKey) => {
           let filePath: string;
@@ -1500,7 +1656,12 @@ export class CtrlYokeMCPServer {
                   )
                 : WorkflowPaths.draftFilePath(this.workspaceRoot, workflowKey);
             }
-          } catch {
+          } catch (error) {
+            if (narrowed) {
+              throw new Error(
+                `${MCP_GLOBAL_STATUS_TOOL_NAME}: no workflow '${workflowKey}' was found under ${this.workspaceRoot} (${describeError(error)}). Call ${MCP_GLOBAL_STATUS_TOOL_NAME} with no arguments to see the workflow keys that exist.`
+              );
+            }
             return null;
           }
           try {
@@ -1511,6 +1672,11 @@ export class CtrlYokeMCPServer {
               executionState: EXECUTION_STATES.IDLE,
             };
             if (!ACTIVE_EXECUTION_STATES.has(runtime.executionState)) {
+              if (narrowed) {
+                notes.push(
+                  `${workflowKey}${runRef ? `/${runRef}` : " (never run)"} exists but is not executing (state: ${runtime.executionState}), so it is not listed here.`
+                );
+              }
               return null;
             }
             const allSteps = (data.steps || []) as WorkflowStep[];
@@ -1547,7 +1713,12 @@ export class CtrlYokeMCPServer {
                 ? { worktreeNotice: runtime.worktreeNotice }
                 : {}),
             };
-          } catch {
+          } catch (error) {
+            if (narrowed) {
+              throw new Error(
+                `${MCP_GLOBAL_STATUS_TOOL_NAME}: workflow '${workflowKey}'${runRef ? ` run '${runRef}'` : ""} could not be read from ${filePath} (${describeError(error)}).`
+              );
+            }
             return null;
           }
         })
@@ -1571,6 +1742,7 @@ export class CtrlYokeMCPServer {
         workflows: limitedWorkflows,
         truncated: omittedCount > 0,
         omittedCount,
+        ...(notes.length > 0 ? { note: notes.join(" ") } : {}),
       };
 
       return {
@@ -1623,24 +1795,35 @@ export class CtrlYokeMCPServer {
   ) {
     const { message } = args;
     if (!message?.trim()) {
-      throw new Error("message is required and cannot be empty");
-    }
-
-    const outputPath = process.env.CTRLYOKE_COMMIT_OUTPUT;
-    if (outputPath) {
-      await fs.writeFile(outputPath, message.trim(), "utf8");
-      log("Commit message written to:", outputPath);
-    } else {
-      log(
-        "CTRLYOKE_COMMIT_OUTPUT not set — message captured but not persisted"
+      throw new Error(
+        `${MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME}: message is required and cannot be empty, so nothing was submitted.`
       );
     }
+
+    // Without a destination there is nowhere for the message to go. Reporting
+    // success here told the caller its commit message had been handed to
+    // ctrlyoke when it had been dropped — and the only record was a log line
+    // that is off unless diagnostics are enabled.
+    const outputPath = process.env.CTRLYOKE_COMMIT_OUTPUT;
+    if (!outputPath) {
+      throw new Error(
+        `${MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME}: no commit-message destination is configured (CTRLYOKE_COMMIT_OUTPUT is unset), so the message was discarded rather than submitted. This tool only works inside ctrlyoke's commit-message generation; outside it, put the commit message in your reply instead.`
+      );
+    }
+    try {
+      await fs.writeFile(outputPath, message.trim(), "utf8");
+    } catch (error) {
+      throw new Error(
+        `${MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME}: the message was not submitted — writing it to ${outputPath} failed (${describeError(error)}).`
+      );
+    }
+    log("Commit message written to:", outputPath);
 
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify({ success: true }),
+          text: JSON.stringify({ success: true, outputPath }),
         },
       ],
     };
@@ -1703,17 +1886,55 @@ export class CtrlYokeMCPServer {
       workflowKey,
       runRef
     );
-    await fs.access(filePath);
-    const descriptor = await lineageRepository.readDescriptor(
-      this.workspaceRoot,
-      workflowKey
-    );
+    try {
+      await fs.access(filePath);
+    } catch (error) {
+      throw new Error(
+        `${operation}: the attached ctrlyoke run file no longer exists at ${filePath}, so nothing was done (${describeError(error)}). Its run history may have been deleted, or this harness session may have outlived the workspace it was launched from.`
+      );
+    }
+    let descriptorRevision: number;
+    try {
+      descriptorRevision = (
+        await lineageRepository.readDescriptor(this.workspaceRoot, workflowKey)
+      ).revision;
+    } catch (error) {
+      throw new Error(
+        `${operation}: could not read the workflow lineage '${workflowKey}' under ${this.workspaceRoot}, so nothing was done (${describeError(error)}).`
+      );
+    }
     return {
       workflowKey,
       runRef,
       filePath,
-      descriptorRevision: descriptor.revision,
+      descriptorRevision,
     };
+  }
+
+  /**
+   * Read the attached run file with a message a caller can act on. A bare
+   * `JSON.parse` failure surfaces as "Unexpected token }" with no indication
+   * that the subject was ctrlyoke's own run state.
+   */
+  private async readAttachedRun(
+    operation: string,
+    filePath: string
+  ): Promise<WorkingFile> {
+    let content: string;
+    try {
+      content = await fs.readFile(filePath, "utf8");
+    } catch (error) {
+      throw new Error(
+        `${operation}: could not read the attached ctrlyoke run file ${filePath}, so nothing was done (${describeError(error)}).`
+      );
+    }
+    try {
+      return JSON.parse(content) as WorkingFile;
+    } catch (error) {
+      throw new Error(
+        `${operation}: the attached ctrlyoke run file ${filePath} is not valid JSON, so nothing was done (${describeError(error)}).`
+      );
+    }
   }
 
   /**
