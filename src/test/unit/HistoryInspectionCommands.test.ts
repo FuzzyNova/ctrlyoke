@@ -1,6 +1,8 @@
 import * as assert from "assert";
 import chalk from "chalk";
 import { Command } from "commander";
+import * as fs from "fs/promises";
+import * as os from "os";
 import * as path from "path";
 import { existsSync } from "fs";
 import { setup, suite, teardown, test } from "mocha";
@@ -49,6 +51,12 @@ import type {
   HistorySearchQuery,
   HistorySearchResponse,
 } from "../../types/WorkflowTimelineTypes";
+import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
+import { HistorySearchService } from "../../core/orchestration/HistorySearchService";
+import { MAX_INDEXED_TEXT_LENGTH } from "../../core/orchestration/HistorySearchIndexService";
+import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
+import { Log } from "../../utils/Log";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
 
 class TestIo implements HistoryInspectionCommandIo {
   readonly output: string[] = [];
@@ -176,10 +184,11 @@ function dependencies(
   repository: HistoryInspectionLineageRepository,
   historyManager: HistoryInspectionOutputHistoryManager,
   resolver?: HistoryInspectionRunOutputResolver,
-  searchService?: HistorySearchCommandService
+  searchService?: HistorySearchCommandService,
+  workspaceRoot = "/workspace"
 ): HistoryInspectionCommandDependencies {
   const workspace: HistoryInspectionWorkspace = {
-    workspaceRoot: "/workspace",
+    workspaceRoot,
     createLineageRepository: () => repository,
     createOutputHistoryManager: () => historyManager,
   };
@@ -731,6 +740,70 @@ suite("CLI history search command", () => {
     });
   });
 
+  test("finds a past-cap term through the --deep command path", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-cli-history-search-")
+    );
+    const term = "cli-history-deep-hidden-term";
+    const messages: string[] = [];
+    const originalInfo = Log.info;
+
+    try {
+      await createDeepSearchRun(workspaceRoot, term);
+      Log.info = (message: string) => {
+        messages.push(message);
+      };
+
+      const makeDependencies = (service: HistorySearchCommandService) =>
+        dependencies(
+          new TestLineageRepository([], new Map(), new Map()),
+          new TestHistoryManager(new Map(), new Map()),
+          undefined,
+          service,
+          workspaceRoot
+        );
+
+      const shallowIo = new TestIo();
+      await searchHistoryCommand(
+        term,
+        {},
+        shallowIo,
+        makeDependencies(new HistorySearchService())
+      );
+
+      assert.strictEqual(
+        shallowIo.output[0]?.startsWith("0 of 0 results"),
+        true
+      );
+      assert.match(
+        shallowIo.output.join("\n"),
+        /use --deep for terms later in long output/
+      );
+
+      const deepIo = new TestIo();
+      await searchHistoryCommand(
+        term,
+        { deep: true },
+        deepIo,
+        makeDependencies(new HistorySearchService())
+      );
+
+      assert.match(deepIo.output[0] ?? "", /^1 of 1 results/);
+      assert.match(deepIo.output.join("\n"), /cli-history-deep-hidden-term/);
+      assert.ok(
+        messages.some(
+          (message) =>
+            message.includes("deep=true") &&
+            message.includes("deepScannedRuns=1")
+        ),
+        messages.join("\n")
+      );
+    } finally {
+      Log.info = originalInfo;
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("derives --this-workflow from CTRLYOKE_WORKING_FILE", async () => {
     const service = new TestHistorySearchService(searchResponse());
     const originalWorkingFile = process.env.CTRLYOKE_WORKING_FILE;
@@ -933,6 +1006,41 @@ function searchResponse(): HistorySearchResponse {
       },
     ],
   };
+}
+
+async function createDeepSearchRun(
+  workspaceRoot: string,
+  term: string
+): Promise<void> {
+  const workflowKey = "cli-history-deep-workflow" as WorkflowKey;
+  const startedAt = 1_800_000_000_000;
+  const runRef = WorkflowPaths.formatRunRef(startedAt);
+  const runDirectory = WorkflowPaths.runDir(workspaceRoot, workflowKey, runRef);
+  const recorder = new TimelineRecorder();
+  const manifestPath = await recorder.initializeRunAt(
+    runDirectory,
+    workflowKey,
+    1,
+    startedAt,
+    EXECUTION_STATES.COMPLETED
+  );
+
+  await recorder.appendEvents(manifestPath, [
+    {
+      eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+      timestampMs: startedAt + 1,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      attemptIndex: 0,
+      payload: {
+        cliOutput: {
+          prompt: "prompt",
+          response: `${"x".repeat(MAX_INDEXED_TEXT_LENGTH + 100)}${term}`,
+          elapsed: 1,
+          isStreaming: false,
+        },
+      },
+    },
+  ]);
 }
 
 function historyManagerForShow(key: WorkflowKey): TestHistoryManager {
