@@ -11,8 +11,12 @@ import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { HistoryRunDocumentBuilder } from "./HistoryRunDocumentBuilder";
 import {
   createHistorySearchMatcher,
+  disposeHistorySearchMatcher,
+  findHistorySearchMatch,
   type HistorySearchMatch,
   type HistorySearchMatcher,
+  HistorySearchMatcherCancelledError,
+  HistorySearchRegexTimeoutError,
 } from "./HistorySearchMatcher";
 import { TimelineRecorder } from "./TimelineRecorder";
 
@@ -90,6 +94,7 @@ export async function* scanHistoryRunDeep(
     typeof queryOrMatcher === "string"
       ? createHistorySearchMatcher(queryOrMatcher, false)
       : queryOrMatcher;
+  const ownsMatcher = typeof queryOrMatcher === "string";
   const documentBuilder = new HistoryRunDocumentBuilder();
   const context = {
     manifest,
@@ -104,35 +109,45 @@ export async function* scanHistoryRunDeep(
         return;
       }
 
-      const documents = documentBuilder.buildEventDocuments(event, context, {
-        projectCandidate: (candidate) => {
-          if (
-            matcher.find(candidate.text.slice(0, MAX_INDEXED_TEXT_LENGTH)) !==
-            undefined
-          ) {
-            return undefined;
-          }
-
-          const match = matcher.find(candidate.text);
-          if (match === undefined) {
-            return undefined;
-          }
-
-          return createBoundedTextProjection(candidate.text, match);
-        },
-      });
-
+      const documents = documentBuilder.buildEventDocuments(event, context);
       for (const document of documents) {
         if (signal?.aborted) {
           return;
         }
-        yield document;
+        const prefixMatch = await findHistorySearchMatch(
+          matcher,
+          document.text.slice(0, MAX_INDEXED_TEXT_LENGTH),
+          signal
+        );
+        if (prefixMatch !== undefined) {
+          continue;
+        }
+        const match = await findHistorySearchMatch(
+          matcher,
+          document.text,
+          signal
+        );
+        if (match === undefined) {
+          continue;
+        }
+        const projection = createBoundedTextProjection(document.text, match);
+        yield { ...document, ...projection };
       }
     }
   } catch (error) {
+    if (
+      error instanceof HistorySearchMatcherCancelledError ||
+      error instanceof HistorySearchRegexTimeoutError
+    ) {
+      throw error;
+    }
     Log.warn(
       `[HistoryRunDeepScanner] Failed to read events ${eventsPath}: ${getErrorMessage(error)}`
     );
+  } finally {
+    if (ownsMatcher) {
+      disposeHistorySearchMatcher(matcher);
+    }
   }
 }
 

@@ -413,6 +413,23 @@ async function main() {
     logLevel: "silent",
   });
 
+  const historySearchMatcherWorkerCtx = await esbuild.context({
+    entryPoints: ["src/core/orchestration/historySearchMatcherWorker.ts"],
+    bundle: true,
+    format: "cjs",
+    minify: production,
+    sourcemap: !production,
+    sourcesContent: false,
+    platform: "node",
+    target: "node22",
+    mainFields,
+    outfile: "out/historySearchMatcherWorker.js",
+    alias: {
+      vscode: path.resolve(__dirname, "src/platform/vscode-shim.ts"),
+    },
+    logLevel: "silent",
+  });
+
   // Build standalone CLI binary
   const packageJson = JSON.parse(
     fs.readFileSync(path.join(__dirname, "package.json"), "utf-8")
@@ -453,6 +470,7 @@ async function main() {
     await statuslineFormatCtx.watch();
     await mcpCtx.watch();
     await historySearchRebuildWorkerCtx.watch();
+    await historySearchMatcherWorkerCtx.watch();
     await cliCtx.watch();
   } else {
     await webviewScriptsCtx.rebuild();
@@ -460,12 +478,14 @@ async function main() {
     await statuslineFormatCtx.rebuild();
     await mcpCtx.rebuild();
     await historySearchRebuildWorkerCtx.rebuild();
+    await historySearchMatcherWorkerCtx.rebuild();
     await cliCtx.rebuild();
     await webviewScriptsCtx.dispose();
     await ctx.dispose();
     await statuslineFormatCtx.dispose();
     await mcpCtx.dispose();
     await historySearchRebuildWorkerCtx.dispose();
+    await historySearchMatcherWorkerCtx.dispose();
     await cliCtx.dispose();
   }
 }

@@ -153,6 +153,26 @@ suite("HistorySearchIndexService", () => {
     );
   });
 
+  test("searches indexed documents with regexes and separates snapshot modes", async () => {
+    await createRun("regex-indexed-2026-09-20T12-00-00", 1, 6000, [
+      createStatusDraft(6100, "ERROR: 404 from indexed document"),
+    ]);
+
+    const index = new HistorySearchIndexService();
+    const regex = await index.search(
+      { query: "error[: ]+\\d+", limit: 10, regex: true },
+      workspaceRoot
+    );
+    assert.strictEqual(regex.totalCount, 1);
+    assert.ok(regex.results[0]?.matchSnippet.includes("ERROR: 404"));
+
+    const substring = await index.search(
+      { query: "error[: ]+\\d+", limit: 10 },
+      workspaceRoot
+    );
+    assert.strictEqual(substring.totalCount, 0);
+  });
+
   test("interleaves indexed and past-cap matches without duplicate rows", async () => {
     const term = "mixed-depth-term";
     await createRun("mixed-depth-2026-09-19T22-02-00", 1, 3000, [

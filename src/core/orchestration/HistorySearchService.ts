@@ -29,7 +29,14 @@ import {
   getHistorySearchDocumentDedupeKey,
   projectHistorySearchResult,
 } from "./HistorySearchResultUtils";
-import { createHistorySearchMatcher } from "./HistorySearchMatcher";
+import {
+  createHistorySearchMatcher,
+  disposeHistorySearchMatcher,
+  findHistorySearchMatch,
+  InvalidHistorySearchPatternError,
+  HistorySearchMatcherCancelledError,
+  HistorySearchRegexTimeoutError,
+} from "./HistorySearchMatcher";
 import { TimelineRecorder } from "./TimelineRecorder";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 
@@ -93,6 +100,13 @@ export class HistorySearchService {
         // exact full-history-read cost this cancellation exists to avoid).
         throw error;
       }
+      if (
+        error instanceof InvalidHistorySearchPatternError ||
+        error instanceof HistorySearchRegexTimeoutError ||
+        error instanceof HistorySearchMatcherCancelledError
+      ) {
+        throw error;
+      }
       if (options?.allowLegacyFallback === false) {
         throw error;
       }
@@ -118,7 +132,8 @@ export class HistorySearchService {
         workspaceFolderPath,
         offset + request.limit,
         request.filters,
-        options?.snippetChars
+        options?.snippetChars,
+        request.regex === true
       );
       const results = scanned.slice(offset, offset + request.limit);
       Log.info(
@@ -142,7 +157,8 @@ export class HistorySearchService {
     workspaceFolderPath: string,
     limit: number,
     filters: HistorySearchFilters | undefined,
-    snippetChars?: number
+    snippetChars?: number,
+    regex = false
   ): Promise<HistorySearchResult[]> {
     const normalizedQuery = query.trim();
     if (normalizedQuery.length < MIN_QUERY_LENGTH) {
@@ -203,7 +219,7 @@ export class HistorySearchService {
 
     const results: HistorySearchResult[] = [];
     const seen = new Set<string>();
-    const matcher = createHistorySearchMatcher(normalizedQuery, false);
+    const matcher = createHistorySearchMatcher(normalizedQuery, regex);
 
     for (const workflow of workflowRuns) {
       if (results.length >= limit) {
@@ -252,7 +268,10 @@ export class HistorySearchService {
           );
 
           for (const document of eventDocuments) {
-            const searchMatch = matcher.find(document.text);
+            const searchMatch = await findHistorySearchMatch(
+              matcher,
+              document.text
+            );
             if (
               searchMatch === undefined ||
               !matchesFilters(document, filters)
@@ -285,6 +304,8 @@ export class HistorySearchService {
     Log.info(
       `[HistorySearchService] disk scan finished: query="${normalizedQuery}" scannedRuns=${scannedRuns}/${totalRuns} matches=${results.length} durationMs=${Date.now() - scanStart}`
     );
+
+    disposeHistorySearchMatcher(matcher);
 
     return results
       .sort((left, right) => right.startedAt - left.startedAt)

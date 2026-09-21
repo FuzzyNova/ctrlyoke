@@ -1,11 +1,10 @@
 # History Search — regex mode
 
-> **Status: Step 3 implemented; regex mode not implemented.** This is the
+> **Status: Step 4 implemented; CLI and drawer exposure remain.** This is the
 > architectural decision for the regex-search follow-up to
 > `dev/implemented/CLI_HISTORY_SEARCH_PLAN.md`.
 > Step 1 added the end-to-end `--deep` test; this document began as step 2 of 6
-> and now records the step 3 matcher refactor. The regex feature itself remains
-> unimplemented.
+> and now records the step 4 regex implementation.
 >
 > **Re-verified:** 2026-09-20 against the current source. The remaining line
 > references below are implementation anchors for steps 4–6.
@@ -82,6 +81,15 @@ this run. The pathological case is not: five additional input characters
 crossed the watchdog, and the deep-sized input did not complete within it. The
 worker is consequently selected for safety, not for expected throughput.
 
+The shipped worker uses a 1,000 ms parent-side watchdog for each candidate
+evaluation. The focused catastrophic-pattern test used 30 `a` characters plus
+`!` and rejected the match in 1,035 ms on the same Windows/Node 22 host. A
+normal indexed regex search in the focused suite completed in 30 ms after the
+worker was started. The watchdog bounds one regex evaluation and terminates its
+worker; it does not make a sequence of many expensive-but-under-budget
+evaluations fast, and it does not prevent the memory or scheduling pressure of
+large candidate strings being copied to the worker.
+
 ## Single matcher contract
 
 Add `src/core/orchestration/HistorySearchMatcher.ts`. It is the only place that
@@ -95,8 +103,13 @@ export interface HistorySearchMatch {
 
 export interface HistorySearchMatcher {
   find(text: string): HistorySearchMatch | undefined;
+  findAsync?(
+    text: string,
+    signal?: AbortSignal
+  ): Promise<HistorySearchMatch | undefined>;
   /** A conservative literal required in every possible match, if one exists. */
   readonly requiredLiteral?: string;
+  dispose?(): void;
 }
 
 export function createHistorySearchMatcher(
@@ -235,13 +248,16 @@ substring behavior and tests remain unchanged.
 
 ### Step 4 — implement regex in core
 
-Add `regex?: boolean` to `HistorySearchQuery`, the regex matcher, invalid-pattern
-error, conservative required-literal extraction, and the bundled terminatable
-worker. Move regex matching for indexed, legacy, and deep paths through the
-worker; substring mode stays on the synchronous implementation. Add tests for
-the worker's pathological-pattern bound, literal and no-literal prefilter
-correctness, all three search paths, invalid patterns, snapshot separation,
-and variable-length snippet/projection boundaries.
+Implemented 2026-09-20. Added `regex?: boolean` to `HistorySearchQuery`, the
+case-insensitive regex matcher, typed invalid-pattern and timeout errors,
+conservative required-literal extraction, and the separately bundled,
+terminatable matcher worker. Regex matching now reaches the indexed path, the
+legacy disk fallback, and the deep scanner through the shared matcher; substring
+mode keeps its synchronous implementation and existing behavior. Snapshot
+identity includes regex mode, and the raw JSONL prefilter either uses a proven
+serialized literal or the existing permissive `() => true` path. Focused tests
+cover the watchdog, literal/no-literal correctness, indexed/deep matching,
+invalid patterns, cache separation, and variable-length match projection.
 
 ### Step 5 — expose `--regex` on the CLI
 

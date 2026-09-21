@@ -30,6 +30,7 @@
 !out/extension.js
 !out/mcp-server.js
 !out/historySearchRebuildWorker.js
+!out/historySearchMatcherWorker.js
 
 # Runtime assets copied by the production build.
 !out/templates/**

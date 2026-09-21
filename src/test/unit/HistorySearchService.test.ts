@@ -231,6 +231,40 @@ suite("HistorySearchService", () => {
     assert.strictEqual(legacyResults[0]?.matchField, "output");
   });
 
+  test("disk-scan fallback applies the regex matcher", async () => {
+    const workflowId = "regex-fallback-2026-06-09T22-25-00";
+    await createRun(workflowId, 1, 1100, [
+      createStatusDraft(
+        1150,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        "fallback ERROR: 404"
+      ),
+    ]);
+
+    const legacyResults = await (
+      service as unknown as {
+        searchLegacy: (
+          query: string,
+          workspaceFolderPath: string,
+          limit: number,
+          filters: undefined,
+          snippetChars: undefined,
+          regex: boolean
+        ) => Promise<Array<{ matchSnippet: string }>>;
+      }
+    ).searchLegacy(
+      "error[: ]+\\d+",
+      workspaceRoot,
+      50,
+      undefined,
+      undefined,
+      true
+    );
+
+    assert.strictEqual(legacyResults.length, 1);
+    assert.ok(legacyResults[0]?.matchSnippet.includes("ERROR: 404"));
+  });
+
   test("returns no results for short queries", async () => {
     const response = await service.search("a", workspaceRoot);
     assert.deepStrictEqual(response.results, []);

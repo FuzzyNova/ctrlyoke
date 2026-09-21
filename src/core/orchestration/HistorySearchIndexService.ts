@@ -50,7 +50,12 @@ import {
   scanHistoryRunDeep,
   type HistoryWorkflowNameResolver,
 } from "./HistoryRunDeepScanner";
-import { createHistorySearchMatcher } from "./HistorySearchMatcher";
+import {
+  createHistorySearchMatcher,
+  disposeHistorySearchMatcher,
+  findHistorySearchMatch,
+  HistorySearchMatcherCancelledError,
+} from "./HistorySearchMatcher";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import type { WorkflowKey } from "../../types/CtrlYokeTypes";
 export { MAX_INDEXED_TEXT_LENGTH } from "./historySearchRebuildWorker";
@@ -196,9 +201,15 @@ export class HistorySearchIndexService {
       ConfigurationUtils.getHistorySearchCacheBudgetBytes()
     );
     const normalizedQuery = request.query.trim();
+    const validationMatcher = createHistorySearchMatcher(
+      normalizedQuery,
+      request.regex === true
+    );
     if (normalizedQuery.length < MIN_QUERY_LENGTH) {
+      disposeHistorySearchMatcher(validationMatcher);
       return this.emptyResponse(normalizedQuery, "ready");
     }
+    disposeHistorySearchMatcher(validationMatcher);
 
     const searchStart = Date.now();
     const offset = Math.max(0, Math.floor(request.offset ?? 0));
@@ -213,6 +224,7 @@ export class HistorySearchIndexService {
       normalizedQuery,
       request.filters,
       Boolean(request.deep),
+      Boolean(request.regex),
       options?.snippetChars
     );
 
@@ -255,6 +267,7 @@ export class HistorySearchIndexService {
           normalizedQuery,
           request.filters,
           Boolean(request.deep),
+          Boolean(request.regex),
           offset,
           limit,
           pageTargetCount,
@@ -305,6 +318,7 @@ export class HistorySearchIndexService {
           normalizedQuery,
           request.filters,
           Boolean(request.deep),
+          Boolean(request.regex),
           offset,
           limit,
           pageTargetCount,
@@ -350,6 +364,7 @@ export class HistorySearchIndexService {
       workspaceFolderPath,
       normalizedQuery,
       request.filters,
+      Boolean(request.regex),
       targetCount,
       0,
       retainedResultCount,
@@ -410,6 +425,7 @@ export class HistorySearchIndexService {
     normalizedQuery: string,
     filters: HistorySearchFilters | undefined,
     deep: boolean,
+    regex: boolean,
     offset: number,
     limit: number,
     targetCount: number,
@@ -430,6 +446,7 @@ export class HistorySearchIndexService {
       workspaceFolderPath,
       normalizedQuery,
       filters,
+      regex,
       targetCount,
       snapshot.results.length,
       Number.POSITIVE_INFINITY,
@@ -574,6 +591,7 @@ export class HistorySearchIndexService {
     workspaceFolderPath: string,
     normalizedQuery: string,
     filters: HistorySearchFilters | undefined,
+    regex: boolean,
     targetCount: number | undefined,
     alreadyCollectedCount: number,
     retainedResultCount: number,
@@ -593,7 +611,7 @@ export class HistorySearchIndexService {
     deepScannedRuns: number;
     totalMatchCount: number;
   }> {
-    const matcher = createHistorySearchMatcher(normalizedQuery, false);
+    const matcher = createHistorySearchMatcher(normalizedQuery, regex);
     const hasPersistedLowercaseKey =
       this.hasCurrentSchemaIndex(workspaceFolderPath);
     const documentsDir = this.getDocumentsDir(workspaceFolderPath);
@@ -675,8 +693,18 @@ export class HistorySearchIndexService {
       }
       currentGroupStartedAt = shard.startedAt;
 
-      const consider = (document: HistorySearchDocument): void => {
-        const match = matcher.find(document.text);
+      const consider = async (
+        document: HistorySearchDocument
+      ): Promise<void> => {
+        let match;
+        try {
+          match = await findHistorySearchMatch(matcher, document.text, signal);
+        } catch (error) {
+          if (error instanceof HistorySearchMatcherCancelledError) {
+            throw new HistorySearchCancelledError();
+          }
+          throw error;
+        }
         if (match === undefined || !matchesFilters(document, filters)) {
           return;
         }
@@ -697,7 +725,7 @@ export class HistorySearchIndexService {
       if (cachedDocuments) {
         documentsScannedThisCall += cachedDocuments.length;
         for (const document of cachedDocuments) {
-          consider(document);
+          await consider(document);
         }
       } else if (this.documentCache.wouldRetain(shard.startedAt)) {
         // Worth a full, unfiltered parse so every document in this run can be
@@ -709,7 +737,7 @@ export class HistorySearchIndexService {
         );
         documentsScannedThisCall += shardRead.documents.length;
         for (const document of shardRead.documents) {
-          consider(document);
+          await consider(document);
         }
         if (shardRead.complete) {
           this.documentCache.set(
@@ -731,7 +759,7 @@ export class HistorySearchIndexService {
           },
           signal
         )) {
-          consider(document);
+          await consider(document);
         }
       }
 
@@ -748,7 +776,7 @@ export class HistorySearchIndexService {
           resolveWorkflowName,
           signal
         )) {
-          consider(document);
+          await consider(document);
         }
       }
       // The generator returns early (without throwing) on cancellation, so a
@@ -772,6 +800,7 @@ export class HistorySearchIndexService {
       for (const key of addedDedupeKeys) {
         seen.delete(key);
       }
+      disposeHistorySearchMatcher(matcher);
       return {
         newResults: [],
         complete: false,
@@ -787,7 +816,7 @@ export class HistorySearchIndexService {
       // needs to be folded in.
       finalizeGroup();
     }
-    return {
+    const result = {
       newResults,
       complete: !stoppedEarly,
       cursor,
@@ -795,6 +824,8 @@ export class HistorySearchIndexService {
       deepScannedRuns,
       totalMatchCount,
     };
+    disposeHistorySearchMatcher(matcher);
+    return result;
   }
 
   /**
@@ -1151,6 +1182,7 @@ export class HistorySearchIndexService {
     query: string,
     filters: HistorySearchFilters | undefined,
     deep: boolean,
+    regex: boolean,
     snippetChars: number | undefined
   ): string {
     return crypto
@@ -1161,6 +1193,7 @@ export class HistorySearchIndexService {
           query: query.trim().toLowerCase(),
           filters: normalizeHistorySearchFilters(filters),
           deep,
+          regex,
           snippetChars,
         })
       )

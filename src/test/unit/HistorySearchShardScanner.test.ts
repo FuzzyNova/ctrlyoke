@@ -18,6 +18,10 @@ import {
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 import { FINAL_STEP_PHASES } from "../../types/DashboardConstants";
 import type { HistorySearchDocument } from "../../types/WorkflowTimelineTypes";
+import {
+  createHistorySearchMatcher,
+  disposeHistorySearchMatcher,
+} from "../../core/orchestration/HistorySearchMatcher";
 
 suite("HistorySearchShardScanner", () => {
   const INDEXED_KEY_OPTIONS = { hasPersistedLowercaseKey: true };
@@ -82,6 +86,30 @@ suite("HistorySearchShardScanner", () => {
       )(line),
       true
     );
+  });
+
+  test("keeps regex prefiltering permissive when no literal is provable", () => {
+    const matcher = createHistorySearchMatcher("[A-Z].+\\d+", true);
+    const document = createDocument("ERROR 404");
+    assert.strictEqual(
+      createHistorySearchLinePrefilter(
+        matcher,
+        INDEXED_KEY_OPTIONS
+      )(JSON.stringify(document)),
+      true
+    );
+    disposeHistorySearchMatcher(matcher);
+  });
+
+  test("uses a required regex literal without matching the raw JSON line", () => {
+    const matcher = createHistorySearchMatcher('quoted "term"', true);
+    const document = createDocument('Quoted "term" here');
+    const line = JSON.stringify(document);
+    assert.strictEqual(
+      createHistorySearchLinePrefilter(matcher, INDEXED_KEY_OPTIONS)(line),
+      true
+    );
+    disposeHistorySearchMatcher(matcher);
   });
 
   test("degrades permissively for a non-ASCII query", async () => {

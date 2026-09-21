@@ -4,6 +4,10 @@ import * as os from "os";
 import * as path from "path";
 import { suite, teardown, test } from "mocha";
 import { scanHistoryRunDeep } from "../../core/orchestration/HistoryRunDeepScanner";
+import {
+  createHistorySearchMatcher,
+  disposeHistorySearchMatcher,
+} from "../../core/orchestration/HistorySearchMatcher";
 import { MAX_INDEXED_TEXT_LENGTH } from "../../core/orchestration/HistorySearchIndexService";
 import { projectHistorySearchResult } from "../../core/orchestration/HistorySearchResultUtils";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
@@ -36,6 +40,21 @@ suite("HistoryRunDeepScanner", () => {
 
     assert.strictEqual(documents.length, 1);
     assert.ok(documents[0].text.includes("hidden-term"));
+  });
+
+  test("uses regex match positions while projecting a deep match", async () => {
+    const run = await createRun(`${"x".repeat(2400)} error: 404 suffix`);
+    const matcher = createHistorySearchMatcher("error[: ]+\\d+", true);
+    const documents = await collect(run, matcher);
+    disposeHistorySearchMatcher(matcher);
+
+    assert.strictEqual(documents.length, 1);
+    assert.ok(
+      projectHistorySearchResult(documents[0], {
+        index: documents[0].text.indexOf("error"),
+        length: 10,
+      }).matchSnippet.includes("error: 404")
+    );
   });
 
   test("does not yield a term found in the indexed prefix", async () => {
@@ -143,7 +162,12 @@ suite("HistoryRunDeepScanner", () => {
     return { workspaceRoot, workflowKey, runRef, manifestPath };
   }
 
-  async function collect(run: TestRun, query: string) {
+  async function collect(
+    run: TestRun,
+    query:
+      | string
+      | import("../../core/orchestration/HistorySearchMatcher").HistorySearchMatcher
+  ) {
     const documents = [];
     for await (const document of scanHistoryRunDeep(
       run.workspaceRoot,

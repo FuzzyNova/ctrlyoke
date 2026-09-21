@@ -184,6 +184,8 @@ export interface HistorySearchQuery {
   filters?: HistorySearchFilters;
   /** Also re-read each visited run's events uncapped, to reach matches past `MAX_INDEXED_TEXT_LENGTH`. */
   deep?: boolean;
+  /** Interpret `query` as a case-insensitive regular expression. */
+  regex?: boolean;
   /** Scan the complete index for an exact total while retaining only the requested result window. */
   exhaustive?: boolean;
 }
