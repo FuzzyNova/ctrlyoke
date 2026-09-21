@@ -24,6 +24,9 @@ import {
   MCP_RELEASE_PATHS_TOOL_NAME,
   MCP_REMOVE_STEP_TOOL_NAME,
   MCP_REORDER_STEPS_TOOL_NAME,
+  MCP_GLOBAL_STATUS_TOOL_NAME,
+  MCP_READ_OUTPUT_TOOL_NAME,
+  MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
   MCP_WORKFLOW_MUTATION_TOOL_NAMES,
 } from "../../utils/McpToolDefinitions";
 import type {
@@ -402,7 +405,10 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
           position: "end",
           steps: [{ prompt: "must be refused" }],
         }),
-      /tool is not available/
+      // The refusal names the cause: without an attached run there is nothing
+      // for a workflow tool to act on, which is a different fix from a
+      // permission boundary and has to read as one.
+      /no ctrlyoke workflow run is attached/
     );
   });
 
@@ -1457,7 +1463,8 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     const server = await setup();
     const run = await createRun(
       "nested-capability",
-      "2026-01-01T00-00-00-000Z"
+      "2026-01-01T00-00-00-000Z",
+      { executionState: EXECUTION_STATES.RUNNING }
     );
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
     const capabilitiesDirectory = path.join(workspaceRoot, ".ctrlyoke");
@@ -1502,6 +1509,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     const run = await createRun("mixed-append", "2026-01-01T00-00-00-000Z", {
       stepCount: 4,
       currentIndex: -1,
+      executionState: EXECUTION_STATES.RUNNING,
     });
     const workingFile = JSON.parse(
       await fs.readFile(run.runFilePath, "utf8")
@@ -1510,6 +1518,12 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       { id: "existing-a", startIndex: 0, endIndex: 1, failFast: true },
       { id: "existing-b", startIndex: 2, endIndex: 3, failFast: true },
     ];
+    // Pending steps: the run is live and its head has not reached them, so the
+    // numeric insert is relocated past the group rather than refused as a
+    // splice into the completed prefix.
+    workingFile.steps = workingFile.steps?.map((step) => ({
+      prompt: (step as { prompt: string }).prompt,
+    })) as WorkflowStep[];
     await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
@@ -1598,7 +1612,8 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     const server = await setup();
     const run = await createRun(
       "invalid-container",
-      "2026-01-01T00-00-00-000Z"
+      "2026-01-01T00-00-00-000Z",
+      { executionState: EXECUTION_STATES.RUNNING }
     );
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
     const before = await fs.readFile(run.runFilePath, "utf8");
@@ -1633,7 +1648,9 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
   test("appends to its own run through the continuation transaction", async () => {
     const server = await setup();
-    const run = await createRun("append", "2026-01-01T00-00-00-000Z");
+    const run = await createRun("append", "2026-01-01T00-00-00-000Z", {
+      executionState: EXECUTION_STATES.RUNNING,
+    });
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
     const result = responseJson(
@@ -1673,6 +1690,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       "2026-01-01T00-00-00-000Z",
       {
         prompt: "repeat this gate",
+        executionState: EXECUTION_STATES.RUNNING,
       }
     );
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
@@ -1698,8 +1716,12 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
   test("cannot append to any run but its own", async () => {
     const server = await setup();
-    const own = await createRun("own", "2026-01-01T00-00-00-000Z");
-    const other = await createRun("other-run", "2026-01-02T00-00-00-000Z");
+    const own = await createRun("own", "2026-01-01T00-00-00-000Z", {
+      executionState: EXECUTION_STATES.RUNNING,
+    });
+    const other = await createRun("other-run", "2026-01-02T00-00-00-000Z", {
+      executionState: EXECUTION_STATES.RUNNING,
+    });
     process.env.CTRLYOKE_WORKING_FILE = own.runFilePath;
 
     // A supplied address is not an alternate target — it is ignored outright,
@@ -1974,8 +1996,13 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       }
     }
 
+    // Live, but with its head past the last step: the run still accepts
+    // mutations, and the join is refused for the reason under test rather than
+    // for the run having settled.
     await rejectJoin(
-      await createRun("live-no-running", "2026-01-01T00-00-00-000Z"),
+      await createRun("live-no-running", "2026-01-01T00-00-00-000Z", {
+        executionState: EXECUTION_STATES.RUNNING,
+      }),
       /running queue step|No queue step is currently running/i
     );
 
@@ -2120,12 +2147,18 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     workingFile.parallelGroups = [
       { id: "mcp-authored-group", startIndex: 0, endIndex: 1, failFast: true },
     ];
-    // Keep this an unattached, completed run so the Phase 8 caller-level group
-    // mutation ban remains exercised by the live-run tests above.
+    // A live run whose head has not reached the authored group yet, so the
+    // numeric insert is relocated rather than blocked: unattached to any
+    // executor, so the Phase 8 caller-level group mutation ban remains
+    // exercised by the live-run tests above.
+    workingFile.steps = [
+      { prompt: "authored-a" },
+      { prompt: "authored-b" },
+    ] as WorkflowStep[];
     workingFile._runtime = {
       ...workingFile._runtime,
       currentIndex: -1,
-      executionState: workingFile._runtime!.executionState,
+      executionState: EXECUTION_STATES.RUNNING,
     };
     await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
@@ -2186,7 +2219,9 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
   test("rejects an append while another run in the lineage holds the lock", async () => {
     const server = await setup();
-    const run = await createRun("busy", "2026-01-01T00-00-00-000Z");
+    const run = await createRun("busy", "2026-01-01T00-00-00-000Z", {
+      executionState: EXECUTION_STATES.RUNNING,
+    });
     const sibling = `run-2026-01-02T00-00-00-000Z` as RunRef;
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
     await WorkflowLockManager.acquireLock(workspaceRoot, run.workflowKey, {
@@ -2234,5 +2269,209 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       results.map((result) => responseJson(result).newQueueSize).sort(),
       [2, 3]
     );
+  });
+
+  // A harness TUI outlives the run that launched it and keeps this server
+  // attached, so a person typing into a finished workflow's TUI reaches the
+  // mutation tools. Writing to a settled run's file and reporting success told
+  // the agent it had queued work that would never execute.
+  for (const settled of [
+    EXECUTION_STATES.COMPLETED,
+    EXECUTION_STATES.ERROR,
+    EXECUTION_STATES.STOPPED,
+    EXECUTION_STATES.IDLE,
+  ] as const) {
+    test(`refuses every queue mutation once the run is ${settled}`, async () => {
+      const server = await setup();
+      const run = await createRun(
+        `settled-${settled}`,
+        "2026-01-01T00-00-00-000Z",
+        { stepCount: 2, executionState: settled }
+      );
+      process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+      const before = await fs.readFile(run.runFilePath, "utf8");
+
+      const invocations: Array<[string, Record<string, unknown>]> = [
+        [
+          MCP_APPEND_STEP_TOOL_NAME,
+          { position: "end", steps: [{ prompt: "too late" }] },
+        ],
+        [
+          MCP_EDIT_STEP_TOOL_NAME,
+          { index: 1, updates: { prompt: "too late" } },
+        ],
+        [MCP_REMOVE_STEP_TOOL_NAME, { index: 1 }],
+        [MCP_REORDER_STEPS_TOOL_NAME, { indices: [1, 0] }],
+      ];
+
+      for (const [toolName, args] of invocations) {
+        await assert.rejects(
+          () => server.invokeTool(toolName, args),
+          (error: Error) => {
+            assert.match(error.message, /no longer executing/);
+            // The state it refused on, so the caller can tell "finished" from
+            // "never started" rather than retrying blind.
+            assert.match(error.message, new RegExp(`state: ${settled}`));
+            assert.match(error.message, /nothing was changed/);
+            return true;
+          },
+          `${toolName} must refuse a ${settled} run`
+        );
+      }
+
+      assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
+    });
+  }
+
+  test("still reports status and output for a settled run", async () => {
+    const server = await setup();
+    const run = await createRun("settled-reads", "2026-01-01T00-00-00-000Z", {
+      responseText: "the finished answer",
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    // Refusing mutations must not cost the caller its own history: reading a
+    // finished run is exactly what a follow-up step needs.
+    const status = responseJson(await server.invokeTool("workflow_status", {}));
+    assert.strictEqual(
+      status.metadata.executionState,
+      EXECUTION_STATES.COMPLETED
+    );
+    const output = responseJson(
+      await server.invokeTool(MCP_READ_OUTPUT_TOOL_NAME, {})
+    );
+    assert.strictEqual(output.outputs[0].responseText, "the finished answer");
+  });
+
+  test("names the valid range when read_output is given a step that does not exist", async () => {
+    const server = await setup();
+    const run = await createRun("bad-index", "2026-01-01T00-00-00-000Z", {
+      stepCount: 2,
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    // Dropping the index silently returned `outputs: []`, which reads as "that
+    // step produced nothing" — the wrong conclusion for a mis-numbered read.
+    await assert.rejects(
+      () => server.invokeTool(MCP_READ_OUTPUT_TOOL_NAME, { indices: [5] }),
+      /has no step 5[\s\S]*valid zero-based indices are 0 to 1/
+    );
+  });
+
+  test("reports a no-op edit as changed: false", async () => {
+    const server = await setup();
+    const run = await createRun("noop-edit", "2026-01-01T00-00-00-000Z", {
+      stepCount: 2,
+      currentIndex: 0,
+      parallelGroups: [],
+      executionState: EXECUTION_STATES.RUNNING,
+    });
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.steps = [
+      { prompt: "running", _runtime: { startedAt: 1 } },
+      { prompt: "pending" },
+    ] as WorkflowStep[];
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const unchanged = responseJson(
+      await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 1,
+        updates: { prompt: "pending" },
+      })
+    );
+    assert.strictEqual(unchanged.success, true);
+    assert.strictEqual(unchanged.changed, false);
+    assert.match(unchanged.note, /wrote nothing/);
+
+    const changed = responseJson(
+      await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 1,
+        updates: { prompt: "actually different" },
+      })
+    );
+    assert.strictEqual(changed.changed, true);
+    assert.strictEqual("note" in changed, false);
+  });
+
+  test("refuses to submit a commit message with nowhere to put it", async () => {
+    const server = await setup();
+    delete process.env.CTRLYOKE_COMMIT_OUTPUT;
+
+    // Reporting success here discarded the message and said it had been
+    // submitted; the only trace was a log line that is off by default.
+    await assert.rejects(
+      () =>
+        server.invokeTool(MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME, {
+          message: "feat: nowhere to go",
+        }),
+      /CTRLYOKE_COMMIT_OUTPUT is unset[\s\S]*discarded rather than submitted/
+    );
+  });
+
+  test("distinguishes a missing workflow from an idle one on a narrowed global_status", async () => {
+    const server = await setup();
+    const idle = await createRun("narrow-idle", "2026-01-01T00-00-00-000Z");
+
+    const narrowed = responseJson(
+      await server.invokeTool(MCP_GLOBAL_STATUS_TOOL_NAME, {
+        workflowKey: idle.workflowKey,
+      })
+    );
+    assert.deepStrictEqual(narrowed.workflows, []);
+    assert.match(
+      narrowed.note,
+      /exists but is not executing \(state: completed\)/
+    );
+
+    await assert.rejects(
+      () =>
+        server.invokeTool(MCP_GLOBAL_STATUS_TOOL_NAME, {
+          workflowKey: "mcp-absent-2026-01-01T00-00-00",
+        }),
+      /no workflow 'mcp-absent-2026-01-01T00-00-00' was found/
+    );
+  });
+
+  test("refuses a note addressed to a participant that does not exist", async () => {
+    const server = await setup();
+    const run = await createRun("note-target", "2026-01-01T00-00-00-000Z", {
+      executionState: EXECUTION_STATES.RUNNING,
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    // An unknown recipient produced an entry nobody is a recipient of: posted,
+    // acknowledged with a sequence number, and read by no one.
+    await assert.rejects(
+      () =>
+        server.invokeTool(MCP_POST_NOTE_TOOL_NAME, {
+          text: "for nobody",
+          to: ["no-such-participant"],
+        }),
+      /no live participant[\s\S]*no-such-participant[\s\S]*note was not posted/
+    );
+  });
+
+  test("reports paths it never held on release_paths", async () => {
+    const server = await setup();
+    const run = await createRun("release-unheld", "2026-01-01T00-00-00-000Z", {
+      executionState: EXECUTION_STATES.RUNNING,
+    });
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    await server.invokeTool(MCP_CLAIM_PATHS_TOOL_NAME, {
+      paths: ["src/mine.ts"],
+    });
+    const released = responseJson(
+      await server.invokeTool(MCP_RELEASE_PATHS_TOOL_NAME, {
+        paths: ["src/mine.ts", "src/never-claimed.ts"],
+      })
+    );
+
+    assert.deepStrictEqual(released.released, ["src/mine.ts"]);
+    assert.deepStrictEqual(released.notHeld, ["src/never-claimed.ts"]);
+    assert.match(released.note, /not released/);
   });
 });

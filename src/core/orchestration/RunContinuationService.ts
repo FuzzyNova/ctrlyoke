@@ -1176,7 +1176,13 @@ function assertStepIndex(
   operation: string
 ): void {
   if (!Number.isInteger(index) || index < 0 || index >= steps.length) {
-    throw new Error(`Invalid ${operation} index: ${index}`);
+    // The bare index alone leaves an MCP caller guessing whether it was off by
+    // one or addressing the wrong run, so state the range that exists.
+    throw new Error(
+      `Invalid ${operation} index: ${index}. This run has ${steps.length} step${
+        steps.length === 1 ? "" : "s"
+      }${steps.length > 0 ? `, so valid zero-based indices are 0 to ${steps.length - 1}` : ""}.`
+    );
   }
 }
 
