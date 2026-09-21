@@ -9,6 +9,11 @@ import { getErrorMessage } from "../../utils/ErrorUtils";
 import { Log } from "../../utils/Log";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { HistoryRunDocumentBuilder } from "./HistoryRunDocumentBuilder";
+import {
+  createHistorySearchMatcher,
+  type HistorySearchMatch,
+  type HistorySearchMatcher,
+} from "./HistorySearchMatcher";
 import { TimelineRecorder } from "./TimelineRecorder";
 
 const DEEP_CONTEXT_LEFT = 400;
@@ -27,7 +32,7 @@ export type HistoryWorkflowNameResolver = (
 export async function* scanHistoryRunDeep(
   workspaceFolderPath: string,
   manifestPath: string,
-  normalizedQuery: string,
+  queryOrMatcher: string | HistorySearchMatcher,
   resolveWorkflowName: HistoryWorkflowNameResolver,
   signal?: AbortSignal
 ): AsyncGenerator<HistorySearchDocument, void, undefined> {
@@ -81,7 +86,10 @@ export async function* scanHistoryRunDeep(
     return;
   }
 
-  const queryLower = normalizedQuery.toLowerCase();
+  const matcher =
+    typeof queryOrMatcher === "string"
+      ? createHistorySearchMatcher(queryOrMatcher, false)
+      : queryOrMatcher;
   const documentBuilder = new HistoryRunDocumentBuilder();
   const context = {
     manifest,
@@ -98,23 +106,19 @@ export async function* scanHistoryRunDeep(
 
       const documents = documentBuilder.buildEventDocuments(event, context, {
         projectCandidate: (candidate) => {
-          const textLower = candidate.text.toLowerCase();
           if (
-            textLower.slice(0, MAX_INDEXED_TEXT_LENGTH).includes(queryLower)
+            matcher.find(candidate.text.slice(0, MAX_INDEXED_TEXT_LENGTH)) !==
+            undefined
           ) {
             return undefined;
           }
 
-          const matchIndex = textLower.indexOf(queryLower);
-          if (matchIndex < 0) {
+          const match = matcher.find(candidate.text);
+          if (match === undefined) {
             return undefined;
           }
 
-          return createBoundedTextProjection(
-            candidate.text,
-            matchIndex,
-            normalizedQuery.length
-          );
+          return createBoundedTextProjection(candidate.text, match);
         },
       });
 
@@ -134,21 +138,20 @@ export async function* scanHistoryRunDeep(
 
 function createBoundedTextProjection(
   text: string,
-  matchIndex: number,
-  queryLength: number
+  match: HistorySearchMatch
 ): { text: string; textLower: string } {
   const maxLength = MAX_DEEP_DOCUMENT_TEXT_LENGTH;
-  const matchEnd = Math.min(text.length, matchIndex + queryLength);
-  let start = Math.max(0, matchIndex - DEEP_CONTEXT_LEFT);
+  const matchEnd = Math.min(text.length, match.index + match.length);
+  let start = Math.max(0, match.index - DEEP_CONTEXT_LEFT);
   let end = Math.min(text.length, matchEnd + DEEP_CONTEXT_RIGHT);
 
   if (end - start > maxLength) {
-    const matchLength = Math.min(queryLength, maxLength);
-    const contextBudget = maxLength - matchLength;
+    const boundedMatchLength = Math.min(match.length, maxLength);
+    const contextBudget = maxLength - boundedMatchLength;
     const left = Math.min(DEEP_CONTEXT_LEFT, Math.floor(contextBudget / 2));
     const right = Math.min(DEEP_CONTEXT_RIGHT, contextBudget - left);
-    start = Math.max(0, matchIndex - left);
-    end = Math.min(text.length, matchIndex + matchLength + right);
+    start = Math.max(0, match.index - left);
+    end = Math.min(text.length, match.index + boundedMatchLength + right);
   }
 
   const boundedText = text.slice(start, end);

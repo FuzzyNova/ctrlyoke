@@ -50,6 +50,7 @@ import {
   scanHistoryRunDeep,
   type HistoryWorkflowNameResolver,
 } from "./HistoryRunDeepScanner";
+import { createHistorySearchMatcher } from "./HistorySearchMatcher";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import type { WorkflowKey } from "../../types/CtrlYokeTypes";
 export { MAX_INDEXED_TEXT_LENGTH } from "./historySearchRebuildWorker";
@@ -592,7 +593,7 @@ export class HistorySearchIndexService {
     deepScannedRuns: number;
     totalMatchCount: number;
   }> {
-    const lowered = normalizedQuery.toLowerCase();
+    const matcher = createHistorySearchMatcher(normalizedQuery, false);
     const hasPersistedLowercaseKey =
       this.hasCurrentSchemaIndex(workspaceFolderPath);
     const documentsDir = this.getDocumentsDir(workspaceFolderPath);
@@ -675,15 +676,13 @@ export class HistorySearchIndexService {
       currentGroupStartedAt = shard.startedAt;
 
       const consider = (document: HistorySearchDocument): void => {
-        if (
-          !document.text.toLowerCase().includes(lowered) ||
-          !matchesFilters(document, filters)
-        ) {
+        const match = matcher.find(document.text);
+        if (match === undefined || !matchesFilters(document, filters)) {
           return;
         }
         const result = projectHistorySearchResult(
           document,
-          normalizedQuery,
+          match,
           snippetChars
         );
         groupBuffer.push({
@@ -722,7 +721,7 @@ export class HistorySearchIndexService {
       } else {
         for await (const document of streamHistorySearchDocuments(
           documentsDir,
-          normalizedQuery,
+          matcher,
           {
             hasPersistedLowercaseKey,
             resolvedShardOrder: [shard.shardName],
@@ -745,7 +744,7 @@ export class HistorySearchIndexService {
         for await (const document of scanHistoryRunDeep(
           workspaceFolderPath,
           shard.manifestPath,
-          normalizedQuery,
+          matcher,
           resolveWorkflowName,
           signal
         )) {

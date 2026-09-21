@@ -7,14 +7,29 @@ import type {
   HistorySearchDocument,
   HistorySearchResult,
 } from "../../types/WorkflowTimelineTypes";
+import {
+  createHistorySearchMatcher,
+  type HistorySearchMatch,
+} from "./HistorySearchMatcher";
 
 export const DEFAULT_HISTORY_SEARCH_SNIPPET_CHARS = 100;
 
 export function projectHistorySearchResult(
   document: HistorySearchDocument,
+  match: HistorySearchMatch,
+  snippetChars?: number
+): HistorySearchResult;
+export function projectHistorySearchResult(
+  document: HistorySearchDocument,
   query: string,
+  snippetChars?: number
+): HistorySearchResult;
+export function projectHistorySearchResult(
+  document: HistorySearchDocument,
+  matchOrQuery: HistorySearchMatch | string,
   snippetChars: number = DEFAULT_HISTORY_SEARCH_SNIPPET_CHARS
 ): HistorySearchResult {
+  const match = resolveHistorySearchMatch(document.text, matchOrQuery);
   return {
     workflowKey: document.workflowKey,
     runRef: document.runRef,
@@ -25,7 +40,7 @@ export function projectHistorySearchResult(
     target: document.target,
     eventKind: document.eventKind,
     matchField: document.matchField,
-    matchSnippet: extractSnippet(document.text, query, snippetChars),
+    matchSnippet: extractSnippet(document.text, match, snippetChars),
     matchContext: formatMatchContext(document.target, document.attemptIndex),
     filePath: document.filePath,
   };
@@ -66,23 +81,41 @@ export function getHistorySearchDocumentDedupeKey(
  */
 export function extractSnippet(
   text: string,
+  match: HistorySearchMatch | undefined,
+  snippetChars?: number
+): string;
+export function extractSnippet(
+  text: string,
   query: string,
+  snippetChars?: number
+): string;
+export function extractSnippet(
+  text: string,
+  matchOrQuery: HistorySearchMatch | string | undefined,
   snippetChars: number = DEFAULT_HISTORY_SEARCH_SNIPPET_CHARS
 ): string {
   const normalizedSnippetChars = Math.max(0, Math.floor(snippetChars));
-  const searchText = text.toLowerCase();
-  const searchQuery = query.toLowerCase();
-  const index = searchText.indexOf(searchQuery);
-  if (index === -1) {
+  const match = resolveHistorySearchMatch(text, matchOrQuery);
+  if (match === undefined) {
     return text.slice(0, normalizedSnippetChars);
   }
 
   const beforeChars = Math.floor(normalizedSnippetChars * 0.4);
   const afterChars = normalizedSnippetChars - beforeChars;
-  const start = Math.max(0, index - beforeChars);
-  const end = Math.min(text.length, index + query.length + afterChars);
+  const start = Math.max(0, match.index - beforeChars);
+  const end = Math.min(text.length, match.index + match.length + afterChars);
   const snippet = text.slice(start, end);
   return `${start > 0 ? "…" : ""}${snippet}${end < text.length ? "…" : ""}`;
+}
+
+function resolveHistorySearchMatch(
+  text: string,
+  matchOrQuery: HistorySearchMatch | string | undefined
+): HistorySearchMatch | undefined {
+  if (matchOrQuery === undefined || typeof matchOrQuery !== "string") {
+    return matchOrQuery;
+  }
+  return createHistorySearchMatcher(matchOrQuery, false).find(text);
 }
 
 function formatMatchContext(

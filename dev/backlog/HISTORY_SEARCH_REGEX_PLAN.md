@@ -1,13 +1,14 @@
 # History Search — regex mode
 
-> **Status: Design complete; not implemented.** This is the architectural decision
-> for the regex-search follow-up to `dev/implemented/CLI_HISTORY_SEARCH_PLAN.md`.
-> Step 1 added the end-to-end `--deep` test; this document is step 2 of 6. It
-> deliberately ships no production feature.
+> **Status: Step 3 implemented; regex mode not implemented.** This is the
+> architectural decision for the regex-search follow-up to
+> `dev/implemented/CLI_HISTORY_SEARCH_PLAN.md`.
+> Step 1 added the end-to-end `--deep` test; this document began as step 2 of 6
+> and now records the step 3 matcher refactor. The regex feature itself remains
+> unimplemented.
 >
-> **Re-verified:** 2026-09-20 against the current source. The line references
-> below are implementation anchors for steps 3–6, not claims about code that
-> already exists.
+> **Re-verified:** 2026-09-20 against the current source. The remaining line
+> references below are implementation anchors for steps 4–6.
 
 ## Decision
 
@@ -68,13 +69,13 @@ representative document was a synthetic 1,000,000-character string, matching
 the relevant shape of an uncapped deep-scan candidate rather than the 2,000
 character indexed cap (`src/core/orchestration/historySearchRebuildWorker.ts:30-35`).
 
-| Test | Result |
-| --- | ---: |
+| Test                                                                |                          Result |
+| ------------------------------------------------------------------- | ------------------------------: |
 | Current deep-style `textLower.includes("needle")`, 1,000 iterations | 47.512 ms total, 47.5 µs/search |
-| Literal `/needle/` regex, 1,000 iterations | 47.219 ms total, 47.2 µs/search |
-| `/(a+)+$/` against 20 `a` characters plus `!` | 131 ms inside the child process |
-| Same pathological pattern against 25 characters | exceeded a 1,000 ms watchdog |
-| Same pathological pattern against 1,000,000 characters | exceeded a 1,000 ms watchdog |
+| Literal `/needle/` regex, 1,000 iterations                          | 47.219 ms total, 47.2 µs/search |
+| `/(a+)+$/` against 20 `a` characters plus `!`                       | 131 ms inside the child process |
+| Same pathological pattern against 25 characters                     |    exceeded a 1,000 ms watchdog |
+| Same pathological pattern against 1,000,000 characters              |    exceeded a 1,000 ms watchdog |
 
 The normal literal-regex cost was indistinguishable from the current matcher in
 this run. The pathological case is not: five additional input characters
@@ -219,13 +220,18 @@ error.
 
 ## Execution plan for steps 3–6
 
-### Step 3 — single-source the matcher
+### Step 3 — single-source the matcher — implemented 2026-09-20
 
-Create `HistorySearchMatcher.ts`, route all four full-text sites through it,
-change both snippet/projection helpers to accept `HistorySearchMatch`, and keep
-the prefilter's current literal behavior. Add focused matcher tests for index
-0, a middle match, no match, case-insensitivity, and query-longer-than-text.
-There must be no regex flag or behavior change in this step.
+`HistorySearchMatcher.ts` now exposes the planned `HistorySearchMatch` and
+`HistorySearchMatcher` contracts, plus
+`createHistorySearchMatcher(query: string, regex: boolean)` and the nominal
+`SubstringHistorySearchMatcher implements HistorySearchMatcher` implementation.
+The factory currently rejects `regex: true` until step 4; substring mode is the
+only supported mode in this step. The indexed, fallback, deep, and raw-line
+prefilter paths now share the matcher, and snippet/projection helpers consume
+the match position and length. Focused matcher tests cover index 0, a middle
+match, no match, case-insensitivity, and a query longer than the text. Existing
+substring behavior and tests remain unchanged.
 
 ### Step 4 — implement regex in core
 

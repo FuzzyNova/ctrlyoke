@@ -29,6 +29,7 @@ import {
   getHistorySearchDocumentDedupeKey,
   projectHistorySearchResult,
 } from "./HistorySearchResultUtils";
+import { createHistorySearchMatcher } from "./HistorySearchMatcher";
 import { TimelineRecorder } from "./TimelineRecorder";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 
@@ -202,6 +203,7 @@ export class HistorySearchService {
 
     const results: HistorySearchResult[] = [];
     const seen = new Set<string>();
+    const matcher = createHistorySearchMatcher(normalizedQuery, false);
 
     for (const workflow of workflowRuns) {
       if (results.length >= limit) {
@@ -250,8 +252,9 @@ export class HistorySearchService {
           );
 
           for (const document of eventDocuments) {
+            const searchMatch = matcher.find(document.text);
             if (
-              !this.matchesQuery(document.text, normalizedQuery) ||
+              searchMatch === undefined ||
               !matchesFilters(document, filters)
             ) {
               continue;
@@ -259,7 +262,7 @@ export class HistorySearchService {
 
             const match = projectHistorySearchResult(
               document,
-              normalizedQuery,
+              searchMatch,
               snippetChars
             );
             const dedupeKey = getHistorySearchDocumentDedupeKey(
@@ -356,9 +359,5 @@ export class HistorySearchService {
       runRef,
       workflowName: metadata.workflowName,
     });
-  }
-
-  private matchesQuery(text: string, query: string): boolean {
-    return text.toLowerCase().includes(query.toLowerCase());
   }
 }

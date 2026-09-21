@@ -7,6 +7,10 @@ import {
   getDocumentsShardFileName,
   type HistorySearchIndexManifest,
 } from "./historySearchRebuildWorker";
+import {
+  createHistorySearchMatcher,
+  type HistorySearchMatcher,
+} from "./HistorySearchMatcher";
 
 const FILE_NOT_FOUND_ERROR_CODE = "ENOENT";
 const NON_ASCII_PATTERN = /[^\x00-\x7f]/;
@@ -190,14 +194,22 @@ async function deriveShardStartedAt(shardPath: string): Promise<number> {
  * rebuild is in flight.
  */
 export function createHistorySearchLinePrefilter(
-  normalizedQuery: string,
+  queryOrMatcher: string | HistorySearchMatcher,
   options: HistorySearchScanOptions
 ): HistorySearchLinePrefilter {
-  if (NON_ASCII_PATTERN.test(normalizedQuery)) {
+  const matcher =
+    typeof queryOrMatcher === "string"
+      ? createHistorySearchMatcher(queryOrMatcher, false)
+      : queryOrMatcher;
+  const requiredLiteral = matcher.requiredLiteral;
+  if (
+    requiredLiteral === undefined ||
+    NON_ASCII_PATTERN.test(requiredLiteral)
+  ) {
     return () => true;
   }
 
-  const serializedLoweredQuery = JSON.stringify(normalizedQuery.toLowerCase());
+  const serializedLoweredQuery = JSON.stringify(requiredLiteral.toLowerCase());
   const escapedLoweredQuery = serializedLoweredQuery.slice(1, -1);
 
   if (!options.hasPersistedLowercaseKey) {
@@ -266,12 +278,12 @@ export async function readShardDocuments(
  */
 export async function* streamHistorySearchDocuments(
   documentsDirectory: string,
-  normalizedQuery: string,
+  queryOrMatcher: string | HistorySearchMatcher,
   options: HistorySearchScanOptions,
   onDocumentScanned?: HistorySearchDocumentScannedCallback,
   signal?: AbortSignal
 ): AsyncGenerator<HistorySearchDocument, void, undefined> {
-  const prefilter = createHistorySearchLinePrefilter(normalizedQuery, options);
+  const prefilter = createHistorySearchLinePrefilter(queryOrMatcher, options);
   const shardNames =
     options.resolvedShardOrder ??
     (
