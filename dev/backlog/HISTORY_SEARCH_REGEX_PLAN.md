@@ -1,6 +1,6 @@
 # History Search — regex mode
 
-> **Status: Step 4 implemented; CLI and drawer exposure remain.** This is the
+> **Status: Step 5 implemented; drawer exposure remains.** This is the
 > architectural decision for the regex-search follow-up to
 > `dev/implemented/CLI_HISTORY_SEARCH_PLAN.md`.
 > Step 1 added the end-to-end `--deep` test; this document began as step 2 of 6
@@ -259,14 +259,16 @@ serialized literal or the existing permissive `() => true` path. Focused tests
 cover the watchdog, literal/no-literal correctness, indexed/deep matching,
 invalid patterns, cache separation, and variable-length match projection.
 
-### Step 5 — expose `--regex` on the CLI
+### Step 5 — expose `--regex` on the CLI — implemented 2026-09-21
 
-Add the flag through the existing handlers-interface path in
+Added `--regex` through the existing handlers-interface path in
 `src/cli/HistoryCommandDefinitions.ts` and
-`src/cli/HistoryInspectionCommands.ts`. Pass `regex: true`, map invalid patterns
-to exit 2, disclose regex mode in the text footer and JSON result, and document
-case-insensitivity plus the possible prefilter/performance cost in
-`docs/cli/ctrlyoke.md`. Preserve exit 0 for a successful zero-match search.
+`src/cli/HistoryInspectionCommands.ts`. The query carries `regex: true`, and
+invalid patterns retain the typed `InvalidHistorySearchPatternError` so the
+existing `handleHistoryCommand` reports the named pattern and parse failure
+with exit code 2. Text and JSON output disclose regex mode, and help/docs cover
+case-insensitivity plus the possible prefilter/performance cost. Successful
+zero-match searches still exit 0.
 
 ### Step 6 — expose regex in the drawer
 

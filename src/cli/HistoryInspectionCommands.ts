@@ -344,6 +344,7 @@ function buildHistorySearchQuery(
     limit: parseHistorySearchLimit(options.limit),
     offset: parseHistorySearchInteger(options.offset, "--offset", 0, 0),
     deep: options.deep === true,
+    regex: options.regex === true,
     exhaustive: options.exactCount === true,
     filters: {
       ...(eventKinds ? { eventKinds: eventKinds as HistoryEventKind[] } : {}),
@@ -438,6 +439,7 @@ function renderHistorySearchJson(
         offset: response.offset,
         limit: request.limit,
         deep: request.deep === true,
+        regex: request.regex === true,
         totalCount: response.totalCount,
         countState: response.countState,
         hasMore: response.hasMore,
@@ -485,6 +487,11 @@ function renderHistorySearchText(
       "This was a deep search over matching runs beyond the indexed text cap."
     );
   }
+  io.writeOut(
+    request.regex === true
+      ? "This was a case-insensitive regex search; it may be slower than substring search because the prefilter can only use an extracted literal."
+      : "This was a case-insensitive substring search."
+  );
   io.writeOut(
     "For an exhaustive read of a known run, use history show with its selector."
   );

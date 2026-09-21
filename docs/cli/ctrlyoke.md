@@ -236,6 +236,7 @@ Search indexed output across this workspace's run history:
 ctrlyoke history search "EPERM" --kind bash --kind response --limit 3
 ctrlyoke history search "timeout" --this-workflow --deep --exact-count
 ctrlyoke history search "permission" --since 7d --json
+ctrlyoke history search "EP.*RM" --regex
 ```
 
 Text results include a copy-pasteable `--workflow ... --run ... --step ...`
@@ -246,7 +247,12 @@ the reported total is a lower bound and is marked with `+`.
 Without `--deep`, matching uses indexed text capped at 2,000 characters per
 event. A term that appears only later in a long output may therefore be missed;
 use `--deep` or inspect a known run with `history show`. The text footer always
-discloses the shallow/deep mode and index/count state.
+discloses the shallow/deep mode, substring/regex mode, and index/count state.
+
+`--regex` treats the query as a case-insensitive regular expression. Regex
+searches may be slower than substring searches because the raw-line prefilter
+can only use a literal extracted from the pattern; patterns without a required
+literal may parse every candidate document.
 
 `--json` emits one versioned JSON result blob bounded by `--limit` (up to 100
 results). This is deliberately different from `history show --json`, which

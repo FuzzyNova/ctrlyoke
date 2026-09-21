@@ -349,6 +349,7 @@ suite("CLI history inspection command parser", () => {
         "response",
         "--exact-count",
         "--deep",
+        "--regex",
         "--no-rebuild",
         "--no-fallback",
       ],
@@ -361,6 +362,7 @@ suite("CLI history inspection command parser", () => {
       kind: ["bash", "response"],
       exactCount: true,
       deep: true,
+      regex: true,
       rebuild: false,
       fallback: false,
       color: true,
@@ -701,7 +703,7 @@ suite("CLI history inspection command handlers", () => {
 });
 
 suite("CLI history search command", () => {
-  test("passes exact-count, deep, cache, and fallback policies to the service", async () => {
+  test("passes exact-count, deep, regex, cache, and fallback policies to the service", async () => {
     const service = new TestHistorySearchService(searchResponse());
     const io = new TestIo();
 
@@ -713,6 +715,7 @@ suite("CLI history search command", () => {
         snippet: "140",
         exactCount: true,
         deep: true,
+        regex: true,
         rebuild: false,
         fallback: false,
       },
@@ -730,6 +733,7 @@ suite("CLI history search command", () => {
       limit: 3,
       offset: 2,
       deep: true,
+      regex: true,
       exhaustive: true,
       filters: {},
     });
@@ -804,6 +808,68 @@ suite("CLI history search command", () => {
     }
   });
 
+  test("uses regex matching when the pattern is not a literal substring", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-cli-history-search-regex-")
+    );
+    const term = "cli-history-regex-hidden-term";
+
+    try {
+      await createDeepSearchRun(workspaceRoot, term);
+      const io = new TestIo();
+      await searchHistoryCommand(
+        "cli-history-regex-.*-term",
+        { deep: true, regex: true },
+        io,
+        dependencies(
+          new TestLineageRepository([], new Map(), new Map()),
+          new TestHistoryManager(new Map(), new Map()),
+          undefined,
+          new HistorySearchService(),
+          workspaceRoot
+        )
+      );
+
+      assert.match(io.output[0] ?? "", /^1 of 1 results/);
+      assert.match(io.output.join("\n"), /case-insensitive regex search/);
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("reports invalid regex patterns with the pattern and parse failure", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-cli-history-search-invalid-regex-")
+    );
+
+    try {
+      await assert.rejects(
+        () =>
+          searchHistoryCommand(
+            "[a",
+            { regex: true },
+            new TestIo(),
+            dependencies(
+              new TestLineageRepository([], new Map(), new Map()),
+              new TestHistoryManager(new Map(), new Map()),
+              undefined,
+              new HistorySearchService(),
+              workspaceRoot
+            )
+          ),
+        (error: unknown) => {
+          assert.match(
+            error instanceof Error ? error.message : String(error),
+            /Invalid history search pattern.*\[.*unterminated|Invalid history search pattern.*\[.*Unterminated/i
+          );
+          return true;
+        }
+      );
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("derives --this-workflow from CTRLYOKE_WORKING_FILE", async () => {
     const service = new TestHistorySearchService(searchResponse());
     const originalWorkingFile = process.env.CTRLYOKE_WORKING_FILE;
@@ -838,6 +904,7 @@ suite("CLI history search command", () => {
       limit: 20,
       offset: 0,
       deep: false,
+      regex: false,
       exhaustive: false,
       filters: { workflowKeys: ["release"] },
     });
@@ -898,6 +965,7 @@ suite("CLI history search command", () => {
     assert.match(output, /one matching event or field, not one occurrence/);
     assert.match(output, /lower bound/);
     assert.match(output, /--deep/);
+    assert.match(output, /case-insensitive substring search/);
     assert.match(output, /history show/);
   });
 
@@ -922,12 +990,31 @@ suite("CLI history search command", () => {
       offset: 0,
       limit: 20,
       deep: false,
+      regex: false,
       totalCount: 4,
       countState: "atLeast",
       hasMore: true,
       indexState: "ready",
       results: searchResponse().results,
     });
+  });
+
+  test("discloses regex mode in JSON output", async () => {
+    const io = new TestIo();
+    await searchHistoryCommand(
+      "EP.*RM",
+      { json: true, regex: true },
+      io,
+      dependencies(
+        new TestLineageRepository([], new Map(), new Map()),
+        new TestHistoryManager(new Map(), new Map()),
+        undefined,
+        new TestHistorySearchService(searchResponse())
+      )
+    );
+
+    assert.strictEqual(JSON.parse(io.output[0]).regex, true);
+    assert.strictEqual(JSON.parse(io.output[0]).schemaVersion, 1);
   });
 
   test("parses relative history times", async () => {

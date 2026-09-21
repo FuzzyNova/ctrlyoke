@@ -45,6 +45,7 @@ export interface HistorySearchOptions {
   since?: string;
   until?: string;
   deep?: boolean;
+  regex?: boolean;
   limit?: string;
   offset?: string;
   snippet?: string;
@@ -171,6 +172,10 @@ export function registerHistoryCommands(
       "--deep",
       "Re-read matching runs past the 2000-character indexed text cap"
     )
+    .option(
+      "--regex",
+      "Interpret the query as a case-insensitive regular expression"
+    )
     .option("--limit <n>", "Maximum results (default 20, maximum 100)")
     .option(
       "--offset <n>",
@@ -193,7 +198,7 @@ export function registerHistoryCommands(
     .option("--no-color", "Disable color in formatted output")
     .addHelpText(
       "after",
-      "\nA result is one matching event or field, not one occurrence. Without --deep, indexed text is capped at 2000 characters. A zero-result search is exact but reads the whole index and may be slow. --offset is not cheap from a cold process. Only settled outcomes (completed, error, stopped, paused) are normally persisted; idle, pausing, and cancelling are transient.\n"
+      "\nA result is one matching event or field, not one occurrence. Without --deep, indexed text is capped at 2000 characters. Regex matching is case-insensitive and may be slower than substring matching because the prefilter can only use an extracted literal. A zero-result search is exact but reads the whole index and may be slow. --offset is not cheap from a cold process. Only settled outcomes (completed, error, stopped, paused) are normally persisted; idle, pausing, and cancelling are transient.\n"
     )
     .action(async (query: string, options: HistorySearchOptions) =>
       handlers.search(query, options)
