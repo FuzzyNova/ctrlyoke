@@ -46,7 +46,10 @@ import type {
   OrderedStatusHistoryEntry,
   OutputExecutionTarget,
 } from "@root/types/OutputHistoryTypes";
-import type { TerminalSettings } from "@root/types/WebviewMessageTypes";
+import type {
+  SearchHistoryErrorMessage,
+  TerminalSettings,
+} from "@root/types/WebviewMessageTypes";
 import { WebviewLog } from "@utils/logger";
 import {
   isExecutionFinished,
@@ -2710,6 +2713,21 @@ export function createMessageHandlers(
       });
       ui.setPendingHistorySearchNavigation(null);
     }
+  };
+
+  // --------------------------------------------------------------------------
+  // SEARCH_HISTORY_ERROR - User-correctable history search errors
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.SEARCH_HISTORY_ERROR] = (message) => {
+    const error = message as SearchHistoryErrorMessage;
+    const uiStore = useUiStore.getState();
+    if (
+      uiStore.historySearchQuery.trim() !== error.query ||
+      uiStore.historySearchRegex !== error.regex
+    ) {
+      return;
+    }
+    uiStore.setHistorySearchError(error.message);
   };
 
   // --------------------------------------------------------------------------

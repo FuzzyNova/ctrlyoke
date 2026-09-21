@@ -200,6 +200,8 @@ export function HistorySearchDrawer() {
   const results = useUiStore((s) => s.historySearchResults);
   const loading = useUiStore((s) => s.historySearchLoading);
   const deepSearch = useUiStore((s) => s.historySearchDeep);
+  const regexSearch = useUiStore((s) => s.historySearchRegex);
+  const historySearchError = useUiStore((s) => s.historySearchError);
   const totalCount = useUiStore((s) => s.historySearchTotalCount);
   const countState = useUiStore((s) => s.historySearchCountState);
   const indexState = useUiStore((s) => s.historySearchIndexState);
@@ -211,6 +213,7 @@ export function HistorySearchDrawer() {
   const closeHistorySearch = useUiStore((s) => s.closeHistorySearch);
   const setHistorySearchQuery = useUiStore((s) => s.setHistorySearchQuery);
   const setHistorySearchDeep = useUiStore((s) => s.setHistorySearchDeep);
+  const setHistorySearchRegex = useUiStore((s) => s.setHistorySearchRegex);
   const setHistorySearchFilters = useUiStore((s) => s.setHistorySearchFilters);
   const resetHistorySearchFilters = useUiStore(
     (s) => s.resetHistorySearchFilters
@@ -225,6 +228,8 @@ export function HistorySearchDrawer() {
   filtersRef.current = historySearchFilters;
   const deepSearchRef = useRef(deepSearch);
   deepSearchRef.current = deepSearch;
+  const regexSearchRef = useRef(regexSearch);
+  regexSearchRef.current = regexSearch;
   // `issueSearch` reads the workflow scope through this ref rather than
   // depending on `workflowKey` directly. `displayedViewAddress` (and thus
   // `workflowKey`) changes freely in the background as other workflows run
@@ -262,6 +267,7 @@ export function HistorySearchDrawer() {
         limit: RESULT_LIMIT,
         filters: toHistorySearchFilters(filters, workflowKeyRef.current),
         ...(deepSearchRef.current ? { deep: true } : {}),
+        ...(regexSearchRef.current ? { regex: true } : {}),
       });
     },
     [setHistorySearchResults, trimmedQuery, vscode]
@@ -386,6 +392,15 @@ export function HistorySearchDrawer() {
     [issueSearch, setHistorySearchDeep]
   );
 
+  const handleRegexSearchChange = useCallback(
+    (nextRegex: boolean) => {
+      regexSearchRef.current = nextRegex;
+      setHistorySearchRegex(nextRegex);
+      issueSearch(filtersRef.current);
+    },
+    [issueSearch, setHistorySearchRegex]
+  );
+
   const handlePathContainsChange = useCallback(
     (pathContains: string) => {
       pathSearchPendingRef.current = true;
@@ -401,6 +416,7 @@ export function HistorySearchDrawer() {
     pathSearchPendingRef.current = false;
     const defaults = createDefaultHistorySearchFilters();
     deepSearchRef.current = false;
+    regexSearchRef.current = false;
     resetHistorySearchFilters();
     issueSearch(defaults);
   }, [issueSearch, resetHistorySearchFilters]);
@@ -432,8 +448,8 @@ export function HistorySearchDrawer() {
     () =>
       `history-search:${trimmedQuery}:${JSON.stringify(
         toHistorySearchFilters(historySearchFilters, workflowKey)
-      )}:${deepSearch ? "deep" : "shallow"}`,
-    [deepSearch, historySearchFilters, trimmedQuery, workflowKey]
+      )}:${deepSearch ? "deep" : "shallow"}:${regexSearch ? "regex" : "substring"}`,
+    [deepSearch, historySearchFilters, regexSearch, trimmedQuery, workflowKey]
   );
   const resultsScrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -473,12 +489,14 @@ export function HistorySearchDrawer() {
         offset,
         filters: toHistorySearchFilters(historySearchFilters, workflowKey),
         ...(deepSearch ? { deep: true } : {}),
+        ...(regexSearch ? { regex: true } : {}),
       });
     },
     [
       countState,
       historySearchFilters,
       deepSearch,
+      regexSearch,
       totalCount,
       trimmedQuery,
       vscode,
@@ -677,6 +695,10 @@ export function HistorySearchDrawer() {
                 value={query}
                 onChange={(event) => setHistorySearchQuery(event.target.value)}
                 onKeyDown={handleInputKeyDown}
+                aria-describedby={
+                  historySearchError ? "history-search-error" : undefined
+                }
+                aria-invalid={historySearchError ? true : undefined}
                 placeholder="Search workflow history..."
                 aria-label="Search workflow history"
                 className="h-9 w-full rounded border border-input-border bg-input-bg pl-9 pr-3 text-sm text-input-fg outline-none focus:border-focus-border"
@@ -702,6 +724,16 @@ export function HistorySearchDrawer() {
               )}
             </button>
           </div>
+
+          {historySearchError && (
+            <p
+              id="history-search-error"
+              role="alert"
+              className="mt-1 text-xs text-error-fg"
+            >
+              {historySearchError}
+            </p>
+          )}
 
           {filtersOpen && (
             <div
@@ -879,9 +911,9 @@ export function HistorySearchDrawer() {
           {trimmedQuery.length >= 2 && (
             <div className="mt-1 flex items-start justify-between gap-3">
               <p className="text-xs text-description-fg/80">
-                Each result is one matching event, not one occurrence &mdash;
-                open a result to highlight every occurrence in that run&rsquo;s
-                output.
+                {regexSearch
+                  ? "Each result is one matching event, not one occurrence — open a result to inspect the matching output."
+                  : "Each result is one matching event, not one occurrence — open a result to highlight every occurrence in that run’s output."}
               </p>
               <label
                 className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-description-fg"
@@ -897,6 +929,21 @@ export function HistorySearchDrawer() {
                   className="h-3 w-3 accent-focus-border"
                 />
                 <span>Deep search (slower)</span>
+              </label>
+              <label
+                className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-description-fg"
+                title="Interpret the query as a case-insensitive regular expression; it may be slower than substring search"
+              >
+                <input
+                  type="checkbox"
+                  checked={regexSearch}
+                  onChange={(event) =>
+                    handleRegexSearchChange(event.target.checked)
+                  }
+                  aria-label="Regex search (potentially slower; case-insensitive regular expression)"
+                  className="h-3 w-3 accent-focus-border"
+                />
+                <span>Regex search (potentially slower)</span>
               </label>
             </div>
           )}
@@ -952,14 +999,20 @@ export function HistorySearchDrawer() {
             </div>
           ))}
 
-        {trimmedQuery.length >= 2 && !loading && totalCount === 0 && (
-          <div className="px-3 py-6 text-center text-sm text-description-fg">
-            No results
-          </div>
-        )}
+        {trimmedQuery.length >= 2 &&
+          !loading &&
+          !historySearchError &&
+          totalCount === 0 && (
+            <div className="px-3 py-6 text-center text-sm text-description-fg">
+              No results
+            </div>
+          )}
 
         {totalCount > 0 && (
-          <div className={`flex flex-col gap-1 ${CONTENT_COLUMN_CLASS}`}>
+          <div
+            className={`flex flex-col gap-1 ${CONTENT_COLUMN_CLASS}`}
+            data-history-search-listing-id={listingId}
+          >
             <VirtualizedPagedList
               totalCount={virtualizedCount}
               listingId={listingId}

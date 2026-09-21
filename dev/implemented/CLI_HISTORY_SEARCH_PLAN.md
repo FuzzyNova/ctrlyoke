@@ -1,7 +1,7 @@
 # CLI History Search — expose global run-history search to agents
 
 > **Status: Implemented.** The CLI command, output contract, tests, and documentation are complete.
-> **Open follow-ups:** regex search, `excludeRunRefs`/`--include-current-run`, and whether
+> **Open follow-ups:** `excludeRunRefs`/`--include-current-run`, and whether
 > `--exact-count` should become the default remain deliberately deferred.
 > Re-verified against the code on 2026-09-20; every file/line citation below was checked, and three
 > claims in the previous draft were **wrong** — see "Corrections to the previous draft".
@@ -142,7 +142,7 @@ The inspection plan now ships `--step` in its first pass, so this line can alway
 
 | Option                              | Maps to                               | Notes                                                                                                                                                                                                                                                                                                                                                                           |
 | ----------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `<query>` (positional)              | `HistorySearchQuery.query`            | Required, min 2 chars (`MIN_QUERY_LENGTH`, defined identically in `HistorySearchService.ts:35` and `HistorySearchIndexService.ts:56`). Substring, case-insensitive — same matcher as the drawer, no regex.                                                                                                                                                                      |
+| `<query>` (positional)              | `HistorySearchQuery.query`            | Required, min 2 chars (`MIN_QUERY_LENGTH`, defined identically in `HistorySearchService.ts:35` and `HistorySearchIndexService.ts:56`). Substring, case-insensitive by default; `--regex` selects the case-insensitive regex matcher.                                                                                                                                                                      |
 | `-d, --cwd <path>`                  | workspace root                        | Matches every other workspace-scoped command.                                                                                                                                                                                                                                                                                                                                   |
 | `--workflow <key...>`               | `filters.workflowKeys`                | Repeatable. Values come from `history list`.                                                                                                                                                                                                                                                                                                                                    |
 | `--this-workflow`                   | `filters.workflowKeys`                | Derives the key from `CTRLYOKE_WORKING_FILE` via `WorkflowPaths.parseWorkingFileAddressFromPath` (`WorkflowPaths.ts:455`) — the in-workflow agent's equivalent of the drawer's "Only &lt;workflow&gt;" checkbox. Errors if the env var is unset.                                                                                                                                |
@@ -493,15 +493,11 @@ and a parameterized snippet width — three small, local changes, now implemente
   (single source, indexed and fallback paths alike), with the CLI defaulting to excluding the run
   named by `CTRLYOKE_WORKING_FILE` unless `--include-current-run` is passed. Do **not** post-filter
   in the CLI — that would desynchronize `totalCount` and `offset` from what was actually returned.
-- **Substring only, no regex.** The matcher is `document.text.toLowerCase().includes(lowered)`
-  (`HistorySearchIndexService.ts:679`) in the indexed path and the same in the fallback. Agents will
-  ask for regex. Adding it means changing the matcher for the drawer too (fine) and accepting
-  unbounded backtracking risk over ~1M documents (not fine without a timeout). Deliberately out of
-  scope for a first pass; if it is added later it belongs in core behind an explicit `--regex` flag
-  with a terminatable matcher, not as a CLI-only variant. Note the raw-line prefilter
-  (`createHistorySearchLinePrefilter`) is substring-shaped too, so regex would also need a prefilter
-  story or it loses the streaming path's main saving. Design: see
-  [`dev/backlog/HISTORY_SEARCH_REGEX_PLAN.md`](../backlog/HISTORY_SEARCH_REGEX_PLAN.md).
+- **Substring only, no regex (superseded).** Substring matching remains the default, while
+  `--regex` now selects the case-insensitive, terminatable matcher shared by the CLI and drawer.
+  The raw-line prefilter uses only a conservatively proven required literal, so patterns without
+  one take the permissive scan path. See
+  [`HISTORY_SEARCH_REGEX_PLAN.md`](./HISTORY_SEARCH_REGEX_PLAN.md) for the implementation notes.
 - **`--limit` default of 20 vs the drawer's 50.** Chosen for the probe-then-drill workflow an agent
   actually runs, and because every result costs context. It also decides how much of the index gets
   read, since the scan stops at `offset + limit` — which makes 20 a better default than it was, and

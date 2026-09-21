@@ -1,13 +1,14 @@
 # History Search — regex mode
 
-> **Status: Step 5 implemented; drawer exposure remains.** This is the
+> **Status: Implemented.** Core, CLI, and React drawer exposure are complete.
+> This is the
 > architectural decision for the regex-search follow-up to
 > `dev/implemented/CLI_HISTORY_SEARCH_PLAN.md`.
 > Step 1 added the end-to-end `--deep` test; this document began as step 2 of 6
 > and now records the step 4 regex implementation.
 >
-> **Re-verified:** 2026-09-20 against the current source. The remaining line
-> references below are implementation anchors for steps 4–6.
+> **Re-verified:** 2026-09-21 against the current source. The line references
+> below are implementation anchors for the completed work.
 
 ## Decision
 
@@ -270,13 +271,14 @@ with exit code 2. Text and JSON output disclose regex mode, and help/docs cover
 case-insensitivity plus the possible prefilter/performance cost. Successful
 zero-match searches still exit 0.
 
-### Step 6 — expose regex in the drawer
+### Step 6 — expose regex in the drawer — implemented 2026-09-21
 
-Mirror the deep toggle through the UI store, request payload, router, and
-listing key. Add inline invalid-pattern feedback, retain the debounce and
-two-character gate, and keep the existing result prose accurate. Cover the
-toggle round trip, payload, cache-key change, and non-wedging invalid-pattern
-rendering in the Vitest suite.
+Mirrored the deep toggle through the UI store, request payload, router, and
+listing key. Added inline invalid-pattern feedback while retaining the debounce
+and two-character gate, and kept the result prose accurate for regex mode.
+Vitest coverage covers the toggle round trip, payload, cache-key change, and
+non-wedging invalid-pattern rendering; router coverage covers mode
+supersession and typed invalid-pattern replies.
 
 ## Non-goals
 

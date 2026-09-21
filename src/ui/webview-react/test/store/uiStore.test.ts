@@ -314,18 +314,24 @@ describe("setPendingFindRequest", () => {
 });
 
 describe("history search state", () => {
-  it("defaults deep search off and resets it with history search state", () => {
+  it("defaults search modes off and resets them with history search state", () => {
     expect(store().historySearchDeep).toBe(false);
+    expect(store().historySearchRegex).toBe(false);
 
     store().setHistorySearchDeep(true);
     expect(store().historySearchDeep).toBe(true);
+    store().setHistorySearchRegex(true);
+    expect(store().historySearchRegex).toBe(true);
 
     store().resetHistorySearchFilters();
     expect(store().historySearchDeep).toBe(false);
+    expect(store().historySearchRegex).toBe(false);
 
     store().setHistorySearchDeep(true);
+    store().setHistorySearchRegex(true);
     store().resetUi();
     expect(store().historySearchDeep).toBe(false);
+    expect(store().historySearchRegex).toBe(false);
   });
 
   it("opens, updates, and closes the history search drawer", () => {

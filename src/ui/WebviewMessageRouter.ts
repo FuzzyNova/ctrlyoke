@@ -87,6 +87,7 @@ import {
 } from "./WebviewClientContext";
 import { HistorySearchService } from "../core/orchestration/HistorySearchService";
 import { HistorySearchCancelledError } from "../core/orchestration/HistorySearchIndexService";
+import { InvalidHistorySearchPatternError } from "../core/orchestration/HistorySearchMatcher";
 import { normalizeHistorySearchFilters } from "../core/orchestration/HistorySearchFilters";
 import type { HistorySearchFilters } from "../types/WorkflowTimelineTypes";
 import { WorkflowVariantService } from "../core/orchestration/WorkflowVariantService";
@@ -109,7 +110,8 @@ type WebviewMessageHandler = (
 type DispatchTable = Map<string, WebviewMessageHandler>;
 
 type WorkflowVariantReply =
-  WorkflowVariantCreatedMessage | WorkflowVariantFailedMessage;
+  | WorkflowVariantCreatedMessage
+  | WorkflowVariantFailedMessage;
 
 interface WorkflowVariantRequestCacheEntry {
   reply: Promise<WorkflowVariantReply>;
@@ -139,6 +141,7 @@ function getHistorySearchListingKey(message: {
   query?: unknown;
   filters?: unknown;
   deep?: unknown;
+  regex?: unknown;
 }): string {
   const query =
     typeof message.query === "string" ? message.query.trim().toLowerCase() : "";
@@ -150,6 +153,7 @@ function getHistorySearchListingKey(message: {
     query,
     filters: normalizeHistorySearchFilters(filters),
     deep: message.deep === true,
+    regex: message.regex === true,
   });
 }
 
@@ -1496,6 +1500,7 @@ export class WebviewMessageRouter {
                 ? message.filters
                 : undefined,
             deep: message.deep === true,
+            regex: message.regex === true,
           },
           workspacePath,
           (processedRuns, totalRuns) => {
@@ -1525,6 +1530,17 @@ export class WebviewMessageRouter {
           Log.debug(
             `[WebviewMessageRouter] history search superseded: clientId=${ctx.clientId} query="${query}"`
           );
+          return;
+        }
+        if (error instanceof InvalidHistorySearchPatternError) {
+          ctx.emit({
+            type: MESSAGE_TYPES.SEARCH_HISTORY_ERROR,
+            query,
+            regex: message.regex === true,
+            code: "invalidPattern",
+            pattern: error.pattern,
+            message: error.message,
+          });
           return;
         }
         throw error;

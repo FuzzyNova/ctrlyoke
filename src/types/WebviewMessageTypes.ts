@@ -597,7 +597,8 @@ export interface DevBuildCompletedMessage {
 export interface DevRestartingMessage {
   type: typeof MESSAGE_TYPES.DEV_RESTARTING;
   command:
-    "workbench.action.reloadWindow" | "workbench.action.restartExtensionHost";
+    | "workbench.action.reloadWindow"
+    | "workbench.action.restartExtensionHost";
 }
 
 export interface DevCommandUnavailableMessage {
@@ -1763,6 +1764,16 @@ export interface SearchHistoryPartialResultsMessage extends HistorySearchRespons
   type: typeof MESSAGE_TYPES.SEARCH_HISTORY_PARTIAL_RESULTS;
 }
 
+/** Extension -> Webview: the current history query needs user correction. */
+export interface SearchHistoryErrorMessage {
+  type: typeof MESSAGE_TYPES.SEARCH_HISTORY_ERROR;
+  query: string;
+  regex: boolean;
+  code: "invalidPattern";
+  pattern: string;
+  message: string;
+}
+
 /**
  * Extension -> Webview: pushed while a SEARCH_HISTORY request is blocked on
  * a full, synchronous search-index rebuild (no cached index, or the cached
@@ -2797,6 +2808,7 @@ export type IncomingMessage =
   | GlobalSettingsUpdatedMessage
   | SearchHistoryResultsMessage
   | SearchHistoryPartialResultsMessage
+  | SearchHistoryErrorMessage
   | OutputHistoryLoadedMessage
   | StepUndoDataUpdatedMessage
   | UndoPromptResultMessage

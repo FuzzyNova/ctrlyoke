@@ -193,6 +193,98 @@ describe("HistorySearchDrawer filters", () => {
     });
   });
 
+  it("sends regex search on the initial query and on paged requests", () => {
+    const view = renderSearch();
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "Regex search (potentially slower; case-insensitive regular expression)",
+      })
+    );
+
+    expect(postMessage).toHaveBeenLastCalledWith({
+      type: MESSAGE_TYPES.SEARCH_HISTORY,
+      query: "needle",
+      limit: 50,
+      filters: {},
+      regex: true,
+    });
+
+    act(() => {
+      useUiStore.getState().setHistorySearchResults(results(40), false, {
+        totalCount: 100,
+      });
+    });
+    const scroller =
+      view.container.querySelector<HTMLElement>(".overflow-y-auto");
+    expect(scroller).not.toBeNull();
+    if (!scroller) return;
+
+    act(() => {
+      scroller.scrollTop = 5000;
+      fireEvent.scroll(scroller);
+    });
+
+    expect(postMessage).toHaveBeenLastCalledWith({
+      type: MESSAGE_TYPES.SEARCH_HISTORY,
+      query: "needle",
+      limit: 50,
+      offset: 50,
+      filters: {},
+      regex: true,
+    });
+  });
+
+  it("changes the virtualized listing identity when regex mode flips", () => {
+    const view = renderSearch();
+    act(() => {
+      useUiStore.getState().setHistorySearchResults([result], false, {
+        totalCount: 1,
+      });
+    });
+
+    const listing = () =>
+      view.container.querySelector<HTMLElement>(
+        "[data-history-search-listing-id]"
+      );
+    const substringListingId = listing()?.dataset.historySearchListingId;
+    expect(substringListingId).toContain(":substring");
+
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "Regex search (potentially slower; case-insensitive regular expression)",
+      })
+    );
+    act(() => {
+      useUiStore.getState().setHistorySearchResults([result], false, {
+        totalCount: 1,
+      });
+    });
+
+    const regexListingId = listing()?.dataset.historySearchListingId;
+    expect(regexListingId).toContain(":regex");
+    expect(regexListingId).not.toBe(substringListingId);
+  });
+
+  it("renders invalid regex feedback without showing no results", () => {
+    renderSearch();
+    act(() => {
+      useUiStore
+        .getState()
+        .setHistorySearchError(
+          'Invalid history search pattern "[": Unterminated character class'
+        );
+    });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Invalid history search pattern"
+    );
+    expect(screen.queryByText("No results")).not.toBeInTheDocument();
+    expect(useUiStore.getState().historySearchLoading).toBe(false);
+    expect(
+      screen.getByRole("searchbox", { name: "Search workflow history" })
+    ).toBeInTheDocument();
+  });
+
   it("re-issues the current query as a fresh listing when deep search toggles", () => {
     renderSearch();
     act(() => {

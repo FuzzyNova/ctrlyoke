@@ -484,6 +484,8 @@ interface UiState {
   historySearchResults: (HistorySearchResult | undefined)[];
   historySearchQuery: string;
   historySearchDeep: boolean;
+  historySearchRegex: boolean;
+  historySearchError: string | null;
   /**
    * Set only while the first page of a query is outstanding. There is no
    * counterpart for later pages: those replace individual placeholder rows,
@@ -824,6 +826,8 @@ interface UiActions {
   toggleHistorySearch: () => void;
   setHistorySearchQuery: (query: string) => void;
   setHistorySearchDeep: (deep: boolean) => void;
+  setHistorySearchRegex: (regex: boolean) => void;
+  setHistorySearchError: (error: string | null) => void;
   setHistorySearchFilters: (filters: HistorySearchFilterState) => void;
   resetHistorySearchFilters: () => void;
   /**
@@ -1112,6 +1116,8 @@ const initialState: UiState = {
   historySearchResults: [],
   historySearchQuery: "",
   historySearchDeep: false,
+  historySearchRegex: false,
+  historySearchError: null,
   historySearchLoading: false,
   historySearchTotalCount: 0,
   historySearchCountState: HISTORY_SEARCH_COUNT_STATES.EXACT,
@@ -1459,11 +1465,26 @@ export const useUiStore = create<UiState & UiActions>()(
       setHistorySearchQuery: (query) =>
         set({
           historySearchQuery: query,
+          historySearchError: null,
           historySearchTotalCount: 0,
           historySearchCountState: HISTORY_SEARCH_COUNT_STATES.EXACT,
         }),
 
       setHistorySearchDeep: (deep) => set({ historySearchDeep: deep }),
+
+      setHistorySearchRegex: (regex) =>
+        set({ historySearchRegex: regex, historySearchError: null }),
+
+      setHistorySearchError: (error) =>
+        set({
+          historySearchError: error,
+          historySearchResults: [],
+          historySearchLoading: false,
+          historySearchTotalCount: 0,
+          historySearchCountState: HISTORY_SEARCH_COUNT_STATES.EXACT,
+          historySearchIndexState: "ready",
+          historySearchRebuildProgress: null,
+        }),
 
       setHistorySearchFilters: (filters) =>
         set({
@@ -1478,6 +1499,8 @@ export const useUiStore = create<UiState & UiActions>()(
         set({
           historySearchFilters: createDefaultHistorySearchFilters(),
           historySearchDeep: false,
+          historySearchRegex: false,
+          historySearchError: null,
           historySearchResults: [],
           historySearchLoading: false,
           historySearchTotalCount: 0,
@@ -1498,6 +1521,7 @@ export const useUiStore = create<UiState & UiActions>()(
           }
           return {
             historySearchResults: nextResults,
+            historySearchError: null,
             historySearchLoading: loading,
             historySearchTotalCount:
               options?.totalCount ??
@@ -2294,6 +2318,8 @@ export const useUiStore = create<UiState & UiActions>()(
           historySearchResults: [],
           historySearchQuery: "",
           historySearchDeep: false,
+          historySearchRegex: false,
+          historySearchError: null,
           historySearchLoading: false,
           historySearchTotalCount: 0,
           historySearchCountState: HISTORY_SEARCH_COUNT_STATES.EXACT,

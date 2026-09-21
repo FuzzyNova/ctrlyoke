@@ -22,6 +22,7 @@ import {
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../../types/DashboardConstants";
 import { WorkflowVariantService } from "../../core/orchestration/WorkflowVariantService";
+import { InvalidHistorySearchPatternError } from "../../core/orchestration/HistorySearchMatcher";
 import { VsCodeUserFeedbackSink } from "../../platform/VsCodeUserFeedbackSink";
 import {
   LicenseActivationLimitError,
@@ -958,6 +959,7 @@ suite("WebviewMessageRouter — license actions", () => {
       offset?: number;
       query: string;
       deep?: boolean;
+      regex?: boolean;
       signal?: AbortSignal;
       resolve: () => void;
     }
@@ -965,7 +967,9 @@ suite("WebviewMessageRouter — license actions", () => {
     function buildSearchRouter(recorded: RecordedSearch[]): {
       router: WebviewMessageRouter;
       restore: () => void;
+      emitted: any[];
     } {
+      const emitted: any[] = [];
       const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
       Object.defineProperty(vscode.workspace, "workspaceFolders", {
         value: [{ uri: vscode.Uri.file(path.join(__dirname, "workspace")) }],
@@ -973,7 +977,12 @@ suite("WebviewMessageRouter — license actions", () => {
       });
       const historySearchService = {
         search: (
-          request: { query: string; offset?: number; deep?: boolean },
+          request: {
+            query: string;
+            offset?: number;
+            deep?: boolean;
+            regex?: boolean;
+          },
           _workspacePath: string,
           _onProgress: unknown,
           signal?: AbortSignal
@@ -983,6 +992,7 @@ suite("WebviewMessageRouter — license actions", () => {
               query: request.query,
               offset: request.offset,
               deep: request.deep,
+              regex: request.regex,
               signal,
               resolve: () =>
                 resolve({
@@ -998,7 +1008,7 @@ suite("WebviewMessageRouter — license actions", () => {
           }),
       };
       const router = new WebviewMessageRouter(
-        () => {},
+        (message) => emitted.push(message),
         { sendWorkflowPropertiesToSettings: async () => {} } as any,
         {} as any,
         () => undefined as any,
@@ -1007,6 +1017,7 @@ suite("WebviewMessageRouter — license actions", () => {
       );
       return {
         router,
+        emitted,
         restore: () =>
           Object.defineProperty(vscode.workspace, "workspaceFolders", {
             value: originalWorkspaceFolders,
@@ -1133,6 +1144,90 @@ suite("WebviewMessageRouter — license actions", () => {
         await shallowAgain;
       } finally {
         restore();
+      }
+    });
+
+    test("regex and substring listings supersede each other for the same query", async () => {
+      const recorded: RecordedSearch[] = [];
+      const { router, restore } = buildSearchRouter(recorded);
+      try {
+        const substring = router.route({
+          type: MESSAGE_TYPES.SEARCH_HISTORY,
+          query: "codemirroreditor",
+          limit: 50,
+        });
+        await settle();
+        assert.strictEqual(recorded.length, 1);
+        assert.strictEqual(recorded[0].regex, false);
+
+        const regex = router.route({
+          type: MESSAGE_TYPES.SEARCH_HISTORY,
+          query: "codemirroreditor",
+          limit: 50,
+          regex: true,
+        });
+        await settle();
+        assert.strictEqual(recorded[0].signal?.aborted, true);
+
+        recorded[0].resolve();
+        await substring;
+        await settle();
+        assert.strictEqual(recorded.length, 2);
+        assert.strictEqual(recorded[1].regex, true);
+        recorded[1].resolve();
+        await regex;
+      } finally {
+        restore();
+      }
+    });
+
+    test("returns invalid regex patterns as typed webview errors", async () => {
+      const emitted: any[] = [];
+      const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+      Object.defineProperty(vscode.workspace, "workspaceFolders", {
+        value: [{ uri: vscode.Uri.file(path.join(__dirname, "workspace")) }],
+        configurable: true,
+      });
+      const historySearchService = {
+        search: () =>
+          Promise.reject(
+            new InvalidHistorySearchPatternError(
+              "[a",
+              "Unterminated character class"
+            )
+          ),
+      };
+      const router = new WebviewMessageRouter(
+        (message) => emitted.push(message),
+        { sendWorkflowPropertiesToSettings: async () => {} } as any,
+        {} as any,
+        () => undefined as any,
+        historySearchService as any,
+        { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+      );
+      try {
+        await router.route({
+          type: MESSAGE_TYPES.SEARCH_HISTORY,
+          query: "[a",
+          limit: 50,
+          regex: true,
+        });
+        assert.deepStrictEqual(emitted, [
+          {
+            type: MESSAGE_TYPES.SEARCH_HISTORY_ERROR,
+            query: "[a",
+            regex: true,
+            code: "invalidPattern",
+            pattern: "[a",
+            message:
+              'Invalid history search pattern "[a": Unterminated character class',
+          },
+        ]);
+      } finally {
+        Object.defineProperty(vscode.workspace, "workspaceFolders", {
+          value: originalWorkspaceFolders,
+          configurable: true,
+        });
       }
     });
 
