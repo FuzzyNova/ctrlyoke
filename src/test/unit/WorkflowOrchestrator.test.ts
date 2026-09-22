@@ -37,6 +37,7 @@ import {
   EXECUTION_STATES,
   MESSAGE_TYPES,
   PANEL_CLIENT_ID,
+  PROMPT_TERMINAL_STATUS,
   QUEUE_POSITION,
   RUNNER_IDS,
   VSCODE_CONTEXT_KEYS,
@@ -2623,7 +2624,8 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
     );
     const ownerToken = WorkflowLockManager.generateOwnerToken();
     let workflowKey:
-      import("../../types/CtrlYokeTypes").WorkflowKey | undefined;
+      | import("../../types/CtrlYokeTypes").WorkflowKey
+      | undefined;
     try {
       const sourceManager = new WorkingFileManager({
         getWorkingFilePath: () => undefined,
@@ -3712,6 +3714,182 @@ suite("WorkflowOrchestrator addressed start position", () => {
       );
     } finally {
       await history?.flushPendingIndexRefresh();
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("seeding from a never-run draft marks the skipped prefix and switches the initiating client onto the new run", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-addressed-draft-seed-")
+    );
+    try {
+      const sourceAccess = {
+        getWorkingFilePath: () => undefined,
+        getSteps: () => [
+          { prompt: "step one" },
+          { prompt: "step two" },
+          { prompt: "step three" },
+        ],
+        getCurrentIndex: () => 0,
+        getStatus: () => EXECUTION_STATES.IDLE,
+        getDefinitionRevision: () => 1,
+        setDefinitionRevision: () => undefined,
+        getWorkflowName: () => "Draft Seed",
+        mergeDiskSteps: () => [],
+        emitStateChange: () => undefined,
+        getFinalStepRuntime: () => undefined,
+        updateWorkflowProperty: () => undefined,
+      };
+      const sourceManager = new WorkingFileManager(sourceAccess);
+      const { workflowKey } = await sourceManager.createWorkingFile(
+        "draft-seed",
+        sourceAccess.getSteps(),
+        workspace,
+        "Draft Seed"
+      );
+      const lineageRepository = new WorkflowLineageRepository();
+      const before = await lineageRepository.readDescriptor(
+        workspace,
+        workflowKey
+      );
+
+      const orchestrator = createTestOrchestrator();
+      const internal = orchestrator as any;
+      internal.currentWorkspaceFolderPath = workspace;
+      internal.instances = new Map();
+      internal.viewAddressRegistry = new Map([
+        [
+          PANEL_CLIENT_ID,
+          { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
+        ],
+      ]);
+      internal.viewMessageSinks = new Map([[PANEL_CLIENT_ID, () => undefined]]);
+      internal.lineageRepository = lineageRepository;
+      const loaded: Array<{ address: any; clientId: string }> = [];
+      internal.loadRunViewForClient = async (
+        address: any,
+        _send: unknown,
+        clientId: string
+      ) => {
+        loaded.push({ address, clientId });
+        internal.viewAddressRegistry.set(clientId, address);
+      };
+      const invalidated: Array<[string, string]> = [];
+      internal.invalidateRunViews = async (key: string, runRef: string) => {
+        invalidated.push([key, runRef]);
+      };
+
+      const result = await orchestrator.setStartPositionAtDraft(
+        { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
+        2,
+        1,
+        before.revision,
+        PANEL_CLIENT_ID
+      );
+
+      assert.strictEqual(result.kind, "seeded");
+      const after = await lineageRepository.readDescriptor(
+        workspace,
+        workflowKey
+      );
+      assert.strictEqual(result.descriptorRevision, after.revision);
+      assert.strictEqual(result.definitionRevision, 1);
+
+      const seededPath = WorkflowPaths.runFilePath(
+        workspace,
+        workflowKey,
+        result.runRef
+      );
+      const seeded = JSON.parse(await fs.readFile(seededPath, "utf8"));
+      assert.strictEqual(seeded._runtime.currentIndex, 2);
+      assert.strictEqual(
+        seeded.steps[0]._runtime?.terminalStatus,
+        PROMPT_TERMINAL_STATUS.SKIPPED
+      );
+      assert.strictEqual(
+        seeded.steps[1]._runtime?.terminalStatus,
+        PROMPT_TERMINAL_STATUS.SKIPPED
+      );
+      // The pending step keeps only its backfilled stepId — no terminal status.
+      assert.ok(seeded.steps[2]._runtime?.stepId);
+      assert.strictEqual(seeded.steps[2]._runtime.terminalStatus, undefined);
+
+      // Promotion removed the draft; only the seeded run file remains.
+      await assert.rejects(
+        fs.access(WorkflowPaths.draftFilePath(workspace, workflowKey))
+      );
+
+      assert.deepStrictEqual(loaded, [
+        {
+          address: {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: result.runRef,
+          },
+          clientId: PANEL_CLIENT_ID,
+        },
+      ]);
+      assert.deepStrictEqual(invalidated, [[workflowKey, result.runRef]]);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects a start index outside the draft's step range", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-addressed-draft-seed-bounds-")
+    );
+    try {
+      const sourceAccess = {
+        getWorkingFilePath: () => undefined,
+        getSteps: () => [{ prompt: "only step" }],
+        getCurrentIndex: () => 0,
+        getStatus: () => EXECUTION_STATES.IDLE,
+        getDefinitionRevision: () => 1,
+        setDefinitionRevision: () => undefined,
+        getWorkflowName: () => "Draft Bounds",
+        mergeDiskSteps: () => [],
+        emitStateChange: () => undefined,
+        getFinalStepRuntime: () => undefined,
+        updateWorkflowProperty: () => undefined,
+      };
+      const sourceManager = new WorkingFileManager(sourceAccess);
+      const { workflowKey } = await sourceManager.createWorkingFile(
+        "draft-bounds",
+        sourceAccess.getSteps(),
+        workspace,
+        "Draft Bounds"
+      );
+      const lineageRepository = new WorkflowLineageRepository();
+      const before = await lineageRepository.readDescriptor(
+        workspace,
+        workflowKey
+      );
+
+      const orchestrator = createTestOrchestrator();
+      const internal = orchestrator as any;
+      internal.currentWorkspaceFolderPath = workspace;
+      internal.instances = new Map();
+      internal.viewAddressRegistry = new Map([
+        [
+          PANEL_CLIENT_ID,
+          { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
+        ],
+      ]);
+      internal.viewMessageSinks = new Map([[PANEL_CLIENT_ID, () => undefined]]);
+      internal.lineageRepository = lineageRepository;
+
+      await assert.rejects(
+        orchestrator.setStartPositionAtDraft(
+          { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
+          1,
+          1,
+          before.revision,
+          PANEL_CLIENT_ID
+        ),
+        /Start position must leave at least one suffix step to run/
+      );
+    } finally {
       await fs.rm(workspace, { recursive: true, force: true });
     }
   });

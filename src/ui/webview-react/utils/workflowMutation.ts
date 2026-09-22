@@ -12,7 +12,8 @@ interface MessageTarget {
 
 /** Stable address and optimistic revisions for generic definition mutations. */
 export function getWorkflowDefinitionMutation():
-  WorkflowDefinitionMutation | undefined {
+  | WorkflowDefinitionMutation
+  | undefined {
   const state = useUiStore.getState();
   if (
     !state.displayedViewAddress ||
@@ -53,6 +54,28 @@ export function postWorkflowDefinitionMutation(
 ): void {
   const mutation = getWorkflowDefinitionMutation();
   target.postMessage({ ...message, ...(mutation ? { mutation } : {}) });
+}
+
+/**
+ * Post a "set start position" mutation. Unlike `postRunLifecycleMutation`,
+ * this accepts either a `draft` or `run` displayed address — a draft that has
+ * never executed can seed its first run starting at a chosen step, not just a
+ * promoted run's rewind. Only warns when nothing is displayed at all.
+ */
+export function postSetStartPositionMutation(
+  target: MessageTarget,
+  message: Record<string, unknown>
+): boolean {
+  const mutation = getWorkflowDefinitionMutation();
+  if (!mutation) {
+    notifyUser(
+      "Open a workflow before changing its start position",
+      USER_FEEDBACK_SEVERITY.WARNING
+    );
+    return false;
+  }
+  target.postMessage({ ...message, ...mutation });
+  return true;
 }
 
 /** Post an explicitly addressed promoted-run lifecycle mutation. */

@@ -306,6 +306,66 @@ export class RunLifecycleService {
     return { kind: WORKTREE_EDIT_KINDS.REWIND, ...result };
   }
 
+  /**
+   * "Set start position" on a draft that has never executed: seeds a brand-new
+   * run from the draft's own definition, starting at `toIndex`, with the steps
+   * before it pre-marked skipped. Mirrors `setStartPositionAtRun`'s `toIndex===0`
+   * branch (seed the run, don't execute it) but sources from the draft file via
+   * `WorkingFileManager.seedRunFromDraft` instead of an existing run.
+   */
+  async setStartPositionAtDraft(
+    address: Extract<WorkflowViewAddress, { kind: "draft" }>,
+    toIndex: number,
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number,
+    clientId: string = this.host.panelClientId
+  ): Promise<Extract<SetStartPositionResult, { kind: "seeded" }>> {
+    if (!Number.isInteger(toIndex) || toIndex < 0) {
+      throw new Error("Start position must be a non-negative integer");
+    }
+    const viewed = this.host.views.getViewAddress(clientId);
+    if (
+      !viewed ||
+      viewed.kind !== WORKFLOW_VIEW_ADDRESS_KIND.DRAFT ||
+      viewed.workflowKey !== address.workflowKey
+    ) {
+      throw new Error("Run no longer targets this client's viewed draft");
+    }
+    const workspaceRoot = this.requireWorkspaceRoot();
+    if (this.findActiveInstanceForLineage(address.workflowKey)) {
+      throw new Error(
+        "Cannot seed a new run while this workflow lineage is executing"
+      );
+    }
+    const seeded = await WorkingFileManager.seedRunFromDraft(
+      workspaceRoot,
+      address.workflowKey,
+      toIndex,
+      {},
+      this.host.getLineageRepository(),
+      {
+        definitionRevision: expectedDefinitionRevision,
+        descriptorRevision: expectedDescriptorRevision,
+      }
+    );
+    const seededAddress: Extract<WorkflowViewAddress, { kind: "run" }> = {
+      workflowKey: address.workflowKey,
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+      runRef: seeded.runRef,
+    };
+    await this.switchClientToRunAddress(seededAddress, clientId);
+    await this.host.views.invalidateRunViews(
+      address.workflowKey,
+      seeded.runRef
+    );
+    return {
+      kind: "seeded",
+      runRef: seeded.runRef,
+      definitionRevision: 1,
+      descriptorRevision: seeded.allocation.reservationDescriptorRevision,
+    };
+  }
+
   async seedAndExecuteAtRun(
     address: WorkflowRunAddress,
     expectedDefinitionRevision: number,

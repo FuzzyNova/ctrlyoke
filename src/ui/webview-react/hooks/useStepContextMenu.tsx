@@ -30,7 +30,10 @@ import {
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import type { ReorderPromptsMessage } from "@root/types/WebviewMessageTypes";
 import type { CliOutput } from "@store/workflowStore";
-import { postRunLifecycleMutation } from "../utils/workflowMutation";
+import {
+  postRunLifecycleMutation,
+  postSetStartPositionMutation,
+} from "../utils/workflowMutation";
 import {
   USER_FEEDBACK_SEVERITY,
   WORKTREE_POSITION_DIRECTIONS,
@@ -160,7 +163,7 @@ export function useStepContextMenu({
   const handleSetStartPosition = useCallback(
     (target: number) => {
       if (!confirmResetOperations) {
-        postRunLifecycleMutation(lifecycleMessageTarget, {
+        postSetStartPositionMutation(lifecycleMessageTarget, {
           type: MESSAGE_TYPES.SET_START_POSITION,
           toIndex: target,
         });
@@ -459,7 +462,7 @@ export function useStepContextMenu({
 
   const handleSetPositionConfirm = useCallback(() => {
     if (setPositionIndex === null) return;
-    postRunLifecycleMutation(lifecycleMessageTarget, {
+    postSetStartPositionMutation(lifecycleMessageTarget, {
       type: MESSAGE_TYPES.SET_START_POSITION,
       toIndex: setPositionIndex,
     });
