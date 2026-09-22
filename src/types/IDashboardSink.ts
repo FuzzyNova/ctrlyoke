@@ -178,10 +178,15 @@ export interface IDashboardSink {
     fileName: string,
     steps: any[],
     finalStep?: WorkflowStep | null,
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    definitionRevision?: number
   ): void;
 
-  updateFinalStep(finalStep: WorkflowStep | null, workflowId?: string): void;
+  updateFinalStep(
+    finalStep: WorkflowStep | null,
+    workflowId?: string,
+    definitionRevision?: number
+  ): void;
 
   updateFinalStepStatus(
     status: StepStatus | null,
@@ -221,13 +226,18 @@ export interface IDashboardSink {
   notifyPromptsReordered(
     steps: WorkflowStep[],
     workflowId?: string,
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    definitionRevision?: number
   ): void;
 
   /** Called after webview undo/redo to acknowledge the sync (no-op response needed; kept for extensibility). */
   notifyUndoRedoSynced(): void;
 
-  updateWorkflowName(name: string, workflowId?: string): void;
+  updateWorkflowName(
+    name: string,
+    workflowId?: string,
+    definitionRevision?: number
+  ): void;
 
   sendStepUndoDataUpdated(
     target: UndoExecutionTarget,

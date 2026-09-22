@@ -357,7 +357,8 @@ export class PostMessageDashboardSink implements IDashboardSink {
     fileName: string,
     steps: any[],
     finalStep?: WorkflowStep | null,
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    definitionRevision?: number
   ): void {
     this.send({
       type: MESSAGE_TYPES.PROMPT_DELETED,
@@ -365,14 +366,20 @@ export class PostMessageDashboardSink implements IDashboardSink {
       steps,
       finalStep: finalStep ?? null,
       ...(parallelGroups !== undefined ? { parallelGroups } : {}),
+      ...(definitionRevision !== undefined ? { definitionRevision } : {}),
     });
   }
 
-  updateFinalStep(finalStep: WorkflowStep | null, workflowId?: string): void {
+  updateFinalStep(
+    finalStep: WorkflowStep | null,
+    workflowId?: string,
+    definitionRevision?: number
+  ): void {
     this.send({
       type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
       finalStep,
       ...(workflowId !== undefined ? { workflowId } : {}),
+      ...(definitionRevision !== undefined ? { definitionRevision } : {}),
     });
   }
 
@@ -453,13 +460,15 @@ export class PostMessageDashboardSink implements IDashboardSink {
   notifyPromptsReordered(
     steps: WorkflowStep[],
     workflowId?: string,
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    definitionRevision?: number
   ): void {
     this.send({
       type: MESSAGE_TYPES.REORDER_PROMPTS_CONFIRMED,
       steps,
       ...(workflowId !== undefined ? { workflowId } : {}),
       ...(parallelGroups !== undefined ? { parallelGroups } : {}),
+      ...(definitionRevision !== undefined ? { definitionRevision } : {}),
     });
   }
 
@@ -467,11 +476,16 @@ export class PostMessageDashboardSink implements IDashboardSink {
     // No-op — acknowledgement only.
   }
 
-  updateWorkflowName(name: string, workflowId?: string): void {
+  updateWorkflowName(
+    name: string,
+    workflowId?: string,
+    definitionRevision?: number
+  ): void {
     this.send({
       type: MESSAGE_TYPES.WORKFLOW_NAME_UPDATED,
       workflowName: name,
       ...(workflowId !== undefined ? { workflowId } : {}),
+      ...(definitionRevision !== undefined ? { definitionRevision } : {}),
     });
   }
 

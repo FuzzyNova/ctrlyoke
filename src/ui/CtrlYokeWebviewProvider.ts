@@ -796,15 +796,23 @@ export class CtrlYokeWebviewProvider
     fileName: string,
     steps: any[],
     finalStep?: WorkflowStep | null,
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    definitionRevision?: number
   ): void {
-    this.sink.updatePromptDeleted(fileName, steps, finalStep, parallelGroups);
+    this.sink.updatePromptDeleted(
+      fileName,
+      steps,
+      finalStep,
+      parallelGroups,
+      definitionRevision
+    );
   }
   public updateFinalStep(
     finalStep: WorkflowStep | null,
-    workflowId?: string
+    workflowId?: string,
+    definitionRevision?: number
   ): void {
-    this.sink.updateFinalStep(finalStep, workflowId);
+    this.sink.updateFinalStep(finalStep, workflowId, definitionRevision);
   }
   public updateFinalStepStatus(
     status: StepStatus | null,
@@ -866,9 +874,15 @@ export class CtrlYokeWebviewProvider
   public notifyPromptsReordered(
     steps: WorkflowStep[],
     workflowId?: string,
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    definitionRevision?: number
   ): void {
-    this.sink.notifyPromptsReordered(steps, workflowId, parallelGroups);
+    this.sink.notifyPromptsReordered(
+      steps,
+      workflowId,
+      parallelGroups,
+      definitionRevision
+    );
   }
   public notifyUndoRedoSynced(): void {
     this.sink.notifyUndoRedoSynced();
@@ -921,8 +935,12 @@ export class CtrlYokeWebviewProvider
     });
   }
 
-  public updateWorkflowName(name: string, workflowId?: string): void {
-    this.sink.updateWorkflowName(name, workflowId);
+  public updateWorkflowName(
+    name: string,
+    workflowId?: string,
+    definitionRevision?: number
+  ): void {
+    this.sink.updateWorkflowName(name, workflowId, definitionRevision);
   }
 
   // ─────────────────────────────────────────────────────────────────────────

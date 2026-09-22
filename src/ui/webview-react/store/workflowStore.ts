@@ -320,6 +320,21 @@ interface WorkflowActions {
   setWorkflowName: (name: string | null) => void;
   setPrompts: (steps: WorkflowStep[]) => void;
   setParallelGroups: (parallelGroups: ParallelGroupDefinition[]) => void;
+  /**
+   * Apply a step list and its parallel-group topology in one `set`, i.e. as a
+   * single undo entry.
+   *
+   * A reorder can move either half independently — dragging the last member of
+   * a group down one slot leaves the step order untouched and changes only the
+   * group's membership — so both have to reach zundo, and they have to reach
+   * it together. Two separate setters give a topology-only drag no undo entry
+   * at all (the parallel-group half is paused to avoid double-recording), and
+   * a drag that moves both would cost two undos to reverse one gesture.
+   */
+  setStepsAndParallelGroups: (
+    steps: WorkflowStep[],
+    parallelGroups: ParallelGroupDefinition[]
+  ) => void;
   updatePrompt: (index: number, updates: Partial<PromptStep>) => void;
   setExecutionState: (state: ExecutionState) => void;
   setCurrentStep: (step: number) => void;
@@ -425,13 +440,30 @@ interface WorkflowActions {
     finalStepLoopCount?: number;
     finalStepPhase?: FinalStepPhase | null;
     /**
-     * Same-view snapshot replay: keep live output, streaming/runtime state,
-     * and the zundo history instead of clearing them. Only pass true when the
-     * incoming snapshot re-describes the workflow the store already holds
-     * (same address, same definition revision) — for a genuine workflow/run
-     * switch the runtime state belongs to the previous view and must clear.
+     * Same-view snapshot replay: keep live output and streaming/runtime state
+     * instead of clearing them. Only pass true when the incoming snapshot
+     * re-describes the workflow the store already holds (same address, same
+     * definition revision) — for a genuine workflow/run switch the runtime
+     * state belongs to the previous view and must clear.
      */
     preserveLiveOutput?: boolean;
+    /**
+     * Whether the zundo history survives this load. Defaults to
+     * `preserveLiveOutput`, which is the right answer for every caller that
+     * only ever loads a *different* workflow.
+     *
+     * It is a separate decision because the two answer different questions.
+     * Runtime state belongs to one revision of one run; an editing epoch
+     * belongs to the *address*. Every run-addressed write publishes a full
+     * invalidation snapshot back to the very client that made it, carrying a
+     * bumped revision — so tying the history to `preserveLiveOutput` meant the
+     * client's own edit came back and erased the undo entry it had just
+     * recorded (the "undo lights up for an instant after a drag-reorder"
+     * report), and one undo erased the rest of the stack along with any
+     * chance of redoing it. The epoch genuinely restarts on an address change
+     * or a definition rollback, and RUN_VIEW_LOADED passes that judgement in.
+     */
+    preserveUndoHistory?: boolean;
   }) => void;
   resetWorkflow: () => void;
   clearAllRuntimeState: () => void;
@@ -1025,6 +1057,13 @@ export const useWorkflowStore = create<
           parallelGroups,
         }),
 
+      setStepsAndParallelGroups: (steps, parallelGroups) =>
+        set({
+          steps,
+          totalSteps: steps.length,
+          parallelGroups,
+        }),
+
       updatePrompt: (index, updates) => {
         set((state) => ({
           steps: state.steps.map((p, i) =>
@@ -1405,6 +1444,7 @@ export const useWorkflowStore = create<
         finalStepLoopCount = 0,
         finalStepPhase = null,
         preserveLiveOutput = false,
+        preserveUndoHistory = preserveLiveOutput,
       }) => {
         // Apply status from results to prompts
         const promptsWithStatus = steps.map((prompt, index) => ({
@@ -1492,8 +1532,10 @@ export const useWorkflowStore = create<
                 }),
           }))
         );
-        // A same-view replay is not a new editing epoch — keep undo history.
-        if (!preserveLiveOutput) {
+        // Only a new editing epoch drops the undo history — see
+        // `preserveUndoHistory`. A revision bump on the address the client is
+        // already editing is not one.
+        if (!preserveUndoHistory) {
           useWorkflowStore.temporal.getState().clear();
         }
       },

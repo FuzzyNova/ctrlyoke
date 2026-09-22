@@ -873,6 +873,8 @@ export interface PromptDeletedMessage {
   steps: WorkflowStep[];
   parallelGroups?: ParallelGroupDefinition[];
   finalStep?: WorkflowStep | null;
+  /** See `ReorderPromptsConfirmedMessage.definitionRevision`. */
+  definitionRevision?: number;
 }
 
 /**
@@ -881,6 +883,13 @@ export interface PromptDeletedMessage {
 export interface UpdateFinalStepMessage {
   type: typeof MESSAGE_TYPES.UPDATE_FINAL_PROMPT;
   finalStep: WorkflowStep | null;
+  workflowId?: string;
+  /**
+   * See `ReorderPromptsConfirmedMessage.definitionRevision`. Set only on the
+   * extension -> webview direction; the webview's own edits carry a
+   * `WorkflowDefinitionMutation` instead.
+   */
+  definitionRevision?: number;
 }
 
 /**
@@ -2154,6 +2163,15 @@ export interface ReorderPromptsConfirmedMessage {
   steps: WorkflowStep[];
   parallelGroups?: ParallelGroupDefinition[];
   workflowId?: string;
+  /**
+   * The revision the reorder write produced. Carried for the same reason
+   * `StepsExtendedMessage` carries it: this message hands the client the new
+   * steps without a snapshot, so the applied definition head has to move with
+   * them or the `RUN_VIEW_LOADED` invalidation that follows every
+   * run-addressed write is read as a new view and wipes runtime/undo state
+   * the client already holds.
+   */
+  definitionRevision?: number;
 }
 
 /** Webview -> extension: restore the complete normalized workflow topology. */
@@ -2760,7 +2778,13 @@ export type IncomingMessage =
   | { type: typeof MESSAGE_TYPES.WORKFLOW_LOADED }
   | { type: typeof MESSAGE_TYPES.WORKFLOW_UNLOADED }
   | OpenNewWorkflowModalMessage
-  | { type: typeof MESSAGE_TYPES.WORKFLOW_NAME_UPDATED; workflowName: string }
+  | {
+      type: typeof MESSAGE_TYPES.WORKFLOW_NAME_UPDATED;
+      workflowName: string;
+      workflowId?: string;
+      /** See `ReorderPromptsConfirmedMessage.definitionRevision`. */
+      definitionRevision?: number;
+    }
   | RecentWorkflowsMessage
   | RunSummariesLoadedMessage
   | { type: typeof MESSAGE_TYPES.TEMPLATE_INFO; template: any }

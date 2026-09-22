@@ -352,6 +352,40 @@ function isRegressiveDefinitionSnapshot(
   );
 }
 
+/**
+ * Adopt the definition revision a *targeted content push* carries — a message
+ * that hands the client new steps directly instead of through a
+ * `RUN_VIEW_LOADED` snapshot (STEPS_EXTENDED, REORDER_PROMPTS_CONFIRMED,
+ * STEP_COLOR_UPDATED).
+ *
+ * Both heads move, and they mean different things. `displayedDefinitionRevision`
+ * is what the next mutation is addressed with; `appliedDefinitionRevision` is
+ * the revision whose content `workflowStore` genuinely holds, and moving it is
+ * the load-bearing half. Every run-addressed write publishes a full
+ * invalidation snapshot straight after this message, and RUN_VIEW_LOADED only
+ * recognises that snapshot as a replay of what the client already has when the
+ * *applied* head matches it (`isSameViewReplay`). Leave the applied head
+ * behind and the client's own edit comes back looking like a view change, so
+ * `loadWorkflow` clears runtime state — and with it the zundo undo history the
+ * edit was just recorded into, which is exactly the "undo lights up for an
+ * instant after a drag-reorder and then goes dark again" bug.
+ */
+function adoptPushedDefinitionRevision(definitionRevision: number): void {
+  const displayedAddress = useUiStore.getState().displayedViewAddress;
+  if (displayedAddress) {
+    useExecutionPreviewStore
+      .getState()
+      .observeDefinitionRevision(displayedAddress, definitionRevision);
+  }
+  useUiStore.setState((state) => ({
+    displayedDefinitionRevision:
+      state.displayedDefinitionRevision === null
+        ? definitionRevision
+        : Math.max(state.displayedDefinitionRevision, definitionRevision),
+  }));
+  useUiStore.getState().markAppliedDefinitionRevision(definitionRevision);
+}
+
 // ============================================================================
 // Shared Helpers
 // ============================================================================
@@ -923,24 +957,7 @@ export function createMessageHandlers(
     // monotonic only within an address; run-view loads remain responsible for
     // resetting it when navigation/promotions move to another address.
     if (message.definitionRevision !== undefined) {
-      const definitionRevision = message.definitionRevision;
-      const displayedAddress = useUiStore.getState().displayedViewAddress;
-      if (displayedAddress) {
-        useExecutionPreviewStore
-          .getState()
-          .observeDefinitionRevision(displayedAddress, definitionRevision);
-      }
-      useUiStore.setState((state) => ({
-        displayedDefinitionRevision:
-          state.displayedDefinitionRevision === null
-            ? definitionRevision
-            : Math.max(state.displayedDefinitionRevision, definitionRevision),
-      }));
-      // The steps applied below are this revision's content, so the applied
-      // head moves with them — otherwise the snapshot that follows a live
-      // queue push is read as new content and clears runtime/undo state the
-      // client already has.
-      useUiStore.getState().markAppliedDefinitionRevision(definitionRevision);
+      adoptPushedDefinitionRevision(message.definitionRevision);
     }
 
     const workflowStore = useWorkflowStore.getState();
@@ -1020,27 +1037,7 @@ export function createMessageHandlers(
     }
 
     if (message.definitionRevision !== undefined) {
-      const displayedAddress = useUiStore.getState().displayedViewAddress;
-      if (displayedAddress) {
-        useExecutionPreviewStore
-          .getState()
-          .observeDefinitionRevision(
-            displayedAddress,
-            message.definitionRevision
-          );
-      }
-      useUiStore.setState((state) => ({
-        displayedDefinitionRevision:
-          state.displayedDefinitionRevision === null
-            ? message.definitionRevision
-            : Math.max(
-                state.displayedDefinitionRevision,
-                message.definitionRevision
-              ),
-      }));
-      useUiStore
-        .getState()
-        .markAppliedDefinitionRevision(message.definitionRevision);
+      adoptPushedDefinitionRevision(message.definitionRevision);
     }
 
     useWorkflowStore
@@ -1058,19 +1055,37 @@ export function createMessageHandlers(
         return;
       }
     }
+    // A reorder is a definition mutation whose new steps arrive here rather
+    // than in a snapshot, so the applied head has to move with them — without
+    // this the invalidation snapshot that follows the write is read as a view
+    // change and `loadWorkflow` clears the undo entry `setPrompts` is about to
+    // record. See `adoptPushedDefinitionRevision`.
+    if (message.definitionRevision !== undefined) {
+      adoptPushedDefinitionRevision(message.definitionRevision);
+    }
     const workflowStore = useWorkflowStore.getState();
-    workflowStore.setPrompts(message.steps || []);
-    useWorkflowStore.temporal.getState().pause();
-    workflowStore.setParallelGroups(
+    // One `set`, so one undo entry covers the whole gesture — and so a drag
+    // that only moved a step in or out of a parallel group (leaving the step
+    // order untouched) still records one.
+    workflowStore.setStepsAndParallelGroups(
+      message.steps || [],
       message.parallelGroups ?? workflowStore.parallelGroups
     );
-    useWorkflowStore.temporal.getState().resume();
   };
 
   // --------------------------------------------------------------------------
   // PROMPT_DELETED - Prompt was deleted from queue
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.PROMPT_DELETED] = (message) => {
+    // The delete's new steps arrive here rather than in a snapshot, so the
+    // applied head moves with them — see `adoptPushedDefinitionRevision`.
+    // Without it the invalidation snapshot that follows the write is read as a
+    // view change, and `loadWorkflow` drops live runtime state the persisted
+    // history cannot restore (retry state, the live context-window readout,
+    // in-flight streaming chunks) on top of redrawing the whole output pane.
+    if (message.definitionRevision !== undefined) {
+      adoptPushedDefinitionRevision(message.definitionRevision);
+    }
     const workflowStore = useWorkflowStore.getState();
 
     rememberUndoRedoRuntime(workflowStore.steps);
@@ -1432,6 +1447,12 @@ export function createMessageHandlers(
   // UPDATE_FINAL_PROMPT - Workflow-level finalStep updated
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.UPDATE_FINAL_PROMPT] = (message) => {
+    // See `adoptPushedDefinitionRevision` — the final step is definition
+    // content delivered without a snapshot, and the run-addressed write that
+    // produced it publishes an invalidation right behind this message.
+    if (message.definitionRevision !== undefined) {
+      adoptPushedDefinitionRevision(message.definitionRevision);
+    }
     useWorkflowStore.getState().setFinalStep(message.finalStep ?? null);
   };
 
@@ -1776,6 +1797,12 @@ export function createMessageHandlers(
       if (message.workflowId !== activeWorkflowId) {
         return;
       }
+    }
+    // The name is zundo-covered definition content (`describeChange` renders
+    // "Renamed to X"), delivered without a snapshot — see
+    // `adoptPushedDefinitionRevision`.
+    if (message.definitionRevision !== undefined) {
+      adoptPushedDefinitionRevision(message.definitionRevision);
     }
     const workflowStore = useWorkflowStore.getState();
     workflowStore.setWorkflowName(message.workflowName);
@@ -2548,15 +2575,23 @@ export function createMessageHandlers(
     }
     // A same-view replay (same address, same definition revision, not a
     // rollback) re-describes the workflow the store already holds — e.g. a
-    // run-view invalidation or reconnect. Preserve live output, runtime state,
-    // and undo history so unchanged rows keep their identities and nothing in
-    // the output pane redraws. Anything else is a genuine view change and
-    // clears runtime state as before.
+    // run-view invalidation or reconnect. Preserve live output and runtime
+    // state so unchanged rows keep their identities and nothing in the output
+    // pane redraws. Anything else is a genuine view change and clears runtime
+    // state as before.
     const isSameViewReplay =
       isCurrentAddress &&
       currentDefinitionRevision !== null &&
       incomingDefinitionRevision === currentDefinitionRevision &&
       !message.definitionRollback;
+    // The undo history is scoped to the *address*, not to a revision of it.
+    // Every run-addressed write pushes a full invalidation snapshot back to
+    // the client that made it, one revision ahead of the applied head, so
+    // reusing `isSameViewReplay` here made the client's own edit wipe the undo
+    // entry it had just recorded — and made the first undo wipe the rest of
+    // the stack, redo included. A rollback (Discard) does restart the epoch:
+    // its past states describe revisions that no longer exist.
+    const preserveUndoHistory = isCurrentAddress && !message.definitionRollback;
     // The selected address was set optimistically before this asynchronous
     // snapshot arrived. Clearing it here briefly records an addressless route,
     // which makes Back/Forward require several clicks to cross one run switch.
@@ -2654,6 +2689,7 @@ export function createMessageHandlers(
       finalStepLoopCount: runtime?.finalStep?.loopCount ?? 0,
       finalStepPhase: runtime?.finalStep?.phase ?? null,
       preserveLiveOutput: isSameViewReplay,
+      preserveUndoHistory,
     });
     const normalized = normalizeWorkflowProperties(workflowProperties);
     useSettingsStore.getState().setWorkflowProperties(normalized);

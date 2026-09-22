@@ -2971,7 +2971,11 @@ export class WorkflowInstance {
       }
     }
 
-    this.dashboardSink?.updateFinalStep(finalStep);
+    this.dashboardSink?.updateFinalStep(
+      finalStep,
+      undefined,
+      this.promptQueue.getState().definitionRevision
+    );
     if (!finalStep) {
       this.dashboardSink?.updateFinalStepStatus(null, 0, null);
     }
@@ -2992,7 +2996,8 @@ export class WorkflowInstance {
         fileName,
         currentState.steps,
         this.promptQueue.getWorkflowFile().finalStep ?? null,
-        currentState.parallelGroups
+        currentState.parallelGroups,
+        currentState.definitionRevision
       );
     }
     await this.reconcileExecutionStateAfterStepChange();
@@ -3075,7 +3080,8 @@ export class WorkflowInstance {
       this.dashboardSink.notifyPromptsReordered(
         state.steps,
         undefined,
-        state.parallelGroups
+        state.parallelGroups,
+        state.definitionRevision
       );
     }
   }
@@ -5276,7 +5282,11 @@ export class WorkflowInstance {
       // Detect workflow name changes and push them to the dashboard immediately.
       const newWorkflowName = state.workflowName ?? "";
       if (newWorkflowName && newWorkflowName !== this.lastKnownWorkflowName) {
-        this.dashboardSink.updateWorkflowName(newWorkflowName);
+        this.dashboardSink.updateWorkflowName(
+          newWorkflowName,
+          undefined,
+          state.definitionRevision
+        );
       }
 
       // Active workflow: forward state changes directly to the dashboard.

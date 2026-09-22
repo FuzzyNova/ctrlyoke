@@ -400,16 +400,28 @@ export class DashboardBroadcastHub
   updatePromptDeleted(
     fileName: string,
     steps: any[],
-    finalStep?: WorkflowStep | null
+    finalStep?: WorkflowStep | null,
+    parallelGroups?: ParallelGroupDefinition[],
+    definitionRevision?: number
   ): void {
     for (const client of this.clients) {
-      client.updatePromptDeleted?.(fileName, steps, finalStep);
+      client.updatePromptDeleted?.(
+        fileName,
+        steps,
+        finalStep,
+        parallelGroups,
+        definitionRevision
+      );
     }
   }
 
-  updateFinalStep(finalStep: WorkflowStep | null, workflowId?: string): void {
+  updateFinalStep(
+    finalStep: WorkflowStep | null,
+    workflowId?: string,
+    definitionRevision?: number
+  ): void {
     for (const client of this.clients) {
-      client.updateFinalStep?.(finalStep, workflowId);
+      client.updateFinalStep?.(finalStep, workflowId, definitionRevision);
     }
   }
 
@@ -485,10 +497,16 @@ export class DashboardBroadcastHub
   notifyPromptsReordered(
     steps: WorkflowStep[],
     workflowId?: string,
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    definitionRevision?: number
   ): void {
     for (const client of this.clients) {
-      client.notifyPromptsReordered?.(steps, workflowId, parallelGroups);
+      client.notifyPromptsReordered?.(
+        steps,
+        workflowId,
+        parallelGroups,
+        definitionRevision
+      );
     }
   }
 
@@ -498,9 +516,13 @@ export class DashboardBroadcastHub
     }
   }
 
-  updateWorkflowName(name: string, workflowId?: string): void {
+  updateWorkflowName(
+    name: string,
+    workflowId?: string,
+    definitionRevision?: number
+  ): void {
     for (const client of this.clients) {
-      client.updateWorkflowName?.(name, workflowId);
+      client.updateWorkflowName?.(name, workflowId, definitionRevision);
     }
   }
 

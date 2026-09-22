@@ -14,6 +14,7 @@ import {
   computeDisplaySlots,
   computeLivePreviewState,
   describePendingDragState,
+  describePendingDragTopology,
   hasTrailingPendingGroup,
   movePendingDragContainer,
   movePendingDragItem,
@@ -1537,6 +1538,51 @@ describe("WorkflowStepsPanel drag layout tracing", () => {
     );
     // The group took the first slot, so the step it passed is now below it.
     expect(describePendingDragState(next)).toBe("[1,2] 0 3");
+  });
+
+  // The committed line compares a *renumbered* drop against the round trip's
+  // own layout. `describePendingDragState` renumbers nothing, so a successful
+  // in-group swap read `drop=0 [2,1] 3` against `committed=0 [1,2] 3` and the
+  // trace reported DIFFERS on every healthy reorder.
+  it("renumbers a drop so it is comparable with the committed layout", () => {
+    const committed = buildPendingDragState(steps, 0, groups);
+    // A swap *inside* a group — `movePendingDragItem` deliberately no-ops on
+    // that case, so it has to go through the same entry point a live drag uses.
+    const swapped = computeLivePreviewState(
+      committed,
+      "step-pending-1",
+      "step-pending-2"
+    );
+
+    expect(describePendingDragState(swapped)).toBe("0 [2,1] 3");
+    expect(describePendingDragTopology(swapped, 0)).toBe("0 [1,2] 3");
+    expect(describePendingDragTopology(swapped, 0)).toBe(
+      describePendingDragTopology(
+        // What `buildPendingDragState` mints once the swap lands on disk.
+        buildPendingDragState(steps, 0, groups),
+        0
+      )
+    );
+  });
+
+  it("still reports a topology the round trip did not produce", () => {
+    const committed = buildPendingDragState(steps, 0, groups);
+    // Dragging the group's last member out dissolves nothing but does shrink
+    // the group — a shape change the committed line must still catch.
+    const pulledOut = movePendingDragItem(
+      committed,
+      "step-pending-2",
+      "step-pending-3"
+    );
+
+    expect(describePendingDragTopology(pulledOut, 0)).not.toBe(
+      describePendingDragTopology(committed, 0)
+    );
+  });
+
+  it("renumbers from the base index the rendered rows used", () => {
+    const pending = buildPendingDragState(steps, 2, []);
+    expect(describePendingDragTopology(pending, 2)).toBe("2 3");
   });
 });
 

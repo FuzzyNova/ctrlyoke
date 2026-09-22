@@ -473,8 +473,9 @@ export function computeLivePreviewState(
  * is the one thing a screenshot of a drag in progress cannot settle — dnd-kit
  * paints rows at an offset from where the model has them, so what the user
  * sees and what will be committed can disagree. Logging the same string at
- * every preview, at the drop, and again when the round trip lands turns
- * "it dropped somewhere else" into three comparable lines.
+ * every preview and at the drop turns "it dropped somewhere else" into two
+ * comparable lines: the ids still name where each step *started* the drag, so
+ * `[3,2]` against a baseline of `[2,3]` reads directly as "those two swapped".
  */
 export function describePendingDragState(state: PendingDragState): string {
   return state.order
@@ -484,6 +485,41 @@ export function describePendingDragState(state: PendingDragState): string {
       const items = container.items
         .map((id) => absoluteIndexFromStepDragId(id))
         .join(",");
+      return container.groupId ? `[${items}]` : items;
+    })
+    .join(" ");
+}
+
+/**
+ * The same one-line topology, but numbered by each row's *resulting* slot
+ * rather than by the index its drag id was minted at — i.e. exactly how
+ * `buildPendingDragState` will render this layout once the round trip lands.
+ *
+ * This is the only form in which a drop and the committed result are
+ * comparable. `describePendingDragState` renumbers nothing, so after the round
+ * trip a committed layout always reads back as plain ascending order: a
+ * successful in-group swap logged `drop=… [3,2] …` against `committed=… [2,3]
+ * …` and the comparison reported `DIFFERS` on every healthy reorder, which is
+ * worse than no check at all.
+ *
+ * What survives renumbering is the *topology* — how many containers, in what
+ * order, which are groups and how many members each holds — and that is what
+ * the committed line genuinely verifies: whether `reorderPendingPrompts` and
+ * the group-range rebuild produced the shape the payload asked for. Pure order
+ * is not checkable from here, because the webview's drag ids are positional
+ * and `_runtime.stepId` is not populated for every step (older working files,
+ * and some drafts, carry none). Use the preview/drop lines for order.
+ */
+export function describePendingDragTopology(
+  state: PendingDragState,
+  baseIndex: number
+): string {
+  const slots = computeDisplaySlots(state, baseIndex);
+  return state.order
+    .map((containerId) => {
+      const container = state.containers[containerId];
+      if (!container) return "?";
+      const items = container.items.map((id) => slots.get(id) ?? "?").join(",");
       return container.groupId ? `[${items}]` : items;
     })
     .join(" ");
@@ -1195,11 +1231,26 @@ const WorkflowStepsPanelInner: React.FC<{
   const baselineDragState = optimisticDragState ?? committedDragState;
 
   /**
-   * The layout the last drop applied locally, held until the extension host's
-   * reorder round trip lands so the two can be compared in the trace log. This
-   * is the only part of a drag the webview cannot verify for itself: everything
-   * up to `sendMessage` is a pure function of state it owns, while what comes
-   * back has been through `reorderPendingPrompts` and the group-range rebuild.
+   * Where the pending list's numbering starts — `currentStep`, unless a group
+   * straddles the done/pending boundary and its tail is drawn elsewhere (see
+   * `computeDisplaySlots`). Single-sourced because the drop trace has to
+   * renumber against exactly the base the rendered rows used.
+   */
+  const pendingBaseIndex = straddlingGroup
+    ? straddlingGroup.endIndex + 1
+    : currentStep;
+
+  /**
+   * The *renumbered* topology the last drop applied locally (see
+   * `describePendingDragTopology`), held until the extension host's reorder
+   * round trip lands so the two can be compared in the trace log. This is the
+   * only part of a drag the webview cannot verify for itself: everything up to
+   * `sendMessage` is a pure function of state it owns, while what comes back
+   * has been through `reorderPendingPrompts` and the group-range rebuild.
+   *
+   * It must be the renumbered form, not the drop line's own: the round trip
+   * mints fresh positional ids, so comparing against un-renumbered drag ids
+   * reported a mismatch on every successful reorder.
    */
   const droppedLayoutRef = useRef<string | null>(null);
 
@@ -1207,15 +1258,18 @@ const WorkflowStepsPanelInner: React.FC<{
     const dropped = droppedLayoutRef.current;
     if (dropped === null) return;
     droppedLayoutRef.current = null;
-    const committed = describePendingDragState(committedDragState);
+    const committed = describePendingDragTopology(
+      committedDragState,
+      pendingBaseIndex
+    );
     WebviewLog.trace(
-      `[StepsDrag] committed layout=${committed} ${
+      `[StepsDrag] committed topology=${committed} ${
         committed === dropped
           ? "(matches drop)"
           : `(DIFFERS from drop=${dropped})`
       }`
     );
-  }, [committedDragState]);
+  }, [committedDragState, pendingBaseIndex]);
 
   /** The step or group currently being dragged, or `null` when idle. */
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
@@ -1277,14 +1331,16 @@ const WorkflowStepsPanelInner: React.FC<{
     );
   }, [activeDragId, overDragId, previewDragState]);
 
+  /**
+   * Where the pending list's numbering starts — `currentStep`, unless a group
+   * straddles the done/pending boundary and its tail is drawn elsewhere (see
+   * `computeDisplaySlots`). Single-sourced because the drop trace has to
+   * renumber against exactly the base the rendered rows used.
+   */
   /** Absolute 0-based display slot per drag id, from the live preview. */
   const displaySlots = useMemo(
-    () =>
-      computeDisplaySlots(
-        previewDragState,
-        straddlingGroup ? straddlingGroup.endIndex + 1 : currentStep
-      ),
-    [previewDragState, straddlingGroup, currentStep]
+    () => computeDisplaySlots(previewDragState, pendingBaseIndex),
+    [previewDragState, pendingBaseIndex]
   );
 
   const resolveSlotNumber = useCallback(
@@ -1662,7 +1718,10 @@ const WorkflowStepsPanelInner: React.FC<{
         }`
       );
       if (!outcome) return;
-      droppedLayoutRef.current = describePendingDragState(outcome.state);
+      droppedLayoutRef.current = describePendingDragTopology(
+        outcome.state,
+        pendingBaseIndex
+      );
       setOptimisticDragState(outcome.state);
       sendMessage(MESSAGE_TYPES.REORDER_PROMPTS, outcome.payload);
 
@@ -1676,6 +1735,7 @@ const WorkflowStepsPanelInner: React.FC<{
       currentStep,
       overDragId,
       parallelGroups,
+      pendingBaseIndex,
       previewDragState,
     ]
   );

@@ -303,13 +303,24 @@ export class WorkflowTaggedSink implements IDashboardSink {
     fileName: string,
     steps: any[],
     finalStep?: WorkflowStep | null,
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    definitionRevision?: number
   ): void {
-    this.inner.updatePromptDeleted(fileName, steps, finalStep, parallelGroups);
+    this.inner.updatePromptDeleted(
+      fileName,
+      steps,
+      finalStep,
+      parallelGroups,
+      definitionRevision
+    );
   }
 
-  updateFinalStep(finalStep: WorkflowStep | null): void {
-    this.inner.updateFinalStep(finalStep, this.workflowId);
+  updateFinalStep(
+    finalStep: WorkflowStep | null,
+    _workflowId?: string,
+    definitionRevision?: number
+  ): void {
+    this.inner.updateFinalStep(finalStep, this.workflowId, definitionRevision);
   }
 
   updateFinalStepStatus(
@@ -371,17 +382,27 @@ export class WorkflowTaggedSink implements IDashboardSink {
   notifyPromptsReordered(
     steps: WorkflowStep[],
     _workflowId?: string,
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    definitionRevision?: number
   ): void {
-    this.inner.notifyPromptsReordered(steps, this.workflowId, parallelGroups);
+    this.inner.notifyPromptsReordered(
+      steps,
+      this.workflowId,
+      parallelGroups,
+      definitionRevision
+    );
   }
 
   notifyUndoRedoSynced(): void {
     this.inner.notifyUndoRedoSynced();
   }
 
-  updateWorkflowName(name: string): void {
-    this.inner.updateWorkflowName(name, this.workflowId);
+  updateWorkflowName(
+    name: string,
+    _workflowId?: string,
+    definitionRevision?: number
+  ): void {
+    this.inner.updateWorkflowName(name, this.workflowId, definitionRevision);
   }
 
   updateStepColor(

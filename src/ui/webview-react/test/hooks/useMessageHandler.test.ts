@@ -1774,6 +1774,97 @@ describe("RUN_VIEW_LOADED same-view replay", () => {
     ).toEqual(["edited"]);
     expect(useUiStore.getState().displayedDefinitionRevision).toBe(2);
   });
+
+  // The undo history is scoped to the address, not to a revision of it. Every
+  // run-addressed write pushes a full invalidation snapshot back to the very
+  // client that made it, one revision ahead of the applied head — so clearing
+  // the history on a revision bump erased the entry the client's own edit had
+  // just recorded, and made the first undo throw away the rest of the stack.
+  it("keeps the undo history when the same address advances a revision", () => {
+    renderHook(() => useMessageHandler());
+    const address = {
+      workflowKey: "wf-replay-undo" as never,
+      kind: "run" as const,
+      runRef: "run-2026-07-23T11-00-00-000Z" as never,
+    };
+    const makeSnapshot = (definitionRevision: number, prompt: string) => ({
+      address,
+      workingFile: {
+        workflowName: "Edited run",
+        definitionRevision,
+        steps: [makePrompt(prompt)],
+      },
+      workflowProperties: {},
+      runSummaries: [],
+      descriptorRevision: 1,
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, makeSnapshot(1, "original"));
+    });
+    // Stand in for a local edit the client recorded before its own
+    // invalidation snapshot came back.
+    act(() => {
+      useWorkflowStore.getState().setPrompts([makePrompt("edited")]);
+    });
+    expect(
+      useWorkflowStore.temporal.getState().pastStates.length
+    ).toBeGreaterThan(0);
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, makeSnapshot(2, "edited"));
+    });
+
+    expect(
+      useWorkflowStore.temporal.getState().pastStates.length
+    ).toBeGreaterThan(0);
+  });
+
+  it("clears the undo history when a definition rollback restarts the epoch", () => {
+    renderHook(() => useMessageHandler());
+    const address = {
+      workflowKey: "wf-replay-rollback" as never,
+      kind: "run" as const,
+      runRef: "run-2026-07-23T12-00-00-000Z" as never,
+    };
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+        address,
+        workingFile: {
+          workflowName: "Discarded run",
+          definitionRevision: 3,
+          steps: [makePrompt("original")],
+        },
+        workflowProperties: {},
+        runSummaries: [],
+        descriptorRevision: 2,
+      });
+    });
+    act(() => {
+      useWorkflowStore.getState().setPrompts([makePrompt("edited")]);
+    });
+    expect(
+      useWorkflowStore.temporal.getState().pastStates.length
+    ).toBeGreaterThan(0);
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+        address,
+        workingFile: {
+          workflowName: "Discarded run",
+          definitionRevision: 2,
+          steps: [makePrompt("original")],
+        },
+        workflowProperties: {},
+        runSummaries: [],
+        descriptorRevision: 3,
+        definitionRollback: { fromRevision: 3 },
+      });
+    });
+
+    expect(useWorkflowStore.temporal.getState().pastStates).toHaveLength(0);
+  });
 });
 
 describe("RUN_VIEW_LOADED stale execution state regression", () => {
@@ -3504,6 +3595,197 @@ describe("STEPS_EXTENDED", () => {
     expect(
       useWorkflowStore.temporal.getState().pastStates.length
     ).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// REORDER_PROMPTS_CONFIRMED
+// ---------------------------------------------------------------------------
+
+describe("REORDER_PROMPTS_CONFIRMED", () => {
+  function loadTwoSteps() {
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "wf.yaml",
+        steps: [makePrompt("first"), makePrompt("second")],
+        parallelGroups: [],
+      });
+    });
+    useWorkflowStore.temporal.getState().clear();
+  }
+
+  it("records one undo entry for a drag that reorders steps", () => {
+    renderHook(() => useMessageHandler());
+    loadTwoSteps();
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.REORDER_PROMPTS_CONFIRMED, {
+        steps: [makePrompt("second"), makePrompt("first")],
+        parallelGroups: [],
+      });
+    });
+
+    expect(useWorkflowStore.temporal.getState().pastStates).toHaveLength(1);
+  });
+
+  // Dragging the last member of a parallel group down one slot leaves the step
+  // order untouched and changes only the group's membership. Applying the two
+  // halves through separate setters (with the group half paused to avoid
+  // double-recording) left that gesture with no undo entry at all.
+  it("records an undo entry for a drag that only changes group membership", () => {
+    renderHook(() => useMessageHandler());
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "wf.yaml",
+        steps: [makePrompt("first"), makePrompt("second")],
+        parallelGroups: [
+          { id: "g1", startIndex: 0, endIndex: 1, failFast: true },
+        ],
+      });
+    });
+    useWorkflowStore.temporal.getState().clear();
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.REORDER_PROMPTS_CONFIRMED, {
+        steps: [makePrompt("first"), makePrompt("second")],
+        parallelGroups: [],
+      });
+    });
+
+    expect(useWorkflowStore.getState().parallelGroups).toHaveLength(0);
+    expect(useWorkflowStore.temporal.getState().pastStates).toHaveLength(1);
+  });
+
+  // The reorder's new steps arrive here rather than in a snapshot, so the
+  // applied head has to move with them — otherwise the invalidation snapshot
+  // that follows the write is read as a view change and clears the entry
+  // above right back out again.
+  it("adopts the revision the reorder write produced", () => {
+    renderHook(() => useMessageHandler());
+    loadTwoSteps();
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "wf-reorder" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: "run-2026-07-23T13-00-00-000Z" as never,
+      },
+      appliedDefinitionRevision: 4,
+      displayedDefinitionRevision: 4,
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.REORDER_PROMPTS_CONFIRMED, {
+        steps: [makePrompt("second"), makePrompt("first")],
+        parallelGroups: [],
+        definitionRevision: 5,
+      });
+    });
+
+    expect(useUiStore.getState().appliedDefinitionRevision).toBe(5);
+    expect(useUiStore.getState().displayedDefinitionRevision).toBe(5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PROMPT_DELETED
+// ---------------------------------------------------------------------------
+
+describe("PROMPT_DELETED", () => {
+  // Same reason as the reorder above: the delete's new steps arrive here
+  // rather than in a snapshot, so the invalidation snapshot that follows the
+  // run-addressed write has to be recognisable as a replay — otherwise it
+  // clears live runtime state the persisted history cannot restore.
+  it("adopts the revision the delete write produced", () => {
+    renderHook(() => useMessageHandler());
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "wf.yaml",
+        steps: [makePrompt("first"), makePrompt("second")],
+      });
+    });
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "wf-delete" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: "run-2026-07-23T14-00-00-000Z" as never,
+      },
+      appliedDefinitionRevision: 7,
+      displayedDefinitionRevision: 7,
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.PROMPT_DELETED, {
+        fileName: "wf.yaml",
+        steps: [makePrompt("first")],
+        definitionRevision: 8,
+      });
+    });
+
+    expect(useWorkflowStore.getState().steps).toHaveLength(1);
+    expect(useUiStore.getState().appliedDefinitionRevision).toBe(8);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Definition-revision adoption across every narrow content push
+// ---------------------------------------------------------------------------
+
+describe("narrow content pushes adopt their definition revision", () => {
+  // Each of these delivers definition content without a snapshot, and each is
+  // published from a run-addressed write that pushes a full invalidation right
+  // behind it. Missing the adoption makes that invalidation read as a view
+  // change, which clears live runtime state and the undo history. Kept as one
+  // table so a newly added message is an obvious omission here.
+  const pushes: Array<{ type: string; payload: Record<string, unknown> }> = [
+    {
+      type: MESSAGE_TYPES.STEPS_EXTENDED,
+      payload: { steps: [makePrompt("a"), makePrompt("b")] },
+    },
+    {
+      type: MESSAGE_TYPES.STEP_COLOR_UPDATED,
+      payload: { index: 0, color: "#123456" },
+    },
+    {
+      type: MESSAGE_TYPES.REORDER_PROMPTS_CONFIRMED,
+      payload: { steps: [makePrompt("b"), makePrompt("a")] },
+    },
+    {
+      type: MESSAGE_TYPES.PROMPT_DELETED,
+      payload: { fileName: "wf.yaml", steps: [makePrompt("a")] },
+    },
+    {
+      type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
+      payload: { finalStep: makePrompt("final") },
+    },
+    {
+      type: MESSAGE_TYPES.WORKFLOW_NAME_UPDATED,
+      payload: { workflowName: "Renamed" },
+    },
+  ];
+
+  it.each(pushes)("$type advances the applied head", ({ type, payload }) => {
+    renderHook(() => useMessageHandler());
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "wf.yaml",
+        steps: [makePrompt("a")],
+      });
+    });
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "wf-push" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: "run-2026-07-23T15-00-00-000Z" as never,
+      },
+      appliedDefinitionRevision: 11,
+      displayedDefinitionRevision: 11,
+    });
+
+    act(() => {
+      dispatch(type, { ...payload, definitionRevision: 12 });
+    });
+
+    expect(useUiStore.getState().appliedDefinitionRevision).toBe(12);
   });
 });
 

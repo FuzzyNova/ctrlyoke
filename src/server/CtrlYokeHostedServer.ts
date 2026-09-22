@@ -652,12 +652,24 @@ export class CtrlYokeHostedServer
   updatePromptDeleted(
     fileName: string,
     steps: any[],
-    finalStep?: WorkflowStep | null
+    finalStep?: WorkflowStep | null,
+    parallelGroups?: ParallelGroupDefinition[],
+    definitionRevision?: number
   ): void {
-    this.sink.updatePromptDeleted(fileName, steps, finalStep);
+    this.sink.updatePromptDeleted(
+      fileName,
+      steps,
+      finalStep,
+      parallelGroups,
+      definitionRevision
+    );
   }
-  updateFinalStep(finalStep: WorkflowStep | null, workflowId?: string): void {
-    this.sink.updateFinalStep(finalStep, workflowId);
+  updateFinalStep(
+    finalStep: WorkflowStep | null,
+    workflowId?: string,
+    definitionRevision?: number
+  ): void {
+    this.sink.updateFinalStep(finalStep, workflowId, definitionRevision);
   }
   updateFinalStepStatus(
     status: StepStatus | null,
@@ -725,15 +737,25 @@ export class CtrlYokeHostedServer
   notifyPromptsReordered(
     steps: WorkflowStep[],
     workflowId?: string,
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    definitionRevision?: number
   ): void {
-    this.sink.notifyPromptsReordered(steps, workflowId, parallelGroups);
+    this.sink.notifyPromptsReordered(
+      steps,
+      workflowId,
+      parallelGroups,
+      definitionRevision
+    );
   }
   notifyUndoRedoSynced(): void {
     this.sink.notifyUndoRedoSynced();
   }
-  updateWorkflowName(name: string, workflowId?: string): void {
-    this.sink.updateWorkflowName(name, workflowId);
+  updateWorkflowName(
+    name: string,
+    workflowId?: string,
+    definitionRevision?: number
+  ): void {
+    this.sink.updateWorkflowName(name, workflowId, definitionRevision);
   }
   sendStepUndoDataUpdated(
     target: UndoExecutionTarget,
