@@ -432,16 +432,31 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // row (name is the only shrinkable one), that mismatch let a freshly running
   // workflow's execution badge get visually clipped the moment the terminal
   // icon appeared, even though `executionState` was already correctly RUNNING.
-  // 380 (the next breakpoint up from the row-budget-derived 220 this used to
-  // be, matching this hook's own DEFAULT_THRESHOLD) so the full-text badge
-  // only appears on genuinely wide headers; narrower ones show icon-only
-  // sooner. isNarrow also feeds the sibling RunIdentityBadge's abbreviated
-  // label below — shrinking that label at the same instant hands this button
-  // back the width it just lost, which used to flip isNarrow back and forth
-  // every animation frame right at the threshold. useElementNarrow's built-in
-  // hysteresis (see its doc comment) is what stops that loop; do not
-  // route this measurement through a bare threshold comparison of your own.
-  const [narrowRef, isNarrow] = useElementNarrow<HTMLButtonElement>(380);
+  //
+  // Deliberately two separate thresholds on the same measured width, not one:
+  // the execution badge (and the sibling RunIdentityBadge label below, which
+  // shares this same signal) can afford to drop to icon-only well before the
+  // terminal/worktree icons should disappear, so tying all of them to a
+  // single breakpoint either hid the terminal/branch icons too eagerly or
+  // kept the badge in full-text mode too long. `isNarrow` (320) is the badge
+  // breakpoint; `isVeryNarrow` (220, the row-budget-derived value this used to
+  // be the sole threshold at) hides only the terminal/worktree icons, so they
+  // stay visible through medium widths and only drop at genuinely tight ones.
+  // Both refs must observe the same node — merged below — so their widths
+  // never disagree. useElementNarrow's built-in hysteresis (see its doc
+  // comment) is what stops the badge/RunIdentityBadge label from flipping
+  // back and forth every animation frame right at its threshold; do not route
+  // either measurement through a bare threshold comparison of your own.
+  const [narrowRef, isNarrow] = useElementNarrow<HTMLButtonElement>(320);
+  const [veryNarrowRef, isVeryNarrow] =
+    useElementNarrow<HTMLButtonElement>(220);
+  const mergedMainButtonRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      narrowRef(node);
+      veryNarrowRef(node);
+    },
+    [narrowRef, veryNarrowRef]
+  );
   const [dropdownTierRef, dropdownRowTier] = useElementTier<
     WorkflowRowTier,
     HTMLDivElement
@@ -1662,11 +1677,11 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         <div
           {...workflowLongPressHandlers}
           onContextMenu={handleWorkflowContextMenu}
-          className={`workflow-split-button flex border rounded-button overflow-hidden max-w-full sm:max-w-[500px] lg:max-w-none w-full min-w-0 transition-colors ${wfStatusSize.container} ${isDropdownOpen ? "border-cmd-active-border" : "border-cmd-border"}`}
+          className={`workflow-split-button flex border rounded-button overflow-hidden max-w-full sm:max-w-[600px] lg:max-w-none w-full min-w-0 transition-colors ${wfStatusSize.container} ${isDropdownOpen ? "border-cmd-active-border" : "border-cmd-border"}`}
         >
           {/* Main Button - Workflow Name */}
           <button
-            ref={narrowRef}
+            ref={mergedMainButtonRef}
             type="button"
             onClick={startEditing}
             className={`workflow-button-main cy-dropdown-row flex-1 min-w-0 text-left overflow-hidden cursor-pointer transition-colors ${wfStatusSize.mainButton} bg-cmd-bg text-cmd-fg hover:bg-cmd-active-bg hover:text-cmd-active-fg`}
@@ -1679,7 +1694,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                 {displayName}
               </span>
 
-              {!isNarrow && currentWorkflowHasActiveTerminal && (
+              {!isVeryNarrow && currentWorkflowHasActiveTerminal && (
                 <span
                   className="flex-shrink-0 w-4 flex items-center justify-center text-description-fg"
                   title="Terminal session is still running"
@@ -1689,7 +1704,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                 </span>
               )}
 
-              {!isNarrow && worktreeIndicator && (
+              {!isVeryNarrow && worktreeIndicator && (
                 <span
                   className="flex-shrink-0 w-4 flex items-center justify-center text-description-fg"
                   title={worktreeIndicator.title}
