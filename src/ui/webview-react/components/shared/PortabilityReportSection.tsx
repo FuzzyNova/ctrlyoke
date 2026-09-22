@@ -24,7 +24,7 @@ const STATUS_META: Record<
   { label: string; icon: string; className: string }
 > = {
   [PORTABILITY_ROW_STATUSES.READY]: {
-    label: "Ready",
+    label: "Compatible",
     icon: "pass",
     className: "text-indicator-success",
   },
@@ -53,6 +53,10 @@ const SOURCE_LABELS: Record<string, string> = {
 
 function harnessLabel(harnessId: HarnessId): string {
   return HARNESS_INFO[harnessId]?.name ?? harnessId;
+}
+
+function compatibilityDetailsId(harnessId: HarnessId): string {
+  return `harness-compatibility-details-${harnessId}`;
 }
 
 function consumerLabel(consumer: PortabilityDiagnostic["consumer"]): string {
@@ -162,14 +166,13 @@ function ReportDetails({
 }): React.ReactElement {
   const findingCount = row.diagnostics.length + row.workspaceSideEffects.length;
   return (
-    <section
-      id="workflow-portability-details"
-      aria-labelledby="workflow-portability-details-title"
-      className="mt-4 border-t border-panel-border pt-4"
+    <div
+      id={compatibilityDetailsId(row.harnessId)}
+      aria-labelledby={`${compatibilityDetailsId(row.harnessId)}-title`}
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h4
-          id="workflow-portability-details-title"
+          id={`${compatibilityDetailsId(row.harnessId)}-title`}
           className="text-sm font-semibold"
         >
           {harnessLabel(row.harnessId)} details
@@ -198,18 +201,18 @@ function ReportDetails({
           ))}
         </ul>
       )}
-    </section>
+    </div>
   );
 }
 
 function ReportBody({
   report,
-  onSelect,
-  selectedHarnessId,
+  expandedHarnessIds,
+  onToggle,
 }: {
   report: PortabilityReport;
-  onSelect: (harnessId: HarnessId) => void;
-  selectedHarnessId: HarnessId | null;
+  expandedHarnessIds: ReadonlySet<HarnessId>;
+  onToggle: (harnessId: HarnessId) => void;
 }): React.ReactElement {
   if (report.rows.length === 0) {
     return (
@@ -222,52 +225,47 @@ function ReportBody({
     );
   }
 
-  const selectedRow = report.rows.find(
-    (row) => row.harnessId === selectedHarnessId
-  );
   return (
-    <>
-      <div
-        className="overflow-x-auto"
-        role="region"
-        aria-label="Installed harness portability report"
-      >
-        <table className="w-full min-w-[34rem] border-collapse text-left text-xs">
-          <caption className="sr-only">
-            Installed harness portability classifications
-          </caption>
-          <thead className="text-description-fg">
-            <tr className="border-b border-panel-border">
-              <th scope="col" className="px-2 py-2 font-semibold">
-                Harness
-              </th>
-              <th scope="col" className="px-2 py-2 font-semibold">
-                Result
-              </th>
-              <th scope="col" className="px-2 py-2 font-semibold">
-                Findings
-              </th>
-              <th scope="col" className="px-2 py-2 font-semibold">
-                <span className="sr-only">Select</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {report.rows.map((row) => {
-              const meta = STATUS_META[row.status];
-              const selected = selectedHarnessId === row.harnessId;
-              return (
-                <tr
-                  key={row.harnessId}
-                  className="border-b border-panel-border last:border-b-0"
-                >
+    <div
+      className="overflow-x-auto"
+      role="region"
+      aria-label="Installed harness compatibility report"
+    >
+      <table className="w-full min-w-[34rem] border-collapse text-left text-xs">
+        <caption className="sr-only">
+          Installed harness compatibility classifications
+        </caption>
+        <thead className="text-description-fg">
+          <tr className="border-b border-panel-border">
+            <th scope="col" className="px-2 py-2 font-semibold">
+              Harness
+            </th>
+            <th scope="col" className="px-2 py-2 font-semibold">
+              Result
+            </th>
+            <th scope="col" className="px-2 py-2 font-semibold">
+              Findings
+            </th>
+            <th scope="col" className="px-2 py-2 font-semibold">
+              <span className="sr-only">Select</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {report.rows.map((row) => {
+            const meta = STATUS_META[row.status];
+            const expanded = expandedHarnessIds.has(row.harnessId);
+            const detailsId = compatibilityDetailsId(row.harnessId);
+            return (
+              <React.Fragment key={row.harnessId}>
+                <tr className="border-b border-panel-border">
                   <th scope="row" className="px-2 py-3 font-normal">
                     <button
                       type="button"
                       className="flex min-w-0 items-center gap-2 rounded text-left text-foreground underline-offset-2 hover:underline focus:outline-none focus:ring-1 focus:ring-focus-border"
-                      aria-controls="workflow-portability-details"
-                      aria-expanded={selected}
-                      onClick={() => onSelect(row.harnessId)}
+                      aria-controls={detailsId}
+                      aria-expanded={expanded}
+                      onClick={() => onToggle(row.harnessId)}
                     >
                       <HarnessIcon harnessId={row.harnessId} size={20} />
                       <span className="min-w-0 break-words">
@@ -296,22 +294,28 @@ function ReportBody({
                     <button
                       type="button"
                       className="rounded px-2 py-1 text-link-fg hover:underline focus:outline-none focus:ring-1 focus:ring-focus-border"
-                      aria-label={`${selected ? "Hide" : "Show"} ${harnessLabel(row.harnessId)} details`}
-                      aria-controls="workflow-portability-details"
-                      aria-expanded={selected}
-                      onClick={() => onSelect(row.harnessId)}
+                      aria-label={`${expanded ? "Hide" : "Show"} ${harnessLabel(row.harnessId)} details`}
+                      aria-controls={detailsId}
+                      aria-expanded={expanded}
+                      onClick={() => onToggle(row.harnessId)}
                     >
-                      {selected ? "Hide" : "Details"}
+                      {expanded ? "Hide" : "Details"}
                     </button>
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      {selectedRow && <ReportDetails row={selectedRow} />}
-    </>
+                {expanded && (
+                  <tr className="border-b border-panel-border">
+                    <td colSpan={4} className="bg-input-bg px-4 py-3">
+                      <ReportDetails row={row} />
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -320,21 +324,34 @@ export interface PortabilityReportSectionProps {
   isChecking: boolean;
 }
 
-/** Renders the installed-harness portability comparison as a Dry Run overview
- * section. `report` is only null while `isChecking` is true — the caller is
- * expected to keep `includePortabilityReport` enabled whenever this section
- * is mounted. */
+/** Renders the installed-harness compatibility comparison as a Dry Run
+ * overview section. `report` is only null while `isChecking` is true — the
+ * caller is expected to keep `includePortabilityReport` enabled whenever this
+ * section is mounted. Each row's details expand inline, accordion-style,
+ * directly beneath that row; multiple rows may stay expanded at once. */
 export const PortabilityReportSection: React.FC<
   PortabilityReportSectionProps
 > = ({ report, isChecking }) => {
-  const [selectedHarnessId, setSelectedHarnessId] = useState<HarnessId | null>(
-    null
-  );
+  const [expandedHarnessIds, setExpandedHarnessIds] = useState<
+    ReadonlySet<HarnessId>
+  >(new Set());
+
+  const toggleHarness = (harnessId: HarnessId) => {
+    setExpandedHarnessIds((current) => {
+      const next = new Set(current);
+      if (next.has(harnessId)) {
+        next.delete(harnessId);
+      } else {
+        next.add(harnessId);
+      }
+      return next;
+    });
+  };
 
   return (
     <section aria-live="polite">
       <h3 className="mb-3 text-sm font-semibold text-foreground">
-        Portability report
+        Harness compatibility report
       </h3>
       {isChecking || !report ? (
         <p
@@ -347,12 +364,8 @@ export const PortabilityReportSection: React.FC<
       ) : (
         <ReportBody
           report={report}
-          onSelect={(harnessId) =>
-            setSelectedHarnessId((current) =>
-              current === harnessId ? null : harnessId
-            )
-          }
-          selectedHarnessId={selectedHarnessId}
+          expandedHarnessIds={expandedHarnessIds}
+          onToggle={toggleHarness}
         />
       )}
     </section>

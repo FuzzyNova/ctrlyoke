@@ -330,7 +330,9 @@ describe("DryRunModal", () => {
 
     render(<DryRunModal scope={{ kind: "workflow" }} />);
 
-    expect(screen.getByText("Portability report")).toBeInTheDocument();
+    expect(
+      screen.getByText("Harness compatibility report")
+    ).toBeInTheDocument();
     expect(screen.getByText("Unsupported")).toBeInTheDocument();
 
     await user.click(
