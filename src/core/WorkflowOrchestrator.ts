@@ -3275,7 +3275,8 @@ export class WorkflowOrchestrator {
     }
     const runAddress = mutation.address;
     let latest:
-      { definitionRevision: number; descriptorRevision: number } | undefined;
+      | { definitionRevision: number; descriptorRevision: number }
+      | undefined;
     await this.applyRunAddressedMutation(
       runAddress,
       clientId,
@@ -3940,7 +3941,8 @@ export class WorkflowOrchestrator {
     }
     const runAddress = mutation.address;
     let latest:
-      { definitionRevision: number; descriptorRevision: number } | undefined;
+      | { definitionRevision: number; descriptorRevision: number }
+      | undefined;
     await this.applyRunAddressedMutation(
       runAddress,
       clientId,
@@ -4042,6 +4044,53 @@ export class WorkflowOrchestrator {
       recordDefinition: true,
       recordDescriptor: true,
     });
+    return result;
+  }
+
+  /**
+   * Addressed start-position operation for a draft that has never executed.
+   * Seeds a brand-new run from the draft, starting at `toIndex`; never infers
+   * "the latest draft" — the caller's addressed view and revision pair must agree.
+   */
+  async setStartPositionAtDraft(
+    address: Extract<WorkflowViewAddress, { kind: "draft" }>,
+    toIndex: number,
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number,
+    clientId: string = this.PANEL_CLIENT_ID
+  ): Promise<{
+    kind: "seeded";
+    runRef: RunRef;
+    definitionRevision: number;
+    descriptorRevision: number;
+  }> {
+    const reconciled = this.reconcileExpectedRevisions(
+      address,
+      clientId,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision
+    );
+    const result = await this.runLifecycleService.setStartPositionAtDraft(
+      address,
+      toIndex,
+      reconciled.expectedDefinitionRevision,
+      reconciled.expectedDescriptorRevision,
+      clientId
+    );
+    await this.recordSuccessfulRevisions(
+      {
+        workflowKey: address.workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: result.runRef,
+      },
+      clientId,
+      {
+        definitionRevision: result.definitionRevision,
+        descriptorRevision: result.descriptorRevision,
+        recordDefinition: true,
+        recordDescriptor: true,
+      }
+    );
     return result;
   }
 

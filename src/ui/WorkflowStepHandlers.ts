@@ -644,16 +644,26 @@ export class WorkflowStepHandlers {
     }
 
     try {
-      await orchestrator.setStartPositionAtRun(
-        {
-          workflowKey: message.address.workflowKey,
-          runRef: message.address.runRef,
-        },
-        message.toIndex,
-        message.expectedDefinitionRevision,
-        message.expectedDescriptorRevision,
-        ctx.clientId
-      );
+      if (message.address.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT) {
+        await orchestrator.setStartPositionAtDraft(
+          message.address,
+          message.toIndex,
+          message.expectedDefinitionRevision,
+          message.expectedDescriptorRevision,
+          ctx.clientId
+        );
+      } else {
+        await orchestrator.setStartPositionAtRun(
+          {
+            workflowKey: message.address.workflowKey,
+            runRef: message.address.runRef,
+          },
+          message.toIndex,
+          message.expectedDefinitionRevision,
+          message.expectedDescriptorRevision,
+          ctx.clientId
+        );
+      }
     } catch (error) {
       this.mutationCoordinator.showRunActionFailure(
         ctx,

@@ -2033,8 +2033,12 @@ export interface WorkspaceWorktreeOwnershipMessage {
 export interface SetStartPositionMessage {
   type: typeof MESSAGE_TYPES.SET_START_POSITION;
   toIndex: number;
-  /** Start-position is always an explicit promoted-run operation. */
-  address: Extract<WorkflowViewAddress, { kind: "run" }>;
+  /**
+   * A `run` address rewinds/re-seeds that promoted run. A `draft` address seeds
+   * a brand-new run from a workflow that has never executed, starting at
+   * `toIndex` with the steps before it marked skipped.
+   */
+  address: WorkflowViewAddress;
   expectedDefinitionRevision: number;
   expectedDescriptorRevision: number;
 }
