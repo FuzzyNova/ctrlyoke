@@ -612,33 +612,47 @@ export class RunViewPublisher {
     runRef: RunRef,
     definitionRollback?: DefinitionRollbackInvalidation
   ): Promise<void> {
+    await this.invalidateViewsForAddress(
+      { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN, runRef },
+      definitionRollback
+    );
+  }
+
+  /**
+   * The draft counterpart of `invalidateRunViews`. A draft-addressed write has
+   * no RunRef to invalidate, but its viewers hold the same kind of snapshot and
+   * go just as stale: "set start position" on a never-run lineage rewrites the
+   * draft's step runtime and current index in place, and without this every
+   * client — the acting one included — keeps rendering the pre-write statuses.
+   */
+  async invalidateDraftViews(workflowKey: WorkflowKey): Promise<void> {
+    await this.invalidateViewsForAddress({
+      workflowKey,
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+    });
+  }
+
+  private async invalidateViewsForAddress(
+    address: WorkflowViewAddress,
+    definitionRollback?: DefinitionRollbackInvalidation
+  ): Promise<void> {
     const targets: Array<{
       clientId: string;
       send: (message: unknown) => void;
     }> = [];
     for (const [
       clientId,
-      address,
+      viewed,
     ] of this.host.registry.getViewAddressRegistry()) {
-      if (
-        address?.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN ||
-        address.workflowKey !== workflowKey ||
-        address.runRef !== runRef
-      ) {
-        continue;
-      }
+      if (!sameViewAddress(viewed, address)) continue;
       const send = this.host.registry.getViewMessageSinks().get(clientId);
       if (send) targets.push({ clientId, send });
     }
     try {
-      await this.publishRunViewToClients(
-        { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN, runRef },
-        targets,
-        definitionRollback
-      );
+      await this.publishRunViewToClients(address, targets, definitionRollback);
     } catch (error) {
       Log.warn(
-        `[WorkflowOrchestrator] Failed to invalidate run view for ${targets.length} client(s): ${getErrorMessage(error)}`
+        `[WorkflowOrchestrator] Failed to invalidate ${describeViewAddress(address)} view for ${targets.length} client(s): ${getErrorMessage(error)}`
       );
     }
   }

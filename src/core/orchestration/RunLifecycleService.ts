@@ -91,6 +91,7 @@ export interface RunLifecycleInstancePort {
     prePromotedFreshStart?: boolean,
     onPrepared?: () => Promise<void>
   ): Promise<void>;
+  setDraftStartPosition(toIndex: number): Promise<void>;
 }
 
 export interface RunLifecycleViewPort {
@@ -109,6 +110,7 @@ export interface RunLifecycleViewPort {
     runRef: RunRef,
     definitionRollback?: DefinitionRollbackInvalidation
   ): Promise<void>;
+  invalidateDraftViews(workflowKey: WorkflowKey): Promise<void>;
   pushRunSummariesRefreshIfNotAlreadyViewing(
     workflowKey: WorkflowKey,
     send: (message: unknown) => void,
@@ -307,11 +309,16 @@ export class RunLifecycleService {
   }
 
   /**
-   * "Set start position" on a draft that has never executed: seeds a brand-new
-   * run from the draft's own definition, starting at `toIndex`, with the steps
-   * before it pre-marked skipped. Mirrors `setStartPositionAtRun`'s `toIndex===0`
-   * branch (seed the run, don't execute it) but sources from the draft file via
-   * `WorkingFileManager.seedRunFromDraft` instead of an existing run.
+   * "Set start position" on a lineage that has never executed. This is a draft
+   * edit, not a run operation: the draft *is* the definition that the first
+   * execution promotes, so the position is recorded on the draft itself
+   * (`PromptQueue.setStartPosition`) and carried into run 1 by promotion.
+   *
+   * Deliberately not the shape `setStartPositionAtRun` uses. Seeding a run here
+   * minted a throwaway run on every adjustment, so a user still deciding where
+   * to start accumulated one dead, never-executed run per click — and landed on
+   * a run whose header offered "Re-run" rather than simply running the workflow
+   * they were still authoring.
    */
   async setStartPositionAtDraft(
     address: Extract<WorkflowViewAddress, { kind: "draft" }>,
@@ -319,7 +326,7 @@ export class RunLifecycleService {
     expectedDefinitionRevision: number,
     expectedDescriptorRevision: number,
     clientId: string = this.host.panelClientId
-  ): Promise<Extract<SetStartPositionResult, { kind: "seeded" }>> {
+  ): Promise<void> {
     if (!Number.isInteger(toIndex) || toIndex < 0) {
       throw new Error("Start position must be a non-negative integer");
     }
@@ -329,41 +336,43 @@ export class RunLifecycleService {
       viewed.kind !== WORKFLOW_VIEW_ADDRESS_KIND.DRAFT ||
       viewed.workflowKey !== address.workflowKey
     ) {
-      throw new Error("Run no longer targets this client's viewed draft");
+      throw new Error(
+        "Set start position no longer targets this client's viewed draft"
+      );
     }
     const workspaceRoot = this.requireWorkspaceRoot();
     if (this.findActiveInstanceForLineage(address.workflowKey)) {
       throw new Error(
-        "Cannot seed a new run while this workflow lineage is executing"
+        "Cannot set start position while this workflow lineage is executing"
       );
     }
-    const seeded = await WorkingFileManager.seedRunFromDraft(
-      workspaceRoot,
-      address.workflowKey,
-      toIndex,
-      {},
-      this.host.getLineageRepository(),
-      {
-        definitionRevision: expectedDefinitionRevision,
-        descriptorRevision: expectedDescriptorRevision,
-      }
+    const descriptor = await this.host
+      .getLineageRepository()
+      .readDescriptor(workspaceRoot, address.workflowKey);
+    assertDescriptorRevision(expectedDescriptorRevision, descriptor.revision);
+    const draft = JSON.parse(
+      await fs.readFile(
+        WorkflowPaths.draftFilePath(workspaceRoot, address.workflowKey),
+        "utf8"
+      )
+    ) as WorkingFile;
+    assertDefinitionRevision(
+      expectedDefinitionRevision,
+      draft.definitionRevision
     );
-    const seededAddress: Extract<WorkflowViewAddress, { kind: "run" }> = {
-      workflowKey: address.workflowKey,
-      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-      runRef: seeded.runRef,
-    };
-    await this.switchClientToRunAddress(seededAddress, clientId);
-    await this.host.views.invalidateRunViews(
-      address.workflowKey,
-      seeded.runRef
-    );
-    return {
-      kind: "seeded",
-      runRef: seeded.runRef,
-      definitionRevision: 1,
-      descriptorRevision: seeded.allocation.reservationDescriptorRevision,
-    };
+
+    // The client's own instance is the live owner of the draft it is viewing —
+    // the same binding `executeDraftAtAddress` executes through — so the edit
+    // must go through it rather than behind its back on disk, where the queue's
+    // next runtime flush would overwrite it.
+    const instance = this.findInstanceForClient(clientId);
+    if (instance.getQueueState().workflowKey !== address.workflowKey) {
+      throw new Error(
+        "This client's workflow instance is not bound to the addressed draft"
+      );
+    }
+    await instance.setDraftStartPosition(toIndex);
+    await this.host.views.invalidateDraftViews(address.workflowKey);
   }
 
   async seedAndExecuteAtRun(

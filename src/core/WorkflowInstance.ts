@@ -3000,6 +3000,18 @@ export class WorkflowInstance {
   }
 
   /**
+   * Move the start position of this instance's never-executed draft. The queue
+   * owns the resulting state (prefix skip marks plus `currentIndex`) and
+   * persists it to the draft file; the refreshed view is published by the
+   * caller through the addressed draft-view invalidation, so nothing is pushed
+   * to the dashboard sink from here.
+   */
+  async setDraftStartPosition(toIndex: number): Promise<void> {
+    await this.promptQueue.setStartPosition(toIndex);
+    Log.debug(`[WorkflowInstance] Draft start position set to step ${toIndex}`);
+  }
+
+  /**
    * Auto-transition execution state after a step list change triggered by a
    * user edit (delete or undo/redo):
    *

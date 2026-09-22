@@ -95,6 +95,12 @@ class FakeInstance implements RunLifecycleInstancePort {
     _prePromotedFreshStart?: boolean,
     _onPrepared?: () => Promise<void>
   ): Promise<void> {}
+
+  readonly draftStartPositions: number[] = [];
+
+  async setDraftStartPosition(toIndex: number): Promise<void> {
+    this.draftStartPositions.push(toIndex);
+  }
 }
 
 class FakeRegistry implements RunLifecycleRegistryPort {
@@ -150,9 +156,14 @@ class FakeViews implements RunLifecycleViewPort {
     return this.address;
   }
 
+  readonly invalidatedDrafts: WorkflowKey[] = [];
+
   async loadRunViewForClient(): Promise<void> {}
   async publishRunRevisionsToViewers(): Promise<void> {}
   async invalidateRunViews(): Promise<void> {}
+  async invalidateDraftViews(key: WorkflowKey): Promise<void> {
+    this.invalidatedDrafts.push(key);
+  }
   async pushRunSummariesRefreshIfNotAlreadyViewing(): Promise<void> {}
 }
 

@@ -761,6 +761,96 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   }
 
   /**
+   * Move the start position of a lineage that has never executed.
+   *
+   * A draft is the pre-execution definition, so its start position is draft
+   * state rather than a run: the steps before `toIndex` are marked SKIPPED and
+   * `currentIndex` moves to `toIndex`, and the lineage's first execution
+   * promotes both into run 1 verbatim (`WorkingFileManager.promoteToNewRun`
+   * copies the queue's steps and current index). A promoted run has no business
+   * here — it rewinds in place through `beginPendingRewind` instead, which is
+   * why this refuses to touch a queue that is bound to a RunRef.
+   *
+   * Every call rewrites the *whole* step list rather than layering marks onto
+   * the previous one, so repositioning is idempotent and fully reversible:
+   * `toIndex: 0` clears the prefix and restores a pristine draft. That is what
+   * lets a user still choosing a start position change their mind freely —
+   * seeding a run per adjustment left one dead run behind on every click.
+   *
+   * The skip marks are written directly instead of through `skipStep`: nothing
+   * has executed, so this must not reach the harness-usage reporter or reset
+   * attempt counters the way a genuine mid-run skip does.
+   */
+  public async setStartPosition(toIndex: number): Promise<void> {
+    if (this.state.runRef !== undefined) {
+      throw new Error(
+        "Only a draft's start position can be set in place; a promoted run rewinds instead"
+      );
+    }
+    if (this.isExecutionActive) {
+      throw new Error(
+        `Cannot set start position while in state ${this.stateMachine.status}`
+      );
+    }
+    if (
+      !Number.isInteger(toIndex) ||
+      toIndex < 0 ||
+      toIndex >= this.state.steps.length
+    ) {
+      throw new Error(
+        "Start position must leave at least one suffix step to run"
+      );
+    }
+    // A parallel group is admitted as a unit, so starting inside one is not a
+    // representable position — snap to the group's first member, exactly as a
+    // run's rewind boundary does.
+    const topology = normalizeParallelGroupTopology({
+      steps: this.state.steps,
+      parallelGroups: this.state.parallelGroups,
+    });
+    const boundary = snapParallelGroupStartPosition(topology, toIndex);
+    const markedAt = Date.now();
+    this.state.steps = topology.steps.map((step, index) => {
+      const cleared = resetStepRuntimeForRewind(step);
+      return index < boundary
+        ? {
+            ...cleared,
+            _runtime: {
+              ...cleared._runtime,
+              startedAt: markedAt,
+              completedAt: markedAt,
+              terminalStatus: PROMPT_TERMINAL_STATUS.SKIPPED,
+            },
+          }
+        : cleared;
+    });
+    this.state.parallelGroups = topology.parallelGroups;
+    this.state.currentIndex = boundary;
+    this.state.completedIndices = new Set<string>(
+      Array.from({ length: boundary }, (_, index) => String(index))
+    );
+    this.state.results = this.state.steps.map((step, index) => ({
+      prompt: isScriptStep(step) ? step.script : step.prompt,
+      status: this.getResultStatusFromRuntime(step, index, boundary),
+      timestamp: new Date(),
+    }));
+    if (this.workflowFile) {
+      this.workflowFile = {
+        ...this.workflowFile,
+        steps: [...this.state.steps],
+        parallelGroups: this.state.parallelGroups,
+      };
+    }
+
+    this.emitStateChange();
+    Log.info(`[PromptQueue] Draft start position set to step ${boundary}`);
+
+    // skipMerge: this rewrites every step's runtime deliberately, so a disk
+    // merge would only risk reviving the marks it just cleared.
+    await this.updateWorkingFile(true);
+  }
+
+  /**
    * Restore queue state after a dirty-file reload for an append continuation.
    *
    * When the prompt file was dirty in VS Code and `loadPrompts` was called (resetting

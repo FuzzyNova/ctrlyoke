@@ -19,7 +19,6 @@ import {
   EXECUTION_STATES,
   HARNESS_IDS,
   PROMPT_PROPERTIES,
-  PROMPT_TERMINAL_STATUS,
   QUEUE_POSITION,
   WORKTREE_EDIT_KINDS,
   type HarnessId,
@@ -813,32 +812,6 @@ export class WorkingFileManager {
    * executing callers' own `initializeRunAt` never corrects this value. Callers that
    * execute the seeded run immediately pass `RUNNING`.
    */
-  /**
-   * Normalizes a source working file's step topology for seeding into a brand-new
-   * run: re-derives parallel-group topology, strips execution runtime, backfills
-   * missing step ids, and strips view-only fields. Shared by `seedNewRun` (forking
-   * from an existing run) and `seedRunFromDraft` (forking from a lineage's draft).
-   */
-  private static normalizeSeedTopology(source: WorkingFile): {
-    steps: WorkflowStep[];
-    parallelGroups: ParallelGroupDefinition[];
-    finalStep: WorkflowStep | undefined;
-  } {
-    const sourceTopology = normalizeParallelGroupTopology({
-      steps: source.steps ?? [],
-      parallelGroups: source.parallelGroups,
-    });
-    const steps = ensureStepIds(
-      stripStepRuntime(sourceTopology.steps).map(
-        stripViewOnlyWorkflowStepFields
-      )
-    );
-    const finalStep = source.finalStep
-      ? stripViewOnlyWorkflowStepFields(stripStepRuntime([source.finalStep])[0])
-      : undefined;
-    return { steps, parallelGroups: sourceTopology.parallelGroups, finalStep };
-  }
-
   public static async seedNewRun(
     workspaceFolderPath: string,
     workflowKey: WorkflowKey,
@@ -899,11 +872,18 @@ export class WorkingFileManager {
     );
 
     const startedAt = Date.now();
-    const {
-      steps: identifiedSteps,
-      parallelGroups,
-      finalStep,
-    } = WorkingFileManager.normalizeSeedTopology(source);
+    const sourceTopology = normalizeParallelGroupTopology({
+      steps: source.steps ?? [],
+      parallelGroups: source.parallelGroups,
+    });
+    const identifiedSteps = ensureStepIds(
+      stripStepRuntime(sourceTopology.steps).map(
+        stripViewOnlyWorkflowStepFields
+      )
+    );
+    const finalStep = source.finalStep
+      ? stripViewOnlyWorkflowStepFields(stripStepRuntime([source.finalStep])[0])
+      : undefined;
     const workingFile: WorkingFile = {
       ...source,
       ...(descriptor.originalFile
@@ -915,7 +895,7 @@ export class WorkingFileManager {
       isFavorite: descriptor.isFavorite,
       definitionRevision: 1,
       steps: identifiedSteps,
-      parallelGroups,
+      parallelGroups: sourceTopology.parallelGroups,
       ...(finalStep ? { finalStep } : {}),
       ...(overrides.harness ? { harness: overrides.harness } : {}),
       ...(overrides.model ? { model: overrides.model } : {}),
@@ -955,167 +935,6 @@ export class WorkingFileManager {
     return {
       workingFilePath: allocation.runFilePath,
       sourceRunRef: fromRunRef,
-      runRef: allocation.runRef,
-      runId: allocation.runId,
-      runDir: allocation.runDir,
-      stagingRunDir: allocation.stagingRunDir,
-      stagingWorkingFilePath: allocation.stagingRunFilePath,
-      allocation,
-      startedAt,
-    };
-  }
-
-  /**
-   * Seeds a brand-new run directly from a lineage's *draft* — the "Set Start
-   * Position" action on a workflow that has never executed. Unlike `seedNewRun`
-   * (which forks from an existing, promoted run's file), there is no prior run
-   * to fork from: the source is the draft's own `workflow.ctrlyoke.json`, and
-   * `finalizeAllocatedRun` removes it once promotion completes, exactly as it
-   * does for the first execution of a draft (`executeLoadedPromptFile`).
-   *
-   * Steps before `startIndex` are pre-marked `PROMPT_TERMINAL_STATUS.SKIPPED`
-   * in the seeded file's `_runtime`, matching the shape
-   * `PromptQueue.markPromptCompleted` writes for a live skip, so completed-step
-   * rendering and history treat them identically to any other skipped step.
-   * Seeding and executing stay separate operations here too — pass
-   * `initialTimelineState: RUNNING` only for a caller that executes immediately.
-   */
-  public static async seedRunFromDraft(
-    workspaceFolderPath: string,
-    workflowKey: WorkflowKey,
-    startIndex: number,
-    overrides: { harness?: HarnessId; model?: string } = {},
-    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
-    expected?: {
-      definitionRevision?: number;
-      descriptorRevision?: number;
-    },
-    initialTimelineState: ExecutionState = EXECUTION_STATES.IDLE
-  ): Promise<{
-    workingFilePath: string;
-    runRef: RunRef;
-    runId: number;
-    runDir: string;
-    stagingRunDir: string;
-    stagingWorkingFilePath: string;
-    allocation: import("./orchestration/WorkflowLineageRepository").AllocatedRun;
-    startedAt: number;
-  }> {
-    const draftFilePath = WorkflowPaths.draftFilePath(
-      workspaceFolderPath,
-      workflowKey
-    );
-    const source = await readWorkingFileFromDisk(draftFilePath);
-    const sourceRevision = source.definitionRevision ?? 1;
-    if (expected?.definitionRevision !== undefined) {
-      assertDefinitionRevision(expected.definitionRevision, sourceRevision);
-    }
-
-    const sourceDescriptor = await lineageRepository.readDescriptor(
-      workspaceFolderPath,
-      workflowKey
-    );
-    if (sourceDescriptor.pendingEdit) {
-      throw new Error(
-        "A draft or continuation is already being prepared for this workflow"
-      );
-    }
-    if (expected?.descriptorRevision !== undefined) {
-      assertDescriptorRevision(
-        expected.descriptorRevision,
-        sourceDescriptor.revision
-      );
-    }
-
-    const {
-      steps: identifiedSteps,
-      parallelGroups,
-      finalStep,
-    } = WorkingFileManager.normalizeSeedTopology(source);
-    if (
-      !Number.isInteger(startIndex) ||
-      startIndex < 0 ||
-      startIndex >= identifiedSteps.length
-    ) {
-      throw new Error(
-        "Start position must leave at least one suffix step to run"
-      );
-    }
-
-    const allocation = await lineageRepository.allocateRun(
-      workspaceFolderPath,
-      workflowKey,
-      sourceDescriptor.revision
-    );
-    const descriptor = await lineageRepository.readDescriptor(
-      workspaceFolderPath,
-      workflowKey
-    );
-
-    const startedAt = Date.now();
-    const seededSteps = identifiedSteps.map((step, index) =>
-      index < startIndex
-        ? {
-            ...step,
-            _runtime: {
-              ...step._runtime,
-              startedAt,
-              completedAt: startedAt,
-              terminalStatus: PROMPT_TERMINAL_STATUS.SKIPPED,
-            },
-          }
-        : step
-    );
-    const workingFile: WorkingFile = {
-      ...source,
-      ...(descriptor.originalFile
-        ? { originalFile: descriptor.originalFile }
-        : {}),
-      workflowName: source.workflowName ?? descriptor.workflowName,
-      startedAt,
-      lastModifiedAt: startedAt,
-      isFavorite: descriptor.isFavorite,
-      definitionRevision: 1,
-      steps: seededSteps,
-      parallelGroups,
-      ...(finalStep ? { finalStep } : {}),
-      ...(overrides.harness ? { harness: overrides.harness } : {}),
-      ...(overrides.model ? { model: overrides.model } : {}),
-      _runtime: {
-        currentIndex: startIndex,
-        executionState: initialTimelineState,
-      },
-    };
-
-    await writeWorkingFileAtomicTo(allocation.stagingRunFilePath, workingFile);
-    await new TimelineRecorder().initializeRunAt(
-      allocation.stagingRunDir,
-      workflowKey,
-      allocation.runId,
-      startedAt,
-      initialTimelineState,
-      workingFile.definitionRevision ?? 1,
-      buildDefinitionSnapshot(
-        workingFile.workflowName ?? descriptor.workflowName,
-        workingFile.steps ?? [],
-        undefined,
-        workingFile.finalStep,
-        workingFile.worktree,
-        workingFile.parallelGroups
-      )
-    );
-    await WorkingFileManager.finalizeAllocatedRun(
-      workspaceFolderPath,
-      workflowKey,
-      allocation,
-      lineageRepository
-    );
-
-    Log.info(
-      `[WorkingFileManager] Seeded lineage ${workflowKey} draft into new run ${allocation.runRef} starting at step ${startIndex}`
-    );
-    return {
-      workingFilePath: allocation.runFilePath,
       runRef: allocation.runRef,
       runId: allocation.runId,
       runDir: allocation.runDir,

@@ -1000,6 +1000,145 @@ suite("PromptQueue State Machine Tests", () => {
     });
   });
 
+  suite("setStartPosition()", () => {
+    test("marks the prefix skipped, moves currentIndex, and persists to the draft", async () => {
+      const workspace = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-draft-start-position-")
+      );
+      try {
+        const draftPath = await queue.createWorkingFile(
+          "start-position-workflow",
+          samplePrompts,
+          workspace
+        );
+        queue.loadPrompts(createPromptFile(samplePrompts), draftPath);
+
+        await queue.setStartPosition(2);
+
+        const state = queue.getState();
+        assert.strictEqual(state.currentIndex, 2);
+        assert.deepStrictEqual(
+          state.results.map((result) => result.status),
+          [STEP_STATUS.SKIPPED, STEP_STATUS.SKIPPED, STEP_STATUS.PENDING]
+        );
+        assert.deepStrictEqual([...state.completedIndices], ["0", "1"]);
+        assert.strictEqual(state.steps[2]._runtime?.terminalStatus, undefined);
+
+        const draft = (await queue.readWorkingFile(draftPath)) as WorkingFile;
+        assert.strictEqual(draft._runtime?.currentIndex, 2);
+        assert.strictEqual(
+          draft.steps?.[0]._runtime?.terminalStatus,
+          PROMPT_TERMINAL_STATUS.SKIPPED
+        );
+        assert.strictEqual(
+          draft.steps?.[1]._runtime?.terminalStatus,
+          PROMPT_TERMINAL_STATUS.SKIPPED
+        );
+        assert.strictEqual(
+          draft.steps?.[2]._runtime?.terminalStatus,
+          undefined
+        );
+        // A start position is runtime, not definition: the revision the client
+        // echoes back on its next edit must not move.
+        assert.strictEqual(draft.definitionRevision, 1);
+      } finally {
+        await fs.rm(workspace, { recursive: true, force: true });
+      }
+    });
+
+    test("returns to a pristine draft when the position moves back to the first step", async () => {
+      const workspace = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-draft-start-position-reset-")
+      );
+      try {
+        const draftPath = await queue.createWorkingFile(
+          "start-position-reset-workflow",
+          samplePrompts,
+          workspace
+        );
+        queue.loadPrompts(createPromptFile(samplePrompts), draftPath);
+
+        await queue.setStartPosition(2);
+        await queue.setStartPosition(0);
+
+        const state = queue.getState();
+        assert.strictEqual(state.currentIndex, 0);
+        assert.deepStrictEqual(
+          state.results.map((result) => result.status),
+          [STEP_STATUS.PENDING, STEP_STATUS.PENDING, STEP_STATUS.PENDING]
+        );
+        assert.strictEqual(state.completedIndices.size, 0);
+
+        const draft = (await queue.readWorkingFile(draftPath)) as WorkingFile;
+        assert.strictEqual(draft._runtime?.currentIndex, 0);
+        draft.steps?.forEach((step) => {
+          assert.strictEqual(step._runtime?.terminalStatus, undefined);
+          assert.strictEqual(step._runtime?.completedAt, undefined);
+        });
+      } finally {
+        await fs.rm(workspace, { recursive: true, force: true });
+      }
+    });
+
+    test("snaps a position inside a parallel group to the group's first member", async () => {
+      queue.loadPrompts({
+        steps: [
+          { prompt: "before" },
+          { prompt: "member-a" },
+          { prompt: "member-b" },
+          { prompt: "after" },
+        ],
+        parallelGroups: [
+          { id: "group-1", startIndex: 1, endIndex: 2, failFast: false },
+        ],
+      });
+
+      await queue.setStartPosition(2);
+
+      const state = queue.getState();
+      assert.strictEqual(state.currentIndex, 1);
+      assert.deepStrictEqual(
+        state.results.map((result) => result.status),
+        [
+          STEP_STATUS.SKIPPED,
+          STEP_STATUS.PENDING,
+          STEP_STATUS.PENDING,
+          STEP_STATUS.PENDING,
+        ]
+      );
+    });
+
+    test("rejects a position that leaves nothing to run", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      await assert.rejects(
+        () => queue.setStartPosition(samplePrompts.length),
+        /Start position must leave at least one suffix step to run/
+      );
+    });
+
+    test("refuses to reposition a promoted run in place", async () => {
+      const workspace = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-promoted-start-position-")
+      );
+      try {
+        const draftPath = await queue.createWorkingFile(
+          "promoted-start-position-workflow",
+          samplePrompts,
+          workspace
+        );
+        queue.loadPrompts(createPromptFile(samplePrompts), draftPath);
+        assert.ok(await queue.promoteToNewRun(workspace, Date.now()));
+
+        await assert.rejects(
+          () => queue.setStartPosition(1),
+          /a promoted run rewinds instead/
+        );
+      } finally {
+        await fs.rm(workspace, { recursive: true, force: true });
+      }
+    });
+  });
+
   suite("clear()", () => {
     test("should request stop and transition to CANCELLING", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));

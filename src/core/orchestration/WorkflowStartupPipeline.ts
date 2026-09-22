@@ -533,11 +533,19 @@ export class WorkflowStartupPipeline {
     ).length;
     const isAppendContinuation =
       !continueFromCurrent && prevCompletedCount > 0 && pendingCount > 0;
+    // An idle continuation resumes an existing run that was stopped and then
+    // repositioned, so it requires a promoted RunRef to continue into: the
+    // branch it selects below reuses that run's history file and explicitly
+    // rejects a queue without one. A *draft* also sits IDLE at a nonzero index
+    // once its start position has been set, and without this guard it took that
+    // branch and threw "Idle continuation requires an explicit promoted run" —
+    // the draft must promote first, carrying its start position into run 1.
     const isIdleContinuation =
       !continueFromCurrent &&
       !isAppendContinuation &&
       prevExecutionState === EXECUTION_STATES.IDLE &&
-      prevQueueState.currentIndex > 0;
+      prevQueueState.currentIndex > 0 &&
+      prevQueueState.runRef !== undefined;
 
     Log.debug(
       `[executeLoadedPromptFile] continueFromCurrent=${continueFromCurrent}, ` +
@@ -836,16 +844,23 @@ export class WorkflowStartupPipeline {
       !startup.isAppendContinuation &&
       !startup.isIdleContinuation
     ) {
+      // A fresh start normally begins at step 0, and the client resets every
+      // step to pending on that message. A draft whose start position was moved
+      // before its first run is the exception: it promotes with its prefix
+      // already marked skipped, so the reset has to stop at the start index or
+      // the dashboard silently repaints those steps as pending for the whole
+      // run — `preserveStepCount` is exactly that boundary.
+      const skippedPrefix = startup.currentQueueState.currentIndex;
       Log.debug(
-        `[executeLoadedPromptFile] Sending EXECUTION_STARTED fresh start, totalSteps=${startup.totalSteps}`
+        `[executeLoadedPromptFile] Sending EXECUTION_STARTED fresh start, totalSteps=${startup.totalSteps}, skippedPrefix=${skippedPrefix}`
       );
       this.port.execution.clearOutputBuffers();
       this.port.dashboardSink.updateExecutionStarted(
         this.port.id,
         fileName,
         startup.totalSteps,
-        undefined,
-        undefined,
+        skippedPrefix > 0 ? true : undefined,
+        skippedPrefix > 0 ? skippedPrefix : undefined,
         undefined,
         startup.executionMode
       );

@@ -2034,9 +2034,10 @@ export interface SetStartPositionMessage {
   type: typeof MESSAGE_TYPES.SET_START_POSITION;
   toIndex: number;
   /**
-   * A `run` address rewinds/re-seeds that promoted run. A `draft` address seeds
-   * a brand-new run from a workflow that has never executed, starting at
-   * `toIndex` with the steps before it marked skipped.
+   * A `run` address rewinds/re-seeds that promoted run. A `draft` address
+   * repositions the draft itself — no run is created, the steps before
+   * `toIndex` are marked skipped, and the lineage's first execution promotes
+   * that position into run 1.
    */
   address: WorkflowViewAddress;
   expectedDefinitionRevision: number;

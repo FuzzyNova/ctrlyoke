@@ -384,6 +384,8 @@ export class WorkflowOrchestrator {
         this.publishRunRevisionsToViewers(workflowKey, runRef),
       invalidateRunViews: (workflowKey, runRef, definitionRollback) =>
         this.invalidateRunViews(workflowKey, runRef, definitionRollback),
+      invalidateDraftViews: (workflowKey) =>
+        this.invalidateDraftViews(workflowKey),
       pushRunSummariesRefreshIfNotAlreadyViewing: (
         workflowKey,
         send,
@@ -4048,9 +4050,12 @@ export class WorkflowOrchestrator {
   }
 
   /**
-   * Addressed start-position operation for a draft that has never executed.
-   * Seeds a brand-new run from the draft, starting at `toIndex`; never infers
-   * "the latest draft" — the caller's addressed view and revision pair must agree.
+   * Addressed start-position operation for a lineage that has never executed.
+   * Repositions the draft in place — no run is seeded, and neither revision
+   * moves, because the position lives in the draft's `_runtime` rather than in
+   * its definition or its descriptor, so there is nothing for the author ledger
+   * to record. Never infers "the latest draft": the caller's addressed view and
+   * revision pair must agree.
    */
   async setStartPositionAtDraft(
     address: Extract<WorkflowViewAddress, { kind: "draft" }>,
@@ -4058,40 +4063,20 @@ export class WorkflowOrchestrator {
     expectedDefinitionRevision: number,
     expectedDescriptorRevision: number,
     clientId: string = this.PANEL_CLIENT_ID
-  ): Promise<{
-    kind: "seeded";
-    runRef: RunRef;
-    definitionRevision: number;
-    descriptorRevision: number;
-  }> {
+  ): Promise<void> {
     const reconciled = this.reconcileExpectedRevisions(
       address,
       clientId,
       expectedDefinitionRevision,
       expectedDescriptorRevision
     );
-    const result = await this.runLifecycleService.setStartPositionAtDraft(
+    await this.runLifecycleService.setStartPositionAtDraft(
       address,
       toIndex,
       reconciled.expectedDefinitionRevision,
       reconciled.expectedDescriptorRevision,
       clientId
     );
-    await this.recordSuccessfulRevisions(
-      {
-        workflowKey: address.workflowKey,
-        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-        runRef: result.runRef,
-      },
-      clientId,
-      {
-        definitionRevision: result.definitionRevision,
-        descriptorRevision: result.descriptorRevision,
-        recordDefinition: true,
-        recordDescriptor: true,
-      }
-    );
-    return result;
   }
 
   /** Seed a fresh RunRef from an addressed run and execute that new run. */
@@ -4391,6 +4376,10 @@ export class WorkflowOrchestrator {
       runRef,
       definitionRollback
     );
+  }
+
+  private async invalidateDraftViews(workflowKey: WorkflowKey): Promise<void> {
+    await this.runViewPublisher.invalidateDraftViews(workflowKey);
   }
 
   async deleteRunAtAddress(
