@@ -5,6 +5,7 @@ import {
 } from "@components/shared/StepContextMenu";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import {
+  MESSAGE_TYPES,
   USER_FEEDBACK_SEVERITY,
   WORKFLOW_DELETE_SCOPES,
   WORKFLOW_VIEW_ADDRESS_KIND,
@@ -12,6 +13,7 @@ import {
 } from "@root/types/DashboardConstants";
 import { writeClipboardText } from "@utils/stepClipboard";
 import { notifyUser } from "@utils/notifyUser";
+import { sendMessage } from "@hooks/useMessageHandler";
 
 export interface WorkflowContextMenuTarget {
   address: WorkflowViewAddress;
@@ -27,8 +29,14 @@ export interface WorkflowContextMenuTarget {
   isFavorite?: boolean;
   /** Absent → Copy renders disabled. */
   runDirectory?: string;
-  /** Executing right now — disables Delete. */
+  /** Executing right now — disables Delete and New Run. */
   isExecuting: boolean;
+  /**
+   * The addressed run was prepared but never executed. New Run then reopens it
+   * rather than copying it (the backend decides either way; this only picks
+   * the honest label).
+   */
+  isUnstarted?: boolean;
 }
 
 interface UseWorkflowContextMenuOptions {
@@ -74,11 +82,40 @@ export function useWorkflowContextMenu({
         : isDraftRun
           ? "The draft cannot be deleted from the run panel"
           : undefined;
+      // A never-run workflow's draft is already the unstarted next run, and
+      // its header already offers Run — there is nothing to prepare.
+      const runAddress =
+        target.address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
+          ? target.address
+          : null;
 
       setContextMenu({
         x,
         y,
         items: [
+          ...(runAddress
+            ? [
+                {
+                  label: target.isUnstarted
+                    ? "Open Unstarted Run"
+                    : "New Run (Don't Start)",
+                  icon: "codicon-add",
+                  disabled: target.isExecuting,
+                  title: target.isUnstarted
+                    ? "This run has not started yet — open it to edit or run it"
+                    : "Create the next run from these steps and settings without running it",
+                  disabledTitle: target.isExecuting
+                    ? "Cannot prepare a new run while this workflow is executing"
+                    : undefined,
+                  onClick: () => {
+                    onCloseDropdown();
+                    sendMessage(MESSAGE_TYPES.PREPARE_NEW_RUN, {
+                      address: runAddress,
+                    });
+                  },
+                },
+              ]
+            : []),
           {
             label: "Duplicate Workflow…",
             icon: "codicon-copy",

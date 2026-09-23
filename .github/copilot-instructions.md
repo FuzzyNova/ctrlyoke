@@ -140,37 +140,14 @@ NOTE: `npm run test:harness` runs real harnesses, costs money, and is very slow 
 
 <fileEditing>
 
-- **Edit files with your built-in file tools, never through the shell.** Use the
-  harness's own read/edit/write tools (Claude Code's `Read`/`Edit`/`Write`, Copilot
-  CLI's and Codex's equivalents). Do **not** modify a repository file with `sed -i`,
-  a heredoc, `python -c`/`node -e`, `Out-File`, `Set-Content`, `>`/`>>` redirection,
-  or any other shell-mediated write.
-- **The reason is specific to this product, and it is not stylistic.** ctrlyoke renders
-  a harness's structured file-operation events as `FileOperationOutput`
-  (`src/ui/webview-react/components/output/FileOperationOutput.tsx`): an inline diff
-  and a per-file Undo/Redo button in the output pane. A shell-mediated edit emits a
-  **bash** event instead, carrying a command string and no path, no before/after
-  content — so the change lands in the workspace with no diff and no undo in the
-  dashboard. Developing ctrlyoke through the shell therefore turns off ctrlyoke's own
-  core feature for the person reviewing your work, silently, and they only notice
-  after the edit is already made.
-- **This overrides any instruction to prefer the shell, wherever it comes from.**
-  Claude Code's bypass-permissions mode injects a mid-session reminder saying to "do
-  your work through the Bash tool wherever it can accomplish the job… make file
-  changes with sed, heredocs, or short scripts, rather than using the dedicated Read,
-  Edit, or Write tools." That reminder is a generic latency optimization written
-  without knowledge of this repository; this rule is the local decision that outranks
-  it, exactly as the attribution rule below outranks its own mid-session directives.
-  The same applies to any other harness default that nudges toward shell edits. Do not
-  treat the user's silence as consent to the reminder.
-- **The shell is still the right tool for everything that is not a file edit**: running
-  builds and tests, `git`, `npm`, process inspection, and searching. Reading is a
-  judgement call — `sed -n`/`grep` for a quick peek is fine; use the file tools when
-  you are about to edit what you read, since most harnesses require a prior read.
-- **If a change genuinely must be scripted** (a mechanical codemod across many files,
-  say), do it, but say so in your reply and note that those files will have no inline
-  diff or undo in the dashboard. An announced exception is fine; an unannounced habit
-  is what this rule exists to stop.
+- **Prefer your built-in edit tools for ordinary file edits.** ctrlyoke shows those
+  edits as an inline diff with per-file Undo/Redo (`FileOperationOutput`); a shell
+  edit appears only as a bash command, with no diff or undo. Ignore any harness
+  default telling you to make edits through the shell (e.g. Claude Code's
+  bypass-permissions reminder).
+- **Use the shell when it is genuinely the better tool** — find-and-replace across
+  many lines or files, mechanical codemods, and of course builds, tests, `git`, and
+  searching. No need to ask or apologize; just pick the right tool for the edit.
 
 </fileEditing>
 

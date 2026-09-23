@@ -135,6 +135,11 @@ export interface RunSummary {
   primaryModel?: string;
   hasMixedHarnesses: boolean;
   hasMixedModels: boolean;
+  /**
+   * True when the run was prepared but has executed nothing (`isUnstartedRun`).
+   * Display-only, like the rest of this summary.
+   */
+  unstarted?: boolean;
   tokenTotals?: WorkflowTokenTotals;
   /** Status projection sourced from this run's persisted `_runtime.worktree`. */
   worktree?: WorktreeRunProjection;

@@ -498,6 +498,7 @@ export const MESSAGE_TYPES = {
   // Stable run lifecycle controls — Webview → Extension
   EXECUTE_DRAFT: "executeDraft",
   SEED_NEW_RUN: "seedNewRun",
+  PREPARE_NEW_RUN: "prepareNewRun",
   START_NEW_RUN_INSTEAD: "startNewRunInstead",
   CONTINUE_RUN: "continueRun",
   APPEND_AND_CONTINUE_RUN: "appendAndContinueRun",

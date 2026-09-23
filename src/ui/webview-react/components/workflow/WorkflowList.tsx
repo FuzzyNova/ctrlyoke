@@ -181,6 +181,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
         isExecuting: isWorkflowActive(
           workflow.executionState as ExecutionState
         ),
+        isUnstarted: workflow.unstarted,
       },
       opener
     );
@@ -248,6 +249,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
           <ExecutionStateBadge
             state={workflow.executionState}
             isNarrow={isCompactRow(tier)}
+            unstarted={workflow.unstarted}
             className="workflow-menu-item-state"
           />
         }

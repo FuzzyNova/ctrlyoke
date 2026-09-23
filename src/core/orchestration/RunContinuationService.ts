@@ -57,8 +57,8 @@ import {
   assertStepMutable,
   ensureStepIds,
   findStepIndexById,
-  hasStarted,
 } from "../StepIdentity";
+import { hasStarted } from "../../utils/StepStatusDerivation";
 
 const RUN_CONTINUATION_ACTIONS = {
   APPEND: "append",

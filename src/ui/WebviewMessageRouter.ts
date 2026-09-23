@@ -34,6 +34,7 @@ import type {
   ExportMcpToHarnessMessage,
   ExecuteDraftMessage,
   SeedNewRunMessage,
+  PrepareNewRunMessage,
   StartNewRunInsteadMessage,
   ContinueRunMessage,
   AppendAndContinueRunMessage,
@@ -2324,6 +2325,12 @@ export class WebviewMessageRouter {
       void this.workflowStepHandlers.handleSeedNewRun(
         ctx,
         message as SeedNewRunMessage
+      );
+    });
+    table.set(MESSAGE_TYPES.PREPARE_NEW_RUN, (message, ctx) => {
+      void this.workflowStepHandlers.handlePrepareNewRun(
+        ctx,
+        message as PrepareNewRunMessage
       );
     });
     table.set(MESSAGE_TYPES.START_NEW_RUN_INSTEAD, (message, ctx) => {

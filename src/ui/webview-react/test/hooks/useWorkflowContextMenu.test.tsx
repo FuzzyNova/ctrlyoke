@@ -11,7 +11,10 @@ import {
   type WorkflowContextMenuTarget,
 } from "@hooks/useWorkflowContextMenu";
 import { useUiStore } from "@store/uiStore";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import {
+  MESSAGE_TYPES,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
 
 // These assertions cover the standalone queue branch of notifyUser().
 vi.hoisted(() => {
@@ -78,7 +81,7 @@ describe("useWorkflowContextMenu", () => {
 
   afterEach(() => cleanup());
 
-  it("renders duplicate, copy, divider, favorite, and scoped delete in order", () => {
+  it("renders new run, duplicate, copy, divider, favorite, and scoped delete in order", () => {
     render(<TestHarness />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
@@ -86,6 +89,7 @@ describe("useWorkflowContextMenu", () => {
       screen.getAllByRole("button").map((button) => button.textContent?.trim())
     ).toEqual([
       "Open menu",
+      "New Run (Don't Start)",
       "Duplicate Workflow…",
       "Copy Run Directory Path",
       "Add to Favorites",
@@ -95,6 +99,59 @@ describe("useWorkflowContextMenu", () => {
     expect(
       screen.getByRole("button", { name: "Copy Run Directory Path" })
     ).toHaveAttribute("title", expect.stringContaining("server's filesystem"));
+  });
+
+  it("prepares a new run from the addressed run without starting it", () => {
+    const postMessage = vi.fn();
+    Object.defineProperty(window, "vscodeApi", {
+      configurable: true,
+      value: { postMessage, getState: vi.fn(), setState: vi.fn() },
+    });
+    render(<TestHarness />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "New Run (Don't Start)" })
+    );
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.PREPARE_NEW_RUN,
+      address: target.address,
+    });
+  });
+
+  it("labels an unstarted run as reopened, and disables new run while executing", () => {
+    const { unmount } = render(
+      <TestHarness menuTarget={{ ...target, isUnstarted: true }} />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    expect(
+      screen.getByRole("button", { name: "Open Unstarted Run" })
+    ).toBeEnabled();
+    unmount();
+
+    render(<TestHarness menuTarget={{ ...target, isExecuting: true }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    expect(
+      screen.getByRole("button", { name: "New Run (Don't Start)" })
+    ).toBeDisabled();
+  });
+
+  it("omits new run for a never-run workflow's draft", () => {
+    render(
+      <TestHarness
+        menuTarget={{
+          ...target,
+          address: {
+            workflowKey: "workflow-1" as never,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+          },
+        }}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    expect(
+      screen.queryByRole("button", { name: /New Run|Unstarted Run/ })
+    ).not.toBeInTheDocument();
   });
 
   it("disables copy without a directory and delete while executing", () => {

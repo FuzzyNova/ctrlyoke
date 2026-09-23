@@ -1,6 +1,51 @@
 import * as assert from "assert";
 import { EXECUTION_STATES, STEP_STATUS } from "../../types/DashboardConstants";
-import { deriveStepStatusesFromRuntime } from "../../utils/StepStatusDerivation";
+import {
+  deriveStepStatusesFromRuntime,
+  isUnstartedRun,
+  isUnstartedRunFile,
+} from "../../utils/StepStatusDerivation";
+
+suite("isUnstartedRun", () => {
+  const unstarted = {
+    executionState: EXECUTION_STATES.IDLE,
+    currentIndex: 0,
+    finalStepStatus: null,
+    steps: [{ _runtime: {} }, {}],
+  };
+
+  test("treats identity-only step runtime as unstarted", () => {
+    // The real seeded shape: `ensureStepIds` stores each stepId in `_runtime`.
+    const seededSteps = [
+      { _runtime: { stepId: "a" } },
+      { _runtime: { stepId: "b" } },
+    ];
+    assert.strictEqual(
+      isUnstartedRunFile({
+        _runtime: { executionState: EXECUTION_STATES.IDLE, currentIndex: 0 },
+        steps: seededSteps,
+      }),
+      true
+    );
+    assert.strictEqual(isUnstartedRun(unstarted), true);
+  });
+
+  test("any execution evidence means started", () => {
+    for (const change of [
+      { executionState: EXECUTION_STATES.COMPLETED },
+      { currentIndex: 1 },
+      { finalStepStatus: STEP_STATUS.COMPLETED },
+      { steps: [{ _runtime: { startedAt: 1 } }] },
+      { steps: [{ _runtime: { completedAt: 1 } }] },
+    ]) {
+      assert.strictEqual(
+        isUnstartedRun({ ...unstarted, ...change }),
+        false,
+        JSON.stringify(change)
+      );
+    }
+  });
+});
 
 suite("StepStatusDerivation", () => {
   test("reads each step's own terminal status rather than its position", () => {

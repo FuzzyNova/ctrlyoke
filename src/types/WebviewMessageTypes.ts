@@ -386,6 +386,8 @@ export interface PromptStep extends StepDisplayProperties {
   toolPermissions?: ToolPermissionsOverride | null;
   errorBehavior?: ErrorBehavior | null;
   _runtime?: {
+    /** Step identity — present on every persisted step, executed or not. */
+    stepId?: string;
     harness?: string;
     model?: string;
     sessionId?: string;
@@ -1064,6 +1066,8 @@ export interface RecentWorkflowsMessage {
     isFavorite?: boolean;
     totalSteps?: number;
     harness?: HarnessId;
+    /** The primary address is a run prepared but never executed (`isUnstartedRun`). */
+    unstarted?: boolean;
     runNav?: WorkflowRunNavigationSummary;
     tokenTotals?: WorkflowTokenTotals;
     worktree?: Pick<WorktreeRunProjection, "branchName" | "worktreePath">;
@@ -1984,6 +1988,17 @@ export interface SeedNewRunMessage {
   address: Extract<WorkflowViewAddress, { kind: "run" }>;
   expectedDefinitionRevision: number;
   expectedDescriptorRevision: number;
+}
+
+/**
+ * Prepare a fresh RunRef from the addressed run without executing it, and
+ * switch the sender to it. Unlike Re-run, the source need not be the sender's
+ * viewed run (it comes from any workflow/run context menu), and an addressed
+ * run that is itself unstarted is reopened instead of copied.
+ */
+export interface PrepareNewRunMessage {
+  type: typeof MESSAGE_TYPES.PREPARE_NEW_RUN;
+  address: Extract<WorkflowViewAddress, { kind: "run" }>;
 }
 
 /** Discard a pending rewind and seed a new RunRef without exposing an intermediate state. */

@@ -45,6 +45,7 @@ import {
   type WorkflowKey,
 } from "../types/CtrlYokeTypes";
 import { PropertyResolver } from "../utils/PropertyResolver";
+import { isUnstartedRunFile } from "../utils/StepStatusDerivation";
 import { extractExtensionsFromGlobs } from "../utils/fileFilterUtils";
 import { isPathWithinDirectory } from "../utils/PathSecurity";
 import { pathsEqual } from "../utils/PathCasing";
@@ -81,7 +82,8 @@ export class WorkflowSerializer {
     private readonly templateManager: TemplateManager,
     private readonly getManager: () => WorkflowOrchestrator | undefined,
     private readonly getOutputHistoryManager: () =>
-      OutputHistoryManager | undefined,
+      | OutputHistoryManager
+      | undefined,
     private readonly workspaceState: vscode.Memento
   ) {}
 
@@ -573,7 +575,7 @@ export class WorkflowSerializer {
       );
       const authoredSteps: Record<string, unknown>[] = [];
 
-      for (let index = 0; index < cleanSteps.length;) {
+      for (let index = 0; index < cleanSteps.length; ) {
         const group = groupsByStart.get(index);
         if (!group) {
           authoredSteps.push(cleanSteps[index]);
@@ -1350,6 +1352,12 @@ export class WorkflowSerializer {
               isFavorite: descriptor.isFavorite,
               totalSteps: steps.length,
               harness,
+              // A draft is unstarted by definition and already shows Run; the
+              // flag distinguishes a prepared run from an ordinary idle one.
+              ...(address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
+              isUnstartedRunFile(workingFile)
+                ? { unstarted: true }
+                : {}),
               tokenTotals: workingFile._runtime?.tokenTotals,
               worktree: workingFile._runtime?.worktree
                 ? {

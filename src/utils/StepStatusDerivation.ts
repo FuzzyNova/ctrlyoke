@@ -13,10 +13,71 @@ import {
  */
 export interface StepWithRuntimeStatus {
   _runtime?: {
+    /** Identity only — never evidence of execution (see `hasStarted`). */
+    stepId?: string;
     startedAt?: number;
     completedAt?: number;
     terminalStatus?: PromptTerminalStatus;
   };
+}
+
+/**
+ * A step has entered execution once dispatch claimed it (`startedAt`) or it
+ * reached a terminal state (`completedAt`, which a skip also sets). The mere
+ * presence of `_runtime` is not evidence: it also carries the step's identity
+ * (`stepId`), which every persisted step has — including every step of a
+ * freshly seeded, never-executed run.
+ */
+export function hasStarted(step: StepWithRuntimeStatus | undefined): boolean {
+  return (
+    step?._runtime?.startedAt !== undefined ||
+    step?._runtime?.completedAt !== undefined
+  );
+}
+
+/**
+ * The runtime facts that decide whether a run has executed anything. A plain
+ * shape so the extension host can pass a run's working file and the webview
+ * its store state.
+ */
+export interface RunStartState {
+  executionState: string | undefined;
+  currentIndex: number | undefined;
+  finalStepStatus: string | null | undefined;
+  steps: readonly StepWithRuntimeStatus[];
+}
+
+/**
+ * A run is unstarted when it sits IDLE on step 0 and neither a queue step nor
+ * the final step has any execution evidence — the state `seedNewRun` leaves a
+ * run in when it is prepared without being executed ("New Run (Don't Start)",
+ * or "Set start position" on the first step). Its natural next action is Run,
+ * and preparing another run from it should reopen it rather than mint a copy.
+ */
+export function isUnstartedRun(state: RunStartState): boolean {
+  return (
+    (state.executionState ?? EXECUTION_STATES.IDLE) === EXECUTION_STATES.IDLE &&
+    (state.currentIndex ?? 0) === 0 &&
+    (state.finalStepStatus ?? null) === null &&
+    !state.steps.some(hasStarted)
+  );
+}
+
+/** `isUnstartedRun` for a persisted run working file. */
+export function isUnstartedRunFile(workingFile: {
+  steps?: readonly StepWithRuntimeStatus[];
+  _runtime?: {
+    executionState?: string;
+    currentIndex?: number;
+    finalStep?: { status?: string };
+  };
+}): boolean {
+  return isUnstartedRun({
+    executionState: workingFile._runtime?.executionState,
+    currentIndex: workingFile._runtime?.currentIndex,
+    finalStepStatus: workingFile._runtime?.finalStep?.status,
+    steps: workingFile.steps ?? [],
+  });
 }
 
 /**

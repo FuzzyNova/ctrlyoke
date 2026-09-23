@@ -12,6 +12,7 @@ import { useSettingsStore } from "../../store/settingsStore";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { useWorkflowDisplayName } from "@hooks/useWorkflowDisplayName";
+import { useIsViewedRunUnstarted } from "@hooks/useIsViewedRunUnstarted";
 import { sendMessage } from "../../hooks/useMessageHandler";
 import {
   MESSAGE_TYPES,
@@ -401,8 +402,12 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // can be correlated against the workflowStore transition logs (see
   // workflowStore.ts's setExecutionState/loadWorkflow) and confirm whether
   // the store ever reached RUNNING while this was still false.
+  // A prepared-but-unstarted run is IDLE too, but it is the one idle state worth
+  // naming: it tells the user they are editing a run that has not run yet.
+  const viewedRunUnstarted = useIsViewedRunUnstarted();
   const showExecutionBadge =
-    !!executionState && executionState !== EXECUTION_STATES.IDLE;
+    !!executionState &&
+    (executionState !== EXECUTION_STATES.IDLE || viewedRunUnstarted);
   const prevShowExecutionBadgeRef = useRef<boolean | null>(null);
   useEffect(() => {
     if (prevShowExecutionBadgeRef.current === showExecutionBadge) {
@@ -1301,6 +1306,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           isFavorite: displayedLineage?.isFavorite,
           runDirectory: displayedRunDirectory ?? undefined,
           isExecuting: isWorkflowActive(executionState),
+          isUnstarted: viewedRunUnstarted,
         },
         opener
       );
@@ -1312,6 +1318,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       executionState,
       openWorkflowContextMenu,
       recentWorkflows,
+      viewedRunUnstarted,
     ]
   );
 
@@ -1490,23 +1497,27 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // whatever is represented by a running row above — and only those, so a
   // loaded-but-not-running lineage keeps its recent row rather than vanishing).
   const workflowListRows: UnifiedWorkflowRow[] = [
-    ...filteredRunningWorkflows.map((workflow): UnifiedWorkflowRow => ({
-      kind: WORKFLOW_ROW_KINDS.RUNNING,
-      key: `running:${workflow.workflowKey ?? workflow.id}`,
-      workflow,
-      // The lineage's recent entry is excluded from the recent rows below
-      // while it is running, but it is still the only source of the run
-      // metadata the row's drill affordance needs.
-      lineage: sortedRecentWorkflows.find(
-        (recentWorkflow) =>
-          recentWorkflow.address.workflowKey === workflow.workflowKey
-      ),
-    })),
-    ...filteredRecentWorkflows.map((workflow): UnifiedWorkflowRow => ({
-      kind: WORKFLOW_ROW_KINDS.RECENT,
-      key: `recent:${workflow.address.workflowKey}`,
-      workflow,
-    })),
+    ...filteredRunningWorkflows.map(
+      (workflow): UnifiedWorkflowRow => ({
+        kind: WORKFLOW_ROW_KINDS.RUNNING,
+        key: `running:${workflow.workflowKey ?? workflow.id}`,
+        workflow,
+        // The lineage's recent entry is excluded from the recent rows below
+        // while it is running, but it is still the only source of the run
+        // metadata the row's drill affordance needs.
+        lineage: sortedRecentWorkflows.find(
+          (recentWorkflow) =>
+            recentWorkflow.address.workflowKey === workflow.workflowKey
+        ),
+      })
+    ),
+    ...filteredRecentWorkflows.map(
+      (workflow): UnifiedWorkflowRow => ({
+        kind: WORKFLOW_ROW_KINDS.RECENT,
+        key: `recent:${workflow.address.workflowKey}`,
+        workflow,
+      })
+    ),
   ];
 
   // ── Run panel (drill-in view) derived data ──────────────────────────────
@@ -1719,6 +1730,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                 <ExecutionStateBadge
                   state={executionState}
                   isNarrow={isNarrow}
+                  unstarted={viewedRunUnstarted}
                   className="flex-shrink-0"
                 />
               )}

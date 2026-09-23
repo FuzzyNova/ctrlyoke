@@ -3872,6 +3872,209 @@ suite("WorkflowOrchestrator addressed start position", () => {
   });
 });
 
+// "New Run (Don't Start)" and step-1 "Set start position" both prepare an
+// unstarted run; neither may strand an existing unstarted run by copying it.
+suite("WorkflowOrchestrator prepare new run", () => {
+  async function createCompletedRun(workspace: string) {
+    const steps = [
+      { prompt: "first", _runtime: { startedAt: 1, completedAt: 2 } },
+      { prompt: "second", _runtime: { startedAt: 3, completedAt: 4 } },
+    ];
+    const sourceAccess = {
+      getWorkingFilePath: () => undefined,
+      getSteps: () => steps,
+      getCurrentIndex: () => 2,
+      getStatus: () => EXECUTION_STATES.COMPLETED,
+      getDefinitionRevision: () => 1,
+      setDefinitionRevision: () => undefined,
+      getWorkflowName: () => "Prepared",
+      mergeDiskSteps: () => [],
+      emitStateChange: () => undefined,
+      getFinalStepRuntime: () => undefined,
+      updateWorkflowProperty: () => undefined,
+    };
+    const manager = new WorkingFileManager(sourceAccess);
+    const { workflowKey } = await manager.createWorkingFile(
+      "prepared",
+      steps,
+      workspace,
+      "Prepared"
+    );
+    const run = await manager.promoteToNewRun(
+      workspace,
+      workflowKey,
+      Date.now()
+    );
+    return { workflowKey, runRef: run.runRef };
+  }
+
+  function wireOrchestrator(
+    workspace: string,
+    viewed: { workflowKey: string; runRef: string }
+  ) {
+    const orchestrator = createTestOrchestrator();
+    const internal = orchestrator as any;
+    internal.currentWorkspaceFolderPath = workspace;
+    internal.instances = new Map();
+    internal.retiredInstances = new Map();
+    internal.lineageRepository = new WorkflowLineageRepository();
+    internal.viewAddressRegistry = new Map([
+      [PANEL_CLIENT_ID, { ...viewed, kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN }],
+    ]);
+    internal.viewMessageSinks = new Map([[PANEL_CLIENT_ID, () => undefined]]);
+    const loaded: string[] = [];
+    internal.loadRunViewForClient = async (
+      address: any,
+      _send: unknown,
+      clientId: string
+    ) => {
+      loaded.push(address.runRef);
+      internal.viewAddressRegistry.set(clientId, address);
+    };
+    internal.invalidateRunViews = async () => undefined;
+    return { orchestrator, internal, loaded };
+  }
+
+  async function listRuns(
+    workspace: string,
+    source: { workflowKey: string; runRef: string }
+  ) {
+    const lineageDir = path.dirname(
+      WorkflowPaths.runDir(
+        workspace,
+        source.workflowKey as never,
+        source.runRef as never
+      )
+    );
+    return (await fs.readdir(lineageDir)).filter((entry) =>
+      entry.startsWith("run-")
+    );
+  }
+
+  test("seeds an idle, unstarted run from a completed run and switches the client to it", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-prepare-run-")
+    );
+    try {
+      const source = await createCompletedRun(workspace);
+      const { orchestrator, loaded } = wireOrchestrator(workspace, source);
+
+      const result = await orchestrator.prepareNewRun(
+        {
+          workflowKey: source.workflowKey as never,
+          runRef: source.runRef as never,
+        },
+        PANEL_CLIENT_ID
+      );
+
+      assert.strictEqual(result.reused, false);
+      assert.notStrictEqual(result.runRef, source.runRef);
+      assert.deepStrictEqual(loaded, [result.runRef]);
+      const seeded = JSON.parse(
+        await fs.readFile(
+          WorkflowPaths.runFilePath(
+            workspace,
+            source.workflowKey as never,
+            result.runRef
+          ),
+          "utf8"
+        )
+      );
+      assert.strictEqual(seeded._runtime.executionState, EXECUTION_STATES.IDLE);
+      assert.strictEqual(seeded._runtime.currentIndex, 0);
+      // Identity survives the seed; execution evidence does not.
+      for (const step of seeded.steps) {
+        assert.ok(step._runtime?.stepId);
+        assert.strictEqual(step._runtime.startedAt, undefined);
+      }
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("reopens an unstarted run instead of copying it", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-prepare-reuse-")
+    );
+    try {
+      const source = await createCompletedRun(workspace);
+      const unstarted = await WorkingFileManager.seedNewRun(
+        workspace,
+        source.workflowKey as never,
+        source.runRef as never,
+        {},
+        new WorkflowLineageRepository()
+      );
+      const { orchestrator, loaded } = wireOrchestrator(workspace, source);
+      const runsBefore = await listRuns(workspace, source);
+
+      const result = await orchestrator.prepareNewRun(
+        {
+          workflowKey: source.workflowKey as never,
+          runRef: unstarted.runRef,
+        },
+        PANEL_CLIENT_ID
+      );
+
+      assert.deepStrictEqual(result, {
+        runRef: unstarted.runRef,
+        reused: true,
+      });
+      assert.deepStrictEqual(loaded, [unstarted.runRef]);
+      assert.deepStrictEqual(await listRuns(workspace, source), runsBefore);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("set start position 0 on an unstarted run keeps that run", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-prepare-start0-")
+    );
+    try {
+      const source = await createCompletedRun(workspace);
+      const lineageRepository = new WorkflowLineageRepository();
+      const unstarted = await WorkingFileManager.seedNewRun(
+        workspace,
+        source.workflowKey as never,
+        source.runRef as never,
+        {},
+        lineageRepository
+      );
+      const { orchestrator } = wireOrchestrator(workspace, {
+        workflowKey: source.workflowKey,
+        runRef: unstarted.runRef,
+      });
+      const descriptor = await lineageRepository.readDescriptor(
+        workspace,
+        source.workflowKey as never
+      );
+      const runsBefore = await listRuns(workspace, source);
+
+      const result = await orchestrator.setStartPositionAtRun(
+        {
+          workflowKey: source.workflowKey as never,
+          runRef: unstarted.runRef,
+        },
+        0,
+        1,
+        descriptor.revision,
+        PANEL_CLIENT_ID
+      );
+
+      assert.deepStrictEqual(result, {
+        kind: "seeded",
+        runRef: unstarted.runRef,
+        definitionRevision: 1,
+        descriptorRevision: descriptor.revision,
+      });
+      assert.deepStrictEqual(await listRuns(workspace, source), runsBefore);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+});
+
 suite("WorkflowOrchestrator explicit append and continue", () => {
   async function createRun(workspace: string): Promise<{
     workflowKey: import("../../types/CtrlYokeTypes").WorkflowKey;

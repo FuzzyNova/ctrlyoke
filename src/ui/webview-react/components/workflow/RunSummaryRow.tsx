@@ -24,7 +24,8 @@ import { Icon } from "../shared/Icon";
 
 /** One row of the run panel's flat draft+run list. */
 export type RunPanelRow =
-  { kind: "draft" } | { kind: "run"; summary: RunSummary };
+  | { kind: "draft" }
+  | { kind: "run"; summary: RunSummary };
 
 interface RunSummaryRowProps {
   row: RunPanelRow;
@@ -131,6 +132,7 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
             ? summary?.runDirectory
             : draftDirectory,
         isExecuting: isLive,
+        isUnstarted: summary?.unstarted,
       },
       opener
     );
@@ -191,6 +193,7 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
             <ExecutionStateBadge
               state={executionState}
               isNarrow={isCompactRow(tier)}
+              unstarted={summary?.unstarted}
             />
           )
         }
