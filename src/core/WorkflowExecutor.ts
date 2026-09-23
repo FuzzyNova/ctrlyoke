@@ -263,7 +263,11 @@ export interface WorkflowExecutionContext {
    * of waiting for the harness's next update (which may be seconds/minutes
    * away, or never arrive again if the step finishes clean).
    */
-  captureContextWindow?: (stepIndex: number, used: number, size: number) => void;
+  captureContextWindow?: (
+    stepIndex: number,
+    used: number,
+    size: number
+  ) => void;
   /** Snapshot of in-flight queue output already sent to the dashboard. */
   getBufferedOutput?: (stepIndex: number) => CliOutput | undefined;
   /** Mirror of captureOutputInit for finalStep loops, keyed by loopIndex. */

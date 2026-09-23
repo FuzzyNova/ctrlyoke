@@ -12,8 +12,7 @@ interface MessageTarget {
 
 /** Stable address and optimistic revisions for generic definition mutations. */
 export function getWorkflowDefinitionMutation():
-  | WorkflowDefinitionMutation
-  | undefined {
+  WorkflowDefinitionMutation | undefined {
   const state = useUiStore.getState();
   if (
     !state.displayedViewAddress ||

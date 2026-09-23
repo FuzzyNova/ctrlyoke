@@ -34,8 +34,7 @@ suite("CLI workspace bootstrap", () => {
   let initialized: boolean;
   let initializedLocation: string | undefined;
   let registryInitialization:
-    | { workspaceRoot: string; gitToplevel: string | undefined }
-    | undefined;
+    { workspaceRoot: string; gitToplevel: string | undefined } | undefined;
 
   setup(() => {
     config = new FakeConfigService();

@@ -142,7 +142,7 @@ The inspection plan now ships `--step` in its first pass, so this line can alway
 
 | Option                              | Maps to                               | Notes                                                                                                                                                                                                                                                                                                                                                                           |
 | ----------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `<query>` (positional)              | `HistorySearchQuery.query`            | Required, min 2 chars (`MIN_QUERY_LENGTH`, defined identically in `HistorySearchService.ts:35` and `HistorySearchIndexService.ts:56`). Substring, case-insensitive by default; `--regex` selects the case-insensitive regex matcher.                                                                                                                                                                      |
+| `<query>` (positional)              | `HistorySearchQuery.query`            | Required, min 2 chars (`MIN_QUERY_LENGTH`, defined identically in `HistorySearchService.ts:35` and `HistorySearchIndexService.ts:56`). Substring, case-insensitive by default; `--regex` selects the case-insensitive regex matcher.                                                                                                                                            |
 | `-d, --cwd <path>`                  | workspace root                        | Matches every other workspace-scoped command.                                                                                                                                                                                                                                                                                                                                   |
 | `--workflow <key...>`               | `filters.workflowKeys`                | Repeatable. Values come from `history list`.                                                                                                                                                                                                                                                                                                                                    |
 | `--this-workflow`                   | `filters.workflowKeys`                | Derives the key from `CTRLYOKE_WORKING_FILE` via `WorkflowPaths.parseWorkingFileAddressFromPath` (`WorkflowPaths.ts:455`) — the in-workflow agent's equivalent of the drawer's "Only &lt;workflow&gt;" checkbox. Errors if the env var is unset.                                                                                                                                |
@@ -189,9 +189,7 @@ streams. Same CLI, two contracts, one reason.
   "countState": "atLeast",
   "hasMore": true,
   "indexState": "ready",
-  "results": [
-    /* HistorySearchResult[], the existing contract, unchanged */
-  ]
+  "results": [/* HistorySearchResult[], the existing contract, unchanged */]
 }
 ```
 
