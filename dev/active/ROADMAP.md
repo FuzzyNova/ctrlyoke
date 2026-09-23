@@ -297,8 +297,9 @@ Do not schedule these until users demonstrate the pain:
 | [VS Code LM API features](../backlog/VSCODE_LM_API_FEATURES.md)                 | Keep ctrlyoke harness-neutral; revisit focused uses such as prompt improvement.                                        |
 | [E2E automation via MCP](../backlog/VSCODE_TESTING_E2E_MCP.md)                  | Engineering investment, not a product feature; pursue when current integration tests stop finding release regressions. |
 
-`TRADEMARK_FILING_GUIDE.md` is business/legal reference material, not a product
-roadmap item. `TESTING_GAPS.md` is generated engineering input, not a feature.
+`TESTING_GAPS.md` is generated engineering input, not a feature. Business/legal
+reference material (trademark filing, LLC formation) lives in the Fuzzy Nova LLC
+business Drive, not this repo.
 
 ---
 
@@ -502,4 +503,3 @@ criteria matter more than speculative dates.
 ### Operational references
 
 - [`TESTING_GAPS.md`](../backlog/TESTING_GAPS.md)
-- [`TRADEMARK_FILING_GUIDE.md`](../backlog/TRADEMARK_FILING_GUIDE.md)
