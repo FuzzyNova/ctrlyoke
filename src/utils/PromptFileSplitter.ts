@@ -474,17 +474,25 @@ export class PromptFileSplitter {
 
     // Overhead of the <priorContext>…</priorContext> wrapper per chunk
     const wrapperTokens = this.countTokens("<priorContext>\n</priorContext>");
+    const wrapperLines = this.countLines("<priorContext>\n</priorContext>");
 
-    // Greedy packing of steps into chunks
+    // Greedy packing of steps into chunks. Script-output steps (stdout/stderr)
+    // can carry many short lines at a low tokens-per-line ratio, so line count
+    // must gate a flush independently of token count — token-only packing here
+    // let chunks silently sail past maxLinesPerFile (Claude CLI's 2K line cap)
+    // while staying under the token cap.
     const chunks: string[] = [];
     let currentSteps: string[] = [];
     let currentTokens = wrapperTokens;
+    let currentLines = wrapperLines;
 
     for (const step of steps) {
       const stepTokens = this.countTokens(step);
+      const stepLines = this.countLines(step);
       if (
-        currentTokens + stepTokens > this.packingTokenLimit &&
-        currentSteps.length > 0
+        currentSteps.length > 0 &&
+        (currentTokens + stepTokens > this.packingTokenLimit ||
+          currentLines + stepLines > this.config.maxLinesPerFile)
       ) {
         // Flush current chunk
         chunks.push(
@@ -492,10 +500,14 @@ export class PromptFileSplitter {
         );
         currentSteps = [step];
         currentTokens = wrapperTokens + stepTokens;
+        currentLines = wrapperLines + stepLines;
       } else {
-        // Add to current chunk (even if this step alone exceeds the limit)
+        // Add to current chunk (even if this step alone exceeds a limit —
+        // a single oversized step is emitted as its own oversized chunk
+        // rather than being split mid-XML)
         currentSteps.push(step);
         currentTokens += stepTokens;
+        currentLines += stepLines;
       }
     }
 

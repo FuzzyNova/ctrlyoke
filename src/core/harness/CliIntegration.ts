@@ -515,22 +515,27 @@ export class CliIntegration extends HarnessIntegration {
    *
    * Format (absent categories omitted):
    *   Following these agent instructions @agent.1.md[, @agent.2.md],
-   *   using these secrets @secrets.md,
-   *   using these available skills @skills.md,
+   *   using these secrets @secrets.1.md[, @secrets.2.md],
+   *   using these available skills @skills.1.md[, @skills.2.md],
    *   using these file references @src/foo.ts, @src/bar.ts,
-   *   with this prior conversation context @context.md,
+   *   with this prior conversation context @context.1.md[, @context.2.md],
    *   and these attachment excerpts @excerpts.1.md[, @excerpts.2.md],
-   *   follow the instructions in @prompt.md
+   *   follow the instructions in @prompt.1.md[, @prompt.2.md]
    *
    * When only a prompt exists: "Follow instructions in @prompt.md "
    *
-   * @param agentRefs Formatted file refs for agent files
+   * Every category below is routed through PromptFileSplitter and may expand
+   * to multiple numbered files (`.1.md`, `.2.md`, …) once its content exceeds
+   * the configured token/line limits — `directRefs` is the only exception,
+   * since it names real workspace files rather than ctrlyoke-generated content.
+   *
+   * @param agentRefs Formatted file refs for agent files (split if large)
    * @param skillRefs Formatted file refs for skills files (split if large)
-   * @param directRefs Formatted direct workspace file refs
+   * @param directRefs Formatted direct workspace file refs (never split — real files, not generated content)
    * @param contextRefs Formatted file refs for prior context files (split on step boundaries)
-   * @param excerptRefs Formatted file refs for excerpt files
-   * @param promptRefs Formatted file refs for prompt files
-   * @param secretRefs Formatted file refs for the available-secrets block
+   * @param excerptRefs Formatted file refs for excerpt files (split if large)
+   * @param promptRefs Formatted file refs for prompt files (split if large)
+   * @param secretRefs Formatted file refs for the available-secrets block (split if large)
    */
   protected formatCategorizedReferences(
     agentRefs: string[],

@@ -531,4 +531,100 @@ suite("PromptFileSplitter Tests", () => {
       );
     });
   });
+
+  suite("splitContextContent", () => {
+    test("should not split when content fits both limits", () => {
+      const splitter = new PromptFileSplitter();
+      const text =
+        '<priorContext>\n<step index="1">\n<response>\nshort\n</response>\n</step>\n</priorContext>';
+      const result = splitter.splitContextContent(text);
+      assert.strictEqual(result.needsSplit, false);
+      assert.deepStrictEqual(result.chunks, [text]);
+    });
+
+    test("should split on line limit even when well under the token limit", () => {
+      // Regression test: a <step> built from verbose script stdout has many
+      // short lines and a low tokens-per-line ratio, so packing must flush on
+      // maxLinesPerFile independent of the (far from reached) token limit —
+      // token-only packing previously let oversized-by-lines chunks through.
+      const splitter = new PromptFileSplitter({
+        maxTokensPerFile: 100000,
+        maxLinesPerFile: 50,
+        minChunkSize: 1,
+      });
+
+      const makeStep = (index: number, lineCount: number): string => {
+        const stdout = Array.from(
+          { length: lineCount },
+          (_, i) => `line ${i}`
+        ).join("\n");
+        return `<step index="${index}" type="script">\n<command>\necho\n</command>\n<stdout>\n${stdout}\n</stdout>\n</step>`;
+      };
+
+      const steps = [makeStep(1, 40), makeStep(2, 40), makeStep(3, 40)];
+      const text = `<priorContext>\n${steps.join("\n")}\n</priorContext>`;
+
+      const result = splitter.splitContextContent(text);
+
+      assert.strictEqual(result.needsSplit, true);
+      assert.strictEqual(
+        result.chunks.length,
+        3,
+        "Each step should land in its own chunk once line count is respected"
+      );
+
+      result.chunks.forEach((chunk, i) => {
+        assert.ok(
+          chunk.startsWith("<priorContext>") && chunk.endsWith("</priorContext>"),
+          "Each chunk must remain valid, well-formed priorContext XML"
+        );
+        assert.ok(
+          result.lineCounts[i] <= 50,
+          `Chunk ${i} has ${result.lineCounts[i]} lines, over maxLinesPerFile`
+        );
+      });
+
+      // No step content should be lost or duplicated across chunks.
+      for (let i = 1; i <= 3; i++) {
+        const matches = result.chunks.filter((c) =>
+          c.includes(`<step index="${i}"`)
+        );
+        assert.strictEqual(
+          matches.length,
+          1,
+          `Step ${i} should appear in exactly one chunk`
+        );
+      }
+    });
+
+    test("should still flush on token limit when lines are short", () => {
+      const splitter = new PromptFileSplitter({
+        maxTokensPerFile: 200,
+        maxLinesPerFile: 100000,
+        minChunkSize: 1,
+      });
+
+      const makeStep = (index: number): string =>
+        `<step index="${index}">\n<response>\n${"word ".repeat(150)}\n</response>\n</step>`;
+
+      const steps = [makeStep(1), makeStep(2)];
+      const text = `<priorContext>\n${steps.join("\n")}\n</priorContext>`;
+
+      const result = splitter.splitContextContent(text);
+
+      assert.strictEqual(result.needsSplit, true);
+      assert.ok(result.chunks.length > 1);
+    });
+
+    test("should fall back to paragraph splitting when no priorContext block is present", () => {
+      const splitter = new PromptFileSplitter({
+        maxTokensPerFile: 50,
+        minChunkSize: 1,
+      });
+      const text = "word ".repeat(200);
+      const result = splitter.splitContextContent(text);
+      assert.strictEqual(result.needsSplit, true);
+      assert.ok(result.chunks.length > 1);
+    });
+  });
 });
