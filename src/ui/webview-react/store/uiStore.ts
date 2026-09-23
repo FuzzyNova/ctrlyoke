@@ -283,6 +283,8 @@ export interface RecentWorkflow {
   isFavorite?: boolean;
   totalSteps?: number;
   harness?: HarnessId;
+  /** The primary address is a run prepared but never executed. */
+  unstarted?: boolean;
   runNav?: WorkflowRunNavigationSummary;
   tokenTotals?: WorkflowTokenTotals;
   worktree?: Pick<WorktreeRunProjection, "branchName" | "worktreePath">;

@@ -4,6 +4,7 @@ import {
   getExecutionStateBadgeIcon,
 } from "../../utils/status";
 import { Icon } from "./Icon";
+import { EXECUTION_STATES } from "@root/types/DashboardConstants";
 
 interface ExecutionStateBadgeProps {
   state: string;
@@ -14,8 +15,15 @@ interface ExecutionStateBadgeProps {
    * the only signal a narrow row has left.
    */
   isNarrow?: boolean;
+  /**
+   * The run was prepared but has executed nothing. Relabels only the IDLE
+   * pill — any other state already says more than "not started" would.
+   */
+  unstarted?: boolean;
   className?: string;
 }
+
+const UNSTARTED_LABEL = "not started";
 
 /**
  * ExecutionStateBadge - the uppercase state pill shared by the workflow
@@ -27,13 +35,18 @@ interface ExecutionStateBadgeProps {
 export const ExecutionStateBadge: React.FC<ExecutionStateBadgeProps> = ({
   state,
   isNarrow = false,
+  unstarted = false,
   className = "",
-}) => (
-  <span
-    className={`inline-flex items-center rounded px-1.5 py-px text-xs font-semibold uppercase ${getExecutionStateBadgeClass(state)} ${className}`}
-    title={isNarrow ? state : undefined}
-    role="status"
-  >
-    {isNarrow ? <Icon name={getExecutionStateBadgeIcon(state)} /> : state}
-  </span>
-);
+}) => {
+  const label =
+    unstarted && state === EXECUTION_STATES.IDLE ? UNSTARTED_LABEL : state;
+  return (
+    <span
+      className={`inline-flex items-center rounded px-1.5 py-px text-xs font-semibold uppercase ${getExecutionStateBadgeClass(state)} ${className}`}
+      title={isNarrow ? label : undefined}
+      role="status"
+    >
+      {isNarrow ? <Icon name={getExecutionStateBadgeIcon(state)} /> : label}
+    </span>
+  );
+};

@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import type { WorkflowStep } from "../types/CtrlYokeTypes";
+import { hasStarted } from "../utils/StepStatusDerivation";
 
 /** Shared mutation diagnostics so every workflow mutation path reports the same policy. */
 export const STEP_MUTATION_ERROR_MESSAGES = {
@@ -10,14 +11,6 @@ export const STEP_MUTATION_ERROR_MESSAGES = {
   shiftedStartedStep: (operation: string, stepId: string) =>
     `Cannot ${operation} the started step ${stepId}: started step positions must remain fixed`,
 } as const;
-
-/** A step is immutable once dispatch claimed it or it reached a terminal state. */
-export function hasStarted(step: WorkflowStep | undefined): boolean {
-  return (
-    step?._runtime?.startedAt !== undefined ||
-    step?._runtime?.completedAt !== undefined
-  );
-}
 
 /** Reject a direct mutation of a step that has already entered execution. */
 export function assertStepMutable(

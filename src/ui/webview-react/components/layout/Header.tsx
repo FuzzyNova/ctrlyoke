@@ -16,6 +16,7 @@ import { useIsSystemGeneratedWorkflow } from "@hooks/useIsSystemGeneratedWorkflo
 import { sendMessage } from "@hooks/useMessageHandler";
 import { WebviewLog } from "@utils/logger";
 import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
+import { useIsViewedRunUnstarted } from "@hooks/useIsViewedRunUnstarted";
 import { getExternalRunnerLabel } from "@utils/externalRunner";
 import { formatShortcut } from "@utils/platform";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
@@ -140,17 +141,7 @@ export const Header: React.FC<{
   const { fileName, executionState } = useWorkflowStore();
   const hasSteps = useWorkflowStore((s) => s.steps.length > 0);
   const hasFinalStep = useWorkflowStore((s) => s.finalStep !== null);
-  // Selectors must return primitives here: a fresh array/object identity per
-  // call re-renders on every unrelated store write. `_runtime` is the persisted
-  // per-step record — present from the moment a step starts, and stripped
-  // entirely when a run is seeded — so it answers "has anything executed in
-  // this run" without depending on the view-only `status` field.
-  const currentStep = useWorkflowStore((s) => s.currentStep);
-  const hasStepProgress = useWorkflowStore(
-    (s) =>
-      s.finalStepStatus !== null ||
-      s.steps.some((step) => step._runtime !== undefined)
-  );
+  const viewedRunUnstarted = useIsViewedRunUnstarted();
   const {
     loadedWorkflows,
     activeWorkflowId,
@@ -261,11 +252,7 @@ export const Header: React.FC<{
       // position` on the first step seeds a run and leaves it idle — so a run
       // can legitimately sit here having executed nothing at all. Offer Run for
       // it rather than Re-run, which would fork yet another empty run.
-      viewedRunUnstarted:
-        displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
-        executionState === EXECUTION_STATES.IDLE &&
-        currentStep === 0 &&
-        !hasStepProgress,
+      viewedRunUnstarted,
     });
   const dryRunScope = useExecutionPreviewStore((state) => state.scope);
 

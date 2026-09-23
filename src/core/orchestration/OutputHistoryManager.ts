@@ -33,6 +33,7 @@ import {
 } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
 import { readWorkflowLockInspection } from "../../utils/WorkflowLockInspector";
+import { isUnstartedRunFile } from "../../utils/StepStatusDerivation";
 import { OutputHistoryTimelineAdapter } from "./OutputHistoryTimelineAdapter";
 import { HistorySearchIndexService } from "./HistorySearchIndexService";
 import { getSharedHistorySearchIndexService } from "./HistorySearchIndexServiceRegistry";
@@ -1287,6 +1288,7 @@ export class OutputHistoryManager {
         primaryModel,
         hasMixedHarnesses,
         hasMixedModels,
+        unstarted,
         tokenTotals,
         worktree,
         worktreeNotice,
@@ -1317,6 +1319,7 @@ export class OutputHistoryManager {
           primaryModel,
           hasMixedHarnesses,
           hasMixedModels,
+          ...(unstarted ? { unstarted } : {}),
           tokenTotals: tokenTotals ?? manifest.tokenTotals,
           worktree,
           worktreeNotice,
@@ -1360,6 +1363,7 @@ export class OutputHistoryManager {
     primaryModel?: string;
     hasMixedHarnesses: boolean;
     hasMixedModels: boolean;
+    unstarted?: boolean;
   }> {
     try {
       const content = await fs.promises.readFile(runFilePath, "utf8");
@@ -1368,6 +1372,8 @@ export class OutputHistoryManager {
         model?: string;
         _runtime?: {
           executionState?: ExecutionState;
+          currentIndex?: number;
+          finalStep?: { status?: string };
           executionEndTime?: number;
           tokenTotals?: WorkflowTokenTotals;
           worktree?: import("../../types/CtrlYokeTypes").WorkingFileWorktreeRuntime;
@@ -1377,7 +1383,12 @@ export class OutputHistoryManager {
           type?: string;
           harness?: string;
           model?: string;
-          _runtime?: { harness?: string; model?: string };
+          _runtime?: {
+            harness?: string;
+            model?: string;
+            startedAt?: number;
+            completedAt?: number;
+          };
         }>;
       };
 
@@ -1408,6 +1419,7 @@ export class OutputHistoryManager {
         primaryModel: models.values().next().value,
         hasMixedHarnesses: harnesses.size > 1,
         hasMixedModels: models.size > 1,
+        unstarted: isUnstartedRunFile(workingFile),
       };
     } catch {
       return {

@@ -92,9 +92,9 @@ import {
   assertStepMutable,
   ensureStepIds,
   findStepIndexById,
-  hasStarted,
   resetStepRuntimeForRewind,
 } from "./StepIdentity";
+import { hasStarted } from "../utils/StepStatusDerivation";
 
 /** Resolver-derived, in-memory execution cache restored for an active run. */
 export interface ResolvedRuntimeOutputCacheEntry {
@@ -312,7 +312,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
   /** Return the durable projection for the currently executing parallel group. */
   public getActiveParallelGroupRuntime():
-    ActiveParallelGroupRuntime | undefined {
+    | ActiveParallelGroupRuntime
+    | undefined {
     return this.activeParallelGroupRuntime
       ? { ...this.activeParallelGroupRuntime }
       : undefined;

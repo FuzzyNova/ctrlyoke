@@ -15,6 +15,7 @@ import type {
   RunExecutionControlMessage,
   ReorderPromptsMessage,
   SeedNewRunMessage,
+  PrepareNewRunMessage,
   SendSteerMessage,
   SetStartPositionMessage,
   StartNewRunInsteadMessage,
@@ -522,6 +523,24 @@ export class WorkflowStepHandlers {
       );
     } catch (error) {
       this.mutationCoordinator.showRunActionFailure(ctx, "re-run", error);
+    }
+  }
+
+  async handlePrepareNewRun(
+    ctx: WebviewClientContext,
+    message: PrepareNewRunMessage
+  ): Promise<void> {
+    try {
+      await this.getOrchestrator()?.prepareNewRun(
+        message.address,
+        ctx.clientId
+      );
+    } catch (error) {
+      this.mutationCoordinator.showRunActionFailure(
+        ctx,
+        "prepare a new run",
+        error
+      );
     }
   }
 

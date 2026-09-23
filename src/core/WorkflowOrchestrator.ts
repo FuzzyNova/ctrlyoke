@@ -4113,6 +4113,30 @@ export class WorkflowOrchestrator {
     return result;
   }
 
+  /** Prepare (or reopen) an unstarted run from the addressed run; never executes. */
+  async prepareNewRun(
+    address: WorkflowRunAddress,
+    clientId: string = this.PANEL_CLIENT_ID
+  ): Promise<{ runRef: RunRef; reused: boolean }> {
+    const result = await this.runLifecycleService.prepareNewRun(
+      address,
+      clientId
+    );
+    await this.recordSuccessfulRevisions(
+      {
+        workflowKey: address.workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: result.runRef,
+      },
+      clientId,
+      {
+        recordDefinition: true,
+        recordDescriptor: true,
+      }
+    );
+    return result;
+  }
+
   /** Execute the exact viewed draft; promoted runs must use seedAndExecuteAtRun. */
   async executeDraftAtAddress(
     address: Extract<WorkflowViewAddress, { kind: "draft" }>,

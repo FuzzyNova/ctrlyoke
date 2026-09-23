@@ -367,7 +367,12 @@ describe("Header execution controls", () => {
     useWorkflowStore.getState().loadWorkflow({
       fileName: "workflow.ctrlyoke.json",
       workflowName: "Seeded run",
-      steps: [{ prompt: "first" }, { prompt: "second" }],
+      // The real seeded shape: `seedNewRun` strips execution runtime but
+      // `ensureStepIds` immediately re-adds `_runtime` to hold each stepId.
+      steps: [
+        { prompt: "first", _runtime: { stepId: "step-1" } },
+        { prompt: "second", _runtime: { stepId: "step-2" } },
+      ],
       executionState: EXECUTION_STATES.IDLE,
       currentStep: 0,
     });
@@ -541,7 +546,8 @@ describe("Header execution controls", () => {
   // and leaving slot 2 on a disabled Pause with no way to resume.
   const stalelyLoadedPausingRun = (
     executionState:
-      typeof EXECUTION_STATES.PAUSING | typeof EXECUTION_STATES.PAUSED
+      | typeof EXECUTION_STATES.PAUSING
+      | typeof EXECUTION_STATES.PAUSED
   ) => {
     useUiStore.setState({
       activeWorkflowId: "workflow-instance",

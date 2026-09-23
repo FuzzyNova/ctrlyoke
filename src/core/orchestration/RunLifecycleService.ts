@@ -31,6 +31,7 @@ import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 import { buildDefinitionSnapshot } from "../WorkflowStepSanitizer";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { getErrorMessage } from "../../utils/ErrorUtils";
+import { isUnstartedRunFile } from "../../utils/StepStatusDerivation";
 import { Log } from "../../utils/Log";
 import { readWorkflowLockOwnershipInspection } from "../../utils/WorkflowLockInspector";
 import { getPtyProcessManager } from "../harness/PtyProcessManager";
@@ -205,6 +206,26 @@ export class RunLifecycleService {
           "Cannot seed a new run while this workflow lineage is executing"
         );
       }
+      // Already the fresh run this would seed: keep it rather than minting an
+      // identical copy and stranding this one, never-executed, in history.
+      const viewed = await this.readRunFile(workspaceRoot, address);
+      if (isUnstartedRunFile(viewed)) {
+        const descriptor = await this.host
+          .getLineageRepository()
+          .readDescriptor(workspaceRoot, address.workflowKey);
+        if (options.invalidateViews !== false) {
+          await this.host.views.invalidateRunViews(
+            address.workflowKey,
+            address.runRef
+          );
+        }
+        return {
+          kind: "seeded",
+          runRef: address.runRef,
+          definitionRevision: viewed.definitionRevision ?? 1,
+          descriptorRevision: descriptor.revision,
+        };
+      }
       const seeded = await WorkingFileManager.seedNewRun(
         workspaceRoot,
         address.workflowKey,
@@ -241,9 +262,7 @@ export class RunLifecycleService {
       address.workflowKey,
       address.runRef
     );
-    const target = JSON.parse(
-      await fs.readFile(targetPath, "utf8")
-    ) as WorkingFile;
+    const target = await this.readRunFile(workspaceRoot, address);
     if (toIndex >= (target.steps?.length ?? 0)) {
       throw new Error(
         "Start position must leave at least one suffix step to run"
@@ -373,6 +392,79 @@ export class RunLifecycleService {
     }
     await instance.setDraftStartPosition(toIndex);
     await this.host.views.invalidateDraftViews(address.workflowKey);
+  }
+
+  /**
+   * "New Run (Don't Start)": seed a fresh run from the addressed run's current
+   * head, leave it IDLE, and switch the initiating client to it. The source is
+   * whatever the context menu targeted — a workflow row's latest run, the
+   * header's viewed run, or any run-panel row — so, unlike Re-run, it need not
+   * be the client's viewed run and carries no revision precondition: nothing
+   * is written to the source, and `seedNewRun` still refuses while a draft or
+   * continuation is being prepared for the lineage.
+   *
+   * A source that is itself unstarted is reopened instead of copied, so
+   * repeating the action never piles up empty runs.
+   */
+  async prepareNewRun(
+    address: WorkflowRunAddress,
+    clientId: string = this.host.panelClientId
+  ): Promise<{ runRef: RunRef; reused: boolean }> {
+    const workspaceRoot = this.requireWorkspaceRoot();
+    if (this.findActiveInstanceForLineage(address.workflowKey)) {
+      throw new Error(
+        "Cannot prepare a new run while this workflow is executing"
+      );
+    }
+    const source = await this.readRunFile(workspaceRoot, address);
+    if (isUnstartedRunFile(source)) {
+      await this.switchClientToRunAddress(
+        {
+          workflowKey: address.workflowKey,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: address.runRef,
+        },
+        clientId
+      );
+      return { runRef: address.runRef, reused: true };
+    }
+    const seeded = await WorkingFileManager.seedNewRun(
+      workspaceRoot,
+      address.workflowKey,
+      address.runRef,
+      {},
+      this.host.getLineageRepository()
+    );
+    await this.switchClientToRunAddress(
+      {
+        workflowKey: address.workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: seeded.runRef,
+      },
+      clientId
+    );
+    // Other viewers of the source refresh their run lists to include the new run.
+    await this.host.views.invalidateRunViews(
+      address.workflowKey,
+      address.runRef
+    );
+    return { runRef: seeded.runRef, reused: false };
+  }
+
+  private async readRunFile(
+    workspaceRoot: string,
+    address: { workflowKey: WorkflowKey; runRef: RunRef }
+  ): Promise<WorkingFile> {
+    return JSON.parse(
+      await fs.readFile(
+        WorkflowPaths.runFilePath(
+          workspaceRoot,
+          address.workflowKey,
+          address.runRef
+        ),
+        "utf8"
+      )
+    ) as WorkingFile;
   }
 
   async seedAndExecuteAtRun(

@@ -189,6 +189,8 @@ function getPanelLifecycleActionLabel(type: string): string | undefined {
     case MESSAGE_TYPES.SEED_NEW_RUN:
     case MESSAGE_TYPES.START_NEW_RUN_INSTEAD:
       return "run start requested";
+    case MESSAGE_TYPES.PREPARE_NEW_RUN:
+      return "new run preparation requested";
     case MESSAGE_TYPES.RESUME_RUN:
       return "run resume requested";
     case MESSAGE_TYPES.PAUSE_RUN:

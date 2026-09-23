@@ -3,10 +3,8 @@ import type {
   ParallelGroupDefinition,
   WorkflowStep,
 } from "../types/CtrlYokeTypes";
-import {
-  assertStartedStepPositionsPreserved,
-  hasStarted,
-} from "./StepIdentity";
+import { assertStartedStepPositionsPreserved } from "./StepIdentity";
+import { hasStarted } from "../utils/StepStatusDerivation";
 import {
   PARALLEL_GROUP_INSERT_RELOCATION_KINDS,
   type ParallelGroupInsertRelocationKind,
