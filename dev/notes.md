@@ -87,8 +87,8 @@ readAddressedRunView is slow on large histories — measured 4.1s for the summar
 
 ☑️ fix font color on header banners to be more readable
 
-Undo and redo do not work for a lot of things, this one needs a big pass
+☑️ Undo and redo do not work for a lot of things, this one needs a big pass
 
-workflow status header is hiding the branch and terminal icon at wider views since changing the status badge grows.
+☑️ workflow status header is hiding the branch and terminal icon at wider views since changing the status badge grows.
 
 ☑️ switching to a running workflow doesn't show the live context window until the next update.
