@@ -89,6 +89,7 @@ function createRunner(options?: {
   discoverSessionLog?: () => Promise<string | null>;
   writeToCurrentPtySession?: (text: string) => boolean;
   isCancelling?: boolean;
+  isVsCodeContext?: boolean;
   collectedHeadlessResponse?: {
     success: boolean;
     error?: string;
@@ -98,12 +99,23 @@ function createRunner(options?: {
   const failureTracker = new CliFailureTracker();
   let failureReason: string | undefined;
   let observedHeadlessEnv: Record<string, string> | undefined;
+  let observedStandaloneEnv: Record<string, string> | undefined;
   const provider = createProvider(options);
 
   const runner = new CliExecutionRunner({
     provider,
     transportCoordinator: {
-      executeStandaloneInteractiveProcess: async () => ({ success: true }),
+      executeStandaloneInteractiveProcess: async (
+        _args,
+        _prompt,
+        _tempFiles,
+        _sessionId,
+        _command,
+        env
+      ) => {
+        observedStandaloneEnv = env;
+        return { success: true };
+      },
       startInteractiveProcess: async () => {
         failureTracker.capturePtyExit(0, []);
       },
@@ -151,7 +163,7 @@ function createRunner(options?: {
     runtimeState: {
       getWorkspaceRoot: () => process.cwd(),
       getExtensionPath: () => process.cwd(),
-      isVsCodeContext: () => true,
+      isVsCodeContext: () => options?.isVsCodeContext ?? true,
       isCancelling: () => options?.isCancelling ?? false,
       setFailureReason: (reason: string) => {
         failureReason = reason;
@@ -169,6 +181,7 @@ function createRunner(options?: {
     failureTracker,
     getFailureReason: () => failureReason,
     getHeadlessEnv: () => observedHeadlessEnv,
+    getStandaloneEnv: () => observedStandaloneEnv,
   };
 }
 
@@ -420,6 +433,25 @@ suite("CliExecutionRunner", () => {
     assert.strictEqual(await runner.executeHeadless(session, []), true);
     assert.strictEqual(getHeadlessEnv()?.CTRLYOKE_PROMPT_INDEX, "1");
     assert.strictEqual(getHeadlessEnv()?.CTRLYOKE_PARALLEL_GROUP_ID, "group-1");
+  });
+
+  // The OpenCode completion plugin reads its notification directory from the
+  // environment; without it a standalone `ctrlyoke run --interactive` step
+  // never sees the stop signal and waits until its timeout.
+  test("gives a standalone interactive process the notification environment", async () => {
+    const { runner, getStandaloneEnv } = createRunner({
+      isVsCodeContext: false,
+    });
+
+    assert.strictEqual(
+      await runner.executeInteractive(
+        new CliExecutionSession({ prompt: { prompt: "just say hi" } }),
+        []
+      ),
+      true
+    );
+    assert.strictEqual(getStandaloneEnv()?.CTRLYOKE_NOTIFY_DIR, process.cwd());
+    assert.ok(getStandaloneEnv()?.CTRLYOKE_RUN_ID);
   });
 
   test("should classify log monitor timeouts without throwing", async () => {

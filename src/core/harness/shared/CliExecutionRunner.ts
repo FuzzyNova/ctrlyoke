@@ -358,28 +358,11 @@ export class CliExecutionRunner {
       "",
       source?.logTail
     );
-    const hookEnv = this.buildHookEnvVars(session);
-
-    const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
-    const notifyDir =
-      workspaceRoot && this.deps.provider.notificationMonitor
-        ? this.deps.provider.notificationMonitor.getNotificationDirectory(
-            workspaceRoot
-          )
-        : undefined;
-
-    const runId = crypto.randomUUID();
-    const headlessEnv: Record<string, string> = {
-      CTRLYOKE_RUN_ID: runId,
-      ...hookEnv,
-      ...this.buildHookProcessEnv(session),
-    };
-    if (notifyDir) {
-      headlessEnv.CTRLYOKE_NOTIFY_DIR = notifyDir;
-    }
-    if (ConfigurationUtils.isDiagnosticLogsEnabled()) {
-      headlessEnv.CTRLYOKE_DIAGNOSTIC_LOGS = "true";
-    }
+    const {
+      runId,
+      notifyDir,
+      env: headlessEnv,
+    } = this.buildHarnessProcessEnv(session);
 
     const hookMonitor =
       notifyDir && this.deps.hostCallbacks.onNotificationEvent
@@ -502,7 +485,7 @@ export class CliExecutionRunner {
         session.tempFilePaths,
         session.resolvedSessionId,
         resolvedCommand,
-        this.buildHookProcessEnv(session),
+        this.buildHarnessProcessEnv(session).env,
         session.resolvedProperties?.secrets
       );
     } catch (error) {
@@ -510,6 +493,39 @@ export class CliExecutionRunner {
       this.deps.runtimeState.setFailureReason(getErrorMessage(error));
       return { success: false };
     }
+  }
+
+  /**
+   * Environment every harness process gets, whichever transport launches it.
+   * Harnesses whose completion hook reads its notification directory from the
+   * environment (the OpenCode plugin) cannot signal completion without
+   * `CTRLYOKE_NOTIFY_DIR`, so a transport that omits it waits forever.
+   */
+  private buildHarnessProcessEnv(session: CliExecutionSession): {
+    runId: string;
+    notifyDir: string | undefined;
+    env: Record<string, string>;
+  } {
+    const runId = crypto.randomUUID();
+    const env: Record<string, string> = {
+      CTRLYOKE_RUN_ID: runId,
+      ...this.buildHookEnvVars(session),
+      ...this.buildHookProcessEnv(session),
+    };
+    if (ConfigurationUtils.isDiagnosticLogsEnabled()) {
+      env.CTRLYOKE_DIAGNOSTIC_LOGS = "true";
+    }
+    const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
+    const notifyDir =
+      workspaceRoot && this.deps.provider.notificationMonitor
+        ? this.deps.provider.notificationMonitor.getNotificationDirectory(
+            workspaceRoot
+          )
+        : undefined;
+    if (notifyDir) {
+      env.CTRLYOKE_NOTIFY_DIR = notifyDir;
+    }
+    return { runId, notifyDir, env };
   }
 
   private buildHookEnvVars(
@@ -621,25 +637,11 @@ export class CliExecutionRunner {
         }
       }
 
-      const runId = crypto.randomUUID();
-      const terminalEnv: Record<string, string> = {
-        CTRLYOKE_RUN_ID: runId,
-        ...this.buildHookEnvVars(session),
-        ...this.buildHookProcessEnv(session),
-      };
-      if (ConfigurationUtils.isDiagnosticLogsEnabled()) {
-        terminalEnv.CTRLYOKE_DIAGNOSTIC_LOGS = "true";
-      }
-
-      const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
-      let notifyDir: string | undefined;
-      if (workspaceRoot && this.deps.provider.notificationMonitor) {
-        notifyDir =
-          this.deps.provider.notificationMonitor.getNotificationDirectory(
-            workspaceRoot
-          );
-        terminalEnv.CTRLYOKE_NOTIFY_DIR = notifyDir;
-      }
+      const {
+        runId,
+        notifyDir,
+        env: terminalEnv,
+      } = this.buildHarnessProcessEnv(session);
 
       hookMonitor =
         notifyDir && this.deps.hostCallbacks.onNotificationEvent
