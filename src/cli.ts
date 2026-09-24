@@ -390,6 +390,26 @@ interface CliAttemptState {
   activeAttemptCompleted: boolean;
 }
 
+/**
+ * The workflow-level harness and model a run reports in its header and
+ * `--json` result, using the precedence execution applies: an explicit
+ * `--harness`/`--model` flag, then the workflow's own `harness`/`model`, then
+ * the settings defaults. Individual steps may still name their own harness.
+ */
+function resolveCliRunHarnessAndModel(
+  workflow: PromptFile | undefined,
+  explicitHarness: HarnessId | undefined,
+  defaultHarness: HarnessId,
+  explicitModel: string | undefined
+): { harness: HarnessId; model?: string } {
+  const harness = explicitHarness ?? workflow?.harness ?? defaultHarness;
+  const model =
+    explicitModel ??
+    workflow?.model ??
+    ConfigurationUtils.getModelForHarness(harness);
+  return { harness, ...(model ? { model } : {}) };
+}
+
 function getCliPromptExecutionDetails(
   instance: WorkflowInstance,
   stepIndex: number,
@@ -610,8 +630,8 @@ async function runCommand(
 
   // Build CLI overlay from explicitly provided flags only (not Commander defaults).
   const overlay: PartialCtrlYokeSettings = {};
-  // --harness: only include when not the default (copilot-cli)
-  if (options.harness && options.harness !== HARNESS_IDS.COPILOT_CLI) {
+  // --harness has no Commander default, so its presence is always explicit.
+  if (options.harness) {
     overlay.defaults = { harness: options.harness as HarnessId };
   }
   if (options.model) {
@@ -715,7 +735,11 @@ async function runCommand(
   // Register the adapter with the vscode-shim for backward compatibility.
   registerCliAdapter(platform);
   const factory = new IntegrationFactory(platform, userFeedbackSink);
-  const harness = config.harness as HarnessId;
+  // The harness a workflow falls back to when neither a step nor the workflow
+  // names one: the explicit --harness flag, else the defaults.harness setting
+  // (which already carries the --harness overlay).
+  const explicitHarness = options.harness as HarnessId | undefined;
+  const harness = explicitHarness ?? ConfigurationUtils.getIntegrationMode();
 
   if (
     operation.kind === CLI_RUN_OPERATION_KINDS.RUN &&
@@ -743,10 +767,6 @@ async function runCommand(
         `[verbose] Execution mode: ${executionMode} (TTY: stdout=${!!process.stdout.isTTY} stdin=${!!process.stdin.isTTY})`
       )
     );
-    console.log(chalk.dim(`[verbose] Harness: ${config.harness}`));
-    if (config.model) {
-      console.log(chalk.dim(`[verbose] Model: ${config.model}`));
-    }
     console.log(chalk.dim(`[verbose] Workspace root: ${workingDir}`));
     const varEntries = Object.entries(config.vars);
     if (varEntries.length > 0) {
@@ -758,12 +778,35 @@ async function runCommand(
     }
   }
 
-  if (!options.quiet && !options.json) {
+  // Printed once the workflow is loaded, because the harness and model it
+  // names come from the workflow file itself, not only from CLI flags.
+  let runHeaderPrinted = false;
+  const printRunHeader = (): void => {
+    if (runHeaderPrinted) {
+      return;
+    }
+    runHeaderPrinted = true;
+    const { harness: runHarness, model: runModel } =
+      resolveCliRunHarnessAndModel(
+        instance.promptQueue.getWorkflowFile(),
+        explicitHarness,
+        harness,
+        config.model
+      );
+    if (options.verbose && !options.json) {
+      console.log(chalk.dim(`[verbose] Harness: ${runHarness}`));
+      if (runModel) {
+        console.log(chalk.dim(`[verbose] Model: ${runModel}`));
+      }
+    }
+    if (options.quiet || options.json) {
+      return;
+    }
     if (executionMode === EXECUTION_MODES.INTERACTIVE) {
       // ctrlyoke header minimal so it doesn't clutter the user's session.
       console.log(
         chalk.dim(
-          `ctrlyoke v${version} — starting ${chalk.yellow(config.harness)} in interactive mode…`
+          `ctrlyoke v${version} — starting ${chalk.yellow(runHarness)} in interactive mode…`
         )
       );
       console.log();
@@ -775,11 +818,11 @@ async function runCommand(
         `Running: ${chalk.cyan(resolvedFile ? path.basename(resolvedFile) : "<inline prompt>")}`
       );
       console.log(
-        `Harness: ${chalk.yellow(config.harness)}${config.model ? chalk.dim(" (" + config.model + ")") : ""}`
+        `Harness: ${chalk.yellow(runHarness)}${runModel ? chalk.dim(" (" + runModel + ")") : ""}`
       );
       console.log(chalk.dim("─".repeat(52)));
     }
-  }
+  };
 
   // Create a cached detector integration (pre-marked as ready, used for pre-flight checks)
   const detectorIntegration = factory.createForExecution(harness);
@@ -837,7 +880,10 @@ async function runCommand(
     ): void => {
       CliTerminalFormatter.renderPromptHeader({
         ...data,
-        ...getCliPromptExecutionDetails(instance, data.stepIndex, config),
+        ...getCliPromptExecutionDetails(instance, data.stepIndex, {
+          harness,
+          model: config.model,
+        }),
       });
     };
 
@@ -1084,6 +1130,7 @@ async function runCommand(
         );
       }
 
+      printRunHeader();
       warnAboutClampedInteractiveSteps(
         instance.promptQueue.getWorkflowFile(),
         hostCanProvidePty
@@ -1126,7 +1173,9 @@ async function runCommand(
         }
       }
 
-      await instance.executeLoadedPromptFile(harness);
+      // Only an explicit --harness overrides the workflow's own `harness`;
+      // otherwise execution resolves it from the workflow, then settings.
+      await instance.executeLoadedPromptFile(explicitHarness);
     } else {
       await executeAddressedCliOperation(
         operation,
@@ -1135,7 +1184,8 @@ async function runCommand(
         platform,
         instance,
         hostCanProvidePty,
-        userFeedbackSink
+        userFeedbackSink,
+        printRunHeader
       );
     }
 
@@ -1155,8 +1205,12 @@ async function runCommand(
       const result = buildCliJsonResult({
         state,
         promptFile,
-        harness,
-        model: config.model,
+        ...resolveCliRunHarnessAndModel(
+          instance.promptQueue.getWorkflowFile(),
+          explicitHarness,
+          harness,
+          config.model
+        ),
         workflowFileReference: file,
         workspaceRoot: workingDir,
         outputProjection,
@@ -1187,8 +1241,12 @@ async function runCommand(
       const result = buildCliJsonResult({
         state: undefined,
         promptFile: instance.promptQueue.getWorkflowFile(),
-        harness,
-        model: config.model,
+        ...resolveCliRunHarnessAndModel(
+          instance.promptQueue.getWorkflowFile(),
+          explicitHarness,
+          harness,
+          config.model
+        ),
         workflowFileReference: file,
         workspaceRoot: workingDir,
         workflowKey: state.workflowKey,
@@ -1597,13 +1655,15 @@ async function executeAddressedCliOperation(
   platform: CliAdapter,
   instance: WorkflowInstance,
   hostCanProvidePty: boolean,
-  userFeedbackSink: ConsoleUserFeedbackSink
+  userFeedbackSink: ConsoleUserFeedbackSink,
+  onWorkflowLoaded: () => void
 ): Promise<void> {
   const workflowKey = operation.workflow;
   WorkflowPaths.assertValidWorkflowKey(workflowKey);
   const history = new OutputHistoryManager(workspaceRoot);
   const lineageRepository = new WorkflowLineageRepository();
   const warnIfNeeded = async (): Promise<void> => {
+    onWorkflowLoaded();
     warnAboutClampedInteractiveSteps(
       instance.promptQueue.getWorkflowFile(),
       hostCanProvidePty

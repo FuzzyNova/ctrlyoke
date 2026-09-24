@@ -1,6 +1,5 @@
 import { Command } from "commander";
 import chalk from "chalk";
-import { HARNESS_IDS } from "../types/DashboardConstants";
 
 export interface CliExecutionOptions {
   harness?: string;
@@ -68,8 +67,10 @@ export function registerRunCommand(
       )
       .option(
         "-H, --harness <harness>",
-        "AI harness: copilot-cli, claude-cli, codex-cli, antigravity-cli, qwen-cli, opencode-cli",
-        HARNESS_IDS.COPILOT_CLI
+        // No Commander default: an omitted flag must stay distinguishable from
+        // an explicit one, so the workflow's own `harness` and the
+        // `defaults.harness` setting are not silently overridden by copilot-cli.
+        "AI harness: copilot-cli, claude-cli, codex-cli, antigravity-cli, qwen-cli, opencode-cli (default: the workflow's harness, then the defaults.harness setting)"
       )
       .option("-m, --model <model>", "Model to use")
       .option(

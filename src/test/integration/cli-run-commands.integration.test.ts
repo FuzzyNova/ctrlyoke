@@ -122,7 +122,7 @@ suite("CLI run-scoped command parser", () => {
 });
 
 suite("CLI run command parser", () => {
-  test("defaults harness and leaves resumeSession unset when neither flag is passed", async () => {
+  test("leaves harness and resumeSession unset when neither flag is passed", async () => {
     const calls: {
       run?: { file: string | undefined; options: RunCommandOptions };
     } = {};
@@ -132,7 +132,9 @@ suite("CLI run command parser", () => {
     );
 
     assert.strictEqual(calls.run?.file, "workflow.ctrlyoke.json");
-    assert.strictEqual(calls.run?.options.harness, "copilot-cli");
+    // No Commander default: an omitted --harness must stay distinguishable
+    // from an explicit one, or it overrides the workflow's own `harness`.
+    assert.strictEqual(calls.run?.options.harness, undefined);
     assert.strictEqual(calls.run?.options.resumeSession, undefined);
   });
 

@@ -244,6 +244,78 @@ suite("CLI dry-run process", () => {
   });
 });
 
+suite("CLI run process harness reporting", () => {
+  teardown(async () => {
+    for (const root of temporaryRoots.splice(0)) {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  /** A script-only workflow runs through the real CLI without any AI harness. */
+  async function writeScriptOnlyWorkflow(root: string): Promise<string> {
+    const workflow = path.join(root, "harness-report.ctrlyoke.json");
+    await fs.writeFile(
+      workflow,
+      JSON.stringify({
+        harness: "opencode-cli",
+        model: "opencode/big-pickle",
+        steps: [
+          {
+            type: "script",
+            name: "noop",
+            script: 'node -e "process.exit(0)"',
+          },
+        ],
+      }),
+      "utf8"
+    );
+    return workflow;
+  }
+
+  test("header and --json report the workflow's harness, not a copilot-cli default", async function () {
+    this.timeout(60000);
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-run-hdr-"));
+    temporaryRoots.push(root);
+    const workflow = await writeScriptOnlyWorkflow(root);
+
+    const text = await runCli(
+      ["run", workflow, "--headless", "--cwd", root],
+      root
+    );
+    assert.strictEqual(text.code, 0, text.stderr);
+    assert.match(text.stdout, /Harness: opencode-cli \(opencode\/big-pickle\)/);
+    assert.doesNotMatch(text.stdout, /copilot-cli/);
+
+    const json = await runCli(
+      ["run", workflow, "--headless", "--json", "--cwd", root],
+      root
+    );
+    assert.strictEqual(json.code, 0, json.stderr);
+    const result = JSON.parse(
+      json.stdout.trim().split(/\r?\n/).pop() ?? ""
+    ) as {
+      harness: string;
+      model: string;
+    };
+    assert.strictEqual(result.harness, "opencode-cli");
+    assert.strictEqual(result.model, "opencode/big-pickle");
+  });
+
+  test("an explicit --harness still overrides the workflow's harness", async function () {
+    this.timeout(60000);
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-run-hdr-"));
+    temporaryRoots.push(root);
+    const workflow = await writeScriptOnlyWorkflow(root);
+
+    const result = await runCli(
+      ["run", workflow, "--headless", "--harness", "claude-cli", "--cwd", root],
+      root
+    );
+    assert.strictEqual(result.code, 0, result.stderr);
+    assert.match(result.stdout, /Harness: claude-cli/);
+  });
+});
+
 async function pathExists(filePath: string): Promise<boolean> {
   try {
     await fs.access(filePath);
