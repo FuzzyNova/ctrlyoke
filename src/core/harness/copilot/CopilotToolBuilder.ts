@@ -288,6 +288,7 @@ export class CopilotToolBuilder {
             path: fileEdit.path,
             structuredPatch: fileEdit.structuredPatch,
             status: OPERATION_STATUS.INITIATED,
+            toolCallId,
           } as FileEditData,
         }));
       }
@@ -300,6 +301,7 @@ export class CopilotToolBuilder {
             path: ApplyPatchParser.extractFirstPath(args) ?? "unknown",
             structuredPatch: ApplyPatchParser.parse(args),
             status: OPERATION_STATUS.INITIATED,
+            toolCallId,
           } as FileEditData,
         },
       ];
@@ -372,6 +374,7 @@ export class CopilotToolBuilder {
               : OPERATION_STATUS.FAILED,
             success,
             error: errorMsg,
+            toolCallId: completionData.toolCallId,
           } as FileEditData,
         }));
       }
@@ -395,6 +398,7 @@ export class CopilotToolBuilder {
               : OPERATION_STATUS.FAILED,
             success,
             error: errorMsg,
+            toolCallId: completionData.toolCallId,
           } as FileEditData,
         }));
       }
@@ -417,6 +421,7 @@ export class CopilotToolBuilder {
               : OPERATION_STATUS.FAILED,
             success,
             error: errorMsg,
+            toolCallId: completionData.toolCallId,
           } as FileEditData,
         },
       ];
@@ -454,6 +459,7 @@ export class CopilotToolBuilder {
               : OPERATION_STATUS.FAILED,
             success,
             error: errorMsg,
+            toolCallId: completionData.toolCallId,
           } as FileEditData,
         },
       ];
@@ -472,6 +478,7 @@ export class CopilotToolBuilder {
               : OPERATION_STATUS.FAILED,
             success,
             error: errorMsg,
+            toolCallId: completionData.toolCallId,
           } as FileWriteData,
         },
       ];
@@ -489,6 +496,7 @@ export class CopilotToolBuilder {
               ? OPERATION_STATUS.COMPLETED
               : OPERATION_STATUS.FAILED,
             error: errorMsg,
+            toolCallId: completionData.toolCallId,
           } as BashCommandData,
         },
       ];
@@ -524,6 +532,7 @@ export class CopilotToolBuilder {
             path: path || "unknown",
             success,
             error: errorMsg,
+            toolCallId: completionData.toolCallId,
           } as FileDeleteData,
         },
       ];

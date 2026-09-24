@@ -20,6 +20,7 @@ import {
   FileWriteData,
   FileReadData,
   AskUserQuestionData,
+  BashCommandData,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -2428,6 +2429,52 @@ suite("CopilotLogParser", () => {
       assert.deepStrictEqual(
         fileEditEvents.map((event) => (event.data as any).path),
         ["src/first.ts", "src/second.ts", "src/first.ts", "src/second.ts"]
+      );
+    });
+
+    test("keeps a parallel shell call running when a sibling call completes", () => {
+      // Real Copilot shape: two shell calls start together, only one
+      // completes, and each completion is followed by a TOOL_RESULT. The
+      // trailing result must not mark the still-running sibling complete.
+      const start = (toolCallId: string, command: string) => ({
+        type: "tool.execution_start",
+        data: { toolCallId, toolName: "powershell", arguments: { command } },
+        timestamp: "2026-09-04T16:52:40Z",
+      });
+      const events = [
+        start("call_typecheck", "npm run typecheck"),
+        start("call_lint", "npm run lint"),
+        {
+          type: "tool.execution_complete",
+          data: {
+            toolCallId: "call_typecheck",
+            success: false,
+            result: { content: "error TS2322" },
+            error: { message: "exit code 2" },
+          },
+          timestamp: "2026-09-04T16:52:45Z",
+        },
+      ];
+
+      const normalized = normalizeCliEvents(
+        parser.extractResponse(events as unknown as BaseCliEvent[]).events
+      );
+      const bash = normalized
+        .filter((e) => e.type === CLI_EVENT_TYPES.BASH_COMMAND)
+        .map((e) => e.data as BashCommandData);
+
+      assert.deepStrictEqual(
+        bash.map((d) => [d.toolCallId, d.status]),
+        [
+          ["call_typecheck", OPERATION_STATUS.FAILED],
+          ["call_lint", OPERATION_STATUS.INITIATED],
+        ]
+      );
+      assert.strictEqual(bash[1].output, undefined);
+      assert.strictEqual(bash[1].error, undefined);
+      assert.strictEqual(
+        normalized.filter((e) => e.type === CLI_EVENT_TYPES.TOOL_RESULT).length,
+        0
       );
     });
 

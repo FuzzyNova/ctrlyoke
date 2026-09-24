@@ -306,6 +306,7 @@ function findMatchingPendingForCompletion(
   event: CliEvent
 ): PendingEvent | undefined {
   const key = getEventKey(event);
+  const toolCallId = getToolCallId(event);
   for (let i = pending.length - 1; i >= 0; i--) {
     const candidate = pending[i];
     if (
@@ -314,8 +315,21 @@ function findMatchingPendingForCompletion(
     ) {
       continue;
     }
+    // Two ids that disagree are two different calls, even when the command
+    // text or path is identical (Copilot runs same-text commands in parallel).
+    if (
+      toolCallId &&
+      candidate.toolCallId &&
+      candidate.toolCallId !== toolCallId
+    ) {
+      continue;
+    }
+    const sameCall = !!toolCallId && candidate.toolCallId === toolCallId;
     if (candidate.key && key) {
-      if (candidate.key === key) {
+      if (
+        candidate.key === key ||
+        (sameCall && keysShareTrailingPath(candidate.key, key))
+      ) {
         return candidate;
       }
       continue;
@@ -323,6 +337,17 @@ function findMatchingPendingForCompletion(
     return candidate;
   }
   return undefined;
+}
+
+/**
+ * Within one call, a harness may report the same file relative at start and
+ * absolute at completion (Copilot's multi-file apply_patch: the model's patch
+ * text vs. the git diff it reports back). Keys are `<type>:<normalized path>`.
+ */
+function keysShareTrailingPath(a: string, b: string): boolean {
+  const pathA = a.slice(a.indexOf(":") + 1);
+  const pathB = b.slice(b.indexOf(":") + 1);
+  return pathA.endsWith(`/${pathB}`) || pathB.endsWith(`/${pathA}`);
 }
 
 function findOutputIndexForCompletionFallback(
@@ -377,6 +402,7 @@ function findOutputIndexForCompletionFallback(
 
 function findPendingForResult(
   pending: PendingEvent[],
+  output: CliEvent[],
   result: ToolResultData
 ): PendingEvent | undefined {
   if (result.toolCallId) {
@@ -384,6 +410,13 @@ function findPendingForResult(
       if (pending[i].toolCallId === result.toolCallId) {
         return pending[i];
       }
+    }
+    // The call's own row exists but is no longer pending — a harness that
+    // pairs start/complete itself (Copilot) already merged its semantic
+    // COMPLETED event, then sends a trailing TOOL_RESULT. Leave that to the
+    // by-id output lookup instead of letting it hijack an in-flight call.
+    if (findOutputIndexByToolCallId(output, result.toolCallId) !== undefined) {
+      return undefined;
     }
   }
 
@@ -403,16 +436,26 @@ function findPendingForResult(
   return undefined;
 }
 
+function findOutputIndexByToolCallId(
+  output: CliEvent[],
+  toolCallId: string
+): number | undefined {
+  for (let i = output.length - 1; i >= 0; i--) {
+    if (getToolCallId(output[i]) === toolCallId) {
+      return i;
+    }
+  }
+  return undefined;
+}
+
 function findOutputIndexForResultFallback(
   output: CliEvent[],
   result: ToolResultData
 ): number | undefined {
   if (result.toolCallId) {
-    for (let i = output.length - 1; i >= 0; i--) {
-      const event = output[i];
-      if (getToolCallId(event) === result.toolCallId) {
-        return i;
-      }
+    const byId = findOutputIndexByToolCallId(output, result.toolCallId);
+    if (byId !== undefined) {
+      return byId;
     }
   }
 
@@ -562,6 +605,7 @@ function mergeInitiatedWithCompleted(
           exitCode: completedData.exitCode ?? initiatedData.exitCode,
           output: completedData.output ?? initiatedData.output,
           error: completedData.error ?? initiatedData.error,
+          toolCallId: completedData.toolCallId ?? initiatedData.toolCallId,
         } as BashCommandData,
       };
     }
@@ -594,6 +638,7 @@ function mergeInitiatedWithCompleted(
           path: completedData.path || initiatedData.path,
           content: completedData.content ?? initiatedData.content,
           error: completedData.error ?? initiatedData.error,
+          toolCallId: completedData.toolCallId ?? initiatedData.toolCallId,
           success: completedData.success ?? initiatedData.success,
         } as FileWriteData,
       };
@@ -612,6 +657,7 @@ function mergeInitiatedWithCompleted(
           structuredPatch:
             completedData.structuredPatch ?? initiatedData.structuredPatch,
           error: completedData.error ?? initiatedData.error,
+          toolCallId: completedData.toolCallId ?? initiatedData.toolCallId,
           success: completedData.success ?? initiatedData.success,
           userModified:
             completedData.userModified ?? initiatedData.userModified,
@@ -629,6 +675,7 @@ function mergeInitiatedWithCompleted(
           ...completedData,
           path: completedData.path || initiatedData.path,
           error: completedData.error ?? initiatedData.error,
+          toolCallId: completedData.toolCallId ?? initiatedData.toolCallId,
           success: completedData.success ?? initiatedData.success,
         } as FileDeleteData,
       };
@@ -686,7 +733,7 @@ export function normalizeCliEventsWithSource(
 
     if (event.type === CLI_EVENT_TYPES.TOOL_RESULT) {
       const resultData = event.data as ToolResultData;
-      const pendingMatch = findPendingForResult(pending, resultData);
+      const pendingMatch = findPendingForResult(pending, output, resultData);
       if (pendingMatch) {
         const merged = mergeInitiatedWithResult(
           output[pendingMatch.index],

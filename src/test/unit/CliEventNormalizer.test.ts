@@ -2,10 +2,15 @@ import * as assert from "assert";
 import type {
   BashCommandData,
   CliEvent,
+  FileEditData,
   FileReadData,
   ToolCall,
+  WebSearchData,
 } from "../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  OPERATION_STATUS,
+} from "../../types/DashboardConstants";
 import { normalizeCliEvents } from "../../utils/CliEventNormalizer";
 
 suite("CliEventNormalizer", () => {
@@ -112,16 +117,141 @@ suite("CliEventNormalizer", () => {
 
     const normalized = normalizeCliEvents(events);
 
-    const bash = normalized.find(
-      (e) => e.type === CLI_EVENT_TYPES.BASH_COMMAND
-    )?.data as BashCommandData;
-    const read = normalized.find(
-      (e) => e.type === CLI_EVENT_TYPES.FILE_READ
-    )?.data as FileReadData;
+    const bash = normalized.find((e) => e.type === CLI_EVENT_TYPES.BASH_COMMAND)
+      ?.data as BashCommandData;
+    const read = normalized.find((e) => e.type === CLI_EVENT_TYPES.FILE_READ)
+      ?.data as FileReadData;
 
     assert.strictEqual(bash.status, OPERATION_STATUS.COMPLETED);
     assert.strictEqual(bash.output, "screenshot listing");
     assert.strictEqual(read.status, OPERATION_STATUS.COMPLETED);
     assert.strictEqual(read.content, "# Trademark Filing Guide");
+  });
+
+  test("a trailing result for an already-completed call does not resolve an unrelated in-flight call", () => {
+    // Copilot pairs start/complete itself, emits a semantic COMPLETED event,
+    // then a TOOL_RESULT for the same call id. That trailing result must land
+    // on its own row, not on whatever id-less call is still running.
+    const events: CliEvent[] = [
+      {
+        type: CLI_EVENT_TYPES.BASH_COMMAND,
+        timestamp: 1,
+        data: {
+          command: "npm run typecheck",
+          status: OPERATION_STATUS.INITIATED,
+          toolCallId: "call_typecheck",
+        } as BashCommandData,
+      },
+      {
+        type: CLI_EVENT_TYPES.WEB_SEARCH,
+        timestamp: 2,
+        data: { query: "vitest timeout" } as WebSearchData,
+      },
+      {
+        type: CLI_EVENT_TYPES.BASH_COMMAND,
+        timestamp: 3,
+        data: {
+          command: "npm run typecheck",
+          output: "no errors",
+          status: OPERATION_STATUS.COMPLETED,
+          toolCallId: "call_typecheck",
+        } as BashCommandData,
+      },
+      {
+        type: CLI_EVENT_TYPES.TOOL_RESULT,
+        timestamp: 4,
+        data: {
+          toolCallId: "call_typecheck",
+          result: { success: true, output: "no errors" },
+        },
+      },
+    ];
+
+    const normalized = normalizeCliEvents(events);
+
+    assert.deepStrictEqual(
+      normalized.map((e) => e.type),
+      [CLI_EVENT_TYPES.BASH_COMMAND, CLI_EVENT_TYPES.WEB_SEARCH]
+    );
+    const search = normalized[1].data as WebSearchData;
+    assert.strictEqual(search.success, undefined);
+    assert.strictEqual(search.results, undefined);
+  });
+
+  test("pairs same-text commands running in parallel by their own call ids", () => {
+    const initiated = (toolCallId: string, timestamp: number): CliEvent => ({
+      type: CLI_EVENT_TYPES.BASH_COMMAND,
+      timestamp,
+      data: {
+        command: "npm test",
+        status: OPERATION_STATUS.INITIATED,
+        toolCallId,
+      } as BashCommandData,
+    });
+    const events: CliEvent[] = [
+      initiated("call_a", 1),
+      initiated("call_b", 2),
+      {
+        type: CLI_EVENT_TYPES.BASH_COMMAND,
+        timestamp: 3,
+        data: {
+          command: "npm test",
+          output: "a passed",
+          status: OPERATION_STATUS.COMPLETED,
+          toolCallId: "call_a",
+        } as BashCommandData,
+      },
+    ];
+
+    const [first, second] = normalizeCliEvents(events).map(
+      (e) => e.data as BashCommandData
+    );
+
+    assert.strictEqual(first.toolCallId, "call_a");
+    assert.strictEqual(first.status, OPERATION_STATUS.COMPLETED);
+    assert.strictEqual(first.output, "a passed");
+    assert.strictEqual(second.toolCallId, "call_b");
+    assert.strictEqual(second.status, OPERATION_STATUS.INITIATED);
+  });
+
+  test("pairs a call's relative start path with its absolute completion path", () => {
+    // Copilot's multi-file apply_patch starts with the patch's relative paths
+    // but completes with the absolute paths from the git diff it reports.
+    const edit = (
+      filePath: string,
+      status: FileEditData["status"],
+      timestamp: number
+    ): CliEvent => ({
+      type: CLI_EVENT_TYPES.FILE_EDIT,
+      timestamp,
+      data: {
+        path: filePath,
+        status,
+        toolCallId: "call_patch",
+      } as FileEditData,
+    });
+    const events: CliEvent[] = [
+      edit("src/core/PromptQueue.ts", OPERATION_STATUS.INITIATED, 1),
+      edit("src/core/WorkflowExecutor.ts", OPERATION_STATUS.INITIATED, 2),
+      edit(
+        "C:/dev/ctrlyoke.worktrees/big-feature/src/core/PromptQueue.ts",
+        OPERATION_STATUS.COMPLETED,
+        3
+      ),
+      edit(
+        "C:/dev/ctrlyoke.worktrees/big-feature/src/core/WorkflowExecutor.ts",
+        OPERATION_STATUS.COMPLETED,
+        4
+      ),
+    ];
+
+    const normalized = normalizeCliEvents(events);
+
+    assert.strictEqual(normalized.length, 2);
+    assert.ok(
+      normalized.every(
+        (e) => (e.data as FileEditData).status === OPERATION_STATUS.COMPLETED
+      )
+    );
   });
 });
