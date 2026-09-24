@@ -19,7 +19,12 @@ import type {
   AskUserQuestionDeclined,
   CompactionData,
   FollowUpResumedData,
+  BackgroundWorkHoldData,
 } from "../types/CliOutputTypes";
+import {
+  getBackgroundTaskLabel,
+  getBackgroundWorkHoldHeadline,
+} from "../utils/BackgroundWorkHoldText";
 import {
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
@@ -1141,6 +1146,31 @@ export class CliTerminalFormatter {
           ),
           chalk.blue
         );
+        break;
+      }
+
+      case CLI_EVENT_TYPES.BACKGROUND_WORK_HOLD: {
+        CliTerminalFormatter.flushStreamingBuffer(target);
+        const data = event.data as BackgroundWorkHoldData;
+        const timestamp = data.heldAt
+          ? new Date(data.heldAt).toLocaleTimeString()
+          : "";
+        writeEventLine(
+          chalk.yellow(
+            `⏸ ${getBackgroundWorkHoldHeadline(data)}${timestamp ? ` (${timestamp})` : ""}`
+          ),
+          chalk.yellow
+        );
+        for (const task of data.pendingTasks) {
+          const { name, meta, command } = getBackgroundTaskLabel(task);
+          writeEventLine(
+            `  • ${name}${meta ? chalk.dim(` (${meta})`) : ""}`,
+            chalk.yellow
+          );
+          if (command) {
+            writeEventLine(chalk.dim(`    $ ${command}`), chalk.yellow);
+          }
+        }
         break;
       }
 

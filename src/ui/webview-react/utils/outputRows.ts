@@ -8,6 +8,7 @@ import {
 } from "../types/messages";
 import type {
   AskUserQuestionData,
+  BackgroundWorkHoldData,
   CliOutput as CliOutputType,
   CliEvent,
   McpToolCallData,
@@ -42,6 +43,7 @@ import type {
 } from "@root/types/OutputHistoryTypes";
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import { resolveTokenTotal } from "@root/utils/TokenFormatting";
+import { getBackgroundTaskLabel } from "@root/utils/BackgroundWorkHoldText";
 import type { OutputMessage, OutputMessageTarget } from "./outputProjection";
 import { getTargetKey, outputMessageIdentityKey } from "./outputProjection";
 import { computePromptChangeSummary } from "./promptUndo";
@@ -564,7 +566,8 @@ function getEffectiveStepHarness(
   // defaults while viewing a run must not recolor its existing output.
   if (step.type === STEP_TYPES.SCRIPT) return undefined;
   return (step._runtime?.harness ?? step.harness ?? effectiveHarness) as
-    HarnessId | undefined;
+    | HarnessId
+    | undefined;
 }
 
 function getStepOutputArtifacts(
@@ -1225,6 +1228,23 @@ function estimateCollapsedScriptVerdictHeight(
  * over `my-2`, with only the row's own `px-[var(--spacing-md)]` taken out
  * horizontally — ToolCallBlock adds no padding of its own.
  */
+/**
+ * `BackgroundWorkHoldOutput` truncates every line, so its height is its line
+ * count: the headline, then per task a name line plus a command line when the
+ * task has one, with the list's top margin; `my-2` wraps the whole row.
+ */
+function estimateBackgroundWorkHoldHeight(
+  data: BackgroundWorkHoldData,
+  outputFontSize: number
+): number {
+  const taskLines = data.pendingTasks.reduce(
+    (lines, task) => lines + (getBackgroundTaskLabel(task).command ? 2 : 1),
+    0
+  );
+  const listChrome = taskLines > 0 ? 4 : 0;
+  return (1 + taskLines) * toolCallLineHeight(outputFontSize) + listChrome + 16;
+}
+
 function estimateTerminalSummaryHeight(
   text: string,
   outputContentWidth: number | undefined,
@@ -1588,6 +1608,12 @@ function estimateStructuredTextHeight(
         fullContentWidth,
         outputFontSize,
         18
+      );
+    }
+    case CLI_EVENT_TYPES.BACKGROUND_WORK_HOLD: {
+      return estimateBackgroundWorkHoldHeight(
+        row.event.data as BackgroundWorkHoldData,
+        outputFontSize
       );
     }
     case CLI_EVENT_TYPES.ASK_USER_QUESTION: {

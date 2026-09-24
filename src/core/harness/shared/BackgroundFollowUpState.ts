@@ -1,3 +1,8 @@
+import type {
+  BackgroundTaskSummary,
+  BackgroundWorkHoldSnapshot,
+} from "../../../types/CliOutputTypes";
+
 /**
  * Provider-agnostic state for a CLI background task that wakes a resumed turn.
  *
@@ -20,7 +25,8 @@ export interface BackgroundFollowUpStateOptions {
 }
 
 export class BackgroundFollowUpState {
-  private readonly pendingTaskIds = new Set<string>();
+  /** Pending task id -> what is known about it, for display only. */
+  private readonly pendingTasks = new Map<string, BackgroundTaskSummary>();
   private readonly staleStopGuardChecks: number;
   private resumedTurnCompletionPending = false;
   private staleStopGuardChecksRemaining = 0;
@@ -32,16 +38,29 @@ export class BackgroundFollowUpState {
     );
   }
 
-  /** Record a confirmed background-task launch. Duplicate IDs are harmless. */
-  launch(taskId: string): void {
-    if (taskId) {
-      this.pendingTaskIds.add(taskId);
+  /**
+   * Record a confirmed background-task launch. Duplicate IDs are harmless; a
+   * repeat launch merges its summary into what is already known, so a later
+   * signal can add detail (such as the provider task id) to an earlier one.
+   */
+  launch(taskId: string, summary: BackgroundTaskSummary = {}): void {
+    if (!taskId) {
+      return;
     }
+    const merged: BackgroundTaskSummary = { ...this.pendingTasks.get(taskId) };
+    for (const [key, value] of Object.entries(summary) as Array<
+      [keyof BackgroundTaskSummary, string | undefined]
+    >) {
+      if (value) {
+        merged[key] = value;
+      }
+    }
+    this.pendingTasks.set(taskId, merged);
   }
 
   /** Remove a launch that failed before it could produce a resumed turn. */
   remove(taskId: string): boolean {
-    return this.pendingTaskIds.delete(taskId);
+    return this.pendingTasks.delete(taskId);
   }
 
   /**
@@ -49,7 +68,7 @@ export class BackgroundFollowUpState {
    * turn. Unmatched and duplicate notifications do not alter state.
    */
   consumeNotification(taskId: string): boolean {
-    if (!this.pendingTaskIds.delete(taskId)) {
+    if (!this.pendingTasks.delete(taskId)) {
       return false;
     }
     this.resumedTurnCompletionPending = true;
@@ -67,14 +86,14 @@ export class BackgroundFollowUpState {
 
   /** Clear all state at the provider's session lifecycle boundary. */
   reset(): void {
-    this.pendingTaskIds.clear();
+    this.pendingTasks.clear();
     this.resumedTurnCompletionPending = false;
     this.staleStopGuardChecksRemaining = 0;
   }
 
   /** Whether the provider still blocks completion at the current check. */
   isCompletionBlocked(): boolean {
-    if (this.pendingTaskIds.size > 0 || this.resumedTurnCompletionPending) {
+    if (this.pendingTasks.size > 0 || this.resumedTurnCompletionPending) {
       return true;
     }
     if (this.staleStopGuardChecksRemaining > 0) {
@@ -87,5 +106,16 @@ export class BackgroundFollowUpState {
   /** Whether a consumed notification is still awaiting its resumed turn close. */
   isResumedTurnPending(): boolean {
     return this.resumedTurnCompletionPending;
+  }
+
+  /**
+   * What is blocking completion, for display. Side-effect free, unlike
+   * `isCompletionBlocked()`, so it is safe to call at any time.
+   */
+  snapshot(): BackgroundWorkHoldSnapshot {
+    return {
+      pendingTasks: [...this.pendingTasks.values()],
+      awaitingResumedTurn: this.resumedTurnCompletionPending,
+    };
   }
 }

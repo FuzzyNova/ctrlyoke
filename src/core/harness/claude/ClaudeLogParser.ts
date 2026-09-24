@@ -18,6 +18,8 @@ import {
   ToolResultData,
   CompactionData,
   ProviderModelUsage,
+  BackgroundTaskSummary,
+  BackgroundWorkHoldSnapshot,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -149,6 +151,14 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   private pendingTaskStopTargets = new Map<string, string>();
 
   /**
+   * tool_use id -> display summary, held only until that call's result
+   * arrives. A launch is often confirmed by the result (an auto-promoted
+   * foreground command, an async Agent/Monitor), and the result carries none
+   * of the call's description or command.
+   */
+  private toolUseSummaries = new Map<string, BackgroundTaskSummary>();
+
+  /**
    * Set the workspace root directory for session log discovery.
    * Called by CliIntegration so the log parser knows where to look.
    */
@@ -169,6 +179,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     this.unconfirmedAsyncLaunches.clear();
     this.backgroundTaskLaunchToolUseIds.clear();
     this.pendingTaskStopTargets.clear();
+    this.toolUseSummaries.clear();
   }
 
   /**
@@ -720,6 +731,8 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       ) {
         continue;
       }
+      const summary = this.toolUseSummaries.get(toolUseId);
+      this.toolUseSummaries.delete(toolUseId);
 
       if (block.is_error === true) {
         this.backgroundFollowUpState.remove(toolUseId);
@@ -734,7 +747,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       const backgroundTaskId = resultMetadata?.backgroundTaskId;
       if (block.is_error !== true && typeof backgroundTaskId === "string") {
         this.backgroundTaskLaunchToolUseIds.set(backgroundTaskId, toolUseId);
-        this.backgroundFollowUpState.launch(toolUseId);
+        this.backgroundFollowUpState.launch(toolUseId, {
+          ...summary,
+          taskId: backgroundTaskId,
+        });
       }
 
       // An Agent launch's confirmed-async result carries `agentId` (e.g.
@@ -750,7 +766,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         typeof agentId === "string"
       ) {
         this.backgroundTaskLaunchToolUseIds.set(agentId, toolUseId);
-        this.backgroundFollowUpState.launch(toolUseId);
+        this.backgroundFollowUpState.launch(toolUseId, {
+          ...summary,
+          taskId: agentId,
+        });
       }
 
       const stoppedTaskId = this.pendingTaskStopTargets.get(toolUseId);
@@ -778,7 +797,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           ? resultText.includes("Async agent launched successfully")
           : resultText.includes("Monitor started");
       if (block.is_error !== true && launchConfirmed) {
-        this.backgroundFollowUpState.launch(toolUseId);
+        this.backgroundFollowUpState.launch(toolUseId, summary);
       }
     }
   }
@@ -821,8 +840,11 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
             continue;
           }
 
+          const summary = ClaudeLogParser.summarizeToolUse(block);
+          this.toolUseSummaries.set(block.id, summary);
+
           if (block.input?.run_in_background === true) {
-            this.backgroundFollowUpState.launch(block.id);
+            this.backgroundFollowUpState.launch(block.id, summary);
           } else if (
             block.name === CLAUDE_TOOL_NAMES.AGENT &&
             block.input?.run_in_background !== false
@@ -891,6 +913,23 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
 
   override hasPendingBackgroundWork(): boolean {
     return this.backgroundFollowUpState.isCompletionBlocked();
+  }
+
+  override getBackgroundWorkHoldSnapshot(): BackgroundWorkHoldSnapshot {
+    return this.backgroundFollowUpState.snapshot();
+  }
+
+  /** Display summary of a tool_use block, in case it turns into a background task. */
+  private static summarizeToolUse(
+    block: Record<string, any>
+  ): BackgroundTaskSummary {
+    const input = block.input ?? {};
+    return {
+      toolName: typeof block.name === "string" ? block.name : undefined,
+      description:
+        typeof input.description === "string" ? input.description : undefined,
+      command: typeof input.command === "string" ? input.command : undefined,
+    };
   }
 
   /**

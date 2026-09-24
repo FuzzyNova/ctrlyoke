@@ -13,7 +13,11 @@ import { ClaudeLogParser } from "../../core/harness/claude/ClaudeLogParser";
 import { CopilotLogParser } from "../../core/harness/copilot/CopilotLogParser";
 import { AntigravityLogParser } from "../../core/harness/antigravity/AntigravityLogParser";
 import { CLI_EVENT_TYPES, FAILURE_KINDS } from "../../types/DashboardConstants";
-import type { CliEvent, TextData } from "../../types/CliOutputTypes";
+import type {
+  BackgroundWorkHoldData,
+  CliEvent,
+  TextData,
+} from "../../types/CliOutputTypes";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 const USER_EVENT_TYPE = "user";
@@ -367,6 +371,70 @@ suite("CliLogMonitor", () => {
     });
   });
 
+  test("reports every absorbed Stop as a background-work-hold event that survives into the final output", async () => {
+    await withZeroDrainDeadline(async () => {
+      const snapshot = {
+        pendingTasks: [
+          {
+            toolName: "Bash",
+            description: "Run full real-harness test suite",
+            taskId: "b2gz1o2ty",
+          },
+        ],
+        awaitingResumedTurn: false,
+      };
+      let pendingCheckCount = 0;
+      const streamed: CliEvent[] = [];
+      const monitor = new CliLogMonitor({
+        logParser: createParser({
+          // Pending at the first Stop and at a second Stop that arrives
+          // during the hold; clear once a third Stop has arrived.
+          hasPendingBackgroundWork: () => ++pendingCheckCount <= 3,
+          getBackgroundWorkHoldSnapshot: () => snapshot,
+        }),
+        notificationMonitor: createNotificationMonitor({
+          monitorForCompletion: async () => ({
+            completed: true,
+            kind: "completion",
+            data: {},
+          }),
+        }),
+        runtimeState: {
+          getWorkspaceRoot: () => os.tmpdir(),
+          isCancelling: () => false,
+        },
+        hostCallbacks: {
+          onStreamingEvents: (events) => streamed.push(...events),
+          onResponseComplete: () => undefined,
+          logResponse: () => undefined,
+        },
+      });
+
+      const result = await monitor.monitor(
+        "session.jsonl",
+        "sess-hold-row",
+        new Date(0),
+        "test-model"
+      );
+
+      const isHold = (event: CliEvent) =>
+        event.type === CLI_EVENT_TYPES.BACKGROUND_WORK_HOLD;
+      const streamedHolds = streamed.filter(isHold);
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(streamedHolds.length, 2);
+      for (const hold of streamedHolds) {
+        const data = hold.data as BackgroundWorkHoldData;
+        assert.deepStrictEqual(data.pendingTasks, snapshot.pendingTasks);
+        assert.strictEqual(data.awaitingResumedTurn, false);
+        assert.strictEqual(typeof data.heldAt, "number");
+      }
+      assert.deepStrictEqual(
+        result.parsedOutput?.events.filter(isHold),
+        streamedHolds
+      );
+    });
+  });
+
   test("ignores an intermediate Claude Stop until the task-notification resumed turn finishes", async () => {
     await withZeroDrainDeadline(async () => {
       const parser = new ClaudeLogParser();
@@ -620,6 +688,132 @@ suite("CliLogMonitor", () => {
           notificationCallCount >= 2,
           "expected the hold to have started waiting on a further Stop"
         );
+      } finally {
+        removeTempDir(tempDir);
+      }
+    });
+  });
+
+  test("holds on one deadline-free Stop wait across log activity until the pending Claude task reports", async () => {
+    // Regression for a real production run: the hold used to commit the step
+    // a fixed 10 minutes after it began, however active the session was —
+    // a background `npm run test:harness` still running, and in another step
+    // the model still mid-turn after consuming both task notifications. Every
+    // log event during the hold also re-armed a fresh Stop poller without
+    // stopping the old one, so abandoned pollers piled up and could consume
+    // a later Stop file nobody was left to read. The hold must keep exactly
+    // one open-ended Stop wait while work is pending, and release only once
+    // the task's notification arrives and the resumed turn ends.
+    await withZeroDrainDeadline(async () => {
+      const tempDir = makeTempDir("ctrlyoke-claude-hold-");
+      const logPath = path.join(tempDir, "session.jsonl");
+
+      try {
+        const writeLine = (event: Record<string, unknown>) =>
+          fs.appendFileSync(logPath, JSON.stringify(event) + "\n", "utf8");
+        const waitFor = async (condition: () => boolean) => {
+          for (let attempt = 0; attempt < 200 && !condition(); attempt++) {
+            await new Promise((resolve) => setTimeout(resolve, 5));
+          }
+        };
+
+        writeLine({
+          type: "assistant",
+          timestamp: "2026-01-01T00:00:00.000Z",
+          sessionId: "sess-hold",
+          message: {
+            content: [
+              {
+                type: "tool_use",
+                id: "toolu_bg",
+                name: "Bash",
+                input: { run_in_background: true },
+              },
+            ],
+            stop_reason: "tool_use",
+          },
+        });
+
+        const parser = new ClaudeLogParser();
+        const holdTimeouts: number[] = [];
+        let resolveFirstStop: (() => void) | undefined;
+        let processedEventCount = 0;
+
+        const monitor = new CliLogMonitor({
+          logParser: parser,
+          notificationMonitor: createNotificationMonitor({
+            monitorForCompletion: async (config) => {
+              if (!resolveFirstStop) {
+                return await new Promise((resolve) => {
+                  resolveFirstStop = () =>
+                    resolve({ completed: true, kind: "completion", data: {} });
+                });
+              }
+              holdTimeouts.push(config.timeoutMs);
+              return await new Promise(() => {});
+            },
+          }),
+          runtimeState: {
+            getWorkspaceRoot: () => tempDir,
+            isCancelling: () => false,
+          },
+          hostCallbacks: {
+            onStreamingEvents: (events) => {
+              processedEventCount += events.length;
+            },
+            onResponseComplete: () => undefined,
+            logResponse: () => undefined,
+          },
+        });
+
+        const monitorPromise = monitor.monitor(
+          logPath,
+          "sess-hold",
+          new Date(0),
+          "claude-opus-5"
+        );
+
+        await waitFor(() => !!resolveFirstStop);
+        assert.ok(resolveFirstStop, "the first Stop callback was not captured");
+        resolveFirstStop!();
+        await waitFor(() => holdTimeouts.length > 0);
+
+        // Session activity while the task is still running — each line is a
+        // separate hold wake that must not open another Stop poller.
+        for (let index = 0; index < 3; index++) {
+          const before = processedEventCount;
+          writeLine({
+            type: "assistant",
+            timestamp: `2026-01-01T00:00:0${index + 1}.000Z`,
+            message: {
+              content: [{ type: "text", text: `Still waiting ${index}.` }],
+              stop_reason: "end_turn",
+            },
+          });
+          await waitFor(() => processedEventCount > before);
+        }
+
+        writeLine({
+          type: "user",
+          timestamp: "2026-01-01T00:00:05.000Z",
+          message: {
+            content:
+              "<task-notification>\n<tool-use-id>toolu_bg</tool-use-id>\n<status>completed</status>\n</task-notification>",
+          },
+        });
+        writeLine({
+          type: "assistant",
+          timestamp: "2026-01-01T00:00:06.000Z",
+          message: {
+            content: [{ type: "text", text: "Suite passed." }],
+            stop_reason: "end_turn",
+          },
+        });
+
+        const result = await monitorPromise;
+
+        assert.strictEqual(result.success, true);
+        assert.deepStrictEqual(holdTimeouts, [Number.MAX_SAFE_INTEGER]);
       } finally {
         removeTempDir(tempDir);
       }

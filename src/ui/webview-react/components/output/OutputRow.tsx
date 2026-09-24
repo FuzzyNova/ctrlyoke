@@ -43,8 +43,10 @@ import {
   type BashOutputExpansionState,
 } from "./BashOutput";
 import { ScriptVerdict } from "./ScriptVerdict";
+import { BackgroundWorkHoldOutput } from "./BackgroundWorkHoldOutput";
 import type {
   AskUserQuestionData,
+  BackgroundWorkHoldData,
   BashCommandData,
   CliEvent,
   CompactionData,
@@ -1086,6 +1088,12 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
           </div>
         );
       }
+      case CLI_EVENT_TYPES.BACKGROUND_WORK_HOLD:
+        return (
+          <BackgroundWorkHoldOutput
+            data={event.data as BackgroundWorkHoldData}
+          />
+        );
       default:
         return null;
     }

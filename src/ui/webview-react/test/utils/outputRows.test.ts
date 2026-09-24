@@ -1070,6 +1070,74 @@ describe("outputRows", () => {
     );
   });
 
+  it("renders a background-work hold as a structured row sized by its task lines", () => {
+    const buildHoldRow = (
+      pendingTasks: Array<{ description?: string; command?: string }>
+    ) => {
+      const result = buildOutputRows({
+        allMessages: [
+          {
+            type: "cli",
+            target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+            timestamp: 1000,
+            attemptIndex: 0,
+            runIndex: 0,
+            data: {
+              prompt: "Run the suite",
+              response: "",
+              elapsed: 0,
+              isStreaming: true,
+              structured: {
+                events: [
+                  {
+                    type: CLI_EVENT_TYPES.BACKGROUND_WORK_HOLD,
+                    data: {
+                      heldAt: 2000,
+                      awaitingResumedTurn: false,
+                      pendingTasks,
+                    },
+                  },
+                ],
+                metadata: {},
+              },
+            },
+          },
+        ],
+        steps,
+        finalStep: null,
+        streamingChunks: {},
+        finalStepStreamingChunks: {},
+        isExecutionActive: true,
+        allowUndoActions: false,
+        isViewingHistory: false,
+        historyOutputs: null,
+        workspaceSnapshots: {},
+        finalStepWorkspaceSnapshots: {},
+        undoRecords: {},
+        diffCollapseState: new Map(),
+        diffExpansionState: new Map(),
+        toolCallExpansionState: new Map(),
+        defaultDiffCollapsed: false,
+      });
+      const row = result.rows.find(
+        (candidate) =>
+          candidate.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
+          candidate.event.type === CLI_EVENT_TYPES.BACKGROUND_WORK_HOLD
+      );
+      if (!row) throw new Error("Expected a background-work hold row");
+      return row;
+    };
+
+    const nameOnly = buildHoldRow([{ command: "npm test" }]);
+    const nameAndCommand = buildHoldRow([
+      { description: "Run tests", command: "npm test" },
+    ]);
+    expect(
+      estimateOutputRowHeight(nameAndCommand, 13, 760) -
+        estimateOutputRowHeight(nameOnly, 13, 760)
+    ).toBe(toolCallLineHeight(13));
+  });
+
   it("keeps streaming chunks isolated by execution phase", () => {
     const allMessages: OutputMessage[] = [
       {

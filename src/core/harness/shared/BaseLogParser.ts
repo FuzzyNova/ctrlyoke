@@ -7,6 +7,7 @@ import {
   UserEventClassification,
 } from "./interfaces/ILogParser";
 import {
+  BackgroundWorkHoldSnapshot,
   CliEvent,
   TextData,
   UniversalCliOutput,
@@ -247,6 +248,13 @@ export abstract class BaseLogParser implements ILogParser {
    */
   hasPendingBackgroundWork(): boolean {
     return false;
+  }
+
+  /**
+   * Default: nothing pending — see `trackBackgroundWorkState`.
+   */
+  getBackgroundWorkHoldSnapshot(): BackgroundWorkHoldSnapshot {
+    return { pendingTasks: [], awaitingResumedTurn: false };
   }
 
   /**

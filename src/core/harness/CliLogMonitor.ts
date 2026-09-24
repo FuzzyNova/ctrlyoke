@@ -1,5 +1,6 @@
 import type * as fs from "fs";
 import type {
+  BackgroundWorkHoldData,
   CliEvent,
   CliResult,
   UniversalCliOutput,
@@ -15,7 +16,10 @@ import { Log } from "../../utils/Log";
 import { extractTextFromEvents } from "./shared/CliResponseTextExtractor";
 import { CliLogEventPump } from "./shared/CliLogEventPump";
 import type { BaseCliEvent, ILogParser } from "./shared/interfaces/ILogParser";
-import type { INotificationMonitor } from "./shared/interfaces/INotificationMonitor";
+import type {
+  INotificationMonitor,
+  NotificationResult,
+} from "./shared/interfaces/INotificationMonitor";
 
 /** Maximum time (ms) spent draining log entries after completion. */
 export const DRAIN_DEADLINE_MS = 2000;
@@ -23,22 +27,23 @@ export const DRAIN_DEADLINE_MS = 2000;
 export const DRAIN_POLL_INTERVAL_MS = 150;
 
 /**
- * Preserve synthetic user-steer events in parser-produced final output.
+ * Preserve synthetic events in parser-produced final output.
  *
- * User steers are created by `CliLogEventPump`, not by harness parsers, so a
- * later `extractResponse()` call cannot reconstruct them. Merge the observed
- * events back by timestamp while preserving each source's existing order.
+ * User steers (created by `CliLogEventPump`) and background-work holds
+ * (created by the monitor itself) do not come from harness parsers, so a later
+ * `extractResponse()` call cannot reconstruct them. Merge the observed events
+ * back by timestamp while preserving each source's existing order.
  */
-function mergeObservedUserSteers(
+function mergeObservedSyntheticEvents(
   response: UniversalCliOutput,
-  observedUserSteers: CliEvent[]
+  observedSyntheticEvents: CliEvent[]
 ): UniversalCliOutput {
-  if (observedUserSteers.length === 0) {
+  if (observedSyntheticEvents.length === 0) {
     return response;
   }
 
   const events = [...response.events];
-  for (const steer of observedUserSteers) {
+  for (const steer of observedSyntheticEvents) {
     const insertAt =
       steer.timestamp === undefined
         ? -1
@@ -167,12 +172,12 @@ export class CliLogMonitor {
     const parser = this.deps.logParser;
     parser.setCurrentModel?.(model);
     const events: BaseCliEvent[] = [];
-    const observedUserSteers: CliEvent[] = [];
+    const observedSyntheticEvents: CliEvent[] = [];
     const pump = new CliLogEventPump({
       parser,
       model,
       onStreamingEvents: (streamingEvents) => {
-        observedUserSteers.push(
+        observedSyntheticEvents.push(
           ...streamingEvents.filter(
             (event) => event.type === CLI_EVENT_TYPES.USER_STEER
           )
@@ -219,9 +224,9 @@ export class CliLogMonitor {
 
         const partialResponse =
           events.length > 0
-            ? mergeObservedUserSteers(
+            ? mergeObservedSyntheticEvents(
                 parser.extractResponse(events),
-                observedUserSteers
+                observedSyntheticEvents
               )
             : undefined;
         const partialText = partialResponse
@@ -283,9 +288,9 @@ export class CliLogMonitor {
         }
 
         // Extract final response from accumulated events
-        const response = mergeObservedUserSteers(
+        const response = mergeObservedSyntheticEvents(
           parser.extractResponse(events),
-          observedUserSteers
+          observedSyntheticEvents
         );
 
         // Copilot-specific: patch in context-window usage from whichever source is
@@ -410,15 +415,35 @@ export class CliLogMonitor {
       // harness is expected to auto-resume the same session. The still-active
       // log watcher (never closed during a hold) keeps trackBackgroundWorkState
       // current and keeps streaming resumed output live the whole time — no
-      // separate "optimistic done" signal is needed. Bounded by an idle
-      // backstop so a background task that never reports completion (an
-      // abandoned task, a long-lived dev server) can't hold a workflow forever.
+      // separate "optimistic done" signal is needed. Deliberately unbounded
+      // while work is pending: a background test run can legitimately sit
+      // silent for far longer than any fixed cap, and committing early is the
+      // bug this hold exists to prevent. Cancellation, PTY exit, a harness
+      // error, and `maxPromptTimeout` (via `completed`) still release it.
       // ──────────────────────────────────────────────────────
       let holdingForBackgroundWork = false;
       // Resolver for "another log event was just processed while holding" —
       // see the race inside `runBackgroundWorkHold` for why this exists
       // alongside the notification-file wait.
       let onHoldWake: (() => void) | undefined;
+
+      // Tell the user a Stop was absorbed, and what it is waiting on — the
+      // hold has no time-based release, so without this a step waiting on a
+      // hung background task would look stuck for no visible reason.
+      const reportAbsorbedStop = () => {
+        const snapshot = parser.getBackgroundWorkHoldSnapshot?.() ?? {
+          pendingTasks: [],
+          awaitingResumedTurn: false,
+        };
+        const heldAt = Date.now();
+        const holdEvent: CliEvent = {
+          type: CLI_EVENT_TYPES.BACKGROUND_WORK_HOLD,
+          timestamp: heldAt,
+          data: { heldAt, ...snapshot } satisfies BackgroundWorkHoldData,
+        };
+        observedSyntheticEvents.push(holdEvent);
+        this.deps.hostCallbacks.onStreamingEvents([holdEvent]);
+      };
 
       const runBackgroundWorkHold = async (): Promise<void> => {
         holdingForBackgroundWork = true;
@@ -427,8 +452,14 @@ export class CliLogMonitor {
         );
 
         const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
-        const backstopMs = ConfigurationUtils.getBackgroundWorkIdleBackstopMs();
-        const holdStarted = Date.now();
+        // The single in-flight Stop/error wait. A log-event wake re-checks
+        // state without abandoning it, and it is re-armed only once it has
+        // settled: an abandoned poller keeps running and can consume (delete)
+        // the next Stop file with nobody left to read its result.
+        let pendingNotification: Promise<NotificationResult> | undefined;
+        // A further Stop arrived during the hold; reported only once the loop
+        // condition has confirmed work is still pending (i.e. it was absorbed).
+        let stopArrivedDuringHold = false;
 
         while (!completed && parser.hasPendingBackgroundWork!()) {
           if (!this.deps.notificationMonitor || !workspaceRoot) {
@@ -438,12 +469,9 @@ export class CliLogMonitor {
             break;
           }
 
-          const remaining = backstopMs - (Date.now() - holdStarted);
-          if (remaining <= 0) {
-            Log.warn(
-              `[CliLogMonitor] Background-work hold backstop (${backstopMs}ms) elapsed with no confirmed idle — committing anyway`
-            );
-            break;
+          if (stopArrivedDuringHold) {
+            stopArrivedDuringHold = false;
+            reportAbsorbedStop();
           }
 
           const notifyDir =
@@ -461,12 +489,16 @@ export class CliLogMonitor {
           // no intervening Stop (see harness-integrations.instructions.md),
           // so the turn that actually clears `hasPendingBackgroundWork()` may
           // never produce a *second* Stop-hook file to wake this loop —
-          // without this race the hold would sit until the idle backstop
-          // even though the watcher (`CliLogEventPump` →
-          // `trackBackgroundWorkState`) already observed the closing event.
-          const notificationResult =
+          // without this race the hold would never release even though the
+          // watcher (`CliLogEventPump` → `trackBackgroundWorkState`) already
+          // observed the closing event.
+          pendingNotification ??=
             this.deps.notificationMonitor.monitorForCompletion(
-              { directory: notifyDir, timeoutMs: remaining, pollMs: 100 },
+              {
+                directory: notifyDir,
+                timeoutMs: Number.MAX_SAFE_INTEGER,
+                pollMs: 100,
+              },
               monitoringSessionId,
               new Date(),
               () =>
@@ -480,7 +512,7 @@ export class CliLogMonitor {
           });
 
           const winner = await Promise.race([
-            notificationResult.then((result) => ({
+            pendingNotification.then((result) => ({
               kind: "notification" as const,
               result,
             })),
@@ -489,6 +521,7 @@ export class CliLogMonitor {
           onHoldWake = undefined;
 
           if (winner.kind === "notification") {
+            pendingNotification = undefined;
             if (
               this.deps.notificationMonitor.cleanupNotificationFiles &&
               sessionId
@@ -499,8 +532,9 @@ export class CliLogMonitor {
               );
             }
 
+            stopArrivedDuringHold = winner.result.completed;
             if (!winner.result.completed) {
-              // Timed out, cancelled, or errored mid-hold. Do not loop
+              // Cancelled, PTY exited, or errored mid-hold. Do not loop
               // forever — release so the normal cancellation/timeout/exit
               // paths (already in flight if that's what triggered this) or
               // the finalize below can settle the monitor.
@@ -565,6 +599,7 @@ export class CliLogMonitor {
         }
 
         if (parser.hasPendingBackgroundWork?.()) {
+          reportAbsorbedStop();
           void runBackgroundWorkHold();
           return;
         }
@@ -808,9 +843,9 @@ export class CliLogMonitor {
 
             const partialResponse =
               events.length > 0
-                ? mergeObservedUserSteers(
+                ? mergeObservedSyntheticEvents(
                     parser.extractResponse(events),
-                    observedUserSteers
+                    observedSyntheticEvents
                   )
                 : undefined;
             const partialText = partialResponse

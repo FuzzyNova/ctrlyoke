@@ -93,4 +93,39 @@ suite("BackgroundFollowUpState", () => {
     assert.strictEqual(state.isCompletionBlocked(), true);
     assert.strictEqual(state.isCompletionBlocked(), false);
   });
+
+  test("merges later launch detail into a pending task without losing earlier fields", () => {
+    const state = new BackgroundFollowUpState();
+
+    state.launch("toolu_1", { toolName: "Bash", command: "npm test" });
+    state.launch("toolu_1", { taskId: "b2gz1o2ty", command: undefined });
+    state.launch("toolu_2");
+
+    assert.deepStrictEqual(state.snapshot(), {
+      pendingTasks: [
+        { toolName: "Bash", command: "npm test", taskId: "b2gz1o2ty" },
+        {},
+      ],
+      awaitingResumedTurn: false,
+    });
+
+    state.consumeNotification("toolu_1");
+    state.remove("toolu_2");
+    assert.deepStrictEqual(state.snapshot(), {
+      pendingTasks: [],
+      awaitingResumedTurn: true,
+    });
+  });
+
+  test("snapshot does not consume stale-stop guard checks", () => {
+    const state = new BackgroundFollowUpState({ staleStopGuardChecks: 1 });
+    state.launch("task-1");
+    state.consumeNotification("task-1");
+    state.resumedTurnClosed();
+
+    state.snapshot();
+    state.snapshot();
+    assert.strictEqual(state.isCompletionBlocked(), true);
+    assert.strictEqual(state.isCompletionBlocked(), false);
+  });
 });

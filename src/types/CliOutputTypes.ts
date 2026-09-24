@@ -52,6 +52,7 @@ export type CliEventData =
   | CompactionData
   | UserSteerData
   | FollowUpResumedData
+  | BackgroundWorkHoldData
   | ContextWindowSyncData
   | AskUserQuestionData;
 
@@ -82,6 +83,42 @@ export interface FollowUpResumedData {
   /** When the follow-up activity was first observed (ms since epoch) */
   resumedAt: number;
 }
+
+/**
+ * A background task a harness launched that has not yet reported completion.
+ * Every field is optional because what each harness exposes differs; renderers
+ * fall back from `description` to `command` to `toolName` to `taskId`.
+ */
+export interface BackgroundTaskSummary {
+  /** The harness's own task identity (Claude task id, Copilot shell id, agy task id) */
+  taskId?: string;
+  /** Human-readable purpose — the launching tool call's description */
+  description?: string;
+  /** Command line, for shell launches */
+  command?: string;
+  /** Tool that launched it (e.g. Bash, PowerShell, Agent, Monitor) */
+  toolName?: string;
+}
+
+/**
+ * Data for a background-work-hold event — a Stop hook arrived but the step was
+ * kept running because the harness still had background work pending.
+ * Display-only.
+ */
+export interface BackgroundWorkHoldData {
+  /** When the absorbed Stop was received (ms since epoch) */
+  heldAt: number;
+  /** Background tasks still running at that Stop */
+  pendingTasks: BackgroundTaskSummary[];
+  /**
+   * Every task has reported, but the turn its notification resumed has not
+   * ended yet — the step is waiting on that turn rather than on a task.
+   */
+  awaitingResumedTurn: boolean;
+}
+
+/** What a log parser reports about its pending background work at a Stop. */
+export type BackgroundWorkHoldSnapshot = Omit<BackgroundWorkHoldData, "heldAt">;
 
 /**
  * Data for a context-window-sync event — an invisible marker carrying updated

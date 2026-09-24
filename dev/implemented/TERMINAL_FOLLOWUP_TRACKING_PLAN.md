@@ -32,6 +32,27 @@ in the same poll.
 instance. The monitor pauses the watcher while it owns the next prompt, then
 the watcher resumes from the same read offset after that prompt settles.
 
+The hold has **no time-based release**. It ends only when the parser reports
+no pending work, or on cancellation, PTY exit, a harness error notification, or
+`maxPromptTimeout`. An earlier version capped the hold at 10 minutes from hold
+start. Session activity never reset that cap, so it committed steps while work
+was genuinely unfinished: a background `npm run test:harness` run that took
+about 30 minutes, and a step whose model was still working mid-turn after
+consuming its task notifications. The hold keeps a single Stop-hook wait in
+flight and re-arms it only after that wait settles, so log-event wakes never
+leave orphaned pollers that could consume a later Stop file.
+
+Because the hold can last indefinitely, every Stop it absorbs is shown to the
+user. `CliLogMonitor` streams a `BACKGROUND_WORK_HOLD` event carrying the
+parser's `getBackgroundWorkHoldSnapshot()`: the pending tasks (description,
+command, launching tool, and provider task id, whichever the harness exposes)
+and whether a resumed turn is still open. The monitor merges that event into
+the step's final output the same way it merges user steers, so it survives
+completion. Parsers capture task names at the launching tool call because the
+signal that confirms a launch (Claude's `backgroundTaskId` result, Copilot's
+async `tool.execution_complete`) does not repeat them. Antigravity's launch
+record exposes only a task id.
+
 ## Claude CLI
 
 Claude records background launches in assistant `tool_use` entries. Any tool
