@@ -2,9 +2,11 @@ import {
   MESSAGE_TYPES,
   PANEL_CLIENT_ID,
   SESSION_KINDS,
+  TERMINAL_END_REASONS,
   USER_FEEDBACK_SEVERITY,
 } from "../types/DashboardConstants";
 import {
+  buildTerminalEndedMessage,
   getPtyProcessManager,
   ptyPostMessage,
   type PtySession,
@@ -215,14 +217,20 @@ export class TerminalMessageHandlers {
   handleCloseShell(message: any): void {
     const ptyManager = getPtyProcessManager();
     if (ptyManager && message.sessionId) {
-      ptyManager.killSession(message.sessionId as string);
+      ptyManager.killSession(
+        message.sessionId as string,
+        TERMINAL_END_REASONS.CLOSED
+      );
     }
   }
 
   async handleCloseAiCli(message: any): Promise<void> {
     const ptyManager = getPtyProcessManager();
     if (!ptyManager || !message.sessionId) return;
-    await ptyManager.gracefulKillAiCliSession(message.sessionId as string);
+    await ptyManager.gracefulKillAiCliSession(
+      message.sessionId as string,
+      TERMINAL_END_REASONS.CLOSED
+    );
   }
 
   handleClaimControl(ctx: WebviewClientContext, message: any): void {
@@ -265,13 +273,7 @@ export class TerminalMessageHandlers {
         });
       },
       onExit: (session, exitCode) => {
-        ptyPostMessage({
-          type: MESSAGE_TYPES.TERMINAL_ENDED,
-          workflowId: session.workflowId,
-          sessionId: session.id,
-          kind: session.kind,
-          exitCode,
-        });
+        ptyPostMessage(buildTerminalEndedMessage(session, exitCode));
       },
     };
   }

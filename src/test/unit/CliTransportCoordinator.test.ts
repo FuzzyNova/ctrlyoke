@@ -11,6 +11,8 @@ import {
   HEADLESS_SOURCE_MODES,
   MESSAGE_TYPES,
   SESSION_KINDS,
+  TERMINAL_END_REASONS,
+  type TerminalEndReason,
 } from "../../types/DashboardConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
@@ -159,7 +161,8 @@ const stdoutProviderFactories: ReadonlyArray<{
 suite("CliTransportCoordinator", () => {
   test("should keep Codex headless hook arguments out of the shell", async () => {
     let preparedCommand:
-      { promptArgument: string; cliCommand: string } | undefined;
+      | { promptArgument: string; cliCommand: string }
+      | undefined;
     const streamedChunks: string[] = [];
     const cleanedTempPaths: string[][] = [];
 
@@ -399,7 +402,8 @@ line two`,
 
   test("should parse partial headless output when cancellation is requested", async () => {
     let callbackResult:
-      { stdout: string; stderr: string; exitCode: number } | undefined;
+      | { stdout: string; stderr: string; exitCode: number }
+      | undefined;
     const cleanedTempPaths: string[][] = [];
     let cancelling = false;
 
@@ -870,6 +874,7 @@ line two`,
 
   test("should terminate the active PTY session through the PTY manager", async () => {
     let killedSessionId: string | undefined;
+    let killReason: TerminalEndReason | undefined;
 
     const coordinator = new CliTransportCoordinator({
       provider: {
@@ -920,8 +925,12 @@ line two`,
       getPtyManager: () =>
         ({
           getExpectedController: () => undefined,
-          gracefulKillAiCliSession: async (sessionId: string) => {
+          gracefulKillAiCliSession: async (
+            sessionId: string,
+            reason: TerminalEndReason
+          ) => {
             killedSessionId = sessionId;
+            killReason = reason;
           },
           spawnPty: (config: { sessionId: string; workflowId: string }) => ({
             id: config.sessionId,
@@ -943,6 +952,7 @@ line two`,
 
     assert.ok(terminatedSessionId);
     assert.strictEqual(killedSessionId, terminatedSessionId);
+    assert.strictEqual(killReason, TERMINAL_END_REASONS.SUPERSEDED);
     assert.strictEqual(
       await coordinator.terminateCurrentPtySession("second call"),
       undefined
@@ -951,6 +961,7 @@ line two`,
 
   test("should honor closeTerminalOnComplete for active PTY sessions", async () => {
     const killedSessionIds: string[] = [];
+    const killReasons: TerminalEndReason[] = [];
     let disposedProcess = false;
     let disposedAll = false;
 
@@ -1010,8 +1021,12 @@ line two`,
       getPtyManager: () =>
         ({
           getExpectedController: () => undefined,
-          gracefulKillAiCliSession: async (sessionId: string) => {
+          gracefulKillAiCliSession: async (
+            sessionId: string,
+            reason: TerminalEndReason
+          ) => {
             killedSessionIds.push(sessionId);
+            killReasons.push(reason);
           },
           spawnPty: (config: { sessionId: string; workflowId: string }) => ({
             id: config.sessionId,
@@ -1034,7 +1049,7 @@ line two`,
     assert.strictEqual(disposedAll, false);
     assert.deepStrictEqual(killedSessionIds, []);
 
-    coordinator.closeTerminal();
+    coordinator.closeTerminal(TERMINAL_END_REASONS.CLOSED);
 
     assert.strictEqual(killedSessionIds.length, 1);
 
@@ -1048,6 +1063,11 @@ line two`,
 
     assert.strictEqual(disposedAll, true);
     assert.strictEqual(killedSessionIds.length, 2);
+    // closeTerminalOnComplete is teardown after finished work, not a failure.
+    assert.deepStrictEqual(killReasons, [
+      TERMINAL_END_REASONS.CLOSED,
+      TERMINAL_END_REASONS.STEP_COMPLETE,
+    ]);
   });
 
   test("should run standalone interactive launch and stop-hook monitor", async () => {

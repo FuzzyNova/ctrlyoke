@@ -2,6 +2,7 @@ import { create } from "zustand";
 import {
   TERMINAL_SESSION_STATUS,
   SESSION_KINDS,
+  type TerminalEndReason,
   type TerminalSessionStatus,
   type SessionKind,
   type ShellKind,
@@ -25,6 +26,12 @@ export interface TerminalSession {
   /** Shell variant for SHELL sessions. Undefined for ai-cli sessions. */
   shellKind?: ShellKind;
   status: TerminalSessionStatus;
+  /**
+   * Why ctrlyoke ended this session, when it did so deliberately (from
+   * TERMINAL_ENDED). Undefined while running or when the process exited on
+   * its own.
+   */
+  endReason?: TerminalEndReason;
   /**
    * True when this client owns interactive control of the PTY (input + resize).
    * Defaults to true optimistically; updated by TERMINAL_CONTROLLER_CHANGED.
@@ -76,10 +83,17 @@ interface TerminalActions {
         | "parallelGroupId"
         | "shellKind"
         | "status"
+        | "endReason"
       >
     >
   ) => void;
-  endSession: (workflowId: string, sessionId: string, exitCode: number) => void;
+  /** Apply the extension's authoritative end status (see TerminalEndedMessage). */
+  endSession: (
+    workflowId: string,
+    sessionId: string,
+    status: TerminalSessionStatus,
+    endReason?: TerminalEndReason
+  ) => void;
   setActiveSession: (workflowId: string, sessionId: string) => void;
   /** Explicitly close/remove a session (user × button on shell sessions) */
   removeSession: (workflowId: string, sessionId: string) => void;
@@ -143,18 +157,10 @@ export const useTerminalStore = create<TerminalState & TerminalActions>()(
         return { sessions: { ...state.sessions, [workflowId]: sessions } };
       }),
 
-    endSession: (workflowId, sessionId, exitCode) =>
+    endSession: (workflowId, sessionId, status, endReason) =>
       set((state) => {
         const sessions = (state.sessions[workflowId] ?? []).map((s) =>
-          s.id === sessionId
-            ? {
-                ...s,
-                status:
-                  exitCode === 0
-                    ? TERMINAL_SESSION_STATUS.COMPLETED
-                    : TERMINAL_SESSION_STATUS.FAILED,
-              }
-            : s
+          s.id === sessionId ? { ...s, status, endReason } : s
         );
         return { sessions: { ...state.sessions, [workflowId]: sessions } };
       }),
@@ -212,7 +218,11 @@ export const useTerminalStore = create<TerminalState & TerminalActions>()(
       set((state) => {
         const sessions = (state.sessions[workflowId] ?? []).map((s) =>
           s.id === sessionId
-            ? { ...s, status: TERMINAL_SESSION_STATUS.RUNNING }
+            ? {
+                ...s,
+                status: TERMINAL_SESSION_STATUS.RUNNING,
+                endReason: undefined,
+              }
             : s
         );
         return { sessions: { ...state.sessions, [workflowId]: sessions } };

@@ -4,6 +4,9 @@ import {
   HEADLESS_SOURCE_MODES,
   MESSAGE_TYPES,
   SESSION_KINDS,
+  TERMINAL_END_REASONS,
+  TERMINAL_SESSION_STATUS,
+  type TerminalEndReason,
 } from "../../../types/DashboardConstants";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import type {
@@ -21,6 +24,7 @@ import {
 } from "./CliLauncherResolver";
 import type { ICliProvider } from "./interfaces/ICliProvider";
 import {
+  buildTerminalEndedMessage,
   getPtyProcessManager,
   ptyPostMessage,
   toPtySpawnArgs,
@@ -334,13 +338,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
               });
             },
             onExit: (ptySession, exitCode) => {
-              postMessage({
-                type: MESSAGE_TYPES.TERMINAL_ENDED,
-                workflowId: ptySession.workflowId,
-                sessionId: ptySession.id,
-                kind: ptySession.kind,
-                exitCode,
-              });
+              postMessage(buildTerminalEndedMessage(ptySession, exitCode));
               if (this.currentPtySession === ptySession) {
                 this.currentPtySession = undefined;
               }
@@ -359,13 +357,17 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           sessionId: preSessionId,
           data: `${message}\r\n`,
         });
-        postMessage({
-          type: MESSAGE_TYPES.TERMINAL_ENDED,
-          workflowId,
-          sessionId: preSessionId,
-          kind: SESSION_KINDS.AI_CLI,
-          exitCode: 1,
-        });
+        postMessage(
+          buildTerminalEndedMessage(
+            {
+              workflowId,
+              id: preSessionId,
+              kind: SESSION_KINDS.AI_CLI,
+              status: TERMINAL_SESSION_STATUS.FAILED,
+            },
+            1
+          )
+        );
         throw error;
       }
 
@@ -632,8 +634,12 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     );
     const ptyManager = this.deps.getPtyManager?.() ?? getPtyProcessManager();
     if (ptyManager) {
-      await ptyManager.gracefulKillAiCliSession(sessionId);
+      await ptyManager.gracefulKillAiCliSession(
+        sessionId,
+        TERMINAL_END_REASONS.SUPERSEDED
+      );
     } else {
+      ptySession.markEnding(TERMINAL_END_REASONS.SUPERSEDED);
       ptySession.pty.write("\x03");
       ptySession.pty.write("\x03");
       await new Promise<void>((resolve) => setTimeout(resolve, 500));
@@ -642,7 +648,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     return sessionId;
   }
 
-  closeTerminal(): void {
+  closeTerminal(reason: TerminalEndReason): void {
     if (!this.currentPtySession) {
       return;
     }
@@ -653,8 +659,9 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     const ptyManager = this.deps.getPtyManager?.() ?? getPtyProcessManager();
     // Fire-and-forget: send Ctrl+C and schedule the kill — callers are sync so we can't await here.
     if (ptyManager) {
-      void ptyManager.gracefulKillAiCliSession(sessionId);
+      void ptyManager.gracefulKillAiCliSession(sessionId, reason);
     } else {
+      ptySession.markEnding(reason);
       ptySession.pty.write("\x03");
       ptySession.pty.write("\x03");
       setTimeout(() => ptySession.pty.kill(), 500);
@@ -672,7 +679,10 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     if (this.currentPtySession) {
       const ptyManager = this.deps.getPtyManager?.() ?? getPtyProcessManager();
       if (ptyManager) {
-        ptyManager.killSession(this.currentPtySession.id);
+        ptyManager.killSession(
+          this.currentPtySession.id,
+          TERMINAL_END_REASONS.STOPPED
+        );
       }
       this.currentPtySession = undefined;
     }
@@ -687,7 +697,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
 
   dispose(closeTerminalWhenPromptCompletes: boolean): void {
     if (closeTerminalWhenPromptCompletes) {
-      this.closeTerminal();
+      this.closeTerminal(TERMINAL_END_REASONS.STEP_COMPLETE);
       this.deps.processManager.dispose();
     } else {
       this.deps.processManager.disposeProcess();

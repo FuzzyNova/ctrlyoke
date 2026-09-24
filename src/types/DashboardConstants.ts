@@ -2386,7 +2386,49 @@ export const TERMINAL_SESSION_STATUS = {
   RUNNING: "running",
   COMPLETED: "completed",
   FAILED: "failed",
+  /** ctrlyoke ended the process itself; its exit code carries no meaning. */
+  STOPPED: "stopped",
 } as const;
+
+// ============================================================================
+// TERMINAL END REASONS - Why ctrlyoke deliberately ended a PTY session
+// ============================================================================
+/**
+ * Stamped on a PTY session *before* ctrlyoke kills it, so its exit resolves to
+ * a status describing the intent rather than the exit code a killed or
+ * Ctrl+C'd process happens to report (usually nonzero). A process that exits
+ * with no reason recorded ended on its own.
+ */
+export const TERMINAL_END_REASONS = {
+  /** The run/step was cancelled — Stop, a stop request, or parallel fail-fast. */
+  STOPPED: "stopped",
+  /**
+   * Torn down after its work completed — end-of-run settlement, a released
+   * parallel target, or `closeTerminalOnComplete`.
+   */
+  STEP_COMPLETE: "step-complete",
+  /** Torn down so the run's managed worktree could be released. */
+  WORKTREE_RELEASED: "worktree-released",
+  /** Retired because a new process (fresh run, restart, handoff) replaces it. */
+  SUPERSEDED: "superseded",
+  /** Killed for exceeding its configured timeout — still a failure. */
+  TIMED_OUT: "timed-out",
+  /** Closed by the user, the workflow being disposed, or extension shutdown. */
+  CLOSED: "closed",
+} as const;
+
+/** Footer labels shown on an ended terminal for each TERMINAL_END_REASONS value. */
+export const TERMINAL_END_REASON_LABELS: Record<
+  (typeof TERMINAL_END_REASONS)[keyof typeof TERMINAL_END_REASONS],
+  string
+> = {
+  stopped: "Process stopped",
+  "step-complete": "Process closed — step complete",
+  "worktree-released": "Process closed — worktree released",
+  superseded: "Process closed — replaced by a new session",
+  "timed-out": "Process timed out",
+  closed: "Process closed",
+};
 
 // ============================================================================
 // SESSION KINDS - Kind values for terminal sessions
@@ -4032,6 +4074,8 @@ export type PromptEditorInsertMode =
   (typeof PROMPT_EDITOR_INSERT_MODES)[keyof typeof PROMPT_EDITOR_INSERT_MODES];
 export type TerminalSessionStatus =
   (typeof TERMINAL_SESSION_STATUS)[keyof typeof TERMINAL_SESSION_STATUS];
+export type TerminalEndReason =
+  (typeof TERMINAL_END_REASONS)[keyof typeof TERMINAL_END_REASONS];
 export type SessionKind = (typeof SESSION_KINDS)[keyof typeof SESSION_KINDS];
 export type OutputHistoryKind =
   (typeof OUTPUT_HISTORY_KINDS)[keyof typeof OUTPUT_HISTORY_KINDS];

@@ -61,6 +61,7 @@ import {
   STEP_STATUS,
   SESSION_KINDS,
   TERMINAL_SESSION_STATUS,
+  TERMINAL_END_REASONS,
   OUTPUT_HISTORY_KINDS,
   FINAL_STEP_PHASES,
 } from "@/types/messages";
@@ -4208,7 +4209,14 @@ describe("TERMINAL_STARTED", () => {
     });
 
     act(() => {
-      useTerminalStore.getState().endSession("workflow-1", "session-1", 0);
+      dispatch(MESSAGE_TYPES.TERMINAL_ENDED, {
+        workflowId: "workflow-1",
+        sessionId: "session-1",
+        kind: SESSION_KINDS.AI_CLI,
+        exitCode: 1,
+        status: TERMINAL_SESSION_STATUS.STOPPED,
+        endReason: TERMINAL_END_REASONS.SUPERSEDED,
+      });
     });
 
     act(() => {
@@ -4229,6 +4237,39 @@ describe("TERMINAL_STARTED", () => {
     expect(sessions[0].stepIndex).toBe(1);
     expect(sessions[0].promptNumber).toBe(2);
     expect(sessions[0].status).toBe(TERMINAL_SESSION_STATUS.RUNNING);
+    // A reused PTY is live again, so the previous end reason must not linger.
+    expect(sessions[0].endReason).toBeUndefined();
+  });
+
+  it("applies the extension's terminal end status instead of re-deriving it from the exit code", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
+        workflowId: "workflow-1",
+        sessionId: "session-1",
+        stepName: "Step 1",
+        kind: SESSION_KINDS.AI_CLI,
+        promptNumber: 1,
+        controllerClientId: "controller-1",
+      });
+    });
+
+    act(() => {
+      // A killed CLI reports a nonzero code; the stamped status is what counts.
+      dispatch(MESSAGE_TYPES.TERMINAL_ENDED, {
+        workflowId: "workflow-1",
+        sessionId: "session-1",
+        kind: SESSION_KINDS.AI_CLI,
+        exitCode: 1,
+        status: TERMINAL_SESSION_STATUS.STOPPED,
+        endReason: TERMINAL_END_REASONS.STOPPED,
+      });
+    });
+
+    const [session] = useTerminalStore.getState().sessions["workflow-1"];
+    expect(session.status).toBe(TERMINAL_SESSION_STATUS.STOPPED);
+    expect(session.endReason).toBe(TERMINAL_END_REASONS.STOPPED);
   });
 
   it("keeps existing AI CLI sessions when a different harness starts", () => {

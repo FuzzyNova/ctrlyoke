@@ -35,6 +35,7 @@ import {
   PRIOR_CONTEXT_REFERENCE_KINDS,
   STEP_TYPES,
   PriorContextItemType,
+  type TerminalEndReason,
 } from "../types/DashboardConstants";
 import { ctrlYokeDeniedToolNames } from "../types/ExecutionPropertyResolver";
 import type { InlinePriorContextRef } from "../utils/FileReferenceParser";
@@ -344,7 +345,7 @@ export abstract class HarnessIntegration {
    * Call this before dispose() when the user explicitly restarts from beginning,
    * so the previous run's process exits cleanly rather than being hard-killed.
    */
-  closeTerminalGracefully(): void {
+  closeTerminalGracefully(_reason: TerminalEndReason): void {
     // no-op for non-PTY harnesses
   }
 
@@ -1202,5 +1203,5 @@ export abstract class HarnessIntegration {
    * Called by WorkflowInstance before switching to a different harness mid-workflow,
    * so the outgoing integration's terminal is not orphaned.
    */
-  closeTerminal(): void {}
+  closeTerminal(_reason: TerminalEndReason): void {}
 }

@@ -38,6 +38,7 @@ Mocha/TDD tests for ctrlyoke core logic and the VS Code extension host. This sco
 - Keep the existing split: top-level `src/test/*.test.ts` for legacy/core tests, `unit/` for focused module tests, `integration/` for extension-host behavior, `suite/harness/` for log-parser contract tests, and `harness/` for real CLI end-to-end tests.
 - Prefer one test file per production module. Use Mocha TDD style (`suite`, `test`, `setup`, `teardown`) with Node `assert`; this tree generally uses hand-written fakes/test subclasses instead of Sinon.
 - When testing abstract or protected behavior, expose it via a small test subclass rather than weakening production visibility.
+- Do not spawn real node-pty processes to test `PtyProcessManager` lifecycle. On Windows, a real PTY killed inside the extension-host test runner never delivers `onExit` (the same kill does in plain Node), so the test hangs to the suite timeout. Subclass `PtyProcessManager`, override `loadNodePty()`, and return a fake `IPty` (see `PtyProcessManager.test.ts`).
 
 </organization>
 

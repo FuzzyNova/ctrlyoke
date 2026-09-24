@@ -45,6 +45,7 @@ import {
   HOOK_EVENT_ORDER,
   PRIOR_CONTEXT_KEYWORDS,
   USER_FEEDBACK_SEVERITY,
+  type TerminalEndReason,
 } from "../../types/DashboardConstants";
 import { configService } from "../../config/CtrlYokeConfigService";
 import type {
@@ -1901,8 +1902,8 @@ export class CliIntegration extends HarnessIntegration {
     return true;
   }
 
-  override closeTerminal(): void {
-    this.transportCoordinator.closeTerminal();
+  override closeTerminal(reason: TerminalEndReason): void {
+    this.transportCoordinator.closeTerminal(reason);
   }
 
   /**
@@ -1964,8 +1965,8 @@ export class CliIntegration extends HarnessIntegration {
    * the CLI time to clean up before the next run spawns a fresh process.
    * Called by WorkflowInstance when the user explicitly restarts from beginning.
    */
-  override closeTerminalGracefully(): void {
-    this.transportCoordinator.closeTerminal();
+  override closeTerminalGracefully(reason: TerminalEndReason): void {
+    this.transportCoordinator.closeTerminal(reason);
   }
 
   /**

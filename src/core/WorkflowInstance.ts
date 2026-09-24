@@ -59,6 +59,7 @@ import {
   QUEUE_POSITION,
   RUNNER_IDS,
   SESSION_KINDS,
+  TERMINAL_END_REASONS,
   TERMINAL_SESSION_STATUS,
   STATUS_MESSAGE_SEVERITY,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
@@ -176,6 +177,7 @@ import {
 } from "./OutputCaptureBuffer";
 import { WorkflowStateMachine } from "./WorkflowStateMachine";
 import {
+  buildTerminalEndedMessage,
   getPtyProcessManager,
   ptyPostMessage,
   resolveShellInvocation,
@@ -804,11 +806,14 @@ export class WorkflowInstance {
       resource?.processRunner ?? this.targetScriptProcessRunners.get(targetKey);
     processRunner?.dispose();
     if (resource?.ptySessionId) {
-      getPtyProcessManager()?.killSession(resource.ptySessionId);
+      getPtyProcessManager()?.killSession(
+        resource.ptySessionId,
+        TERMINAL_END_REASONS.STEP_COMPLETE
+      );
     }
     const integration = this.targetExecutionIntegrations.get(targetKey);
     if (integration) {
-      integration.closeTerminalGracefully();
+      integration.closeTerminalGracefully(TERMINAL_END_REASONS.STEP_COMPLETE);
       integration.dispose();
       this.targetExecutionIntegrations.delete(targetKey);
     }
@@ -882,7 +887,10 @@ export class WorkflowInstance {
     const resource = this.activeTargetResources.get(targetKey);
     resource?.processRunner?.dispose();
     if (resource?.ptySessionId) {
-      getPtyProcessManager()?.killSession(resource.ptySessionId);
+      getPtyProcessManager()?.killSession(
+        resource.ptySessionId,
+        TERMINAL_END_REASONS.STOPPED
+      );
     }
     const integration =
       resource?.integration ?? this.targetExecutionIntegrations.get(targetKey);
@@ -1106,7 +1114,7 @@ export class WorkflowInstance {
     this.endConditionEvaluator.dispose();
     // Close any lingering terminals from the last run and release references.
     for (const prev of this.lastRunIntegrations) {
-      prev.closeTerminal();
+      prev.closeTerminal(TERMINAL_END_REASONS.CLOSED);
     }
     this.lastRunIntegrations = [];
     // Dispose all live inject integrations held across runs (PTY still alive).
@@ -1116,12 +1124,12 @@ export class WorkflowInstance {
     }
     this.liveInjectIntegrations.clear();
     for (const integration of this.unkeyedExecutionIntegrations) {
-      integration.closeTerminal();
+      integration.closeTerminal(TERMINAL_END_REASONS.CLOSED);
       integration.dispose();
     }
     this.unkeyedExecutionIntegrations.clear();
     for (const integration of this.targetExecutionIntegrations.values()) {
-      integration.closeTerminal();
+      integration.closeTerminal(TERMINAL_END_REASONS.CLOSED);
       integration.dispose();
     }
     this.targetExecutionIntegrations.clear();
@@ -1151,7 +1159,7 @@ export class WorkflowInstance {
    */
   async closeRetainedTerminalsForFreshRun(): Promise<void> {
     for (const previous of this.lastRunIntegrations) {
-      previous.closeTerminal();
+      previous.closeTerminal(TERMINAL_END_REASONS.SUPERSEDED);
     }
     this.lastRunIntegrations = [];
 
@@ -1160,7 +1168,7 @@ export class WorkflowInstance {
         harnessKey,
         liveIntegration
       );
-      liveIntegration.closeTerminalGracefully();
+      liveIntegration.closeTerminalGracefully(TERMINAL_END_REASONS.SUPERSEDED);
       liveIntegration.dispose();
     }
     this.liveInjectIntegrations.clear();
@@ -2070,7 +2078,7 @@ export class WorkflowInstance {
           this.activeRunRedactor
         );
         for (const previous of this.lastRunIntegrations) {
-          previous.closeTerminal();
+          previous.closeTerminal(TERMINAL_END_REASONS.SUPERSEDED);
         }
         this.lastRunIntegrations = [];
       },
@@ -2435,7 +2443,10 @@ export class WorkflowInstance {
       }
       resource.processRunner?.dispose();
       if (resource.ptySessionId) {
-        getPtyProcessManager()?.killSession(resource.ptySessionId);
+        getPtyProcessManager()?.killSession(
+          resource.ptySessionId,
+          TERMINAL_END_REASONS.STOPPED
+        );
       }
     }
     if (integrations.size === 0) {
@@ -3669,13 +3680,7 @@ export class WorkflowInstance {
           onExit: (session, exitCode) => {
             if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
             options.onSessionEnded?.();
-            ptyPostMessage({
-              type: MESSAGE_TYPES.TERMINAL_ENDED,
-              workflowId: session.workflowId,
-              sessionId: session.id,
-              kind: session.kind,
-              exitCode,
-            });
+            ptyPostMessage(buildTerminalEndedMessage(session, exitCode));
             resolve(exitCode);
           },
         });
@@ -3685,7 +3690,7 @@ export class WorkflowInstance {
               `[spawnScriptPty] timed out after ${options.timeout}ms: ${options.stepName}`
             );
             options.onTimeout?.();
-            ptyManager.killSession(session.id);
+            ptyManager.killSession(session.id, TERMINAL_END_REASONS.TIMED_OUT);
           }, options.timeout);
         }
       } catch (error) {
@@ -3698,13 +3703,17 @@ export class WorkflowInstance {
           sessionId: preSessionId,
           data: `${message}\r\n`,
         });
-        ptyPostMessage({
-          type: MESSAGE_TYPES.TERMINAL_ENDED,
-          workflowId: this.id,
-          sessionId: preSessionId,
-          kind: SESSION_KINDS.AI_CLI,
-          exitCode: 1,
-        });
+        ptyPostMessage(
+          buildTerminalEndedMessage(
+            {
+              workflowId: this.id,
+              id: preSessionId,
+              kind: SESSION_KINDS.AI_CLI,
+              status: TERMINAL_SESSION_STATUS.FAILED,
+            },
+            1
+          )
+        );
         options.onOutput(message);
         resolve(1);
       }
@@ -3988,7 +3997,7 @@ export class WorkflowInstance {
       this.liveInjectIntegrations.delete(integrationKey);
       if (!this.canReuseExecutionIntegration(live)) {
         void this.cleanupRetainedIntegrationArtifacts(integrationKey, live);
-        live.closeTerminalGracefully();
+        live.closeTerminalGracefully(TERMINAL_END_REASONS.SUPERSEDED);
         live.dispose();
       } else {
         live.resetForNewRun();
@@ -4407,7 +4416,9 @@ export class WorkflowInstance {
         harnessKey,
         liveIntegration
       );
-      liveIntegration.closeTerminalGracefully();
+      liveIntegration.closeTerminalGracefully(
+        TERMINAL_END_REASONS.WORKTREE_RELEASED
+      );
       liveIntegration.dispose();
     }
     this.liveInjectIntegrations.clear();
@@ -4494,7 +4505,9 @@ export class WorkflowInstance {
           integrationKey,
           liveIntegration
         );
-        liveIntegration.closeTerminalGracefully();
+        liveIntegration.closeTerminalGracefully(
+          TERMINAL_END_REASONS.SUPERSEDED
+        );
         liveIntegration.dispose();
         continue;
       }
@@ -4634,7 +4647,9 @@ export class WorkflowInstance {
         // Dispose first so no background reader can recreate an artifact
         // while provider cleanup is proving the directory clean.
         if (terminalWorktreeRun) {
-          execIntegration.closeTerminalGracefully();
+          execIntegration.closeTerminalGracefully(
+            TERMINAL_END_REASONS.WORKTREE_RELEASED
+          );
           execIntegration.dispose();
         }
         const cleanup = await this.cleanupIntegrationArtifactsForSettlement(
@@ -4665,7 +4680,11 @@ export class WorkflowInstance {
     this.unkeyedExecutionIntegrations.clear();
 
     for (const targetIntegration of this.targetExecutionIntegrations.values()) {
-      targetIntegration.closeTerminalGracefully();
+      targetIntegration.closeTerminalGracefully(
+        terminalWorktreeRun
+          ? TERMINAL_END_REASONS.WORKTREE_RELEASED
+          : TERMINAL_END_REASONS.STEP_COMPLETE
+      );
       targetIntegration.dispose();
     }
     this.targetExecutionIntegrations.clear();
@@ -4693,7 +4712,9 @@ export class WorkflowInstance {
     // worktree cleanup barrier and must never outlive the lease.
     if (terminalWorktreeRun) {
       for (const [harnessKey, retained] of this.liveInjectIntegrations) {
-        retained.closeTerminalGracefully();
+        retained.closeTerminalGracefully(
+          TERMINAL_END_REASONS.WORKTREE_RELEASED
+        );
         retained.dispose();
         const cleanup = await this.cleanupIntegrationArtifactsForSettlement(
           harnessKey,

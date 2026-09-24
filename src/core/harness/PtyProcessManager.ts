@@ -8,13 +8,17 @@ import { withWorkingDirectoryEnv } from "../../utils/SpawnEnvironment";
 import { logMemoryUsage } from "../../utils/MemoryDiagnostics";
 import { resolveShellKind, shellDisplayName } from "../../utils/ShellCatalog";
 import {
+  MESSAGE_TYPES,
   SESSION_KINDS,
   SHELL_KINDS,
+  TERMINAL_END_REASONS,
   TERMINAL_SESSION_STATUS,
   type SessionKind,
   type ShellKind,
+  type TerminalEndReason,
   type TerminalSessionStatus,
 } from "../../types/DashboardConstants";
+import type { TerminalEndedMessage } from "../../types/WebviewMessageTypes";
 
 type NodePtyModule = typeof import("node-pty");
 const NODE_PTY_UNAVAILABLE_MESSAGE =
@@ -251,6 +255,43 @@ const DEFAULT_COLS = 220;
 const DEFAULT_ROWS = 50;
 
 /**
+ * Status of an exited PTY. A recorded end reason means ctrlyoke ended the
+ * process itself, so the exit code — nonzero for a killed or Ctrl+C'd CLI — is
+ * not evidence of failure; only a timeout still counts as one.
+ */
+export function resolveEndedTerminalStatus(
+  exitCode: number,
+  endReason: TerminalEndReason | undefined
+): TerminalSessionStatus {
+  if (endReason === TERMINAL_END_REASONS.TIMED_OUT) {
+    return TERMINAL_SESSION_STATUS.FAILED;
+  }
+  if (endReason) {
+    return TERMINAL_SESSION_STATUS.STOPPED;
+  }
+  return exitCode === 0
+    ? TERMINAL_SESSION_STATUS.COMPLETED
+    : TERMINAL_SESSION_STATUS.FAILED;
+}
+
+/** Single builder for every TERMINAL_ENDED payload, including spawn failures. */
+export function buildTerminalEndedMessage(
+  session: Pick<PtySession, "workflowId" | "id" | "kind" | "status"> &
+    Partial<Pick<PtySession, "endReason">>,
+  exitCode: number
+): TerminalEndedMessage {
+  return {
+    type: MESSAGE_TYPES.TERMINAL_ENDED,
+    workflowId: session.workflowId,
+    sessionId: session.id,
+    kind: session.kind,
+    exitCode,
+    status: session.status,
+    ...(session.endReason ? { endReason: session.endReason } : {}),
+  };
+}
+
+/**
  * A single node-pty session (AI CLI or user shell).
  */
 export class PtySession {
@@ -268,6 +309,11 @@ export class PtySession {
   readonly shellKind?: ShellKind;
   readonly pty: IPty;
   status: TerminalSessionStatus;
+  /**
+   * Why ctrlyoke is ending this session, recorded before the kill is issued.
+   * Undefined means the process is exiting on its own. See `markEnding`.
+   */
+  endReason?: TerminalEndReason;
   /** The clientId that owns interactive control of this session (input + resize). */
   controllerClientId: string | undefined;
   /**
@@ -312,6 +358,16 @@ export class PtySession {
     this.pty = ptyInstance;
     this.status = TERMINAL_SESSION_STATUS.RUNNING;
     this.reconnectBufferMaxBytes = reconnectBufferMaxBytes;
+  }
+
+  /**
+   * Record that ctrlyoke is deliberately ending this session. The first reason
+   * wins: once a Stop has been issued, a later end-of-run teardown reaching the
+   * same process must not relabel it. Must run before any Ctrl+C is written —
+   * the CLI often exits on the Ctrl+C itself, before the follow-up hard kill.
+   */
+  markEnding(reason: TerminalEndReason): void {
+    this.endReason ??= reason;
   }
 
   /**
@@ -557,6 +613,11 @@ export class PtyProcessManager {
     return affected;
   }
 
+  /** node-pty source; a test subclass substitutes a fake. */
+  protected loadNodePty(): Pick<NodePtyModule, "spawn"> {
+    return tryLoadNodePty();
+  }
+
   /**
    * Spawn a new PTY session.
    * PTYs start at the controlling client's last-known viewport size (resolved via
@@ -566,7 +627,7 @@ export class PtyProcessManager {
    * authoritative resize on mount.
    */
   spawnPty(options: SpawnPtyOptions): PtySession {
-    const nodePty = tryLoadNodePty();
+    const nodePty = this.loadNodePty();
     const sessionId =
       options.sessionId ??
       `${options.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -640,10 +701,7 @@ export class PtyProcessManager {
     });
 
     ptyInstance.onExit(({ exitCode }: { exitCode: number }) => {
-      session.status =
-        exitCode === 0
-          ? TERMINAL_SESSION_STATUS.COMPLETED
-          : TERMINAL_SESSION_STATUS.FAILED;
+      session.status = resolveEndedTerminalStatus(exitCode, session.endReason);
       this.sessions.delete(sessionId);
       logMemoryUsage("PTY session exited", {
         sessionId,
@@ -652,7 +710,8 @@ export class PtyProcessManager {
       });
       options.onExit(session, exitCode ?? 1);
       Log.debug(
-        `[PtyProcessManager] PTY session ${sessionId} (${options.kind}) exited with code ${exitCode}`
+        `[PtyProcessManager] PTY session ${sessionId} (${options.kind}) exited with code ${exitCode} ` +
+          `status=${session.status} endReason=${session.endReason ?? "none"}`
       );
     });
 
@@ -746,14 +805,16 @@ export class PtyProcessManager {
   }
 
   /**
-   * Kill a PTY session immediately.
+   * Kill a PTY session immediately. `reason` is recorded so the exit reads as
+   * an intentional end rather than a failure.
    */
-  killSession(sessionId: string): void {
+  killSession(sessionId: string, reason: TerminalEndReason): void {
     const session = this.sessions.get(sessionId);
     if (session) {
       Log.debug(
-        `[PtyProcessManager] killSession ${sessionId.slice(0, 8)} (${session.kind}) wf=${session.workflowId.slice(0, 8)}`
+        `[PtyProcessManager] killSession ${sessionId.slice(0, 8)} (${session.kind}) wf=${session.workflowId.slice(0, 8)} reason=${reason}`
       );
+      session.markEnding(reason);
       session.pty.kill();
       this.sessions.delete(sessionId);
     }
@@ -764,17 +825,21 @@ export class PtyProcessManager {
    * Sends Ctrl+C twice to let the TUI clean up, waits 500ms, then hard-kills.
    * Without the signal, AI CLIs warn about improper shutdown or block on next launch.
    */
-  async gracefulKillAiCliSession(sessionId: string): Promise<void> {
+  async gracefulKillAiCliSession(
+    sessionId: string,
+    reason: TerminalEndReason
+  ): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (session) {
       Log.debug(
-        `[PtyProcessManager] gracefulKillAiCliSession ${sessionId.slice(0, 8)} (${session.kind}) wf=${session.workflowId.slice(0, 8)}`
+        `[PtyProcessManager] gracefulKillAiCliSession ${sessionId.slice(0, 8)} (${session.kind}) wf=${session.workflowId.slice(0, 8)} reason=${reason}`
       );
+      session.markEnding(reason);
       session.pty.write("\x03");
       session.pty.write("\x03");
       await new Promise<void>((resolve) => setTimeout(resolve, 500));
     }
-    this.killSession(sessionId);
+    this.killSession(sessionId, reason);
   }
 
   /**
@@ -795,6 +860,7 @@ export class PtyProcessManager {
 
     const cwd = session.pty.process; // best-effort: use same workflowId/cwd
     const workflowId = session.workflowId;
+    session.markEnding(TERMINAL_END_REASONS.SUPERSEDED);
     session.pty.kill();
     this.sessions.delete(sessionId);
 
@@ -865,6 +931,7 @@ export class PtyProcessManager {
       `[PtyProcessManager] gracefulShutdownAllAiCliSessions — sending Ctrl+C to ${aiSessions.length} session(s)`
     );
     for (const session of aiSessions) {
+      session.markEnding(TERMINAL_END_REASONS.CLOSED);
       try {
         session.pty.write("\x03");
         session.pty.write("\x03");
@@ -880,6 +947,7 @@ export class PtyProcessManager {
    */
   dispose(): void {
     for (const session of this.sessions.values()) {
+      session.markEnding(TERMINAL_END_REASONS.CLOSED);
       try {
         session.pty.kill();
       } catch {
