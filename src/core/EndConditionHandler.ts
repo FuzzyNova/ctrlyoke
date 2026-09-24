@@ -26,6 +26,24 @@ import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
 import { StatusMessageReporter } from "./orchestration/StatusMessageReporter";
 import { PropertyResolver } from "../utils/PropertyResolver";
 import { reportEndConditionEvaluated } from "../utils/TelemetryEvents";
+import { formatComparison } from "../utils/ScriptComparison";
+
+/**
+ * The `Expected:` / `Actual:` pair every end-condition failure message shows.
+ * Expected is the comparison that actually ran (`exit code == 0`,
+ * `stdout contains 0 failing`) rather than the raw `expected` field, which is
+ * absent under the zero-config default; Actual is the value read from
+ * `compareSource`, which for an exit-code comparison is not stdout.
+ */
+function describeComparisonOutcome(
+  endCondition: ScriptProperties | null | undefined,
+  evaluationResult: EvaluationResult
+): { expected: string; actual: string } {
+  return {
+    expected: formatComparison(endCondition ?? {}),
+    actual: evaluationResult.actual,
+  };
+}
 
 /**
  * Context needed to handle retry prompts
@@ -283,10 +301,15 @@ export class EndConditionHandler {
         const retryCount = this.promptQueue.getCurrentRetryCount(
           retryContext.attemptTarget
         );
-        const failureReason =
+        const { expected, actual } = describeComparisonOutcome(
+          prompt.endCondition,
+          evaluationResult
+        );
+        const headline =
           maxRetries > 0
-            ? `End condition failed after ${retryCount} retries.\n\nExpected: ${prompt.endCondition?.expected}\nActual: ${evaluationResult.result}\n\nScript output:\n${evaluationResult.stdout.substring(0, 200)}`
-            : `End condition validation failed.\n\nExpected: ${prompt.endCondition?.expected}\nActual: ${evaluationResult.result}\n\nScript output:\n${evaluationResult.stdout.substring(0, 200)}`;
+            ? `End condition failed after ${retryCount} retries.`
+            : "End condition validation failed.";
+        const failureReason = `${headline}\n\nExpected: ${expected}\nActual: ${actual}\n\nScript output:\n${evaluationResult.stdout.substring(0, 200)}`;
 
         Log.error(
           `[EndConditionHandler] End condition failed after ${retryCount} retries (max: ${maxRetries})`
@@ -536,7 +559,11 @@ export class EndConditionHandler {
 
     if (!retryPromptTemplate) {
       // Fallback retry prompt if none configured (should rarely happen due to smart defaults)
-      return `The previous task validation failed. Expected: ${prompt.endCondition?.expected}, but got: ${evaluationResult.result}\n\nScript output:\n${evaluationResult.stdout}\n\nPlease fix the issues and try again.`;
+      const { expected, actual } = describeComparisonOutcome(
+        prompt.endCondition,
+        evaluationResult
+      );
+      return `The previous task validation failed. Expected: ${expected}, but got: ${actual}\n\nScript output:\n${evaluationResult.stdout}\n\nPlease fix the issues and try again.`;
     }
 
     return retryPromptTemplate;

@@ -461,7 +461,7 @@ suite("EndConditionHandler", () => {
       {
         stepIndex: 0,
         message:
-          "End condition validation failed.\n\nExpected: ok\nActual: actual-result\n\nScript output:\nactual-result",
+          "End condition validation failed.\n\nExpected: exit code == ok\nActual: actual-result\n\nScript output:\nactual-result",
         severity: "error",
       },
     ]);
@@ -471,7 +471,7 @@ suite("EndConditionHandler", () => {
         target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         statusMessage: {
           message:
-            "End condition validation failed.\n\nExpected: ok\nActual: actual-result\n\nScript output:\nactual-result",
+            "End condition validation failed.\n\nExpected: exit code == ok\nActual: actual-result\n\nScript output:\nactual-result",
           severity: "error",
           timestamp: history.statusMessages[0]?.statusMessage.timestamp,
         },
@@ -483,6 +483,45 @@ suite("EndConditionHandler", () => {
       "actual-result"
     );
     assert.strictEqual(queue.getState().results[0].endConditionResult, false);
+  });
+
+  test("failure message names the comparison that ran and the compared value, not stdout", async () => {
+    const runtime = new WorkflowStateMachine();
+    const queue = new PromptQueue(runtime);
+    // Zero-config default: no `expected`, so the comparison is "exit code == 0".
+    const prompt: PromptStep = {
+      prompt: "run task",
+      endCondition: { script: "check-results.js" },
+    };
+    const dashboard = new DashboardSinkDouble();
+    const handler = new EndConditionHandler(
+      new TestEndConditionEvaluator(new MockPlatform()),
+      queue,
+      createReporter(dashboard, new HistoryManagerDouble())
+    );
+    queue.loadPrompts({ steps: [prompt] });
+
+    await handler.handleEndConditionResult(
+      prompt,
+      { ...validationFailure("3 tests failed"), actual: "1", exitCode: 1 },
+      {
+        integration: new MockHarnessIntegration(undefined, false),
+        totalSteps: 1,
+        workspaceFolderPath: process.cwd(),
+        currentPromptFilePath: "workflow.ctrlyoke.yaml",
+        runtime,
+        attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        attemptIndex: 0,
+      },
+      async () => {
+        throw new Error("retry callback should not be invoked");
+      }
+    );
+
+    assert.strictEqual(
+      dashboard.statusMessages[0]?.message,
+      "End condition validation failed.\n\nExpected: exit code == 0\nActual: 1\n\nScript output:\n3 tests failed"
+    );
   });
 
   test("records evaluator errors as the final end-condition evaluation", async () => {
