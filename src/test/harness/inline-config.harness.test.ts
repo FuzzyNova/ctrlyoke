@@ -37,6 +37,7 @@ import {
   runInteractiveWorkflowFile,
   runWorkflowFile,
   runWorkflowFileAsync,
+  withIsolatedCodexHome,
 } from "./helpers/harnessRunner";
 
 const OPENCODE = "opencode-cli" as const;
@@ -335,7 +336,7 @@ suite("Inline harness configuration regression tests", function () {
     });
 
     for (const mode of ["headless", "interactive"] as const) {
-      test(`completion plugin loads from an external file URL in ${mode} mode`, function () {
+      test(`completion plugin loads from an external file URL in ${mode} mode`, async function () {
         const outputPath = path.join(tmpDir, `opencode-${mode}-hooks.jsonl`);
         const workflow = {
           harness: OPENCODE,
@@ -353,7 +354,7 @@ suite("Inline harness configuration regression tests", function () {
         const result =
           mode === EXECUTION_MODES.HEADLESS
             ? runWorkflowFile(workflow, tmpDir, `opencode-plugin-${mode}`)
-            : runInteractiveWorkflowFile(
+            : await runInteractiveWorkflowFile(
                 workflow,
                 tmpDir,
                 `opencode-plugin-${mode}`
@@ -370,16 +371,18 @@ suite("Inline harness configuration regression tests", function () {
   });
 
   suite(`Codex ${PINNED_HARNESS_VERSIONS[CODEX]}`, function () {
-    test("interactive completion uses inline hooks without .codex/hooks.json", function () {
+    test("interactive completion uses inline hooks without .codex/hooks.json", async function () {
       const outputPath = path.join(tmpDir, "codex-inline-stop.jsonl");
-      const result = runInteractiveWorkflowFile(
-        codexHookWorkflow(
-          [makeHook("stop", recorderScript, outputPath)],
-          "Reply with exactly: codex-inline-complete",
-          "interactive"
-        ),
-        tmpDir,
-        "codex-inline-completion"
+      const result = await withIsolatedCodexHome([tmpDir], () =>
+        runInteractiveWorkflowFile(
+          codexHookWorkflow(
+            [makeHook("stop", recorderScript, outputPath)],
+            "Reply with exactly: codex-inline-complete",
+            "interactive"
+          ),
+          tmpDir,
+          "codex-inline-completion"
+        )
       );
       if (logAndMaybeSkip("codex-cli (inline interactive)", result)) return;
       assertSuccessfulRun("codex-cli (inline interactive)", result);
@@ -387,6 +390,9 @@ suite("Inline harness configuration regression tests", function () {
       assertNoWorkspaceConfig(tmpDir, [".codex"]);
     });
 
+    // Headless on purpose: since 0.156 interactive Codex will not start in an
+    // untrusted folder at all (its trust dialog offers only "Trust" or
+    // "Quit"), while `codex exec` still runs there with project config off.
     test("inline completion works in an untrusted Codex project where the old file path fails", function () {
       const outputPath = path.join(tmpDir, "codex-untrusted-stop.jsonl");
       const legacyOutputPath = path.join(tmpDir, "codex-legacy-stop.jsonl");
@@ -416,11 +422,11 @@ suite("Inline harness configuration regression tests", function () {
       );
       fs.mkdirSync(path.dirname(legacyHookPath), { recursive: true });
       fs.writeFileSync(legacyHookPath, legacyConfig);
-      const result = runInteractiveWorkflowFile(
+      const result = runWorkflowFile(
         codexHookWorkflow(
           [makeHook("stop", recorderScript, outputPath)],
           "Reply with exactly: codex-untrusted-complete",
-          "interactive"
+          "headless"
         ),
         tmpDir,
         "codex-untrusted-inline-completion"
@@ -435,7 +441,7 @@ suite("Inline harness configuration regression tests", function () {
       assert.strictEqual(fs.readFileSync(legacyHookPath, "utf8"), legacyConfig);
     });
 
-    test("preserves a user's .codex/hooks.json and still runs the user's hook", function () {
+    test("preserves a user's .codex/hooks.json and still runs the user's hook", async function () {
       const codexDir = path.join(tmpDir, ".codex");
       const userOutputPath = path.join(tmpDir, "codex-user-hook.jsonl");
       const userConfigPath = path.join(codexDir, "hooks.json");
@@ -474,14 +480,17 @@ suite("Inline harness configuration regression tests", function () {
       );
       fs.writeFileSync(userConfigPath, userConfig);
 
-      const result = runInteractiveWorkflowFile(
-        codexHookWorkflow(
-          [],
-          "Reply with exactly: codex-user-hook-complete",
-          "interactive"
-        ),
-        tmpDir,
-        "codex-user-hook-preservation"
+      // A project's own .codex/hooks.json only runs in a trusted project.
+      const result = await withIsolatedCodexHome([tmpDir], () =>
+        runInteractiveWorkflowFile(
+          codexHookWorkflow(
+            [],
+            "Reply with exactly: codex-user-hook-complete",
+            "interactive"
+          ),
+          tmpDir,
+          "codex-user-hook-preservation"
+        )
       );
       if (logAndMaybeSkip("codex-cli (user hook preservation)", result)) return;
       assertSuccessfulRun("codex-cli (user hook preservation)", result);
@@ -550,7 +559,7 @@ suite("Inline harness configuration regression tests", function () {
     }
 
     for (const mode of ["headless", "interactive"] as const) {
-      test(`calls an inline MCP tool in ${mode} mode`, function () {
+      test(`calls an inline MCP tool in ${mode} mode`, async function () {
         const toolName = `qwen_${mode}_probe`;
         const markerPath = path.join(tmpDir, `${toolName}.calls`);
         const server = makeUserMcpServer(
@@ -570,7 +579,7 @@ suite("Inline harness configuration regression tests", function () {
                 tmpDir,
                 `qwen-mcp-${mode}`
               )
-            : runInteractiveWorkflowFile(
+            : await runInteractiveWorkflowFile(
                 qwenMcpWorkflow(server, prompt, mode),
                 tmpDir,
                 `qwen-mcp-${mode}`
@@ -655,6 +664,7 @@ suite("Inline harness configuration regression tests", function () {
 
     test("existing hooks still deliver start, completion, and permission events", function () {
       const outputPath = path.join(tmpDir, "qwen-existing-hooks.jsonl");
+      const markerPath = path.join(tmpDir, "qwen-permission-hook-marker.txt");
       const hooks = [
         makeHook("sessionStart", recorderScript, outputPath),
         makeHook("stop", recorderScript, outputPath),
@@ -672,8 +682,9 @@ suite("Inline harness configuration regression tests", function () {
         steps: [
           {
             name: "qwen-hook-events",
-            prompt:
-              "Run exactly one shell command: echo qwen-hook-event-probe. Do not use any other tool.",
+            // Qwen 0.24 auto-approves read-only shell commands such as `echo`
+            // without asking, so the probe must write a file to need approval.
+            prompt: `Run exactly one shell command: node -e "require('fs').writeFileSync('${normalizedPath(markerPath)}','hook-allowed')". Do not use any other tool.`,
           },
         ],
       };
@@ -683,6 +694,10 @@ suite("Inline harness configuration regression tests", function () {
       assert.ok(hasRecordedEvent(outputPath, "sessionStart"));
       assert.ok(hasRecordedEvent(outputPath, "stop"));
       assert.ok(hasRecordedEvent(outputPath, "permissionRequest"));
+      assert.ok(
+        fs.existsSync(markerPath),
+        "the permissionRequest hook's allow decision did not let the command run"
+      );
     });
   });
 });

@@ -6,11 +6,14 @@
  */
 
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import { spawn, spawnSync } from "child_process";
+import * as nodePty from "node-pty";
 import type { PromptFile } from "../../../types/CtrlYokeTypes";
 import type { CliJsonResult } from "../../../cli/CliJsonResultBuilder";
 import type { HarnessId } from "../../../types/DashboardConstants";
+import { getCodexHomeDir } from "../../../utils/CodexHome";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -200,10 +203,14 @@ function parseJsonResultLine(stdout: string): CliJsonResult | undefined {
 }
 
 /**
- * Invoke a workflow through ctrlyoke's real interactive PTY path.
+ * Invoke a workflow through ctrlyoke's interactive path, with ctrlyoke itself
+ * running inside a real pseudo-terminal.
  *
- * The outer runner is still synchronous so each harness test remains isolated;
- * ctrlyoke creates the child PTY internally for the requested TUI execution.
+ * The CLI's standalone interactive transport hands its own stdio straight to
+ * the harness TUI, so the harness sees whatever terminal ctrlyoke was given. A
+ * plain `spawnSync` gives it none: Codex 0.156 exits with "stdin is not a
+ * terminal" and OpenCode's TUI waits forever on terminal queries. A PTY is
+ * what a person running `ctrlyoke run --interactive` actually provides.
  */
 export function runInteractiveWorkflowFile(
   workflow: PromptFile,
@@ -211,12 +218,36 @@ export function runInteractiveWorkflowFile(
   label: string,
   vars?: Record<string, string>,
   timeoutMs: number = HARNESS_TIMEOUT_MS
-): RunResult {
-  return runPrepared(
-    prepareRun(workflow, tmpDir, label, "--interactive", vars),
-    tmpDir,
-    timeoutMs
-  );
+): Promise<RunResult> {
+  const args = prepareRun(workflow, tmpDir, label, "--interactive", vars);
+
+  return new Promise<RunResult>((resolve) => {
+    const terminal = nodePty.spawn(process.execPath, args, {
+      name: "xterm-256color",
+      cols: 120,
+      rows: 40,
+      cwd: tmpDir,
+      env: { ...process.env, PWD: tmpDir } as Record<string, string>,
+    });
+    let output = "";
+    let timedOut = false;
+    terminal.onData((chunk) => (output += chunk));
+    const timer = setTimeout(() => {
+      timedOut = true;
+      terminal.kill();
+    }, timeoutMs);
+    terminal.onExit(({ exitCode }) => {
+      clearTimeout(timer);
+      resolve({
+        skipped: !timedOut && exitCode === 3,
+        // Mirror spawnSync: a run killed at the deadline has no exit code.
+        exitCode: timedOut ? null : exitCode,
+        // A PTY merges both streams into one.
+        stdout: output,
+        stderr: "",
+      });
+    });
+  });
 }
 
 /**
@@ -261,6 +292,57 @@ export function runWorkflowFileAsync(
       });
     });
   });
+}
+
+// ---------------------------------------------------------------------------
+// Codex home isolation
+// ---------------------------------------------------------------------------
+
+/**
+ * Run `fn` with `CODEX_HOME` pointing at a throwaway Codex home in which each
+ * of `trustedDirs` is a trusted project.
+ *
+ * Interactive Codex (0.156+) opens a "Trust this folder?" dialog for every
+ * folder it has not recorded, and reads that decision only from
+ * `<CODEX_HOME>/config.toml` (a `-c projects.…trust_level` override is
+ * ignored). Test folders are fresh temp directories, so without this every
+ * interactive run would stall on the dialog, and answering it would append a
+ * dead temp path to the developer's real `~/.codex/config.toml`.
+ *
+ * The real home is only read: `auth.json` and `config.toml` are copied so the
+ * isolated home authenticates and behaves like the developer's own.
+ */
+export async function withIsolatedCodexHome<T>(
+  trustedDirs: readonly string[],
+  fn: () => Promise<T>
+): Promise<T> {
+  const realHome = getCodexHomeDir();
+  const isolatedHome = fs.mkdtempSync(path.join(os.tmpdir(), "cy-codex-home-"));
+  for (const file of ["auth.json", "config.toml"]) {
+    const source = path.join(realHome, file);
+    if (fs.existsSync(source)) {
+      fs.copyFileSync(source, path.join(isolatedHome, file));
+    }
+  }
+  // TOML literal-string keys hold a Windows path without escaping, matching
+  // how Codex itself records trust.
+  const trustEntries = trustedDirs
+    .map((dir) => `\n[projects.'${dir}']\ntrust_level = "trusted"\n`)
+    .join("");
+  fs.appendFileSync(path.join(isolatedHome, "config.toml"), trustEntries);
+
+  const previousHome = process.env.CODEX_HOME;
+  process.env.CODEX_HOME = isolatedHome;
+  try {
+    return await fn();
+  } finally {
+    if (previousHome === undefined) {
+      delete process.env.CODEX_HOME;
+    } else {
+      process.env.CODEX_HOME = previousHome;
+    }
+    fs.rmSync(isolatedHome, { recursive: true, force: true, maxRetries: 3 });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -428,6 +510,18 @@ rl.on("line", (line) => {
     } else {
       send(request.id, { isError: true, content: [{ type: "text", text: "unknown tool" }] });
     }
+    return;
+  }
+  // Every other request gets a JSON-RPC error, as a real server would send.
+  // Qwen 0.24 asks for prompts/list and resources/list even though only
+  // tools are advertised, and marks the server "failed to start" when those
+  // go unanswered. Notifications (no id) need no reply.
+  if (request.id !== undefined) {
+    process.stdout.write(JSON.stringify({
+      jsonrpc: "2.0",
+      id: request.id,
+      error: { code: -32601, message: "Method not found" }
+    }) + "\\n");
   }
 });
 `;
