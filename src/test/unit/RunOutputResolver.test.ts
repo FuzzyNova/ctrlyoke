@@ -675,6 +675,97 @@ suite("RunOutputResolver", () => {
     assert.strictEqual(settled[0].attempt.terminalState, undefined);
   });
 
+  test("folds a follow-up recorded after run termination into the settled attempt", async () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const identity = { target, runIndex: 0, attemptIndex: 0 } as const;
+    const output = (response: string): WorkflowTimelineEventDraft => ({
+      eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+      timestampMs: 2,
+      ...identity,
+      definitionRevision: 1,
+      responseKind: "ai",
+      payload: {
+        cliOutput: {
+          prompt: "run it",
+          response,
+          elapsed: 1,
+          isStreaming: false,
+        },
+      },
+    });
+    // Shape of a real run: the turn ends with a short acknowledgement, the run
+    // completes, then a post-completion follow-up in the same session does the
+    // actual work and re-records the cumulative aggregate.
+    await recorder.appendEvents(manifestPath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+        timestampMs: 1,
+        ...identity,
+        definitionRevision: 1,
+        payload: { kind: "ai", startReason: "initial", prompt: "run it" },
+      },
+      output("Waiting for the tests."),
+      {
+        eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED,
+        timestampMs: 3,
+        ...identity,
+        definitionRevision: 1,
+        payload: { terminalState: "completed" },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.RUN_TERMINATED,
+        timestampMs: 4,
+        payload: { executionState: EXECUTION_STATES.COMPLETED, stepCount: 1 },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.FOLLOW_UP_RESPONSE_APPENDED,
+        timestampMs: 5,
+        ...identity,
+        definitionRevision: 1,
+        payload: { responseTextLength: 0, eventCount: 0 },
+      },
+      output("Waiting for the tests. All passed; committed."),
+    ]);
+
+    const resolver = new RunOutputResolver(recorder);
+    const settled = [];
+    for await (const event of resolver.streamAttempts(manifestPath)) {
+      if (event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED) {
+        settled.push(event);
+      }
+    }
+    assert.deepStrictEqual(
+      settled.map((event) => [event.continuation, event.unterminated]),
+      [
+        [false, false],
+        [true, false],
+      ]
+    );
+
+    const expected = "Waiting for the tests. All passed; committed.";
+    const latest = (
+      await resolver.resolveLatestAttempts(manifestPath, [target])
+    ).get("queue:0");
+    assert.strictEqual(latest?.responseText, expected);
+    assert.strictEqual(latest?.prompt, "run it");
+    assert.strictEqual(latest?.terminalState, "completed");
+
+    const single = await resolver.resolveAttempt(manifestPath, target, 0, 0);
+    assert.strictEqual(single?.responseText, expected);
+    assert.strictEqual(single?.prompt, "run it");
+
+    const priorItems = await resolver.resolvePriorContextItems(
+      manifestPath,
+      [[1]],
+      [{ prompt: "run it" }],
+      1
+    );
+    assert.deepStrictEqual(
+      priorItems.map((item) => item.text),
+      [expected]
+    );
+  });
+
   test("yields interleaved parallel attempts once in settle order", async () => {
     const firstTarget = {
       kind: FINAL_STEP_PHASES.QUEUE,
