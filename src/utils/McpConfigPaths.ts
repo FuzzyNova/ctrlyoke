@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { getCodexHomeDir } from "./CodexHome";
 import { PATH_CONSTANTS } from "./ConfigurationUtils";
 
 function getHomeDir(): string {
@@ -108,11 +109,7 @@ export function getCodexWorkspaceMcpConfigPath(workspaceRoot: string): string {
  * the config home with `CODEX_HOME`.
  */
 export function getCodexUserMcpConfigPath(): string {
-  const configuredHome = process.env.CODEX_HOME?.trim();
-  if (configuredHome) {
-    return path.join(configuredHome, "config.toml");
-  }
-  return path.join(getHomeDir(), ".codex", "config.toml");
+  return path.join(getCodexHomeDir(), "config.toml");
 }
 
 /**

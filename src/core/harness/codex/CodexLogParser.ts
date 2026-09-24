@@ -1,12 +1,12 @@
 import * as fs from "fs";
 import * as path from "path";
-import * as os from "os";
 import { BaseLogParser } from "../shared/BaseLogParser";
 import {
   BaseCliEvent,
   UserEventClassification,
 } from "../shared/interfaces/ILogParser";
 import { Log } from "../../../utils/Log";
+import { getCodexHomeDir } from "../../../utils/CodexHome";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import { CodexToolBuilder } from "./CodexToolBuilder";
 import {
@@ -766,7 +766,8 @@ export class CodexLogParser extends BaseLogParser {
         return null;
       }
 
-      const basePath = path.join(os.homedir(), ".codex", "sessions");
+      // Honours CODEX_HOME, where Codex actually writes its session logs.
+      const basePath = path.join(getCodexHomeDir(), "sessions");
 
       // FAST PATH: If session ID provided, search for matching file recursively
       if (sessionId) {
