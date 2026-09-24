@@ -34,6 +34,14 @@ export class SettingsJsonHooksTracker {
   /** Whether the target settings/hooks file existed before ctrlyoke touched it. */
   private baselineFileExisted: boolean | undefined = undefined;
 
+  /**
+   * Whether the settings directory (e.g. `.qwen/`) existed before ctrlyoke
+   * touched it. Writing the file creates the directory, and deleting the file
+   * on restore does not remove it again, so without this every hook
+   * registration in a fresh workspace left an empty `.qwen/` behind.
+   */
+  private baselineDirExisted: boolean | undefined = undefined;
+
   /** Path to a temporary .gitignore we wrote to hide newly-created settings files from git. */
   private gitignorePath: string | undefined;
 
@@ -101,6 +109,10 @@ export class SettingsJsonHooksTracker {
       const baseline = await this.readBaseline(settingsPath, baselinePolicy);
       this.baselineHooksSection = baseline.hooks;
       this.baselineFileExisted = baseline.fileExisted;
+      this.baselineDirExisted = await fs
+        .access(path.dirname(settingsPath))
+        .then(() => true)
+        .catch(() => false);
     }
 
     // Track this workflow's hooks
@@ -143,6 +155,7 @@ export class SettingsJsonHooksTracker {
       await this.restoreBaseline(settingsPath);
       this.baselineHooksSection = undefined;
       this.baselineFileExisted = undefined;
+      this.baselineDirExisted = undefined;
     } else {
       // Other workflows still active — rebuild without this one
       await this.rebuildAndWriteSettings(settingsPath, workspaceRoot);
@@ -316,6 +329,11 @@ export class SettingsJsonHooksTracker {
         if (this.gitignorePath) {
           await fs.unlink(this.gitignorePath).catch(() => {});
           this.gitignorePath = undefined;
+        }
+        if (this.baselineDirExisted === false) {
+          // Non-recursive on purpose: anything else in the directory (another
+          // tracker's file, something the user added) keeps it in place.
+          await fs.rmdir(path.dirname(settingsPath)).catch(() => {});
         }
         return;
       }

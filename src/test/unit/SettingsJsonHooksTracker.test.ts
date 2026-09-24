@@ -162,6 +162,38 @@ suite("SettingsJsonHooksTracker", () => {
     await assert.rejects(fs.access(settingsPath), /ENOENT/);
   });
 
+  test("removes the settings directory it created when restoring baseline", async () => {
+    // Fresh workspace: no .qwen/ at all, as in a headless run with no hooks.
+    await fs.rm(settingsDir, { recursive: true, force: true });
+
+    const tracker = SettingsJsonHooksTracker.getInstance("qwen");
+    await tracker.registerWorkflow("wf-1", tmpDir, {}, {});
+    await tracker.unregisterWorkflow("wf-1", tmpDir);
+
+    await assert.rejects(fs.access(settingsDir), /ENOENT/);
+  });
+
+  test("keeps a pre-existing settings directory when restoring baseline", async () => {
+    // setup() creates .qwen/ without a settings file.
+    const tracker = SettingsJsonHooksTracker.getInstance("qwen");
+    await tracker.registerWorkflow("wf-1", tmpDir, {}, {});
+    await tracker.unregisterWorkflow("wf-1", tmpDir);
+
+    await fs.access(settingsDir);
+  });
+
+  test("keeps a created settings directory that still holds other files", async () => {
+    await fs.rm(settingsDir, { recursive: true, force: true });
+
+    const tracker = SettingsJsonHooksTracker.getInstance("qwen");
+    await tracker.registerWorkflow("wf-1", tmpDir, {}, {});
+    const otherFile = path.join(settingsDir, "user-notes.md");
+    await fs.writeFile(otherFile, "added while the run was active");
+    await tracker.unregisterWorkflow("wf-1", tmpDir);
+
+    await fs.access(otherFile);
+  });
+
   test("should keep existing settings file when only hooks were temporary", async () => {
     await fs.writeFile(settingsPath, JSON.stringify({ theme: "dark" }));
 
