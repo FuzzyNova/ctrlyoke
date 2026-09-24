@@ -3175,6 +3175,12 @@ export const CLI_EVENT_TYPES = {
    *  and workflowStore's streaming-event merge. */
   FOLLOW_UP_RESUMED: "followUpResumed",
 
+  /** A Stop hook arrived but the step was deliberately kept running because the
+   *  harness still had background work pending (see CliLogMonitor's background-work
+   *  hold). Display-only; emitted once per absorbed Stop so the user can see why the
+   *  step hasn't completed and which background tasks it is waiting on. */
+  BACKGROUND_WORK_HOLD: "backgroundWorkHold",
+
   /** Invisible marker carrying updated context-window usage discovered during
    *  post-completion follow-up activity. Never rendered — consumed by the merge
    *  logic that refreshes a completed step's stats footer (tokens/contextWindow). */

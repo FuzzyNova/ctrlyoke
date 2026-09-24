@@ -40,6 +40,8 @@ export {
   type CompactionData,
   type UserSteerData,
   type FollowUpResumedData,
+  type BackgroundWorkHoldData,
+  type BackgroundTaskSummary,
   type ContextWindowSyncData,
   type UnifiedDiffHunk,
   type UniversalCliOutput,

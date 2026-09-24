@@ -20,6 +20,7 @@ import {
   TextData,
   TokenUsage,
   UniversalCliOutput,
+  BackgroundWorkHoldSnapshot,
 } from "../../../types/CliOutputTypes";
 import { getAntigravityContextWindowSize } from "../../../utils/ModelConstants";
 import {
@@ -831,7 +832,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     ) {
       const taskId = this.extractTaskId(entry);
       if (taskId) {
-        this.backgroundFollowUpState.launch(taskId);
+        this.backgroundFollowUpState.launch(taskId, { taskId });
       }
       return;
     }
@@ -974,6 +975,10 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
    */
   override hasPendingBackgroundWork(): boolean {
     return this.backgroundFollowUpState.isCompletionBlocked();
+  }
+
+  override getBackgroundWorkHoldSnapshot(): BackgroundWorkHoldSnapshot {
+    return this.backgroundFollowUpState.snapshot();
   }
 
   async readSessionIdFromLastConversations(

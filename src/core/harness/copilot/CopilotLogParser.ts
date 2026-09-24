@@ -16,6 +16,8 @@ import {
   CliEvent,
   TextData,
   ToolResultData,
+  BackgroundTaskSummary,
+  BackgroundWorkHoldSnapshot,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -848,7 +850,7 @@ export class CopilotLogParser extends BaseLogParser {
    * decrements landing "for free" within one Stop's catch-up) and, when closure
    * instead happens live between Stops, requires a Stop hook Copilot will never
    * send again after truly finishing — hanging every session with background work
-   * until the 10-minute idle backstop. Confirmed against a real capture: two
+   * (the background-work hold has no time-based release). Confirmed against a real capture: two
    * detached shells launched, an early Stop fired while both were still running,
    * the notifications/turn-resume/turn-close all landed live between that Stop and
    * the next one, and a `staleStopGuardChecks: 2` guard held the step "still
@@ -858,6 +860,13 @@ export class CopilotLogParser extends BaseLogParser {
 
   /** Set after a matching notification until the resumed turn starts. */
   private resumedTurnStarted = false;
+
+  /**
+   * toolCallId -> display summary, held only until that call completes. An
+   * async shell launch is only recognizable at `tool.execution_complete`,
+   * which does not repeat the command or description from the start event.
+   */
+  private readonly toolCallSummaries = new Map<string, BackgroundTaskSummary>();
 
   override trackBackgroundWorkState(event: BaseCliEvent): void {
     const e = event as CopilotProviderEvent;
@@ -869,15 +878,33 @@ export class CopilotLogParser extends BaseLogParser {
     if (e.type === "session.start") {
       this.backgroundFollowUpState.reset();
       this.resumedTurnStarted = false;
+      this.toolCallSummaries.clear();
       return;
     }
 
+    if (e.type === "tool.execution_start" && e.data?.toolCallId) {
+      const args = e.data.arguments ?? {};
+      this.toolCallSummaries.set(String(e.data.toolCallId), {
+        toolName:
+          typeof e.data.toolName === "string" ? e.data.toolName : undefined,
+        description:
+          typeof args.description === "string" ? args.description : undefined,
+        command: typeof args.command === "string" ? args.command : undefined,
+      });
+    }
+
     if (e.type === "tool.execution_complete" && e.data) {
+      const toolCallId = String(e.data.toolCallId ?? "");
+      const summary = this.toolCallSummaries.get(toolCallId);
+      this.toolCallSummaries.delete(toolCallId);
       const executionMode = e.data.toolTelemetry?.properties?.executionMode;
       if (executionMode === "async") {
         const shellId = this.extractShellId(e.data.result?.content);
         if (shellId) {
-          this.backgroundFollowUpState.launch(shellId);
+          this.backgroundFollowUpState.launch(shellId, {
+            ...summary,
+            taskId: shellId,
+          });
         }
       }
       return;
@@ -935,6 +962,10 @@ export class CopilotLogParser extends BaseLogParser {
 
   override hasPendingBackgroundWork(): boolean {
     return this.backgroundFollowUpState.isCompletionBlocked();
+  }
+
+  override getBackgroundWorkHoldSnapshot(): BackgroundWorkHoldSnapshot {
+    return this.backgroundFollowUpState.snapshot();
   }
 
   /**

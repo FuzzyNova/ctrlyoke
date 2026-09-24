@@ -1006,7 +1006,8 @@ suite("ClaudeLogParser", () => {
       );
       assert.strictEqual(fileEditEvents.length, 1);
       const hunks = (fileEditEvents[0].data as any).structuredPatch as
-        Array<{ oldStart: number; newStart: number }> | undefined;
+        | Array<{ oldStart: number; newStart: number }>
+        | undefined;
       assert.ok(hunks && hunks.length > 0, "expected structuredPatch hunks");
       assert.strictEqual(hunks[0].oldStart, 482);
       assert.strictEqual(hunks[0].newStart, 482);
@@ -1702,6 +1703,95 @@ suite("ClaudeLogParser", () => {
       });
 
       assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+    });
+
+    test("describes pending tasks by description, command, tool, and Claude task id", () => {
+      // Feeds the Stop-absorbed row in the output pane: a user watching a held
+      // step needs to know which background process it is waiting on.
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_explicit",
+              name: "Bash",
+              input: {
+                command: "npm run test:harness",
+                description: "Run full real-harness test suite",
+                run_in_background: true,
+              },
+            },
+            {
+              type: "tool_use",
+              id: "toolu_promoted",
+              name: "PowerShell",
+              input: { command: "npm test", timeout: 600000 },
+            },
+          ],
+          stop_reason: "tool_use",
+        },
+      });
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_explicit",
+              content: "Command running in background with ID: b2gz1o2ty.",
+            },
+          ],
+        },
+        toolUseResult: { backgroundTaskId: "b2gz1o2ty" },
+      });
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_promoted",
+              content:
+                "Command did not complete within its 600s timeout and was moved to the background (ID: beul1f741).",
+            },
+          ],
+        },
+        toolUseResult: { backgroundTaskId: "beul1f741" },
+      });
+
+      assert.deepStrictEqual(parser.getBackgroundWorkHoldSnapshot(), {
+        pendingTasks: [
+          {
+            toolName: "Bash",
+            description: "Run full real-harness test suite",
+            command: "npm run test:harness",
+            taskId: "b2gz1o2ty",
+          },
+          { toolName: "PowerShell", command: "npm test", taskId: "beul1f741" },
+        ],
+        awaitingResumedTurn: false,
+      });
+
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          content:
+            "<task-notification><tool-use-id>toolu_explicit</tool-use-id></task-notification>",
+        },
+      });
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          content:
+            "<task-notification><tool-use-id>toolu_promoted</tool-use-id></task-notification>",
+        },
+      });
+
+      assert.deepStrictEqual(parser.getBackgroundWorkHoldSnapshot(), {
+        pendingTasks: [],
+        awaitingResumedTurn: true,
+      });
     });
 
     test("should track concurrent PowerShell, Bash, and Monitor work through the resumed turn", () => {
@@ -2991,6 +3081,39 @@ suite("CopilotLogParser", () => {
       assert.strictEqual(parser.hasPendingBackgroundWork(), false);
     });
 
+    test("describes an async shell by its start event's command and description", () => {
+      parser.trackBackgroundWorkState({
+        type: "tool.execution_start",
+        data: {
+          toolCallId: "call-1",
+          toolName: "powershell",
+          arguments: { command: "npm test", description: "Run unit tests" },
+        },
+      });
+      parser.trackBackgroundWorkState({
+        type: "tool.execution_complete",
+        data: {
+          toolCallId: "call-1",
+          toolTelemetry: { properties: { executionMode: "async" } },
+          result: {
+            content: "<command started in background with shellId: shell-7>",
+          },
+        },
+      });
+
+      assert.deepStrictEqual(parser.getBackgroundWorkHoldSnapshot(), {
+        pendingTasks: [
+          {
+            toolName: "powershell",
+            description: "Run unit tests",
+            command: "npm test",
+            taskId: "shell-7",
+          },
+        ],
+        awaitingResumedTurn: false,
+      });
+    });
+
     test("tracks overlapping shells independently and keeps failure notifications equivalent", () => {
       parser.trackBackgroundWorkState(asyncLaunch("shell-1"));
       parser.trackBackgroundWorkState(asyncLaunch("shell-2"));
@@ -3950,7 +4073,8 @@ suite("CodexLogParser", () => {
       // corrected offset (482), not the line-number-less default (1).
       for (const editEvent of fileEditEvents) {
         const hunks = (editEvent.data as any).structuredPatch as
-          Array<{ oldStart: number; newStart: number }> | undefined;
+          | Array<{ oldStart: number; newStart: number }>
+          | undefined;
         assert.ok(hunks && hunks.length > 0, "expected structuredPatch hunks");
         assert.strictEqual(hunks[0].oldStart, 482);
         assert.strictEqual(hunks[0].newStart, 482);
@@ -4016,7 +4140,8 @@ suite("CodexLogParser", () => {
         assert.ok(fileEditEvents.length > 0, "expected FILE_EDIT events");
         for (const editEvent of fileEditEvents) {
           const hunks = (editEvent.data as any).structuredPatch as
-            Array<{ oldStart: number; newStart: number }> | undefined;
+            | Array<{ oldStart: number; newStart: number }>
+            | undefined;
           assert.ok(
             hunks && hunks.length > 0,
             "expected structuredPatch hunks"
@@ -4443,7 +4568,8 @@ suite("CodexLogParser", () => {
       // exec-<uuid> call_id, via path-based correlation.
       for (const editEvent of fileEditEvents) {
         const hunks = (editEvent.data as any).structuredPatch as
-          Array<{ oldStart: number; newStart: number }> | undefined;
+          | Array<{ oldStart: number; newStart: number }>
+          | undefined;
         assert.ok(hunks && hunks.length > 0, "expected structuredPatch hunks");
         assert.strictEqual(hunks[0].oldStart, 120);
         assert.strictEqual(hunks[0].newStart, 120);

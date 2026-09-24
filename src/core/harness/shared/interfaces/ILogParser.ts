@@ -1,5 +1,9 @@
 import * as fs from "fs";
-import { CliEvent, UniversalCliOutput } from "../../../../types/CliOutputTypes";
+import {
+  BackgroundWorkHoldSnapshot,
+  CliEvent,
+  UniversalCliOutput,
+} from "../../../../types/CliOutputTypes";
 
 /**
  * Minimal base type for CLI log events across all harnesses.
@@ -33,7 +37,11 @@ export interface BaseCliEvent {
  * - `"other"` — none of the above (default for harnesses with no ambiguity).
  */
 export type UserEventClassification =
-  "tool-result" | "injected-prompt" | "resume-signal" | "human-steer" | "other";
+  | "tool-result"
+  | "injected-prompt"
+  | "resume-signal"
+  | "human-steer"
+  | "other";
 
 /**
  * Interface for CLI harness log parsers
@@ -449,4 +457,13 @@ export interface ILogParser {
    * stay gate-free (today's zero-latency behavior, unchanged).
    */
   hasPendingBackgroundWork?(): boolean;
+
+  /**
+   * Describe the background work currently blocking completion — the pending
+   * tasks (with whatever names the harness exposes) and whether a resumed turn
+   * is still open. Used only to tell the user why a Stop was absorbed, so it
+   * must be side-effect free: unlike `hasPendingBackgroundWork()`, calling it
+   * never consumes a stale-stop guard check.
+   */
+  getBackgroundWorkHoldSnapshot?(): BackgroundWorkHoldSnapshot;
 }
