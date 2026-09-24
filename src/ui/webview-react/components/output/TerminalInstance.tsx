@@ -11,6 +11,7 @@ import {
 import "@xterm/xterm/css/xterm.css";
 import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
 import { WebviewLog } from "@/utils/logger";
+import { getTerminalEndedLabel } from "@utils/terminalPresentation";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` in useSyncExternalStore.
 const EMPTY_SESSIONS: TerminalSession[] = [];
@@ -753,8 +754,8 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
 };
 
 /**
- * Dim overlay shown when an ai-cli session has ended.
- * Purely decorative — does not block scrollback interaction.
+ * Dim overlay shown when an ai-cli session has ended, naming why when ctrlyoke
+ * ended it deliberately. Purely decorative — does not block scrollback.
  */
 const FrozenOverlay: React.FC<{ workflowId: string; sessionId: string }> = ({
   workflowId,
@@ -764,19 +765,16 @@ const FrozenOverlay: React.FC<{ workflowId: string; sessionId: string }> = ({
     (s) => s.sessions[workflowId] ?? EMPTY_SESSIONS
   );
   const session = sessions.find((s) => s.id === sessionId);
-  const isFrozen =
-    session?.kind === SESSION_KINDS.AI_CLI &&
-    session.status !== TERMINAL_SESSION_STATUS.RUNNING;
+  const label =
+    session?.kind === SESSION_KINDS.AI_CLI
+      ? getTerminalEndedLabel(session)
+      : undefined;
 
-  if (!isFrozen) return null;
+  if (!label) return null;
 
   return (
     <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center py-1 pointer-events-none bg-overlay-scrim">
-      <span className="text-xs text-description-fg select-none">
-        {session?.status === TERMINAL_SESSION_STATUS.FAILED
-          ? "Process exited with error"
-          : "Process exited"}
-      </span>
+      <span className="text-xs text-description-fg select-none">{label}</span>
     </div>
   );
 };

@@ -2,6 +2,7 @@ import {
   SESSION_KINDS,
   SHELL_KINDS,
   SHELL_TYPES,
+  TERMINAL_END_REASON_LABELS,
   TERMINAL_SESSION_STATUS,
   type ShellKind,
 } from "@/types/messages";
@@ -120,6 +121,25 @@ export function isTerminalSessionInUseByActiveStep(
     session.stepIndex !== undefined &&
     activeStepIndices.includes(session.stepIndex)
   );
+}
+
+/**
+ * Footer text for an ended terminal, or undefined while it is still running.
+ * A deliberate end names its reason; only a process that exited on its own
+ * with a nonzero code is reported as an error.
+ */
+export function getTerminalEndedLabel(
+  session: Pick<TerminalSession, "status" | "endReason">
+): string | undefined {
+  if (session.status === TERMINAL_SESSION_STATUS.RUNNING) {
+    return undefined;
+  }
+  if (session.endReason) {
+    return TERMINAL_END_REASON_LABELS[session.endReason];
+  }
+  return session.status === TERMINAL_SESSION_STATUS.FAILED
+    ? "Process exited with error"
+    : "Process exited";
 }
 
 export function getShellCodiconName(

@@ -2,12 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   SESSION_KINDS,
   SHELL_KINDS,
+  TERMINAL_END_REASONS,
+  TERMINAL_END_REASON_LABELS,
   TERMINAL_SESSION_STATUS,
 } from "@/types/messages";
 import {
   getAiCliCompactLabel,
   getShellCodiconName,
   getShellCompactLabel,
+  getTerminalEndedLabel,
   inferShellKind,
   isTerminalSessionInUseByActiveStep,
 } from "@utils/terminalPresentation";
@@ -148,5 +151,33 @@ describe("getAiCliCompactLabel", () => {
 
   it("falls back to the short marker when the session carries no step index", () => {
     expect(getAiCliCompactLabel({ stepIndex: undefined })).toBe("fin");
+  });
+
+  describe("getTerminalEndedLabel", () => {
+    it("shows nothing while the session is running", () => {
+      expect(
+        getTerminalEndedLabel({ status: TERMINAL_SESSION_STATUS.RUNNING })
+      ).toBeUndefined();
+    });
+
+    it("names the reason when ctrlyoke ended the process", () => {
+      expect(
+        getTerminalEndedLabel({
+          status: TERMINAL_SESSION_STATUS.STOPPED,
+          endReason: TERMINAL_END_REASONS.WORKTREE_RELEASED,
+        })
+      ).toBe(
+        TERMINAL_END_REASON_LABELS[TERMINAL_END_REASONS.WORKTREE_RELEASED]
+      );
+    });
+
+    it("reports an error only for a process that failed on its own", () => {
+      expect(
+        getTerminalEndedLabel({ status: TERMINAL_SESSION_STATUS.FAILED })
+      ).toBe("Process exited with error");
+      expect(
+        getTerminalEndedLabel({ status: TERMINAL_SESSION_STATUS.COMPLETED })
+      ).toBe("Process exited");
+    });
   });
 });

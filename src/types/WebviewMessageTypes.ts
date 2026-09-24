@@ -45,6 +45,8 @@ import {
   type StatusLineTrackingHarnessId,
   type SessionKind,
   type ShellKind,
+  type TerminalEndReason,
+  type TerminalSessionStatus,
   type WorktreeManagementAction,
   type WorkflowFileFormat,
   type StepColorMode,
@@ -599,7 +601,8 @@ export interface DevBuildCompletedMessage {
 export interface DevRestartingMessage {
   type: typeof MESSAGE_TYPES.DEV_RESTARTING;
   command:
-    "workbench.action.reloadWindow" | "workbench.action.restartExtensionHost";
+    | "workbench.action.reloadWindow"
+    | "workbench.action.restartExtensionHost";
 }
 
 export interface DevCommandUnavailableMessage {
@@ -823,6 +826,23 @@ export interface TerminalStartedMessage {
   shellKind?: ShellKind;
   parallelGroupId?: string;
   controllerClientId?: string;
+}
+
+/**
+ * PTY session ended (extension -> webview).
+ *
+ * `status` is authoritative — resolved on the extension from the exit code and
+ * any `endReason` ctrlyoke recorded before killing the process — so the webview
+ * must not re-derive it from `exitCode`.
+ */
+export interface TerminalEndedMessage {
+  type: typeof MESSAGE_TYPES.TERMINAL_ENDED;
+  workflowId: string;
+  sessionId: string;
+  kind: SessionKind;
+  exitCode: number;
+  status: TerminalSessionStatus;
+  endReason?: TerminalEndReason;
 }
 
 /**

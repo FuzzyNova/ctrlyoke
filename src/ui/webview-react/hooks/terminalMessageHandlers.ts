@@ -17,7 +17,10 @@ import { useUiStore } from "../store/uiStore";
 import { terminalRegistry } from "../terminalRegistry";
 import { sendMessage } from "@hooks/useMessageHandler";
 import type { MessageHandlerMap } from "./useMessageHandler";
-import type { TerminalStartedMessage } from "@root/types/WebviewMessageTypes";
+import type {
+  TerminalEndedMessage,
+  TerminalStartedMessage,
+} from "@root/types/WebviewMessageTypes";
 import {
   clearPanelReconnectReloadWatchdog,
   clearFreshPageReadySent,
@@ -216,6 +219,8 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
         parallelGroupId,
         ...(shellKind !== undefined ? { shellKind } : {}),
         status: TERMINAL_SESSION_STATUS.RUNNING,
+        // Live again — a previous end reason would mislabel the next exit.
+        endReason: undefined,
       });
       termStore.setSessionController(workflowId, sessionId, isController);
       if (willAutoClaim) {
@@ -377,12 +382,12 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
   // --------------------------------------------------------------------------
   // TERMINAL_ENDED - PTY session exited; freeze registry entry, update rail
   // --------------------------------------------------------------------------
-  handlers[MESSAGE_TYPES.TERMINAL_ENDED] = (message: any) => {
-    const { workflowId, sessionId, kind, exitCode } = message;
+  handlers[MESSAGE_TYPES.TERMINAL_ENDED] = (message: TerminalEndedMessage) => {
+    const { workflowId, sessionId, kind, status, endReason } = message;
     if (!workflowId || !sessionId) return;
 
     const termStore = useTerminalStore.getState();
-    termStore.endSession(workflowId, sessionId, exitCode ?? 0);
+    termStore.endSession(workflowId, sessionId, status, endReason);
     clearPendingAutoClaim(workflowId, sessionId, "terminal ended");
 
     // Freeze ai-cli sessions in the registry so onData is disabled
