@@ -112,6 +112,7 @@ export class BaseToolBuilder {
                 input.cwd ??
                 input.workingDir) as string | undefined,
               status: OPERATION_STATUS.INITIATED,
+              toolCallId: toolId,
             } as BashCommandData,
           },
         ];
@@ -143,6 +144,7 @@ export class BaseToolBuilder {
                 ((input.content ?? input.file_text) as string | undefined) ||
                 "",
               status: OPERATION_STATUS.INITIATED,
+              toolCallId: toolId,
             } as FileWriteData,
           },
         ];
@@ -167,6 +169,7 @@ export class BaseToolBuilder {
                 input.new_str ??
                 input.content) as string | undefined,
               status: OPERATION_STATUS.INITIATED,
+              toolCallId: toolId,
             } as FileEditData,
           },
         ];
@@ -179,6 +182,7 @@ export class BaseToolBuilder {
             ...ex,
             data: {
               path: path || "unknown",
+              toolCallId: toolId,
             } as FileDeleteData,
           },
         ];

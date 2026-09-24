@@ -314,6 +314,8 @@ export interface BashCommandData {
   error?: string;
   /** Execution status */
   status?: FileOperationStatus;
+  /** Tool call ID used to correlate this command with its result */
+  toolCallId?: string;
 }
 
 /**
@@ -352,6 +354,8 @@ export interface FileWriteData {
   success?: boolean;
   /** Error message (if failed) */
   error?: string;
+  /** Tool call ID used to correlate this write with its result */
+  toolCallId?: string;
 }
 
 /**
@@ -394,6 +398,8 @@ export interface FileEditData {
   success?: boolean;
   /** Error message (if failed) */
   error?: string;
+  /** Tool call ID used to correlate this edit with its result */
+  toolCallId?: string;
 }
 
 /**
@@ -406,6 +412,8 @@ export interface FileDeleteData {
   success?: boolean;
   /** Error message (if failed) */
   error?: string;
+  /** Tool call ID used to correlate this delete with its result */
+  toolCallId?: string;
 }
 
 /**

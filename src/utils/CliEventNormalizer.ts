@@ -181,14 +181,19 @@ function getEventKey(event: CliEvent): string | undefined {
   }
 }
 
+/**
+ * Every semantic operation type (BASH_COMMAND, FILE_READ/WRITE/EDIT/DELETE,
+ * ASK_USER_QUESTION) now carries an optional `toolCallId` on its data — read
+ * it generically instead of listing types one by one, so a new semantic type
+ * gets id-based correlation for free instead of silently falling back to the
+ * unsafe LIFO guess in `findPendingForResult`/`findOutputIndexForResultFallback`.
+ */
 function getToolCallId(event: CliEvent): string | undefined {
   if (event.type === CLI_EVENT_TYPES.TOOL_CALL) {
     return (event.data as ToolCall).id;
   }
-  if (event.type === CLI_EVENT_TYPES.FILE_READ) {
-    return (event.data as FileReadData).toolCallId;
-  }
-  return undefined;
+  const data = event.data as { toolCallId?: unknown };
+  return typeof data.toolCallId === "string" ? data.toolCallId : undefined;
 }
 
 function isSemanticCompletionEvent(event: CliEvent): boolean {
@@ -382,7 +387,20 @@ function findPendingForResult(
     }
   }
 
-  return pending[pending.length - 1];
+  // No id match: only guess among pending entries that never carried an id of
+  // their own. An id-carrying entry (e.g. a FILE_READ awaiting its own
+  // result) has a reliable correlation channel and must never be stolen by a
+  // differently-typed result that merely happens to be the most recently
+  // initiated — that mismatch previously left an unrelated pending entry
+  // permanently stuck at "running" while its result silently corrupted the
+  // wrong row.
+  for (let i = pending.length - 1; i >= 0; i--) {
+    if (!pending[i].toolCallId) {
+      return pending[i];
+    }
+  }
+
+  return undefined;
 }
 
 function findOutputIndexForResultFallback(
