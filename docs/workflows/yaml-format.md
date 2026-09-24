@@ -32,14 +32,14 @@ finalStep:
 
 ## Root-level fields you will use first
 
-| Field                  | Purpose                                              |
-| ---------------------- | ---------------------------------------------------- |
-| `harness`              | Select the harness                                   |
-| `model`                | Override the harness model                           |
-| `steps`                | Ordered list of work to run                          |
-| `finalStep`            | Prompt or script that runs after the queue           |
-| `vars`                 | Workflow-level variables for `{{name}}` substitution |
-| `trustedExternalRoots` | Workflow-scoped external directory access            |
+| Field                  | Purpose                                                               |
+| ---------------------- | --------------------------------------------------------------------- |
+| `harness`              | Select the harness                                                    |
+| `model`                | Override the harness model                                            |
+| `steps`                | Ordered list of work to run                                           |
+| `finalStep`            | Prompt or script that runs after the queue                            |
+| `vars`                 | Workflow-level variables for <code v-pre>{{name}}</code> substitution |
+| `trustedExternalRoots` | Workflow-scoped external directory access                             |
 
 ## Workflow-scoped external roots
 

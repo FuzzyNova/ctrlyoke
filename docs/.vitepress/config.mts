@@ -7,6 +7,9 @@ export default defineConfig({
   description: "AI workflow automation for VS Code and the command line.",
   base,
   cleanUrls: true,
+  // Hand-written sections that scripts/generate-schema-docs.mjs inlines into
+  // the generated reference pages; they are not pages of their own.
+  srcExclude: ["reference/_partials/**"],
   lastUpdated: true,
   themeConfig: {
     logo: "/ctrlyoke-icon.svg",
@@ -79,6 +82,7 @@ export default defineConfig({
           items: [
             { text: "Workflow schema", link: "/reference/workflow-schema" },
             { text: "Settings", link: "/reference/settings" },
+            { text: "Run files", link: "/reference/run-files" },
             { text: "Commands", link: "/reference/commands" },
             { text: "MCP tools", link: "/reference/mcp-tools" },
           ],

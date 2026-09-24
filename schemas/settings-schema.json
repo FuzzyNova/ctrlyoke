@@ -176,6 +176,7 @@
           }
         },
         "errorBehavior": {
+          "description": "Default policy for internal errors in any step phase. `null` (the default) stops the workflow unless the workflow or step sets its own policy.",
           "oneOf": [
             {
               "type": "object",
@@ -233,6 +234,7 @@
           }
         },
         "endCondition": {
+          "description": "Default end condition for new workflows. `null` (the default) means new workflows have no end condition.",
           "oneOf": [
             {
               "type": "object",
@@ -315,6 +317,7 @@
           ]
         },
         "preCondition": {
+          "description": "Default pre-condition for new workflows. `null` (the default) means new workflows have no pre-condition.",
           "oneOf": [
             {
               "type": "object",
@@ -578,18 +581,23 @@
               "description": "Configure each harness's statusline format independently. When false (the default), every harness renders 'sharedFormat' and the per-harness 'format' values are left untouched but unused."
             },
             "sharedFormat": {
+              "description": "Statusline format every harness renders while 'useDifferentFormatPerHarness' is false.",
               "$ref": "#/definitions/statusLineFormat"
             },
             "claude": {
+              "description": "Statusline settings for Claude CLI.",
               "$ref": "#/definitions/statusLineTrackingSettings"
             },
             "antigravity": {
+              "description": "Statusline settings for Antigravity CLI.",
               "$ref": "#/definitions/statusLineTrackingSettings"
             },
             "copilot": {
+              "description": "Statusline settings for Copilot CLI.",
               "$ref": "#/definitions/statusLineTrackingSettings"
             },
             "qwen": {
+              "description": "Statusline settings for Qwen Code.",
               "$ref": "#/definitions/statusLineTrackingSettings"
             }
           }
@@ -625,6 +633,7 @@
           "description": "Persist normalized observed usage in the workspace."
         },
         "warningPercentUsed": {
+          "description": "Quota usage percentage at which ctrlyoke starts warning that a provider limit is close.",
           "type": "number",
           "minimum": 0,
           "maximum": 100
@@ -805,6 +814,7 @@
           "description": "When to show the mobile terminal control bar."
         },
         "mobileBarLayout": {
+          "description": "Which keys the mobile terminal control bar shows: 'bar' keys are always visible, 'popup' keys sit behind the More menu, and 'hidden' keys are not shown.",
           "type": "object",
           "additionalProperties": false,
           "properties": {
@@ -1264,10 +1274,12 @@
       }
     },
     "statusLineTrackingSettings": {
+      "description": "Statusline settings for one harness.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "enabled": {
+          "description": "Install ctrlyoke's statusline command for this harness.",
           "type": "boolean",
           "default": true
         },
@@ -1282,6 +1294,7 @@
           "description": "Show ctrlyoke's branded statusline instead of custom-command output."
         },
         "format": {
+          "description": "Statusline format for this harness, used only while 'useDifferentFormatPerHarness' is true.",
           "$ref": "#/definitions/statusLineFormat"
         }
       }
