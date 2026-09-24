@@ -10,10 +10,12 @@ import {
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
   MESSAGE_TYPES,
+  NOTIFICATION_OUTCOME_KINDS,
   SESSION_KINDS,
   TERMINAL_END_REASONS,
   type TerminalEndReason,
 } from "../../types/DashboardConstants";
+import type { NotificationResult } from "../../core/harness/shared/interfaces/INotificationMonitor";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
 import type {
@@ -161,8 +163,7 @@ const stdoutProviderFactories: ReadonlyArray<{
 suite("CliTransportCoordinator", () => {
   test("should keep Codex headless hook arguments out of the shell", async () => {
     let preparedCommand:
-      | { promptArgument: string; cliCommand: string }
-      | undefined;
+      { promptArgument: string; cliCommand: string } | undefined;
     const streamedChunks: string[] = [];
     const cleanedTempPaths: string[][] = [];
 
@@ -402,8 +403,7 @@ line two`,
 
   test("should parse partial headless output when cancellation is requested", async () => {
     let callbackResult:
-      | { stdout: string; stderr: string; exitCode: number }
-      | undefined;
+      { stdout: string; stderr: string; exitCode: number } | undefined;
     const cleanedTempPaths: string[][] = [];
     let cancelling = false;
 
@@ -1179,6 +1179,9 @@ line two`,
     function createExitingCoordinator(options: {
       exit: InteractiveExitResult;
       stopHookFires: boolean;
+      /** Overrides the monitor outcome derived from `stopHookFires`. */
+      monitorOutcome?: NotificationResult;
+      onDisposeProcess?: () => void;
     }): CliTransportCoordinator {
       return new CliTransportCoordinator({
         provider: {
@@ -1191,9 +1194,10 @@ line two`,
             usesInteractiveNotificationMonitor: true,
           },
           notificationMonitor: {
-            monitorForCompletion: async () => ({
-              completed: options.stopHookFires,
-            }),
+            monitorForCompletion: async () =>
+              options.monitorOutcome ?? {
+                completed: options.stopHookFires,
+              },
             getNotificationDirectory: () => process.cwd(),
           },
           buildInteractiveArgs: (baseArgs: string[], promptText: string) => [
@@ -1206,7 +1210,7 @@ line two`,
             await new Promise((resolve) => setTimeout(resolve, 10));
             return options.exit;
           },
-          disposeProcess: () => {},
+          disposeProcess: () => options.onDisposeProcess?.(),
         } as unknown as CliProcessManager,
         resolveCliCommand: resolveCommand,
         runtimeState: {
@@ -1264,6 +1268,31 @@ line two`,
         []
       );
       assert.strictEqual(result.success, true);
+    });
+
+    // A harness error leaves the TUI open, so the step must end it rather than
+    // wait on a process that will not exit (the OpenCode plugin reports a
+    // failed resumed-prompt submission this way).
+    test("terminates the session and fails when the harness reports an error", async () => {
+      let disposed = false;
+      const coordinator = createExitingCoordinator({
+        exit: { exitCode: 1, terminatedByManager: true },
+        stopHookFires: false,
+        monitorOutcome: {
+          completed: false,
+          kind: NOTIFICATION_OUTCOME_KINDS.ERROR,
+          error: "Harness reported an error",
+          data: { rawHookData: { message: "could not submit the prompt" } },
+        },
+        onDisposeProcess: () => {
+          disposed = true;
+        },
+      });
+      await assert.rejects(
+        coordinator.executeStandaloneInteractiveProcess([], "prompt", []),
+        /test-cli reported an error: could not submit the prompt/
+      );
+      assert.strictEqual(disposed, true);
     });
 
     test("ignores the exit code of a session ctrlyoke terminated after its Stop hook", async () => {

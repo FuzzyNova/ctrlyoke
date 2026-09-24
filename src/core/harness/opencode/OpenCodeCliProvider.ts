@@ -41,6 +41,41 @@ import {
   type OpenCodeInlineConfig,
   type OpenCodeInlineConfigBuildOptions,
 } from "./OpenCodeInlineConfig";
+import {
+  OPENCODE_CLI_FLAGS,
+  OPENCODE_RESUME_PROMPT_ENV,
+  OPENCODE_RESUMED_PROMPT_DELIVERIES,
+  type OpenCodeResumedPromptDelivery,
+} from "./OpenCodeProtocolConstants";
+
+/**
+ * How a resumed interactive step delivers its prompt.
+ *
+ * OpenCode's TUI ignores `--prompt` when `--session` is also given: it opens
+ * the session and waits for input, so the step never starts
+ * (anomalyco/opencode#21829, closed "not planned"; fix proposed in
+ * anomalyco/opencode#46307). Until a release honours the pair, the ctrlyoke
+ * plugin submits the prompt through OpenCode's server instead. Switch this to
+ * `ARGUMENT` to go back to `--session … --prompt …` once the fix ships.
+ *
+ * Only relaunches are affected: inject mode types follow-up prompts into the
+ * running TUI and never resumes by argument.
+ */
+const OPENCODE_RESUMED_PROMPT_DELIVERY: OpenCodeResumedPromptDelivery =
+  OPENCODE_RESUMED_PROMPT_DELIVERIES.PLUGIN;
+
+/** A resumed interactive prompt the plugin submits after OpenCode starts. */
+interface OpenCodeResumePrompt {
+  sessionId: string;
+  model: string | undefined;
+  text: string;
+}
+
+/** Value that follows `flag` in `args`, if the flag is present. */
+function flagValue(args: readonly string[], flag: string): string | undefined {
+  const index = args.indexOf(flag);
+  return index >= 0 ? args[index + 1] : undefined;
+}
 
 const OPENCODE_MCP_FILTERING_CAPABILITY = {
   fidelity: "exact",
@@ -82,7 +117,9 @@ const OPENCODE_IMAGE_INPUT_CAPABILITY = {
  *   opencode run "prompt" --format json -m provider/model [-s sessionId]
  *
  * Interactive execution (with plugin for completion detection):
- *   opencode --prompt "prompt text" -m provider/model [-s sessionId]
+ *   opencode --prompt "prompt text" -m provider/model
+ *   opencode -m provider/model -s sessionId   (prompt submitted by the plugin;
+ *                                               see OPENCODE_RESUMED_PROMPT_DELIVERY)
  *   (plugin loaded from the extension installation through inline config)
  *
  * Session management:
@@ -138,6 +175,12 @@ export class OpenCodeCliProvider implements ICliProvider {
   private pendingUserHooksEnv: string | undefined;
   /** Artifacts created only by the documented fallback path. */
   private fallbackPluginArtifactPaths: string[] = [];
+  /**
+   * Prompt for the plugin to submit to a resumed session. Set by
+   * buildInteractiveArgs() and read by getInteractiveSpawnEnv(), which every
+   * interactive launch calls in that order.
+   */
+  private pendingResumePrompt: OpenCodeResumePrompt | undefined;
 
   /**
    * Build the ctrlyoke-owned OpenCode config without performing any I/O.
@@ -306,7 +349,7 @@ export class OpenCodeCliProvider implements ICliProvider {
     // Model selection — use resolved property if available
     const model = this.getModel(resolvedModel);
     if (model) {
-      args.push("-m", model);
+      args.push(OPENCODE_CLI_FLAGS.MODEL, model);
     }
 
     // Session management — resume with explicit session ID only
@@ -318,7 +361,7 @@ export class OpenCodeCliProvider implements ICliProvider {
       sessionId
     );
     if (shouldResume) {
-      args.push("-s", sessionId!);
+      args.push(OPENCODE_CLI_FLAGS.SESSION, sessionId!);
       Log.info(`[OpenCodeCliProvider] Resuming session: ${sessionId}`);
     } else if (resolvedResumeSession && !sessionId) {
       Log.warn(
@@ -395,14 +438,36 @@ export class OpenCodeCliProvider implements ICliProvider {
   /**
    * Build CLI arguments for interactive TUI mode.
    *
-   * opencode --prompt "prompt text" -m model [-s sessionId]
+   * opencode --prompt "prompt text" -m model
+   *
+   * A resumed session (`-s`) omits `--prompt` while
+   * OPENCODE_RESUMED_PROMPT_DELIVERY is `PLUGIN`, and hands the prompt to the
+   * plugin through getInteractiveSpawnEnv() instead.
    *
    * @param baseArgs Base arguments array (from buildCliArgs with isInteractive=true)
    * @param promptText The prompt text to include
    * @returns Complete arguments array
    */
   buildInteractiveArgs(baseArgs: string[], promptText: string): string[] {
-    return ["--prompt", promptText, ...baseArgs];
+    const sessionId = flagValue(baseArgs, OPENCODE_CLI_FLAGS.SESSION);
+    this.pendingResumePrompt =
+      sessionId &&
+      promptText &&
+      OPENCODE_RESUMED_PROMPT_DELIVERY ===
+        OPENCODE_RESUMED_PROMPT_DELIVERIES.PLUGIN
+        ? {
+            sessionId,
+            model: flagValue(baseArgs, OPENCODE_CLI_FLAGS.MODEL),
+            text: promptText,
+          }
+        : undefined;
+    if (this.pendingResumePrompt) {
+      Log.info(
+        `[OpenCodeCliProvider] Resumed session ${sessionId}: the plugin will submit the prompt (OpenCode ignores --prompt with --session)`
+      );
+      return [...baseArgs];
+    }
+    return [OPENCODE_CLI_FLAGS.PROMPT, promptText, ...baseArgs];
   }
 
   /**
@@ -707,6 +772,21 @@ export class OpenCodeCliProvider implements ICliProvider {
       OPENCODE_CONFIG_CONTENT: this.getInlineConfigContent(),
       ...(this.pendingUserHooksEnv
         ? { CTRLYOKE_OPENCODE_HOOKS: this.pendingUserHooksEnv }
+        : {}),
+      ...this.getResumePromptEnv(),
+    };
+  }
+
+  private getResumePromptEnv(): Record<string, string> {
+    const resume = this.pendingResumePrompt;
+    if (!resume) {
+      return {};
+    }
+    return {
+      [OPENCODE_RESUME_PROMPT_ENV.PROMPT]: resume.text,
+      [OPENCODE_RESUME_PROMPT_ENV.SESSION]: resume.sessionId,
+      ...(resume.model
+        ? { [OPENCODE_RESUME_PROMPT_ENV.MODEL]: resume.model }
         : {}),
     };
   }

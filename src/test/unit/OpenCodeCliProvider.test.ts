@@ -9,6 +9,10 @@ import {
   type OpenCodePermissionCollisionContext,
 } from "../../core/harness/opencode/OpenCodeInlineConfig";
 import { OpenCodeLogParser } from "../../core/harness/opencode/OpenCodeLogParser";
+import {
+  OPENCODE_CLI_FLAGS,
+  OPENCODE_RESUME_PROMPT_ENV,
+} from "../../core/harness/opencode/OpenCodeProtocolConstants";
 import { CliResponseCollector } from "../../core/harness/shared/CliResponseCollector";
 import { Log } from "../../utils/Log";
 import {
@@ -831,6 +835,55 @@ suite("OpenCodeCliProvider", () => {
       assert.deepStrictEqual(secondConfig.plugin, firstConfig.plugin);
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  // OpenCode's TUI ignores --prompt when --session is also given
+  // (anomalyco/opencode#21829), so the plugin submits a resumed prompt.
+  test("hands a resumed interactive prompt to the plugin instead of --prompt", () => {
+    const provider = new OpenCodeCliProvider();
+    const baseArgs = [
+      OPENCODE_CLI_FLAGS.MODEL,
+      "opencode/big-pickle",
+      OPENCODE_CLI_FLAGS.SESSION,
+      "ses_resumed",
+    ];
+
+    assert.deepStrictEqual(
+      provider.buildInteractiveArgs(baseArgs, "second step"),
+      baseArgs
+    );
+    const env = provider.getInteractiveSpawnEnv();
+    assert.strictEqual(env[OPENCODE_RESUME_PROMPT_ENV.PROMPT], "second step");
+    assert.strictEqual(env[OPENCODE_RESUME_PROMPT_ENV.SESSION], "ses_resumed");
+    assert.strictEqual(
+      env[OPENCODE_RESUME_PROMPT_ENV.MODEL],
+      "opencode/big-pickle"
+    );
+  });
+
+  test("passes --prompt for a new session and drops a previous resumed prompt", () => {
+    const provider = new OpenCodeCliProvider();
+    provider.buildInteractiveArgs(
+      [OPENCODE_CLI_FLAGS.SESSION, "ses_resumed"],
+      "second step"
+    );
+
+    assert.deepStrictEqual(
+      provider.buildInteractiveArgs(
+        [OPENCODE_CLI_FLAGS.MODEL, "opencode/big-pickle"],
+        "first step"
+      ),
+      [
+        OPENCODE_CLI_FLAGS.PROMPT,
+        "first step",
+        OPENCODE_CLI_FLAGS.MODEL,
+        "opencode/big-pickle",
+      ]
+    );
+    const env = provider.getInteractiveSpawnEnv();
+    for (const name of Object.values(OPENCODE_RESUME_PROMPT_ENV)) {
+      assert.strictEqual(env[name], undefined, name);
     }
   });
 

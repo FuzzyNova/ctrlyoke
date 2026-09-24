@@ -368,6 +368,42 @@ suite("Inline harness configuration regression tests", function () {
         assertNoWorkspaceConfig(tmpDir, ["opencode.json", ".opencode"]);
       });
     }
+
+    // The standalone CLI relaunches the TUI with `-s` for every step. OpenCode
+    // ignores `--prompt` alongside `--session` (anomalyco/opencode#21829), so
+    // without the plugin submitting the prompt, step 2 waits for input forever.
+    test("runs the prompt of a resumed interactive step", async function () {
+      const markerPath = normalizedPath(
+        path.join(tmpDir, "opencode-resumed-marker.txt")
+      );
+      const result = await runInteractiveWorkflowFile(
+        {
+          harness: OPENCODE,
+          model: HARNESS_MODELS[OPENCODE],
+          executionMode: EXECUTION_MODES.INTERACTIVE,
+          toolPermissions: { mode: "dangerouslyAllowAll" },
+          resumeSession: true,
+          steps: [
+            {
+              name: "opencode-first",
+              prompt: "Reply with exactly: first-step",
+            },
+            {
+              name: "opencode-resumed",
+              prompt: `Use the shell tool to run: node -e \"require('fs').writeFileSync('${markerPath}','resumed')\"`,
+            },
+          ],
+        },
+        tmpDir,
+        "opencode-resumed-interactive"
+      );
+      if (logAndMaybeSkip("opencode-cli resumed interactive", result)) return;
+      assertSuccessfulRun("opencode-cli resumed interactive", result);
+      assert.ok(
+        fs.existsSync(markerPath),
+        "the resumed step's prompt never ran"
+      );
+    });
   });
 
   suite(`Codex ${PINNED_HARNESS_VERSIONS[CODEX]}`, function () {

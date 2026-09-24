@@ -10,6 +10,15 @@
 //   CTRLYOKE_RUN_ID          — per-run UUID for collision-free start file naming
 //   CTRLYOKE_WORKSPACE_ROOT  — workspace root directory
 //
+// A resumed interactive launch also sets (OPENCODE_RESUME_PROMPT_ENV in
+// src/core/harness/opencode/OpenCodeProtocolConstants.ts; keep in step):
+//   CTRLYOKE_OPENCODE_RESUME_PROMPT   — prompt to submit to the resumed session
+//   CTRLYOKE_OPENCODE_RESUME_SESSION  — the resumed session's ID
+//   CTRLYOKE_OPENCODE_RESUME_MODEL    — optional provider/model for the prompt
+// OpenCode's TUI ignores --prompt when --session is also given
+// (anomalyco/opencode#21829), so ctrlyoke omits --prompt and the plugin submits
+// the prompt through OpenCode's server once the plugin has loaded.
+//
 // User hooks are loaded at startup from CTRLYOKE_OPENCODE_HOOKS.
 // Format: [{ "event": "stop"|"sessionStart"|..., "command": "node ..." }, ...]
 //
@@ -78,6 +87,40 @@ const mainSessions = new Set<string>();
 // Track which sessions have had their start file written.
 const startFilesWritten = new Set<string>();
 let hookArtifactCounter = 0;
+
+// Read once, then removed from this process's environment so shell tools and
+// any nested OpenCode the agent starts cannot inherit it and resubmit.
+const RESUME_PROMPT = process.env.CTRLYOKE_OPENCODE_RESUME_PROMPT;
+const RESUME_SESSION = process.env.CTRLYOKE_OPENCODE_RESUME_SESSION;
+const RESUME_MODEL = process.env.CTRLYOKE_OPENCODE_RESUME_MODEL;
+delete process.env.CTRLYOKE_OPENCODE_RESUME_PROMPT;
+delete process.env.CTRLYOKE_OPENCODE_RESUME_SESSION;
+delete process.env.CTRLYOKE_OPENCODE_RESUME_MODEL;
+let resumePromptSubmitted = false;
+
+/** The slice of OpenCode's plugin input this plugin uses. */
+interface OpenCodePluginInput {
+  client?: {
+    session?: {
+      promptAsync?: (options: {
+        path: { id: string };
+        body: {
+          parts: Array<{ type: "text"; text: string }>;
+          model?: { providerID: string; modelID: string };
+        };
+      }) => Promise<{ error?: unknown }>;
+    };
+  };
+}
+
+/** Split "provider/model" at the first slash; model IDs may contain more. */
+function _parseModel(
+  model: string | undefined
+): { providerID: string; modelID: string } | undefined {
+  const slash = model?.indexOf("/") ?? -1;
+  if (!model || slash <= 0 || slash === model.length - 1) return undefined;
+  return { providerID: model.slice(0, slash), modelID: model.slice(slash + 1) };
+}
 
 // Load user hooks from the process-local JSON environment value.
 // Format: [{ event: "stop"|"sessionStart"|"preToolUse"|"postToolUse"|"userPromptSubmit", command: string }]
@@ -178,14 +221,99 @@ function _debugLog(message: string, data?: unknown): void {
   } catch (_e) {}
 }
 
-export const CtrlYokeHook = async (_hookContext: unknown) => {
+export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
   _debugLog("🚀 ctrlyoke OpenCode plugin loaded", {
     notifyDir: NOTIFY_DIR,
     runId: RUN_ID,
     workspaceRoot,
     userHookCount: _userHooks.length,
     diagnosticsEnabled: _logPath !== null,
+    resumeSession: RESUME_SESSION,
   });
+
+  /**
+   * Write {sessionId}-error.json so ctrlyoke's completion monitor fails the
+   * step instead of waiting for a stop that will never come.
+   */
+  function _writeErrorFile(
+    sessionId: string,
+    hookEvent: string,
+    rawHookData: unknown
+  ): void {
+    if (!NOTIFY_DIR) return;
+    try {
+      mkdirSync(NOTIFY_DIR, { recursive: true });
+      const errorFile = `${NOTIFY_DIR}/${sessionId}-error.json`;
+      writeFileSync(
+        errorFile,
+        JSON.stringify({
+          hookEvent,
+          sessionId,
+          status: "error",
+          timestamp: Date.now(),
+          rawHookData,
+        })
+      );
+      _debugLog("✅ Wrote error file", { file: errorFile, sessionId });
+    } catch (e) {
+      _debugLog("❌ Failed to write error file", {
+        error: String(e),
+      });
+    }
+  }
+
+  /** Submit a resumed session's prompt; see the RESUME_* note at the top. */
+  async function _submitResumePrompt(
+    sessionId: string,
+    text: string
+  ): Promise<void> {
+    const failure = (error: unknown): void => {
+      _debugLog("❌ Resume prompt submission failed", {
+        sessionId,
+        error: String(error),
+      });
+      _writeErrorFile(sessionId, "ctrlyoke.resume-prompt", {
+        message: `ctrlyoke could not submit the prompt to resumed OpenCode session ${sessionId}: ${String(error)}`,
+      });
+    };
+    const promptAsync = hookContext.client?.session?.promptAsync;
+    if (!promptAsync) {
+      failure(
+        "this OpenCode version's plugin client has no session.promptAsync"
+      );
+      return;
+    }
+    try {
+      const model = _parseModel(RESUME_MODEL);
+      const result = await promptAsync.call(hookContext.client!.session, {
+        path: { id: sessionId },
+        body: {
+          parts: [{ type: "text", text }],
+          ...(model ? { model } : {}),
+        },
+      });
+      if (result?.error) {
+        failure(JSON.stringify(result.error));
+        return;
+      }
+      _debugLog("📨 Submitted resume prompt", {
+        sessionId,
+        length: text.length,
+      });
+    } catch (e) {
+      failure(e);
+    }
+  }
+
+  if (RESUME_PROMPT && RESUME_SESSION && !resumePromptSubmitted) {
+    resumePromptSubmitted = true;
+    // Deferred so OpenCode finishes initialising plugins before the prompt
+    // reaches its server; awaiting here would hold up plugin loading.
+    setTimeout(
+      () => void _submitResumePrompt(RESUME_SESSION, RESUME_PROMPT),
+      0
+    );
+  }
 
   /**
    * Write the start notification file for a main session (once per session).
@@ -450,28 +578,7 @@ export const CtrlYokeHook = async (_hookContext: unknown) => {
         _writeHookArtifact("error", "session.error", event.properties, {
           sessionId,
         });
-
-        if (NOTIFY_DIR) {
-          try {
-            mkdirSync(NOTIFY_DIR, { recursive: true });
-            const errorFile = `${NOTIFY_DIR}/${sessionId}-error.json`;
-            writeFileSync(
-              errorFile,
-              JSON.stringify({
-                hookEvent: "session.error",
-                sessionId,
-                status: "error",
-                timestamp: Date.now(),
-                rawHookData: event.properties,
-              })
-            );
-            _debugLog("✅ Wrote error file", { file: errorFile, sessionId });
-          } catch (e) {
-            _debugLog("❌ Failed to write error file", {
-              error: String(e),
-            });
-          }
-        }
+        _writeErrorFile(sessionId, "session.error", event.properties);
 
         _runUserHooks("error");
       }

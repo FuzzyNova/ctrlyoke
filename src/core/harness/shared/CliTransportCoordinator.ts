@@ -3,6 +3,7 @@ import {
   EXECUTION_MODES,
   HEADLESS_SOURCE_MODES,
   MESSAGE_TYPES,
+  NOTIFICATION_OUTCOME_KINDS,
   SESSION_KINDS,
   TERMINAL_END_REASONS,
   TERMINAL_SESSION_STATUS,
@@ -58,6 +59,11 @@ interface CliTransportCoordinatorHostCallbacks {
   onResponseComplete: (response: string) => void;
   onPtyExit: (session: PtySession, exitCode: number) => void;
   cleanupTempFiles: (tempFilePaths: string[]) => Promise<void>;
+}
+
+/** Fields of an `{sessionId}-error.json` notification read for its message. */
+interface ErrorNotificationData {
+  rawHookData?: { message?: unknown };
 }
 
 export interface CliTransportCoordinatorDeps {
@@ -159,6 +165,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       let processExited = false;
       let completionSignalled = false;
       let hookSessionId: string | undefined;
+      let harnessError: string | undefined;
 
       const spawnPromise = this.withProcessEnvOverrides(secretEnv, () =>
         this.deps.processManager.spawnInteractive(
@@ -204,12 +211,30 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
                   (hookSessionId ? ` (session: ${hookSessionId})` : "")
               );
               this.deps.processManager.disposeProcess();
+            } else if (
+              result.kind === NOTIFICATION_OUTCOME_KINDS.ERROR &&
+              !processExited
+            ) {
+              // The TUI stays open after a harness error, so without this
+              // the step would wait on a process that will never finish.
+              harnessError =
+                this.describeHarnessError(result.data) ?? result.error;
+              Log.warn(
+                `[CliTransportCoordinator] Harness error detected — terminating interactive session: ${harnessError}`
+              );
+              this.deps.processManager.disposeProcess();
             }
           });
 
         [exit] = await Promise.all([spawnPromise, monitorPromise]);
       } else {
         exit = await spawnPromise;
+      }
+
+      if (harnessError !== undefined) {
+        throw new Error(
+          `${command.command} reported an error: ${harnessError}`
+        );
       }
 
       // A CLI that fails to start (Codex 0.156 exits 1 with "stdin is not a
@@ -236,6 +261,14 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     } finally {
       await this.deps.hostCallbacks.cleanupTempFiles(tempFilePaths);
     }
+  }
+
+  /** The message an error notification carries, when it carries one. */
+  private describeHarnessError(
+    data: ErrorNotificationData | undefined
+  ): string | undefined {
+    const message = data?.rawHookData?.message;
+    return typeof message === "string" && message ? message : undefined;
   }
 
   async startInteractiveProcess(

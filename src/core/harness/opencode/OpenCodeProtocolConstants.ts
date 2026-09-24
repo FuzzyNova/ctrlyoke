@@ -37,3 +37,36 @@ export const OPENCODE_TOOL_NAMES = {
 export const OPENCODE_STEP_FINISH_REASONS = {
   STOP: "stop",
 } as const;
+
+/** OpenCode CLI flags that ctrlyoke both writes and reads back. */
+export const OPENCODE_CLI_FLAGS = {
+  MODEL: "-m",
+  SESSION: "-s",
+  PROMPT: "--prompt",
+} as const;
+
+/**
+ * How a resumed interactive launch (`--session`) hands its prompt to OpenCode.
+ *
+ * - `ARGUMENT`: pass `--prompt` alongside `--session`, as for a new session.
+ * - `PLUGIN`: omit `--prompt`; the ctrlyoke plugin submits the prompt to the
+ *   resumed session through OpenCode's server once that server is up.
+ */
+export const OPENCODE_RESUMED_PROMPT_DELIVERIES = {
+  ARGUMENT: "argument",
+  PLUGIN: "plugin",
+} as const;
+
+export type OpenCodeResumedPromptDelivery =
+  (typeof OPENCODE_RESUMED_PROMPT_DELIVERIES)[keyof typeof OPENCODE_RESUMED_PROMPT_DELIVERIES];
+
+/**
+ * Environment the ctrlyoke plugin reads to submit a resumed session's prompt.
+ * `src/scripts/ctrlyoke-opencode-plugin.ts` cannot import this module, so it
+ * repeats these names; keep the two in step.
+ */
+export const OPENCODE_RESUME_PROMPT_ENV = {
+  PROMPT: "CTRLYOKE_OPENCODE_RESUME_PROMPT",
+  SESSION: "CTRLYOKE_OPENCODE_RESUME_SESSION",
+  MODEL: "CTRLYOKE_OPENCODE_RESUME_MODEL",
+} as const;
