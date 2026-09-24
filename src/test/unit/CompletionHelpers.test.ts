@@ -10,6 +10,7 @@ import {
 import {
   clearFilesCache,
   getFileCompletions,
+  getHashCompletions,
   getHashSelectionCompletions,
   getPathSuggestions,
   getPromptFileCompletions,
@@ -292,25 +293,55 @@ suite("CompletionHelpers", () => {
     assert.strictEqual(item.command, undefined);
   });
 
-  test("matches @ completions fuzzily against a basename-only query", async () => {
+  test("ranks @ completions fuzzily against a basename-only query", async () => {
     mockWorkspaceFiles([
-      "src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
       "src/ui/webview-react/components/editor/CodeMirrorTheme.ts",
       "src/ui/webview-react/components/workflow/WorkflowFilePickerModal.tsx",
+      "src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
     ]);
 
     const items = await getFileCompletions("cme");
-    const labels = items.map((item) => item.label);
 
-    assert.ok(labels.includes("CodeMirrorEditor.tsx"));
-    assert.ok(!labels.includes("CodeMirrorTheme.ts"));
-    assert.ok(!labels.includes("WorkflowFilePickerModal.tsx"));
+    assert.strictEqual(items[0]?.label, "CodeMirrorEditor.tsx");
+    assert.deepStrictEqual(
+      items.map((item) => item.rank),
+      items.map((_, index) => index)
+    );
   });
 
-  test("matches @ completions fuzzily within the typed directory segment", async () => {
+  test("matches @ completions with gaps across camelCase words", async () => {
     mockWorkspaceFiles([
       "src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
+      "src/ui/webview-react/components/workflow/WorkflowFilePickerModal.tsx",
+    ]);
+
+    const labels = (await getFileCompletions("codeeditor")).map(
+      (item) => item.label
+    );
+
+    assert.deepStrictEqual(labels, ["CodeMirrorEditor.tsx"]);
+  });
+
+  test("ranks @ completions before truncating, so the best match survives the cap", async () => {
+    // 600 weak path-only matches that sort ahead of the real one by path.
+    const noise = Array.from(
+      { length: 600 },
+      (_, index) => `aaa/editor-fixtures/case${index}.ts`
+    );
+    mockWorkspaceFiles([
+      ...noise,
+      "zzz/ui/components/editor/CodeMirrorEditor.tsx",
+    ]);
+
+    const items = await getFileCompletions("codemirroreditor");
+
+    assert.strictEqual(items[0]?.label, "CodeMirrorEditor.tsx");
+  });
+
+  test("ranks @ completions fuzzily within the typed directory segment", async () => {
+    mockWorkspaceFiles([
       "src/ui/webview-react/components/editor/CodeMirrorTheme.ts",
+      "src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
       "src/ui/webview-react/components/editor/commands/CommandPalette.tsx",
     ]);
 
@@ -319,9 +350,101 @@ suite("CompletionHelpers", () => {
     );
     const labels = items.map((item) => item.label);
 
-    assert.ok(labels.includes("CodeMirrorEditor.tsx"));
-    assert.ok(!labels.includes("CodeMirrorTheme.ts"));
+    assert.strictEqual(labels[0], "CodeMirrorEditor.tsx");
     assert.ok(!labels.includes("commands/"));
+    assert.ok(!labels.includes("CommandPalette.tsx"));
+  });
+
+  suite("# symbol completions", () => {
+    const originalExecuteCommand = vscode.commands.executeCommand;
+    const symbolUri = vscode.Uri.file(
+      path.join(os.tmpdir(), "ctrlyoke-completion-helpers", "src", "hooks.ts")
+    );
+
+    function symbol(name: string, line: number, containerName = "") {
+      return new vscode.SymbolInformation(
+        name,
+        vscode.SymbolKind.Function,
+        containerName,
+        new vscode.Location(symbolUri, new vscode.Range(line, 0, line + 2, 0))
+      );
+    }
+
+    // Mimic tsserver's navto for an all-lowercase query: a contiguous,
+    // case-insensitive substring match only.
+    function mockWorkspaceSymbols(
+      symbols: vscode.SymbolInformation[]
+    ): string[] {
+      const queries: string[] = [];
+      Object.defineProperty(vscode.commands, "executeCommand", {
+        configurable: true,
+        value: ((command: string, query: string) => {
+          if (command !== "vscode.executeWorkspaceSymbolProvider") {
+            return originalExecuteCommand(command, query);
+          }
+          queries.push(query);
+          return Promise.resolve(
+            symbols.filter(
+              (candidate) =>
+                query.length > 0 &&
+                `${candidate.containerName}.${candidate.name}`
+                  .toLowerCase()
+                  .includes(query.toLowerCase())
+            )
+          );
+        }) as typeof originalExecuteCommand,
+      });
+      return queries;
+    }
+
+    teardown(() => {
+      Object.defineProperty(vscode.commands, "executeCommand", {
+        configurable: true,
+        value: originalExecuteCommand,
+      });
+    });
+
+    test("finds gapped camelCase symbols the provider only returns for the short prefix", async () => {
+      mockSelections([]);
+      const queries = mockWorkspaceSymbols([
+        symbol("useCallbackRef", 1),
+        symbol("useFinalStepContextMenu", 10),
+        symbol("useContextPct", 20),
+      ]);
+
+      const items = await getHashCompletions("usecontext");
+      const labels = items.map((item) => item.label);
+
+      assert.deepStrictEqual(queries.sort(), ["use", "usecontext"]);
+      assert.ok(labels.includes("useFinalStepContextMenu"));
+      assert.ok(labels.includes("useContextPct"));
+      assert.ok(!labels.includes("useCallbackRef"));
+      assert.deepStrictEqual(
+        items.map((item) => item.rank),
+        items.map((_, index) => index)
+      );
+    });
+
+    test("keeps provider matches for the full query that fuzzy ranking cannot see", async () => {
+      mockSelections([]);
+      mockWorkspaceSymbols([symbol("member", 1, "Container")]);
+
+      const labels = (await getHashCompletions("Container.member")).map(
+        (item) => item.label
+      );
+
+      assert.deepStrictEqual(labels, ["member"]);
+    });
+
+    test("filters the selection item against the query", async () => {
+      mockSelections([
+        { relativePath: "src/foo.ts", startLine: 10, endLine: 20 },
+      ]);
+      mockWorkspaceSymbols([]);
+
+      assert.strictEqual((await getHashCompletions("usecontext")).length, 0);
+      assert.strictEqual((await getHashCompletions("sel")).length, 1);
+    });
   });
 
   test("matches lone prompt-file path completions against the typed directory and child prefix", async () => {

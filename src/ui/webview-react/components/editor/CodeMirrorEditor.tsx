@@ -172,6 +172,8 @@ interface ExtensionCompletionItem {
   captureId?: string;
   sortText?: string;
   filterText?: string;
+  /** Fuzzy relevance rank from the extension (see PlainCompletionItem.rank). */
+  rank?: number;
   /**
    * Explicit codicon name overriding the kind-derived icon below (see
    * PlainCompletionItem.icon in CompletionHelpers.ts for why this exists —
@@ -329,7 +331,15 @@ export function buildCodeMirrorCompletionResult(
   symbolIconCache?: Map<string, string>,
   onOutputCapturePicked?: OutputCapturePickHandler
 ): CompletionResult {
-  const useFilterTextForMatching = !shouldBypassCodeMirrorFiltering(request);
+  // A response the extension already fuzzy-ranked against the query is shown
+  // as-is: CodeMirror's own matcher would both re-sort it and drop legitimate
+  // matches (a one-character query only matches at the label start, and a
+  // gapped two-character query never matches). Every keystroke re-queries the
+  // extension (no `validFor`), so the list still narrows as the user types.
+  const bypassFiltering =
+    shouldBypassCodeMirrorFiltering(request) ||
+    items.some((item) => item.rank !== undefined);
+  const useFilterTextForMatching = !bypassFiltering;
   const completions = items.map((item, index) => {
     // Calculate boost from sortText.
     // Handles both numeric prefixes ("000_", "001_") and
@@ -471,7 +481,7 @@ export function buildCodeMirrorCompletionResult(
     options: completions,
   };
 
-  if (shouldBypassCodeMirrorFiltering(request)) {
+  if (bypassFiltering) {
     result.filter = false;
   }
 

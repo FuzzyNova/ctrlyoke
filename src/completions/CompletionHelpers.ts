@@ -29,6 +29,13 @@ import { SYMBOL_KIND_ICONS } from "../types/SymbolKindConstants";
 import { outputCaptureCache } from "./OutputCaptureCache";
 import { clearSlashTokenCompletionCache } from "./SlashTokenCompletionHelpers";
 import {
+  buildFuzzyIndex,
+  fuzzyMatches,
+  rankByFuzzyQuery,
+  rankIndexByFuzzyQuery,
+  type FuzzyIndex,
+} from "./FuzzyRanking";
+import {
   CAPTURING_OUTPUT_PLACEHOLDER,
   RETRY_PROMPT_PLACEHOLDERS,
   SCRIPT_OUTPUT_SOURCES,
@@ -63,6 +70,15 @@ export interface PlainCompletionItem {
   sortText?: string;
   filterText?: string;
   /**
+   * 0-based position in this response's fuzzy relevance ranking (see
+   * FuzzyRanking.ts). Set only by sources that rank against the typed query.
+   * A response containing ranked items is shown by the webview dropdown in the
+   * order sent, with no client-side filtering or re-sorting (see
+   * buildCodeMirrorCompletionResult) — so every other item in that response
+   * must already be filtered against the query too.
+   */
+  rank?: number;
+  /**
    * Explicit codicon name overriding the webview dropdown's default
    * kind-derived icon (see COMPLETION_KIND_ICONS in CodeMirrorEditor.tsx).
    * `vscode.CompletionItemKind` has too few free values to give every atomic
@@ -86,7 +102,7 @@ export function getSecretCompletions(
   filterText: string
 ): PlainCompletionItem[] {
   return [...new Set(secretNames)]
-    .filter((name) => matchesFuzzyQuery(name, filterText))
+    .filter((name) => fuzzyMatches(name, filterText))
     .sort()
     .map((name) => ({
       label: name,
@@ -416,6 +432,7 @@ async function getGitAwareFiles(): Promise<vscode.Uri[]> {
 export function clearFilesCache(): void {
   filesCache = [];
   filesCacheTimestamp = 0;
+  pathIndexCache = undefined;
 }
 
 /**
@@ -458,92 +475,6 @@ function getNormalizedWorkspaceRelativePath(fileUri: vscode.Uri): string {
 function getNormalizedParentDirectory(relativePath: string): string {
   const parentPath = path.posix.dirname(relativePath);
   return parentPath === "." ? "" : parentPath;
-}
-
-function matchesFuzzyQuery(candidate: string, query: string): boolean {
-  if (!query) {
-    return true;
-  }
-
-  const normalizedCandidate = candidate.toLowerCase();
-  const normalizedQuery = query.toLowerCase();
-
-  if (normalizedCandidate.includes(normalizedQuery)) {
-    return true;
-  }
-
-  const boundarySignature = getBoundarySignature(candidate);
-  if (
-    boundarySignature &&
-    matchesSubsequence(boundarySignature, normalizedQuery)
-  ) {
-    return true;
-  }
-
-  if (hasUppercaseCharacter(candidate)) {
-    return false;
-  }
-
-  return matchesSubsequence(normalizedCandidate, normalizedQuery);
-}
-
-function matchesSubsequence(candidate: string, query: string): boolean {
-  let queryIndex = 0;
-  for (const character of candidate) {
-    if (character === query[queryIndex]) {
-      queryIndex++;
-      if (queryIndex === query.length) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
-function hasUppercaseCharacter(value: string): boolean {
-  return /[A-Z]/.test(value);
-}
-
-function getBoundarySignature(candidate: string): string {
-  let signature = "";
-
-  for (let index = 0; index < candidate.length; index++) {
-    const character = candidate[index];
-    const previous = index > 0 ? candidate[index - 1] : "";
-
-    const isBoundaryStart =
-      index === 0 ||
-      previous === "/" ||
-      previous === "-" ||
-      previous === "_" ||
-      previous === "." ||
-      (character >= "A" &&
-        character <= "Z" &&
-        previous >= "a" &&
-        previous <= "z");
-
-    if (isBoundaryStart) {
-      signature += character;
-      continue;
-    }
-
-    if (
-      signature.length > 0 &&
-      character >= "A" &&
-      character <= "Z" &&
-      previous >= "A" &&
-      previous <= "Z" &&
-      index + 1 < candidate.length
-    ) {
-      const next = candidate[index + 1];
-      if (next >= "a" && next <= "z") {
-        signature += character;
-      }
-    }
-  }
-
-  return signature.toLowerCase();
 }
 
 function buildPathCompletionFilter(
@@ -589,28 +520,154 @@ function buildPathCompletionFilter(
   };
 }
 
+/** One file or directory in the workspace, as offered by path completions. */
+interface WorkspacePathEntry {
+  kind:
+    typeof WORKSPACE_ENTRY_KINDS.FILE | typeof WORKSPACE_ENTRY_KINDS.DIRECTORY;
+  /** Normalized, workspace-relative (folder-prefixed in multi-root). */
+  relativePath: string;
+  name: string;
+  parentPath: string;
+  /** Lowercased parentPath, for matching a typed directory case-insensitively. */
+  parentPathLower: string;
+}
+
+interface WorkspacePathIndex {
+  /** The getWorkspaceFiles() result this index was built from. */
+  source: vscode.Uri[];
+  multiRoot: boolean;
+  /** Files, then every ancestor directory of a file. */
+  entries: WorkspacePathEntry[];
+  /** Built lazily on the first non-empty query. */
+  fuzzy?: FuzzyIndex<WorkspacePathEntry>;
+}
+
+let pathIndexCache: WorkspacePathIndex | undefined;
+
+function createWorkspacePathEntry(
+  kind: WorkspacePathEntry["kind"],
+  relativePath: string
+): WorkspacePathEntry {
+  const parentPath = getNormalizedParentDirectory(relativePath);
+  return {
+    kind,
+    relativePath,
+    name: path.posix.basename(relativePath),
+    parentPath,
+    parentPathLower: parentPath.toLowerCase(),
+  };
+}
+
+/**
+ * Every workspace file and directory, rebuilt only when getWorkspaceFiles()
+ * refreshes its own cache, so per-keystroke completion requests reuse the
+ * relative paths and fuzzy index instead of recomputing them.
+ */
+async function getWorkspacePathIndex(): Promise<WorkspacePathIndex> {
+  const files = await getWorkspaceFiles();
+  const multiRoot = isMultiRootWorkspace();
+  if (
+    pathIndexCache?.source === files &&
+    pathIndexCache.multiRoot === multiRoot
+  ) {
+    return pathIndexCache;
+  }
+
+  const entries: WorkspacePathEntry[] = [];
+  const directories = new Set<string>();
+  for (const fileUri of files) {
+    const relativePath = getNormalizedWorkspaceRelativePath(fileUri);
+    collectWorkspaceDirectories(relativePath, directories);
+    entries.push(
+      createWorkspacePathEntry(WORKSPACE_ENTRY_KINDS.FILE, relativePath)
+    );
+  }
+  for (const directory of directories) {
+    entries.push(
+      createWorkspacePathEntry(WORKSPACE_ENTRY_KINDS.DIRECTORY, directory)
+    );
+  }
+
+  pathIndexCache = { source: files, multiRoot, entries };
+  return pathIndexCache;
+}
+
+function getWorkspacePathFuzzyIndex(
+  index: WorkspacePathIndex
+): FuzzyIndex<WorkspacePathEntry> {
+  // Basename first so a name match outranks a match spread across the path.
+  index.fuzzy ??= buildFuzzyIndex(index.entries, [
+    (entry) => entry.name,
+    (entry) => entry.relativePath,
+  ]);
+  return index.fuzzy;
+}
+
+/**
+ * The path entries a typed filter selects. `ranked` is true when `entries` is
+ * already in fuzzy relevance order (best first); otherwise the caller owns the
+ * ordering (an empty query, or a typed directory with no child name yet).
+ *
+ * A typed directory (`src/ui/co`) restricts candidates to that directory's
+ * direct children and fuzzy-matches only the child name; a bare query
+ * (`codeeditor`) fuzzy-matches every entry's name and full path.
+ */
+function selectWorkspacePathEntries(
+  index: WorkspacePathIndex,
+  filter: PathCompletionFilter,
+  include: (entry: WorkspacePathEntry) => boolean
+): { entries: WorkspacePathEntry[]; ranked: boolean } {
+  if (filter.hasPathContext) {
+    const siblings = index.entries.filter(
+      (entry) => entry.parentPathLower === filter.parentPath && include(entry)
+    );
+    return filter.childPrefix
+      ? {
+          entries: rankByFuzzyQuery(filter.childPrefix, siblings, [
+            (entry) => entry.name,
+          ]),
+          ranked: true,
+        }
+      : { entries: siblings, ranked: false };
+  }
+
+  if (!filter.normalized) {
+    return { entries: index.entries.filter(include), ranked: false };
+  }
+
+  return {
+    entries: rankIndexByFuzzyQuery(
+      filter.normalized,
+      getWorkspacePathFuzzyIndex(index)
+    ).filter(include),
+    ranked: true,
+  };
+}
+
+/** Whether a single path (e.g. an output channel slug) passes the typed filter. */
 function matchesPathCompletionFilter(
   candidatePath: string,
   filter: PathCompletionFilter
 ): boolean {
-  if (!filter.normalized) {
-    return true;
-  }
-
-  if (!filter.hasPathContext) {
-    const candidateName = path.posix.basename(candidatePath);
+  const entry = createWorkspacePathEntry(
+    WORKSPACE_ENTRY_KINDS.FILE,
+    candidatePath
+  );
+  if (filter.hasPathContext) {
     return (
-      candidatePath.toLowerCase().includes(filter.normalized) ||
-      matchesFuzzyQuery(candidateName, filter.normalized)
+      entry.parentPathLower === filter.parentPath &&
+      fuzzyMatches(entry.name, filter.childPrefix)
     );
   }
-
-  const candidateName = path.posix.basename(candidatePath);
   return (
-    getNormalizedParentDirectory(candidatePath) === filter.parentPath &&
-    (candidateName.startsWith(filter.childPrefix) ||
-      matchesFuzzyQuery(candidateName, filter.childPrefix))
+    fuzzyMatches(entry.name, filter.normalized) ||
+    fuzzyMatches(entry.relativePath, filter.normalized)
   );
+}
+
+/** Zero-padded so rank-derived sortText sorts lexically in rank order. */
+function formatRankSortKey(rank: number): string {
+  return rank.toString().padStart(6, "0");
 }
 
 function collectWorkspaceDirectories(
@@ -645,18 +702,66 @@ function cacheOutputCapture(
 export async function getFileCompletions(
   filterText: string
 ): Promise<PlainCompletionItem[]> {
-  const fileItems: PlainCompletionItem[] = [];
-  const files = await getWorkspaceFiles();
+  const index = await getWorkspacePathIndex();
   const filter = buildPathCompletionFilter(filterText, {
     stripLeadingQuote: true,
   });
 
-  // Track unique directories we've seen
-  const directories = new Set<string>();
-
   const MAX_TOTAL_ITEMS = 500;
   const MAX_FILE_ITEMS = 450; // Leave room for directories so they don't get buried
 
+  const outputItems = getOutputChannelCompletions(filter);
+  const { entries, ranked } = selectWorkspacePathEntries(
+    index,
+    filter,
+    () => true
+  );
+
+  if (ranked) {
+    // Truncate only after ranking, so the best matches always survive the cap.
+    const rankedItems = entries
+      .slice(0, MAX_TOTAL_ITEMS - outputItems.length)
+      .map((entry, rank) => ({
+        ...buildWorkspacePathCompletion(entry),
+        sortText: `0_${formatRankSortKey(rank)}`,
+        rank,
+      }));
+    return [...outputItems, ...rankedItems];
+  }
+
+  const bySortText = (
+    a: PlainCompletionItem,
+    b: PlainCompletionItem
+  ): number => {
+    const aKey = a.sortText ?? a.label;
+    const bKey = b.sortText ?? b.label;
+    return aKey.localeCompare(bKey);
+  };
+
+  // Unfiltered listing: sort by sortText (matches VS Code behavior) so
+  // directories bubble up consistently, and return them first so UIs that
+  // don't honor sortText still surface them.
+  const dirItems = entries
+    .filter((entry) => entry.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY)
+    .map(buildWorkspacePathCompletion)
+    .sort(bySortText);
+  const fileItems = [
+    ...outputItems,
+    ...entries
+      .filter((entry) => entry.kind === WORKSPACE_ENTRY_KINDS.FILE)
+      .map(buildWorkspacePathCompletion),
+  ]
+    .sort(bySortText)
+    .slice(0, MAX_FILE_ITEMS);
+
+  const remainingForFiles = Math.max(0, MAX_TOTAL_ITEMS - dirItems.length);
+  return [...dirItems, ...fileItems.slice(0, remainingForFiles)];
+}
+
+function getOutputChannelCompletions(
+  filter: PathCompletionFilter
+): PlainCompletionItem[] {
+  const items: PlainCompletionItem[] = [];
   for (const editor of vscode.window.visibleTextEditors) {
     if (editor.document.uri.scheme !== VSCODE_URI_SCHEMES.OUTPUT) {
       continue;
@@ -672,7 +777,7 @@ export async function getFileCompletions(
       editor.document.getText(),
       undefined
     );
-    fileItems.push({
+    items.push({
       label: `${channel} (Output)`,
       kind: vscode.CompletionItemKind.File,
       insertText: CAPTURING_OUTPUT_PLACEHOLDER,
@@ -687,84 +792,44 @@ export async function getFileCompletions(
       filterText: `${channel} output`,
     });
   }
+  return items;
+}
 
-  for (const fileUri of files) {
-    const relativePath = getNormalizedWorkspaceRelativePath(fileUri);
-    collectWorkspaceDirectories(relativePath, directories);
-    if (!matchesPathCompletionFilter(relativePath, filter)) {
-      continue;
-    }
-
-    const fileName = path.posix.basename(relativePath);
-    const dirName = getNormalizedParentDirectory(relativePath);
-
-    // Add file completion (but don't let files crowd out directory entries)
-    if (fileItems.length < MAX_FILE_ITEMS) {
-      // Quote paths with spaces so the parser can handle them correctly
-      const insertPath = buildFileReferenceValue(relativePath);
-      const fileItem: PlainCompletionItem = {
-        label: fileName,
-        kind: vscode.CompletionItemKind.File,
-        insertText: insertPath,
-        detail: dirName ? dirName : "Root directory",
-        documentation:
-          `**Full file attachment** (CLI-native)\n\n` +
-          `Insert: \`${buildFileReference(relativePath)}\`\n\n` +
-          `The CLI will automatically attach this file's content.\n\n` +
-          `_For line ranges, use \`${buildSelectionReference(relativePath, 10, 20)}\`_`,
-        sortText: `0_${relativePath.split("/").length}_${relativePath}`,
-        filterText: `${fileName} ${relativePath}`,
-      };
-
-      fileItems.push(fileItem);
-    }
-  }
-
-  // Add directory completions (with trailing slash)
-  const dirItems: PlainCompletionItem[] = [];
-  for (const dirPath of directories) {
-    if (!matchesPathCompletionFilter(dirPath, filter)) {
-      continue;
-    }
-
-    const dirName = path.posix.basename(dirPath);
-    const parentDir = getNormalizedParentDirectory(dirPath);
-
-    // Quote directory paths with spaces so the parser can handle them correctly
-    const insertDirPath = buildDirectoryReferenceValue(dirPath);
-    const dirItem: PlainCompletionItem = {
-      label: dirName + "/",
+function buildWorkspacePathCompletion(
+  entry: WorkspacePathEntry
+): PlainCompletionItem {
+  const depth = entry.relativePath.split("/").length;
+  if (entry.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY) {
+    return {
+      label: entry.name + "/",
       kind: vscode.CompletionItemKind.Folder,
-      insertText: insertDirPath,
-      detail: parentDir ? parentDir : "Root directory",
+      // Quote directory paths with spaces so the parser can handle them correctly
+      insertText: buildDirectoryReferenceValue(entry.relativePath),
+      detail: entry.parentPath ? entry.parentPath : "Root directory",
       documentation:
         `**Directory structure attachment**\n\n` +
-        `Insert: \`${buildDirectoryReference(dirPath)}\`\n\n` +
+        `Insert: \`${buildDirectoryReference(entry.relativePath)}\`\n\n` +
         `ctrlyoke will attach a file tree of this directory.\n\n` +
         `_No file contents, just structure._`,
-      sortText: `0_${dirPath.split("/").length}_0_${dirPath}`,
-      filterText: `${dirName} ${dirPath}`,
+      sortText: `0_${depth}_0_${entry.relativePath}`,
+      filterText: `${entry.name} ${entry.relativePath}`,
     };
-
-    dirItems.push(dirItem);
   }
 
-  // Sort by sortText (matches VS Code behavior) so directories bubble up consistently
-  const bySortText = (
-    a: PlainCompletionItem,
-    b: PlainCompletionItem
-  ): number => {
-    const aKey = a.sortText ?? a.label;
-    const bKey = b.sortText ?? b.label;
-    return aKey.localeCompare(bKey);
+  return {
+    label: entry.name,
+    kind: vscode.CompletionItemKind.File,
+    // Quote paths with spaces so the parser can handle them correctly
+    insertText: buildFileReferenceValue(entry.relativePath),
+    detail: entry.parentPath ? entry.parentPath : "Root directory",
+    documentation:
+      `**Full file attachment** (CLI-native)\n\n` +
+      `Insert: \`${buildFileReference(entry.relativePath)}\`\n\n` +
+      `The CLI will automatically attach this file's content.\n\n` +
+      `_For line ranges, use \`${buildSelectionReference(entry.relativePath, 10, 20)}\`_`,
+    sortText: `0_${depth}_${entry.relativePath}`,
+    filterText: `${entry.name} ${entry.relativePath}`,
   };
-
-  dirItems.sort(bySortText);
-  fileItems.sort(bySortText);
-
-  // Return directories first so UIs that don't honor sortText still surface them
-  const remainingForFiles = Math.max(0, MAX_TOTAL_ITEMS - dirItems.length);
-  return [...dirItems, ...fileItems.slice(0, remainingForFiles)];
 }
 
 // Count leading path segments (case-insensitive) two relative paths share,
@@ -813,24 +878,14 @@ export async function getPathSuggestions(
   const typedParent = getNormalizedParentDirectory(normalizedTyped);
   const typedSegments = normalizedTyped.split("/");
 
-  const files = await getWorkspaceFiles();
-
   // Candidates: files for @file; unique ancestor directories for @directory.
-  let candidatePaths: string[];
-  if (kind === WORKSPACE_ENTRY_KINDS.DIRECTORY) {
-    const directories = new Set<string>();
-    for (const fileUri of files) {
-      collectWorkspaceDirectories(
-        getNormalizedWorkspaceRelativePath(fileUri),
-        directories
-      );
-    }
-    candidatePaths = [...directories];
-  } else {
-    candidatePaths = files.map((fileUri) =>
-      getNormalizedWorkspaceRelativePath(fileUri)
-    );
-  }
+  const candidateKind =
+    kind === WORKSPACE_ENTRY_KINDS.DIRECTORY
+      ? WORKSPACE_ENTRY_KINDS.DIRECTORY
+      : WORKSPACE_ENTRY_KINDS.FILE;
+  const candidatePaths = (await getWorkspacePathIndex()).entries
+    .filter((entry) => entry.kind === candidateKind)
+    .map((entry) => entry.relativePath);
 
   const ranked: Array<{
     relativePath: string;
@@ -850,7 +905,7 @@ export async function getPathSuggestions(
     const prefixRel =
       typedBase.startsWith(candBase) || candBase.startsWith(typedBase);
     const basenameExact = candBase === typedBase;
-    const fuzzy = matchesFuzzyQuery(candBase, typedBase);
+    const fuzzy = fuzzyMatches(candBase, typedBase);
 
     let tier: number;
     if (sameDir && prefixRel) {
@@ -894,8 +949,57 @@ export async function getPathSuggestions(
 }
 
 /**
+ * Length of the extra, shortened workspace-symbol query sent alongside the
+ * full one. `vscode.executeWorkspaceSymbolProvider` applies no matching of its
+ * own — it returns exactly what each language's provider returns — and
+ * tsserver's `navto` (the TS/JS provider) only matches an all-lowercase query
+ * as one contiguous run, so `usecontext` never returns
+ * `useFinalStepContextMenu` (only `useContext` would). Querying the first few
+ * characters as well widens the candidate set enough for our own fuzzy
+ * ranking to find it. Kept short but not a single character, since tsserver
+ * caps navto at 256 results and a one-letter query would fill that cap with
+ * noise.
+ */
+const SYMBOL_CANDIDATE_PREFIX_LENGTH = 3;
+
+/**
+ * Workspace symbols for the full query plus its short prefix (see
+ * SYMBOL_CANDIDATE_PREFIX_LENGTH), de-duplicated, with `matchedFullQuery`
+ * marking the ones the provider itself returned for the full query.
+ */
+async function getWorkspaceSymbolCandidates(
+  filterText: string
+): Promise<
+  Array<{ symbol: vscode.SymbolInformation; matchedFullQuery: boolean }>
+> {
+  const prefix = filterText.slice(0, SYMBOL_CANDIDATE_PREFIX_LENGTH);
+  const [fullMatches, prefixMatches] = await Promise.all([
+    getWorkspaceSymbols(filterText),
+    prefix === filterText ? [] : getWorkspaceSymbols(prefix),
+  ]);
+
+  const candidates = new Map<
+    string,
+    { symbol: vscode.SymbolInformation; matchedFullQuery: boolean }
+  >();
+  const add = (
+    symbol: vscode.SymbolInformation,
+    matchedFullQuery: boolean
+  ): void => {
+    const { uri, range } = symbol.location;
+    const key = `${uri.toString()}::${symbol.name}::${symbol.kind}::${range.start.line}:${range.start.character}`;
+    if (!candidates.has(key)) {
+      candidates.set(key, { symbol, matchedFullQuery });
+    }
+  };
+  fullMatches.forEach((symbol) => add(symbol, true));
+  prefixMatches.forEach((symbol) => add(symbol, false));
+  return [...candidates.values()];
+}
+
+/**
  * Get symbol completions for # trigger
- * Shows workspace symbols from all file types
+ * Shows workspace symbols from all file types, fuzzy-ranked against the query
  */
 async function getSymbolCompletions(
   filterText: string,
@@ -904,15 +1008,36 @@ async function getSymbolCompletions(
   const items: PlainCompletionItem[] = [];
 
   try {
-    // Query workspace symbols (all file types)
-    const symbols = await getWorkspaceSymbols(filterText, maxResults);
+    const multiRoot = isMultiRootWorkspace();
+    const candidates = (await getWorkspaceSymbolCandidates(filterText)).map(
+      (candidate) => ({
+        ...candidate,
+        relativePath: vscode.workspace.asRelativePath(
+          candidate.symbol.location.uri,
+          multiRoot
+        ),
+      })
+    );
+    let ranked = candidates;
+    if (filterText) {
+      const fuzzyRanked = rankByFuzzyQuery(filterText, candidates, [
+        (candidate) => candidate.symbol.name,
+        (candidate) => candidate.relativePath,
+      ]);
+      // Keep anything the provider matched on the full query that fuzzysort
+      // can't see (e.g. a `Container.member` query), after the ranked matches.
+      const rankedSet = new Set(fuzzyRanked);
+      ranked = [
+        ...fuzzyRanked,
+        ...candidates.filter(
+          (candidate) => candidate.matchedFullQuery && !rankedSet.has(candidate)
+        ),
+      ];
+    }
 
-    for (const symbol of symbols) {
-      const relativePath = vscode.workspace.asRelativePath(
-        symbol.location.uri,
-        isMultiRootWorkspace()
-      );
-
+    for (const [rank, { symbol, relativePath }] of ranked
+      .slice(0, maxResults)
+      .entries()) {
       const startLine = symbol.location.range.start.line + 1;
       const endLine = symbol.location.range.end.line + 1;
       const symbolKindName = vscode.SymbolKind[symbol.kind];
@@ -943,8 +1068,9 @@ async function getSymbolCompletions(
           `Location: \`${relativePath}:${startLine}-${endLine}\`\n\n` +
           `Insert: \`${buildSymbolReference(relativePath, symbol.name, startLine, endLine, referenceKind)}\`\n\n` +
           `_ctrlyoke will attach this symbol's recorded line range._`,
-        sortText: symbol.name,
+        sortText: filterText ? formatRankSortKey(rank) : symbol.name,
         filterText: `${symbol.name} ${relativePath}`,
+        ...(filterText ? { rank } : {}),
       };
 
       items.push(item);
@@ -1078,8 +1204,14 @@ export async function getHashCompletions(
 ): Promise<PlainCompletionItem[]> {
   const items: PlainCompletionItem[] = [];
 
-  // 1. Add selection completions FIRST (bubbled to top with sortText)
-  items.push(...getHashSelectionCompletions());
+  // 1. Add selection completions FIRST (bubbled to top with sortText).
+  // Filtered here because a ranked response is shown unfiltered by the
+  // webview (see PlainCompletionItem.rank).
+  items.push(
+    ...getHashSelectionCompletions().filter((item) =>
+      fuzzyMatches(item.filterText ?? item.label, filterText)
+    )
+  );
 
   // 2. Add workspace symbols
   const symbolItems = await getSymbolCompletions(filterText, 500);
@@ -1262,9 +1394,7 @@ export function getPriorContextCompletions(
   ];
 
   return keywords
-    .filter((keyword) =>
-      matchesFuzzyQuery(keyword.label.toLowerCase(), filterText.toLowerCase())
-    )
+    .filter((keyword) => fuzzyMatches(keyword.label, filterText))
     .map((keyword) => ({
       label: keyword.label,
       kind: vscode.CompletionItemKind.Keyword,
@@ -1331,42 +1461,49 @@ const PROMPT_REF_EXTENSIONS = [".prompt.md", ".md", ".txt"];
 export async function getPromptFileCompletions(
   filterText: string
 ): Promise<PlainCompletionItem[]> {
-  const files = await getWorkspaceFiles();
+  const MAX_ITEMS = 200;
+  const index = await getWorkspacePathIndex();
   const isMultiRoot = isMultiRootWorkspace();
   const filter = buildPathCompletionFilter(filterText, {
     stripPromptPathPrefixes: true,
   });
 
-  const items: PlainCompletionItem[] = [];
+  const { entries, ranked } = selectWorkspacePathEntries(
+    index,
+    filter,
+    (entry) =>
+      entry.kind === WORKSPACE_ENTRY_KINDS.FILE &&
+      PROMPT_REF_EXTENSIONS.some((ext) =>
+        entry.relativePath.toLowerCase().endsWith(ext)
+      )
+  );
 
-  for (const fileUri of files) {
-    const relativePath = getNormalizedWorkspaceRelativePath(fileUri);
-    const lower = relativePath.toLowerCase();
-
-    if (!PROMPT_REF_EXTENSIONS.some((ext) => lower.endsWith(ext))) {
-      continue;
-    }
-
-    if (!matchesPathCompletionFilter(relativePath, filter)) {
-      continue;
-    }
-
-    const fileName = path.posix.basename(relativePath);
-    const dirName = getNormalizedParentDirectory(relativePath);
-    const insertPath = isMultiRoot ? relativePath : `./${relativePath}`;
-
-    items.push({
-      label: fileName,
+  const items = entries.map((entry): PlainCompletionItem => {
+    const insertPath = isMultiRoot
+      ? entry.relativePath
+      : `./${entry.relativePath}`;
+    return {
+      label: entry.name,
       kind: vscode.CompletionItemKind.File,
       insertText: insertPath,
-      detail: dirName ? dirName : "Root",
+      detail: entry.parentPath ? entry.parentPath : "Root",
       documentation: `**Prompt file reference**\n\nPath: \`${insertPath}\``,
-      sortText: `${relativePath.split("/").length}_${relativePath}`,
-      filterText: `${fileName} ${relativePath}`,
-    });
+      sortText: `${entry.relativePath.split("/").length}_${entry.relativePath}`,
+      filterText: `${entry.name} ${entry.relativePath}`,
+    };
+  });
 
-    if (items.length >= 200) break;
+  if (!ranked) {
+    return items
+      .sort((a, b) => (a.sortText ?? "").localeCompare(b.sortText ?? ""))
+      .slice(0, MAX_ITEMS);
   }
-
-  return items;
+  // Truncate only after ranking, so the best matches always survive the cap.
+  return items
+    .slice(0, MAX_ITEMS)
+    .map((item, rank) => ({
+      ...item,
+      sortText: formatRankSortKey(rank),
+      rank,
+    }));
 }

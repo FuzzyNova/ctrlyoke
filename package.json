@@ -802,6 +802,7 @@
     "commander": "^15.0.0",
     "diff": "^9.0.0",
     "express": "^5.2.1",
+    "fuzzysort": "^4.0.2",
     "glob": "^13.0.6",
     "gpt-tokenizer": "^3.4.0",
     "js-yaml": "^5.0.0",

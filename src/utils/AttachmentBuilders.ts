@@ -165,13 +165,12 @@ ${tree}
  * Get all workspace symbols matching a query
  * Used for completion provider
  *
- * @param query Search query (empty string returns all symbols)
- * @param maxResults Maximum number of results (default: 100)
- * @returns Array of symbol information from all file types
+ * @param query Search query, passed to every provider verbatim (each
+ *   provider decides what matches; VS Code itself filters nothing)
+ * @returns Array of symbol information from all file types, in provider order
  */
 export async function getWorkspaceSymbols(
-  query: string = "",
-  maxResults: number = 100
+  query: string = ""
 ): Promise<vscode.SymbolInformation[]> {
   try {
     const allSymbols = (await vscode.commands.executeCommand(
@@ -179,11 +178,7 @@ export async function getWorkspaceSymbols(
       query
     )) as vscode.SymbolInformation[];
 
-    if (!allSymbols || allSymbols.length === 0) {
-      return [];
-    }
-
-    return allSymbols.slice(0, maxResults);
+    return allSymbols ?? [];
   } catch (error) {
     Log.warn(
       "[AttachmentBuilders] Failed to get workspace symbols; returning no symbols:",

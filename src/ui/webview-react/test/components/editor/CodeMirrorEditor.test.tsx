@@ -256,6 +256,35 @@ describe("CodeMirrorEditor external reference completions", () => {
     expect(result.filter).toBeUndefined();
   });
 
+  it("shows extension-ranked completions unfiltered and in the order sent", () => {
+    const result = buildCodeMirrorCompletionResult(
+      [
+        {
+          label: "useFinalStepContextMenu",
+          kind: 2,
+          insertText: "sym:src/a.ts:useFinalStepContextMenu:1-2",
+          filterText: "useFinalStepContextMenu src/a.ts",
+          rank: 0,
+        },
+        {
+          label: "useContextPct",
+          kind: 2,
+          insertText: "sym:src/b.ts:useContextPct:1-2",
+          filterText: "useContextPct src/b.ts",
+          rank: 1,
+        },
+      ],
+      5,
+      { trigger: "#", query: "usecontext" }
+    );
+
+    expect(result.filter).toBe(false);
+    expect(result.options.map((option) => option.label)).toEqual([
+      "useFinalStepContextMenu",
+      "useContextPct",
+    ]);
+  });
+
   it("uses filterText for CodeMirror fuzzy matching while keeping the visible label", () => {
     const result = buildCodeMirrorCompletionResult(
       [

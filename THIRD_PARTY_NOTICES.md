@@ -91,6 +91,7 @@ These are the direct `dependencies` declared in the root `package.json`, with th
 | `commander`                   | `14.0.3`        | `MIT`           |
 | `diff`                        | `9.0.0`         | `BSD-3-Clause`  |
 | `express`                     | `5.2.1`         | `MIT`           |
+| `fuzzysort`                   | `4.0.2`         | `MIT`           |
 | `glob`                        | `13.0.6`        | `BlueOak-1.0.0` |
 | `gpt-tokenizer`               | `3.4.0`         | `MIT`           |
 | `js-yaml`                     | `5.0.0`         | `MIT`           |
