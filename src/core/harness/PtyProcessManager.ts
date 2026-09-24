@@ -4,6 +4,7 @@ import { Log } from "../../utils/Log";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { secretRedactionService } from "../../utils/SecretRedactionService";
 import { canonicalizeDriveLetter } from "../../utils/PathCasing";
+import { withWorkingDirectoryEnv } from "../../utils/SpawnEnvironment";
 import { logMemoryUsage } from "../../utils/MemoryDiagnostics";
 import { resolveShellKind, shellDisplayName } from "../../utils/ShellCatalog";
 import {
@@ -591,7 +592,10 @@ export class PtyProcessManager {
       // Interactive script steps and shell sessions inherit the same VS Code
       // sourced root (`c:\...`) that broke Vitest on the headless path.
       cwd: canonicalizeDriveLetter(options.cwd),
-      env: (options.env ?? process.env) as Record<string, string>,
+      env: withWorkingDirectoryEnv(
+        options.env,
+        canonicalizeDriveLetter(options.cwd)
+      ) as Record<string, string>,
     });
 
     const terminalSettings = ConfigurationUtils.getTerminalSettings();

@@ -1,6 +1,7 @@
 import { spawn, ChildProcess } from "child_process";
 import kill from "tree-kill";
 import { canonicalizeDriveLetter } from "./PathCasing";
+import { withWorkingDirectoryEnv } from "./SpawnEnvironment";
 import { attachStreamTextDecoder } from "./StreamTextDecoder";
 
 /**
@@ -102,16 +103,17 @@ export class CliProcessManager {
       this.lastSpawnedCommand = `${command} ${args.join(" ")}`;
       this.logger?.(`📤 Spawning: ${this.lastSpawnedCommand}`);
 
+      // Canonical drive letter: the workspace root usually originates from
+      // VS Code, which reports `c:\...`, while a shell reports `C:\...`. Some
+      // tools key internal caches off the cwd string and treat the two as
+      // different roots — `npm test` as a pre/end-condition failed all 114
+      // Vitest suites with "failed to find the runner" purely because of this.
+      const cwd = canonicalizeDriveLetter(options.cwd || this.workspaceRoot);
       const child = spawn(command, args, {
-        // Canonical drive letter: the workspace root usually originates from
-        // VS Code, which reports `c:\...`, while a shell reports `C:\...`. Some
-        // tools key internal caches off the cwd string and treat the two as
-        // different roots — `npm test` as a pre/end-condition failed all 114
-        // Vitest suites with "failed to find the runner" purely because of this.
-        cwd: canonicalizeDriveLetter(options.cwd || this.workspaceRoot),
+        cwd,
         shell: options.shell ?? false,
         stdio: [options.stdin ?? "ignore", "pipe", "pipe"],
-        env: options.env || { ...process.env },
+        env: withWorkingDirectoryEnv(options.env, cwd),
         // The extension host is a GUI process, so Windows creates a visible
         // console for cmd.exe/PowerShell launchers unless it is explicitly
         // hidden. This method is the headless transport; interactive launches
@@ -288,12 +290,13 @@ export class CliProcessManager {
     return new Promise<void>((resolve) => {
       this.logger?.(`📤 Spawning interactive: ${command} ${args.join(" ")}`);
 
+      const cwd = canonicalizeDriveLetter(workingDirectory);
       const child = spawn(command, args, {
-        cwd: canonicalizeDriveLetter(workingDirectory),
+        cwd,
         stdio: "inherit",
         shell: false,
         windowsVerbatimArguments,
-        ...(env ? { env } : {}),
+        env: withWorkingDirectoryEnv(env, cwd),
       });
 
       this.currentProcess = child;

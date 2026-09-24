@@ -1,6 +1,9 @@
 import * as assert from "assert";
-import { suite, test } from "mocha";
+import * as path from "path";
+import { setup, suite, teardown, test } from "mocha";
 import { CliProcessManager } from "../../utils/CliProcessManager";
+import { canonicalizeDriveLetter } from "../../utils/PathCasing";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 const REPLACEMENT_CHARACTER = "�";
 
@@ -51,5 +54,34 @@ suite("CliProcessManager stream decoding", () => {
 
     assert.strictEqual(stdout, `a${REPLACEMENT_CHARACTER}`);
     assert.strictEqual(streamed.join(""), `a${REPLACEMENT_CHARACTER}`);
+  });
+});
+
+suite("CliProcessManager working directory", () => {
+  let tmpDir: string;
+
+  setup(() => {
+    tmpDir = makeTempDir("cy-cli-pwd-");
+  });
+
+  teardown(() => {
+    removeTempDir(tmpDir);
+  });
+
+  test("points the child's PWD at its cwd, not the parent's stale PWD", async () => {
+    // OpenCode resolves its project from PWD, so a stale value inherited from
+    // the parent made it run against the wrong directory tree.
+    const manager = new CliProcessManager(process.cwd());
+    const result = await manager.spawn(
+      process.execPath,
+      ["-e", "process.stdout.write(process.env.PWD ?? '')"],
+      {
+        cwd: tmpDir,
+        env: { ...process.env, PWD: path.join(tmpDir, "stale-parent-dir") },
+      }
+    );
+
+    assert.strictEqual(result.exitCode, 0);
+    assert.strictEqual(result.stdout, canonicalizeDriveLetter(tmpDir));
   });
 });
