@@ -75,6 +75,22 @@ function assertNoWorkspaceConfig(tmpDir: string, names: string[]): void {
   }
 }
 
+/**
+ * ctrlyoke must not change a user's opencode.json. OpenCode itself (confirmed
+ * on 1.18.32 with no ctrlyoke involved) inserts a `$schema` key into any
+ * project config it loads, so compare the parsed content without that key
+ * rather than the raw bytes.
+ */
+function assertOpenCodeUserConfigPreserved(
+  configPath: string,
+  original: string
+): void {
+  const { $schema: _schema, ...current } = JSON.parse(
+    fs.readFileSync(configPath, "utf8")
+  ) as Record<string, unknown>;
+  assert.deepStrictEqual(current, JSON.parse(original));
+}
+
 function makeUserMcpServer(
   id: string,
   toolName: string,
@@ -207,7 +223,7 @@ suite("Inline harness configuration regression tests", function () {
         name: "allow proceeds",
         permissions: {
           mode: "custom",
-          allowedTools: ["shell(command:*)"],
+          allowedTools: ["shell(node:*)"],
           deniedTools: [],
         } satisfies ToolPermissionsOverride,
         shouldCreate: true,
@@ -217,7 +233,7 @@ suite("Inline harness configuration regression tests", function () {
         permissions: {
           mode: "custom",
           allowedTools: [],
-          deniedTools: ["shell(command:*)"],
+          deniedTools: ["shell(node:*)"],
         } satisfies ToolPermissionsOverride,
         shouldCreate: false,
       },
@@ -225,8 +241,8 @@ suite("Inline harness configuration regression tests", function () {
         name: "deny wins over allow",
         permissions: {
           mode: "custom",
-          allowedTools: ["shell(command:*)"],
-          deniedTools: ["shell(command:*)"],
+          allowedTools: ["shell(node:*)"],
+          deniedTools: ["shell(node:*)"],
         } satisfies ToolPermissionsOverride,
         shouldCreate: false,
       },
@@ -283,7 +299,7 @@ suite("Inline harness configuration regression tests", function () {
           fs.existsSync(markerPath),
           permissionCase.shouldCreate
         );
-        assert.strictEqual(fs.readFileSync(userConfigPath, "utf8"), userConfig);
+        assertOpenCodeUserConfigPreserved(userConfigPath, userConfig);
       });
     }
 

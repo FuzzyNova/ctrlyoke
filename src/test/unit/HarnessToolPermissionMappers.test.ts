@@ -1032,6 +1032,10 @@ suite("HarnessToolPermissionMappers", () => {
           ),
           {
             "*": "ask",
+            read: "allow",
+            glob: "allow",
+            grep: "allow",
+            lsp: "allow",
             edit: "allow",
             bash: {
               "git *": "allow",
@@ -1040,6 +1044,31 @@ suite("HarnessToolPermissionMappers", () => {
             websearch: "deny",
           }
         );
+      });
+
+      test("custom allows read-only tools so headless runs can read their prompt", async () => {
+        // A headless OpenCode run auto-rejects anything that resolves to "ask",
+        // including the read of ctrlyoke's own prompt file.
+        const policy = mapper.buildPermissionPolicy(
+          cfg(PERMISSION_MODES.CUSTOM, [], [])
+        );
+        assert.deepStrictEqual(policy, {
+          "*": "ask",
+          read: "allow",
+          glob: "allow",
+          grep: "allow",
+          lsp: "allow",
+        });
+      });
+
+      test("an explicit deny still overrides the read-only baseline", async () => {
+        const policy = mapper.buildPermissionPolicy(
+          cfg(PERMISSION_MODES.CUSTOM, [], ["read"])
+        );
+        assert.strictEqual(policy?.read, "deny");
+        // OpenCode's last matching key wins, so the deny must come after the
+        // baseline allow in insertion order.
+        assert.deepStrictEqual(Object.keys(policy ?? {}).slice(-1), ["read"]);
       });
     });
 

@@ -77,6 +77,24 @@ const OPENCODE_TOOL_ALIASES: Readonly<Record<string, string>> = {
 };
 
 /**
+ * Read-only OpenCode tools that `custom` mode allows before the author's own
+ * rules, matching the other harnesses (Copilot, Claude, Qwen) where read-only
+ * operations never need approval.
+ *
+ * Without this, `"*": "ask"` gates them too, and a headless run has nobody to
+ * answer: OpenCode 1.18.32 auto-rejects the `read` of ctrlyoke's own prompt
+ * file ("Follow instructions in .ctrlyoke/temp/...") and the step ends having
+ * done nothing. Emitted before the author's rules, so an explicit
+ * `deniedTools: ["read"]` still lands later and wins.
+ */
+const OPENCODE_READ_ONLY_TOOLS: readonly string[] = [
+  TOOL_PERMISSION_CATEGORIES.READ,
+  OPENCODE_TOOL_ALIASES.glob,
+  OPENCODE_TOOL_ALIASES.grep,
+  OPENCODE_TOOL_ALIASES.lsp,
+];
+
+/**
  * OpenCode CLI Tool Permission Mapper
  *
  * OpenCode uses config-file-driven permissions, not CLI flags.
@@ -87,7 +105,8 @@ const OPENCODE_TOOL_ALIASES: Readonly<Record<string, string>> = {
  *
  * - dangerouslyAllowAll / none: no ctrlyoke permission block
  * - allowAll: `"*": "allow"` plus deny overrides
- * - custom: `"*": "ask"` plus allow overrides, then deny overrides
+ * - custom: `"*": "ask"`, then the read-only baseline, then allow
+ *   overrides, then deny overrides
  */
 export class OpenCodeToolPermissionMapper
   extends ToolPermissionMapperBase
@@ -156,6 +175,18 @@ export class OpenCodeToolPermissionMapper
       config.mode === PERMISSION_MODES.ALLOW_ALL ? "allow" : "ask";
 
     if (config.mode === PERMISSION_MODES.CUSTOM) {
+      for (const tool of OPENCODE_READ_ONLY_TOOLS) {
+        this.appendRule(
+          policy,
+          tool,
+          undefined,
+          "allow",
+          collisionContext,
+          emittedTopLevelKeys,
+          emittedToolKeys,
+          emittedNestedKeys
+        );
+      }
       this.appendRules(
         policy,
         config.allowedTools,

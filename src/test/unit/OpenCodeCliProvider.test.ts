@@ -67,6 +67,10 @@ suite("OpenCodeCliProvider", () => {
       } else {
         assert.deepStrictEqual(config.permission, {
           "*": "ask",
+          read: "allow",
+          glob: "allow",
+          grep: "allow",
+          lsp: "allow",
           edit: "allow",
           bash: { "rm *": "deny" },
         });
@@ -91,6 +95,10 @@ suite("OpenCodeCliProvider", () => {
 
     assert.deepStrictEqual(config.permission, {
       "**": "ask",
+      read: "allow",
+      glob: "allow",
+      grep: "allow",
+      lsp: "allow",
       "bash***": { "foo ***": "allow" },
     });
   });
@@ -217,6 +225,10 @@ suite("OpenCodeCliProvider", () => {
       );
       assert.deepStrictEqual(config.permission, {
         "*": "ask",
+        read: "allow",
+        glob: "allow",
+        grep: "allow",
+        lsp: "allow",
         "bash*": { "foo **": "deny" },
       });
     } finally {
@@ -746,6 +758,10 @@ suite("OpenCodeCliProvider", () => {
       );
       assert.deepStrictEqual(config.permission, {
         "*": "ask",
+        read: "allow",
+        glob: "allow",
+        grep: "allow",
+        lsp: "allow",
         edit: "allow",
         bash: { "git *": "allow", "rm *": "deny" },
       });
