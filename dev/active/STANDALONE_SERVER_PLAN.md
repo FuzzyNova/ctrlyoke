@@ -1052,6 +1052,13 @@ export class CompletionService {
 
 #### Symbol Completions
 
+> **Superseded (2026-09-24)** by the `SymbolIndex` port in
+> [`WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md`](../backlog/WORKSPACE_EDITOR_LANGUAGE_INTELLIGENCE_PLAN.md).
+> Standalone `#sym:` completions come from the shared managed language-server host
+> (`LspSymbolIndex`). Option A below survives only as `RegexSymbolIndex`, the
+> per-language fallback when no server is available. Option B's one-off
+> `LspSymbolClient` is not built.
+
 **Option A (default) — Smart regex heuristic** scanning source files by extension:
 
 ```typescript
