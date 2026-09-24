@@ -24,11 +24,11 @@
 /**
  * Copilot CLI supported models.
  *
- * This list comes from `copilot help config` output.
- * Update this when new CLI models become available.
- *
- * Last updated: 2026-07-01
- * Command: npm run sync-models -- --discover
+ * This list comes from `copilot help config` output and is rewritten wholesale
+ * by `npm run sync-models -- --discover` (git history records when). That
+ * output can lag what Copilot actually accepts — `--model gpt-6-luna` worked
+ * on 2026-09-23 while `copilot help config` (CLI 1.0.88) did not list it — so a
+ * missing ID here does not by itself mean Copilot cannot run it.
  */
 export const COPILOT_CLI_MODEL_IDS = [
   "claude-sonnet-5",

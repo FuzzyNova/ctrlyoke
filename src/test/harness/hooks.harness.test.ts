@@ -22,6 +22,12 @@ import * as path from "path";
 import { spawnSync } from "child_process";
 import type { PromptFile } from "../../types/CtrlYokeTypes";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
+import {
+  HARNESS_MODELS,
+  HARNESS_TIMEOUT_MS,
+  buildHookRecorderScript,
+  type HarnessId,
+} from "./helpers/harnessRunner";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -32,22 +38,6 @@ const CLI_PATH = path.resolve(__dirname, "../../cli.js");
 /** Repository root for harnesses that require repository-scoped hook discovery. */
 const REPO_ROOT = path.resolve(__dirname, "../../..");
 
-/**
- * Timeout (ms) for a single harness run.
- * These are correctness checks, not performance checks — the limit is generous
- * to avoid flaky SIGTERM kills under API latency spikes.
- */
-const HARNESS_TIMEOUT_MS = 900_000; // 15 minutes
-
-/** Full set of supported harness IDs (for typed config maps below). */
-type HarnessId =
-  | "copilot-cli"
-  | "claude-cli"
-  | "codex-cli"
-  | "opencode-cli"
-  | "qwen-cli"
-  | "antigravity-cli";
-
 /** Active harnesses for this test run. Comment out any you don't want to run. */
 const HARNESSES: HarnessId[] = [
   "copilot-cli",
@@ -57,18 +47,6 @@ const HARNESSES: HarnessId[] = [
   "qwen-cli",
   "antigravity-cli",
 ];
-
-/**
- * Models to use per harness — prefer free/cheap tiers to minimise cost.
- */
-const HARNESS_MODELS: Record<HarnessId, string | undefined> = {
-  "copilot-cli": "gpt-5-mini",
-  "claude-cli": "haiku",
-  "codex-cli": "gpt-5.4",
-  "opencode-cli": "opencode/big-pickle",
-  "qwen-cli": "qwen3.5-plus",
-  "antigravity-cli": "gemini-3.6-flash-low",
-};
 
 /**
  * Hooks that MUST fire for each harness (test fails if they don't).
@@ -108,27 +86,6 @@ const SESSION_HOOKS: Record<HarnessId, string[]> = {
   "qwen-cli": ["sessionStart", "userPromptSubmit"],
   "antigravity-cli": ["sessionStart"],
 };
-
-// ---------------------------------------------------------------------------
-// Hook recorder script (written to temp dir at test setup)
-// ---------------------------------------------------------------------------
-
-/**
- * Generates the source for a small Node.js script that appends one JSON line
- * per invocation to the given output file.
- *
- * Invocation: node record-hook.js <event> <outputFile>
- */
-function buildRecorderScript(): string {
-  return `"use strict";
-const fs = require("fs");
-const event = process.argv[2];
-const outputFile = process.argv[3];
-if (!event || !outputFile) process.exit(0);
-const entry = JSON.stringify({ event, ts: Date.now() });
-fs.appendFileSync(outputFile, entry + "\\n");
-`;
-}
 
 // ---------------------------------------------------------------------------
 // Result types
@@ -311,7 +268,7 @@ suite("Harness Hook Tests", function () {
   setup(function () {
     tmpDir = makeTempDir("cy-hook-test-");
     recorderScript = path.join(tmpDir, "record-hook.js");
-    fs.writeFileSync(recorderScript, buildRecorderScript());
+    fs.writeFileSync(recorderScript, buildHookRecorderScript());
   });
 
   teardown(function () {

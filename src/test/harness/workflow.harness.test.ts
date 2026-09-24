@@ -16,7 +16,7 @@
  * Exit code 3 from the CLI means "harness not installed" — test is skipped.
  * All other non-zero exit codes are treated as test failures.
  *
- * Model selection: copilot-cli (gpt-5-mini) is used for these tests.  The
+ * Model selection: copilot-cli (model from HARNESS_MODELS) is used for these tests.  The
  * retry test is copilot-cli only because retry runs are slow and the retry
  * path is harness-agnostic.
  *
@@ -41,7 +41,7 @@ import {
   HARNESS_MODELS,
   runWorkflowFile,
   logAndMaybeSkip,
-  buildFileCheckScript,
+  buildReadFileScript,
   buildCounterScript,
 } from "./helpers/harnessRunner";
 
@@ -63,15 +63,15 @@ suite("Workflow Feature Harness Tests", function () {
   this.timeout(HARNESS_TIMEOUT_MS);
 
   let tmpDir: string;
-  let fileCheckScript: string;
+  let readFileScript: string;
   let counterScript: string;
 
   setup(function () {
     tmpDir = makeTempDir("cy-workflow-test-");
 
     // Write helper scripts to tmpDir once; each test references them by path.
-    fileCheckScript = path.join(tmpDir, "file-check.js");
-    fs.writeFileSync(fileCheckScript, buildFileCheckScript());
+    readFileScript = path.join(tmpDir, "read-file.js");
+    fs.writeFileSync(readFileScript, buildReadFileScript());
 
     counterScript = path.join(tmpDir, "counter.js");
     fs.writeFileSync(counterScript, buildCounterScript());
@@ -153,9 +153,9 @@ suite("Workflow Feature Harness Tests", function () {
   // Test 2: End condition passes on first attempt
   // -------------------------------------------------------------------------
   //
-  // The AI writes a marker file; the end condition script checks for a known
-  // keyword and returns "true".  Verifies the full round-trip: script
-  // isolation → exit code interpretation → workflow completion.
+  // The AI writes a marker file; the end condition prints it and states the
+  // check as `stdout contains SUCCESS`.  Verifies the full round-trip: script
+  // isolation → explicit comparison → workflow completion.
   // -------------------------------------------------------------------------
 
   for (const harness of MULTI_STEP_HARNESSES) {
@@ -166,8 +166,7 @@ suite("Workflow Feature Harness Tests", function () {
 
       const outputFile = path.join(tmpDir, `${h}-end-cond.txt`);
 
-      // End condition script: node file-check.js <outputFile> SUCCESS
-      const endCondScript = `node "${fileCheckScript}" "${outputFile}" SUCCESS`;
+      const endCondScript = `node "${readFileScript}" "${outputFile}"`;
 
       const workflow: PromptFile = {
         harness: h as any,
@@ -178,7 +177,9 @@ suite("Workflow Feature Harness Tests", function () {
             prompt: `Run the bash command exactly as written: \`echo SUCCESS > "${outputFile}"\`. Do not explain — just run it.`,
             endCondition: {
               script: endCondScript,
-              expected: "true",
+              compareSource: "stdout",
+              operator: "contains",
+              expected: "SUCCESS",
             },
           },
         ],
@@ -211,8 +212,9 @@ suite("Workflow Feature Harness Tests", function () {
   // Test 3: End condition fails once, retryPrompt fires, passes on retry
   // -------------------------------------------------------------------------
   //
-  // A counter script always returns "false" on the first invocation and "true"
-  // on the second, regardless of what the AI produces.  This proves the retry
+  // A counter script exits 1 on the first invocation and 0 on the second,
+  // regardless of what the AI produces; the end condition uses the zero-config
+  // default (passes on exit code 0).  This proves the retry
   // loop executes retryPrompt and the workflow still exits 0.
   //
   // Uses copilot-cli only — the retry path is harness-agnostic and retry runs
@@ -237,7 +239,6 @@ suite("Workflow Feature Harness Tests", function () {
           prompt: `Run the bash command exactly as written: \`echo ATTEMPT1 > "${retryMarker}"\`. Do not explain — just run it.`,
           endCondition: {
             script: endCondScript,
-            expected: "true",
             maxRetries: 1,
             retryPrompt: `Run the bash command exactly as written: \`echo ATTEMPT2 > "${retryMarker}"\`. Do not explain — just run it.`,
           },

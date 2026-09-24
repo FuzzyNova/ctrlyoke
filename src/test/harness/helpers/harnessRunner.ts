@@ -2,15 +2,15 @@
  * Shared helpers for harness integration tests.
  *
  * Provides the CLI runner, model constants, and logging utilities used by
- * all files under src/test/harness/.  The original hooks.harness.test.ts
- * keeps its own inline copy of these constants for backward compatibility;
- * new test files should import from here.
+ * all files under src/test/harness/.
  */
 
 import * as fs from "fs";
 import * as path from "path";
 import { spawn, spawnSync } from "child_process";
 import type { PromptFile } from "../../../types/CtrlYokeTypes";
+import type { CliJsonResult } from "../../../cli/CliJsonResultBuilder";
+import type { HarnessId } from "../../../types/DashboardConstants";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -31,30 +31,26 @@ const CLI_PATH = path.resolve(__dirname, "../../../cli.js");
  */
 export const HARNESS_TIMEOUT_MS = 900_000; // 15 minutes
 
-/** Supported harness IDs (mirrors the Harness enum string values). */
-export type HarnessId =
-  | "copilot-cli"
-  | "claude-cli"
-  | "codex-cli"
-  | "opencode-cli"
-  | "qwen-cli"
-  | "antigravity-cli";
+export type { HarnessId };
 
 /**
- * Cheapest available model per harness.
- * - copilot-cli / opencode-cli have free-tier models.  copilot-cli remains the
- *   default for tool-execution-dependent tests (see workflow.harness.test.ts /
- *   mcp.harness.test.ts headers) because opencode-cli currently does not
- *   reliably scope to the spawn's cwd in this environment.
- * - claude-cli falls back to haiku (cheapest paid tier).
+ * Model per harness — the cheapest tier of the current generation, so a run
+ * exercises what users actually pick without paying for a flagship model.
+ * - copilot-cli remains the default for tool-execution-dependent tests (see
+ *   workflow.harness.test.ts / mcp.harness.test.ts headers) because
+ *   opencode-cli currently does not reliably scope to the spawn's cwd in this
+ *   environment.
+ * - opencode-cli uses its free big-pickle tier; claude-cli uses the haiku alias.
+ *
+ * Every file under src/test/harness/ reads this map — change models here only.
  */
 export const HARNESS_MODELS: Record<HarnessId, string | undefined> = {
-  "copilot-cli": "gpt-5-mini",
+  "copilot-cli": "gpt-6-luna",
   "claude-cli": "haiku",
-  "codex-cli": "gpt-5.4",
+  "codex-cli": "gpt-6-luna",
   "opencode-cli": "opencode/big-pickle",
   "qwen-cli": "qwen3.5-plus",
-  "antigravity-cli": "gemini-3.6-flash-low",
+  "antigravity-cli": "gemini-3.8-flash-low",
 };
 
 /**
@@ -87,6 +83,60 @@ export interface RunResult {
 // Runner
 // ---------------------------------------------------------------------------
 
+/** How the ctrlyoke CLI drives the harness for a run. */
+type RunModeFlag = "--headless" | "--interactive";
+
+/**
+ * Serialise `workflow` to `<tmpDir>/<label>-test.ctrlyoke.json` and build the
+ * `node cli.js run ...` argument list shared by every runner below.
+ */
+function prepareRun(
+  workflow: PromptFile,
+  tmpDir: string,
+  label: string,
+  modeFlag: RunModeFlag,
+  vars: Record<string, string> | undefined,
+  extraArgs: readonly string[] = []
+): string[] {
+  const workflowFile = path.join(tmpDir, `${label}-test.ctrlyoke.json`);
+  fs.writeFileSync(workflowFile, JSON.stringify(workflow, null, 2));
+
+  const varArgs: string[] = [];
+  for (const [k, v] of Object.entries(vars ?? {})) {
+    varArgs.push("--var", `${k}=${v}`);
+  }
+
+  return [
+    CLI_PATH,
+    "run",
+    workflowFile,
+    modeFlag,
+    "--timeout",
+    "180",
+    ...extraArgs,
+    ...varArgs,
+  ];
+}
+
+function runPrepared(
+  args: string[],
+  tmpDir: string,
+  timeoutMs: number
+): RunResult {
+  const result = spawnSync("node", args, {
+    encoding: "utf8",
+    timeout: timeoutMs,
+    cwd: tmpDir,
+  });
+
+  return {
+    skipped: result.status === 3,
+    exitCode: result.status,
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? "",
+  };
+}
+
 /**
  * Serialise `workflow` to disk then invoke the ctrlyoke CLI in headless mode.
  *
@@ -103,38 +153,50 @@ export function runWorkflowFile(
   vars?: Record<string, string>,
   timeoutMs: number = HARNESS_TIMEOUT_MS
 ): RunResult {
-  const workflowFile = path.join(tmpDir, `${label}-test.ctrlyoke.json`);
-  fs.writeFileSync(workflowFile, JSON.stringify(workflow, null, 2));
-
-  const varArgs: string[] = [];
-  for (const [k, v] of Object.entries(vars ?? {})) {
-    varArgs.push("--var", `${k}=${v}`);
-  }
-
-  const result = spawnSync(
-    "node",
-    [
-      CLI_PATH,
-      "run",
-      workflowFile,
-      "--headless",
-      "--timeout",
-      "180",
-      ...varArgs,
-    ],
-    {
-      encoding: "utf8",
-      timeout: timeoutMs,
-      cwd: tmpDir,
-    }
+  return runPrepared(
+    prepareRun(workflow, tmpDir, label, "--headless", vars),
+    tmpDir,
+    timeoutMs
   );
+}
 
-  return {
-    skipped: result.status === 3,
-    exitCode: result.status,
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
-  };
+/** A headless run that also carries the CLI's `--json` result. */
+export interface JsonRunResult extends RunResult {
+  /** Parsed `--json` result line; `undefined` when the CLI never printed one. */
+  json: CliJsonResult | undefined;
+}
+
+/**
+ * Headless run with `--json`, so a test can assert on per-step condition
+ * verdicts (`passed`, `action`, `operator`, `actual`) instead of inferring
+ * them from side effects.
+ */
+export function runWorkflowFileJson(
+  workflow: PromptFile,
+  tmpDir: string,
+  label: string,
+  vars?: Record<string, string>,
+  timeoutMs: number = HARNESS_TIMEOUT_MS
+): JsonRunResult {
+  const result = runPrepared(
+    prepareRun(workflow, tmpDir, label, "--headless", vars, ["--json"]),
+    tmpDir,
+    timeoutMs
+  );
+  return { ...result, json: parseJsonResultLine(result.stdout) };
+}
+
+/** The CLI emits its `--json` result as the last JSON line on stdout. */
+function parseJsonResultLine(stdout: string): CliJsonResult | undefined {
+  const lines = stdout.split(/\r?\n/).filter((line) => line.startsWith("{"));
+  for (let i = lines.length - 1; i >= 0; i--) {
+    try {
+      return JSON.parse(lines[i]) as CliJsonResult;
+    } catch {
+      // Not the result line; keep looking.
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -150,38 +212,11 @@ export function runInteractiveWorkflowFile(
   vars?: Record<string, string>,
   timeoutMs: number = HARNESS_TIMEOUT_MS
 ): RunResult {
-  const workflowFile = path.join(tmpDir, `${label}-test.ctrlyoke.json`);
-  fs.writeFileSync(workflowFile, JSON.stringify(workflow, null, 2));
-
-  const varArgs: string[] = [];
-  for (const [k, v] of Object.entries(vars ?? {})) {
-    varArgs.push("--var", `${k}=${v}`);
-  }
-
-  const result = spawnSync(
-    "node",
-    [
-      CLI_PATH,
-      "run",
-      workflowFile,
-      "--interactive",
-      "--timeout",
-      "180",
-      ...varArgs,
-    ],
-    {
-      encoding: "utf8",
-      timeout: timeoutMs,
-      cwd: tmpDir,
-    }
+  return runPrepared(
+    prepareRun(workflow, tmpDir, label, "--interactive", vars),
+    tmpDir,
+    timeoutMs
   );
-
-  return {
-    skipped: result.status === 3,
-    exitCode: result.status,
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
-  };
 }
 
 /**
@@ -194,28 +229,13 @@ export function runWorkflowFileAsync(
   vars?: Record<string, string>,
   timeoutMs: number = HARNESS_TIMEOUT_MS
 ): Promise<RunResult> {
-  const workflowFile = path.join(tmpDir, `${label}-test.ctrlyoke.json`);
-  fs.writeFileSync(workflowFile, JSON.stringify(workflow, null, 2));
-
-  const varArgs: string[] = [];
-  for (const [k, v] of Object.entries(vars ?? {})) {
-    varArgs.push("--var", `${k}=${v}`);
-  }
+  const args = prepareRun(workflow, tmpDir, label, "--headless", vars);
 
   return new Promise<RunResult>((resolve) => {
-    const child = spawn(
-      "node",
-      [
-        CLI_PATH,
-        "run",
-        workflowFile,
-        "--headless",
-        "--timeout",
-        "180",
-        ...varArgs,
-      ],
-      { cwd: tmpDir, stdio: ["ignore", "pipe", "pipe"] }
-    );
+    const child = spawn("node", args, {
+      cwd: tmpDir,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     let stdout = "";
     let stderr = "";
     child.stdout?.on("data", (chunk: Buffer) => (stdout += chunk.toString()));
@@ -267,33 +287,35 @@ export function logAndMaybeSkip(label: string, result: RunResult): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * Source for a Node.js script that reads a file and prints "true" if its
- * content includes `keyword`, or "false" otherwise.
+ * Source for a Node.js script that prints a file's content to stdout and exits
+ * 0, or prints nothing and exits 1 when the file does not exist.
  *
- * Invocation: node file-check.js <filePath> <keyword>
+ * Invocation: node read-file.js <filePath>
+ *
+ * Lets an end condition state its check with the real comparison trio
+ * (`compareSource: stdout`, `operator: contains`, ...) against what the AI
+ * actually wrote, instead of a wrapper script that pre-digests a verdict.
  */
-export function buildFileCheckScript(): string {
+export function buildReadFileScript(): string {
   return `"use strict";
 const fs = require("fs");
 const filePath = process.argv[2];
-const keyword  = process.argv[3];
-if (!filePath || !keyword) { process.stdout.write("false"); process.exit(0); }
 try {
-  const content = fs.readFileSync(filePath, "utf8").trim();
-  process.stdout.write(content.includes(keyword) ? "true" : "false");
+  process.stdout.write(fs.readFileSync(filePath, "utf8"));
 } catch {
-  process.stdout.write("false");
+  process.exit(1);
 }
 `;
 }
 
 /**
- * Source for a Node.js script that increments a counter file and prints "true"
- * once the counter reaches the given threshold (default 2).
+ * Source for a Node.js script that increments a counter file, prints the new
+ * count, and exits 0 once the count reaches the threshold (default 2), or 1
+ * before that.
  *
  * Invocation: node counter.js <counterFile> [threshold]
  *
- * Use-case: force exactly one end-condition failure regardless of AI output,
+ * Use-case: force exactly N-1 end-condition failures regardless of AI output,
  * to exercise the retry loop without depending on what the AI produces.
  */
 export function buildCounterScript(): string {
@@ -301,13 +323,43 @@ export function buildCounterScript(): string {
 const fs = require("fs");
 const counterFile = process.argv[2];
 const threshold   = parseInt(process.argv[3] || "2", 10);
-if (!counterFile) { process.stdout.write("false"); process.exit(0); }
+if (!counterFile) process.exit(2);
 let count = 0;
 try { count = parseInt(fs.readFileSync(counterFile, "utf8").trim(), 10) || 0; } catch {}
 count++;
 fs.writeFileSync(counterFile, String(count));
-process.stdout.write(count >= threshold ? "true" : "false");
+process.stdout.write(String(count));
+process.exit(count >= threshold ? 0 : 1);
 `;
+}
+
+/** What `buildEmitScript` writes and exits with. */
+export interface EmitSpec {
+  stdout?: string;
+  stderr?: string;
+  exitCode?: number;
+}
+
+/**
+ * Source for a Node.js script that writes a fixed stdout/stderr and exits with
+ * a fixed code, so a condition's comparison can be proven against known input.
+ *
+ * Invocation: `emitCommand(scriptPath, spec)` — the spec travels as base64 JSON
+ * so no shell (cmd, pwsh, sh) gets a chance to re-quote the payload.
+ */
+export function buildEmitScript(): string {
+  return `"use strict";
+const spec = JSON.parse(Buffer.from(process.argv[2] || "", "base64").toString("utf8") || "{}");
+if (spec.stdout) process.stdout.write(spec.stdout);
+if (spec.stderr) process.stderr.write(spec.stderr);
+process.exitCode = spec.exitCode || 0;
+`;
+}
+
+/** The condition `script` line that runs `buildEmitScript` with `spec`. */
+export function emitCommand(scriptPath: string, spec: EmitSpec): string {
+  const payload = Buffer.from(JSON.stringify(spec), "utf8").toString("base64");
+  return `node "${scriptPath}" ${payload}`;
 }
 
 /**
