@@ -4,6 +4,7 @@ import * as path from "path";
 import Ajv from "ajv";
 import * as yaml from "js-yaml";
 import { PromptFileParser } from "../../core/PromptFileParser";
+import { formatRunRef } from "../../utils/WorkflowPaths";
 
 suite("Workflow template schema", () => {
   const schemaPath = path.resolve(
@@ -345,6 +346,31 @@ suite("Workflow template schema", () => {
         validate(workflow),
         false,
         JSON.stringify(validate.errors)
+      );
+    }
+  });
+
+  test("accepts a run address in the exact form ctrlyoke writes run refs", () => {
+    const withAddress = (workflowKey: string, runRef: string) => ({
+      steps: [{ prompt: "Continue", priorContext: { workflowKey, runRef } }],
+    });
+
+    assert.strictEqual(
+      validate(withAddress("my-flow", formatRunRef(Date.UTC(2026, 8, 23)))),
+      true,
+      JSON.stringify(validate.errors)
+    );
+
+    for (const [workflowKey, runRef] of [
+      ["my-flow", "run-2026-09-23"],
+      ["my-flow", "run-2026-09-23T10:11:12.123Z"],
+      ["nested/flow", formatRunRef(Date.UTC(2026, 8, 23))],
+      ["nested\\flow", formatRunRef(Date.UTC(2026, 8, 23))],
+    ]) {
+      assert.strictEqual(
+        validate(withAddress(workflowKey, runRef)),
+        false,
+        `${workflowKey} ${runRef}`
       );
     }
   });

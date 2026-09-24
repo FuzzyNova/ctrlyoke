@@ -9,6 +9,9 @@ description: >-
   inline file/symbol content before sending to the AI.
 properties:
   _templateMeta:
+    description: >-
+      Marks the file as a reusable template and describes its placeholders. Removed when the
+      template is instantiated.
     $ref: '#/definitions/templateMetadata'
 allOf:
   - if:
@@ -67,6 +70,9 @@ oneOf:
       - $ref: '#/definitions/workflowOnlyProperties'
       - properties:
           steps:
+            description: >-
+              The ordered step queue. Each item is a prompt step, a script step, or a parallel
+              group.
             type: array
             items:
               oneOf:
@@ -258,8 +264,12 @@ definitions:
     description: Properties authored only at the workflow root.
     properties:
       worktree:
+        description: >-
+          Run the workflow in the working checkout or in a Git worktree. When omitted, the
+          `defaults.worktree` setting applies.
         $ref: '#/definitions/worktreeConfig'
       vars:
+        description: Default values for `{{varName}}` substitutions.
         $ref: '#/definitions/varsConfig'
       trustedExternalRoots:
         oneOf:
@@ -292,7 +302,7 @@ definitions:
           list for every other workflow) and/or a deliberately narrowed subset of already-trusted
           roots (restricting a risky workflow to less than the everyday default); either way every
           root in the array still needs its own one-time approval unless already approved at a
-          broader scope. See dev/backlog/TRUSTED_ROOTS_SCOPE_REFACTOR_PLAN.md.
+          broader scope.
   singleStepRoot:
     oneOf:
       - allOf:
@@ -361,11 +371,11 @@ definitions:
       workflowKey:
         type: string
         minLength: 1
-        pattern: ^[^/\\\\]+$
+        pattern: ^[^/\\]+$
         description: Stable workflow lineage key within the current workspace.
       runRef:
         type: string
-        pattern: ^run-\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}-\\d{3}Z$
+        pattern: ^run-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$
         description: Stable completed-run reference within workflowKey.
   executionProperties:
     type: object
@@ -376,7 +386,7 @@ definitions:
       harness:
         description: >-
           Harness to use for this prompt. Determines which AI CLI executes the prompt. Optional -
-          defaults to ctrlyoke.harness setting.
+          defaults to the `defaults.harness` setting.
         oneOf:
           - $ref: '#/definitions/harnessId'
           - $ref: '#/definitions/templatePlaceholder'
@@ -464,18 +474,17 @@ definitions:
         description: >-
           Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions
           (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md').
-          CliPromptPreparer.createCategorizedPromptFiles() resolves the content into prompt
-          references and wraps agent content in <agentInstructions> tags. Native harness agent
-          discovery is managed separately in the Agents & Skills settings page and does not
-          determine workflow agent support. Use null to explicitly disable inherited agent
-          selection.
+          ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags,
+          so it works the same on every harness. Native harness agent discovery is managed
+          separately in the Agents & Skills settings page and does not determine workflow agent
+          support. Use null to explicitly disable inherited agent selection.
       resumeSession:
         type: boolean
         description: >-
           Whether to resume the existing chat session for this prompt. When omitted, defaults to the
-          ctrlyoke.resumeExistingSession setting (default: false). Set to true to continue in the
-          existing session for context continuity. Retries continue in the same session by default;
-          set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry.
+          `defaults.resumeSession` setting (default: false). Set to true to continue in the existing
+          session for context continuity. Retries continue in the same session by default; set
+          endCondition.resumeSessionOnRetry=false to start a fresh session for each retry.
       mcpServers:
         oneOf:
           - type: array
@@ -528,12 +537,12 @@ definitions:
               pattern: ^[a-zA-Z0-9-_]+$
           - type: 'null'
         description: >-
-          Portable ctrlyoke prompt attachments. CliPromptPreparer.createCategorizedPromptFiles()
-          resolves the selected skill content into categorized prompt references. The Agents &
-          Skills settings page separately manages optional harness-native discovery directories
-          whose behavior varies by harness; native discovery does not determine workflow skills
-          support. Prompt-level skills replace workflow-level skills (no merging). Use null to
-          explicitly disable inherited skills.
+          Portable ctrlyoke prompt attachments. ctrlyoke attaches each selected skill's content to
+          the prompt, so skills work the same on every harness. The Agents & Skills settings page
+          separately manages optional harness-native discovery directories whose behavior varies by
+          harness; native discovery does not determine workflow skills support. Prompt-level skills
+          replace workflow-level skills (no merging). Use null to explicitly disable inherited
+          skills.
       secrets:
         oneOf:
           - type: array
@@ -612,7 +621,7 @@ definitions:
           - type: object
             description: >-
               Per-workflow/prompt tool permission overrides. Follows three-tier precedence: prompt >
-              workflow > global VS Code settings. Only applies to CLI harnesses.
+              workflow > the `defaults.toolPermissions` setting.
             properties:
               mode:
                 type: string
@@ -651,20 +660,19 @@ definitions:
           - type: 'null'
         description: >-
           Tool permission overrides for this prompt/workflow. Use null to explicitly disable
-          inherited overrides and fall back to global VS Code settings. Set mode to 'passthrough' to
-          omit all ctrlyoke permission flags and rely entirely on the harness's own local
-          configuration.
+          inherited overrides and fall back to the `defaults.toolPermissions` setting. Set mode to
+          'passthrough' to omit all ctrlyoke permission flags and rely entirely on the harness's own
+          local configuration.
       errorBehavior:
         oneOf:
           - $ref: '#/definitions/errorBehavior'
           - type: 'null'
         description: >-
           Internal-error policy for every step phase: pre-conditions, prompts/harnesses,
-          end-conditions, and script steps. Worktree setup is outside this policy: errorBehavior is
-          step-scoped (EXECUTION_PROPERTY_KEYS) and resolves through the prompt → workflow →
-          settings chain, but setup runs before any step is in flight, so it has no resolution
-          context; a non-succeeded setup blocks the worktree and the next Run is the recovery
-          gesture. Use null to explicitly disable an inherited policy.
+          end-conditions, and script steps. Resolves prompt → workflow → the
+          `defaults.errorBehavior` setting. Worktree setup is outside this policy: setup runs before
+          any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is
+          the recovery gesture. Use null to explicitly disable an inherited policy.
   workflowStep:
     allOf:
       - oneOf:
@@ -685,6 +693,7 @@ definitions:
       parallelGroups when loaded.
     properties:
       parallel:
+        description: The prompt or script steps that run concurrently. Groups cannot be nested.
         type: array
         items:
           allOf:
@@ -695,6 +704,7 @@ definitions:
                   - parallel
         minItems: 2
       failFast:
+        description: 'Stop the remaining members as soon as one member fails. Default: true.'
         type: boolean
         default: true
     required:
@@ -768,9 +778,13 @@ definitions:
     description: A workflow step that runs a shell script/command with no AI interaction.
     properties:
       type:
+        description: Step type discriminator. Required, and must be "script", for script steps.
         type: string
         const: script
       name:
+        description: >-
+          Optional display label shown in the ctrlyoke dashboard. If omitted, the dashboard shows
+          the script text.
         type: string
         maxLength: 100
       enabled:
@@ -940,19 +954,17 @@ definitions:
         not: {}
         description: >-
           Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes.
-          Omit it entirely to pass on exit code 0. See
-          dev/backlog/SCRIPT_COMPARISON_REDESIGN_PLAN.md.
+          Omit it entirely to pass on exit code 0.
       timeout:
         type: number
-        description: Timeout in milliseconds. Defaults to ctrlyoke.scriptTimeout setting.
+        description: Timeout in milliseconds. When omitted, the `execution.scriptTimeout` setting applies.
       shell:
         type: string
         description: >-
-          Pin the shell that runs this script's inline text (used only when `script` is not a file
-          path that resolves to a known extension — see scriptProperties description). Free-form
-          executable name or path, e.g. "pwsh", "bash", "cmd". Overrides the workspace's
-          terminal.shellExecutable setting for this one script; falls back to it, then platform
-          auto-detect, when omitted.
+          Pin the shell that runs this script's inline text. Used only when `script` is inline text
+          rather than a path to a script file with a known extension. Free-form executable name or
+          path, e.g. "pwsh", "bash", "cmd". Overrides the `terminal.shellExecutable` setting for
+          this one script; falls back to it, then platform auto-detect, when omitted.
         examples:
           - pwsh
           - powershell
@@ -1034,10 +1046,9 @@ definitions:
     type: object
     description: >-
       Policy for internal errors in any step phase, including pre-conditions, prompts/harnesses,
-      end-conditions, and script steps. Worktree setup is outside this policy: errorBehavior is
-      step-scoped (EXECUTION_PROPERTY_KEYS) and resolves through the prompt → workflow → settings
-      chain, but setup runs before any step is in flight, so it has no resolution context; a
-      non-succeeded setup blocks the worktree and the next Run is the recovery gesture.
+      end-conditions, and script steps. Worktree setup is outside this policy: setup runs before any
+      step is in flight, so a non-succeeded setup blocks the worktree and the next Run is the
+      recovery gesture.
     properties:
       onError:
         type: string
