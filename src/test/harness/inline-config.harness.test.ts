@@ -480,14 +480,20 @@ suite("Inline harness configuration regression tests", function () {
       );
       fs.writeFileSync(userConfigPath, userConfig);
 
-      // A project's own .codex/hooks.json only runs in a trusted project.
+      // A project's own .codex/hooks.json only runs in a trusted project, and
+      // since 0.156 each of its hooks also needs a persisted trust decision
+      // ("Hooks need review" dialog). The bypass flag stands in for that
+      // one-time user approval so the test does not stall on the dialog.
       const result = await withIsolatedCodexHome([tmpDir], () =>
         runInteractiveWorkflowFile(
-          codexHookWorkflow(
-            [],
-            "Reply with exactly: codex-user-hook-complete",
-            "interactive"
-          ),
+          {
+            ...codexHookWorkflow(
+              [],
+              "Reply with exactly: codex-user-hook-complete",
+              "interactive"
+            ),
+            additionalArgs: "--dangerously-bypass-hook-trust",
+          },
           tmpDir,
           "codex-user-hook-preservation"
         )
