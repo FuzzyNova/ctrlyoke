@@ -35,6 +35,7 @@ import {
   type Completion,
   type CompletionResult,
 } from "@codemirror/autocomplete";
+import { fuzzyMatchRanges } from "@root/completions/FuzzyRanking";
 import { history, historyKeymap, insertTab } from "@codemirror/commands";
 import {
   searchKeymap,
@@ -483,9 +484,35 @@ export function buildCodeMirrorCompletionResult(
 
   if (bypassFiltering) {
     result.filter = false;
+    // With filtering off CodeMirror computes no matched ranges of its own, so
+    // supply them — with the same matcher the extension ranked with — so the
+    // dropdown still highlights what the query matched.
+    const highlightQuery = getCompletionHighlightQuery(request);
+    if (highlightQuery) {
+      result.getMatch = (completion) =>
+        fuzzyMatchRanges(
+          completion.displayLabel ?? completion.label,
+          highlightQuery
+        );
+    }
   }
 
   return result;
+}
+
+// The part of the typed query a completion label is matched against: labels
+// are basenames, so a typed directory (`src/ui/co`, `"my dir/fi`) contributes
+// only its last segment.
+function getCompletionHighlightQuery(
+  request: PendingCompletionRequest | null
+): string {
+  if (!request) {
+    return "";
+  }
+  const query = request.query.replace(/^"/, "");
+  return query.slice(
+    Math.max(query.lastIndexOf("/"), query.lastIndexOf("\\")) + 1
+  );
 }
 
 // Cache key for a progressive completion's full result. The trigger is always a

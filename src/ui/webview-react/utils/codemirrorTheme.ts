@@ -185,6 +185,18 @@ export function createThemeExtension(
         outline: `1px solid ${autocompleteSelectedOutlineColor}`,
         outlineOffset: "-1px",
       },
+      // Matched query characters: bold + highlight color, like VS Code's own
+      // suggest widget (CodeMirror's default is a plain underline).
+      ".cm-completionMatchedText": {
+        textDecoration: "none",
+        fontWeight: "bold",
+        color: "var(--vscode-editorSuggestWidget-highlightForeground)",
+      },
+      ".cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionMatchedText":
+        {
+          color:
+            "var(--vscode-editorSuggestWidget-focusHighlightForeground, var(--vscode-editorSuggestWidget-highlightForeground))",
+        },
       // CodeMirror's own .cm-completionIcon sizes its built-in glyph set at
       // 90% with no vertical-align, which works because those glyphs are
       // plain text characters. Our codicon glyphs come from a separate font

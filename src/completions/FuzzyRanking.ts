@@ -44,6 +44,29 @@ export function fuzzyMatches(candidate: string, query: string): boolean {
   return fuzzysort.single(query, candidate) !== null;
 }
 
+/**
+ * The characters of `text` that `query` fuzzily matches, as a flat list of
+ * `[from, to, from, to, ...]` half-open ranges (adjacent matched characters
+ * merged) — the shape CodeMirror's `CompletionResult.getMatch` expects for
+ * highlighting. Empty when the query is empty or doesn't match.
+ */
+export function fuzzyMatchRanges(text: string, query: string): number[] {
+  const match = query ? fuzzysort.single(query, text) : null;
+  if (!match) {
+    return [];
+  }
+
+  const ranges: number[] = [];
+  for (const index of [...match.indexes].sort((a, b) => a - b)) {
+    if (ranges.length > 0 && ranges[ranges.length - 1] === index) {
+      ranges[ranges.length - 1] = index + 1;
+    } else {
+      ranges.push(index, index + 1);
+    }
+  }
+  return ranges;
+}
+
 function weightedScore(scores: readonly { score: number }[]): number {
   let best = 0;
   scores.forEach(({ score }, index) => {

@@ -283,6 +283,18 @@ describe("CodeMirrorEditor external reference completions", () => {
       "useFinalStepContextMenu",
       "useContextPct",
     ]);
+    // "use" + "Context" highlighted in the displayed label
+    expect(result.getMatch?.(result.options[0])).toEqual([0, 3, 12, 19]);
+  });
+
+  it("highlights only the child segment of a typed directory query", () => {
+    const result = buildCodeMirrorCompletionResult(
+      [{ label: "CodeMirrorEditor.tsx", kind: 16, insertText: "x", rank: 0 }],
+      5,
+      { trigger: "@", query: "src/editor/cme" }
+    );
+
+    expect(result.getMatch?.(result.options[0])).toEqual([0, 1, 4, 5, 10, 11]);
   });
 
   it("uses filterText for CodeMirror fuzzy matching while keeping the visible label", () => {
