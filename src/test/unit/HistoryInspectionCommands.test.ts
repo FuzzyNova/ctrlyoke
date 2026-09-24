@@ -210,6 +210,7 @@ function settledAttempt(
 > {
   return {
     kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED,
+    continuation: false,
     attempt: {
       target,
       runIndex: 0,

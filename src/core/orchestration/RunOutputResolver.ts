@@ -130,6 +130,8 @@ interface OpenAttemptState {
   value: ResolvedRunAttemptValue;
   deltas: StreamingCliOutputAccumulator;
   terminated: boolean;
+  /** Reopened after this attempt was already settled and yielded. */
+  continuation: boolean;
 }
 
 /**
@@ -204,6 +206,14 @@ export type RunOutputResolverAttemptEvent =
       attempt: ResolvedRunAttemptValue;
       /** True when the timeline ended before ATTEMPT_TERMINATED was recorded. */
       unterminated: boolean;
+      /**
+       * True when this attempt was already settled earlier in the stream and
+       * this value carries records appended afterwards (a post-completion
+       * follow-up recorded after RUN_TERMINATED or another attempt's events).
+       * Its aggregate output is cumulative, so it supersedes the earlier
+       * value; the prompt and terminal state live only on that earlier value.
+       */
+      continuation: boolean;
     }
   | {
       kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUNTIME_TRANSITION;
@@ -247,7 +257,8 @@ export class RunOutputResolver {
   async *streamFromEvents(
     manifest: WorkflowRunManifest,
     events:
-      Iterable<WorkflowTimelineEvent> | AsyncIterable<WorkflowTimelineEvent>
+      | Iterable<WorkflowTimelineEvent>
+      | AsyncIterable<WorkflowTimelineEvent>
   ): AsyncGenerator<RunOutputResolverEvent, void, undefined> {
     let activeDefinition: ResolvedAttemptDefinition | undefined =
       manifest.initialDefinition
@@ -420,28 +431,36 @@ export class RunOutputResolver {
    * Open-attempt state is discarded as soon as it settles, apart from a
    * just-terminated value held briefly so contiguous follow-up records remain
    * part of the same logical attempt. Retained memory stays bounded by the
-   * number of concurrently open attempts. Attempts from a parallel group are
-   * yielded in settle order rather than sorted by target.
+   * number of concurrently open attempts (plus the key strings of settled
+   * attempts). Attempts from a parallel group are yielded in settle order
+   * rather than sorted by target.
+   *
+   * Post-completion follow-ups are recorded after RUN_TERMINATED, so an
+   * attempt can receive records after it was already settled. Those records
+   * reopen it and it settles again with `continuation: true`; reducers must
+   * fold that value over the earlier one via `foldSettledAttempt()`.
    */
   async *streamAttempts(
     manifestPath: string
   ): AsyncGenerator<RunOutputResolverAttemptEvent, void, undefined> {
     const openAttempts = new Map<string, OpenAttemptState>();
+    const settledKeys = new Set<string>();
 
     for await (const event of this.stream(manifestPath)) {
       if (
         event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUNTIME_TRANSITION ||
         event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUN_TERMINATED
       ) {
-        yield* this.drainSettledAttempts(openAttempts);
+        yield* this.drainSettledAttempts(openAttempts, settledKeys);
         yield event;
         continue;
       }
 
       const key = getAttemptKey(event.attempt);
-      yield* this.drainSettledAttempts(openAttempts, key);
+      yield* this.drainSettledAttempts(openAttempts, settledKeys, key);
       const state =
-        openAttempts.get(key) ?? this.createOpenAttemptState(event.attempt);
+        openAttempts.get(key) ??
+        this.createOpenAttemptState(event.attempt, settledKeys.has(key));
       openAttempts.set(key, state);
       state.value.definition =
         event.attempt.definition ?? state.value.definition;
@@ -480,11 +499,7 @@ export class RunOutputResolver {
     }
 
     for (const [key, state] of openAttempts) {
-      yield {
-        kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED,
-        attempt: this.finishAttemptState(state, key),
-        unterminated: !state.terminated,
-      };
+      yield this.createSettledAttemptEvent(state, key);
     }
   }
 
@@ -495,6 +510,7 @@ export class RunOutputResolver {
    */
   private *drainSettledAttempts(
     openAttempts: Map<string, OpenAttemptState>,
+    settledKeys: Set<string>,
     exceptKey?: string
   ): Generator<RunOutputResolverAttemptEvent, void, undefined> {
     for (const [key, state] of openAttempts) {
@@ -502,17 +518,20 @@ export class RunOutputResolver {
         continue;
       }
       openAttempts.delete(key);
+      settledKeys.add(key);
       yield this.createSettledAttemptEvent(state, key);
     }
   }
 
   private createOpenAttemptState(
-    attempt: ResolvedRunAttempt
+    attempt: ResolvedRunAttempt,
+    continuation: boolean
   ): OpenAttemptState {
     return {
       value: { ...attempt },
       deltas: new StreamingCliOutputAccumulator(),
       terminated: false,
+      continuation,
     };
   }
 
@@ -523,7 +542,10 @@ export class RunOutputResolver {
     return {
       kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED,
       attempt: this.finishAttemptState(state, key),
-      unterminated: !state.terminated,
+      // A continuation's attempt already terminated; follow-ups never record
+      // their own ATTEMPT_TERMINATED, so its absence is not an interruption.
+      unterminated: !state.terminated && !state.continuation,
+      continuation: state.continuation,
     };
   }
 
@@ -558,7 +580,7 @@ export class RunOutputResolver {
       ) {
         continue;
       }
-      value = event.attempt;
+      value = foldSettledAttempt(value, event);
     }
     return value;
   }
@@ -585,8 +607,13 @@ export class RunOutputResolver {
 
       const key = getTargetKey(event.attempt.target);
       const existing = latest.get(key);
-      if (!existing || isNewerAttempt(event.attempt, existing)) {
-        latest.set(key, event.attempt);
+      if (
+        !existing ||
+        isNewerAttempt(event.attempt, existing) ||
+        (event.continuation &&
+          getAttemptKey(existing) === getAttemptKey(event.attempt))
+      ) {
+        latest.set(key, foldSettledAttempt(existing, event));
       }
     }
 
@@ -1311,6 +1338,37 @@ function isNewerAttempt(
     (candidate.runIndex === existing.runIndex &&
       candidate.attemptIndex > existing.attemptIndex)
   );
+}
+
+/**
+ * Reduce one settled attempt into the value already held for it. A
+ * continuation of that same attempt carries its cumulative output, while the
+ * prompt, start metadata, and terminal state exist only on the earlier value;
+ * anything else replaces the held value outright.
+ */
+function foldSettledAttempt(
+  existing: ResolvedRunAttemptValue | undefined,
+  event: Extract<
+    RunOutputResolverAttemptEvent,
+    { kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED }
+  >
+): ResolvedRunAttemptValue {
+  const continued = event.attempt;
+  if (
+    !event.continuation ||
+    !existing ||
+    getAttemptKey(existing) !== getAttemptKey(continued)
+  ) {
+    return continued;
+  }
+  return {
+    ...existing,
+    definition: continued.definition ?? existing.definition,
+    kind: continued.kind ?? existing.kind,
+    output: continued.output ?? existing.output,
+    responseText: continued.responseText ?? existing.responseText,
+    scriptOutput: continued.scriptOutput ?? existing.scriptOutput,
+  };
 }
 
 function deduplicatePriorContextItems(
