@@ -51,6 +51,19 @@ export interface SpawnResult {
   terminationSignal?: NodeJS.Signals;
 }
 
+/** How an interactive (stdio-inherited) process ended. */
+export interface InteractiveExitResult {
+  /** Exit code, or `null` when a signal ended the process. */
+  exitCode: number | null;
+  /** Spawn failure (e.g. ENOENT); the process never ran. */
+  error?: string;
+  /**
+   * Whether this manager asked for the kill (a detected Stop hook, a
+   * cancellation). Such an exit is expected and says nothing about the CLI.
+   */
+  terminatedByManager: boolean;
+}
+
 /**
  * Configuration constants for process management
  */
@@ -286,8 +299,8 @@ export class CliProcessManager {
     workingDirectory: string,
     env?: NodeJS.ProcessEnv,
     windowsVerbatimArguments?: boolean
-  ): Promise<void> {
-    return new Promise<void>((resolve) => {
+  ): Promise<InteractiveExitResult> {
+    return new Promise<InteractiveExitResult>((resolve) => {
       this.logger?.(`📤 Spawning interactive: ${command} ${args.join(" ")}`);
 
       const cwd = canonicalizeDriveLetter(workingDirectory);
@@ -301,20 +314,32 @@ export class CliProcessManager {
 
       this.currentProcess = child;
 
-      child.on("close", () => {
+      let settled = false;
+      const settle = (result: InteractiveExitResult): void => {
         if (this.currentProcess === child) {
           this.currentProcess = undefined;
         }
-        this.logger?.("✅ Interactive process exited");
-        resolve();
+        if (!settled) {
+          settled = true;
+          resolve(result);
+        }
+      };
+
+      child.on("close", (code) => {
+        this.logger?.(`✅ Interactive process exited (code ${code})`);
+        settle({
+          exitCode: code,
+          terminatedByManager: this.requestedKills.has(child),
+        });
       });
 
       child.on("error", (err: Error) => {
-        if (this.currentProcess === child) {
-          this.currentProcess = undefined;
-        }
         this.logger?.(`❌ Interactive process error: ${err.message}`);
-        resolve(); // treat errors as exit — caller checks success via return value
+        settle({
+          exitCode: null,
+          error: err.message,
+          terminatedByManager: this.requestedKills.has(child),
+        });
       });
     });
   }

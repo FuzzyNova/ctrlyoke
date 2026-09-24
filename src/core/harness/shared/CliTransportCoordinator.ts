@@ -8,6 +8,7 @@ import {
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import type {
   CliProcessManager,
+  InteractiveExitResult,
   SpawnResult,
 } from "../../../utils/CliProcessManager";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
@@ -152,6 +153,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       const secretEnv = await this.resolveSecretEnvironment(secretNames);
 
       let processExited = false;
+      let completionSignalled = false;
       let hookSessionId: string | undefined;
 
       const spawnPromise = this.withProcessEnvOverrides(secretEnv, () =>
@@ -167,6 +169,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       });
 
       const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
+      let exit: InteractiveExitResult;
       if (
         workspaceRoot &&
         this.deps.provider.config.usesInteractiveNotificationMonitor
@@ -187,6 +190,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           )
           .then((result) => {
             if (result.completed && !processExited) {
+              completionSignalled = true;
               hookSessionId =
                 this.deps.provider.notificationMonitor.extractSessionId?.(
                   result.data
@@ -199,9 +203,26 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
             }
           });
 
-        await Promise.all([spawnPromise, monitorPromise]);
+        [exit] = await Promise.all([spawnPromise, monitorPromise]);
       } else {
-        await spawnPromise;
+        exit = await spawnPromise;
+      }
+
+      // A CLI that fails to start (Codex 0.156 exits 1 with "stdin is not a
+      // terminal" when stdin is not a TTY) ends the process on its own, with no
+      // completion signal. Reporting that as a finished step turned a launch
+      // failure into "Workflow completed successfully".
+      if (!completionSignalled && !exit.terminatedByManager) {
+        if (exit.error !== undefined) {
+          throw new Error(
+            `${command.command} could not be started: ${exit.error}`
+          );
+        }
+        if (exit.exitCode !== null && exit.exitCode !== 0) {
+          throw new Error(
+            `${command.command} exited with code ${exit.exitCode} before signalling completion`
+          );
+        }
       }
 
       this.deps.hostCallbacks.onResponseComplete("Interactive session ended");

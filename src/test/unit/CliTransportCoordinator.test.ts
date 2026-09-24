@@ -14,6 +14,10 @@ import {
 } from "../../types/DashboardConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
+import type {
+  CliProcessManager,
+  InteractiveExitResult,
+} from "../../utils/CliProcessManager";
 
 async function resolveCommand(command: string, args: string[]) {
   return {
@@ -1099,6 +1103,7 @@ line two`,
           assert.strictEqual(env.HOOK_TOKEN, "hook-value");
           assert.strictEqual(process.env[secretName], "secret-value");
           await new Promise((resolve) => setTimeout(resolve, 10));
+          return { exitCode: null, terminatedByManager: true };
         },
         disposeProcess: () => {
           disposedProcess = true;
@@ -1144,6 +1149,115 @@ line two`,
     }
     assert.strictEqual(disposedProcess, true);
     assert.strictEqual(responseCompleted, "Interactive session ended");
+  });
+
+  suite("standalone interactive exit", () => {
+    /**
+     * Minimal coordinator whose interactive CLI ends with `exit`, optionally
+     * after the Stop-hook monitor reports completion.
+     */
+    function createExitingCoordinator(options: {
+      exit: InteractiveExitResult;
+      stopHookFires: boolean;
+    }): CliTransportCoordinator {
+      return new CliTransportCoordinator({
+        provider: {
+          config: {
+            name: "test-cli",
+            displayName: "Test CLI",
+            terminalName: "Test",
+            installHint: "",
+            shouldStreamHeadlessOutput: false,
+            usesInteractiveNotificationMonitor: true,
+          },
+          notificationMonitor: {
+            monitorForCompletion: async () => ({
+              completed: options.stopHookFires,
+            }),
+            getNotificationDirectory: () => process.cwd(),
+          },
+          buildInteractiveArgs: (baseArgs: string[], promptText: string) => [
+            promptText,
+            ...baseArgs,
+          ],
+        } as unknown as ICliProvider,
+        processManager: {
+          spawnInteractive: async () => {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            return options.exit;
+          },
+          disposeProcess: () => {},
+        } as unknown as CliProcessManager,
+        resolveCliCommand: resolveCommand,
+        runtimeState: {
+          getWorkspaceRoot: () => process.cwd(),
+          isCancelling: () => false,
+        },
+        hostCallbacks: {
+          onBeforeInteractiveStart: () => {},
+          onCommandPrepared: () => {},
+          onStreamingChunk: () => {},
+          onStreamingEvents: () => {},
+          onResponseComplete: () => {},
+          onPtyExit: () => {},
+          cleanupTempFiles: async () => {},
+        },
+      });
+    }
+
+    test("fails when the CLI exits non-zero before signalling completion", async () => {
+      // Codex 0.156 exits 1 ("stdin is not a terminal") without ever running;
+      // that used to be reported as a completed step.
+      const coordinator = createExitingCoordinator({
+        exit: { exitCode: 1, terminatedByManager: false },
+        stopHookFires: false,
+      });
+      await assert.rejects(
+        coordinator.executeStandaloneInteractiveProcess([], "prompt", []),
+        /exited with code 1 before signalling completion/
+      );
+    });
+
+    test("fails when the CLI cannot be started", async () => {
+      const coordinator = createExitingCoordinator({
+        exit: {
+          exitCode: null,
+          error: "spawn ENOENT",
+          terminatedByManager: false,
+        },
+        stopHookFires: false,
+      });
+      await assert.rejects(
+        coordinator.executeStandaloneInteractiveProcess([], "prompt", []),
+        /could not be started: spawn ENOENT/
+      );
+    });
+
+    test("succeeds when the user quits cleanly without a Stop hook", async () => {
+      const coordinator = createExitingCoordinator({
+        exit: { exitCode: 0, terminatedByManager: false },
+        stopHookFires: false,
+      });
+      const result = await coordinator.executeStandaloneInteractiveProcess(
+        [],
+        "prompt",
+        []
+      );
+      assert.strictEqual(result.success, true);
+    });
+
+    test("ignores the exit code of a session ctrlyoke terminated after its Stop hook", async () => {
+      const coordinator = createExitingCoordinator({
+        exit: { exitCode: 1, terminatedByManager: true },
+        stopHookFires: true,
+      });
+      const result = await coordinator.executeStandaloneInteractiveProcess(
+        [],
+        "prompt",
+        []
+      );
+      assert.strictEqual(result.success, true);
+    });
   });
 
   test("should refuse to spawn when cancellation lands while the log tail starts", async () => {
