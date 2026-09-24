@@ -787,7 +787,7 @@ Identifies one completed run for `priorContext` imports.
 
 - **Type:** `string`
 - **Required:** yes
-- **Constraints:** at least 1 character(s) · pattern `^[^/\\\\]+$`
+- **Constraints:** at least 1 character(s) · pattern `^[^/\\]+$`
 
 Stable workflow lineage key within the current workspace.
 
@@ -795,7 +795,7 @@ Stable workflow lineage key within the current workspace.
 
 - **Type:** `string`
 - **Required:** yes
-- **Constraints:** pattern `^run-\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}-\\d{3}Z$`
+- **Constraints:** pattern `^run-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$`
 
 Stable completed-run reference within workflowKey.
 
