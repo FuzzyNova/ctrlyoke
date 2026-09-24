@@ -724,9 +724,9 @@
     "@typescript-eslint/parser": "^8.44.1",
     "@vitejs/plugin-react": "^6.0.2",
     "@vitest/coverage-v8": "^4.1.7",
-    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^3.1.0",
-    "@vscode/vsce": "^3.9.2",
+    "@vscode/vsce": "^4.0.0",
     "@welldone-software/why-did-you-render": "^10.0.1",
     "autoprefixer": "^10.4.24",
     "cross-env": "^10.1.0",
@@ -740,7 +740,7 @@
     "knip": "^6.15.0",
     "mdast-util-find-and-replace": "^3.0.2",
     "mdast-util-to-string": "^4.0.0",
-    "mocha": "^11.7.2",
+    "mocha": "^12.0.2",
     "npm-run-all": "^4.1.5",
     "postcss": "^8.5.6",
     "prettier": "^3.6.2",
@@ -759,10 +759,7 @@
   ],
   "overrides": {
     "brace-expansion": "^5.0.8",
-    "mocha": {
-      "diff": "^8.0.3",
-      "serialize-javascript": "^7.0.7"
-    }
+    "mocha": "$mocha"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.0",
@@ -825,5 +822,10 @@
   },
   "bundleDependencies": [
     "node-pty"
-  ]
+  ],
+  "allowScripts": {
+    "@parcel/watcher": true,
+    "@vscode/vsce-sign": true,
+    "esbuild": true
+  }
 }
