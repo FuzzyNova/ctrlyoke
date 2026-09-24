@@ -426,6 +426,7 @@ export class PromptEditorSupportService {
         documentation: item.documentation,
         sortText: item.sortText,
         filterText: item.filterText,
+        rank: item.rank,
         captureId: item.captureId,
         icon: item.icon,
       })),
