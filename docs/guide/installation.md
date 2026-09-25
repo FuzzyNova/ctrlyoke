@@ -3,7 +3,8 @@
 ## Requirements
 
 - VS Code 1.106 or later for the extension
-- Node.js 22.12.0 or later for local development and CLI usage
+- Node.js 22.12.0 or later on `PATH`. The extension starts its MCP server with `node`, and the
+  CLI is a Node.js program
 - At least one supported harness installed and authenticated
 
 ## Install the extension
@@ -45,8 +46,27 @@ Command Palette → ctrlyoke: Initialize Workspace
 
 That creates `.ctrlyoke/` and a self-ignoring `.gitignore` inside it — nothing else, so initializing does not leave your Git worktree dirty. Subdirectories such as `prompts/`, `scripts/`, `templates/`, `agents/`, and `skills/` are created on demand the first time you add something to them.
 
-## Optional: install the standalone CLI
+## The command-line tool
 
-The repository also builds a standalone `ctrlyoke` binary entry point. Once installed, it can execute the same workflow files outside VS Code.
+The extension includes the `ctrlyoke` command-line tool. In VS Code's integrated terminals it is
+already on `PATH`, so `ctrlyoke run`, `ctrlyoke validate` and the other commands work there with
+no setup. Nothing is added to your system `PATH`.
 
-See [CLI overview](/cli/) for usage.
+To use the CLI anywhere else (another terminal, CI, a server or a container), install it from
+npm:
+
+```bash
+npm install -g ctrlyoke
+```
+
+If you also use the extension, install the extension's exact version, so both copies read and
+write shared state the same way:
+
+```bash
+npm install -g ctrlyoke@<extension version>
+```
+
+**ctrlyoke: Install CLI for Use Outside VS Code** opens a terminal with that command typed in for
+you to review and run. For a one-off run, `npx ctrlyoke@<version> …` works without installing.
+
+See [CLI overview](/cli/) for how the two copies coexist, and [CLI in CI](/cli/ci) for pipelines.

@@ -11,6 +11,65 @@ Both are Node.js programs and require Node.js 22.12 or later. The harness CLIs
 you run workflows with (Copilot CLI, Claude Code, and so on) must be installed,
 on `PATH`, and signed in, exactly as for the extension.
 
+## Getting the CLI
+
+- **Inside VS Code:** nothing to install. The extension includes both commands
+  and puts them on `PATH` in VS Code's integrated terminals. The harness
+  processes ctrlyoke starts get the same copy, so an agent that runs
+  `ctrlyoke append` during a run reaches the ctrlyoke that started it.
+- **Everywhere else** (another terminal, CI, a server or a container): install
+  the `ctrlyoke` package from npm.
+
+  ```bash
+  npm install -g ctrlyoke
+  ctrlyoke --version
+  ```
+
+  Or run it without installing: `npx ctrlyoke@<version> validate my-workflow.ctrlyoke.yaml`.
+
+The npm package and the extension are built from the same release and always
+share a version number.
+
+## Using the CLI and the extension together
+
+Which copy runs `ctrlyoke`:
+
+| Where                                      | Copy                                       |
+| ------------------------------------------ | ------------------------------------------ |
+| VS Code integrated terminal                | The extension's (ahead of npm's on `PATH`) |
+| Harness processes ctrlyoke starts          | The copy that started the run              |
+| Any other shell, CI job, or scheduled task | The npm copy                               |
+
+Both copies read and write the same state: settings, run history, runner locks,
+trust decisions and the history-search index. **Keep the npm copy on the
+extension's version.** VS Code updates extensions automatically and npm does
+not update global packages, so in practice the npm copy is the one that falls
+behind:
+
+- When the npm CLI is older than the installed extension, it prints a warning
+  once per version pair, on stderr so `--json` output stays clean. The warning
+  names the install command: `npm install -g ctrlyoke@<extension version>`. The
+  extension shows a matching one-time notice.
+- If an older copy meets state written by a newer one, it still reads it, but
+  it refuses to change it rather than risk dropping fields it doesn't know
+  about. The error says the state "was written by a newer version of ctrlyoke"
+  and asks you to update; the CLI exits with code `2`. Update the older copy
+  and run the command again.
+
+Each copy starts its own `ctrlyoke-mcp` server from its own install, so a run
+never mixes versions of the CLI and its MCP server.
+
+## License and privacy
+
+The CLI and MCP server are covered by the same [ctrlyoke Commercial License](https://ctrlyoke.dev/terms)
+as the extension and are part of the Free Tier. The free-use eligibility terms
+apply to the CLI exactly as they do to the extension, including
+for automated, scripted and CI use. The CLI does not check a license.
+
+The CLI and MCP server send no telemetry and make no network requests of their
+own. Your harness CLIs talk to their providers as usual. See
+[Privacy](/guide/privacy).
+
 ## What the CLI shares with the extension
 
 - the same workflow file formats
@@ -32,5 +91,6 @@ on `PATH`, and signed in, exactly as for the extension.
   [Tool permissions](/cli/ctrlyoke#tool-permissions))
 - structured exit codes and `--json` output for scripting and CI
 
-Read [ctrlyoke](/cli/ctrlyoke) for every command and option, and
-[ctrlyoke-mcp](/cli/ctrlyoke-mcp) for the MCP server.
+Read [ctrlyoke](/cli/ctrlyoke) for every command and option,
+[CLI in CI](/cli/ci) for pipelines, and [ctrlyoke-mcp](/cli/ctrlyoke-mcp) for
+the MCP server.

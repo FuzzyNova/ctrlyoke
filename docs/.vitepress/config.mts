@@ -32,6 +32,7 @@ export default defineConfig({
             { text: "Quick start", link: "/guide/quick-start" },
             { text: "Core concepts", link: "/guide/concepts" },
             { text: "Your first workflow", link: "/guide/your-first-workflow" },
+            { text: "Privacy and telemetry", link: "/guide/privacy" },
           ],
         },
       ],
@@ -94,6 +95,7 @@ export default defineConfig({
           items: [
             { text: "Overview", link: "/cli/" },
             { text: "ctrlyoke", link: "/cli/ctrlyoke" },
+            { text: "CLI in CI", link: "/cli/ci" },
             { text: "ctrlyoke-mcp", link: "/cli/ctrlyoke-mcp" },
           ],
         },

@@ -1,9 +1,8 @@
 # CLI Distribution Plan
 
-**Status:** Decided 2026-09-24. Done 2026-09-25: §3.1, §3.2 (package build, packaging test,
-staged publish in `release.yml`, account setup), and §3.4 rules 2–3. The first real tag has not
-run the npm steps yet. Not started: §3.3, §4 docs, §3.4 rules 4–6. See §6 for progress and next
-steps.
+**Status:** Decided 2026-09-24. Done 2026-09-25: §3.1, §3.2, §3.3, §3.4 rules 2–3, and §4.
+`ctrlyoke@0.1.2` was staged by the `v0.1.2` release and approved, so it is live on npm. Not
+started: §3.4 rules 4–6. See §6 for progress and next steps.
 
 **Decision:** ship the CLI through both channels, built from one artifact with one version
 number:
@@ -203,6 +202,14 @@ only harness processes. Measured VSIX size: 16.1 MB (was 14.1 MB).
 - Check what telemetry, if any, the CLI sends and how to opt out without VS Code. Document it on
   the `guide/privacy.md` page from the docs plan.
 
+**Done 2026-09-25.** The CLI sends no telemetry: `initTelemetry()` is called only from
+`extension.ts`, and neither `out/cli.js` nor `out/mcp-server.js` imports `http`, `https` or
+`net`, or calls `fetch`. (The `telemetry` strings in `cli.js` come from a bundled tokenizer
+vocabulary.) `LICENSE.md` already names the CLI and MCP server in the Free Tier and allows CI/CD
+use, and `PRIVACY.md` already says the binaries send no telemetry, so neither needed changes.
+`docs/cli/index.md` has a "License and privacy" section, and the new `docs/guide/privacy.md`
+covers telemetry, opting out, the extension's other network requests, and the hosted dashboard.
+
 ### 3.4 Coexistence: extension and npm CLI installed together
 
 This section covers what happens when a user has the extension installed and also runs
@@ -330,6 +337,8 @@ global installs don't, so in practice this is "the npm CLI is older than the ext
   the CLI loads at runtime must live under `out/` and be listed in both `.vscodeignore` and the
   npm `files` allowlist. The packaging test enforces it.
 
+**Done 2026-09-25.** All of the above is in place; see §6 item 6 for the pages.
+
 ## 5. Rejected alternatives
 
 - **npm only.** Extension users would need a manual second install before `ctrlyoke append`
@@ -359,12 +368,12 @@ global installs don't, so in practice this is "the npm CLI is older than the ext
    entry and walkthrough step, `bin/` shims in the package, and the release checklist items. Done
    2026-09-25. **Next:** push a tag and approve the first staged version (release checklist
    Phase 11).
-5. **§3.3 licensing and telemetry** notes for `cli/index.md` and `guide/privacy.md`.
-6. **§4 docs.** The Phase 8 check and the `cli-binary.instructions.md` distribution note are
-   already done. Still to write: `docs/cli/index.md`, including a short "Using the CLI and the
-   extension together" section (which copy runs where, keeping the npm copy on the extension's
-   version, and what the "update ctrlyoke" refusal means); `docs/guide/installation.md`; and
-   `docs/cli/ci.md`.
+5. ✅ **§3.3 licensing and telemetry.** Done 2026-09-25.
+6. ✅ **§4 docs.** Done 2026-09-25: `docs/cli/index.md` ("Getting the CLI", "Using the CLI and
+   the extension together", "License and privacy"), `docs/guide/installation.md`, the new
+   `docs/cli/ci.md` and `docs/guide/privacy.md`, and a `docs/reference/commands.md` row for
+   Install CLI. The `cli/ci.md` examples pin `ctrlyoke@0.1.2`, so bump them when a release
+   changes the CLI's behavior.
 7. **§3.4 rules 4–6** (per-version search index directories, stable statusline launcher,
    uninstall hygiene). Not release blockers. Rule 5 also fixes an extension-only problem, the
    statusline path moving on every update, so it's worth doing anyway.

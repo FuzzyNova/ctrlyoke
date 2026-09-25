@@ -29,5 +29,5 @@ is older than the installed extension.
 
 ## License
 
-Commercial license with free-use terms; see [LICENSE.md](LICENSE.md). Third-party notices are in
+Commercial license with free-use terms; see the [ctrlyoke Commercial License](https://ctrlyoke.dev/terms) (also in `LICENSE.md`). Third-party notices are in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
