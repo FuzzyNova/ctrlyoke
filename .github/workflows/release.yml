@@ -7,6 +7,13 @@ name: Release
 #
 # Requires a VSCE_PAT repo secret (the Azure DevOps PAT with Marketplace
 # "Manage" scope -- see RELEASE_CHECKLIST.md Phase 9).
+#
+# Also stages the `ctrlyoke` npm CLI package at the same version
+# (dev/backlog/CLI_DISTRIBUTION_PLAN.md §3.2). That uses npm trusted publishing
+# (GitHub OIDC), so there is no NPM_TOKEN. The trusted publisher only allows
+# `npm stage publish`: the version goes live after a maintainer approves it on
+# npmjs.com (Staged Packages tab) or with `npm stage approve <id>`, both of
+# which require 2FA.
 on:
   push:
     tags:
@@ -14,6 +21,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write # npm trusted publishing
 
 jobs:
   release:
@@ -25,6 +33,7 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
         run: npm ci
@@ -39,6 +48,14 @@ jobs:
       - name: Package extension
         run: npm run package
 
+      - name: Build npm CLI package
+        run: node scripts/build-npm-package.mjs
+
+      - name: Test npm CLI package
+        # Before anything is published: packs dist/npm from the production
+        # build, installs the tarball, runs --version and validate.
+        run: node --test scripts/build-npm-package.test.mjs
+
       - name: Publish to VS Code Marketplace
         run: npx vsce publish --packagePath "${{ steps.vsix.outputs.path }}" -p "$VSCE_PAT"
         env:
@@ -52,3 +69,12 @@ jobs:
         with:
           body_path: release-notes.md
           files: ctrlyoke-*.vsix
+
+      - name: Stage npm CLI package
+        # `npm stage` needs npm >= 11.15.0; Node 22 bundles npm 10. Provenance
+        # is left to npm's default: it is generated automatically for a public
+        # repo and is unsupported from a private one.
+        working-directory: dist/npm
+        run: |
+          npm install -g npm@^11.15.0
+          npm stage publish

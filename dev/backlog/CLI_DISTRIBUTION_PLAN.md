@@ -1,8 +1,9 @@
 # CLI Distribution Plan
 
-**Status:** Decided 2026-09-24. Done 2026-09-25: §3.1, §3.4 rules 2–3, and the npm account and
-name setup (§3.2 item 5). Not started: the §3.2 package build, packaging test and `release.yml`
-publish, and §3.4 rules 4–6. See §6 for progress and next steps.
+**Status:** Decided 2026-09-24. Done 2026-09-25: §3.1, §3.2 (package build, packaging test,
+staged publish in `release.yml`, account setup), and §3.4 rules 2–3. The first real tag has not
+run the npm steps yet. Not started: §3.3, §4 docs, §3.4 rules 4–6. See §6 for progress and next
+steps.
 
 **Decision:** ship the CLI through both channels, built from one artifact with one version
 number:
@@ -168,6 +169,32 @@ only harness processes. Measured VSIX size: 16.1 MB (was 14.1 MB).
      approve with the passkey. A non-interactive shell (an agent's tool call) fails with `EOTP`
      instead.
 
+**Implemented 2026-09-25** (`scripts/build-npm-package.mjs`, `scripts/build-npm-package.test.mjs`,
+`scripts/npm-package/README.md`, `release.yml`). Notes from the build:
+
+- The path audit found these CLI runtime assets: `out/templates/`, `out/schemas/`,
+  `out/scripts/`, `out/mcp-server.js`, and both history-search worker bundles. The CLI does not
+  load `out/server/`, `out/runtime-deps/` or `out/ui/`, so they are left out. The package is
+  2.4 MB packed (dev build; the release build is minified).
+- `out/mcp-server.js` got a shebang banner, because npm links `ctrlyoke-mcp` straight to it.
+- The test installs the packed tarball into a temp `--prefix` with `CTRLYOKE_HOME` pointed at a
+  temp dir, then runs `ctrlyoke --version` and `ctrlyoke validate --json`. `release.yml` runs it
+  **before** the Marketplace publish, so a broken package stops the release before anything goes
+  public.
+- A tarball packed on Windows has no executable bit on `bin/ctrlyoke`. The build script chmods
+  it, and CLI startup now calls `ensureCtrlyokeShimsExecutable` just as the extension does.
+- The staging step upgrades to `npm@^11.15.0`: `npm stage` needs npm ≥ 11.15.0 and Node ≥
+  22.14.0, and Node 22 bundles npm 10. It relies on `registry-url` in `setup-node` plus
+  `id-token: write`. Provenance is not set explicitly: trusted publishing generates it for public
+  repos, and npm does not support provenance from private repos. **Unverified until the first
+  tag:** that a private-repo staged publish succeeds with no explicit provenance setting. The
+  release checklist carries that check.
+- Approval is `npm stage approve <stage-id>` or the Staged Packages tab on npmjs.com. Both need
+  2FA. The dist-tag is fixed when the version is staged (`latest` by default) and takes effect on
+  approval.
+- `ctrlyoke.installCli` is now in the Command Palette, and the walkthrough has an optional
+  `installCli` step (`walkthroughs/getting-started/install-cli.md`).
+
 ### 3.3 Licensing and telemetry
 
 - The npm package uses the same commercial `LICENSE.md`; npm allows `SEE LICENSE IN`. The CLI
@@ -328,17 +355,10 @@ global installs don't, so in practice this is "the npm CLI is older than the ext
 2. ✅ **§3.1 bundling and terminal PATH.** Done 2026-09-25 (commit `420cb24b`).
 3. ✅ **§3.4 rules 3 and 2** (refuse-to-write guard and host registry), which had to land before
    the first real npm publish. Done 2026-09-25 (commits `0fee4edb` and `12f40135`).
-4. **Next: §3.2 items 1–4.** These are the build script, the packaging test that installs the
-   tarball and runs `--version`/`validate`, and the staged-publish step in `release.yml`. Ship
-   with the first public tag if ready; otherwise ship as a 0.1.x fast-follow, and until then the
-   docs say VS Code only. In the change that first publishes to npm:
-   - Remove the `when: false` Command Palette entry that hides `ctrlyoke.installCli`, and add its
-     optional Getting Started walkthrough step (§3.1 note).
-   - Ship the `bin/` shims in the npm package too. `registerCtrlyokeBinDirectory()` ignores a
-     package without `bin/`, so without them an npm-launched run would not put its own copy
-     first on the harness PATH.
-   - Add to `RELEASE_CHECKLIST.md` Phases 10–11: approving the staged version on npmjs.com,
-     `npm view ctrlyoke version` matching the tag, and a clean-machine `npx ctrlyoke --version`.
+4. ✅ **§3.2 items 1–4**: build script, packaging test, staged publish, the `installCli` palette
+   entry and walkthrough step, `bin/` shims in the package, and the release checklist items. Done
+   2026-09-25. **Next:** push a tag and approve the first staged version (release checklist
+   Phase 11).
 5. **§3.3 licensing and telemetry** notes for `cli/index.md` and `guide/privacy.md`.
 6. **§4 docs.** The Phase 8 check and the `cli-binary.instructions.md` distribution note are
    already done. Still to write: `docs/cli/index.md`, including a short "Using the CLI and the

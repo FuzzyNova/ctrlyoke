@@ -605,11 +605,13 @@ Confirm:
 
 - [x] Reserve the `ctrlyoke` npm name under a Fuzzy Nova–owned account with 2FA — done September 25, 2026: npm user `fuzzynova` (`admin@fuzzno.com`, passkey 2FA) published a `0.0.1` placeholder that prints "coming soon" and exits `1`. The account uses a passkey, not TOTP, so a manual `npm publish` needs `--auth-type=web` from an interactive terminal.
 - [x] On npmjs.com → `ctrlyoke` → Settings: trusted publisher added (GitHub Actions, `FuzzyNova`/`ctrlyoke`, workflow `release.yml`, **staged publishing only**), and publishing access set to "Require two-factor authentication and disallow tokens" — done September 25, 2026. The `ctrlyoke` npm org also exists, to reserve the `@ctrlyoke` scope.
-- [x] VSIX bundling + terminal PATH (plan §3.1) — done September 25, 2026. `ctrlyoke.installCli` stays hidden and its walkthrough step unwritten until the npm package is published (see the plan).
+- [x] VSIX bundling + terminal PATH (plan §3.1) — done September 25, 2026. `ctrlyoke.installCli` and its optional walkthrough step were un-hidden in the same change that added the npm publish step, so both ship with the first release that stages to npm.
 - [x] Coexistence guard, rule 3 — done September 25, 2026: `schemaVersion` on shared run/lock/trust/board state with refuse-to-write on a newer format, and a newer `runner.json` treated as held.
 - [x] Coexistence guard, rule 2 — done September 25, 2026: the `~/.ctrlyoke/installations.json` host registry with once-per-version-pair mismatch warnings (CLI on stderr, extension as a notification). **Must land before or with the first npm publish** — that is the first moment two ctrlyoke versions can touch the same state.
-- [ ] npm package build, packaging test, and `release.yml` publish with provenance (plan §3.2). Can be a 0.1.x fast-follow; until then docs say the CLI is available inside VS Code only.
-- [ ] After a release: `npm view ctrlyoke version` matches the tag; `npx ctrlyoke --version` works on a clean machine.
+- [x] npm package build (`scripts/build-npm-package.mjs`), packaging test (`scripts/build-npm-package.test.mjs`), and the staged-publish step in `release.yml` (plan §3.2) — done September 25, 2026. Not yet exercised by a real tag.
+- [ ] **Every release:** after `release.yml` finishes, approve the staged version on npmjs.com → `ctrlyoke` → Staged Packages (or `npm stage approve <id>` from an interactive terminal). Approval needs the passkey. Until it's approved, the npm version lags the Marketplace, and the Install CLI command types a version that doesn't exist yet.
+- [ ] **Every release:** `npm view ctrlyoke version` matches the tag; `npx ctrlyoke --version` works on a clean machine.
+- [ ] First staged release only: confirm that `npm stage publish` succeeded without an explicit provenance setting while the repo is private. If it fails on provenance, set `NPM_CONFIG_PROVENANCE: false` on that step until the Phase 14 flip. After the flip, check that provenance shows on the package page.
 
 ---
 

@@ -391,6 +391,11 @@ async function main() {
       // no VS Code host, so resolve that dependency to the standalone shim.
       vscode: path.resolve(__dirname, "src/platform/vscode-shim.ts"),
     },
+    // npm links `ctrlyoke-mcp` straight to this file, so it needs a shebang
+    // like out/cli.js (dev/backlog/CLI_DISTRIBUTION_PLAN.md §3.2).
+    banner: {
+      js: "#!/usr/bin/env node",
+    },
   });
 
   // Build the history-index rebuild worker as its own Node bundle. It runs in

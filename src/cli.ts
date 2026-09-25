@@ -63,6 +63,8 @@ import {
 import { Log } from "./utils/Log";
 import { setRuntimeMode } from "./utils/RuntimeMode";
 import {
+  ensureCtrlyokeShimsExecutable,
+  getCtrlyokeBinDirectory,
   registerCtrlyokeBinDirectory,
   resolvePackageRootFromEntry,
 } from "./utils/CtrlyokeCliPath";
@@ -154,8 +156,13 @@ import {
 
 // Mark this process as the standalone CLI binary before anything else runs.
 setRuntimeMode(RUNNER_IDS.CLI);
-// Harnesses this CLI spawns resolve `ctrlyoke` to this same install.
+// Harnesses this CLI spawns resolve `ctrlyoke` to this same install. A tarball
+// packed on Windows carries no executable bit, so restore it like the extension does.
 registerCtrlyokeBinDirectory(resolvePackageRootFromEntry(__filename));
+const cliBinDirectory = getCtrlyokeBinDirectory();
+if (cliBinDirectory) {
+  ensureCtrlyokeShimsExecutable(cliBinDirectory);
+}
 
 const cliRunnerHostIdentity: RunnerHostIdentity = {
   runner: RUNNER_IDS.CLI,
