@@ -33,6 +33,11 @@ class RecordingWorktreeSetupRunner implements WorktreeSetupRunner {
 }
 
 suite("WorktreeManager", function () {
+  // Raised above the 30s harness default: every case builds real repositories
+  // and worktrees, dozens of `git` spawns each. Idle, the heaviest case takes
+  // ~3s; beside the Vitest pool alone it was measured at 15.6s, and a full
+  // `npm test` (six extension hosts plus Vitest) pushed it past 30s.
+  this.timeout(120_000);
   const temporaryDirectories: string[] = [];
 
   teardown(async () => {
@@ -207,7 +212,7 @@ suite("WorktreeManager", function () {
     await info.lease.release();
   });
 
-  test("attaches an existing local branch and creates a missing branch", async () => {
+  test("attaches an existing local branch", async () => {
     const first = await makeRepository("attach");
     execFileSync("git", ["-C", first.repository, "branch", "feature/existing"]);
     const attached = await resolve(
@@ -227,7 +232,9 @@ suite("WorktreeManager", function () {
       "feature/existing"
     );
     await attached.lease.release();
+  });
 
+  test("creates a missing branch", async () => {
     const second = await makeRepository("create");
     const created = await resolve(
       manager(second.parent),
