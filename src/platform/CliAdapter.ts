@@ -7,6 +7,7 @@ import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import type { SecretStore } from "./SecretStore";
 import { OsCredentialStore } from "./OsCredentialStore";
+import { resolvePackageRootFromEntry } from "../utils/CtrlyokeCliPath";
 
 export interface ResolvedCliConfig {
   harness: string;
@@ -108,12 +109,9 @@ export class CliAdapter implements PlatformAdapter {
   getExtensionPath(): string {
     // Match VS Code's `context.extensionPath` contract: return package root.
     // In the bundled CLI this file lives under `<root>/out/cli.js`, so climb one level.
-    const entryDir = path.dirname(
+    return resolvePackageRootFromEntry(
       typeof __filename !== "undefined" ? __filename : process.cwd()
     );
-    return path.basename(entryDir).toLowerCase() === "out"
-      ? path.dirname(entryDir)
-      : entryDir;
   }
 
   // focusDashboard is intentionally not implemented (no dashboard in CLI)

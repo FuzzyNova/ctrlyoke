@@ -14,6 +14,7 @@ import { canonicalizeDriveLetter } from "../../../utils/PathCasing";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { ctrlYokeToolFamilies } from "../../../types/ExecutionPropertyResolver";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
+import { withCtrlyokeBinOnPath } from "../../../utils/CtrlyokeCliPath";
 import { parseArgString } from "../../../utils/CliArgParser";
 import { resolveCliCommand } from "./CliLauncherResolver";
 import { CLI_VERSION_CHECK_TIMEOUT_MS } from "./interfaces/ICliProvider";
@@ -567,13 +568,15 @@ export class CliProviderUtils {
   /**
    * Build a process environment object for spawning CLI harness processes.
    *
-   * Single source of truth for env construction: spreads `process.env` and
+   * Single source of truth for env construction: spreads `process.env`,
+   * prepends this host's `ctrlyoke` launcher directory to PATH (so an agent's
+   * `ctrlyoke append` reaches the same version that launched it), and
    * conditionally injects `CTRLYOKE_DIAGNOSTIC_LOGS` when diagnostic
    * logging is enabled. Providers may modify the returned object before use
    * (e.g. Claude deletes `CLAUDECODE`).
    */
   static buildProcessEnv(): NodeJS.ProcessEnv {
-    const env: NodeJS.ProcessEnv = { ...process.env };
+    const env = withCtrlyokeBinOnPath(process.env);
     if (ConfigurationUtils.isDiagnosticLogsEnabled()) {
       env.CTRLYOKE_DIAGNOSTIC_LOGS = "true";
     }

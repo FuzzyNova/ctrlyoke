@@ -604,7 +604,7 @@ Confirm:
 **Decided September 24, 2026** — see [`CLI_DISTRIBUTION_PLAN.md`](../backlog/CLI_DISTRIBUTION_PLAN.md). The CLI ships through two channels built from one artifact at one version: bundled in the VSIX and put on `PATH` in VS Code terminals and ctrlyoke-spawned harness processes (no system PATH edits), **and** published to npm as a dedicated `ctrlyoke` package (not the root `package.json`) by `release.yml` from the same tag.
 
 - [ ] Reserve the `ctrlyoke` npm name under a Fuzzy Nova–owned account with 2FA — **before the Phase 14 visibility flip** (unclaimed as of September 24, 2026).
-- [ ] VSIX bundling + terminal PATH (plan §3.1).
+- [x] VSIX bundling + terminal PATH (plan §3.1) — done September 25, 2026. `ctrlyoke.installCli` stays hidden and its walkthrough step unwritten until the npm package is published (see the plan).
 - [ ] Coexistence guard (plan §3.4 rules 2–3): `formatVersion` on shared run/lock/trust state with refuse-to-write on a newer format, a newer `runner.json` treated as held, and the `~/.ctrlyoke/installations.json` host registry with version-mismatch warnings. **Must land before or with the first npm publish** — that is the first moment two ctrlyoke versions can touch the same state.
 - [ ] npm package build, packaging test, and `release.yml` publish with provenance (plan §3.2). Can be a 0.1.x fast-follow; until then docs say the CLI is available inside VS Code only.
 - [ ] After a release: `npm view ctrlyoke version` matches the tag; `npx ctrlyoke --version` works on a clean machine.

@@ -316,7 +316,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         workflowContext?.resolvedProperties?.secrets ?? []
       );
       const mergedEnv = {
-        ...process.env,
+        ...CliProviderUtils.buildProcessEnv(),
         ...providerEnv,
         ...env,
         ...secretEnv,

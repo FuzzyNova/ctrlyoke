@@ -1,6 +1,6 @@
 # CLI Distribution Plan
 
-**Status:** Decided 2026-09-24. Not implemented.
+**Status:** Decided 2026-09-24. §3.1 implemented 2026-09-25 (see the note at the end of §3.1); §3.2–§3.4 not started.
 
 **Decision:** ship the CLI through both channels, built from one artifact with one version
 number:
@@ -91,6 +91,20 @@ check "`out/cli.js` **not** included". Both were updated to point here. Resolves
 5. Add the command **ctrlyoke: Install CLI for Use Outside VS Code**. It opens a terminal with
    `npm install -g ctrlyoke@<extensionVersion>` typed in but **not run**. It never installs
    silently. Add it to the Getting Started walkthrough as an optional step.
+
+**Implemented 2026-09-25.** Items 1 and 3–5 are in (`src/utils/CtrlyokeCliPath.ts`,
+`src/ui/CtrlyokeCliCommands.ts`, `bin/`, `scripts/cli-distribution-packaging.test.mjs`), and so
+are item 2's shims. Two things are deliberately held until the npm package (§3.2) is published,
+because until then the command would type an install that fails:
+
+- `ctrlyoke.installCli` is registered but hidden from the Command Palette
+  (`contributes.menus.commandPalette` entry with `when: false` in `package.json`). Remove that
+  entry in the same change that first publishes to npm.
+- The optional walkthrough step is not written yet; add it in that same change.
+
+As planned, the item 2 fallback (`ELECTRON_RUN_AS_NODE` when `node` is missing) was not built.
+The same PATH prepend also covers the dashboard's own shell terminals (`PtyProcessManager`), not
+only harness processes. Measured VSIX size: 16.1 MB (was 14.1 MB).
 
 ### 3.2 npm package
 

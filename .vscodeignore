@@ -25,10 +25,16 @@
 # Getting Started walkthrough step content.
 !walkthroughs/**
 
-# Bundled extension and MCP server entrypoints.
-# cli.js is released as a standalone npm package, not bundled with the VSIX.
+# Bundled extension, MCP server and CLI entrypoints. The CLI ships here as well
+# as on npm (dev/backlog/CLI_DISTRIBUTION_PLAN.md); bin/ holds the launcher
+# shims the extension puts on PATH for terminals and harness processes.
 !out/extension.js
 !out/mcp-server.js
+!out/cli.js
+!bin/ctrlyoke
+!bin/ctrlyoke.cmd
+!bin/ctrlyoke-mcp
+!bin/ctrlyoke-mcp.cmd
 !out/historySearchRebuildWorker.js
 !out/historySearchMatcherWorker.js
 

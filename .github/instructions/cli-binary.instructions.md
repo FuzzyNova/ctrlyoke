@@ -55,4 +55,10 @@ Standalone `ctrlyoke` CLI entrypoint plus terminal-only formatting. `src/cli.ts`
 - CLI builds produce `out/cli.js` with a shebang and `IS_DEV_MODE=false`; keep code Node-safe and independent of extension-host services.
 - Preserve structured exit semantics when adding failure paths: `0` success, `1` workflow failure, `2` usage/parse/unexpected error, `3` harness/tool availability issues, `4` timeout, `5` interrupted.
 
+## Distribution
+
+- `out/cli.js` ships inside the VSIX as well as on npm (`dev/backlog/CLI_DISTRIBUTION_PLAN.md`). The CLI finds its runtime assets relative to the package root (`CliAdapter.getExtensionPath()`), so **anything the CLI loads at runtime must live under `out/` and be allowlisted in `.vscodeignore`** (and in the npm package's `files` once that exists). `scripts/cli-distribution-packaging.test.mjs` guards the bundle and shim entries.
+- `bin/ctrlyoke[.cmd]` and `bin/ctrlyoke-mcp[.cmd]` are the launchers. Each host (extension or CLI) calls `registerCtrlyokeBinDirectory()` at startup, and `CliProviderUtils.buildProcessEnv()` prepends that directory to every harness spawn, so an agent's `ctrlyoke append` reaches the copy that launched it, not whichever `ctrlyoke` comes first on the user's PATH. A new harness spawn path must build its env from `buildProcessEnv()` rather than spreading `process.env`, or it silently loses this. Integrated terminals get the same directory through `environmentVariableCollection` (`src/ui/CtrlyokeCliCommands.ts`); the system PATH is never edited.
+- The POSIX shims must stay git mode `100755` and LF, and the `.cmd` shims CRLF (`.gitattributes`). A VSIX does not reliably preserve the executable bit, so activation re-applies it (`ensureCtrlyokeShimsExecutable`).
+
 </constraints>

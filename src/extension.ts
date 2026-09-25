@@ -89,6 +89,10 @@ import { initializeRunHistoryLocation } from "./utils/RunHistoryStoragePolicy";
 import { LicenseService, LICENSE_TIERS } from "./license/LicenseService";
 import { registerNativeOutputCaptureCommand } from "./ui/NativeOutputCaptureCommand";
 import { StatusBarManager } from "./ui/StatusBarManager";
+import {
+  exposeBundledCli,
+  registerInstallCliCommand,
+} from "./ui/CtrlyokeCliCommands";
 
 let workflowOrchestrator: WorkflowOrchestrator;
 let webviewProvider: CtrlYokeWebviewProvider;
@@ -214,6 +218,10 @@ export async function activate(context: vscode.ExtensionContext) {
       context,
       workspaceFolders?.length ? getVsCodeWorkspaceRoot() : undefined
     );
+
+    // Bundled CLI on PATH for integrated terminals and, before any harness
+    // can spawn, for the processes the orchestrator launches.
+    exposeBundledCli(context);
 
     // License state is extension-host-owned so commands and the status bar
     // share one service instance and update immediately after activation.
@@ -1592,6 +1600,7 @@ function registerCommands(
     openPanelCommand,
     openSecretsSettingsCommand,
     showGettingStartedCommand,
+    registerInstallCliCommand(context),
     activateProCommand,
     activateOfflineProCommand,
     deactivateProCommand,

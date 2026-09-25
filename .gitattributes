@@ -1,6 +1,9 @@
 # Normalize line endings to LF for all text files
 * text=auto eol=lf
 
+# cmd.exe batch scripts (the bin/ launcher shims) must keep CRLF
+*.cmd text eol=crlf
+
 # Explicitly binary — never touch line endings
 *.png binary
 *.jpg binary

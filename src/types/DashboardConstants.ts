@@ -4165,6 +4165,7 @@ export const VSCODE_COMMANDS = {
   ACTIVATE_OFFLINE_PRO: "ctrlyoke.activateOfflinePro",
   DEACTIVATE_PRO: "ctrlyoke.deactivatePro",
   MANAGE_LICENSE: "ctrlyoke.manageLicense",
+  INSTALL_CLI: "ctrlyoke.installCli",
   SEARCH_HISTORY: "ctrlyoke.searchHistory",
   GENERATE_COMMIT_MESSAGE: "ctrlyoke.generateCommitMessage",
   CANCEL_COMMIT_MESSAGE_GENERATION: "ctrlyoke.cancelCommitMessageGeneration",

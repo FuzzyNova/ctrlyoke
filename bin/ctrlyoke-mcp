@@ -1,0 +1,4 @@
+#!/bin/sh
+# ctrlyoke launcher: runs this package's bundled mcp-server.js with the node on PATH.
+basedir=$(dirname -- "$0")
+exec node "$basedir/../out/mcp-server.js" "$@"

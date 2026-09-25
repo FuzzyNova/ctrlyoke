@@ -62,6 +62,10 @@ import {
 } from "./cli/CliJsonResultBuilder";
 import { Log } from "./utils/Log";
 import { setRuntimeMode } from "./utils/RuntimeMode";
+import {
+  registerCtrlyokeBinDirectory,
+  resolvePackageRootFromEntry,
+} from "./utils/CtrlyokeCliPath";
 import { ConfigurationUtils } from "./utils/ConfigurationUtils";
 import {
   ExternalRootsTrustStore,
@@ -149,6 +153,8 @@ import {
 
 // Mark this process as the standalone CLI binary before anything else runs.
 setRuntimeMode(RUNNER_IDS.CLI);
+// Harnesses this CLI spawns resolve `ctrlyoke` to this same install.
+registerCtrlyokeBinDirectory(resolvePackageRootFromEntry(__filename));
 
 const cliRunnerHostIdentity: RunnerHostIdentity = {
   runner: RUNNER_IDS.CLI,

@@ -5,6 +5,7 @@ import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { secretRedactionService } from "../../utils/SecretRedactionService";
 import { canonicalizeDriveLetter } from "../../utils/PathCasing";
 import { withWorkingDirectoryEnv } from "../../utils/SpawnEnvironment";
+import { withCtrlyokeBinOnPath } from "../../utils/CtrlyokeCliPath";
 import { logMemoryUsage } from "../../utils/MemoryDiagnostics";
 import { resolveShellKind, shellDisplayName } from "../../utils/ShellCatalog";
 import {
@@ -759,7 +760,7 @@ export class PtyProcessManager {
       command: shell,
       args: [],
       cwd: opts.cwd,
-      env: process.env,
+      env: withCtrlyokeBinOnPath(process.env),
       onData: opts.onData,
       onExit: opts.onExit,
     });
