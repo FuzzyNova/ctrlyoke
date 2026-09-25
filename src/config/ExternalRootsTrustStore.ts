@@ -2,6 +2,12 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { TRUST_DECISIONS } from "../types/DashboardConstants";
+import {
+  loadTrustDecisionFile,
+  saveTrustDecisionFile,
+  type TrustDecisionFile,
+} from "./TrustDecisionFile";
+import { PERSISTED_STORES } from "../utils/PersistedSchemaGuard";
 
 /**
  * A user's one-time decision about a workspace-configured external root.
@@ -11,10 +17,8 @@ import { TRUST_DECISIONS } from "../types/DashboardConstants";
 export type ExternalRootTrustDecision =
   (typeof TRUST_DECISIONS)[keyof typeof TRUST_DECISIONS];
 
-interface ExternalRootsTrustFile {
-  /** `${scopeIdentity}␟${canonicalRoot}` -> decision */
-  decisions: Record<string, ExternalRootTrustDecision>;
-}
+/** Keys are `${scopeIdentity}␟${canonicalRoot}`. */
+type ExternalRootsTrustFile = TrustDecisionFile<ExternalRootTrustDecision>;
 
 const DECISION_KEY_SEPARATOR = "␟";
 
@@ -67,35 +71,15 @@ export class ExternalRootsTrustStore {
   }
 
   private load(): ExternalRootsTrustFile {
-    let content: string;
-    try {
-      content = fs.readFileSync(this.storePath, "utf-8");
-    } catch {
-      return { decisions: {} };
-    }
-    try {
-      const parsed = JSON.parse(content) as Partial<ExternalRootsTrustFile>;
-      return { decisions: parsed.decisions ?? {} };
-    } catch {
-      console.warn(
-        `[ctrlyoke] External roots trust store has invalid JSON and will be treated as empty: ${this.storePath}`
-      );
-      return { decisions: {} };
-    }
+    return loadTrustDecisionFile(this.storePath, "External roots trust store");
   }
 
   private async save(data: ExternalRootsTrustFile): Promise<void> {
-    const dir = path.dirname(this.storePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    const tmpPath = `${this.storePath}.tmp`;
-    await fs.promises.writeFile(
-      tmpPath,
-      JSON.stringify(data, null, 2),
-      "utf-8"
+    await saveTrustDecisionFile(
+      PERSISTED_STORES.EXTERNAL_ROOTS_TRUST,
+      this.storePath,
+      data
     );
-    await fs.promises.rename(tmpPath, this.storePath);
   }
 
   /** Get the recorded decision for a single root, or `undefined` if never decided. */

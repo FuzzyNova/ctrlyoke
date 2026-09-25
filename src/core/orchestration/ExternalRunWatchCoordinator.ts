@@ -31,6 +31,10 @@ import {
   type StepWithRuntimeStatus,
 } from "../../utils/StepStatusDerivation";
 import { Log } from "../../utils/Log";
+import {
+  assertWritableSchema,
+  PERSISTED_STORES,
+} from "../../utils/PersistedSchemaGuard";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import { OutputHistoryManager } from "./OutputHistoryManager";
@@ -884,6 +888,12 @@ export class ExternalRunWatchCoordinator {
             workingFile._runtime.executionState = EXECUTION_STATES.STOPPED;
           }
           try {
+            // A newer ctrlyoke's run is displayed as stopped but never rewritten.
+            assertWritableSchema(
+              PERSISTED_STORES.RUN_FILE,
+              workingFile._runtime,
+              workingFilePath
+            );
             const tmpPath = workingFilePath + ".tmp";
             await fs.promises.writeFile(
               tmpPath,

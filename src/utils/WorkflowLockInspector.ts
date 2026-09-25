@@ -12,6 +12,11 @@ import {
 } from "../types/DashboardConstants";
 import * as WorkflowPaths from "./WorkflowPaths";
 import {
+  CURRENT_SCHEMA_VERSIONS,
+  hasNewerSchema,
+  PERSISTED_STORES,
+} from "./PersistedSchemaGuard";
+import {
   isOwnerStale,
   isProcessAlive,
   type ProcessLivenessCheck,
@@ -105,6 +110,16 @@ export function inspectWorkflowLockOwnership(
   observer: RunnerHostIdentity | undefined,
   options: WorkflowLockInspectionOptions = {}
 ): WorkflowLockInspection {
+  // A lock written by a newer ctrlyoke is held by definition: this build cannot
+  // judge its liveness fields, and misreading it as absent or stale is how an
+  // older host would stop a live run or start a second runner on it.
+  if (hasNewerSchema(PERSISTED_STORES.RUNNER_LOCK, rawLock)) {
+    return {
+      liveness: WORKFLOW_LOCK_LIVENESS.ACTIVE,
+      locality: WORKFLOW_LOCK_LOCALITIES.INDETERMINATE,
+      lock: rawLock as WorkflowRunnerLock,
+    };
+  }
   if (!isWorkflowRunnerLock(rawLock)) {
     return { liveness: WORKFLOW_LOCK_LIVENESS.ABSENT };
   }
@@ -210,7 +225,9 @@ function isWorkflowRunnerLock(value: unknown): value is WorkflowRunnerLock {
     Number.isFinite(candidate.startedAt) &&
     typeof candidate.lastHeartbeat === "number" &&
     Number.isFinite(candidate.lastHeartbeat) &&
-    (candidate.schemaVersion === undefined || candidate.schemaVersion === 2) &&
+    (candidate.schemaVersion === undefined ||
+      candidate.schemaVersion ===
+        CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.RUNNER_LOCK]) &&
     (candidate.hostInstanceId === undefined ||
       typeof candidate.hostInstanceId === "string") &&
     (candidate.executionInstanceId === undefined ||

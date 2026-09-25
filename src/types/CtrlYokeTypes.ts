@@ -413,6 +413,8 @@ export interface CoordinationParticipant {
 }
 
 export interface CoordinationEntry {
+  /** Board format version (PersistedSchemaGuard); absent on entries written before versioning. */
+  schemaVersion?: number;
   seq: number;
   at: string;
   kind: "note" | "claim" | "release" | "join" | "leave";
@@ -651,6 +653,8 @@ export interface WorktreeCompletionResult {
  * (those are tracked at workflow root and per-prompt _runtime)
  */
 export interface WorkingFileRuntime {
+  /** Run-file format version (`PersistedSchemaGuard`); stamped on every write. */
+  schemaVersion?: number;
   currentIndex: number;
   executionState: ExecutionState;
   /** Latest run-scoped token aggregate projected from timeline history. */

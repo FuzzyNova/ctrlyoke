@@ -32,6 +32,7 @@ import {
   type ExecutionPhase,
 } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
+import { isNewerRunFile } from "../../utils/PersistedSchemaGuard";
 import { readWorkflowLockInspection } from "../../utils/WorkflowLockInspector";
 import { isUnstartedRunFile } from "../../utils/StepStatusDerivation";
 import { OutputHistoryTimelineAdapter } from "./OutputHistoryTimelineAdapter";
@@ -1765,8 +1766,9 @@ export class OutputHistoryManager {
         _runtime?: Record<string, unknown>;
       };
       if (
+        isNewerRunFile(workingFile) ||
         JSON.stringify(workingFile._runtime?.tokenTotals) ===
-        JSON.stringify(tokenTotals)
+          JSON.stringify(tokenTotals)
       ) {
         return;
       }

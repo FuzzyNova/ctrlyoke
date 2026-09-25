@@ -21,6 +21,11 @@ import {
   readWorkflowLockInspection,
 } from "./WorkflowLockInspector";
 import { withFileLock } from "./FileLockUtils";
+import {
+  hasNewerSchema,
+  isNewerRunFile,
+  PERSISTED_STORES,
+} from "./PersistedSchemaGuard";
 import { generateOwnerToken, isOwnerStale } from "./LockSafetyPrimitives";
 
 export {
@@ -107,8 +112,12 @@ export class WorkflowLockManager {
           }
 
           const existing = await readWorkflowLock(workspaceRoot, workflowKey);
+          // Never reclaim a newer ctrlyoke's lock: its liveness fields are
+          // not ours to interpret, so it is held until that host releases it.
           const stale =
-            !existing || isOwnerStale(existing.pid, existing.lastHeartbeat);
+            !existing ||
+            (!hasNewerSchema(PERSISTED_STORES.RUNNER_LOCK, existing) &&
+              isOwnerStale(existing.pid, existing.lastHeartbeat));
 
           if (stale) {
             await fs.promises.unlink(lockPath).catch((unlinkError) => {
@@ -276,6 +285,7 @@ export class WorkflowLockManager {
 
       const executionState = runningFile._runtime?.executionState;
       if (
+        isNewerRunFile(runningFile) ||
         !executionState ||
         !ACTIVE_EXECUTION_STATES.has(executionState as ExecutionState)
       ) {

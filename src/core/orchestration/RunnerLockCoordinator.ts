@@ -11,6 +11,10 @@ import {
 import { HEARTBEAT_INTERVAL_MS } from "../../utils/LockSafetyPrimitives";
 import type { ExecutionLeaseHandle } from "./ExecutionRootLeaseManager";
 import { Log } from "../../utils/Log";
+import {
+  CURRENT_SCHEMA_VERSIONS,
+  PERSISTED_STORES,
+} from "../../utils/PersistedSchemaGuard";
 
 export interface RunnerLockCoordinatorPort {
   readonly id: string;
@@ -51,7 +55,7 @@ export class RunnerLockCoordinator {
       lockWorkspaceRoot,
       state.workflowKey,
       {
-        schemaVersion: 2,
+        schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.RUNNER_LOCK],
         workflowKey: state.workflowKey,
         runRef: state.runRef,
         runner: this.port.runnerHostIdentity.runner,

@@ -218,6 +218,16 @@ global installs don't, so in practice this is "the npm CLI is older than the ext
    This turns the two **High** rows into a clear error instead of silent corruption. Pre-1.0
    the policy stays "no migrations"; only the refuse-to-write guard is required.
 
+   **Implemented 2026-09-25** in `src/utils/PersistedSchemaGuard.ts`, using the codebase's
+   existing field name `schemaVersion` rather than `formatVersion`. `runner.json` (already at
+   `2`) and `workflow.json` (already at `1`, but never checked) kept their fields; run files carry
+   theirs as `_runtime.schemaVersion`, because `_runtime` never reaches an exported definition.
+   Trust stores share a new `TrustDecisionFile` helper, and coordination-board entries are
+   stamped one by one. Two known gaps: a mid-run refusal inside the executor may surface as a
+   workflow failure (exit `1`) rather than exit `2`, since only direct step/CLI commands reach
+   the exit-`2` handler; and the usage-history stores still quarantine a mismatched schema, which
+   would discard a newer file (Medium row, not in rule 3's list).
+
 4. **Version the search index directory** (`.search-index/v<INDEX_SCHEMA_VERSION>/`). Each
    version then keeps its own index instead of rebuilding the other's. Prune directories for
    versions not seen in `installations.json` for 30 days.

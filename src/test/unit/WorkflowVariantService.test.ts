@@ -18,6 +18,10 @@ import { WorkingFileManager } from "../../core/WorkingFileManager";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import { WorkflowVariantService } from "../../core/orchestration/WorkflowVariantService";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import {
+  CURRENT_SCHEMA_VERSIONS,
+  PERSISTED_STORES,
+} from "../../utils/PersistedSchemaGuard";
 
 suite("WorkflowVariantService", () => {
   const workspaces: string[] = [];
@@ -139,6 +143,7 @@ suite("WorkflowVariantService", () => {
     assert.strictEqual(copied.model, "variant-model");
     assert.strictEqual(copied.isFavorite, false);
     assert.deepStrictEqual(copied._runtime, {
+      schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.RUN_FILE],
       currentIndex: 0,
       executionState: EXECUTION_STATES.IDLE,
     });

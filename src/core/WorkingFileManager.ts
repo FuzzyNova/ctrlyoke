@@ -52,6 +52,13 @@ import { RunContinuationService } from "./orchestration/RunContinuationService";
 import { TimelineRecorder } from "./orchestration/TimelineRecorder";
 import { ensureStepIds, resetStepRuntimeForRewind } from "./StepIdentity";
 import {
+  assertWritableSchema,
+  isNewerRunFile,
+  NewerSchemaError,
+  PERSISTED_STORES,
+  prepareRunFileForWrite,
+} from "../utils/PersistedSchemaGuard";
+import {
   deleteParallelGroupStep,
   insertParallelGroupSteps,
   normalizeParallelGroupTopology,
@@ -377,17 +384,15 @@ async function writeWorkingFileAtomicTo(
   workingFile: WorkingFile,
   options: WorkingFileWriteOptions = {}
 ): Promise<void> {
+  // Outside the try below so a NewerSchemaError keeps its type for callers.
+  const stamped = prepareRunFileForWrite(workingFile, workingFilePath);
   const writeAction = async () => {
     try {
-      await logWorkingFileWriteDiagnostics(
-        workingFilePath,
-        workingFile,
-        options
-      );
+      await logWorkingFileWriteDiagnostics(workingFilePath, stamped, options);
       await writeFileAtomic(
         workingFilePath,
         JSON.stringify(
-          stripTimelineDuplicatedWorkingFileOutput(workingFile),
+          stripTimelineDuplicatedWorkingFileOutput(stamped),
           null,
           2
         ),
@@ -704,6 +709,17 @@ export class WorkingFileManager {
     stagingWorkingFilePath: string;
     allocation: import("./orchestration/WorkflowLineageRepository").AllocatedRun;
   }> {
+    // Read before allocating: a head a newer ctrlyoke wrote must not be
+    // re-run by this build (its fresh `_runtime` would drop the version the
+    // run-file writer checks), and refusing first leaves no staging run behind.
+    const head = await this.readCurrentDefinitionHead();
+    if (head && isNewerRunFile(head)) {
+      throw new NewerSchemaError(
+        PERSISTED_STORES.RUN_FILE,
+        head._runtime?.schemaVersion as number,
+        this.queueAccess.getWorkingFilePath()
+      );
+    }
     const allocation = await this.lineageRepository.allocateRun(
       workspaceFolderPath,
       workflowKey
@@ -719,7 +735,6 @@ export class WorkingFileManager {
     // dropped all of it, so a workflow's first execution ran with global
     // defaults and every later view of that run showed no saved settings.
     // Mirrors `seedNewRun`, which already carries its source forward.
-    const head = await this.readCurrentDefinitionHead();
     const finalStepRuntime = this.queueAccess.getFinalStepRuntime();
     const workingFile: WorkingFile = {
       ...head,
@@ -839,6 +854,11 @@ export class WorkingFileManager {
       fromRunRef
     );
     const source = await readWorkingFileFromDisk(sourceFilePath);
+    assertWritableSchema(
+      PERSISTED_STORES.RUN_FILE,
+      source._runtime,
+      sourceFilePath
+    );
     const sourceRevision = source.definitionRevision ?? 1;
     if (expected?.definitionRevision !== undefined) {
       assertDefinitionRevision(expected.definitionRevision, sourceRevision);

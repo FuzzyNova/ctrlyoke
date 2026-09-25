@@ -1,16 +1,19 @@
-import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { ExternalRootsTrustStore } from "./ExternalRootsTrustStore";
 import { TRUST_DECISIONS } from "../types/DashboardConstants";
+import {
+  loadTrustDecisionFile,
+  saveTrustDecisionFile,
+  type TrustDecisionFile,
+} from "./TrustDecisionFile";
+import { PERSISTED_STORES } from "../utils/PersistedSchemaGuard";
 
 export type SecretGrantTrustDecision =
   (typeof TRUST_DECISIONS)[keyof typeof TRUST_DECISIONS];
 
-interface SecretGrantsTrustFile {
-  /** `${workspaceIdentity}␟${secretName}` -> decision */
-  decisions: Record<string, SecretGrantTrustDecision>;
-}
+/** Keys are `${workspaceIdentity}␟${secretName}`. */
+type SecretGrantsTrustFile = TrustDecisionFile<SecretGrantTrustDecision>;
 
 const DECISION_KEY_SEPARATOR = "␟";
 
@@ -31,35 +34,15 @@ export class SecretGrantsTrustStore {
   }
 
   private load(): SecretGrantsTrustFile {
-    let content: string;
-    try {
-      content = fs.readFileSync(this.storePath, "utf-8");
-    } catch {
-      return { decisions: {} };
-    }
-    try {
-      const parsed = JSON.parse(content) as Partial<SecretGrantsTrustFile>;
-      return { decisions: parsed.decisions ?? {} };
-    } catch {
-      console.warn(
-        `[ctrlyoke] Secret grants trust store has invalid JSON and will be treated as empty: ${this.storePath}`
-      );
-      return { decisions: {} };
-    }
+    return loadTrustDecisionFile(this.storePath, "Secret grants trust store");
   }
 
   private async save(data: SecretGrantsTrustFile): Promise<void> {
-    const dir = path.dirname(this.storePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    const tmpPath = `${this.storePath}.tmp`;
-    await fs.promises.writeFile(
-      tmpPath,
-      JSON.stringify(data, null, 2),
-      "utf-8"
+    await saveTrustDecisionFile(
+      PERSISTED_STORES.SECRET_GRANTS_TRUST,
+      this.storePath,
+      data
     );
-    await fs.promises.rename(tmpPath, this.storePath);
   }
 
   /** Get the recorded decision for a single grant, or undefined if pending. */

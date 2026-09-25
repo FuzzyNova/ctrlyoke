@@ -10,6 +10,12 @@ import { COORDINATION_ENTRY_KINDS } from "../../types/DashboardConstants";
 import { withFileLock } from "../../utils/FileLockUtils";
 import { splitLines } from "../../utils/TextLines";
 import {
+  assertWritableSchema,
+  CURRENT_SCHEMA_VERSIONS,
+  hasNewerSchema,
+  PERSISTED_STORES,
+} from "../../utils/PersistedSchemaGuard";
+import {
   resolveExecutionRootScope,
   scopeStorageRoot,
   verifyScopeRecord,
@@ -46,7 +52,10 @@ export interface CoordinationBoardScope {
   scopeRecordPath: string;
 }
 
-export type CoordinationEntryInput = Omit<CoordinationEntry, "seq" | "at"> & {
+export type CoordinationEntryInput = Omit<
+  CoordinationEntry,
+  "seq" | "at" | "schemaVersion"
+> & {
   at?: string;
 };
 
@@ -437,6 +446,18 @@ export class ExecutionRootCoordinationStore {
       const transaction: CoordinationBoardTransaction = {
         entries,
         append: async (entry) => {
+          // Compaction rewrites the whole board, so one entry a newer
+          // ctrlyoke wrote makes the board read-only for this build.
+          const newer = entries.find((existing) =>
+            hasNewerSchema(PERSISTED_STORES.COORDINATION_BOARD, existing)
+          );
+          if (newer) {
+            assertWritableSchema(
+              PERSISTED_STORES.COORDINATION_BOARD,
+              newer,
+              scope.boardPath
+            );
+          }
           if (
             entry.kind === COORDINATION_ENTRY_KINDS.NOTE &&
             (entry.text?.length ?? 0) >
@@ -449,6 +470,8 @@ export class ExecutionRootCoordinationStore {
           const settings = retentionOptions(this.options.retention);
           const persisted: CoordinationEntry = {
             ...entry,
+            schemaVersion:
+              CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.COORDINATION_BOARD],
             seq: ++lastSequence,
             at: entry.at ?? new Date().toISOString(),
           };

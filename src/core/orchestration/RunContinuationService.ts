@@ -59,6 +59,7 @@ import {
   findStepIndexById,
 } from "../StepIdentity";
 import { hasStarted } from "../../utils/StepStatusDerivation";
+import { prepareRunFileForWrite } from "../../utils/PersistedSchemaGuard";
 
 const RUN_CONTINUATION_ACTIONS = {
   APPEND: "append",
@@ -1329,10 +1330,11 @@ async function writeWorkingFileAtomic(
   filePath: string,
   workingFile: WorkingFile
 ): Promise<void> {
+  const stamped = prepareRunFileForWrite(workingFile, filePath);
   try {
     await writeFileAtomic(
       filePath,
-      JSON.stringify(workingFile, null, 2),
+      JSON.stringify(stamped, null, 2),
       runStateWriteOptions(filePath, "RunContinuationService")
     );
   } catch (error) {

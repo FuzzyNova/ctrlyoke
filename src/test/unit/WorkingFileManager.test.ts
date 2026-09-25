@@ -25,6 +25,10 @@ import {
   storeRunSummary,
 } from "../../core/orchestration/RunSummaryCache";
 import type { RunSummaryRecord } from "../../core/orchestration/OutputHistoryManager";
+import {
+  CURRENT_SCHEMA_VERSIONS,
+  PERSISTED_STORES,
+} from "../../utils/PersistedSchemaGuard";
 
 // ─── Minimal mock for IWorkingFileQueueAccess ────────────────────────────────
 
@@ -489,6 +493,7 @@ suite("WorkingFileManager", () => {
         await fs.readFile(workingFilePath, "utf-8")
       ) as WorkingFile;
       assert.deepStrictEqual(parsed._runtime, {
+        schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.RUN_FILE],
         currentIndex: 0,
         executionState: EXECUTION_STATES.PAUSED,
         startTime: 1_000,
@@ -558,6 +563,7 @@ suite("WorkingFileManager", () => {
         await fs.readFile(workingFilePath, "utf-8")
       ) as WorkingFile;
       assert.deepStrictEqual(persisted._runtime, {
+        schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.RUN_FILE],
         currentIndex: 4,
         executionState: EXECUTION_STATES.RUNNING,
         startTime: 123,

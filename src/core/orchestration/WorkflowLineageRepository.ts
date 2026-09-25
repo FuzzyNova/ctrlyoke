@@ -18,8 +18,14 @@ import {
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import { WORKTREE_EDIT_KINDS } from "../../types/DashboardConstants";
 import { assertDescriptorRevision } from "./RevisionPrecondition";
+import {
+  assertWritableSchema,
+  CURRENT_SCHEMA_VERSIONS,
+  PERSISTED_STORES,
+} from "../../utils/PersistedSchemaGuard";
 
-const DESCRIPTOR_SCHEMA_VERSION = 1;
+const DESCRIPTOR_SCHEMA_VERSION =
+  CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.LINEAGE_DESCRIPTOR];
 /** How long a `.creating-*` staging dir can go without a new write before `pruneStaleStagingDirs` removes it. */
 const STALE_STAGING_DIR_MS = 5 * 60 * 1000;
 
@@ -660,13 +666,25 @@ export class WorkflowLineageRepository {
       workspaceRoot,
       workflowKey
     );
+    // Every update spreads the descriptor it read under the lock, so a newer
+    // host's schemaVersion reaches here intact and is refused rather than
+    // rewritten by a build that may not know its fields.
+    assertWritableSchema(
+      PERSISTED_STORES.LINEAGE_DESCRIPTOR,
+      descriptor,
+      descriptorPath
+    );
     await fs.promises.mkdir(path.dirname(descriptorPath), {
       recursive: true,
     });
     try {
       await writeFileAtomic(
         descriptorPath,
-        JSON.stringify(descriptor, null, 2)
+        JSON.stringify(
+          { ...descriptor, schemaVersion: DESCRIPTOR_SCHEMA_VERSION },
+          null,
+          2
+        )
       );
     } catch (error) {
       // console.warn (not Log) — this module is imported by mcp-server.ts, which has no vscode logging infrastructure.

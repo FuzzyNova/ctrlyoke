@@ -257,8 +257,7 @@ export class RunOutputResolver {
   async *streamFromEvents(
     manifest: WorkflowRunManifest,
     events:
-      | Iterable<WorkflowTimelineEvent>
-      | AsyncIterable<WorkflowTimelineEvent>
+      Iterable<WorkflowTimelineEvent> | AsyncIterable<WorkflowTimelineEvent>
   ): AsyncGenerator<RunOutputResolverEvent, void, undefined> {
     let activeDefinition: ResolvedAttemptDefinition | undefined =
       manifest.initialDefinition
