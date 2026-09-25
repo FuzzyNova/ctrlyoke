@@ -68,10 +68,10 @@ UI still in flux. Everything else is capture-ready today.
   `C:\dev\ctrlyoke` or a personal username, in any shot destined for public docs/marketing.
 - **File format:** PNG for stills, GIF (or MP4 transcoded to GIF) for motion, target <2MB per GIF for
   page load — trim/loop tightly rather than capturing a whole multi-minute run.
-- **Asset location:** create `landing/public/screenshots/` and `docs/public/screenshots/` (new
-  directories — neither exists yet; today `landing/public/` and `docs/public/` hold only the harness
-  icons and the ctrlyoke icon). Landing and docs can share one canonical set and each reference it, or
-  duplicate — decide when executing based on Astro/VitePress asset pipeline constraints.
+- **Asset location:** `images/screenshots/` (repo root) is the single canonical copy — see the
+  "Screenshot assets" entry in `.github/copilot-instructions.md` for how `landing/` imports from it
+  directly and why `docs/` needs a generated copy instead. The VS Code walkthrough (#13) also
+  references `images/screenshots/` directly, since it ships inside the extension package.
 
 ### Target dimensions
 
@@ -113,6 +113,7 @@ to whatever they are.
 | E. In-body docs GIF            | #9                | none forced                                       | ~688–900px wide, captured near 1x      | keep under the existing 2MB budget                                                                                                                      |
 | F. Styled code snippet         | #8                | none — content-driven height                      | 896px wide                             | matches the existing hero `<pre>` block treatment                                                                                                       |
 | H. Raw mobile/PWA screenshot   | #7, #10           | none — natural mobile portrait, crop to content   | 750–860px wide                         | 2x of a real iPhone's ~375–430px CSS width; capture on an actual device, not an emulator, for anything touching the PWA-install/cert flow               |
+| I. Walkthrough step media      | #13               | ~16:10 to 4:3 landscape                           | 1200px wide, stills 2x / GIF near 1x   | fills the right-hand media pane of VS Code's walkthrough page, which scales it to the pane width; ships inside the VSIX, so bytes count double          |
 
 One practical gotcha for A/B/C: on a non-retina Windows display at 100%/125% scaling, an ordinary
 screenshot captures logical pixels 1:1 — soft once placed at native size in a 2x-built container.
@@ -290,6 +291,58 @@ Each item: what to capture, what prep it needs, where it's used.
   MCP servers, hooks) rather than landing, though the Harness tab (harness/model picker) is a
   reasonable landing candidate paired with #1.
 
+### 13. VS Code "Getting Started with ctrlyoke" walkthrough — one media asset per step
+
+The walkthrough (`package.json` → `contributes.walkthroughs`, id `ctrlyoke.gettingStarted`) currently
+uses `markdown` media for all five steps, which is text plus a command link, so the large right-hand
+media pane is mostly empty. Each step needs one picture that matches what its copy
+(`walkthroughs/getting-started/*.md`) describes.
+
+**Where the logo shows, and why it's missing from the walkthrough page.** The walkthrough `icon`
+(`images/ctrlyoke-icon-color.png`) _is_ wired up correctly, but VS Code only renders it on the
+**Welcome page's walkthrough list card** (`gettingStarted.ts` `iconWidgetFor(category)` inside the
+`button.getting-started-category` list entry). The walkthrough _detail_ page, which is the page users
+land on from "Open Walkthrough...", renders the header as a bare `h2.category-title` with no icon slot
+at all. So a missing logo there is VS Code behavior, not a ctrlyoke bug, and no manifest property
+changes it. (The title goes through `renderLabelWithIcons`, so a `$(codicon)` in `title` would render,
+but a custom logo would need a `contributes.icons` icon-font glyph, and it would be monochrome.
+Untested; probably not worth it.) The practical way to get branding onto the detail page is the
+step 1 media below: a shot of the panel where the ctrlyoke logo is visible.
+
+**Media type decision (for when the assets are slotted in).** Switch each step from `markdown` to
+`image` media with `light`/`dark` variants (VS Code picks the variant from the active theme; `hc`/
+`hcLight` fall back sensibly if omitted), and move each step's command link into the step
+`description`. A link on its own line there renders as a button, so the call to action stays. Each
+`image` needs `altText`. Markdown media _can_ embed an image, but it has no per-theme variant, so a
+dark screenshot would sit inside a light-themed pane.
+
+**Capture two themes per still:** `dark 2026 (Default Dark)` (the primary set's theme) and
+`Light 2026 (Default Light)`. Same window, same demo project, same state. The GIF (13d) may ship
+dark-only if the byte cost of two variants is too high.
+
+**Packaging:** `.vscodeignore` is an allowlist and does not include `images/screenshots/**`. Add an
+explicit `!images/screenshots/walkthrough-*` line or the published VSIX shows broken images even
+though the dev host works. Keep the walkthrough's total media well under ~3MB. It's downloaded with
+every install, unlike landing/docs assets.
+
+**Naming:** follow the existing `<name>-<w>x<h>.<ext>` convention, e.g.
+`walkthrough-open-panel-dark-2400x1500.png` / `walkthrough-open-panel-light-2400x1500.png`.
+
+| Step (`id`)          | Shot                                                                                                                                                                                                                                                                                                                                                                                                                                   | Prep                                                                                                                                                                                               |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 13a `openPanel`      | The ctrlyoke panel open in VS Code with a workflow loaded: step list, output pane with real output, and the properties drawer open. This must match the step copy ("steps on the left, live output and the prompt editor in the middle, harness/context/validation settings on the right"), so capture the wide layout, not the narrow sidebar. Crop to include the activity-bar ctrlyoke icon so the logo appears on the detail page. | The #6 demo workflow after one completed step, so output isn't empty.                                                                                                                              |
+| 13b `verifyHarness`  | Two-up still: left half, the dashboard's "no supported CLI detected" state showing per-harness install commands; right half, the Harness tab / footer quick picker with detected harnesses listed.                                                                                                                                                                                                                                     | Left half: a machine or dev-host profile where no harness CLI is on `PATH` (`npm run dev:host:start:onboarding` + a stripped `PATH`). Right half: normal machine with several harnesses installed. |
+| 13c `createWorkflow` | The New Workflow from Template flow: template picker with the built-in templates listed, and (second frame or inset) the variable form filled in with realistic values.                                                                                                                                                                                                                                                                | Onboarding-mode dev host (clean workspace) so the template list isn't cluttered with personal workflows.                                                                                           |
+| 13d `runWorkflow`    | Short looping GIF (≤ ~8s, target < 1MB): Run clicked → output streams → step completes, end condition passes, and the queue advances to step 2.                                                                                                                                                                                                                                                                                        | A trimmed-down 2-step variant of the #6 demo workflow with a fast model so the whole loop fits in a few seconds. This is a _separate_ capture from #6 (walkthrough pane size, VSIX byte budget).   |
+| 13e `getHelp`        | The Agent picker open with `ctrlyoke-tech-support` highlighted, plus the start of an answer to a real question (e.g. "why did my end condition fail?") in the output pane.                                                                                                                                                                                                                                                             | Ask the question once beforehand so the answer is real; crop to picker + first few lines of the answer.                                                                                            |
+
+**Not a screenshot, but in the same pass:** `verifyHarness` and `getHelp` have no
+`completionEvents`, so they never get checked off. Add `onLink:https://ctrlyoke.dev/docs` (or
+`stepSelected`) to `getHelp`, and an `onContext:` key that the extension sets when at least one
+harness is detected to `verifyHarness`. Also consider `featuredFor: ["**/*.ctrlyoke.{yaml,yml,json}",
+"**/*.prompt.md"]` so the walkthrough is promoted on the Welcome page in workspaces that already use
+ctrlyoke.
+
 ## Slotting summary
 
 | Landing section (existing or new)                        | Asset(s)                                                      |
@@ -316,6 +369,10 @@ Each item: what to capture, what prep it needs, where it's used.
 | `docs/guide/concepts.md` or new editor page                       | #10      |
 | New/expanded workflow-properties + permissions + MCP + hooks docs | #12      |
 
+| VS Code surface                                  | Asset(s)  |
+| ------------------------------------------------ | --------- |
+| `ctrlyoke.gettingStarted` walkthrough, steps 1–5 | #13a–#13e |
+
 ## Execution order (suggested)
 
 1. Pick and record the primary capture theme + demo project setup (one-time).
@@ -324,9 +381,10 @@ Each item: what to capture, what prep it needs, where it's used.
 3. Author the demo multi-step, multi-harness workflow used by #6 (and reused as the "same workflow"
    across #1/#2's per-layer captures, so those composites show one coherent example, not six unrelated
    screenshots).
-4. Capture stills: #4, #5, #10, #11, #12, then the 6+ raw layers for #1 and the 4–5 raw layers for #2.
+4. Capture stills: #4, #5, #10, #11, #12, #13a–c and #13e (dark + light each), then the 6+ raw layers
+   for #1 and the 4–5 raw layers for #2.
 5. Composite #1 and #2.
-6. Capture GIFs: #6, #9, then #3/#7 (mobile, likely last since it needs the hosted server + a real or
+6. Capture GIFs: #6, #13d, #9, then #3/#7 (mobile, likely last since it needs the hosted server + a real or
    emulated device).
 7. Produce the styled YAML snippet images (#8) — no app capture needed, can happen anytime.
 8. Only then: touch `landing/` and `docs/` content to slot everything in (separate follow-up, not part
