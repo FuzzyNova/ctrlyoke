@@ -603,7 +603,8 @@ Confirm:
 
 **Decided September 24, 2026** — see [`CLI_DISTRIBUTION_PLAN.md`](../backlog/CLI_DISTRIBUTION_PLAN.md). The CLI ships through two channels built from one artifact at one version: bundled in the VSIX and put on `PATH` in VS Code terminals and ctrlyoke-spawned harness processes (no system PATH edits), **and** published to npm as a dedicated `ctrlyoke` package (not the root `package.json`) by `release.yml` from the same tag.
 
-- [ ] Reserve the `ctrlyoke` npm name under a Fuzzy Nova–owned account with 2FA — **before the Phase 14 visibility flip** (unclaimed as of September 24, 2026).
+- [x] Reserve the `ctrlyoke` npm name under a Fuzzy Nova–owned account with 2FA — done September 25, 2026: npm user `fuzzynova` (`admin@fuzzno.com`, passkey 2FA) published a `0.0.1` placeholder that prints "coming soon" and exits `1`. The account uses a passkey, not TOTP, so a manual `npm publish` needs `--auth-type=web` from an interactive terminal.
+- [ ] On npmjs.com → `ctrlyoke` → Settings: add the trusted publisher (GitHub Actions, `FuzzyNova`/`ctrlyoke`, workflow `release.yml`), then set "Require two-factor authentication and disallow tokens".
 - [x] VSIX bundling + terminal PATH (plan §3.1) — done September 25, 2026. `ctrlyoke.installCli` stays hidden and its walkthrough step unwritten until the npm package is published (see the plan).
 - [x] Coexistence guard, rule 3 — done September 25, 2026: `schemaVersion` on shared run/lock/trust/board state with refuse-to-write on a newer format, and a newer `runner.json` treated as held.
 - [x] Coexistence guard, rule 2 — done September 25, 2026: the `~/.ctrlyoke/installations.json` host registry with once-per-version-pair mismatch warnings (CLI on stderr, extension as a notification). **Must land before or with the first npm publish** — that is the first moment two ctrlyoke versions can touch the same state.
