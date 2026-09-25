@@ -1,6 +1,8 @@
 # CLI Distribution Plan
 
-**Status:** Decided 2026-09-24. Implemented 2026-09-25: §3.1 and §3.4 rules 2–3 (see the notes under each). Not started: §3.2 (npm package), §3.4 rules 4–6.
+**Status:** Decided 2026-09-24. Done 2026-09-25: §3.1, §3.4 rules 2–3, and the npm account and
+name setup (§3.2 item 5). Not started: the §3.2 package build, packaging test and `release.yml`
+publish, and §3.4 rules 4–6. See §6 for progress and next steps.
 
 **Decision:** ship the CLI through both channels, built from one artifact with one version
 number:
@@ -51,9 +53,9 @@ check "`out/cli.js` **not** included". Both were updated to point here. Resolves
   paths back and forth. Inside VS Code, the bundled copy removes this entirely. Outside, keeping
   the versions identical and adding a skew warning (§3.4) contains it.
 
-- **The npm name is free.** `npm view ctrlyoke` returned 404 on 2026-09-24, and so did
-  `@fuzzynova/ctrlyoke`. Once the docs say `npm install -g ctrlyoke`, someone else owning that
-  name is a supply-chain risk. **Claim it before the repo goes public.**
+- **The npm name was free, and is now claimed.** `npm view ctrlyoke` returned 404 on
+  2026-09-24. Once the docs say `npm install -g ctrlyoke`, someone else owning that name would be
+  a supply-chain risk, so it was claimed on 2026-09-25 (§3.2 item 5).
 
 ## 2. Why "both" and not one channel
 
@@ -133,13 +135,38 @@ only harness processes. Measured VSIX size: 16.1 MB (was 14.1 MB).
    `npm pack --dry-run --json`, and checks the file list. Then install the tarball into a temp
    prefix and run `ctrlyoke --version` and `ctrlyoke validate` against a fixture workflow.
 4. `release.yml`: after the Marketplace publish, run `node scripts/build-npm-package.mjs` and
-   `npm publish dist/npm --provenance --access public`. Prefer npm **trusted publishing**
-   (GitHub OIDC; `permissions: id-token: write`) over a long-lived `NPM_TOKEN`. If a token is
-   unavoidable, make it a granular automation token scoped to this one package.
-   `verify-release-tag.mjs` already guarantees tag == root version, and so == npm version.
-5. Account setup (business side): create an npm org or user owned by Fuzzy Nova LLC, enable
-   2FA, and reserve `ctrlyoke`. A `0.0.0` placeholder that prints "coming soon" is fine if the
-   real publish slips. Mirror MFA status into the checklist's account-hardening list.
+   **stage** the package through npm **trusted publishing** (GitHub OIDC;
+   `permissions: id-token: write`). There is no `NPM_TOKEN`, and there must not be one: the
+   package disallows token publishing (item 5). `verify-release-tag.mjs` already guarantees
+   tag == root version, and so == npm version.
+   - **Staged, not direct.** The trusted publisher was created with "Allow npm publish"
+     **unchecked**, so the workflow can only run `npm stage publish`. A staged version goes live
+     only after a maintainer approves it on npmjs.com with their passkey. That approval is a
+     manual step in every release (add it to the release checklist), and the npm version trails
+     the Marketplace until it is done; the §3.4 rule 2 warning covers that window. **Check the
+     exact `npm stage publish` flags, the minimum npm CLI version (trusted publishing needs a
+     recent npm, so the job may need `npm install -g npm@latest`), and how approval works against
+     npm's current docs before writing the step.** This feature is newer than what the plan's
+     author could verify.
+   - **Provenance:** npm cannot generate provenance attestations from a private repository.
+     Until the Phase 14 visibility flip, the step must not force `--provenance`. Re-check after
+     the flip that provenance appears on the package page.
+5. Account setup. **Done 2026-09-25:**
+   - npm user `fuzzynova` (`admin@fuzzno.com`, the Fuzzy Nova Workspace admin address) with
+     passkey 2FA. npm has no business account type; a normal user account is the owner.
+   - `ctrlyoke@0.0.1` published as a placeholder. It prints "coming soon" and exits `1`. The real
+     package's first version (≥ 0.1.x) supersedes it on `latest`.
+   - The `ctrlyoke` npm org reserves the `@ctrlyoke/...` scope against look-alike packages. The
+     package itself stays owned by the user and is not moved into the org. `@fuzzynova` is
+     already the user account's own scope.
+   - Trusted publisher on the package: GitHub Actions, `FuzzyNova`/`ctrlyoke`, workflow
+     `release.yml`, no environment, label "GitHub Actions – release.yml", **Allow npm publish
+     unchecked** (staged only).
+   - Publishing access: "Require two-factor authentication and disallow tokens".
+   - Passkey-only accounts have no TOTP code, so a manual publish needs
+     `npm publish --auth-type=web` run from an **interactive** terminal. It prints a link to
+     approve with the passkey. A non-interactive shell (an agent's tool call) fails with `EOTP`
+     instead.
 
 ### 3.3 Licensing and telemetry
 
@@ -213,6 +240,7 @@ global installs don't, so in practice this is "the npm CLI is older than the ext
    Scripts compare `ctrlyoke --version` output to a version string (the packaging test does too),
    so adding the package root there would break them; a separate `ctrlyoke doctor`/`about` is a
    better home for it if support needs it.
+
 3. **Format versions on shared persisted state, and read-only below a newer format.** Add an
    integer `formatVersion` to each of these:
    - run working files
@@ -292,18 +320,35 @@ global installs don't, so in practice this is "the npm CLI is older than the ext
 - **Homebrew / winget / Scoop.** Worth adding after launch as thin wrappers over the npm
   tarball. Not needed for v0.1.
 
-## 6. Order
+## 6. Order and progress
 
-1. Reserve `ctrlyoke` on npm under Fuzzy Nova, with 2FA. Do this **before the Phase 14 repo
-   visibility flip**.
-2. §3.1 bundling and terminal PATH. Small, and it lets the docs say "it's already there".
-3. §3.2 npm package, packaging test and `release.yml` publish. Ship it with the first public tag
-   if ready. Otherwise ship it as a 0.1.x fast-follow; until then the docs say VS Code only.
-4. §3.4 rule 3 (`formatVersion` plus refuse-to-write) and rule 2 (host registry and warnings).
-   These **must land before or with the first npm publish**, because that is the first moment
-   two versions can touch the same state. Rules 4–6 (index directories, stable statusline
-   launcher, uninstall hygiene) can follow. Rule 5 also fixes an extension-only problem, the
-   path moving on every update, so it's worth doing anyway.
-5. §4 docs and checklist. The `cli/index.md` page also gets a short "Using the CLI and the
-   extension together" section: which copy runs where, keep the npm copy on the extension's
-   version, and what the "update ctrlyoke" refusal means.
+1. ✅ **Reserve `ctrlyoke` on npm** under Fuzzy Nova, with 2FA, before the Phase 14 repo
+   visibility flip. Done 2026-09-25 (§3.2 item 5), including the trusted publisher and
+   token lockout.
+2. ✅ **§3.1 bundling and terminal PATH.** Done 2026-09-25 (commit `420cb24b`).
+3. ✅ **§3.4 rules 3 and 2** (refuse-to-write guard and host registry), which had to land before
+   the first real npm publish. Done 2026-09-25 (commits `0fee4edb` and `12f40135`).
+4. **Next: §3.2 items 1–4.** These are the build script, the packaging test that installs the
+   tarball and runs `--version`/`validate`, and the staged-publish step in `release.yml`. Ship
+   with the first public tag if ready; otherwise ship as a 0.1.x fast-follow, and until then the
+   docs say VS Code only. In the change that first publishes to npm:
+   - Remove the `when: false` Command Palette entry that hides `ctrlyoke.installCli`, and add its
+     optional Getting Started walkthrough step (§3.1 note).
+   - Ship the `bin/` shims in the npm package too. `registerCtrlyokeBinDirectory()` ignores a
+     package without `bin/`, so without them an npm-launched run would not put its own copy
+     first on the harness PATH.
+   - Add to `RELEASE_CHECKLIST.md` Phases 10–11: approving the staged version on npmjs.com,
+     `npm view ctrlyoke version` matching the tag, and a clean-machine `npx ctrlyoke --version`.
+5. **§3.3 licensing and telemetry** notes for `cli/index.md` and `guide/privacy.md`.
+6. **§4 docs.** The Phase 8 check and the `cli-binary.instructions.md` distribution note are
+   already done. Still to write: `docs/cli/index.md`, including a short "Using the CLI and the
+   extension together" section (which copy runs where, keeping the npm copy on the extension's
+   version, and what the "update ctrlyoke" refusal means); `docs/guide/installation.md`; and
+   `docs/cli/ci.md`.
+7. **§3.4 rules 4–6** (per-version search index directories, stable statusline launcher,
+   uninstall hygiene). Not release blockers. Rule 5 also fixes an extension-only problem, the
+   statusline path moving on every update, so it's worth doing anyway.
+
+Known gaps carried from this work: `ctrlyoke --version` does not print the package root (§3.4
+rule 2 note); a mid-run schema refusal can exit `1`, not `2`; the usage-history stores still
+quarantine a newer file (§3.4 rule 3 note).
