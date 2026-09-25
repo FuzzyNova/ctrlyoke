@@ -5,6 +5,7 @@ import type {
 } from "@root/types/WebviewMessageTypes";
 import { SettingSourceBadge } from "./SettingSourceBadge";
 import { Icon } from "./Icon";
+import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
 
 interface Props {
   label: string;
@@ -38,6 +39,7 @@ export function SettingToggleRow({
 
   return (
     <label
+      title={path ? schemaTitle(path) : description}
       className={`flex items-start gap-3 py-2 group ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
     >
       <input
@@ -45,6 +47,8 @@ export function SettingToggleRow({
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
         disabled={disabled}
+        aria-label={path ? schemaAriaLabel(label, path) : undefined}
+        title={path ? schemaTitle(path) : undefined}
         className={`mt-0.5 w-4 h-4 accent-focus-border shrink-0 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}
       />
       <span className="flex flex-col flex-1 min-w-0">

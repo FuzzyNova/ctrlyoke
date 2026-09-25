@@ -1,7 +1,12 @@
 import { SCHEMA_DESCRIPTIONS } from "@root/types/generated/SchemaDescriptions";
 
 export type SchemaPropertyValue =
-  string | number | boolean | null | { readonly omit: true };
+  | string
+  | number
+  | boolean
+  | null
+  | { readonly omit: true }
+  | { readonly writes: string };
 
 function writeLiteral(
   value: Exclude<SchemaPropertyValue, { omit: true }>
@@ -18,8 +23,12 @@ export function schemaTitle(
   if (value && typeof value === "object" && "omit" in value) {
     return `omit ${path}`;
   }
-  const body = description ?? SCHEMA_DESCRIPTIONS[path];
-  const property = `property: ${path}${value !== undefined ? ` = ${writeLiteral(value)}` : ""}`;
+  const pseudoWrite =
+    value && typeof value === "object" && "writes" in value
+      ? value.writes
+      : undefined;
+  const body = pseudoWrite ?? description ?? SCHEMA_DESCRIPTIONS[path];
+  const property = `property: ${path}${value !== undefined && !pseudoWrite ? ` = ${writeLiteral(value)}` : ""}`;
   return body ? `${body} ${property}` : property;
 }
 
@@ -31,6 +40,9 @@ export function schemaAriaLabel(
 ): string {
   if (value && typeof value === "object" && "omit" in value) {
     return `${label}, omit ${path}`;
+  }
+  if (value && typeof value === "object" && "writes" in value) {
+    return `${label}, ${value.writes}`;
   }
   return value === undefined
     ? `${label}, property ${path}`

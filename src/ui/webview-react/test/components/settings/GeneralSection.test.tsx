@@ -36,14 +36,20 @@ describe("GeneralSection script step color control", () => {
   it("shows the script step color control only in harness mode", () => {
     renderGeneralSection(STEP_COLOR_MODES.HARNESS);
 
-    expect(screen.getByLabelText("Script step color")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(
+        "Script step color, property ui.harnessColors.script"
+      )
+    ).toBeInTheDocument();
   });
 
   it("hides the script step color control when step colors are off", () => {
     renderGeneralSection(STEP_COLOR_MODES.NONE);
 
     expect(
-      screen.queryByLabelText("Script step color")
+      screen.queryByLabelText(
+        "Script step color, property ui.harnessColors.script"
+      )
     ).not.toBeInTheDocument();
   });
 
@@ -51,7 +57,9 @@ describe("GeneralSection script step color control", () => {
     renderGeneralSection(STEP_COLOR_MODES.UNIQUE);
 
     expect(
-      screen.queryByLabelText("Script step color")
+      screen.queryByLabelText(
+        "Script step color, property ui.harnessColors.script"
+      )
     ).not.toBeInTheDocument();
   });
 });

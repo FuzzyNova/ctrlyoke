@@ -40,7 +40,11 @@ describe("DefaultsHarnessPage execution defaults", () => {
       screen.getByText(/Pre\/end-condition scripts always run headless/i)
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Execution mode" }));
+    await user.click(
+      screen.getByRole("button", {
+        name: "Execution mode, property defaults.executionMode",
+      })
+    );
     await user.click(screen.getByRole("button", { name: "Headless" }));
 
     expect(onUpdate).toHaveBeenCalledWith("defaults.executionMode", "headless");
@@ -67,9 +71,15 @@ describe("DefaultsHarnessPage execution defaults", () => {
 
     expect(screen.getByText("Worktree Defaults")).toBeInTheDocument();
     expect(screen.getByText(WORKTREE_MODE_HELP_TEXT)).toBeInTheDocument();
-    expect(screen.getByLabelText("Branch")).toHaveValue("settings-branch");
-    expect(screen.getByLabelText("Base")).toHaveValue("main");
-    expect(screen.getByLabelText("Setup")).toHaveValue("npm ci");
+    expect(
+      screen.getByLabelText("Branch, property defaults.worktree.branch")
+    ).toHaveValue("settings-branch");
+    expect(
+      screen.getByLabelText("Base, property defaults.worktree.base")
+    ).toHaveValue("main");
+    expect(
+      screen.getByLabelText("Setup, property defaults.worktree.setup")
+    ).toHaveValue("npm ci");
   });
 
   it("writes false when the None worktree default is selected", async () => {
@@ -85,9 +95,17 @@ describe("DefaultsHarnessPage execution defaults", () => {
       />
     );
 
-    await user.click(screen.getByRole("button", { name: "Worktree mode" }));
+    await user.click(
+      screen.getByRole("button", {
+        name: "Worktree mode, property defaults.worktree",
+      })
+    );
     await user.click(screen.getByRole("button", { name: "Named" }));
-    await user.click(screen.getByRole("button", { name: "Worktree mode" }));
+    await user.click(
+      screen.getByRole("button", {
+        name: "Worktree mode, property defaults.worktree",
+      })
+    );
     await user.click(screen.getByRole("button", { name: "None" }));
 
     expect(onUpdate).toHaveBeenLastCalledWith("defaults.worktree", false);
@@ -114,8 +132,12 @@ describe("DefaultsHarnessPage execution defaults", () => {
       />
     );
 
-    expect(screen.getByLabelText("Base")).toHaveValue("main");
-    expect(screen.getByLabelText("Setup")).toHaveValue("npm ci");
+    expect(
+      screen.getByLabelText("Base, property defaults.worktree.base")
+    ).toHaveValue("main");
+    expect(
+      screen.getByLabelText("Setup, property defaults.worktree.setup")
+    ).toHaveValue("npm ci");
     expect(screen.getByLabelText("Keep directory")).toBeChecked();
     expect(screen.getByLabelText("Merge")).toBeChecked();
     expect(screen.getByText(WORKTREE_KEEP_HELP_TEXT)).toBeInTheDocument();

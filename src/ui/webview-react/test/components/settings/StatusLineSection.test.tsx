@@ -53,7 +53,9 @@ describe("StatusLineSection", () => {
       )
     ).toBeInTheDocument();
     expect(
-      screen.getAllByRole("textbox", { name: "Custom statusline command" })
+      screen.getAllByRole("textbox", {
+        name: /^Custom statusline command, property /,
+      })
     ).toHaveLength(4);
     expect(
       screen.getByRole("checkbox", {
@@ -77,7 +79,7 @@ describe("StatusLineSection", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("checkbox", {
-        name: "Use a different status line format per harness",
+        name: /^Use a different status line format per harness, property /,
       })
     ).not.toBeChecked();
     expect(
@@ -101,7 +103,7 @@ describe("StatusLineSection", () => {
 
     await user.click(
       screen.getByRole("checkbox", {
-        name: "Use a different status line format per harness",
+        name: /^Use a different status line format per harness, property /,
       })
     );
 

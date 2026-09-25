@@ -12,6 +12,7 @@ import {
 } from "@utils/dropdownValidation";
 import { Icon } from "./Icon";
 import type { SelectOption as SharedSelectOption } from "@root/types/SelectOption";
+import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
 
 interface CustomSelectOption extends SharedSelectOption {
   /** Optional className override for the description text (defaults to muted). */
@@ -58,6 +59,8 @@ interface CustomSelectProps extends HideableProps {
   className?: string;
   triggerAriaLabel?: string;
   triggerTitle?: string;
+  /** Schema property represented by this select. */
+  schemaPath?: string;
   /** Max height of the open dropdown panel. Defaults to "60vh". */
   dropdownMaxHeight?: string;
   /** When true, renders the list inline without a trigger button. Used in FooterQuickPicker. */
@@ -97,6 +100,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   className = "",
   triggerAriaLabel,
   triggerTitle,
+  schemaPath,
   namespace,
   hiddenValues = [],
   onHideOption,
@@ -120,6 +124,26 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   const nonHideable = nonHideableValues ?? DEFAULT_NON_HIDEABLE;
 
   const selectedOption = options.find((o) => o.value === value);
+  const triggerLabel = triggerAriaLabel ?? selectedOption?.label ?? value;
+  const optionSchemaPath = (option: CustomSelectOption) =>
+    option.schemaPath ?? schemaPath;
+  const optionTitle = (option: CustomSelectOption) => {
+    const path = optionSchemaPath(option);
+    if (!schemaPath || !path) return option.label;
+    return schemaTitle(
+      path,
+      option.pseudo ? { writes: option.pseudo.writes } : option.value
+    );
+  };
+  const optionAriaLabel = (option: CustomSelectOption) => {
+    const path = optionSchemaPath(option);
+    if (!schemaPath || !path) return undefined;
+    return schemaAriaLabel(
+      option.label,
+      path,
+      option.pseudo ? { writes: option.pseudo.writes } : option.value
+    );
+  };
 
   // Split options into visible and hidden lists
   const {
@@ -193,10 +217,11 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
               type="button"
               onClick={() => !option.disabled && handleSelect(option.value)}
               disabled={option.disabled}
+              aria-label={optionAriaLabel(option)}
               className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left focus:outline-none border-none bg-transparent cursor-inherit disabled:cursor-not-allowed"
             >
               <span className="flex flex-col min-w-0">
-                <span title={option.label} className="truncate">
+                <span title={optionTitle(option)} className="truncate">
                   {option.label}
                 </span>
                 {option.description && (
@@ -254,10 +279,11 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
               <button
                 type="button"
                 onClick={() => handleSelectHidden(option.value)}
+                aria-label={optionAriaLabel(option)}
                 className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left text-description-fg focus:outline-none border-none bg-transparent cursor-pointer"
               >
                 <span className="flex flex-col min-w-0">
-                  <span title={option.label} className="truncate">
+                  <span title={optionTitle(option)} className="truncate">
                     {option.label}
                   </span>
                   {option.description && (
@@ -308,9 +334,17 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         aria-controls={listboxId}
-        aria-label={triggerAriaLabel}
+        aria-label={
+          schemaPath
+            ? schemaAriaLabel(triggerLabel, schemaPath)
+            : triggerAriaLabel
+        }
         aria-describedby={warning ? warningId : undefined}
-        title={triggerTitle}
+        title={
+          schemaPath
+            ? schemaTitle(schemaPath, undefined, triggerTitle)
+            : triggerTitle
+        }
         className={`cy-select-trigger cy-dropdown-row ${dropdownBorderClass(
           warning,
           warningSeverity

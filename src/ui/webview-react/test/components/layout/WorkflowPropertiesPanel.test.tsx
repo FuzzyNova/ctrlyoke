@@ -27,8 +27,6 @@ import {
   EXECUTION_MODES,
   HARNESS_IDS,
   PERMISSION_MODES,
-  WORKTREE_KEEP_HELP_TEXT,
-  WORKTREE_MODE_HELP_TEXT,
   WORKTREE_MODES,
 } from "@root/types/DashboardConstants";
 
@@ -63,6 +61,20 @@ describe("WorkflowPropertiesPanel permissions", () => {
   });
 
   afterEach(cleanup);
+
+  it("labels workflow fields with their workflow-relative schema path", () => {
+    render(<WorkflowPropertiesPanel />);
+
+    const fieldLabel = screen.getByText("Harness", { selector: "label" });
+    expect(fieldLabel).toHaveAttribute(
+      "title",
+      expect.stringContaining("property: harness")
+    );
+    expect(fieldLabel).toHaveAttribute(
+      "aria-label",
+      "Harness, property harness"
+    );
+  });
 
   it("shows the global permission mode when a new workflow has no override", () => {
     useSettingsStore.getState().updateGlobalSetting("toolPermissions", {
@@ -119,7 +131,9 @@ describe("WorkflowPropertiesPanel permissions", () => {
     render(<WorkflowPropertiesPanel />);
     fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Secrets" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Secrets, property secrets" })
+    );
 
     expect(
       screen.getByRole("button", { name: "API_TOKEN" })
@@ -145,7 +159,9 @@ describe("WorkflowPropertiesPanel permissions", () => {
 
     render(<WorkflowPropertiesPanel />);
     fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
-    fireEvent.click(screen.getByRole("button", { name: "Secrets" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Secrets, property secrets" })
+    );
     fireEvent.click(
       screen.getByRole("button", { name: "INLINE_TOKENGranted by prompt text" })
     );
@@ -571,7 +587,7 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     expect(screen.queryByLabelText("Worktree branch")).not.toBeInTheDocument();
     expect(screen.getByText("Worktree", { selector: "label" })).toHaveAttribute(
       "title",
-      WORKTREE_MODE_HELP_TEXT
+      expect.stringContaining("property: worktree")
     );
   });
 
@@ -627,7 +643,10 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     expect(screen.queryByLabelText("Worktree branch")).not.toBeInTheDocument();
     expect(
       screen.getByText("Keep directory", { selector: "label" })
-    ).toHaveAttribute("title", WORKTREE_KEEP_HELP_TEXT);
+    ).toHaveAttribute(
+      "title",
+      expect.stringContaining("property: worktree.keep")
+    );
     expect(postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "updateWorkflowProperties",

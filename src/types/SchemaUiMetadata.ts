@@ -55,6 +55,7 @@ export interface SchemaOptionMeta<V extends string> {
     activeColor?: string;
   };
   short?: string;
+  pseudo?: { writes: string };
 }
 
 export function toSelectOptions<V extends string>(
@@ -66,6 +67,7 @@ export function toSelectOptions<V extends string>(
     label: option.label,
     ...(option.short ? { short: option.short } : {}),
     schemaPath: path,
+    ...(option.pseudo ? { pseudo: option.pseudo } : {}),
   }));
 }
 

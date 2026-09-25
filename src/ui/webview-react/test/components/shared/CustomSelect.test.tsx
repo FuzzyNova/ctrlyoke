@@ -111,6 +111,56 @@ describe("CustomSelect — basic behavior", () => {
     expect(screen.getByTitle(longLabel)).toHaveClass("truncate");
   });
 
+  it("adds schema property names to trigger and option tooltip and accessible names", async () => {
+    const user = userEvent.setup();
+    render(
+      <CustomSelect
+        triggerAriaLabel="Permission Mode"
+        schemaPath="toolPermissions.mode"
+        value="none"
+        onChange={vi.fn()}
+        options={[
+          { value: "none", label: "None" },
+          {
+            value: "inherit",
+            label: "Inherit (Allow All)",
+            pseudo: { writes: "omit toolPermissions" },
+          },
+        ]}
+      />
+    );
+
+    const trigger = screen.getByRole("button", {
+      name: "Permission Mode, property toolPermissions.mode",
+    });
+    expect(trigger).toHaveAttribute(
+      "title",
+      expect.stringContaining("property: toolPermissions.mode")
+    );
+
+    await user.click(trigger);
+
+    const noneOption = screen.getByRole("button", {
+      name: "None, toolPermissions.mode: none",
+    });
+    expect(
+      screen.getByTitle(/property: toolPermissions\.mode = none/)
+    ).toHaveAttribute(
+      "title",
+      expect.stringContaining("property: toolPermissions.mode = none")
+    );
+    expect(noneOption).toBeInTheDocument();
+
+    const inheritOption = screen.getByRole("button", {
+      name: "Inherit (Allow All), omit toolPermissions",
+    });
+    expect(inheritOption).toBeInTheDocument();
+    expect(inheritOption.querySelector("span.truncate")).toHaveAttribute(
+      "title",
+      "omit toolPermissions property: toolPermissions.mode"
+    );
+  });
+
   it("dropdown options are not rendered when closed", () => {
     render(<CustomSelect value="a" onChange={vi.fn()} options={OPTIONS} />);
     // The dropdown is portal-based and not in the DOM when closed

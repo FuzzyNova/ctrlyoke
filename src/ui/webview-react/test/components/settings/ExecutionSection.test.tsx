@@ -26,10 +26,14 @@ describe("ExecutionSection", () => {
 
     expect(screen.queryByText("Execution mode")).not.toBeInTheDocument();
     expect(
-      screen.getByLabelText("Max prompt timeout (seconds, -1 = unlimited)")
+      screen.getByLabelText(
+        /^Max prompt timeout \(seconds, -1 = unlimited\), property execution\.maxPromptTimeout$/
+      )
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Context resolution failures")).toHaveValue(
-      "warn"
-    );
+    expect(
+      screen.getByLabelText(
+        "Context resolution failures, property execution.contextResolutionFailure"
+      )
+    ).toHaveValue("warn");
   });
 });

@@ -108,6 +108,8 @@ import {
   workflowPermissionDiagnostic,
 } from "@utils/compatibilityDiagnostics";
 import { Icon } from "../shared/Icon";
+import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
+import { SCHEMA_DESCRIPTIONS } from "@root/types/generated/SchemaDescriptions";
 /** Single breakpoint (px) where the settings drawer switches to narrow layout */
 const SETTINGS_DRAWER_BREAKPOINT = 400;
 
@@ -233,6 +235,7 @@ const SetAsDefaultButton: React.FC<{
  */
 const FormField: React.FC<{
   label: string;
+  schemaPath: string;
   description?: string;
   htmlFor?: string;
   children: React.ReactNode;
@@ -240,6 +243,7 @@ const FormField: React.FC<{
   className?: string;
 }> = ({
   label,
+  schemaPath,
   description,
   htmlFor,
   children,
@@ -250,10 +254,18 @@ const FormField: React.FC<{
     <div className="flex items-center justify-between min-h-[18px]">
       <label
         htmlFor={htmlFor}
-        title={description}
+        title={schemaTitle(
+          schemaPath,
+          undefined,
+          SCHEMA_DESCRIPTIONS[schemaPath] ?? description
+        )}
+        aria-label={schemaAriaLabel(label, schemaPath)}
         className="text-xs font-semibold uppercase text-description-fg cursor-help"
       >
         {label}
+        <span className="sr-only">
+          {schemaAriaLabel(label, schemaPath).slice(label.length)}
+        </span>
       </label>
       {setAsDefaultButton}
     </div>
@@ -1600,6 +1612,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
               <DrawerRow narrow={isNarrow}>
                 <FormField
                   label="Harness"
+                  schemaPath="harness"
                   htmlFor="settings-harness"
                   description="AI harness for execution"
                   setAsDefaultButton={
@@ -1639,6 +1652,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
                 <FormField
                   label="Model"
+                  schemaPath="model"
                   htmlFor="settings-model"
                   description="AI model for execution"
                   setAsDefaultButton={
@@ -1689,6 +1703,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
               <DrawerRow narrow={isNarrow}>
                 <FormField
                   label="Agent"
+                  schemaPath="agent"
                   htmlFor="settings-agent"
                   description="Custom agent file (.agent.md)"
                   setAsDefaultButton={
@@ -1732,6 +1747,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
                 <FormField
                   label="Skills"
+                  schemaPath="skills"
                   htmlFor="settings-skills"
                   description="Attach skills (frontmatter only, progressive disclosure)"
                   setAsDefaultButton={
@@ -1781,6 +1797,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
               {/* Row 3: Additional Args (full width) */}
               <FormField
                 label="Additional Args"
+                schemaPath="additionalArgs"
                 htmlFor="settings-append-args"
                 description="Extra CLI flags appended to ctrlyoke's standard argument set. Only applies to CLI harnesses."
                 setAsDefaultButton={
@@ -1814,6 +1831,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
               <DrawerRow narrow={isNarrow}>
                 <FormField
                   label="Execution Mode"
+                  schemaPath="executionMode"
                   htmlFor="settings-execution-mode"
                   description={EXECUTION_MODE_HELP_TEXT}
                   setAsDefaultButton={
@@ -1841,6 +1859,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 </FormField>
                 <FormField
                   label="Worktree"
+                  schemaPath="worktree"
                   htmlFor="settings-worktree-mode"
                   description={WORKTREE_MODE_HELP_TEXT}
                   setAsDefaultButton={
@@ -1871,6 +1890,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   {worktreeMode === WORKTREE_MODES.NAMED && (
                     <FormField
                       label="Branch"
+                      schemaPath="worktree.branch"
                       htmlFor="settings-worktree-branch"
                       description="Existing or new local Git branch for the named worktree."
                     >
@@ -1900,6 +1920,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   )}
                   <FormField
                     label="Base"
+                    schemaPath="worktree.base"
                     htmlFor="settings-worktree-base"
                     description="Optional Git ref used as the starting point for a new worktree."
                   >
@@ -1917,6 +1938,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   </FormField>
                   <FormField
                     label="Setup"
+                    schemaPath="worktree.setup"
                     htmlFor="settings-worktree-setup"
                     description="Optional command run after a new worktree is created. Setup is outside step errorBehavior; a failure blocks the worktree and the next Run retries it."
                   >
@@ -1936,6 +1958,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     <>
                       <FormField
                         label="Keep directory"
+                        schemaPath="worktree.keep"
                         htmlFor="settings-worktree-keep"
                         description={WORKTREE_KEEP_HELP_TEXT}
                       >
@@ -1957,6 +1980,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       </FormField>
                       <FormField
                         label="Merge"
+                        schemaPath="worktree.merge"
                         htmlFor="settings-worktree-merge"
                         description="Merge the managed branch into the working checkout after every run."
                       >
@@ -1998,6 +2022,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
               <DrawerRow narrow={isNarrow}>
                 <FormField
                   label="Resume Session"
+                  schemaPath="resumeSession"
                   htmlFor="settings-resume-session"
                   description="Resume Session continues existing session. Session ID below resumes a specific session or reuses another prompt's session (by number). 'Final Step Session' resumes the session established by the Final Step gate."
                   setAsDefaultButton={
@@ -2074,6 +2099,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
                 <FormField
                   label="Prior Context"
+                  schemaPath="priorContext"
                   htmlFor="settings-prior-context"
                   description="Send prior step outputs with the prompt"
                   setAsDefaultButton={
@@ -2101,6 +2127,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
               <FormField
                 label="Variables"
+                schemaPath="vars"
                 description="Workflow-level defaults for {{name}} substitution in prompt text, model, additional arguments, hook command/env, pre- and end-condition script/env and retry prompts, script-step script/env, and worktree setup commands. CLI --var values override these defaults. Unresolved placeholders remain literal text and are reported as an advisory."
               >
                 <KeyValueRowsEditor
@@ -2272,6 +2299,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
             <div className="flex-1 flex flex-col min-h-0">
               <FormField
                 label="MCP Servers"
+                schemaPath="mcpServers"
                 description="MCP servers to attach to the harness for this workflow. Include ctrlyoke to enable dynamic queue extension. Add custom McpServerConfig entries for additional MCP servers. Set to None to explicitly disable MCP injection."
                 className="flex-1 min-h-0"
                 setAsDefaultButton={
@@ -2305,6 +2333,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 {/* Permission Mode */}
                 <FormField
                   label="Permission Mode"
+                  schemaPath="toolPermissions.mode"
                   htmlFor="settings-permission-mode"
                   description="Tool permission mode for CLI harnesses"
                   setAsDefaultButton={
@@ -2341,6 +2370,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
                 <FormField
                   label="Secrets"
+                  schemaPath="secrets"
                   htmlFor="settings-secrets"
                   description="Grant named credentials to this workflow. Inline !NAME references in prompt text are always granted."
                   setAsDefaultButton={
@@ -2383,6 +2413,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
                 <FormField
                   label="Trusted External Roots"
+                  schemaPath="trustedExternalRoots"
                   htmlFor="settings-trusted-external-roots-mode"
                   description="Restrict this workflow to selected external directories, inherit the user and workspace roots, or disable external-root access."
                 >
@@ -2421,6 +2452,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 <div className="flex-1 flex flex-col gap-2 min-h-0 mt-2">
                   <FormField
                     label="Allowed Tools"
+                    schemaPath="toolPermissions.allowedTools"
                     htmlFor="settings-allowed-tools"
                     description="Tool patterns to allow (one per line). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; Qwen is inline and OpenCode uses OPENCODE_CONFIG_CONTENT."
                     className="flex-1 min-h-0"
@@ -2489,6 +2521,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
                   <FormField
                     label="Denied Tools"
+                    schemaPath="toolPermissions.deniedTools"
                     htmlFor="settings-denied-tools"
                     description="Tool patterns to deny (one per line, takes precedence over allow list). Codex and Antigravity do not enforce these lists."
                     className="flex-1 min-h-0"
@@ -2567,6 +2600,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
             <>
               <FormField
                 label="User Hooks"
+                schemaPath="hooks"
                 description="User-defined hooks to run alongside ctrlyoke's completion-detection hooks. Supported events vary by harness."
                 setAsDefaultButton={
                   <SetAsDefaultButton
