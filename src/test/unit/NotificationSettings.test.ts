@@ -84,8 +84,7 @@ suite("Notification settings defaults", () => {
         ({ event }) => event === HOOK_EVENT_NAMES.NOTIFICATION
       ),
       {
-        event: "notification",
-        label: "Notification",
+        event: HOOK_EVENT_NAMES.NOTIFICATION,
         description:
           "Fires when the harness displays a notification, including prompts that may require user input.",
       }

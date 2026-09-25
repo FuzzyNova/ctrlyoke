@@ -2119,6 +2119,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <PriorContextSelect
                     id="settings-prior-context"
+                    schemaPath="priorContext"
                     value={effectivePriorContext}
                     onChange={handlePriorContextChange}
                   />
@@ -2189,6 +2190,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   <div className="space-y-3">
                     <ScriptConditionEditor
                       variant={PROMPT_PROPERTIES.PRE_CONDITION}
+                      schemaPath="preCondition"
                       value={
                         effectivePreCondition as
                           ScriptConditionValue | null | undefined
@@ -2246,6 +2248,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   <div className="space-y-3">
                     <ScriptConditionEditor
                       variant={PROMPT_PROPERTIES.END_CONDITION}
+                      schemaPath="endCondition"
                       value={
                         effectiveEndCondition as
                           ScriptConditionValue | null | undefined
@@ -2287,6 +2290,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   continue.
                 </p>
                 <ErrorBehaviorEditor
+                  schemaPath="errorBehavior"
                   value={effectiveErrorBehavior}
                   onChange={handleErrorBehaviorChange}
                   idPrefix="settings-error"
@@ -2616,6 +2620,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 }
               >
                 <HooksEditor
+                  schemaPath="hooks"
                   value={effectiveHooks}
                   onChange={handleHooksChange}
                   showDefault={false}

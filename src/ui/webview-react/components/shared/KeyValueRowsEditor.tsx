@@ -23,6 +23,7 @@ import {
 import { FieldDiagnostic } from "./FieldDiagnostic";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
+import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
 
 export interface KeyValueRowsEditorProps {
   label: string;
@@ -34,6 +35,7 @@ export interface KeyValueRowsEditorProps {
   /** Column heading and add-button noun, e.g. "variable" or "header". */
   entryNoun?: string;
   ariaLabel?: string;
+  schemaPath?: string;
   disabled?: boolean;
   allowSecretReferences?: boolean;
 }
@@ -191,6 +193,7 @@ export function KeyValueRowsEditor({
   keyKind,
   entryNoun = "entry",
   ariaLabel = label,
+  schemaPath,
   disabled = false,
   allowSecretReferences = false,
 }: KeyValueRowsEditorProps) {
@@ -457,14 +460,19 @@ export function KeyValueRowsEditor({
 
   return (
     <div className="flex flex-col gap-2">
-      <label id={labelId} className="text-xxs text-description-fg">
+      <label
+        id={labelId}
+        className="text-xxs text-description-fg"
+        title={schemaPath ? schemaTitle(schemaPath) : undefined}
+      >
         {label}
       </label>
       <div
         id={controlId}
         role="group"
-        aria-labelledby={labelId}
-        aria-label={ariaLabel}
+        aria-labelledby={schemaPath ? undefined : labelId}
+        aria-label={schemaPath ? schemaAriaLabel(label, schemaPath) : ariaLabel}
+        title={schemaPath ? schemaTitle(schemaPath) : undefined}
         className="flex min-w-0 flex-col gap-2"
       >
         <button

@@ -33,6 +33,7 @@ export function DefaultsHooksPage({
         {...rowProps}
       >
         <HooksEditor
+          schemaPath="defaults.hooks"
           value={hooks.length > 0 ? hooks : null}
           onChange={(value) => onUpdate("defaults.hooks", value ?? [])}
           showDefault={false}

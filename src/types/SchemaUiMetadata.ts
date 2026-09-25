@@ -13,6 +13,8 @@ import {
   NOTIFICATION_EVENT_MODES,
   PERMISSION_MODES,
   PRIOR_CONTEXT_KEYWORDS,
+  PRIOR_CONTEXT_SELECTION_MODES,
+  INHERIT_DEFAULT_OPTION,
   RUN_HISTORY_LOCATIONS,
   SCRIPT_OPERATORS,
   STEP_COLOR_MODES,
@@ -58,11 +60,11 @@ export interface SchemaOptionMeta<V extends string> {
   pseudo?: { writes: string };
 }
 
-export function toSelectOptions<V extends string>(
-  meta: Record<V, SchemaOptionMeta<V>>,
+export function toSelectOptions<T extends Record<string, SchemaOptionMeta<string>>>(
+  meta: T,
   path: string
 ): SelectOption[] {
-  return (Object.values(meta) as SchemaOptionMeta<V>[]).map((option) => ({
+  return Object.values(meta).map((option) => ({
     value: option.value,
     label: option.label,
     ...(option.short ? { short: option.short } : {}),
@@ -218,6 +220,25 @@ export const PRIOR_CONTEXT_KEYWORD_OPTIONS_META: Record<
   },
 };
 
+export const PRIOR_CONTEXT_SELECT_OPTIONS_META = {
+  ...PRIOR_CONTEXT_KEYWORD_OPTIONS_META,
+  [INHERIT_DEFAULT_OPTION]: {
+    value: INHERIT_DEFAULT_OPTION,
+    label: "Inherit",
+    pseudo: { writes: "omit priorContext" },
+  },
+  [PRIOR_CONTEXT_SELECTION_MODES.RUN]: {
+    value: PRIOR_CONTEXT_SELECTION_MODES.RUN,
+    label: "Completed run output",
+    pseudo: { writes: "priorContext: { workflowKey: ..., runRef: ... }" },
+  },
+  [PRIOR_CONTEXT_SELECTION_MODES.CUSTOM]: {
+    value: PRIOR_CONTEXT_SELECTION_MODES.CUSTOM,
+    label: "Custom",
+    pseudo: { writes: "priorContext: [1,2]" },
+  },
+} as const;
+
 export const CONDITION_ACTION_OPTIONS_META: Record<
   (typeof CONDITION_ACTIONS)[keyof typeof CONDITION_ACTIONS],
   SchemaOptionMeta<(typeof CONDITION_ACTIONS)[keyof typeof CONDITION_ACTIONS]>
@@ -235,6 +256,19 @@ export const CONDITION_ACTION_OPTIONS_META: Record<
     value: CONDITION_ACTIONS.SKIP_PROMPT,
     label: "Skip Prompt",
   },
+};
+
+/** Shared labels for the subset accepted by errorBehavior.onError. */
+export const ERROR_BEHAVIOR_ACTION_OPTIONS_META = {
+  [CONDITION_ACTIONS.STOP_WORKFLOW]: CONDITION_ACTION_OPTIONS_META[
+    CONDITION_ACTIONS.STOP_WORKFLOW
+  ],
+  [CONDITION_ACTIONS.RETRY]: CONDITION_ACTION_OPTIONS_META[
+    CONDITION_ACTIONS.RETRY
+  ],
+  [CONDITION_ACTIONS.CONTINUE]: CONDITION_ACTION_OPTIONS_META[
+    CONDITION_ACTIONS.CONTINUE
+  ],
 };
 
 export const COMPARE_SOURCE_OPTIONS_META: Record<
@@ -362,6 +396,11 @@ export const HOOK_EVENT_OPTIONS_META: Record<
   },
   [HOOK_EVENT_NAMES.ERROR]: { value: HOOK_EVENT_NAMES.ERROR, label: "Error" },
 };
+
+export const MCP_TRANSPORT_OPTIONS_META = {
+  "streamable-http": { value: "streamable-http", label: "streamable-http" },
+  sse: { value: "sse", label: "sse" },
+} as const;
 
 export const NOTIFICATION_EVENT_MODE_OPTIONS_META: Record<
   NotificationEventMode,

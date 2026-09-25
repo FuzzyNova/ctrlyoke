@@ -10,9 +10,9 @@ import {
   type HookEvent,
   type NotificationKind,
   type StepStatus,
-  HOOK_EVENT_METADATA,
   HOOK_EVENT_NAMES,
 } from "../../types/DashboardConstants";
+import { HOOK_EVENT_OPTIONS_META } from "../../types/SchemaUiMetadata";
 import type {
   WorkflowRunAddress,
   WorkflowSummary,
@@ -352,8 +352,7 @@ export function buildHookNotificationEvent(
     return null;
   }
 
-  const meta = HOOK_EVENT_METADATA.find((m) => m.event === artifact.hookEvent);
-  const label = meta?.label ?? artifact.hookEvent;
+  const label = HOOK_EVENT_OPTIONS_META[artifact.hookEvent]?.label ?? artifact.hookEvent;
 
   const titleParts = ["ctrlyoke -", label];
   const bodyParts: string[] = [];

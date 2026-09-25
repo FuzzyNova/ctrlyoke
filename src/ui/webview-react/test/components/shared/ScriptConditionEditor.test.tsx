@@ -508,7 +508,7 @@ describe("ScriptConditionEditor", () => {
     // Scope option lookup to the shell listbox: several dropdowns in this
     // editor share option labels (Compare Source also offers "Auto").
     function chooseShell(label: string): void {
-      const trigger = screen.getByRole("button", { name: "Shell" });
+      const trigger = screen.getByRole("button", { name: /Shell, property/ });
       fireEvent.click(trigger);
       const listboxId = trigger.getAttribute("aria-controls");
       const listbox = listboxId ? document.getElementById(listboxId) : null;
@@ -572,7 +572,7 @@ describe("ScriptConditionEditor", () => {
           />
         );
 
-        expect(screen.getByRole("button", { name: "Shell" })).toHaveTextContent(
+        expect(screen.getByRole("button", { name: /Shell, property/ })).toHaveTextContent(
           "Auto"
         );
       }
@@ -590,7 +590,7 @@ describe("ScriptConditionEditor", () => {
         />
       );
 
-      expect(screen.getByRole("button", { name: "Shell" })).toHaveTextContent(
+      expect(screen.getByRole("button", { name: /Shell, property/ })).toHaveTextContent(
         "zsh"
       );
       expect(
@@ -610,7 +610,7 @@ describe("ScriptConditionEditor", () => {
         />
       );
 
-      expect(screen.getByRole("button", { name: "Shell" })).toHaveTextContent(
+      expect(screen.getByRole("button", { name: /Shell, property/ })).toHaveTextContent(
         "pwsh"
       );
       expect(screen.queryByText(/not typically available/)).toBeNull();
@@ -674,7 +674,7 @@ describe("ScriptConditionEditor", () => {
 
   describe("scriptStep execution mode override", () => {
     function chooseExecutionMode(label: string): void {
-      const current = screen.getByRole("button", { name: "Execution Mode" });
+      const current = screen.getByRole("button", { name: /Execution Mode, property/ });
       fireEvent.click(current);
       const option = screen
         .getAllByText(label)
@@ -695,7 +695,7 @@ describe("ScriptConditionEditor", () => {
       );
 
       expect(
-        screen.getByRole("button", { name: "Execution Mode" })
+        screen.getByRole("button", { name: /Execution Mode, property/ })
       ).toBeInTheDocument();
     });
 
@@ -712,7 +712,7 @@ describe("ScriptConditionEditor", () => {
         );
 
         expect(
-          screen.queryByRole("button", { name: "Execution Mode" })
+          screen.queryByRole("button", { name: /Execution Mode, property/ })
         ).not.toBeInTheDocument();
       }
     );
@@ -728,7 +728,7 @@ describe("ScriptConditionEditor", () => {
       );
 
       expect(
-        screen.getByRole("button", { name: "Execution Mode" })
+        screen.getByRole("button", { name: /Execution Mode, property/ })
       ).toHaveTextContent(/Inherit/);
     });
 
@@ -816,14 +816,14 @@ describe("ScriptConditionEditor", () => {
       );
 
       expect(
-        screen.getByRole("button", { name: "Compare source" })
-      ).toHaveTextContent("Exit code");
+        screen.getByRole("button", { name: /Compare source, property/ })
+      ).toHaveTextContent("Exit Code");
       expect(
-        screen.getByRole("button", { name: "Comparison operator" })
+        screen.getByRole("button", { name: /Comparison operator, property/ })
       ).toHaveTextContent("==");
       // The unset value shows its default as a placeholder rather than writing
       // it onto the step.
-      expect(screen.getByLabelText("Expected value")).toHaveAttribute(
+      expect(screen.getByLabelText("Expected value, property steps[].expected")).toHaveAttribute(
         "placeholder",
         "0"
       );
@@ -847,7 +847,7 @@ describe("ScriptConditionEditor", () => {
           />
         );
 
-        expect(screen.getByLabelText("Expected value")).toHaveAttribute(
+        expect(screen.getByLabelText("Expected value, property steps[].expected")).toHaveAttribute(
           "placeholder",
           placeholder
         );
@@ -868,7 +868,7 @@ describe("ScriptConditionEditor", () => {
         />
       );
 
-      expect(screen.getByLabelText("Expected value")).toHaveAttribute(
+      expect(screen.getByLabelText("Expected value, property steps[].expected")).toHaveAttribute(
         "placeholder",
         "0"
       );
@@ -904,7 +904,7 @@ describe("ScriptConditionEditor", () => {
         />
       );
 
-      const input = screen.getByLabelText("Expected value");
+      const input = screen.getByLabelText("Expected value, property endCondition.expected");
       expect(input).toHaveAttribute(
         "aria-describedby",
         "test-condition-expected-diagnostic"
@@ -954,9 +954,9 @@ describe("ScriptConditionEditor", () => {
       );
 
       fireEvent.click(
-        screen.getByRole("button", { name: "Comparison operator" })
+        screen.getByRole("button", { name: /Comparison operator, property/ })
       );
-      fireEvent.click(screen.getByRole("button", { name: "contains" }));
+      fireEvent.click(screen.getByRole("button", { name: /Contains,/ }));
 
       expect(onChange).toHaveBeenCalledWith(
         expect.objectContaining({ operator: "contains" })
@@ -964,9 +964,9 @@ describe("ScriptConditionEditor", () => {
 
       onChange.mockClear();
       fireEvent.click(
-        screen.getByRole("button", { name: "Comparison operator" })
+        screen.getByRole("button", { name: /Comparison operator, property/ })
       );
-      fireEvent.click(screen.getByRole("button", { name: "==" }));
+      fireEvent.click(screen.getByRole("button", { name: /==,/ }));
 
       // `eq` is the default, so selecting it clears the field rather than
       // serializing a redundant value onto the step.
@@ -990,12 +990,12 @@ describe("ScriptConditionEditor", () => {
         />
       );
 
-      expect(screen.getByLabelText("Expected value")).toBeInTheDocument();
+      expect(screen.getByLabelText("Expected value, property endCondition.expected")).toBeInTheDocument();
 
       fireEvent.click(
-        screen.getByRole("button", { name: "Comparison operator" })
+        screen.getByRole("button", { name: /Comparison operator, property/ })
       );
-      fireEvent.click(screen.getByRole("button", { name: "is empty" }));
+      fireEvent.click(screen.getByRole("button", { name: /Is Empty,/ }));
 
       expect(onChange).toHaveBeenCalledWith(
         expect.objectContaining({ operator: "isEmpty", expected: undefined })
@@ -1022,9 +1022,9 @@ describe("ScriptConditionEditor", () => {
       expect(screen.getByLabelText("Ignore case")).toBeChecked();
 
       fireEvent.click(
-        screen.getByRole("button", { name: "Comparison operator" })
+        screen.getByRole("button", { name: /Comparison operator, property/ })
       );
-      fireEvent.click(screen.getByRole("button", { name: ">=" }));
+      fireEvent.click(screen.getByRole("button", { name: />=,/ }));
 
       // A hidden control must clear its value, not merely stop displaying it —
       // otherwise a stale ignoreCase stays serialized on a numeric comparison.
@@ -1059,11 +1059,34 @@ describe("ScriptConditionEditor", () => {
         />
       );
 
-      fireEvent.click(screen.getByRole("button", { name: "Compare source" }));
+      fireEvent.click(screen.getByRole("button", { name: /Compare source, property/ }));
       expect(screen.queryByRole("button", { name: /auto/i })).toBeNull();
       expect(
-        screen.getByRole("button", { name: "Stdout" })
+        screen.getByRole("button", { name: /^Stdout, .*compareSource: stdout$/ })
       ).toBeInTheDocument();
+    });
+
+    it("keeps the comparison sentence layout and annotates each property", () => {
+      render(
+        <ScriptConditionEditor
+          variant="preCondition"
+          schemaPath="defaults.preCondition"
+          value={{ script: "npm test", compareSource: "stdout", operator: "contains", expected: "PASS" }}
+          onChange={vi.fn()}
+        />
+      );
+
+      const source = screen.getByRole("button", { name: "Compare source, property defaults.preCondition.compareSource" });
+      expect(source).toHaveAttribute("title", expect.stringContaining("property: defaults.preCondition.compareSource"));
+      fireEvent.click(source);
+      expect(within(screen.getByRole("button", { name: "Stdout, defaults.preCondition.compareSource: stdout" })).getByText("Stdout")).toHaveAttribute("title", expect.stringContaining("property: defaults.preCondition.compareSource = stdout"));
+      const operator = screen.getByRole("button", { name: "Comparison operator, property defaults.preCondition.operator" });
+      fireEvent.click(operator);
+      expect(screen.getByRole("button", { name: "Contains, defaults.preCondition.operator: contains" })).toBeInTheDocument();
+      expect(screen.getByRole("textbox", { name: "Expected value, property defaults.preCondition.expected" })).toHaveAttribute("title", expect.stringContaining("property: defaults.preCondition.expected"));
+      expect(screen.getByLabelText("Timeout (ms), property defaults.preCondition.timeout")).toHaveAttribute("title", expect.stringContaining("property: defaults.preCondition.timeout"));
+      expect(screen.getByLabelText("Environment, property defaults.preCondition.env")).toHaveAttribute("title", expect.stringContaining("property: defaults.preCondition.env"));
+      expect(screen.getByText("Pass when")).toBeInTheDocument();
     });
   });
 });

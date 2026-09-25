@@ -2,12 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { CustomSelect } from "./CustomSelect";
 import type { ErrorBehavior } from "@root/types/CtrlYokeTypes";
 import { CONDITION_ACTIONS } from "@root/types/DashboardConstants";
-
-const ERROR_ACTION_OPTIONS = [
-  { value: CONDITION_ACTIONS.STOP_WORKFLOW, label: "Stop Workflow" },
-  { value: CONDITION_ACTIONS.RETRY, label: "Retry Step" },
-  { value: CONDITION_ACTIONS.CONTINUE, label: "Continue Workflow" },
-] as const;
+import { ERROR_BEHAVIOR_ACTION_OPTIONS_META, toSelectOptions } from "@root/types/SchemaUiMetadata";
+import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
 
 const DEFAULT_ERROR_BEHAVIOR: ErrorBehavior = {
   onError: CONDITION_ACTIONS.STOP_WORKFLOW,
@@ -37,6 +33,7 @@ interface ErrorBehaviorEditorProps {
   onChange: (value: ErrorBehavior) => void;
   disabled?: boolean;
   idPrefix?: string;
+  schemaPath?: string;
 }
 
 export function ErrorBehaviorEditor({
@@ -44,6 +41,7 @@ export function ErrorBehaviorEditor({
   onChange,
   disabled = false,
   idPrefix = "error-behavior",
+  schemaPath = "errorBehavior",
 }: ErrorBehaviorEditorProps) {
   const resolvedValue = useMemo(() => normalizeErrorBehavior(value), [value]);
   const [maxRetriesInput, setMaxRetriesInput] = useState(
@@ -69,7 +67,7 @@ export function ErrorBehaviorEditor({
         <label
           htmlFor={`${idPrefix}-on-error`}
           className="text-xs font-semibold uppercase text-description-fg"
-          title="What ctrlyoke should do when a step phase encounters an internal error, including pre-conditions, prompts/harnesses, end-conditions, and script steps."
+          title={schemaTitle(`${schemaPath}.onError`, undefined, "What ctrlyoke should do when a step phase encounters an internal error, including pre-conditions, prompts/harnesses, end-conditions, and script steps.")}
         >
           On Error
         </label>
@@ -84,11 +82,9 @@ export function ErrorBehaviorEditor({
               )
             )
           }
-          options={ERROR_ACTION_OPTIONS.map((option) => ({
-            value: option.value,
-            label: option.label,
-          }))}
+          options={toSelectOptions(ERROR_BEHAVIOR_ACTION_OPTIONS_META, `${schemaPath}.onError`)}
           disabled={disabled}
+          schemaPath={`${schemaPath}.onError`}
         />
       </div>
 
@@ -97,12 +93,15 @@ export function ErrorBehaviorEditor({
           <div className="flex flex-col gap-1">
             <label
               htmlFor={`${idPrefix}-max-retries`}
+              title={schemaTitle(`${schemaPath}.maxRetries`)}
               className="text-xs font-semibold uppercase text-description-fg"
             >
               Max Retries
             </label>
             <input
               id={`${idPrefix}-max-retries`}
+              aria-label={schemaAriaLabel("Max Retries", `${schemaPath}.maxRetries`)}
+              title={schemaTitle(`${schemaPath}.maxRetries`)}
               type="number"
               min={1}
               step={1}
@@ -117,7 +116,7 @@ export function ErrorBehaviorEditor({
                 setMaxRetriesInput(String(nextValue));
                 onChange({
                   ...resolvedValue,
-                  onError: "retry",
+                  onError: CONDITION_ACTIONS.RETRY,
                   maxRetries: nextValue,
                   retryDelayMs: resolvedValue.retryDelayMs ?? 0,
                 });
@@ -130,12 +129,15 @@ export function ErrorBehaviorEditor({
           <div className="flex flex-col gap-1">
             <label
               htmlFor={`${idPrefix}-retry-delay`}
+              title={schemaTitle(`${schemaPath}.retryDelayMs`)}
               className="text-xs font-semibold uppercase text-description-fg"
             >
               Retry Delay (ms)
             </label>
             <input
               id={`${idPrefix}-retry-delay`}
+              aria-label={schemaAriaLabel("Retry Delay (ms)", `${schemaPath}.retryDelayMs`)}
+              title={schemaTitle(`${schemaPath}.retryDelayMs`)}
               type="number"
               min={0}
               step={100}
@@ -150,7 +152,7 @@ export function ErrorBehaviorEditor({
                 setRetryDelayInput(String(nextValue));
                 onChange({
                   ...resolvedValue,
-                  onError: "retry",
+                  onError: CONDITION_ACTIONS.RETRY,
                   maxRetries: resolvedValue.maxRetries ?? 1,
                   retryDelayMs: nextValue,
                 });

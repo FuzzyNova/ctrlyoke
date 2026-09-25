@@ -8,6 +8,7 @@ import {
   HOOK_EVENT_ORDER,
   TOAST_LEVEL_MODES,
 } from "@root/types/DashboardConstants";
+import { HOOK_EVENT_OPTIONS_META } from "@root/types/SchemaUiMetadata";
 import type {
   FullGlobalSettings,
   SettingSource,
@@ -401,7 +402,7 @@ export function NotificationsSection({
           return (
             <SettingToggleRow
               key={event}
-              label={meta.label}
+              label={HOOK_EVENT_OPTIONS_META[event].label}
               description={meta.description}
               checked={checked}
               onChange={(value) =>

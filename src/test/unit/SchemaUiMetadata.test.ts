@@ -72,7 +72,7 @@ const META_BINDINGS: Array<{
   {
     name: "execution modes",
     rows: Object.values(EXECUTION_MODE_OPTIONS_META),
-    paths: ["executionMode", "defaults.executionMode"],
+    paths: ["executionMode", "defaults.executionMode", "steps[].executionMode"],
   },
   {
     name: "prior context keywords",
@@ -89,6 +89,8 @@ const META_BINDINGS: Array<{
       "preCondition.onFail",
       "endCondition.onPass",
       "endCondition.onFail",
+      "steps[].onPass",
+      "steps[].onFail",
       "errorBehavior.onError",
       "defaults.errorBehavior.onError",
     ],
@@ -100,6 +102,7 @@ const META_BINDINGS: Array<{
       "compareSource",
       "endCondition.compareSource",
       "preCondition.compareSource",
+      "steps[].compareSource",
       "defaults.endCondition.compareSource",
       "defaults.preCondition.compareSource",
     ],
@@ -111,6 +114,7 @@ const META_BINDINGS: Array<{
       "operator",
       "endCondition.operator",
       "preCondition.operator",
+      "steps[].operator",
       "defaults.endCondition.operator",
       "defaults.preCondition.operator",
     ],

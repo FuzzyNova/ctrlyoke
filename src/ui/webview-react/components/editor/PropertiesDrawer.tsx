@@ -45,7 +45,6 @@ import {
   HarnessDropdown,
   HARNESS_DISPLAY_NAMES,
   PriorContextSelect,
-  PRIOR_CONTEXT_KEYWORD_LABELS,
   SkillsSelect,
   McpServersEditor,
   buildMcpDefaultLabel,
@@ -63,6 +62,7 @@ import {
   ExitButton,
   AdditionalArgsEditor,
 } from "../shared";
+import { PRIOR_CONTEXT_SELECT_OPTIONS_META } from "@root/types/SchemaUiMetadata";
 import { getAutoResumePreview } from "../../utils/autoResumePreview";
 import {
   agentWarning,
@@ -371,12 +371,15 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     (globalSettings.priorContext as PriorContext);
   const defaultPriorContextLabel = (() => {
     if (Array.isArray(resolvedPriorContext)) {
-      return `Inherit (Custom: [${resolvedPriorContext.join(", ")}])`;
+      return "Inherit (Custom)";
+    }
+    if (resolvedPriorContext && typeof resolvedPriorContext === "object") {
+      return "Inherit (Completed run output)";
     }
     const label =
-      PRIOR_CONTEXT_KEYWORD_LABELS[
-        resolvedPriorContext as keyof typeof PRIOR_CONTEXT_KEYWORD_LABELS
-      ];
+      PRIOR_CONTEXT_SELECT_OPTIONS_META[
+        resolvedPriorContext as keyof typeof PRIOR_CONTEXT_SELECT_OPTIONS_META
+      ]?.label;
     return `Inherit (${label ?? resolvedPriorContext})`;
   })();
 
@@ -904,6 +907,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
                 <PriorContextSelect
                   id="prop-prior-context"
+                  schemaPath="priorContext"
                   value={properties.priorContext}
                   onChange={(v) =>
                     setProperty(PROMPT_PROPERTIES.PRIOR_CONTEXT, v)
@@ -967,6 +971,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
                   <ScriptConditionEditor
                     variant={PROMPT_PROPERTIES.PRE_CONDITION}
+                    schemaPath="preCondition"
                     value={
                       properties.preCondition as
                         ScriptConditionValue | null | undefined
@@ -1015,6 +1020,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
                   <ScriptConditionEditor
                     variant={PROMPT_PROPERTIES.END_CONDITION}
+                    schemaPath="endCondition"
                     hasPreCondition={hasPreCondition}
                     value={
                       properties.endCondition as
@@ -1062,6 +1068,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               >
                 <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
                   <ErrorBehaviorEditor
+                    schemaPath="errorBehavior"
                     value={properties.errorBehavior}
                     onChange={(updated) =>
                       setProperty(PROMPT_PROPERTIES.ERROR_BEHAVIOR, updated)
@@ -1289,6 +1296,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               User Hooks
             </p>
             <HooksEditor
+              schemaPath="hooks"
               value={properties.hooks}
               onChange={(v) => setProperty(PROMPT_PROPERTIES.HOOKS, v)}
               inheritedValue={resolvedHooks}

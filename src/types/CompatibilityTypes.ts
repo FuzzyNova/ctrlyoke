@@ -9,13 +9,13 @@ import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   COMPATIBILITY_SOURCE_TIERS,
   FINAL_STEP_PHASES,
-  HOOK_EVENT_METADATA,
   MCP_CAPABILITY_KEYS,
   PERMISSION_CAPABILITY_KEYS,
   PROMPT_INPUT_CAPABILITY_KEYS,
   type HarnessId,
   type HookEvent,
 } from "./DashboardConstants";
+import { HOOK_EVENT_OPTIONS_META } from "./SchemaUiMetadata";
 
 export const COMPATIBILITY_DIAGNOSTIC_CODES = {
   HARNESS_UNAVAILABLE: "compatibility.harness.unavailable",
@@ -422,7 +422,6 @@ function getDeclarationDiagnosticCode(
 
 function hookEventLabel(capability: string): string {
   return (
-    HOOK_EVENT_METADATA.find((metadata) => metadata.event === capability)
-      ?.label ?? capability
+    HOOK_EVENT_OPTIONS_META[capability as HookEvent]?.label ?? capability
   );
 }

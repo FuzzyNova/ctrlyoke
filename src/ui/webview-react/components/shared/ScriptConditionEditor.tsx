@@ -5,14 +5,12 @@ import { ActionButton } from "./ActionButton";
 import {
   CONDITION_ACTIONS,
   COMPARE_SOURCES,
-  COMPARE_SOURCE_LABELS,
   type CompareSource,
 } from "../../types/messages";
 import {
   DEFAULT_COMPARE_SOURCE,
   DEFAULT_SCRIPT_OPERATOR,
   SCRIPT_OPERATORS,
-  SCRIPT_OPERATOR_LABELS,
   type ScriptOperator,
 } from "@root/types/DashboardConstants";
 import {
@@ -28,7 +26,6 @@ import {
   fieldValidationBorderClass,
   type FieldDiagnostic as FieldDiagnosticItem,
 } from "@utils/fieldValidation";
-import type { SelectOption } from "./CustomSelect";
 import { CodeMirrorEditor } from "@components/editor/CodeMirrorEditor";
 import { ScriptCommandEditor } from "./ScriptCommandEditor";
 import { CreateScriptModal } from "./CreateScriptModal";
@@ -40,7 +37,6 @@ import {
   INHERIT_DEFAULT_OPTION,
   KEYBOARD_KEYS,
   EXECUTION_MODE_HELP_TEXT,
-  EXECUTION_MODE_OPTIONS,
   PROMPT_PROPERTIES,
   SCRIPT_CONDITION_VARIANTS,
   MESSAGE_TYPES,
@@ -48,6 +44,14 @@ import {
   type EndConditionScriptType,
   type ExecutionMode,
 } from "@root/types/DashboardConstants";
+import {
+  COMPARE_SOURCE_OPTIONS_META,
+  CONDITION_ACTION_OPTIONS_META,
+  EXECUTION_MODE_OPTIONS_META,
+  SCRIPT_OPERATOR_OPTIONS_META,
+  toSelectOptions,
+} from "@root/types/SchemaUiMetadata";
+import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
 import {
   resolveShellKind,
   getShellInvocationError,
@@ -63,39 +67,6 @@ import {
   shellSelectValue,
   usesCustomShellPath,
 } from "./shellSelectOptions";
-
-const COMPARE_SOURCE_OPTIONS: SelectOption[] = (
-  Object.values(COMPARE_SOURCES) as CompareSource[]
-).map((v) => ({ value: v, label: COMPARE_SOURCE_LABELS[v] }));
-
-/**
- * Operator options in reading order. The labels are the symbolic forms authors
- * expect (`==`, `>=`); the stored values are the word tokens, because symbols
- * are not usable as YAML scalars — see SCRIPT_OPERATORS.
- */
-const SCRIPT_OPERATOR_OPTIONS: SelectOption[] = (
-  Object.values(SCRIPT_OPERATORS) as ScriptOperator[]
-).map((v) => ({ value: v, label: SCRIPT_OPERATOR_LABELS[v] }));
-
-/** Action options for end condition (onPass/onFail) */
-const END_CONDITION_ACTION_OPTIONS: SelectOption[] = [
-  { value: CONDITION_ACTIONS.CONTINUE, label: "Continue" },
-  { value: CONDITION_ACTIONS.RETRY, label: "Retry" },
-  { value: CONDITION_ACTIONS.STOP_WORKFLOW, label: "Stop Workflow" },
-];
-
-/** Action options for pre-condition (onPass/onFail) */
-const PRE_CONDITION_ACTION_OPTIONS: SelectOption[] = [
-  { value: CONDITION_ACTIONS.CONTINUE, label: "Continue" },
-  { value: CONDITION_ACTIONS.SKIP_PROMPT, label: "Skip Prompt" },
-  { value: CONDITION_ACTIONS.STOP_WORKFLOW, label: "Stop Workflow" },
-];
-
-/** Action options for script step (onPass/onFail) */
-const SCRIPT_STEP_ACTION_OPTIONS: SelectOption[] = [
-  { value: CONDITION_ACTIONS.CONTINUE, label: "Continue" },
-  { value: CONDITION_ACTIONS.STOP_WORKFLOW, label: "Stop Workflow" },
-];
 
 let createScriptRequestCounter = 0;
 
@@ -157,6 +128,8 @@ interface ScriptConditionEditorProps {
   scriptLabel?: string;
   /** Whether the edited step has an effective pre-condition configured. */
   hasPreCondition?: boolean;
+  /** File-relative schema path for this script condition (e.g. endCondition). */
+  schemaPath?: string;
 }
 
 /**
@@ -189,14 +162,29 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   idPrefix = variant,
   scriptLabel = "Script",
   hasPreCondition = false,
+  schemaPath = variant === SCRIPT_CONDITION_VARIANTS.SCRIPT_STEP
+    ? "steps[]"
+    : variant,
 }) => {
   const v = value ?? {};
+  const compareSourcePath = `${schemaPath}.compareSource`;
+  const operatorPath = `${schemaPath}.operator`;
+  const compareSourceOptions = toSelectOptions(
+    COMPARE_SOURCE_OPTIONS_META,
+    compareSourcePath
+  );
+  const operatorOptions = toSelectOptions(SCRIPT_OPERATOR_OPTIONS_META, operatorPath);
   const actionOptions =
     variant === PROMPT_PROPERTIES.END_CONDITION
-      ? END_CONDITION_ACTION_OPTIONS
+      ? [CONDITION_ACTIONS.CONTINUE, CONDITION_ACTIONS.RETRY, CONDITION_ACTIONS.STOP_WORKFLOW]
       : variant === PROMPT_PROPERTIES.PRE_CONDITION
-        ? PRE_CONDITION_ACTION_OPTIONS
-        : SCRIPT_STEP_ACTION_OPTIONS;
+        ? [CONDITION_ACTIONS.CONTINUE, CONDITION_ACTIONS.SKIP_PROMPT, CONDITION_ACTIONS.STOP_WORKFLOW]
+        : [CONDITION_ACTIONS.CONTINUE, CONDITION_ACTIONS.STOP_WORKFLOW];
+  const actionOptionsFor = (property: "onPass" | "onFail") =>
+    actionOptions.map((action) => ({
+      ...CONDITION_ACTION_OPTIONS_META[action],
+      schemaPath: `${schemaPath}.${property}`,
+    }));
 
   const hasPassRetry =
     variant === PROMPT_PROPERTIES.END_CONDITION &&
@@ -368,7 +356,14 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   }, [v.shell]);
 
   const shellOptions = useMemo(
-    () => buildShellOptions(v.shell, platform),
+    () =>
+      buildShellOptions(v.shell, platform).map((option) =>
+        option.value === INHERIT_DEFAULT_OPTION
+          ? { ...option, pseudo: { writes: "omit shell" } }
+          : option.value === CUSTOM_SHELL_OPTION
+            ? { ...option, pseudo: { writes: "shell: <custom path>" } }
+            : option
+      ),
     [v.shell, platform]
   );
 
@@ -429,9 +424,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
     (s) => s.workflowProperties.executionMode ?? s.globalSettings.executionMode
   );
   const defaultExecutionModeLabel = `Inherit (${
-    EXECUTION_MODE_OPTIONS.find(
-      (option) => option.value === resolvedExecutionMode
-    )?.label ?? resolvedExecutionMode
+      EXECUTION_MODE_OPTIONS_META[resolvedExecutionMode]?.label ?? resolvedExecutionMode
   })`;
   // One generated sentence, shared with the execution preview and the CLI
   // verdict, so all three describe a condition the same way.
@@ -485,11 +478,13 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
         <label
           htmlFor={`${idPrefix}-script`}
           className="text-xs font-medium text-foreground"
+          title={schemaTitle(`${schemaPath}.script`)}
         >
           {scriptLabel}
         </label>
         <ScriptCommandEditor
           id={`${idPrefix}-script`}
+          aria-label={schemaAriaLabel(scriptLabel, `${schemaPath}.script`)}
           value={scriptInput}
           onChange={setScriptInput}
           onBlur={() => update({ script: scriptInput })}
@@ -505,6 +500,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
         id={`${idPrefix}-env`}
         label="Environment"
         ariaLabel={`${idPrefix}-env`}
+        schemaPath={`${schemaPath}.env`}
         value={v.env ?? {}}
         onChange={handleEnvironmentChange}
         keyKind="env"
@@ -537,25 +533,28 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             id={`${idPrefix}-compare-source`}
             value={compareSource}
             onChange={(val) => update({ compareSource: val as CompareSource })}
-            options={COMPARE_SOURCE_OPTIONS}
+            options={compareSourceOptions}
             disabled={disabled}
             triggerAriaLabel="Compare source"
+            schemaPath={compareSourcePath}
             className={narrow ? "w-full" : "flex-1 min-w-0"}
           />
           <CustomSelect
             id={`${idPrefix}-operator`}
             value={operator}
             onChange={handleOperatorChange}
-            options={SCRIPT_OPERATOR_OPTIONS}
+            options={operatorOptions}
             disabled={disabled}
             triggerAriaLabel="Comparison operator"
+            schemaPath={operatorPath}
             className={narrow ? "w-full" : "flex-1 min-w-0"}
           />
           {showExpected && (
             <input
               type="text"
               id={`${idPrefix}-expected`}
-              aria-label="Expected value"
+              title={schemaTitle(`${schemaPath}.expected`)}
+              aria-label={schemaAriaLabel("Expected value", `${schemaPath}.expected`)}
               value={expectedInput}
               onChange={(e) => setExpectedInput(e.target.value)}
               onBlur={(e) =>
@@ -592,6 +591,8 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             <input
               type="checkbox"
               id={`${idPrefix}-ignore-case`}
+              aria-label={schemaAriaLabel("Ignore case", `${schemaPath}.ignoreCase`)}
+              title={schemaTitle(`${schemaPath}.ignoreCase`, undefined, "Compare text without regard to letter case. Does not apply to numeric, regex, or emptiness operators.")}
               checked={v.ignoreCase ?? false}
               onChange={(e) =>
                 update({ ignoreCase: e.target.checked ? true : undefined })
@@ -602,7 +603,6 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             <label
               htmlFor={`${idPrefix}-ignore-case`}
               className="text-xs font-medium text-foreground cursor-pointer"
-              title="Compare text without regard to letter case. Does not apply to numeric, regex, or emptiness operators."
             >
               Ignore case
             </label>
@@ -616,6 +616,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           <label
             htmlFor={`${idPrefix}-on-pass`}
             className="text-xs font-medium text-foreground"
+            title={schemaTitle(`${schemaPath}.onPass`)}
           >
             On Pass
           </label>
@@ -623,14 +624,16 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             id={`${idPrefix}-on-pass`}
             value={v.onPass ?? CONDITION_ACTIONS.CONTINUE}
             onChange={(val) => update({ onPass: val })}
-            options={actionOptions}
+            options={actionOptionsFor("onPass")}
             disabled={disabled}
+            schemaPath={`${schemaPath}.onPass`}
           />
         </div>
         <div className="flex flex-col gap-1">
           <label
             htmlFor={`${idPrefix}-on-fail`}
             className="text-xs font-medium text-foreground"
+            title={schemaTitle(`${schemaPath}.onFail`)}
           >
             On Fail
           </label>
@@ -643,8 +646,9 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
                 : CONDITION_ACTIONS.STOP_WORKFLOW)
             }
             onChange={(val) => update({ onFail: val })}
-            options={actionOptions}
+            options={actionOptionsFor("onFail")}
             disabled={disabled}
+            schemaPath={`${schemaPath}.onFail`}
           />
         </div>
       </DrawerRow>
@@ -655,12 +659,15 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           <label
             htmlFor={`${idPrefix}-timeout`}
             className="text-xs font-medium text-foreground"
+            title={schemaTitle(`${schemaPath}.timeout`)}
           >
             Timeout (ms)
           </label>
           <input
             type="number"
             id={`${idPrefix}-timeout`}
+            aria-label={schemaAriaLabel("Timeout (ms)", `${schemaPath}.timeout`)}
+            title={schemaTitle(`${schemaPath}.timeout`)}
             value={timeoutInput}
             onChange={(e) => setTimeoutInput(e.target.value)}
             onBlur={commitTimeout}
@@ -674,7 +681,8 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           <label
             htmlFor={`${idPrefix}-shell`}
             className="text-xs font-medium text-foreground"
-            title="Pins the interpreter for this script's inline text. Script files with a known extension (.ps1, .sh) always use their own interpreter."
+            title={schemaTitle(`${schemaPath}.shell`, undefined, "Pins the interpreter for this script's inline text. Script files with a known extension (.ps1, .sh) always use their own interpreter.")}
+            aria-label={schemaAriaLabel("Shell", `${schemaPath}.shell`)}
           >
             Shell
           </label>
@@ -683,10 +691,12 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             value={shellSelectValue(v.shell, customShellPath)}
             onChange={handleShellSelect}
             options={shellOptions}
+            schemaPath={`${schemaPath}.shell`}
             disabled={disabled}
             warning={shellValidation}
             warningSeverity={shellValidationSeverity}
             warningId={`${idPrefix}-shell-warning`}
+            triggerAriaLabel="Shell"
           />
         </div>
       </DrawerRow>
@@ -703,6 +713,8 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           <input
             type="text"
             id={`${idPrefix}-shell-path`}
+            aria-label={schemaAriaLabel("Custom shell path", `${schemaPath}.shell`)}
+            title={schemaTitle(`${schemaPath}.shell`)}
             value={shellInput}
             onChange={(e) => setShellInput(e.target.value)}
             onBlur={commitShell}
@@ -727,12 +739,15 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             <label
               htmlFor={`${idPrefix}-max-retries`}
               className="text-xs font-medium text-foreground"
+              title={schemaTitle(`${schemaPath}.maxRetries`)}
             >
               Max Retries
             </label>
             <input
               type="number"
               id={`${idPrefix}-max-retries`}
+              aria-label={schemaAriaLabel("Max Retries", `${schemaPath}.maxRetries`)}
+              title={schemaTitle(`${schemaPath}.maxRetries`)}
               value={maxRetriesInput}
               onChange={(e) => setMaxRetriesInput(e.target.value)}
               onBlur={() => {
@@ -757,7 +772,8 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             <label
               htmlFor={`${idPrefix}-execution-mode`}
               className="text-xs font-medium text-foreground"
-              title={EXECUTION_MODE_HELP_TEXT}
+              title={schemaTitle(`${schemaPath}.executionMode`, undefined, EXECUTION_MODE_HELP_TEXT)}
+              aria-label={schemaAriaLabel("Execution Mode", `${schemaPath}.executionMode`)}
             >
               Execution Mode
             </label>
@@ -776,10 +792,13 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
                 {
                   value: INHERIT_DEFAULT_OPTION,
                   label: defaultExecutionModeLabel,
+                  pseudo: { writes: "omit executionMode" },
                 },
-                ...EXECUTION_MODE_OPTIONS,
+                ...toSelectOptions(EXECUTION_MODE_OPTIONS_META, `${schemaPath}.executionMode`),
               ]}
               disabled={disabled}
+              schemaPath={`${schemaPath}.executionMode`}
+              triggerAriaLabel="Execution Mode"
             />
           </div>
         </DrawerRow>
@@ -792,6 +811,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             <div className="flex flex-col gap-1">
               <label
                 htmlFor={`${idPrefix}-pass-retry-prompt`}
+                title={schemaTitle(`${schemaPath}.passRetryPrompt`)}
                 className="text-xs font-medium text-foreground"
               >
                 Pass Retry Prompt
@@ -825,6 +845,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             <div className="flex flex-col gap-1">
               <label
                 htmlFor={`${idPrefix}-retry-prompt`}
+                title={schemaTitle(`${schemaPath}.retryPrompt`)}
                 className="text-xs font-medium text-foreground"
               >
                 Retry Prompt
@@ -858,6 +879,8 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             <input
               type="checkbox"
               id={`${idPrefix}-resume-session-on-retry`}
+              aria-label={schemaAriaLabel("Resume Session on Retry", `${schemaPath}.resumeSessionOnRetry`)}
+              title={schemaTitle(`${schemaPath}.resumeSessionOnRetry`, undefined, "When enabled, retries continue in the same session. Uncheck to start a fresh session for each retry.")}
               checked={v.resumeSessionOnRetry ?? true}
               onChange={(e) =>
                 update({ resumeSessionOnRetry: e.target.checked })
@@ -868,7 +891,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             <label
               htmlFor={`${idPrefix}-resume-session-on-retry`}
               className="text-xs font-medium text-foreground cursor-pointer"
-              title="When enabled, retries continue in the same session. Uncheck to start a fresh session for each retry."
+              title={schemaTitle(`${schemaPath}.resumeSessionOnRetry`, undefined, "When enabled, retries continue in the same session. Uncheck to start a fresh session for each retry.")}
             >
               Resume Session on Retry
             </label>

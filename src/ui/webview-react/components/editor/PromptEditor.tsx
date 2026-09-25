@@ -1528,6 +1528,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         <div className="flex flex-col flex-1 min-h-0 overflow-auto px-3 py-3 bg-editor-bg">
           <ScriptConditionEditor
             variant="scriptStep"
+            schemaPath="steps[]"
             value={{
               script: scriptCommand,
               timeout: scriptTimeout,
@@ -1586,6 +1587,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
                   value={properties.errorBehavior}
                   onChange={(updated) => setProperty("errorBehavior", updated)}
                   idPrefix="script-step-error"
+                  schemaPath="errorBehavior"
                 />
               )}
             </div>

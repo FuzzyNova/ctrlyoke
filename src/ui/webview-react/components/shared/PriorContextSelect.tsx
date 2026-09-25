@@ -1,7 +1,10 @@
 import {
   INHERIT_DEFAULT_OPTION,
   PRIOR_CONTEXT_SELECTION_MODES,
+  PRIOR_CONTEXT_KEYWORDS,
 } from "@root/types/DashboardConstants";
+import { PRIOR_CONTEXT_SELECT_OPTIONS_META } from "@root/types/SchemaUiMetadata";
+import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
 import React, { useId, useState, useEffect, useRef } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
@@ -20,28 +23,10 @@ interface PriorContextSelectProps {
   /** Override label for the Default option (e.g. "Default (None)" or "Default (Previous step)"). */
   defaultLabel?: string;
   dropdownMaxHeight?: string;
+  schemaPath?: string;
 }
 
-export type KeywordMode =
-  | typeof INHERIT_DEFAULT_OPTION
-  | "none"
-  | "previous"
-  | "all"
-  | "finalStepPrevious"
-  | "finalStepAll"
-  | typeof PRIOR_CONTEXT_SELECTION_MODES.RUN
-  | typeof PRIOR_CONTEXT_SELECTION_MODES.CUSTOM;
-
-export const PRIOR_CONTEXT_KEYWORD_LABELS: Record<KeywordMode, string> = {
-  default: "Default (inherit from workflow)",
-  none: "None",
-  previous: "Previous step",
-  all: "All prior steps",
-  finalStepPrevious: "Previous final step output",
-  finalStepAll: "All final step outputs",
-  run: "Completed run output",
-  [PRIOR_CONTEXT_SELECTION_MODES.CUSTOM]: "Custom",
-};
+export type KeywordMode = keyof typeof PRIOR_CONTEXT_SELECT_OPTIONS_META;
 
 function isRunAddress(
   value: PriorContext | undefined
@@ -94,6 +79,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   showDefault = false,
   defaultLabel,
   dropdownMaxHeight = "60vh",
+  schemaPath = "priorContext",
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const reactId = useId();
@@ -111,6 +97,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   useClickOutside([buttonRef, popupRef], isOpen, () => setIsOpen(false));
 
   const mode = getMode(value);
+  const inheritLabel = defaultLabel ?? "Inherit (None)";
 
   // Custom input state
   const [wantsCustom, setWantsCustom] = useState(
@@ -209,28 +196,30 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   if (showCustomInput) {
     buttonLabel = "Custom";
   } else if (mode === INHERIT_DEFAULT_OPTION && defaultLabel) {
-    buttonLabel = defaultLabel;
+    buttonLabel = inheritLabel;
+  } else if (mode === INHERIT_DEFAULT_OPTION) {
+    buttonLabel = inheritLabel;
   } else {
-    buttonLabel = PRIOR_CONTEXT_KEYWORD_LABELS[mode];
+    buttonLabel = PRIOR_CONTEXT_SELECT_OPTIONS_META[mode].label;
   }
 
   const keywords: KeywordMode[] = showDefault
     ? [
         INHERIT_DEFAULT_OPTION,
-        "none",
-        "previous",
-        "all",
-        "finalStepPrevious",
-        "finalStepAll",
+        PRIOR_CONTEXT_KEYWORDS.NONE,
+        PRIOR_CONTEXT_KEYWORDS.PREVIOUS,
+        PRIOR_CONTEXT_KEYWORDS.ALL,
+        PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS,
+        PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL,
         PRIOR_CONTEXT_SELECTION_MODES.RUN,
         PRIOR_CONTEXT_SELECTION_MODES.CUSTOM,
       ]
     : [
-        "none",
-        "previous",
-        "all",
-        "finalStepPrevious",
-        "finalStepAll",
+        PRIOR_CONTEXT_KEYWORDS.NONE,
+        PRIOR_CONTEXT_KEYWORDS.PREVIOUS,
+        PRIOR_CONTEXT_KEYWORDS.ALL,
+        PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS,
+        PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL,
         PRIOR_CONTEXT_SELECTION_MODES.RUN,
         PRIOR_CONTEXT_SELECTION_MODES.CUSTOM,
       ];
@@ -244,7 +233,8 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
           id={id}
           type="button"
           onClick={() => setIsOpen((prev) => !prev)}
-          aria-label="Prior context"
+          aria-label={schemaAriaLabel(buttonLabel, schemaPath, PRIOR_CONTEXT_SELECT_OPTIONS_META[mode].pseudo ? { writes: PRIOR_CONTEXT_SELECT_OPTIONS_META[mode].pseudo.writes } : mode)}
+          title={schemaTitle(schemaPath, PRIOR_CONTEXT_SELECT_OPTIONS_META[mode].pseudo ? { writes: PRIOR_CONTEXT_SELECT_OPTIONS_META[mode].pseudo.writes } : mode)}
           aria-expanded={isOpen}
           aria-haspopup="listbox"
           aria-controls={listboxId}
@@ -268,14 +258,16 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
             {keywords.map((k) => {
               const isSelected = displayMode === k;
               const label =
-                k === INHERIT_DEFAULT_OPTION && defaultLabel
-                  ? defaultLabel
-                  : PRIOR_CONTEXT_KEYWORD_LABELS[k];
+                k === INHERIT_DEFAULT_OPTION
+                  ? inheritLabel
+                  : PRIOR_CONTEXT_SELECT_OPTIONS_META[k].label;
               return (
                 <button
                   key={k}
                   type="button"
                   onClick={() => selectKeyword(k)}
+                  aria-label={schemaAriaLabel(label, schemaPath, PRIOR_CONTEXT_SELECT_OPTIONS_META[k].pseudo ? { writes: PRIOR_CONTEXT_SELECT_OPTIONS_META[k].pseudo.writes } : k)}
+                  title={schemaTitle(schemaPath, PRIOR_CONTEXT_SELECT_OPTIONS_META[k].pseudo ? { writes: PRIOR_CONTEXT_SELECT_OPTIONS_META[k].pseudo.writes } : k)}
                   className={`w-full px-2 py-1.5 text-xs text-left flex items-center gap-2 focus:outline-none border-none ${
                     isSelected
                       ? "bg-dropdown-selected-bg text-list-active-fg cy-dropdown-row-selected"

@@ -1793,7 +1793,6 @@ export type HookEvent =
 
 export interface HookEventMetadata {
   event: HookEvent;
-  label: string;
   description: string;
 }
 
@@ -1810,44 +1809,36 @@ export const HOOK_EVENT_ORDER: HookEvent[] = [
 
 export const HOOK_EVENT_METADATA: HookEventMetadata[] = [
   {
-    event: "stop",
-    label: "Stop",
+    event: HOOK_EVENT_NAMES.STOP,
     description: "Fires when the AI agent finishes responding.",
   },
   {
-    event: "sessionStart",
-    label: "Session Start",
+    event: HOOK_EVENT_NAMES.SESSION_START,
     description: "Fires when a new AI session is created.",
   },
   {
-    event: "preToolUse",
-    label: "Pre Tool Use",
+    event: HOOK_EVENT_NAMES.PRE_TOOL_USE,
     description: "Fires before the AI invokes a tool.",
   },
   {
-    event: "postToolUse",
-    label: "Post Tool Use",
+    event: HOOK_EVENT_NAMES.POST_TOOL_USE,
     description: "Fires after the AI receives the result of a tool call.",
   },
   {
-    event: "userPromptSubmit",
-    label: "User Prompt Submit",
+    event: HOOK_EVENT_NAMES.USER_PROMPT_SUBMIT,
     description: "Fires when a user prompt is submitted to the AI.",
   },
   {
     event: HOOK_EVENT_NAMES.PERMISSION_REQUEST,
-    label: "Permission Request",
     description: "Fires when the AI requests permission to perform an action.",
   },
   {
-    event: "notification",
-    label: "Notification",
+    event: HOOK_EVENT_NAMES.NOTIFICATION,
     description:
       "Fires when the harness displays a notification, including prompts that may require user input.",
   },
   {
-    event: "error",
-    label: "Error",
+    event: HOOK_EVENT_NAMES.ERROR,
     description: "Fires when the harness reports a session-level error.",
   },
 ];
@@ -2872,21 +2863,11 @@ export const COMPARE_SOURCES = {
 /** The compare source used when a script condition does not pin one. */
 export const DEFAULT_COMPARE_SOURCE = COMPARE_SOURCES.EXIT_CODE;
 
-/** Display labels for COMPARE_SOURCES values (script/endCondition/preCondition editors) */
-export const COMPARE_SOURCE_LABELS: Record<
-  (typeof COMPARE_SOURCES)[keyof typeof COMPARE_SOURCES],
-  string
-> = {
-  stdout: "Stdout",
-  stderr: "Stderr",
-  exitCode: "Exit code",
-};
-
 // ============================================================================
 // SCRIPT OPERATORS - how a script condition compares its source against
 // `expected`. Word tokens, never symbols: `operator: >=` is a YAML block-scalar
 // parse error and `operator: !=` silently parses to "" (it reads as a YAML tag),
-// so the symbols live only in SCRIPT_OPERATOR_LABELS for display.
+// so display symbols are held in SchemaUiMetadata.
 // ============================================================================
 export const SCRIPT_OPERATORS = {
   EQ: "eq",
@@ -2904,24 +2885,6 @@ export const SCRIPT_OPERATORS = {
 
 /** The operator used when a script condition does not pin one. */
 export const DEFAULT_SCRIPT_OPERATOR = SCRIPT_OPERATORS.EQ;
-
-/** Display labels for SCRIPT_OPERATORS values (script condition editors, verdicts). */
-export const SCRIPT_OPERATOR_LABELS: Record<
-  (typeof SCRIPT_OPERATORS)[keyof typeof SCRIPT_OPERATORS],
-  string
-> = {
-  eq: "==",
-  ne: "!=",
-  contains: "contains",
-  notContains: "does not contain",
-  gte: ">=",
-  gt: ">",
-  lte: "<=",
-  lt: "<",
-  matches: "matches regex",
-  isEmpty: "is empty",
-  isNotEmpty: "is not empty",
-};
 
 /**
  * Operators that compare text, so `ignoreCase` applies to them. Numeric,
