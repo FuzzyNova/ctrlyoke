@@ -3,6 +3,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, teardown, test } from "mocha";
+import { STATUSLINE_SNAPSHOT_PROTOCOL_VERSION } from "../../utils/StatuslineFormat";
 
 // Scripts are copied verbatim to out/scripts by esbuild; tests run from
 // out/test, so this path deliberately resolves against the compiled layout.
@@ -47,6 +48,10 @@ suite("Antigravity statusline script", () => {
     assert.strictEqual(
       (snapshot._ctrlyoke as { writtenAt: number }).writtenAt,
       1234
+    );
+    assert.strictEqual(
+      (snapshot._ctrlyoke as { protocolVersion: unknown }).protocolVersion,
+      STATUSLINE_SNAPSHOT_PROTOCOL_VERSION
     );
     assert.strictEqual(
       typeof (snapshot._ctrlyoke as { sequence: unknown }).sequence,

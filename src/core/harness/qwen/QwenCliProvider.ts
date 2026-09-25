@@ -362,12 +362,8 @@ export class QwenCliProvider implements ICliProvider {
     extensionPath: string,
     workspaceRoot: string
   ): Promise<StatuslineInstallResult> {
-    const scriptPath = path.join(
-      extensionPath,
-      "out",
-      "scripts",
-      "ctrlyoke-qwen-statusline.js"
-    );
+    const scriptPath =
+      await QwenCliProvider.statuslineManager.resolveScriptPath(extensionPath);
     const command = CliNotificationMonitor.buildNodeCommand(
       scriptPath,
       ""

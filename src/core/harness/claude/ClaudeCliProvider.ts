@@ -945,12 +945,10 @@ export class ClaudeCliProvider implements ICliProvider {
     workspaceRoot: string,
     _workflowKey: string
   ): Promise<StatuslineInstallResult> {
-    const scriptPath = path.join(
-      extensionPath,
-      "out",
-      "scripts",
-      "ctrlyoke-claude-statusline.js"
-    );
+    const scriptPath =
+      await ClaudeCliProvider.statuslineManager.resolveScriptPath(
+        extensionPath
+      );
     const command = CliNotificationMonitor.buildNodeCommand(
       scriptPath,
       ""

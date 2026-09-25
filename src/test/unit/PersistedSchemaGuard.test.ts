@@ -8,10 +8,22 @@ import {
   hasNewerSchema,
   isNewerSchemaError,
   NewerSchemaError,
+  onNewerSchemaRefusal,
   PERSISTED_STORES,
   prepareRunFileForWrite,
   readSchemaVersion,
 } from "../../utils/PersistedSchemaGuard";
+import {
+  LifetimeUsageStore,
+  LIFETIME_USAGE_ERROR_CODES,
+} from "../../core/harness/shared/usage/LifetimeUsageStore";
+import {
+  ObservedHarnessUsageStore,
+  OBSERVED_USAGE_ERROR_CODES,
+} from "../../core/harness/shared/usage/ObservedHarnessUsageStore";
+import { HarnessUsageService } from "../../core/harness/shared/usage/HarnessUsageService";
+import { providerSnapshotsPath } from "../../utils/UsagePaths";
+import { formatRunRef } from "../../utils/WorkflowPaths";
 import {
   EXECUTION_STATES,
   RUNNER_IDS,
@@ -33,6 +45,13 @@ import { ExternalRootsTrustStore } from "../../config/ExternalRootsTrustStore";
 import { SecretGrantsTrustStore } from "../../config/SecretGrantsTrustStore";
 import { TRUST_DECISIONS } from "../../types/DashboardConstants";
 import { ExecutionRootCoordinationStore } from "../../core/orchestration/ExecutionRootCoordinationStore";
+
+/** Awaits the persistence the service otherwise fires and forgets. */
+class PersistingUsageService extends HarnessUsageService {
+  persistNow(): Promise<void> {
+    return this.persistProviderSnapshots();
+  }
+}
 
 /** One past what this build supports: "written by a newer ctrlyoke". */
 function newerThan(store: keyof typeof CURRENT_SCHEMA_VERSIONS): number {
@@ -87,6 +106,29 @@ suite("PersistedSchemaGuard", () => {
       );
     });
 
+    test("every refusal reaches the listeners, even one the caller swallows", () => {
+      const seen: NewerSchemaError[] = [];
+      const unsubscribe = onNewerSchemaRefusal((error) => seen.push(error));
+      try {
+        try {
+          prepareRunFileForWrite(
+            {
+              _runtime: { schemaVersion: newerThan(PERSISTED_STORES.RUN_FILE) },
+            },
+            "run.json"
+          );
+        } catch {
+          // The executor catches this and reports a failed step.
+        }
+      } finally {
+        unsubscribe();
+      }
+      assert.deepStrictEqual(
+        seen.map((error) => error.store),
+        [PERSISTED_STORES.RUN_FILE]
+      );
+    });
+
     test("prepareRunFileForWrite refuses a newer run file", () => {
       assert.throws(
         () =>
@@ -100,6 +142,103 @@ suite("PersistedSchemaGuard", () => {
           ),
         NewerSchemaError
       );
+    });
+  });
+
+  suite("usage statistics", () => {
+    let previousHome: string | undefined;
+
+    setup(() => {
+      previousHome = process.env.CTRLYOKE_HOME;
+      process.env.CTRLYOKE_HOME = path.join(tempRoot, "home");
+    });
+
+    teardown(() => {
+      if (previousHome === undefined) {
+        delete process.env.CTRLYOKE_HOME;
+      } else {
+        process.env.CTRLYOKE_HOME = previousHome;
+      }
+    });
+
+    async function writeNewer(
+      filePath: string,
+      store: (typeof PERSISTED_STORES)[keyof typeof PERSISTED_STORES]
+    ): Promise<string> {
+      const contents = JSON.stringify({
+        schemaVersion: newerThan(store),
+        someNewField: true,
+      });
+      await fs.mkdir(path.dirname(filePath), { recursive: true });
+      await fs.writeFile(filePath, contents, "utf8");
+      return contents;
+    }
+
+    async function assertUntouched(
+      filePath: string,
+      contents: string
+    ): Promise<void> {
+      assert.strictEqual(await fs.readFile(filePath, "utf8"), contents);
+      const siblings = await fs.readdir(path.dirname(filePath));
+      assert.ok(
+        !siblings.some((file) => file.includes(".corrupt-")),
+        `a newer file must not be quarantined: ${siblings.join(", ")}`
+      );
+    }
+
+    test("lifetime stats: refused and left in place, not quarantined", async () => {
+      const store = new LifetimeUsageStore(tempRoot);
+      const contents = await writeNewer(
+        store.getPath(),
+        PERSISTED_STORES.LIFETIME_USAGE
+      );
+
+      await assertRefusesNewer(PERSISTED_STORES.LIFETIME_USAGE, () =>
+        store.read()
+      );
+      await assert.rejects(store.fullRebuild());
+      assert.strictEqual(
+        store.getLastErrorCode(),
+        LIFETIME_USAGE_ERROR_CODES.NEWER_DATA
+      );
+      await assertUntouched(store.getPath(), contents);
+    });
+
+    test("observed usage: refused and left in place, not quarantined", async () => {
+      const store = new ObservedHarnessUsageStore(tempRoot);
+      const contents = await writeNewer(
+        store.getPath(),
+        PERSISTED_STORES.OBSERVED_USAGE
+      );
+
+      await assertRefusesNewer(PERSISTED_STORES.OBSERVED_USAGE, () =>
+        store.read()
+      );
+      await assert.rejects(
+        store.upsertRunContribution(
+          "schema-usage" as WorkflowKey,
+          formatRunRef(Date.now()),
+          undefined
+        )
+      );
+      assert.strictEqual(
+        store.getLastErrorCode(),
+        OBSERVED_USAGE_ERROR_CODES.NEWER_DATA
+      );
+      await assertUntouched(store.getPath(), contents);
+    });
+
+    test("provider snapshots: not loaded, not overwritten, not quarantined", async () => {
+      const filePath = providerSnapshotsPath();
+      const contents = await writeNewer(
+        filePath,
+        PERSISTED_STORES.PROVIDER_USAGE
+      );
+
+      const service = new PersistingUsageService(tempRoot, []);
+      await service.initialize();
+      await service.persistNow();
+      await assertUntouched(filePath, contents);
     });
   });
 

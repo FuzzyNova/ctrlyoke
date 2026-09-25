@@ -40,6 +40,11 @@ export interface InstallationRecord {
   version: string;
   packageRoot: string;
   lastSeen: number;
+  /**
+   * The history search index version this host reads and writes. Hosts from
+   * before per-version index directories leave it unset.
+   */
+  indexSchemaVersion?: string;
 }
 
 interface InstallationsFile {
@@ -105,6 +110,31 @@ function isLive(record: InstallationRecord, now: number): boolean {
     now - record.lastSeen <= INSTALLATION_MAX_AGE_MS &&
     fs.existsSync(record.packageRoot)
   );
+}
+
+/** Every installation seen in the last 30 days whose folder still exists. */
+export async function readLiveInstallations(
+  now: number = Date.now()
+): Promise<InstallationRecord[]> {
+  const file = await readFile(installationsFilePath());
+  return Object.values(file.installations).filter((record) =>
+    isLive(record, now)
+  );
+}
+
+/**
+ * How many distinct installations are live. The CLI bundled in the VSIX shares
+ * its extension's folder, so the two count once. A host that recorded itself
+ * at startup counts itself.
+ */
+export async function countLiveInstallationRoots(
+  now: number = Date.now()
+): Promise<number> {
+  return new Set(
+    (await readLiveInstallations(now)).map((record) =>
+      foldPathForCompare(path.resolve(record.packageRoot))
+    )
+  ).size;
 }
 
 /**

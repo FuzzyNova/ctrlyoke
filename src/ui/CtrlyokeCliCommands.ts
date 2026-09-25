@@ -16,6 +16,7 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import { VSCODE_COMMANDS } from "../types/DashboardConstants";
+import { INDEX_SCHEMA_VERSION } from "../core/orchestration/HistorySearchIndexLayout";
 import {
   ensureCtrlyokeShimsExecutable,
   getCtrlyokeBinDirectory,
@@ -102,6 +103,7 @@ export async function noteExtensionInstallation(
       version: String(context.extension.packageJSON.version),
       packageRoot: context.extensionPath,
       lastSeen: Date.now(),
+      indexSchemaVersion: INDEX_SCHEMA_VERSION,
     };
     const { others } = await recordInstallation(self);
     const olderCli = findOlderCli(self, others);

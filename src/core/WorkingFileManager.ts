@@ -54,9 +54,9 @@ import { ensureStepIds, resetStepRuntimeForRewind } from "./StepIdentity";
 import {
   assertWritableSchema,
   isNewerRunFile,
-  NewerSchemaError,
   PERSISTED_STORES,
   prepareRunFileForWrite,
+  refuseNewerSchema,
 } from "../utils/PersistedSchemaGuard";
 import {
   deleteParallelGroupStep,
@@ -714,7 +714,7 @@ export class WorkingFileManager {
     // run-file writer checks), and refusing first leaves no staging run behind.
     const head = await this.readCurrentDefinitionHead();
     if (head && isNewerRunFile(head)) {
-      throw new NewerSchemaError(
+      refuseNewerSchema(
         PERSISTED_STORES.RUN_FILE,
         head._runtime?.schemaVersion as number,
         this.queueAccess.getWorkingFilePath()

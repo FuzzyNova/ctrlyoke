@@ -23,12 +23,19 @@ import { getErrorMessage } from "../../../../utils/ErrorUtils";
 import { withFileLock } from "../../../../utils/FileLockUtils";
 import { Log } from "../../../../utils/Log";
 import { providerSnapshotsPath } from "../../../../utils/UsagePaths";
+import {
+  assertWritableSchema,
+  CURRENT_SCHEMA_VERSIONS,
+  isNewerSchemaError,
+  PERSISTED_STORES,
+} from "../../../../utils/PersistedSchemaGuard";
 import { normalizeUsageTimestamp } from "./UsageTimestampUtils";
 import { ObservedHarnessUsageStore } from "./ObservedHarnessUsageStore";
 import type { IHarnessUsageProvider } from "./IHarnessUsageProvider";
 import { createDefaultHarnessUsageProviders } from "./providers";
 
-export const PROVIDER_USAGE_SCHEMA_VERSION = 1 as const;
+export const PROVIDER_USAGE_SCHEMA_VERSION =
+  CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.PROVIDER_USAGE];
 
 export const HARNESS_USAGE_ERROR_CODES = {
   MALFORMED_PROVIDER_DATA: "malformed-provider-usage-data",
@@ -431,6 +438,11 @@ export class HarnessUsageService {
     try {
       const raw = await fs.readFile(this.providerSnapshotsFile, "utf8");
       const parsed: unknown = JSON.parse(raw);
+      assertWritableSchema(
+        PERSISTED_STORES.PROVIDER_USAGE,
+        parsed,
+        this.providerSnapshotsFile
+      );
       if (
         !isRecord(parsed) ||
         parsed.schemaVersion !== PROVIDER_USAGE_SCHEMA_VERSION ||
@@ -462,11 +474,13 @@ export class HarnessUsageService {
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      // A newer ctrlyoke's file is left for it; this host starts empty.
+      if (isNewerSchemaError(error)) return;
       await this.quarantineProviderSnapshotFile();
     }
   }
 
-  private async persistProviderSnapshots(): Promise<void> {
+  protected async persistProviderSnapshots(): Promise<void> {
     try {
       await ensurePrivateDirectory(path.dirname(this.providerSnapshotsFile));
       await withFileLock(this.providerSnapshotsFile, async () => {
@@ -540,12 +554,18 @@ function stripPersistedQuota(
   };
 }
 
+/**
+ * The persisted snapshots, or `undefined` when absent or unreadable. Throws
+ * `NewerSchemaError` for a file a newer ctrlyoke wrote, so the persist path
+ * skips its write instead of replacing that file.
+ */
 async function readPersistedProviderUsage(
   filePath: string
 ): Promise<PersistedProviderUsage | undefined> {
   try {
     const raw = await fs.readFile(filePath, "utf8");
     const parsed: unknown = JSON.parse(raw);
+    assertWritableSchema(PERSISTED_STORES.PROVIDER_USAGE, parsed, filePath);
     if (
       !isRecord(parsed) ||
       parsed.schemaVersion !== PROVIDER_USAGE_SCHEMA_VERSION ||
@@ -569,7 +589,8 @@ async function readPersistedProviderUsage(
       }
     }
     return { schemaVersion: PROVIDER_USAGE_SCHEMA_VERSION, snapshots };
-  } catch {
+  } catch (error) {
+    if (isNewerSchemaError(error)) throw error;
     return undefined;
   }
 }

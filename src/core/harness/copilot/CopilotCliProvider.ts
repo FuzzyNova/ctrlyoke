@@ -713,12 +713,10 @@ export class CopilotCliProvider implements ICliProvider {
     extensionPath: string,
     workspaceRoot: string
   ): Promise<StatuslineInstallResult> {
-    const scriptPath = path.join(
-      extensionPath,
-      "out",
-      "scripts",
-      "ctrlyoke-copilot-statusline.js"
-    );
+    const scriptPath =
+      await CopilotCliProvider.statuslineManager.resolveScriptPath(
+        extensionPath
+      );
     const command = CliNotificationMonitor.buildNodeCommand(
       scriptPath,
       ""

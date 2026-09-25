@@ -26,6 +26,9 @@ export const PERSISTED_STORES = {
   EXTERNAL_ROOTS_TRUST: "external-roots-trust",
   SECRET_GRANTS_TRUST: "secret-grants-trust",
   COORDINATION_BOARD: "coordination-board",
+  LIFETIME_USAGE: "lifetime-usage",
+  OBSERVED_USAGE: "observed-usage",
+  PROVIDER_USAGE: "provider-usage",
 } as const;
 
 export type PersistedStore =
@@ -42,6 +45,9 @@ export const CURRENT_SCHEMA_VERSIONS = {
   [PERSISTED_STORES.EXTERNAL_ROOTS_TRUST]: 1,
   [PERSISTED_STORES.SECRET_GRANTS_TRUST]: 1,
   [PERSISTED_STORES.COORDINATION_BOARD]: 1,
+  [PERSISTED_STORES.LIFETIME_USAGE]: 1,
+  [PERSISTED_STORES.OBSERVED_USAGE]: 1,
+  [PERSISTED_STORES.PROVIDER_USAGE]: 1,
 } as const satisfies Record<PersistedStore, number>;
 
 const STORE_LABELS: Record<PersistedStore, string> = {
@@ -51,6 +57,9 @@ const STORE_LABELS: Record<PersistedStore, string> = {
   [PERSISTED_STORES.EXTERNAL_ROOTS_TRUST]: "external file-root approvals",
   [PERSISTED_STORES.SECRET_GRANTS_TRUST]: "secret approvals",
   [PERSISTED_STORES.COORDINATION_BOARD]: "coordination board",
+  [PERSISTED_STORES.LIFETIME_USAGE]: "lifetime usage statistics",
+  [PERSISTED_STORES.OBSERVED_USAGE]: "observed usage statistics",
+  [PERSISTED_STORES.PROVIDER_USAGE]: "harness quota snapshot",
 };
 
 /** Thrown instead of writing a store that a newer ctrlyoke version owns. */
@@ -74,6 +83,43 @@ export class NewerSchemaError extends Error {
 
 export function isNewerSchemaError(error: unknown): error is NewerSchemaError {
   return error instanceof NewerSchemaError;
+}
+
+export type NewerSchemaRefusalListener = (error: NewerSchemaError) => void;
+
+const refusalListeners = new Set<NewerSchemaRefusalListener>();
+
+/**
+ * Observe every refusal in this process, including ones a caller catches and
+ * turns into something else (the executor reports a failed write as a failed
+ * step). The CLI uses this to exit `2` rather than `1` when a run stopped
+ * because a newer ctrlyoke owns its state. Returns an unsubscribe function.
+ */
+export function onNewerSchemaRefusal(
+  listener: NewerSchemaRefusalListener
+): () => void {
+  refusalListeners.add(listener);
+  return () => refusalListeners.delete(listener);
+}
+
+/**
+ * Throw {@link NewerSchemaError} after notifying the refusal listeners. Every
+ * refusal goes through here so no listener misses one.
+ */
+export function refuseNewerSchema(
+  store: PersistedStore,
+  foundVersion: number,
+  filePath?: string
+): never {
+  const error = new NewerSchemaError(store, foundVersion, filePath);
+  for (const listener of refusalListeners) {
+    try {
+      listener(error);
+    } catch {
+      // A listener must never change what the writer sees.
+    }
+  }
+  throw error;
 }
 
 /** The integer version recorded on `value`, or `undefined` when absent. */
@@ -111,7 +157,7 @@ export function assertWritableSchema(
 ): void {
   const version = readSchemaVersion(record);
   if (isNewerSchemaVersion(store, version)) {
-    throw new NewerSchemaError(store, version as number, filePath);
+    refuseNewerSchema(store, version as number, filePath);
   }
 }
 
@@ -121,9 +167,10 @@ export function assertWritableSchema(
  * lives in `_runtime` because that block is runtime-only and never reaches an
  * exported workflow definition.
  */
-export function prepareRunFileForWrite<
-  T extends { _runtime?: object },
->(workingFile: T, filePath: string): T {
+export function prepareRunFileForWrite<T extends { _runtime?: object }>(
+  workingFile: T,
+  filePath: string
+): T {
   if (!workingFile._runtime) {
     return workingFile;
   }

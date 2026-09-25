@@ -1,3 +1,13 @@
+/**
+ * Version of the snapshot file the statusline scripts write for ctrlyoke's
+ * sidecars (`_ctrlyoke.protocolVersion`). The scripts run from the shared
+ * `~/.ctrlyoke/bin` launcher, which may come from a different ctrlyoke version
+ * than the host reading the snapshot; a sidecar ignores any version but its
+ * own, so a mismatch shows no statusline data instead of misreading it. Bump
+ * only for a change an older reader would misinterpret.
+ */
+export const STATUSLINE_SNAPSHOT_PROTOCOL_VERSION = 1;
+
 /** Closed vocabulary of fields that can appear in a customized statusline. */
 export const STATUS_LINE_FIELD_IDS = {
   MODEL: "model",

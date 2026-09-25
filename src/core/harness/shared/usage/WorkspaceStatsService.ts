@@ -16,9 +16,11 @@ import type { RunRef, WorkflowKey } from "../../../../types/CtrlYokeTypes";
 import {
   contributionFromManifest,
   LifetimeUsageStore,
+  LIFETIME_USAGE_ERROR_CODES,
   LIFETIME_USAGE_SCHEMA_VERSION,
   type LifetimeUsageStoreData,
 } from "./LifetimeUsageStore";
+import { isNewerSchemaError } from "../../../../utils/PersistedSchemaGuard";
 import {
   isLineageDirEntry,
   isRunDirEntry,
@@ -196,8 +198,10 @@ export class WorkspaceStatsService {
       const data = await this.lifetimeStore.read(now);
       this.storeReadErrorCode = this.lifetimeStore.getLastErrorCode();
       return data;
-    } catch {
-      this.storeReadErrorCode = WORKSPACE_STATS_ERROR_CODES.STORE_READ_FAILED;
+    } catch (error) {
+      this.storeReadErrorCode = isNewerSchemaError(error)
+        ? LIFETIME_USAGE_ERROR_CODES.NEWER_DATA
+        : WORKSPACE_STATS_ERROR_CODES.STORE_READ_FAILED;
       return emptyData(now);
     }
   }

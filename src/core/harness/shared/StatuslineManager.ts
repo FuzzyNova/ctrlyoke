@@ -12,7 +12,15 @@ import {
 } from "../../../types/DashboardConstants";
 import { configService } from "../../../config/CtrlYokeConfigService";
 import type { StatusLineTrackingSettings } from "../../../types/CtrlYokeSettings";
+import { countLiveInstallationRoots } from "../../../utils/CtrlyokeInstallations";
+import { pathsEqual } from "../../../utils/PathCasing";
 import { SettingsJsonMcpTracker } from "./SettingsJsonMcpTracker";
+import {
+  removeStatuslineLauncher,
+  resolveStatuslineScriptPath,
+  statuslineLauncherDirectory,
+  statuslineScriptFileName,
+} from "./StatuslineLauncher";
 import {
   SETTINGS_JSON_INSTALL_KIND_WRITTEN,
   STATUS_LINE_SETTING_KEY,
@@ -28,8 +36,8 @@ export interface StatuslineInstallResult {
   readonly collision?: boolean;
   /**
    * True when the pre-existing statusLine value was already recognized as a
-   * ctrlyoke wrapper for this provider before this call (e.g. its absolute
-   * path moved after an extension update). The write still happens to keep
+   * ctrlyoke wrapper for this provider before this call (e.g. a package-folder
+   * path moving to the shared launcher). The write still happens to keep
    * the installed command current, but the user has already seen the
    * one-time install notification for this provider, so callers must not
    * notify again for this result.
@@ -141,6 +149,15 @@ export class StatuslineManager implements StatuslineManagerLike {
     return ConfigurationUtils.getStatusLineTrackingSettings(this.provider);
   }
 
+  /**
+   * The script path for this provider's statusline command: the shared
+   * `~/.ctrlyoke/bin` launcher, or this package's own copy when the launcher
+   * cannot be deployed (see StatuslineLauncher).
+   */
+  resolveScriptPath(packageRoot: string): Promise<string> {
+    return resolveStatuslineScriptPath(packageRoot, this.provider);
+  }
+
   /** Install the wrapper and capture the user's command exactly once. */
   async install(
     workspaceRoot: string,
@@ -205,8 +222,8 @@ export class StatuslineManager implements StatuslineManagerLike {
         this.extractCommand(currentValue, hadKey) === command
     );
 
-    // A wrapper path changes when an extension update moves the installed
-    // files, producing a real write even though the command was already
+    // A wrapper path changes when it moves between a package folder and the
+    // shared launcher, producing a real write even though the command was already
     // ctrlyoke's own (see alreadyCtrlyoke below, which suppresses the
     // install notification for this case). Keep `captured` itself accurate
     // regardless, since it still reflects whether a custom command is being
@@ -225,25 +242,75 @@ export class StatuslineManager implements StatuslineManagerLike {
     };
   }
 
-  /** Restore the live custom command, or remove ctrlyoke's statusline key. */
+  /**
+   * Restore the live custom command, or remove ctrlyoke's statusline key.
+   *
+   * This always runs, even with another ctrlyoke installation live: it follows
+   * the user disabling tracking, which is a machine-wide setting both hosts
+   * read, so the other host will not use this provider's statusline either.
+   * What another installation can still need is the shared launcher, which
+   * {@link releaseLauncherIfUnused} keeps while it does.
+   */
   async uninstall(workspaceRoot: string, restoreCustomCommand: boolean) {
     const { customCommand } = this.getSettings();
-    if (restoreCustomCommand && customCommand.length > 0) {
-      await this.definition.tracker.uninstallPersistentValue(
-        workspaceRoot,
-        this.getPersistentValueKey(),
-        {
-          action: "restore",
-          value: { type: "command", command: customCommand },
-        }
-      );
-      return;
-    }
-
     await this.definition.tracker.uninstallPersistentValue(
       workspaceRoot,
       this.getPersistentValueKey(),
-      { action: "delete" }
+      restoreCustomCommand && customCommand.length > 0
+        ? {
+            action: "restore",
+            value: { type: "command", command: customCommand },
+          }
+        : { action: "delete" }
+    );
+    await StatuslineManager.releaseLauncherIfUnused(workspaceRoot);
+  }
+
+  /**
+   * Remove the shared `~/.ctrlyoke/bin` launcher once nothing can use it
+   * (CLI_DISTRIBUTION_PLAN.md §3.4 rule 6): every provider has tracking
+   * disabled, no harness config still runs a launcher script, and no other
+   * ctrlyoke installation is recorded as live. Best effort; never throws.
+   */
+  private static async releaseLauncherIfUnused(
+    workspaceRoot: string
+  ): Promise<void> {
+    try {
+      const launcherDirectory = statuslineLauncherDirectory();
+      for (const provider of Object.values(STATUS_LINE_TRACKING_PROVIDERS)) {
+        const manager = this.forProvider(provider);
+        if (
+          manager.getSettings().enabled ||
+          (await manager.runsScriptFrom(workspaceRoot, launcherDirectory))
+        ) {
+          return;
+        }
+      }
+      if ((await countLiveInstallationRoots()) > 1) {
+        return;
+      }
+      await removeStatuslineLauncher();
+    } catch {
+      // Leaving the launcher in place is always safe.
+    }
+  }
+
+  /** True when this provider's configured statusline runs a script in `directory`. */
+  private async runsScriptFrom(
+    workspaceRoot: string,
+    directory: string
+  ): Promise<boolean> {
+    const command = this.extractCommand(
+      await this.definition.tracker.readPersistentValue(
+        workspaceRoot,
+        this.getPersistentValueKey()
+      ),
+      true
+    );
+    const script = command ? parseArgString(command)[1] : undefined;
+    return (
+      script !== undefined &&
+      pathsEqual(path.dirname(path.resolve(script)), path.resolve(directory))
     );
   }
 
@@ -280,6 +347,6 @@ export class StatuslineManager implements StatuslineManagerLike {
     }
 
     const scriptName = script.replace(/\\/gu, "/").split("/").pop();
-    return scriptName === `ctrlyoke-${this.provider}-statusline.js`;
+    return scriptName === statuslineScriptFileName(this.provider);
   }
 }

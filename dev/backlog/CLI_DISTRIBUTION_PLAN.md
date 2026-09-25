@@ -1,8 +1,8 @@
 # CLI Distribution Plan
 
-**Status:** Decided 2026-09-24. Done 2026-09-25: §3.1, §3.2, §3.3, §3.4 rules 2–3, and §4.
-`ctrlyoke@0.1.2` was staged by the `v0.1.2` release and approved, so it is live on npm. Not
-started: §3.4 rules 4–6. See §6 for progress and next steps.
+**Status:** Decided 2026-09-24. Done 2026-09-25: §3.1, §3.2, §3.3, §3.4 rules 2–6, and §4.
+`ctrlyoke@0.1.2` was staged by the `v0.1.2` release and approved, so it is live on npm. The
+known gaps from rules 2–3 are closed too. See §6 for progress.
 
 **Decision:** ship the CLI through both channels, built from one artifact with one version
 number:
@@ -270,10 +270,12 @@ global installs don't, so in practice this is "the npm CLI is older than the ext
    in the VSIX shares the extension's folder. That bundled copy never warns, since advising an
    npm install from inside VS Code would be wrong. Entries unseen for 30 days, or whose folder is
    gone, are pruned. "Once per version pair" is tracked per audience in the same file, so the
-   CLI's warning never silences the extension's notice. **Not done:** the `--version` change.
-   Scripts compare `ctrlyoke --version` output to a version string (the packaging test does too),
-   so adding the package root there would break them; a separate `ctrlyoke doctor`/`about` is a
-   better home for it if support needs it.
+   CLI's warning never silences the extension's notice. The `--version` change was not made:
+   scripts compare `ctrlyoke --version` output to a version string (the packaging test does
+   too), so adding the package root there would break them. Instead, **`ctrlyoke about
+[--json]`** (`src/cli/CliAboutCommand.ts`, added 2026-09-25) prints the version, whether this
+   is the npm copy or the one bundled in the extension, the package root, Node version, state
+   home, and the other live installations.
 
 3. **Format versions on shared persisted state, and read-only below a newer format.** Add an
    integer `formatVersion` to each of these:
@@ -297,14 +299,29 @@ global installs don't, so in practice this is "the npm CLI is older than the ext
    `2`) and `workflow.json` (already at `1`, but never checked) kept their fields; run files carry
    theirs as `_runtime.schemaVersion`, because `_runtime` never reaches an exported definition.
    Trust stores share a new `TrustDecisionFile` helper, and coordination-board entries are
-   stamped one by one. Two known gaps: a mid-run refusal inside the executor may surface as a
-   workflow failure (exit `1`) rather than exit `2`, since only direct step/CLI commands reach
-   the exit-`2` handler; and the usage-history stores still quarantine a mismatched schema, which
-   would discard a newer file (Medium row, not in rule 3's list).
+   stamped one by one.
+
+   Two gaps found then were closed the same day. A mid-run refusal is caught by the executor
+   and reported as a failed step, so the CLI exited `1`. Every refusal now goes through
+   `refuseNewerSchema()`, which notifies `onNewerSchemaRefusal` listeners before throwing, and
+   the CLI (`src/cli/CliSchemaRefusal.ts`) exits `2` when a run that did not succeed saw a
+   refusal of the run file, lineage descriptor or runner lock. Refusals from advisory stores do
+   not count, since their callers swallow them. The three usage stores (`lifetime-stats.json`,
+   `observed-usage.json`, `provider-usage.json`) used to quarantine any schema mismatch, which
+   renamed a newer file away. They are now guarded stores too: a newer file is left in place,
+   never rewritten, and reported as a `*-newer-data` error code.
 
 4. **Version the search index directory** (`.search-index/v<INDEX_SCHEMA_VERSION>/`). Each
    version then keeps its own index instead of rebuilding the other's. Prune directories for
    versions not seen in `installations.json` for 30 days.
+
+   **Implemented 2026-09-25** in `src/core/orchestration/HistorySearchIndexLayout.ts`, which
+   now owns `INDEX_SCHEMA_VERSION` and the index path. Each host records its
+   `indexSchemaVersion` in `installations.json`. After a full rebuild, the worker removes every
+   `v*` directory no live installation records. The pre-versioning files directly under
+   `.search-index/` are removed only once every live installation records an index version,
+   because one that records none may be an older build still using them.
+
 5. **Point global harness config at a stable path.** Statusline and global hook entries should
    reference a version-independent launcher, `~/.ctrlyoke/bin/ctrlyoke-statusline.js`, instead
    of an `out/scripts/…` path inside a versioned install folder.
@@ -315,10 +332,37 @@ global installs don't, so in practice this is "the npm CLI is older than the ext
      re-point in `StatuslineManager`).
    - The sidecar protocol needs a version field too, so a mismatched launcher and sidecar fail
      quietly (no statusline data) instead of mis-parsing.
+
+   **Implemented 2026-09-25** in `src/core/harness/shared/StatuslineLauncher.ts`. The provider
+   scripts `require` shared siblings, so the launcher is the whole set of six statusline files
+   (four provider scripts, the wrapper and the bundled formatter) rather than one
+   `ctrlyoke-statusline.js`. The per-provider file names are kept, so the existing "is this
+   ctrlyoke's command" check still recognizes them. A `statusline-launcher.json` manifest beside
+   them records the version. An equal version rewrites any file whose content differs, which
+   keeps dev builds current; an older host repairs an incomplete launcher rather than leave a
+   broken one. When the scripts cannot be copied, harness config falls back to the package's
+   own `out/scripts/` path, as before. The directory is under `os.homedir()`, not
+   `CTRLYOKE_HOME`, because the harness config that points at it is always under the real home.
+   Snapshots carry `_ctrlyoke.protocolVersion` (`STATUSLINE_SNAPSHOT_PROTOCOL_VERSION` in
+   `StatuslineFormat.ts`), and `StatuslineSnapshotWatcher` ignores any other version. A snapshot
+   with no version comes from a script that predates the field and has the same format.
+   Antigravity's global `hooks.json` entries were left alone: they are per-workflow groups added
+   at run start and removed at cleanup, so a stale path cannot outlive the run that wrote it.
+
 6. **Uninstall hygiene.** `StatuslineManager.uninstall()` restores the user's captured command.
    It, and any future CLI equivalent, should do that only when no other installation is recorded
    as active in `installations.json`. That stops one copy from tearing down integration the other
    still uses.
+
+   **Implemented 2026-09-25, with one deliberate change.** `uninstall()` only runs when the user
+   disables a provider's tracking, and that setting is user-scoped in `~/.ctrlyoke/settings.json`,
+   which both hosts read. Skipping the restore while another installation is live would leave
+   ctrlyoke's wrapper in the harness config after the user asked for their command back, with no
+   host left to remove it. So the restore always runs. What another installation can still
+   depend on after rule 5 is the shared launcher, and that is what the rule now guards:
+   `uninstall()` removes `~/.ctrlyoke/bin`'s statusline files only when every provider has
+   tracking disabled, no harness config still runs a launcher script, and `installations.json`
+   records no other live installation (`countLiveInstallationRoots() <= 1`).
 
 ## 4. Docs and checklist follow-ups
 
@@ -374,10 +418,6 @@ global installs don't, so in practice this is "the npm CLI is older than the ext
    `docs/cli/ci.md` and `docs/guide/privacy.md`, and a `docs/reference/commands.md` row for
    Install CLI. The `cli/ci.md` examples pin `ctrlyoke@0.1.2`, so bump them when a release
    changes the CLI's behavior.
-7. **§3.4 rules 4–6** (per-version search index directories, stable statusline launcher,
-   uninstall hygiene). Not release blockers. Rule 5 also fixes an extension-only problem, the
-   statusline path moving on every update, so it's worth doing anyway.
-
-Known gaps carried from this work: `ctrlyoke --version` does not print the package root (§3.4
-rule 2 note); a mid-run schema refusal can exit `1`, not `2`; the usage-history stores still
-quarantine a newer file (§3.4 rule 3 note).
+7. ✅ **§3.4 rules 4–6** (per-version search index directories, stable statusline launcher,
+   uninstall hygiene), and the three known gaps from rules 2–3 (`ctrlyoke about`, exit `2` for
+   a mid-run refusal, usage stores no longer quarantine a newer file). Done 2026-09-25.

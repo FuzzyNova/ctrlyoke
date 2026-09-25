@@ -68,7 +68,12 @@ import {
   registerCtrlyokeBinDirectory,
   resolvePackageRootFromEntry,
 } from "./utils/CtrlyokeCliPath";
+import { aboutCommand } from "./cli/CliAboutCommand";
 import { noteCliInstallation } from "./cli/CliInstallationNotice";
+import {
+  applyRunStateRefusal,
+  trackRunStateRefusals,
+} from "./cli/CliSchemaRefusal";
 import { ConfigurationUtils } from "./utils/ConfigurationUtils";
 import {
   ExternalRootsTrustStore,
@@ -159,6 +164,10 @@ setRuntimeMode(RUNNER_IDS.CLI);
 // Harnesses this CLI spawns resolve `ctrlyoke` to this same install. A tarball
 // packed on Windows carries no executable bit, so restore it like the extension does.
 registerCtrlyokeBinDirectory(resolvePackageRootFromEntry(__filename));
+
+// A newer ctrlyoke's run state refused mid-run surfaces as a failed step; this
+// lets the run exit 2 ("update ctrlyoke") instead of 1 (CLI_DISTRIBUTION_PLAN §3.4).
+const runStateRefusals = trackRunStateRefusals();
 const cliBinDirectory = getCtrlyokeBinDirectory();
 if (cliBinDirectory) {
   ensureCtrlyokeShimsExecutable(cliBinDirectory);
@@ -350,6 +359,21 @@ program
   .option("--json", "Emit one versioned JSON result line")
   .action(async (file: string, options: ValidateCommandOptions) => {
     await validateCommand(file, options);
+  });
+
+program
+  .command("about")
+  .description(
+    "Show this CLI's version, where it is installed, and other ctrlyoke installations on this machine"
+  )
+  .option("--json", "Emit one versioned JSON result line")
+  .action(async (options: { json?: boolean }) => {
+    await aboutCommand(
+      version,
+      resolvePackageRootFromEntry(__filename),
+      options,
+      (message) => console.log(message)
+    );
   });
 
 program
@@ -1208,7 +1232,8 @@ async function runCommand(
     releaseHeadlessOutputState();
 
     const state = instance.promptQueue.getState();
-    const exitCode = getExitCode(state);
+    const schemaRefusal = runStateRefusals.first();
+    const exitCode = applyRunStateRefusal(getExitCode(state), schemaRefusal);
     const completed = exitCode === 0;
 
     if (options.json) {
@@ -1246,6 +1271,10 @@ async function runCommand(
       } else {
         console.log(chalk.red("✗ Workflow ended: " + state.status));
       }
+    }
+    if (!completed && schemaRefusal) {
+      // stderr in every mode: `--json` stdout stays one JSON document.
+      console.error(chalk.red("Error: " + schemaRefusal.message));
     }
 
     process.exit(exitCode);

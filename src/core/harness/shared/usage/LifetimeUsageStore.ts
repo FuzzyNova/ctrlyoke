@@ -33,11 +33,21 @@ import {
   runsRoot,
 } from "../../../../utils/WorkflowPaths";
 import { lifetimeStatsPath } from "../../../../utils/UsagePaths";
+import {
+  assertWritableSchema,
+  CURRENT_SCHEMA_VERSIONS,
+  hasNewerSchema,
+  isNewerSchemaError,
+  PERSISTED_STORES,
+} from "../../../../utils/PersistedSchemaGuard";
 
-export const LIFETIME_USAGE_SCHEMA_VERSION = 1 as const;
+export const LIFETIME_USAGE_SCHEMA_VERSION =
+  CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.LIFETIME_USAGE];
 
 export const LIFETIME_USAGE_ERROR_CODES = {
   MALFORMED_DATA: "malformed-lifetime-usage-data",
+  /** Written by a newer ctrlyoke: left untouched, and not updated here. */
+  NEWER_DATA: "lifetime-usage-newer-data",
   WRITE_FAILED: "lifetime-usage-write-failed",
   BACKFILL_REQUIRED: "lifetime-usage-backfill-required",
 } as const;
@@ -842,6 +852,10 @@ export class LifetimeUsageStore {
     await fs.mkdir(path.dirname(this.filePath), { recursive: true });
     try {
       return await withFileLock(this.filePath, async () => {
+        // A malformed file is what a rebuild replaces; a newer one is refused.
+        await this.readExisting().catch((error: unknown) => {
+          if (isNewerSchemaError(error)) throw error;
+        });
         const data = emptyStore(now);
         this.recentContributionCache.clear();
         let lineageEntries: Dirent[] = [];
@@ -990,13 +1004,35 @@ export class LifetimeUsageStore {
     };
   }
 
+  /**
+   * The parsed file, `undefined` when absent. Throws `NewerSchemaError` for a
+   * file a newer ctrlyoke wrote, so no caller rewrites or quarantines it.
+   */
+  private async readExisting(): Promise<unknown> {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(await fs.readFile(this.filePath, "utf8"));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+      throw error;
+    }
+    if (hasNewerSchema(PERSISTED_STORES.LIFETIME_USAGE, parsed)) {
+      this.lastErrorCode = LIFETIME_USAGE_ERROR_CODES.NEWER_DATA;
+      assertWritableSchema(
+        PERSISTED_STORES.LIFETIME_USAGE,
+        parsed,
+        this.filePath
+      );
+    }
+    return parsed;
+  }
+
   private async readOrReset(now: number): Promise<LifetimeUsageStoreData> {
     try {
-      const raw = await fs.readFile(this.filePath, "utf8");
-      return validateStore(JSON.parse(raw));
+      const parsed = await this.readExisting();
+      return parsed === undefined ? emptyStore(now) : validateStore(parsed);
     } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code === "ENOENT") return emptyStore(now);
+      if (isNewerSchemaError(error)) throw error;
       this.lastErrorCode = LIFETIME_USAGE_ERROR_CODES.MALFORMED_DATA;
       this.backfillRequired = true;
       await this.quarantineMalformedFile();

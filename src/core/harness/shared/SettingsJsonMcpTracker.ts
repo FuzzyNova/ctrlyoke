@@ -674,6 +674,17 @@ export class SettingsJsonMcpTracker {
     });
   }
 
+  /** The current value at `key`, `undefined` when absent. Unlocked read. */
+  async readPersistentValue(
+    workspaceRoot: string,
+    key: SettingsJsonPersistentValueKey
+  ): Promise<unknown> {
+    const settings = await this.readProjectConfig(
+      this.getProjectConfigPath(workspaceRoot)
+    );
+    return getAtPath(settings, key).value;
+  }
+
   /**
    * Restore or delete the persistent statusLine value without creating a lease
    * owner. The legacy statusLine lease sidecar is removed while holding the

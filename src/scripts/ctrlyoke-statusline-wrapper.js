@@ -13,6 +13,7 @@ const path = require("path");
 const { spawn } = require("child_process");
 const {
   DEFAULT_STATUS_LINE_FORMAT,
+  STATUSLINE_SNAPSHOT_PROTOCOL_VERSION,
   getStatusLineWorkspaceDirectory,
   formatUsagePercentForDisplay,
   formatBrandedStatusLine: formatSharedBrandedStatusLine,
@@ -243,6 +244,7 @@ function buildSnapshotPayload(payload, writtenAt) {
   snapshotSequence += 1;
   return Object.assign({}, normalizePayload(payload), {
     _ctrlyoke: {
+      protocolVersion: STATUSLINE_SNAPSHOT_PROTOCOL_VERSION,
       sequence: snapshotSequence,
       writtenAt: asFiniteNumber(writtenAt) ?? Date.now(),
     },

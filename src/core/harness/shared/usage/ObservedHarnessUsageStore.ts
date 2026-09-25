@@ -28,11 +28,21 @@ import {
   observedUsagePath,
   observedUsagePathForProject,
 } from "../../../../utils/UsagePaths";
+import {
+  assertWritableSchema,
+  CURRENT_SCHEMA_VERSIONS,
+  hasNewerSchema,
+  isNewerSchemaError,
+  PERSISTED_STORES,
+} from "../../../../utils/PersistedSchemaGuard";
 
-export const OBSERVED_USAGE_SCHEMA_VERSION = 1 as const;
+export const OBSERVED_USAGE_SCHEMA_VERSION =
+  CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.OBSERVED_USAGE];
 
 export const OBSERVED_USAGE_ERROR_CODES = {
   MALFORMED_DATA: "malformed-observed-usage-data",
+  /** Written by a newer ctrlyoke: left untouched, and not updated here. */
+  NEWER_DATA: "observed-usage-newer-data",
   WRITE_FAILED: "observed-usage-write-failed",
 } as const;
 
@@ -607,9 +617,21 @@ export class ObservedHarnessUsageStore {
     now: number
   ): Promise<ObservedHarnessUsageStoreData> {
     try {
-      const raw = await fs.readFile(this.filePath, "utf8");
-      return validateStore(JSON.parse(raw));
+      const parsed: unknown = JSON.parse(
+        await fs.readFile(this.filePath, "utf8")
+      );
+      // Newer data is refused, never quarantined.
+      if (hasNewerSchema(PERSISTED_STORES.OBSERVED_USAGE, parsed)) {
+        this.lastErrorCode = OBSERVED_USAGE_ERROR_CODES.NEWER_DATA;
+        assertWritableSchema(
+          PERSISTED_STORES.OBSERVED_USAGE,
+          parsed,
+          this.filePath
+        );
+      }
+      return validateStore(parsed);
     } catch (error) {
+      if (isNewerSchemaError(error)) throw error;
       const code = (error as NodeJS.ErrnoException).code;
       if (code === "ENOENT") return emptyStore(now);
       this.lastErrorCode = OBSERVED_USAGE_ERROR_CODES.MALFORMED_DATA;

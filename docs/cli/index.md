@@ -40,8 +40,8 @@ Which copy runs `ctrlyoke`:
 | Harness processes ctrlyoke starts          | The copy that started the run              |
 | Any other shell, CI job, or scheduled task | The npm copy                               |
 
-Both copies read and write the same state: settings, run history, runner locks,
-trust decisions and the history-search index. **Keep the npm copy on the
+Both copies read and write the same state: settings, run history, runner locks
+and trust decisions. **Keep the npm copy on the
 extension's version.** VS Code updates extensions automatically and npm does
 not update global packages, so in practice the npm copy is the one that falls
 behind:
@@ -53,8 +53,16 @@ behind:
 - If an older copy meets state written by a newer one, it still reads it, but
   it refuses to change it rather than risk dropping fields it doesn't know
   about. The error says the state "was written by a newer version of ctrlyoke"
-  and asks you to update; the CLI exits with code `2`. Update the older copy
-  and run the command again.
+  and asks you to update; the CLI exits with code `2`, including when this
+  stops a run partway through. Update the older copy and run the command again.
+- Each version keeps its own history-search index, so the two copies do not
+  rebuild each other's index on every search.
+- Harness statuslines run from a shared copy of ctrlyoke's statusline scripts
+  in `~/.ctrlyoke/bin/`, which the newest installed version keeps up to date.
+  Updating or removing either copy does not break your statusline.
+
+Run `ctrlyoke about` to see which copy a shell is running, where it is
+installed, and which other ctrlyoke installations this machine has used.
 
 Each copy starts its own `ctrlyoke-mcp` server from its own install, so a run
 never mixes versions of the CLI and its MCP server.

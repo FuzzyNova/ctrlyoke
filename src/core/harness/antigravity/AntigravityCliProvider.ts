@@ -830,12 +830,10 @@ export class AntigravityCliProvider implements ICliProvider {
     workspaceRoot: string,
     _workflowKey: string
   ): Promise<StatuslineInstallResult> {
-    const scriptPath = path.join(
-      extensionPath,
-      "out",
-      "scripts",
-      "ctrlyoke-antigravity-statusline.js"
-    );
+    const scriptPath =
+      await AntigravityCliProvider.statuslineManager.resolveScriptPath(
+        extensionPath
+      );
     // agy's statusline runner uses the same naive, unquoted whitespace split
     // as its hook runner. Passing an empty directory and trimming the result
     // gives the exact `node <script>` command from the wrapper contract.

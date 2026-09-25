@@ -16,7 +16,6 @@ import {
   getDocumentsShardPath,
   MAX_INDEXED_TEXT_LENGTH,
   type HistorySearchIndexManifest,
-  INDEX_SCHEMA_VERSION,
   listRunSources,
   runHistorySearchRebuild,
 } from "../../core/orchestration/historySearchRebuildWorker";
@@ -37,12 +36,12 @@ import {
 import type { WorkflowKey } from "../../types/CtrlYokeTypes";
 import { Log } from "../../utils/Log";
 import { getFrozenRunHistoryLocation } from "../../utils/RunHistoryStoragePolicy";
-import { projectStateRoot } from "../../utils/ProjectStatePaths";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import {
-  ConfigurationUtils,
-  PATH_CONSTANTS,
-} from "../../utils/ConfigurationUtils";
+  getSearchIndexDir,
+  INDEX_SCHEMA_VERSION,
+} from "../../core/orchestration/HistorySearchIndexLayout";
 
 suite("HistorySearchIndexService", () => {
   let workspaceRoot: string;
@@ -132,9 +131,9 @@ suite("HistorySearchIndexService", () => {
 
     const source = (await listRunSources(workspaceRoot))[0];
     assert.ok(source);
-    const indexDir = path.join(
-      projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation()),
-      PATH_CONSTANTS.SEARCH_INDEX_DIR
+    const indexDir = getSearchIndexDir(
+      workspaceRoot,
+      getFrozenRunHistoryLocation()
     );
     const documents = (
       await fs.readFile(
@@ -270,8 +269,7 @@ suite("HistorySearchIndexService", () => {
     );
 
     const documentsDir = path.join(
-      projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation()),
-      PATH_CONSTANTS.SEARCH_INDEX_DIR,
+      getSearchIndexDir(workspaceRoot, getFrozenRunHistoryLocation()),
       DOCUMENTS_DIR_NAME
     );
     const shardFiles = await fs.readdir(documentsDir);
@@ -1301,9 +1299,9 @@ suite("HistorySearchIndexService", () => {
       { query: "incremental-untouched-first-term", limit: 10 },
       workspaceRoot
     );
-    const indexDir = path.join(
-      projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation()),
-      PATH_CONSTANTS.SEARCH_INDEX_DIR
+    const indexDir = getSearchIndexDir(
+      workspaceRoot,
+      getFrozenRunHistoryLocation()
     );
     const initialSources = await listRunSources(workspaceRoot);
     const initialShardStats = new Map(
@@ -1385,9 +1383,9 @@ suite("HistorySearchIndexService", () => {
       source.manifestPath.includes("incremental-remove-target")
     );
     assert.ok(removedSource);
-    const indexDir = path.join(
-      projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation()),
-      PATH_CONSTANTS.SEARCH_INDEX_DIR
+    const indexDir = getSearchIndexDir(
+      workspaceRoot,
+      getFrozenRunHistoryLocation()
     );
     const removedShardPath = getDocumentsShardPath(
       indexDir,
@@ -1722,9 +1720,9 @@ suite("HistorySearchIndexService", () => {
     // in-memory document cache the first search populated.
     const source = (await listRunSources(workspaceRoot))[0];
     assert.ok(source);
-    const indexDir = path.join(
-      projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation()),
-      PATH_CONSTANTS.SEARCH_INDEX_DIR
+    const indexDir = getSearchIndexDir(
+      workspaceRoot,
+      getFrozenRunHistoryLocation()
     );
     await fs.writeFile(
       getDocumentsShardPath(indexDir, source.manifestPath),
@@ -1787,9 +1785,9 @@ suite("HistorySearchIndexService", () => {
 
       const source = (await listRunSources(workspaceRoot))[0];
       assert.ok(source);
-      const indexDir = path.join(
-        projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation()),
-        PATH_CONSTANTS.SEARCH_INDEX_DIR
+      const indexDir = getSearchIndexDir(
+        workspaceRoot,
+        getFrozenRunHistoryLocation()
       );
       await fs.rm(getDocumentsShardPath(indexDir, source.manifestPath));
 
@@ -1814,8 +1812,7 @@ suite("HistorySearchIndexService", () => {
 
   function getSearchIndexManifestPath(): string {
     return path.join(
-      projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation()),
-      PATH_CONSTANTS.SEARCH_INDEX_DIR,
+      getSearchIndexDir(workspaceRoot, getFrozenRunHistoryLocation()),
       "manifest.json"
     );
   }

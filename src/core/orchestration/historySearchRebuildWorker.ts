@@ -12,12 +12,10 @@ import {
   type WorkflowTimelineEvent,
 } from "../../types/WorkflowTimelineTypes";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
-import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import { withFileLock } from "../../utils/FileLockUtils";
 import { Log } from "../../utils/Log";
 import { logMemoryUsage } from "../../utils/MemoryDiagnostics";
-import { projectStateRoot } from "../../utils/ProjectStatePaths";
 import { initializeRunHistoryLocation } from "../../utils/RunHistoryStoragePolicy";
 import {
   renameWithTransientRetry,
@@ -26,8 +24,13 @@ import {
 import { TimelineRecorder } from "./TimelineRecorder";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import { HistoryRunDocumentBuilder } from "./HistoryRunDocumentBuilder";
+import {
+  getSearchIndexDir,
+  getSearchIndexRoot,
+  INDEX_SCHEMA_VERSION,
+  pruneSearchIndexVersions,
+} from "./HistorySearchIndexLayout";
 
-export const INDEX_SCHEMA_VERSION = "4.2.0" as const;
 export const MANIFEST_FILE_NAME = "manifest.json";
 export const DOCUMENTS_DIR_NAME = "documents";
 export const DOCUMENTS_SHARD_EXTENSION = ".jsonl";
@@ -316,7 +319,7 @@ export async function runHistorySearchRebuild(
   data: HistorySearchRebuildWorkerData,
   onProgress?: HistorySearchRebuildProgressCallback
 ): Promise<HistorySearchRebuildSuccessMessage> {
-  const indexDir = getIndexDir(
+  const indexDir = getSearchIndexDir(
     data.workspaceFolderPath,
     data.runHistoryLocation
   );
@@ -543,6 +546,13 @@ export async function runHistorySearchRebuild(
     { timeoutMs: REBUILD_LOCK_TIMEOUT_MS }
   );
 
+  // A full rebuild is rare, so it is when other versions' indexes are pruned.
+  if (fullRebuild && !skipped) {
+    await pruneSearchIndexVersions(
+      getSearchIndexRoot(data.workspaceFolderPath, data.runHistoryLocation)
+    );
+  }
+
   return {
     type: HISTORY_SEARCH_REBUILD_MESSAGE_TYPES.SUCCESS,
     skipped,
@@ -752,22 +762,12 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
-function getIndexDir(
-  workspaceFolderPath: string,
-  runHistoryLocation: RunHistoryLocation
-): string {
-  return path.join(
-    projectStateRoot(workspaceFolderPath, runHistoryLocation),
-    PATH_CONSTANTS.SEARCH_INDEX_DIR
-  );
-}
-
 function getIndexManifestPath(
   workspaceFolderPath: string,
   runHistoryLocation: RunHistoryLocation
 ): string {
   return path.join(
-    getIndexDir(workspaceFolderPath, runHistoryLocation),
+    getSearchIndexDir(workspaceFolderPath, runHistoryLocation),
     MANIFEST_FILE_NAME
   );
 }

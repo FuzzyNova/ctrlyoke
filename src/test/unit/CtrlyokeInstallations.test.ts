@@ -5,11 +5,14 @@ import * as path from "path";
 import { suite, test } from "mocha";
 import {
   compareVersions,
+  countLiveInstallationRoots,
   findOlderCli,
   INSTALLATION_KINDS,
   installationsFilePath,
+  readLiveInstallations,
   recordInstallation,
 } from "../../utils/CtrlyokeInstallations";
+import { INDEX_SCHEMA_VERSION } from "../../core/orchestration/HistorySearchIndexLayout";
 import {
   formatNewerExtensionNotice,
   isBundledInExtension,
@@ -119,7 +122,48 @@ suite("CtrlyokeInstallations", () => {
     assert.strictEqual(findOlderCli(self, [bundled, older]), older);
   });
 
+  test("counts the bundled CLI and its extension as one installation", async () => {
+    const extension = await packageRoot("ext", { engines: { vscode: "^1" } });
+    const npmCli = await packageRoot("npm-cli");
+    for (const kind of [
+      INSTALLATION_KINDS.VSCODE_EXTENSION,
+      INSTALLATION_KINDS.CLI,
+    ]) {
+      await recordInstallation({
+        kind,
+        version: "0.2.0",
+        packageRoot: extension,
+      });
+    }
+    assert.strictEqual(await countLiveInstallationRoots(), 1);
+
+    await recordInstallation({
+      kind: INSTALLATION_KINDS.CLI,
+      version: "0.2.0",
+      packageRoot: npmCli,
+    });
+    assert.strictEqual(await countLiveInstallationRoots(), 2);
+  });
+
+  test("ignores installations not seen for 30 days", async () => {
+    const npmCli = await packageRoot("npm-cli");
+    const now = Date.now();
+    await recordInstallation(
+      { kind: INSTALLATION_KINDS.CLI, version: "0.2.0", packageRoot: npmCli },
+      now - 31 * 24 * 60 * 60 * 1000
+    );
+    assert.deepStrictEqual(await readLiveInstallations(now), []);
+    assert.strictEqual(await countLiveInstallationRoots(now), 0);
+  });
+
   suite("CLI notice", () => {
+    test("records the search index version this CLI uses", async () => {
+      const npmCli = await packageRoot("npm-cli");
+      await noteCliInstallation("0.2.1", npmCli, () => undefined);
+      const [record] = await readLiveInstallations();
+      assert.strictEqual(record?.indexSchemaVersion, INDEX_SCHEMA_VERSION);
+    });
+
     test("warns once per version pair when a newer extension is recorded", async () => {
       const extension = await packageRoot("ext", { engines: { vscode: "^1" } });
       const npmCli = await packageRoot("npm-cli", { name: "ctrlyoke" });

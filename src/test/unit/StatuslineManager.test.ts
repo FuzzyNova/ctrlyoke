@@ -5,6 +5,16 @@ import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
 import { SettingsJsonMcpTracker } from "../../core/harness/shared/SettingsJsonMcpTracker";
 import { StatuslineManager } from "../../core/harness/shared/StatuslineManager";
+import {
+  packageStatuslineDirectory,
+  resetStatuslineLauncherCache,
+  STATUSLINE_LAUNCHER_FILES,
+  statuslineLauncherDirectory,
+} from "../../core/harness/shared/StatuslineLauncher";
+import {
+  INSTALLATION_KINDS,
+  recordInstallation,
+} from "../../utils/CtrlyokeInstallations";
 import { configService } from "../../config/CtrlYokeConfigService";
 import {
   HARNESS_IDS,
@@ -20,6 +30,7 @@ suite("StatuslineManager", () => {
   let originalHome: string | undefined;
   let originalUserProfile: string | undefined;
   let userSettings: PartialCtrlYokeSettings;
+  let originalCtrlyokeHome: string | undefined;
 
   setup(async () => {
     tempHome = await fs.mkdtemp(
@@ -29,6 +40,9 @@ suite("StatuslineManager", () => {
     originalUserProfile = process.env.USERPROFILE;
     process.env.HOME = tempHome;
     process.env.USERPROFILE = tempHome;
+    originalCtrlyokeHome = process.env.CTRLYOKE_HOME;
+    process.env.CTRLYOKE_HOME = path.join(tempHome, "state");
+    resetStatuslineLauncherCache();
     userSettings = {};
     configService.setUserBackend({
       getAll: () => userSettings,
@@ -53,6 +67,9 @@ suite("StatuslineManager", () => {
     else process.env.HOME = originalHome;
     if (originalUserProfile === undefined) delete process.env.USERPROFILE;
     else process.env.USERPROFILE = originalUserProfile;
+    if (originalCtrlyokeHome === undefined) delete process.env.CTRLYOKE_HOME;
+    else process.env.CTRLYOKE_HOME = originalCtrlyokeHome;
+    resetStatuslineLauncherCache();
     configService.setCliOverlay({});
     await fs.rm(tempHome, { recursive: true, force: true });
   });
@@ -194,5 +211,118 @@ suite("StatuslineManager", () => {
         },
       }
     );
+  });
+
+  suite("shared launcher", () => {
+    /** A package whose statusline scripts can be deployed. */
+    async function packageRoot(name: string): Promise<string> {
+      const root = path.join(tempHome, name);
+      const scripts = packageStatuslineDirectory(root);
+      await fs.mkdir(scripts, { recursive: true });
+      await fs.writeFile(
+        path.join(root, "package.json"),
+        JSON.stringify({ version: "0.2.0" })
+      );
+      for (const file of STATUSLINE_LAUNCHER_FILES) {
+        await fs.writeFile(path.join(scripts, file), "// script");
+      }
+      return root;
+    }
+
+    function disableAllProviders(): void {
+      const disabled = {
+        enabled: false,
+        customCommand: "",
+        useCtrlyokeStyle: true,
+      } as StatusLineTrackingSettings;
+      userSettings = {
+        permissions: {
+          statusLineTracking: Object.fromEntries(
+            Object.values(STATUS_LINE_TRACKING_PROVIDERS).map((provider) => [
+              provider,
+              disabled,
+            ])
+          ),
+        },
+      };
+    }
+
+    async function launcherExists(): Promise<boolean> {
+      return fs
+        .access(
+          path.join(statuslineLauncherDirectory(), STATUSLINE_LAUNCHER_FILES[0])
+        )
+        .then(
+          () => true,
+          () => false
+        );
+    }
+
+    /** Install Copilot's statusline from the launcher, then disable everything. */
+    async function installFromLauncher(
+      root: string
+    ): Promise<StatuslineManager> {
+      const manager = StatuslineManager.forHarness(HARNESS_IDS.COPILOT_CLI);
+      const scriptPath = await manager.resolveScriptPath(root);
+      assert.ok(scriptPath.startsWith(statuslineLauncherDirectory()));
+      await manager.install(tempHome, `node "${scriptPath}"`);
+      disableAllProviders();
+      return manager;
+    }
+
+    test("uninstall removes the launcher once nothing uses it", async () => {
+      const root = await packageRoot("pkg");
+      await recordInstallation({
+        kind: INSTALLATION_KINDS.VSCODE_EXTENSION,
+        version: "0.2.0",
+        packageRoot: root,
+      });
+      const manager = await installFromLauncher(root);
+
+      await manager.uninstall(tempHome, false);
+
+      assert.strictEqual(await launcherExists(), false);
+    });
+
+    test("keeps the launcher while another installation is live", async () => {
+      const root = await packageRoot("pkg");
+      const other = await packageRoot("other");
+      for (const packageRootPath of [root, other]) {
+        await recordInstallation({
+          kind: INSTALLATION_KINDS.CLI,
+          version: "0.2.0",
+          packageRoot: packageRootPath,
+        });
+      }
+      const manager = await installFromLauncher(root);
+
+      await manager.uninstall(tempHome, false);
+
+      assert.strictEqual(await launcherExists(), true);
+    });
+
+    test("keeps the launcher while another harness still runs it", async () => {
+      const root = await packageRoot("pkg");
+      const claude = StatuslineManager.forHarness(HARNESS_IDS.CLAUDE_CLI);
+      await claude.install(
+        tempHome,
+        `node "${await claude.resolveScriptPath(root)}"`
+      );
+      const manager = await installFromLauncher(root);
+
+      await manager.uninstall(tempHome, false);
+
+      assert.strictEqual(await launcherExists(), true);
+    });
+
+    test("keeps the launcher while any provider has tracking enabled", async () => {
+      const root = await packageRoot("pkg");
+      const manager = await installFromLauncher(root);
+      userSettings = {};
+
+      await manager.uninstall(tempHome, false);
+
+      assert.strictEqual(await launcherExists(), true);
+    });
   });
 });

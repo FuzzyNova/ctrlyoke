@@ -22,8 +22,7 @@ import {
   TIMELINE_EVENT_TYPES,
   type WorkflowTimelineEventDraft,
 } from "../../types/WorkflowTimelineTypes";
-import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
-import { projectStateRoot } from "../../utils/ProjectStatePaths";
+import { getSearchIndexDir } from "../../core/orchestration/HistorySearchIndexLayout";
 import { getFrozenRunHistoryLocation } from "../../utils/RunHistoryStoragePolicy";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import type {
@@ -297,8 +296,7 @@ suite("HistorySearchService", () => {
     await assert.rejects(
       fs.access(
         path.join(
-          projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation()),
-          PATH_CONSTANTS.SEARCH_INDEX_DIR,
+          getSearchIndexDir(workspaceRoot, getFrozenRunHistoryLocation()),
           "manifest.json"
         )
       ),
@@ -700,8 +698,7 @@ suite("HistorySearchService", () => {
     assert.strictEqual(initial.totalCount, 1);
 
     const documentsPath = path.join(
-      projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation()),
-      PATH_CONSTANTS.SEARCH_INDEX_DIR,
+      getSearchIndexDir(workspaceRoot, getFrozenRunHistoryLocation()),
       "documents.jsonl"
     );
     await fs.writeFile(documentsPath, "{not-json}\n", "utf8");

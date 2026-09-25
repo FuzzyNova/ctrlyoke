@@ -10,6 +10,7 @@ ctrlyoke append [file] --workflow <key> --run <ref|runId> [--prompt <text>] [opt
 ctrlyoke continue --workflow <key> --run <ref|runId> [options]
 ctrlyoke validate <file> [--harness <id> | --all-installed-harnesses] [--strict <policy>] [--json]
 ctrlyoke commit [--model <model>] [--hint <text>] [--print-only] [--yes] [--cwd <path>]
+ctrlyoke about [--json]
 ctrlyoke trust-external-roots [--yes] [--cwd <path>]
 ctrlyoke trust-workflow-external-roots <file> [--yes] [--cwd <path>]
 ctrlyoke trust-secret-grants <file> [--yes] [--cwd <path>]
@@ -28,7 +29,8 @@ ctrlyoke secret rm <NAME> [--yes] [--scope user|workspace] [--cwd <path>]
 ctrlyoke secret check <file> [--cwd <path>]
 ```
 
-`ctrlyoke --version` prints the CLI version.
+`ctrlyoke --version` prints the CLI version. `ctrlyoke about` also shows
+where this copy is installed (see [`ctrlyoke about`](#ctrlyoke-about)).
 
 The CLI treats its working directory (or `--cwd`) as the workspace root: it
 reads `<cwd>/.ctrlyoke/settings.json` on top of `~/.ctrlyoke/settings.json` and
@@ -37,14 +39,14 @@ your `.ctrlyoke/` folder, or pass `--cwd`.
 
 ## Exit codes
 
-| Code | Meaning                                                                               |
-| ---- | ------------------------------------------------------------------------------------- |
-| `0`  | Success                                                                               |
-| `1`  | The workflow failed (a step or end condition failed), or a validation check failed    |
-| `2`  | Usage, parse, or unexpected error; also unapproved external roots or secret grants    |
-| `3`  | A harness failed because its CLI could not be found (not installed, not on `PATH`)    |
-| `4`  | A step failed with a timeout                                                          |
-| `5`  | Interrupted with Ctrl+C or `SIGTERM`; the run is stopped and its runner lock released |
+| Code | Meaning                                                                                                                      |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `0`  | Success                                                                                                                      |
+| `1`  | The workflow failed (a step or end condition failed), or a validation check failed                                           |
+| `2`  | Usage, parse, or unexpected error; also unapproved external roots or secret grants, or run state written by a newer ctrlyoke |
+| `3`  | A harness failed because its CLI could not be found (not installed, not on `PATH`)                                           |
+| `4`  | A step failed with a timeout                                                                                                 |
+| `5`  | Interrupted with Ctrl+C or `SIGTERM`; the run is stopped and its runner lock released                                        |
 
 ## `ctrlyoke run`
 
@@ -248,6 +250,22 @@ back to unstaged and untracked changes and warns you to stage them before
 committing. The harness, model, and prompt come from the `commit` settings;
 `--model` overrides the model. Without `--yes`, the CLI asks for confirmation.
 `--print-only` writes only the message to stdout and does not commit.
+
+## `ctrlyoke about`
+
+Show this CLI's version, how it was installed (the npm package, or the copy
+bundled with the VS Code extension), its package folder, the Node.js version,
+the ctrlyoke state folder, and any other ctrlyoke installations used on this
+machine in the last 30 days:
+
+```bash
+ctrlyoke about
+ctrlyoke about --json
+```
+
+Use it to tell which copy a shell is running when the extension and an npm
+install are both present. `--json` prints one JSON object with a
+`schemaVersion` field.
 
 ## `ctrlyoke trust-workflow-external-roots`
 

@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { INDEX_SCHEMA_VERSION } from "../core/orchestration/HistorySearchIndexLayout";
 import {
   findNewerExtension,
   hasShownNotice,
@@ -51,6 +52,7 @@ export async function noteCliInstallation(
       version,
       packageRoot,
       lastSeen: Date.now(),
+      indexSchemaVersion: INDEX_SCHEMA_VERSION,
     };
     const { others } = await recordInstallation(self);
     // The bundled copy always matches its own extension; advising an npm

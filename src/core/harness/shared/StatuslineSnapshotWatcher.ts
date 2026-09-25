@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { STATUSLINE_SNAPSHOT_PROTOCOL_VERSION } from "../../../utils/StatuslineFormat";
 
 const SNAPSHOT_POLL_INTERVAL_MS = 500;
 
@@ -132,6 +133,15 @@ export class StatuslineSnapshotWatcher<TSnapshot extends object> {
   private getSnapshotMarker(snapshot: TSnapshot): string | undefined {
     const metadata = (snapshot as { _ctrlyoke?: unknown })._ctrlyoke;
     if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+      return undefined;
+    }
+    // Scripts from before the version field wrote this same format.
+    const protocolVersion = (metadata as { protocolVersion?: unknown })
+      .protocolVersion;
+    if (
+      protocolVersion !== undefined &&
+      protocolVersion !== STATUSLINE_SNAPSHOT_PROTOCOL_VERSION
+    ) {
       return undefined;
     }
     const sequence = this.asFiniteNumber(

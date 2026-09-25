@@ -9,13 +9,9 @@ import {
   type HistorySearchResponse,
   type HistorySearchResult,
 } from "../../types/WorkflowTimelineTypes";
-import {
-  ConfigurationUtils,
-  PATH_CONSTANTS,
-} from "../../utils/ConfigurationUtils";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import { Log } from "../../utils/Log";
-import { projectStateRoot } from "../../utils/ProjectStatePaths";
 import { getFrozenRunHistoryLocation } from "../../utils/RunHistoryStoragePolicy";
 import {
   HISTORY_SEARCH_COUNT_STATES,
@@ -33,13 +29,16 @@ import {
 import {
   checkHistorySearchIndexFreshness,
   DOCUMENTS_DIR_NAME,
-  INDEX_SCHEMA_VERSION,
   MANIFEST_FILE_NAME,
   REBUILD_WORKER_MAX_OLD_GENERATION_MB,
   type HistorySearchIndexManifest,
   type HistorySearchRebuildWorkerData,
   type HistorySearchRebuildWorkerMessage,
 } from "./historySearchRebuildWorker";
+import {
+  getSearchIndexDir,
+  INDEX_SCHEMA_VERSION,
+} from "./HistorySearchIndexLayout";
 import {
   listDocumentShardEntries,
   readShardDocuments,
@@ -1201,9 +1200,9 @@ export class HistorySearchIndexService {
   }
 
   private getIndexDir(workspaceFolderPath: string): string {
-    return path.join(
-      projectStateRoot(workspaceFolderPath, getFrozenRunHistoryLocation()),
-      PATH_CONSTANTS.SEARCH_INDEX_DIR
+    return getSearchIndexDir(
+      workspaceFolderPath,
+      getFrozenRunHistoryLocation()
     );
   }
 
