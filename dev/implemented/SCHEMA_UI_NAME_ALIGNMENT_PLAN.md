@@ -1,5 +1,7 @@
 # Schema ↔ UI Name Alignment Plan
 
+**Status: implemented (2026-09-25).** Every phase landed. C6 (`defaults.mcpServers[]` shape parity) is deliberately deferred; see §5.
+
 ## Problem
 
 The words the dashboard shows often differ from the property names and enum values

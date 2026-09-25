@@ -18,9 +18,9 @@ interface PriorContextSelectProps {
   id?: string;
   value: PriorContext | undefined;
   onChange: (value: PriorContext | undefined) => void;
-  /** Show "Default (inherit from workflow)" as the first option. Use in prompt-level UI. */
+  /** Show the "Inherit (<resolved label>)" option first. Use in prompt-level UI. */
   showDefault?: boolean;
-  /** Override label for the Default option (e.g. "Default (None)" or "Default (Previous step)"). */
+  /** Override label for the Inherit option (e.g. "Inherit (None)" or "Inherit (Previous)"). */
   defaultLabel?: string;
   dropdownMaxHeight?: string;
   schemaPath?: string;
