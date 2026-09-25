@@ -10,14 +10,13 @@ export interface CliExecutionOptions {
   harness?: string;
   model?: string;
   cwd?: string;
-  timeout: string;
-  scriptTimeout: string;
+  timeout?: number;
+  scriptTimeout?: number;
   headless?: boolean;
   interactive?: boolean;
   allowTool: string[];
   denyTool: string[];
   permissionMode?: PermissionMode;
-  addDir: string[];
   var?: Record<string, string>;
   prompt?: string;
   sessionId?: string;
@@ -159,8 +158,16 @@ function addExecutionOptions(command: Command): Command {
       "-d, --cwd <path>",
       "Working directory (default: current directory)"
     )
-    .option("-t, --timeout <seconds>", "Global timeout in seconds", "3600")
-    .option("--script-timeout <seconds>", "End condition script timeout", "30")
+    .option(
+      "-t, --timeout <seconds>",
+      "Override the execution.maxPromptTimeout setting for this run (-1 = unlimited)",
+      parseTimeoutSeconds
+    )
+    .option(
+      "--script-timeout <seconds>",
+      "Override the execution.scriptTimeout setting for this run",
+      parseTimeoutSeconds
+    )
     .option("--headless", "Force headless mode (CI/CD, no user interaction)")
     .option(
       "--interactive",
@@ -183,12 +190,7 @@ function addExecutionOptions(command: Command): Command {
       `Override the defaults.toolPermissions.mode setting for this run: ${Object.values(PERMISSION_MODES).join(", ")}`,
       parsePermissionMode
     )
-    .option(
-      "--add-dir <path>",
-      "Add directory to Copilot CLI allowed paths (repeatable)",
-      collectRepeatable,
-      [] as string[]
-    )
+
     .option("--json", "Output results as JSON")
     .option("-q, --quiet", "Suppress all output except errors")
     .option("--verbose", "Show debug information")
@@ -205,6 +207,19 @@ function parsePermissionMode(value: string): PermissionMode {
     process.exit(2);
   }
   return value;
+}
+
+function parseTimeoutSeconds(value: string): number {
+  const seconds = Number(value);
+  if (!Number.isInteger(seconds) || (seconds < 1 && seconds !== -1)) {
+    console.error(
+      chalk.red(
+        `Error: timeout "${value}" must be a whole number of seconds, or -1 for unlimited`
+      )
+    );
+    process.exit(2);
+  }
+  return seconds;
 }
 
 function collectRepeatable(value: string, previous: string[]): string[] {

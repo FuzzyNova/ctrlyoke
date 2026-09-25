@@ -505,9 +505,7 @@ suite("CliIntegration", () => {
     const platform = new CliAdapter({
       harness: HARNESS_IDS.COPILOT_CLI,
       cwd: workspaceRoot,
-      timeout: 10_000,
-      scriptTimeout: 10_000,
-      additionalDirs: [],
+
       verbose: false,
       quiet: true,
       json: false,

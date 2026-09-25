@@ -20,7 +20,7 @@ Standalone `ctrlyoke` CLI entrypoint plus terminal-only formatting. `src/cli.ts`
 1. `setRuntimeMode(RUNNER_IDS.CLI)` must stay at module top level before shared code initializes.
 2. `configService` is seeded with user/workspace file backends, then `setCliOverlay()` is applied with only explicitly provided flags.
 3. `CliAdapter` plus `registerCliAdapter()` is what makes shared `ConfigurationUtils` / `workspace.getConfiguration()` reads see CLI values inside the bundled Node process.
-4. In `CliAdapter.getConfig()`, add explicit key mappings for shared settings that CLI paths depend on. Do **not** fall back to `this.config[key]`; CLI option names and persisted setting keys intentionally do not match.
+4. A CLI flag that corresponds to a setting (`--model`, `--timeout`, `--permission-mode`, …) goes into the `setCliOverlay()` overlay, and only when the user passed it explicitly. Never give such a flag a Commander default, or it silently overrides the settings file. Do not add `CliAdapter.getConfig()` key mappings for flags: that path is read only by callers that ask for a specific key (today just `cliExecutionMode`). Mappings nobody read accumulated there and made `-t`/`--script-timeout`/`--add-dir`/`--permission-mode` look wired when they were not. Do **not** fall back to `this.config[key]`; CLI option names and persisted setting keys intentionally do not match.
 
 ## `run` data flow gotchas
 

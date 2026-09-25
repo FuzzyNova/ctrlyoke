@@ -69,9 +69,7 @@ export function createCliSecretCommandDependencies(
   const config: ResolvedCliConfig = {
     harness: HARNESS_IDS.COPILOT_CLI,
     cwd: workspaceRoot,
-    timeout: 3_600_000,
-    scriptTimeout: 30_000,
-    additionalDirs: [],
+
     verbose: false,
     quiet: false,
     json: false,

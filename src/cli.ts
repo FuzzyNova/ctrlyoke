@@ -594,9 +594,6 @@ async function runCommand(
     harness: options.harness || HARNESS_IDS.COPILOT_CLI,
     model: options.model,
     cwd: workingDir,
-    timeout: parseInt(options.timeout, 10) * 1000,
-    scriptTimeout: parseInt(options.scriptTimeout, 10) * 1000,
-    additionalDirs: options.addDir || [],
     vars: options.var || {},
     sessionId: options.sessionId,
     resumeSession: options.resumeSession,
@@ -666,6 +663,16 @@ async function runCommand(
         ...(overlay.defaults?.toolPermissions ?? {}),
         deniedTools: options.denyTool,
       },
+    };
+  }
+  if (options.timeout !== undefined || options.scriptTimeout !== undefined) {
+    overlay.execution = {
+      ...(options.timeout !== undefined && {
+        maxPromptTimeout: options.timeout,
+      }),
+      ...(options.scriptTimeout !== undefined && {
+        scriptTimeout: options.scriptTimeout,
+      }),
     };
   }
   configService.setCliOverlay(overlay);
@@ -1981,9 +1988,7 @@ async function validateCommand(
     const validationAdapter = new CliAdapter({
       harness: HARNESS_IDS.COPILOT_CLI,
       cwd: workingDir,
-      timeout: 3600 * 1000,
-      scriptTimeout: 30 * 1000,
-      additionalDirs: [],
+
       vars: {},
       verbose: false,
       quiet: true,

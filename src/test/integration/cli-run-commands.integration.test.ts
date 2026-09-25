@@ -8,6 +8,7 @@ import {
   type RerunOptions,
   type RunCommandOptions,
 } from "../../cli/CliRunCommandDefinitions";
+import { PERMISSION_MODES } from "../../types/DashboardConstants";
 
 function createProgram(calls: {
   rerun?: RerunOptions;
@@ -230,5 +231,50 @@ suite("CLI run command parser", () => {
     assert.strictEqual(calls.run?.options.model, "opus");
     assert.strictEqual(calls.run?.options.prompt, "do the thing");
     assert.strictEqual(calls.run?.options.sessionId, "abc-123");
+  });
+
+  test("leaves setting-backed flags unset when omitted", async () => {
+    // A Commander default here would silently override the settings files
+    // through the CLI overlay.
+    const calls: {
+      run?: { file: string | undefined; options: RunCommandOptions };
+    } = {};
+    await createRunProgram(calls).parseAsync(["run"], { from: "user" });
+    assert.strictEqual(calls.run?.options.timeout, undefined);
+    assert.strictEqual(calls.run?.options.scriptTimeout, undefined);
+    assert.strictEqual(calls.run?.options.permissionMode, undefined);
+  });
+
+  test("parses timeout and permission-mode overrides into typed values", async () => {
+    const calls: {
+      run?: { file: string | undefined; options: RunCommandOptions };
+    } = {};
+    await createRunProgram(calls).parseAsync(
+      [
+        "run",
+        "-t",
+        "-1",
+        "--script-timeout",
+        "90",
+        "--permission-mode",
+        PERMISSION_MODES.NONE,
+      ],
+      { from: "user" }
+    );
+    assert.strictEqual(calls.run?.options.timeout, -1);
+    assert.strictEqual(calls.run?.options.scriptTimeout, 90);
+    assert.strictEqual(
+      calls.run?.options.permissionMode,
+      PERMISSION_MODES.NONE
+    );
+  });
+
+  test("no longer accepts the removed --add-dir flag", async () => {
+    await assert.rejects(
+      createRunProgram({}).parseAsync(["run", "--add-dir", "/tmp"], {
+        from: "user",
+      }),
+      /unknown option '--add-dir'/
+    );
   });
 });

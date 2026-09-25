@@ -12,10 +12,6 @@ export interface ResolvedCliConfig {
   harness: string;
   model?: string;
   cwd?: string;
-  timeout: number;
-  scriptTimeout: number;
-  /** Extra directories to pass as --add-dir to Copilot CLI (from --add-dir flags). */
-  additionalDirs: string[];
   /**
    * Session ID to resume (from --resume <id> flag).
    * When set, the first prompt step will resume this session.
@@ -66,35 +62,14 @@ export class CliAdapter implements PlatformAdapter {
   }
 
   getConfig<T>(key: string, defaultValue: T): T {
+    // CLI flags that map to settings (--model, --timeout, --permission-mode, …)
+    // reach shared code through configService.setCliOverlay() in cli.ts, not
+    // through here. Only keys a caller actually reads belong in this switch.
     switch (key) {
-      // ── Additional directories (--add-dir) ─────────────────────────────
-      // CliProviderUtils.getWorkspaceDirs() reads this key to build --add-dir args.
-      case "copilotCliAllowedDirs":
-        return this.config.additionalDirs as unknown as T;
-
-      // ── Execution mode ──────────────────────────────────────────────────
+      // Read by CliIntegration.getExecutionMode(); lets CommitMessageGenerator
+      // force headless without touching the user's settings.
       case "cliExecutionMode":
         return this.config.cliExecutionMode as unknown as T;
-
-      // ── Model selection ─────────────────────────────────────────────────
-      // All three harness model keys map to the single --model flag value.
-      case "copilotCliModel":
-      case "claudeCliModel":
-      case "codexCliModel":
-        return (this.config.model ?? defaultValue) as unknown as T;
-
-      // ── Timeouts ────────────────────────────────────────────────────────
-      // ConfigurationUtils stores timeouts in *seconds* in the config key;
-      // the *Ms() helpers multiply by 1000.  We need to reverse that here.
-      case "scriptTimeout":
-        return Math.round(this.config.scriptTimeout / 1000) as unknown as T;
-      case "maxPromptExecutionTime":
-        return Math.round(this.config.timeout / 1000) as unknown as T;
-
-      // ── Session resumption ──────────────────────────────────────────────
-      // Maps to PropertyResolver tier-3 (global setting fallback).
-      case "resumeExistingSession":
-        return (this.config.resumeSession ?? false) as unknown as T;
 
       // ── Fallback: config service only (file-based settings) ────────────
       // Do NOT fall back to this.config[key] — config field names don't match
