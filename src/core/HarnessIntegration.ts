@@ -999,7 +999,7 @@ export abstract class HarnessIntegration {
 
   /**
    * Get every external directory currently authorized to be read/attached
-   * for this workspace: user-scope `permissions.allowedExternalFileRoots`
+   * for this workspace: user-scope `permissions.trustedExternalRoots`
    * (trusted immediately) plus workspace-scope entries with a recorded
    * "allow" decision in `ExternalRootsTrustStore`. Returns `[]` when no
    * workspace is open. See dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md.

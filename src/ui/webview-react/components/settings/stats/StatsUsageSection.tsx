@@ -45,7 +45,7 @@ import type { UsagePercentDirection } from "@root/utils/StatuslineFormat";
 const ALL_HARNESS_IDS = Object.values(HARNESS_IDS) as HarnessId[];
 
 interface Props {
-  hideCost: boolean;
+  showCostEstimates: boolean;
   isNarrow?: boolean;
   settings?: FullGlobalSettings;
   activeScope: SettingWriteScope;
@@ -54,7 +54,7 @@ interface Props {
 }
 
 export function StatsUsageSection({
-  hideCost,
+  showCostEstimates,
   isNarrow = false,
   settings,
   activeScope,
@@ -93,10 +93,10 @@ export function StatsUsageSection({
       snapshot
         ? buildWorkspaceStatsExport(snapshot, {
             generatedAt: Date.now(),
-            hideCost,
+            showCostEstimates,
           })
         : undefined,
-    [hideCost, snapshot]
+    [showCostEstimates, snapshot]
   );
 
   const downloadExport = useCallback(
@@ -318,7 +318,7 @@ export function StatsUsageSection({
         <StatTileGrid
           snapshot={snapshot}
           isNarrow={isNarrow}
-          hideCost={hideCost}
+          showCostEstimates={showCostEstimates}
         />
       )}
       {!snapshot && (
@@ -331,7 +331,7 @@ export function StatsUsageSection({
           snapshot={snapshot}
           metric={shareMetric}
           onMetricChange={setShareMetric}
-          hideCost={hideCost}
+          showCostEstimates={showCostEstimates}
           harnessColorSettings={settings?.settings.ui.harnessColors}
         />
       )}
@@ -345,7 +345,7 @@ export function StatsUsageSection({
             <UsageCard
               harnessId={harnessId}
               snapshot={snapshotsByHarness[harnessId]}
-              hideCost={hideCost}
+              showCostEstimates={showCostEstimates}
             />
           </div>
         ))}
@@ -396,13 +396,13 @@ function HarnessShare({
   snapshot,
   metric,
   onMetricChange,
-  hideCost,
+  showCostEstimates,
   harnessColorSettings,
 }: {
   snapshot: WorkspaceStatsSnapshot;
   metric: HarnessShareMetric;
   onMetricChange: (metric: HarnessShareMetric) => void;
-  hideCost: boolean;
+  showCostEstimates: boolean;
   harnessColorSettings?: HarnessColorSettings;
 }) {
   const contributions = ALL_HARNESS_IDS.map((harnessId, index) => ({
@@ -489,7 +489,7 @@ function HarnessShare({
             contribution={contribution!}
             percentage={(valueFor(harnessId) / total) * 100}
             metric={metric}
-            hideCost={hideCost}
+            showCostEstimates={showCostEstimates}
           />
         ))}
         {unused.length > 0 && (

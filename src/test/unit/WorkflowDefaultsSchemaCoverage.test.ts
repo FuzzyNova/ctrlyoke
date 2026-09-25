@@ -6,7 +6,7 @@ import { suite, test } from "mocha";
 const RESHAPED_DEFAULTS: Record<string, string> = {
   model: "defaults.models",
   additionalArgs: "defaults.additionalArgs",
-  trustedExternalRoots: "permissions.allowedExternalFileRoots",
+  trustedExternalRoots: "permissions.trustedExternalRoots",
 };
 
 const DEFAULT_OPT_OUTS: Record<string, string> = {

@@ -16,7 +16,7 @@ capability details and version-scoped evidence.
 - The model list comes from the `modelProviders` in `~/.qwen/settings.json`; `qwen3.5-plus` is the fallback.
 - ctrlyoke registers its completion hooks in the workspace `.qwen/settings.json` for the duration of a run, then restores the file. MCP servers are passed per process with `--mcp-config`.
 - Image references are not attached on this harness, and `error` hooks do not fire. See the [compatibility matrix](/harnesses/compatibility).
-- `permissions.allowedExternalFileRoots` is not passed to Qwen; it has no `--add-dir` equivalent.
+- `permissions.trustedExternalRoots` is not passed to Qwen; it has no `--add-dir` equivalent.
 
 ## Example
 

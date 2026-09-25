@@ -1,12 +1,12 @@
 ### External file roots
 
 Workspace files are always trusted. To let ctrlyoke use a directory outside
-the workspace, add it to `permissions.allowedExternalFileRoots`:
+the workspace, add it to `permissions.trustedExternalRoots`:
 
 ```json
 {
   "permissions": {
-    "allowedExternalFileRoots": [
+    "trustedExternalRoots": [
       "C:/Users/me/.codex/sessions",
       "C:/temp/repros"
     ]

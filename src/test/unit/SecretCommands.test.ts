@@ -357,7 +357,7 @@ suite("Secret command handlers", () => {
 
   test("secret check stays strict when context resolution mode is warn", async () => {
     configService.setCliOverlay({
-      execution: { strictContextResolution: "warn" },
+      execution: { contextResolutionFailure: "warn" },
     });
     try {
       const io = new TestIo();

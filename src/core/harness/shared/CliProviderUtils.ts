@@ -319,7 +319,7 @@ export class CliProviderUtils {
    * Get workspace directories for --add-dir arguments
    *
    * Collects every workspace-folder root plus every external root currently
-   * authorized via `permissions.allowedExternalFileRoots` (see
+   * authorized via `permissions.trustedExternalRoots` (see
    * dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md) — the sole mechanism for
    * granting a harness sandbox access to a directory outside the workspace.
    * Workspace roots stay distinct from external roots so external-root

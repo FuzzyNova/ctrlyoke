@@ -12,6 +12,7 @@ import { DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT } from "@root/types/CtrlYokeSe
 import { RunHistorySection } from "./RunHistorySection";
 import {
   CTRLYOKE_MCP_MODES,
+  SETTING_PATHS,
   STEP_COLOR_MODES,
 } from "@root/types/DashboardConstants";
 
@@ -161,9 +162,9 @@ export function GeneralSection({
         <SettingToggleRow
           label="Show token cost estimates"
           description="Show source-labelled token cost estimates. These are not incremental subscription spend."
-          checked={!ui.hideCost}
-          onChange={(v) => onUpdate("ui.hideCost", !v)}
-          path="ui.hideCost"
+          checked={ui.showCostEstimates}
+          onChange={(v) => onUpdate("ui.showCostEstimates", v)}
+          path={SETTING_PATHS.UI_SHOW_COST_ESTIMATES}
           {...rowProps}
         />
         <SettingToggleRow

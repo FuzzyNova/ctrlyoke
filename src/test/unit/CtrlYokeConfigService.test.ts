@@ -250,27 +250,27 @@ suite("CtrlYokeConfigService", () => {
     test("returns only the requested scope's value, ignoring the other scope", () => {
       service.setUserBackend(
         makeBackend({
-          permissions: { allowedExternalFileRoots: ["/home/user/logs"] },
+          permissions: { trustedExternalRoots: ["/home/user/logs"] },
         })
       );
       service.setWorkspaceBackend(
         makeBackend({
-          permissions: { allowedExternalFileRoots: ["/shared/logs"] },
+          permissions: { trustedExternalRoots: ["/shared/logs"] },
         })
       );
       assert.deepStrictEqual(
-        service.getScoped("permissions", "user")?.allowedExternalFileRoots,
+        service.getScoped("permissions", "user")?.trustedExternalRoots,
         ["/home/user/logs"]
       );
       assert.deepStrictEqual(
-        service.getScoped("permissions", "workspace")?.allowedExternalFileRoots,
+        service.getScoped("permissions", "workspace")?.trustedExternalRoots,
         ["/shared/logs"]
       );
     });
 
     test("ignores the CLI overlay entirely", () => {
       service.setCliOverlay({
-        permissions: { allowedExternalFileRoots: ["/cli/only"] },
+        permissions: { trustedExternalRoots: ["/cli/only"] },
       });
       assert.strictEqual(service.getScoped("permissions", "user"), undefined);
       assert.strictEqual(
@@ -378,7 +378,7 @@ suite("CtrlYokeConfigService", () => {
               useCtrlyokeStyle: false,
             },
           },
-          allowedExternalFileRoots: ["/shared/logs"],
+          trustedExternalRoots: ["/shared/logs"],
         },
         usageTracking: {
           enabled: false,
@@ -393,7 +393,7 @@ suite("CtrlYokeConfigService", () => {
       true
     );
     assert.deepStrictEqual(
-      service.get("permissions").allowedExternalFileRoots,
+      service.get("permissions").trustedExternalRoots,
       ["/shared/logs"]
     );
     assert.strictEqual(service.get("usageTracking").enabled, true);

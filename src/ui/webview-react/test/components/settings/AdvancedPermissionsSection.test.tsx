@@ -37,7 +37,7 @@ describe("AdvancedPermissionsSection — allowed external file roots", () => {
     render(
       <AdvancedPermissionsSection
         settings={createSettings({
-          allowedExternalFileRoots: ["/home/user/logs", "/var/log/my-tool"],
+          trustedExternalRoots: ["/home/user/logs", "/var/log/my-tool"],
         })}
         activeScope={SETTING_SCOPES.USER}
         onUpdate={() => {}}
@@ -73,7 +73,7 @@ describe("AdvancedPermissionsSection — allowed external file roots", () => {
     await user.click(screen.getByRole("button", { name: "Add" }));
 
     expect(onUpdate).toHaveBeenCalledWith(
-      "permissions.allowedExternalFileRoots",
+      "permissions.trustedExternalRoots",
       ["/home/user/logs"]
     );
   });
@@ -83,7 +83,7 @@ describe("AdvancedPermissionsSection — allowed external file roots", () => {
     render(
       <AdvancedPermissionsSection
         settings={{
-          ...createSettings({ allowedExternalFileRoots: ["/shared/logs"] }),
+          ...createSettings({ trustedExternalRoots: ["/shared/logs"] }),
           externalFileRootsByScope: {
             user: [],
             workspace: [{ path: "/shared/logs", decision: "deny" }],

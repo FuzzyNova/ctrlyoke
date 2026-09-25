@@ -654,7 +654,7 @@ suite("CliIntegration", () => {
     for (const currentCase of cases) {
       configService.setCliOverlay({
         execution: {
-          strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
+          contextResolutionFailure: CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
         },
       });
       const integration = createHeadlessIntegration();
@@ -689,7 +689,7 @@ suite("CliIntegration", () => {
       try {
         await assert.rejects(
           (integration as any).initializeExecutionSession(session, false),
-          /Step blocked by execution\.strictContextResolution="fail"/u
+          /Step blocked by execution\.contextResolutionFailure="fail"/u
         );
         assert.strictEqual(preparePromptCalls, 0);
         assert.strictEqual(surfaced.length, 1);
@@ -710,7 +710,7 @@ suite("CliIntegration", () => {
     for (const code of cases) {
       configService.setCliOverlay({
         execution: {
-          strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
+          contextResolutionFailure: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
         },
       });
       const integration = createHeadlessIntegration();
@@ -792,7 +792,7 @@ suite("CliIntegration", () => {
 
     configService.setCliOverlay({
       execution: {
-        strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
+        contextResolutionFailure: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
       },
     });
 
@@ -835,7 +835,7 @@ suite("CliIntegration", () => {
   test("does not block advisory prompt diagnostics in fail mode", async () => {
     configService.setCliOverlay({
       execution: {
-        strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
+        contextResolutionFailure: CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
       },
     });
     const integration = createHeadlessIntegration();

@@ -660,7 +660,7 @@ export class WorkflowInstance {
       onPromptComplete: (data) =>
         this._promptCompleteEmitter.fire({
           ...data,
-          hideCost: ConfigurationUtils.shouldHideCost(),
+          showCostEstimates: ConfigurationUtils.shouldShowCostEstimates(),
         }),
       onStatusMessage: (stepIndex, message, severity) =>
         this._workflowStatusMessageEmitter.fire({

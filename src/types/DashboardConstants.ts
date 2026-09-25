@@ -306,7 +306,7 @@ export const MESSAGE_TYPES = {
   GET_CONFIG: "getConfig", // Webview -> Extension: Request config value
   UPDATE_CONFIG: "updateConfig", // Webview -> Extension: Update config value
   CONFIG_VALUE: "configValue", // Extension -> Webview: Send config value
-  BROWSE_AND_ADD_EXTERNAL_ROOT: "browseAndAddExternalRoot", // Webview -> Extension: { scope } OS folder picker, appends result to permissions.allowedExternalFileRoots for that scope
+  BROWSE_AND_ADD_EXTERNAL_ROOT: "browseAndAddExternalRoot", // Webview -> Extension: { scope } OS folder picker, appends result to permissions.trustedExternalRoots for that scope
   UPDATE_EXTERNAL_ROOT_DECISION: "updateExternalRootDecision", // Webview -> Extension: change a workspace-scope external-root trust decision
   DISABLE_STATUS_LINE_TRACKING: "disableStatusLineTracking", // Webview -> Extension: disable one harness's global statusline tracking
   SET_STATUS_LINE_FORMAT_MODE: "setStatusLineFormatMode", // Webview -> Extension: set shared/per-harness statusline format mode
@@ -1574,7 +1574,7 @@ export function formatContextResolutionFailureMessage(
 ): string {
   const count = diagnostics.length;
   return [
-    `Step blocked by execution.strictContextResolution="fail" — ${count} reference${
+    `Step blocked by execution.contextResolutionFailure="fail" — ${count} reference${
       count === 1 ? "" : "s"
     } did not resolve:`,
     ...diagnostics.map((diagnostic) => `  • ${diagnostic.message}`),
@@ -1612,6 +1612,11 @@ export const SETTING_PATHS = {
   WORKTREES: "worktrees",
   COORDINATION: "coordination",
   STORAGE_RUN_HISTORY_LOCATION: "storage.runHistoryLocation",
+  PERMISSIONS_TRUSTED_EXTERNAL_ROOTS: "permissions.trustedExternalRoots",
+  EXECUTION_CONTEXT_RESOLUTION_FAILURE: "execution.contextResolutionFailure",
+  UI_SHOW_COST_ESTIMATES: "ui.showCostEstimates",
+  SERVER_AUTO_START: "server.autoStart",
+  COMMIT_SYSTEM_PROMPT: "commit.systemPrompt",
   PERMISSIONS_STATUS_LINE_TRACKING: "permissions.statusLineTracking",
   PERMISSIONS_STATUS_LINE_TRACKING_USE_DIFFERENT_FORMAT_PER_HARNESS:
     "permissions.statusLineTracking.useDifferentFormatPerHarness",

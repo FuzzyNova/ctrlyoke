@@ -520,6 +520,7 @@ function McpServersPanel({
             className={`flex flex-col gap-1${fillHeight ? " flex-1 min-h-0 overflow-y-auto pr-1" : ""}`}
           >
             {rows.map((server) => {
+              const { enabled: isServerEnabled } = server;
               const isExpanded = expandedId === server.id;
               const displayName =
                 server.managed?.displayName?.trim() || server.config.id;
@@ -534,7 +535,7 @@ function McpServersPanel({
                 <div
                   key={server.id}
                   className={`rounded border bg-editor-bg transition-colors ${
-                    server.enabled
+                    isServerEnabled
                       ? "border-focus-border"
                       : "border-panel-border"
                   }`}
@@ -548,19 +549,19 @@ function McpServersPanel({
                       disabled={readOnly}
                       className="flex flex-shrink-0 items-center"
                       aria-label={
-                        server.enabled
+                        isServerEnabled
                           ? `Disable ${server.id}`
                           : `Enable ${server.id}`
                       }
                       title={
-                        server.enabled
+                        isServerEnabled
                           ? `Disable ${server.id}`
                           : `Enable ${server.id}`
                       }
                     >
                       <input
                         type="checkbox"
-                        checked={server.enabled}
+                        checked={isServerEnabled}
                         readOnly
                         className="h-3 w-3 accent-focus-border pointer-events-none"
                         tabIndex={-1}

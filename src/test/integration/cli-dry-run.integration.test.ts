@@ -204,7 +204,7 @@ suite("CLI dry-run process", () => {
     await fs.writeFile(
       path.join(root, ".ctrlyoke", "settings.json"),
       JSON.stringify({
-        permissions: { allowedExternalFileRoots: [externalRoot] },
+        permissions: { trustedExternalRoots: [externalRoot] },
       }),
       "utf8"
     );

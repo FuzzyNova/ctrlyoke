@@ -220,7 +220,7 @@ export async function confirmExternalFileTrustAndOpen(
 
 /**
  * One-time batch approval for a workspace's requested external file roots
- * (`permissions.allowedExternalFileRoots` at workspace scope). Shows a
+ * (`permissions.trustedExternalRoots` at workspace scope). Shows a
  * single scrollable, reviewable dashboard modal — never one popup per root — listing
  * every root that has no recorded decision yet for this workspace identity.
  * Each item defaults checked ("Trust"); unchecking an item before confirming

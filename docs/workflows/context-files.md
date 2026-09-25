@@ -97,7 +97,7 @@ The same prompt text also recognizes:
 - <code v-pre>{{name}}</code> for workflow `vars`
 
 If a reference cannot be resolved, ctrlyoke warns and runs the step anyway by
-default. Set `execution.strictContextResolution` to `fail` to stop the step
+default. Set `execution.contextResolutionFailure` to `fail` to stop the step
 instead.
 
 ## Writing references literally

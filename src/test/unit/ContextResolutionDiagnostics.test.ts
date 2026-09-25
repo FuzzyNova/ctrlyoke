@@ -46,7 +46,7 @@ suite("Context resolution diagnostics", () => {
             'Reference "~abc1234" could not be attached: unknown commit.',
         },
       ]),
-      'Step blocked by execution.strictContextResolution="fail" — 2 references did not resolve:\n' +
+      'Step blocked by execution.contextResolutionFailure="fail" — 2 references did not resolve:\n' +
         '  • Skill "foo" referenced by /skill:foo was not found among discovered skills.\n' +
         '  • Reference "~abc1234" could not be attached: unknown commit.'
     );

@@ -3320,7 +3320,7 @@ export class WorkflowExecutor {
    * Resolves a step's granted secrets. A name that cannot resolve is reported
    * as a warning status row (persisted to history like every other
    * context-resolution warning) and simply omitted from the returned map —
-   * mirroring `execution.strictContextResolution`'s "warn" contract for every
+   * mirroring `execution.contextResolutionFailure`'s "warn" contract for every
    * other declared-reference category, instead of hard-stopping the run the
    * way this used to unconditionally. `"fail"` mode keeps today's hard stop
    * so `secret check`'s guarantee still has a live-run counterpart. A name

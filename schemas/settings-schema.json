@@ -368,7 +368,7 @@
             }
           }
         },
-        "allowedExternalFileRoots": {
+        "trustedExternalRoots": {
           "type": "array",
           "items": {
             "type": "string"
@@ -471,7 +471,7 @@
           "type": "boolean",
           "description": "Automatically delete categorized prompt temp files after execution. Set to false to retain files in .ctrlyoke/temp/ for debugging."
         },
-        "strictContextResolution": {
+        "contextResolutionFailure": {
           "type": "string",
           "enum": ["warn", "fail"],
           "default": "warn",
@@ -694,9 +694,10 @@
           "type": "boolean",
           "description": "In the prompt editor, treat @file/#symbol/~git/$context references as single units: arrow keys skip over them and Backspace/Delete removes the whole reference at once. In output, format clickable local references as compact chips. Clicking or long-pressing a reference still opens it; when off, editor references edit character by character and output uses ordinary text links."
         },
-        "hideCost": {
+        "showCostEstimates": {
           "type": "boolean",
-          "description": "Hide token cost estimates from dashboard and CLI statistics."
+          "default": true,
+          "description": "Show token cost estimates in dashboard and CLI statistics."
         },
         "offerTrustForUntrustedFileLinks": {
           "type": "boolean",
@@ -757,9 +758,9 @@
       "description": "ctrlyoke hosted server settings.",
       "additionalProperties": false,
       "properties": {
-        "enabled": {
+        "autoStart": {
           "type": "boolean",
-          "description": "Whether the ctrlyoke hosted server is enabled."
+          "description": "Automatically start the hosted dashboard server when the VS Code extension activates."
         },
         "port": {
           "type": "number",
@@ -941,7 +942,7 @@
           "type": "string",
           "description": "Model override for commit message generation. Empty = use the commit harness default."
         },
-        "prompt": {
+        "systemPrompt": {
           "type": "string",
           "description": "System prompt sent before the git diff. The diff is appended automatically."
         }

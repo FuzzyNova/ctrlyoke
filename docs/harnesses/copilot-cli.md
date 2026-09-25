@@ -31,5 +31,5 @@ steps:
 ## Notes
 
 - Tool permissions can be tuned through workflow `toolPermissions` overrides or `defaults.toolPermissions` in `.ctrlyoke/settings.json`.
-- Directories outside the workspace are granted through `permissions.allowedExternalFileRoots`; ctrlyoke passes each approved root to Copilot as `--add-dir`. To pass `--allow-all-paths` instead, add it to `defaults.additionalArgs["copilot-cli"]`.
+- Directories outside the workspace are granted through `permissions.trustedExternalRoots`; ctrlyoke passes each approved root to Copilot as `--add-dir`. To pass `--allow-all-paths` instead, add it to `defaults.additionalArgs["copilot-cli"]`.
 - If you need a workflow to continue a previous Copilot conversation, use `resumeSession` or `sessionId`.

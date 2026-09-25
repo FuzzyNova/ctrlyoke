@@ -159,7 +159,7 @@ export interface CtrlYokeGlobalSettings {
      * (see `ExternalRootsTrustStore`) before they take effect. See
      * `dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md`.
      */
-    allowedExternalFileRoots: string[];
+    trustedExternalRoots: string[];
     /**
      * Apply pattern-based heuristics (e.g. `token=...`, `Bearer ...`,
      * private-key blocks) during secret redaction, in addition to exact
@@ -192,7 +192,7 @@ export interface CtrlYokeGlobalSettings {
     scriptTimeout: number; // seconds
     closeTerminalOnComplete: boolean;
     autoDeleteTempFiles: boolean;
-    strictContextResolution: ContextResolutionFailureMode;
+    contextResolutionFailure: ContextResolutionFailureMode;
   };
 
   // Queue
@@ -268,12 +268,12 @@ export interface CtrlYokeGlobalSettings {
      * Allow an AI-generated file link outside trusted roots to offer a "Trust
      * Parent Folder" action. When false, untrusted external links are still
      * blocked outright — this only controls whether the trust offer appears.
-     * Trusted roots (workspace or `permissions.allowedExternalFileRoots`)
+     * Trusted roots (workspace or `permissions.trustedExternalRoots`)
      * always open directly regardless of this setting.
      */
     offerTrustForUntrustedFileLinks: boolean;
-    /** Hide token cost estimates from dashboard and CLI presentation. */
-    hideCost: boolean;
+    /** Show token cost estimates in dashboard and CLI presentation. */
+    showCostEstimates: boolean;
     /** Dashboard step identity color mode. */
     stepColorMode: StepColorMode;
     /** Dashboard-only per-harness identity color controls. */
@@ -282,7 +282,7 @@ export interface CtrlYokeGlobalSettings {
 
   // Server (new)
   server: {
-    enabled: boolean;
+    autoStart: boolean;
     port: number;
     standalonePort: number;
     /**
@@ -312,7 +312,7 @@ export interface CtrlYokeGlobalSettings {
   commit: {
     harness: HarnessId | "";
     model: string;
-    prompt: string;
+    systemPrompt: string;
   };
 
   // Advanced
@@ -490,7 +490,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
         format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
       },
     },
-    allowedExternalFileRoots: [],
+    trustedExternalRoots: [],
     heuristicSecretRedactionEnabled: true,
   },
   usageTracking: {
@@ -507,7 +507,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     scriptTimeout: 3600,
     closeTerminalOnComplete: false,
     autoDeleteTempFiles: true,
-    strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
+    contextResolutionFailure: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
   },
   queue: {
     maxSize: DEFAULT_MAX_QUEUE_SIZE,
@@ -555,7 +555,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     hideGitIgnoredFiles: false,
     atomicContextReferences: true,
     offerTrustForUntrustedFileLinks: true,
-    hideCost: false,
+    showCostEstimates: true,
     stepColorMode: STEP_COLOR_MODES.OFF,
     harnessColors: {
       byHarness: {},
@@ -563,7 +563,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     },
   },
   server: {
-    enabled: false,
+    autoStart: false,
     port: 4747,
     standalonePort: 4748,
     fallbackPorts: [],
@@ -606,7 +606,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
   commit: {
     harness: "",
     model: "",
-    prompt:
+    systemPrompt:
       "Generate a conventional commit message based on the included git diff. " +
       "Return ONLY the final commit message content based on the included diff — no explanation, no code fences, no author or co-author attribution lines. " +
       "Treat the provided diff and any optional user draft as the complete context for composing the message; do not read extra instruction files or inspect other workspace files unless explicitly instructed. " +

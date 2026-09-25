@@ -5,6 +5,7 @@ import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import {
   LICENSE_UI,
   MESSAGE_TYPES,
+  SETTING_PATHS,
   SETTING_SCOPES,
 } from "@root/types/DashboardConstants";
 import {
@@ -313,11 +314,13 @@ export function ServerSection({
         {/* Enable on launch — server-side only; browser clients cannot change server startup */}
         {!isStandalone && (
           <SettingToggleRow
-            label="Enable on launch"
-            description="Automatically start the hosted server when ctrlyoke activates."
-            checked={server.enabled}
-            onChange={(value) => onUpdate("server.enabled", value)}
-            path="server.enabled"
+            label="Auto Start"
+            description="Automatically start the hosted dashboard server when the VS Code extension activates."
+            checked={server.autoStart}
+            onChange={(value) =>
+              onUpdate(SETTING_PATHS.SERVER_AUTO_START, value)
+            }
+            path={SETTING_PATHS.SERVER_AUTO_START}
             {...rowProps}
           />
         )}

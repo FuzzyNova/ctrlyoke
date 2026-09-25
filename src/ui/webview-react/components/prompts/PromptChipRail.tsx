@@ -354,8 +354,8 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
   const { setFinalStepFooterExpanded } = useUiStore();
   const { selectFinalStep, selectPrompt, deselect } = useEditorStore();
   const { globalSettings, workflowProperties } = useSettingsStore();
-  const hideCost = useSettingsStore(
-    (state) => state.fullGlobalSettings?.settings.ui.hideCost === true
+  const showCostEstimates = useSettingsStore(
+    (state) => state.fullGlobalSettings?.settings.ui.showCostEstimates !== false
   );
 
   const activeExternalOwner = useActiveWorkflowExternalOwner();
@@ -490,7 +490,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
       contextWindow: ctx,
       harness: getChipHarnessId(step, status),
       attemptTokens: latestOutput?.tokens,
-      hideCost,
+      showCostEstimates,
     });
   };
 

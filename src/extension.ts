@@ -1641,7 +1641,7 @@ function registerCommands(
   );
 
   // Auto-start hosted server if enabled in config (must be after command registration)
-  if (configService.get("server")?.enabled) {
+  if (configService.get("server")?.autoStart) {
     void vscode.commands.executeCommand("ctrlyoke.enableServer");
   }
 

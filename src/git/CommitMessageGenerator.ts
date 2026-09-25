@@ -258,7 +258,7 @@ export class CommitMessageGenerator {
       ConfigurationUtils.getIntegrationMode();
     const harness = rawHarness as HarnessId;
     const model = ConfigurationUtils.getCommitModel() || undefined;
-    const commitPrompt = ConfigurationUtils.getCommitPrompt();
+    const commitPrompt = ConfigurationUtils.getCommitSystemPrompt();
 
     const instructionsSection = instructions?.trim()
       ? `\n\nUser's starting draft or instructions — use as a guide for the message:\n${instructions.trim()}`

@@ -32,7 +32,7 @@ by another machine that syncs the same history — delete that lineage's `runner
 
 ## "This workspace requests external file roots that have not been approved yet"
 
-The workspace's `.ctrlyoke/settings.json` lists `permissions.allowedExternalFileRoots` that nobody
+The workspace's `.ctrlyoke/settings.json` lists `permissions.trustedExternalRoots` that nobody
 has reviewed on this machine. Approve them when VS Code prompts you, or run
 `ctrlyoke trust-external-roots`. The related message "This workflow requests external file roots
 that have not been approved yet" refers to a workflow's `trustedExternalRoots`; run
@@ -49,7 +49,7 @@ A secret the workflow declares is neither stored as a managed secret nor set in 
 Store it (`ctrlyoke secret set NAME`, or the Secrets tab in the dashboard's settings) or export
 `NAME` in the environment that launches ctrlyoke. `ctrlyoke secret check <file>` checks every
 declared secret without starting a harness. By default a missing secret is a warning when a run
-starts; set `execution.strictContextResolution` to `fail` to make it an error.
+starts; set `execution.contextResolutionFailure` to `fail` to make it an error.
 
 "No encrypted OS credential store is available" means the host has no usable credential-store
 backend (common on headless Linux). Use environment variables instead of managed secrets there.

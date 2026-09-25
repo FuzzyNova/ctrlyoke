@@ -60,7 +60,7 @@ describe("buildWorkspaceStatsExport", () => {
   it("produces a shareable Markdown summary with aggregate values", () => {
     const exported = buildWorkspaceStatsExport(snapshot(), {
       generatedAt: Date.UTC(2026, 7, 11, 12),
-      hideCost: false,
+      showCostEstimates: true,
     });
 
     expect(exported.markdown).toContain("# ctrlyoke workspace statistics");
@@ -75,7 +75,7 @@ describe("buildWorkspaceStatsExport", () => {
   it("returns raw numeric values in a versioned JSON payload", () => {
     const exported = buildWorkspaceStatsExport(snapshot(), {
       generatedAt: Date.UTC(2026, 7, 11, 12),
-      hideCost: false,
+      showCostEstimates: true,
     });
 
     expect(exported.json.schemaVersion).toBe(
@@ -91,10 +91,10 @@ describe("buildWorkspaceStatsExport", () => {
     });
   });
 
-  it("suppresses cost fields and cost rows when hideCost is enabled", () => {
+  it("suppresses cost fields and cost rows when showCostEstimates is disabled", () => {
     const exported = buildWorkspaceStatsExport(snapshot(), {
       generatedAt: Date.UTC(2026, 7, 11, 12),
-      hideCost: true,
+      showCostEstimates: false,
     });
 
     expect(exported.markdown).not.toContain("Estimated cost");
@@ -127,7 +127,7 @@ describe("buildWorkspaceStatsExport", () => {
 
     const exported = buildWorkspaceStatsExport(widenedSnapshot, {
       generatedAt: Date.UTC(2026, 7, 11, 12),
-      hideCost: false,
+      showCostEstimates: true,
     });
     const serialized = `${exported.markdown}\n${JSON.stringify(exported.json)}`;
 

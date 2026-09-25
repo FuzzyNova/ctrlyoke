@@ -16,7 +16,7 @@ same shape:
 
 Objects merge key by key across the two files. An array or a single value in
 the workspace file replaces the user value entirely. The one exception is
-[`permissions.allowedExternalFileRoots`](#external-file-roots): ctrlyoke
+[`permissions.trustedExternalRoots`](#external-file-roots): ctrlyoke
 combines the roots from both files. When you run the `ctrlyoke` CLI, the
 flags you pass override both files for that run.
 
@@ -492,12 +492,12 @@ Harness-specific path and sandbox permission settings.
 ### External file roots
 
 Workspace files are always trusted. To let ctrlyoke use a directory outside
-the workspace, add it to `permissions.allowedExternalFileRoots`:
+the workspace, add it to `permissions.trustedExternalRoots`:
 
 ```json
 {
   "permissions": {
-    "allowedExternalFileRoots": [
+    "trustedExternalRoots": [
       "C:/Users/me/.codex/sessions",
       "C:/temp/repros"
     ]
@@ -763,7 +763,7 @@ Statusline settings for Qwen Code.
 
 </details>
 
-### `permissions.allowedExternalFileRoots` {#permissions-allowedexternalfileroots}
+### `permissions.trustedExternalRoots` {#permissions-trustedexternalroots}
 
 - **Type:** `string[]`
 - **Default:** `[]`
@@ -856,7 +856,7 @@ Automatically close the terminal when execution completes.
 
 Automatically delete categorized prompt temp files after execution. Set to false to retain files in .ctrlyoke/temp/ for debugging.
 
-### `execution.strictContextResolution` {#execution-strictcontextresolution}
+### `execution.contextResolutionFailure` {#execution-contextresolutionfailure}
 
 - **Type:** `"warn" | "fail"`
 - **Default:** `"warn"`
@@ -1171,12 +1171,12 @@ Hide files and directories ignored by .gitignore in the workspace file explorer 
 
 In the prompt editor, treat @file/#symbol/~git/$context references as single units: arrow keys skip over them and Backspace/Delete removes the whole reference at once. In output, format clickable local references as compact chips. Clicking or long-pressing a reference still opens it; when off, editor references edit character by character and output uses ordinary text links.
 
-### `ui.hideCost` {#ui-hidecost}
+### `ui.showCostEstimates` {#ui-showcostestimates}
 
 - **Type:** `boolean`
-- **Default:** `false`
+- **Default:** `true`
 
-Hide token cost estimates from dashboard and CLI statistics.
+Show token cost estimates in dashboard and CLI statistics.
 
 ### `ui.offerTrustForUntrustedFileLinks` {#ui-offertrustforuntrustedfilelinks}
 
@@ -1226,12 +1226,12 @@ Hex color used for script steps.
 
 ctrlyoke hosted server settings.
 
-### `server.enabled` {#server-enabled}
+### `server.autoStart` {#server-autostart}
 
 - **Type:** `boolean`
 - **Default:** `false`
 
-Whether the ctrlyoke hosted server is enabled.
+Automatically start the hosted dashboard server when the VS Code extension activates.
 
 ### `server.port` {#server-port}
 
@@ -1469,7 +1469,7 @@ Harness to use for commit message generation. Empty = use the workspace default 
 
 Model override for commit message generation. Empty = use the commit harness default.
 
-### `commit.prompt` {#commit-prompt}
+### `commit.systemPrompt` {#commit-systemprompt}
 
 - **Type:** `string`
 

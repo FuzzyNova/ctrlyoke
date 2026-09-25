@@ -257,6 +257,30 @@ function webviewSource(): string {
 }
 
 suite("Settings schema -> Global Settings dashboard control parity", () => {
+  test("renamed settings keys have live controls at their new schema paths", () => {
+    const expectedPaths = [
+      "ui.showCostEstimates",
+      "execution.contextResolutionFailure",
+      "permissions.trustedExternalRoots",
+      "server.autoStart",
+      "commit.systemPrompt",
+    ];
+    const paths = allSettingPaths();
+    const pathConstants = settingPathConstants();
+    const source = webviewSource();
+
+    for (const settingPath of expectedPaths) {
+      assert.ok(paths.has(settingPath), `${settingPath} is missing from the schema`);
+      const constantName = pathConstants.get(settingPath);
+      assert.ok(
+        source.includes(settingPath) ||
+          (constantName !== undefined &&
+            source.includes(`SETTING_PATHS.${constantName}`)),
+        `${settingPath} has no matching settings UI control`
+      );
+    }
+  });
+
   test("schema walk finds a non-trivial number of authorable settings", () => {
     const paths = allSettingPaths();
     assert.ok(
