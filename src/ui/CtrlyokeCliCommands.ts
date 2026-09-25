@@ -22,6 +22,16 @@ import {
   registerCtrlyokeBinDirectory,
 } from "../utils/CtrlyokeCliPath";
 import { Log } from "../utils/Log";
+import {
+  findOlderCli,
+  hasShownNotice,
+  INSTALLATION_KINDS,
+  markNoticeShown,
+  mismatchNoticeKey,
+  recordInstallation,
+  type InstallationRecord,
+} from "../utils/CtrlyokeInstallations";
+import type { UserInteractionPort } from "./UserInteractionPort";
 
 /** npm package name the CLI is published under. */
 export const CTRLYOKE_NPM_PACKAGE = "ctrlyoke";
@@ -70,4 +80,58 @@ export function registerInstallCliCommand(
     // Typed, not run: installing a global package is the user's call.
     terminal.sendText(buildCliInstallCommand(version), false);
   });
+}
+
+const OLDER_CLI_NOTICE_ID = "ctrlyoke.olderCliNotice";
+const UPDATE_CLI_CHOICE = "update";
+const DISMISS_CHOICE = "dismiss";
+
+/**
+ * Record this extension in the installation registry and, once per version
+ * pair, tell the user when an older npm CLI shares this machine's state
+ * (CLI_DISTRIBUTION_PLAN.md §3.4 rule 2). The registry write happens at once;
+ * the notice waits for a dashboard client that can show it. Never throws.
+ */
+export async function noteExtensionInstallation(
+  context: vscode.ExtensionContext,
+  getInteractionPort: () => Promise<UserInteractionPort>
+): Promise<void> {
+  try {
+    const self: InstallationRecord = {
+      kind: INSTALLATION_KINDS.VSCODE_EXTENSION,
+      version: String(context.extension.packageJSON.version),
+      packageRoot: context.extensionPath,
+      lastSeen: Date.now(),
+    };
+    const { others } = await recordInstallation(self);
+    const olderCli = findOlderCli(self, others);
+    if (!olderCli) {
+      return;
+    }
+    const noticeKey = mismatchNoticeKey(self.kind, olderCli, self);
+    if (await hasShownNotice(noticeKey)) {
+      return;
+    }
+    const port = await getInteractionPort();
+    if (!port.canPrompt()) {
+      return;
+    }
+    await markNoticeShown(noticeKey);
+    const choice = await port.requestChoice({
+      id: OLDER_CLI_NOTICE_ID,
+      title: `ctrlyoke CLI ${olderCli.version} is older than this extension (${self.version})`,
+      detail:
+        `The CLI installed at ${olderCli.packageRoot} shares run history and settings with ` +
+        `this extension. Keep both on the same version so they read that state the same way.`,
+      choices: [
+        { value: UPDATE_CLI_CHOICE, label: "Show Update Command" },
+        { value: DISMISS_CHOICE, label: "Dismiss" },
+      ],
+    });
+    if (choice === UPDATE_CLI_CHOICE) {
+      await vscode.commands.executeCommand(VSCODE_COMMANDS.INSTALL_CLI);
+    }
+  } catch (error) {
+    Log.debug(`[CtrlyokeCli] Installation registry check failed: ${error}`);
+  }
 }

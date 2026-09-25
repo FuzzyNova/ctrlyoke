@@ -1,6 +1,6 @@
 # CLI Distribution Plan
 
-**Status:** Decided 2026-09-24. §3.1 implemented 2026-09-25 (see the note at the end of §3.1); §3.2–§3.4 not started.
+**Status:** Decided 2026-09-24. Implemented 2026-09-25: §3.1 and §3.4 rules 2–3 (see the notes under each). Not started: §3.2 (npm package), §3.4 rules 4–6.
 
 **Decision:** ship the CLI through both channels, built from one artifact with one version
 number:
@@ -201,6 +201,18 @@ global installs don't, so in practice this is "the npm CLI is older than the ext
    - The **extension** shows a one-time, dismissable notice when the npm CLI is older.
    - `ctrlyoke --version` prints the version plus the package root, so support can tell the
      two copies apart.
+
+   **Implemented 2026-09-25** (`src/utils/CtrlyokeInstallations.ts`,
+   `src/cli/CliInstallationNotice.ts`, `noteExtensionInstallation` in
+   `src/ui/CtrlyokeCliCommands.ts`). The file lives under `ctrlyokeStateHome()`, so
+   `CTRLYOKE_HOME` moves it. Records are keyed by kind plus package root, because the CLI bundled
+   in the VSIX shares the extension's folder. That bundled copy never warns, since advising an
+   npm install from inside VS Code would be wrong. Entries unseen for 30 days, or whose folder is
+   gone, are pruned. "Once per version pair" is tracked per audience in the same file, so the
+   CLI's warning never silences the extension's notice. **Not done:** the `--version` change.
+   Scripts compare `ctrlyoke --version` output to a version string (the packaging test does too),
+   so adding the package root there would break them; a separate `ctrlyoke doctor`/`about` is a
+   better home for it if support needs it.
 3. **Format versions on shared persisted state, and read-only below a newer format.** Add an
    integer `formatVersion` to each of these:
    - run working files

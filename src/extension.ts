@@ -91,6 +91,7 @@ import { registerNativeOutputCaptureCommand } from "./ui/NativeOutputCaptureComm
 import { StatusBarManager } from "./ui/StatusBarManager";
 import {
   exposeBundledCli,
+  noteExtensionInstallation,
   registerInstallCliCommand,
 } from "./ui/CtrlyokeCliCommands";
 
@@ -330,6 +331,10 @@ export async function activate(context: vscode.ExtensionContext) {
       )
     );
     Log.debug("[Extension] ctrlyoke: React webview provider registered");
+    void noteExtensionInstallation(context, async () => {
+      await webviewProvider.awaitPanelReady();
+      return webviewProvider.getUserInteractionPort();
+    });
     if (workspaceFolders && workspaceFolders.length > 0) {
       void webviewProvider
         .awaitPanelReady()

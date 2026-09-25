@@ -66,6 +66,7 @@ import {
   registerCtrlyokeBinDirectory,
   resolvePackageRootFromEntry,
 } from "./utils/CtrlyokeCliPath";
+import { noteCliInstallation } from "./cli/CliInstallationNotice";
 import { ConfigurationUtils } from "./utils/ConfigurationUtils";
 import {
   ExternalRootsTrustStore,
@@ -181,6 +182,16 @@ program
     "Execute AI-powered workflow automation from the command line. `run` works with env passthrough even when no credential backend is available."
   )
   .version(version);
+
+// Tell the user once when a newer VS Code extension shares this machine's
+// state (dev/backlog/CLI_DISTRIBUTION_PLAN.md §3.4 rule 2).
+program.hook("preAction", () =>
+  noteCliInstallation(
+    version,
+    resolvePackageRootFromEntry(__filename),
+    (message) => console.error(chalk.yellow(message))
+  )
+);
 
 registerRunCommand(program, runCommand);
 
