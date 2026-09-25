@@ -31,6 +31,15 @@
  *   because three reporters writing to one terminal at once is unreadable.
  *   `--serial` restores the old sequential, live-streamed behaviour.
  *
+ * ## Run log
+ *
+ * Every run also writes the compile output, each suite's full output (colour
+ * stripped), and the summary to `.ctrlyoke/logs/test-runs/npm-test-<time>.log`,
+ * and the summary names that file. The terminal may have scrolled or truncated
+ * a failure's stack trace; the log keeps it, which is what makes an
+ * intermittent failure investigable after the fact. Only the newest
+ * `KEPT_RUN_LOGS` are kept, and logging is best-effort: it can never fail a run.
+ *
  * Counts and failing names are parsed best-effort -- the *verdict* is always
  * the child's exit code, so a reporter changing its wording can cost detail in
  * the summary but can never turn a failure into a pass.
@@ -44,6 +53,13 @@
  *             suite that is already running cannot be "not run"
  */
 import { spawn } from "node:child_process";
+import {
+  appendFileSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -59,6 +75,11 @@ const RULE = "=".repeat(72);
 const DETAIL_COLUMN_WIDTH = 36;
 const MAX_LISTED_FAILURES = 25;
 const MAX_CAPTURED_LINES = 50_000;
+
+/** Mirrors CTRLYOKE_DIR/LOGS_DIR (DashboardConstants.ts); a plain .mjs cannot import them. */
+export const RUN_LOG_DIR = join(ROOT_DIR, ".ctrlyoke", "logs", "test-runs");
+const RUN_LOG_PREFIX = "npm-test-";
+export const KEPT_RUN_LOGS = 10;
 
 export const SUITE_STATUS = {
   PASS: "pass",
@@ -300,7 +321,40 @@ function statusLabel(status) {
   return status === SUITE_STATUS.FAIL ? "FAIL" : "SKIP";
 }
 
-export function renderSummary(results) {
+/**
+ * Opens this run's log file and prunes the oldest ones. Returns undefined if
+ * the log cannot be created -- a missing log must never fail the test run.
+ */
+export function createRunLog(dir = RUN_LOG_DIR, now = new Date()) {
+  try {
+    mkdirSync(dir, { recursive: true });
+    const stamp = now.toISOString().replace(/[:.]/g, "-");
+    const path = join(dir, `${RUN_LOG_PREFIX}${stamp}.log`);
+    writeFileSync(path, "");
+    const old = readdirSync(dir)
+      .filter((name) => name.startsWith(RUN_LOG_PREFIX))
+      .sort()
+      .slice(0, -KEPT_RUN_LOGS);
+    for (const name of old) rmSync(join(dir, name), { force: true });
+    return {
+      path,
+      section(title, text) {
+        try {
+          appendFileSync(
+            path,
+            `\n${RULE}\n ${title}\n${RULE}\n${stripAnsi(text)}\n`
+          );
+        } catch {
+          // Best-effort, like creation.
+        }
+      },
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+export function renderSummary(results, logPath) {
   const failed = results.filter(
     (result) => result.status === SUITE_STATUS.FAIL
   );
@@ -347,6 +401,7 @@ export function renderSummary(results) {
     lines.push(`  Re-run only this suite:  npm run ${result.script}`);
   }
 
+  if (logPath) lines.push(RULE, `  Full output: ${logPath}`);
   lines.push(RULE, "");
   return lines.join("\n");
 }
@@ -446,6 +501,7 @@ async function runSuite(suite, plan, live) {
     failures: ok ? [] : suite.failures(run.lines),
     durationMs: run.durationMs,
     output: live ? undefined : run.raw,
+    raw: run.raw,
   };
 }
 
@@ -526,11 +582,14 @@ async function main() {
     );
   }
 
+  const runLog = createRunLog();
+
   process.stdout.write(`\n${RULE}\n ${PREPARE_SCRIPT}\n${RULE}\n`);
   const prepared = await runScript({ script: PREPARE_SCRIPT, live: true });
+  runLog?.section(PREPARE_SCRIPT, prepared.raw);
   if (prepared.code !== 0) {
-    process.stdout.write(
-      renderSummary([
+    const summary = renderSummary(
+      [
         {
           key: PREPARE_SCRIPT,
           script: PREPARE_SCRIPT,
@@ -540,8 +599,11 @@ async function main() {
           durationMs: prepared.durationMs,
         },
         ...TEST_SUITES.map(skipped),
-      ])
+      ],
+      runLog?.path
     );
+    runLog?.section("summary", summary);
+    process.stdout.write(summary);
     process.exitCode = 1;
     return;
   }
@@ -558,7 +620,14 @@ async function main() {
     ? await runSuitesSerially(bail, plan)
     : await runSuitesConcurrently(plan);
 
-  process.stdout.write(renderSummary(results));
+  for (const result of results) {
+    if (result.raw !== undefined) {
+      runLog?.section(`${result.key} suite output`, result.raw);
+    }
+  }
+  const summary = renderSummary(results, runLog?.path);
+  runLog?.section("summary", summary);
+  process.stdout.write(summary);
   process.exitCode = results.every(
     (result) => result.status === SUITE_STATUS.PASS
   )

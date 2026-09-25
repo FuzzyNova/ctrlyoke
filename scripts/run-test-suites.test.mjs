@@ -1,11 +1,22 @@
 import assert from "node:assert/strict";
+import {
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
 import { describe, it } from "node:test";
 
 import {
+  KEPT_RUN_LOGS,
   PREPARE_SCRIPT,
   SUITE_STATUS,
   SUMMARY_ANCHOR,
   TEST_SUITES,
+  createRunLog,
   describeMochaRun,
   describeNodeTestRun,
   describeVitestRun,
@@ -279,6 +290,49 @@ describe("test summary rendering", () => {
       summary.split("\n").filter((line) => /\s$/.test(line)).length,
       0
     );
+  });
+
+  it("names the run log when there is one", () => {
+    const summary = renderSummary(
+      [passing("extension", "1 passing, 0 failing")],
+      "/logs/npm-test-x.log"
+    );
+    assert.match(summary, /^ {2}Full output: \/logs\/npm-test-x\.log$/m);
+  });
+});
+
+describe("test run log", () => {
+  it("writes colour-stripped sections and keeps only the newest logs", () => {
+    const dir = mkdtempSync(join(tmpdir(), "ctrlyoke-run-log-"));
+    try {
+      for (let index = 0; index < KEPT_RUN_LOGS + 3; index++) {
+        createRunLog(dir, new Date(Date.UTC(2026, 0, 1, 0, 0, index)));
+      }
+      const log = createRunLog(dir, new Date(Date.UTC(2026, 0, 2)));
+      assert.ok(log);
+      log.section("ui suite output", "\u001b[31m× broken\u001b[39m\n");
+
+      const kept = readdirSync(dir);
+      assert.equal(kept.length, KEPT_RUN_LOGS);
+      assert.ok(kept.includes(basename(log.path)));
+      const text = readFileSync(log.path, "utf8");
+      assert.match(text, /ui suite output/);
+      assert.match(text, /× broken/);
+      assert.doesNotMatch(text, /\u001b/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("returns undefined instead of throwing when the log cannot be created", () => {
+    const dir = mkdtempSync(join(tmpdir(), "ctrlyoke-run-log-"));
+    try {
+      const blocker = join(dir, "not-a-directory");
+      writeFileSync(blocker, "");
+      assert.equal(createRunLog(join(blocker, "logs")), undefined);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
