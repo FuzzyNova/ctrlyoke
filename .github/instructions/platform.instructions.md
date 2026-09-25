@@ -16,7 +16,7 @@ Keep core workflow/runtime code platform-agnostic. `PlatformAdapter` is intentio
 
 <stateFlow>
 - VS Code path: `extension.ts` / `WorkflowOrchestrator` create `VsCodeAdapter` instances and pass them into shared runtime classes.
-- CLI path: `cli.ts` computes the effective execution mode and permissions, writes them into `configService.setCliOverlay(...)`, then constructs `CliAdapter` and calls `registerCliAdapter(...)`.
+- CLI path: `cli.ts` computes the effective execution mode, writes it and any explicitly passed setting flags (e.g. `--permission-mode`, `--allow-tool`) into `configService.setCliOverlay(...)`, then constructs `CliAdapter` and calls `registerCliAdapter(...)`. The CLI never resolves tool permissions itself; they resolve per step (step > workflow > settings) like in the extension, so execution mode must not change them.
 - The CLI overlay is the primary path for modern config reads. Shim-backed `workspace.getConfiguration().get()` still matters for older shared code that reaches configuration through `ConfigurationUtils` or helper modules.
 - `CommitMessageGenerator` also constructs a headless `CliAdapter` inside the extension host, so platform changes affect both the standalone CLI and AI commit-message generation.
 </stateFlow>

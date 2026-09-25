@@ -1,10 +1,7 @@
 import * as path from "path";
 import type { PlatformAdapter } from "./PlatformAdapter";
 import type { ResolverWorkspaceFolder } from "./WorkspaceRootResolver";
-import type {
-  ExecutionMode,
-  PermissionMode,
-} from "../types/DashboardConstants";
+import type { ExecutionMode } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
@@ -17,10 +14,6 @@ export interface ResolvedCliConfig {
   cwd?: string;
   timeout: number;
   scriptTimeout: number;
-  /** Explicit tool permission mode. Use PERMISSION_MODES constants. */
-  permissionMode: PermissionMode;
-  allowedTools: string[];
-  deniedTools: string[];
   /** Extra directories to pass as --add-dir to Copilot CLI (from --add-dir flags). */
   additionalDirs: string[];
   /**
@@ -74,14 +67,6 @@ export class CliAdapter implements PlatformAdapter {
 
   getConfig<T>(key: string, defaultValue: T): T {
     switch (key) {
-      // ── Tool permissions ────────────────────────────────────────────────
-      case "cliAllowedTools":
-        return this.config.allowedTools as unknown as T;
-      case "cliDeniedTools":
-        return this.config.deniedTools as unknown as T;
-      case "cliToolPermissions":
-        return this.config.permissionMode as unknown as T;
-
       // ── Additional directories (--add-dir) ─────────────────────────────
       // CliProviderUtils.getWorkspaceDirs() reads this key to build --add-dir args.
       case "copilotCliAllowedDirs":

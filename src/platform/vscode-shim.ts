@@ -32,9 +32,8 @@ let _registeredAdapter:
  * delegates to `adapter.getConfig(key, default)` instead of always returning the
  * default. Must be called in cli.ts immediately after constructing `CliAdapter`.
  *
- * This makes every `ConfigurationUtils` call inside CLI provider code (e.g.
- * `getCliAllowedTools()`, `getCliToolPermissions()`) transparently reflect the
- * flags the user passed on the command line.
+ * CLI flags that map to settings (e.g. `--permission-mode`) do not go through
+ * here; `cli.ts` writes them into `configService.setCliOverlay(...)`.
  */
 export function registerCliAdapter(adapter: {
   getConfig<T>(key: string, defaultValue: T): T;

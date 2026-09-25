@@ -25,7 +25,6 @@ import {
   SECRET_REGISTRY_STATES,
   EXECUTION_MODES,
   HARNESS_IDS,
-  PERMISSION_MODES,
   SETTING_SCOPES,
   type SettingWriteScope,
 } from "../types/DashboardConstants";
@@ -72,9 +71,6 @@ export function createCliSecretCommandDependencies(
     cwd: workspaceRoot,
     timeout: 3_600_000,
     scriptTimeout: 30_000,
-    permissionMode: PERMISSION_MODES.ALLOW_ALL,
-    allowedTools: [],
-    deniedTools: [],
     additionalDirs: [],
     verbose: false,
     quiet: false,

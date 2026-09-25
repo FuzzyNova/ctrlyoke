@@ -19,7 +19,6 @@ import {
   HARNESS_IDS,
   EXECUTION_MODES,
   FINAL_STEP_PHASES,
-  PERMISSION_MODES,
   RUNNER_IDS,
   WORKFLOW_LOCK_LIVENESS,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
@@ -30,7 +29,6 @@ import {
 import type {
   CliValidateStrictPolicy,
   HarnessId,
-  PermissionMode,
 } from "./types/DashboardConstants";
 import type { RunnerHostIdentity } from "./types/CtrlYokeTypes";
 import type { CompatibilityDiagnostic } from "./types/CompatibilityTypes";
@@ -588,28 +586,16 @@ async function runCommand(
     !!process.stdin.isTTY
   );
 
-  // In headless mode, auto-apply dangerouslyAllowAll unless the user specified
-  // custom allow/deny lists (which imply deliberate control).
-  const hasCustomTools =
-    (options.allowTool && options.allowTool.length > 0) ||
-    (options.denyTool && options.denyTool.length > 0);
-  const permissionMode: PermissionMode = options.permissionMode
-    ? (options.permissionMode as PermissionMode)
-    : hasCustomTools
-      ? PERMISSION_MODES.CUSTOM
-      : executionMode === EXECUTION_MODES.HEADLESS
-        ? PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL
-        : PERMISSION_MODES.ALLOW_ALL;
-
+  // Tool permissions are not resolved here: --permission-mode/--allow-tool/
+  // --deny-tool only enter the settings overlay below, so they resolve per step
+  // like any other default (step > workflow > settings), independent of
+  // execution mode.
   const config: ResolvedCliConfig = {
     harness: options.harness || HARNESS_IDS.COPILOT_CLI,
     model: options.model,
     cwd: workingDir,
     timeout: parseInt(options.timeout, 10) * 1000,
     scriptTimeout: parseInt(options.scriptTimeout, 10) * 1000,
-    permissionMode,
-    allowedTools: options.allowTool || [],
-    deniedTools: options.denyTool || [],
     additionalDirs: options.addDir || [],
     vars: options.var || {},
     sessionId: options.sessionId,
@@ -1998,9 +1984,6 @@ async function validateCommand(
       cwd: workingDir,
       timeout: 3600 * 1000,
       scriptTimeout: 30 * 1000,
-      permissionMode: PERMISSION_MODES.ALLOW_ALL,
-      allowedTools: [],
-      deniedTools: [],
       additionalDirs: [],
       vars: {},
       verbose: false,
