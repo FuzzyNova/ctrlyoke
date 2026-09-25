@@ -27,8 +27,9 @@ on `PATH`, and signed in, exactly as for the extension.
 
 - no dashboard UI; headless output is formatted for the terminal, and
   interactive mode passes the harness's own terminal UI through
-- headless runs default to the `dangerouslyAllowAll` tool permission mode
-  unless you pass `--permission-mode` or allow/deny patterns
+- `--permission-mode`, `--allow-tool`, and `--deny-tool` override the settings
+  default for tool permissions for one run (see
+  [Tool permissions](/cli/ctrlyoke#tool-permissions))
 - structured exit codes and `--json` output for scripting and CI
 
 Read [ctrlyoke](/cli/ctrlyoke) for every command and option, and

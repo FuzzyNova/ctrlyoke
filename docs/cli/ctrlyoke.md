@@ -93,15 +93,23 @@ calls, diffs, script verdicts, and per-step statistics.
 
 ### Tool permissions
 
-Unless you pass `--permission-mode`, the CLI chooses one:
+The CLI resolves tool permissions for each step exactly as the extension does,
+and headless versus interactive mode does not change the result. The first
+match wins:
 
-- `custom` when any `--allow-tool` or `--deny-tool` is given
-- `dangerouslyAllowAll` in headless mode, so an unattended run is never blocked
-  by an approval prompt
-- `allowAll` in interactive mode
+1. the step's own `toolPermissions`
+2. the workflow's `toolPermissions`
+3. `defaults.toolPermissions` from settings
 
-Pass `--permission-mode` or explicit allow/deny patterns to restrict what a
-headless run may do.
+`--permission-mode`, `--allow-tool`, and `--deny-tool` override only the
+settings layer (step 3), taking precedence over the workspace and user settings
+files for this run. A workflow or step that sets its own `toolPermissions`
+still wins over them. `--allow-tool` and `--deny-tool` replace the settings
+allow and deny lists but leave the mode alone.
+
+An unattended run whose resolved mode can still prompt for approval may stall
+on that prompt. For CI, set the mode you want in the workflow or in the CI
+workspace's settings, or pass `--permission-mode`.
 
 ### JSON output
 
