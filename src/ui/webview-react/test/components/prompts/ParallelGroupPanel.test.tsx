@@ -131,7 +131,7 @@ describe("ParallelGroupPanel", () => {
         retryStates={{}}
         liveContextWindow={{}}
         canSetStartPosition
-        stepColorMode={STEP_COLOR_MODES.OFF}
+        stepColorMode={STEP_COLOR_MODES.NONE}
         harnessColorSettings={{ byHarness: {}, script: "#808080" }}
         getLatestOutput={() => null}
         getStepHarnessModel={() => ({

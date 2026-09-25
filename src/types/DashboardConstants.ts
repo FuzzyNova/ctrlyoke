@@ -670,7 +670,7 @@ export const LICENSE_ACTIONS = {
 export const NOTIFICATION_EVENT_MODES = {
   ALL: "all",
   FAILURES_ONLY: "failuresOnly",
-  NEVER: "never",
+  NONE: "none",
 } as const;
 
 export type NotificationEventMode =
@@ -862,7 +862,7 @@ export const TOAST_LEVEL_MODES = {
   ALL: "all",
   WARNING_AND_ERROR: "warningAndError",
   ERROR_ONLY: "errorOnly",
-  OFF: "off",
+  NONE: "none",
 } as const;
 
 export type ToastLevelMode =
@@ -872,7 +872,7 @@ export function meetsToastLevel(
   severity: UserFeedbackSeverity,
   level: ToastLevelMode
 ): boolean {
-  if (level === TOAST_LEVEL_MODES.OFF) return false;
+  if (level === TOAST_LEVEL_MODES.NONE) return false;
   if (level === TOAST_LEVEL_MODES.ALL) return true;
   if (level === TOAST_LEVEL_MODES.ERROR_ONLY) {
     return severity === USER_FEEDBACK_SEVERITY.ERROR;
@@ -1685,7 +1685,7 @@ export const HARNESS_CHART_COLORS: Record<HarnessId, string> = {
 
 /** Modes controlling how workflow steps receive identity colors. */
 export const STEP_COLOR_MODES = {
-  OFF: "off",
+  NONE: "none",
   HARNESS: "harness",
   UNIQUE: "unique",
 } as const;
@@ -1859,7 +1859,6 @@ export const HOOK_EVENT_METADATA: HookEventMetadata[] = [
 // WORKTREE MODES - Workflow execution checkout selection
 // ============================================================================
 export const WORKTREE_MODES = {
-  NONE: "none",
   MANAGED: "managed",
   NAMED: "named",
 } as const;
@@ -2061,8 +2060,13 @@ export const EXECUTION_MODE_OPTIONS = [
   { value: EXECUTION_MODES.HEADLESS, label: "Headless" },
 ];
 
+/** Selector-only choice for the workflow value `worktree: false`. */
+export const WORKTREE_MODE_SELECTIONS = {
+  NONE: "none",
+} as const;
+
 export const WORKTREE_MODE_OPTIONS = [
-  { value: WORKTREE_MODES.NONE, label: "None" },
+  { value: WORKTREE_MODE_SELECTIONS.NONE, label: "None" },
   { value: WORKTREE_MODES.MANAGED, label: "Managed" },
   { value: WORKTREE_MODES.NAMED, label: "Named" },
 ];

@@ -148,110 +148,8 @@
           "description": "Default pre-condition for new workflows. `null` (the default) means new workflows have no pre-condition."
         },
         "worktree": {
-          "type": "object",
-          "description": "Default worktree behavior for workflows that omit a root worktree value. An inherited value degrades to ordinary execution when the workspace is not eligible.",
-          "additionalProperties": false,
-          "properties": {
-            "mode": {
-              "type": "string",
-              "enum": ["none", "managed", "named"],
-              "default": "none",
-              "description": "Default worktree mode for new workflows: none uses the working checkout; managed creates and removes a throw-away worktree per run; named targets a persistent worktree you own for appendable workflows."
-            },
-            "branch": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Default branch for named worktree mode."
-            },
-            "base": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Default Git ref used when creating a worktree."
-            },
-            "setup": {
-              "type": "string",
-              "description": "Default setup command run after creating a worktree."
-            },
-            "keep": {
-              "type": "boolean",
-              "description": "Keeps the managed worktree directory after the run. Without it, appending recreates the directory, loses ignored files such as node_modules, and reruns setup; removing it also ends filesystem undo for that run."
-            },
-            "merge": {
-              "type": "boolean",
-              "description": "Merge the managed branch into the source checkout after every run."
-            }
-          },
-          "allOf": [
-            {
-              "if": {
-                "required": ["mode"],
-                "properties": {
-                  "mode": {
-                    "const": "named"
-                  }
-                }
-              },
-              "then": {
-                "required": ["branch"],
-                "not": {
-                  "anyOf": [
-                    {
-                      "required": ["keep"]
-                    },
-                    {
-                      "required": ["merge"]
-                    }
-                  ]
-                }
-              }
-            },
-            {
-              "if": {
-                "required": ["mode"],
-                "properties": {
-                  "mode": {
-                    "const": "managed"
-                  }
-                }
-              },
-              "then": {
-                "not": {
-                  "required": ["branch"]
-                }
-              }
-            },
-            {
-              "if": {
-                "required": ["mode"],
-                "properties": {
-                  "mode": {
-                    "const": "none"
-                  }
-                }
-              },
-              "then": {
-                "not": {
-                  "anyOf": [
-                    {
-                      "required": ["branch"]
-                    },
-                    {
-                      "required": ["base"]
-                    },
-                    {
-                      "required": ["setup"]
-                    },
-                    {
-                      "required": ["keep"]
-                    },
-                    {
-                      "required": ["merge"]
-                    }
-                  ]
-                }
-              }
-            }
-          ]
+          "$ref": "workflow-schema.json#/definitions/worktreeConfig",
+          "description": "Default worktree behavior for workflows that omit a root worktree value. Uses the same false, shorthand, and object forms as workflow worktree; an inherited value degrades to ordinary execution when the workspace is not eligible."
         }
       }
     },
@@ -705,8 +603,8 @@
         },
         "stepColorMode": {
           "type": "string",
-          "enum": ["off", "harness", "unique"],
-          "description": "Choose how workflow step identity colors are rendered: off uses status colors only, harness uses harness colors, and unique assigns a distinct color to each step."
+          "enum": ["none", "harness", "unique"],
+          "description": "Choose how workflow step identity colors are rendered: none uses status colors only, harness uses harness colors, and unique assigns a distinct color to each step."
         },
         "harnessColors": {
           "type": "object",
@@ -847,7 +745,7 @@
         },
         "toastLevel": {
           "type": "string",
-          "enum": ["all", "warningAndError", "errorOnly", "off"],
+          "enum": ["all", "warningAndError", "errorOnly", "none"],
           "description": "Minimum severity for operational toast/feedback popups, such as action results (save failures and validation errors); separate from completion notifications."
         },
         "events": {
@@ -857,12 +755,12 @@
           "properties": {
             "workflowComplete": {
               "type": "string",
-              "enum": ["all", "failuresOnly", "never"],
+              "enum": ["all", "failuresOnly", "none"],
               "description": "When to notify on workflow completion."
             },
             "promptComplete": {
               "type": "string",
-              "enum": ["all", "failuresOnly", "never"],
+              "enum": ["all", "failuresOnly", "none"],
               "description": "When to notify on individual prompt completion."
             },
             "hookEvents": {

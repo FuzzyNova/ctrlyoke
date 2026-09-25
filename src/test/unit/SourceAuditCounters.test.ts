@@ -526,6 +526,9 @@ suite("SourceAuditCounters", () => {
   const repoRoot = path.resolve(__dirname, "..", "..", "..");
 
   test("holds the orchestrator's transitive VS Code import graph baseline", function () {
+    // This parses the full production TypeScript import graph while the other
+    // extension shards and UI suite run alongside it.
+    this.timeout(60_000);
     const reachableImporters = getOrchestratorValueImportGraph(repoRoot)
       .filter(importsVscode)
       .map((source) => source.relativeFile)

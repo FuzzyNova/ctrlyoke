@@ -4384,8 +4384,8 @@ export class WorkflowInstance {
     }
     this.activeWorktree = info;
     this.activeWorktreeSettlement = {
-      merge: config.merge === true,
-      keep: config.keep === true,
+      merge: config.mode === WORKTREE_MODES.MANAGED && config.merge === true,
+      keep: config.mode === WORKTREE_MODES.MANAGED && config.keep === true,
     };
     this.executionLease = info.lease;
     await this.configureExecutionWorkspace(info.executionWorkspace);
@@ -4753,8 +4753,12 @@ export class WorkflowInstance {
       if (managedTerminalRun) {
         try {
           await this.worktreeManager.completeManagedRun(worktree, {
-            merge: this.worktreeResolution.config?.merge === true,
-            keep: this.worktreeResolution.config?.keep === true,
+            merge:
+              this.worktreeResolution.config?.mode === WORKTREE_MODES.MANAGED &&
+              this.worktreeResolution.config.merge === true,
+            keep:
+              this.worktreeResolution.config?.mode === WORKTREE_MODES.MANAGED &&
+              this.worktreeResolution.config.keep === true,
             artifactsClean: strictArtifactCleanupSucceeded,
             cleanupMessage: strictArtifactCleanupMessage,
           });

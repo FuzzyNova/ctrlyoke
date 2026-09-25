@@ -2109,7 +2109,13 @@ suite("WebviewSettingsSync", () => {
           property: PROMPT_PROPERTIES.WORKTREE,
           value: "feature/default",
           expectedKey: CONFIG_KEYS.DEFAULTS_WORKTREE,
-          expectedValue: { mode: "named", branch: "feature/default" },
+          expectedValue: "feature/default",
+        },
+        {
+          property: PROMPT_PROPERTIES.WORKTREE,
+          value: false,
+          expectedKey: CONFIG_KEYS.DEFAULTS_WORKTREE,
+          expectedValue: false,
         },
       ];
 
@@ -2255,8 +2261,7 @@ suite("WebviewSettingsSync external root decisions", () => {
   test("approves a newly browsed workspace root immediately", async () => {
     const originalSet = configService.set;
     const originalShowOpenDialog = vscode.window.showOpenDialog;
-    const originalGetRoots =
-      ConfigurationUtils.getTrustedExternalRootsByScope;
+    const originalGetRoots = ConfigurationUtils.getTrustedExternalRootsByScope;
     const originalSetDecisions = externalRootsTrustStore.setDecisions;
     const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
     const workspaceRoot = externalRootTestPath("workspace");
@@ -2324,8 +2329,7 @@ suite("WebviewSettingsSync external root decisions", () => {
 
   test("adds and approves a browsed workflow root without changing global settings", async () => {
     const originalShowOpenDialog = vscode.window.showOpenDialog;
-    const originalGetRoots =
-      ConfigurationUtils.getTrustedExternalRootsByScope;
+    const originalGetRoots = ConfigurationUtils.getTrustedExternalRootsByScope;
     const originalSetDecisions = externalRootsTrustStore.setDecisions;
     const workspaceRoot = externalRootTestPath("workflow-workspace");
     const inheritedRoot = externalRootTestPath("workflow-inherited");
@@ -2399,8 +2403,7 @@ suite("WebviewSettingsSync external root decisions", () => {
 
   test("seeds a browsed workflow root from approved roots only, excluding pending/denied workspace roots", async () => {
     const originalShowOpenDialog = vscode.window.showOpenDialog;
-    const originalGetRoots =
-      ConfigurationUtils.getTrustedExternalRootsByScope;
+    const originalGetRoots = ConfigurationUtils.getTrustedExternalRootsByScope;
     const originalGetApprovedRoots = externalRootsTrustStore.getApprovedRoots;
     const originalSetDecisions = externalRootsTrustStore.setDecisions;
     const workspaceRoot = externalRootTestPath("workflow-workspace-mixed");
@@ -2472,8 +2475,7 @@ suite("WebviewSettingsSync external root decisions", () => {
 
   test("approves newly added workspace roots through the setting update path", async () => {
     const originalSet = configService.set;
-    const originalGetRoots =
-      ConfigurationUtils.getTrustedExternalRootsByScope;
+    const originalGetRoots = ConfigurationUtils.getTrustedExternalRootsByScope;
     const originalSetDecisions = externalRootsTrustStore.setDecisions;
     const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
     const workspaceRoot = externalRootTestPath("workspace");

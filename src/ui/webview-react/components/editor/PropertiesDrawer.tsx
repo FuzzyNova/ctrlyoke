@@ -817,7 +817,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   ]}
                 />
               </div>
-              {globalSettings.stepColorMode !== STEP_COLOR_MODES.OFF && (
+              {globalSettings.stepColorMode !== STEP_COLOR_MODES.NONE && (
                 <StepColorField idPrefix="prop-step" />
               )}
             </DrawerRow>

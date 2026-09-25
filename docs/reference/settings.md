@@ -389,20 +389,36 @@ Fields:
 
 ### `defaults.worktree` {#defaults-worktree}
 
-- **Type:** `{ mode?, branch?, base?, … }`
-- **Default:** `{"mode":"none"}`
+- **Type:** `false` or `true` or `string` or `{ mode: "managed", merge?, keep?, … }` or `{ mode: "named", branch, base?, … }`
+- **Default:** `false`
 - **Workflow field:** [`worktree`](/reference/workflow-schema#workflow-file-worktree) — a workflow or step value overrides this default
 
-Default worktree behavior for workflows that omit a root worktree value. An inherited value degrades to ordinary execution when the workspace is not eligible.
+Default worktree behavior for workflows that omit a root worktree value. Uses the same false, shorthand, and object forms as workflow worktree; an inherited value degrades to ordinary execution when the workspace is not eligible.
+
+Accepted forms:
+
+- `false` — Explicitly run this workflow in the ordinary workspace.
+- `true` — Managed-worktree shorthand.
+- `string` — Named-worktree branch shorthand. The value must be a valid local Git branch name.
+- `{ mode: "managed", merge?, keep?, … }` — Managed creates a throw-away worktree and branch per run and removes the directory when the workflow completes, leaving the branch for review; pick it for isolated runs you will not follow up on.
+- `{ mode: "named", branch, base?, … }` — Named targets a persistent worktree you own, which ctrlyoke never commits, merges, or removes; pick it for conversational workflows you will append to.
+
+**When `mode` is `"managed"`:**
 
 Fields:
 
-- `mode` · `"none" | "managed" | "named"` — Default worktree mode for new workflows: none uses the working checkout; managed creates and removes a throw-away worktree per run; named targets a persistent worktree you own for appendable workflows.
-- `branch` · `string` — Default branch for named worktree mode.
-- `base` · `string` — Default Git ref used when creating a worktree.
-- `setup` · `string` — Default setup command run after creating a worktree.
-- `keep` · `boolean` — Keeps the managed worktree directory after the run. Without it, appending recreates the directory, loses ignored files such as node\_modules, and reruns setup; removing it also ends filesystem undo for that run.
-- `merge` · `boolean` — Merge the managed branch into the source checkout after every run.
+- `merge` · `boolean` — Merge the managed branch into the captured source checkout after the run.
+- `keep` · `boolean` — Keeps the managed worktree directory after the run instead of removing it. Without it, appending a follow-up prompt recreates the directory from the branch; ignored files such as node\_modules are gone and the setup command runs again, so a long setup pays that cost on every append. Removing the directory also ends filesystem undo for that run.
+- `base` · `string` — Optional Git ref resolved to a commit when the worktree is created.
+- `setup` · `string` — Optional setup command run after a new managed worktree is created. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped.
+
+**When `mode` is `"named"`:**
+
+Fields:
+
+- `branch` · `string` · required — Local Git branch name for the named worktree.
+- `base` · `string` — Optional Git ref resolved to a commit when the worktree is created.
+- `setup` · `string` — Optional setup command run after a new named worktree is created. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped.
 
 ## `worktrees` {#worktrees}
 
@@ -1187,10 +1203,10 @@ Allow AI-generated file links outside trusted roots to offer a Trust Parent Fold
 
 ### `ui.stepColorMode` {#ui-stepcolormode}
 
-- **Type:** `"off" | "harness" | "unique"`
-- **Default:** `"off"`
+- **Type:** `"none" | "harness" | "unique"`
+- **Default:** `"none"`
 
-Choose how workflow step identity colors are rendered: off uses status colors only, harness uses harness colors, and unique assigns a distinct color to each step.
+Choose how workflow step identity colors are rendered: none uses status colors only, harness uses harness colors, and unique assigns a distinct color to each step.
 
 ### `ui.harnessColors` {#ui-harnesscolors}
 
@@ -1343,7 +1359,7 @@ When to send browser notifications. 'connectedOnly' fires while the hosted dashb
 
 ### `notifications.toastLevel` {#notifications-toastlevel}
 
-- **Type:** `"all" | "warningAndError" | "errorOnly" | "off"`
+- **Type:** `"all" | "warningAndError" | "errorOnly" | "none"`
 - **Default:** `"all"`
 
 Minimum severity for operational toast/feedback popups, such as action results (save failures and validation errors); separate from completion notifications.
@@ -1356,15 +1372,15 @@ Which events trigger notifications.
 
 ### `notifications.events.workflowComplete` {#notifications-events-workflowcomplete}
 
-- **Type:** `"all" | "failuresOnly" | "never"`
+- **Type:** `"all" | "failuresOnly" | "none"`
 - **Default:** `"all"`
 
 When to notify on workflow completion.
 
 ### `notifications.events.promptComplete` {#notifications-events-promptcomplete}
 
-- **Type:** `"all" | "failuresOnly" | "never"`
-- **Default:** `"never"`
+- **Type:** `"all" | "failuresOnly" | "none"`
+- **Default:** `"none"`
 
 When to notify on individual prompt completion.
 

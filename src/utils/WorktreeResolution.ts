@@ -18,8 +18,20 @@ export interface WorkspaceWorktreeResolution extends WorktreeResolution {
 }
 
 function normalizeDefault(value: WorktreeDefaultConfig): WorktreeResolution {
-  if (value.mode === WORKTREE_MODES.NONE) {
+  if (value === false) {
     return { origin: "default" };
+  }
+  if (value === true) {
+    return {
+      origin: "default",
+      config: { mode: WORKTREE_MODES.MANAGED },
+    };
+  }
+  if (typeof value === "string") {
+    return {
+      origin: "default",
+      config: { mode: WORKTREE_MODES.NAMED, branch: value },
+    };
   }
   if (
     value.mode === WORKTREE_MODES.NAMED &&
@@ -82,7 +94,7 @@ export async function resolveWorktreeForWorkspace(
   namedRoots: readonly ResolverWorkspaceFolder[]
 ): Promise<WorkspaceWorktreeResolution> {
   const selection = resolveWorktreeSelection(authored, defaultValue);
-  if (!selection.config || selection.config.mode === WORKTREE_MODES.NONE) {
+  if (!selection.config) {
     return selection;
   }
 
@@ -105,5 +117,5 @@ export async function resolveWorktreeForWorkspace(
 }
 
 export function isWorktreeMode(value: WorktreeMode): boolean {
-  return value !== WORKTREE_MODES.NONE;
+  return value === WORKTREE_MODES.MANAGED || value === WORKTREE_MODES.NAMED;
 }

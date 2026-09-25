@@ -218,9 +218,7 @@ describe("getEffectiveWorktree", () => {
       branch: "feature/default",
     });
 
-    useSettingsStore.getState().updateGlobalSetting("worktree", {
-      mode: WORKTREE_MODES.NONE,
-    });
+    useSettingsStore.getState().updateGlobalSetting("worktree", false);
     expect(useSettingsStore.getState().getEffectiveWorktree()).toBe(false);
   });
 

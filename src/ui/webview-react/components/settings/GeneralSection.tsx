@@ -132,7 +132,7 @@ export function GeneralSection({
             value={ui.stepColorMode}
             onChange={(v) => onUpdate("ui.stepColorMode", v)}
             options={[
-              { value: STEP_COLOR_MODES.OFF, label: "Off" },
+              { value: STEP_COLOR_MODES.NONE, label: "None" },
               { value: STEP_COLOR_MODES.HARNESS, label: "Harness color" },
               { value: STEP_COLOR_MODES.UNIQUE, label: "Unique per step" },
             ]}

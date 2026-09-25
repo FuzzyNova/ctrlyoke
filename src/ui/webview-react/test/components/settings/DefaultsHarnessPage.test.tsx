@@ -72,8 +72,30 @@ describe("DefaultsHarnessPage execution defaults", () => {
     expect(screen.getByLabelText("Setup")).toHaveValue("npm ci");
   });
 
-  it("renders progressive Managed worktree defaults with keep, merge, and the live-checkout warning", () => {
+  it("writes false when the None worktree default is selected", async () => {
     const onUpdate = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <DefaultsHarnessPage
+        settings={createSettings()}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={onUpdate}
+        onReset={() => {}}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Worktree mode" }));
+    await user.click(screen.getByRole("button", { name: "Named" }));
+    await user.click(screen.getByRole("button", { name: "Worktree mode" }));
+    await user.click(screen.getByRole("button", { name: "None" }));
+
+    expect(onUpdate).toHaveBeenLastCalledWith("defaults.worktree", false);
+  });
+
+  it("renders progressive Managed worktree defaults with keep, merge, and the live-checkout warning", async () => {
+    const onUpdate = vi.fn();
+    const user = userEvent.setup();
     const settings = createSettings();
     settings.settings.defaults.worktree = {
       mode: WORKTREE_MODES.MANAGED,
@@ -103,11 +125,23 @@ describe("DefaultsHarnessPage execution defaults", () => {
       )
     ).toBeInTheDocument();
 
-    screen.getByLabelText("Keep directory").click();
-    expect(onUpdate).toHaveBeenCalledWith("defaults.worktree.keep", false);
+    await user.click(screen.getByLabelText("Keep directory"));
+    expect(onUpdate).toHaveBeenCalledWith("defaults.worktree", {
+      mode: WORKTREE_MODES.MANAGED,
+      base: "main",
+      setup: "npm ci",
+      keep: false,
+      merge: true,
+    });
 
-    screen.getByLabelText("Merge").click();
-    expect(onUpdate).toHaveBeenCalledWith("defaults.worktree.merge", false);
+    await user.click(screen.getByLabelText("Merge"));
+    expect(onUpdate).toHaveBeenCalledWith("defaults.worktree", {
+      mode: WORKTREE_MODES.MANAGED,
+      base: "main",
+      setup: "npm ci",
+      keep: true,
+      merge: false,
+    });
   });
 
   it("shows the active-scope reset affordance", async () => {

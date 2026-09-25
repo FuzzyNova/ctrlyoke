@@ -893,7 +893,7 @@ describe("PromptEditor — script-step properties", () => {
   it("hides the script-step color control when step colors are off", () => {
     useSettingsStore
       .getState()
-      .updateGlobalSetting("stepColorMode", STEP_COLOR_MODES.OFF);
+      .updateGlobalSetting("stepColorMode", STEP_COLOR_MODES.NONE);
     prepareScriptEditor();
     render(<PromptEditor />);
 

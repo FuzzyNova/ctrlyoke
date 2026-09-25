@@ -579,7 +579,7 @@ suite("FileConfigBackend", () => {
     const service = new CtrlYokeConfigService();
     service.setUserBackend(backend);
 
-    await service.set("ui.stepColorMode", "off", "user");
+    await service.set("ui.stepColorMode", "none", "user");
     await service.set(
       "ui.harnessColors.byHarness.claude-cli",
       "#123456",
@@ -587,7 +587,7 @@ suite("FileConfigBackend", () => {
     );
     await service.set("ui.harnessColors.script", "#654321", "user");
 
-    assert.strictEqual(service.get("ui").stepColorMode, "off");
+    assert.strictEqual(service.get("ui").stepColorMode, "none");
     assert.deepStrictEqual(service.get("ui").harnessColors, {
       byHarness: { "claude-cli": "#123456" },
       script: "#654321",

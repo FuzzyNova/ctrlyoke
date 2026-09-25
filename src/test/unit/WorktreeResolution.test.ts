@@ -35,7 +35,6 @@ suite("WorktreeResolution", () => {
       branch: "feature/default",
       base: "main",
       setup: "npm ci",
-      keep: true,
     };
 
     assert.deepStrictEqual(resolveWorktreeSelection(undefined, defaultValue), {
@@ -55,12 +54,10 @@ suite("WorktreeResolution", () => {
   });
 
   test("normalizes authored managed shorthand and preserves managed options", () => {
-    assert.deepStrictEqual(
-      resolveWorktreeSelection(true, {
-        mode: WORKTREE_MODES.NONE,
-      }),
-      { origin: "authored", config: { mode: WORKTREE_MODES.MANAGED } }
-    );
+    assert.deepStrictEqual(resolveWorktreeSelection(true, false), {
+      origin: "authored",
+      config: { mode: WORKTREE_MODES.MANAGED },
+    });
     assert.deepStrictEqual(
       resolveWorktreeSelection(
         {
@@ -69,7 +66,7 @@ suite("WorktreeResolution", () => {
           base: "main",
           setup: "npm ci",
         },
-        { mode: WORKTREE_MODES.NONE }
+        false
       ),
       {
         origin: "authored",
@@ -86,11 +83,9 @@ suite("WorktreeResolution", () => {
   test("authored worktree hard-fails in an ineligible workspace", async () => {
     const root = await ineligibleRoot();
     await assert.rejects(
-      resolveWorktreeForWorkspace(
-        "feature/authored",
-        { mode: WORKTREE_MODES.NONE },
-        [{ name: "root", fsPath: root }]
-      ),
+      resolveWorktreeForWorkspace("feature/authored", false, [
+        { name: "root", fsPath: root },
+      ]),
       /requires a Git repository/
     );
   });
@@ -118,7 +113,6 @@ suite("WorktreeResolution", () => {
       branch: "feature/named",
       base: "origin/main",
       setup: "pnpm install",
-      keep: false,
     });
 
     assert.deepStrictEqual(result.config, {
@@ -126,26 +120,45 @@ suite("WorktreeResolution", () => {
       branch: "feature/named",
       base: "origin/main",
       setup: "pnpm install",
-      keep: false,
     });
   });
 
-  test("exposes merge in the settings schema", async () => {
-    const schemaPath = path.resolve(
+  test("reuses the workflow worktree schema for settings defaults", async () => {
+    const settingsSchemaPath = path.resolve(
       __dirname,
       "../../../schemas/settings-schema.json"
     );
-    const schema = JSON.parse(await fs.readFile(schemaPath, "utf8")) as {
+    const workflowSchemaPath = path.resolve(
+      __dirname,
+      "../../../schemas/workflow-schema.json"
+    );
+    const settingsSchema = JSON.parse(
+      await fs.readFile(settingsSchemaPath, "utf8")
+    ) as {
       properties: {
         defaults: {
-          properties: { worktree: { properties: Record<string, unknown> } };
+          properties: { worktree: { $ref: string } };
+        };
+      };
+    };
+    const workflowSchema = JSON.parse(
+      await fs.readFile(workflowSchemaPath, "utf8")
+    ) as {
+      definitions: {
+        worktreeConfig: {
+          oneOf: Array<{ properties?: Record<string, unknown> }>;
         };
       };
     };
 
     assert.strictEqual(
-      "merge" in schema.properties.defaults.properties.worktree.properties,
-      true
+      settingsSchema.properties.defaults.properties.worktree.$ref,
+      "workflow-schema.json#/definitions/worktreeConfig"
+    );
+    assert.ok(
+      workflowSchema.definitions.worktreeConfig.oneOf.some(
+        (variant) => variant.properties && "merge" in variant.properties
+      )
     );
   });
 });

@@ -36,7 +36,7 @@ interface Props {
 const EVENT_MODE_OPTIONS = [
   { value: NOTIFICATION_EVENT_MODES.ALL, label: "Success and failure" },
   { value: NOTIFICATION_EVENT_MODES.FAILURES_ONLY, label: "Failures only" },
-  { value: NOTIFICATION_EVENT_MODES.NEVER, label: "Off" },
+  { value: NOTIFICATION_EVENT_MODES.NONE, label: "None" },
 ];
 
 const TOAST_LEVEL_OPTIONS = [
@@ -49,11 +49,11 @@ const TOAST_LEVEL_OPTIONS = [
     label: "Warnings and errors",
   },
   { value: TOAST_LEVEL_MODES.ERROR_ONLY, label: "Errors only" },
-  { value: TOAST_LEVEL_MODES.OFF, label: "Off" },
+  { value: TOAST_LEVEL_MODES.NONE, label: "None" },
 ];
 
 const BROWSER_MODE_OPTIONS = [
-  { value: BROWSER_NOTIFICATION_MODES.NEVER, label: "Off" },
+  { value: BROWSER_NOTIFICATION_MODES.NEVER, label: "Never" },
   {
     value: BROWSER_NOTIFICATION_MODES.CONNECTED_ONLY,
     label: "While dashboard is open",

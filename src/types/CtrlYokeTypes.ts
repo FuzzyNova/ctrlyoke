@@ -177,20 +177,14 @@ export type WorktreeConfig =
       setup?: string;
     };
 
-/** Settings-tier worktree default, including managed-only retention. */
-export interface WorktreeDefaultConfig {
-  mode: import("./DashboardConstants").WorktreeMode;
-  branch?: string;
-  base?: string;
-  setup?: string;
-  keep?: boolean;
-  merge?: boolean;
-}
+/** Settings defaults reuse the same shorthand/object forms as workflow worktree. */
+export type WorktreeDefaultConfig = WorktreeConfig;
+export type WorktreeObjectConfig = Extract<WorktreeConfig, { mode: string }>;
 
 /** Worktree settings plus the tier that supplied the value for one run. */
 export interface WorktreeResolution {
-  /** Absent means the resolved mode is `none`. */
-  config?: WorktreeDefaultConfig;
+  /** Absent means the working checkout is used. */
+  config?: WorktreeObjectConfig;
   origin: WorktreeConfigOrigin;
 }
 

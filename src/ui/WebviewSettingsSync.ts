@@ -16,7 +16,6 @@ import {
   VSCODE_COMMANDS,
   PROMPT_PROPERTIES,
   WORKFLOW_PROPERTY_KEYS,
-  WORKTREE_MODES,
   STATUS_LINE_TRACKING_PROVIDERS,
   type HarnessId,
   type HarnessStatusString,
@@ -62,7 +61,6 @@ import {
   McpServerConfig,
   ToolPermissionsOverride,
   WorktreeConfig,
-  WorktreeDefaultConfig,
 } from "../types/CtrlYokeTypes";
 import { readJsonFile } from "../utils/FileSystemUtils";
 import { getErrorMessage } from "../utils/ErrorUtils";
@@ -731,15 +729,7 @@ export class WebviewSettingsSync {
       );
     } else if (property === PROMPT_PROPERTIES.WORKTREE) {
       const authored = value as WorktreeConfig;
-      const defaultValue: WorktreeDefaultConfig =
-        authored === false
-          ? { mode: WORKTREE_MODES.NONE }
-          : authored === true
-            ? { mode: WORKTREE_MODES.MANAGED }
-            : typeof authored === "string"
-              ? { mode: WORKTREE_MODES.NAMED, branch: authored }
-              : authored;
-      await ConfigurationUtils.setDefaultWorktree(defaultValue);
+      await ConfigurationUtils.setDefaultWorktree(authored);
     } else {
       await ConfigurationUtils.updateSetting(property, value);
     }

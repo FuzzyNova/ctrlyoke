@@ -125,7 +125,7 @@ export function getStatusLabel(status: StepStatus): string {
 /**
  * Get the left-rail/chip accent class for a step's status. This is the
  * fallback identity-bar rendering used everywhere `resolveStepColor` returns
- * nothing (`ui.stepColorMode: "off"`), so it must cover every status, not
+ * nothing (`ui.stepColorMode: "none"`), so it must cover every status, not
  * just terminal ones — a step that hasn't run yet must not read as "done".
  * PENDING -> none (nothing has happened yet), SENT/RUNNING -> in-progress
  * (matches `STATUS_COLORS`' charts-blue), FAILED -> error (red),

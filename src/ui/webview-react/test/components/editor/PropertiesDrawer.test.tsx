@@ -186,7 +186,7 @@ describe("PropertiesDrawer execution mode", () => {
   it("hides the step color control when step colors are off", () => {
     useSettingsStore
       .getState()
-      .updateGlobalSetting("stepColorMode", STEP_COLOR_MODES.OFF);
+      .updateGlobalSetting("stepColorMode", STEP_COLOR_MODES.NONE);
     renderHarnessDrawer();
 
     expect(screen.queryByLabelText("Step color")).not.toBeInTheDocument();

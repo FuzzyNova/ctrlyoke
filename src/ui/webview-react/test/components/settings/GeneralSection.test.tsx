@@ -40,7 +40,7 @@ describe("GeneralSection script step color control", () => {
   });
 
   it("hides the script step color control when step colors are off", () => {
-    renderGeneralSection(STEP_COLOR_MODES.OFF);
+    renderGeneralSection(STEP_COLOR_MODES.NONE);
 
     expect(
       screen.queryByLabelText("Script step color")

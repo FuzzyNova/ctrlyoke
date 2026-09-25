@@ -32,7 +32,7 @@ suite("Notification settings defaults", () => {
     );
     assert.strictEqual(
       notifications.events.promptComplete,
-      NOTIFICATION_EVENT_MODES.NEVER
+      NOTIFICATION_EVENT_MODES.NONE
     );
     assert.strictEqual(notifications.events.hookEvents.notification, false);
     assert.strictEqual(notifications.toastLevel, TOAST_LEVEL_MODES.ALL);
@@ -63,10 +63,10 @@ suite("Notification settings defaults", () => {
       [USER_FEEDBACK_SEVERITY.SUCCESS, TOAST_LEVEL_MODES.ERROR_ONLY, false],
       [USER_FEEDBACK_SEVERITY.WARNING, TOAST_LEVEL_MODES.ERROR_ONLY, false],
       [USER_FEEDBACK_SEVERITY.ERROR, TOAST_LEVEL_MODES.ERROR_ONLY, true],
-      [USER_FEEDBACK_SEVERITY.INFO, TOAST_LEVEL_MODES.OFF, false],
-      [USER_FEEDBACK_SEVERITY.SUCCESS, TOAST_LEVEL_MODES.OFF, false],
-      [USER_FEEDBACK_SEVERITY.WARNING, TOAST_LEVEL_MODES.OFF, false],
-      [USER_FEEDBACK_SEVERITY.ERROR, TOAST_LEVEL_MODES.OFF, false],
+      [USER_FEEDBACK_SEVERITY.INFO, TOAST_LEVEL_MODES.NONE, false],
+      [USER_FEEDBACK_SEVERITY.SUCCESS, TOAST_LEVEL_MODES.NONE, false],
+      [USER_FEEDBACK_SEVERITY.WARNING, TOAST_LEVEL_MODES.NONE, false],
+      [USER_FEEDBACK_SEVERITY.ERROR, TOAST_LEVEL_MODES.NONE, false],
     ];
 
     for (const [severity, level, expected] of cases) {

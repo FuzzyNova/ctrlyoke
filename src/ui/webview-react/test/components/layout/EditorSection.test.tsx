@@ -297,7 +297,7 @@ describe("EditorSection", () => {
   it("hides the header step color quick picker when step colors are off", () => {
     useSettingsStore
       .getState()
-      .updateGlobalSetting("stepColorMode", STEP_COLOR_MODES.OFF);
+      .updateGlobalSetting("stepColorMode", STEP_COLOR_MODES.NONE);
     render(<EditorSection />);
 
     expect(screen.queryByLabelText("Step color")).not.toBeInTheDocument();

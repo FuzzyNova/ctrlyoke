@@ -750,28 +750,8 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
   });
 
   it("treats absent, false, and none as the same default", () => {
-    useSettingsStore.getState().updateGlobalSetting("worktree", {
-      mode: WORKTREE_MODES.NONE,
-    });
+    useSettingsStore.getState().updateGlobalSetting("worktree", false);
     useSettingsStore.getState().updateWorkflowProperty("worktree", false);
-    render(<WorkflowPropertiesPanel />);
-
-    const worktreeField =
-      screen.getByLabelText("Worktree").parentElement?.parentElement;
-    expect(
-      within(worktreeField as HTMLElement).queryByRole("button", {
-        name: /Set as Default/,
-      })
-    ).toBeNull();
-  });
-
-  it("normalizes the legacy none sentinel for default comparison", () => {
-    useSettingsStore.getState().updateGlobalSetting("worktree", {
-      mode: WORKTREE_MODES.NONE,
-    });
-    useSettingsStore
-      .getState()
-      .updateWorkflowProperty("worktree", "none" as never);
     render(<WorkflowPropertiesPanel />);
 
     const worktreeField =

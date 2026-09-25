@@ -22,7 +22,6 @@ import {
   type StepColorMode,
   type StatusLineTrackingProvider,
   type ToastLevelMode,
-  WORKTREE_MODES,
   DEFAULT_MAX_QUEUE_SIZE,
 } from "./DashboardConstants";
 import {
@@ -35,7 +34,7 @@ import type {
   McpServerConfig,
   PreCondition,
   UserHookConfig,
-  WorktreeDefaultConfig,
+  WorktreeConfig,
   PriorContext,
 } from "./CtrlYokeTypes";
 import {
@@ -45,6 +44,7 @@ import {
 } from "../utils/StatuslineFormat";
 import { DEFAULT_TERMINAL_BAR_LAYOUT } from "../utils/TerminalControlBarFormat";
 
+export type { WorktreeConfig } from "./CtrlYokeTypes";
 export type { WorktreeDefaultConfig } from "./CtrlYokeTypes";
 
 export type RunHistoryLocation =
@@ -122,7 +122,7 @@ export interface CtrlYokeGlobalSettings {
     /** Default pre-condition applied to all new workflows. null/undefined = disabled. */
     preCondition?: PreCondition | null;
     /** Default worktree behavior for workflows that omit a root worktree value. */
-    worktree: WorktreeDefaultConfig;
+    worktree: WorktreeConfig;
   };
 
   /** User-only machine/repository placement configuration. */
@@ -438,9 +438,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     },
     endCondition: null,
     preCondition: null,
-    worktree: {
-      mode: WORKTREE_MODES.NONE,
-    },
+    worktree: false,
   },
   worktrees: {
     root: "",
@@ -556,7 +554,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     atomicContextReferences: true,
     offerTrustForUntrustedFileLinks: true,
     showCostEstimates: true,
-    stepColorMode: STEP_COLOR_MODES.OFF,
+    stepColorMode: STEP_COLOR_MODES.NONE,
     harnessColors: {
       byHarness: {},
       script: "#808080",
@@ -586,7 +584,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     },
     events: {
       workflowComplete: NOTIFICATION_EVENT_MODES.ALL,
-      promptComplete: NOTIFICATION_EVENT_MODES.NEVER,
+      promptComplete: NOTIFICATION_EVENT_MODES.NONE,
       hookEvents: {
         stop: false,
         sessionStart: false,

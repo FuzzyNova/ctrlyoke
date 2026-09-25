@@ -1547,7 +1547,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             idPrefix="script-step"
           />
           <div className="mt-4 space-y-4 rounded border border-panel-border p-3">
-            {globalSettings.stepColorMode !== STEP_COLOR_MODES.OFF && (
+            {globalSettings.stepColorMode !== STEP_COLOR_MODES.NONE && (
               <StepColorField idPrefix="script-step" />
             )}
             <SecretGrantsEditor

@@ -143,7 +143,7 @@ export function buildWorkflowCompletionNotification(
 
   const isFailure = state === EXECUTION_STATES.ERROR;
   const mode = settings.events.workflowComplete;
-  if (mode === NOTIFICATION_EVENT_MODES.NEVER) {
+  if (mode === NOTIFICATION_EVENT_MODES.NONE) {
     return undefined;
   }
   if (mode === NOTIFICATION_EVENT_MODES.FAILURES_ONLY && !isFailure) {
@@ -187,7 +187,7 @@ export function buildPromptCompletionNotification(
 
   const isFailure = stepStatus.state === STEP_STATUS.FAILED;
   const mode = settings.events.promptComplete;
-  if (mode === NOTIFICATION_EVENT_MODES.NEVER) {
+  if (mode === NOTIFICATION_EVENT_MODES.NONE) {
     return undefined;
   }
   if (mode === NOTIFICATION_EVENT_MODES.FAILURES_ONLY && !isFailure) {

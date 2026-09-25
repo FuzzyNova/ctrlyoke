@@ -172,10 +172,13 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     if (authored === false) return false;
     if (authored === true) return { mode: WORKTREE_MODES.MANAGED };
     if (authored === undefined) {
-      const configured = globalSettings.worktree;
-      return configured?.mode === WORKTREE_MODES.NONE
-        ? false
-        : (configured ?? false);
+      const configured = globalSettings.worktree ?? false;
+      if (configured === false) return false;
+      if (configured === true) return { mode: WORKTREE_MODES.MANAGED };
+      if (typeof configured === "string") {
+        return { mode: WORKTREE_MODES.NAMED, branch: configured };
+      }
+      return configured;
     }
     if (typeof authored === "string") {
       return { mode: WORKTREE_MODES.NAMED, branch: authored };
@@ -184,8 +187,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   }, [globalSettings.worktree, workflowProperties.worktree]);
   const worktreeIndicator = useMemo(() => {
     if (
-      effectiveWorktree === false ||
-      effectiveWorktree.mode === WORKTREE_MODES.NONE
+      effectiveWorktree === false
     ) {
       return undefined;
     }

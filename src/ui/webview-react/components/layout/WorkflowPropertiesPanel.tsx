@@ -78,6 +78,7 @@ import {
   WORKTREE_KEEP_HELP_TEXT,
   WORKTREE_MODE_HELP_TEXT,
   WORKTREE_MODE_OPTIONS,
+  WORKTREE_MODE_SELECTIONS,
   WORKTREE_MODES,
   PERMISSION_MODES,
   PERMISSION_CAPABILITY_KEYS,
@@ -144,28 +145,46 @@ function worktreeConfigForMode(
   mode: (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES],
   defaults: GlobalSettings["worktree"]
 ): WorktreeObjectConfig {
+  const normalizedDefaults = worktreeObjectConfig(defaults);
   if (mode === WORKTREE_MODES.MANAGED) {
     return {
       mode,
-      base: defaults?.base ?? "",
-      setup: defaults?.setup ?? "",
+      base: normalizedDefaults !== false ? (normalizedDefaults.base ?? "") : "",
+      setup:
+        normalizedDefaults !== false ? (normalizedDefaults.setup ?? "") : "",
       merge:
-        defaults?.mode === WORKTREE_MODES.MANAGED
-          ? (defaults.merge ?? false)
+        normalizedDefaults !== false &&
+        normalizedDefaults.mode === WORKTREE_MODES.MANAGED
+          ? (normalizedDefaults.merge ?? false)
           : false,
       keep:
-        defaults?.mode === WORKTREE_MODES.MANAGED
-          ? (defaults.keep ?? false)
+        normalizedDefaults !== false &&
+        normalizedDefaults.mode === WORKTREE_MODES.MANAGED
+          ? (normalizedDefaults.keep ?? false)
           : false,
     };
   }
   return {
     mode: WORKTREE_MODES.NAMED,
     branch:
-      defaults?.mode === WORKTREE_MODES.NAMED ? (defaults.branch ?? "") : "",
-    base: defaults?.base ?? "",
-    setup: defaults?.setup ?? "",
+      normalizedDefaults !== false &&
+      normalizedDefaults.mode === WORKTREE_MODES.NAMED
+        ? (normalizedDefaults.branch ?? "")
+        : "",
+    base: normalizedDefaults !== false ? (normalizedDefaults.base ?? "") : "",
+    setup: normalizedDefaults !== false ? (normalizedDefaults.setup ?? "") : "",
   };
+}
+
+function worktreeObjectConfig(
+  value: WorktreeConfig | undefined
+): WorktreeObjectConfig | false {
+  if (value === undefined || value === false) return false;
+  if (value === true) return { mode: WORKTREE_MODES.MANAGED };
+  if (typeof value === "string") {
+    return { mode: WORKTREE_MODES.NAMED, branch: value };
+  }
+  return value;
 }
 
 const BUTTON_STATE = {
@@ -173,6 +192,7 @@ const BUTTON_STATE = {
   SUCCESS: "success",
   FADING: "fading",
 } as const;
+const WORKTREE_MODE_NONE = WORKTREE_MODE_SELECTIONS.NONE;
 type ButtonState = (typeof BUTTON_STATE)[keyof typeof BUTTON_STATE];
 
 /**
@@ -358,7 +378,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const effectiveExecutionMode = getEffectiveExecutionMode();
   const effectiveWorktree = getEffectiveWorktree();
   const effectiveWorktreeMode =
-    effectiveWorktree === false ? WORKTREE_MODES.NONE : effectiveWorktree.mode;
+    effectiveWorktree === false ? WORKTREE_MODE_NONE : effectiveWorktree.mode;
   const effectiveWorktreeBranch =
     effectiveWorktree === false || !("branch" in effectiveWorktree)
       ? ""
@@ -569,16 +589,11 @@ const WorkflowPropertiesPanelInner: React.FC<{
       if (workflowValue === undefined) return false;
       if (property === PROMPT_PROPERTIES.WORKTREE) {
         const normalize = (value: unknown) => {
-          if (
-            value === undefined ||
-            value === false ||
-            value === WORKTREE_MODES.NONE
-          ) {
-            return { mode: WORKTREE_MODES.NONE };
-          }
+          if (value === undefined || value === false) return false;
           if (typeof value === "string") {
             return { mode: WORKTREE_MODES.NAMED, branch: value };
           }
+          if (value === true) return { mode: WORKTREE_MODES.MANAGED };
           const config = value as {
             mode: string;
             branch?: string;
@@ -587,9 +602,6 @@ const WorkflowPropertiesPanelInner: React.FC<{
             keep?: boolean;
             merge?: boolean;
           };
-          if (config.mode === WORKTREE_MODES.NONE) {
-            return { mode: WORKTREE_MODES.NONE };
-          }
           return {
             mode: config.mode,
             branch: config.branch ?? "",
@@ -847,8 +859,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
   const handleWorktreeModeChange = useCallback(
     (mode: string) => {
-      if (mode === WORKTREE_MODES.NONE) {
-        setWorktreeMode(WORKTREE_MODES.NONE);
+      if (mode === WORKTREE_MODE_NONE) {
+        setWorktreeMode(WORKTREE_MODE_NONE);
         setWorktreeBranchInput("");
         setWorktreeBaseInput("");
         setWorktreeSetupInput("");
@@ -858,10 +870,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
         return;
       }
 
-      const selectedMode = mode as Exclude<
-        (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES],
-        typeof WORKTREE_MODES.NONE
-      >;
+      const selectedMode =
+        mode as (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES];
       const seeded = worktreeConfigForMode(
         selectedMode,
         globalSettings.worktree
@@ -1367,6 +1377,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const handleResetAllToDefault = useCallback(() => {
     const globalHarness = globalSettings.harness as string;
     const resetWorktree = globalSettings.worktree;
+    const resetWorktreeConfig = worktreeObjectConfig(resetWorktree);
     const updates: Partial<WorkflowProperties> = {
       harness: globalHarness,
       model: globalSettings.harnessDefaultModels[globalHarness],
@@ -1391,51 +1402,36 @@ const WorkflowPropertiesPanelInner: React.FC<{
         globalSettings.defaultEndCondition as WorkflowProperties["endCondition"],
       preCondition:
         globalSettings.defaultPreCondition as WorkflowProperties["preCondition"],
-      worktree:
-        resetWorktree?.mode === WORKTREE_MODES.NONE
-          ? false
-          : resetWorktree?.mode === WORKTREE_MODES.MANAGED
-            ? {
-                mode: WORKTREE_MODES.MANAGED,
-                base: resetWorktree.base,
-                setup: resetWorktree.setup,
-                keep: resetWorktree.keep,
-                merge: resetWorktree.merge,
-              }
-            : {
-                mode: WORKTREE_MODES.NAMED,
-                branch: resetWorktree?.branch ?? "",
-                base: resetWorktree?.base,
-                setup: resetWorktree?.setup,
-              },
+      worktree: globalSettings.worktree,
     };
     setSessionIdInput("");
-    setWorktreeMode(resetWorktree?.mode ?? WORKTREE_MODES.NONE);
+    setWorktreeMode(
+      resetWorktreeConfig === false
+        ? WORKTREE_MODE_NONE
+        : resetWorktreeConfig.mode
+    );
     setWorktreeBranchInput(
-      resetWorktree?.mode === WORKTREE_MODES.NAMED
-        ? (resetWorktree.branch ?? "")
+      resetWorktreeConfig !== false &&
+        resetWorktreeConfig.mode === WORKTREE_MODES.NAMED
+        ? (resetWorktreeConfig.branch ?? "")
         : ""
     );
     setWorktreeBaseInput(
-      resetWorktree?.mode === WORKTREE_MODES.NAMED ||
-        resetWorktree?.mode === WORKTREE_MODES.MANAGED
-        ? (resetWorktree.base ?? "")
-        : ""
+      resetWorktreeConfig !== false ? (resetWorktreeConfig.base ?? "") : ""
     );
     setWorktreeSetupInput(
-      resetWorktree?.mode === WORKTREE_MODES.NAMED ||
-        resetWorktree?.mode === WORKTREE_MODES.MANAGED
-        ? (resetWorktree.setup ?? "")
-        : ""
+      resetWorktreeConfig !== false ? (resetWorktreeConfig.setup ?? "") : ""
     );
     setWorktreeMergeInput(
-      resetWorktree?.mode === WORKTREE_MODES.MANAGED
-        ? (resetWorktree.merge ?? false)
+      resetWorktreeConfig !== false &&
+        resetWorktreeConfig.mode === WORKTREE_MODES.MANAGED
+        ? (resetWorktreeConfig.merge ?? false)
         : false
     );
     setWorktreeKeepInput(
-      resetWorktree?.mode === WORKTREE_MODES.MANAGED
-        ? (resetWorktree.keep ?? false)
+      resetWorktreeConfig !== false &&
+        resetWorktreeConfig.mode === WORKTREE_MODES.MANAGED
+        ? (resetWorktreeConfig.keep ?? false)
         : false
     );
     setEndConditionEnabled(
@@ -1870,7 +1866,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 </FormField>
               </DrawerRow>
 
-              <AnimatedSection visible={worktreeMode !== WORKTREE_MODES.NONE}>
+              <AnimatedSection visible={worktreeMode !== WORKTREE_MODE_NONE}>
                 <DrawerRow narrow={isNarrow}>
                   {worktreeMode === WORKTREE_MODES.NAMED && (
                     <FormField
@@ -1986,7 +1982,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
               </AnimatedSection>
 
               {workflowProperties.worktree === undefined &&
-                worktreeMode !== WORKTREE_MODES.NONE && (
+                worktreeMode !== WORKTREE_MODE_NONE && (
                   <p className="text-xxs text-warning-fg" role="status">
                     This worktree default is inherited from settings.
                     {worktreeMode === WORKTREE_MODES.NAMED &&
