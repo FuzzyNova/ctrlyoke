@@ -66,6 +66,7 @@ flattened into the workflow's authoritative step numbering:
 Group members share one workspace and, when configured, one managed or named
 worktree for the run. They are intended for independent work; v1 has no
 per-member isolation or automatic merge. `queue.maxParallelSteps` bounds the
-group width, while `1` preserves sequential execution. Group members cannot
-enable the built-in `ctrlyoke` dynamic-queue MCP server; `finalStep` may still
-use it.
+group width, while `1` preserves sequential execution. Group members may enable
+the built-in `ctrlyoke` dynamic-queue MCP server. See
+[YAML format](/workflows/yaml-format#parallel-steps) for the full list of group
+rules.

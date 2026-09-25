@@ -6,12 +6,12 @@ YAML is the most readable way to author multi-step workflows by hand.
 
 ```yaml
 harness: copilot-cli
-model: claude-sonnet-4.5
+model: claude-sonnet-4.6
 
 steps:
   - name: inspect
     prompt: |
-      Inspect @src/ctrlyoke/ and identify the biggest reliability risk.
+      Inspect @src/core/ and identify the biggest reliability risk.
 
   - name: verify-workspace
     type: script
@@ -72,9 +72,17 @@ locally and is not committed with the workflow.
 | `name`          | Human-readable label in the dashboard                          |
 | `prompt`        | Inline prompt text or a path to `.prompt.md`, `.md`, or `.txt` |
 | `resumeSession` | Continue the previous compatible session                       |
-| `sessionId`     | Resume a specific prior step or exact session                  |
+| `sessionId`     | Resume a step's session (`1`), an exact ID, or `finalStep`     |
 | `endCondition`  | Validate after the step completes                              |
 | `preCondition`  | Gate before the step runs                                      |
+
+A `prompt` value is read as a file path only when the whole value is a path that
+starts with `./`, `../`, or an absolute path, or in a multi-root workspace a
+path that starts with a workspace folder name (for example
+`prompt: ./prompts/review.prompt.md`). The file is looked up next to the
+workflow file first, then in the workspace root, then in `.ctrlyoke/`. Anything
+else, including `prompts/review.prompt.md` without the `./`, is sent as inline
+prompt text.
 
 ## Script steps
 
@@ -130,7 +138,14 @@ whole group that one worktree. Do not put conflicting edits in the same group.
 Terminal controller arbitration is per workflow, not per session, so multiple
 member terminals still belong to the same workflow controller scope.
 
+A group needs at least two members. Before the group starts, ctrlyoke checks
+that the members resolve to distinct harness sessions: two members that would
+resume the same session are rejected. If the host cannot run several
+interactive terminals at once, it also rejects multiple interactive members. In
+that case, set `executionMode: headless` on those members.
+
 Groups cannot be nested, cannot contain a `worktree` or
-`trustedExternalRoots` override, and cannot be used as `finalStep`. A member
-cannot enable the built-in `ctrlyoke` dynamic-queue MCP server; put that server
-on `finalStep` if the final step needs to extend the queue.
+`trustedExternalRoots` override, and cannot be used as `finalStep`. Members may
+enable the built-in `ctrlyoke` dynamic-queue MCP server. A member can edit,
+remove, or append steps that have not started yet, but a step that has already
+started cannot be changed.

@@ -1,6 +1,6 @@
 # Dynamic queue
 
-Dynamic queue extension lets a workflow add more work while it is already running.
+Dynamic queue extension lets a workflow add and adjust its own work while it is running.
 
 ## Enable it
 
@@ -11,17 +11,26 @@ mcpServers:
   - ctrlyoke
 ```
 
+ctrlyoke starts the server for each harness launch and attaches it to the current run, so the tools always act on the run that launched them. The harness is pre-approved to call it, so unattended runs never stop at a tool-approval prompt.
+
 ## What it provides
 
-The built-in server exposes queue tools that let the harness:
+The built-in server lets the harness:
 
-- inspect the current queue
-- append new prompts after the current position or at the end
-- read previous output when planning follow-up work
+- inspect the run's steps and their status (`workflow_status`)
+- append steps or parallel groups next, at the end, at a specific index, or into the parallel group that is currently running (`append_step`)
+- edit, remove, or reorder steps that have not started yet (`edit_step`, `remove_step`, `reorder_steps`)
+- check which harnesses and models are installed before choosing them (`list_harnesses`)
+- read earlier steps' output, paging through long responses (`read_output`)
+- see what other workflows in the workspace are doing, and coordinate with them (`global_status` and the coordination tools)
+
+See [MCP tools](/reference/mcp-tools) for parameters and responses.
+
+Queue changes are only accepted while the run is executing (running, pausing, paused, or cancelling). A harness session left open after its workflow finished cannot add steps that would never run; the tool refuses instead. The total step count is capped by the `queue.maxSize` setting (100 by default) unless `queue.unlimitedMode` is on.
 
 ## Typical pattern
 
-Use `ctrlyoke` in the `finalStep` so the harness can review the current run, append follow-up tasks, and loop until it decides the queue is complete.
+Use `ctrlyoke` in the `finalStep` so the harness can review the current run and append follow-up tasks. After the queue finishes, the final step runs; if it appended new steps, those run and the final step runs again. The loop ends when a final step appends nothing.
 
 ```yaml
 finalStep:
@@ -30,7 +39,24 @@ finalStep:
     - ctrlyoke
 ```
 
-The built-in `ctrlyoke` server is rejected on a parallel-group member. A group
-has one shared queue position and joins before the next item, so members cannot
-append work concurrently. The `finalStep` may still enable `ctrlyoke`; it runs
-after the group join and can append follow-up work before running again.
+A workflow can even start with an empty `steps` list and let the `finalStep` build the whole queue.
+
+## Parallel groups
+
+Parallel-group members may use the built-in `ctrlyoke` server. A member can:
+
+- append a future parallel group with `position: "end"`, `"next"`, or an index — `"next"` always queues after the running group, never inside it
+- join the running group with `position: "parallelWithCurrent"` (flat steps only), subject to the `queue.maxParallelSteps` limit
+- read output only from steps before the group started
+
+To let members read state but not change the queue, deny the mutation tools:
+
+```yaml
+mcpServers:
+  - id: ctrlyoke
+    deniedTools: [append_step, edit_step, remove_step, reorder_steps]
+```
+
+## Skill mode
+
+The `ctrlyokeMcpMode` setting controls how the tools reach the harness. `native` (the default) attaches the MCP server. `skill` attaches built-in skills (`ctrlyoke-mcp-tools` and `ctrlyoke-coordination-tools`) instead, which tell the harness how to call the same tools as one-shot shell commands (the [`ctrlyoke-mcp`](/cli/ctrlyoke-mcp) script's `--tool` mode). Use it when MCP servers are blocked or unavailable in your environment (for example by an organization policy). Commit-message generation follows the same setting. Denied tools are left out of the skills.

@@ -11,10 +11,10 @@ capability fidelity, evidence, version scope, caveats, and remediation guidance.
 | ----------------- | ---------- | --------------------------------- | --------------------------------------------- |
 | `copilot-cli`     | CLI        | Default path for GitHub users     | Good general-purpose default                  |
 | `claude-cli`      | CLI        | Long-form reasoning and coding    | Strong session continuity                     |
-| `codex-cli`       | CLI        | OpenAI Codex workflows            | Exposes Codex-specific sandbox controls       |
+| `codex-cli`       | CLI        | OpenAI Codex workflows            | Sandbox/approval modes, not tool patterns     |
 | `opencode-cli`    | CLI        | Provider-flexible OpenCode setups | Useful when OpenCode is already your standard |
-| `qwen-cli`        | CLI        | Qwen Code users                   | Similar workflow model to other CLI harnesses |
-| `antigravity-cli` | CLI        | Google Antigravity workflows      | Uses `agy`; supports MCP config support       |
+| `qwen-cli`        | CLI        | Qwen Code users                   | No image attachments                          |
+| `antigravity-cli` | CLI        | Google Antigravity workflows      | Uses `agy`; coarse permission modes only      |
 
 ## Choosing a starting harness
 
@@ -22,6 +22,6 @@ capability fidelity, evidence, version scope, caveats, and remediation guidance.
 - Use **`claude-cli`** if your team already works in Claude Code.
 - Reach for the other CLI harnesses when they already match your preferred assistant or hosting model.
 
-All harnesses use the same workflow schema and expose the same runtime capabilities (interactive terminal mode, headless execution, per-harness CLI args, and CLI session IDs).
+All harnesses use the same workflow schema and share the core runtime: interactive terminal mode, headless execution, per-harness `additionalArgs`, CLI session IDs, MCP server attachment, and portable agents and skills. What differs is enforcement of tool permission lists, which hook events fire, per-server MCP tool filtering, and image attachments — check the [compatibility matrix](/harnesses/compatibility) before relying on one of those.
 
 See the per-harness pages for setup notes and tradeoffs.

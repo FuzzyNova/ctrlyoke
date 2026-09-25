@@ -1,27 +1,36 @@
 # Commands
 
-These are the main user-facing commands registered by the extension.
+These are the user-facing commands the extension contributes to VS Code. Run them from the
+Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) unless the table says they live in a menu.
 
-## Core workflow commands
+## Dashboard and execution
 
-| Command                         | What it does              |
-| ------------------------------- | ------------------------- |
-| `ctrlyoke: Open ctrlyoke Panel` | Open the panel UI         |
-| `ctrlyoke: Run`                 | Start the loaded workflow |
-| `ctrlyoke: Pause Execution`     | Pause the current run     |
-| `ctrlyoke: Resume Execution`    | Resume a paused run       |
-| `ctrlyoke: Stop Execution`      | Stop the current run      |
-| `ctrlyoke: Show Output Panel`   | Open the output panel     |
+| Command                             | What it does                                        |
+| ----------------------------------- | --------------------------------------------------- |
+| `ctrlyoke: Open ctrlyoke Panel`     | Open the dashboard                                  |
+| `ctrlyoke: Run`                     | Run the workflow loaded in the dashboard            |
+| `ctrlyoke: Pause Execution`         | Pause the current run                               |
+| `ctrlyoke: Resume Execution`        | Resume a paused run                                 |
+| `ctrlyoke: Stop Execution`          | Stop the current run                                |
+| `ctrlyoke: Resume Session`          | Pick a previous run's harness session and resume it |
+| `ctrlyoke: Search ctrlyoke History` | Open the dashboard's run-history search             |
+| `ctrlyoke: Show Output Panel`       | Show the ctrlyoke log in VS Code's Output panel     |
 
-## Workflow authoring commands
+## Workflow authoring
 
-| Command                                | What it does                                |
-| -------------------------------------- | ------------------------------------------- |
-| Editor convert button                  | Write a step prompt to `.ctrlyoke/prompts/` |
-| `ctrlyoke: New Workflow from Template` | Start from a template                       |
-| `ctrlyoke: New Blank Workflow`         | Clear the current workflow and start fresh  |
-| `ctrlyoke: Create New Custom Template` | Create a user template                      |
-| `ctrlyoke: Import Workflow Templates`  | Import bundled templates                    |
+| Command                                | What it does                                                     | Shortcut (dashboard focused)   |
+| -------------------------------------- | ---------------------------------------------------------------- | ------------------------------ |
+| `ctrlyoke: New Workflow from Template` | Open the template picker                                         | `Ctrl+Shift+T` / `Cmd+Shift+T` |
+| `ctrlyoke: New Blank Workflow`         | Clear the current workflow and start fresh                       | `Ctrl+Shift+N` / `Cmd+Shift+N` |
+| `ctrlyoke: Create New Custom Template` | Open the template picker's create-template form                  |                                |
+| `ctrlyoke: Select Prompt File`         | Pick a workflow or prompt file in the workspace and load it      | `Ctrl+Shift+L` / `Cmd+Shift+L` |
+| `ctrlyoke: Queue Prompt File`          | Pick a workflow or prompt file and append its steps to the queue | `Ctrl+Shift+Q` / `Cmd+Shift+Q` |
+
+The keyboard shortcuts apply only while the ctrlyoke dashboard view has focus.
+
+The prompt editor's convert button writes a step prompt to a file under `.ctrlyoke/prompts/` and
+replaces the inline prompt with a reference to it. Script templates for end conditions are created
+from the condition editor in the dashboard, not from a command.
 
 ### Save As
 
@@ -35,33 +44,58 @@ and still resolve, provided they travel together. The pair carries generated dep
 repository it operates on: `@src/foo.ts`, committed prompt files, and `.ctrlyoke/scripts/**`
 references remain dependencies of the surrounding repository by design.
 
-## Queue and session commands
+## Run with ctrlyoke submenu
 
-| Command                                    | What it does                                |
-| ------------------------------------------ | ------------------------------------------- |
-| `ctrlyoke: Queue Steps with ctrlyoke`      | Append a prompt file to the queue           |
-| `ctrlyoke: Queue Steps Next with ctrlyoke` | Insert a prompt file after the current step |
-| `ctrlyoke: Queue Prompt File`              | Queue a prompt file from the dashboard      |
-| `ctrlyoke: Resume Session`                 | Resume a prior session                      |
+Right-click a `.ctrlyoke.yaml`, `.ctrlyoke.yml`, `.ctrlyoke.json`, or `.prompt.md` file in the
+Explorer or on its editor tab, or use the play-icon **Run with ctrlyoke** menu in the editor title
+bar:
 
-The Run, Load, Queue Steps, and Queue Steps Next file actions are grouped under the **Run with
-ctrlyoke** submenu in file context menus and the editor title toolbar. Queue Steps and Queue
-Steps Next are hidden until the active queue already contains at least one step.
+| Menu item                      | What it does                                           |
+| ------------------------------ | ------------------------------------------------------ |
+| Run with ctrlyoke              | Save the file if needed, load it, and run it           |
+| Load in ctrlyoke               | Load the file into the dashboard without running it    |
+| Queue Steps with ctrlyoke      | Append the file's steps to the end of the active queue |
+| Queue Steps Next with ctrlyoke | Insert the file's steps after the current step         |
 
-## Workspace and helper commands
+Queue Steps and Queue Steps Next are hidden until the active queue already contains at least one
+step. These items are menu-only and do not appear in the Command Palette.
 
-| Command                                 | What it does                                       |
-| --------------------------------------- | -------------------------------------------------- |
-| `ctrlyoke: Initialize Workspace`        | Create `.ctrlyoke/` and its generated `.gitignore` |
-| `ctrlyoke: Create End Condition Script` | Create a validation script template                |
-| `ctrlyoke: Import ctrlyoke Agents`      | Import bundled agents                              |
+## Adding context to the prompt editor
 
-## Prompt editor context commands
+These menu items insert a reference into the dashboard's prompt editor. They are menu-only.
 
-These commands insert references into the prompt editor from the Explorer, editor selection, SCM view, and timeline:
+| Menu item                        | Where it appears                                                                  |
+| -------------------------------- | --------------------------------------------------------------------------------- |
+| Add File to ctrlyoke             | Explorer file context menu, editor tab context menu, Source Control changed files |
+| Add Directory to ctrlyoke        | Explorer folder context menu                                                      |
+| Add Selection to ctrlyoke        | Editor and line-number context menus when text is selected                        |
+| Add Symbol to ctrlyoke           | Editor and line-number context menus when nothing is selected                     |
+| Add Output Selection to ctrlyoke | Output panel context menu when text is selected                                   |
+| Add Output Channel to ctrlyoke   | Output panel context menu with no selection, and the Output panel title bar       |
+| Add Commit to ctrlyoke           | Timeline view context menu on a Git commit                                        |
 
-- Add File to ctrlyoke
-- Add Directory to ctrlyoke
-- Add Selection to ctrlyoke
-- Add Symbol to ctrlyoke
-- Add Commit to ctrlyoke
+## Source Control
+
+| Command                                           | What it does                                                                                                                                                                |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ctrlyoke: Generate Commit Message with ctrlyoke` | Generate a commit message into the Source Control input box; text already in the box guides the message. Also a button in the Source Control title bar for Git repositories |
+| `ctrlyoke: Cancel Commit Message Generation`      | Cancel a generation in progress (replaces the generate button while it runs)                                                                                                |
+
+## Workspace, worktrees, and usage
+
+| Command                                  | What it does                                                 |
+| ---------------------------------------- | ------------------------------------------------------------ |
+| `ctrlyoke: Initialize Workspace`         | Create or repair `.ctrlyoke/` and its generated `.gitignore` |
+| `ctrlyoke: Show Getting Started`         | Reopen the Getting Started walkthrough                       |
+| `ctrlyoke: Manage Worktrees`             | Open the dashboard to manage ctrlyoke worktrees              |
+| `ctrlyoke: Refresh Harness Usage`        | Refresh harness usage and quota information                  |
+| `ctrlyoke: Refresh Workspace Statistics` | Recompute the workspace statistics shown in the dashboard    |
+
+## License
+
+| Command                                           | What it does                                          |
+| ------------------------------------------------- | ----------------------------------------------------- |
+| `ctrlyoke: Activate Pro License`                  | Open the dashboard's license settings                 |
+| `ctrlyoke: Activate Offline (Air-Gapped) License` | Import an offline license file without network access |
+| `ctrlyoke: Deactivate Pro License`                | Open the dashboard's license settings                 |
+| `ctrlyoke: Manage License`                        | Open the dashboard's license settings                 |

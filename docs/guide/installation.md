@@ -2,8 +2,8 @@
 
 ## Requirements
 
-- VS Code 1.104 or later for the extension
-- Node.js 22.17.0 or later for local development and CLI usage
+- VS Code 1.106 or later for the extension
+- Node.js 22.12.0 or later for local development and CLI usage
 - At least one supported harness installed and authenticated
 
 ## Install the extension
@@ -15,6 +15,8 @@ After install, open the panel:
 ```text
 Command Palette → ctrlyoke: Open ctrlyoke Panel
 ```
+
+The panel opens in the secondary side bar (far right) by default. If you prefer a wider, horizontal layout, drag the ctrlyoke tab down to the bottom panel. The **ctrlyoke: Show Getting Started** command reopens the built-in walkthrough at any time.
 
 ## Install a harness
 
@@ -33,7 +35,9 @@ Start with `copilot-cli` or `claude-cli` unless you already know you need anothe
 
 ## Initialize a workspace
 
-ctrlyoke expects a workspace-level `.ctrlyoke` folder for drafts, templates, scripts, runtime files, and logs.
+ctrlyoke keeps workspace-level files such as settings, templates, scripts, prompts, attachments, and logs in a `.ctrlyoke` folder.
+
+The first time you open the panel in a workspace that has no `.ctrlyoke/` folder, the dashboard asks **Initialize ctrlyoke here?** Click **Initialize ctrlyoke** to continue. You can also run the command directly at any time:
 
 ```text
 Command Palette → ctrlyoke: Initialize Workspace

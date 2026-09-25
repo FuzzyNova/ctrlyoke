@@ -13,7 +13,7 @@ capability details and version-scoped evidence.
 
 ## Typical setup
 
-1. Install the GitHub Copilot CLI
+1. Install the GitHub Copilot CLI (`npm install -g @github/copilot`)
 2. Authenticate it
 3. Set ctrlyoke's harness to `copilot-cli`
 4. Optionally pick a model override in your workflow or settings
@@ -22,7 +22,7 @@ capability details and version-scoped evidence.
 
 ```yaml
 harness: copilot-cli
-model: claude-sonnet-4.5
+model: claude-sonnet-4.6
 
 steps:
   - prompt: Review @src/ for the highest-priority reliability issue.
@@ -30,6 +30,6 @@ steps:
 
 ## Notes
 
-- Tool permissions can be tuned through workflow overrides or `.ctrlyoke/settings.json`.
-- Additional allowed directories can be granted when the harness needs access outside the workspace root.
+- Tool permissions can be tuned through workflow `toolPermissions` overrides or `defaults.toolPermissions` in `.ctrlyoke/settings.json`.
+- Directories outside the workspace are granted through `permissions.allowedExternalFileRoots`; ctrlyoke passes each approved root to Copilot as `--add-dir`. To pass `--allow-all-paths` instead, add it to `defaults.additionalArgs["copilot-cli"]`.
 - If you need a workflow to continue a previous Copilot conversation, use `resumeSession` or `sessionId`.

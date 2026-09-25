@@ -12,8 +12,11 @@ capability details and version-scoped evidence.
 
 ## Notes
 
+- Install with `npm install -g opencode-ai` and make sure `opencode models` lists the models you want before selecting this harness.
 - The workflow surface is the same as the other CLI harnesses.
-- Some permission behavior is mode-based rather than pattern-based, so keep that in mind when comparing it to Copilot CLI or Claude CLI.
+- Models use OpenCode's `provider/model` form. The dashboard lists what `opencode models` reports for your setup.
+- Tool permissions (`mode`, `allowedTools`, `deniedTools`), MCP servers, and ctrlyoke's completion plugin are delivered per process through `OPENCODE_CONFIG_CONTENT`; ctrlyoke does not write a workspace `opencode.json`. OpenCode's own categories are coarser than tool patterns (for example, `write` and `edit` both map to OpenCode's `edit` permission).
+- `permissions.allowedExternalFileRoots` is not passed to OpenCode; it has no `--add-dir` equivalent.
 
 ## Example
 

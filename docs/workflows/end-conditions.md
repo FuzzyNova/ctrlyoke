@@ -20,9 +20,16 @@ endCondition:
     $endCondition:stderr
 ```
 
-The pass and failure directions are independent actions. `onFail: retry`
-re-prompts after a failed validation, while `onPass: retry` re-prompts when a
-passing validation means the step should keep working. Pass retries use
+A failed validation is re-prompted with the retry prompt while retry budget
+remains. That happens with the default `onFail: stopWorkflow` as well as with
+`onFail: retry`, as long as a retry prompt is available — the step's
+`retryPrompt`, or the `defaults.endCondition.retryPrompt` setting. Without a retry
+prompt there are no failure retries, so always pair `onFail: retry` with a
+`retryPrompt`. When the budget runs out the step fails and the workflow stops.
+`onFail: continue` skips retries and advances immediately.
+
+`onPass: retry` works in the other direction: it re-prompts when a passing
+validation means the step should keep working. Pass retries use
 `passRetryPrompt`, then the default pass-retry prompt from settings, and finally
 the step's own prompt when no template is configured. They reuse the same
 `maxRetries` budget as failure retries and the same session by default.
@@ -52,19 +59,26 @@ recipe: keep working while the condition passes, and advance once it fails.
 
 ## Important fields
 
-| Field                  | Meaning                                                                                                                       |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `script`               | Command or script path to execute                                                                                             |
-| `compareSource`        | Which output to compare: `exitCode` (default), `stdout`, `stderr`                                                             |
-| `operator`             | How to compare: `eq` (default), `ne`, `contains`, `notContains`, `gte`, `gt`, `lte`, `lt`, `matches`, `isEmpty`, `isNotEmpty` |
-| `expected`             | Value to compare against. Omit it to pass on exit code 0                                                                      |
-| `ignoreCase`           | Case-insensitive text compare (string operators only)                                                                         |
-| `maxRetries`           | Shared retry limit across pass and failure retries                                                                            |
-| `retryPrompt`          | Template sent after validation failure                                                                                        |
-| `passRetryPrompt`      | Template sent after validation passes with `onPass: retry`                                                                    |
-| `resumeSessionOnRetry` | Whether retries stay in the same conversation                                                                                 |
-| `onPass`               | `continue`, `retry`, or `stopWorkflow`                                                                                        |
-| `onFail`               | `continue`, `retry`, or `stopWorkflow`                                                                                        |
+| Field                  | Meaning                                                                                                                                                                                              |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `script`               | Command or script path to execute (required)                                                                                                                                                         |
+| `env`                  | Extra environment variables for the script. Secrets only as `${secret:NAME}` values                                                                                                                  |
+| `timeout`              | Timeout in milliseconds. Defaults to the `execution.scriptTimeout` setting                                                                                                                           |
+| `shell`                | Shell for inline command text, e.g. `pwsh`, `bash`, `cmd`. Ignored for script files                                                                                                                  |
+| `compareSource`        | Which output to compare: `exitCode` (default), `stdout`, `stderr`                                                                                                                                    |
+| `operator`             | How to compare: `eq` (default), `ne`, `contains`, `notContains`, `gte`, `gt`, `lte`, `lt`, `matches`, `isEmpty`, `isNotEmpty`                                                                        |
+| `expected`             | Value to compare against. Omit it to pass on exit code 0                                                                                                                                             |
+| `ignoreCase`           | Case-insensitive text compare (string operators only)                                                                                                                                                |
+| `maxRetries`           | Shared retry limit across pass and failure retries. `0` = none, `-1` = unlimited, max `100`. Unset: `1` when `onPass`/`onFail` is `retry`, else the `defaults.endCondition.maxRetries` setting (`0`) |
+| `retryPrompt`          | Template sent after validation failure                                                                                                                                                               |
+| `passRetryPrompt`      | Template sent after validation passes with `onPass: retry`                                                                                                                                           |
+| `resumeSessionOnRetry` | Whether retries stay in the same conversation (default `true`)                                                                                                                                       |
+| `onPass`               | `continue` (default), `retry`, or `stopWorkflow`                                                                                                                                                     |
+| `onFail`               | `continue`, `retry`, or `stopWorkflow` (default)                                                                                                                                                     |
+
+`endCondition` and `preCondition` can also be set once at the workflow level (or
+in the `defaults` settings) and are inherited by every prompt step. Set either to
+`null` on a step to switch an inherited condition off.
 
 ## Comparing output
 
@@ -109,13 +123,52 @@ and `!=`.
 
 ## Pre-condition
 
-A pre-condition runs before a prompt step and decides whether to continue, skip the prompt, or stop the workflow.
+A pre-condition runs before a prompt step and decides whether to run the prompt, skip it, or stop the workflow. It uses the same script and comparison fields as an end condition (no retry fields).
 
 ```yaml
 preCondition:
   script: npm run lint
   onFail: stopWorkflow
 ```
+
+| Field    | Values                                                             |
+| -------- | ------------------------------------------------------------------ |
+| `onPass` | `continue` (default, run the prompt), `skipPrompt`, `stopWorkflow` |
+| `onFail` | `continue`, `skipPrompt` (default), `stopWorkflow`                 |
+
+`onFail: continue` makes the pre-condition advisory: the prompt runs anyway, and
+its output is still available through `$preCondition:*` references.
+
+## How scripts run
+
+`script` is either a path to a script file or an inline command.
+
+A path is looked up relative to the execution directory (the worktree, when the
+run uses one), then the workspace root, then `.ctrlyoke/`, then
+`~/.ctrlyoke/scripts/`. A resolved file must stay inside the workspace or
+`~/.ctrlyoke/scripts/`. The interpreter follows the file extension:
+
+| Extension             | Runs with                                    |
+| --------------------- | -------------------------------------------- |
+| `.py`                 | `python3`, falling back to `python`          |
+| `.js`, `.mjs`, `.cjs` | `node`                                       |
+| `.ts`                 | `node` with a local `tsx` or `ts-node`       |
+| `.sh`                 | `sh` (`bash` on Windows)                     |
+| `.ps1`                | PowerShell (`-ExecutionPolicy Bypass -File`) |
+| `.bat`, `.cmd`        | `cmd /c` (Windows only)                      |
+
+Files without one of these extensions run directly when executable, or through
+the interpreter named in their shebang line.
+
+Anything that does not resolve to a file runs as a shell command — pin that
+shell with `shell`, otherwise the `terminal.shellExecutable` setting or the
+platform default is used. Scripts run in the execution directory, and workflow
+variables are exported to them as `CTRLYOKE_VAR_<KEY>` environment variables.
+
+A script that cannot be run at all — for example an unsupported file type or a
+spawn failure — is an internal error, not a failed validation. It is handled by
+the step's `errorBehavior` policy (`stop`, `retry`, or `continue`) rather than by
+`onFail`.
 
 ## Condition output references
 

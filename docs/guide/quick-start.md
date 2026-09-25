@@ -14,7 +14,7 @@ Create `hello.ctrlyoke.yaml` in your workspace:
 
 ```yaml
 harness: copilot-cli
-model: claude-sonnet-4.5
+model: claude-sonnet-4.6
 
 steps:
   - name: inspect
@@ -34,53 +34,13 @@ steps:
 Use one of these entry points:
 
 - `ctrlyoke: Load in ctrlyoke` from the **Run with ctrlyoke** submenu in the file context menu
-- `ctrlyoke: Select Prompt File` from the panel
+- `ctrlyoke: Select Prompt File` from the Command Palette
 - `ctrlyoke: Run with ctrlyoke` from the **Run with ctrlyoke** submenu if you want to load and
   start in one step
 
 The **Run with ctrlyoke** submenu groups Run, Load, Queue Steps, and Queue Steps Next in file
 context menus and the editor title toolbar. Queue Steps and Queue Steps Next are hidden until
 the active queue already contains at least one step.
-
-## Make a workflow durable
-
-**Workflows you build in the dashboard stay on your machine.** By default, run history is
-user-scoped under `<ctrlyokeStateHome>/projects/<slug>-<hash12>/.runs/`, keyed from the resolved
-`stateRoot`. It is outside the workspace and harness sandbox because only ctrlyoke reads it.
-Attachments and prompts remain ephemeral workspace-scoped files under `.ctrlyoke/` because the
-harness reads them through `@` references. User-level, project-keyed session history is a familiar
-pattern from Claude and Codex.
-
-**When a workflow turns out to be worth keeping, use Save As.** It writes a portable copy — the
-workflow file plus any assets it depends on — anywhere you choose in the repo. Save As copies
-inline attachments into a sibling `<workflow>.assets/` directory and inlines lone prompt-file
-bodies. The workflow file and its sibling assets directory can travel together to another
-directory or repository. That copy is yours to commit and share, but it carries generated
-dependencies only: references to repository files or committed prompt files still require their
-original subject matter. Files you author directly, such as a
-`.ctrlyoke.yaml`, are tracked like any other source file.
-
-The generated `.ctrlyoke/.gitignore` ignores `.runs/`, `attachments/`, `prompts/`, logs, temporary
-files, and other machine-local runtime data. It does not ignore exported `<workflow>.assets/`
-directories. Set `storage.runHistoryLocation` to `workspace` to keep history beside the repo at
-`<stateRoot>/.ctrlyoke/.runs/`; workspace mode still ignores `.runs/`. The setting controls
-locality and durability, not sharing. Since `ensureGitignore` is append-only, removing entries is
-restored on activation. Use the explicit run export described in
-`dev/backlog/RUN_EXPORT_PLAN.md` to share a run.
-
-Durable workflows are files you export with Save As, hand-author anywhere in the repo, or promote
-to a template. Templates are the reusable form of a workflow you run often; Save As creates a
-copy. Managed-worktree landing accepts deliberately tracked prompts, attachments, and other
-non-sensitive runtime files, but rejects non-ignored untracked runtime output. It always rejects
-`certs/`, `notifications/`, `temp/`, and `logs/`, even if tracked.
-
-Managed worktree runs use the initiating checkout's history. Opening a worktree directory directly
-as its own VS Code workspace gives it its own history. OneDrive/Dropbox home directories sync
-user-scoped history, but simultaneous runs of the same project on two synced machines are
-unsupported because PIDs and file locks are machine-local.
-
-`settings.json` is tracked by default as project configuration. Its `server.certPath` and
-`server.keyPath` fields are machine-local and should point to files available on each machine.
 
 ## 4. Run the workflow
 
@@ -109,6 +69,21 @@ steps:
 
         Fix the remaining issues.
 ```
+
+## Where your work is saved
+
+**Workflows you build in the dashboard stay on your machine.** By default, run history lives
+under `~/.ctrlyoke/projects/<slug>-<hash12>/.runs/`, outside the workspace, because only
+ctrlyoke reads it. To keep it beside the repo at `.ctrlyoke/.runs/` instead, set
+`storage.runHistoryLocation` to `workspace` in your user settings (`~/.ctrlyoke/settings.json`);
+this setting is ignored in a workspace settings file. Either way, `.runs/` stays git-ignored.
+
+**When a workflow turns out to be worth keeping, save it.** The **Save** button in the dashboard
+header writes a portable copy — the workflow file plus a sibling `<workflow>.assets/` directory
+for any inline attachments — anywhere you choose in the repo. That copy is yours to commit and
+share. Files you author directly, such as `hello.ctrlyoke.yaml` above, are tracked like any other
+source file. See [Durable workflows and generated files](/guide/concepts#durable-workflows-and-generated-files)
+for the details.
 
 ## Next steps
 

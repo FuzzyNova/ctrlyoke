@@ -14,7 +14,7 @@ hero:
       link: /reference/workflow-schema
     - theme: alt
       text: GitHub
-      link: https://github.com/nhickster/ctrlyoke
+      link: https://github.com/FuzzyNova/ctrlyoke
 
 features:
   - title: One workflow format
@@ -31,13 +31,13 @@ features:
 
 ctrlyoke turns AI assistants into a repeatable workflow runner. Instead of pasting one prompt at a time, you define a sequence of steps, choose a harness, and let ctrlyoke execute the work while keeping outputs, session history, and validation results together.
 
-It ships in two forms:
+It ships in three forms:
 
-| Surface           | What it is                                                                                                  |
-| ----------------- | ----------------------------------------------------------------------------------------------------------- |
-| VS Code extension | Dashboard UI, prompt editor, embedded terminal, schema validation, and harness orchestration inside VS Code |
-| `ctrlyoke` CLI    | Headless or interactive workflow execution from a terminal or CI job                                        |
-| `ctrlyoke-mcp`    | Standalone MCP server used for queue inspection and queue extension                                         |
+| Surface           | What it is                                                                                                     |
+| ----------------- | -------------------------------------------------------------------------------------------------------------- |
+| VS Code extension | Dashboard UI, prompt editor, embedded terminal, schema validation, and harness orchestration inside VS Code    |
+| `ctrlyoke` CLI    | Headless or interactive workflow execution from a terminal or CI job                                           |
+| `ctrlyoke-mcp`    | Standalone MCP server that lets an agent inspect and edit the workflow queue, read step output, and coordinate |
 
 ## Where to start
 
@@ -48,4 +48,4 @@ It ships in two forms:
 
 ## Current documentation scope
 
-This first docs pass focuses on the public surface that is most useful during setup and authoring: installation, workflow syntax, harness selection, key settings, CLI usage, and troubleshooting. Deeper per-harness and per-command coverage can expand without changing the site structure.
+These docs focus on the public surface that is most useful during setup and authoring: installation, workflow syntax, harness selection, key settings, CLI usage, and troubleshooting.

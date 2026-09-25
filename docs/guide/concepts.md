@@ -15,40 +15,44 @@ ctrlyoke currently supports:
 
 ## Workflow
 
-A workflow is a `.ctrlyoke.yaml`, `.ctrlyoke.json`, or `.prompt.md` file that describes work to run. YAML and JSON support multi-step automation. Markdown prompt files are the simplest one-step format.
+A workflow is a `.ctrlyoke.yaml` (or `.yml`), `.ctrlyoke.json`, or `.prompt.md` file that describes work to run. YAML and JSON support multi-step automation. Markdown prompt files are the simplest one-step format.
 
 ### Durable workflows and generated files
 
 Dashboard work is ephemeral. By default, run history is user-scoped at
-`<ctrlyokeStateHome>/projects/<slug>-<hash12>/.runs/`, keyed from the resolved
-`ExecutionWorkspace.stateRoot`; it is outside the workspace and harness sandbox because only
-ctrlyoke reads it. `storage.runHistoryLocation: "workspace"` keeps it beside the repo at
-`<stateRoot>/.ctrlyoke/.runs/` for locality or durability, but workspace mode still ignores
-`.runs/` and neither mode makes runs shareable. User-level, project-keyed session history is also
+`~/.ctrlyoke/projects/<slug>-<hash12>/.runs/` (or under `$CTRLYOKE_HOME` when that environment
+variable is set), keyed from the workspace path; it is outside the workspace and harness sandbox
+because only ctrlyoke reads it. Setting `storage.runHistoryLocation: "workspace"` keeps it beside
+the repo at `.ctrlyoke/.runs/` for locality or durability, but workspace mode still ignores
+`.runs/` and neither mode makes runs shareable. `storage` is a user-only setting: set it in
+`~/.ctrlyoke/settings.json` or the dashboard's Settings page, not in a workspace settings file. User-level, project-keyed session history is also
 the familiar pattern used by Claude and Codex.
 
 `attachments/` and `prompts/` stay ephemeral and workspace-scoped under `.ctrlyoke/`. Harnesses
 read those files through `@` references, so they must remain inside the workspace sandbox.
 
-Use **Save As** when a workflow is worth keeping: it writes the workflow plus its dependencies,
+Use the dashboard's **Save** button when a workflow is worth keeping: it writes the workflow plus its dependencies,
 copying inline attachments into a sibling `<workflow>.assets/` directory and inlining lone
 prompt-file bodies. A workflow you hand-author anywhere in the repo or promote to a template is
-also durable; templates are the reusable form of a workflow you run often, while Save As produces
+also durable; templates are the reusable form of a workflow you run often, while saving produces
 a copy. The workflow file and its sibling assets directory can be moved or copied together to
 another directory or repository and still resolve. This carries generated dependencies only;
 references such as `@src/foo.ts`, committed prompt files, and `.ctrlyoke/scripts/**` still require
 the repository they operate on.
 
-The generated `.ctrlyoke/.gitignore` continues to ignore workspace runtime entries. It is
-append-only, so deleting an entry is restored on the next activation; use the explicit run export
-described in `dev/backlog/RUN_EXPORT_PLAN.md` to share a run. Managed-worktree landing permits
+The generated `.ctrlyoke/.gitignore` ignores workspace runtime entries such as `.runs/`,
+`attachments/`, `prompts/`, `logs/`, and `temp/`, and it ignores itself. While that last
+`.gitignore` line is present, ctrlyoke treats the file as generated and restores any default entry
+you delete on the next activation. To take ownership of the file, delete its `.gitignore` line
+first; ctrlyoke then leaves it untouched. Sharing an individual run is not supported yet.
+Managed-worktree landing permits
 runtime files you deliberately track, including prompts and attachments, but blocks non-ignored
 untracked runtime output. It always blocks `certs/`, `notifications/`, `temp/`, and `logs/`, even
 if tracked, because those directories can contain secrets or ephemeral transport data.
-`settings.json` is tracked by default; the `server.certPath` and `server.keyPath` settings are
-machine-local paths.
+`settings.json` is tracked by default; the `server.tls.certPath` and `server.tls.keyPath` settings
+are machine-local paths.
 
-Managed worktree runs retain the initiating checkout's `stateRoot` and therefore its history.
+Managed worktree runs keep the initiating checkout's run history.
 Opening a worktree directory directly as its own VS Code workspace gives that directory its own
 history. Home directories under OneDrive or Dropbox sync user-scoped history, but simultaneous
 runs of the same project on two synced machines are unsupported because PIDs and file locks are
@@ -92,6 +96,7 @@ A session is the underlying conversation or thread maintained by a harness. ctrl
 - resume the immediately previous session with `resumeSession: true`
 - resume a specific earlier step with `sessionId: 1`
 - resume an exact harness session ID string
+- resume the most recent final step's session with `sessionId: finalStep`
 
 Session reuse is provider-aware. ctrlyoke does not try to resume a Claude session in Copilot or the other way around.
 
@@ -111,10 +116,10 @@ Prompts can include structured references that the prompt editor understands:
 | `$previous`, `$all`, `$step:1`                 | Inject prior ctrlyoke output                                                                                        |
 
 For `@`, `#selection:`, and `#sym:` references, a leading `./` or `../` resolves from the
-workflow file's directory. A lone `prompt:` value uses `./` differently: the leading prefix is
-mandatory path syntax, and its existing source-directory-then-workspace probing behavior is
-unchanged. The two forms are intentionally separate because lone prompt paths are inlined by Save
-As, while inline context references may be copied into the sibling assets directory.
+workflow file's directory. A `prompt:` value that is only a path to a prompt file works
+differently: it must start with `./`, and ctrlyoke looks for the file next to the workflow file
+first, then relative to the workspace root. Saving a workflow inlines such a prompt file's body,
+while inline context references may be copied into the sibling assets directory.
 
 ## End conditions and pre-conditions
 

@@ -11,8 +11,8 @@ model: sonnet
 steps:
   - name: analyze
     prompt: |
-      Inspect @src/ctrlyoke/ and identify the highest-risk
-      maintainability issue in this module.
+      Inspect @src/ and identify the highest-risk
+      maintainability issue in this code.
 
   - name: implement
     resumeSession: true
@@ -57,7 +57,8 @@ finalStep:
 
 ## After the first run
 
-Open the run's working file under run storage at `<workflowKey>/run-<timestamp>/` if you want to
-inspect persisted runtime metadata such as the resolved harness, model, session ID, and
-timestamps. User mode stores this under the ctrlyoke state home; workspace mode stores it under
-`<stateRoot>/.ctrlyoke/.runs/`.
+Open the run's working file, `workflow.ctrlyoke.json`, if you want to inspect persisted runtime
+metadata such as the resolved harness, model, session ID, and timestamps. Each run gets its own
+`.runs/<workflowKey>/run-<timestamp>/` folder. By default `.runs/` lives under
+`~/.ctrlyoke/projects/<slug>-<hash12>/`; with `storage.runHistoryLocation: "workspace"` it lives
+at `.ctrlyoke/.runs/` in the workspace. See [Run files](/reference/run-files) for the full layout.

@@ -6,22 +6,37 @@ ctrlyoke prompt files support structured references that help you attach the rig
 
 ```text
 @src/extension.ts
-@src/ctrlyoke/
+@src/core/
 @"path with spaces/file.ts"
 ```
 
 - `@file` attaches a full file
-- `@dir/` attaches directory structure
+- `@dir/` attaches the directory's file tree (names only, no file contents)
 - paths with spaces are quoted
+- an unquoted path must contain `/`, `\`, or `.`, so `@workspace` or an email address is not treated as a reference
+
+### Where paths resolve
+
+- A plain path such as `@src/app.ts` is relative to the workspace root. In a
+  multi-root workspace, a path whose first segment names a workspace folder
+  (`@backend/src/app.ts`) resolves inside that folder.
+- A path starting with `./` or `../` is relative to the workflow file's own
+  directory.
+- An absolute path is accepted only when it points inside the workspace or an
+  approved external root (see `trustedExternalRoots` in the
+  [YAML format](/workflows/yaml-format#workflow-scoped-external-roots)).
+  References that escape those roots are blocked and reported as skipped.
 
 ## Snippet references
 
 ```text
 #selection:src/cli.ts:45-103
-#sym.function:src/ctrlyoke/WorkflowExecutor.ts:runLoop:88-110
+#sym.method:src/core/WorkflowExecutor.ts:runLoop:88-110
+#selection:"docs/my notes.md":1-20
 ```
 
-- `#selection:` attaches a line range
+- `#selection:` attaches a line range (1-based, inclusive)
+- a path or symbol name that contains a space or `:` must be double-quoted
 - `#sym.<kind>:` attaches a symbol definition using file, symbol name, and a line range; this is the form ctrlyoke inserts. Hand-authored `#sym:` references remain valid and use the generic icon.
 
 ## Git references
@@ -33,7 +48,12 @@ ctrlyoke prompt files support structured references that help you attach the rig
 ~a1b2c3d4
 ```
 
-Use these when a prompt should reason over local changes, staged work, a stash entry, or a specific commit.
+Use these when a prompt should reason over local changes, staged work, a stash entry, or a specific commit:
+
+- `~diff` attaches unstaged working-tree changes (`git diff`)
+- `~staged` attaches staged changes (`git diff --cached`)
+- `~stash:N` attaches stash entry `N`
+- `~<hash>` attaches a commit's diff. The hash must be 7 to 40 hexadecimal characters.
 
 ## Prior output references
 
@@ -45,7 +65,15 @@ $allFinalStep
 $step:1,3-5
 ```
 
-These let a prompt pull prior ctrlyoke output into the prompt text.
+These let a prompt pull prior ctrlyoke output into the prompt text:
+
+- `$previous` pulls in the step just before this one, and `$all` pulls in every earlier queue step
+- `$finalStep` pulls in the most recent `finalStep` loop output, and `$allFinalStep` pulls in every earlier `finalStep` loop output
+- `$step:1,3-5` pulls in specific steps by their 1-based step number
+
+They are the inline form of the `priorContext` step property
+(`previous`, `all`, `finalStepPrevious`, `finalStepAll`, or an array such as
+`[1, 3]`).
 
 ## Context at a parallel boundary
 
@@ -57,6 +85,27 @@ earlier step before the group, but cannot reference another member in the same
 group. After the join, the following step can use numeric references to the
 flattened member step numbers (for example, `priorContext: [2, 3, 4]`) to
 consume the settled group output.
+
+## Other prompt tokens
+
+The same prompt text also recognizes:
+
+- `/skill:<name>`, which attaches a skill (see [Agents and skills](/workflows/agents-and-skills))
+- `/mcp:<server-id>`, which force-attaches a managed MCP server
+- `!NAME`, which grants the secret environment variable `NAME` to the step
+- `$preCondition:<field>` and `$endCondition:<field>` for condition output (see [End conditions](/workflows/end-conditions))
+- <code v-pre>{{name}}</code> for workflow `vars`
+
+If a reference cannot be resolved, ctrlyoke warns and runs the step anyway by
+default. Set `execution.strictContextResolution` to `fail` to stop the step
+instead.
+
+## Writing references literally
+
+References inside a triple-backtick fenced block are not expanded. Use a fence
+when you paste logs, examples, or earlier ctrlyoke instructions that contain
+`@`, `#`, `~`, `$`, `!`, or `/skill:` text. Single-backtick inline code does
+**not** suppress expansion.
 
 ## How context reaches CLI harnesses
 

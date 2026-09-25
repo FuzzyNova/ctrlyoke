@@ -6,7 +6,15 @@ The extension does, but the standalone `ctrlyoke` CLI does not.
 
 ## Do I have to use Copilot?
 
-No. ctrlyoke supports multiple harnesses. Copilot CLI is only the default.
+No. ctrlyoke supports six harnesses: GitHub Copilot CLI (`copilot-cli`), Claude Code CLI (`claude-cli`), Codex CLI (`codex-cli`), OpenCode CLI (`opencode-cli`), Qwen Code CLI (`qwen-cli`), and Antigravity CLI (`antigravity-cli`). Copilot CLI is only the default; change it with the `defaults.harness` setting, a workflow's `harness`, or `ctrlyoke run --harness`.
+
+## Can I run workflows in CI?
+
+Yes. Use `ctrlyoke run <file> --headless --json`, check the [exit code](/cli/ctrlyoke#exit-codes), and provide secrets as environment variables. Headless runs default to the `dangerouslyAllowAll` tool permission mode so they never wait on an approval prompt; pass `--permission-mode` or `--allow-tool`/`--deny-tool` to restrict them. The harness CLI must be installed and authenticated on the CI machine.
+
+## Where is my run history?
+
+By default under `~/.ctrlyoke/projects/<slug>-<hash12>/.runs/`, outside the repository. Set `storage.runHistoryLocation` to `workspace` in your user settings (it is user-scope only) to keep it in `.ctrlyoke/.runs/` instead. See [Run storage](/troubleshooting/#run-storage). After moving or renaming a repository, run `ctrlyoke history relink <oldPath> <newPath>` to keep its history.
 
 ## Can I run scripts without any AI step?
 

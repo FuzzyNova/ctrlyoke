@@ -12,14 +12,19 @@ capability details and version-scoped evidence.
 
 ## Notes
 
-- The standalone `ctrlyoke` CLI currently documents `codex-cli` in its `run` command help alongside `copilot-cli` and `claude-cli`.
-- Global settings include Codex-specific defaults for sandbox mode and approval policy.
+- Install the Codex CLI (`npm install -g @openai/codex`) and sign in before selecting this harness.
+- Codex uses sandbox and approval modes rather than individual tool patterns, so `allowedTools` / `deniedTools` are **not enforced** on this harness. The permission `mode` maps to Codex flags:
+  - `dangerouslyAllowAll` → `--dangerously-bypass-approvals-and-sandbox`
+  - `allowAll` → `--sandbox workspace-write --ask-for-approval on-request`
+  - `custom` → `-s <permissions.codexSandboxMode> -a <permissions.codexApprovalPolicy>`- `permissions.codexSandboxMode` (`read-only`, `workspace-write`, `danger-full-access`; default `workspace-write`) and `permissions.codexApprovalPolicy` (`untrusted`, `on-request`, `never`; default `on-request`) are only read in `custom` mode.
+- Headless runs use `codex exec`, which does not accept an approval flag, so only the sandbox flag is passed there.
+- Directories in `permissions.allowedExternalFileRoots` are passed to Codex as `--add-dir`.
 
 ## Example
 
 ```yaml
 harness: codex-cli
-model: gpt-5.2-codex
+model: gpt-5.5
 
 steps:
   - prompt: Review @src/cli.ts and simplify the option parsing where practical.

@@ -27,6 +27,8 @@ steps:
 
 ## Notes
 
-- The CLI harness model names differ from Copilot CLI model names, so keep model overrides harness-specific.
+- Install with `npm install -g @anthropic-ai/claude-code` and sign in before selecting this harness.
+- Claude uses short model aliases (`fable`, `sonnet`, `sonnet[1m]`, `opus`, `opus[1m]`, `haiku`), not Copilot-style IDs like `claude-sonnet-4.6`, so keep model overrides harness-specific.
 - Session IDs are harness-specific. Reuse only Claude sessions with Claude steps.
-- When you need custom tool permission behavior, configure it in workflow `toolPermissions` or global settings.
+- When you need custom tool permission behavior, configure it in workflow `toolPermissions` or `defaults.toolPermissions` in settings.
+- Directories in `permissions.allowedExternalFileRoots` are passed to Claude as `--add-dir`.

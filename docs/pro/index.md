@@ -9,10 +9,12 @@ enterprise and air-gapped activation.
 
 Individuals and small businesses can use ctrlyoke's local features for free.
 
-For commercial use, an organization needs Pro if it has **USD $10 million or
-more in annual revenue or 250 or more employees**. Either threshold is enough;
-the organization does not need to meet both. This applies even when the team
-uses only the free local and localhost features. The threshold is a
+For commercial use, every user at an organization with **USD $10 million or
+more in annual revenue or 250 or more employees** needs a Pro license, either a
+personal Pro license or an enterprise license that covers them. Either
+threshold is enough; the organization does not need to meet both. This applies
+even when the team uses only the free local and localhost features. Students
+and non-commercial academic research are exempt. The threshold is a
 contractual term, not an automatic technical check.
 
 The full [ctrlyoke Commercial License](https://ctrlyoke.dev/terms) is the
@@ -22,7 +24,7 @@ authoritative text. This page is a plain-language summary, not legal advice.
 
 - Remote and LAN dashboard access, including QR-to-phone connections.
 - HTTPS and self-signed certificate generation for remote connections.
-- Mobile push notifications.
+- Browser and mobile push notifications.
 - Air-gapped activation from a signed license file.
 - Custom icon colors.
 - Future Pro features included with the same perpetual license.
@@ -35,8 +37,8 @@ harnesses are included, with no workflow-step or workflow-count cap.
 
 ## Try remote access free
 
-Each new installation includes a 14-day remote-access trial. No credit card or
-account is required. After the trial, the local and `localhost` dashboard keeps
+Each new installation includes a one-time 14-day remote-access trial. No credit
+card or account is required. After the trial, the local and `localhost` dashboard keeps
 working for free; only remote reach requires Pro.
 
 ## Buy Pro
@@ -57,10 +59,15 @@ This is the normal flow for a connected machine:
 
 1. Purchase Pro, or retrieve the Keygen license key from your purchase email.
 2. Open the VS Code Command Palette (`Ctrl/Cmd+Shift+P`).
-3. Run **`ctrlyoke: Activate Pro License`**.
-4. Paste the Keygen license key when prompted.
-5. Confirm the success notification. Pro unlocks immediately; no restart is
+3. Run **`ctrlyoke: Activate Pro License`**. This opens the **License** tab of
+   the dashboard's Settings.
+4. Paste the key into **Activate with license key** and click **Activate**.
+5. Confirm the success message. Pro unlocks immediately; no restart is
    required.
+
+If the key is already active on its maximum number of machines, the License tab
+lists the **Activated machines** so you can deactivate one you no longer use
+and retry.
 
 Online activation registers the current machine with Keygen and caches a
 cryptographically signed license file for offline verification and short
@@ -76,10 +83,12 @@ Use this flow when the development machine cannot reach the internet:
 2. Transfer the file to the air-gapped machine using your approved removable
    media process.
 3. In VS Code, open the Command Palette and run
-   **`ctrlyoke: Activate Offline (Air-Gapped) License`**.
-4. Choose the signed license file in the file picker. If you do not select a
-   file, paste the complete signed license-file text when prompted.
-5. Confirm the success notification.
+   **`ctrlyoke: Activate Offline (Air-Gapped) License`**, then choose the
+   signed license file in the file picker. Alternatively, open the **License**
+   settings tab and paste the complete file text (starting with
+   `-----BEGIN LICENSE FILE-----`) under **Import offline license file**, then
+   click **Import license file**.
+4. Confirm the success notification.
 
 The file's Ed25519 signature is checked locally against the embedded Keygen
 public key. The import makes no network call. QR scanning is not part of the
@@ -87,10 +96,13 @@ current release; use the file picker or paste the file contents instead.
 
 ## Deactivate or manage a license
 
-Run **`ctrlyoke: Deactivate Pro License`** on a machine you no longer use to
-release its Keygen activation slot, then activate the license on another
-machine. Run **`ctrlyoke: Manage License`** to see the current Free/Pro status;
-the status is also visible in the VS Code status bar.
+**`ctrlyoke: Deactivate Pro License`** and **`ctrlyoke: Manage License`** both
+open the **License** settings tab, which shows the current Free/Pro status and
+any remaining trial days. Click **Deactivate Pro License** there on a machine
+you no longer use to release its activation slot, then activate the license on
+another machine. For an online license, the **Activated machines** list also
+lets you free a slot held by a different machine. The tier is also shown in the
+ctrlyoke item in the VS Code status bar.
 
 ## Questions
 

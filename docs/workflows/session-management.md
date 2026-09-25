@@ -5,7 +5,13 @@ Session management controls how one step picks up from another.
 ## The simple rule
 
 - use `resumeSession: true` when the next step should continue the previous compatible conversation
-- use `sessionId` when you need something more explicit
+- add `sessionId` (together with `resumeSession: true`) when you need to pick a specific conversation
+
+`resumeSession` defaults to the `defaults.resumeSession` setting, which is `false` out of the box, so every step starts a fresh session unless you opt in. It can be set per step or once at the workflow level.
+
+::: warning `sessionId` needs `resumeSession: true`
+`sessionId` only chooses _which_ session to resume. When the effective `resumeSession` is `false`, it is ignored and the step starts a fresh session.
+:::
 
 ## When to resume vs. start fresh
 
@@ -28,6 +34,10 @@ steps:
 
 The written artifact is the shared memory: it survives across fresh sessions and keeps each step focused on its slice.
 
+## Automatic resume
+
+With `resumeSession: true` and no `sessionId`, ctrlyoke walks backwards from the current step and resumes the most recent earlier step that ran on the **same harness** and recorded a session ID. If none exists (for example on the first step), a new session starts.
+
 ## Numeric step references
 
 Use a number to resume the session captured by an earlier step:
@@ -38,11 +48,12 @@ steps:
     prompt: Analyze @src/
 
   - name: implement
+    resumeSession: true
     sessionId: 1
     prompt: Implement the best fix from the analysis.
 ```
 
-`sessionId: 1` means "use the session from step 1".
+`sessionId: 1` means "use the session from step 1" (1-based). The reference should point to an earlier, completed step. If it points to the current or a later step, the referenced step has no recorded session yet, or it ran on a different harness, ctrlyoke logs a warning and starts a new session instead of failing the step.
 
 ## Exact session IDs
 
@@ -51,16 +62,23 @@ You can also provide a literal harness session ID:
 ```yaml
 steps:
   - prompt: Continue the earlier work.
+    resumeSession: true
     sessionId: "550e8400-e29b-41d4-a716-446655440000"
 ```
 
+A literal ID is passed straight to the harness; ctrlyoke does not check which harness created it.
+
 ## Final-step session reference
 
-The schema also supports `sessionId: "finalStep"` to resume the most recent final-step session.
+`sessionId: "finalStep"` resumes the session established by the most recent `finalStep` execution. It works on any step, not just the final step itself. On the first pass, before any final step has run, a new session starts.
 
-## Provider-aware behavior
+## Retries
 
-ctrlyoke does not blindly reuse sessions across harnesses. If a later step switches harness, the session resume logic only reuses compatible sessions.
+End-condition retries continue the step's session by default. Set `endCondition.resumeSessionOnRetry: false` to start a fresh session for each retry. See [End conditions](/workflows/end-conditions).
+
+## Harness-aware behavior
+
+ctrlyoke does not share sessions across harnesses. Automatic resume skips earlier steps that ran on a different harness, and a numeric reference to a step on another harness starts a new session. (A literal session ID is the exception — it is passed through unchecked.)
 
 ## Sessions at a parallel group boundary
 

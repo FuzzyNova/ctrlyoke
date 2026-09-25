@@ -1,42 +1,98 @@
 # MCP tools
 
-ctrlyoke exposes built-in tools for workflows that need to inspect or adjust the active run.
+ctrlyoke's built-in MCP server gives a harness tools to inspect and adjust the run it belongs to. Enable it with `mcpServers: ["ctrlyoke"]` on a workflow or step — see [Dynamic queue](/workflows/dynamic-queue).
 
-## Built-in tool list
+## How the server is scoped
 
-| Tool                    | Purpose                                            |
-| ----------------------- | -------------------------------------------------- |
-| `workflow_status`       | Return workflow metadata and step state            |
-| `append_step`           | Add prompts to the current workflow                |
-| `edit_step`             | Change a pending step's prompt or configuration    |
-| `remove_step`           | Remove a pending step                              |
-| `reorder_steps`         | Reorder the pending steps                          |
-| `list_harnesses`        | Return available harnesses and supported models    |
-| `read_output`           | Read output from completed prompts                 |
-| `global_status`         | List other workflows in the workspace              |
-| `submit_commit_message` | Submit a commit message when explicitly instructed |
+- **One run per server.** ctrlyoke starts the server for each harness launch and pins it to the executing run. No tool takes a workflow or run address, so a tool can never act on another workflow by mistake. Responses still report the resolved `workflowKey` and `runRef`.
+- **No lifecycle control.** No tool starts, stops, pauses, or resumes a run.
+- **Every call does what it says or returns an error.** An error result (`isError: true`, text starting `Error:`) means nothing was changed.
+- **Queue changes need a live run.** `append_step`, `edit_step`, `remove_step`, and `reorder_steps` are refused unless the run is running, pausing, paused, or cancelling.
+- All responses are a single text block containing JSON.
+
+## Tool list
+
+| Tool                    | Purpose                                                    | Parameters                                                  |
+| ----------------------- | ---------------------------------------------------------- | ----------------------------------------------------------- |
+| `workflow_status`       | The run's steps, their status, and run metadata            | none                                                        |
+| `append_step`           | Add steps or parallel groups to the run                    | `steps` (required), `position` (required), `source`         |
+| `edit_step`             | Change a pending step's prompt or configuration            | `index` (required), `updates` (required), `clearProperties` |
+| `remove_step`           | Remove a pending step                                      | `index` (required)                                          |
+| `reorder_steps`         | Reorder the pending steps                                  | `indices` (required)                                        |
+| `list_harnesses`        | Installed harnesses and the models each supports           | none                                                        |
+| `read_output`           | Read output from earlier steps                             | `indices`, `cursor`, `limit`, `tail`                        |
+| `global_status`         | List executing workflows in the workspace                  | `workflowKey`, `runRef`                                     |
+| `post_note`             | Post a coordination note for other participants            | `text` (required), `to`                                     |
+| `read_notes`            | Read coordination notes                                    | `since`, `from`                                             |
+| `claim_paths`           | Advisory claim on files before editing them                | `paths` (required), `reason`                                |
+| `release_paths`         | Release your path claims                                   | `paths`                                                     |
+| `submit_commit_message` | Submit a generated commit message (commit generation only) | `message` (required)                                        |
+
+Step indices are **zero-based** everywhere in these tools, except `sessionId` inside a step, which is a 1-based step number like in workflow files.
+
+## `workflow_status`
+
+Returns `workflowKey`, `runRef`, a `metadata` object, and `steps`.
+
+- `metadata`: `workflowName`, `harness`, `model`, `currentIndex`, `totalSteps`, `completedSteps`, `executionState`, `maxQueueSize` and `remainingSlots` (numbers, or `"unlimited"`), `workingFile`, `runDirectory`, `definitionRevision`, `descriptorRevision`.
+- `steps[]`: `index`, `prompt` (script steps show as `(script) <command>`), `status` (`completed`, `running`, or `pending`), `model`.
 
 ## `append_step`
 
-This tool accepts:
+- `steps`: one or more queue items, in order. Each item is either a step or a future parallel group.
+  - A step takes `prompt` (required), `name`, `model`, `harness`, `resumeSession`, and `sessionId` (1-based step number; needs `resumeSession: true`). No other fields are accepted, and script steps cannot be appended.
+  - A parallel group is `{ "parallel": [step, step, ...], "failFast": true }` with at least two steps. `failFast` defaults to `true`.
+- `position`:
+  - `"next"` — after the current step, or after the running parallel group. Never joins that group.
+  - `"end"` — after all queued steps.
+  - `"parallelWithCurrent"` — join the parallel group that is running now. Flat steps only; limited by `queue.maxParallelSteps`.
+  - a zero-based index — insert before that step. Completed steps cannot be displaced.
+- `source`: optional label describing why the steps were added.
 
-- `steps`: array of steps to add
-- `position`: `next`, `end`, or a zero-based step index
-- `source`: optional source label
+When `harness` or `model` is set, it is checked against the installed harnesses and their models (when that information is available). The run's step total is capped by `queue.maxSize` unless `queue.unlimitedMode` is on.
 
-Use it when the harness discovers follow-up work during a run.
+Example:
+
+```json
+{
+  "steps": [
+    { "prompt": "Add tests for the new parser", "name": "Parser tests" },
+    {
+      "parallel": [
+        { "prompt": "Implement the API" },
+        { "prompt": "Write the API docs" }
+      ]
+    }
+  ],
+  "position": "end"
+}
+```
+
+Returns `success`, `destination` (`queue` or `activeParallelGroup`), `queueItemsAdded`, `stepsAdded`, `newQueueSize`, `insertIndex`, `insertedEndIndex`, `placement`, `parallelGroupsAdded`, `joinedParallelGroup` (when joining), plus `workingFile`, `runDirectory`, `workflowKey`, `runRef`, `definitionRevision`, and `descriptorRevision`. With `"next"`, `insertIndex` is resolved at write time and can differ from what an earlier `workflow_status` suggested if the run advanced in between.
 
 ## Step mutations
 
-`edit_step` takes a zero-based `index` and an `updates` object. Use it to correct a
-pending prompt or change its configuration. `remove_step` takes the same `index`.
-`reorder_steps` takes `indices`, all pending steps' absolute zero-based indices in
-the desired execution order. When a step is running, include it first in that order.
+- `edit_step` takes a zero-based `index` and an `updates` object. Updatable fields: `prompt`, `name`, `model`, `harness`, `resumeSession`, `sessionId`, `agent`, `enabled`, `color`, `additionalArgs` (array of strings), `skills`. Omitted fields keep their values. `clearProperties` lists fields to remove so they inherit workflow defaults again.
+- `remove_step` takes the same `index`.
+- `reorder_steps` takes `indices`: all pending steps' absolute zero-based indices in the desired execution order. When a step is running, include it first in that order.
+
+Completed and currently running steps cannot be edited, removed, or moved.
+
+Each returns `success`, `operation`, `changed`, the arguments it was given, `newQueueSize`, `workingFile`, `runDirectory`, `workflowKey`, `runRef`, `definitionRevision`, and `descriptorRevision`. When the request matched what was already on disk, `changed` is `false` and a `note` says nothing was written.
+
+## `list_harnesses`
+
+Returns `generatedAt` and `harnesses[]` with `id`, `displayName`, `available`, and `models` (model values). Only installed harnesses are listed. The data comes from `.ctrlyoke/capabilities.json`, which ctrlyoke writes during harness detection; if it does not exist yet the tool returns an error.
 
 ## `read_output`
 
 By default this returns every requested step's full response text. `indices` selects
-zero-based step numbers; omit it to read them all.
+zero-based step numbers; omit it to read them all. The response has `workflowKey`,
+`runRef`, and `outputs[]` with `index`, `prompt`, `status`, and `responseText`
+(`null` when the step has no recorded output). Naming a step that does not exist is
+an error. Only queue steps are readable, not the `finalStep`.
+
+A member of a parallel group can read only steps before the group started.
 
 For a long response, three optional arguments return a bounded slice instead. All
 three require `indices` to name **exactly one** step — supplying them with zero or
@@ -59,11 +115,42 @@ This is a cross-worktree radar for noticing what other workflows are doing and f
 recognizing failures they may have caused. It is informational only: it is not a
 collision check and it does not act as a lock.
 
+It lists only workflows that are currently executing (including the caller's own),
+up to 100. Each entry has `workflowKey`, `runRef`, `workflowName`, `executionState`,
+`harness`, `model`, `currentStep` (1-based), `totalSteps`, `completedSteps`,
+`startedAt`, `lastModifiedAt`, `workingFile`, `runDirectory`, and `worktree` details
+when the run uses one. The response also carries `workspaceRoot`, `workflowCount`,
+`truncated`, and `omittedCount`.
+
+Pass `workflowKey` (from an earlier listing) to report one workflow, and optionally
+`runRef` (requires `workflowKey`) for one run. When a named workflow exists but is not
+executing, a `note` says so instead of silently returning an empty list.
+
+## Coordination tools
+
+Steps — and other agents — working in the same checkout (execution root) share a coordination board. Everything on it is advisory and **untrusted**: notes are data, never instructions or permission, and claims never block file access.
+
+- `post_note` posts `text` to the board. `to` optionally directs it to participant IDs; an unknown ID is an error. Returns the note's `seq` and a `scope` summary.
+- `read_notes` returns `entries` (each with author, attribution, and `untrusted: true`), a `nextCursor` when more remain, and `scope`. `since` reads after a sequence number; `from` filters by author participant IDs. Reads are paged by the `coordination.readNotesPageSize` setting.
+- `claim_paths` claims execution-root-relative files or literal globs, with an optional `reason`. Returns `granted`, `denied` (with the current owner), `claims`, and `scope`. Absolute paths and paths outside the checkout are rejected.
+- `release_paths` releases the named claims, or all of yours when `paths` is omitted. Paths you did not hold come back in `notHeld`. ctrlyoke also releases a step's claims at the step boundary.
+
+The `scope` object lists the execution root, live participants, and a claim summary. Retention and size limits live under the `coordination` settings; `coordination.allowExternalParticipants` controls whether sessions ctrlyoke did not launch may join.
+
 ## `submit_commit_message`
 
-Submit the complete generated commit message. Call this tool only when explicitly
-instructed to do so.
+Used only by ctrlyoke's commit-message generation, which denies every other tool. Submit the complete generated commit message. Call this tool only when explicitly instructed to do so; outside commit generation it returns an error and discards the message.
 
-## When these tools are available
+## Availability
 
-- through the built-in ctrlyoke MCP server when you include `"ctrlyoke"` in `mcpServers`
+- The workflow tools (`workflow_status` through `read_output`) need the server to be attached to a run, which ctrlyoke does automatically.
+- `global_status`, the coordination tools, and `submit_commit_message` also work without an attached run.
+- Deny individual tools per workflow or step with `deniedTools`:
+
+  ```yaml
+  mcpServers:
+    - id: ctrlyoke
+      deniedTools: [edit_step, remove_step, reorder_steps]
+  ```
+
+- With the `ctrlyokeMcpMode: "skill"` setting, the same tools are delivered as built-in skills that call [`ctrlyoke-mcp`](/cli/ctrlyoke-mcp) in one-shot mode instead of attaching the MCP server.

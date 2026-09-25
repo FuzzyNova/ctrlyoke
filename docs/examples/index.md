@@ -7,7 +7,7 @@ These examples are intentionally small so you can adapt them quickly.
 ```yaml
 harness: copilot-cli
 steps:
-  - prompt: Explain the structure of @src/ctrlyoke/ and point out one coupling problem.
+  - prompt: Explain the structure of @src/ and point out one coupling problem.
 ```
 
 ## Implement with validation
