@@ -1568,7 +1568,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
           )}
           <button
             type="button"
-            className="ml-1 flex h-5 w-5 shrink-0 items-center justify-center rounded opacity-60 transition-all hover:bg-toolbar-hover-bg hover:opacity-100"
+            className="mr-3 flex h-5 w-5 shrink-0 items-center justify-center rounded opacity-60 transition-all hover:bg-toolbar-hover-bg hover:opacity-100"
             onClick={(e) => {
               e.stopPropagation();
               handleResetAllToDefault();
