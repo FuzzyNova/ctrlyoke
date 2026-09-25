@@ -336,7 +336,7 @@ the same edit.
    **0.5 Shared defaults (§3b).** Resolved: workflow definitions are shared through settings `defaults`,
    cross-file schema docs and Ajv coverage are in place, every workflow property is accounted for in the
    defaults coverage test, and `defaults.priorContext` uses `PriorContext`. Both schema artifacts are regenerated.
-1. **Mechanism.** Add `SchemaUiMetadata.ts`, the generated `SchemaDescriptions.ts` plus its `--check`, and `schemaPropertyLabels.ts`. Add `schemaPath` to `CustomSelect` and `FormField`. `SettingInputRow` / `SettingToggleRow` emit title and ARIA from `path`. This alone gives every settings control (≈140) the uniform rule.
+1. **Mechanism.** The infrastructure half is landed: typed `SchemaUiMetadata.ts` option tables, the generated `SchemaDescriptions.ts` plus its `--check`, and `schemaPropertyLabels.ts`. The shared `SelectOption` contract now lives in `src/types`. UI wiring remains for the next implementation step: add `schemaPath` to `CustomSelect` and `FormField`, then have `SettingInputRow` / `SettingToggleRow` emit title and ARIA from `path`. This alone gives every settings control (≈140) the uniform rule.
 2. **Relabel HIGH + MEDIUM** (§4.1, 4.2, 4.4, 4.5). UI-label fixes only, following the §1.1 vocabulary: no "Off" option labels, "None" for every "none of this thing" choice, "Never" only for timing enums, `Inherit (<label>)` for omission, and no Yes/No options.
 3. **Migrate option arrays** (§4.7 C7, all inline `options={[…]}` in §4) to the meta tables. Delete the duplicates, including `WorkflowStepsPanel`'s short maps (they can use `meta.short`) and `PERMISSION_MODE_VISUALS`. Wire the path through the remaining editors (SCE, EBE, HooksEditor, McpServerForm, PriorContextSelect, quick pickers). Standardize the Inherit label (M19).
 4. **Schema renames**:
@@ -347,6 +347,12 @@ the same edit.
    Update `CtrlYokeSettings.ts`, `CtrlYokeConfigService`, `ConfigurationUtils` keys, `SETTING_PATHS`, and the parity tests. Regenerate the docs and YAML.
 
 5. **Merge with `SETTINGS_SEARCH_PLAN`.** Its catalog's `label` / `description` resolve from this metadata, and its `settingKey` migration becomes the same edit.
+
+The metadata labels follow schema humanization and the §1.1 vocabulary: `None` for
+explicit absence, `Never` for notification/mobile timing and Codex approval policy,
+unified condition labels (`Continue`, `Retry`, `Stop Workflow`, `Skip Prompt`),
+and the same `All` label for the `all` value across tables. Harness brand names,
+the `yolo` permission nickname, and script comparison symbols carry alias reasons.
 
 ## 6. Tests and checks
 

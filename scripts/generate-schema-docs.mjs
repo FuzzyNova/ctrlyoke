@@ -368,7 +368,7 @@ function firstSentence(text) {
 // Schema helpers
 // ---------------------------------------------------------------------------
 
-function schemaForPointer(schema, pointer, siblingSchemas = {}) {
+export function schemaForPointer(schema, pointer, siblingSchemas = {}) {
   if (pointer.startsWith("#")) return schema;
   const separator = pointer.indexOf("#");
   const schemaFile = separator === -1 ? pointer : pointer.slice(0, separator);
@@ -379,7 +379,7 @@ function schemaForPointer(schema, pointer, siblingSchemas = {}) {
   return pointerSchema;
 }
 
-function qualifyLocalReferences(schema, schemaFile) {
+export function qualifyLocalReferences(schema, schemaFile) {
   if (Array.isArray(schema)) {
     return schema.map((value) => qualifyLocalReferences(value, schemaFile));
   }
@@ -394,7 +394,7 @@ function qualifyLocalReferences(schema, schemaFile) {
   );
 }
 
-function resolvePointer(schema, pointer, siblingSchemas = {}) {
+export function resolvePointer(schema, pointer, siblingSchemas = {}) {
   const pointerSchema = schemaForPointer(schema, pointer, siblingSchemas);
   const separator = pointer.indexOf("#");
   const localPointer = pointer.startsWith("#")
@@ -416,6 +416,33 @@ function resolvePointer(schema, pointer, siblingSchemas = {}) {
       }
       return node[key];
     }, pointerSchema);
+}
+
+/** Resolve a schema node's reference chain, including refs into sibling schemas. */
+export function resolveSchemaRefs(rawSchema, schema, siblingSchemas = {}) {
+  let current = rawSchema;
+  let currentSchema = schema;
+  const seen = new Set();
+  while (current?.$ref) {
+    const ref = current.$ref;
+    if (seen.has(ref)) throw new Error(`Circular schema reference: ${ref}`);
+    seen.add(ref);
+    const separator = ref.indexOf("#");
+    const schemaFile = ref.startsWith("#")
+      ? undefined
+      : ref.slice(0, separator);
+    const resolvedSchema = schemaForPointer(currentSchema, ref, siblingSchemas);
+    const referenced = resolvePointer(currentSchema, ref, siblingSchemas);
+    const { $ref: _ref, ...siblings } = current;
+    current = {
+      ...(schemaFile
+        ? qualifyLocalReferences(referenced, schemaFile)
+        : referenced),
+      ...siblings,
+    };
+    currentSchema = resolvedSchema;
+  }
+  return current;
 }
 
 function isRemoved(schema) {
@@ -458,38 +485,8 @@ class SchemaRenderer {
 
   /** Inline every `$ref` that does not point at a documented section. */
   deref(schema) {
-    let current = schema;
-    let currentSchema = this.schema;
-    const seen = new Set();
-    while (current.$ref && !this.refTargets.has(current.$ref)) {
-      if (seen.has(current.$ref)) {
-        throw new Error(`Circular schema reference: ${current.$ref}`);
-      }
-      seen.add(current.$ref);
-      const { $ref, ...siblings } = current;
-      const separator = $ref.indexOf("#");
-      const schemaFile = $ref.startsWith("#")
-        ? undefined
-        : $ref.slice(0, separator);
-      const resolvedSchema = schemaForPointer(
-        currentSchema,
-        $ref,
-        this.siblingSchemas
-      );
-      const referenced = resolvePointer(
-        currentSchema,
-        $ref,
-        this.siblingSchemas
-      );
-      current = {
-        ...(schemaFile
-          ? qualifyLocalReferences(referenced, schemaFile)
-          : referenced),
-        ...siblings,
-      };
-      currentSchema = resolvedSchema;
-    }
-    return current;
+    if (this.refTargets.has(schema.$ref)) return schema;
+    return resolveSchemaRefs(schema, this.schema, this.siblingSchemas);
   }
 
   typeLabel(raw) {

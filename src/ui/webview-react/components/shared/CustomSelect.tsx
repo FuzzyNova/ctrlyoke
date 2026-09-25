@@ -11,16 +11,14 @@ import {
   type ValidationSeverity,
 } from "@utils/dropdownValidation";
 import { Icon } from "./Icon";
+import type { SelectOption as SharedSelectOption } from "@root/types/SelectOption";
 
-export interface SelectOption {
-  value: string;
-  label: string;
-  /** Optional muted secondary text rendered below the label in the menu. */
-  description?: string;
+interface CustomSelectOption extends SharedSelectOption {
   /** Optional className override for the description text (defaults to muted). */
   descriptionClassName?: string;
-  disabled?: boolean;
 }
+
+export type { SelectOption } from "@root/types/SelectOption";
 
 const OPTION_DESCRIPTION_MAX_LENGTH = 120;
 
@@ -55,7 +53,7 @@ interface CustomSelectProps extends HideableProps {
   id?: string;
   value: string;
   onChange: (value: string) => void;
-  options: SelectOption[];
+  options: CustomSelectOption[];
   disabled?: boolean;
   className?: string;
   triggerAriaLabel?: string;
@@ -168,7 +166,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
     !inline
   );
 
-  const canHide = (option: SelectOption) =>
+  const canHide = (option: CustomSelectOption) =>
     hideEnabled &&
     !nonHideable.includes(option.value) &&
     option.value !== value && // never hide the currently-selected value

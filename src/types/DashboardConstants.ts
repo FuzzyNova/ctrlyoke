@@ -2504,6 +2504,26 @@ export const TERMINAL_MOBILE_CONTROL_BAR = {
   NEVER: "never",
 } as const;
 
+/** Codex sandbox permission levels accepted by settings and Codex CLI. */
+export const CODEX_SANDBOX_MODES = {
+  READ_ONLY: "read-only",
+  WORKSPACE_WRITE: "workspace-write",
+  DANGER_FULL_ACCESS: "danger-full-access",
+} as const;
+
+export type CodexSandboxMode =
+  (typeof CODEX_SANDBOX_MODES)[keyof typeof CODEX_SANDBOX_MODES];
+
+/** Codex confirmation policy accepted by settings and Codex CLI. */
+export const CODEX_APPROVAL_POLICIES = {
+  UNTRUSTED: "untrusted",
+  ON_REQUEST: "on-request",
+  NEVER: "never",
+} as const;
+
+export type CodexApprovalPolicy =
+  (typeof CODEX_APPROVAL_POLICIES)[keyof typeof CODEX_APPROVAL_POLICIES];
+
 export type TerminalCursorStyle =
   (typeof TERMINAL_CURSOR_STYLES)[keyof typeof TERMINAL_CURSOR_STYLES];
 export type TerminalMobileControlBar =

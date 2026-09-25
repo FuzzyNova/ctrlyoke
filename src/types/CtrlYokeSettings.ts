@@ -1,5 +1,7 @@
 import {
   BROWSER_NOTIFICATION_MODES,
+  CODEX_APPROVAL_POLICIES,
+  CODEX_SANDBOX_MODES,
   CONTEXT_RESOLUTION_FAILURE_MODES,
   NOTIFICATION_EVENT_MODES,
   TERMINAL_CURSOR_STYLES,
@@ -10,6 +12,8 @@ import {
   type NotificationEventMode,
   type BrowserNotificationMode,
   type ContextResolutionFailureMode,
+  type CodexApprovalPolicy,
+  type CodexSandboxMode,
   type HookEvent,
   type ExecutionMode,
   type PermissionMode,
@@ -141,8 +145,8 @@ export interface CtrlYokeGlobalSettings {
   // Permissions (harness-specific advanced settings)
   permissions: {
     // Codex CLI-specific
-    codexSandboxMode: "read-only" | "workspace-write" | "danger-full-access";
-    codexApprovalPolicy: "untrusted" | "on-request" | "never";
+    codexSandboxMode: CodexSandboxMode;
+    codexApprovalPolicy: CodexApprovalPolicy;
     /** Settings for providers that install a global statusline command. */
     statusLineTracking: Record<
       StatusLineTrackingProvider,
@@ -456,8 +460,8 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     runHistoryLocation: RUN_HISTORY_LOCATIONS.USER,
   },
   permissions: {
-    codexSandboxMode: "workspace-write",
-    codexApprovalPolicy: "on-request",
+    codexSandboxMode: CODEX_SANDBOX_MODES.WORKSPACE_WRITE,
+    codexApprovalPolicy: CODEX_APPROVAL_POLICIES.ON_REQUEST,
     statusLineTracking: {
       useDifferentFormatPerHarness: false,
       sharedFormat: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({
