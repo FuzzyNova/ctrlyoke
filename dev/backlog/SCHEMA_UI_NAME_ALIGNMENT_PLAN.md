@@ -324,6 +324,13 @@ Legend. **Sev**: H = semantic mismatch, M = intentional alias, L = humanization.
 
 ## 5. Phases
 
+**Execution order.** The phases run in the order 0.5 → 0 → 4 → 1 → 2/3 → 5. Phase 4, the schema
+renames, runs _before_ the mechanism so the meta tables and parity tests are written once against
+the final values. The other order would mean writing `never` / `off` rows and then renaming them,
+and the "nothing vocabulary" test could not pass until Phase 4 landed. Phases 2 and 3 run together,
+one surface at a time, because moving an option array into its meta table and fixing its label is
+the same edit.
+
 0. **Correctness (H3).** H1, H1b and H4 are done (schema `passthrough` → `none`, spawn-time `none` handling, settings enum). Remaining: change `onError` to `stopWorkflow` in both schemas, then regenerate with `npm run generate-schema-docs && npm run generate-schema`.
    **0.5 Shared defaults (§3b).** Do this before H3 so the `onError` rename is a single edit. Lift the
    inline definitions, `$ref` them from settings `defaults`, extend `generate-schema-docs.mjs` and the Ajv
