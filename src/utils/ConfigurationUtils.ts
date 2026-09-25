@@ -15,6 +15,7 @@ import type {
   StatusLineTrackingSettings,
   TerminalSettings,
 } from "../types/CtrlYokeSettings";
+import type { PriorContext } from "../types/CtrlYokeTypes";
 import type { ToolPermissionConfig } from "../types/ExecutionPropertyTypes";
 import type { StatusLineSegment } from "./StatuslineFormat";
 import {
@@ -1016,7 +1017,7 @@ export const ConfigurationUtils = {
   /**
    * Get the default prior context injection mode for workflow prompts.
    */
-  getPriorContext(): string {
+  getPriorContext(): PriorContext {
     return configService.get(CONFIG_KEYS.DEFAULTS).priorContext;
   },
 
@@ -1234,7 +1235,7 @@ export const ConfigurationUtils = {
   /**
    * Set the default prior context for new workflows
    */
-  async setDefaultPriorContext(priorContext: string): Promise<void> {
+  async setDefaultPriorContext(priorContext: PriorContext): Promise<void> {
     await configService.set(
       CONFIG_KEYS.DEFAULTS_PRIOR_CONTEXT,
       priorContext,

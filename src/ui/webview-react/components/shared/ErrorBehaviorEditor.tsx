@@ -4,13 +4,13 @@ import type { ErrorBehavior } from "@root/types/CtrlYokeTypes";
 import { CONDITION_ACTIONS } from "@root/types/DashboardConstants";
 
 const ERROR_ACTION_OPTIONS = [
-  { value: "stop", label: "Stop Workflow" },
-  { value: "retry", label: "Retry Step" },
-  { value: "continue", label: "Continue Workflow" },
+  { value: CONDITION_ACTIONS.STOP_WORKFLOW, label: "Stop Workflow" },
+  { value: CONDITION_ACTIONS.RETRY, label: "Retry Step" },
+  { value: CONDITION_ACTIONS.CONTINUE, label: "Continue Workflow" },
 ] as const;
 
 const DEFAULT_ERROR_BEHAVIOR: ErrorBehavior = {
-  onError: "stop",
+  onError: CONDITION_ACTIONS.STOP_WORKFLOW,
 };
 
 function normalizeErrorBehavior(value: ErrorBehavior | null | undefined) {

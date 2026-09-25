@@ -83,7 +83,6 @@ import {
   PERMISSION_CAPABILITY_KEYS,
   PROMPT_PROPERTIES,
   RESUME_SESSION_SELECTIONS,
-  WORKFLOW_EXECUTION_OUTCOMES,
   SETTING_SCOPES,
 } from "../../../../types/DashboardConstants";
 import { getAutoResumePreview } from "../../utils/autoResumePreview";
@@ -684,11 +683,11 @@ const WorkflowPropertiesPanelInner: React.FC<{
         );
       }
       // Deep comparison for errorBehavior — null/undefined both fall back to
-      // the default stop outcome, so they're equivalent to an explicit
-      // { onError: WORKFLOW_EXECUTION_OUTCOMES.STOP } for this comparison.
+      // the default stopWorkflow policy, so they're equivalent to an explicit
+      // { onError: CONDITION_ACTIONS.STOP_WORKFLOW } for this comparison.
       if (property === PROMPT_PROPERTIES.ERROR_BEHAVIOR) {
         const normalize = (v: unknown) =>
-          v ?? { onError: WORKFLOW_EXECUTION_OUTCOMES.STOP };
+          v ?? { onError: CONDITION_ACTIONS.STOP_WORKFLOW };
         return (
           JSON.stringify(normalize(workflowValue)) !==
           JSON.stringify(normalize(globalSettings.defaultErrorBehavior))
@@ -1470,7 +1469,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
         PERMISSION_MODES.ALLOW_ALL);
   const effectiveErrorBehavior = workflowProperties.errorBehavior ??
     globalSettings.defaultErrorBehavior ?? {
-      onError: WORKFLOW_EXECUTION_OUTCOMES.STOP,
+      onError: CONDITION_ACTIONS.STOP_WORKFLOW,
     };
   // Fall back to global settings when workflow doesn't have lists yet
   const effectiveAllowedTools =

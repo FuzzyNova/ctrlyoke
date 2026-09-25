@@ -224,7 +224,7 @@ describe("enterEditMode", () => {
     store().enterEditMode(1, makePromptStep({ errorBehavior: null }));
 
     expect(store().properties.errorBehavior).toEqual({
-      onError: "stop",
+      onError: "stopWorkflow",
     });
   });
 
@@ -552,10 +552,10 @@ describe("getPromptProperties", () => {
     store().setProperty("errorBehavior", null);
 
     expect(store().properties.errorBehavior).toEqual({
-      onError: "stop",
+      onError: "stopWorkflow",
     });
     expect(store().getPromptProperties().errorBehavior).toEqual({
-      onError: "stop",
+      onError: "stopWorkflow",
     });
   });
 });

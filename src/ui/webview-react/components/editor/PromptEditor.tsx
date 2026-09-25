@@ -1574,7 +1574,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
                       setProperty("errorBehavior", undefined);
                     } else {
                       setProperty("errorBehavior", {
-                        onError: "stop",
+                        onError: CONDITION_ACTIONS.STOP_WORKFLOW,
                       } as ErrorBehavior);
                     }
                   }}

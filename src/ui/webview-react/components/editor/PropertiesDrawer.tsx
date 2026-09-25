@@ -21,7 +21,6 @@ import {
   NONE_OPTION,
   PROMPT_PROPERTIES,
   RESUME_SESSION_SELECTIONS,
-  WORKFLOW_EXECUTION_OUTCOMES,
   EXECUTION_MODE_HELP_TEXT,
   EXECUTION_MODE_OPTIONS,
   PERMISSION_MODES,
@@ -1052,7 +1051,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     setProperty(PROMPT_PROPERTIES.ERROR_BEHAVIOR, undefined);
                   } else {
                     setProperty(PROMPT_PROPERTIES.ERROR_BEHAVIOR, {
-                      onError: WORKFLOW_EXECUTION_OUTCOMES.STOP,
+                      onError: CONDITION_ACTIONS.STOP_WORKFLOW,
                     } as ErrorBehavior);
                   }
                 }}

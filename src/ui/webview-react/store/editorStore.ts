@@ -117,7 +117,7 @@ function normalizePromptErrorBehavior(
   errorBehavior: ErrorBehavior | null | undefined
 ): ErrorBehavior | undefined {
   if (errorBehavior === null) {
-    return { onError: "stop" };
+    return { onError: CONDITION_ACTIONS.STOP_WORKFLOW };
   }
 
   return errorBehavior;

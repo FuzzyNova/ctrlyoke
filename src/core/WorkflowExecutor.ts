@@ -3413,7 +3413,7 @@ export class WorkflowExecutor {
     switch (errorBehavior?.onError) {
       case CONDITION_ACTIONS.RETRY:
         return CONDITION_ACTIONS.RETRY;
-      case WORKFLOW_EXECUTION_OUTCOMES.CONTINUE:
+      case CONDITION_ACTIONS.CONTINUE:
         return CONDITION_ACTIONS.CONTINUE;
       default:
         return CONDITION_ACTIONS.STOP_WORKFLOW;
@@ -3439,17 +3439,17 @@ export class WorkflowExecutor {
     completeAttemptOnContinue: boolean = false
   ): Promise<PhaseDisposition> {
     const policy = errorBehavior ?? {
-      onError: WORKFLOW_EXECUTION_OUTCOMES.STOP,
+      onError: CONDITION_ACTIONS.STOP_WORKFLOW,
     };
     const maxRetries = policy.maxRetries ?? 0;
     const canRetry = canRetryErrorBehavior(policy, attemptIndex);
     const actionText = canRetry
       ? `retry ${attemptIndex + 1} of ${maxRetries === -1 ? "unlimited" : maxRetries}`
-      : policy.onError === WORKFLOW_EXECUTION_OUTCOMES.CONTINUE
-        ? WORKFLOW_EXECUTION_OUTCOMES.CONTINUE
+      : policy.onError === CONDITION_ACTIONS.CONTINUE
+        ? CONDITION_ACTIONS.CONTINUE
         : WORKFLOW_EXECUTION_OUTCOMES.STOP;
     const severity =
-      canRetry || policy.onError === WORKFLOW_EXECUTION_OUTCOMES.CONTINUE
+      canRetry || policy.onError === CONDITION_ACTIONS.CONTINUE
         ? STATUS_MESSAGE_SEVERITY.WARNING
         : STATUS_MESSAGE_SEVERITY.ERROR;
     const reason = this.getEvaluationErrorMessage(result);
@@ -3480,7 +3480,7 @@ export class WorkflowExecutor {
       };
     }
 
-    if (policy.onError === WORKFLOW_EXECUTION_OUTCOMES.CONTINUE) {
+    if (policy.onError === CONDITION_ACTIONS.CONTINUE) {
       if (completeAttemptOnContinue) {
         this.getRuntime().completeAttempt(target, attemptIndex);
       }
@@ -5002,7 +5002,7 @@ export class WorkflowExecutor {
       this.getPromptPhaseStartedAt(target) ?? Date.now();
     const statusTimestampMs = Math.max(Date.now(), attemptTimestampMs + 1);
     const errorBehavior = resolvedProperties?.errorBehavior ?? {
-      onError: WORKFLOW_EXECUTION_OUTCOMES.STOP,
+      onError: CONDITION_ACTIONS.STOP_WORKFLOW,
     };
 
     const failureLabel =
@@ -5084,7 +5084,7 @@ export class WorkflowExecutor {
       }
     };
 
-    if (errorBehavior.onError === WORKFLOW_EXECUTION_OUTCOMES.CONTINUE) {
+    if (errorBehavior.onError === CONDITION_ACTIONS.CONTINUE) {
       await this.trackStatusMessage(
         context,
         target,

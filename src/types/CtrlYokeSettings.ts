@@ -36,6 +36,7 @@ import type {
   PreCondition,
   UserHookConfig,
   WorktreeDefaultConfig,
+  PriorContext,
 } from "./CtrlYokeTypes";
 import {
   DEFAULT_STATUS_LINE_FORMAT,
@@ -107,7 +108,7 @@ export interface CtrlYokeGlobalSettings {
     secrets?: string[];
     executionMode: ExecutionMode;
     resumeSession: boolean;
-    priorContext: string;
+    priorContext: PriorContext;
     mcpServers: (string | McpServerConfig)[];
     hooks: UserHookConfig[];
     errorBehavior?: ErrorBehavior | null;

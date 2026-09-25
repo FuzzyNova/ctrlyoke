@@ -55,7 +55,11 @@ export function DefaultsContextPage({
       >
         <CustomSelect
           id="defaults-prior-context"
-          value={wf.priorContext || PRIOR_CONTEXT_KEYWORDS.NONE}
+          value={
+            typeof wf.priorContext === "string"
+              ? wf.priorContext
+              : PRIOR_CONTEXT_KEYWORDS.NONE
+          }
           onChange={(v) => onUpdate("defaults.priorContext", v)}
           options={PRIOR_CONTEXT_OPTIONS}
         />

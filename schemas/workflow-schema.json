@@ -1046,7 +1046,7 @@
       "properties": {
         "onError": {
           "type": "string",
-          "enum": ["stop", "retry", "continue"],
+          "enum": ["stopWorkflow", "retry", "continue"],
           "description": "What to do when a step phase cannot run or otherwise encounters an internal error."
         },
         "maxRetries": {

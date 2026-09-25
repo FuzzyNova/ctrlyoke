@@ -10,7 +10,7 @@ describe("ErrorBehaviorEditor", () => {
 
     render(
       <ErrorBehaviorEditor
-        value={{ onError: "stop" }}
+        value={{ onError: "stopWorkflow" }}
         onChange={onChange}
         idPrefix="test-error"
       />

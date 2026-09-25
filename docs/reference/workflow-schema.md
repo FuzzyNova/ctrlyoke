@@ -707,7 +707,7 @@ Policy for internal errors in any step phase, including pre-conditions, prompts/
 
 ### `onError` {#error-behavior-onerror}
 
-- **Type:** `"stop" | "retry" | "continue"`
+- **Type:** `"stopWorkflow" | "retry" | "continue"`
 - **Required:** yes
 
 What to do when a step phase cannot run or otherwise encounters an internal error.

@@ -1008,7 +1008,7 @@ definitions:
       onError:
         type: string
         enum:
-          - stop
+          - stopWorkflow
           - retry
           - continue
         description: What to do when a step phase cannot run or otherwise encounters an internal error.

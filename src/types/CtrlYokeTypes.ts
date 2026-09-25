@@ -11,8 +11,8 @@ import {
   type PromptTerminalStatus,
   type WorkflowAttemptStatus,
   PRIOR_CONTEXT_KEYWORDS,
+  CONDITION_ACTIONS,
   type ConditionAction,
-  type WorkflowExecutionOutcome,
   type CompareSource,
   type ScriptOperator,
   type HarnessId,
@@ -143,7 +143,10 @@ export interface ToolPermissionsOverride {
   deniedTools?: string[];
 }
 
-export type ErrorBehaviorAction = WorkflowExecutionOutcome;
+export type ErrorBehaviorAction =
+  | typeof CONDITION_ACTIONS.CONTINUE
+  | typeof CONDITION_ACTIONS.STOP_WORKFLOW
+  | typeof CONDITION_ACTIONS.RETRY;
 
 /** Policy for internal errors in any step phase: pre-condition, prompt/harness, end-condition, or script execution. */
 export interface ErrorBehavior {
