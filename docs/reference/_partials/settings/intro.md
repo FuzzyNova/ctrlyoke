@@ -6,16 +6,21 @@ same shape:
   only to that workspace and overrides user values.
 
 Objects merge key by key across the two files. An array or a single value in
-the workspace file replaces the user value entirely.
+the workspace file replaces the user value entirely. The one exception is
+[`permissions.allowedExternalFileRoots`](#external-file-roots): ctrlyoke
+combines the roots from both files. When you run the `ctrlyoke` CLI, the
+flags you pass override both files for that run.
 
 Some settings are machine-specific and are read only from user scope:
 `worktrees`, `storage`, `permissions.statusLineTracking`, and
 `usageTracking.enabled`. ctrlyoke ignores these settings in a workspace file.
 
-The dashboard's Settings page edits these files for you. To edit a file by
-hand, point your editor at `schemas/settings-schema.json` to get completion and
-validation. Every key is optional, and a key you leave out keeps the default
-shown below.
+The dashboard's Settings page edits these files for you. If you edit a file by
+hand in VS Code, ctrlyoke checks every `.ctrlyoke/settings.json` against its
+settings schema, so completion and error checking work as you type. Don't
+add a `$schema` key. The schema doesn't allow unknown keys, so that key is
+reported as an error. Every key is optional, and a key you leave out keeps
+the default shown below.
 
 ```json
 {

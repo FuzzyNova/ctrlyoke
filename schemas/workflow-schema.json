@@ -775,7 +775,7 @@
     },
     "parallelGroupItem": {
       "type": "object",
-      "description": "An authored group of prompt or script steps. Groups are flattened into steps plus parallelGroups when loaded.",
+      "description": "An authored group of prompt or script steps. Groups are flattened into steps plus parallelGroups when loaded. Members share the workflow's workspace and its one managed or named worktree; ctrlyoke does not isolate members or merge their work, so give each member independent work. The `queue.maxParallelSteps` setting caps how many members run at once. Groups cannot be nested, and finalStep cannot be a group. A numeric priorContext or sessionId in a member cannot point at another member of the same group, and two members cannot resolve to the same harness session. Members may use the built-in ctrlyoke MCP server.",
       "properties": {
         "parallel": {
           "description": "The prompt or script steps that run concurrently. Groups cannot be nested.",
@@ -1120,7 +1120,7 @@
     },
     "promptRuntimeMetadata": {
       "type": "object",
-      "description": "Per-prompt runtime execution metadata (optional, added automatically during execution)",
+      "description": "Per-prompt runtime execution metadata (optional, added automatically during execution). Execution-property fields record the values the step actually ran with after inheritance, including the session ID the harness reported; secrets are recorded by name only, never by value. The step's response text is not stored here — the run's events.jsonl is the only record of step output.",
       "allOf": [
         {
           "$ref": "#/definitions/executionProperties"

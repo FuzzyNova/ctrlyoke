@@ -10,6 +10,13 @@
  * how-to notes) lives in docs/reference/_partials/<page>/<section>.md and is
  * inlined under the matching section heading.
  *
+ * Partials are for docs-only content: YAML examples, cross-links to guide
+ * pages, and narrative that would be noise in an editor hover. A rule about
+ * what a field accepts or how it behaves belongs in the schema description,
+ * where IntelliSense, validation messages, and this page all read it. When the
+ * page renders a schema shape poorly, fix the renderer here rather than
+ * restating the shape in a partial. Never edit the generated pages directly.
+ *
  * The generator fails when an authored field has no description, when a
  * workflow-schema definition is not assigned to a page section, or when a
  * partial names a section that no longer exists, so schema growth cannot
@@ -1014,6 +1021,23 @@ function workflowFieldAnchors(workflowSchema) {
   return anchors;
 }
 
+/**
+ * A section whose schema composes another documented section through `allOf`
+ * accepts those fields too, but the section's own property pointer only lists
+ * the local additions. Name the inherited sections so the page does not read as
+ * if the composed fields were missing.
+ */
+function inheritedSectionLines(renderer, refSchema) {
+  const inherited = (refSchema?.allOf ?? [])
+    .map((part) => renderer.sectionTarget(part))
+    .filter(Boolean);
+  if (inherited.length === 0) return [];
+  const links = inherited.map(
+    (target) => `[${target.label}](${renderer.href(target)})`
+  );
+  return [`Also includes every field from ${links.join(" and ")}.`, ""];
+}
+
 function buildWorkflowPage(
   workflowSchema,
   settingsSchema,
@@ -1039,6 +1063,7 @@ function buildWorkflowPage(
     renderer.checkDescription(section.title, description, pageConfig.strict);
     body.push(`## ${section.title} {#${section.id}}`, "");
     if (description) body.push(prose(description), "");
+    body.push(...inheritedSectionLines(renderer, refSchema));
     body.push(...partials.get(section.id));
 
     if (section.schema) {

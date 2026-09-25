@@ -16,11 +16,34 @@ These fields are written by ctrlyoke. Do not author them in your own workflow
 files. For the fields you write yourself, see the
 [workflow schema reference](/reference/workflow-schema).
 
+### Where run files live
+
+By default, run history lives under
+`~/.ctrlyoke/projects/<project>-<hash>/.runs/`. The
+[`storage.runHistoryLocation`](/reference/settings#storage-runhistorylocation)
+setting can move it to `.ctrlyoke/.runs/` inside the workspace instead. To keep
+user-scope run history somewhere other than `~/.ctrlyoke`, set the
+`CTRLYOKE_HOME` environment variable. Your user `settings.json` stays in
+`~/.ctrlyoke` either way. Each workflow gets its own folder under `.runs/`:
+
+| Path                                     | Contents                                                                                                               |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `workflow.json`                          | The workflow's history entry: name, favorite flag, latest run, and next run number.                                    |
+| `runner.json`                            | Present only while a run executes. It names the run and the process that owns it.                                      |
+| `draft/workflow.ctrlyoke.json`           | The workflow definition before its first run.                                                                          |
+| `run-<timestamp>/workflow.ctrlyoke.json` | The run's working copy, described on this page.                                                                        |
+| `run-<timestamp>/manifest.json`          | Run summary: state, timestamps, step count, and token totals.                                                          |
+| `run-<timestamp>/events.jsonl`           | The run's event log, one JSON event per line. AI responses and script output are stored here, not in the working copy. |
+
+ctrlyoke treats a `runner.json` lock as stale, and reclaims it, when its owning
+process has exited or its heartbeat has been silent for 30 seconds. Deleting it
+by hand is only needed when two synced machines share one run-history folder.
+
 | Section | Purpose |
 | --- | --- |
 | [Run file root](#run-file-root) | Root fields present only in a run's working copy. |
 | [Workflow runtime](#workflow-runtime) | Workflow-level runtime execution state for working files (optional, added automatically by ctrlyoke during execution) |
-| [Step runtime](#step-runtime) | Per-prompt runtime execution metadata (optional, added automatically during execution) |
+| [Step runtime](#step-runtime) | Per-prompt runtime execution metadata (optional, added automatically during execution). |
 | [Parallel group topology](#parallel-group-topology) | Normalized working-file topology for one authored parallel group. |
 | [Condition evaluation](#condition-evaluation) | Latest script-condition evaluation retained for the automation result projection (written automatically during execution). |
 | [Token totals](#token-totals) | Run-scoped token aggregate projected from timeline history. |
@@ -189,7 +212,9 @@ Latest end-condition evaluation retained for the final step's automation result 
 
 ## Step runtime {#step-runtime}
 
-Per-prompt runtime execution metadata (optional, added automatically during execution)
+Per-prompt runtime execution metadata (optional, added automatically during execution). Execution-property fields record the values the step actually ran with after inheritance, including the session ID the harness reported; secrets are recorded by name only, never by value. The step's response text is not stored here — the run's events.jsonl is the only record of step output.
+
+Also includes every field from [Execution properties](/reference/workflow-schema#execution-properties).
 
 ### `startedAt` {#step-runtime-startedat}
 

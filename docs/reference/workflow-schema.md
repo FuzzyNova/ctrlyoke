@@ -270,6 +270,8 @@ Internal-error policy for every step phase: pre-conditions, prompts/harnesses, e
 
 A step that sends a prompt to a harness.
 
+Also includes every field from [Execution properties](#execution-properties).
+
 ### `type` {#prompt-step-type}
 
 - **Type:** `"prompt"`
@@ -435,7 +437,7 @@ Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto 
 
 ## Parallel group {#parallel-group}
 
-An authored group of prompt or script steps. Groups are flattened into steps plus parallelGroups when loaded.
+An authored group of prompt or script steps. Groups are flattened into steps plus parallelGroups when loaded. Members share the workflow's workspace and its one managed or named worktree; ctrlyoke does not isolate members or merge their work, so give each member independent work. The `queue.maxParallelSteps` setting caps how many members run at once. Groups cannot be nested, and finalStep cannot be a group. A numeric priorContext or sessionId in a member cannot point at another member of the same group, and two members cannot resolve to the same harness session. Members may use the built-in ctrlyoke MCP server.
 
 ```yaml
 steps:
@@ -447,12 +449,8 @@ steps:
     failFast: true
 ```
 
-Group members share the workflow's workspace and its one managed or named
-worktree. ctrlyoke does not isolate members or merge their work, so give each
-member independent work. The
-[`queue.maxParallelSteps`](/reference/settings#queue-maxparallelsteps) setting
-caps how many members run at once. Groups cannot be nested, `finalStep` cannot
-be a group, and group members cannot use the built-in `ctrlyoke` MCP server.
+See [Dynamic queue: parallel groups](/workflows/dynamic-queue#parallel-groups) for what a
+member can do through the `ctrlyoke` MCP server.
 
 ### `parallel` {#parallel-group-parallel}
 
@@ -473,6 +471,8 @@ Stop the remaining members as soon as one member fails. Default: true.
 
 Script gate that runs before the prompt. Determines whether to run the prompt, skip it, or stop the workflow.
 
+Also includes every field from [Shared script fields](#script-fields).
+
 ### `onPass` {#pre-condition-onpass}
 
 - **Type:** `"continue" | "skipPrompt" | "stopWorkflow"`
@@ -490,6 +490,8 @@ What to do when the pre-condition check fails. 'continue': run the prompt anyway
 ## End condition {#end-condition}
 
 Validation that runs after the prompt completes. Shares script/env/compareSource/operator/expected/timeout with preCondition and scriptStep via scriptProperties.
+
+Also includes every field from [Shared script fields](#script-fields).
 
 ### `maxRetries` {#end-condition-maxretries}
 
