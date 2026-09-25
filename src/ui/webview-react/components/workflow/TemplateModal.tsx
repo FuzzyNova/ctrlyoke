@@ -629,6 +629,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                       ) : isHarness ? (
                         <HarnessDropdown
                           id={`var-${variable.name}`}
+                          schemaPath={`vars.${variable.name}`}
                           value={variables[variable.name] ?? ""}
                           onChange={(v) =>
                             handleVariableChange(variable.name, v)

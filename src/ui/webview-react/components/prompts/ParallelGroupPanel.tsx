@@ -33,6 +33,8 @@ import {
   livePreviewSortingStrategy,
 } from "@utils/dndKit";
 import { Icon } from "../shared/Icon";
+import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
+import { SCHEMA_FIELD_META } from "@root/types/SchemaUiMetadata";
 
 export type ParallelGroupStatus =
   "running" | "failed" | "cancelled" | "completed" | "skipped" | "pending";
@@ -291,11 +293,15 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
         </span>
         <label
           className={`flex items-center gap-1 text-description-fg ${dragDisabled ? "cursor-not-allowed" : "cursor-pointer"}`}
-          title="Cancel the rest of this group's steps as soon as one fails, instead of letting them finish."
         >
           <input
             type="checkbox"
             checked={group.failFast}
+            aria-label={schemaAriaLabel(
+              SCHEMA_FIELD_META.failFast.label,
+              SCHEMA_FIELD_META.failFast.path
+            )}
+            title={schemaTitle(SCHEMA_FIELD_META.failFast.path)}
             disabled={dragDisabled}
             onChange={(event) => onFailFastChange(group, event.target.checked)}
             className={`w-3 h-3 accent-focus-border ${dragDisabled ? "cursor-not-allowed" : "cursor-pointer"}`}

@@ -7,9 +7,9 @@ import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import {
   WORKTREE_KEEP_HELP_TEXT,
-  WORKTREE_MODE_HELP_TEXT,
   WORKTREE_MODES,
 } from "@root/types/DashboardConstants";
+import { SCHEMA_DESCRIPTIONS } from "@root/types/generated/SchemaDescriptions";
 
 function createSettings(
   sources: Record<string, "user" | "workspace" | "default"> = {}
@@ -42,10 +42,10 @@ describe("DefaultsHarnessPage execution defaults", () => {
 
     await user.click(
       screen.getByRole("button", {
-        name: "Execution mode, property defaults.executionMode",
+        name: /^Interactive, property defaults\.executionMode/,
       })
     );
-    await user.click(screen.getByRole("button", { name: "Headless" }));
+    await user.click(screen.getByRole("button", { name: /^Headless/ }));
 
     expect(onUpdate).toHaveBeenCalledWith("defaults.executionMode", "headless");
   });
@@ -70,7 +70,9 @@ describe("DefaultsHarnessPage execution defaults", () => {
     );
 
     expect(screen.getByText("Worktree Defaults")).toBeInTheDocument();
-    expect(screen.getByText(WORKTREE_MODE_HELP_TEXT)).toBeInTheDocument();
+    expect(
+      screen.getByText(SCHEMA_DESCRIPTIONS["defaults.worktree"])
+    ).toBeInTheDocument();
     expect(
       screen.getByLabelText("Branch, property defaults.worktree.branch")
     ).toHaveValue("settings-branch");
@@ -97,16 +99,24 @@ describe("DefaultsHarnessPage execution defaults", () => {
 
     await user.click(
       screen.getByRole("button", {
-        name: "Worktree mode, property defaults.worktree",
+        name: /^Named, property defaults\.worktree/,
       })
     );
-    await user.click(screen.getByRole("button", { name: "Named" }));
     await user.click(
       screen.getByRole("button", {
-        name: "Worktree mode, property defaults.worktree",
+        name: /^Named, defaults\.worktree: \{ mode: named/,
       })
     );
-    await user.click(screen.getByRole("button", { name: "None" }));
+    await user.click(
+      screen.getByRole("button", {
+        name: /^Named, property defaults\.worktree/,
+      })
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: /^None, defaults\.worktree: false/,
+      })
+    );
 
     expect(onUpdate).toHaveBeenLastCalledWith("defaults.worktree", false);
   });

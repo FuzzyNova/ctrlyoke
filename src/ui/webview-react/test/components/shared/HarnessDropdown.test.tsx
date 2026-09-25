@@ -37,7 +37,7 @@ describe("HarnessDropdown", () => {
       />
     );
 
-    const trigger = screen.getByRole("button", { name: "Harness" });
+    const trigger = screen.getByRole("button", { name: /^Harness/ });
     expect(trigger).toHaveAttribute("aria-haspopup", "listbox");
     expect(trigger).toHaveAttribute("aria-expanded", "false");
     expect(trigger).toHaveAttribute("aria-controls", "harness-listbox");
@@ -73,7 +73,9 @@ describe("HarnessDropdown", () => {
     );
 
     expect(
-      screen.getByTitle("Install via: npm install -g @github/copilot")
+      screen.getByTitle(
+        "Install via: npm install -g @github/copilot property: harness = copilot-cli"
+      )
     ).toBeInTheDocument();
   });
 

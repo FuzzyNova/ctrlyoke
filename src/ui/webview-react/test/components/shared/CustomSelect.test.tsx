@@ -115,7 +115,7 @@ describe("CustomSelect — basic behavior", () => {
     const user = userEvent.setup();
     render(
       <CustomSelect
-        triggerAriaLabel="Permission Mode"
+        triggerAriaLabel="Tool Permission Mode"
         schemaPath="toolPermissions.mode"
         value="none"
         onChange={vi.fn()}
@@ -131,7 +131,7 @@ describe("CustomSelect — basic behavior", () => {
     );
 
     const trigger = screen.getByRole("button", {
-      name: "Permission Mode, property toolPermissions.mode",
+      name: "Tool Permission Mode, property toolPermissions.mode",
     });
     expect(trigger).toHaveAttribute(
       "title",
@@ -159,6 +159,40 @@ describe("CustomSelect — basic behavior", () => {
       "title",
       "omit toolPermissions property: toolPermissions.mode"
     );
+  });
+
+  it("describes pseudo-option writes and omission in the schema path", async () => {
+    const user = userEvent.setup();
+    render(
+      <CustomSelect
+        schemaPath="agent"
+        value="none"
+        onChange={vi.fn()}
+        options={[
+          {
+            value: "none",
+            label: "None",
+            pseudo: { writes: 'agent: ""' },
+          },
+          {
+            value: "default",
+            label: "Inherit (None)",
+            pseudo: { omit: true },
+          },
+        ]}
+      />
+    );
+
+    await user.click(getTrigger());
+
+    expect(
+      screen.getByRole("button", { name: 'None, agent: ""' })
+    ).toBeInTheDocument();
+    expect(screen.getByTitle('agent: "" property: agent')).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Inherit (None), omit agent" })
+    ).toBeInTheDocument();
+    expect(screen.getByTitle("omit agent")).toBeInTheDocument();
   });
 
   it("dropdown options are not rendered when closed", () => {

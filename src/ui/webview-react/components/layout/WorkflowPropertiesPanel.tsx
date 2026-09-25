@@ -51,7 +51,6 @@ import {
   DrawerRow,
   McpServersEditor,
   type McpServersValue,
-  PERMISSION_MODE_OPTIONS,
   FieldDiagnostic,
   CompatibilitySummary,
   ErrorBehaviorEditor,
@@ -74,10 +73,7 @@ import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import {
   KEYBOARD_KEYS,
   EXECUTION_MODE_HELP_TEXT,
-  EXECUTION_MODE_OPTIONS,
   WORKTREE_KEEP_HELP_TEXT,
-  WORKTREE_MODE_HELP_TEXT,
-  WORKTREE_MODE_OPTIONS,
   WORKTREE_MODE_SELECTIONS,
   WORKTREE_MODES,
   PERMISSION_MODES,
@@ -85,7 +81,16 @@ import {
   PROMPT_PROPERTIES,
   RESUME_SESSION_SELECTIONS,
   SETTING_SCOPES,
+  TRUSTED_ROOTS_MODES,
 } from "../../../../types/DashboardConstants";
+import {
+  EXECUTION_MODE_OPTIONS_META,
+  PERMISSION_MODE_OPTIONS_META,
+  TRUSTED_ROOTS_SELECTION_OPTIONS_META,
+  WORKFLOW_AGENT_SELECTION_OPTIONS_META,
+  WORKTREE_SELECTION_OPTIONS_META,
+  toSelectOptions,
+} from "../../../../types/SchemaUiMetadata";
 import { getAutoResumePreview } from "../../utils/autoResumePreview";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
 import {
@@ -116,11 +121,6 @@ const SETTINGS_DRAWER_BREAKPOINT = 400;
 type WorktreeField = "branch" | "base" | "setup" | "keep" | "merge";
 type WorktreeObjectConfig = Exclude<WorktreeConfig, false | true | string>;
 type ExecutionPropertyKey = (typeof EXECUTION_PROPERTY_KEYS)[number];
-const TRUSTED_ROOTS_MODES = {
-  INHERIT: "inherit",
-  NONE: "none",
-  CUSTOM: "custom",
-} as const;
 type TrustedRootsMode =
   (typeof TRUSTED_ROOTS_MODES)[keyof typeof TRUSTED_ROOTS_MODES];
 
@@ -1670,6 +1670,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <CustomSelect
                     id="settings-model"
+                    schemaPath="model"
                     triggerAriaLabel="Model"
                     value={effectiveModel}
                     onChange={handleModelChange}
@@ -1721,11 +1722,15 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <CustomSelect
                     id="settings-agent"
+                    schemaPath="agent"
                     triggerAriaLabel="Agent"
                     value={effectiveAgent || ""}
                     onChange={handleAgentChange}
                     options={[
-                      { value: "", label: "None" },
+                      ...toSelectOptions(
+                        WORKFLOW_AGENT_SELECTION_OPTIONS_META,
+                        "agent"
+                      ),
                       ...availableAgents.map((agent) =>
                         toAgentSelectOption(agent, agent.name || agent.path)
                       ),
@@ -1851,17 +1856,20 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <CustomSelect
                     id="settings-execution-mode"
+                    schemaPath="executionMode"
                     triggerAriaLabel="Execution Mode"
                     value={effectiveExecutionMode}
                     onChange={handleExecutionModeChange}
-                    options={EXECUTION_MODE_OPTIONS}
+                    options={toSelectOptions(
+                      EXECUTION_MODE_OPTIONS_META,
+                      "executionMode"
+                    )}
                   />
                 </FormField>
                 <FormField
                   label="Worktree"
                   schemaPath="worktree"
                   htmlFor="settings-worktree-mode"
-                  description={WORKTREE_MODE_HELP_TEXT}
                   setAsDefaultButton={
                     <SetAsDefaultButton
                       property={PROMPT_PROPERTIES.WORKTREE}
@@ -1877,10 +1885,14 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <CustomSelect
                     id="settings-worktree-mode"
+                    schemaPath="worktree"
                     triggerAriaLabel="Worktree"
                     value={worktreeMode}
                     onChange={handleWorktreeModeChange}
-                    options={WORKTREE_MODE_OPTIONS}
+                    options={toSelectOptions(
+                      WORKTREE_SELECTION_OPTIONS_META,
+                      "worktree"
+                    )}
                   />
                 </FormField>
               </DrawerRow>
@@ -2042,6 +2054,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <CustomSelect
                     id="settings-resume-session"
+                    schemaPath="resumeSession"
                     triggerAriaLabel="Resume Session"
                     value={
                       workflowProperties.sessionId ===
@@ -2336,7 +2349,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
               <div className="flex-1 flex flex-col min-h-0">
                 {/* Permission Mode */}
                 <FormField
-                  label="Permission Mode"
+                  label="Tool Permission Mode"
                   schemaPath="toolPermissions.mode"
                   htmlFor="settings-permission-mode"
                   description="Tool permission mode for CLI harnesses"
@@ -2357,7 +2370,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <CustomSelect
                     id="settings-permission-mode"
-                    triggerAriaLabel="Permission Mode"
+                    schemaPath="toolPermissions.mode"
+                    triggerAriaLabel="Tool Permission Mode"
                     value={permMode}
                     onChange={(mode) => {
                       handleToolPermissionsChange({
@@ -2366,7 +2380,10 @@ const WorkflowPropertiesPanelInner: React.FC<{
                         deniedTools: deniedToolsInput,
                       });
                     }}
-                    options={PERMISSION_MODE_OPTIONS}
+                    options={toSelectOptions(
+                      PERMISSION_MODE_OPTIONS_META,
+                      "toolPermissions.mode"
+                    )}
                     warning={modeDiagnostics[0]?.message}
                     warningId="settings-permission-mode-diagnostic"
                   />
@@ -2423,23 +2440,21 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <CustomSelect
                     id="settings-trusted-external-roots-mode"
+                    schemaPath="trustedExternalRoots"
                     triggerAriaLabel="Trusted External Roots"
                     value={trustedRootsMode}
                     onChange={handleTrustedRootsModeChange}
-                    options={[
-                      {
-                        value: TRUSTED_ROOTS_MODES.INHERIT,
-                        label: `Inherit (${liveTrustedExternalRoots.length} roots)`,
-                      },
-                      {
-                        value: TRUSTED_ROOTS_MODES.NONE,
-                        label: "None",
-                      },
-                      {
-                        value: TRUSTED_ROOTS_MODES.CUSTOM,
-                        label: "Custom",
-                      },
-                    ]}
+                    options={toSelectOptions(
+                      TRUSTED_ROOTS_SELECTION_OPTIONS_META,
+                      "trustedExternalRoots"
+                    ).map((option) =>
+                      option.value === TRUSTED_ROOTS_MODES.INHERIT
+                        ? {
+                            ...option,
+                            label: `Inherit (${liveTrustedExternalRoots.length > 0 ? "Custom" : "None"})`,
+                          }
+                        : option
+                    )}
                   />
                   {trustedRootsMode === TRUSTED_ROOTS_MODES.CUSTOM && (
                     <TrustedRootsListEditor
@@ -2603,7 +2618,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
           {activePage === DRAWER_PAGES.HOOKS && (
             <>
               <FormField
-                label="User Hooks"
+                label="Hooks"
                 schemaPath="hooks"
                 description="User-defined hooks to run alongside ctrlyoke's completion-detection hooks. Supported events vary by harness."
                 setAsDefaultButton={

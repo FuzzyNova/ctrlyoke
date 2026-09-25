@@ -1,4 +1,7 @@
-import { INHERIT_DEFAULT_OPTION } from "@root/types/DashboardConstants";
+import {
+  INHERIT_DEFAULT_OPTION,
+  NONE_OPTION,
+} from "@root/types/DashboardConstants";
 import React, { useId, useRef, useState } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
@@ -11,6 +14,11 @@ import {
 } from "@utils/dropdownValidation";
 import type { HideableProps } from "./CustomSelect";
 import { Icon } from "./Icon";
+import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
+import {
+  SKILLS_SELECTION_OPTIONS_META,
+  toSelectOptions,
+} from "@root/types/SchemaUiMetadata";
 
 interface SkillOption {
   name: string;
@@ -31,6 +39,8 @@ interface SkillsSelectProps extends HideableProps {
   warning?: string;
   /** Accessible name for the field represented by the trigger. */
   triggerAriaLabel?: string;
+  /** Schema property represented by this selector. */
+  schemaPath?: string;
 }
 
 /**
@@ -60,6 +70,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
   nonHideableValues = [],
   warning,
   triggerAriaLabel = "Skills",
+  schemaPath = "skills",
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const reactId = useId();
@@ -123,10 +134,14 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
     !selectedSkills.includes(skillName) &&
     !nonHideableValues.includes(skillName);
 
-  const handleKeywordSelect = (
-    keyword: typeof INHERIT_DEFAULT_OPTION | "none"
-  ) => {
-    onChange(keyword === INHERIT_DEFAULT_OPTION ? undefined : null);
+  const handleKeywordSelect = (keyword: string) => {
+    onChange(
+      keyword === INHERIT_DEFAULT_OPTION
+        ? undefined
+        : keyword === NONE_OPTION
+          ? null
+          : value
+    );
     setIsOpen(false);
     setShowHidden(false);
   };
@@ -148,44 +163,50 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
 
   const listContent = (
     <div className="overflow-y-auto min-h-0 flex-1">
-      {([INHERIT_DEFAULT_OPTION, "none"] as const).map((keyword) => {
-        const isSelected =
-          keyword === INHERIT_DEFAULT_OPTION
-            ? value === undefined
-            : value === null;
-        const label =
-          keyword === INHERIT_DEFAULT_OPTION
-            ? (defaultLabel ?? "Default")
-            : "None";
-        return (
-          <button
-            key={keyword}
-            type="button"
-            onClick={() => handleKeywordSelect(keyword)}
-            className={`w-full px-2 py-1.5 text-xs text-left flex items-center gap-2 focus:outline-none border-none ${
-              isSelected
-                ? "bg-dropdown-selected-bg text-list-active-fg cy-dropdown-row-selected"
-                : "hover:bg-list-hover-bg cursor-pointer cy-dropdown-row"
-            }`}
-          >
-            <Icon
-              name="check"
-              className={`text-xxs flex-shrink-0 ${
-                isSelected ? "visible" : "invisible"
+      {toSelectOptions(SKILLS_SELECTION_OPTIONS_META, schemaPath).map(
+        (option) => {
+          const keyword = option.value;
+          const isSelected =
+            keyword === INHERIT_DEFAULT_OPTION
+              ? value === undefined
+              : value === null;
+          const label =
+            keyword === INHERIT_DEFAULT_OPTION
+              ? (defaultLabel ?? "Inherit")
+              : option.label;
+          const schemaValue = option.pseudo ?? keyword;
+          return (
+            <button
+              key={keyword}
+              type="button"
+              onClick={() => handleKeywordSelect(keyword)}
+              aria-label={schemaAriaLabel(label, schemaPath, schemaValue)}
+              title={schemaTitle(schemaPath, schemaValue)}
+              className={`w-full px-2 py-1.5 text-xs text-left flex items-center gap-2 focus:outline-none border-none ${
+                isSelected
+                  ? "bg-dropdown-selected-bg text-list-active-fg cy-dropdown-row-selected"
+                  : "hover:bg-list-hover-bg cursor-pointer cy-dropdown-row"
               }`}
-            />
-            <span
-              data-testid={
-                keyword === INHERIT_DEFAULT_OPTION
-                  ? "inherited-skills-label"
-                  : undefined
-              }
             >
-              {label}
-            </span>
-          </button>
-        );
-      })}
+              <Icon
+                name="check"
+                className={`text-xxs flex-shrink-0 ${
+                  isSelected ? "visible" : "invisible"
+                }`}
+              />
+              <span
+                data-testid={
+                  keyword === INHERIT_DEFAULT_OPTION
+                    ? "inherited-skills-label"
+                    : undefined
+                }
+              >
+                {label}
+              </span>
+            </button>
+          );
+        }
+      )}
 
       {availableSkills.length > 0 && (
         <>
@@ -321,7 +342,23 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         aria-controls={listboxId}
-        aria-label={triggerAriaLabel}
+        aria-label={schemaAriaLabel(
+          triggerAriaLabel,
+          schemaPath,
+          value === undefined
+            ? { omit: true }
+            : value === null
+              ? null
+              : JSON.stringify(value)
+        )}
+        title={schemaTitle(
+          schemaPath,
+          value === undefined
+            ? { omit: true }
+            : value === null
+              ? null
+              : JSON.stringify(value)
+        )}
         className={`cy-select-trigger cy-dropdown-row ${dropdownBorderClass(warning)}`}
       >
         <span className="truncate">{buttonLabel}</span>

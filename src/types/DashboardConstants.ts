@@ -2046,27 +2046,21 @@ export const CTRLYOKE_MCP_MODES = {
 export type CtrlYokeMcpMode =
   (typeof CTRLYOKE_MCP_MODES)[keyof typeof CTRLYOKE_MCP_MODES];
 
-export const EXECUTION_MODE_OPTIONS = [
-  { value: EXECUTION_MODES.INTERACTIVE, label: "Interactive" },
-  { value: EXECUTION_MODES.HEADLESS, label: "Headless" },
-];
-
 /** Selector-only choice for the workflow value `worktree: false`. */
 export const WORKTREE_MODE_SELECTIONS = {
   NONE: "none",
+  MANAGED: "managed",
+  NAMED: "named",
 } as const;
-
-export const WORKTREE_MODE_OPTIONS = [
-  { value: WORKTREE_MODE_SELECTIONS.NONE, label: "None" },
-  { value: WORKTREE_MODES.MANAGED, label: "Managed" },
-  { value: WORKTREE_MODES.NAMED, label: "Named" },
-];
 
 export const EXECUTION_MODE_HELP_TEXT =
   "Interactive spawns a live terminal you can steer; headless runs in the background with output in the Output panel. Pre- and end-condition scripts always run headless. With inject mode on, inserting a headless step between interactive steps retires and respawns the PTY, so TUI continuity is lost across that boundary.";
 
-export const WORKTREE_MODE_HELP_TEXT =
-  "None runs in your working checkout. Managed creates a throw-away worktree and branch per run and removes the directory when the workflow completes, leaving the branch for review — pick it for isolated runs you will not follow up on. Named targets a persistent worktree you own, which ctrlyoke never commits, merges, or removes — pick it for conversational workflows you will append to. Worktrees are workflow-level and do not apply to individual prompts.";
+export const TRUSTED_ROOTS_MODES = {
+  INHERIT: "inherit",
+  NONE: "none",
+  CUSTOM: "custom",
+} as const;
 
 export const WORKTREE_KEEP_HELP_TEXT =
   "Keeps the managed worktree directory after the run instead of removing it. Without it, appending a follow-up prompt recreates the directory from the branch — ignored files such as `node_modules` are gone and the setup command runs again, so a long setup pays that cost on every append. Removing the directory also ends filesystem undo for that run.";

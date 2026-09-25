@@ -258,9 +258,9 @@ describe("WorkflowPropertiesPanel permissions", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Trusted External Roots" })
+      screen.getByRole("button", { name: /^Trusted External Roots/ })
     );
-    fireEvent.click(screen.getByRole("button", { name: "Custom" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Custom/ }));
 
     expect(
       screen.getByTestId(`trusted-root-row-${userRoot}`)
@@ -314,13 +314,13 @@ describe("WorkflowPropertiesPanel permissions", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
 
     expect(
-      screen.getByText("Inherit (2 roots)", { exact: false })
+      screen.getByText("Inherit (Custom)", { exact: false })
     ).toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Trusted External Roots" })
+      screen.getByRole("button", { name: /^Trusted External Roots/ })
     );
-    fireEvent.click(screen.getByRole("button", { name: "Custom" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Custom/ }));
 
     expect(
       screen.getByTestId(`trusted-root-row-${userRoot}`)
@@ -530,13 +530,13 @@ describe("WorkflowPropertiesPanel execution mode", () => {
     render(<WorkflowPropertiesPanel />);
 
     const executionMode = screen.getByRole("button", {
-      name: "Execution Mode",
+      name: /^Execution Mode/,
     });
     expect(executionMode).toHaveTextContent("Headless");
     expect(screen.queryByRole("button", { name: /Set as Default/ })).toBeNull();
 
     fireEvent.click(executionMode);
-    fireEvent.click(screen.getByRole("button", { name: "Interactive" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Interactive,/ }));
 
     expect(useSettingsStore.getState().workflowProperties.executionMode).toBe(
       EXECUTION_MODES.INTERACTIVE
@@ -576,14 +576,20 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
   afterEach(cleanup);
 
   function chooseWorktreeMode(label: string): void {
-    fireEvent.click(screen.getByLabelText("Worktree"));
-    fireEvent.click(screen.getByRole("button", { name: label }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Worktree, property worktree/ })
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: new RegExp(`^${label}`) })
+    );
   }
 
   it("renders None as one control and keeps the prompt drawer free of worktree", async () => {
     render(<WorkflowPropertiesPanel />);
 
-    expect(screen.getByLabelText("Worktree")).toHaveTextContent("None");
+    expect(
+      screen.getByRole("button", { name: /^Worktree, property worktree/ })
+    ).toHaveTextContent("None");
     expect(screen.queryByLabelText("Worktree branch")).not.toBeInTheDocument();
     expect(screen.getByText("Worktree", { selector: "label" })).toHaveAttribute(
       "title",
@@ -773,8 +779,9 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     useSettingsStore.getState().updateWorkflowProperty("worktree", false);
     render(<WorkflowPropertiesPanel />);
 
-    const worktreeField =
-      screen.getByLabelText("Worktree").parentElement?.parentElement;
+    const worktreeField = screen.getByRole("button", {
+      name: /^Worktree, property worktree/,
+    }).parentElement?.parentElement;
     expect(
       within(worktreeField as HTMLElement).queryByRole("button", {
         name: /Set as Default/,

@@ -9,10 +9,12 @@ import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import {
   KEYBOARD_KEYS,
   MCP_SERVER_IDS,
-  PERMISSION_MODES,
   STEP_TYPES,
-  type PermissionMode,
 } from "@root/types/DashboardConstants";
+import {
+  PERMISSION_MODE_OPTIONS_META,
+  PRIOR_CONTEXT_KEYWORD_OPTIONS_META,
+} from "@root/types/SchemaUiMetadata";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import { useUiStore } from "@store/uiStore";
@@ -73,6 +75,7 @@ import {
 import { SortableContext, arrayMove } from "@dnd-kit/sortable";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { WebviewLog } from "@utils/logger";
+import { schemaTitle } from "@utils/schemaPropertyLabels";
 import { ExitButton } from "../shared";
 import {
   isExecutionBusy,
@@ -1038,19 +1041,20 @@ const WorkflowStepsPanelInner: React.FC<{
         if (Array.isArray(step.priorContext)) {
           ctxLabel = `ctx: [${step.priorContext.join(",")}]`;
         } else {
-          // "all" | "previous" | "none" | "finalStepAll" | "finalStepPrevious"
-          const shortMap: Record<string, string> = {
-            all: "all",
-            previous: "prev",
-            none: "none",
-            finalStepAll: "fs-all",
-            finalStepPrevious: "fs-prev",
-          };
-          ctxLabel = `ctx: ${shortMap[step.priorContext as string] ?? String(step.priorContext)}`;
+          const meta =
+            PRIOR_CONTEXT_KEYWORD_OPTIONS_META[
+              step.priorContext as keyof typeof PRIOR_CONTEXT_KEYWORD_OPTIONS_META
+            ];
+          ctxLabel = `ctx: ${meta?.short ?? String(step.priorContext)}`;
         }
         result.push({
           label: ctxLabel,
-          title: `priorContext: ${String(step.priorContext)}`,
+          title: schemaTitle(
+            "priorContext",
+            Array.isArray(step.priorContext)
+              ? JSON.stringify(step.priorContext)
+              : String(step.priorContext)
+          ),
         });
       }
 
@@ -1123,20 +1127,18 @@ const WorkflowStepsPanelInner: React.FC<{
         if (step.toolPermissions === null) {
           result.push({
             label: "perms: none",
-            title: "toolPermissions: null (same as mode: none)",
+            title: schemaTitle("toolPermissions", null),
           });
         } else if (step.toolPermissions.mode) {
-          const modeShort: Record<PermissionMode, string> = {
-            [PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL]: "allow all!",
-            [PERMISSION_MODES.ALLOW_ALL]: "allow all",
-            [PERMISSION_MODES.CUSTOM]: "custom",
-            [PERMISSION_MODES.NONE]: "none",
-          };
           const short =
-            modeShort[step.toolPermissions.mode] ?? step.toolPermissions.mode;
+            PERMISSION_MODE_OPTIONS_META[step.toolPermissions.mode]?.short ??
+            step.toolPermissions.mode;
           result.push({
             label: `perms: ${short}`,
-            title: `toolPermissions: ${step.toolPermissions.mode}`,
+            title: schemaTitle(
+              "toolPermissions.mode",
+              step.toolPermissions.mode
+            ),
           });
         }
       }

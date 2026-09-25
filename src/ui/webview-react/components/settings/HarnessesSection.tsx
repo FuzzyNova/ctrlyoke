@@ -93,6 +93,7 @@ export function HarnessesSection({
       >
         <HarnessDropdown
           id="harness-active"
+          schemaPath="defaults.harness"
           value={settings.settings.defaults.harness}
           onChange={(value) => onUpdate("defaults.harness", value)}
           showStatus={false}

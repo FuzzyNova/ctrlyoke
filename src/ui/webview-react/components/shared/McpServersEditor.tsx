@@ -888,11 +888,5 @@ export const McpServersEditor: React.FC<{
 export function buildMcpDefaultLabel(servers: McpServersValue): string {
   const entries = Array.isArray(servers) ? servers : [];
   if (entries.length === 0) return "Inherit (None)";
-
-  const hasCtrlYokeEntry = hasCtrlYoke(entries);
-  const customCount = getNonCtrlYokeEntries(entries).length;
-
-  if (hasCtrlYokeEntry && customCount === 0) return "Inherit (ctrlyoke)";
-  if (hasCtrlYokeEntry) return `Inherit (ctrlyoke +${customCount})`;
-  return `Inherit (${customCount} server${customCount !== 1 ? "s" : ""})`;
+  return "Inherit (Custom)";
 }

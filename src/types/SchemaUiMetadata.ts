@@ -15,13 +15,19 @@ import {
   PRIOR_CONTEXT_KEYWORDS,
   PRIOR_CONTEXT_SELECTION_MODES,
   INHERIT_DEFAULT_OPTION,
+  NONE_OPTION,
+  PROPERTY_EDITOR_MODES,
+  RESUME_SESSION_SELECTIONS,
   RUN_HISTORY_LOCATIONS,
+  SESSION_ID_SENTINELS,
   SCRIPT_OPERATORS,
   STEP_COLOR_MODES,
   TERMINAL_CURSOR_STYLES,
   TERMINAL_MOBILE_CONTROL_BAR,
   TOAST_LEVEL_MODES,
   WORKTREE_MODES,
+  WORKTREE_MODE_SELECTIONS,
+  TRUSTED_ROOTS_MODES,
   WORKFLOW_FILE_FORMATS,
   type BrowserNotificationMode,
   type CodexApprovalPolicy,
@@ -46,6 +52,11 @@ export interface SchemaFieldMeta {
   alias?: { reason: string };
 }
 
+export const SCHEMA_FIELD_META = {
+  color: { path: "color", label: "Step Color" },
+  failFast: { path: "steps[].failFast", label: "Fail Fast" },
+} as const satisfies Record<string, SchemaFieldMeta>;
+
 export interface SchemaOptionMeta<V extends string> {
   value: V;
   label: string;
@@ -57,19 +68,25 @@ export interface SchemaOptionMeta<V extends string> {
     activeColor?: string;
   };
   short?: string;
-  pseudo?: { writes: string };
+  pseudo?: { writes: string } | { omit: true };
 }
 
-export function toSelectOptions<T extends Record<string, SchemaOptionMeta<string>>>(
-  meta: T,
-  path: string
-): SelectOption[] {
+export function toSelectOptions<
+  T extends Record<string, SchemaOptionMeta<string>>,
+>(meta: T, path: string): SelectOption[] {
   return Object.values(meta).map((option) => ({
     value: option.value,
     label: option.label,
     ...(option.short ? { short: option.short } : {}),
     schemaPath: path,
-    ...(option.pseudo ? { pseudo: option.pseudo } : {}),
+    ...(option.pseudo
+      ? {
+          pseudo:
+            "writes" in option.pseudo
+              ? { writes: option.pseudo.writes.replace(/\{path\}/g, path) }
+              : option.pseudo,
+        }
+      : {}),
   }));
 }
 
@@ -80,6 +97,7 @@ export const PERMISSION_MODE_OPTIONS_META: Record<
   [PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL]: {
     value: PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
     label: "Dangerously Allow All (yolo)",
+    short: "allow all!",
     alias: {
       reason: "Yolo is a widely recognized nickname for this risky mode.",
     },
@@ -93,6 +111,7 @@ export const PERMISSION_MODE_OPTIONS_META: Record<
   [PERMISSION_MODES.ALLOW_ALL]: {
     value: PERMISSION_MODES.ALLOW_ALL,
     label: "Allow All",
+    short: "allow all",
     visual: {
       codicon: "workspace-trusted",
       color: "text-warning-fg",
@@ -103,6 +122,7 @@ export const PERMISSION_MODE_OPTIONS_META: Record<
   [PERMISSION_MODES.CUSTOM]: {
     value: PERMISSION_MODES.CUSTOM,
     label: "Custom",
+    short: "custom",
     visual: {
       codicon: "workspace-trusted",
       color: "text-terminal-ansiGreen",
@@ -113,6 +133,7 @@ export const PERMISSION_MODE_OPTIONS_META: Record<
   [PERMISSION_MODES.NONE]: {
     value: PERMISSION_MODES.NONE,
     label: "None",
+    short: "none",
     visual: {
       codicon: "workspace-trusted",
       color: "text-description-fg",
@@ -178,6 +199,152 @@ export const WORKTREE_MODE_OPTIONS_META: Record<
   },
 };
 
+/** UI modes for the workflow worktree selector, including its false sentinel. */
+export const WORKTREE_SELECTION_OPTIONS_META = {
+  [WORKTREE_MODE_SELECTIONS.NONE]: {
+    value: WORKTREE_MODE_SELECTIONS.NONE,
+    label: "None",
+    pseudo: { writes: "{path}: false" },
+  },
+  [WORKTREE_MODE_SELECTIONS.MANAGED]: {
+    value: WORKTREE_MODE_SELECTIONS.MANAGED,
+    label: "Managed",
+    pseudo: { writes: "{path}: true" },
+  },
+  [WORKTREE_MODE_SELECTIONS.NAMED]: {
+    value: WORKTREE_MODE_SELECTIONS.NAMED,
+    label: "Named",
+    pseudo: { writes: "{path}: { mode: named, ... }" },
+  },
+} as const;
+
+export const AGENT_SELECTION_OPTIONS_META = {
+  [INHERIT_DEFAULT_OPTION]: {
+    value: INHERIT_DEFAULT_OPTION,
+    label: "Inherit",
+    pseudo: { omit: true },
+  },
+  [NONE_OPTION]: {
+    value: NONE_OPTION,
+    label: "None",
+    pseudo: { writes: "agent: null" },
+  },
+} as const;
+
+/** The workflow editor encodes an explicit no-agent selection as an empty string. */
+export const WORKFLOW_AGENT_SELECTION_OPTIONS_META = {
+  "": {
+    value: "",
+    label: "None",
+    pseudo: { writes: 'agent: ""' },
+  },
+} as const;
+
+export const SKILLS_SELECTION_OPTIONS_META = {
+  [INHERIT_DEFAULT_OPTION]: {
+    value: INHERIT_DEFAULT_OPTION,
+    label: "Inherit",
+    pseudo: { omit: true },
+  },
+  [NONE_OPTION]: {
+    value: NONE_OPTION,
+    label: "None",
+    pseudo: { writes: "skills: null" },
+  },
+} as const;
+
+export const ADDITIONAL_ARGS_SELECTION_OPTIONS_META = {
+  [INHERIT_DEFAULT_OPTION]: {
+    value: INHERIT_DEFAULT_OPTION,
+    label: "Inherit",
+    pseudo: { omit: true },
+  },
+  [NONE_OPTION]: {
+    value: NONE_OPTION,
+    label: "None",
+    pseudo: { writes: "additionalArgs: null" },
+  },
+  [PROPERTY_EDITOR_MODES.CUSTOM]: {
+    value: PROPERTY_EDITOR_MODES.CUSTOM,
+    label: "Custom",
+    pseudo: { writes: 'additionalArgs: "<value>"' },
+  },
+} as const;
+
+export const CONDITION_SELECTION_OPTIONS_META = {
+  [PROPERTY_EDITOR_MODES.INHERIT]: {
+    value: PROPERTY_EDITOR_MODES.INHERIT,
+    label: "Inherit",
+    pseudo: { omit: true },
+  },
+  [NONE_OPTION]: {
+    value: NONE_OPTION,
+    label: "None",
+    pseudo: { writes: "null" },
+  },
+  [PROPERTY_EDITOR_MODES.CUSTOM]: {
+    value: PROPERTY_EDITOR_MODES.CUSTOM,
+    label: "Custom",
+    pseudo: { writes: '{ script: "<value>" }' },
+  },
+} as const;
+
+export const ERROR_BEHAVIOR_SELECTION_OPTIONS_META = {
+  [PROPERTY_EDITOR_MODES.INHERIT]: {
+    value: PROPERTY_EDITOR_MODES.INHERIT,
+    label: "Inherit",
+    pseudo: { omit: true },
+  },
+  [PROPERTY_EDITOR_MODES.CUSTOM]: {
+    value: PROPERTY_EDITOR_MODES.CUSTOM,
+    label: "Custom",
+    pseudo: { writes: '{ errorBehavior: { onError: "stopWorkflow" } }' },
+  },
+} as const;
+
+export const RESUME_SESSION_OPTIONS_META = {
+  [INHERIT_DEFAULT_OPTION]: {
+    value: INHERIT_DEFAULT_OPTION,
+    label: "Inherit",
+    pseudo: { omit: true },
+  },
+  [RESUME_SESSION_SELECTIONS.YES]: {
+    value: RESUME_SESSION_SELECTIONS.YES,
+    label: "Resume",
+    pseudo: { writes: "resumeSession: true" },
+  },
+  [RESUME_SESSION_SELECTIONS.NO]: {
+    value: RESUME_SESSION_SELECTIONS.NO,
+    label: "New Session",
+    pseudo: { writes: "resumeSession: false" },
+  },
+  [SESSION_ID_SENTINELS.FINAL_STEP]: {
+    value: SESSION_ID_SENTINELS.FINAL_STEP,
+    label: "Final Step Session",
+    pseudo: {
+      writes: "resumeSession: true, sessionId: <FINAL_STEP sentinel>",
+    },
+  },
+} as const;
+
+export const TRUSTED_ROOTS_SELECTION_OPTIONS_META = {
+  [TRUSTED_ROOTS_MODES.INHERIT]: {
+    value: TRUSTED_ROOTS_MODES.INHERIT,
+    label: "Inherit",
+    pseudo: { omit: true },
+  },
+  [TRUSTED_ROOTS_MODES.NONE]: {
+    value: TRUSTED_ROOTS_MODES.NONE,
+    label: "None",
+    pseudo: { writes: "trustedExternalRoots: null" },
+  },
+  [TRUSTED_ROOTS_MODES.CUSTOM]: {
+    value: TRUSTED_ROOTS_MODES.CUSTOM,
+    label: "Custom",
+    pseudo: { writes: "trustedExternalRoots: [<paths>]" },
+  },
+} as const;
+
 export const EXECUTION_MODE_OPTIONS_META: Record<
   ExecutionMode,
   SchemaOptionMeta<ExecutionMode>
@@ -201,22 +368,27 @@ export const PRIOR_CONTEXT_KEYWORD_OPTIONS_META: Record<
   [PRIOR_CONTEXT_KEYWORDS.ALL]: {
     value: PRIOR_CONTEXT_KEYWORDS.ALL,
     label: "All",
+    short: "all",
   },
   [PRIOR_CONTEXT_KEYWORDS.PREVIOUS]: {
     value: PRIOR_CONTEXT_KEYWORDS.PREVIOUS,
     label: "Previous",
+    short: "prev",
   },
   [PRIOR_CONTEXT_KEYWORDS.NONE]: {
     value: PRIOR_CONTEXT_KEYWORDS.NONE,
     label: "None",
+    short: "none",
   },
   [PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL]: {
     value: PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL,
     label: "Final Step All",
+    short: "fs-all",
   },
   [PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS]: {
     value: PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS,
     label: "Final Step Previous",
+    short: "fs-prev",
   },
 };
 
@@ -225,7 +397,7 @@ export const PRIOR_CONTEXT_SELECT_OPTIONS_META = {
   [INHERIT_DEFAULT_OPTION]: {
     value: INHERIT_DEFAULT_OPTION,
     label: "Inherit",
-    pseudo: { writes: "omit priorContext" },
+    pseudo: { omit: true },
   },
   [PRIOR_CONTEXT_SELECTION_MODES.RUN]: {
     value: PRIOR_CONTEXT_SELECTION_MODES.RUN,
@@ -258,17 +430,22 @@ export const CONDITION_ACTION_OPTIONS_META: Record<
   },
 };
 
+/** Actions available to a prompt script step's onPass/onFail fields. */
+export const SCRIPT_STEP_CONDITION_ACTION_OPTIONS_META = {
+  [CONDITION_ACTIONS.CONTINUE]:
+    CONDITION_ACTION_OPTIONS_META[CONDITION_ACTIONS.CONTINUE],
+  [CONDITION_ACTIONS.STOP_WORKFLOW]:
+    CONDITION_ACTION_OPTIONS_META[CONDITION_ACTIONS.STOP_WORKFLOW],
+};
+
 /** Shared labels for the subset accepted by errorBehavior.onError. */
 export const ERROR_BEHAVIOR_ACTION_OPTIONS_META = {
-  [CONDITION_ACTIONS.STOP_WORKFLOW]: CONDITION_ACTION_OPTIONS_META[
-    CONDITION_ACTIONS.STOP_WORKFLOW
-  ],
-  [CONDITION_ACTIONS.RETRY]: CONDITION_ACTION_OPTIONS_META[
-    CONDITION_ACTIONS.RETRY
-  ],
-  [CONDITION_ACTIONS.CONTINUE]: CONDITION_ACTION_OPTIONS_META[
-    CONDITION_ACTIONS.CONTINUE
-  ],
+  [CONDITION_ACTIONS.STOP_WORKFLOW]:
+    CONDITION_ACTION_OPTIONS_META[CONDITION_ACTIONS.STOP_WORKFLOW],
+  [CONDITION_ACTIONS.RETRY]:
+    CONDITION_ACTION_OPTIONS_META[CONDITION_ACTIONS.RETRY],
+  [CONDITION_ACTIONS.CONTINUE]:
+    CONDITION_ACTION_OPTIONS_META[CONDITION_ACTIONS.CONTINUE],
 };
 
 export const COMPARE_SOURCE_OPTIONS_META: Record<

@@ -127,6 +127,7 @@ export function CommitSection({
       >
         <HarnessDropdown
           id="commit-harness"
+          schemaPath="commit.harness"
           value={(commit.harness as string) || INHERIT_DEFAULT_OPTION}
           onChange={(value) =>
             onUpdate(

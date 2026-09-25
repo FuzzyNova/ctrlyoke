@@ -233,8 +233,15 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
           id={id}
           type="button"
           onClick={() => setIsOpen((prev) => !prev)}
-          aria-label={schemaAriaLabel(buttonLabel, schemaPath, PRIOR_CONTEXT_SELECT_OPTIONS_META[mode].pseudo ? { writes: PRIOR_CONTEXT_SELECT_OPTIONS_META[mode].pseudo.writes } : mode)}
-          title={schemaTitle(schemaPath, PRIOR_CONTEXT_SELECT_OPTIONS_META[mode].pseudo ? { writes: PRIOR_CONTEXT_SELECT_OPTIONS_META[mode].pseudo.writes } : mode)}
+          aria-label={schemaAriaLabel(
+            buttonLabel,
+            schemaPath,
+            PRIOR_CONTEXT_SELECT_OPTIONS_META[mode].pseudo ?? mode
+          )}
+          title={schemaTitle(
+            schemaPath,
+            PRIOR_CONTEXT_SELECT_OPTIONS_META[mode].pseudo ?? mode
+          )}
           aria-expanded={isOpen}
           aria-haspopup="listbox"
           aria-controls={listboxId}
@@ -266,8 +273,15 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
                   key={k}
                   type="button"
                   onClick={() => selectKeyword(k)}
-                  aria-label={schemaAriaLabel(label, schemaPath, PRIOR_CONTEXT_SELECT_OPTIONS_META[k].pseudo ? { writes: PRIOR_CONTEXT_SELECT_OPTIONS_META[k].pseudo.writes } : k)}
-                  title={schemaTitle(schemaPath, PRIOR_CONTEXT_SELECT_OPTIONS_META[k].pseudo ? { writes: PRIOR_CONTEXT_SELECT_OPTIONS_META[k].pseudo.writes } : k)}
+                  aria-label={schemaAriaLabel(
+                    label,
+                    schemaPath,
+                    PRIOR_CONTEXT_SELECT_OPTIONS_META[k].pseudo ?? k
+                  )}
+                  title={schemaTitle(
+                    schemaPath,
+                    PRIOR_CONTEXT_SELECT_OPTIONS_META[k].pseudo ?? k
+                  )}
                   className={`w-full px-2 py-1.5 text-xs text-left flex items-center gap-2 focus:outline-none border-none ${
                     isSelected
                       ? "bg-dropdown-selected-bg text-list-active-fg cy-dropdown-row-selected"

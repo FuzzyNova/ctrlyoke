@@ -27,13 +27,13 @@ import {
   WORKFLOW_ROW_KINDS,
   WORKFLOW_ROW_TIERS,
   WORKTREE_MODES,
-  WORKTREE_MODE_OPTIONS,
   WORKFLOW_VIEW_ADDRESS_KIND,
   WORKFLOW_DELETE_SCOPES,
   RUN_SUMMARY_CACHE_STATUSES,
 } from "@root/types/DashboardConstants";
 import { WorkflowList, type UnifiedWorkflowRow } from "./WorkflowList";
 import { RunPanel } from "./RunPanel";
+import { WORKTREE_MODE_OPTIONS_META } from "@root/types/SchemaUiMetadata";
 import { RunIdentityBadge } from "./RunIdentityBadge";
 import type { RunPanelRow } from "./RunSummaryRow";
 import { useRunSummaryCacheStore } from "../../store/runSummaryCacheStore";
@@ -186,15 +186,12 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     return authored;
   }, [globalSettings.worktree, workflowProperties.worktree]);
   const worktreeIndicator = useMemo(() => {
-    if (
-      effectiveWorktree === false
-    ) {
+    if (effectiveWorktree === false) {
       return undefined;
     }
     const modeLabel =
-      WORKTREE_MODE_OPTIONS.find(
-        (option) => option.value === effectiveWorktree.mode
-      )?.label ?? effectiveWorktree.mode;
+      WORKTREE_MODE_OPTIONS_META[effectiveWorktree.mode]?.label ??
+      effectiveWorktree.mode;
     const branch =
       "branch" in effectiveWorktree && effectiveWorktree.branch?.trim();
     return {
@@ -1499,27 +1496,23 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // whatever is represented by a running row above — and only those, so a
   // loaded-but-not-running lineage keeps its recent row rather than vanishing).
   const workflowListRows: UnifiedWorkflowRow[] = [
-    ...filteredRunningWorkflows.map(
-      (workflow): UnifiedWorkflowRow => ({
-        kind: WORKFLOW_ROW_KINDS.RUNNING,
-        key: `running:${workflow.workflowKey ?? workflow.id}`,
-        workflow,
-        // The lineage's recent entry is excluded from the recent rows below
-        // while it is running, but it is still the only source of the run
-        // metadata the row's drill affordance needs.
-        lineage: sortedRecentWorkflows.find(
-          (recentWorkflow) =>
-            recentWorkflow.address.workflowKey === workflow.workflowKey
-        ),
-      })
-    ),
-    ...filteredRecentWorkflows.map(
-      (workflow): UnifiedWorkflowRow => ({
-        kind: WORKFLOW_ROW_KINDS.RECENT,
-        key: `recent:${workflow.address.workflowKey}`,
-        workflow,
-      })
-    ),
+    ...filteredRunningWorkflows.map((workflow): UnifiedWorkflowRow => ({
+      kind: WORKFLOW_ROW_KINDS.RUNNING,
+      key: `running:${workflow.workflowKey ?? workflow.id}`,
+      workflow,
+      // The lineage's recent entry is excluded from the recent rows below
+      // while it is running, but it is still the only source of the run
+      // metadata the row's drill affordance needs.
+      lineage: sortedRecentWorkflows.find(
+        (recentWorkflow) =>
+          recentWorkflow.address.workflowKey === workflow.workflowKey
+      ),
+    })),
+    ...filteredRecentWorkflows.map((workflow): UnifiedWorkflowRow => ({
+      kind: WORKFLOW_ROW_KINDS.RECENT,
+      key: `recent:${workflow.address.workflowKey}`,
+      workflow,
+    })),
   ];
 
   // ── Run panel (drill-in view) derived data ──────────────────────────────

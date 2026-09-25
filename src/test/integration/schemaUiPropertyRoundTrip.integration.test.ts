@@ -11,6 +11,18 @@ import {
   type RoundTripHarness,
   type RunDefinition,
 } from "./helpers/propertyRoundTrip";
+import {
+  COMPARE_SOURCE_OPTIONS_META,
+  EXECUTION_MODE_OPTIONS_META,
+  HARNESS_OPTIONS_META,
+  HOOK_EVENT_OPTIONS_META,
+  PERMISSION_MODE_OPTIONS_META,
+  PRIOR_CONTEXT_KEYWORD_OPTIONS_META,
+  SCRIPT_OPERATOR_OPTIONS_META,
+  SCRIPT_STEP_CONDITION_ACTION_OPTIONS_META,
+  toSelectOptions,
+} from "../../types/SchemaUiMetadata";
+import { SCHEMA_ENUMS } from "../../types/generated/SchemaDescriptions";
 
 /**
  * Schema -> dashboard property round trip.
@@ -387,6 +399,7 @@ const UI_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
   ["additionalArgs", ["settings-append-args"]],
   ["agent", ["settings-agent"]],
   ["compareSource", ["${idPrefix}-compare-source"]],
+  ["color", ["${idPrefix}-color"]],
   ["endCondition", ["settings-end-condition-enabled"]],
   ["env", ["${idPrefix}-env"]],
   ["errorBehavior", ["settings-error"]],
@@ -418,12 +431,19 @@ const UI_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
  * Properties temporarily reachable only through persisted/hand-authored data
  * may be listed here with an explanation while their editor control is staged.
  */
-const UI_CONTROL_OPTOUTS = new Map<string, string>([
-  [
-    "color",
-    "data layer landed in sequencing item 8; editor mounts are the follow-up",
-  ],
-]);
+const UI_CONTROL_OPTOUTS = new Map<string, string>();
+
+const UI_ENUM_META = [
+  { path: "toolPermissions.mode", meta: PERMISSION_MODE_OPTIONS_META },
+  { path: "executionMode", meta: EXECUTION_MODE_OPTIONS_META },
+  { path: "harness", meta: HARNESS_OPTIONS_META },
+  { path: "priorContext", meta: PRIOR_CONTEXT_KEYWORD_OPTIONS_META },
+  { path: "onFail", meta: SCRIPT_STEP_CONDITION_ACTION_OPTIONS_META },
+  { path: "onPass", meta: SCRIPT_STEP_CONDITION_ACTION_OPTIONS_META },
+  { path: "compareSource", meta: COMPARE_SOURCE_OPTIONS_META },
+  { path: "operator", meta: SCRIPT_OPERATOR_OPTIONS_META },
+  { path: "hooks[].event", meta: HOOK_EVENT_OPTIONS_META },
+] as const;
 
 const WEBVIEW_SOURCE_ROOT = path.resolve(
   __dirname,
@@ -613,6 +633,25 @@ suite("Schema -> dashboard property round trip", () => {
         [],
         `Schema → UI control parity failures:\n${failures.join("\n")}`
       );
+    });
+
+    test("workflow enum controls use schema-matched metadata values and labels", () => {
+      for (const { path: schemaPath, meta } of UI_ENUM_META) {
+        const rows = Object.values(meta);
+        assert.deepStrictEqual(
+          rows.map((row) => row.value).sort(),
+          [...(SCHEMA_ENUMS[schemaPath] ?? [])].sort(),
+          `${schemaPath}: option metadata values must match the schema enum`
+        );
+        assert.deepStrictEqual(
+          toSelectOptions(meta, schemaPath).map(({ value, label }) => ({
+            value,
+            label,
+          })),
+          rows.map(({ value, label }) => ({ value, label })),
+          `${schemaPath}: generated select options must preserve metadata labels`
+        );
+      }
     });
   });
 

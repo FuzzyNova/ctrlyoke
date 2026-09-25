@@ -357,7 +357,7 @@ const CONTEXT_CASES: UndoCase[] = [
     tab: "Context",
     run: () => {
       openSelect("settings-resume-session");
-      chooseOption("Yes - Resume previous");
+      chooseOption("Resume");
     },
   },
   {
@@ -476,7 +476,9 @@ const VALIDATION_CASES: UndoCase[] = [
     setup: seedPreConditionOnly,
     run: () => {
       openSelect("settings-pre-operator");
-      chooseOption(SCRIPT_OPERATOR_OPTIONS_META[SCRIPT_OPERATORS.NOT_CONTAINS].label);
+      chooseOption(
+        SCRIPT_OPERATOR_OPTIONS_META[SCRIPT_OPERATORS.NOT_CONTAINS].label
+      );
     },
   },
   {
@@ -1053,7 +1055,7 @@ describe("WorkflowPropertiesPanel undo/redo sequences", () => {
     checkpoints.push(propertiesJson());
 
     openSelect("settings-pre-operator");
-      chooseOption(SCRIPT_OPERATOR_OPTIONS_META[SCRIPT_OPERATORS.CONTAINS].label);
+    chooseOption(SCRIPT_OPERATOR_OPTIONS_META[SCRIPT_OPERATORS.CONTAINS].label);
     checkpoints.push(propertiesJson());
 
     commitInput(requireElement("settings-pre-expected"), "ready");
@@ -1111,7 +1113,9 @@ describe("WorkflowPropertiesPanel undo/redo sequences", () => {
       fireEvent.blur(expected);
       fireEvent.click(requireElement("settings-pre-operator"));
     });
-      chooseOption(SCRIPT_OPERATOR_OPTIONS_META[SCRIPT_OPERATORS.NOT_CONTAINS].label);
+    chooseOption(
+      SCRIPT_OPERATOR_OPTIONS_META[SCRIPT_OPERATORS.NOT_CONTAINS].label
+    );
 
     expect(
       useSettingsStore.getState().workflowProperties.preCondition

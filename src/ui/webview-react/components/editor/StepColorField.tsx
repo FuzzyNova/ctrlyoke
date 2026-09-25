@@ -5,6 +5,8 @@ import { useWorkflowStore } from "../../store/workflowStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { getInheritedStepColor } from "../../utils/stepColor";
 import { Icon } from "../shared/Icon";
+import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
+import { SCHEMA_FIELD_META } from "@root/types/SchemaUiMetadata";
 
 interface StepColorInputState {
   color: string;
@@ -71,6 +73,7 @@ export const StepColorField: React.FC<StepColorFieldProps> = ({ idPrefix }) => {
   const { color, inheritedColor, hasOverride, setColor, commit, reset } =
     useStepColorInput();
   const inputId = `${idPrefix}-color`;
+  const fieldMeta = SCHEMA_FIELD_META.color;
 
   return (
     <div className="space-y-1">
@@ -78,7 +81,12 @@ export const StepColorField: React.FC<StepColorFieldProps> = ({ idPrefix }) => {
         <label
           htmlFor={inputId}
           className="text-xs font-semibold uppercase text-description-fg"
-          title="Override the step identity color used across the dashboard."
+          title={schemaTitle(
+            fieldMeta.path,
+            undefined,
+            "Override the step identity color used across the dashboard."
+          )}
+          aria-label={schemaAriaLabel(fieldMeta.label, fieldMeta.path)}
         >
           Step Color
         </label>
@@ -102,10 +110,18 @@ export const StepColorField: React.FC<StepColorFieldProps> = ({ idPrefix }) => {
         className="h-8 w-full cursor-pointer rounded border border-input-border bg-input-bg p-0.5"
         title={
           hasOverride
-            ? `Step color override: ${color}`
-            : `Inherited step color: ${inheritedColor}`
+            ? schemaTitle(
+                fieldMeta.path,
+                color,
+                `Step color override: ${color}`
+              )
+            : schemaTitle(
+                fieldMeta.path,
+                color,
+                `Inherited step color: ${inheritedColor}`
+              )
         }
-        aria-label="Step color"
+        aria-label={schemaAriaLabel(fieldMeta.label, fieldMeta.path, color)}
       />
       <p className="text-xs text-description-fg">
         {hasOverride ? `Override: ${color}` : `Inherited: ${inheritedColor}`}

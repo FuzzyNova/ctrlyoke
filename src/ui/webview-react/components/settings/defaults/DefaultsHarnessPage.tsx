@@ -4,10 +4,7 @@ import type {
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
 import {
-  EXECUTION_MODE_OPTIONS,
   WORKTREE_KEEP_HELP_TEXT,
-  WORKTREE_MODE_HELP_TEXT,
-  WORKTREE_MODE_OPTIONS,
   WORKTREE_MODE_SELECTIONS,
   WORKTREE_MODES,
 } from "@root/types/DashboardConstants";
@@ -23,6 +20,12 @@ import { MultiCheckboxDropdown } from "../../shared/MultiCheckboxDropdown";
 import { SettingInputRow } from "../../shared/SettingInputRow";
 import { FieldDiagnostic } from "../../shared/FieldDiagnostic";
 import { SecretGrantsEditor } from "../../shared/SecretGrantsEditor";
+import {
+  EXECUTION_MODE_OPTIONS_META,
+  WORKTREE_SELECTION_OPTIONS_META,
+  toSelectOptions,
+} from "@root/types/SchemaUiMetadata";
+import { SCHEMA_DESCRIPTIONS } from "@root/types/generated/SchemaDescriptions";
 import { fieldValidationBorderClass } from "@utils/fieldValidation";
 import { HarnessesSection } from "../HarnessesSection";
 
@@ -120,7 +123,11 @@ export function DefaultsHarnessPage({
             id="defaults-execution-mode"
             value={wf.executionMode}
             onChange={(v) => onUpdate("defaults.executionMode", v)}
-            options={EXECUTION_MODE_OPTIONS}
+            schemaPath="defaults.executionMode"
+            options={toSelectOptions(
+              EXECUTION_MODE_OPTIONS_META,
+              "defaults.executionMode"
+            )}
           />
         </SettingInputRow>
       </div>
@@ -130,7 +137,7 @@ export function DefaultsHarnessPage({
         </h3>
         <SettingInputRow
           label="Worktree mode"
-          description={WORKTREE_MODE_HELP_TEXT}
+          description={SCHEMA_DESCRIPTIONS["defaults.worktree"]}
           id="defaults-worktree-mode"
           path="defaults.worktree"
           {...rowProps}
@@ -139,7 +146,11 @@ export function DefaultsHarnessPage({
             id="defaults-worktree-mode"
             value={worktreeMode}
             onChange={updateWorktreeMode}
-            options={WORKTREE_MODE_OPTIONS}
+            schemaPath="defaults.worktree"
+            options={toSelectOptions(
+              WORKTREE_SELECTION_OPTIONS_META,
+              "defaults.worktree"
+            )}
           />
         </SettingInputRow>
         {worktreeMode === WORKTREE_MODES.NAMED && (

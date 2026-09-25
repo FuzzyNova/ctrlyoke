@@ -265,7 +265,7 @@ describe("EditorSection", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Headless" }));
+      fireEvent.click(screen.getByRole("button", { name: /^Headless/ }));
     });
 
     expect(useEditorStore.getState().properties.executionMode).toBe("headless");

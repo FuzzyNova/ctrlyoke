@@ -871,7 +871,7 @@ describe("PromptEditor — script-step properties", () => {
     prepareScriptEditor();
     render(<PromptEditor />);
 
-    const color = screen.getByLabelText("Step color");
+    const color = screen.getByLabelText(/^Step Color, color:/);
     fireEvent.change(color, { target: { value: "#2468ac" } });
     fireEvent.blur(color);
 

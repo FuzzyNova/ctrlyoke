@@ -12,5 +12,5 @@ export interface SelectOption {
   /** Schema path used to add property-aware title and accessible text. */
   schemaPath?: string;
   /** YAML emitted by an option that is a UI-only sentinel rather than a schema value. */
-  pseudo?: { writes: string };
+  pseudo?: { writes: string } | { omit: true };
 }

@@ -2,6 +2,7 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
   BROWSER_NOTIFICATION_MODE_OPTIONS_META,
+  AGENT_SELECTION_OPTIONS_META,
   CODEX_APPROVAL_POLICY_OPTIONS_META,
   CODEX_SANDBOX_MODE_OPTIONS_META,
   COMPARE_SOURCE_OPTIONS_META,
@@ -21,6 +22,7 @@ import {
   TERMINAL_MOBILE_CONTROL_BAR_OPTIONS_META,
   TOAST_LEVEL_OPTIONS_META,
   WORKTREE_MODE_OPTIONS_META,
+  WORKFLOW_AGENT_SELECTION_OPTIONS_META,
   toSelectOptions,
   type SchemaOptionMeta,
 } from "../../types/SchemaUiMetadata";
@@ -272,6 +274,30 @@ function normalize(value: string): string {
 }
 
 suite("Schema UI metadata", () => {
+  test("agent None options describe each surface's schema encoding", () => {
+    const stepNone = toSelectOptions(
+      AGENT_SELECTION_OPTIONS_META,
+      "agent"
+    ).find(({ label }) => label === "None");
+    const workflowNone = toSelectOptions(
+      WORKFLOW_AGENT_SELECTION_OPTIONS_META,
+      "agent"
+    )[0];
+
+    assert.deepStrictEqual(stepNone, {
+      value: "none",
+      label: "None",
+      schemaPath: "agent",
+      pseudo: { writes: "agent: null" },
+    });
+    assert.deepStrictEqual(workflowNone, {
+      value: "",
+      label: "None",
+      schemaPath: "agent",
+      pseudo: { writes: 'agent: ""' },
+    });
+  });
+
   test("toSelectOptions carries the schema path and compact label", () => {
     const [claude] = toSelectOptions(HARNESS_OPTIONS_META, "harness").filter(
       ({ value }) => value === HARNESS_IDS.CLAUDE_CLI

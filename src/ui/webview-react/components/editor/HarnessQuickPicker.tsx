@@ -115,6 +115,7 @@ export const HarnessQuickPicker: React.FC<HarnessQuickPickerProps> = ({
       disabled={disabled}
     >
       <HarnessDropdown
+        schemaPath="harness"
         value={properties.harness ?? INHERIT_DEFAULT_OPTION}
         onChange={handleHarnessChange}
         showDefault={true}

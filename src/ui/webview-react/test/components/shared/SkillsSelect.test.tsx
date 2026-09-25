@@ -36,7 +36,7 @@ describe("SkillsSelect", () => {
       />
     );
 
-    const trigger = screen.getByRole("button", { name: "Skills" });
+    const trigger = screen.getByRole("button", { name: /^Skills/ });
     expect(trigger).toHaveAttribute("aria-haspopup", "listbox");
     expect(trigger).toHaveAttribute("aria-expanded", "false");
     expect(trigger).toHaveAttribute("aria-controls", "skills-listbox");

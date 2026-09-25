@@ -130,19 +130,12 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   const optionTitle = (option: CustomSelectOption) => {
     const path = optionSchemaPath(option);
     if (!schemaPath || !path) return option.label;
-    return schemaTitle(
-      path,
-      option.pseudo ? { writes: option.pseudo.writes } : option.value
-    );
+    return schemaTitle(path, option.pseudo ?? option.value);
   };
   const optionAriaLabel = (option: CustomSelectOption) => {
     const path = optionSchemaPath(option);
     if (!schemaPath || !path) return undefined;
-    return schemaAriaLabel(
-      option.label,
-      path,
-      option.pseudo ? { writes: option.pseudo.writes } : option.value
-    );
+    return schemaAriaLabel(option.label, path, option.pseudo ?? option.value);
   };
 
   // Split options into visible and hidden lists
