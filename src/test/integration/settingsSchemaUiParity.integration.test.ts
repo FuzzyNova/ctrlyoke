@@ -44,6 +44,10 @@ const SETTINGS_SCHEMA_PATH = path.resolve(
   __dirname,
   "../../../schemas/settings-schema.json"
 );
+const WORKFLOW_SCHEMA_PATH = path.resolve(
+  __dirname,
+  "../../../schemas/workflow-schema.json"
+);
 const DASHBOARD_CONSTANTS_PATH = path.resolve(
   __dirname,
   "../../../src/types/DashboardConstants.ts"
@@ -58,16 +62,48 @@ type SchemaNode = Record<string, unknown>;
 const schema = JSON.parse(
   readFileSync(SETTINGS_SCHEMA_PATH, "utf8")
 ) as SchemaNode;
+const workflowSchema = JSON.parse(
+  readFileSync(WORKFLOW_SCHEMA_PATH, "utf8")
+) as SchemaNode;
 
-function resolveRef(node: SchemaNode): SchemaNode {
+interface ResolvedSchemaNode {
+  node: SchemaNode;
+  document: SchemaNode;
+}
+
+function resolveRef(
+  node: SchemaNode,
+  document: SchemaNode
+): ResolvedSchemaNode {
   const ref = node.$ref as string | undefined;
-  if (!ref) return node;
-  const match = /^#\/definitions\/(.+)$/.exec(ref);
-  assert.ok(match, `Unsupported $ref: ${ref}`);
-  const definitions = schema.definitions as Record<string, SchemaNode>;
-  const target = definitions[match![1]];
+  if (!ref) return { node, document };
+
+  const hashIndex = ref.indexOf("#");
+  const schemaFile = hashIndex === -1 ? ref : ref.slice(0, hashIndex);
+  const pointer = hashIndex === -1 ? "" : ref.slice(hashIndex);
+  const targetDocument = ref.startsWith("#")
+    ? document
+    : schemaFile === "workflow-schema.json"
+      ? workflowSchema
+      : undefined;
+  assert.ok(targetDocument, `Unsupported $ref: ${ref}`);
+  const target = pointer
+    .slice(2)
+    .split("/")
+    .filter(Boolean)
+    .reduce<unknown>((current, segment) => {
+      const key = segment.replaceAll("~1", "/").replaceAll("~0", "~");
+      assert.ok(
+        current !== null && typeof current === "object" && key in current,
+        `$ref target not found: ${ref}`
+      );
+      return (current as Record<string, unknown>)[key];
+    }, targetDocument);
   assert.ok(target, `$ref target not found: ${ref}`);
-  return target;
+  return {
+    node: { ...(target as SchemaNode), ...node, $ref: undefined },
+    document: targetDocument,
+  };
 }
 
 function isPlainObjectSchema(node: SchemaNode): boolean {
@@ -99,14 +135,38 @@ function walk(
   node: SchemaNode,
   prefix: string,
   out: Map<string, string>,
-  templateParent: string | undefined
+  templateParent: string | undefined,
+  document: SchemaNode
 ): void {
-  const resolved = resolveRef(node);
+  const { node: resolved, document: resolvedDocument } = resolveRef(
+    node,
+    document
+  );
   const dynamicParent =
     templateParent ??
     (DYNAMIC_TEMPLATE_PARENTS.has(prefix) ? prefix : undefined);
 
   if (!isPlainObjectSchema(resolved)) {
+    // Settings exposes tool permission values as a nullable shared workflow
+    // definition, while the dashboard still edits the object branch's fields.
+    if (
+      prefix === "defaults.toolPermissions" &&
+      Array.isArray(resolved.oneOf)
+    ) {
+      const objectBranch = (resolved.oneOf as SchemaNode[])
+        .map((branch) => resolveRef(branch, resolvedDocument))
+        .find(({ node: branch }) => isPlainObjectSchema(branch));
+      if (objectBranch) {
+        walk(
+          objectBranch.node,
+          prefix,
+          out,
+          dynamicParent,
+          objectBranch.document
+        );
+        return;
+      }
+    }
     if (prefix) {
       out.set(prefix, dynamicParent ? `${dynamicParent}.\${` : prefix);
     }
@@ -115,13 +175,19 @@ function walk(
 
   const properties = resolved.properties as Record<string, SchemaNode>;
   for (const [key, childSchema] of Object.entries(properties)) {
-    walk(childSchema, prefix ? `${prefix}.${key}` : key, out, dynamicParent);
+    walk(
+      childSchema,
+      prefix ? `${prefix}.${key}` : key,
+      out,
+      dynamicParent,
+      resolvedDocument
+    );
   }
 }
 
 function allSettingPaths(): Map<string, string> {
   const out = new Map<string, string>();
-  walk(schema, "", out, undefined);
+  walk(schema, "", out, undefined, schema);
   return out;
 }
 

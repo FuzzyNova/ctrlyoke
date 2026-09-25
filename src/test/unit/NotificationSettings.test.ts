@@ -99,7 +99,15 @@ suite("Notification settings defaults", () => {
         "utf8"
       )
     ) as Record<string, unknown>;
-    const validate = new Ajv({ allErrors: true }).compile(schema);
+    const workflowSchema = JSON.parse(
+      fs.readFileSync(
+        path.resolve(__dirname, "../../../schemas/workflow-schema.json"),
+        "utf8"
+      )
+    ) as Record<string, unknown>;
+    const ajv = new Ajv({ allErrors: true });
+    ajv.addSchema(workflowSchema, "workflow-schema.json");
+    const validate = ajv.compile(schema);
 
     assert.strictEqual(
       validate({

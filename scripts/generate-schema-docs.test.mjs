@@ -56,6 +56,22 @@ test("a new settings field without a description fails generation", () => {
   );
 });
 
+test("settings references resolve against the sibling workflow schema", () => {
+  const inputs = loadSchemaDocumentationInputs();
+  inputs.workflowSchema.definitions.harnessId = {
+    type: "string",
+    const: "sibling-schema-resolved",
+  };
+  inputs.settingsSchema.properties.defaults.properties.agent = {
+    $ref: "workflow-schema.json#/definitions/harnessId",
+    description: "External reference used by this test.",
+  };
+
+  const result = buildSchemaDocumentation(inputs);
+  assert.deepEqual(result.errors, []);
+  assert.match(pageEndingWith(result, "settings"), /"sibling-schema-resolved"/);
+});
+
 test("a new workflow definition must be assigned to a docs section", () => {
   const inputs = loadSchemaDocumentationInputs();
   inputs.workflowSchema.definitions.brandNewShape = { type: "object" };

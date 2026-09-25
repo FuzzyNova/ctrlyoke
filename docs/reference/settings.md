@@ -168,15 +168,21 @@ Fields:
 
 ### `defaults.agent` {#defaults-agent}
 
-- **Type:** `string`
+- **Type:** `string` or `""` or `null`
 - **Default:** `""`
 - **Workflow field:** [`agent`](/reference/workflow-schema#execution-properties-agent) — a workflow or step value overrides this default
 
 Default portable ctrlyoke workflow agent attachment for new workflows. Native harness agent discovery is managed separately by the Agents & Skills settings page.
 
+Accepted forms:
+
+- `string` matching `^[a-zA-Z0-9-_]+$`
+- `""` — Empty string means no agent — the form the dashboard's "None" selection serializes to. Distinct from null, which explicitly disables an inherited agent.
+- `null`
+
 ### `defaults.skills` {#defaults-skills}
 
-- **Type:** `string[]`
+- **Type:** `string[]` or `null`
 - **Default:** `[]`
 - **Workflow field:** [`skills`](/reference/workflow-schema#execution-properties-skills) — a workflow or step value overrides this default
 
@@ -184,7 +190,7 @@ Default portable ctrlyoke workflow skill attachments for new workflows. Native h
 
 ### `defaults.secrets` {#defaults-secrets}
 
-- **Type:** `string[]`
+- **Type:** `string[]` or `null`
 - **Default:** `[]`
 - **Workflow field:** [`secrets`](/reference/workflow-schema#execution-properties-secrets) — a workflow or step value overrides this default
 
@@ -208,15 +214,26 @@ Resume an existing session when running a workflow.
 
 ### `defaults.priorContext` {#defaults-priorcontext}
 
-- **Type:** `string`
+- **Type:** `"all" | "previous" | "none" | "finalStepAll" | "finalStepPrevious"` or `integer[]` or `{ workflowKey, runRef }`
 - **Default:** `"none"`
 - **Workflow field:** [`priorContext`](/reference/workflow-schema#execution-properties-priorcontext) — a workflow or step value overrides this default
 
 Prior context to inject before the first prompt.
 
+Accepted forms:
+
+- `"all" | "previous" | "none" | "finalStepAll" | "finalStepPrevious"` — Keyword shorthand: 'all' = all prior queue prompt outputs, 'previous' = immediately preceding queue prompt output, 'none' = no injection, 'finalStepAll' = all previous final step loop outputs, 'finalStepPrevious' = immediately preceding final step loop output
+- `integer[]` — Specific prior prompt numbers to include (1-based, e.g. [1, 3] includes prompts 1 and 3)
+- `{ workflowKey, runRef }` — Import all resolved queue and final-step output from one completed run in this same workspace.
+
+Fields:
+
+- `workflowKey` · `string` · required — Stable workflow lineage key within the current workspace.
+- `runRef` · `string` · required — Stable completed-run reference within workflowKey.
+
 ### `defaults.mcpServers` {#defaults-mcpservers}
 
-- **Type:** array of (`string` or `{ id?, command?, args?, … }`)
+- **Type:** array of (`string` or `{ id, description?, command?, … }`)
 - **Default:** `[]`
 - **Workflow field:** [`mcpServers`](/reference/workflow-schema#execution-properties-mcpservers) — a workflow or step value overrides this default
 
@@ -224,18 +241,31 @@ Default MCP servers to attach to each prompt execution.
 
 Fields:
 
-- `id` · `string`
-- `command` · `string`
-- `args` · `string[]`
-- `env` · map of `string`
+- `id` · `string` · required — Unique server identifier
+- `description` · `string` — Human-readable description shown in MCP Manager. ctrlyoke-only metadata — deliberately omitted by every harness export path so it never leaks an unrecognized key into an external tool's native config file.
+- `command` · `string` — Command to run the MCP server process (stdio servers, e.g. "npx" or "node")
+- `args` · `string[]` — Arguments to pass to the command (stdio servers only)
+- `env` · map of `string` — Environment variables for the server process (stdio servers only)
+- `autoApprove` · `boolean` or `string[]` — Tools to auto-approve: true = all tools, string[] = specific tools
+- `url` · `string` — Remote endpoint URL for streamable-http or SSE servers (e.g. "https://mcp.example.com")
+- `transport` · `"streamable-http" | "sse"` — Transport protocol for remote servers. Defaults to "streamable-http".
+- `headers` · map of `string` — HTTP headers to send with every request (remote servers only, e.g. { "Authorization": "Bearer token" }). Secret references are allowed as ${secret:NAME} values.
+- `deniedTools` · `string[]` — Tool names from this server to deny at execution time. Use bare tool names without the mcp\_\_&lt;serverid>\_\_ prefix (e.g. ["append\_step"]). Translated to mcp\_\_&lt;id>\_\_&lt;tool> deny patterns and merged into the harness permission args. Supported on harnesses that accept tool deny patterns.
 
 ### `defaults.hooks` {#defaults-hooks}
 
-- **Type:** array of `object`
+- **Type:** array of `{ event, command, env?, … }`
 - **Default:** `[]`
 - **Workflow field:** [`hooks`](/reference/workflow-schema#execution-properties-hooks) — a workflow or step value overrides this default
 
 User-defined hooks to run at various execution lifecycle points.
+
+Fields:
+
+- `event` · `"stop" | "sessionStart" | "preToolUse" | "postToolUse" | "userPromptSubmit" | "permissionRequest" | "notification" | "error"` · required — Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), agentStop (Copilot), notify (Codex). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.
+- `command` · `string` · required — Command to execute. Resolved relative to workspace root if not absolute.
+- `env` · map of `string` — Environment map consumed by the hook process. Secret references are allowed only as ${secret:NAME} values.
+- `timeoutSec` · `number` — Timeout in seconds. Only respected by CLIs that support per-hook timeouts.
 
 ### `defaults.errorBehavior` {#defaults-errorbehavior}
 
@@ -245,23 +275,23 @@ User-defined hooks to run at various execution lifecycle points.
 
 Default policy for internal errors in any step phase. `null` (the default) stops the workflow unless the workflow or step sets its own policy.
 
-Accepted forms:
-
-- `{ onError, maxRetries?, retryDelayMs? }` — Default harness/session failure policy for new workflows.
-- `null` — Disabled (default). New workflows use stop behavior unless overridden.
-
 Fields:
 
-- `onError` · `"stop" | "retry" | "continue"` · required — What to do when the harness/session fails.
+- `onError` · `"stop" | "retry" | "continue"` · required — What to do when a step phase cannot run or otherwise encounters an internal error.
 - `maxRetries` · `integer` — Maximum retry attempts when onError is retry.
 - `retryDelayMs` · `integer` — Delay before retrying, in milliseconds.
 
 ### `defaults.toolPermissions` {#defaults-toolpermissions}
 
-- **Type:** `{ mode?, allowedTools?, deniedTools? }`
+- **Type:** `{ mode?, allowedTools?, deniedTools? }` or `null`
 - **Workflow field:** [`toolPermissions`](/reference/workflow-schema#execution-properties-toolpermissions) — a workflow or step value overrides this default
 
 Default tool permission settings for prompt execution. Allowed Tools and Denied Tools are currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; Qwen is inline granular support and OpenCode uses OPENCODE\_CONFIG\_CONTENT without writing a workspace opencode.json. Codex and Antigravity provide a derived mode-only summary and do NOT ENFORCE these lists.
+
+Accepted forms:
+
+- `{ mode?, allowedTools?, deniedTools? }` — Per-workflow/prompt tool permission overrides. Follows three-tier precedence: prompt > workflow > the `defaults.toolPermissions` setting.
+- `null`
 
 <details><summary>Default value</summary>
 
@@ -305,61 +335,57 @@ Default tool permission settings for prompt execution. Allowed Tools and Denied 
 
 Fields:
 
-- `mode` · `"dangerouslyAllowAll" | "allowAll" | "custom" | "none"` — Default tool permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects the deny list. 'custom' uses allowedTools + deniedTools only. 'none' passes no permission flags at all — it does not deny tools; the harness applies its own local permission settings.
-- `allowedTools` · `string[]` — Explicitly allowed tools (used when mode is 'custom'). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; NOT ENFORCED by Codex or Antigravity.
-- `deniedTools` · `string[]` — Explicitly denied tools (used when mode is 'custom'). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; NOT ENFORCED by Codex or Antigravity.
+- `mode` · `"dangerouslyAllowAll" | "allowAll" | "custom" | "none"` — Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects deny list. 'custom' uses allowedTools + deniedTools only. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config).
+- `allowedTools` · `string[]` — Tool patterns to allow (used in custom mode). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE\_CONFIG\_CONTENT and writes no workspace opencode.json. Codex and Antigravity provide a derived mode-only summary; Allowed Tools are NOT ENFORCED by those harnesses.
+- `deniedTools` · `string[]` — Tool patterns to deny (takes precedence over allow list). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE\_CONFIG\_CONTENT and writes no workspace opencode.json. Codex and Antigravity provide a derived mode-only summary; Denied Tools are NOT ENFORCED by those harnesses.
 
 ### `defaults.endCondition` {#defaults-endcondition}
 
-- **Type:** `{ script, compareSource?, timeout?, … }` or `null`
+- **Type:** `{ script, env?, compareSource?, … }` or `null`
 - **Default:** `null`
 - **Workflow field:** [`endCondition`](/reference/workflow-schema#execution-properties-endcondition) — a workflow or step value overrides this default
 
 Default end condition for new workflows. `null` (the default) means new workflows have no end condition.
 
-Accepted forms:
-
-- `{ script, compareSource?, timeout?, … }` — Default end condition applied to all new workflows. Individual prompts can override or disable this.
-- `null` — Disabled (default). New workflows have no end condition.
-
 Fields:
 
-- `script` · `string` · required — Shell command or script path to execute after each prompt.
+- `script` · `string` · required — Shell command or path to script. Resolved relative to workspace root or .ctrlyoke/.
+- `env` · map of `string` — Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.
 - `compareSource` · `"stdout" | "stderr" | "exitCode"` — Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.
-- `timeout` · `number` — Timeout in milliseconds.
-- `maxRetries` · `number` — Maximum retry attempts. Use -1 for unlimited, 0 for none.
-- `retryPrompt` · `string` — Retry prompt template. Supports $preCondition:&lt;field> and $endCondition:&lt;field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:\* works in the step and retry prompts; $endCondition:\* is only available in the retry prompt.
-- `passRetryPrompt` · `string` — Pass-retry prompt template. Supports $preCondition:&lt;field> and $endCondition:&lt;field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:\* works in the step and retry prompts; $endCondition:\* is only available in the retry prompt. If omitted, the step's own prompt is re-sent.
-- `resumeSessionOnRetry` · `boolean` — Resume the same session for retries (default: true).
-- `onPass` · `"continue" | "retry" | "stopWorkflow"` — Action when end condition passes.
-- `onFail` · `"continue" | "retry" | "stopWorkflow"` — Action when end condition fails.
+- `returns` · removed — Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.
+- `timeout` · `number` — Timeout in milliseconds. When omitted, the `execution.scriptTimeout` setting applies.
+- `shell` · `string` — Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. "pwsh", "bash", "cmd". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted.
 - `operator` · `"eq" | "ne" | "contains" | "notContains" | "gte" | "gt" | "lte" | "lt" | "matches" | "isEmpty" | "isNotEmpty"` — How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag.
-- `expected` · `string` or `number` — Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values.
+- `expected` · `string` or `number` — Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.
 - `ignoreCase` · `boolean` — Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.
+- `maxRetries` · `number` — Maximum number of retry attempts when validation fails. Use -1 for unlimited retries (use with caution), 0 for no retries (default), or 1-100 for a specific limit.
+- `retryPrompt` · `string` — Template for retry prompt. Supports $preCondition:&lt;field> and $endCondition:&lt;field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:\* works in the step and retry prompts; $endCondition:\* is only available in the retry prompt.
+- `passRetryPrompt` · `string` — Template for pass-retry prompt. Supports $preCondition:&lt;field> and $endCondition:&lt;field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:\* works in the step and retry prompts; $endCondition:\* is only available in the retry prompt. If omitted, the step's own prompt is re-sent.
+- `resumeSessionOnRetry` · `boolean` — Whether retries continue in the same session. Default: true (retries resume the existing session for context continuity). Set to false to start a fresh session for each retry.
+- `onPass` · `"continue" | "retry" | "stopWorkflow"` — What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately.
+- `onFail` · `"continue" | "retry" | "stopWorkflow"` — What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times). 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default). When 'retry' is set and maxRetries is unset, defaults to 1 retry.
 
 ### `defaults.preCondition` {#defaults-precondition}
 
-- **Type:** `{ script, compareSource?, timeout?, … }` or `null`
+- **Type:** `{ script, env?, compareSource?, … }` or `null`
 - **Default:** `null`
 - **Workflow field:** [`preCondition`](/reference/workflow-schema#execution-properties-precondition) — a workflow or step value overrides this default
 
 Default pre-condition for new workflows. `null` (the default) means new workflows have no pre-condition.
 
-Accepted forms:
-
-- `{ script, compareSource?, timeout?, … }` — Default pre-condition gate applied to all new workflows. Individual prompts can override or disable this.
-- `null` — Disabled (default). New workflows have no pre-condition.
-
 Fields:
 
-- `script` · `string` · required — Shell command or script path to execute before each prompt.
+- `script` · `string` · required — Shell command or path to script. Resolved relative to workspace root or .ctrlyoke/.
+- `env` · map of `string` — Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.
 - `compareSource` · `"stdout" | "stderr" | "exitCode"` — Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.
-- `timeout` · `number` — Timeout in milliseconds.
-- `onPass` · `"continue" | "skipPrompt" | "stopWorkflow"` — Action when pre-condition passes.
-- `onFail` · `"continue" | "skipPrompt" | "stopWorkflow"` — Action when pre-condition fails.
+- `returns` · removed — Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.
+- `timeout` · `number` — Timeout in milliseconds. When omitted, the `execution.scriptTimeout` setting applies.
+- `shell` · `string` — Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. "pwsh", "bash", "cmd". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted.
 - `operator` · `"eq" | "ne" | "contains" | "notContains" | "gte" | "gt" | "lte" | "lt" | "matches" | "isEmpty" | "isNotEmpty"` — How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag.
-- `expected` · `string` or `number` — Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values.
+- `expected` · `string` or `number` — Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.
 - `ignoreCase` · `boolean` — Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.
+- `onPass` · `"continue" | "skipPrompt" | "stopWorkflow"` — What to do when the pre-condition check passes (script exits 0 / returns matches). 'continue': run the prompt (default). 'skipPrompt': skip this prompt and advance the queue. 'stopWorkflow': halt execution.
+- `onFail` · `"continue" | "skipPrompt" | "stopWorkflow"` — What to do when the pre-condition check fails. 'continue': run the prompt anyway (pre-condition is advisory). 'skipPrompt': skip this prompt and advance the queue (default). 'stopWorkflow': halt execution.
 
 ### `defaults.worktree` {#defaults-worktree}
 

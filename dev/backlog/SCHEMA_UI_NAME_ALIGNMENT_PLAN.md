@@ -168,21 +168,22 @@ Drift found (verified against the current schemas):
 
 Fixes:
 
-1. **Point each default's value at the workflow definition via a cross-file `$ref`.** Both
-   schemas ship to `out/schemas/`, so a relative `workflow-schema.json#/definitions/<name>` resolves
-   in VS Code's JSON language service. First lift the inline `oneOf`s in `executionProperties`
-   (`toolPermissions`, `priorContext`, `agent`, `skills`, `secrets`) into named `definitions`. Then
-   `$ref` them from `defaults`, along with `endCondition`, `preCondition`, `errorBehavior`,
-   `userHookConfig` (for `hooks.items`), `mcpServerConfig` (for `mcpServers.items`) and `harnessId`.
-   The `defaults`-specific wording stays as a sibling `description`, which overrides the referenced one.
-   Note that the workflow `endCondition`/`preCondition` definitions are open (no `additionalProperties:
-false`), so settings validation gets looser there. Close them once in the workflow schema so both
-   files benefit.
-2. **Tooling.** `scripts/generate-schema-docs.mjs` `resolvePointer` throws on any pointer that doesn't
-   start with `#`. Teach it to load the sibling schema file. `src/test/unit/NotificationSettings.test.ts`
-   compiles the settings schema with Ajv, so it needs `ajv.addSchema(workflowSchema, "workflow-schema.json")`.
-   Nothing validates `settings.json` against the schema at runtime (it's wired only through `package.json`
-   `jsonValidation`), so there is no production Ajv to update.
+1. **Done.** Defaults now reference shared workflow definitions through sibling-schema `$ref`s. Both
+   schemas ship to `out/schemas/`, so `workflow-schema.json#/definitions/<name>` resolves in VS Code's
+   JSON language service. The inline `oneOf`s in `executionProperties` (`toolPermissions`,
+   `priorContext`, `agent`, `skills`, `secrets`) were lifted into named definitions and reused from
+   `defaults`, along with `errorBehavior`, `userHookConfig` (`hooks.items`) and `harnessId`. The
+   condition and error-behavior defaults use named nullable wrappers to preserve their explicit
+   `null` disable values.
+   Workflow `endCondition` / `preCondition` are now closed. Draft-07 does not apply
+   `additionalProperties` across `allOf`, so each condition declares the shared `scriptProperties`
+   names locally while keeping their detailed constraints on the shared definition. The MCP item ref
+   uses a named string-or-config union so registry IDs remain valid alongside inline server objects.
+   Defaults-specific descriptions remain sibling `description` values.
+2. **Done.** The docs resolver follows sibling schema references, and its tests cover that path.
+   `NotificationSettings.test.ts` registers `workflow-schema.json` with Ajv before compiling the
+   settings schema. No production Ajv validates `settings.json`; the schema is wired through
+   `package.json` `jsonValidation`.
 3. **Defaults coverage test.** Walk `executionProperties` and `workflowOnlyProperties`. Every key must be
    in `defaults`, mapped to a differently shaped default (`model → models`, `additionalArgs →
 additionalArgs.<harness>`, `trustedExternalRoots → permissions.allowedExternalFileRoots`), or on an

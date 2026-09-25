@@ -473,6 +473,61 @@ Script gate that runs before the prompt. Determines whether to run the prompt, s
 
 Also includes every field from [Shared script fields](#script-fields).
 
+### `script` {#pre-condition-script}
+
+- **Type:** `string`
+- **Required:** yes
+
+Shell command or path to script. Resolved relative to workspace root or .ctrlyoke/.
+
+### `env` {#pre-condition-env}
+
+- **Type:** map of `string`
+
+Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.
+
+### `compareSource` {#pre-condition-comparesource}
+
+- **Type:** `"stdout" | "stderr" | "exitCode"`
+
+Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.
+
+### `returns` {#pre-condition-returns}
+
+- **Type:** removed
+
+Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.
+
+### `timeout` {#pre-condition-timeout}
+
+- **Type:** `number`
+
+Timeout in milliseconds. When omitted, the `execution.scriptTimeout` setting applies.
+
+### `shell` {#pre-condition-shell}
+
+- **Type:** `string`
+
+Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. "pwsh", "bash", "cmd". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted.
+
+### `operator` {#pre-condition-operator}
+
+- **Type:** `"eq" | "ne" | "contains" | "notContains" | "gte" | "gt" | "lte" | "lt" | "matches" | "isEmpty" | "isNotEmpty"`
+
+How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag.
+
+### `expected` {#pre-condition-expected}
+
+- **Type:** `string` or `number`
+
+Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.
+
+### `ignoreCase` {#pre-condition-ignorecase}
+
+- **Type:** `boolean`
+
+Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.
+
 ### `onPass` {#pre-condition-onpass}
 
 - **Type:** `"continue" | "skipPrompt" | "stopWorkflow"`
@@ -492,6 +547,61 @@ What to do when the pre-condition check fails. 'continue': run the prompt anyway
 Validation that runs after the prompt completes. Shares script/env/compareSource/operator/expected/timeout with preCondition and scriptStep via scriptProperties.
 
 Also includes every field from [Shared script fields](#script-fields).
+
+### `script` {#end-condition-script}
+
+- **Type:** `string`
+- **Required:** yes
+
+Shell command or path to script. Resolved relative to workspace root or .ctrlyoke/.
+
+### `env` {#end-condition-env}
+
+- **Type:** map of `string`
+
+Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.
+
+### `compareSource` {#end-condition-comparesource}
+
+- **Type:** `"stdout" | "stderr" | "exitCode"`
+
+Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.
+
+### `returns` {#end-condition-returns}
+
+- **Type:** removed
+
+Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.
+
+### `timeout` {#end-condition-timeout}
+
+- **Type:** `number`
+
+Timeout in milliseconds. When omitted, the `execution.scriptTimeout` setting applies.
+
+### `shell` {#end-condition-shell}
+
+- **Type:** `string`
+
+Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. "pwsh", "bash", "cmd". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted.
+
+### `operator` {#end-condition-operator}
+
+- **Type:** `"eq" | "ne" | "contains" | "notContains" | "gte" | "gt" | "lte" | "lt" | "matches" | "isEmpty" | "isNotEmpty"`
+
+How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag.
+
+### `expected` {#end-condition-expected}
+
+- **Type:** `string` or `number`
+
+Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.
+
+### `ignoreCase` {#end-condition-ignorecase}
+
+- **Type:** `boolean`
+
+Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.
 
 ### `maxRetries` {#end-condition-maxretries}
 
