@@ -611,7 +611,7 @@ Confirm:
 - [x] npm package build (`scripts/build-npm-package.mjs`), packaging test (`scripts/build-npm-package.test.mjs`), and the staged-publish step in `release.yml` (plan §3.2) — done September 25, 2026. Not yet exercised by a real tag.
 - [ ] **Every release:** after `release.yml` finishes, approve the staged version on npmjs.com → `ctrlyoke` → Staged Packages (or `npm stage approve <id>` from an interactive terminal). Approval needs the passkey. Until it's approved, the npm version lags the Marketplace, and the Install CLI command types a version that doesn't exist yet.
 - [ ] **Every release:** `npm view ctrlyoke version` matches the tag; `npx ctrlyoke --version` works on a clean machine.
-- [ ] First staged release only: confirm that `npm stage publish` succeeded without an explicit provenance setting while the repo is private. If it fails on provenance, set `NPM_CONFIG_PROVENANCE: false` on that step until the Phase 14 flip. After the flip, check that provenance shows on the package page.
+- [x] First staged release: `v0.1.2` (September 25, 2026) staged `ctrlyoke@0.1.2` from the private repo with no provenance setting. npm skipped provenance and did not fail, and the tarball test passed on the Linux runner. After the Phase 14 flip, check that provenance shows on the package page.
 
 ---
 

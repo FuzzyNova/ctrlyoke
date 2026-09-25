@@ -186,9 +186,9 @@ only harness processes. Measured VSIX size: 16.1 MB (was 14.1 MB).
 - The staging step upgrades to `npm@^11.15.0`: `npm stage` needs npm ≥ 11.15.0 and Node ≥
   22.14.0, and Node 22 bundles npm 10. It relies on `registry-url` in `setup-node` plus
   `id-token: write`. Provenance is not set explicitly: trusted publishing generates it for public
-  repos, and npm does not support provenance from private repos. **Unverified until the first
-  tag:** that a private-repo staged publish succeeds with no explicit provenance setting. The
-  release checklist carries that check.
+  repos, and npm does not support provenance from private repos. The first tag, `v0.1.2`,
+  confirmed that a private-repo staged publish succeeds with no provenance setting: npm skips
+  provenance instead of failing.
 - Approval is `npm stage approve <stage-id>` or the Staged Packages tab on npmjs.com. Both need
   2FA. The dist-tag is fixed when the version is staged (`latest` by default) and takes effect on
   approval.
