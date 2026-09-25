@@ -9,7 +9,9 @@ import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import {
   KEYBOARD_KEYS,
   MCP_SERVER_IDS,
+  PERMISSION_MODES,
   STEP_TYPES,
+  type PermissionMode,
 } from "@root/types/DashboardConstants";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
@@ -1121,14 +1123,14 @@ const WorkflowStepsPanelInner: React.FC<{
         if (step.toolPermissions === null) {
           result.push({
             label: "perms: none",
-            title: "toolPermissions explicitly disabled",
+            title: "toolPermissions: null (same as mode: none)",
           });
         } else if (step.toolPermissions.mode) {
-          const modeShort: Record<string, string> = {
-            dangerouslyAllowAll: "allow all!",
-            allowAll: "allow all",
-            custom: "custom",
-            passthrough: "pass-thru",
+          const modeShort: Record<PermissionMode, string> = {
+            [PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL]: "allow all!",
+            [PERMISSION_MODES.ALLOW_ALL]: "allow all",
+            [PERMISSION_MODES.CUSTOM]: "custom",
+            [PERMISSION_MODES.NONE]: "none",
           };
           const short =
             modeShort[step.toolPermissions.mode] ?? step.toolPermissions.mode;

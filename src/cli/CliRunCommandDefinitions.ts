@@ -1,5 +1,10 @@
 import { Command } from "commander";
 import chalk from "chalk";
+import {
+  PERMISSION_MODES,
+  isPermissionMode,
+  type PermissionMode,
+} from "../types/DashboardConstants";
 
 export interface CliExecutionOptions {
   harness?: string;
@@ -11,7 +16,7 @@ export interface CliExecutionOptions {
   interactive?: boolean;
   allowTool: string[];
   denyTool: string[];
-  permissionMode?: string;
+  permissionMode?: PermissionMode;
   addDir: string[];
   var?: Record<string, string>;
   prompt?: string;
@@ -175,7 +180,8 @@ function addExecutionOptions(command: Command): Command {
     )
     .option(
       "--permission-mode <mode>",
-      "Tool permission mode: dangerouslyAllowAll, allowAll, custom (default: auto-detect)"
+      `Override the defaults.toolPermissions.mode setting for this run: ${Object.values(PERMISSION_MODES).join(", ")}`,
+      parsePermissionMode
     )
     .option(
       "--add-dir <path>",
@@ -187,6 +193,18 @@ function addExecutionOptions(command: Command): Command {
     .option("-q, --quiet", "Suppress all output except errors")
     .option("--verbose", "Show debug information")
     .option("--no-color", "Disable colored output");
+}
+
+function parsePermissionMode(value: string): PermissionMode {
+  if (!isPermissionMode(value)) {
+    console.error(
+      chalk.red(
+        `Error: --permission-mode must be one of: ${Object.values(PERMISSION_MODES).join(", ")}`
+      )
+    );
+    process.exit(2);
+  }
+  return value;
 }
 
 function collectRepeatable(value: string, previous: string[]): string[] {

@@ -5,7 +5,10 @@ import { configService } from "../../config/CtrlYokeConfigService";
 import type { ConfigBackend } from "../../config/CtrlYokeConfigService";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
-import { STATUS_LINE_TRACKING_PROVIDERS } from "../../types/DashboardConstants";
+import {
+  PERMISSION_MODES,
+  STATUS_LINE_TRACKING_PROVIDERS,
+} from "../../types/DashboardConstants";
 import { ExternalRootsTrustStore } from "../../config/ExternalRootsTrustStore";
 
 function makeBackend(data: PartialCtrlYokeSettings): ConfigBackend {
@@ -293,6 +296,64 @@ suite("ConfigurationUtils — context resolution failure mode", () => {
     assert.strictEqual(
       ConfigurationUtils.getContextResolutionFailureMode(),
       "warn"
+    );
+  });
+});
+
+suite("ConfigurationUtils — spawn tool permissions", () => {
+  teardown(() => {
+    configService.setUserBackend(makeBackend({}));
+    configService.setWorkspaceBackend(makeBackend({}));
+  });
+
+  const custom = {
+    mode: PERMISSION_MODES.CUSTOM,
+    allowedTools: ["write"],
+    deniedTools: [],
+  };
+
+  test("passes a resolved config through unchanged", () => {
+    assert.deepStrictEqual(
+      ConfigurationUtils.resolveSpawnToolPermissions(custom),
+      custom
+    );
+  });
+
+  test("returns null for an explicit null and for mode none", () => {
+    assert.strictEqual(
+      ConfigurationUtils.resolveSpawnToolPermissions(null),
+      null
+    );
+    assert.strictEqual(
+      ConfigurationUtils.resolveSpawnToolPermissions({
+        ...custom,
+        mode: PERMISSION_MODES.NONE,
+      }),
+      null
+    );
+  });
+
+  test("falls back to the settings default, including a none default", () => {
+    configService.setUserBackend(
+      makeBackend({
+        defaults: {
+          toolPermissions: { mode: PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL },
+        },
+      })
+    );
+    assert.strictEqual(
+      ConfigurationUtils.resolveSpawnToolPermissions(undefined)?.mode,
+      PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL
+    );
+
+    configService.setUserBackend(
+      makeBackend({
+        defaults: { toolPermissions: { mode: PERMISSION_MODES.NONE } },
+      })
+    );
+    assert.strictEqual(
+      ConfigurationUtils.resolveSpawnToolPermissions(undefined),
+      null
     );
   });
 });

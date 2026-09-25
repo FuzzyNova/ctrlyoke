@@ -646,8 +646,7 @@ async function runCommand(
     overlay.defaults = {
       ...overlay.defaults,
       toolPermissions: {
-        mode: options.permissionMode as
-          "dangerouslyAllowAll" | "allowAll" | "custom",
+        mode: options.permissionMode,
       },
     };
   }

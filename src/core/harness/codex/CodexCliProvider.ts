@@ -547,17 +547,14 @@ export class CodexCliProvider implements ICliProvider {
     toolPermissions: ToolPermissionConfig | null | undefined,
     context: PermissionContext
   ): Promise<ToolPermissionApplication> {
-    if (toolPermissions === null) {
+    const config =
+      ConfigurationUtils.resolveSpawnToolPermissions(toolPermissions);
+    if (config === null) {
       // none mode — skip permission flags entirely
       return { cliArgs: [], diagnostics: [] };
     }
     const sandboxMode = ConfigurationUtils.getCodexSandboxMode();
     const approvalPolicy = ConfigurationUtils.getCodexApprovalPolicy();
-    const config = toolPermissions ?? {
-      mode: ConfigurationUtils.getCliToolPermissions(),
-      allowedTools: ConfigurationUtils.getCliAllowedTools(),
-      deniedTools: ConfigurationUtils.getCliDeniedTools(),
-    };
     return this.toolPermissionMapper.prepare(config, {
       ...context,
       sandboxMode,

@@ -719,10 +719,12 @@ export class WebviewSettingsSync {
       await ConfigurationUtils.updateSetting(
         CONFIG_KEYS.DEFAULTS_TOOL_PERMISSIONS,
         {
+          // null means "pass no permission flags", the same as mode none;
+          // an object without a mode resolves to allowAll at runtime.
           mode:
-            override?.mode && override.mode !== PERMISSION_MODES.NONE
-              ? override.mode
-              : PERMISSION_MODES.ALLOW_ALL,
+            override === null
+              ? PERMISSION_MODES.NONE
+              : (override?.mode ?? PERMISSION_MODES.ALLOW_ALL),
           allowedTools: override?.allowedTools ?? [],
           deniedTools: override?.deniedTools ?? [],
         }

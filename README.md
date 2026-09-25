@@ -150,7 +150,7 @@ Properties follow a three-tier precedence: **prompt-level → workflow-level →
 | `endCondition`    | `EndCondition`                          | Validation script with retry configuration                                                                   |
 | `priorContext`    | `string \| number[]`                    | Inject prior prompt outputs: `none`, `previous`, `all`, or index array                                       |
 | `additionalArgs`  | `string`                                | Extra flags appended to the CLI invocation                                                                   |
-| `toolPermissions` | `ToolPermissionsOverride`               | Per-prompt override: `dangerouslyAllowAll`, `allowAll`, `custom`, `passthrough`                              |
+| `toolPermissions` | `ToolPermissionsOverride`               | Per-prompt override: `dangerouslyAllowAll`, `allowAll`, `custom`, `none`                                     |
 
 ### End condition
 

@@ -445,15 +445,12 @@ export class CliIntegration extends HarnessIntegration {
   protected hasFullPermissions(
     toolPermissions?: ToolPermissionConfig | null
   ): boolean {
-    if (toolPermissions === null) {
-      return false;
-    }
-    const config = toolPermissions ?? {
-      mode: ConfigurationUtils.getCliToolPermissions(),
-      allowedTools: ConfigurationUtils.getCliAllowedTools(),
-      deniedTools: ConfigurationUtils.getCliDeniedTools(),
-    };
-    return this.provider.toolPermissionMapper.hasFullPermissions(config);
+    const config =
+      ConfigurationUtils.resolveSpawnToolPermissions(toolPermissions);
+    return (
+      config !== null &&
+      this.provider.toolPermissionMapper.hasFullPermissions(config)
+    );
   }
 
   // ============================================================

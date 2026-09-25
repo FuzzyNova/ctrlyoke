@@ -15,6 +15,7 @@ import type {
   StatusLineTrackingSettings,
   TerminalSettings,
 } from "../types/CtrlYokeSettings";
+import type { ToolPermissionConfig } from "../types/ExecutionPropertyTypes";
 import type { StatusLineSegment } from "./StatuslineFormat";
 import {
   HARNESS_IDS,
@@ -23,6 +24,7 @@ import {
   LOGS_DIR,
   CAPABILITIES_FILE,
   SETTING_PATHS,
+  PERMISSION_MODES,
   type StatusLineTrackingProvider,
   type HarnessId,
   type ContextResolutionFailureMode,
@@ -717,11 +719,30 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Get CLI tool permissions mode (shared between Copilot and Claude)
+   * Get the `defaults.toolPermissions.mode` setting. `none` means ctrlyoke
+   * passes no permission flags and the harness uses its own configuration.
    */
-  getCliToolPermissions(): Exclude<PermissionMode, "none"> {
-    return configService.get(CONFIG_KEYS.DEFAULTS).toolPermissions
-      .mode as Exclude<PermissionMode, "none">;
+  getCliToolPermissions(): PermissionMode {
+    return configService.get(CONFIG_KEYS.DEFAULTS).toolPermissions.mode;
+  },
+
+  /**
+   * The tool permissions a harness spawn should apply. `undefined` (no
+   * resolved workflow value) falls back to the `defaults.toolPermissions`
+   * setting. Returns null — pass no permission flags — for an explicit null
+   * and for mode `none`, so permission mappers never receive `none`.
+   */
+  resolveSpawnToolPermissions(
+    toolPermissions: ToolPermissionConfig | null | undefined
+  ): ToolPermissionConfig | null {
+    const config = toolPermissions ?? {
+      mode: ConfigurationUtils.getCliToolPermissions(),
+      allowedTools: ConfigurationUtils.getCliAllowedTools(),
+      deniedTools: ConfigurationUtils.getCliDeniedTools(),
+    };
+    return toolPermissions === null || config.mode === PERMISSION_MODES.NONE
+      ? null
+      : config;
   },
 
   // ============================================================

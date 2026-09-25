@@ -3335,6 +3335,10 @@ export const PERMISSION_MODES = {
 export type PermissionMode =
   (typeof PERMISSION_MODES)[keyof typeof PERMISSION_MODES];
 
+export function isPermissionMode(value: unknown): value is PermissionMode {
+  return Object.values(PERMISSION_MODES).includes(value as PermissionMode);
+}
+
 // ============================================================================
 // TOOL PERMISSION CATEGORIES - Shared tool categories used by permission rules
 // ============================================================================

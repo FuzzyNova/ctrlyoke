@@ -1144,6 +1144,21 @@ suite("HarnessToolPermissionMappers", () => {
       }
     });
 
+    test("none mode passes no permission flags for every mapper", async () => {
+      // A mapper that falls through to its allow branch for an unrecognised
+      // mode would turn "use the harness's own settings" into a bypass.
+      for (const [name, mapper] of Object.entries(mappers)) {
+        assert.deepStrictEqual(
+          await mapperArgs(
+            mapper,
+            cfg(PERMISSION_MODES.NONE, ["write"], ["shell"])
+          ),
+          [],
+          `${name}: none mode should emit no flags`
+        );
+      }
+    });
+
     test("all mappers return boolean from hasFullPermissions", async () => {
       for (const [name, mapper] of Object.entries(mappers)) {
         const result = mapper.hasFullPermissions(

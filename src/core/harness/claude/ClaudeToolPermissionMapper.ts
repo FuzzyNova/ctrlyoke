@@ -79,6 +79,9 @@ export class ClaudeToolPermissionMapper
     config: ToolPermissionConfig,
     _context: PermissionContext
   ): Promise<ToolPermissionApplication> {
+    if (config.mode === PERMISSION_MODES.NONE) {
+      return { cliArgs: [], diagnostics: [] };
+    }
     let args: string[];
     if (config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
       args = ["--dangerously-skip-permissions"];

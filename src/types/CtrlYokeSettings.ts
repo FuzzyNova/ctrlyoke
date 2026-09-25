@@ -12,6 +12,7 @@ import {
   type ContextResolutionFailureMode,
   type HookEvent,
   type ExecutionMode,
+  type PermissionMode,
   type CtrlYokeMcpMode,
   CTRLYOKE_MCP_MODES,
   RUN_HISTORY_LOCATIONS,
@@ -111,7 +112,7 @@ export interface CtrlYokeGlobalSettings {
     hooks: UserHookConfig[];
     errorBehavior?: ErrorBehavior | null;
     toolPermissions: {
-      mode: "dangerouslyAllowAll" | "allowAll" | "custom";
+      mode: PermissionMode;
       allowedTools: string[];
       deniedTools: string[];
     };

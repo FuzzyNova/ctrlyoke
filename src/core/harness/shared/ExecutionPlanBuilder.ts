@@ -6,6 +6,7 @@ import {
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import type { WorkflowStep } from "../../../types/CtrlYokeTypes";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
+import type { ToolPermissionConfig } from "../../../types/ExecutionPropertyTypes";
 import { mergeServerDeniedTools } from "../../../types/ToolPermissionUtils";
 import {
   CAPABILITY_FIDELITIES,
@@ -253,18 +254,10 @@ export class ExecutionPlanBuilder {
             effectiveToolPermissions,
             permissionContext
           )
-        : effectiveToolPermissions === null ||
-            typeof this.deps.provider.toolPermissionMapper.prepare !==
-              "function"
-          ? { cliArgs: [], diagnostics: [] }
-          : await this.deps.provider.toolPermissionMapper.prepare(
-              effectiveToolPermissions ?? {
-                mode: ConfigurationUtils.getCliToolPermissions(),
-                allowedTools: ConfigurationUtils.getCliAllowedTools(),
-                deniedTools: ConfigurationUtils.getCliDeniedTools(),
-              },
-              permissionContext
-            );
+        : await this.prepareWithMapper(
+            effectiveToolPermissions,
+            permissionContext
+          );
 
     if (permissionApplication.workspaceMutation) {
       mutations.push(permissionApplication.workspaceMutation);
@@ -313,5 +306,18 @@ export class ExecutionPlanBuilder {
 
   async apply(plan: ExecutionPlan): Promise<void> {
     await applyPreparedMutations(plan.mutations);
+  }
+
+  /** Fallback for providers without their own permission preparation hook. */
+  private async prepareWithMapper(
+    toolPermissions: ToolPermissionConfig | null | undefined,
+    context: PermissionContext
+  ): Promise<ToolPermissionApplication> {
+    const config =
+      ConfigurationUtils.resolveSpawnToolPermissions(toolPermissions);
+    const mapper = this.deps.provider.toolPermissionMapper;
+    return config === null || typeof mapper.prepare !== "function"
+      ? { cliArgs: [], diagnostics: [] }
+      : mapper.prepare(config, context);
   }
 }

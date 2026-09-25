@@ -5,6 +5,7 @@ import Ajv from "ajv";
 import * as yaml from "js-yaml";
 import { PromptFileParser } from "../../core/PromptFileParser";
 import { formatRunRef } from "../../utils/WorkflowPaths";
+import { PERMISSION_MODES } from "../../types/DashboardConstants";
 
 suite("Workflow template schema", () => {
   const schemaPath = path.resolve(
@@ -28,6 +29,19 @@ suite("Workflow template schema", () => {
       true,
       JSON.stringify(validate.errors)
     );
+  });
+
+  test("accepts toolPermissions mode none and rejects passthrough", () => {
+    const workflow = (mode: string) => ({
+      toolPermissions: { mode },
+      steps: [{ prompt: "hi" }],
+    });
+    assert.strictEqual(
+      validate(workflow(PERMISSION_MODES.NONE)),
+      true,
+      JSON.stringify(validate.errors)
+    );
+    assert.strictEqual(validate(workflow("passthrough")), false);
   });
 
   test("parses and validates every bundled workflow template", async () => {

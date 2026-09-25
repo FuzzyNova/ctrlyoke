@@ -234,7 +234,7 @@ Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke cont
 - **Type:** `{ mode?, allowedTools?, deniedTools? }` or `null`
 - **Settings default:** [`defaults.toolPermissions`](/reference/settings#defaults-toolpermissions)
 
-Tool permission overrides for this prompt/workflow. Use null to explicitly disable inherited overrides and fall back to the `defaults.toolPermissions` setting. Set mode to 'passthrough' to omit all ctrlyoke permission flags and rely entirely on the harness's own local configuration.
+Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'.
 
 Accepted forms:
 
@@ -243,9 +243,9 @@ Accepted forms:
 
 ### `toolPermissions.mode` {#execution-properties-toolpermissions-mode}
 
-- **Type:** `"dangerouslyAllowAll" | "allowAll" | "custom" | "passthrough"`
+- **Type:** `"dangerouslyAllowAll" | "allowAll" | "custom" | "none"`
 
-Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects deny list. 'custom' uses allowedTools + deniedTools only. 'passthrough' omits all ctrlyoke permission flags — the harness uses whatever permissions the user has configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config).
+Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects deny list. 'custom' uses allowedTools + deniedTools only. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config).
 
 ### `toolPermissions.allowedTools` {#execution-properties-toolpermissions-allowedtools}
 

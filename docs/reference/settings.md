@@ -305,7 +305,7 @@ Default tool permission settings for prompt execution. Allowed Tools and Denied 
 
 Fields:
 
-- `mode` · `"dangerouslyAllowAll" | "allowAll" | "custom"` — Global tool permission mode.
+- `mode` · `"dangerouslyAllowAll" | "allowAll" | "custom" | "none"` — Default tool permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects the deny list. 'custom' uses allowedTools + deniedTools only. 'none' passes no permission flags at all — it does not deny tools; the harness applies its own local permission settings.
 - `allowedTools` · `string[]` — Explicitly allowed tools (used when mode is 'custom'). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; NOT ENFORCED by Codex or Antigravity.
 - `deniedTools` · `string[]` — Explicitly denied tools (used when mode is 'custom'). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; NOT ENFORCED by Codex or Antigravity.
 

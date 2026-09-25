@@ -84,6 +84,9 @@ export class QwenToolPermissionMapper
     config: ToolPermissionConfig,
     _context: PermissionContext
   ): Promise<ToolPermissionApplication> {
+    if (config.mode === PERMISSION_MODES.NONE) {
+      return { cliArgs: [], diagnostics: [] };
+    }
     const args: string[] = [];
     const lossyPatterns: { capability: "allowedTools" | "deniedTools" }[] = [];
 

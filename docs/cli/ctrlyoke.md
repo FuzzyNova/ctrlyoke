@@ -71,7 +71,7 @@ Pass either a file or `--prompt`, not both.
 | `--dry-run`                  | Print the redacted execution preview and its diagnostics without starting a harness                                                                                                  |
 | `--headless`                 | Force headless mode (CI, no user interaction)                                                                                                                                        |
 | `--interactive`              | Force interactive mode (the harness TUI is passed through; you end the session)                                                                                                      |
-| `--permission-mode <mode>`   | Tool permission mode: `dangerouslyAllowAll`, `allowAll`, or `custom`                                                                                                                 |
+| `--permission-mode <mode>`   | Override the `defaults.toolPermissions.mode` setting: `dangerouslyAllowAll`, `allowAll`, `custom`, or `none`                                                                         |
 | `--allow-tool <pattern>`     | Allow a tool pattern (repeatable)                                                                                                                                                    |
 | `--deny-tool <pattern>`      | Deny a tool pattern (repeatable)                                                                                                                                                     |
 | `-d, --cwd <path>`           | Workspace directory (default: current directory)                                                                                                                                     |

@@ -707,14 +707,11 @@ export class ClaudeCliProvider implements ICliProvider {
     toolPermissions: ToolPermissionConfig | null | undefined,
     context: PermissionContext
   ): Promise<ToolPermissionApplication> {
-    if (toolPermissions === null) {
+    const config =
+      ConfigurationUtils.resolveSpawnToolPermissions(toolPermissions);
+    if (config === null) {
       return { cliArgs: [], diagnostics: [] };
     }
-    const config = toolPermissions ?? {
-      mode: ConfigurationUtils.getCliToolPermissions(),
-      allowedTools: ConfigurationUtils.getCliAllowedTools(),
-      deniedTools: ConfigurationUtils.getCliDeniedTools(),
-    };
     return this.toolPermissionMapper.prepare(config, context);
   }
 

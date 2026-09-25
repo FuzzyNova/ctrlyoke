@@ -214,8 +214,8 @@
           "properties": {
             "mode": {
               "type": "string",
-              "enum": ["dangerouslyAllowAll", "allowAll", "custom"],
-              "description": "Global tool permission mode."
+              "enum": ["dangerouslyAllowAll", "allowAll", "custom", "none"],
+              "description": "Default tool permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects the deny list. 'custom' uses allowedTools + deniedTools only. 'none' passes no permission flags at all — it does not deny tools; the harness applies its own local permission settings."
             },
             "allowedTools": {
               "type": "array",

@@ -2074,6 +2074,26 @@ suite("WebviewSettingsSync", () => {
           },
         },
         {
+          property: PROMPT_PROPERTIES.TOOL_PERMISSIONS,
+          value: { mode: PERMISSION_MODES.NONE },
+          expectedKey: CONFIG_KEYS.DEFAULTS_TOOL_PERMISSIONS,
+          expectedValue: {
+            mode: PERMISSION_MODES.NONE,
+            allowedTools: [],
+            deniedTools: [],
+          },
+        },
+        {
+          property: PROMPT_PROPERTIES.TOOL_PERMISSIONS,
+          value: null,
+          expectedKey: CONFIG_KEYS.DEFAULTS_TOOL_PERMISSIONS,
+          expectedValue: {
+            mode: PERMISSION_MODES.NONE,
+            allowedTools: [],
+            deniedTools: [],
+          },
+        },
+        {
           property: PROMPT_PROPERTIES.END_CONDITION,
           value: endCondition,
           expectedKey: CONFIG_KEYS.DEFAULTS_END_CONDITION,
@@ -2150,33 +2170,16 @@ suite("WebviewSettingsSync", () => {
         });
       });
 
-      test("should fall back to allowAll mode when mode is NONE or absent", async () => {
+      test("should write allowAll, the runtime default, when mode is absent", async () => {
         const setCalls = await captureSetAsDefaultWrite(
           PROMPT_PROPERTIES.TOOL_PERMISSIONS,
-          {
-            mode: "none",
-            allowedTools: [],
-            deniedTools: [],
-          }
-        );
-
-        assert.strictEqual(setCalls.length, 1);
-        assert.strictEqual(
-          (setCalls[0].value as { mode: string }).mode,
-          PERMISSION_MODES.ALLOW_ALL
-        );
-      });
-
-      test("should write allowAll mode and empty arrays when value is null", async () => {
-        const setCalls = await captureSetAsDefaultWrite(
-          PROMPT_PROPERTIES.TOOL_PERMISSIONS,
-          null
+          { allowedTools: ["read"] }
         );
 
         assert.strictEqual(setCalls.length, 1);
         assert.deepStrictEqual(setCalls[0].value, {
           mode: PERMISSION_MODES.ALLOW_ALL,
-          allowedTools: [],
+          allowedTools: ["read"],
           deniedTools: [],
         });
       });

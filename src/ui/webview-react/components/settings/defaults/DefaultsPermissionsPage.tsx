@@ -8,6 +8,7 @@ import { CustomSelect } from "../../shared/CustomSelect";
 import { PermissionListEditor } from "../../shared/PermissionListEditor";
 import { SettingInputRow } from "../../shared/SettingInputRow";
 import { PermissionCapabilitySummary } from "../../shared/PermissionCapabilitySummary";
+import { PERMISSION_MODE_OPTIONS } from "../../shared/permissionUtils";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -15,12 +16,6 @@ interface Props {
   onUpdate: (path: string, value: unknown) => void;
   onReset: (path: string) => void;
 }
-
-const PERMISSION_MODE_OPTIONS = [
-  { value: "allowAll", label: "Allow All" },
-  { value: "dangerouslyAllowAll", label: "Dangerously Allow All" },
-  { value: "custom", label: "Custom" },
-];
 
 export function DefaultsPermissionsPage({
   settings,
