@@ -321,6 +321,10 @@ Legend. **Sev**: H = semantic mismatch, M = intentional alias, L = humanization.
 
 ### 4.9 UI-only labels with no schema counterpart (brief)
 
+The source-scan allowlist also covers script creation mode, dry-run preview
+section, and dynamic model-pricing harness/model selectors; these are UI-only
+choices without a schema property.
+
 "Connect via" (`ServerSection.tsx:352`, display IP), the Developer section toggles (`DeveloperSection.tsx:215-281`), "Save as Template" (`workflow/SaveWorkflowDialog.tsx:350`), the `run` / `Custom` prior-context modes, the trusted-roots Inherit/None/Custom modes, "Custom path..." (`TerminalSection.tsx:51`), and every Inherit/Default pseudo-option. These must not get a `property:` tooltip. Pseudo-options get the "writes …" tooltip described in §1 rule 4.
 
 ## 5. Phases
@@ -337,8 +341,8 @@ the same edit.
    cross-file schema docs and Ajv coverage are in place, every workflow property is accounted for in the
    defaults coverage test, and `defaults.priorContext` uses `PriorContext`. Both schema artifacts are regenerated.
 1. **Mechanism — done.** Typed `SchemaUiMetadata.ts` option tables, generated `SchemaDescriptions.ts` plus its `--check`, and `schemaPropertyLabels.ts` provide the shared metadata. `CustomSelect` now accepts `schemaPath` and adds property-aware trigger/option tooltips and accessible names. `FormField` carries workflow-relative paths, and `SettingInputRow` / `SettingToggleRow` use settings paths for titles and accessible names. Rendered Vitest coverage checks all four surfaces.
-2. **Relabel HIGH + MEDIUM** (§4.1, 4.2, 4.4, 4.5). UI-label fixes only, following the §1.1 vocabulary: no "Off" option labels, "None" for every "none of this thing" choice, "Never" only for timing enums, `Inherit (<label>)` for omission, and no Yes/No options.
-3. **Migrate option arrays** (§4.7 C7, all inline `options={[…]}` in §4) to the meta tables. Delete the duplicates, including `WorkflowStepsPanel`'s short maps (they can use `meta.short`) and `PERMISSION_MODE_VISUALS`. Wire the path through the remaining editors (SCE, EBE, HooksEditor, McpServerForm, PriorContextSelect, quick pickers). Standardize the Inherit label (M19).
+2. **Relabel HIGH + MEDIUM** (§4.1, 4.2, 4.4, 4.5). UI-label fixes only, following the §1.1 vocabulary: no "Off" option labels, "None" for every "none of this thing" choice, "Never" only for timing enums, `Inherit (<label>)` for omission, and no Yes/No options. **Settings rows in §4.4–4.6 handled.**
+3. **Migrate option arrays** (§4.7 C7, all inline `options={[…]}` in §4) to the meta tables. Delete the duplicates, including `WorkflowStepsPanel`'s short maps (they can use `meta.short`) and `PERMISSION_MODE_VISUALS`. Wire the path through the remaining editors (SCE, EBE, HooksEditor, McpServerForm, PriorContextSelect, quick pickers). Standardize the Inherit label (M19). **Settings surface handled.**
 4. **Schema renames**:
    - Keys: H5 `ui.showCostEstimates`, H7 `execution.contextResolutionFailure`, H10 `permissions.trustedExternalRoots`, H12 `server.autoStart`, M11 `commit.systemPrompt`.
    - Resolved H8: `notifications.events.*`, `notifications.toastLevel`, and `ui.stepColorMode` use `none` / "None"; browser notifications and the mobile control bar retain `never` / "Never".
@@ -346,7 +350,9 @@ the same edit.
 
    Update `CtrlYokeSettings.ts`, `CtrlYokeConfigService`, `ConfigurationUtils` keys, `SETTING_PATHS`, and the parity tests. Regenerate the docs and YAML.
 
-5. **Merge with `SETTINGS_SEARCH_PLAN`.** Its catalog's `label` / `description` resolve from this metadata, and its `settingKey` migration becomes the same edit.
+5. **Merge with `SETTINGS_SEARCH_PLAN` — handled.** Its catalog's `label` / `description` resolve from this metadata, and its `settingKey` migration becomes the same edit.
+
+Deferred: C6 (`defaults.mcpServers[]` has a narrower shape than workflow `mcpServers[]`) remains a schema parity follow-up and is outside this naming and settings-UI change.
 
 The metadata labels follow schema humanization and the §1.1 vocabulary: `None` for
 explicit absence, `Never` for notification/mobile timing and Codex approval policy,

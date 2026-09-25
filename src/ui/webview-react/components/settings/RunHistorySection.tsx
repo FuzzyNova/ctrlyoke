@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  RUN_HISTORY_LOCATIONS,
   SETTING_SCOPES,
   type SettingWriteScope,
 } from "@root/types/DashboardConstants";
@@ -12,6 +11,10 @@ import type { RunHistoryLocation } from "@root/types/CtrlYokeSettings";
 import { CustomSelect } from "../shared/CustomSelect";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { Icon } from "../shared/Icon";
+import {
+  RUN_HISTORY_LOCATION_OPTIONS_META,
+  toSelectOptions,
+} from "@root/types/SchemaUiMetadata";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -20,17 +23,6 @@ interface Props {
   onReset: (path: string) => void;
   onReload: () => void;
 }
-
-const RUN_HISTORY_OPTIONS = [
-  {
-    value: RUN_HISTORY_LOCATIONS.USER,
-    label: "User — under your home directory",
-  },
-  {
-    value: RUN_HISTORY_LOCATIONS.WORKSPACE,
-    label: "Workspace — beside this repo",
-  },
-];
 
 export function RunHistorySection({
   settings,
@@ -68,7 +60,11 @@ export function RunHistorySection({
           id="storage-run-history-location"
           value={location}
           onChange={handleLocationChange}
-          options={RUN_HISTORY_OPTIONS}
+          schemaPath="storage.runHistoryLocation"
+          options={toSelectOptions(
+            RUN_HISTORY_LOCATION_OPTIONS_META,
+            "storage.runHistoryLocation"
+          )}
           disabled={!isUserScope}
           triggerAriaLabel="Run history location"
           triggerTitle={

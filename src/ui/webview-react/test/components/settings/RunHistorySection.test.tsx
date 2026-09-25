@@ -32,7 +32,11 @@ describe("RunHistorySection", () => {
   it("renders the user-scoped control and resolved location", () => {
     render(<RunHistorySection {...props()} />);
 
-    expect(screen.getByLabelText("Run history location")).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", {
+        name: "Run history location, property storage.runHistoryLocation",
+      })
+    ).not.toBeDisabled();
     expect(screen.getByText("Requires reload")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent(
       "C:/Users/test/.ctrlyoke/projects/ctrlyoke-hash/.runs"
@@ -44,7 +48,11 @@ describe("RunHistorySection", () => {
       <RunHistorySection {...props()} activeScope={SETTING_SCOPES.WORKSPACE} />
     );
 
-    expect(screen.getByLabelText("Run history location")).toBeDisabled();
+    expect(
+      screen.getByRole("button", {
+        name: "Run history location, property storage.runHistoryLocation",
+      })
+    ).toBeDisabled();
     expect(
       screen.getByText(/user-scoped and cannot be changed/i)
     ).toBeInTheDocument();
@@ -54,9 +62,15 @@ describe("RunHistorySection", () => {
     const sectionProps = props();
     render(<RunHistorySection {...sectionProps} />);
 
-    fireEvent.click(screen.getByLabelText("Run history location"));
     fireEvent.click(
-      screen.getByRole("button", { name: "Workspace — beside this repo" })
+      screen.getByRole("button", {
+        name: "Run history location, property storage.runHistoryLocation",
+      })
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Workspace, storage.runHistoryLocation: workspace",
+      })
     );
 
     expect(sectionProps.onUpdate).toHaveBeenCalledWith(

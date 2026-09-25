@@ -3,12 +3,16 @@ import {
   BROWSER_NOTIFICATION_MODES,
   BROWSER_NOTIFICATION_PERMISSION_STATES,
   LICENSE_UI,
-  NOTIFICATION_EVENT_MODES,
   HOOK_EVENT_METADATA,
   HOOK_EVENT_ORDER,
-  TOAST_LEVEL_MODES,
 } from "@root/types/DashboardConstants";
-import { HOOK_EVENT_OPTIONS_META } from "@root/types/SchemaUiMetadata";
+import {
+  BROWSER_NOTIFICATION_MODE_OPTIONS_META,
+  NOTIFICATION_EVENT_MODE_OPTIONS_META,
+  TOAST_LEVEL_OPTIONS_META,
+  HOOK_EVENT_OPTIONS_META,
+  toSelectOptions,
+} from "@root/types/SchemaUiMetadata";
 import type {
   FullGlobalSettings,
   SettingSource,
@@ -33,37 +37,6 @@ interface Props {
   onUpdate: (path: string, value: unknown) => void;
   onReset: (path: string) => void;
 }
-
-const EVENT_MODE_OPTIONS = [
-  { value: NOTIFICATION_EVENT_MODES.ALL, label: "Success and failure" },
-  { value: NOTIFICATION_EVENT_MODES.FAILURES_ONLY, label: "Failures only" },
-  { value: NOTIFICATION_EVENT_MODES.NONE, label: "None" },
-];
-
-const TOAST_LEVEL_OPTIONS = [
-  {
-    value: TOAST_LEVEL_MODES.ALL,
-    label: "All (info, success, warnings, errors)",
-  },
-  {
-    value: TOAST_LEVEL_MODES.WARNING_AND_ERROR,
-    label: "Warnings and errors",
-  },
-  { value: TOAST_LEVEL_MODES.ERROR_ONLY, label: "Errors only" },
-  { value: TOAST_LEVEL_MODES.NONE, label: "None" },
-];
-
-const BROWSER_MODE_OPTIONS = [
-  { value: BROWSER_NOTIFICATION_MODES.NEVER, label: "Never" },
-  {
-    value: BROWSER_NOTIFICATION_MODES.CONNECTED_ONLY,
-    label: "While dashboard is open",
-  },
-  {
-    value: BROWSER_NOTIFICATION_MODES.PUSH,
-    label: "Push when backgrounded",
-  },
-];
 
 export function NotificationsSection({
   settings,
@@ -175,7 +148,10 @@ export function NotificationsSection({
       status.permission !== BROWSER_NOTIFICATION_PERMISSION_STATES.GRANTED ||
       notif.browser.mode !== BROWSER_NOTIFICATION_MODES.PUSH ||
       !status.subscribed);
-  const browserModeOptions = BROWSER_MODE_OPTIONS.map((option) =>
+  const browserModeOptions = toSelectOptions(
+    BROWSER_NOTIFICATION_MODE_OPTIONS_META,
+    "notifications.browser.mode"
+  ).map((option) =>
     option.value === BROWSER_NOTIFICATION_MODES.PUSH
       ? { ...option, disabled: !hasRemoteAccess }
       : option
@@ -193,7 +169,7 @@ export function NotificationsSection({
         </h4>
 
         <SettingToggleRow
-          label="VS Code toasts"
+          label="VS Code notifications"
           description="Show notification popups in the VS Code window when workflows complete."
           checked={notif.vscode.enabled}
           onChange={(value) => onUpdate("notifications.vscode.enabled", value)}
@@ -211,6 +187,7 @@ export function NotificationsSection({
             id="notif-browser-mode"
             value={notif.browser.mode}
             onChange={(value) => onUpdate("notifications.browser.mode", value)}
+            schemaPath="notifications.browser.mode"
             options={browserModeOptions}
           />
           <div className="mt-1 space-y-1 text-xs text-description-fg">
@@ -364,7 +341,11 @@ export function NotificationsSection({
             onChange={(value) =>
               onUpdate("notifications.events.workflowComplete", value)
             }
-            options={EVENT_MODE_OPTIONS}
+            schemaPath="notifications.events.workflowComplete"
+            options={toSelectOptions(
+              NOTIFICATION_EVENT_MODE_OPTIONS_META,
+              "notifications.events.workflowComplete"
+            )}
           />
         </SettingInputRow>
 
@@ -380,7 +361,11 @@ export function NotificationsSection({
             onChange={(value) =>
               onUpdate("notifications.events.promptComplete", value)
             }
-            options={EVENT_MODE_OPTIONS}
+            schemaPath="notifications.events.promptComplete"
+            options={toSelectOptions(
+              NOTIFICATION_EVENT_MODE_OPTIONS_META,
+              "notifications.events.promptComplete"
+            )}
           />
         </SettingInputRow>
       </div>
@@ -453,7 +438,11 @@ export function NotificationsSection({
             id="notif-toast-level"
             value={notif.toastLevel}
             onChange={(value) => onUpdate("notifications.toastLevel", value)}
-            options={TOAST_LEVEL_OPTIONS}
+            schemaPath="notifications.toastLevel"
+            options={toSelectOptions(
+              TOAST_LEVEL_OPTIONS_META,
+              "notifications.toastLevel"
+            )}
           />
           <p className="mt-1 text-xs text-description-fg">
             Controls in-app and native popups for action results (save failed,

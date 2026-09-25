@@ -1,6 +1,7 @@
 import type { SelectOption } from "./SelectOption";
 import {
   BROWSER_NOTIFICATION_MODES,
+  CTRLYOKE_MCP_MODES,
   CODEX_APPROVAL_POLICIES,
   CODEX_SANDBOX_MODES,
   COMPARE_SOURCES,
@@ -30,6 +31,7 @@ import {
   TRUSTED_ROOTS_MODES,
   WORKFLOW_FILE_FORMATS,
   type BrowserNotificationMode,
+  type CtrlYokeMcpMode,
   type CodexApprovalPolicy,
   type CodexSandboxMode,
   type ContextResolutionFailureMode,
@@ -759,5 +761,20 @@ export const DEFAULT_FORMAT_OPTIONS_META: Record<
   [WORKFLOW_FILE_FORMATS.JSON]: {
     value: WORKFLOW_FILE_FORMATS.JSON,
     label: "JSON",
+  },
+};
+
+export const CTRLYOKE_MCP_MODE_OPTIONS_META: Record<
+  CtrlYokeMcpMode,
+  SchemaOptionMeta<CtrlYokeMcpMode>
+> = {
+  [CTRLYOKE_MCP_MODES.NATIVE]: {
+    value: CTRLYOKE_MCP_MODES.NATIVE,
+    label: "Native",
+  },
+  [CTRLYOKE_MCP_MODES.SKILL]: {
+    value: CTRLYOKE_MCP_MODES.SKILL,
+    label: "Skill (MCP unavailable)",
+    alias: { reason: "Clarifies why the skill attachment mode exists." },
   },
 };

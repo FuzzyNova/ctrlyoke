@@ -536,6 +536,7 @@ export function ServerSection({
                 id="server-bind"
                 value={server.bindAddress ?? "127.0.0.1"}
                 onChange={(value) => onUpdate("server.bindAddress", value)}
+                schemaPath="server.bindAddress"
                 options={bindAddressOptions}
                 triggerAriaLabel="Choose server bind address"
                 triggerTitle="Choose whether the server listens only on localhost or all interfaces"

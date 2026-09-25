@@ -107,7 +107,9 @@ describe("NotificationsSection", () => {
     expect(toastLevelSelect).not.toBeNull();
     await user.click(toastLevelSelect!);
     await user.click(
-      screen.getByRole("button", { name: "Warnings and errors" })
+      screen.getByRole("button", {
+        name: "Warning and Error, notifications.toastLevel: warningAndError",
+      })
     );
 
     expect(onUpdate).toHaveBeenCalledWith(

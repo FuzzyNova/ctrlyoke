@@ -86,7 +86,7 @@ export function HarnessesSection({
         Harness Defaults
       </h3>
       <SettingInputRow
-        label="default harness"
+        label="Default harness"
         id="harness-active"
         path="defaults.harness"
         {...rowProps}
@@ -145,6 +145,7 @@ export function HarnessesSection({
                     onChange={(v) =>
                       onUpdate(`defaults.models.${harnessId}`, v || undefined)
                     }
+                    schemaPath={`defaults.models.${harnessId}`}
                     options={discoveredModels}
                   />
                 ) : (
@@ -160,7 +161,7 @@ export function HarnessesSection({
                 )}
               </SettingInputRow>
               <SettingInputRow
-                label="Extra args"
+                label="Additional args"
                 id={`extra-args-${harnessId}`}
                 path={`defaults.additionalArgs.${harnessId}`}
                 {...rowProps}

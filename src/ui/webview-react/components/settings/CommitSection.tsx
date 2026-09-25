@@ -162,6 +162,7 @@ export function CommitSection({
             id="commit-model"
             value={currentModel}
             onChange={(v) => onUpdate("commit.model", v || "")}
+            schemaPath="commit.model"
             options={discoveredModels}
           />
         ) : (

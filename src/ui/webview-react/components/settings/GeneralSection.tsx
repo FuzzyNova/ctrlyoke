@@ -9,12 +9,17 @@ import { SettingInputRow } from "../shared/SettingInputRow";
 import { LocalNumberInput, LocalTextInput } from "../shared/LocalInputs";
 import { CustomSelect } from "../shared/CustomSelect";
 import { DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT } from "@root/types/CtrlYokeSettings";
-import { RunHistorySection } from "./RunHistorySection";
 import {
-  CTRLYOKE_MCP_MODES,
+  DEFAULT_FORMAT_OPTIONS_META,
+  STEP_COLOR_MODE_OPTIONS_META,
+  CTRLYOKE_MCP_MODE_OPTIONS_META,
+  toSelectOptions,
+} from "@root/types/SchemaUiMetadata";
+import {
   SETTING_PATHS,
   STEP_COLOR_MODES,
 } from "@root/types/DashboardConstants";
+import { RunHistorySection } from "./RunHistorySection";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -64,10 +69,11 @@ export function GeneralSection({
           id="general-default-format"
           value={general.defaultFormat}
           onChange={(v) => onUpdate("general.defaultFormat", v)}
-          options={[
-            { value: "yaml", label: "YAML (.ctrlyoke.yaml)" },
-            { value: "json", label: "JSON (.ctrlyoke.json)" },
-          ]}
+          schemaPath="general.defaultFormat"
+          options={toSelectOptions(
+            DEFAULT_FORMAT_OPTIONS_META,
+            "general.defaultFormat"
+          )}
         />
       </SettingInputRow>
       <SettingInputRow
@@ -131,11 +137,11 @@ export function GeneralSection({
             id="ui-step-color-mode"
             value={ui.stepColorMode}
             onChange={(v) => onUpdate("ui.stepColorMode", v)}
-            options={[
-              { value: STEP_COLOR_MODES.NONE, label: "None" },
-              { value: STEP_COLOR_MODES.HARNESS, label: "Harness color" },
-              { value: STEP_COLOR_MODES.UNIQUE, label: "Unique per step" },
-            ]}
+            schemaPath="ui.stepColorMode"
+            options={toSelectOptions(
+              STEP_COLOR_MODE_OPTIONS_META,
+              "ui.stepColorMode"
+            )}
           />
         </SettingInputRow>
         {ui.stepColorMode === STEP_COLOR_MODES.HARNESS && (
@@ -373,7 +379,7 @@ export function GeneralSection({
           ctrlyoke MCP server
         </h3>
         <SettingInputRow
-          label="Attachment mode"
+          label="MCP mode"
           description="Controls only ctrlyoke's own MCP server (queue/coordination/commit tools) — never any other MCP servers a workflow configures. Native attaches ctrlyoke's real MCP server. Skill replaces it with the built-in MCP-tools skill instead, for environments where MCP configuration itself is unavailable (e.g. blocked by policy)."
           id="settings-ctrlyoke-mcp-mode"
           path="ctrlyokeMcpMode"
@@ -383,13 +389,11 @@ export function GeneralSection({
             id="settings-ctrlyoke-mcp-mode"
             value={settings.settings.ctrlyokeMcpMode}
             onChange={(v) => onUpdate("ctrlyokeMcpMode", v)}
-            options={[
-              { value: CTRLYOKE_MCP_MODES.NATIVE, label: "Native" },
-              {
-                value: CTRLYOKE_MCP_MODES.SKILL,
-                label: "Skill (MCP unavailable)",
-              },
-            ]}
+            schemaPath="ctrlyokeMcpMode"
+            options={toSelectOptions(
+              CTRLYOKE_MCP_MODE_OPTIONS_META,
+              "ctrlyokeMcpMode"
+            )}
           />
         </SettingInputRow>
       </div>

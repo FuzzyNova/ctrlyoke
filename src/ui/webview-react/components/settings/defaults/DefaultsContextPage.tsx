@@ -4,6 +4,10 @@ import type {
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
 import { PRIOR_CONTEXT_KEYWORDS } from "@root/types/DashboardConstants";
+import {
+  PRIOR_CONTEXT_KEYWORD_OPTIONS_META,
+  toSelectOptions,
+} from "@root/types/SchemaUiMetadata";
 import { CustomSelect } from "../../shared/CustomSelect";
 import { SettingInputRow } from "../../shared/SettingInputRow";
 import { SettingToggleRow } from "../../shared/SettingToggleRow";
@@ -14,17 +18,6 @@ interface Props {
   onUpdate: (path: string, value: unknown) => void;
   onReset: (path: string) => void;
 }
-
-const PRIOR_CONTEXT_OPTIONS = [
-  { value: PRIOR_CONTEXT_KEYWORDS.NONE, label: "None" },
-  { value: PRIOR_CONTEXT_KEYWORDS.ALL, label: "All" },
-  { value: PRIOR_CONTEXT_KEYWORDS.PREVIOUS, label: "Previous" },
-  { value: PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL, label: "Final Step (All)" },
-  {
-    value: PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS,
-    label: "Final Step (Previous)",
-  },
-];
 
 export function DefaultsContextPage({
   settings,
@@ -47,7 +40,7 @@ export function DefaultsContextPage({
         {...rowProps}
       />
       <SettingInputRow
-        label="Default prior context"
+        label="Prior Context"
         description="How to handle prior context between prompts."
         id="defaults-prior-context"
         path="defaults.priorContext"
@@ -61,7 +54,11 @@ export function DefaultsContextPage({
               : PRIOR_CONTEXT_KEYWORDS.NONE
           }
           onChange={(v) => onUpdate("defaults.priorContext", v)}
-          options={PRIOR_CONTEXT_OPTIONS}
+          schemaPath="defaults.priorContext"
+          options={toSelectOptions(
+            PRIOR_CONTEXT_KEYWORD_OPTIONS_META,
+            "defaults.priorContext"
+          )}
         />
       </SettingInputRow>
     </div>

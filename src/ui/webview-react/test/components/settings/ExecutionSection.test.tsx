@@ -31,9 +31,9 @@ describe("ExecutionSection", () => {
       )
     ).toBeInTheDocument();
     expect(
-      screen.getByLabelText(
-        "Context resolution failures, property execution.contextResolutionFailure"
-      )
-    ).toHaveValue("warn");
+      screen.getByRole("button", {
+        name: "Warn, property execution.contextResolutionFailure",
+      })
+    ).toBeInTheDocument();
   });
 });

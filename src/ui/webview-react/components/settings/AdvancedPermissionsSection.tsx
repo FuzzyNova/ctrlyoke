@@ -14,6 +14,11 @@ import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 import { PermissionCapabilitySummary } from "../shared/PermissionCapabilitySummary";
 import { TrustedRootsListEditor } from "../shared/TrustedRootsListEditor";
+import {
+  CODEX_APPROVAL_POLICY_OPTIONS_META,
+  CODEX_SANDBOX_MODE_OPTIONS_META,
+  toSelectOptions,
+} from "@root/types/SchemaUiMetadata";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -21,18 +26,6 @@ interface Props {
   onUpdate: (path: string, value: unknown) => void;
   onReset: (path: string) => void;
 }
-
-const CODEX_SANDBOX_OPTIONS = [
-  { value: "read-only", label: "Read Only" },
-  { value: "workspace-write", label: "Workspace Write" },
-  { value: "danger-full-access", label: "Danger: Full Access" },
-];
-
-const CODEX_APPROVAL_OPTIONS = [
-  { value: "untrusted", label: "Untrusted" },
-  { value: "on-request", label: "On Request" },
-  { value: "never", label: "Never" },
-];
 
 export function AdvancedPermissionsSection({
   settings,
@@ -178,7 +171,11 @@ export function AdvancedPermissionsSection({
               id="codex-sandbox-mode"
               value={permissions.codexSandboxMode}
               onChange={(v) => onUpdate("permissions.codexSandboxMode", v)}
-              options={CODEX_SANDBOX_OPTIONS}
+              schemaPath="permissions.codexSandboxMode"
+              options={toSelectOptions(
+                CODEX_SANDBOX_MODE_OPTIONS_META,
+                "permissions.codexSandboxMode"
+              )}
             />
           </SettingInputRow>
           <SettingInputRow
@@ -191,7 +188,11 @@ export function AdvancedPermissionsSection({
               id="codex-approval-policy"
               value={permissions.codexApprovalPolicy}
               onChange={(v) => onUpdate("permissions.codexApprovalPolicy", v)}
-              options={CODEX_APPROVAL_OPTIONS}
+              schemaPath="permissions.codexApprovalPolicy"
+              options={toSelectOptions(
+                CODEX_APPROVAL_POLICY_OPTIONS_META,
+                "permissions.codexApprovalPolicy"
+              )}
             />
           </SettingInputRow>
         </div>

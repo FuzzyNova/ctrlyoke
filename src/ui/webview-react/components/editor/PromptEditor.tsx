@@ -1579,6 +1579,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
                       } as ErrorBehavior);
                     }
                   }}
+                  schemaPath="errorBehavior"
                   options={scriptErrorBehaviorOptions}
                 />
               </div>

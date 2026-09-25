@@ -332,6 +332,7 @@ export function DefaultsHarnessPage({
             id="defaults-agent"
             value={wf.agent || ""}
             onChange={(v) => onUpdate("defaults.agent", v)}
+            schemaPath="defaults.agent"
             options={[
               { value: "", label: "None" },
               ...availableAgents.map((agent) =>
