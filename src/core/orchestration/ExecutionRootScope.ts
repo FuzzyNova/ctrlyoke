@@ -1,7 +1,11 @@
 import * as crypto from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
-import { absoluteGitDir, gitCommonDir } from "../../utils/GitUtils";
+import {
+  absoluteGitDir,
+  liveGitLocations,
+  type GitLocationLookup,
+} from "../../utils/GitUtils";
 import { writeFileAtomic } from "../../utils/AtomicFileUtils";
 import { foldPathForCompare } from "../../utils/PathCasing";
 
@@ -43,9 +47,12 @@ async function canonicalPath(value: string): Promise<string> {
  * Resolve the one canonical identity shared by execution leases and coordination
  * storage. A linked worktree is identified by its worktree-specific Git
  * directory, while the storage for that identity lives in Git's common dir.
+ * The worktree Git directory is always asked afresh (see `GitLocationMemo`);
+ * only the common directory comes from `git`.
  */
 export async function resolveExecutionRootScope(
-  executionRoot: string
+  executionRoot: string,
+  git: GitLocationLookup = liveGitLocations
 ): Promise<ExecutionRootScope> {
   const canonicalExecutionRoot = await canonicalPath(executionRoot);
   const worktreeGitDir = await absoluteGitDir(canonicalExecutionRoot);
@@ -53,7 +60,7 @@ export async function resolveExecutionRootScope(
     await canonicalPath(worktreeGitDir ?? canonicalExecutionRoot)
   );
   const commonDir = worktreeGitDir
-    ? await gitCommonDir(canonicalExecutionRoot)
+    ? await git.gitCommonDir(canonicalExecutionRoot)
     : undefined;
   if (worktreeGitDir && !commonDir) {
     throw new Error(

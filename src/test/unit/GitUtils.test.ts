@@ -27,6 +27,8 @@ import {
   getFileHistoryCommits,
   getRecentCommits,
   getChangedFilesWithBinaryStatus,
+  GitLocationMemo,
+  type GitLocationLookup,
 } from "../../utils/GitUtils";
 
 suite("GitUtils.gitRefExists", function () {
@@ -439,5 +441,88 @@ suite("GitUtils.getGitIgnoredFiles", function () {
     await writeRepoFile(root, "nested/also-visible.txt", "visible\n");
 
     assert.deepStrictEqual(await getGitIgnoredFiles(root), []);
+  });
+});
+
+suite("GitUtils.GitLocationMemo", function () {
+  /** Counts questions so a test can see which ones reached Git. */
+  class CountingLocations implements GitLocationLookup {
+    public readonly asked: string[] = [];
+    public constructor(
+      private readonly answer: (dir: string) => string | null | Error
+    ) {}
+
+    public repoToplevel(dir: string): Promise<string | null> {
+      return this.reply("toplevel", dir);
+    }
+
+    public gitCommonDir(dir: string): Promise<string | null> {
+      return this.reply("common", dir);
+    }
+
+    private async reply(kind: string, dir: string): Promise<string | null> {
+      this.asked.push(`${kind} ${dir}`);
+      const result = this.answer(dir);
+      if (result instanceof Error) throw result;
+      return result;
+    }
+  }
+
+  const repo = path.resolve(os.tmpdir(), "memo-repo");
+
+  test("asks each question about a directory once, even concurrently", async function () {
+    const source = new CountingLocations(() => repo);
+    const memo = new GitLocationMemo(source);
+
+    const answers = await Promise.all([
+      memo.repoToplevel(repo),
+      memo.repoToplevel(repo),
+      memo.gitCommonDir(repo),
+    ]);
+    await memo.gitCommonDir(repo);
+
+    assert.deepStrictEqual(answers, [repo, repo, repo]);
+    assert.deepStrictEqual(source.asked, [
+      `toplevel ${repo}`,
+      `common ${repo}`,
+    ]);
+  });
+
+  test("treats spellings of one directory as the same question", async function () {
+    const source = new CountingLocations(() => repo);
+    const memo = new GitLocationMemo(source);
+
+    await memo.repoToplevel(repo);
+    await memo.repoToplevel(path.join(repo, "sub", ".."));
+    if (process.platform === "win32") {
+      await memo.repoToplevel(repo.toUpperCase());
+    }
+
+    assert.strictEqual(source.asked.length, 1);
+  });
+
+  test("asks again after a directory was not a repository", async function () {
+    // A worktree path is asked about before `git worktree add` creates it.
+    let created = false;
+    const source = new CountingLocations(() => (created ? repo : null));
+    const memo = new GitLocationMemo(source);
+
+    assert.strictEqual(await memo.repoToplevel(repo), null);
+    created = true;
+    assert.strictEqual(await memo.repoToplevel(repo), repo);
+    assert.strictEqual(source.asked.length, 2);
+  });
+
+  test("asks again after a lookup failed", async function () {
+    let fail = true;
+    const source = new CountingLocations(() =>
+      fail ? new Error("spawn failed") : repo
+    );
+    const memo = new GitLocationMemo(source);
+
+    await assert.rejects(memo.gitCommonDir(repo), /spawn failed/);
+    fail = false;
+    assert.strictEqual(await memo.gitCommonDir(repo), repo);
+    assert.strictEqual(source.asked.length, 2);
   });
 });

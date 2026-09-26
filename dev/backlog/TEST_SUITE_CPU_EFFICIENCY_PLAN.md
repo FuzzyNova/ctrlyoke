@@ -86,12 +86,15 @@ Failures seen in recent `.ctrlyoke/logs/test-runs/` logs:
 `HostedWorkspaceViewerService` (twice), `CliInteractiveStartupCoordinator >
 should recover via delayed log discovery…`, `ExecutionRootCoordinationStore >
 assigns gapless sequences across separate node processes`,
-`HarnessCapabilityRegistry` (3 cases in one run), and `WorkflowVariantService`.
+`HarnessCapabilityRegistry` (3 cases in one run), `WorkflowVariantService`, and
+`Parallel mutation integration > lets a group orchestrator mutate flat future
+work and join without stale indices` ("Definition revision conflict: expected
+4, found 3" under a full run on 2026-09-26; it passed in isolation).
 For each one, follow the flaky-test procedure in `test.instructions.md`. Where
 the cause is a fixed sleep or a real timer racing work, use a poll-until-
 condition helper or fake timers instead of raising a bound.
 
-## 4. `WorktreeManager` asks git where the repository is ~20 times per operation
+## 4. `WorktreeManager` asked git where the repository is several times per operation
 
 A `GIT_TRACE2_EVENT` capture of the `WorktreeManager` suite counted 3,236 git
 processes for 60 tests. The per-case repository fixture accounted for only
@@ -107,10 +110,25 @@ code is most of it:
 | 190   | `rev-parse --verify …`         |
 | 169   | `rev-parse --absolute-git-dir` |
 
-The first two rows plus `--absolute-git-dir` are about 1,165 spawns that
-answer questions whose answers do not change during one operation. Resolving
-them once per public `WorktreeManager` operation, as a per-call context object
-rather than a long-lived cache that could go stale, would shorten the
-extension suite's critical path. It would also speed up the product itself,
-because each spawn costs 20–50ms on Windows. To measure, run the suite with
-`GIT_TRACE2_EVENT=<dir>` and count `start` events by argv.
+**Done (toplevel and common dir):** each public `WorktreeManager` operation
+now resolves a `RepositoryContext` once and passes its per-operation
+`GitLocationMemo` to the lease and runtime-trust calls it makes.
+`ensureManagedWorktree` went from 10 location lookups to 5. Across the suite,
+`--show-toplevel` fell from 394 to 231 calls and `--git-common-dir` from 593
+to 254, about 500 fewer spawns out of 2,589 routed through `execGit`. In three
+alternating idle A/B pairs the suite took 133/123/115s before and
+111/112/103s after, averaging 124s → 109s.
+
+What remains, if this file is still the critical path:
+
+- `--absolute-git-dir` (169) is deliberately not memoized. A worktree removed
+  and re-added at the same path can get a different administrative directory
+  within one operation, and lease identity depends on it.
+- `worktree list` (435) and `rev-parse --verify` (401) are now the largest
+  rows. Many `worktree list` calls re-read state straight after a mutation, so
+  they need a case-by-case look rather than a memo.
+
+To measure, wrap `execGit` in `src/utils/GitUtils.ts` to append
+`{ args, stack }` per call to a file, and aggregate by the first frame outside
+`GitUtils`. That attributes each spawn to a call site, which
+`GIT_TRACE2_EVENT` cannot do.

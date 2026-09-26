@@ -1,6 +1,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { writeFileAtomic } from "../../utils/AtomicFileUtils";
+import type { GitLocationLookup } from "../../utils/GitUtils";
 import {
   generateOwnerToken,
   isOwnerStale,
@@ -163,8 +164,11 @@ async function readJson<T>(filePath: string): Promise<T | null> {
   }
 }
 
-async function resolveLeaseScope(executionRoot: string): Promise<LeaseScope> {
-  const scope = await resolveExecutionRootScope(executionRoot);
+async function resolveLeaseScope(
+  executionRoot: string,
+  git?: GitLocationLookup
+): Promise<LeaseScope> {
+  const scope = await resolveExecutionRootScope(executionRoot, git);
   const storageRoot = scopeStorageRoot(scope, "execution-leases");
   return {
     identity: scope.identity,
@@ -223,28 +227,35 @@ function createHandle(
 export class ExecutionRootLeaseManager {
   constructor(private readonly defaultRequest?: ExecutionLeaseRequest) {}
 
-  async acquire(request = this.defaultRequest): Promise<ExecutionLeaseHandle> {
+  /** `git` is the caller's per-operation lookup, if it has one. */
+  async acquire(
+    request = this.defaultRequest,
+    git?: GitLocationLookup
+  ): Promise<ExecutionLeaseHandle> {
     if (!request) throw new Error("An execution lease request is required");
-    return ExecutionRootLeaseManager.acquireLease(request);
+    return ExecutionRootLeaseManager.acquireLease(request, git);
   }
 
   async acquireLease(
-    request = this.defaultRequest
+    request = this.defaultRequest,
+    git?: GitLocationLookup
   ): Promise<ExecutionLeaseHandle> {
     if (!request) throw new Error("An execution lease request is required");
-    return ExecutionRootLeaseManager.acquireLease(request);
+    return ExecutionRootLeaseManager.acquireLease(request, git);
   }
 
   static async acquire(
-    request: ExecutionLeaseRequest
+    request: ExecutionLeaseRequest,
+    git?: GitLocationLookup
   ): Promise<ExecutionLeaseHandle> {
-    return this.acquireLease(request);
+    return this.acquireLease(request, git);
   }
 
   static async acquireLease(
-    request: ExecutionLeaseRequest
+    request: ExecutionLeaseRequest,
+    git?: GitLocationLookup
   ): Promise<ExecutionLeaseHandle> {
-    const scope = await resolveLeaseScope(request.executionRoot);
+    const scope = await resolveLeaseScope(request.executionRoot, git);
     const ownerToken = generateOwnerToken();
     const now = Date.now();
     const lease: ExecutionLease = {
@@ -289,6 +300,7 @@ export class ExecutionRootLeaseManager {
             ageMs: Date.now() - conflict.startedAt,
             retryAction: "retry",
           },
+          // A retry is a later operation, so it asks Git afresh.
           () => ExecutionRootLeaseManager.acquireLease(request)
         );
       }
@@ -345,9 +357,10 @@ export class ExecutionRootLeaseManager {
   /** Inspect persisted leases without pruning stale owners or changing Git state. */
   static async inspectLeases(
     executionRoot: string,
-    now = Date.now()
+    now = Date.now(),
+    git?: GitLocationLookup
   ): Promise<ExecutionLeaseInspection[]> {
-    const scope = await resolveLeaseScope(executionRoot);
+    const scope = await resolveLeaseScope(executionRoot, git);
     let entries: import("fs").Dirent[];
     try {
       entries = await fs.readdir(scope.leasesRoot, { withFileTypes: true });

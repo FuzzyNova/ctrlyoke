@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { gitCommonDir, repoToplevel } from "./GitUtils";
+import { GitLocationMemo, type GitLocationLookup } from "./GitUtils";
 import { foldPathForCompare } from "./PathCasing";
 
 export interface RuntimeTrustedRootHandle {
@@ -30,9 +30,13 @@ export class RuntimeTrustedRootRegistry {
     rootPath: string;
     repositoryRoot?: string;
     ownerToken?: string;
+    /** The caller's per-operation lookup, when it has already asked Git about these paths. */
+    git?: GitLocationLookup;
   }): Promise<RuntimeTrustedRootHandle> {
+    // Registration asks about the same repository several times; answer each once.
+    const git = new GitLocationMemo(options.git);
     const rootPath = await this.requireDirectory(options.rootPath);
-    const rootRepository = await repoToplevel(rootPath);
+    const rootRepository = await git.repoToplevel(rootPath);
     if (!rootRepository) {
       throw new Error(
         `Runtime trusted root is not a Git worktree: ${rootPath}`
@@ -40,18 +44,21 @@ export class RuntimeTrustedRootRegistry {
     }
 
     const expectedRepository = options.repositoryRoot
-      ? await repoToplevel(options.repositoryRoot)
+      ? await git.repoToplevel(options.repositoryRoot)
       : rootRepository;
     if (
       !expectedRepository ||
-      !(await this.sameRepository(rootRepository, expectedRepository))
+      !(await this.sameRepository(git, rootRepository, expectedRepository))
     ) {
       throw new Error(
         `Runtime trusted root does not resolve to the expected repository: ${rootPath}`
       );
     }
 
-    const repositoryIdentity = await this.repositoryIdentity(rootRepository);
+    const repositoryIdentity = await this.repositoryIdentity(
+      git,
+      rootRepository
+    );
     const repositoryMarker = this.readRepositoryMarker(rootPath);
     if (!repositoryMarker) {
       throw new Error(
@@ -127,10 +134,14 @@ export class RuntimeTrustedRootRegistry {
     return path.normalize(await fs.promises.realpath(resolved));
   }
 
-  private async sameRepository(left: string, right: string): Promise<boolean> {
+  private async sameRepository(
+    git: GitLocationLookup,
+    left: string,
+    right: string
+  ): Promise<boolean> {
     const [leftCommon, rightCommon] = await Promise.all([
-      gitCommonDir(left),
-      gitCommonDir(right),
+      git.gitCommonDir(left),
+      git.gitCommonDir(right),
     ]);
     return Boolean(
       leftCommon &&
@@ -140,8 +151,11 @@ export class RuntimeTrustedRootRegistry {
     );
   }
 
-  private async repositoryIdentity(repositoryRoot: string): Promise<string> {
-    const common = await gitCommonDir(repositoryRoot);
+  private async repositoryIdentity(
+    git: GitLocationLookup,
+    repositoryRoot: string
+  ): Promise<string> {
+    const common = await git.gitCommonDir(repositoryRoot);
     return foldPathForCompare(path.resolve(common ?? repositoryRoot));
   }
 

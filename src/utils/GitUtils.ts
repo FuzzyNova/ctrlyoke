@@ -4,6 +4,7 @@ import * as path from "path";
 import * as fs from "fs/promises";
 import type { ExecFileOptions } from "child_process";
 import { GIT_CHANGE_KINDS } from "../types/DashboardConstants";
+import { foldPathForCompare } from "./PathCasing";
 
 const GIT_TIMEOUT_MS = 10_000;
 const GIT_MAX_BUFFER = 50 * 1024 * 1024;
@@ -951,6 +952,73 @@ export async function gitCommonDir(dir: string): Promise<string | null> {
     }
   } catch {
     return null;
+  }
+}
+
+/** Where a directory's repository lives, as answered by `git rev-parse`. */
+export interface GitLocationLookup {
+  repoToplevel(dir: string): Promise<string | null>;
+  gitCommonDir(dir: string): Promise<string | null>;
+}
+
+/** Asks Git every time. */
+export const liveGitLocations: GitLocationLookup = {
+  repoToplevel,
+  gitCommonDir,
+};
+
+/**
+ * Remembers repository locations for the length of one operation. Each
+ * answer costs a `git` spawn (20–50ms on Windows), and one worktree operation
+ * used to ask the same question about the same directory up to five times.
+ *
+ * Create one per operation and let it go out of scope when the operation ends;
+ * never hold one for the life of a service. Only successful answers are kept,
+ * because a directory that is not a repository yet (a worktree about to be
+ * added) must be asked again once it is. `--absolute-git-dir` is deliberately
+ * not memoized: a worktree removed and re-added at the same path can get a
+ * different administrative directory within one operation.
+ */
+export class GitLocationMemo implements GitLocationLookup {
+  private readonly toplevels = new Map<string, Promise<string | null>>();
+  private readonly commonDirs = new Map<string, Promise<string | null>>();
+
+  public constructor(
+    private readonly source: GitLocationLookup = liveGitLocations
+  ) {}
+
+  public repoToplevel(dir: string): Promise<string | null> {
+    return this.remember(this.toplevels, dir, (d) =>
+      this.source.repoToplevel(d)
+    );
+  }
+
+  public gitCommonDir(dir: string): Promise<string | null> {
+    return this.remember(this.commonDirs, dir, (d) =>
+      this.source.gitCommonDir(d)
+    );
+  }
+
+  private remember(
+    answers: Map<string, Promise<string | null>>,
+    dir: string,
+    ask: (dir: string) => Promise<string | null>
+  ): Promise<string | null> {
+    const key = foldPathForCompare(path.resolve(dir));
+    const known = answers.get(key);
+    if (known) return known;
+    const pending = ask(dir).then(
+      (answer) => {
+        if (answer === null) answers.delete(key);
+        return answer;
+      },
+      (error: unknown) => {
+        answers.delete(key);
+        throw error;
+      }
+    );
+    answers.set(key, pending);
+    return pending;
   }
 }
 
