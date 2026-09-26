@@ -2,12 +2,14 @@ import * as assert from "assert";
 import * as fs from "fs";
 import * as path from "path";
 import Ajv from "ajv/dist/2020";
+import addFormats from "ajv-formats";
 import * as yaml from "js-yaml";
 import { PromptFileParser } from "../../core/PromptFileParser";
 import { formatRunRef } from "../../utils/WorkflowPaths";
 import {
   HARNESS_IDS,
   PERMISSION_MODES,
+  PUBLISHED_SCHEMA_URLS,
   STATUS_LINE_HARNESS_IDS,
 } from "../../types/DashboardConstants";
 import { VARIABLE_NAME_PATTERN_SOURCE } from "../../utils/KeyValueKeyKinds";
@@ -19,9 +21,9 @@ suite("Workflow template schema", () => {
     "../../../schemas/workflow-schema.json"
   );
   const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8"));
-  const validate = new Ajv({ allErrors: true, allowUnionTypes: true }).compile(
-    schema
-  );
+  const workflowAjv = new Ajv({ allErrors: true, allowUnionTypes: true });
+  addFormats(workflowAjv);
+  const validate = workflowAjv.compile(schema);
 
   test("accepts the bundled Template Starter", () => {
     const templatePath = path.resolve(
@@ -54,7 +56,17 @@ suite("Workflow template schema", () => {
       const template = yaml.load(
         fs.readFileSync(path.join(workflowsDirectory, fileName), "utf8")
       ) as { schemaVersion?: number };
+      const source = fs.readFileSync(
+        path.join(workflowsDirectory, fileName),
+        "utf8"
+      );
       assert.strictEqual(template.schemaVersion, 1, fileName);
+      assert.ok(
+        source.startsWith(
+          `# yaml-language-server: $schema=${PUBLISHED_SCHEMA_URLS.WORKFLOW}\n`
+        ),
+        `${fileName} should link to the published workflow schema`
+      );
     }
   });
 
@@ -70,11 +82,24 @@ suite("Workflow template schema", () => {
     );
   });
 
-  test("accepts schemaVersion on every closed workflow root and settings root", () => {
+  test("accepts schemaVersion and $schema on every closed workflow root and settings root", () => {
     const roots = [
-      { schemaVersion: 1, steps: [{ prompt: "multi-step root" }] },
-      { schemaVersion: 1, prompt: "single prompt root" },
-      { schemaVersion: 1, type: "script", script: "echo root script" },
+      {
+        $schema: "https://ctrlyoke.dev/schema/v1/workflow.json",
+        schemaVersion: 1,
+        steps: [{ prompt: "multi-step root" }],
+      },
+      {
+        $schema: "https://ctrlyoke.dev/schema/v1/workflow.json",
+        schemaVersion: 1,
+        prompt: "single prompt root",
+      },
+      {
+        $schema: "https://ctrlyoke.dev/schema/v1/workflow.json",
+        schemaVersion: 1,
+        type: "script",
+        script: "echo root script",
+      },
     ];
     for (const root of roots) {
       assert.strictEqual(validate(root), true, JSON.stringify(validate.errors));
@@ -87,12 +112,21 @@ suite("Workflow template schema", () => {
       )
     );
     const settingsAjv = new Ajv({ allErrors: true });
-    settingsAjv.addSchema(schema, "workflow-schema.json");
+    addFormats(settingsAjv);
+    settingsAjv.addSchema(schema, schema.$id);
     const validateSettings = settingsAjv.compile(settingsSchema);
     assert.strictEqual(
-      validateSettings({ schemaVersion: 1 }),
+      validateSettings({
+        $schema: "https://ctrlyoke.dev/schema/v1/settings.json",
+        schemaVersion: 1,
+      }),
       true,
       JSON.stringify(validateSettings.errors)
+    );
+    assert.strictEqual(
+      validateSettings({ defaults: { harness: "not-a-harness" } }),
+      false,
+      "the settings schema should resolve workflow.json by its $id"
     );
     assert.strictEqual(
       validate({ schemaVersion: 0, steps: [{ prompt: "x" }] }),
@@ -309,7 +343,8 @@ suite("Workflow template schema", () => {
       )
     );
     const settingsAjv = new Ajv({ allErrors: true });
-    settingsAjv.addSchema(schema, "workflow-schema.json");
+    addFormats(settingsAjv);
+    settingsAjv.addSchema(schema, schema.$id);
     const validateSettings = settingsAjv.compile(settingsSchema);
     const { execution, queue, runs, terminal, ui, server } =
       CTRLYOKE_SETTINGS_DEFAULTS;

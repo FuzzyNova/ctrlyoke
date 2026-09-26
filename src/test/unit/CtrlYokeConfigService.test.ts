@@ -488,6 +488,10 @@ suite("FileConfigBackend", () => {
     const content = JSON.parse(fs.readFileSync(configPath, "utf-8"));
     assert.strictEqual(content.defaults?.harness, "claude-cli");
     assert.strictEqual(content.schemaVersion, 1);
+    assert.strictEqual(
+      content.$schema,
+      "https://ctrlyoke.dev/schema/v1/settings.json"
+    );
   });
 
   test("set() updates an existing top-level setting", async () => {

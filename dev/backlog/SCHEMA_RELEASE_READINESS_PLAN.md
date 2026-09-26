@@ -1,6 +1,6 @@
 # Schema and Persisted-Format Release Readiness
 
-> **Status:** In progress — phases A–D are complete; phase E remains proposed. Written 2026-09-26 against current code.
+> **Status:** In progress — phases A–D and phase E implementation items 1–2 are complete; release-cut verification and inventory gaps remain. Written 2026-09-26 against current code.
 >
 > **Problem in one line:** once ctrlyoke ships, every persisted shape — workflow files,
 > `settings.json`, run history, the search index — becomes a compatibility contract, and today
@@ -29,7 +29,7 @@
 | #   | Item                                                                   | Decision                                                                                                                                                              | §    | Phase |
 | --- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | ----- |
 | 1   | Version marker on authored files + migration plan                      | In progress — format v1 guards and empty-chain migration/read hooks done 2026-09-26; release fixture freeze, schema publication, and remaining inventory gaps pending | 1, 2 | E     |
-| 2   | Publish schemas at `https://ctrlyoke.dev/schema/v1/…`, allow `$schema` | **Yes** (user)                                                                                                                                                        | 3    | E     |
+| 2   | Publish schemas at `https://ctrlyoke.dev/schema/v1/…`, allow `$schema` | Done 2026-09-26 (publication pipeline implemented; production release pending)                                                                                        | 3    | E     |
 | 3   | All durations in seconds, with a `Sec` suffix                          | Done 2026-09-26                                                                                                                                                       | 4    | B     |
 | 4   | Strict prompt steps / workflow root                                    | Done 2026-09-26                                                                                                                                                       | 5    | D     |
 | 5   | Top-level `statusLine` keyed by harness ID; new `diagnostics` group    | Done 2026-09-26                                                                                                                                                       | 6    | B     |
@@ -320,6 +320,17 @@ existing per-command integers and document an additive-only policy for them in t
   bundled `out/schemas/workflow-schema.json`. If it does not, rename the bundled copy so its
   file name matches the `$id`'s last segment, or keep the file-relative
   `workflow-schema.json#/$defs/…` spelling and register that key with Ajv as well.
+- **Verification result (2026-09-26):** `vscode-json-languageservice` 5.7.2 and
+  `yaml-language-server` 1.24.0 were installed only under `.ctrlyoke/temp/`. With
+  the settings schema loaded through its local association and refs spelled
+  `workflow.json#/$defs/…`, both services requested the settings schema and its ref from
+  `out/schemas/` only; the test request log contained no HTTP(S) request. Each service
+  reported the deliberately invalid harness enum, confirming that the cross-file definition
+  was applied. Their file-relative resolver expects `out/schemas/workflow.json`, so the build
+  generates that local alias from `workflow-schema.json`; the source schema's `$id` remains
+  the exact published `/schema/v1/workflow.json` URL. Ajv 8's 2020 implementation also
+  compiled settings with `workflow-schema.json` registered under that `$id` and rejected the
+  invalid harness. The scratch installation did not modify project dependencies.
 - **Allow a root `$schema` key** (`type: string`, `format: uri`) on every root form: the
   multi-step root, the single-step prompt root, `rootScriptStep` and the settings root.
   Today settings rejects it, and so does a single-step script file (confirmed with Ajv).
@@ -797,10 +808,11 @@ After implementation, record the durable rules where the next agent will look:
 ### Release checklist (end of phase E)
 
 - [ ] Every store in §1.1 carries an integer `schemaVersion` and is covered by the guard.
-- [ ] `BASELINE_SCHEMA_VERSIONS` recorded; chain test green with zero migrations.
+- [x] `BASELINE_SCHEMA_VERSIONS` recorded; chain test green with zero migrations.
 - [ ] Provisional fixture corpus re-captured or confirmed from the actual release build (including optional fields and both run-file version numbers) and committed.
-- [ ] `schemas/` copied to `schemas/archive/v1/`; `/schema/v1/` live with the right headers.
-- [ ] Built-in templates, `init`, and `WorkflowSerializer` stamp `schemaVersion` and `$schema`.
+- [x] `schemas/` copied to `schemas/archive/v1/`; the publish script checks the archive remains byte-identical while v1 is current.
+- [ ] `/schema/v1/` deployed and verified live with the right headers at the actual release cut.
+- [x] Built-in YAML templates carry the workflow schema modeline; `WorkflowSerializer` and custom-template writers stamp workflow schema hints, and settings writes stamp `$schema` with `schemaVersion`. Workspace `init` currently creates only `.ctrlyoke/.gitignore`, not a settings file.
 
 ---
 

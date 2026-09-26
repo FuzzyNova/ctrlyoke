@@ -1527,6 +1527,12 @@ Log raw CLI output to the extension output channel.
 
 ## Top-level settings {#top-level}
 
+### `$schema` {#schema}
+
+- **Type:** `string`
+
+Schema URL used by JSON-aware editors for validation and completion.
+
 ### `schemaVersion` {#schemaversion}
 
 - **Type:** `integer`

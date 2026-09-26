@@ -24,6 +24,12 @@ export const WORKFLOW_FILE_FORMATS = {
 export type WorkflowFileFormat =
   (typeof WORKFLOW_FILE_FORMATS)[keyof typeof WORKFLOW_FILE_FORMATS];
 
+/** Published format-1 schemas linked from newly authored workflow/settings files. */
+export const PUBLISHED_SCHEMA_URLS = {
+  WORKFLOW: "https://ctrlyoke.dev/schema/v1/workflow.json",
+  SETTINGS: "https://ctrlyoke.dev/schema/v1/settings.json",
+} as const;
+
 /** Completion trigger discriminants shared by the extension host and webview. */
 export const COMPLETION_TRIGGERS = {
   SLASH: "/",

@@ -3,6 +3,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import Ajv from "ajv/dist/2020";
+import addFormats from "ajv-formats";
 import { PromptFileParser } from "../../core/PromptFileParser";
 import { FileConfigBackend } from "../../config/FileConfigBackend";
 import {
@@ -47,7 +48,8 @@ suite("FormatMigrations", () => {
       )
     );
     const settingsAjv = new Ajv({ allErrors: true });
-    settingsAjv.addSchema(workflowSchema, "workflow-schema.json");
+    addFormats(settingsAjv);
+    settingsAjv.addSchema(workflowSchema, workflowSchema.$id);
     const validateSettings = settingsAjv.compile(settingsSchema);
     try {
       for (const store of Object.values(PERSISTED_STORES)) {

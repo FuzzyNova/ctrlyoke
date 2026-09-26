@@ -92,6 +92,8 @@ export interface CoordinationSettings {
 }
 
 export interface CtrlYokeGlobalSettings {
+  /** Published schema URL used by editors to validate this settings file. */
+  $schema?: string;
   /** Settings format version; omitted on hand-authored legacy files (format 1). */
   schemaVersion?: number;
   // General (format/template/behavior toggles)

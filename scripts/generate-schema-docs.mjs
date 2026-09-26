@@ -934,7 +934,10 @@ function buildSettingsPage(
     settingsSchema,
     SETTINGS_PAGE,
     refTargets,
-    { "workflow-schema.json": workflowSchema }
+    {
+      "workflow.json": workflowSchema,
+      "workflow-schema.json": workflowSchema,
+    }
   );
   const partials = new Partials(SETTINGS_PAGE);
 

@@ -103,6 +103,7 @@ suite("Settings schema defaults", () => {
     };
 
     for (const [key, property] of Object.entries(schema.properties ?? {})) {
+      if (key === "$schema") continue;
       walk(property, [key]);
     }
   });

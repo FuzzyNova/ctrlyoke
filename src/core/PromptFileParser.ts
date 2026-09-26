@@ -1,6 +1,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import Ajv from "ajv/dist/2020";
+import addFormats from "ajv-formats";
 import * as yaml from "js-yaml";
 import type { ErrorObject, ValidateFunction } from "ajv";
 import {
@@ -89,6 +90,7 @@ export class PromptFileParser {
     private readonly platform?: PlatformAdapter,
     private readonly userFeedbackSink?: UserFeedbackSink
   ) {
+    addFormats(this.ajv);
     this.loadSchemas();
   }
 
@@ -292,6 +294,10 @@ export class PromptFileParser {
 
   private static createRelaxedSchema(schema: Record<string, unknown>): any {
     const relaxed = structuredClone(schema) as Record<string, unknown>;
+    // The strict schema is already registered by its $id on this Ajv
+    // instance. The relaxed variant is an in-memory validation helper and
+    // must not claim that same globally addressable schema identity.
+    delete relaxed.$id;
     const visit = (value: unknown): void => {
       if (Array.isArray(value)) {
         value.forEach(visit);

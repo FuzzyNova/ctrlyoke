@@ -1,0 +1,3 @@
+/schema/*
+  Content-Type: application/schema+json
+  Access-Control-Allow-Origin: *

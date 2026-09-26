@@ -153,7 +153,7 @@ suite("WorktreeResolution", () => {
 
     assert.strictEqual(
       settingsSchema.properties.defaults.properties.worktree.$ref,
-      "workflow-schema.json#/$defs/worktreeConfig"
+      "workflow.json#/$defs/worktreeConfig"
     );
     assert.ok(
       workflowSchema.$defs.worktreeConfig.oneOf.some(

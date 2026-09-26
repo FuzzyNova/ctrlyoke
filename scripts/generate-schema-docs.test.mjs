@@ -63,7 +63,7 @@ test("settings references resolve against the sibling workflow schema", () => {
     const: "sibling-schema-resolved",
   };
   inputs.settingsSchema.properties.defaults.properties.agent = {
-    $ref: "workflow-schema.json#/$defs/harnessId",
+    $ref: "workflow.json#/$defs/harnessId",
     description: "External reference used by this test.",
   };
 

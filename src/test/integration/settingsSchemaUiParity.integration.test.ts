@@ -100,7 +100,7 @@ function resolveRef(
   const pointer = hashIndex === -1 ? "" : ref.slice(hashIndex);
   const targetDocument = ref.startsWith("#")
     ? document
-    : schemaFile === "workflow-schema.json"
+    : schemaFile === "workflow.json" || schemaFile === "workflow-schema.json"
       ? workflowSchema
       : undefined;
   assert.ok(targetDocument, `Unsupported $ref: ${ref}`);
@@ -192,6 +192,7 @@ function walk(
 
   const properties = resolved.properties as Record<string, SchemaNode>;
   for (const [key, childSchema] of Object.entries(properties)) {
+    if (!prefix && key === "$schema") continue;
     walk(
       childSchema,
       prefix ? `${prefix}.${key}` : key,

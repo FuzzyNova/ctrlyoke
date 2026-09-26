@@ -202,13 +202,26 @@ const copySchemasPlugin = {
 
       // Copy all schema files
       if (fs.existsSync(srcSchemas)) {
-        const files = fs.readdirSync(srcSchemas);
-        files.forEach((file) => {
-          const srcFile = path.join(srcSchemas, file);
-          const outFile = path.join(outSchemas, file);
-          fs.copyFileSync(srcFile, outFile);
-          console.log(`[copy] ${file} -> out/schemas/${file}`);
+        const entries = fs.readdirSync(srcSchemas, { withFileTypes: true });
+        entries.forEach((entry) => {
+          const srcPath = path.join(srcSchemas, entry.name);
+          const outPath = path.join(outSchemas, entry.name);
+          if (entry.isDirectory()) {
+            copyDirRecursive(srcPath, outPath);
+            console.log(`[copy] ${entry.name}/ -> out/schemas/${entry.name}/`);
+            return;
+          }
+          fs.copyFileSync(srcPath, outPath);
+          console.log(`[copy] ${entry.name} -> out/schemas/${entry.name}`);
         });
+        // Draft 2020-12 settings refs use workflow.json, matching the
+        // workflow schema's published $id. Keep this local editor alias
+        // generated from the one canonical source schema.
+        fs.copyFileSync(
+          path.join(srcSchemas, "workflow-schema.json"),
+          path.join(outSchemas, "workflow.json")
+        );
+        console.log("[copy] workflow-schema.json -> out/schemas/workflow.json");
       }
     });
   },

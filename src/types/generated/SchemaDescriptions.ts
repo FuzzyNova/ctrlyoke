@@ -1,6 +1,7 @@
 // AUTO-GENERATED from schemas/settings-schema.json and schemas/workflow-schema.json. Do not edit by hand.
 
 export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
+  "$schema": "Schema URL used by JSON-aware editors for validation and completion.",
   "_runtime": "Per-prompt runtime execution metadata (optional, added automatically during execution)",
   "_runtime.activeParallelGroup": "Durable admission state for the currently executing parallel group",
   "_runtime.additionalArgs": "Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). Use null at prompt level to explicitly disable additional args even if the workflow or settings define some. Example: \"--effort high --max-turns 10\"",

@@ -12,6 +12,7 @@ import {
 } from "../utils/PersistedSchemaGuard";
 import { Log } from "../utils/Log";
 import { migrateToCurrent } from "../utils/FormatMigrations";
+import { PUBLISHED_SCHEMA_URLS } from "../types/DashboardConstants";
 
 const warnedNewerSettingsPaths = new Set<string>();
 
@@ -108,6 +109,7 @@ export class FileConfigBackend implements ConfigBackend {
 
   private async save(data: PartialCtrlYokeSettings): Promise<void> {
     data.schemaVersion = CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.SETTINGS];
+    data.$schema = PUBLISHED_SCHEMA_URLS.SETTINGS;
     const dir = path.dirname(this.configPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
