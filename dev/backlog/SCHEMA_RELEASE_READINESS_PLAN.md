@@ -53,8 +53,8 @@ ever written for a pre-release rename.
 
 Item 4's schema dialect, `$defs` migration touchpoints, closures, lenient loader, and warning
 surfacing in the extension, VS Code/hosted dashboards, and MCP `workflow_status` were
-completed 2026-09-26. Authored workflow and settings `schemaVersion` fields landed in phase E;
-root `$schema` remains deferred.
+completed 2026-09-26. Authored workflow and settings `schemaVersion` fields and the root
+`$schema` key landed in phase E.
 
 ---
 
@@ -786,8 +786,7 @@ timestamps, terminal status)".
 After implementation, record the durable rules where the next agent will look:
 
 - the migration read pipeline and write-back classes → `utils.instructions.md` (next to
-  `PersistedSchemaGuard`) in the later FormatMigrations step; that pipeline is not implemented
-  in this engine-owned-store chunk;
+  `PersistedSchemaGuard`) — done;
 - the "strict schema, lenient loader" rule → `core.instructions.md` `parsingAndValidation`,
   amending the bullet that currently says every Ajv failure is fatal, and replacing the "three step allowlists" bullet with the §5.3 closure-placement rule;
 - the §2.5 launcher constraint → `harness-shared.instructions.md`.
@@ -802,7 +801,7 @@ After implementation, record the durable rules where the next agent will look:
 | **B** | 3, 5                                          | The two rename sets; do them together so the settings file only changes shape once.                                                                                                                                                                                                                                                          |
 | **C** | 6                                             | Needs B's settled field names; bumps the search index.                                                                                                                                                                                                                                                                                       |
 | **D** | 4                                             | Last shape change: the draft 2020-12 move, closures, lenient loader and `ValidationUtils` deletion, after all renames and §7's removals.                                                                                                                                                                                                     |
-| **E** | 1, 2 + §2.2 skeleton + §2.8                   | Workflow/settings version fields, store guards, and §1.3 refusal landed 2026-09-26. Empty-chain `FormatMigrations`, read hooks, launcher support, and provisional fixtures landed 2026-09-26. Still convert remaining semver strings, publish `/schema/v1/`, and **re-capture or confirm the fixture corpus from the actual release build.** |
+| **E** | 1, 2 + §2.2 skeleton + §2.8                   | Workflow/settings version fields, store guards, and §1.3 refusal landed 2026-09-26. Empty-chain `FormatMigrations`, read hooks, launcher support, and provisional fixtures landed 2026-09-26. Semver strings converted and the `/schema/v1/` publish pipeline built. At the release cut: deploy and verify `/schema/v1/`, and **re-capture or confirm the fixture corpus from the actual release build.** |
 | post  | §2.4 `ctrlyoke migrate`, first real migration | When the first breaking change lands after release.                                                                                                                                                                                                                                                                                          |
 
 ### Release checklist (end of phase E)
