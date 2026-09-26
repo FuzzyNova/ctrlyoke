@@ -498,6 +498,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "runs": "Execution run retention settings. History is always on.",
   "runs.historySearchCacheMb": "Approximate working-set budget in MB for caching parsed history-search documents from the most recent runs, evicted oldest-first when exceeded. Bounds real extension-host process memory (RSS), not a literal byte count — actual RSS runs above this number due to V8 overhead the estimate can't see, so the default is calibrated from measured RSS on a real index rather than the byte math alone. 0 disables the cache.",
   "runs.maxRuns": "Deletes entire runs—definition and output—oldest first. -1 keeps all runs.",
+  "schemaVersion": "Settings format version. Absent means format 1. ctrlyoke stamps this field when it writes settings; an older host reads newer settings best-effort but refuses to write them.",
   "script": "Shell command or path to script. Resolved relative to workspace root or .ctrlyoke/.",
   "secrets": "Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets replace workflow-level secrets (no merging). Use null to explicitly disable an inherited grant array; inline !NAME references in prompt text remain authoritative grants.",
   "server": "ctrlyoke hosted server settings.",

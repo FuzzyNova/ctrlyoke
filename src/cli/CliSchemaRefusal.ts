@@ -14,6 +14,7 @@ export const NEWER_SCHEMA_EXIT_CODE = 2;
  * callers and say nothing about why a run ended.
  */
 const RUN_STATE_STORES: ReadonlySet<PersistedStore> = new Set([
+  PERSISTED_STORES.WORKFLOW_DEFINITION,
   PERSISTED_STORES.RUN_FILE,
   PERSISTED_STORES.LINEAGE_DESCRIPTOR,
   PERSISTED_STORES.RUNNER_LOCK,

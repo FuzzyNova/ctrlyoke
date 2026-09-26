@@ -1,3 +1,4 @@
+schemaVersion: 1
 _templateMeta:
   name: Spec-Driven Loop
   description: "Orchestrator loop. Give it a spec/design doc — it breaks the work into steps, queues them, then reviews and keeps looping until every requirement is satisfied."

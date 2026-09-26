@@ -1668,6 +1668,7 @@ export interface OpenGlobalSettingsTabMessage {
 export interface GlobalSettingsLoadedMessage {
   type: typeof MESSAGE_TYPES.GLOBAL_SETTINGS_LOADED;
   settings: FullGlobalSettings;
+  readOnly?: boolean;
   commitMessageGeneration?: CommitMessageGenerationRecord | null;
 }
 

@@ -2341,6 +2341,26 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.strictEqual(output.outputs[0].responseText, "the finished answer");
   });
 
+  test("returns the newer workflow format refusal as a tool error", async () => {
+    const server = await setup();
+    const run = await createRun("newer-format", "2026-01-01T00-00-00-000Z");
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.schemaVersion = 2;
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    await assert.rejects(
+      () =>
+        server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "end",
+          steps: [{ prompt: "must not append" }],
+        }),
+      /workflow\.ctrlyoke\.json \(JSON\) uses workflow format 2[\s\S]*supports format 1/u
+    );
+  });
+
   test("includes authored schema warnings in workflow_status", async () => {
     const server = await setup();
     const run = await createRun("schema-warnings", "2026-01-01T00-00-00-000Z");

@@ -541,6 +541,7 @@ suite("TemplateManager variable metadata", () => {
         onFail: "continue",
       };
       assert.deepStrictEqual(workflow, {
+        schemaVersion: 1,
         ...executionProperties,
         vars: { branch: "main" },
         steps: [expectedPrompt, expectedScript],

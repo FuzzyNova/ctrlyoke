@@ -340,6 +340,8 @@ export const EXECUTION_PROPERTY_KEYS = [
 ] as const satisfies readonly (keyof ExecutionProperties)[];
 
 export interface PromptFile extends ExecutionProperties {
+  /** Workflow definition schema version; omitted on hand-authored legacy files (format 1). */
+  schemaVersion?: number;
   /** Worktree selection authored at the workflow root. */
   worktree?: WorktreeConfig;
   /** External roots requested for this workflow, or null to disable access. */

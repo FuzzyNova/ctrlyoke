@@ -1126,6 +1126,7 @@ export class WebviewSettingsSync {
     this.emitMessage(
       {
         type: MESSAGE_TYPES.GLOBAL_SETTINGS_LOADED,
+        readOnly: configService.isSettingsReadOnly(),
         settings: {
           settings: allSettings,
           sources,

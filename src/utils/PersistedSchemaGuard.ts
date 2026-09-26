@@ -20,6 +20,8 @@
 
 /** Shared stores guarded against writes by an older host. */
 export const PERSISTED_STORES = {
+  WORKFLOW_DEFINITION: "workflow-definition",
+  SETTINGS: "settings",
   RUN_FILE: "run-file",
   LINEAGE_DESCRIPTOR: "lineage-descriptor",
   RUNNER_LOCK: "runner-lock",
@@ -41,6 +43,8 @@ export type PersistedStore =
  * only for a change an older host would misread or silently drop.
  */
 export const CURRENT_SCHEMA_VERSIONS = {
+  [PERSISTED_STORES.WORKFLOW_DEFINITION]: 1,
+  [PERSISTED_STORES.SETTINGS]: 1,
   [PERSISTED_STORES.RUN_FILE]: 1,
   [PERSISTED_STORES.LINEAGE_DESCRIPTOR]: 1,
   [PERSISTED_STORES.RUNNER_LOCK]: 2,
@@ -55,6 +59,8 @@ export const CURRENT_SCHEMA_VERSIONS = {
 } as const satisfies Record<PersistedStore, number>;
 
 const STORE_LABELS: Record<PersistedStore, string> = {
+  [PERSISTED_STORES.WORKFLOW_DEFINITION]: "workflow definition",
+  [PERSISTED_STORES.SETTINGS]: "settings",
   [PERSISTED_STORES.RUN_FILE]: "workflow run",
   [PERSISTED_STORES.LINEAGE_DESCRIPTOR]: "workflow history",
   [PERSISTED_STORES.RUNNER_LOCK]: "runner lock",
@@ -76,15 +82,31 @@ export class NewerSchemaError extends Error {
     readonly filePath?: string
   ) {
     const supported = CURRENT_SCHEMA_VERSIONS[store];
-    super(
-      `This ${STORE_LABELS[store]} was written by a newer version of ctrlyoke ` +
-        `(format ${foundVersion}; this version supports up to ${supported}). ` +
-        `Update ctrlyoke — the VS Code extension, and the CLI with ` +
-        `\`npm install -g ctrlyoke@latest\` — to modify it.` +
-        (filePath ? ` (${filePath})` : "")
-    );
+    const label = STORE_LABELS[store];
+    const message =
+      store === PERSISTED_STORES.WORKFLOW_DEFINITION
+        ? `${filePath ? `${filePath} ` : "This workflow file "}uses workflow format ${foundVersion}, which needs a newer ctrlyoke — this version (${getHostVersion()}) supports format ${supported}. Update ctrlyoke to open it.`
+        : `This ${label} was written by a newer version of ctrlyoke (format ${foundVersion}; this version supports up to ${supported}). Update ctrlyoke to modify it.${filePath ? ` (${filePath})` : ""}`;
+    super(message);
     this.name = "NewerSchemaError";
   }
+}
+
+function getHostVersion(): string {
+  const path = require("path") as typeof import("path");
+  const candidates = [
+    path.resolve(__dirname, "../package.json"),
+    path.resolve(__dirname, "../../package.json"),
+  ];
+  for (const candidate of candidates) {
+    try {
+      const packageJson = require(candidate) as { version?: unknown };
+      if (typeof packageJson.version === "string") return packageJson.version;
+    } catch {
+      // Try the next package location used by compiled and bundled consumers.
+    }
+  }
+  return "unknown";
 }
 
 export function isNewerSchemaError(error: unknown): error is NewerSchemaError {
@@ -177,20 +199,25 @@ export function prepareRunFileForWrite<T extends { _runtime?: object }>(
   workingFile: T,
   filePath: string
 ): T {
-  if (!workingFile._runtime) {
-    return workingFile;
+  if (workingFile._runtime) {
+    assertWritableSchema(
+      PERSISTED_STORES.RUN_FILE,
+      workingFile._runtime,
+      filePath
+    );
   }
-  assertWritableSchema(
-    PERSISTED_STORES.RUN_FILE,
-    workingFile._runtime,
-    filePath
-  );
   return {
     ...workingFile,
-    _runtime: {
-      ...workingFile._runtime,
-      schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.RUN_FILE],
-    },
+    schemaVersion:
+      CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.WORKFLOW_DEFINITION],
+    ...(workingFile._runtime
+      ? {
+          _runtime: {
+            ...workingFile._runtime,
+            schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.RUN_FILE],
+          },
+        }
+      : {}),
   };
 }
 

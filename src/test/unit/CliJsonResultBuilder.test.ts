@@ -84,6 +84,7 @@ suite("CliJsonResultBuilder", () => {
         },
       ],
       error: null,
+      errorCode: null,
     });
     assert.strictEqual(JSON.stringify(output).split("\n").length, 1);
   });

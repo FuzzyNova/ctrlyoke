@@ -1,3 +1,4 @@
+schemaVersion: 1
 _templateMeta:
   name: Full Feature Pipeline
   description: "Plan → Review plan → Implement → Polish → Review → Docs → Commit. A fixed pipeline where each step is its own session, a second harness reviews, and the tests gate the work."

@@ -87,6 +87,13 @@ import {
 } from "./utils/ProjectStateRegistry";
 import { ctrlyokeStateHome } from "./utils/ProjectStatePaths";
 import {
+  isNewerSchemaError,
+  isNewerSchemaVersion,
+  PERSISTED_STORES,
+  readSchemaVersion,
+  refuseNewerSchema,
+} from "./utils/PersistedSchemaGuard";
+import {
   initializeRunHistoryLocation,
   parseRunHistoryLocation,
 } from "./utils/RunHistoryStoragePolicy";
@@ -970,6 +977,9 @@ export class CtrlYokeMCPServer {
       const parsedSource = await this.promptFileParser.parsePromptFile(
         workflowDescriptor.originalFile
       );
+      if (this.promptFileParser.lastNewerSchemaError) {
+        throw new Error(this.promptFileParser.lastNewerSchemaError.message);
+      }
       schemaWarnings = parsedSource?.warnings ?? [];
     }
     if (schemaWarnings.length === 0) {
@@ -1926,6 +1936,9 @@ export class CtrlYokeMCPServer {
         `${operation}: the attached ctrlyoke run file no longer exists at ${filePath}, so nothing was done (${describeError(error)}). Its run history may have been deleted, or this harness session may have outlived the workspace it was launched from.`
       );
     }
+    // Mutations resolve here before reaching the shared continuation service;
+    // refuse a newer definition root at the MCP boundary as well as on reads.
+    await this.readAttachedRun(operation, filePath);
     let descriptorRevision: number;
     try {
       descriptorRevision = (
@@ -1962,8 +1975,23 @@ export class CtrlYokeMCPServer {
       );
     }
     try {
-      return JSON.parse(content) as WorkingFile;
+      const workingFile = JSON.parse(content) as WorkingFile;
+      const schemaVersion = readSchemaVersion(workingFile);
+      if (
+        isNewerSchemaVersion(
+          PERSISTED_STORES.WORKFLOW_DEFINITION,
+          schemaVersion
+        )
+      ) {
+        refuseNewerSchema(
+          PERSISTED_STORES.WORKFLOW_DEFINITION,
+          schemaVersion as number,
+          `${path.basename(filePath)} (JSON)`
+        );
+      }
+      return workingFile;
     } catch (error) {
+      if (isNewerSchemaError(error)) throw error;
       throw new Error(
         `${operation}: the attached ctrlyoke run file ${filePath} is not valid JSON, so nothing was done (${describeError(error)}).`
       );

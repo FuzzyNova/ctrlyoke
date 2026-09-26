@@ -1600,6 +1600,14 @@ export const CLI_VALIDATE_STRICT_POLICIES = {
   ALL: "all",
 } as const;
 
+export const CLI_VALIDATE_ERROR_CODES = {
+  WORKFLOW_NEWER_FORMAT: "workflow-newer-format",
+} as const;
+
+export const USER_FEEDBACK_ACTIONS = {
+  UPDATE_EXTENSION: "update-extension",
+} as const;
+
 export type CliValidateStrictPolicy =
   (typeof CLI_VALIDATE_STRICT_POLICIES)[keyof typeof CLI_VALIDATE_STRICT_POLICIES];
 

@@ -54,9 +54,12 @@ import { TimelineRecorder } from "./orchestration/TimelineRecorder";
 import { ensureStepIds, resetStepRuntimeForRewind } from "./StepIdentity";
 import {
   assertWritableSchema,
+  isNewerSchemaError,
+  isNewerSchemaVersion,
   isNewerRunFile,
   PERSISTED_STORES,
   prepareRunFileForWrite,
+  readSchemaVersion,
   refuseNewerSchema,
 } from "../utils/PersistedSchemaGuard";
 import {
@@ -136,11 +139,21 @@ async function readWorkingFileFromDisk(
 ): Promise<WorkingFile> {
   try {
     const content = await fs.readFile(workingFilePath, "utf-8");
-    const workingFile = stripLegacyWorkingFileLineageMetadata(
-      JSON.parse(content) as WorkingFile
-    );
+    const parsed = JSON.parse(content) as WorkingFile;
+    const schemaVersion = readSchemaVersion(parsed);
+    if (
+      isNewerSchemaVersion(PERSISTED_STORES.WORKFLOW_DEFINITION, schemaVersion)
+    ) {
+      refuseNewerSchema(
+        PERSISTED_STORES.WORKFLOW_DEFINITION,
+        schemaVersion as number,
+        `${workingFilePath.split(/[\\/]/).pop()} (JSON)`
+      );
+    }
+    const workingFile = stripLegacyWorkingFileLineageMetadata(parsed);
     return stripTimelineDuplicatedWorkingFileOutput(workingFile);
   } catch (error) {
+    if (isNewerSchemaError(error)) throw error;
     throw new Error(`Failed to read working file: ${getErrorMessage(error)}`);
   }
 }

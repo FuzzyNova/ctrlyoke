@@ -23,6 +23,7 @@ import {
   WORKFLOW_LOCK_LIVENESS,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   CLI_VALIDATE_TARGET_KINDS,
+  CLI_VALIDATE_ERROR_CODES,
   HARNESS_INFO,
   STATUS_MESSAGE_SEVERITY,
 } from "./types/DashboardConstants";
@@ -1471,7 +1472,10 @@ async function dryRunCommand(
       ? { steps: [{ prompt: options.prompt }] }
       : await parser.parsePromptFile(resolvedFile!);
     if (!workflow) {
-      throw new Error(`Failed to load workflow file: ${resolvedFile}`);
+      throw new Error(
+        parser.lastNewerSchemaError?.message ??
+          `Failed to load workflow file: ${resolvedFile}`
+      );
     }
 
     if (resolvedFile) {
@@ -1828,7 +1832,10 @@ async function parseAppendTail(
   const parser = new PromptFileParser(platform, userFeedbackSink);
   const parsed = await parser.parsePromptFile(path.resolve(operation.file));
   if (!parsed?.steps?.length) {
-    throw new Error("Append source must contain at least one workflow step");
+    throw new Error(
+      parser.lastNewerSchemaError?.message ??
+        "Append source must contain at least one workflow step"
+    );
   }
   return parsed.steps;
 }
@@ -1966,6 +1973,26 @@ async function validateCommand(
     const parser = new PromptFileParser();
     const result = await parser.parsePromptFile(resolvedFile);
     if (!result) {
+      const newerSchemaError = parser.lastNewerSchemaError;
+      if (newerSchemaError) {
+        if (options.json) {
+          process.stdout.write(
+            JSON.stringify(
+              buildCliValidationJsonResult({
+                success: false,
+                parsed: false,
+                workflowFile: resolvedFile,
+                error: newerSchemaError.message,
+                errorCode: CLI_VALIDATE_ERROR_CODES.WORKFLOW_NEWER_FORMAT,
+              })
+            ) + "\n"
+          );
+        } else {
+          console.error(newerSchemaError.message);
+        }
+        process.exit(2);
+        return;
+      }
       const message = `${path.basename(resolvedFile)} failed validation`;
       if (options.json) {
         process.stdout.write(
@@ -2376,10 +2403,14 @@ async function trustWorkflowExternalRootsCommand(
   configService.setUserBackend(userBackend);
   configService.setWorkspaceBackend(workspaceBackend);
 
-  const workflow = await new PromptFileParser().parsePromptFile(resolvedFile);
+  const parser = new PromptFileParser();
+  const workflow = await parser.parsePromptFile(resolvedFile);
   if (!workflow) {
     console.error(
-      chalk.red(`Error: Failed to load workflow file: ${resolvedFile}`)
+      chalk.red(
+        parser.lastNewerSchemaError?.message ??
+          `Error: Failed to load workflow file: ${resolvedFile}`
+      )
     );
     process.exit(2);
   }

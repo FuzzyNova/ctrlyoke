@@ -673,9 +673,11 @@ suite("WorkflowSerializer", () => {
         );
 
         const saved = JSON.parse(await fs.readFile(outputPath, "utf8")) as {
+          schemaVersion: number;
           steps: Array<Record<string, unknown>>;
           parallelGroups?: unknown;
         };
+        assert.strictEqual(saved.schemaVersion, 1);
         assert.strictEqual(saved.parallelGroups, undefined);
         assert.deepStrictEqual(saved.steps[1], {
           parallel: [

@@ -1,3 +1,4 @@
+schemaVersion: 1
 _templateMeta:
   name: Simple Feature
   description: "Plan → Implement → Commit in a single session for a small, focused change."

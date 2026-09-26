@@ -30,6 +30,7 @@ import {
   STEP_TYPES,
   WORKFLOW_PROPERTY_KEYS,
   WORKFLOW_VALIDATION_WARNING_CODES,
+  USER_FEEDBACK_ACTIONS,
   WORKTREE_MODES,
 } from "../types/DashboardConstants";
 import {
@@ -42,6 +43,15 @@ import {
   normalizeParallelGroupTopology,
   type ResolvedParallelItem,
 } from "./ParallelGroupTopology";
+import {
+  CURRENT_SCHEMA_VERSIONS,
+  isNewerSchemaError,
+  isNewerSchemaVersion,
+  PERSISTED_STORES,
+  readSchemaVersion,
+  refuseNewerSchema,
+  type NewerSchemaError,
+} from "../utils/PersistedSchemaGuard";
 
 type ParallelValidationProperties = Pick<
   ExecutionProperties,
@@ -68,6 +78,7 @@ export function getAuthoredSourcePath(
 }
 
 export class PromptFileParser {
+  lastNewerSchemaError?: NewerSchemaError;
   private promptSchema: any;
   private strictValidator?: ValidateFunction;
   private relaxedValidator?: ValidateFunction;
@@ -127,6 +138,7 @@ export class PromptFileParser {
    * Supports .ctrlyoke.yaml/.yml, .ctrlyoke.json, and .prompt.md files
    */
   async parsePromptFile(filePath: string): Promise<ParsedPromptFile | null> {
+    this.lastNewerSchemaError = undefined;
     try {
       const ext = path.extname(filePath).toLowerCase();
 
@@ -174,6 +186,17 @@ export class PromptFileParser {
         await this.validateAndNormalizeWithWarnings(parsed, filePath);
       return PromptFileParser.withWarnings(workflow, warnings);
     } catch (error) {
+      if (isNewerSchemaError(error)) {
+        this.lastNewerSchemaError = error;
+        if (this.userFeedbackSink) {
+          this.userFeedbackSink.notify({
+            severity: "error",
+            message: error.message,
+            action: USER_FEEDBACK_ACTIONS.UPDATE_EXTENSION,
+          });
+        }
+        return null;
+      }
       Log.error(`[PromptFileParser] Failed to parse file ${filePath}:`, error);
       if (this.userFeedbackSink) {
         notifyUserFeedback(
@@ -218,6 +241,11 @@ export class PromptFileParser {
     parsed: any,
     contentPath: string
   ): Promise<{ workflow: PromptFile; warnings: WorkflowValidationWarning[] }> {
+    this.assertSupportedWorkflowSchema(
+      parsed,
+      contentPath,
+      path.extname(contentPath).toLowerCase() === ".json" ? "JSON" : "YAML"
+    );
     this.validateAuthoredParallelStructure(parsed);
 
     if (
@@ -234,10 +262,27 @@ export class PromptFileParser {
     }
 
     const warnings = this.validateSchemaAndGetWarnings(parsed);
-    return {
-      workflow: await this.normalizePromptFile(parsed, contentPath),
-      warnings,
-    };
+    const workflow = await this.normalizePromptFile(parsed, contentPath);
+    workflow.schemaVersion =
+      CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.WORKFLOW_DEFINITION];
+    return { workflow, warnings };
+  }
+
+  private assertSupportedWorkflowSchema(
+    parsed: unknown,
+    contentPath: string,
+    format: string
+  ): void {
+    const schemaVersion = readSchemaVersion(parsed);
+    if (
+      isNewerSchemaVersion(PERSISTED_STORES.WORKFLOW_DEFINITION, schemaVersion)
+    ) {
+      refuseNewerSchema(
+        PERSISTED_STORES.WORKFLOW_DEFINITION,
+        schemaVersion as number,
+        `${path.basename(contentPath)} (${format})`
+      );
+    }
   }
 
   private static createRelaxedSchema(schema: Record<string, unknown>): any {
@@ -487,8 +532,25 @@ export class PromptFileParser {
     try {
       const content = await fs.readFile(filePath, "utf8");
 
-      // Trim whitespace but preserve the prompt text as-is
-      const promptText = content.trim();
+      const frontmatterMatch = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u.exec(
+        content
+      );
+      let promptContent = content;
+      if (frontmatterMatch) {
+        const frontmatter = yaml.load(frontmatterMatch[1], {
+          filename: filePath,
+          schema: yaml.CORE_SCHEMA,
+        });
+        this.assertSupportedWorkflowSchema(
+          frontmatter,
+          filePath,
+          "Markdown frontmatter"
+        );
+        promptContent = content.slice(frontmatterMatch[0].length);
+      }
+
+      // Trim whitespace but preserve the prompt text as-is.
+      const promptText = promptContent.trim();
 
       if (!promptText) {
         throw new Error("Prompt file is empty");
@@ -496,6 +558,8 @@ export class PromptFileParser {
 
       return PromptFileParser.withWarnings(
         {
+          schemaVersion:
+            CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.WORKFLOW_DEFINITION],
           steps: [
             {
               prompt: promptText,
@@ -506,6 +570,15 @@ export class PromptFileParser {
         []
       );
     } catch (error) {
+      if (isNewerSchemaError(error)) {
+        this.lastNewerSchemaError = error;
+        this.userFeedbackSink?.notify({
+          severity: "error",
+          message: error.message,
+          action: USER_FEEDBACK_ACTIONS.UPDATE_EXTENSION,
+        });
+        return null;
+      }
       Log.error(
         `[PromptFileParser] Failed to read markdown prompt file ${filePath}:`,
         error

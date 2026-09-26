@@ -645,6 +645,7 @@ export function createMessageHandlers(
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.GLOBAL_SETTINGS_LOADED] = (message) => {
     const settingsStore = useSettingsStore.getState();
+    settingsStore.setGlobalSettingsReadOnly(message.readOnly ?? false);
     if (message.settings) {
       settingsStore.setFullGlobalSettings(message.settings);
       if (message.settings.licenseAccess) {

@@ -5,6 +5,12 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "Settings format version. Absent means format 1. ctrlyoke stamps this field when it writes settings; an older host reads newer settings best-effort but refuses to write them."
+    },
     "general": {
       "type": "object",
       "description": "General format, template, and behavior settings.",

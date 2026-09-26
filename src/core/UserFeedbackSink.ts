@@ -1,4 +1,7 @@
-import type { UserFeedbackSeverity } from "../types/DashboardConstants";
+import {
+  USER_FEEDBACK_ACTIONS,
+  type UserFeedbackSeverity,
+} from "../types/DashboardConstants";
 
 /** Operational feedback that must remain visible regardless of notification settings. */
 export interface UserFeedback {
@@ -6,6 +9,7 @@ export interface UserFeedback {
   message: string;
   detail?: string;
   dedupeKey?: string;
+  action?: (typeof USER_FEEDBACK_ACTIONS)[keyof typeof USER_FEEDBACK_ACTIONS];
 }
 
 export function formatUserFeedback(message: UserFeedback): string {

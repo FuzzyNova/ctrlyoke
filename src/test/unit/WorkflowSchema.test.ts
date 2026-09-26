@@ -29,12 +29,33 @@ suite("Workflow template schema", () => {
       "../../../src/templates/workflows/template-starter.ctrlyoke.yaml"
     );
     const template = yaml.load(fs.readFileSync(templatePath, "utf-8"));
+    assert.strictEqual(
+      (template as { schemaVersion?: number }).schemaVersion,
+      1
+    );
 
     assert.strictEqual(
       validate(template),
       true,
       JSON.stringify(validate.errors)
     );
+  });
+
+  test("stamps every bundled workflow template with schemaVersion 1", () => {
+    const workflowsDirectory = path.resolve(
+      __dirname,
+      "../../../src/templates/workflows"
+    );
+    const templateFiles = fs
+      .readdirSync(workflowsDirectory)
+      .filter((fileName) => fileName.endsWith(".ctrlyoke.yaml"));
+    assert.ok(templateFiles.length > 0);
+    for (const fileName of templateFiles) {
+      const template = yaml.load(
+        fs.readFileSync(path.join(workflowsDirectory, fileName), "utf8")
+      ) as { schemaVersion?: number };
+      assert.strictEqual(template.schemaVersion, 1, fileName);
+    }
   });
 
   test("requires the prompt field on prompt steps", () => {
@@ -47,6 +68,82 @@ suite("Workflow template schema", () => {
       validate({ steps: [{ endCondition: { script: "test.py" } }] }),
       false
     );
+  });
+
+  test("accepts schemaVersion on every closed workflow root and settings root", () => {
+    const roots = [
+      { schemaVersion: 1, steps: [{ prompt: "multi-step root" }] },
+      { schemaVersion: 1, prompt: "single prompt root" },
+      { schemaVersion: 1, type: "script", script: "echo root script" },
+    ];
+    for (const root of roots) {
+      assert.strictEqual(validate(root), true, JSON.stringify(validate.errors));
+    }
+
+    const settingsSchema = JSON.parse(
+      fs.readFileSync(
+        path.resolve(__dirname, "../../../schemas/settings-schema.json"),
+        "utf8"
+      )
+    );
+    const settingsAjv = new Ajv({ allErrors: true });
+    settingsAjv.addSchema(schema, "workflow-schema.json");
+    const validateSettings = settingsAjv.compile(settingsSchema);
+    assert.strictEqual(
+      validateSettings({ schemaVersion: 1 }),
+      true,
+      JSON.stringify(validateSettings.errors)
+    );
+    assert.strictEqual(
+      validate({ schemaVersion: 0, steps: [{ prompt: "x" }] }),
+      false
+    );
+  });
+
+  test("refuses newer workflow versions before schema validation for YAML, JSON, and Markdown", async () => {
+    const tempDir = fs.mkdtempSync(path.join(__dirname, "schema-refusal-"));
+    try {
+      const cases = [
+        [
+          "deploy.ctrlyoke.yaml",
+          "schemaVersion: 2\nunknownFutureField: true\n",
+        ],
+        [
+          "deploy.ctrlyoke.json",
+          JSON.stringify({ schemaVersion: 2, future: true }),
+        ],
+        [
+          "deploy.prompt.md",
+          "---\nschemaVersion: 2\nfuture: true\n---\nDo the work",
+        ],
+      ] as const;
+      for (const [fileName, content] of cases) {
+        const filePath = path.join(tempDir, fileName);
+        fs.writeFileSync(filePath, content, "utf8");
+        const parser = new PromptFileParser();
+        assert.strictEqual(await parser.parsePromptFile(filePath), null);
+        assert.match(
+          parser.lastNewerSchemaError?.message ?? "",
+          new RegExp(
+            `${fileName.replaceAll(".", "\\.")} \\([^)]+\\) uses workflow format 2`
+          )
+        );
+        assert.match(
+          parser.lastNewerSchemaError?.message ?? "",
+          /supports format 1/u
+        );
+        assert.match(
+          parser.lastNewerSchemaError?.message ?? "",
+          /this version \([^)]+\)/u
+        );
+        assert.match(
+          parser.lastNewerSchemaError?.message ?? "",
+          /Update ctrlyoke to open it\./u
+        );
+      }
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   test("uses the shared variable-name pattern and rejects case collisions", async () => {

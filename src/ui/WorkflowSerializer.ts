@@ -19,6 +19,10 @@ import {
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import { Log } from "../utils/Log";
 import {
+  CURRENT_SCHEMA_VERSIONS,
+  PERSISTED_STORES,
+} from "../utils/PersistedSchemaGuard";
+import {
   getVsCodeWorkspaceRoot,
   getVsCodeNamedWorkspaceRoots,
   getVsCodeTrustedWorkspaceRoots,
@@ -530,7 +534,10 @@ export class WorkflowSerializer {
   private buildCleanWorkflow(
     workingFile: Record<string, any>
   ): Record<string, unknown> {
-    const clean: Record<string, unknown> = {};
+    const clean: Record<string, unknown> = {
+      schemaVersion:
+        CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.WORKFLOW_DEFINITION],
+    };
 
     for (const field of WorkflowSerializer.WORKFLOW_FIELDS) {
       if (

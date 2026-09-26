@@ -61,6 +61,12 @@ oneOf:
     $ref: '#/$defs/singleStepRoot'
     type: object
     properties:
+      schemaVersion:
+        type: integer
+        minimum: 1
+        description: >-
+          Workflow definition format version. Absent means format 1. ctrlyoke stamps this field when
+          it writes workflow files; older ctrlyoke versions refuse to open a newer format.
       _templateMeta:
         $ref: '#/properties/_templateMeta'
   - title: Multiple Steps (or Working File)
@@ -106,6 +112,12 @@ oneOf:
           - steps
     type: object
     properties:
+      schemaVersion:
+        type: integer
+        minimum: 1
+        description: >-
+          Workflow definition format version. Absent means format 1. Run files use this root field
+          for the workflow definition and `_runtime.schemaVersion` independently for run metadata.
       _templateMeta:
         $ref: '#/properties/_templateMeta'
     unevaluatedProperties: false
@@ -317,6 +329,10 @@ $defs:
           - $ref: '#/$defs/promptStep'
           - $ref: '#/$defs/workflowOnlyProperties'
         properties:
+          schemaVersion:
+            type: integer
+            minimum: 1
+            description: Workflow definition format version. Absent means format 1.
           _templateMeta:
             $ref: '#/properties/_templateMeta'
         unevaluatedProperties: false
@@ -325,12 +341,20 @@ $defs:
           - $ref: '#/$defs/rootScriptStep'
           - $ref: '#/$defs/workflowOnlyProperties'
         properties:
+          schemaVersion:
+            type: integer
+            minimum: 1
+            description: Workflow definition format version. Absent means format 1.
           _templateMeta:
             $ref: '#/properties/_templateMeta'
   rootScriptStep:
     type: object
     description: A top-level script workflow with workflow-only properties.
     properties:
+      schemaVersion:
+        type: integer
+        minimum: 1
+        description: Workflow definition format version. Absent means format 1.
       type:
         $ref: '#/$defs/scriptStep/properties/type'
       name:

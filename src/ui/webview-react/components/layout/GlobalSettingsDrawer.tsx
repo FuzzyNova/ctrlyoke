@@ -135,6 +135,9 @@ export function GlobalSettingsDrawer() {
   const setActiveTab = useUiStore((s) => s.setGlobalSettingsTab);
   const closeGlobalSettings = useUiStore((s) => s.closeGlobalSettings);
   const fullSettings = useSettingsStore((s) => s.fullGlobalSettings);
+  const globalSettingsReadOnly = useSettingsStore(
+    (s) => s.globalSettingsReadOnly
+  );
   const serverRunning = useSettingsStore((s) => s.serverRunning);
   const dev = useSettingsStore((s) => s.dev);
   const [drawerRef, isNarrow] = useElementNarrow(580);
@@ -205,6 +208,7 @@ export function GlobalSettingsDrawer() {
   }
 
   function handleUpdate(path: string, value: unknown) {
+    if (globalSettingsReadOnly) return;
     vscode.postMessage({
       type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
       path,
@@ -214,6 +218,7 @@ export function GlobalSettingsDrawer() {
   }
 
   function handleReset(path: string) {
+    if (globalSettingsReadOnly) return;
     vscode.postMessage({
       type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
       path,
@@ -304,137 +309,161 @@ export function GlobalSettingsDrawer() {
         </div>
       </div>
 
-      <div className="flex flex-1 min-h-0">
-        {/* Left: vertical tab bar */}
-        <GlobalSettingsVerticalTabBar
-          tabs={visibleTabs.map((t) =>
-            t.id === GLOBAL_SETTINGS_TABS.SERVER
-              ? { ...t, indicator: serverRunning }
-              : t
-          )}
-          activeTab={effectiveActiveTab}
-          onTabChange={setActiveTab}
-          iconOnly={isNarrow}
-        />
+      {globalSettingsReadOnly && (
+        <div
+          role="status"
+          className="absolute z-10 top-[30px] inset-x-0 bg-warning/15 border-b border-warning px-3 py-2 text-sm"
+        >
+          These settings use a newer format. Update ctrlyoke to edit them.
+        </div>
+      )}
+      <fieldset
+        disabled={globalSettingsReadOnly}
+        className="flex flex-1 min-h-0 min-w-0 border-0 p-0 m-0"
+      >
+        <div className="flex flex-1 min-h-0">
+          {/* Left: vertical tab bar */}
+          <GlobalSettingsVerticalTabBar
+            tabs={visibleTabs.map((t) =>
+              t.id === GLOBAL_SETTINGS_TABS.SERVER
+                ? { ...t, indicator: serverRunning }
+                : t
+            )}
+            activeTab={effectiveActiveTab}
+            onTabChange={setActiveTab}
+            iconOnly={isNarrow}
+          />
 
-        {/* Right: section content.
+          {/* Right: section content.
             The "workflow" tab renders WorkflowDefaultsSection which owns its
             own scrolling and uses h-full + DrawerTabBar pinned at the bottom.
             It must be a direct flex child so h-full resolves to a definite
             size. MCP also gets the full available width so its wide layout can
             use equal columns; all other tabs use the standard width cap. */}
-        {fullSettings &&
-        effectiveActiveTab === GLOBAL_SETTINGS_TABS.WORKFLOW ? (
-          <div className="flex-1 flex flex-col min-h-0">
-            <WorkflowDefaultsSection
-              settings={fullSettings}
-              {...sectionProps}
-            />
-          </div>
-        ) : (
-          <div className="flex-1 overflow-y-auto overflow-x-hidden">
-            <div
-              className={`p-4 ${
-                isFullWidthSettingsTab ? "max-w-none" : "max-w-2xl"
-              }`}
-            >
-              {fullSettings &&
-                effectiveActiveTab === GLOBAL_SETTINGS_TABS.GENERAL && (
-                  <GeneralSection
-                    settings={fullSettings}
-                    {...sectionProps}
-                    onReload={handleReloadWindow}
-                  />
-                )}
-              {effectiveActiveTab === GLOBAL_SETTINGS_TABS.LICENSE && (
-                <LicenseSection />
-              )}
-              {fullSettings &&
-                effectiveActiveTab === GLOBAL_SETTINGS_TABS.STATS && (
-                  <StatsUsageSection
-                    showCostEstimates={fullSettings.settings.ui.showCostEstimates}
-                    isNarrow={isNarrow}
-                    settings={fullSettings}
-                    {...sectionProps}
-                  />
-                )}
-              {fullSettings &&
-                effectiveActiveTab === GLOBAL_SETTINGS_TABS.STATUS_LINE && (
-                  <StatusLineSection settings={fullSettings} />
-                )}
-              {fullSettings &&
-                effectiveActiveTab === GLOBAL_SETTINGS_TABS.PERMISSIONS && (
-                  <AdvancedPermissionsSection
-                    settings={fullSettings}
-                    {...sectionProps}
-                  />
-                )}
-              {fullSettings &&
-                effectiveActiveTab === GLOBAL_SETTINGS_TABS.SECRETS && (
-                  <SecretsSection settings={fullSettings} {...sectionProps} />
-                )}
-              {fullSettings &&
-                effectiveActiveTab === GLOBAL_SETTINGS_TABS.EXECUTION && (
-                  <ExecutionSection settings={fullSettings} {...sectionProps} />
-                )}
-              {fullSettings &&
-                effectiveActiveTab === GLOBAL_SETTINGS_TABS.WORKTREES && (
-                  <WorktreesSection settings={fullSettings} {...sectionProps} />
-                )}
-              {fullSettings &&
-                effectiveActiveTab === GLOBAL_SETTINGS_TABS.NOTIFICATIONS && (
-                  <NotificationsSection
-                    settings={fullSettings}
-                    {...sectionProps}
-                  />
-                )}
-              {fullSettings &&
-                effectiveActiveTab === GLOBAL_SETTINGS_TABS.TERMINAL && (
-                  <TerminalSection settings={fullSettings} {...sectionProps} />
-                )}
-              {fullSettings &&
-                effectiveActiveTab === GLOBAL_SETTINGS_TABS.QUEUE && (
-                  <QueueSection settings={fullSettings} {...sectionProps} />
-                )}
-              {fullSettings &&
-                effectiveActiveTab === GLOBAL_SETTINGS_TABS.COORDINATION && (
-                  <CoordinationSection
-                    settings={fullSettings}
-                    {...sectionProps}
-                  />
-                )}
-              {fullSettings &&
-                effectiveActiveTab === GLOBAL_SETTINGS_TABS.SERVER && (
-                  <ServerSection settings={fullSettings} {...sectionProps} />
-                )}
-              {effectiveActiveTab ===
-                GLOBAL_SETTINGS_TABS.AGENT_SKILLS_MANAGER && (
-                <AgentSkillsManagerSection activeScope={activeScope} />
-              )}
-              {effectiveActiveTab === GLOBAL_SETTINGS_TABS.MCP_MANAGER && (
-                <McpManagerSection activeScope={activeScope} />
-              )}
-              {fullSettings &&
-                effectiveActiveTab === GLOBAL_SETTINGS_TABS.COMMIT && (
-                  <CommitSection settings={fullSettings} {...sectionProps} />
-                )}
-              {dev?.enabled &&
-                effectiveActiveTab === GLOBAL_SETTINGS_TABS.DEVELOPER && (
-                  <DeveloperSection />
-                )}
-              {!fullSettings &&
-                effectiveActiveTab !== GLOBAL_SETTINGS_TABS.DEVELOPER &&
-                effectiveActiveTab !==
-                  GLOBAL_SETTINGS_TABS.AGENT_SKILLS_MANAGER &&
-                effectiveActiveTab !== GLOBAL_SETTINGS_TABS.MCP_MANAGER && (
-                  <div className="text-description-fg text-sm">
-                    Loading settings…
-                  </div>
-                )}
+          {fullSettings &&
+          effectiveActiveTab === GLOBAL_SETTINGS_TABS.WORKFLOW ? (
+            <div className="flex-1 flex flex-col min-h-0">
+              <WorkflowDefaultsSection
+                settings={fullSettings}
+                {...sectionProps}
+              />
             </div>
-          </div>
-        )}
-      </div>
+          ) : (
+            <div className="flex-1 overflow-y-auto overflow-x-hidden">
+              <div
+                className={`p-4 ${
+                  isFullWidthSettingsTab ? "max-w-none" : "max-w-2xl"
+                }`}
+              >
+                {fullSettings &&
+                  effectiveActiveTab === GLOBAL_SETTINGS_TABS.GENERAL && (
+                    <GeneralSection
+                      settings={fullSettings}
+                      {...sectionProps}
+                      onReload={handleReloadWindow}
+                    />
+                  )}
+                {effectiveActiveTab === GLOBAL_SETTINGS_TABS.LICENSE && (
+                  <LicenseSection />
+                )}
+                {fullSettings &&
+                  effectiveActiveTab === GLOBAL_SETTINGS_TABS.STATS && (
+                    <StatsUsageSection
+                      showCostEstimates={
+                        fullSettings.settings.ui.showCostEstimates
+                      }
+                      isNarrow={isNarrow}
+                      settings={fullSettings}
+                      {...sectionProps}
+                    />
+                  )}
+                {fullSettings &&
+                  effectiveActiveTab === GLOBAL_SETTINGS_TABS.STATUS_LINE && (
+                    <StatusLineSection settings={fullSettings} />
+                  )}
+                {fullSettings &&
+                  effectiveActiveTab === GLOBAL_SETTINGS_TABS.PERMISSIONS && (
+                    <AdvancedPermissionsSection
+                      settings={fullSettings}
+                      {...sectionProps}
+                    />
+                  )}
+                {fullSettings &&
+                  effectiveActiveTab === GLOBAL_SETTINGS_TABS.SECRETS && (
+                    <SecretsSection settings={fullSettings} {...sectionProps} />
+                  )}
+                {fullSettings &&
+                  effectiveActiveTab === GLOBAL_SETTINGS_TABS.EXECUTION && (
+                    <ExecutionSection
+                      settings={fullSettings}
+                      {...sectionProps}
+                    />
+                  )}
+                {fullSettings &&
+                  effectiveActiveTab === GLOBAL_SETTINGS_TABS.WORKTREES && (
+                    <WorktreesSection
+                      settings={fullSettings}
+                      {...sectionProps}
+                    />
+                  )}
+                {fullSettings &&
+                  effectiveActiveTab === GLOBAL_SETTINGS_TABS.NOTIFICATIONS && (
+                    <NotificationsSection
+                      settings={fullSettings}
+                      {...sectionProps}
+                    />
+                  )}
+                {fullSettings &&
+                  effectiveActiveTab === GLOBAL_SETTINGS_TABS.TERMINAL && (
+                    <TerminalSection
+                      settings={fullSettings}
+                      {...sectionProps}
+                    />
+                  )}
+                {fullSettings &&
+                  effectiveActiveTab === GLOBAL_SETTINGS_TABS.QUEUE && (
+                    <QueueSection settings={fullSettings} {...sectionProps} />
+                  )}
+                {fullSettings &&
+                  effectiveActiveTab === GLOBAL_SETTINGS_TABS.COORDINATION && (
+                    <CoordinationSection
+                      settings={fullSettings}
+                      {...sectionProps}
+                    />
+                  )}
+                {fullSettings &&
+                  effectiveActiveTab === GLOBAL_SETTINGS_TABS.SERVER && (
+                    <ServerSection settings={fullSettings} {...sectionProps} />
+                  )}
+                {effectiveActiveTab ===
+                  GLOBAL_SETTINGS_TABS.AGENT_SKILLS_MANAGER && (
+                  <AgentSkillsManagerSection activeScope={activeScope} />
+                )}
+                {effectiveActiveTab === GLOBAL_SETTINGS_TABS.MCP_MANAGER && (
+                  <McpManagerSection activeScope={activeScope} />
+                )}
+                {fullSettings &&
+                  effectiveActiveTab === GLOBAL_SETTINGS_TABS.COMMIT && (
+                    <CommitSection settings={fullSettings} {...sectionProps} />
+                  )}
+                {dev?.enabled &&
+                  effectiveActiveTab === GLOBAL_SETTINGS_TABS.DEVELOPER && (
+                    <DeveloperSection />
+                  )}
+                {!fullSettings &&
+                  effectiveActiveTab !== GLOBAL_SETTINGS_TABS.DEVELOPER &&
+                  effectiveActiveTab !==
+                    GLOBAL_SETTINGS_TABS.AGENT_SKILLS_MANAGER &&
+                  effectiveActiveTab !== GLOBAL_SETTINGS_TABS.MCP_MANAGER && (
+                    <div className="text-description-fg text-sm">
+                      Loading settings…
+                    </div>
+                  )}
+              </div>
+            </div>
+          )}
+        </div>
+      </fieldset>
     </div>
   );
 }

@@ -487,6 +487,7 @@ suite("FileConfigBackend", () => {
     assert.ok(fs.existsSync(configPath), "config file should be created");
     const content = JSON.parse(fs.readFileSync(configPath, "utf-8"));
     assert.strictEqual(content.defaults?.harness, "claude-cli");
+    assert.strictEqual(content.schemaVersion, 1);
   });
 
   test("set() updates an existing top-level setting", async () => {
@@ -543,6 +544,28 @@ suite("FileConfigBackend", () => {
     const configPath = path.join(tmpDir, "settings.json");
     const backend = new FileConfigBackend(configPath);
     assert.strictEqual(backend.filePath, configPath);
+  });
+
+  test("reads newer settings best-effort but refuses to write them", async () => {
+    const configPath = path.join(tmpDir, "settings.json");
+    const original = {
+      schemaVersion: 2,
+      defaults: { harness: "claude-cli" },
+      futureSettings: { retained: true },
+    };
+    fs.writeFileSync(configPath, JSON.stringify(original), "utf8");
+    const backend = new FileConfigBackend(configPath);
+
+    assert.strictEqual(backend.getAll().defaults?.harness, "claude-cli");
+    assert.strictEqual(backend.isReadOnly, true);
+    await assert.rejects(
+      backend.set("defaults.harness", "codex-cli"),
+      /settings was written by a newer version of ctrlyoke/u
+    );
+    assert.deepStrictEqual(
+      JSON.parse(fs.readFileSync(configPath, "utf8")),
+      original
+    );
   });
 
   test("concurrent set() calls to different paths do not clobber each other", async () => {

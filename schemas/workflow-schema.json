@@ -85,6 +85,11 @@
       "$ref": "#/$defs/singleStepRoot",
       "type": "object",
       "properties": {
+        "schemaVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Workflow definition format version. Absent means format 1. ctrlyoke stamps this field when it writes workflow files; older ctrlyoke versions refuse to open a newer format."
+        },
         "_templateMeta": {
           "$ref": "#/properties/_templateMeta"
         }
@@ -144,6 +149,11 @@
       ],
       "type": "object",
       "properties": {
+        "schemaVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Workflow definition format version. Absent means format 1. Run files use this root field for the workflow definition and `_runtime.schemaVersion` independently for run metadata."
+        },
         "_templateMeta": {
           "$ref": "#/properties/_templateMeta"
         }
@@ -363,6 +373,11 @@
             }
           ],
           "properties": {
+            "schemaVersion": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Workflow definition format version. Absent means format 1."
+            },
             "_templateMeta": {
               "$ref": "#/properties/_templateMeta"
             }
@@ -380,6 +395,11 @@
             }
           ],
           "properties": {
+            "schemaVersion": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Workflow definition format version. Absent means format 1."
+            },
             "_templateMeta": {
               "$ref": "#/properties/_templateMeta"
             }
@@ -391,6 +411,11 @@
       "type": "object",
       "description": "A top-level script workflow with workflow-only properties.",
       "properties": {
+        "schemaVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Workflow definition format version. Absent means format 1."
+        },
         "type": {
           "$ref": "#/$defs/scriptStep/properties/type"
         },

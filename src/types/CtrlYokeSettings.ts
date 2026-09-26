@@ -92,6 +92,8 @@ export interface CoordinationSettings {
 }
 
 export interface CtrlYokeGlobalSettings {
+  /** Settings format version; omitted on hand-authored legacy files (format 1). */
+  schemaVersion?: number;
   // General (format/template/behavior toggles)
   general: {
     defaultFormat: "yaml" | "json";
@@ -379,6 +381,7 @@ export type PartialCtrlYokeSettings = DeepPartial<CtrlYokeGlobalSettings>;
 
 /** Default values for all settings */
 export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
+  schemaVersion: 1,
   general: {
     defaultFormat: "yaml",
     defaultTemplate: "blank",

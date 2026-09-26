@@ -1527,6 +1527,14 @@ Log raw CLI output to the extension output channel.
 
 ## Top-level settings {#top-level}
 
+### `schemaVersion` {#schemaversion}
+
+- **Type:** `integer`
+- **Default:** `1`
+- **Constraints:** minimum 1
+
+Settings format version. Absent means format 1. ctrlyoke stamps this field when it writes settings; an older host reads newer settings best-effort but refuses to write them.
+
 ### `modelPricing` {#modelpricing}
 
 - **Type:** map of map of `{ inputPerMTok, outputPerMTok, cachedInputPerMTok?, … }`
