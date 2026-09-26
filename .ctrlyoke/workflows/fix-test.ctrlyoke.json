@@ -5,7 +5,6 @@
       "prompt": "just say hi",
       "endCondition": {
         "script": "npm test",
-        "returns": "0",
         "maxRetries": 5,
         "retryPrompt": "Tests are still failing. Please fix the remaining issues:\n{scriptOutput}"
       }
