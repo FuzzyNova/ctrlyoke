@@ -137,6 +137,7 @@ export function DefaultsValidationPage({
         <AnimatedSection visible={preConditionEnabled}>
           <ScriptConditionEditor
             variant="preCondition"
+            schemaPath="defaults.preCondition"
             value={(wf.preCondition ?? null) as ScriptConditionValue | null}
             onChange={(updated) => onUpdate("defaults.preCondition", updated)}
             idPrefix="global-default-pre"
@@ -171,6 +172,7 @@ export function DefaultsValidationPage({
         <AnimatedSection visible={endConditionEnabled}>
           <ScriptConditionEditor
             variant="endCondition"
+            schemaPath="defaults.endCondition"
             value={(wf.endCondition ?? null) as ScriptConditionValue | null}
             onChange={(updated) => onUpdate("defaults.endCondition", updated)}
             idPrefix="global-default-end"
@@ -197,6 +199,7 @@ export function DefaultsValidationPage({
           stop, retry, or continue.
         </p>
         <ErrorBehaviorEditor
+          schemaPath="defaults.errorBehavior"
           value={wf.errorBehavior}
           onChange={(updated) => onUpdate("defaults.errorBehavior", updated)}
           idPrefix="global-default-error"

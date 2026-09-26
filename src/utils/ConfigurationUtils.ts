@@ -15,6 +15,7 @@ import type {
   StatusLineTrackingSettings,
   TerminalSettings,
 } from "../types/CtrlYokeSettings";
+import type { PriorContext } from "../types/CtrlYokeTypes";
 import type { ToolPermissionConfig } from "../types/ExecutionPropertyTypes";
 import type { StatusLineSegment } from "./StatuslineFormat";
 import {
@@ -118,7 +119,7 @@ export const CONFIG_KEYS = {
   GENERAL_INCLUDE_FULL_DIFFS_IN_PRIOR_CONTEXT:
     "general.includeFullDiffsInPriorContext",
   EXECUTION_MODE: "defaults.executionMode",
-  SERVER_ENABLED: "server.enabled",
+  SERVER_AUTO_START: SETTING_PATHS.SERVER_AUTO_START,
   SERVER_BIND_ADDRESS: "server.bindAddress",
   SERVER_TLS_ENABLED: "server.tls.enabled",
   SERVER_TLS_CERT_PATH: "server.tls.certPath",
@@ -133,9 +134,9 @@ export const CONFIG_KEYS = {
   UI_AUTO_FOCUS_OUTPUT_ON_EXECUTION: "ui.autoFocusOutputOnExecution",
   UI_OUTPUT_VIRTUALIZATION_ROW_THRESHOLD: "ui.outputVirtualizationRowThreshold",
   UI_COLLAPSED_TOOL_OUTPUT_LINE_COUNT: "ui.collapsedToolOutputLineCount",
-  UI_HIDE_COST: "ui.hideCost",
-  PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS:
-    "permissions.allowedExternalFileRoots",
+  UI_SHOW_COST_ESTIMATES: SETTING_PATHS.UI_SHOW_COST_ESTIMATES,
+  PERMISSIONS_TRUSTED_EXTERNAL_ROOTS:
+    SETTING_PATHS.PERMISSIONS_TRUSTED_EXTERNAL_ROOTS,
   PERMISSIONS_STATUS_LINE_TRACKING:
     SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING,
   USAGE_TRACKING: "usageTracking",
@@ -463,8 +464,8 @@ export const ConfigurationUtils = {
     return configService.get(CONFIG_KEYS.UI).autoExpandEditorWhenTyping;
   },
 
-  shouldHideCost(): boolean {
-    return configService.get(CONFIG_KEYS.UI).hideCost;
+  shouldShowCostEstimates(): boolean {
+    return configService.get(CONFIG_KEYS.UI).showCostEstimates;
   },
 
   getModelPricingOverride(
@@ -536,12 +537,12 @@ export const ConfigurationUtils = {
   // ============================================================
 
   /**
-   * Get `permissions.allowedExternalFileRoots` split by scope. A dedicated
+   * Get `permissions.trustedExternalRoots` split by scope. A dedicated
    * union (not the ordinary deep-merge, which replaces arrays wholesale) is
    * required because both user and workspace scope can independently
    * contribute roots.
    */
-  getAllowedExternalFileRootsByScope(): {
+  getTrustedExternalRootsByScope(): {
     user: string[];
     workspace: string[];
   } {
@@ -557,7 +558,7 @@ export const ConfigurationUtils = {
       user: dedupeExternalRoots(
         toStringArray(
           configService.getScoped(CONFIG_KEYS.PERMISSIONS, CONFIG_SCOPE.USER)
-            ?.allowedExternalFileRoots
+            ?.trustedExternalRoots
         )
       ),
       workspace: dedupeExternalRoots(
@@ -565,7 +566,7 @@ export const ConfigurationUtils = {
           configService.getScoped(
             CONFIG_KEYS.PERMISSIONS,
             CONFIG_SCOPE.WORKSPACE
-          )?.allowedExternalFileRoots
+          )?.trustedExternalRoots
         )
       ),
     };
@@ -578,9 +579,9 @@ export const ConfigurationUtils = {
    * Settings UI, the CLI trust command) — for actual read/open decisions use
    * {@link getEffectiveApprovedExternalFileRoots}.
    */
-  getAllowedExternalFileRoots(): string[] {
+  getTrustedExternalRoots(): string[] {
     const { user, workspace } =
-      ConfigurationUtils.getAllowedExternalFileRootsByScope();
+      ConfigurationUtils.getTrustedExternalRootsByScope();
     return dedupeExternalRoots([...user, ...workspace]);
   },
 
@@ -605,7 +606,7 @@ export const ConfigurationUtils = {
     trustStore: ExternalRootsTrustStoreLike = externalRootsTrustStore
   ): string[] {
     const { user, workspace } =
-      ConfigurationUtils.getAllowedExternalFileRootsByScope();
+      ConfigurationUtils.getTrustedExternalRootsByScope();
     const approvedWorkspaceRoots = trustStore.getApprovedRoots(
       workspaceIdentity,
       workspace
@@ -648,7 +649,7 @@ export const ConfigurationUtils = {
     trustStore: ExternalRootsTrustStoreLike = externalRootsTrustStore
   ): string[] {
     const { workspace } =
-      ConfigurationUtils.getAllowedExternalFileRootsByScope();
+      ConfigurationUtils.getTrustedExternalRootsByScope();
     return trustStore.getPendingRoots(workspaceIdentity, workspace);
   },
 
@@ -679,18 +680,18 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Add a directory to the user-scope `allowedExternalFileRoots` list (no
+   * Add a directory to the user-scope `trustedExternalRoots` list (no
    * workspace-approval gate — this is the "Trust Parent Folder" action).
    * No-op if the directory is already present.
    */
   async addUserAllowedExternalFileRoot(root: string): Promise<void> {
     const { user: current } =
-      ConfigurationUtils.getAllowedExternalFileRootsByScope();
+      ConfigurationUtils.getTrustedExternalRootsByScope();
     if (current.includes(root)) {
       return;
     }
     await configService.set(
-      CONFIG_KEYS.PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS,
+      CONFIG_KEYS.PERMISSIONS_TRUSTED_EXTERNAL_ROOTS,
       [...current, root],
       CONFIG_SCOPE.USER
     );
@@ -698,12 +699,12 @@ export const ConfigurationUtils = {
 
   async addWorkspaceAllowedExternalFileRoot(root: string): Promise<void> {
     const { workspace: current } =
-      ConfigurationUtils.getAllowedExternalFileRootsByScope();
+      ConfigurationUtils.getTrustedExternalRootsByScope();
     if (current.includes(root)) {
       return;
     }
     await configService.set(
-      CONFIG_KEYS.PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS,
+      CONFIG_KEYS.PERMISSIONS_TRUSTED_EXTERNAL_ROOTS,
       [...current, root],
       CONFIG_SCOPE.WORKSPACE
     );
@@ -955,7 +956,7 @@ export const ConfigurationUtils = {
   /** Get how declared context references that fail to resolve should be handled. */
   getContextResolutionFailureMode(): ContextResolutionFailureMode {
     return (
-      configService.get(CONFIG_KEYS.EXECUTION).strictContextResolution ?? "warn"
+      configService.get(CONFIG_KEYS.EXECUTION).contextResolutionFailure ?? "warn"
     );
   },
 
@@ -1016,7 +1017,7 @@ export const ConfigurationUtils = {
   /**
    * Get the default prior context injection mode for workflow prompts.
    */
-  getPriorContext(): string {
+  getPriorContext(): PriorContext {
     return configService.get(CONFIG_KEYS.DEFAULTS).priorContext;
   },
 
@@ -1100,8 +1101,8 @@ export const ConfigurationUtils = {
     return configService.get(CONFIG_KEYS.COMMIT).model;
   },
 
-  getCommitPrompt(): string {
-    return configService.get(CONFIG_KEYS.COMMIT).prompt;
+  getCommitSystemPrompt(): string {
+    return configService.get(CONFIG_KEYS.COMMIT).systemPrompt;
   },
 
   // ============================================================
@@ -1234,7 +1235,7 @@ export const ConfigurationUtils = {
   /**
    * Set the default prior context for new workflows
    */
-  async setDefaultPriorContext(priorContext: string): Promise<void> {
+  async setDefaultPriorContext(priorContext: PriorContext): Promise<void> {
     await configService.set(
       CONFIG_KEYS.DEFAULTS_PRIOR_CONTEXT,
       priorContext,

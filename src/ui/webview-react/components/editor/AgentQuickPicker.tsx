@@ -15,6 +15,10 @@ import {
 } from "../shared";
 import { FooterQuickPicker } from "./FooterQuickPicker";
 import { Icon } from "../shared/Icon";
+import {
+  AGENT_SELECTION_OPTIONS_META,
+  toSelectOptions,
+} from "@root/types/SchemaUiMetadata";
 
 interface AgentQuickPickerProps {
   isNarrow: boolean;
@@ -87,6 +91,7 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
       disabled={disabled}
     >
       <CustomSelect
+        schemaPath="agent"
         value={
           properties.agent === undefined
             ? INHERIT_DEFAULT_OPTION
@@ -105,8 +110,12 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
           setFooterOpenPicker(null);
         }}
         options={[
-          { value: INHERIT_DEFAULT_OPTION, label: defaultAgentLabel },
-          { value: NONE_OPTION, label: "None" },
+          ...toSelectOptions(AGENT_SELECTION_OPTIONS_META, "agent").map(
+            (option) =>
+              option.value === INHERIT_DEFAULT_OPTION
+                ? { ...option, label: defaultAgentLabel }
+                : option
+          ),
           ...availableAgents.map((agent) =>
             toAgentSelectOption(agent, agent.name)
           ),

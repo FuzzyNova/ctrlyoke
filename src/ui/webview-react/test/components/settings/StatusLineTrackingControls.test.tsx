@@ -139,7 +139,7 @@ describe("StatusLineTrackingControls", () => {
     );
 
     const input = screen.getByRole("textbox", {
-      name: "Custom statusline command",
+      name: /^Custom statusline command, property /,
     });
     expect(
       screen.getByRole("checkbox", {
@@ -378,7 +378,9 @@ describe("StatusLineTrackingControls", () => {
     render(<StatusLineSection settings={settings} />);
 
     expect(
-      screen.getAllByRole("textbox", { name: "Custom statusline command" })
+      screen.getAllByRole("textbox", {
+        name: /^Custom statusline command, property /,
+      })
     ).toHaveLength(4);
   });
 });

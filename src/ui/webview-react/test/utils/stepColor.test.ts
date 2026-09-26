@@ -121,7 +121,7 @@ describe("resolveStepColor", () => {
         step: { prompt: "disabled" },
         harnessId: HARNESS_IDS.CLAUDE_CLI,
         stepIndex: 0,
-        stepColorMode: STEP_COLOR_MODES.OFF,
+        stepColorMode: STEP_COLOR_MODES.NONE,
         settings: customSettings,
       })
     ).toBeUndefined();
@@ -133,7 +133,7 @@ describe("resolveStepColor", () => {
       resolveStepColor({
         step: { prompt: "authored", color: "#abcdef" },
         stepIndex: 0,
-        stepColorMode: STEP_COLOR_MODES.OFF,
+        stepColorMode: STEP_COLOR_MODES.NONE,
       })
     ).toBeUndefined();
   });

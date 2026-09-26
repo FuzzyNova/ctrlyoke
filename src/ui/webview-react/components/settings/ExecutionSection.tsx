@@ -3,10 +3,15 @@ import type {
   SettingSource,
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
-import { CONTEXT_RESOLUTION_FAILURE_MODES } from "@root/types/DashboardConstants";
+import { SETTING_PATHS } from "@root/types/DashboardConstants";
 import { LocalNumberInput } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
+import { CustomSelect } from "../shared/CustomSelect";
+import {
+  CONTEXT_RESOLUTION_FAILURE_OPTIONS_META,
+  toSelectOptions,
+} from "@root/types/SchemaUiMetadata";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -35,20 +40,21 @@ export function ExecutionSection({
         label="Context resolution failures"
         description="How to handle a declared reference that fails to resolve: a missing/invalid secret (!NAME), an unknown skill (/skill:) or MCP server (/mcp:), an unresolved @file/#selection/#sym reference, or an unresolved ~diff/~staged/~stash/~<hash> git reference. 'warn' (default) reports a diagnostic and lets the step run anyway. 'fail' stops the step before the harness spawns, naming the unresolved reference."
         id="exec-strict-context-resolution"
-        path="execution.strictContextResolution"
+        path={SETTING_PATHS.EXECUTION_CONTEXT_RESOLUTION_FAILURE}
         {...rowProps}
       >
-        <select
+        <CustomSelect
           id="exec-strict-context-resolution"
-          value={exec.strictContextResolution}
-          onChange={(event) =>
-            onUpdate("execution.strictContextResolution", event.target.value)
+          value={exec.contextResolutionFailure}
+          onChange={(value) =>
+            onUpdate(SETTING_PATHS.EXECUTION_CONTEXT_RESOLUTION_FAILURE, value)
           }
-          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
-        >
-          <option value={CONTEXT_RESOLUTION_FAILURE_MODES.WARN}>Warn</option>
-          <option value={CONTEXT_RESOLUTION_FAILURE_MODES.FAIL}>Fail</option>
-        </select>
+          schemaPath="execution.contextResolutionFailure"
+          options={toSelectOptions(
+            CONTEXT_RESOLUTION_FAILURE_OPTIONS_META,
+            "execution.contextResolutionFailure"
+          )}
+        />
       </SettingInputRow>
       <SettingInputRow
         label="Max prompt timeout (seconds, -1 = unlimited)"

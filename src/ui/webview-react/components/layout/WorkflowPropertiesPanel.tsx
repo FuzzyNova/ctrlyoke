@@ -51,7 +51,6 @@ import {
   DrawerRow,
   McpServersEditor,
   type McpServersValue,
-  PERMISSION_MODE_OPTIONS,
   FieldDiagnostic,
   CompatibilitySummary,
   ErrorBehaviorEditor,
@@ -74,18 +73,24 @@ import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import {
   KEYBOARD_KEYS,
   EXECUTION_MODE_HELP_TEXT,
-  EXECUTION_MODE_OPTIONS,
   WORKTREE_KEEP_HELP_TEXT,
-  WORKTREE_MODE_HELP_TEXT,
-  WORKTREE_MODE_OPTIONS,
+  WORKTREE_MODE_SELECTIONS,
   WORKTREE_MODES,
   PERMISSION_MODES,
   PERMISSION_CAPABILITY_KEYS,
   PROMPT_PROPERTIES,
   RESUME_SESSION_SELECTIONS,
-  WORKFLOW_EXECUTION_OUTCOMES,
   SETTING_SCOPES,
+  TRUSTED_ROOTS_MODES,
 } from "../../../../types/DashboardConstants";
+import {
+  EXECUTION_MODE_OPTIONS_META,
+  PERMISSION_MODE_OPTIONS_META,
+  TRUSTED_ROOTS_SELECTION_OPTIONS_META,
+  WORKFLOW_AGENT_SELECTION_OPTIONS_META,
+  WORKTREE_SELECTION_OPTIONS_META,
+  toSelectOptions,
+} from "../../../../types/SchemaUiMetadata";
 import { getAutoResumePreview } from "../../utils/autoResumePreview";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
 import {
@@ -108,17 +113,14 @@ import {
   workflowPermissionDiagnostic,
 } from "@utils/compatibilityDiagnostics";
 import { Icon } from "../shared/Icon";
+import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
+import { SCHEMA_DESCRIPTIONS } from "@root/types/generated/SchemaDescriptions";
 /** Single breakpoint (px) where the settings drawer switches to narrow layout */
 const SETTINGS_DRAWER_BREAKPOINT = 400;
 
 type WorktreeField = "branch" | "base" | "setup" | "keep" | "merge";
 type WorktreeObjectConfig = Exclude<WorktreeConfig, false | true | string>;
 type ExecutionPropertyKey = (typeof EXECUTION_PROPERTY_KEYS)[number];
-const TRUSTED_ROOTS_MODES = {
-  INHERIT: "inherit",
-  NONE: "none",
-  CUSTOM: "custom",
-} as const;
 type TrustedRootsMode =
   (typeof TRUSTED_ROOTS_MODES)[keyof typeof TRUSTED_ROOTS_MODES];
 
@@ -145,28 +147,46 @@ function worktreeConfigForMode(
   mode: (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES],
   defaults: GlobalSettings["worktree"]
 ): WorktreeObjectConfig {
+  const normalizedDefaults = worktreeObjectConfig(defaults);
   if (mode === WORKTREE_MODES.MANAGED) {
     return {
       mode,
-      base: defaults?.base ?? "",
-      setup: defaults?.setup ?? "",
+      base: normalizedDefaults !== false ? (normalizedDefaults.base ?? "") : "",
+      setup:
+        normalizedDefaults !== false ? (normalizedDefaults.setup ?? "") : "",
       merge:
-        defaults?.mode === WORKTREE_MODES.MANAGED
-          ? (defaults.merge ?? false)
+        normalizedDefaults !== false &&
+        normalizedDefaults.mode === WORKTREE_MODES.MANAGED
+          ? (normalizedDefaults.merge ?? false)
           : false,
       keep:
-        defaults?.mode === WORKTREE_MODES.MANAGED
-          ? (defaults.keep ?? false)
+        normalizedDefaults !== false &&
+        normalizedDefaults.mode === WORKTREE_MODES.MANAGED
+          ? (normalizedDefaults.keep ?? false)
           : false,
     };
   }
   return {
     mode: WORKTREE_MODES.NAMED,
     branch:
-      defaults?.mode === WORKTREE_MODES.NAMED ? (defaults.branch ?? "") : "",
-    base: defaults?.base ?? "",
-    setup: defaults?.setup ?? "",
+      normalizedDefaults !== false &&
+      normalizedDefaults.mode === WORKTREE_MODES.NAMED
+        ? (normalizedDefaults.branch ?? "")
+        : "",
+    base: normalizedDefaults !== false ? (normalizedDefaults.base ?? "") : "",
+    setup: normalizedDefaults !== false ? (normalizedDefaults.setup ?? "") : "",
   };
+}
+
+function worktreeObjectConfig(
+  value: WorktreeConfig | undefined
+): WorktreeObjectConfig | false {
+  if (value === undefined || value === false) return false;
+  if (value === true) return { mode: WORKTREE_MODES.MANAGED };
+  if (typeof value === "string") {
+    return { mode: WORKTREE_MODES.NAMED, branch: value };
+  }
+  return value;
 }
 
 const BUTTON_STATE = {
@@ -174,6 +194,7 @@ const BUTTON_STATE = {
   SUCCESS: "success",
   FADING: "fading",
 } as const;
+const WORKTREE_MODE_NONE = WORKTREE_MODE_SELECTIONS.NONE;
 type ButtonState = (typeof BUTTON_STATE)[keyof typeof BUTTON_STATE];
 
 /**
@@ -214,6 +235,7 @@ const SetAsDefaultButton: React.FC<{
  */
 const FormField: React.FC<{
   label: string;
+  schemaPath: string;
   description?: string;
   htmlFor?: string;
   children: React.ReactNode;
@@ -221,6 +243,7 @@ const FormField: React.FC<{
   className?: string;
 }> = ({
   label,
+  schemaPath,
   description,
   htmlFor,
   children,
@@ -231,10 +254,18 @@ const FormField: React.FC<{
     <div className="flex items-center justify-between min-h-[18px]">
       <label
         htmlFor={htmlFor}
-        title={description}
+        title={schemaTitle(
+          schemaPath,
+          undefined,
+          SCHEMA_DESCRIPTIONS[schemaPath] ?? description
+        )}
+        aria-label={schemaAriaLabel(label, schemaPath)}
         className="text-xs font-semibold uppercase text-description-fg cursor-help"
       >
         {label}
+        <span className="sr-only">
+          {schemaAriaLabel(label, schemaPath).slice(label.length)}
+        </span>
       </label>
       {setAsDefaultButton}
     </div>
@@ -359,7 +390,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const effectiveExecutionMode = getEffectiveExecutionMode();
   const effectiveWorktree = getEffectiveWorktree();
   const effectiveWorktreeMode =
-    effectiveWorktree === false ? WORKTREE_MODES.NONE : effectiveWorktree.mode;
+    effectiveWorktree === false ? WORKTREE_MODE_NONE : effectiveWorktree.mode;
   const effectiveWorktreeBranch =
     effectiveWorktree === false || !("branch" in effectiveWorktree)
       ? ""
@@ -570,16 +601,11 @@ const WorkflowPropertiesPanelInner: React.FC<{
       if (workflowValue === undefined) return false;
       if (property === PROMPT_PROPERTIES.WORKTREE) {
         const normalize = (value: unknown) => {
-          if (
-            value === undefined ||
-            value === false ||
-            value === WORKTREE_MODES.NONE
-          ) {
-            return { mode: WORKTREE_MODES.NONE };
-          }
+          if (value === undefined || value === false) return false;
           if (typeof value === "string") {
             return { mode: WORKTREE_MODES.NAMED, branch: value };
           }
+          if (value === true) return { mode: WORKTREE_MODES.MANAGED };
           const config = value as {
             mode: string;
             branch?: string;
@@ -588,9 +614,6 @@ const WorkflowPropertiesPanelInner: React.FC<{
             keep?: boolean;
             merge?: boolean;
           };
-          if (config.mode === WORKTREE_MODES.NONE) {
-            return { mode: WORKTREE_MODES.NONE };
-          }
           return {
             mode: config.mode,
             branch: config.branch ?? "",
@@ -684,11 +707,11 @@ const WorkflowPropertiesPanelInner: React.FC<{
         );
       }
       // Deep comparison for errorBehavior — null/undefined both fall back to
-      // the default stop outcome, so they're equivalent to an explicit
-      // { onError: WORKFLOW_EXECUTION_OUTCOMES.STOP } for this comparison.
+      // the default stopWorkflow policy, so they're equivalent to an explicit
+      // { onError: CONDITION_ACTIONS.STOP_WORKFLOW } for this comparison.
       if (property === PROMPT_PROPERTIES.ERROR_BEHAVIOR) {
         const normalize = (v: unknown) =>
-          v ?? { onError: WORKFLOW_EXECUTION_OUTCOMES.STOP };
+          v ?? { onError: CONDITION_ACTIONS.STOP_WORKFLOW };
         return (
           JSON.stringify(normalize(workflowValue)) !==
           JSON.stringify(normalize(globalSettings.defaultErrorBehavior))
@@ -848,8 +871,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
   const handleWorktreeModeChange = useCallback(
     (mode: string) => {
-      if (mode === WORKTREE_MODES.NONE) {
-        setWorktreeMode(WORKTREE_MODES.NONE);
+      if (mode === WORKTREE_MODE_NONE) {
+        setWorktreeMode(WORKTREE_MODE_NONE);
         setWorktreeBranchInput("");
         setWorktreeBaseInput("");
         setWorktreeSetupInput("");
@@ -859,10 +882,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
         return;
       }
 
-      const selectedMode = mode as Exclude<
-        (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES],
-        typeof WORKTREE_MODES.NONE
-      >;
+      const selectedMode =
+        mode as (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES];
       const seeded = worktreeConfigForMode(
         selectedMode,
         globalSettings.worktree
@@ -1368,6 +1389,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const handleResetAllToDefault = useCallback(() => {
     const globalHarness = globalSettings.harness as string;
     const resetWorktree = globalSettings.worktree;
+    const resetWorktreeConfig = worktreeObjectConfig(resetWorktree);
     const updates: Partial<WorkflowProperties> = {
       harness: globalHarness,
       model: globalSettings.harnessDefaultModels[globalHarness],
@@ -1392,51 +1414,36 @@ const WorkflowPropertiesPanelInner: React.FC<{
         globalSettings.defaultEndCondition as WorkflowProperties["endCondition"],
       preCondition:
         globalSettings.defaultPreCondition as WorkflowProperties["preCondition"],
-      worktree:
-        resetWorktree?.mode === WORKTREE_MODES.NONE
-          ? false
-          : resetWorktree?.mode === WORKTREE_MODES.MANAGED
-            ? {
-                mode: WORKTREE_MODES.MANAGED,
-                base: resetWorktree.base,
-                setup: resetWorktree.setup,
-                keep: resetWorktree.keep,
-                merge: resetWorktree.merge,
-              }
-            : {
-                mode: WORKTREE_MODES.NAMED,
-                branch: resetWorktree?.branch ?? "",
-                base: resetWorktree?.base,
-                setup: resetWorktree?.setup,
-              },
+      worktree: globalSettings.worktree,
     };
     setSessionIdInput("");
-    setWorktreeMode(resetWorktree?.mode ?? WORKTREE_MODES.NONE);
+    setWorktreeMode(
+      resetWorktreeConfig === false
+        ? WORKTREE_MODE_NONE
+        : resetWorktreeConfig.mode
+    );
     setWorktreeBranchInput(
-      resetWorktree?.mode === WORKTREE_MODES.NAMED
-        ? (resetWorktree.branch ?? "")
+      resetWorktreeConfig !== false &&
+        resetWorktreeConfig.mode === WORKTREE_MODES.NAMED
+        ? (resetWorktreeConfig.branch ?? "")
         : ""
     );
     setWorktreeBaseInput(
-      resetWorktree?.mode === WORKTREE_MODES.NAMED ||
-        resetWorktree?.mode === WORKTREE_MODES.MANAGED
-        ? (resetWorktree.base ?? "")
-        : ""
+      resetWorktreeConfig !== false ? (resetWorktreeConfig.base ?? "") : ""
     );
     setWorktreeSetupInput(
-      resetWorktree?.mode === WORKTREE_MODES.NAMED ||
-        resetWorktree?.mode === WORKTREE_MODES.MANAGED
-        ? (resetWorktree.setup ?? "")
-        : ""
+      resetWorktreeConfig !== false ? (resetWorktreeConfig.setup ?? "") : ""
     );
     setWorktreeMergeInput(
-      resetWorktree?.mode === WORKTREE_MODES.MANAGED
-        ? (resetWorktree.merge ?? false)
+      resetWorktreeConfig !== false &&
+        resetWorktreeConfig.mode === WORKTREE_MODES.MANAGED
+        ? (resetWorktreeConfig.merge ?? false)
         : false
     );
     setWorktreeKeepInput(
-      resetWorktree?.mode === WORKTREE_MODES.MANAGED
-        ? (resetWorktree.keep ?? false)
+      resetWorktreeConfig !== false &&
+        resetWorktreeConfig.mode === WORKTREE_MODES.MANAGED
+        ? (resetWorktreeConfig.keep ?? false)
         : false
     );
     setEndConditionEnabled(
@@ -1470,7 +1477,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
         PERMISSION_MODES.ALLOW_ALL);
   const effectiveErrorBehavior = workflowProperties.errorBehavior ??
     globalSettings.defaultErrorBehavior ?? {
-      onError: WORKFLOW_EXECUTION_OUTCOMES.STOP,
+      onError: CONDITION_ACTIONS.STOP_WORKFLOW,
     };
   // Fall back to global settings when workflow doesn't have lists yet
   const effectiveAllowedTools =
@@ -1605,6 +1612,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
               <DrawerRow narrow={isNarrow}>
                 <FormField
                   label="Harness"
+                  schemaPath="harness"
                   htmlFor="settings-harness"
                   description="AI harness for execution"
                   setAsDefaultButton={
@@ -1644,6 +1652,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
                 <FormField
                   label="Model"
+                  schemaPath="model"
                   htmlFor="settings-model"
                   description="AI model for execution"
                   setAsDefaultButton={
@@ -1661,6 +1670,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <CustomSelect
                     id="settings-model"
+                    schemaPath="model"
                     triggerAriaLabel="Model"
                     value={effectiveModel}
                     onChange={handleModelChange}
@@ -1694,6 +1704,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
               <DrawerRow narrow={isNarrow}>
                 <FormField
                   label="Agent"
+                  schemaPath="agent"
                   htmlFor="settings-agent"
                   description="Custom agent file (.agent.md)"
                   setAsDefaultButton={
@@ -1711,11 +1722,15 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <CustomSelect
                     id="settings-agent"
+                    schemaPath="agent"
                     triggerAriaLabel="Agent"
                     value={effectiveAgent || ""}
                     onChange={handleAgentChange}
                     options={[
-                      { value: "", label: "None" },
+                      ...toSelectOptions(
+                        WORKFLOW_AGENT_SELECTION_OPTIONS_META,
+                        "agent"
+                      ),
                       ...availableAgents.map((agent) =>
                         toAgentSelectOption(agent, agent.name || agent.path)
                       ),
@@ -1737,6 +1752,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
                 <FormField
                   label="Skills"
+                  schemaPath="skills"
                   htmlFor="settings-skills"
                   description="Attach skills (frontmatter only, progressive disclosure)"
                   setAsDefaultButton={
@@ -1786,6 +1802,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
               {/* Row 3: Additional Args (full width) */}
               <FormField
                 label="Additional Args"
+                schemaPath="additionalArgs"
                 htmlFor="settings-append-args"
                 description="Extra CLI flags appended to ctrlyoke's standard argument set. Only applies to CLI harnesses."
                 setAsDefaultButton={
@@ -1819,6 +1836,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
               <DrawerRow narrow={isNarrow}>
                 <FormField
                   label="Execution Mode"
+                  schemaPath="executionMode"
                   htmlFor="settings-execution-mode"
                   description={EXECUTION_MODE_HELP_TEXT}
                   setAsDefaultButton={
@@ -1838,16 +1856,20 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <CustomSelect
                     id="settings-execution-mode"
+                    schemaPath="executionMode"
                     triggerAriaLabel="Execution Mode"
                     value={effectiveExecutionMode}
                     onChange={handleExecutionModeChange}
-                    options={EXECUTION_MODE_OPTIONS}
+                    options={toSelectOptions(
+                      EXECUTION_MODE_OPTIONS_META,
+                      "executionMode"
+                    )}
                   />
                 </FormField>
                 <FormField
                   label="Worktree"
+                  schemaPath="worktree"
                   htmlFor="settings-worktree-mode"
-                  description={WORKTREE_MODE_HELP_TEXT}
                   setAsDefaultButton={
                     <SetAsDefaultButton
                       property={PROMPT_PROPERTIES.WORKTREE}
@@ -1863,19 +1885,24 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <CustomSelect
                     id="settings-worktree-mode"
+                    schemaPath="worktree"
                     triggerAriaLabel="Worktree"
                     value={worktreeMode}
                     onChange={handleWorktreeModeChange}
-                    options={WORKTREE_MODE_OPTIONS}
+                    options={toSelectOptions(
+                      WORKTREE_SELECTION_OPTIONS_META,
+                      "worktree"
+                    )}
                   />
                 </FormField>
               </DrawerRow>
 
-              <AnimatedSection visible={worktreeMode !== WORKTREE_MODES.NONE}>
+              <AnimatedSection visible={worktreeMode !== WORKTREE_MODE_NONE}>
                 <DrawerRow narrow={isNarrow}>
                   {worktreeMode === WORKTREE_MODES.NAMED && (
                     <FormField
                       label="Branch"
+                      schemaPath="worktree.branch"
                       htmlFor="settings-worktree-branch"
                       description="Existing or new local Git branch for the named worktree."
                     >
@@ -1905,6 +1932,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   )}
                   <FormField
                     label="Base"
+                    schemaPath="worktree.base"
                     htmlFor="settings-worktree-base"
                     description="Optional Git ref used as the starting point for a new worktree."
                   >
@@ -1922,6 +1950,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   </FormField>
                   <FormField
                     label="Setup"
+                    schemaPath="worktree.setup"
                     htmlFor="settings-worktree-setup"
                     description="Optional command run after a new worktree is created. Setup is outside step errorBehavior; a failure blocks the worktree and the next Run retries it."
                   >
@@ -1941,6 +1970,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     <>
                       <FormField
                         label="Keep directory"
+                        schemaPath="worktree.keep"
                         htmlFor="settings-worktree-keep"
                         description={WORKTREE_KEEP_HELP_TEXT}
                       >
@@ -1962,6 +1992,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       </FormField>
                       <FormField
                         label="Merge"
+                        schemaPath="worktree.merge"
                         htmlFor="settings-worktree-merge"
                         description="Merge the managed branch into the working checkout after every run."
                       >
@@ -1987,7 +2018,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
               </AnimatedSection>
 
               {workflowProperties.worktree === undefined &&
-                worktreeMode !== WORKTREE_MODES.NONE && (
+                worktreeMode !== WORKTREE_MODE_NONE && (
                   <p className="text-xxs text-warning-fg" role="status">
                     This worktree default is inherited from settings.
                     {worktreeMode === WORKTREE_MODES.NAMED &&
@@ -2003,6 +2034,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
               <DrawerRow narrow={isNarrow}>
                 <FormField
                   label="Resume Session"
+                  schemaPath="resumeSession"
                   htmlFor="settings-resume-session"
                   description="Resume Session continues existing session. Session ID below resumes a specific session or reuses another prompt's session (by number). 'Final Step Session' resumes the session established by the Final Step gate."
                   setAsDefaultButton={
@@ -2022,6 +2054,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <CustomSelect
                     id="settings-resume-session"
+                    schemaPath="resumeSession"
                     triggerAriaLabel="Resume Session"
                     value={
                       workflowProperties.sessionId ===
@@ -2079,6 +2112,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
                 <FormField
                   label="Prior Context"
+                  schemaPath="priorContext"
                   htmlFor="settings-prior-context"
                   description="Send prior step outputs with the prompt"
                   setAsDefaultButton={
@@ -2098,6 +2132,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <PriorContextSelect
                     id="settings-prior-context"
+                    schemaPath="priorContext"
                     value={effectivePriorContext}
                     onChange={handlePriorContextChange}
                   />
@@ -2106,6 +2141,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
               <FormField
                 label="Variables"
+                schemaPath="vars"
                 description="Workflow-level defaults for {{name}} substitution in prompt text, model, additional arguments, hook command/env, pre- and end-condition script/env and retry prompts, script-step script/env, and worktree setup commands. CLI --var values override these defaults. Unresolved placeholders remain literal text and are reported as an advisory."
               >
                 <KeyValueRowsEditor
@@ -2167,6 +2203,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   <div className="space-y-3">
                     <ScriptConditionEditor
                       variant={PROMPT_PROPERTIES.PRE_CONDITION}
+                      schemaPath="preCondition"
                       value={
                         effectivePreCondition as
                           ScriptConditionValue | null | undefined
@@ -2224,6 +2261,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   <div className="space-y-3">
                     <ScriptConditionEditor
                       variant={PROMPT_PROPERTIES.END_CONDITION}
+                      schemaPath="endCondition"
                       value={
                         effectiveEndCondition as
                           ScriptConditionValue | null | undefined
@@ -2265,6 +2303,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   continue.
                 </p>
                 <ErrorBehaviorEditor
+                  schemaPath="errorBehavior"
                   value={effectiveErrorBehavior}
                   onChange={handleErrorBehaviorChange}
                   idPrefix="settings-error"
@@ -2277,6 +2316,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
             <div className="flex-1 flex flex-col min-h-0">
               <FormField
                 label="MCP Servers"
+                schemaPath="mcpServers"
                 description="MCP servers to attach to the harness for this workflow. Include ctrlyoke to enable dynamic queue extension. Add custom McpServerConfig entries for additional MCP servers. Set to None to explicitly disable MCP injection."
                 className="flex-1 min-h-0"
                 setAsDefaultButton={
@@ -2309,7 +2349,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
               <div className="flex-1 flex flex-col min-h-0">
                 {/* Permission Mode */}
                 <FormField
-                  label="Permission Mode"
+                  label="Tool Permission Mode"
+                  schemaPath="toolPermissions.mode"
                   htmlFor="settings-permission-mode"
                   description="Tool permission mode for CLI harnesses"
                   setAsDefaultButton={
@@ -2329,7 +2370,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 >
                   <CustomSelect
                     id="settings-permission-mode"
-                    triggerAriaLabel="Permission Mode"
+                    schemaPath="toolPermissions.mode"
+                    triggerAriaLabel="Tool Permission Mode"
                     value={permMode}
                     onChange={(mode) => {
                       handleToolPermissionsChange({
@@ -2338,7 +2380,10 @@ const WorkflowPropertiesPanelInner: React.FC<{
                         deniedTools: deniedToolsInput,
                       });
                     }}
-                    options={PERMISSION_MODE_OPTIONS}
+                    options={toSelectOptions(
+                      PERMISSION_MODE_OPTIONS_META,
+                      "toolPermissions.mode"
+                    )}
                     warning={modeDiagnostics[0]?.message}
                     warningId="settings-permission-mode-diagnostic"
                   />
@@ -2346,6 +2391,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
                 <FormField
                   label="Secrets"
+                  schemaPath="secrets"
                   htmlFor="settings-secrets"
                   description="Grant named credentials to this workflow. Inline !NAME references in prompt text are always granted."
                   setAsDefaultButton={
@@ -2388,28 +2434,27 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
                 <FormField
                   label="Trusted External Roots"
+                  schemaPath="trustedExternalRoots"
                   htmlFor="settings-trusted-external-roots-mode"
                   description="Restrict this workflow to selected external directories, inherit the user and workspace roots, or disable external-root access."
                 >
                   <CustomSelect
                     id="settings-trusted-external-roots-mode"
+                    schemaPath="trustedExternalRoots"
                     triggerAriaLabel="Trusted External Roots"
                     value={trustedRootsMode}
                     onChange={handleTrustedRootsModeChange}
-                    options={[
-                      {
-                        value: TRUSTED_ROOTS_MODES.INHERIT,
-                        label: `Inherit (${liveTrustedExternalRoots.length} roots)`,
-                      },
-                      {
-                        value: TRUSTED_ROOTS_MODES.NONE,
-                        label: "None",
-                      },
-                      {
-                        value: TRUSTED_ROOTS_MODES.CUSTOM,
-                        label: "Custom",
-                      },
-                    ]}
+                    options={toSelectOptions(
+                      TRUSTED_ROOTS_SELECTION_OPTIONS_META,
+                      "trustedExternalRoots"
+                    ).map((option) =>
+                      option.value === TRUSTED_ROOTS_MODES.INHERIT
+                        ? {
+                            ...option,
+                            label: `Inherit (${liveTrustedExternalRoots.length > 0 ? "Custom" : "None"})`,
+                          }
+                        : option
+                    )}
                   />
                   {trustedRootsMode === TRUSTED_ROOTS_MODES.CUSTOM && (
                     <TrustedRootsListEditor
@@ -2426,6 +2471,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 <div className="flex-1 flex flex-col gap-2 min-h-0 mt-2">
                   <FormField
                     label="Allowed Tools"
+                    schemaPath="toolPermissions.allowedTools"
                     htmlFor="settings-allowed-tools"
                     description="Tool patterns to allow (one per line). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; Qwen is inline and OpenCode uses OPENCODE_CONFIG_CONTENT."
                     className="flex-1 min-h-0"
@@ -2494,6 +2540,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
                   <FormField
                     label="Denied Tools"
+                    schemaPath="toolPermissions.deniedTools"
                     htmlFor="settings-denied-tools"
                     description="Tool patterns to deny (one per line, takes precedence over allow list). Codex and Antigravity do not enforce these lists."
                     className="flex-1 min-h-0"
@@ -2571,7 +2618,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
           {activePage === DRAWER_PAGES.HOOKS && (
             <>
               <FormField
-                label="User Hooks"
+                label="Hooks"
+                schemaPath="hooks"
                 description="User-defined hooks to run alongside ctrlyoke's completion-detection hooks. Supported events vary by harness."
                 setAsDefaultButton={
                   <SetAsDefaultButton
@@ -2587,6 +2635,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 }
               >
                 <HooksEditor
+                  schemaPath="hooks"
                   value={effectiveHooks}
                   onChange={handleHooksChange}
                   showDefault={false}

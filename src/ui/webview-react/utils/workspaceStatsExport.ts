@@ -79,7 +79,7 @@ export interface WorkspaceStatsExport {
 
 export interface WorkspaceStatsExportOptions {
   generatedAt: number;
-  hideCost: boolean;
+  showCostEstimates: boolean;
 }
 
 function formatDate(value: number): string {
@@ -96,9 +96,9 @@ function tokenCoverage(
 
 function costFields(
   contribution: LifetimeHarnessContribution,
-  hideCost: boolean
+  showCostEstimates: boolean
 ): ExportCostFields {
-  if (hideCost || contribution.costUsd === undefined) return {};
+  if (!showCostEstimates || contribution.costUsd === undefined) return {};
 
   return {
     costUsd: contribution.costUsd,
@@ -120,14 +120,14 @@ function hasUsage(contribution: LifetimeHarnessContribution): boolean {
 function projectHarness(
   harnessId: HarnessId,
   contribution: LifetimeHarnessContribution,
-  hideCost: boolean
+  showCostEstimates: boolean
 ): WorkspaceStatsExportPayload["byHarness"][number] {
   return {
     harnessId,
     aiStepCount: contribution.attemptCount,
     totalTokens: contribution.total,
     tokenCoverage: tokenCoverage(contribution),
-    ...costFields(contribution, hideCost),
+    ...costFields(contribution, showCostEstimates),
   };
 }
 
@@ -149,13 +149,13 @@ function markdownTokenTotal(
  */
 export function buildWorkspaceStatsExport(
   snapshot: WorkspaceStatsSnapshot,
-  { generatedAt, hideCost }: WorkspaceStatsExportOptions
+  { generatedAt, showCostEstimates }: WorkspaceStatsExportOptions
 ): WorkspaceStatsExport {
   const period: ExportPeriod = {
     start: LIFETIME_PERIOD_START,
     end: formatDate(snapshot.updatedAt),
   };
-  const disclaimer = hideCost ? HIDDEN_COST_DISCLAIMER : FULL_DISCLAIMER;
+  const disclaimer = !showCostEstimates ? HIDDEN_COST_DISCLAIMER : FULL_DISCLAIMER;
   const totals = {
     workflowCount: snapshot.workflowCount,
     runCount: snapshot.runCount,
@@ -167,13 +167,13 @@ export function buildWorkspaceStatsExport(
     skippedRunCount: snapshot.skippedRunCount,
     backfill: { ...snapshot.backfill },
     tokenCoverage: tokenCoverage(snapshot.totals),
-    ...costFields(snapshot.totals, hideCost),
+    ...costFields(snapshot.totals, showCostEstimates),
   };
   const byHarness = (Object.values(HARNESS_IDS) as HarnessId[]).flatMap(
     (harnessId) => {
       const contribution = snapshot.byHarness[harnessId];
       return contribution && hasUsage(contribution)
-        ? [projectHarness(harnessId, contribution, hideCost)]
+        ? [projectHarness(harnessId, contribution, showCostEstimates)]
         : [];
     }
   );
@@ -189,10 +189,10 @@ export function buildWorkspaceStatsExport(
   };
 
   const harnessRows = byHarness.map((harness) => {
-    const cost = hideCost
+    const cost = !showCostEstimates
       ? ""
       : formatCostLabel(harness.costUsd, harness.costCoverage === "partial");
-    return hideCost
+    return !showCostEstimates
       ? `| ${harness.harnessId} | ${formatTokenCount(harness.aiStepCount) || "0"} | ${markdownTokenTotal(harness.totalTokens, harness.tokenCoverage)} |`
       : `| ${harness.harnessId} | ${formatTokenCount(harness.aiStepCount) || "0"} | ${markdownTokenTotal(harness.totalTokens, harness.tokenCoverage)} | ${cost || "—"} |`;
   });
@@ -205,9 +205,9 @@ export function buildWorkspaceStatsExport(
     `- Provenance: ${OBSERVED_PROVENANCE.join(", ")}`,
     `- Caveat: ${disclaimer}`,
     `- Cost estimate caveat: ${
-      hideCost
-        ? "Cost estimates are omitted by the workspace setting."
-        : "Cost values are estimated from token counts at API list prices, or taken directly from a harness's own reported figure when one is available; either way, they are not subscription spend."
+      showCostEstimates
+        ? "Cost values are estimated from token counts at API list prices, or taken directly from a harness's own reported figure when one is available; either way, they are not subscription spend."
+        : "Cost estimates are omitted by the workspace setting."
     }`,
     "",
     "## Totals",
@@ -222,7 +222,7 @@ export function buildWorkspaceStatsExport(
     `| Completed / stopped / error | ${numberLabel(snapshot.outcomes.completed)} / ${numberLabel(snapshot.outcomes.stopped)} / ${numberLabel(snapshot.outcomes.error)} |`,
     `| Wall-clock duration runs | ${numberLabel(snapshot.wallClockDurationRunCount)} |`,
     `| Unreadable runs | ${numberLabel(snapshot.skippedRunCount)} |`,
-    ...(hideCost
+    ...(!showCostEstimates
       ? []
       : [
           `| Estimated cost | ${
@@ -235,7 +235,7 @@ export function buildWorkspaceStatsExport(
     "",
     "## Harness totals",
     "",
-    ...(hideCost
+    ...(!showCostEstimates
       ? ["| Harness ID | AI steps | Tokens |", "| --- | ---: | ---: |"]
       : [
           "| Harness ID | AI steps | Tokens | Estimated cost |",
@@ -243,7 +243,7 @@ export function buildWorkspaceStatsExport(
         ]),
     ...(harnessRows.length
       ? harnessRows
-      : [hideCost ? "| — | 0 | 0 |" : "| — | 0 | 0 | — |"]),
+      : [!showCostEstimates ? "| — | 0 | 0 |" : "| — | 0 | 0 | — |"]),
     "",
   ].join("\n");
 

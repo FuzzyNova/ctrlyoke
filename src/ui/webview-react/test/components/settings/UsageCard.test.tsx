@@ -74,7 +74,7 @@ describe("UsageCard percent direction", () => {
           HARNESS_IDS.CLAUDE_CLI,
           HARNESS_USAGE_UNITS.PERCENT
         )}
-        hideCost={true}
+        showCostEstimates={false}
       />
     );
 
@@ -91,7 +91,7 @@ describe("UsageCard percent direction", () => {
           HARNESS_IDS.ANTIGRAVITY_CLI,
           HARNESS_USAGE_UNITS.PERCENT
         )}
-        hideCost={true}
+        showCostEstimates={false}
       />
     );
 
@@ -107,7 +107,7 @@ describe("UsageCard percent direction", () => {
           HARNESS_IDS.COPILOT_CLI,
           HARNESS_USAGE_UNITS.REQUESTS
         )}
-        hideCost={true}
+        showCostEstimates={false}
       />
     );
 
@@ -123,7 +123,7 @@ describe("UsageCard percent direction", () => {
           HARNESS_IDS.COPILOT_CLI,
           HARNESS_USAGE_UNITS.REQUESTS
         )}
-        hideCost={true}
+        showCostEstimates={false}
       />
     );
 
@@ -149,7 +149,7 @@ describe("UsageCard percent direction", () => {
       <UsageCard
         harnessId={HARNESS_IDS.COPILOT_CLI}
         snapshot={snapshot}
-        hideCost={false}
+        showCostEstimates={true}
       />
     );
 
@@ -167,7 +167,7 @@ describe("UsageCard percent direction", () => {
           HARNESS_IDS.CLAUDE_CLI,
           HARNESS_USAGE_UNITS.PERCENT
         )}
-        hideCost={true}
+        showCostEstimates={false}
       />
     );
 
@@ -184,7 +184,7 @@ describe("UsageCard percent direction", () => {
           HARNESS_IDS.CLAUDE_CLI,
           HARNESS_USAGE_UNITS.PERCENT
         )}
-        hideCost={true}
+        showCostEstimates={false}
       />
     );
 
@@ -200,7 +200,7 @@ describe("UsageCard percent direction", () => {
       <UsageCard
         harnessId={HARNESS_IDS.CLAUDE_CLI}
         snapshot={snapshot}
-        hideCost={true}
+        showCostEstimates={false}
       />
     );
 
@@ -218,7 +218,7 @@ describe("UsageCard percent direction", () => {
       <UsageCard
         harnessId={HARNESS_IDS.CLAUDE_CLI}
         snapshot={makeSnapshot(HARNESS_IDS.CLAUDE_CLI)}
-        hideCost={true}
+        showCostEstimates={false}
       />
     );
 

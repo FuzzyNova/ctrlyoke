@@ -1,16 +1,15 @@
 import {
   COMPARE_SOURCES,
-  COMPARE_SOURCE_LABELS,
   DEFAULT_COMPARE_SOURCE,
   DEFAULT_SCRIPT_OPERATOR,
   SCRIPT_NUMERIC_OPERATORS,
   SCRIPT_OPERATORS,
-  SCRIPT_OPERATOR_LABELS,
   SCRIPT_STRING_OPERATORS,
   SCRIPT_VALUELESS_OPERATORS,
   type CompareSource,
   type ScriptOperator,
 } from "../types/DashboardConstants";
+import { COMPARE_SOURCE_OPTIONS_META, SCRIPT_OPERATOR_OPTIONS_META } from "../types/SchemaUiMetadata";
 
 /**
  * Longest `actual` a regex is run against. A `matches` pattern is authored by the
@@ -241,10 +240,10 @@ export function describeComparison(config: ScriptComparisonConfig): string {
   const sourceLabel =
     compareSource === COMPARE_SOURCES.EXIT_CODE
       ? "the exit code"
-      : `${COMPARE_SOURCE_LABELS[compareSource].toLowerCase()}`;
+      : `${COMPARE_SOURCE_OPTIONS_META[compareSource].label.toLowerCase()}`;
 
   if (operatorTakesNoValue(operator)) {
-    return `Passes when ${sourceLabel} ${SCRIPT_OPERATOR_LABELS[operator]}.`;
+    return `Passes when ${sourceLabel} ${SCRIPT_OPERATOR_OPTIONS_META[operator].label.toLowerCase()}.`;
   }
 
   const caseNote =
@@ -255,10 +254,10 @@ export function describeComparison(config: ScriptComparisonConfig): string {
   }
 
   if (operatorIsNumeric(operator)) {
-    return `Passes when ${sourceLabel} is ${SCRIPT_OPERATOR_LABELS[operator]} ${expected}. Both sides must be numeric, or the check fails.`;
+    return `Passes when ${sourceLabel} is ${SCRIPT_OPERATOR_OPTIONS_META[operator].label.toLowerCase()} ${expected}. Both sides must be numeric, or the check fails.`;
   }
 
-  return `Passes when ${sourceLabel} ${SCRIPT_OPERATOR_LABELS[operator]} "${expected}"${caseNote}.`;
+  return `Passes when ${sourceLabel} ${SCRIPT_OPERATOR_OPTIONS_META[operator].label.toLowerCase()} "${expected}"${caseNote}.`;
 }
 
 /**
@@ -305,7 +304,7 @@ export function formatComparisonSubject(
   const { compareSource, operator } = resolveScriptComparison(config);
   const source =
     compareSource === COMPARE_SOURCES.EXIT_CODE ? "exit code" : compareSource;
-  return `${source} ${SCRIPT_OPERATOR_LABELS[operator]}`;
+  return `${source} ${SCRIPT_OPERATOR_OPTIONS_META[operator].label.toLowerCase()}`;
 }
 
 /** Compact `stdout contains 0 failing` form for verdict rows. */
@@ -319,7 +318,7 @@ export function formatComparison(config: ScriptComparisonConfig): string {
     // No `expected` means `compareScriptOutput` fell back to "the script exited
     // 0" whatever source and operator were configured, so print the rule that
     // actually ran — `stdout contains 0` would describe a comparison nobody made.
-    return `exit code ${SCRIPT_OPERATOR_LABELS[DEFAULT_SCRIPT_OPERATOR]} 0`;
+    return `exit code ${SCRIPT_OPERATOR_OPTIONS_META[DEFAULT_SCRIPT_OPERATOR].label.toLowerCase()} 0`;
   }
   return `${subject} ${expected}`;
 }

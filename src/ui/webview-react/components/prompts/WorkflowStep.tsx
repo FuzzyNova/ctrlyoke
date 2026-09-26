@@ -164,8 +164,8 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
   onContextMenu,
   dragHandleProps,
 }) => {
-  const hideCost = useSettingsStore(
-    (state) => state.fullGlobalSettings?.settings.ui.hideCost === true
+  const showCostEstimates = useSettingsStore(
+    (state) => state.fullGlobalSettings?.settings.ui.showCostEstimates !== false
   );
   const longPressHandlers = useLongPress(onContextMenu);
 
@@ -195,7 +195,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
     contextWindow: ctx,
     harness: harnessId,
     attemptTokens,
-    hideCost,
+    showCostEstimates,
   }).join("\n");
   const hoverTooltip = buildStepHoverTooltip({
     primaryAction: onContextMenu
@@ -204,7 +204,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
     contextWindow: ctx,
     harness: harnessId,
     attemptTokens,
-    hideCost,
+    showCostEstimates,
   });
 
   // Build class names for the container

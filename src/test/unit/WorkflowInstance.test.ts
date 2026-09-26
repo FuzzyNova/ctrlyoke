@@ -2881,7 +2881,7 @@ suite("WorkflowInstance append-and-continue", () => {
     try {
       configService.setCliOverlay({
         execution: {
-          strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
+          contextResolutionFailure: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
         },
       });
       await (instance as any).executeLoadedPromptFile(
@@ -3083,7 +3083,7 @@ suite("WorkflowInstance secret-grant approval callback", () => {
     try {
       configService.setCliOverlay({
         execution: {
-          strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
+          contextResolutionFailure: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
         },
       });
       await (instance as any).executeLoadedPromptFile(

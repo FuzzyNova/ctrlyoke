@@ -16,8 +16,8 @@ import {
   DEFAULT_COMPARE_SOURCE,
   DEFAULT_SCRIPT_OPERATOR,
   SCRIPT_OPERATORS,
-  SCRIPT_OPERATOR_LABELS,
 } from "../../types/DashboardConstants";
+import { SCRIPT_OPERATOR_OPTIONS_META } from "../../types/SchemaUiMetadata";
 
 /** A clean run that printed `stdout` and wrote nothing to stderr. */
 function ok(stdout: string) {
@@ -340,7 +340,7 @@ suite("ScriptComparison", () => {
           compareSource: COMPARE_SOURCES.EXIT_CODE,
           expected: 0,
         }),
-        `exit code ${SCRIPT_OPERATOR_LABELS.eq} 0`
+        `exit code ${SCRIPT_OPERATOR_OPTIONS_META.eq.label.toLowerCase()} 0`
       );
       assert.strictEqual(
         formatComparison({}),

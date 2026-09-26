@@ -133,7 +133,7 @@ describe("PromptChipRail", () => {
       harnessColors: {
         ...useSettingsStore.getState().globalSettings.harnessColors!,
       },
-      stepColorMode: STEP_COLOR_MODES.OFF,
+      stepColorMode: STEP_COLOR_MODES.NONE,
     });
     useWorkflowStore.getState().loadWorkflow({
       fileName: "test.prompt.md",

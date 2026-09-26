@@ -16,7 +16,6 @@ import {
   VSCODE_COMMANDS,
   PROMPT_PROPERTIES,
   WORKFLOW_PROPERTY_KEYS,
-  WORKTREE_MODES,
   STATUS_LINE_TRACKING_PROVIDERS,
   type HarnessId,
   type HarnessStatusString,
@@ -62,7 +61,6 @@ import {
   McpServerConfig,
   ToolPermissionsOverride,
   WorktreeConfig,
-  WorktreeDefaultConfig,
 } from "../types/CtrlYokeTypes";
 import { readJsonFile } from "../utils/FileSystemUtils";
 import { getErrorMessage } from "../utils/ErrorUtils";
@@ -731,15 +729,7 @@ export class WebviewSettingsSync {
       );
     } else if (property === PROMPT_PROPERTIES.WORKTREE) {
       const authored = value as WorktreeConfig;
-      const defaultValue: WorktreeDefaultConfig =
-        authored === false
-          ? { mode: WORKTREE_MODES.NONE }
-          : authored === true
-            ? { mode: WORKTREE_MODES.MANAGED }
-            : typeof authored === "string"
-              ? { mode: WORKTREE_MODES.NAMED, branch: authored }
-              : authored;
-      await ConfigurationUtils.setDefaultWorktree(defaultValue);
+      await ConfigurationUtils.setDefaultWorktree(authored);
     } else {
       await ConfigurationUtils.updateSetting(property, value);
     }
@@ -927,7 +917,7 @@ export class WebviewSettingsSync {
       confirmContinuationDiscardOperations:
         ConfigurationUtils.shouldConfirmContinuationDiscardOperations(),
       hideGitIgnoredFiles: ConfigurationUtils.shouldHideGitIgnoredFiles(),
-      hideCost: ConfigurationUtils.shouldHideCost(),
+      showCostEstimates: ConfigurationUtils.shouldShowCostEstimates(),
       stepColorMode: ConfigurationUtils.getStepColorMode(),
       harnessColors: ConfigurationUtils.getHarnessColorSettings(),
       isMultiRoot: isMultiRootWorkspace(),
@@ -1406,13 +1396,13 @@ export class WebviewSettingsSync {
       return;
     }
     const currentWorkspaceRoots =
-      path === CONFIG_KEYS.PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS &&
+      path === CONFIG_KEYS.PERMISSIONS_TRUSTED_EXTERNAL_ROOTS &&
       scope === CONFIG_SCOPE.WORKSPACE
-        ? ConfigurationUtils.getAllowedExternalFileRootsByScope().workspace
+        ? ConfigurationUtils.getTrustedExternalRootsByScope().workspace
         : [];
     await configService.set(path, value, scope);
     if (
-      path === CONFIG_KEYS.PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS &&
+      path === CONFIG_KEYS.PERMISSIONS_TRUSTED_EXTERNAL_ROOTS &&
       scope === CONFIG_SCOPE.WORKSPACE &&
       Array.isArray(value)
     ) {
@@ -1472,7 +1462,7 @@ export class WebviewSettingsSync {
   /**
    * Handle BROWSE_AND_ADD_EXTERNAL_ROOT: open a native folder picker and, if
    * the user selects a folder, append it to either
-   * `permissions.allowedExternalFileRoots` or the active workflow's
+   * `permissions.trustedExternalRoots` or the active workflow's
    * `trustedExternalRoots` (deduping). No-op on cancel. See
    * dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md.
    */
@@ -1541,7 +1531,7 @@ export class WebviewSettingsSync {
     }
 
     const { user, workspace } =
-      ConfigurationUtils.getAllowedExternalFileRootsByScope();
+      ConfigurationUtils.getTrustedExternalRootsByScope();
     const current = scope === CONFIG_SCOPE.WORKSPACE ? workspace : user;
     const canonicalNewRoot = ExternalRootsTrustStore.canonicalizeRoot(newRoot);
     if (
@@ -1554,7 +1544,7 @@ export class WebviewSettingsSync {
     }
 
     await configService.set(
-      CONFIG_KEYS.PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS,
+      CONFIG_KEYS.PERMISSIONS_TRUSTED_EXTERNAL_ROOTS,
       [...current, newRoot],
       scope
     );
@@ -1619,7 +1609,7 @@ export class WebviewSettingsSync {
 
   private buildExternalFileRootsByScope() {
     const { user, workspace } =
-      ConfigurationUtils.getAllowedExternalFileRootsByScope();
+      ConfigurationUtils.getTrustedExternalRootsByScope();
     const workspaceIdentity = vscode.workspace.workspaceFolders?.length
       ? ExternalRootsTrustStore.canonicalizeRoot(getVsCodeWorkspaceRoot())
       : undefined;

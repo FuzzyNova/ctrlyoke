@@ -56,7 +56,10 @@ describe("StatsUsageSection", () => {
     ]);
 
     render(
-      <StatsUsageSection hideCost={false} activeScope={SETTING_SCOPES.USER} />
+      <StatsUsageSection
+        showCostEstimates={true}
+        activeScope={SETTING_SCOPES.USER}
+      />
     );
 
     expect(screen.getByText("Workspace statistics")).toBeInTheDocument();
@@ -90,7 +93,10 @@ describe("StatsUsageSection", () => {
   it("refreshes harness usage from the page button", async () => {
     const user = userEvent.setup();
     render(
-      <StatsUsageSection hideCost={true} activeScope={SETTING_SCOPES.USER} />
+      <StatsUsageSection
+        showCostEstimates={false}
+        activeScope={SETTING_SCOPES.USER}
+      />
     );
 
     vi.mocked(getVsCodeApi().postMessage).mockClear();
@@ -124,7 +130,10 @@ describe("StatsUsageSection", () => {
     ]);
 
     render(
-      <StatsUsageSection hideCost={false} activeScope={SETTING_SCOPES.USER} />
+      <StatsUsageSection
+        showCostEstimates={true}
+        activeScope={SETTING_SCOPES.USER}
+      />
     );
 
     expect(screen.getByText("1.5k tokens")).toBeInTheDocument();
@@ -133,7 +142,7 @@ describe("StatsUsageSection", () => {
   it("renders the usage collection controls", () => {
     render(
       <StatsUsageSection
-        hideCost={false}
+        showCostEstimates={true}
         settings={createSettings()}
         activeScope={SETTING_SCOPES.USER}
         onUpdate={vi.fn()}
@@ -154,7 +163,9 @@ describe("StatsUsageSection", () => {
       screen.getByRole("checkbox", { name: /^Save usage history/ })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("spinbutton", { name: "Usage warning threshold" })
+      screen.getByRole("spinbutton", {
+        name: "Usage warning threshold, property usageTracking.warningPercentUsed",
+      })
     ).toBeInTheDocument();
   });
 
@@ -164,7 +175,7 @@ describe("StatsUsageSection", () => {
 
     render(
       <StatsUsageSection
-        hideCost={false}
+        showCostEstimates={true}
         settings={createSettings()}
         activeScope={SETTING_SCOPES.USER}
         onUpdate={onUpdate}
@@ -182,7 +193,7 @@ describe("StatsUsageSection", () => {
       screen.getByRole("checkbox", { name: /^Save usage history/ })
     );
     const threshold = screen.getByRole("spinbutton", {
-      name: "Usage warning threshold",
+      name: "Usage warning threshold, property usageTracking.warningPercentUsed",
     });
     await user.clear(threshold);
     await user.type(threshold, "95");
@@ -209,7 +220,7 @@ describe("StatsUsageSection", () => {
   it("disables usage collection at workspace scope with a user-scope note", () => {
     render(
       <StatsUsageSection
-        hideCost={false}
+        showCostEstimates={true}
         settings={createSettings()}
         activeScope={SETTING_SCOPES.WORKSPACE}
         onUpdate={vi.fn()}
@@ -230,7 +241,7 @@ describe("StatsUsageSection", () => {
   it("disables provider refresh and persistence when collection is disabled", () => {
     render(
       <StatsUsageSection
-        hideCost={false}
+        showCostEstimates={true}
         settings={createSettings({ enabled: false })}
         activeScope={SETTING_SCOPES.USER}
         onUpdate={vi.fn()}
@@ -251,12 +262,17 @@ describe("StatsUsageSection", () => {
 
   it("does not render statusline tracking controls", () => {
     render(
-      <StatsUsageSection hideCost={false} activeScope={SETTING_SCOPES.USER} />
+      <StatsUsageSection
+        showCostEstimates={true}
+        activeScope={SETTING_SCOPES.USER}
+      />
     );
 
     expect(screen.queryByText("Statusline Tracking")).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("textbox", { name: "Custom statusline command" })
+      screen.queryByRole("textbox", {
+        name: /^Custom statusline command, property /,
+      })
     ).not.toBeInTheDocument();
   });
 
@@ -264,7 +280,7 @@ describe("StatsUsageSection", () => {
     const user = userEvent.setup();
     render(
       <StatsUsageSection
-        hideCost={false}
+        showCostEstimates={true}
         activeScope={SETTING_SCOPES.WORKSPACE}
       />
     );

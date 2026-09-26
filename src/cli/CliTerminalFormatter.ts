@@ -1315,7 +1315,7 @@ export class CliTerminalFormatter {
             ? TOKEN_TOTAL_CACHE_NETTED_NOTE
             : null,
           totalLabel ? `Total: ${totalLabel}` : null,
-          data.hideCost || !cost
+          data.showCostEstimates === false || !cost
             ? null
             : `${formatCostLabel(cost.usd)} ${formatCostSourcePhrase([cost.source])}`,
           compactionLabel ?? null,
@@ -1327,7 +1327,7 @@ export class CliTerminalFormatter {
           totalLabel && isCacheInputSubset(data.harness)
             ? TOKEN_TOTAL_CACHE_NETTED_NOTE
             : null,
-          data.hideCost || !cost
+          data.showCostEstimates === false || !cost
             ? null
             : `${formatCostLabel(cost.usd)} ${formatCostSourcePhrase([cost.source])}`,
           compactionLabel ?? null,

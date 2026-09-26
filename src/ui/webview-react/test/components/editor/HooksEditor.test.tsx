@@ -40,7 +40,7 @@ describe("HooksEditor compatibility diagnostics", () => {
     render(<ControlledEditor />);
 
     expect(
-      screen.getByRole("option", { name: "Notification" })
+      screen.getByRole("option", { name: "Notification, hooks[].event: notification" })
     ).toBeInTheDocument();
     fireEvent.change(screen.getByRole("combobox"), {
       target: { value: "notification" },
@@ -134,6 +134,7 @@ describe("HooksEditor compatibility diagnostics", () => {
     const onChange = vi.fn();
     render(
       <HooksEditor
+        schemaPath="defaults.hooks"
         value={[
           {
             event: "stop",
@@ -152,7 +153,9 @@ describe("HooksEditor compatibility diagnostics", () => {
     expect(screen.getByLabelText("Value for HOOK_TOKEN")).toHaveValue(
       "${secret:HOOK_TOKEN}"
     );
-    expect(screen.getByLabelText("Timeout (seconds)")).toHaveValue(30);
+    expect(screen.getByLabelText("Timeout (seconds), property defaults.hooks[].timeoutSec")).toHaveValue(30);
+    expect(screen.getByLabelText("Event, property defaults.hooks[].event")).toHaveAttribute("title", expect.stringContaining("property: defaults.hooks[].event"));
+    expect(screen.getByLabelText("Environment, property defaults.hooks[].env")).toHaveAttribute("title", expect.stringContaining("property: defaults.hooks[].env"));
 
     fireEvent.click(
       screen.getByRole("button", { name: "+ Add environment variable" })

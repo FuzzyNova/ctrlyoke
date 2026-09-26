@@ -685,7 +685,7 @@ describe("toast queue", () => {
   });
 
   it("prefers fullGlobalSettings over the mirrored value once loaded", () => {
-    setMirroredToastLevel(TOAST_LEVEL_MODES.OFF);
+    setMirroredToastLevel(TOAST_LEVEL_MODES.NONE);
     setToastLevel(TOAST_LEVEL_MODES.ALL);
 
     store().showToast("Info", USER_FEEDBACK_SEVERITY.INFO);

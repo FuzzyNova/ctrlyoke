@@ -26,17 +26,18 @@ import {
   getHarnessUsageDisplay,
 } from "@utils/harnessUsageDisplay";
 import { Icon } from "./Icon";
+import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
+import { HARNESS_OPTIONS_META } from "@root/types/SchemaUiMetadata";
 
 // ─── Display names (official product names) ──────────────────────────────────
 
-export const HARNESS_DISPLAY_NAMES: Record<HarnessId, string> = {
-  [HARNESS_IDS.ANTIGRAVITY_CLI]: "Antigravity",
-  [HARNESS_IDS.COPILOT_CLI]: "Copilot CLI",
-  [HARNESS_IDS.CLAUDE_CLI]: "Claude Code",
-  [HARNESS_IDS.CODEX_CLI]: "Codex",
-  [HARNESS_IDS.OPENCODE_CLI]: "OpenCode",
-  [HARNESS_IDS.QWEN_CLI]: "Qwen Code",
-};
+export const HARNESS_DISPLAY_NAMES: Record<HarnessId, string> =
+  Object.fromEntries(
+    Object.values(HARNESS_OPTIONS_META).map(({ value, label }) => [
+      value,
+      label,
+    ])
+  ) as Record<HarnessId, string>;
 
 // ─── Harness list ─────────────────────────────────────────────────────────────
 
@@ -78,6 +79,7 @@ const StatusIndicator: React.FC<{ status: HarnessStatusString }> = ({
 
 interface HarnessRowProps {
   harness: HarnessId;
+  schemaPath: string;
   isSelected: boolean;
   isHidden: boolean;
   showStatus: boolean;
@@ -98,6 +100,7 @@ interface HarnessRowProps {
 
 const HarnessRow: React.FC<HarnessRowProps> = ({
   harness,
+  schemaPath,
   isSelected,
   isHidden,
   showStatus,
@@ -154,6 +157,8 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
         </button>
         <button
           type="button"
+          title={schemaTitle(schemaPath, harness, rowTooltip)}
+          aria-label={schemaAriaLabel(name, schemaPath, harness)}
           onClick={() => onSelect(harness)}
           className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left text-description-fg focus:outline-none border-none bg-transparent cursor-pointer flex items-center gap-1.5"
         >
@@ -178,6 +183,8 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
     >
       <button
         type="button"
+        title={schemaTitle(schemaPath, harness, rowTooltip)}
+        aria-label={schemaAriaLabel(name, schemaPath, harness)}
         onClick={() =>
           isAvailable || isChecking ? onSelect(harness) : undefined
         }
@@ -217,6 +224,8 @@ export interface HarnessDropdownProps {
   onChange: (value: string) => void;
   triggerAriaLabel?: string;
   triggerTitle?: string;
+  /** Schema property represented by this harness selector. */
+  schemaPath?: string;
   /** Show a "Default" sentinel option above the groups (for per-prompt overrides). */
   showDefault?: boolean;
   /** Label for the "Default" sentinel option. Defaults to "Default". */
@@ -253,6 +262,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
   onChange,
   triggerAriaLabel,
   triggerTitle,
+  schemaPath = "harness",
   showDefault = false,
   defaultLabel,
   showStatus = true,
@@ -358,6 +368,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
         <HarnessRow
           key={harness}
           harness={harness}
+          schemaPath={schemaPath}
           isSelected={value === harness}
           isHidden={hidden}
           showStatus={showStatus}
@@ -401,6 +412,10 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
           <button
             type="button"
             onClick={() => handleSelect(INHERIT_DEFAULT_OPTION)}
+            aria-label={schemaAriaLabel(defaultLabel ?? "Inherit", schemaPath, {
+              omit: true,
+            })}
+            title={schemaTitle(schemaPath, { omit: true })}
             className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left focus:outline-none border-none bg-transparent cursor-inherit flex items-center"
           >
             {defaultSentinelContent}
@@ -440,6 +455,13 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
     showStatus && value !== INHERIT_DEFAULT_OPTION && harnessStatus
       ? harnessStatus[value as HarnessId]
       : undefined;
+  const triggerSchemaValue =
+    value === INHERIT_DEFAULT_OPTION ? { omit: true as const } : value;
+  const unavailableHint =
+    !triggerStatus?.available &&
+    triggerStatus?.status !== HARNESS_STATUS_STRINGS.CHECKING
+      ? (triggerStatus?.installHint ?? "Harness is not available")
+      : undefined;
 
   return (
     <div className="relative inline-block w-full" ref={narrowRef}>
@@ -458,14 +480,16 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
           aria-expanded={isOpen}
           aria-haspopup="listbox"
           aria-controls={listboxId}
-          aria-label={triggerAriaLabel}
-          title={
-            triggerTitle ??
-            (!triggerStatus?.available &&
-            triggerStatus?.status !== HARNESS_STATUS_STRINGS.CHECKING
-              ? (triggerStatus?.installHint ?? "Harness is not available")
-              : undefined)
-          }
+          aria-label={schemaAriaLabel(
+            triggerAriaLabel ?? triggerLabel,
+            schemaPath,
+            triggerSchemaValue
+          )}
+          title={schemaTitle(
+            schemaPath,
+            triggerSchemaValue,
+            triggerTitle ?? unavailableHint
+          )}
           className="cy-select-trigger cy-dropdown-row flex-1 min-w-0"
         >
           <span className="flex items-center gap-1.5 min-w-0">

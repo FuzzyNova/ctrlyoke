@@ -1,10 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { resumeSessionSelection } from "@/types/dropdownNamespaces";
+import {
+  getResumeSessionOptions,
+  resumeSessionSelection,
+} from "@/types/dropdownNamespaces";
 import { SESSION_ID_SENTINELS } from "@root/types/DashboardConstants";
 
 const GUID = "63017930-45b0-4ec4-8094-8a57751e905b";
 
 describe("resumeSessionSelection", () => {
+  it("uses schema UI labels and writes the Final Step sentinel", () => {
+    const options = getResumeSessionOptions("Inherit (Resume)");
+    expect(options.map(({ label }) => label)).toEqual([
+      "Inherit (Resume)",
+      "Resume",
+      "New Session",
+      "Final Step Session",
+    ]);
+    expect(options[options.length - 1]).toMatchObject({
+      schemaPath: "resumeSession",
+      pseudo: {
+        writes: "resumeSession: true, sessionId: <FINAL_STEP sentinel>",
+      },
+    });
+  });
+
   it("keeps an explicit session ID while the selection stays Yes", () => {
     expect(resumeSessionSelection("yes", GUID)).toEqual({
       resumeSession: true,

@@ -11,8 +11,8 @@ import {
   type PromptTerminalStatus,
   type WorkflowAttemptStatus,
   PRIOR_CONTEXT_KEYWORDS,
+  CONDITION_ACTIONS,
   type ConditionAction,
-  type WorkflowExecutionOutcome,
   type CompareSource,
   type ScriptOperator,
   type HarnessId,
@@ -143,7 +143,10 @@ export interface ToolPermissionsOverride {
   deniedTools?: string[];
 }
 
-export type ErrorBehaviorAction = WorkflowExecutionOutcome;
+export type ErrorBehaviorAction =
+  | typeof CONDITION_ACTIONS.CONTINUE
+  | typeof CONDITION_ACTIONS.STOP_WORKFLOW
+  | typeof CONDITION_ACTIONS.RETRY;
 
 /** Policy for internal errors in any step phase: pre-condition, prompt/harness, end-condition, or script execution. */
 export interface ErrorBehavior {
@@ -174,20 +177,14 @@ export type WorktreeConfig =
       setup?: string;
     };
 
-/** Settings-tier worktree default, including managed-only retention. */
-export interface WorktreeDefaultConfig {
-  mode: import("./DashboardConstants").WorktreeMode;
-  branch?: string;
-  base?: string;
-  setup?: string;
-  keep?: boolean;
-  merge?: boolean;
-}
+/** Settings defaults reuse the same shorthand/object forms as workflow worktree. */
+export type WorktreeDefaultConfig = WorktreeConfig;
+export type WorktreeObjectConfig = Extract<WorktreeConfig, { mode: string }>;
 
 /** Worktree settings plus the tier that supplied the value for one run. */
 export interface WorktreeResolution {
-  /** Absent means the resolved mode is `none`. */
-  config?: WorktreeDefaultConfig;
+  /** Absent means the working checkout is used. */
+  config?: WorktreeObjectConfig;
   origin: WorktreeConfigOrigin;
 }
 

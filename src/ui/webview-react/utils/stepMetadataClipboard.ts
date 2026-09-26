@@ -259,13 +259,14 @@ export function buildStepMetadataClipboardText({
         }
       : undefined;
   const contextWindow = completedContext ?? liveContextWindow;
-  const hideCost = fullGlobalSettings?.settings.ui.hideCost === true;
+  const showCostEstimates =
+    fullGlobalSettings?.settings.ui.showCostEstimates !== false;
   runtimeLines.push(
     ...buildAttemptTokenTooltipLines({
       contextWindow,
       harness: latestOutput?.structured?.metadata.harness,
       attemptTokens: latestOutput?.tokens,
-      hideCost,
+      showCostEstimates,
     })
   );
 

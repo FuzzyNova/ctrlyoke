@@ -284,7 +284,7 @@ const EditorSectionInner: React.FC = () => {
             </button>
           )}
           {!isExternallyManaged &&
-            globalSettings.stepColorMode !== STEP_COLOR_MODES.OFF && (
+            globalSettings.stepColorMode !== STEP_COLOR_MODES.NONE && (
               <StepColorQuickPicker />
             )}
           <span

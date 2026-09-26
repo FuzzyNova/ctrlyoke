@@ -116,7 +116,14 @@ describe("ParallelGroupPanel", () => {
     expect(screen.getByText("first")).toBeInTheDocument();
     expect(screen.getByText("second")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("checkbox", { name: "fail fast" }));
+    const failFast = screen.getByRole("checkbox", {
+      name: "Fail Fast, property steps[].failFast",
+    });
+    expect(failFast).toHaveAttribute(
+      "title",
+      expect.stringContaining("property: steps[].failFast")
+    );
+    fireEvent.click(failFast);
     expect(onFailFastChange).toHaveBeenCalledWith(group, false);
   });
 
@@ -131,7 +138,7 @@ describe("ParallelGroupPanel", () => {
         retryStates={{}}
         liveContextWindow={{}}
         canSetStartPosition
-        stepColorMode={STEP_COLOR_MODES.OFF}
+        stepColorMode={STEP_COLOR_MODES.NONE}
         harnessColorSettings={{ byHarness: {}, script: "#808080" }}
         getLatestOutput={() => null}
         getStepHarnessModel={() => ({

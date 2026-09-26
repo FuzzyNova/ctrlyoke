@@ -8,7 +8,10 @@ import { CustomSelect } from "../../shared/CustomSelect";
 import { PermissionListEditor } from "../../shared/PermissionListEditor";
 import { SettingInputRow } from "../../shared/SettingInputRow";
 import { PermissionCapabilitySummary } from "../../shared/PermissionCapabilitySummary";
-import { PERMISSION_MODE_OPTIONS } from "../../shared/permissionUtils";
+import {
+  PERMISSION_MODE_OPTIONS_META,
+  toSelectOptions,
+} from "@root/types/SchemaUiMetadata";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -51,7 +54,11 @@ export function DefaultsPermissionsPage({
           id="defaults-permission-mode"
           value={toolPermissions.mode}
           onChange={(v) => onUpdate("defaults.toolPermissions.mode", v)}
-          options={PERMISSION_MODE_OPTIONS}
+          schemaPath="defaults.toolPermissions.mode"
+          options={toSelectOptions(
+            PERMISSION_MODE_OPTIONS_META,
+            "defaults.toolPermissions.mode"
+          )}
         />
       </SettingInputRow>
       <SettingInputRow

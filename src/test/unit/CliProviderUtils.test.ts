@@ -93,12 +93,12 @@ suite("CliProviderUtils", () => {
   test("appends every effective approved external root after workspace roots", () => {
     const primaryRoot = path.join(os.tmpdir(), "ctrlyoke-workspace-primary");
     const externalRoot = path.join(os.tmpdir(), "ctrlyoke-external-root");
-    // User-scope allowedExternalFileRoots is trusted immediately (no
+    // User-scope trustedExternalRoots is trusted immediately (no
     // trust-store decision needed) — read via getScoped(..., "user"), which
     // only sees the user/workspace backends, not the CLI overlay.
     configService.setUserBackend({
       getAll: () => ({
-        permissions: { allowedExternalFileRoots: [externalRoot] },
+        permissions: { trustedExternalRoots: [externalRoot] },
       }),
       set: async () => {},
     });

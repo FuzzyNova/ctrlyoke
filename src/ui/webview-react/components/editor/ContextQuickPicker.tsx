@@ -132,6 +132,7 @@ export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
           <CustomSelect
             value={resumeSessionValue}
             onChange={handleResumeSessionChange}
+            schemaPath="resumeSession"
             options={[...getResumeSessionOptions(defaultResumeSessionLabel)]}
             dropdownMaxHeight="200px"
             inline={true}

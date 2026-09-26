@@ -1,16 +1,6 @@
 import type { ToolPermissionsOverride } from "../../types/messages";
 import { PERMISSION_MODES } from "@root/types/DashboardConstants";
-
-/** Options for the permission mode selector (used by both WorkflowPropertiesPanel and PropertiesDrawer) */
-export const PERMISSION_MODE_OPTIONS = [
-  {
-    value: PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
-    label: "Dangerously Allow All (yolo)",
-  },
-  { value: PERMISSION_MODES.ALLOW_ALL, label: "Allow All" },
-  { value: PERMISSION_MODES.CUSTOM, label: "Custom" },
-  { value: PERMISSION_MODES.NONE, label: "None" },
-];
+import { PERMISSION_MODE_OPTIONS_META } from "@root/types/SchemaUiMetadata";
 
 /**
  * Build the "Default (X)" label for the Permissions dropdown in PropertiesDrawer.
@@ -22,19 +12,9 @@ export function buildPermissionsDefaultLabel(
   globalValue?: ToolPermissionsOverride | null
 ): string {
   const effective = workflowValue !== undefined ? workflowValue : globalValue;
-  if (
-    effective === null ||
-    effective === undefined ||
-    effective.mode === PERMISSION_MODES.NONE
-  ) {
-    return "Inherit (none)";
-  }
-  if (effective.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)
-    return "Inherit (dangerouslyAllowAll)";
-  if (effective.mode === PERMISSION_MODES.ALLOW_ALL)
-    return "Inherit (allowAll)";
-  const count =
-    (effective.allowedTools?.length ?? 0) +
-    (effective.deniedTools?.length ?? 0);
-  return `Inherit (custom, ${count} rule${count !== 1 ? "s" : ""})`;
+  const mode =
+    effective === null || effective === undefined
+      ? PERMISSION_MODES.NONE
+      : (effective.mode ?? PERMISSION_MODES.ALLOW_ALL);
+  return `Inherit (${PERMISSION_MODE_OPTIONS_META[mode].label})`;
 }

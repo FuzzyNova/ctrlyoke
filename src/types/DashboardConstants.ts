@@ -306,7 +306,7 @@ export const MESSAGE_TYPES = {
   GET_CONFIG: "getConfig", // Webview -> Extension: Request config value
   UPDATE_CONFIG: "updateConfig", // Webview -> Extension: Update config value
   CONFIG_VALUE: "configValue", // Extension -> Webview: Send config value
-  BROWSE_AND_ADD_EXTERNAL_ROOT: "browseAndAddExternalRoot", // Webview -> Extension: { scope } OS folder picker, appends result to permissions.allowedExternalFileRoots for that scope
+  BROWSE_AND_ADD_EXTERNAL_ROOT: "browseAndAddExternalRoot", // Webview -> Extension: { scope } OS folder picker, appends result to permissions.trustedExternalRoots for that scope
   UPDATE_EXTERNAL_ROOT_DECISION: "updateExternalRootDecision", // Webview -> Extension: change a workspace-scope external-root trust decision
   DISABLE_STATUS_LINE_TRACKING: "disableStatusLineTracking", // Webview -> Extension: disable one harness's global statusline tracking
   SET_STATUS_LINE_FORMAT_MODE: "setStatusLineFormatMode", // Webview -> Extension: set shared/per-harness statusline format mode
@@ -670,7 +670,7 @@ export const LICENSE_ACTIONS = {
 export const NOTIFICATION_EVENT_MODES = {
   ALL: "all",
   FAILURES_ONLY: "failuresOnly",
-  NEVER: "never",
+  NONE: "none",
 } as const;
 
 export type NotificationEventMode =
@@ -862,7 +862,7 @@ export const TOAST_LEVEL_MODES = {
   ALL: "all",
   WARNING_AND_ERROR: "warningAndError",
   ERROR_ONLY: "errorOnly",
-  OFF: "off",
+  NONE: "none",
 } as const;
 
 export type ToastLevelMode =
@@ -872,7 +872,7 @@ export function meetsToastLevel(
   severity: UserFeedbackSeverity,
   level: ToastLevelMode
 ): boolean {
-  if (level === TOAST_LEVEL_MODES.OFF) return false;
+  if (level === TOAST_LEVEL_MODES.NONE) return false;
   if (level === TOAST_LEVEL_MODES.ALL) return true;
   if (level === TOAST_LEVEL_MODES.ERROR_ONLY) {
     return severity === USER_FEEDBACK_SEVERITY.ERROR;
@@ -1574,7 +1574,7 @@ export function formatContextResolutionFailureMessage(
 ): string {
   const count = diagnostics.length;
   return [
-    `Step blocked by execution.strictContextResolution="fail" — ${count} reference${
+    `Step blocked by execution.contextResolutionFailure="fail" — ${count} reference${
       count === 1 ? "" : "s"
     } did not resolve:`,
     ...diagnostics.map((diagnostic) => `  • ${diagnostic.message}`),
@@ -1612,6 +1612,11 @@ export const SETTING_PATHS = {
   WORKTREES: "worktrees",
   COORDINATION: "coordination",
   STORAGE_RUN_HISTORY_LOCATION: "storage.runHistoryLocation",
+  PERMISSIONS_TRUSTED_EXTERNAL_ROOTS: "permissions.trustedExternalRoots",
+  EXECUTION_CONTEXT_RESOLUTION_FAILURE: "execution.contextResolutionFailure",
+  UI_SHOW_COST_ESTIMATES: "ui.showCostEstimates",
+  SERVER_AUTO_START: "server.autoStart",
+  COMMIT_SYSTEM_PROMPT: "commit.systemPrompt",
   PERMISSIONS_STATUS_LINE_TRACKING: "permissions.statusLineTracking",
   PERMISSIONS_STATUS_LINE_TRACKING_USE_DIFFERENT_FORMAT_PER_HARNESS:
     "permissions.statusLineTracking.useDifferentFormatPerHarness",
@@ -1680,7 +1685,7 @@ export const HARNESS_CHART_COLORS: Record<HarnessId, string> = {
 
 /** Modes controlling how workflow steps receive identity colors. */
 export const STEP_COLOR_MODES = {
-  OFF: "off",
+  NONE: "none",
   HARNESS: "harness",
   UNIQUE: "unique",
 } as const;
@@ -1788,7 +1793,6 @@ export type HookEvent =
 
 export interface HookEventMetadata {
   event: HookEvent;
-  label: string;
   description: string;
 }
 
@@ -1805,44 +1809,36 @@ export const HOOK_EVENT_ORDER: HookEvent[] = [
 
 export const HOOK_EVENT_METADATA: HookEventMetadata[] = [
   {
-    event: "stop",
-    label: "Stop",
+    event: HOOK_EVENT_NAMES.STOP,
     description: "Fires when the AI agent finishes responding.",
   },
   {
-    event: "sessionStart",
-    label: "Session Start",
+    event: HOOK_EVENT_NAMES.SESSION_START,
     description: "Fires when a new AI session is created.",
   },
   {
-    event: "preToolUse",
-    label: "Pre Tool Use",
+    event: HOOK_EVENT_NAMES.PRE_TOOL_USE,
     description: "Fires before the AI invokes a tool.",
   },
   {
-    event: "postToolUse",
-    label: "Post Tool Use",
+    event: HOOK_EVENT_NAMES.POST_TOOL_USE,
     description: "Fires after the AI receives the result of a tool call.",
   },
   {
-    event: "userPromptSubmit",
-    label: "User Prompt Submit",
+    event: HOOK_EVENT_NAMES.USER_PROMPT_SUBMIT,
     description: "Fires when a user prompt is submitted to the AI.",
   },
   {
     event: HOOK_EVENT_NAMES.PERMISSION_REQUEST,
-    label: "Permission Request",
     description: "Fires when the AI requests permission to perform an action.",
   },
   {
-    event: "notification",
-    label: "Notification",
+    event: HOOK_EVENT_NAMES.NOTIFICATION,
     description:
       "Fires when the harness displays a notification, including prompts that may require user input.",
   },
   {
-    event: "error",
-    label: "Error",
+    event: HOOK_EVENT_NAMES.ERROR,
     description: "Fires when the harness reports a session-level error.",
   },
 ];
@@ -1854,7 +1850,6 @@ export const HOOK_EVENT_METADATA: HookEventMetadata[] = [
 // WORKTREE MODES - Workflow execution checkout selection
 // ============================================================================
 export const WORKTREE_MODES = {
-  NONE: "none",
   MANAGED: "managed",
   NAMED: "named",
 } as const;
@@ -2051,22 +2046,21 @@ export const CTRLYOKE_MCP_MODES = {
 export type CtrlYokeMcpMode =
   (typeof CTRLYOKE_MCP_MODES)[keyof typeof CTRLYOKE_MCP_MODES];
 
-export const EXECUTION_MODE_OPTIONS = [
-  { value: EXECUTION_MODES.INTERACTIVE, label: "Interactive" },
-  { value: EXECUTION_MODES.HEADLESS, label: "Headless" },
-];
-
-export const WORKTREE_MODE_OPTIONS = [
-  { value: WORKTREE_MODES.NONE, label: "None" },
-  { value: WORKTREE_MODES.MANAGED, label: "Managed" },
-  { value: WORKTREE_MODES.NAMED, label: "Named" },
-];
+/** Selector-only choice for the workflow value `worktree: false`. */
+export const WORKTREE_MODE_SELECTIONS = {
+  NONE: "none",
+  MANAGED: "managed",
+  NAMED: "named",
+} as const;
 
 export const EXECUTION_MODE_HELP_TEXT =
   "Interactive spawns a live terminal you can steer; headless runs in the background with output in the Output panel. Pre- and end-condition scripts always run headless. With inject mode on, inserting a headless step between interactive steps retires and respawns the PTY, so TUI continuity is lost across that boundary.";
 
-export const WORKTREE_MODE_HELP_TEXT =
-  "None runs in your working checkout. Managed creates a throw-away worktree and branch per run and removes the directory when the workflow completes, leaving the branch for review — pick it for isolated runs you will not follow up on. Named targets a persistent worktree you own, which ctrlyoke never commits, merges, or removes — pick it for conversational workflows you will append to. Worktrees are workflow-level and do not apply to individual prompts.";
+export const TRUSTED_ROOTS_MODES = {
+  INHERIT: "inherit",
+  NONE: "none",
+  CUSTOM: "custom",
+} as const;
 
 export const WORKTREE_KEEP_HELP_TEXT =
   "Keeps the managed worktree directory after the run instead of removing it. Without it, appending a follow-up prompt recreates the directory from the branch — ignored files such as `node_modules` are gone and the setup command runs again, so a long setup pays that cost on every append. Removing the directory also ends filesystem undo for that run.";
@@ -2495,6 +2489,26 @@ export const TERMINAL_MOBILE_CONTROL_BAR = {
   NEVER: "never",
 } as const;
 
+/** Codex sandbox permission levels accepted by settings and Codex CLI. */
+export const CODEX_SANDBOX_MODES = {
+  READ_ONLY: "read-only",
+  WORKSPACE_WRITE: "workspace-write",
+  DANGER_FULL_ACCESS: "danger-full-access",
+} as const;
+
+export type CodexSandboxMode =
+  (typeof CODEX_SANDBOX_MODES)[keyof typeof CODEX_SANDBOX_MODES];
+
+/** Codex confirmation policy accepted by settings and Codex CLI. */
+export const CODEX_APPROVAL_POLICIES = {
+  UNTRUSTED: "untrusted",
+  ON_REQUEST: "on-request",
+  NEVER: "never",
+} as const;
+
+export type CodexApprovalPolicy =
+  (typeof CODEX_APPROVAL_POLICIES)[keyof typeof CODEX_APPROVAL_POLICIES];
+
 export type TerminalCursorStyle =
   (typeof TERMINAL_CURSOR_STYLES)[keyof typeof TERMINAL_CURSOR_STYLES];
 export type TerminalMobileControlBar =
@@ -2843,21 +2857,11 @@ export const COMPARE_SOURCES = {
 /** The compare source used when a script condition does not pin one. */
 export const DEFAULT_COMPARE_SOURCE = COMPARE_SOURCES.EXIT_CODE;
 
-/** Display labels for COMPARE_SOURCES values (script/endCondition/preCondition editors) */
-export const COMPARE_SOURCE_LABELS: Record<
-  (typeof COMPARE_SOURCES)[keyof typeof COMPARE_SOURCES],
-  string
-> = {
-  stdout: "Stdout",
-  stderr: "Stderr",
-  exitCode: "Exit code",
-};
-
 // ============================================================================
 // SCRIPT OPERATORS - how a script condition compares its source against
 // `expected`. Word tokens, never symbols: `operator: >=` is a YAML block-scalar
 // parse error and `operator: !=` silently parses to "" (it reads as a YAML tag),
-// so the symbols live only in SCRIPT_OPERATOR_LABELS for display.
+// so display symbols are held in SchemaUiMetadata.
 // ============================================================================
 export const SCRIPT_OPERATORS = {
   EQ: "eq",
@@ -2875,24 +2879,6 @@ export const SCRIPT_OPERATORS = {
 
 /** The operator used when a script condition does not pin one. */
 export const DEFAULT_SCRIPT_OPERATOR = SCRIPT_OPERATORS.EQ;
-
-/** Display labels for SCRIPT_OPERATORS values (script condition editors, verdicts). */
-export const SCRIPT_OPERATOR_LABELS: Record<
-  (typeof SCRIPT_OPERATORS)[keyof typeof SCRIPT_OPERATORS],
-  string
-> = {
-  eq: "==",
-  ne: "!=",
-  contains: "contains",
-  notContains: "does not contain",
-  gte: ">=",
-  gt: ">",
-  lte: "<=",
-  lt: "<",
-  matches: "matches regex",
-  isEmpty: "is empty",
-  isNotEmpty: "is not empty",
-};
 
 /**
  * Operators that compare text, so `ignoreCase` applies to them. Numeric,

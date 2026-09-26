@@ -311,7 +311,9 @@ describe("WorktreesSection", () => {
       />
     );
 
-    expect(screen.getByLabelText("Worktree root")).toBeDisabled();
+    expect(
+      screen.getByLabelText("Worktree root, property worktrees.root")
+    ).toBeDisabled();
     expect(screen.getByRole("status")).toHaveTextContent("C:/worktrees");
     expect(
       screen.getByText(/user-scoped and cannot be changed/i)

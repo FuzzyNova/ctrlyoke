@@ -1249,11 +1249,16 @@ export class WorkflowStartupPipeline {
     }
     const worktree = this.port.worktree.getActiveWorktree();
     if (!worktree) return;
+    const worktreeConfig = this.port.worktree.getResolution().config;
     this.port.worktree.manager.releaseRuntimeTrust(worktree);
     await this.port.worktree.manager
       .completeManagedRun(worktree, {
-        merge: this.port.worktree.getResolution().config?.merge === true,
-        keep: this.port.worktree.getResolution().config?.keep === true,
+        merge:
+          worktreeConfig?.mode === WORKTREE_MODES.MANAGED &&
+          worktreeConfig.merge === true,
+        keep:
+          worktreeConfig?.mode === WORKTREE_MODES.MANAGED &&
+          worktreeConfig.keep === true,
         artifactsClean: true,
       })
       .catch((settlementError) =>

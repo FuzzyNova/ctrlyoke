@@ -69,7 +69,16 @@ const RUN_FILES_PAGE = "run-files";
  * fields are documented through the sections that reference them.
  */
 const STRUCTURAL_WORKFLOW_DEFINITIONS = new Set([
+  "agent",
+  "errorBehaviorDefault",
+  "endConditionDefault",
+  "mcpServerEntry",
+  "preConditionDefault",
+  "priorContext",
+  "secrets",
+  "skills",
   "singleStepRoot",
+  "toolPermissions",
   "workflowStep",
 ]);
 
@@ -359,11 +368,44 @@ function firstSentence(text) {
 // Schema helpers
 // ---------------------------------------------------------------------------
 
-function resolvePointer(schema, pointer) {
-  if (!pointer.startsWith("#")) {
-    throw new Error(`Only local JSON pointers are supported: ${pointer}`);
+export function schemaForPointer(schema, pointer, siblingSchemas = {}) {
+  if (pointer.startsWith("#")) return schema;
+  const separator = pointer.indexOf("#");
+  const schemaFile = separator === -1 ? pointer : pointer.slice(0, separator);
+  const pointerSchema = siblingSchemas[schemaFile];
+  if (!pointerSchema) {
+    throw new Error(`Unknown sibling schema reference: ${pointer}`);
   }
-  return pointer
+  return pointerSchema;
+}
+
+export function qualifyLocalReferences(schema, schemaFile) {
+  if (Array.isArray(schema)) {
+    return schema.map((value) => qualifyLocalReferences(value, schemaFile));
+  }
+  if (!schema || typeof schema !== "object") return schema;
+  return Object.fromEntries(
+    Object.entries(schema).map(([key, value]) => [
+      key,
+      key === "$ref" && typeof value === "string" && value.startsWith("#")
+        ? `${schemaFile}${value}`
+        : qualifyLocalReferences(value, schemaFile),
+    ])
+  );
+}
+
+export function resolvePointer(schema, pointer, siblingSchemas = {}) {
+  const pointerSchema = schemaForPointer(schema, pointer, siblingSchemas);
+  const separator = pointer.indexOf("#");
+  const localPointer = pointer.startsWith("#")
+    ? pointer
+    : separator === -1
+      ? "#"
+      : pointer.slice(separator);
+  if (!localPointer.startsWith("#")) {
+    throw new Error(`Only JSON pointers are supported: ${pointer}`);
+  }
+  return localPointer
     .slice(1)
     .split("/")
     .filter(Boolean)
@@ -373,7 +415,34 @@ function resolvePointer(schema, pointer) {
         throw new Error(`Unresolvable schema pointer: ${pointer}`);
       }
       return node[key];
-    }, schema);
+    }, pointerSchema);
+}
+
+/** Resolve a schema node's reference chain, including refs into sibling schemas. */
+export function resolveSchemaRefs(rawSchema, schema, siblingSchemas = {}) {
+  let current = rawSchema;
+  let currentSchema = schema;
+  const seen = new Set();
+  while (current?.$ref) {
+    const ref = current.$ref;
+    if (seen.has(ref)) throw new Error(`Circular schema reference: ${ref}`);
+    seen.add(ref);
+    const separator = ref.indexOf("#");
+    const schemaFile = ref.startsWith("#")
+      ? undefined
+      : ref.slice(0, separator);
+    const resolvedSchema = schemaForPointer(currentSchema, ref, siblingSchemas);
+    const referenced = resolvePointer(currentSchema, ref, siblingSchemas);
+    const { $ref: _ref, ...siblings } = current;
+    current = {
+      ...(schemaFile
+        ? qualifyLocalReferences(referenced, schemaFile)
+        : referenced),
+      ...siblings,
+    };
+    currentSchema = resolvedSchema;
+  }
+  return current;
 }
 
 function isRemoved(schema) {
@@ -393,11 +462,13 @@ class SchemaRenderer {
    * @param {object} schema - root schema document
    * @param {string} page - page being rendered, for relative links
    * @param {Map<string, { label: string, page: string, anchor: string }>} refTargets
+   * @param {Record<string, object>} siblingSchemas
    */
-  constructor(schema, page, refTargets) {
+  constructor(schema, page, refTargets, siblingSchemas = {}) {
     this.schema = schema;
     this.page = page;
     this.refTargets = refTargets;
+    this.siblingSchemas = siblingSchemas;
     this.missingDescriptions = [];
     this.internalDescriptions = [];
   }
@@ -414,17 +485,8 @@ class SchemaRenderer {
 
   /** Inline every `$ref` that does not point at a documented section. */
   deref(schema) {
-    let current = schema;
-    const seen = new Set();
-    while (current.$ref && !this.refTargets.has(current.$ref)) {
-      if (seen.has(current.$ref)) {
-        throw new Error(`Circular schema reference: ${current.$ref}`);
-      }
-      seen.add(current.$ref);
-      const { $ref, ...siblings } = current;
-      current = { ...resolvePointer(this.schema, $ref), ...siblings };
-    }
-    return current;
+    if (this.refTargets.has(schema.$ref)) return schema;
+    return resolveSchemaRefs(schema, this.schema, this.siblingSchemas);
   }
 
   typeLabel(raw) {
@@ -858,7 +920,12 @@ export function loadSettingsDefaults() {
   return require(COMPILED_SETTINGS_PATH).CTRLYOKE_SETTINGS_DEFAULTS;
 }
 
-function buildSettingsPage(settingsSchema, defaults, workflowFieldAnchors) {
+function buildSettingsPage(
+  settingsSchema,
+  defaults,
+  workflowFieldAnchors,
+  workflowSchema
+) {
   const refTargets = new Map(
     Object.keys(settingsSchema.definitions ?? {}).map((name) => [
       `#/definitions/${name}`,
@@ -868,7 +935,8 @@ function buildSettingsPage(settingsSchema, defaults, workflowFieldAnchors) {
   const renderer = new SchemaRenderer(
     settingsSchema,
     SETTINGS_PAGE,
-    refTargets
+    refTargets,
+    { "workflow-schema.json": workflowSchema }
   );
   const partials = new Partials(SETTINGS_PAGE);
 
@@ -1171,7 +1239,8 @@ export function buildSchemaDocumentation({
       ...buildSettingsPage(
         settingsSchema,
         settingsDefaults,
-        workflowFieldAnchors(workflowSchema)
+        workflowFieldAnchors(workflowSchema),
+        workflowSchema
       ),
     },
     ...WORKFLOW_PAGES.map((pageConfig) => ({

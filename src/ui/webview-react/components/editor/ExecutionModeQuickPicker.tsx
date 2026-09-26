@@ -10,11 +10,14 @@ import {
   INHERIT_DEFAULT_OPTION,
   FOOTER_PICKERS,
   EXECUTION_MODES,
-  EXECUTION_MODE_OPTIONS,
   EXECUTION_MODE_HELP_TEXT,
   type ExecutionMode,
 } from "@root/types/DashboardConstants";
 import { Icon } from "../shared/Icon";
+import {
+  EXECUTION_MODE_OPTIONS_META,
+  toSelectOptions,
+} from "@root/types/SchemaUiMetadata";
 
 const POPUP_MIN_WIDTH = 200;
 
@@ -57,12 +60,10 @@ export const ExecutionModeQuickPicker: React.FC<
       : "codicon-terminal";
 
   const resolvedLabel =
-    EXECUTION_MODE_OPTIONS.find((o) => o.value === resolvedMode)?.label ??
-    resolvedMode;
+    EXECUTION_MODE_OPTIONS_META[resolvedMode]?.label ?? resolvedMode;
   const defaultLabel = `Inherit (${resolvedLabel})`;
   const activeLabel = isOverride
-    ? (EXECUTION_MODE_OPTIONS.find((o) => o.value === activeMode)?.label ??
-      activeMode)
+    ? (EXECUTION_MODE_OPTIONS_META[activeMode]?.label ?? activeMode)
     : defaultLabel;
   const tooltip = isOverride
     ? `Execution mode override: ${activeLabel}\n${EXECUTION_MODE_HELP_TEXT}`
@@ -119,6 +120,7 @@ export const ExecutionModeQuickPicker: React.FC<
             </h3>
           </div>
           <CustomSelect
+            schemaPath="executionMode"
             value={properties.executionMode ?? INHERIT_DEFAULT_OPTION}
             onChange={(v) => {
               setProperty(
@@ -128,8 +130,12 @@ export const ExecutionModeQuickPicker: React.FC<
               setFooterOpenPicker(null);
             }}
             options={[
-              { value: INHERIT_DEFAULT_OPTION, label: defaultLabel },
-              ...EXECUTION_MODE_OPTIONS,
+              {
+                value: INHERIT_DEFAULT_OPTION,
+                label: defaultLabel,
+                pseudo: { omit: true },
+              },
+              ...toSelectOptions(EXECUTION_MODE_OPTIONS_META, "executionMode"),
             ]}
             dropdownMaxHeight="200px"
             inline={true}

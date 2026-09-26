@@ -1060,7 +1060,7 @@ describe("NOTIFICATION_EVENT", () => {
           browser: { mode: "connectedOnly" },
           events: {
             workflowComplete: "all",
-            promptComplete: "never",
+            promptComplete: "none",
           },
           includeWorkflowName: true,
           includePromptName: true,

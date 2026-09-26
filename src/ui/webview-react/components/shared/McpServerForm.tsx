@@ -1,6 +1,8 @@
 import { useId } from "react";
 import type { McpServerConfig } from "@root/types/CtrlYokeTypes";
 import { MCP_FORM_TABS } from "@root/types/DashboardConstants";
+import { MCP_TRANSPORT_OPTIONS_META, toSelectOptions } from "@root/types/SchemaUiMetadata";
+import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
 import { CustomSelect } from "./CustomSelect";
 import { KeyValueRowsEditor } from "./KeyValueRowsEditor";
 
@@ -8,12 +10,8 @@ export { findLiteralCredentialEnvKeys } from "./KeyValueMapHelpers";
 
 export type McpServerFormTab =
   (typeof MCP_FORM_TABS)[keyof typeof MCP_FORM_TABS];
-export type McpServerTransport = "streamable-http" | "sse";
-
-const MCP_TRANSPORT_OPTIONS = [
-  { label: "streamable-http", value: "streamable-http" },
-  { label: "sse", value: "sse" },
-] as const;
+export type McpServerTransport =
+  (typeof MCP_TRANSPORT_OPTIONS_META)[keyof typeof MCP_TRANSPORT_OPTIONS_META]["value"];
 
 export interface McpServerFormState {
   id: string;
@@ -176,6 +174,7 @@ export interface McpServerFormProps {
   subtitle?: string;
   autoFocus?: boolean;
   className?: string;
+  schemaPath?: string;
 }
 
 export function McpServerForm({
@@ -189,6 +188,7 @@ export function McpServerForm({
   subtitle,
   autoFocus = false,
   className = "",
+  schemaPath = "mcpServers[]",
 }: McpServerFormProps) {
   const isValid = isMcpServerFormValid(value);
   const autoApproveId = useId();
@@ -211,7 +211,8 @@ export function McpServerForm({
       <input
         type="text"
         placeholder="id (required)"
-        aria-label="Server ID"
+        aria-label={schemaAriaLabel("Server ID", `${schemaPath}.id`)}
+        title={schemaTitle(`${schemaPath}.id`)}
         value={value.id}
         onChange={(event) => onChange({ ...value, id: event.target.value })}
         className="w-full rounded border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-none"
@@ -221,7 +222,8 @@ export function McpServerForm({
       <input
         type="text"
         placeholder="description (optional)"
-        aria-label="Description"
+        aria-label={schemaAriaLabel("Description", `${schemaPath}.description`)}
+        title={schemaTitle(`${schemaPath}.description`)}
         value={value.description}
         onChange={(event) =>
           onChange({ ...value, description: event.target.value })
@@ -251,7 +253,8 @@ export function McpServerForm({
           <input
             type="text"
             placeholder="command (e.g. node or npx)"
-            aria-label="Command"
+            aria-label={schemaAriaLabel("Command", `${schemaPath}.command`)}
+            title={schemaTitle(`${schemaPath}.command`)}
             value={value.command}
             onChange={(event) =>
               onChange({ ...value, command: event.target.value })
@@ -261,7 +264,8 @@ export function McpServerForm({
           <input
             type="text"
             placeholder="args (space-separated)"
-            aria-label="Arguments"
+            aria-label={schemaAriaLabel("Arguments", `${schemaPath}.args`)}
+            title={schemaTitle(`${schemaPath}.args`)}
             value={value.args}
             onChange={(event) =>
               onChange({ ...value, args: event.target.value })
@@ -270,8 +274,9 @@ export function McpServerForm({
           />
           <KeyValueRowsEditor
             id="mcp-server-env"
-            label="env"
+            label="Environment"
             ariaLabel="Environment variables"
+            schemaPath={`${schemaPath}.env`}
             value={value.env}
             onChange={(env) => onChange({ ...value, env })}
             keyKind="env"
@@ -284,7 +289,8 @@ export function McpServerForm({
           <input
             type="text"
             placeholder="url (e.g. https://mcp.example.com)"
-            aria-label="Server URL"
+            aria-label={schemaAriaLabel("Server URL", `${schemaPath}.url`)}
+            title={schemaTitle(`${schemaPath}.url`)}
             value={value.url}
             onChange={(event) =>
               onChange({ ...value, url: event.target.value })
@@ -299,14 +305,15 @@ export function McpServerForm({
                 transport: transport as McpServerTransport,
               })
             }
-            options={[...MCP_TRANSPORT_OPTIONS]}
-            triggerAriaLabel="Choose remote transport"
+            options={toSelectOptions(MCP_TRANSPORT_OPTIONS_META, `${schemaPath}.transport`)}
             triggerTitle="Choose the transport used by the remote MCP server"
+            schemaPath={`${schemaPath}.transport`}
           />
           <KeyValueRowsEditor
             id="mcp-server-headers"
             label="headers"
             ariaLabel="Headers"
+            schemaPath={`${schemaPath}.headers`}
             value={value.headers}
             onChange={(headers) => onChange({ ...value, headers })}
             keyKind="header"
@@ -318,6 +325,7 @@ export function McpServerForm({
 
       <label
         htmlFor={`${autoApproveId}-tools`}
+        title={schemaTitle(`${schemaPath}.autoApprove`)}
         className="flex flex-col gap-0.5"
       >
         <span className="text-xxs text-description-fg">
@@ -325,7 +333,8 @@ export function McpServerForm({
         </span>
         <textarea
           id={`${autoApproveId}-tools`}
-          aria-label="Auto-approve tools"
+          aria-label={schemaAriaLabel("Auto-approve tools", `${schemaPath}.autoApprove`)}
+          title={schemaTitle(`${schemaPath}.autoApprove`)}
           placeholder="tool_name"
           value={
             Array.isArray(value.autoApprove) ? value.autoApprove.join("\n") : ""
@@ -347,12 +356,14 @@ export function McpServerForm({
 
       <label
         htmlFor={autoApproveId}
+        title={schemaTitle(`${schemaPath}.autoApprove`)}
         className="flex cursor-pointer items-center gap-1.5"
       >
         <input
           id={autoApproveId}
           type="checkbox"
-          aria-label="Auto-approve all tools"
+          aria-label={schemaAriaLabel("Auto-approve all tools", `${schemaPath}.autoApprove`)}
+          title={schemaTitle(`${schemaPath}.autoApprove`)}
           checked={value.autoApprove === true}
           onChange={(event) =>
             onChange({

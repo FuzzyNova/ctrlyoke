@@ -331,7 +331,7 @@ export function GlobalSettingsDrawer() {
               {fullSettings &&
                 effectiveActiveTab === GLOBAL_SETTINGS_TABS.STATS && (
                   <StatsUsageSection
-                    hideCost={fullSettings.settings.ui.hideCost}
+                    showCostEstimates={fullSettings.settings.ui.showCostEstimates}
                     isNarrow={isNarrow}
                     settings={fullSettings}
                     {...sectionProps}

@@ -1,9 +1,11 @@
 import React, { useCallback, useMemo } from "react";
 import {
   INHERIT_DEFAULT_OPTION,
-  HOOK_EVENT_METADATA,
+  HOOK_EVENT_NAMES,
   NONE_OPTION,
 } from "@root/types/DashboardConstants";
+import { HOOK_EVENT_OPTIONS_META, toSelectOptions } from "@root/types/SchemaUiMetadata";
+import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
 import type { UserHookConfig } from "@root/types/CtrlYokeTypes";
 import type { CompatibilityDiagnostic } from "@root/types/CompatibilityTypes";
 import { toFieldDiagnostic } from "@utils/compatibilityDiagnostics";
@@ -24,6 +26,8 @@ interface HooksEditorProps {
   showDefault?: boolean;
   /** Compatibility findings for configured hook events. */
   diagnostics?: readonly CompatibilityDiagnostic[];
+  /** File-relative path to this hooks array. */
+  schemaPath?: string;
 }
 
 type EditorMode = typeof INHERIT_DEFAULT_OPTION | typeof NONE_OPTION | "custom";
@@ -41,6 +45,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
   inheritedValue = [],
   showDefault = true,
   diagnostics = [],
+  schemaPath = "hooks",
 }) => {
   const mode = getMode(value);
   const hooks = useMemo<UserHookConfig[]>(
@@ -56,13 +61,13 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
     (newMode: EditorMode) => {
       if (newMode === INHERIT_DEFAULT_OPTION) onChange(undefined);
       else if (newMode === NONE_OPTION) onChange(null);
-      else onChange([{ event: "stop", command: "" }]);
+      else onChange([{ event: HOOK_EVENT_NAMES.STOP, command: "" }]);
     },
     [onChange]
   );
 
   const handleAddHook = useCallback(() => {
-    onChange([...hooks, { event: "stop", command: "" }]);
+    onChange([...hooks, { event: HOOK_EVENT_NAMES.STOP, command: "" }]);
   }, [hooks, onChange]);
 
   const handleRemoveHook = useCallback(
@@ -173,11 +178,14 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
                 <label
                   htmlFor={`hook-${index}-event`}
                   className="text-xxs text-description-fg"
+                  title={schemaTitle(`${schemaPath}[].event`)}
                 >
                   Event
                 </label>
                 <select
                   id={`hook-${index}-event`}
+                  aria-label={schemaAriaLabel("Event", `${schemaPath}[].event`)}
+                  title={schemaTitle(`${schemaPath}[].event`)}
                   value={hook.event}
                   onChange={(e) =>
                     handleUpdateHook(index, {
@@ -186,9 +194,9 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
                   }
                   className="h-7 w-full min-w-0 rounded border border-input-border bg-input-bg px-1 py-0.5 text-xs text-input-fg"
                 >
-                  {HOOK_EVENT_METADATA.map((m) => (
-                    <option key={m.event} value={m.event}>
-                      {m.label}
+                  {toSelectOptions(HOOK_EVENT_OPTIONS_META, `${schemaPath}[].event`).map((option) => (
+                    <option key={option.value} value={option.value} aria-label={schemaAriaLabel(option.label, `${schemaPath}[].event`, option.value)} title={schemaTitle(`${schemaPath}[].event`, option.value)}>
+                      {option.label}
                     </option>
                   ))}
                 </select>
@@ -196,6 +204,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
               <div className="flex min-w-0 flex-col gap-1">
                 <label
                   htmlFor={`hook-${index}-timeout-sec`}
+                  title={schemaTitle(`${schemaPath}[].timeoutSec`)}
                   className="text-xxs text-description-fg"
                 >
                   Timeout (seconds)
@@ -203,6 +212,8 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
                 <input
                   type="number"
                   id={`hook-${index}-timeout-sec`}
+                  aria-label={schemaAriaLabel("Timeout (seconds)", `${schemaPath}[].timeoutSec`)}
+                  title={schemaTitle(`${schemaPath}[].timeoutSec`)}
                   value={hook.timeoutSec ?? ""}
                   min={0}
                   onChange={(e) => {
@@ -245,6 +256,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
               id={`hook-${index}-env`}
               label="Environment"
               ariaLabel={`hook-${index}-env`}
+              schemaPath={`${schemaPath}[].env`}
               value={hook.env ?? {}}
               onChange={(env) =>
                 handleUpdateHook(index, {

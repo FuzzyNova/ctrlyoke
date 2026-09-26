@@ -24,13 +24,13 @@ const DECISION_KEY_SEPARATOR = "␟";
 
 /**
  * User-local store of trust decisions for workspace-scoped
- * `permissions.allowedExternalFileRoots` entries. Never written to workspace
+ * `permissions.trustedExternalRoots` entries. Never written to workspace
  * or repository config — a workspace only *requests* external roots; whether
  * they actually take effect is decided here, per canonical root and
  * workspace identity, so a compromised/shared workspace config cannot widen
  * filesystem access without a local, reviewed decision.
  *
- * User-scope `allowedExternalFileRoots` entries do not go through this store
+ * User-scope `trustedExternalRoots` entries do not go through this store
  * at all (the user already made that trust decision by editing their own
  * settings) — see `ConfigurationUtils.getEffectiveApprovedExternalFileRoots`.
  *

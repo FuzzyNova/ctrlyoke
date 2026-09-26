@@ -1528,6 +1528,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         <div className="flex flex-col flex-1 min-h-0 overflow-auto px-3 py-3 bg-editor-bg">
           <ScriptConditionEditor
             variant="scriptStep"
+            schemaPath="steps[]"
             value={{
               script: scriptCommand,
               timeout: scriptTimeout,
@@ -1547,7 +1548,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             idPrefix="script-step"
           />
           <div className="mt-4 space-y-4 rounded border border-panel-border p-3">
-            {globalSettings.stepColorMode !== STEP_COLOR_MODES.OFF && (
+            {globalSettings.stepColorMode !== STEP_COLOR_MODES.NONE && (
               <StepColorField idPrefix="script-step" />
             )}
             <SecretGrantsEditor
@@ -1574,10 +1575,11 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
                       setProperty("errorBehavior", undefined);
                     } else {
                       setProperty("errorBehavior", {
-                        onError: "stop",
+                        onError: CONDITION_ACTIONS.STOP_WORKFLOW,
                       } as ErrorBehavior);
                     }
                   }}
+                  schemaPath="errorBehavior"
                   options={scriptErrorBehaviorOptions}
                 />
               </div>
@@ -1586,6 +1588,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
                   value={properties.errorBehavior}
                   onChange={(updated) => setProperty("errorBehavior", updated)}
                   idPrefix="script-step-error"
+                  schemaPath="errorBehavior"
                 />
               )}
             </div>

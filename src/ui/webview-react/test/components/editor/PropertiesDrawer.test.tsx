@@ -60,9 +60,15 @@ function renderPermissionsDrawer() {
 }
 
 function chooseExecutionMode(label: string): void {
-  const current = screen.getByRole("button", { name: "Execution Mode" });
+  const current = screen.getByRole("button", { name: /^Execution Mode/ });
   fireEvent.click(current);
-  fireEvent.click(screen.getByRole("button", { name: label }));
+  const optionNames: Record<string, string> = {
+    Interactive: "Interactive, executionMode: interactive",
+    Headless: "Headless, executionMode: headless",
+    "Inherit (Interactive)": "Inherit (Interactive), omit executionMode",
+    "Inherit (Headless)": "Inherit (Headless), omit executionMode",
+  };
+  fireEvent.click(screen.getByRole("button", { name: optionNames[label] }));
 }
 
 describe("PropertiesDrawer landmark", () => {
@@ -95,7 +101,7 @@ describe("PropertiesDrawer execution mode", () => {
     renderHarnessDrawer();
 
     expect(
-      screen.getByRole("button", { name: "Execution Mode" })
+      screen.getByRole("button", { name: /^Execution Mode/ })
     ).toHaveTextContent("Inherit (Headless)");
     expect(screen.queryByText("Worktree")).not.toBeInTheDocument();
 
@@ -123,7 +129,7 @@ describe("PropertiesDrawer execution mode", () => {
     renderHarnessDrawer();
 
     expect(
-      screen.getByRole("button", { name: "Execution Mode" })
+      screen.getByRole("button", { name: /^Execution Mode/ })
     ).toHaveTextContent("Inherit (Interactive)");
 
     act(() => {
@@ -131,7 +137,7 @@ describe("PropertiesDrawer execution mode", () => {
     });
 
     expect(
-      screen.getByRole("button", { name: "Execution Mode" })
+      screen.getByRole("button", { name: /^Execution Mode/ })
     ).toHaveTextContent("Inherit (Headless)");
   });
 
@@ -151,7 +157,7 @@ describe("PropertiesDrawer execution mode", () => {
   it("exposes the headless condition and PTY continuity warnings in the tooltip", () => {
     renderHarnessDrawer();
 
-    const label = screen.getByText("Execution Mode");
+    const label = screen.getByText("Execution Mode", { selector: "label" });
     expect(label).toHaveAttribute(
       "title",
       expect.stringContaining("always run headless")
@@ -168,7 +174,7 @@ describe("PropertiesDrawer execution mode", () => {
       .updateGlobalSetting("stepColorMode", STEP_COLOR_MODES.HARNESS);
     renderHarnessDrawer();
 
-    const color = screen.getByLabelText("Step color");
+    const color = screen.getByLabelText(/^Step Color, color:/);
     const reset = screen.getByRole("button", {
       name: "Reset step color to inherit",
     });
@@ -186,10 +192,12 @@ describe("PropertiesDrawer execution mode", () => {
   it("hides the step color control when step colors are off", () => {
     useSettingsStore
       .getState()
-      .updateGlobalSetting("stepColorMode", STEP_COLOR_MODES.OFF);
+      .updateGlobalSetting("stepColorMode", STEP_COLOR_MODES.NONE);
     renderHarnessDrawer();
 
-    expect(screen.queryByLabelText("Step color")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(/^Step Color, color:/)
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -293,9 +301,14 @@ describe("PropertiesDrawer resume session", () => {
   }
 
   function chooseResumeSession(label: string): void {
-    const current = screen.getByRole("button", { name: "Resume Session" });
+    const current = screen.getByRole("button", { name: /^Resume Session/ });
     fireEvent.click(current);
-    fireEvent.click(screen.getByRole("button", { name: label }));
+    const optionNames: Record<string, string> = {
+      Resume: "Resume, resumeSession: true",
+      "New Session": "New Session, resumeSession: false",
+      "Inherit (Resume)": "Inherit (Resume), omit resumeSession",
+    };
+    fireEvent.click(screen.getByRole("button", { name: optionNames[label] }));
   }
 
   it("clears the session ID when the override falls back to inherit", () => {
@@ -305,13 +318,13 @@ describe("PropertiesDrawer resume session", () => {
     useSettingsStore.getState().updateGlobalSetting("resumeSession", true);
     renderContextDrawer();
 
-    chooseResumeSession("Yes - Resume previous");
+    chooseResumeSession("Resume");
     act(() => {
       useEditorStore.getState().setProperty("sessionId", GUID);
     });
     expect(useEditorStore.getState().properties.sessionId).toBe(GUID);
 
-    chooseResumeSession("Inherit (Yes)");
+    chooseResumeSession("Inherit (Resume)");
 
     expect(useEditorStore.getState().properties.resumeSession).toBeUndefined();
     expect(useEditorStore.getState().properties.sessionId).toBe("");
@@ -320,12 +333,12 @@ describe("PropertiesDrawer resume session", () => {
   it("clears the session ID when resume is turned off", () => {
     renderContextDrawer();
 
-    chooseResumeSession("Yes - Resume previous");
+    chooseResumeSession("Resume");
     act(() => {
       useEditorStore.getState().setProperty("sessionId", GUID);
     });
 
-    chooseResumeSession("No - Create New");
+    chooseResumeSession("New Session");
 
     expect(useEditorStore.getState().properties.resumeSession).toBe(false);
     expect(useEditorStore.getState().properties.sessionId).toBe("");

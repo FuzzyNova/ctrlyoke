@@ -13,7 +13,7 @@ import { formatDuration } from "@utils/time";
 interface Props {
   snapshot: WorkspaceStatsSnapshot;
   isNarrow: boolean;
-  hideCost: boolean;
+  showCostEstimates: boolean;
 }
 
 function numberLabel(value: number): string {
@@ -42,7 +42,7 @@ function Tile({
   );
 }
 
-export function StatTileGrid({ snapshot, isNarrow, hideCost }: Props) {
+export function StatTileGrid({ snapshot, isNarrow, showCostEstimates }: Props) {
   const tokenCoverage = snapshot.totals.partial
     ? WORKFLOW_TOKEN_COVERAGE.PARTIAL
     : WORKFLOW_TOKEN_COVERAGE.COMPLETE;
@@ -81,7 +81,7 @@ export function StatTileGrid({ snapshot, isNarrow, hideCost }: Props) {
     </Tile>,
   ];
 
-  if (!hideCost) {
+  if (showCostEstimates) {
     tiles.splice(
       3,
       0,

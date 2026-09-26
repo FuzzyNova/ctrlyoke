@@ -889,10 +889,12 @@ export class ExecutionPreviewService {
       workflow.worktree,
       ConfigurationUtils.getDefaultWorktree()
     );
-    if (!selection.config || selection.config.mode === WORKTREE_MODES.NONE) {
+    if (!selection.config) {
       return {};
     }
-    const { mode, branch, base } = selection.config;
+    const { mode, base } = selection.config;
+    const branch =
+      "branch" in selection.config ? selection.config.branch : undefined;
     const workspaceRoot = this.options.workspaceRoot;
     const eligibility = await evaluateWorkspaceEligibility(
       this.options.namedWorkspaceRoots ?? []

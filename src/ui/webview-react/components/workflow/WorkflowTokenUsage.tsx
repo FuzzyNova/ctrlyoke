@@ -75,20 +75,20 @@ export const WorkflowTokenUsage: React.FC<WorkflowTokenUsageProps> = ({
   totals,
   layout = "inline",
 }) => {
-  const hideCost = useSettingsStore(
-    (state) => state.fullGlobalSettings?.settings.ui.hideCost === true
+  const showCostEstimates = useSettingsStore(
+    (state) => state.fullGlobalSettings?.settings.ui.showCostEstimates !== false
   );
   if (!totals) return null;
 
   const label = formatTokenTotal(totals.total, totals.coverage);
   const accessibleLabel = workflowTokenTotalsAccessibleLabel(totals);
-  const tooltip = hideCost
+  const tooltip = !showCostEstimates
     ? workflowTokenTotalsTooltip({ ...totals, costUsd: undefined })
     : workflowTokenTotalsTooltip(totals);
   if (!label || !accessibleLabel || !tooltip) return null;
 
   const costLabel =
-    !hideCost && totals.costUsd !== undefined
+    showCostEstimates && totals.costUsd !== undefined
       ? formatCostLabel(totals.costUsd, totals.costPartial === true)
       : undefined;
 

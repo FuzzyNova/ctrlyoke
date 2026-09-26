@@ -376,14 +376,14 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
     ]);
   });
 
-  test("errored preCondition with onError stop halts before the prompt", async () => {
+  test("errored preCondition with onError stopWorkflow halts before the prompt", async () => {
     harness = createExecutionHarness(workspace);
     await harness.instance.loadPromptFile(
       await writeWorkflow({
         preCondition: {
           script: ERROR_SCRIPT,
         },
-        errorBehavior: { onError: "stop" },
+        errorBehavior: { onError: "stopWorkflow" },
       })
     );
     await harness.instance.executeLoadedPromptFile();

@@ -176,7 +176,7 @@ export function resolveStepColor({
   // rail means status, and honoring an authored identity color would put both
   // meanings in one panel with no visible boundary between them. `off` means
   // off, for authored colors too.
-  if (stepColorMode === STEP_COLOR_MODES.OFF) return undefined;
+  if (stepColorMode === STEP_COLOR_MODES.NONE) return undefined;
 
   const authoredColor = step.color;
   if (authoredColor) return authoredColor;

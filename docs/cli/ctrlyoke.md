@@ -140,7 +140,7 @@ ctrlyoke run review.ctrlyoke.yaml --dry-run
 
 `run` refuses to start (exit code `2`) and names the command to run when:
 
-- the workspace requests `permissions.allowedExternalFileRoots` that have not
+- the workspace requests `permissions.trustedExternalRoots` that have not
   been reviewed: run `ctrlyoke trust-external-roots`
 - the workflow's `trustedExternalRoots` include roots that have not been
   reviewed: run `ctrlyoke trust-workflow-external-roots <file>`
@@ -283,7 +283,7 @@ roots cannot run; `ctrlyoke run` exits with code `2` and prints this command as
 the remediation.
 
 `ctrlyoke trust-external-roots` is the corresponding command for
-workspace-scope `permissions.allowedExternalFileRoots` requests. User-scope
+workspace-scope `permissions.trustedExternalRoots` requests. User-scope
 roots are trusted immediately when added to the user's settings.
 
 ## `ctrlyoke trust-secret-grants`
@@ -318,7 +318,7 @@ ctrlyoke run deploy.ctrlyoke.yaml --headless
 without starting a harness. It exits `1` when a declared name cannot resolve
 (and reports the name and resolution scope) and `2` when the file cannot be
 loaded. Unlike `run`, which only warns about a missing secret unless
-`execution.strictContextResolution` is `fail`, `secret check` always fails on
+`execution.contextResolutionFailure` is `fail`, `secret check` always fails on
 one.
 
 ## `ctrlyoke history prune`

@@ -2,6 +2,23 @@ import { suite, test } from "mocha";
 import * as assert from "assert";
 import { readFileSync, readdirSync } from "fs";
 import * as path from "path";
+import {
+  BROWSER_NOTIFICATION_MODE_OPTIONS_META,
+  CODEX_APPROVAL_POLICY_OPTIONS_META,
+  CODEX_SANDBOX_MODE_OPTIONS_META,
+  CONTEXT_RESOLUTION_FAILURE_OPTIONS_META,
+  CTRLYOKE_MCP_MODE_OPTIONS_META,
+  DEFAULT_FORMAT_OPTIONS_META,
+  EXECUTION_MODE_OPTIONS_META,
+  NOTIFICATION_EVENT_MODE_OPTIONS_META,
+  PERMISSION_MODE_OPTIONS_META,
+  PRIOR_CONTEXT_KEYWORD_OPTIONS_META,
+  RUN_HISTORY_LOCATION_OPTIONS_META,
+  STEP_COLOR_MODE_OPTIONS_META,
+  TERMINAL_CURSOR_STYLE_OPTIONS_META,
+  TERMINAL_MOBILE_CONTROL_BAR_OPTIONS_META,
+  TOAST_LEVEL_OPTIONS_META,
+} from "../../types/SchemaUiMetadata";
 
 /**
  * Schema -> Global Settings dashboard control parity.
@@ -44,6 +61,10 @@ const SETTINGS_SCHEMA_PATH = path.resolve(
   __dirname,
   "../../../schemas/settings-schema.json"
 );
+const WORKFLOW_SCHEMA_PATH = path.resolve(
+  __dirname,
+  "../../../schemas/workflow-schema.json"
+);
 const DASHBOARD_CONSTANTS_PATH = path.resolve(
   __dirname,
   "../../../src/types/DashboardConstants.ts"
@@ -58,16 +79,48 @@ type SchemaNode = Record<string, unknown>;
 const schema = JSON.parse(
   readFileSync(SETTINGS_SCHEMA_PATH, "utf8")
 ) as SchemaNode;
+const workflowSchema = JSON.parse(
+  readFileSync(WORKFLOW_SCHEMA_PATH, "utf8")
+) as SchemaNode;
 
-function resolveRef(node: SchemaNode): SchemaNode {
+interface ResolvedSchemaNode {
+  node: SchemaNode;
+  document: SchemaNode;
+}
+
+function resolveRef(
+  node: SchemaNode,
+  document: SchemaNode
+): ResolvedSchemaNode {
   const ref = node.$ref as string | undefined;
-  if (!ref) return node;
-  const match = /^#\/definitions\/(.+)$/.exec(ref);
-  assert.ok(match, `Unsupported $ref: ${ref}`);
-  const definitions = schema.definitions as Record<string, SchemaNode>;
-  const target = definitions[match![1]];
+  if (!ref) return { node, document };
+
+  const hashIndex = ref.indexOf("#");
+  const schemaFile = hashIndex === -1 ? ref : ref.slice(0, hashIndex);
+  const pointer = hashIndex === -1 ? "" : ref.slice(hashIndex);
+  const targetDocument = ref.startsWith("#")
+    ? document
+    : schemaFile === "workflow-schema.json"
+      ? workflowSchema
+      : undefined;
+  assert.ok(targetDocument, `Unsupported $ref: ${ref}`);
+  const target = pointer
+    .slice(2)
+    .split("/")
+    .filter(Boolean)
+    .reduce<unknown>((current, segment) => {
+      const key = segment.replaceAll("~1", "/").replaceAll("~0", "~");
+      assert.ok(
+        current !== null && typeof current === "object" && key in current,
+        `$ref target not found: ${ref}`
+      );
+      return (current as Record<string, unknown>)[key];
+    }, targetDocument);
   assert.ok(target, `$ref target not found: ${ref}`);
-  return target;
+  return {
+    node: { ...(target as SchemaNode), ...node, $ref: undefined },
+    document: targetDocument,
+  };
 }
 
 function isPlainObjectSchema(node: SchemaNode): boolean {
@@ -99,14 +152,38 @@ function walk(
   node: SchemaNode,
   prefix: string,
   out: Map<string, string>,
-  templateParent: string | undefined
+  templateParent: string | undefined,
+  document: SchemaNode
 ): void {
-  const resolved = resolveRef(node);
+  const { node: resolved, document: resolvedDocument } = resolveRef(
+    node,
+    document
+  );
   const dynamicParent =
     templateParent ??
     (DYNAMIC_TEMPLATE_PARENTS.has(prefix) ? prefix : undefined);
 
   if (!isPlainObjectSchema(resolved)) {
+    // Settings exposes tool permission values as a nullable shared workflow
+    // definition, while the dashboard still edits the object branch's fields.
+    if (
+      prefix === "defaults.toolPermissions" &&
+      Array.isArray(resolved.oneOf)
+    ) {
+      const objectBranch = (resolved.oneOf as SchemaNode[])
+        .map((branch) => resolveRef(branch, resolvedDocument))
+        .find(({ node: branch }) => isPlainObjectSchema(branch));
+      if (objectBranch) {
+        walk(
+          objectBranch.node,
+          prefix,
+          out,
+          dynamicParent,
+          objectBranch.document
+        );
+        return;
+      }
+    }
     if (prefix) {
       out.set(prefix, dynamicParent ? `${dynamicParent}.\${` : prefix);
     }
@@ -115,13 +192,19 @@ function walk(
 
   const properties = resolved.properties as Record<string, SchemaNode>;
   for (const [key, childSchema] of Object.entries(properties)) {
-    walk(childSchema, prefix ? `${prefix}.${key}` : key, out, dynamicParent);
+    walk(
+      childSchema,
+      prefix ? `${prefix}.${key}` : key,
+      out,
+      dynamicParent,
+      resolvedDocument
+    );
   }
 }
 
 function allSettingPaths(): Map<string, string> {
   const out = new Map<string, string>();
-  walk(schema, "", out, undefined);
+  walk(schema, "", out, undefined, schema);
   return out;
 }
 
@@ -190,7 +273,208 @@ function webviewSource(): string {
     .join("\n");
 }
 
+const SETTINGS_ENUM_METADATA = [
+  [
+    "general.defaultFormat",
+    DEFAULT_FORMAT_OPTIONS_META,
+    "DEFAULT_FORMAT_OPTIONS_META",
+  ],
+  [
+    "ui.stepColorMode",
+    STEP_COLOR_MODE_OPTIONS_META,
+    "STEP_COLOR_MODE_OPTIONS_META",
+  ],
+  [
+    "ctrlyokeMcpMode",
+    CTRLYOKE_MCP_MODE_OPTIONS_META,
+    "CTRLYOKE_MCP_MODE_OPTIONS_META",
+  ],
+  [
+    "notifications.browser.mode",
+    BROWSER_NOTIFICATION_MODE_OPTIONS_META,
+    "BROWSER_NOTIFICATION_MODE_OPTIONS_META",
+  ],
+  [
+    "notifications.events.workflowComplete",
+    NOTIFICATION_EVENT_MODE_OPTIONS_META,
+    "NOTIFICATION_EVENT_MODE_OPTIONS_META",
+  ],
+  [
+    "notifications.events.promptComplete",
+    NOTIFICATION_EVENT_MODE_OPTIONS_META,
+    "NOTIFICATION_EVENT_MODE_OPTIONS_META",
+  ],
+  [
+    "notifications.toastLevel",
+    TOAST_LEVEL_OPTIONS_META,
+    "TOAST_LEVEL_OPTIONS_META",
+  ],
+  [
+    "defaults.toolPermissions.mode",
+    PERMISSION_MODE_OPTIONS_META,
+    "PERMISSION_MODE_OPTIONS_META",
+  ],
+  [
+    "defaults.executionMode",
+    EXECUTION_MODE_OPTIONS_META,
+    "EXECUTION_MODE_OPTIONS_META",
+  ],
+  [
+    "defaults.priorContext",
+    PRIOR_CONTEXT_KEYWORD_OPTIONS_META,
+    "PRIOR_CONTEXT_KEYWORD_OPTIONS_META",
+  ],
+  [
+    "permissions.codexSandboxMode",
+    CODEX_SANDBOX_MODE_OPTIONS_META,
+    "CODEX_SANDBOX_MODE_OPTIONS_META",
+  ],
+  [
+    "permissions.codexApprovalPolicy",
+    CODEX_APPROVAL_POLICY_OPTIONS_META,
+    "CODEX_APPROVAL_POLICY_OPTIONS_META",
+  ],
+  [
+    "terminal.cursorStyle",
+    TERMINAL_CURSOR_STYLE_OPTIONS_META,
+    "TERMINAL_CURSOR_STYLE_OPTIONS_META",
+  ],
+  [
+    "terminal.mobileControlBar",
+    TERMINAL_MOBILE_CONTROL_BAR_OPTIONS_META,
+    "TERMINAL_MOBILE_CONTROL_BAR_OPTIONS_META",
+  ],
+  [
+    "execution.contextResolutionFailure",
+    CONTEXT_RESOLUTION_FAILURE_OPTIONS_META,
+    "CONTEXT_RESOLUTION_FAILURE_OPTIONS_META",
+  ],
+  [
+    "storage.runHistoryLocation",
+    RUN_HISTORY_LOCATION_OPTIONS_META,
+    "RUN_HISTORY_LOCATION_OPTIONS_META",
+  ],
+] as const;
+
+function schemaNodeAtPath(dotPath: string): ResolvedSchemaNode {
+  let current: ResolvedSchemaNode = { node: schema, document: schema };
+  for (const segment of dotPath.split(".")) {
+    const resolved = resolveRef(current.node, current.document);
+    const properties = resolved.node.properties as
+      Record<string, SchemaNode> | undefined;
+    let child = properties?.[segment];
+    if (!child) {
+      for (const combinator of ["oneOf", "anyOf", "allOf"]) {
+        const branches = resolved.node[combinator];
+        if (!Array.isArray(branches)) continue;
+        for (const branch of branches as SchemaNode[]) {
+          const branchResolved = resolveRef(branch, resolved.document);
+          const branchProperties = branchResolved.node.properties as
+            Record<string, SchemaNode> | undefined;
+          child ??= branchProperties?.[segment];
+        }
+      }
+    }
+    assert.ok(child, `Schema path not found: ${dotPath}`);
+    current = resolveRef(child!, resolved.document);
+  }
+  return current;
+}
+
+function schemaEnumValues(node: SchemaNode, document: SchemaNode): string[] {
+  const resolved = resolveRef(node, document);
+  const values = Array.isArray(resolved.node.enum)
+    ? (resolved.node.enum as string[])
+    : [];
+  return values.concat(
+    ["oneOf", "anyOf", "allOf"].flatMap((key) => {
+      const branches = resolved.node[key];
+      return Array.isArray(branches)
+        ? (branches as SchemaNode[]).flatMap((branch) =>
+            schemaEnumValues(branch, resolved.document)
+          )
+        : [];
+    })
+  );
+}
+
+const CUSTOM_SELECT_ALLOWLIST: Readonly<Record<string, string>> = {
+  "settings/SecretsSection.tsx#0":
+    "Selects the scope for a secret editor, not a schema enum.",
+  "settings/ServerSection.tsx#0":
+    "Selects the display address from detected network interfaces.",
+  "shared/CreateScriptModal.tsx#0":
+    "Selects the script creation mode in a UI-only modal.",
+  "shared/DryRunModal.tsx#0":
+    "Selects a section of the dry-run preview, not a workflow property.",
+  "shared/ModelPricingEditor.tsx#0":
+    "Selects a harness key in a dynamic pricing map.",
+  "shared/ModelPricingEditor.tsx#1":
+    "Selects a model ID in a dynamic pricing map.",
+};
+
+function assertCustomSelectCoverage(): void {
+  const componentRoot = path.join(WEBVIEW_SOURCE_ROOT, "components");
+  const sourceDirs = ["settings", "layout", "editor", "shared"];
+  const usedAllowlist = new Set<string>();
+  for (const directory of sourceDirs) {
+    const root = path.join(componentRoot, directory);
+    for (const filePath of webviewSourceFiles(root)) {
+      const relativePath = path
+        .relative(componentRoot, filePath)
+        .replaceAll("\\", "/");
+      const source = readFileSync(filePath, "utf8");
+      const tags = /<CustomSelect\b([\s\S]*?)\/>/g;
+      let unannotatedIndex = 0;
+      let match: RegExpExecArray | null;
+      while ((match = tags.exec(source)) !== null) {
+        if (/\bschemaPath\s*=/.test(match[1])) continue;
+        const allowlistKey = `${relativePath}#${unannotatedIndex++}`;
+        assert.ok(
+          allowlistKey && CUSTOM_SELECT_ALLOWLIST[allowlistKey],
+          `${relativePath}: CustomSelect without schemaPath must have a reasoned allowlist entry (${allowlistKey})`
+        );
+        usedAllowlist.add(allowlistKey);
+      }
+    }
+  }
+  assert.deepStrictEqual(
+    Object.keys(CUSTOM_SELECT_ALLOWLIST).filter(
+      (key) => !usedAllowlist.has(key)
+    ),
+    [],
+    "Remove stale CustomSelect allowlist entries"
+  );
+}
+
 suite("Settings schema -> Global Settings dashboard control parity", () => {
+  test("renamed settings keys have live controls at their new schema paths", () => {
+    const expectedPaths = [
+      "ui.showCostEstimates",
+      "execution.contextResolutionFailure",
+      "permissions.trustedExternalRoots",
+      "server.autoStart",
+      "commit.systemPrompt",
+    ];
+    const paths = allSettingPaths();
+    const pathConstants = settingPathConstants();
+    const source = webviewSource();
+
+    for (const settingPath of expectedPaths) {
+      assert.ok(
+        paths.has(settingPath),
+        `${settingPath} is missing from the schema`
+      );
+      const constantName = pathConstants.get(settingPath);
+      assert.ok(
+        source.includes(settingPath) ||
+          (constantName !== undefined &&
+            source.includes(`SETTING_PATHS.${constantName}`)),
+        `${settingPath} has no matching settings UI control`
+      );
+    }
+  });
+
   test("schema walk finds a non-trivial number of authorable settings", () => {
     const paths = allSettingPaths();
     assert.ok(
@@ -198,6 +482,44 @@ suite("Settings schema -> Global Settings dashboard control parity", () => {
       `Expected substantially more than 50 leaf settings; found ${paths.size}. ` +
         "The schema walk may be broken (e.g. stopping recursion too early)."
     );
+  });
+
+  test("settings enum metadata matches schema values and displayed labels", () => {
+    const source = webviewSource().replace(/\s+/g, " ");
+    for (const [
+      settingPath,
+      metadata,
+      metadataName,
+    ] of SETTINGS_ENUM_METADATA) {
+      const resolved = schemaNodeAtPath(settingPath);
+      const schemaValues = schemaEnumValues(resolved.node, resolved.document);
+      assert.ok(schemaValues.length > 0, `${settingPath} must remain an enum`);
+      const entries = Object.values(metadata);
+      assert.deepStrictEqual(
+        entries.map(({ value }) => value).sort(),
+        [...schemaValues].sort(),
+        `${settingPath}: metadata enum values must match the settings schema`
+      );
+      assert.ok(entries.every(({ label }) => label.trim().length > 0));
+      assert.ok(
+        source.includes(metadataName),
+        `${settingPath}: settings UI must use ${metadataName} for displayed labels`
+      );
+      assert.ok(
+        new RegExp(
+          `toSelectOptions\\s*\\(\\s*${metadataName},\\s*["']${settingPath}["']\\s*\\)`
+        ).test(source),
+        `${settingPath}: CustomSelect must render labels from ${metadataName}`
+      );
+      assert.ok(
+        source.includes(`schemaPath="${settingPath}"`),
+        `${settingPath}: settings UI must pass its settings-relative path to CustomSelect`
+      );
+    }
+  });
+
+  test("CustomSelect controls have a schema path or a reasoned UI-only exception", () => {
+    assertCustomSelectCoverage();
   });
 
   test("every leaf settings-schema property has a live dashboard control", () => {

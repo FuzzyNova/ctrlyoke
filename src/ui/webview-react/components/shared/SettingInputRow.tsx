@@ -6,6 +6,7 @@ import type {
 } from "@root/types/WebviewMessageTypes";
 import { SettingSourceBadge } from "./SettingSourceBadge";
 import { Icon } from "./Icon";
+import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
 
 interface Props {
   label: string;
@@ -37,8 +38,17 @@ export function SettingInputRow({
   return (
     <div className="group">
       <div className="flex items-center gap-1.5 mb-1">
-        <label htmlFor={id} className="text-xs text-description-fg">
+        <label
+          htmlFor={id}
+          title={path ? schemaTitle(path) : description}
+          className="text-xs text-description-fg"
+        >
           {label}
+          {path && (
+            <span className="sr-only">
+              {schemaAriaLabel(label, path).slice(label.length)}
+            </span>
+          )}
         </label>
         {source && source !== INHERIT_DEFAULT_OPTION && (
           <SettingSourceBadge source={source} />

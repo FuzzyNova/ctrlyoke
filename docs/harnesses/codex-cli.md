@@ -18,7 +18,7 @@ capability details and version-scoped evidence.
   - `allowAll` → `--sandbox workspace-write --ask-for-approval on-request`
   - `custom` → `-s <permissions.codexSandboxMode> -a <permissions.codexApprovalPolicy>`- `permissions.codexSandboxMode` (`read-only`, `workspace-write`, `danger-full-access`; default `workspace-write`) and `permissions.codexApprovalPolicy` (`untrusted`, `on-request`, `never`; default `on-request`) are only read in `custom` mode.
 - Headless runs use `codex exec`, which does not accept an approval flag, so only the sandbox flag is passed there.
-- Directories in `permissions.allowedExternalFileRoots` are passed to Codex as `--add-dir`.
+- Directories in `permissions.trustedExternalRoots` are passed to Codex as `--add-dir`.
 
 ## Example
 

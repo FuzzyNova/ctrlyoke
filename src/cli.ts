@@ -379,7 +379,7 @@ program
 program
   .command("trust-external-roots")
   .description(
-    "Review and approve this workspace's requested external file roots (permissions.allowedExternalFileRoots)"
+    "Review and approve this workspace's requested external file roots (permissions.trustedExternalRoots)"
   )
   .option("-d, --cwd <path>", "Working directory (default: current directory)")
   .option("-y, --yes", "Approve all pending roots without prompting")
@@ -745,7 +745,7 @@ async function runCommand(
   );
 
   // Fail closed when this workspace requests external file roots
-  // (permissions.allowedExternalFileRoots at workspace scope) that have not
+  // (permissions.trustedExternalRoots at workspace scope) that have not
   // been reviewed yet — see dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md.
   // User-scope roots need no such gate (the user already approved them by
   // editing their own settings).
@@ -2255,7 +2255,7 @@ interface TrustWorkflowExternalRootsOptions {
 
 /**
  * Review and approve this workspace's requested external file roots
- * (`permissions.allowedExternalFileRoots` at workspace scope). Ordinary
+ * (`permissions.trustedExternalRoots` at workspace scope). Ordinary
  * `ctrlyoke run` fails closed while any workspace-scope root is still
  * pending — see dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md.
  */

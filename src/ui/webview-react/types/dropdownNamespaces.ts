@@ -3,6 +3,10 @@ import {
   RESUME_SESSION_SELECTIONS,
   SESSION_ID_SENTINELS,
 } from "@root/types/DashboardConstants";
+import {
+  RESUME_SESSION_OPTIONS_META,
+  toSelectOptions,
+} from "@root/types/SchemaUiMetadata";
 
 /**
  * Namespace keys for the dropdown hide feature.
@@ -40,17 +44,14 @@ export function modelNamespaceForHarness(harness: string): string {
  * WorkflowPropertiesPanel uses only Yes/No (computes effective value separately).
  */
 export function getResumeSessionOptions(defaultLabel?: string) {
-  const base = [
-    {
-      value: RESUME_SESSION_SELECTIONS.YES,
-      label: "Yes - Resume previous",
-    },
-    { value: RESUME_SESSION_SELECTIONS.NO, label: "No - Create New" },
-    { value: SESSION_ID_SENTINELS.FINAL_STEP, label: "Final Step Session" },
-  ] as const;
+  const options = toSelectOptions(RESUME_SESSION_OPTIONS_META, "resumeSession");
   return defaultLabel
-    ? [{ value: INHERIT_DEFAULT_OPTION, label: defaultLabel }, ...base]
-    : base;
+    ? options.map((option) =>
+        option.value === INHERIT_DEFAULT_OPTION
+          ? { ...option, label: defaultLabel }
+          : option
+      )
+    : options.filter((option) => option.value !== INHERIT_DEFAULT_OPTION);
 }
 
 /** Property writes a Resume Session dropdown selection implies. */

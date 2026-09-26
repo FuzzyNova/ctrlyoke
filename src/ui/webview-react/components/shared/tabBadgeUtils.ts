@@ -3,6 +3,7 @@ import {
   PRIOR_CONTEXT_KEYWORDS,
 } from "@root/types/DashboardConstants";
 import type { UserHookConfig } from "@root/types/CtrlYokeTypes";
+import { PERMISSION_MODE_OPTIONS_META } from "@root/types/SchemaUiMetadata";
 
 /** Tab icon override shape used by DrawerTabBar */
 export interface TabIconOverride {
@@ -26,9 +27,6 @@ export const FOCUS_TAB_OVERRIDE: TabIconOverride = {
   activeColor: "text-focus-highlight",
 };
 
-/** Default codicon for the Permissions tab/quick-picker (workspace-trust shield shape). */
-export const PERMISSIONS_DEFAULT_CODICON = "workspace-trusted";
-
 type PermissionModeVisual = Required<
   Pick<TabIconOverride, "codicon" | "color" | "hoverColor" | "activeColor">
 >;
@@ -38,33 +36,6 @@ type PermissionModeVisual = Required<
  * single source of truth for how permission state is drawn, shared by the
  * Permissions tab (DrawerTabBar/SegmentedTabBar) and PermissionsQuickPicker.
  */
-const PERMISSION_MODE_VISUALS: Record<string, PermissionModeVisual> = {
-  [PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL]: {
-    codicon: "workspace-untrusted",
-    color: "text-error-fg",
-    hoverColor: "hover:text-terminal-ansiBrightRed",
-    activeColor: "text-terminal-ansiBrightRed",
-  },
-  [PERMISSION_MODES.ALLOW_ALL]: {
-    codicon: PERMISSIONS_DEFAULT_CODICON,
-    color: "text-warning-fg",
-    hoverColor: "hover:text-terminal-ansiBrightYellow",
-    activeColor: "text-terminal-ansiBrightYellow",
-  },
-  [PERMISSION_MODES.CUSTOM]: {
-    codicon: PERMISSIONS_DEFAULT_CODICON,
-    color: "text-terminal-ansiGreen",
-    hoverColor: "hover:text-terminal-ansiBrightGreen",
-    activeColor: "text-terminal-ansiBrightGreen",
-  },
-  [PERMISSION_MODES.NONE]: {
-    codicon: PERMISSIONS_DEFAULT_CODICON,
-    color: "text-description-fg",
-    hoverColor: "hover:text-foreground",
-    activeColor: "text-foreground",
-  },
-};
-
 /**
  * Resolves the icon/color visual for a permission mode, always falling back
  * to the "none" look for an unrecognized mode. Unlike `getPermissionTabOverride`,
@@ -73,10 +44,16 @@ const PERMISSION_MODE_VISUALS: Record<string, PermissionModeVisual> = {
  * for every mode, including "none".
  */
 export function getPermissionModeVisual(mode: string): PermissionModeVisual {
-  return (
-    PERMISSION_MODE_VISUALS[mode] ??
-    PERMISSION_MODE_VISUALS[PERMISSION_MODES.NONE]
-  );
+  const visual =
+    PERMISSION_MODE_OPTIONS_META[
+      mode as keyof typeof PERMISSION_MODE_OPTIONS_META
+    ]?.visual ?? PERMISSION_MODE_OPTIONS_META[PERMISSION_MODES.NONE].visual!;
+  return {
+    codicon: visual.codicon,
+    color: visual.color,
+    hoverColor: visual.hoverColor ?? "hover:text-foreground",
+    activeColor: visual.activeColor ?? "text-foreground",
+  };
 }
 
 /** Per-mode icon shape/color for the Permissions tab. None returns undefined. */

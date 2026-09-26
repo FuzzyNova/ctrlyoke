@@ -23,13 +23,13 @@ export function HarnessShareRow({
   contribution,
   percentage,
   metric,
-  hideCost,
+  showCostEstimates,
 }: {
   harnessId: HarnessId;
   contribution: LifetimeHarnessContribution;
   percentage: number;
   metric: HarnessShareMetric;
-  hideCost: boolean;
+  showCostEstimates: boolean;
 }) {
   const steps = formatTokenCount(contribution.attemptCount) || "0";
   const tokens =
@@ -39,7 +39,7 @@ export function HarnessShareRow({
         ? WORKFLOW_TOKEN_COVERAGE.PARTIAL
         : WORKFLOW_TOKEN_COVERAGE.COMPLETE
     ) || "0";
-  const cost = hideCost
+  const cost = !showCostEstimates
     ? ""
     : formatCostLabel(contribution.costUsd, contribution.costPartial === true);
   const details = [`${steps} steps`, `${tokens} tokens`];

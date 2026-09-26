@@ -39,15 +39,7 @@
       "additionalProperties": false,
       "properties": {
         "harness": {
-          "type": "string",
-          "enum": [
-            "copilot-cli",
-            "claude-cli",
-            "codex-cli",
-            "opencode-cli",
-            "qwen-cli",
-            "antigravity-cli"
-          ],
+          "$ref": "workflow-schema.json#/definitions/harnessId",
           "description": "The default harness to use for new workflows."
         },
         "models": {
@@ -101,22 +93,15 @@
           "additionalProperties": false
         },
         "agent": {
-          "type": "string",
+          "$ref": "workflow-schema.json#/definitions/agent",
           "description": "Default portable ctrlyoke workflow agent attachment for new workflows. Native harness agent discovery is managed separately by the Agents & Skills settings page."
         },
         "skills": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
+          "$ref": "workflow-schema.json#/definitions/skills",
           "description": "Default portable ctrlyoke workflow skill attachments for new workflows. Native harness skill discovery is managed separately by the Agents & Skills settings page and does not determine workflow skill support."
         },
         "secrets": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "pattern": "^[A-Z][A-Z0-9_]*$"
-          },
+          "$ref": "workflow-schema.json#/definitions/secrets",
           "description": "Default secret environment-variable names granted to new workflows. Values are resolved by the execution host and never stored in workflow definitions."
         },
         "executionMode": {
@@ -129,363 +114,42 @@
           "description": "Resume an existing session when running a workflow."
         },
         "priorContext": {
-          "type": "string",
+          "$ref": "workflow-schema.json#/definitions/priorContext",
           "description": "Prior context to inject before the first prompt."
         },
         "mcpServers": {
           "type": "array",
           "description": "Default MCP servers to attach to each prompt execution.",
           "items": {
-            "oneOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string"
-                  },
-                  "command": {
-                    "type": "string"
-                  },
-                  "args": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "env": {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "string"
-                    }
-                  }
-                },
-                "additionalProperties": true
-              }
-            ]
+            "$ref": "workflow-schema.json#/definitions/mcpServerEntry"
           }
         },
         "hooks": {
           "type": "array",
           "description": "User-defined hooks to run at various execution lifecycle points.",
           "items": {
-            "type": "object",
-            "additionalProperties": true
+            "$ref": "workflow-schema.json#/definitions/userHookConfig"
           }
         },
         "errorBehavior": {
-          "description": "Default policy for internal errors in any step phase. `null` (the default) stops the workflow unless the workflow or step sets its own policy.",
-          "oneOf": [
-            {
-              "type": "object",
-              "description": "Default harness/session failure policy for new workflows.",
-              "properties": {
-                "onError": {
-                  "type": "string",
-                  "enum": ["stop", "retry", "continue"],
-                  "description": "What to do when the harness/session fails."
-                },
-                "maxRetries": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "description": "Maximum retry attempts when onError is retry."
-                },
-                "retryDelayMs": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "description": "Delay before retrying, in milliseconds."
-                }
-              },
-              "required": ["onError"],
-              "additionalProperties": false
-            },
-            {
-              "type": "null",
-              "description": "Disabled (default). New workflows use stop behavior unless overridden."
-            }
-          ]
+          "$ref": "workflow-schema.json#/definitions/errorBehaviorDefault",
+          "description": "Default policy for internal errors in any step phase. `null` (the default) stops the workflow unless the workflow or step sets its own policy."
         },
         "toolPermissions": {
-          "type": "object",
-          "description": "Default tool permission settings for prompt execution. Allowed Tools and Denied Tools are currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; Qwen is inline granular support and OpenCode uses OPENCODE_CONFIG_CONTENT without writing a workspace opencode.json. Codex and Antigravity provide a derived mode-only summary and do NOT ENFORCE these lists.",
-          "additionalProperties": false,
-          "properties": {
-            "mode": {
-              "type": "string",
-              "enum": ["dangerouslyAllowAll", "allowAll", "custom", "none"],
-              "description": "Default tool permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects the deny list. 'custom' uses allowedTools + deniedTools only. 'none' passes no permission flags at all — it does not deny tools; the harness applies its own local permission settings."
-            },
-            "allowedTools": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "Explicitly allowed tools (used when mode is 'custom'). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; NOT ENFORCED by Codex or Antigravity."
-            },
-            "deniedTools": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "Explicitly denied tools (used when mode is 'custom'). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; NOT ENFORCED by Codex or Antigravity."
-            }
-          }
+          "$ref": "workflow-schema.json#/definitions/toolPermissions",
+          "description": "Default tool permission settings for prompt execution. Allowed Tools and Denied Tools are currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; Qwen is inline granular support and OpenCode uses OPENCODE_CONFIG_CONTENT without writing a workspace opencode.json. Codex and Antigravity provide a derived mode-only summary and do NOT ENFORCE these lists."
         },
         "endCondition": {
-          "description": "Default end condition for new workflows. `null` (the default) means new workflows have no end condition.",
-          "oneOf": [
-            {
-              "type": "object",
-              "description": "Default end condition applied to all new workflows. Individual prompts can override or disable this.",
-              "properties": {
-                "script": {
-                  "type": "string",
-                  "description": "Shell command or script path to execute after each prompt."
-                },
-                "compareSource": {
-                  "type": "string",
-                  "enum": ["stdout", "stderr", "exitCode"],
-                  "description": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison."
-                },
-                "timeout": {
-                  "type": "number",
-                  "description": "Timeout in milliseconds."
-                },
-                "maxRetries": {
-                  "type": "number",
-                  "minimum": -1,
-                  "maximum": 100,
-                  "description": "Maximum retry attempts. Use -1 for unlimited, 0 for none."
-                },
-                "retryPrompt": {
-                  "type": "string",
-                  "description": "Retry prompt template. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:* works in the step and retry prompts; $endCondition:* is only available in the retry prompt."
-                },
-                "passRetryPrompt": {
-                  "type": "string",
-                  "description": "Pass-retry prompt template. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:* works in the step and retry prompts; $endCondition:* is only available in the retry prompt. If omitted, the step's own prompt is re-sent."
-                },
-                "resumeSessionOnRetry": {
-                  "type": "boolean",
-                  "description": "Resume the same session for retries (default: true)."
-                },
-                "onPass": {
-                  "type": "string",
-                  "enum": ["continue", "retry", "stopWorkflow"],
-                  "description": "Action when end condition passes."
-                },
-                "onFail": {
-                  "type": "string",
-                  "enum": ["continue", "retry", "stopWorkflow"],
-                  "description": "Action when end condition fails."
-                },
-                "operator": {
-                  "type": "string",
-                  "enum": [
-                    "eq",
-                    "ne",
-                    "contains",
-                    "notContains",
-                    "gte",
-                    "gt",
-                    "lte",
-                    "lt",
-                    "matches",
-                    "isEmpty",
-                    "isNotEmpty"
-                  ],
-                  "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag."
-                },
-                "expected": {
-                  "type": ["string", "number"],
-                  "description": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values."
-                },
-                "ignoreCase": {
-                  "type": "boolean",
-                  "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false."
-                }
-              },
-              "required": ["script"],
-              "additionalProperties": false
-            },
-            {
-              "type": "null",
-              "description": "Disabled (default). New workflows have no end condition."
-            }
-          ]
+          "$ref": "workflow-schema.json#/definitions/endConditionDefault",
+          "description": "Default end condition for new workflows. `null` (the default) means new workflows have no end condition."
         },
         "preCondition": {
-          "description": "Default pre-condition for new workflows. `null` (the default) means new workflows have no pre-condition.",
-          "oneOf": [
-            {
-              "type": "object",
-              "description": "Default pre-condition gate applied to all new workflows. Individual prompts can override or disable this.",
-              "properties": {
-                "script": {
-                  "type": "string",
-                  "description": "Shell command or script path to execute before each prompt."
-                },
-                "compareSource": {
-                  "type": "string",
-                  "enum": ["stdout", "stderr", "exitCode"],
-                  "description": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison."
-                },
-                "timeout": {
-                  "type": "number",
-                  "description": "Timeout in milliseconds."
-                },
-                "onPass": {
-                  "type": "string",
-                  "enum": ["continue", "skipPrompt", "stopWorkflow"],
-                  "description": "Action when pre-condition passes."
-                },
-                "onFail": {
-                  "type": "string",
-                  "enum": ["continue", "skipPrompt", "stopWorkflow"],
-                  "description": "Action when pre-condition fails."
-                },
-                "operator": {
-                  "type": "string",
-                  "enum": [
-                    "eq",
-                    "ne",
-                    "contains",
-                    "notContains",
-                    "gte",
-                    "gt",
-                    "lte",
-                    "lt",
-                    "matches",
-                    "isEmpty",
-                    "isNotEmpty"
-                  ],
-                  "description": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag."
-                },
-                "expected": {
-                  "type": ["string", "number"],
-                  "description": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values."
-                },
-                "ignoreCase": {
-                  "type": "boolean",
-                  "description": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false."
-                }
-              },
-              "required": ["script"],
-              "additionalProperties": false
-            },
-            {
-              "type": "null",
-              "description": "Disabled (default). New workflows have no pre-condition."
-            }
-          ]
+          "$ref": "workflow-schema.json#/definitions/preConditionDefault",
+          "description": "Default pre-condition for new workflows. `null` (the default) means new workflows have no pre-condition."
         },
         "worktree": {
-          "type": "object",
-          "description": "Default worktree behavior for workflows that omit a root worktree value. An inherited value degrades to ordinary execution when the workspace is not eligible.",
-          "additionalProperties": false,
-          "properties": {
-            "mode": {
-              "type": "string",
-              "enum": ["none", "managed", "named"],
-              "default": "none",
-              "description": "Default worktree mode for new workflows: none uses the working checkout; managed creates and removes a throw-away worktree per run; named targets a persistent worktree you own for appendable workflows."
-            },
-            "branch": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Default branch for named worktree mode."
-            },
-            "base": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Default Git ref used when creating a worktree."
-            },
-            "setup": {
-              "type": "string",
-              "description": "Default setup command run after creating a worktree."
-            },
-            "keep": {
-              "type": "boolean",
-              "description": "Keeps the managed worktree directory after the run. Without it, appending recreates the directory, loses ignored files such as node_modules, and reruns setup; removing it also ends filesystem undo for that run."
-            },
-            "merge": {
-              "type": "boolean",
-              "description": "Merge the managed branch into the source checkout after every run."
-            }
-          },
-          "allOf": [
-            {
-              "if": {
-                "required": ["mode"],
-                "properties": {
-                  "mode": {
-                    "const": "named"
-                  }
-                }
-              },
-              "then": {
-                "required": ["branch"],
-                "not": {
-                  "anyOf": [
-                    {
-                      "required": ["keep"]
-                    },
-                    {
-                      "required": ["merge"]
-                    }
-                  ]
-                }
-              }
-            },
-            {
-              "if": {
-                "required": ["mode"],
-                "properties": {
-                  "mode": {
-                    "const": "managed"
-                  }
-                }
-              },
-              "then": {
-                "not": {
-                  "required": ["branch"]
-                }
-              }
-            },
-            {
-              "if": {
-                "required": ["mode"],
-                "properties": {
-                  "mode": {
-                    "const": "none"
-                  }
-                }
-              },
-              "then": {
-                "not": {
-                  "anyOf": [
-                    {
-                      "required": ["branch"]
-                    },
-                    {
-                      "required": ["base"]
-                    },
-                    {
-                      "required": ["setup"]
-                    },
-                    {
-                      "required": ["keep"]
-                    },
-                    {
-                      "required": ["merge"]
-                    }
-                  ]
-                }
-              }
-            }
-          ]
+          "$ref": "workflow-schema.json#/definitions/worktreeConfig",
+          "description": "Default worktree behavior for workflows that omit a root worktree value. Uses the same false, shorthand, and object forms as workflow worktree; an inherited value degrades to ordinary execution when the workspace is not eligible."
         }
       }
     },
@@ -602,7 +266,7 @@
             }
           }
         },
-        "allowedExternalFileRoots": {
+        "trustedExternalRoots": {
           "type": "array",
           "items": {
             "type": "string"
@@ -705,7 +369,7 @@
           "type": "boolean",
           "description": "Automatically delete categorized prompt temp files after execution. Set to false to retain files in .ctrlyoke/temp/ for debugging."
         },
-        "strictContextResolution": {
+        "contextResolutionFailure": {
           "type": "string",
           "enum": ["warn", "fail"],
           "default": "warn",
@@ -928,9 +592,10 @@
           "type": "boolean",
           "description": "In the prompt editor, treat @file/#symbol/~git/$context references as single units: arrow keys skip over them and Backspace/Delete removes the whole reference at once. In output, format clickable local references as compact chips. Clicking or long-pressing a reference still opens it; when off, editor references edit character by character and output uses ordinary text links."
         },
-        "hideCost": {
+        "showCostEstimates": {
           "type": "boolean",
-          "description": "Hide token cost estimates from dashboard and CLI statistics."
+          "default": true,
+          "description": "Show token cost estimates in dashboard and CLI statistics."
         },
         "offerTrustForUntrustedFileLinks": {
           "type": "boolean",
@@ -938,8 +603,8 @@
         },
         "stepColorMode": {
           "type": "string",
-          "enum": ["off", "harness", "unique"],
-          "description": "Choose how workflow step identity colors are rendered: off uses status colors only, harness uses harness colors, and unique assigns a distinct color to each step."
+          "enum": ["none", "harness", "unique"],
+          "description": "Choose how workflow step identity colors are rendered: none uses status colors only, harness uses harness colors, and unique assigns a distinct color to each step."
         },
         "harnessColors": {
           "type": "object",
@@ -991,9 +656,9 @@
       "description": "ctrlyoke hosted server settings.",
       "additionalProperties": false,
       "properties": {
-        "enabled": {
+        "autoStart": {
           "type": "boolean",
-          "description": "Whether the ctrlyoke hosted server is enabled."
+          "description": "Automatically start the hosted dashboard server when the VS Code extension activates."
         },
         "port": {
           "type": "number",
@@ -1080,7 +745,7 @@
         },
         "toastLevel": {
           "type": "string",
-          "enum": ["all", "warningAndError", "errorOnly", "off"],
+          "enum": ["all", "warningAndError", "errorOnly", "none"],
           "description": "Minimum severity for operational toast/feedback popups, such as action results (save failures and validation errors); separate from completion notifications."
         },
         "events": {
@@ -1090,12 +755,12 @@
           "properties": {
             "workflowComplete": {
               "type": "string",
-              "enum": ["all", "failuresOnly", "never"],
+              "enum": ["all", "failuresOnly", "none"],
               "description": "When to notify on workflow completion."
             },
             "promptComplete": {
               "type": "string",
-              "enum": ["all", "failuresOnly", "never"],
+              "enum": ["all", "failuresOnly", "none"],
               "description": "When to notify on individual prompt completion."
             },
             "hookEvents": {
@@ -1175,7 +840,7 @@
           "type": "string",
           "description": "Model override for commit message generation. Empty = use the commit harness default."
         },
-        "prompt": {
+        "systemPrompt": {
           "type": "string",
           "description": "System prompt sent before the git diff. The diff is appended automatically."
         }

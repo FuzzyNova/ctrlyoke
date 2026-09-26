@@ -243,7 +243,7 @@ all, in either scope:
   override only when deliberately isolated user-scoped state is more important
   than that shared convenience.
 
-Note in particular that `server.port`/`server.enabled` fall in the "same
+Note in particular that `server.port`/`server.autoStart` fall in the "same
 file, same value" bucket above — `CTRLYOKE_HOME` does not give the two
 instances different server config. See the next section for what that means
 in practice.
@@ -342,7 +342,7 @@ from:
 
 ### Hosted server, and why Playwright automation still works cleanly
 
-With `server.enabled: true`, both instances read the identical
+With `server.autoStart: true`, both instances read the identical
 `server.port` (default `3000`) and attempt to auto-start a hosted server on
 activation (`src/extension.ts:1294-1297`). The first instance to bind wins.
 When the other receives `EADDRINUSE`, `CtrlYokeHostedServer.listen()` probes

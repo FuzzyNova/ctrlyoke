@@ -73,7 +73,9 @@ describe("ServerSection", () => {
     ).toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Choose server bind address" })
+      screen.getByRole("button", {
+        name: "Choose server bind address, property server.bindAddress",
+      })
     );
     expect(
       screen.getByText(

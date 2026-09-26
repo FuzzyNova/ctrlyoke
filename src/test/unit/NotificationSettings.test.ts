@@ -32,7 +32,7 @@ suite("Notification settings defaults", () => {
     );
     assert.strictEqual(
       notifications.events.promptComplete,
-      NOTIFICATION_EVENT_MODES.NEVER
+      NOTIFICATION_EVENT_MODES.NONE
     );
     assert.strictEqual(notifications.events.hookEvents.notification, false);
     assert.strictEqual(notifications.toastLevel, TOAST_LEVEL_MODES.ALL);
@@ -63,10 +63,10 @@ suite("Notification settings defaults", () => {
       [USER_FEEDBACK_SEVERITY.SUCCESS, TOAST_LEVEL_MODES.ERROR_ONLY, false],
       [USER_FEEDBACK_SEVERITY.WARNING, TOAST_LEVEL_MODES.ERROR_ONLY, false],
       [USER_FEEDBACK_SEVERITY.ERROR, TOAST_LEVEL_MODES.ERROR_ONLY, true],
-      [USER_FEEDBACK_SEVERITY.INFO, TOAST_LEVEL_MODES.OFF, false],
-      [USER_FEEDBACK_SEVERITY.SUCCESS, TOAST_LEVEL_MODES.OFF, false],
-      [USER_FEEDBACK_SEVERITY.WARNING, TOAST_LEVEL_MODES.OFF, false],
-      [USER_FEEDBACK_SEVERITY.ERROR, TOAST_LEVEL_MODES.OFF, false],
+      [USER_FEEDBACK_SEVERITY.INFO, TOAST_LEVEL_MODES.NONE, false],
+      [USER_FEEDBACK_SEVERITY.SUCCESS, TOAST_LEVEL_MODES.NONE, false],
+      [USER_FEEDBACK_SEVERITY.WARNING, TOAST_LEVEL_MODES.NONE, false],
+      [USER_FEEDBACK_SEVERITY.ERROR, TOAST_LEVEL_MODES.NONE, false],
     ];
 
     for (const [severity, level, expected] of cases) {
@@ -84,8 +84,7 @@ suite("Notification settings defaults", () => {
         ({ event }) => event === HOOK_EVENT_NAMES.NOTIFICATION
       ),
       {
-        event: "notification",
-        label: "Notification",
+        event: HOOK_EVENT_NAMES.NOTIFICATION,
         description:
           "Fires when the harness displays a notification, including prompts that may require user input.",
       }
@@ -99,7 +98,15 @@ suite("Notification settings defaults", () => {
         "utf8"
       )
     ) as Record<string, unknown>;
-    const validate = new Ajv({ allErrors: true }).compile(schema);
+    const workflowSchema = JSON.parse(
+      fs.readFileSync(
+        path.resolve(__dirname, "../../../schemas/workflow-schema.json"),
+        "utf8"
+      )
+    ) as Record<string, unknown>;
+    const ajv = new Ajv({ allErrors: true });
+    ajv.addSchema(workflowSchema, "workflow-schema.json");
+    const validate = ajv.compile(schema);
 
     assert.strictEqual(
       validate({

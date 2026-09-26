@@ -10,7 +10,7 @@ describe("ErrorBehaviorEditor", () => {
 
     render(
       <ErrorBehaviorEditor
-        value={{ onError: "stop" }}
+        value={{ onError: "stopWorkflow" }}
         onChange={onChange}
         idPrefix="test-error"
       />
@@ -19,7 +19,7 @@ describe("ErrorBehaviorEditor", () => {
     await user.click(screen.getAllByRole("button")[0]);
     await user.click(
       screen
-        .getAllByText("Retry Step")[0]
+        .getAllByText("Retry")[0]
         .closest("button") as HTMLButtonElement
     );
 
@@ -28,6 +28,23 @@ describe("ErrorBehaviorEditor", () => {
       maxRetries: 1,
       retryDelayMs: 0,
     });
+  });
+
+  it("uses shared action labels and annotates the schema property", () => {
+    render(
+      <ErrorBehaviorEditor
+        value={{ onError: "stopWorkflow" }}
+        onChange={vi.fn()}
+        schemaPath="defaults.errorBehavior"
+      />
+    );
+
+    const trigger = screen.getByRole("button", { name: /Stop Workflow/ });
+    expect(trigger).toHaveAttribute("aria-label", expect.stringContaining("defaults.errorBehavior.onError"));
+    expect(trigger).toHaveAttribute("title", expect.stringContaining("property: defaults.errorBehavior.onError"));
+    fireEvent.click(trigger);
+    expect(screen.getByRole("button", { name: "Retry, defaults.errorBehavior.onError: retry" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Continue, defaults.errorBehavior.onError: continue" })).toBeInTheDocument();
   });
 
   it("commits retry numeric values on blur", () => {

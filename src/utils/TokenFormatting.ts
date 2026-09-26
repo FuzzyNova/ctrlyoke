@@ -228,9 +228,9 @@ export function buildAttemptTokenTooltipLines(params: {
   contextWindow?: { used: number; size: number };
   harness?: HarnessId;
   attemptTokens?: AttemptTokenSnapshot;
-  hideCost?: boolean;
+  showCostEstimates?: boolean;
 }): string[] {
-  const { contextWindow, harness, attemptTokens, hideCost } = params;
+  const { contextWindow, harness, attemptTokens, showCostEstimates } = params;
   const contextPct = contextWindow?.size
     ? Math.round((contextWindow.used / contextWindow.size) * 100)
     : undefined;
@@ -265,7 +265,7 @@ export function buildAttemptTokenTooltipLines(params: {
     attemptTotalLabel ? `Attempt total: ${attemptTotalLabel} tokens` : null,
     attemptBreakdown || null,
     compactionCount !== undefined ? `Compactions: ${compactionCount}` : null,
-    !hideCost && attemptTokens?.cost
+    showCostEstimates !== false && attemptTokens?.cost
       ? formatAttemptCostTooltip(attemptTokens.cost)
       : null,
   ].filter((part): part is string => part !== null);
@@ -282,7 +282,7 @@ export function buildStepHoverTooltip(params: {
   contextWindow?: { used: number; size: number };
   harness?: HarnessId;
   attemptTokens?: AttemptTokenSnapshot;
-  hideCost?: boolean;
+  showCostEstimates?: boolean;
 }): string {
   const detailLines = buildAttemptTokenTooltipLines(params);
   return detailLines.length

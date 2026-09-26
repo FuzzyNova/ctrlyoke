@@ -27,8 +27,6 @@ import {
   EXECUTION_MODES,
   HARNESS_IDS,
   PERMISSION_MODES,
-  WORKTREE_KEEP_HELP_TEXT,
-  WORKTREE_MODE_HELP_TEXT,
   WORKTREE_MODES,
 } from "@root/types/DashboardConstants";
 
@@ -63,6 +61,20 @@ describe("WorkflowPropertiesPanel permissions", () => {
   });
 
   afterEach(cleanup);
+
+  it("labels workflow fields with their workflow-relative schema path", () => {
+    render(<WorkflowPropertiesPanel />);
+
+    const fieldLabel = screen.getByText("Harness", { selector: "label" });
+    expect(fieldLabel).toHaveAttribute(
+      "title",
+      expect.stringContaining("property: harness")
+    );
+    expect(fieldLabel).toHaveAttribute(
+      "aria-label",
+      "Harness, property harness"
+    );
+  });
 
   it("shows the global permission mode when a new workflow has no override", () => {
     useSettingsStore.getState().updateGlobalSetting("toolPermissions", {
@@ -119,7 +131,9 @@ describe("WorkflowPropertiesPanel permissions", () => {
     render(<WorkflowPropertiesPanel />);
     fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Secrets" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Secrets, property secrets" })
+    );
 
     expect(
       screen.getByRole("button", { name: "API_TOKEN" })
@@ -145,7 +159,9 @@ describe("WorkflowPropertiesPanel permissions", () => {
 
     render(<WorkflowPropertiesPanel />);
     fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
-    fireEvent.click(screen.getByRole("button", { name: "Secrets" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Secrets, property secrets" })
+    );
     fireEvent.click(
       screen.getByRole("button", { name: "INLINE_TOKENGranted by prompt text" })
     );
@@ -242,9 +258,9 @@ describe("WorkflowPropertiesPanel permissions", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Trusted External Roots" })
+      screen.getByRole("button", { name: /^Trusted External Roots/ })
     );
-    fireEvent.click(screen.getByRole("button", { name: "Custom" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Custom/ }));
 
     expect(
       screen.getByTestId(`trusted-root-row-${userRoot}`)
@@ -298,13 +314,13 @@ describe("WorkflowPropertiesPanel permissions", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
 
     expect(
-      screen.getByText("Inherit (2 roots)", { exact: false })
+      screen.getByText("Inherit (Custom)", { exact: false })
     ).toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Trusted External Roots" })
+      screen.getByRole("button", { name: /^Trusted External Roots/ })
     );
-    fireEvent.click(screen.getByRole("button", { name: "Custom" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Custom/ }));
 
     expect(
       screen.getByTestId(`trusted-root-row-${userRoot}`)
@@ -514,13 +530,13 @@ describe("WorkflowPropertiesPanel execution mode", () => {
     render(<WorkflowPropertiesPanel />);
 
     const executionMode = screen.getByRole("button", {
-      name: "Execution Mode",
+      name: /^Execution Mode/,
     });
     expect(executionMode).toHaveTextContent("Headless");
     expect(screen.queryByRole("button", { name: /Set as Default/ })).toBeNull();
 
     fireEvent.click(executionMode);
-    fireEvent.click(screen.getByRole("button", { name: "Interactive" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Interactive,/ }));
 
     expect(useSettingsStore.getState().workflowProperties.executionMode).toBe(
       EXECUTION_MODES.INTERACTIVE
@@ -560,18 +576,24 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
   afterEach(cleanup);
 
   function chooseWorktreeMode(label: string): void {
-    fireEvent.click(screen.getByLabelText("Worktree"));
-    fireEvent.click(screen.getByRole("button", { name: label }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Worktree, property worktree/ })
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: new RegExp(`^${label}`) })
+    );
   }
 
   it("renders None as one control and keeps the prompt drawer free of worktree", async () => {
     render(<WorkflowPropertiesPanel />);
 
-    expect(screen.getByLabelText("Worktree")).toHaveTextContent("None");
+    expect(
+      screen.getByRole("button", { name: /^Worktree, property worktree/ })
+    ).toHaveTextContent("None");
     expect(screen.queryByLabelText("Worktree branch")).not.toBeInTheDocument();
     expect(screen.getByText("Worktree", { selector: "label" })).toHaveAttribute(
       "title",
-      WORKTREE_MODE_HELP_TEXT
+      expect.stringContaining("property: worktree")
     );
   });
 
@@ -627,7 +649,10 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     expect(screen.queryByLabelText("Worktree branch")).not.toBeInTheDocument();
     expect(
       screen.getByText("Keep directory", { selector: "label" })
-    ).toHaveAttribute("title", WORKTREE_KEEP_HELP_TEXT);
+    ).toHaveAttribute(
+      "title",
+      expect.stringContaining("property: worktree.keep")
+    );
     expect(postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "updateWorkflowProperties",
@@ -750,32 +775,13 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
   });
 
   it("treats absent, false, and none as the same default", () => {
-    useSettingsStore.getState().updateGlobalSetting("worktree", {
-      mode: WORKTREE_MODES.NONE,
-    });
+    useSettingsStore.getState().updateGlobalSetting("worktree", false);
     useSettingsStore.getState().updateWorkflowProperty("worktree", false);
     render(<WorkflowPropertiesPanel />);
 
-    const worktreeField =
-      screen.getByLabelText("Worktree").parentElement?.parentElement;
-    expect(
-      within(worktreeField as HTMLElement).queryByRole("button", {
-        name: /Set as Default/,
-      })
-    ).toBeNull();
-  });
-
-  it("normalizes the legacy none sentinel for default comparison", () => {
-    useSettingsStore.getState().updateGlobalSetting("worktree", {
-      mode: WORKTREE_MODES.NONE,
-    });
-    useSettingsStore
-      .getState()
-      .updateWorkflowProperty("worktree", "none" as never);
-    render(<WorkflowPropertiesPanel />);
-
-    const worktreeField =
-      screen.getByLabelText("Worktree").parentElement?.parentElement;
+    const worktreeField = screen.getByRole("button", {
+      name: /^Worktree, property worktree/,
+    }).parentElement?.parentElement;
     expect(
       within(worktreeField as HTMLElement).queryByRole("button", {
         name: /Set as Default/,

@@ -94,11 +94,11 @@ Default values for <code v-pre>{{varName}}</code> substitutions.
 
 - **Type:** `string[]` or `null`
 
-Restricts, extends, or disables this workflow's external-root access relative to the user/workspace defaults. Omit this field entirely to inherit the live union of approved user + workspace permissions.allowedExternalFileRoots (today's behavior, unchanged). When set, the array REPLACES that inherited union rather than adding to it — it may contain brand-new roots this workflow alone needs (widening, without growing the user/workspace list for every other workflow) and/or a deliberately narrowed subset of already-trusted roots (restricting a risky workflow to less than the everyday default); either way every root in the array still needs its own one-time approval unless already approved at a broader scope.
+Restricts, extends, or disables this workflow's external-root access relative to the user/workspace defaults. Omit this field entirely to inherit the live union of approved user + workspace permissions.trustedExternalRoots (today's behavior, unchanged). When set, the array REPLACES that inherited union rather than adding to it — it may contain brand-new roots this workflow alone needs (widening, without growing the user/workspace list for every other workflow) and/or a deliberately narrowed subset of already-trusted roots (restricting a risky workflow to less than the everyday default); either way every root in the array still needs its own one-time approval unless already approved at a broader scope.
 
 Accepted forms:
 
-- `string[]` — Absolute external directory roots this workflow is restricted to. REPLACES (does not add to) the workspace's approved permissions.allowedExternalFileRoots for this workflow's runs — a root already approved at user or workspace scope needs no separate approval, but this array is the complete set; roots trusted broadly but omitted here are not accessible to this workflow. Declaring a new root here only registers a request — it never grants access by itself. Before this workflow first runs (or is loaded in VS Code) with a newly declared root, a one-time batch approval is required: a VS Code prompt, or `ctrlyoke trust-workflow-external-roots <file>` for the standalone CLI. Execution fails closed until every declared root has a recorded decision for this workflow file's identity.
+- `string[]` — Absolute external directory roots this workflow is restricted to. REPLACES (does not add to) the workspace's approved permissions.trustedExternalRoots for this workflow's runs — a root already approved at user or workspace scope needs no separate approval, but this array is the complete set; roots trusted broadly but omitted here are not accessible to this workflow. Declaring a new root here only registers a request — it never grants access by itself. Before this workflow first runs (or is loaded in VS Code) with a newly declared root, a one-time batch approval is required: a VS Code prompt, or `ctrlyoke trust-workflow-external-roots <file>` for the standalone CLI. Execution fails closed until every declared root has a recorded decision for this workflow file's identity.
 - `null` — Explicitly disables all external-root access for this workflow, regardless of user/workspace-scope trusted roots. Only workspace files are accessible. Use this to run a specific workflow with no external directories at all.
 
 ### `_templateMeta` {#workflow-file-templatemeta}
@@ -473,6 +473,61 @@ Script gate that runs before the prompt. Determines whether to run the prompt, s
 
 Also includes every field from [Shared script fields](#script-fields).
 
+### `script` {#pre-condition-script}
+
+- **Type:** `string`
+- **Required:** yes
+
+Shell command or path to script. Resolved relative to workspace root or .ctrlyoke/.
+
+### `env` {#pre-condition-env}
+
+- **Type:** map of `string`
+
+Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.
+
+### `compareSource` {#pre-condition-comparesource}
+
+- **Type:** `"stdout" | "stderr" | "exitCode"`
+
+Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.
+
+### `returns` {#pre-condition-returns}
+
+- **Type:** removed
+
+Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.
+
+### `timeout` {#pre-condition-timeout}
+
+- **Type:** `number`
+
+Timeout in milliseconds. When omitted, the `execution.scriptTimeout` setting applies.
+
+### `shell` {#pre-condition-shell}
+
+- **Type:** `string`
+
+Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. "pwsh", "bash", "cmd". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted.
+
+### `operator` {#pre-condition-operator}
+
+- **Type:** `"eq" | "ne" | "contains" | "notContains" | "gte" | "gt" | "lte" | "lt" | "matches" | "isEmpty" | "isNotEmpty"`
+
+How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag.
+
+### `expected` {#pre-condition-expected}
+
+- **Type:** `string` or `number`
+
+Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.
+
+### `ignoreCase` {#pre-condition-ignorecase}
+
+- **Type:** `boolean`
+
+Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.
+
 ### `onPass` {#pre-condition-onpass}
 
 - **Type:** `"continue" | "skipPrompt" | "stopWorkflow"`
@@ -492,6 +547,61 @@ What to do when the pre-condition check fails. 'continue': run the prompt anyway
 Validation that runs after the prompt completes. Shares script/env/compareSource/operator/expected/timeout with preCondition and scriptStep via scriptProperties.
 
 Also includes every field from [Shared script fields](#script-fields).
+
+### `script` {#end-condition-script}
+
+- **Type:** `string`
+- **Required:** yes
+
+Shell command or path to script. Resolved relative to workspace root or .ctrlyoke/.
+
+### `env` {#end-condition-env}
+
+- **Type:** map of `string`
+
+Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.
+
+### `compareSource` {#end-condition-comparesource}
+
+- **Type:** `"stdout" | "stderr" | "exitCode"`
+
+Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.
+
+### `returns` {#end-condition-returns}
+
+- **Type:** removed
+
+Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.
+
+### `timeout` {#end-condition-timeout}
+
+- **Type:** `number`
+
+Timeout in milliseconds. When omitted, the `execution.scriptTimeout` setting applies.
+
+### `shell` {#end-condition-shell}
+
+- **Type:** `string`
+
+Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. "pwsh", "bash", "cmd". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted.
+
+### `operator` {#end-condition-operator}
+
+- **Type:** `"eq" | "ne" | "contains" | "notContains" | "gte" | "gt" | "lte" | "lt" | "matches" | "isEmpty" | "isNotEmpty"`
+
+How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag.
+
+### `expected` {#end-condition-expected}
+
+- **Type:** `string` or `number`
+
+Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.
+
+### `ignoreCase` {#end-condition-ignorecase}
+
+- **Type:** `boolean`
+
+Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.
 
 ### `maxRetries` {#end-condition-maxretries}
 
@@ -597,7 +707,7 @@ Policy for internal errors in any step phase, including pre-conditions, prompts/
 
 ### `onError` {#error-behavior-onerror}
 
-- **Type:** `"stop" | "retry" | "continue"`
+- **Type:** `"stopWorkflow" | "retry" | "continue"`
 - **Required:** yes
 
 What to do when a step phase cannot run or otherwise encounters an internal error.

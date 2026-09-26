@@ -96,7 +96,7 @@ describe("Harness share", () => {
 
     const user = userEvent.setup();
     render(
-      <StatsUsageSection hideCost={false} activeScope={SETTING_SCOPES.USER} />
+      <StatsUsageSection showCostEstimates={true} activeScope={SETTING_SCOPES.USER} />
     );
     const share = getShareSection();
 
@@ -128,7 +128,7 @@ describe("Harness share", () => {
     });
 
     render(
-      <StatsUsageSection hideCost={false} activeScope={SETTING_SCOPES.USER} />
+      <StatsUsageSection showCostEstimates={true} activeScope={SETTING_SCOPES.USER} />
     );
     const share = getShareSection();
     const bar = share.querySelector(
@@ -150,7 +150,7 @@ describe("Harness share", () => {
     });
 
     render(
-      <StatsUsageSection hideCost={false} activeScope={SETTING_SCOPES.USER} />
+      <StatsUsageSection showCostEstimates={true} activeScope={SETTING_SCOPES.USER} />
     );
     const share = getShareSection();
 
@@ -172,7 +172,7 @@ describe("Harness share", () => {
     useWorkspaceStatsStore.setState({ snapshot: snapshot({}) });
 
     render(
-      <StatsUsageSection hideCost={false} activeScope={SETTING_SCOPES.USER} />
+      <StatsUsageSection showCostEstimates={true} activeScope={SETTING_SCOPES.USER} />
     );
     const share = getShareSection();
 
@@ -183,7 +183,7 @@ describe("Harness share", () => {
     expect(share.textContent).not.toContain("NaN");
   });
 
-  it("omits row costs when hideCost is enabled", () => {
+  it("omits row costs when showCostEstimates is disabled", () => {
     useWorkspaceStatsStore.setState({
       snapshot: snapshot({
         [HARNESS_IDS.CLAUDE_CLI]: contribution(10, 100, 38.2),
@@ -191,7 +191,7 @@ describe("Harness share", () => {
     });
 
     render(
-      <StatsUsageSection hideCost={true} activeScope={SETTING_SCOPES.USER} />
+      <StatsUsageSection showCostEstimates={false} activeScope={SETTING_SCOPES.USER} />
     );
 
     expect(screen.queryByText("≈$38.20")).not.toBeInTheDocument();

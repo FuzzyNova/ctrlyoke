@@ -2,8 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { LocalTextInput } from "../shared/LocalInputs";
 import {
   CUSTOM_SHELL_OPTION,
-  TERMINAL_CURSOR_STYLES,
-  TERMINAL_MOBILE_CONTROL_BAR,
   UI_PLATFORMS,
   type TerminalCursorStyle,
   type TerminalMobileControlBar,
@@ -19,6 +17,11 @@ import { NumberField, SettingInputRow, SettingToggleRow } from "../shared";
 import { clamp } from "@utils/number";
 import { TerminalControlBarEditor } from "./TerminalControlBarEditor";
 import { Icon } from "../shared/Icon";
+import {
+  TERMINAL_CURSOR_STYLE_OPTIONS_META,
+  TERMINAL_MOBILE_CONTROL_BAR_OPTIONS_META,
+  toSelectOptions,
+} from "@root/types/SchemaUiMetadata";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -26,18 +29,6 @@ interface Props {
   onUpdate: (path: string, value: unknown) => void;
   onReset: (path: string) => void;
 }
-
-const CURSOR_STYLE_OPTIONS = [
-  { value: TERMINAL_CURSOR_STYLES.BLOCK, label: "Block" },
-  { value: TERMINAL_CURSOR_STYLES.UNDERLINE, label: "Underline" },
-  { value: TERMINAL_CURSOR_STYLES.BAR, label: "Bar" },
-];
-
-const CONTROL_BAR_OPTIONS = [
-  { value: TERMINAL_MOBILE_CONTROL_BAR.AUTO, label: "Auto" },
-  { value: TERMINAL_MOBILE_CONTROL_BAR.ALWAYS, label: "Always show" },
-  { value: TERMINAL_MOBILE_CONTROL_BAR.NEVER, label: "Never show" },
-];
 
 const WINDOWS_SHELL_OPTIONS = [
   { value: "", label: "Auto-detect" },
@@ -48,7 +39,11 @@ const WINDOWS_SHELL_OPTIONS = [
     label: "Git Bash",
   },
   { value: "C:\\Windows\\System32\\wsl.exe", label: "WSL" },
-  { value: CUSTOM_SHELL_OPTION, label: "Custom path..." },
+  {
+    value: CUSTOM_SHELL_OPTION,
+    label: "Custom path...",
+    pseudo: { writes: 'terminal.shellExecutable: "<custom path>"' },
+  },
 ];
 
 function FontStepper({
@@ -185,7 +180,11 @@ export function TerminalSection({
             onChange={(v) =>
               onUpdate("terminal.cursorStyle", v as TerminalCursorStyle)
             }
-            options={CURSOR_STYLE_OPTIONS}
+            schemaPath="terminal.cursorStyle"
+            options={toSelectOptions(
+              TERMINAL_CURSOR_STYLE_OPTIONS_META,
+              "terminal.cursorStyle"
+            )}
           />
         </SettingInputRow>
 
@@ -269,6 +268,7 @@ export function TerminalSection({
                   setShowCustomShell(false);
                   onUpdate("terminal.shellExecutable", v);
                 }}
+                schemaPath="terminal.shellExecutable"
                 options={WINDOWS_SHELL_OPTIONS}
               />
             </SettingInputRow>
@@ -343,7 +343,7 @@ export function TerminalSection({
         </h3>
 
         <SettingInputRow
-          label="Control bar visibility"
+          label="Mobile control bar"
           id="terminal-mobile-control-bar"
           path="terminal.mobileControlBar"
           {...rowProps}
@@ -357,7 +357,11 @@ export function TerminalSection({
                 v as TerminalMobileControlBar
               )
             }
-            options={CONTROL_BAR_OPTIONS}
+            schemaPath="terminal.mobileControlBar"
+            options={toSelectOptions(
+              TERMINAL_MOBILE_CONTROL_BAR_OPTIONS_META,
+              "terminal.mobileControlBar"
+            )}
           />
           <p className="text-xs text-description-fg mt-1">
             Auto shows the bar for touch browsers connected to the ctrlyoke

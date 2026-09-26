@@ -3,7 +3,7 @@ import type {
   SettingSource,
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
-import type { HarnessId } from "@root/types/DashboardConstants";
+import { SETTING_PATHS, type HarnessId } from "@root/types/DashboardConstants";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
@@ -43,7 +43,7 @@ function PromptPreview({ text }: { text: string }) {
   );
 }
 
-const DEFAULT_PROMPT = CTRLYOKE_SETTINGS_DEFAULTS.commit.prompt;
+const DEFAULT_PROMPT = CTRLYOKE_SETTINGS_DEFAULTS.commit.systemPrompt;
 const EMPTY_HIDDEN_VALUES: string[] = [];
 
 export function CommitSection({
@@ -127,6 +127,7 @@ export function CommitSection({
       >
         <HarnessDropdown
           id="commit-harness"
+          schemaPath="commit.harness"
           value={(commit.harness as string) || INHERIT_DEFAULT_OPTION}
           onChange={(value) =>
             onUpdate(
@@ -161,6 +162,7 @@ export function CommitSection({
             id="commit-model"
             value={currentModel}
             onChange={(v) => onUpdate("commit.model", v || "")}
+            schemaPath="commit.model"
             options={discoveredModels}
           />
         ) : (
@@ -177,15 +179,15 @@ export function CommitSection({
       <SettingInputRow
         label="System prompt"
         id="commit-prompt"
-        path="commit.prompt"
+        path={SETTING_PATHS.COMMIT_SYSTEM_PROMPT}
         description="Prompt sent to the AI along with the git diff. The AI should return only the commit message text."
         {...rowProps}
       >
         <LocalTextarea
           id="commit-prompt"
           rows={5}
-          value={commit.prompt as string}
-          onCommit={(v) => onUpdate("commit.prompt", v)}
+          value={commit.systemPrompt as string}
+          onCommit={(v) => onUpdate(SETTING_PATHS.COMMIT_SYSTEM_PROMPT, v)}
           placeholder={DEFAULT_PROMPT}
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border resize-y font-mono"
         />

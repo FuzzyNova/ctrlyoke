@@ -1291,8 +1291,8 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
     : undefined;
   const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
   const [copiedOutput, setCopiedOutput] = useState(false);
-  const hideCost = useSettingsStore(
-    (state) => state.fullGlobalSettings?.settings.ui.hideCost === true
+  const showCostEstimates = useSettingsStore(
+    (state) => state.fullGlobalSettings?.settings.ui.showCostEstimates !== false
   );
 
   const handleCopySessionId = useCallback(async () => {
@@ -1359,7 +1359,7 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
       totalLabel ? `Attempt total: ${totalLabel} tokens` : null,
       tokenBreakdown || null,
       compactionLabel ? `Compactions: ${compactionCount}` : null,
-      !hideCost && cost ? formatAttemptCostTooltip(cost) : null,
+      showCostEstimates && cost ? formatAttemptCostTooltip(cost) : null,
     ]
       .filter((part): part is string => part !== null)
       .join("\n");
@@ -1377,7 +1377,7 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
           </span>
         );
       }
-      if (!hideCost && cost) {
+      if (showCostEstimates && cost) {
         parts.push(
           <span key="cost" title={formatAttemptCostTooltip(cost)}>
             {formatCostLabel(cost.usd)}
@@ -1398,7 +1398,7 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
           </span>
         );
       }
-      if (!hideCost && cost) {
+      if (showCostEstimates && cost) {
         parts.push(
           <span key="cost" title={formatAttemptCostTooltip(cost)}>
             {formatCostLabel(cost.usd)}

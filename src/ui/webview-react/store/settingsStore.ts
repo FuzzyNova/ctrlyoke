@@ -48,6 +48,7 @@ import {
   type HarnessColorSettings,
   type WorktreeDefaultConfig,
 } from "@root/types/CtrlYokeSettings";
+import type { WorktreeObjectConfig } from "@root/types/CtrlYokeTypes";
 import { DEFAULT_TERMINAL_BAR_LAYOUT } from "@root/utils/TerminalControlBarFormat";
 
 /**
@@ -378,7 +379,7 @@ interface SettingsActions {
   getEffectiveHarness: () => HarnessId;
   getEffectiveModel: () => string;
   getEffectiveExecutionMode: () => ExecutionMode;
-  getEffectiveWorktree: () => WorktreeDefaultConfig | false;
+  getEffectiveWorktree: () => WorktreeObjectConfig | false;
   getEffectiveAgent: () => string;
   getEffectiveResumeSession: () => boolean;
   getEffectiveMcpServers: () => (string | object)[] | null;
@@ -433,7 +434,7 @@ const initialGlobalSettings: GlobalSettings = {
   defaultErrorBehavior: null,
   defaultEndCondition: null,
   defaultPreCondition: null,
-  worktree: { mode: WORKTREE_MODES.NONE },
+  worktree: false,
   terminal: {
     fontSize: 14,
     lineHeight: 1.2,
@@ -758,12 +759,15 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
         return { mode: WORKTREE_MODES.MANAGED };
       }
       if (authored === undefined) {
-        const defaultWorktree = globalSettings.worktree ?? {
-          mode: WORKTREE_MODES.NONE,
-        };
-        return defaultWorktree.mode === WORKTREE_MODES.NONE
-          ? false
-          : { ...defaultWorktree };
+        const defaultWorktree = globalSettings.worktree ?? false;
+        if (defaultWorktree === false) return false;
+        if (defaultWorktree === true) {
+          return { mode: WORKTREE_MODES.MANAGED };
+        }
+        if (typeof defaultWorktree === "string") {
+          return { mode: WORKTREE_MODES.NAMED, branch: defaultWorktree };
+        }
+        return { ...defaultWorktree };
       }
       if (typeof authored === "string") {
         return { mode: WORKTREE_MODES.NAMED, branch: authored };

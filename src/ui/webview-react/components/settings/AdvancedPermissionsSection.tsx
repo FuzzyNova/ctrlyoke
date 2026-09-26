@@ -3,13 +3,22 @@ import type {
   SettingSource,
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
-import { MESSAGE_TYPES, SETTING_SCOPES } from "@root/types/DashboardConstants";
+import {
+  MESSAGE_TYPES,
+  SETTING_PATHS,
+  SETTING_SCOPES,
+} from "@root/types/DashboardConstants";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { CustomSelect } from "../shared/CustomSelect";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 import { PermissionCapabilitySummary } from "../shared/PermissionCapabilitySummary";
 import { TrustedRootsListEditor } from "../shared/TrustedRootsListEditor";
+import {
+  CODEX_APPROVAL_POLICY_OPTIONS_META,
+  CODEX_SANDBOX_MODE_OPTIONS_META,
+  toSelectOptions,
+} from "@root/types/SchemaUiMetadata";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -17,18 +26,6 @@ interface Props {
   onUpdate: (path: string, value: unknown) => void;
   onReset: (path: string) => void;
 }
-
-const CODEX_SANDBOX_OPTIONS = [
-  { value: "read-only", label: "Read Only" },
-  { value: "workspace-write", label: "Workspace Write" },
-  { value: "danger-full-access", label: "Danger: Full Access" },
-];
-
-const CODEX_APPROVAL_OPTIONS = [
-  { value: "untrusted", label: "Untrusted" },
-  { value: "on-request", label: "On Request" },
-  { value: "never", label: "Never" },
-];
 
 export function AdvancedPermissionsSection({
   settings,
@@ -45,11 +42,11 @@ export function AdvancedPermissionsSection({
     activeScope === SETTING_SCOPES.USER
       ? (
           settings.externalFileRootsByScope?.user ??
-          permissions.allowedExternalFileRoots
+          permissions.trustedExternalRoots
         ).map((path) => ({ path }))
       : (
           settings.externalFileRootsByScope?.workspace ??
-          permissions.allowedExternalFileRoots.map((path) => ({ path }))
+          permissions.trustedExternalRoots.map((path) => ({ path }))
         ).map((entry) => (typeof entry === "string" ? { path: entry } : entry));
 
   const handleBrowseExternalRoot = () => {
@@ -60,7 +57,7 @@ export function AdvancedPermissionsSection({
   };
 
   const handleAddExternalRoot = (path: string) => {
-    onUpdate("permissions.allowedExternalFileRoots", [
+    onUpdate(SETTING_PATHS.PERMISSIONS_TRUSTED_EXTERNAL_ROOTS, [
       ...scopedEntries.map((entry) => entry.path),
       path,
     ]);
@@ -68,7 +65,7 @@ export function AdvancedPermissionsSection({
 
   const handleRemoveExternalRoot = (path: string) => {
     onUpdate(
-      "permissions.allowedExternalFileRoots",
+      SETTING_PATHS.PERMISSIONS_TRUSTED_EXTERNAL_ROOTS,
       scopedEntries
         .map((entry) => entry.path)
         .filter((entryPath) => entryPath !== path)
@@ -113,12 +110,12 @@ export function AdvancedPermissionsSection({
       </div>
       <div>
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
-          External File Roots
+          Trusted External Roots
         </h3>
         <SettingInputRow
-          label="Allowed external directories"
-          id="allowed-external-file-roots"
-          path="permissions.allowedExternalFileRoots"
+          label="Trusted external roots"
+          id="trusted-external-roots"
+          path={SETTING_PATHS.PERMISSIONS_TRUSTED_EXTERNAL_ROOTS}
           {...rowProps}
         >
           <TrustedRootsListEditor
@@ -174,7 +171,11 @@ export function AdvancedPermissionsSection({
               id="codex-sandbox-mode"
               value={permissions.codexSandboxMode}
               onChange={(v) => onUpdate("permissions.codexSandboxMode", v)}
-              options={CODEX_SANDBOX_OPTIONS}
+              schemaPath="permissions.codexSandboxMode"
+              options={toSelectOptions(
+                CODEX_SANDBOX_MODE_OPTIONS_META,
+                "permissions.codexSandboxMode"
+              )}
             />
           </SettingInputRow>
           <SettingInputRow
@@ -187,7 +188,11 @@ export function AdvancedPermissionsSection({
               id="codex-approval-policy"
               value={permissions.codexApprovalPolicy}
               onChange={(v) => onUpdate("permissions.codexApprovalPolicy", v)}
-              options={CODEX_APPROVAL_OPTIONS}
+              schemaPath="permissions.codexApprovalPolicy"
+              options={toSelectOptions(
+                CODEX_APPROVAL_POLICY_OPTIONS_META,
+                "permissions.codexApprovalPolicy"
+              )}
             />
           </SettingInputRow>
         </div>

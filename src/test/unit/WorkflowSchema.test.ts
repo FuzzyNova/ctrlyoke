@@ -44,6 +44,38 @@ suite("Workflow template schema", () => {
     assert.strictEqual(validate(workflow("passthrough")), false);
   });
 
+  test("closes conditions while accepting every script property", () => {
+    const scriptProperties = {
+      script: "echo ready",
+      env: { CHECK_MODE: "strict" },
+      shell: "pwsh",
+    };
+    assert.strictEqual(
+      validate({
+        endCondition: { ...scriptProperties, onPass: "continue" },
+        preCondition: { ...scriptProperties, onFail: "skipPrompt" },
+        steps: [{ prompt: "hi" }],
+      }),
+      true,
+      JSON.stringify(validate.errors)
+    );
+
+    assert.strictEqual(
+      validate({
+        endCondition: { ...scriptProperties, unknown: true },
+        steps: [{ prompt: "hi" }],
+      }),
+      false
+    );
+    assert.strictEqual(
+      validate({
+        preCondition: { ...scriptProperties, unknown: true },
+        steps: [{ prompt: "hi" }],
+      }),
+      false
+    );
+  });
+
   test("parses and validates every bundled workflow template", async () => {
     const workflowsDirectory = path.resolve(
       __dirname,

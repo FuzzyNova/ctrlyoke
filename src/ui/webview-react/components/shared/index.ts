@@ -48,11 +48,7 @@ export {
 } from "./SegmentedTabBar";
 export { DrawerTabBar } from "./DrawerTabBar";
 export { DrawerRow } from "./DrawerRow";
-export {
-  PriorContextSelect,
-  PRIOR_CONTEXT_KEYWORD_LABELS,
-  type KeywordMode,
-} from "./PriorContextSelect";
+export { PriorContextSelect, type KeywordMode } from "./PriorContextSelect";
 export { SkillsSelect } from "./SkillsSelect";
 export {
   McpServersEditor,
@@ -70,10 +66,7 @@ export {
   type McpServerFormTab,
   type McpServerTransport,
 } from "./McpServerForm";
-export {
-  PERMISSION_MODE_OPTIONS,
-  buildPermissionsDefaultLabel,
-} from "./permissionUtils";
+export { buildPermissionsDefaultLabel } from "./permissionUtils";
 export { FieldDiagnostic, CompatibilitySummary } from "./FieldDiagnostic";
 export { type TabIconOverride } from "./tabBadgeUtils";
 export {

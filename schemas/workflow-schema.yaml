@@ -279,15 +279,15 @@ definitions:
               minLength: 1
             description: >-
               Absolute external directory roots this workflow is restricted to. REPLACES (does not
-              add to) the workspace's approved permissions.allowedExternalFileRoots for this
-              workflow's runs — a root already approved at user or workspace scope needs no separate
-              approval, but this array is the complete set; roots trusted broadly but omitted here
-              are not accessible to this workflow. Declaring a new root here only registers a
-              request — it never grants access by itself. Before this workflow first runs (or is
-              loaded in VS Code) with a newly declared root, a one-time batch approval is required:
-              a VS Code prompt, or `ctrlyoke trust-workflow-external-roots <file>` for the
-              standalone CLI. Execution fails closed until every declared root has a recorded
-              decision for this workflow file's identity.
+              add to) the workspace's approved permissions.trustedExternalRoots for this workflow's
+              runs — a root already approved at user or workspace scope needs no separate approval,
+              but this array is the complete set; roots trusted broadly but omitted here are not
+              accessible to this workflow. Declaring a new root here only registers a request — it
+              never grants access by itself. Before this workflow first runs (or is loaded in VS
+              Code) with a newly declared root, a one-time batch approval is required: a VS Code
+              prompt, or `ctrlyoke trust-workflow-external-roots <file>` for the standalone CLI.
+              Execution fails closed until every declared root has a recorded decision for this
+              workflow file's identity.
           - type: 'null'
             description: >-
               Explicitly disables all external-root access for this workflow, regardless of
@@ -296,8 +296,8 @@ definitions:
         description: >-
           Restricts, extends, or disables this workflow's external-root access relative to the
           user/workspace defaults. Omit this field entirely to inherit the live union of approved
-          user + workspace permissions.allowedExternalFileRoots (today's behavior, unchanged). When
-          set, the array REPLACES that inherited union rather than adding to it — it may contain
+          user + workspace permissions.trustedExternalRoots (today's behavior, unchanged). When set,
+          the array REPLACES that inherited union rather than adding to it — it may contain
           brand-new roots this workflow alone needs (widening, without growing the user/workspace
           list for every other workflow) and/or a deliberately narrowed subset of already-trusted
           roots (restricting a risky workflow to less than the everyday default); either way every
@@ -462,15 +462,6 @@ definitions:
           with output in the Output panel. Pre/end-condition scripts always run headless. Omitting
           this field inherits the workflow/global default.
       agent:
-        oneOf:
-          - type: string
-            pattern: ^[a-zA-Z0-9-_]+$
-          - type: string
-            const: ''
-            description: >-
-              Empty string means no agent — the form the dashboard's "None" selection serializes to.
-              Distinct from null, which explicitly disables an inherited agent.
-          - type: 'null'
         description: >-
           Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions
           (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md').
@@ -478,6 +469,7 @@ definitions:
           so it works the same on every harness. Native harness agent discovery is managed
           separately in the Agents & Skills settings page and does not determine workflow agent
           support. Use null to explicitly disable inherited agent selection.
+        $ref: '#/definitions/agent'
       resumeSession:
         type: boolean
         description: >-
@@ -489,10 +481,7 @@ definitions:
         oneOf:
           - type: array
             items:
-              oneOf:
-                - type: string
-                  description: A well-known MCP server ID (e.g., "ctrlyoke" to enable dynamic queue extension).
-                - $ref: '#/definitions/mcpServerConfig'
+              $ref: '#/definitions/mcpServerEntry'
             description: >-
               MCP servers to attach. Registry IDs resolve against ctrlyoke's managed MCP registry;
               include "ctrlyoke" to enable dynamic queue extension.
@@ -530,12 +519,6 @@ definitions:
           automatically resumes previous prompt's session. Working file runtime metadata stores the
           actual session ID used during execution.
       skills:
-        oneOf:
-          - type: array
-            items:
-              type: string
-              pattern: ^[a-zA-Z0-9-_]+$
-          - type: 'null'
         description: >-
           Portable ctrlyoke prompt attachments. ctrlyoke attaches each selected skill's content to
           the prompt, so skills work the same on every harness. The Agents & Skills settings page
@@ -543,17 +526,13 @@ definitions:
           harness; native discovery does not determine workflow skills support. Prompt-level skills
           replace workflow-level skills (no merging). Use null to explicitly disable inherited
           skills.
+        $ref: '#/definitions/skills'
       secrets:
-        oneOf:
-          - type: array
-            items:
-              type: string
-              pattern: ^[A-Z][A-Z0-9_]*$
-          - type: 'null'
         description: >-
           Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets
           replace workflow-level secrets (no merging). Use null to explicitly disable an inherited
           grant array; inline !NAME references in prompt text remain authoritative grants.
+        $ref: '#/definitions/secrets'
       endCondition:
         oneOf:
           - $ref: '#/definitions/endCondition'
@@ -579,32 +558,7 @@ definitions:
           run in this workspace. Addresses never contain local paths. When omitted, no context is
           injected. Note: combining with resumeSession:true may duplicate context (accepted
           limitation).
-        oneOf:
-          - type: string
-            enum:
-              - all
-              - previous
-              - none
-              - finalStepAll
-              - finalStepPrevious
-            description: >-
-              Keyword shorthand: 'all' = all prior queue prompt outputs, 'previous' = immediately
-              preceding queue prompt output, 'none' = no injection, 'finalStepAll' = all previous
-              final step loop outputs, 'finalStepPrevious' = immediately preceding final step loop
-              output
-          - type: array
-            items:
-              type: integer
-              minimum: 1
-              description: 1-based prompt number
-            minItems: 1
-            description: >-
-              Specific prior prompt numbers to include (1-based, e.g. [1, 3] includes prompts 1 and
-              3)
-          - $ref: '#/definitions/workflowRunAddress'
-            description: >-
-              Import all resolved queue and final-step output from one completed run in this same
-              workspace.
+        $ref: '#/definitions/priorContext'
       additionalArgs:
         oneOf:
           - type: string
@@ -617,62 +571,20 @@ definitions:
           explicitly disable additional args even if the workflow or settings define some. Example:
           "--effort high --max-turns 10"
       toolPermissions:
-        oneOf:
-          - type: object
-            description: >-
-              Per-workflow/prompt tool permission overrides. Follows three-tier precedence: prompt >
-              workflow > the `defaults.toolPermissions` setting.
-            properties:
-              mode:
-                type: string
-                enum:
-                  - dangerouslyAllowAll
-                  - allowAll
-                  - custom
-                  - none
-                description: >-
-                  Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll'
-                  auto-grants all but respects deny list. 'custom' uses allowedTools + deniedTools
-                  only. 'none' passes no permission flags at all — it does not deny tools; the
-                  harness applies whatever permissions are configured in its own local settings
-                  (e.g. ~/.claude/settings.json, Copilot CLI config).
-              allowedTools:
-                type: array
-                items:
-                  type: string
-                description: >-
-                  Tool patterns to allow (used in custom mode). Currently supported by Copilot CLI,
-                  Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode
-                  delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace
-                  opencode.json. Codex and Antigravity provide a derived mode-only summary; Allowed
-                  Tools are NOT ENFORCED by those harnesses.
-              deniedTools:
-                type: array
-                items:
-                  type: string
-                description: >-
-                  Tool patterns to deny (takes precedence over allow list). Currently supported by
-                  Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular
-                  support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes
-                  no workspace opencode.json. Codex and Antigravity provide a derived mode-only
-                  summary; Denied Tools are NOT ENFORCED by those harnesses.
-            additionalProperties: false
-          - type: 'null'
         description: >-
           Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the
           `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and
           rely entirely on the harness's own local configuration; null behaves the same as mode
           'none'.
+        $ref: '#/definitions/toolPermissions'
       errorBehavior:
-        oneOf:
-          - $ref: '#/definitions/errorBehavior'
-          - type: 'null'
         description: >-
           Internal-error policy for every step phase: pre-conditions, prompts/harnesses,
           end-conditions, and script steps. Resolves prompt → workflow → the
           `defaults.errorBehavior` setting. Worktree setup is outside this policy: setup runs before
           any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is
           the recovery gesture. Use null to explicitly disable an inherited policy.
+        $ref: '#/definitions/errorBehaviorDefault'
   workflowStep:
     allOf:
       - oneOf:
@@ -879,6 +791,24 @@ definitions:
     allOf:
       - $ref: '#/definitions/scriptProperties'
     properties:
+      script:
+        $ref: '#/definitions/scriptProperties/properties/script'
+      env:
+        $ref: '#/definitions/scriptProperties/properties/env'
+      compareSource:
+        $ref: '#/definitions/scriptProperties/properties/compareSource'
+      returns:
+        $ref: '#/definitions/scriptProperties/properties/returns'
+      timeout:
+        $ref: '#/definitions/scriptProperties/properties/timeout'
+      shell:
+        $ref: '#/definitions/scriptProperties/properties/shell'
+      operator:
+        $ref: '#/definitions/scriptProperties/properties/operator'
+      expected:
+        $ref: '#/definitions/scriptProperties/properties/expected'
+      ignoreCase:
+        $ref: '#/definitions/scriptProperties/properties/ignoreCase'
       maxRetries:
         type: number
         description: >-
@@ -931,6 +861,7 @@ definitions:
           retry.
     required:
       - script
+    additionalProperties: false
   scriptProperties:
     type: object
     description: Shared script execution properties used by endCondition, preCondition, and scriptStep.
@@ -1023,6 +954,24 @@ definitions:
     allOf:
       - $ref: '#/definitions/scriptProperties'
     properties:
+      script:
+        $ref: '#/definitions/scriptProperties/properties/script'
+      env:
+        $ref: '#/definitions/scriptProperties/properties/env'
+      compareSource:
+        $ref: '#/definitions/scriptProperties/properties/compareSource'
+      returns:
+        $ref: '#/definitions/scriptProperties/properties/returns'
+      timeout:
+        $ref: '#/definitions/scriptProperties/properties/timeout'
+      shell:
+        $ref: '#/definitions/scriptProperties/properties/shell'
+      operator:
+        $ref: '#/definitions/scriptProperties/properties/operator'
+      expected:
+        $ref: '#/definitions/scriptProperties/properties/expected'
+      ignoreCase:
+        $ref: '#/definitions/scriptProperties/properties/ignoreCase'
       onPass:
         type: string
         enum:
@@ -1047,6 +996,7 @@ definitions:
           (default). 'stopWorkflow': halt execution.
     required:
       - script
+    additionalProperties: false
   errorBehavior:
     type: object
     description: >-
@@ -1058,7 +1008,7 @@ definitions:
       onError:
         type: string
         enum:
-          - stop
+          - stopWorkflow
           - retry
           - continue
         description: What to do when a step phase cannot run or otherwise encounters an internal error.
@@ -1478,3 +1428,110 @@ definitions:
     required:
       - id
     additionalProperties: false
+  toolPermissions:
+    oneOf:
+      - type: object
+        description: >-
+          Per-workflow/prompt tool permission overrides. Follows three-tier precedence: prompt >
+          workflow > the `defaults.toolPermissions` setting.
+        properties:
+          mode:
+            type: string
+            enum:
+              - dangerouslyAllowAll
+              - allowAll
+              - custom
+              - none
+            description: >-
+              Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll'
+              auto-grants all but respects deny list. 'custom' uses allowedTools + deniedTools only.
+              'none' passes no permission flags at all — it does not deny tools; the harness applies
+              whatever permissions are configured in its own local settings (e.g.
+              ~/.claude/settings.json, Copilot CLI config).
+          allowedTools:
+            type: array
+            items:
+              type: string
+            description: >-
+              Tool patterns to allow (used in custom mode). Currently supported by Copilot CLI,
+              Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode
+              delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace
+              opencode.json. Codex and Antigravity provide a derived mode-only summary; Allowed
+              Tools are NOT ENFORCED by those harnesses.
+          deniedTools:
+            type: array
+            items:
+              type: string
+            description: >-
+              Tool patterns to deny (takes precedence over allow list). Currently supported by
+              Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support.
+              OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace
+              opencode.json. Codex and Antigravity provide a derived mode-only summary; Denied Tools
+              are NOT ENFORCED by those harnesses.
+        additionalProperties: false
+      - type: 'null'
+  priorContext:
+    oneOf:
+      - type: string
+        enum:
+          - all
+          - previous
+          - none
+          - finalStepAll
+          - finalStepPrevious
+        description: >-
+          Keyword shorthand: 'all' = all prior queue prompt outputs, 'previous' = immediately
+          preceding queue prompt output, 'none' = no injection, 'finalStepAll' = all previous final
+          step loop outputs, 'finalStepPrevious' = immediately preceding final step loop output
+      - type: array
+        items:
+          type: integer
+          minimum: 1
+          description: 1-based prompt number
+        minItems: 1
+        description: Specific prior prompt numbers to include (1-based, e.g. [1, 3] includes prompts 1 and 3)
+      - $ref: '#/definitions/workflowRunAddress'
+        description: >-
+          Import all resolved queue and final-step output from one completed run in this same
+          workspace.
+  agent:
+    oneOf:
+      - type: string
+        pattern: ^[a-zA-Z0-9-_]+$
+      - type: string
+        const: ''
+        description: >-
+          Empty string means no agent — the form the dashboard's "None" selection serializes to.
+          Distinct from null, which explicitly disables an inherited agent.
+      - type: 'null'
+  skills:
+    oneOf:
+      - type: array
+        items:
+          type: string
+          pattern: ^[a-zA-Z0-9-_]+$
+      - type: 'null'
+  secrets:
+    oneOf:
+      - type: array
+        items:
+          type: string
+          pattern: ^[A-Z][A-Z0-9_]*$
+      - type: 'null'
+  mcpServerEntry:
+    oneOf:
+      - type: string
+        description: A well-known MCP server ID (e.g., "ctrlyoke" to enable dynamic queue extension).
+      - $ref: '#/definitions/mcpServerConfig'
+  endConditionDefault:
+    oneOf:
+      - $ref: '#/definitions/endCondition'
+      - type: 'null'
+  preConditionDefault:
+    oneOf:
+      - $ref: '#/definitions/preCondition'
+      - type: 'null'
+  errorBehaviorDefault:
+    oneOf:
+      - $ref: '#/definitions/errorBehavior'
+      - type: 'null'

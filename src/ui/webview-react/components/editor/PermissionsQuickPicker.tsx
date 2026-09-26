@@ -6,16 +6,18 @@ import {
   INHERIT_DEFAULT_OPTION,
   PERMISSION_MODES,
 } from "@root/types/DashboardConstants";
+import type { PermissionMode } from "@root/types/DashboardConstants";
 import { FOOTER_PICKERS } from "@root/types/DashboardConstants";
 import type {
   ToolPermissionsOverride,
   ToolPermissionMode,
 } from "../../types/messages";
 import { CustomSelect } from "../shared";
+import { buildPermissionsDefaultLabel } from "../shared/permissionUtils";
 import {
-  PERMISSION_MODE_OPTIONS,
-  buildPermissionsDefaultLabel,
-} from "../shared/permissionUtils";
+  PERMISSION_MODE_OPTIONS_META,
+  toSelectOptions,
+} from "@root/types/SchemaUiMetadata";
 import { getPermissionModeVisual } from "../shared/tabBadgeUtils";
 import { FooterQuickPicker } from "./FooterQuickPicker";
 import { Icon } from "../shared/Icon";
@@ -58,13 +60,14 @@ export const PermissionsQuickPicker: React.FC<PermissionsQuickPickerProps> = ({
   const visual = getPermissionModeVisual(overrideMode ?? inheritedMode);
 
   const resolvedModeLabel =
-    PERMISSION_MODE_OPTIONS.find((o) => o.value === inheritedMode)?.label ??
+    PERMISSION_MODE_OPTIONS_META[inheritedMode as PermissionMode]?.label ??
     "None";
 
   const valueLabel = !isOverride
     ? resolvedModeLabel
-    : (PERMISSION_MODE_OPTIONS.find((o) => o.value === overrideMode)?.label ??
-      "None");
+    : ((overrideMode
+        ? PERMISSION_MODE_OPTIONS_META[overrideMode]?.label
+        : undefined) ?? "None");
 
   const defaultLabel = buildPermissionsDefaultLabel(
     workflowProperties.toolPermissions,
@@ -94,6 +97,7 @@ export const PermissionsQuickPicker: React.FC<PermissionsQuickPickerProps> = ({
       disabled={disabled}
     >
       <CustomSelect
+        schemaPath="toolPermissions.mode"
         value={
           properties.toolPermissions === undefined
             ? INHERIT_DEFAULT_OPTION
@@ -116,8 +120,15 @@ export const PermissionsQuickPicker: React.FC<PermissionsQuickPickerProps> = ({
           setFooterOpenPicker(null);
         }}
         options={[
-          { value: INHERIT_DEFAULT_OPTION, label: defaultLabel },
-          ...PERMISSION_MODE_OPTIONS,
+          {
+            value: INHERIT_DEFAULT_OPTION,
+            label: defaultLabel,
+            pseudo: { omit: true },
+          },
+          ...toSelectOptions(
+            PERMISSION_MODE_OPTIONS_META,
+            "toolPermissions.mode"
+          ),
         ]}
         dropdownMaxHeight="300px"
         inline={true}

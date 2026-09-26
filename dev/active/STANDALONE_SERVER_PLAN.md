@@ -66,7 +66,7 @@ Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessi
 - `src/server/CtrlYokeHostedServer.ts` is implemented (now ~1,500 lines) and already serves the Vite webview bundle over HTTP plus WebSocket, with token-gated HTML/API access (`requireToken` middleware), TLS support (`https.createServer` via an optional `tlsConfig`), a configurable `bindAddress`, and browser push-notification plumbing (`WebPushService`).
 - `src/server/standalone-shim.js` is implemented and already handles per-tab state, reconnects, READY replay, theme var application, and pre-React message buffering.
 - `src/ui/CtrlYokeWebviewProvider.ts` already exposes `routeExternalMessage(...)` and browser-client registration hooks, so hosted browser clients reuse the existing router instead of needing a separate hosted-server router class.
-- `src/extension.ts` already registers `ctrlyoke.enableServer`, `ctrlyoke.disableServer`, and `ctrlyoke.regenerateServerToken`, auto-starts the hosted server when `server.enabled` is true, and forwards theme recapture events on color-theme changes.
+- `src/extension.ts` already registers `ctrlyoke.enableServer`, `ctrlyoke.disableServer`, and `ctrlyoke.regenerateServerToken`, auto-starts the hosted server when `server.autoStart` is true, and forwards theme recapture events on color-theme changes.
 - `DashboardConstants.ts`, `useMessageHandler.ts`, `settingsStore.ts`, and `ServerSection.tsx` already handle `SERVER_STARTED`, `SERVER_STOPPED`, theme capture messages, token regeneration, available LAN IPs, TLS certificate download, and browser-side QR display.
 - `CtrlYokeConfigService` + file-backed config are already in place, and `CtrlYokeSettings` already includes `server.port`, `server.standalonePort`, `server.bindAddress`, `server.theme`, and `server.tls`.
 - `express`, `ws`, `qrcode`, `selfsigned`, and the server static-file copy step in `esbuild.js` are already present in the repo, so the hosted-server runtime plumbing is no longer theoretical.
@@ -584,7 +584,7 @@ Not needed as a separate file — `CtrlYokeWebviewProvider.routeExternalMessage(
 
 #### `WebviewSettingsSync` — wire up actual start/stop
 
-This is now implemented. `WebviewSettingsSync` persists `server.enabled`, `WebviewMessageRouter` routes enable/disable requests, and `extension.ts` owns the hosted server lifetime plus `SERVER_STARTED` / `SERVER_STOPPED` broadcast:
+This is now implemented. `WebviewSettingsSync` persists `server.autoStart`, `WebviewMessageRouter` routes enable/disable requests, and `extension.ts` owns the hosted server lifetime plus `SERVER_STARTED` / `SERVER_STOPPED` broadcast:
 
 ```typescript
 // extension.ts — preferred: extension owns the server lifetime
@@ -631,7 +631,7 @@ This is also implemented: the webview captures theme vars, the router forwards `
 - [x] `settingsStore` tracks `serverUrl`, available LAN IPs, and selected display IP
 - [x] `useMessageHandler` handles hosted-server lifecycle and theme-capture messages
 - [x] `ServerSection.tsx` displays the URL, copy action, LAN IP selector, TLS certificate download, token regeneration, and browser-side QR code
-- [x] Hosted server auto-starts when `server.enabled === true`
+- [x] Hosted server auto-starts when `server.autoStart === true`
 - [x] Theme recapture is triggered on VS Code theme changes
 
 #### `standalone-shim.js` (shared, Phase 3)

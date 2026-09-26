@@ -4,12 +4,14 @@ import type {
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
 import {
-  EXECUTION_MODE_OPTIONS,
   WORKTREE_KEEP_HELP_TEXT,
-  WORKTREE_MODE_HELP_TEXT,
-  WORKTREE_MODE_OPTIONS,
+  WORKTREE_MODE_SELECTIONS,
   WORKTREE_MODES,
 } from "@root/types/DashboardConstants";
+import type {
+  WorktreeConfig,
+  WorktreeObjectConfig,
+} from "@root/types/CtrlYokeTypes";
 import { useSettingsStore } from "@store/settingsStore";
 import { agentWarning, skillsWarning } from "@utils/dropdownValidation";
 import { CustomSelect } from "../../shared/CustomSelect";
@@ -18,6 +20,12 @@ import { MultiCheckboxDropdown } from "../../shared/MultiCheckboxDropdown";
 import { SettingInputRow } from "../../shared/SettingInputRow";
 import { FieldDiagnostic } from "../../shared/FieldDiagnostic";
 import { SecretGrantsEditor } from "../../shared/SecretGrantsEditor";
+import {
+  EXECUTION_MODE_OPTIONS_META,
+  WORKTREE_SELECTION_OPTIONS_META,
+  toSelectOptions,
+} from "@root/types/SchemaUiMetadata";
+import { SCHEMA_DESCRIPTIONS } from "@root/types/generated/SchemaDescriptions";
 import { fieldValidationBorderClass } from "@utils/fieldValidation";
 import { HarnessesSection } from "../HarnessesSection";
 
@@ -28,6 +36,17 @@ interface Props {
   onReset: (path: string) => void;
 }
 
+function worktreeObjectConfig(
+  value: WorktreeConfig
+): WorktreeObjectConfig | false {
+  if (value === false) return false;
+  if (value === true) return { mode: WORKTREE_MODES.MANAGED };
+  if (typeof value === "string") {
+    return { mode: WORKTREE_MODES.NAMED, branch: value };
+  }
+  return value;
+}
+
 export function DefaultsHarnessPage({
   settings,
   activeScope,
@@ -36,13 +55,43 @@ export function DefaultsHarnessPage({
 }: Props) {
   const sources = settings.sources as Record<string, SettingSource>;
   const wf = settings.settings.defaults;
+  const worktreeConfig = worktreeObjectConfig(wf.worktree);
+  const worktreeMode =
+    worktreeConfig === false
+      ? WORKTREE_MODE_SELECTIONS.NONE
+      : worktreeConfig.mode;
+  const updateWorktreeMode = (mode: string) => {
+    const next: WorktreeConfig =
+      mode === WORKTREE_MODE_SELECTIONS.NONE
+        ? false
+        : mode === WORKTREE_MODES.MANAGED
+          ? worktreeConfig !== false &&
+            worktreeConfig.mode === WORKTREE_MODES.MANAGED
+            ? worktreeConfig
+            : { mode: WORKTREE_MODES.MANAGED }
+          : worktreeConfig !== false &&
+              worktreeConfig.mode === WORKTREE_MODES.NAMED
+            ? worktreeConfig
+            : { mode: WORKTREE_MODES.NAMED, branch: "" };
+    onUpdate("defaults.worktree", next);
+  };
+  const updateWorktreeField = (
+    field: "branch" | "base" | "setup" | "keep" | "merge",
+    value: string | boolean
+  ) => {
+    if (worktreeConfig === false) return;
+    onUpdate("defaults.worktree", { ...worktreeConfig, [field]: value });
+  };
   const availableAgents = useSettingsStore((s) => s.availableAgents);
   const availableSkills = useSettingsStore((s) => s.availableSkills);
   const rowProps = { sources, onReset, activeScope };
   const agentWarn = agentWarning(wf.agent, availableAgents);
   const skillsWarn = skillsWarning(wf.skills, availableSkills);
   const worktreeBranchDiagnostics =
-    wf.worktree.mode === WORKTREE_MODES.NAMED && !wf.worktree.branch?.trim()
+    worktreeMode === WORKTREE_MODES.NAMED &&
+    worktreeConfig !== false &&
+    "branch" in worktreeConfig &&
+    !worktreeConfig.branch?.trim()
       ? [
           {
             severity: "error" as const,
@@ -74,7 +123,11 @@ export function DefaultsHarnessPage({
             id="defaults-execution-mode"
             value={wf.executionMode}
             onChange={(v) => onUpdate("defaults.executionMode", v)}
-            options={EXECUTION_MODE_OPTIONS}
+            schemaPath="defaults.executionMode"
+            options={toSelectOptions(
+              EXECUTION_MODE_OPTIONS_META,
+              "defaults.executionMode"
+            )}
           />
         </SettingInputRow>
       </div>
@@ -84,19 +137,23 @@ export function DefaultsHarnessPage({
         </h3>
         <SettingInputRow
           label="Worktree mode"
-          description={WORKTREE_MODE_HELP_TEXT}
+          description={SCHEMA_DESCRIPTIONS["defaults.worktree"]}
           id="defaults-worktree-mode"
-          path="defaults.worktree.mode"
+          path="defaults.worktree"
           {...rowProps}
         >
           <CustomSelect
             id="defaults-worktree-mode"
-            value={wf.worktree.mode}
-            onChange={(v) => onUpdate("defaults.worktree.mode", v)}
-            options={WORKTREE_MODE_OPTIONS}
+            value={worktreeMode}
+            onChange={updateWorktreeMode}
+            schemaPath="defaults.worktree"
+            options={toSelectOptions(
+              WORKTREE_SELECTION_OPTIONS_META,
+              "defaults.worktree"
+            )}
           />
         </SettingInputRow>
-        {wf.worktree.mode === WORKTREE_MODES.NAMED && (
+        {worktreeMode === WORKTREE_MODES.NAMED && (
           <>
             <SettingInputRow
               label="Branch"
@@ -108,9 +165,13 @@ export function DefaultsHarnessPage({
               <input
                 id="defaults-worktree-branch"
                 type="text"
-                value={wf.worktree.branch ?? ""}
+                value={
+                  worktreeConfig !== false && "branch" in worktreeConfig
+                    ? (worktreeConfig.branch ?? "")
+                    : ""
+                }
                 onChange={(event) =>
-                  onUpdate("defaults.worktree.branch", event.target.value)
+                  updateWorktreeField("branch", event.target.value)
                 }
                 className={`w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(worktreeBranchDiagnostics)} rounded focus:outline-none focus:border-focus-border font-mono h-7`}
               />
@@ -129,9 +190,11 @@ export function DefaultsHarnessPage({
               <input
                 id="defaults-worktree-base"
                 type="text"
-                value={wf.worktree.base ?? ""}
+                value={
+                  worktreeConfig !== false ? (worktreeConfig.base ?? "") : ""
+                }
                 onChange={(event) =>
-                  onUpdate("defaults.worktree.base", event.target.value)
+                  updateWorktreeField("base", event.target.value)
                 }
                 placeholder="Current branch (HEAD)"
                 className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
@@ -147,9 +210,11 @@ export function DefaultsHarnessPage({
               <input
                 id="defaults-worktree-setup"
                 type="text"
-                value={wf.worktree.setup ?? ""}
+                value={
+                  worktreeConfig !== false ? (worktreeConfig.setup ?? "") : ""
+                }
                 onChange={(event) =>
-                  onUpdate("defaults.worktree.setup", event.target.value)
+                  updateWorktreeField("setup", event.target.value)
                 }
                 placeholder="e.g. npm ci"
                 className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
@@ -157,7 +222,7 @@ export function DefaultsHarnessPage({
             </SettingInputRow>
           </>
         )}
-        {wf.worktree.mode === WORKTREE_MODES.MANAGED && (
+        {worktreeMode === WORKTREE_MODES.MANAGED && (
           <>
             <SettingInputRow
               label="Base"
@@ -169,9 +234,11 @@ export function DefaultsHarnessPage({
               <input
                 id="defaults-worktree-base"
                 type="text"
-                value={wf.worktree.base ?? ""}
+                value={
+                  worktreeConfig !== false ? (worktreeConfig.base ?? "") : ""
+                }
                 onChange={(event) =>
-                  onUpdate("defaults.worktree.base", event.target.value)
+                  updateWorktreeField("base", event.target.value)
                 }
                 placeholder="Current branch (HEAD)"
                 className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
@@ -187,9 +254,11 @@ export function DefaultsHarnessPage({
               <input
                 id="defaults-worktree-setup"
                 type="text"
-                value={wf.worktree.setup ?? ""}
+                value={
+                  worktreeConfig !== false ? (worktreeConfig.setup ?? "") : ""
+                }
                 onChange={(event) =>
-                  onUpdate("defaults.worktree.setup", event.target.value)
+                  updateWorktreeField("setup", event.target.value)
                 }
                 placeholder="e.g. npm ci"
                 className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
@@ -207,9 +276,13 @@ export function DefaultsHarnessPage({
                   id="defaults-worktree-keep"
                   type="checkbox"
                   aria-label="Keep directory"
-                  checked={wf.worktree.keep ?? false}
+                  checked={
+                    worktreeConfig !== false && "keep" in worktreeConfig
+                      ? (worktreeConfig.keep ?? false)
+                      : false
+                  }
                   onChange={(event) =>
-                    onUpdate("defaults.worktree.keep", event.target.checked)
+                    updateWorktreeField("keep", event.target.checked)
                   }
                   className="accent-button-bg"
                 />
@@ -228,9 +301,13 @@ export function DefaultsHarnessPage({
                   id="defaults-worktree-merge"
                   type="checkbox"
                   aria-label="Merge"
-                  checked={wf.worktree.merge ?? false}
+                  checked={
+                    worktreeConfig !== false && "merge" in worktreeConfig
+                      ? (worktreeConfig.merge ?? false)
+                      : false
+                  }
                   onChange={(event) =>
-                    onUpdate("defaults.worktree.merge", event.target.checked)
+                    updateWorktreeField("merge", event.target.checked)
                   }
                   className="accent-button-bg"
                 />
@@ -255,6 +332,7 @@ export function DefaultsHarnessPage({
             id="defaults-agent"
             value={wf.agent || ""}
             onChange={(v) => onUpdate("defaults.agent", v)}
+            schemaPath="defaults.agent"
             options={[
               { value: "", label: "None" },
               ...availableAgents.map((agent) =>

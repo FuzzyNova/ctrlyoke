@@ -31,11 +31,11 @@ import {
   HARNESS_IDS,
   MESSAGE_TYPES,
   PERMISSION_MODES,
-  SCRIPT_OPERATOR_LABELS,
   SCRIPT_OPERATORS,
   WORKFLOW_PROPERTY_KEYS,
   WORKTREE_MODES,
 } from "@root/types/DashboardConstants";
+import { SCRIPT_OPERATOR_OPTIONS_META } from "@root/types/SchemaUiMetadata";
 import { restoreClearedWorkflowProperties } from "@root/utils/WorkflowPropertyPatch";
 
 /**
@@ -357,7 +357,7 @@ const CONTEXT_CASES: UndoCase[] = [
     tab: "Context",
     run: () => {
       openSelect("settings-resume-session");
-      chooseOption("Yes - Resume previous");
+      chooseOption("Resume");
     },
   },
   {
@@ -374,8 +374,8 @@ const CONTEXT_CASES: UndoCase[] = [
     name: "prior context dropdown",
     tab: "Context",
     run: () => {
-      fireEvent.click(screen.getByLabelText("Prior context"));
-      chooseOption("All prior steps");
+      fireEvent.click(screen.getByRole("button", { name: /priorContext/ }));
+      chooseOption("All");
     },
   },
   {
@@ -476,7 +476,9 @@ const VALIDATION_CASES: UndoCase[] = [
     setup: seedPreConditionOnly,
     run: () => {
       openSelect("settings-pre-operator");
-      chooseOption(SCRIPT_OPERATOR_LABELS[SCRIPT_OPERATORS.NOT_CONTAINS]);
+      chooseOption(
+        SCRIPT_OPERATOR_OPTIONS_META[SCRIPT_OPERATORS.NOT_CONTAINS].label
+      );
     },
   },
   {
@@ -609,7 +611,7 @@ const VALIDATION_CASES: UndoCase[] = [
     tab: "Validation",
     run: () => {
       openSelect("settings-error-on-error");
-      chooseOption("Continue Workflow");
+      chooseOption("Continue");
     },
   },
 ];
@@ -1053,7 +1055,7 @@ describe("WorkflowPropertiesPanel undo/redo sequences", () => {
     checkpoints.push(propertiesJson());
 
     openSelect("settings-pre-operator");
-    chooseOption(SCRIPT_OPERATOR_LABELS[SCRIPT_OPERATORS.CONTAINS]);
+    chooseOption(SCRIPT_OPERATOR_OPTIONS_META[SCRIPT_OPERATORS.CONTAINS].label);
     checkpoints.push(propertiesJson());
 
     commitInput(requireElement("settings-pre-expected"), "ready");
@@ -1111,7 +1113,9 @@ describe("WorkflowPropertiesPanel undo/redo sequences", () => {
       fireEvent.blur(expected);
       fireEvent.click(requireElement("settings-pre-operator"));
     });
-    chooseOption(SCRIPT_OPERATOR_LABELS[SCRIPT_OPERATORS.NOT_CONTAINS]);
+    chooseOption(
+      SCRIPT_OPERATOR_OPTIONS_META[SCRIPT_OPERATORS.NOT_CONTAINS].label
+    );
 
     expect(
       useSettingsStore.getState().workflowProperties.preCondition

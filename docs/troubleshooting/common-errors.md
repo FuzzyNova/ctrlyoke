@@ -32,7 +32,7 @@ by another machine that syncs the same history — delete that lineage's `runner
 
 ## "This workspace requests external file roots that have not been approved yet"
 
-The workspace's `.ctrlyoke/settings.json` lists `permissions.allowedExternalFileRoots` that nobody
+The workspace's `.ctrlyoke/settings.json` lists `permissions.trustedExternalRoots` that nobody
 has reviewed on this machine. Approve them when VS Code prompts you, or run
 `ctrlyoke trust-external-roots`. The related message "This workflow requests external file roots
 that have not been approved yet" refers to a workflow's `trustedExternalRoots`; run
@@ -49,7 +49,7 @@ A secret the workflow declares is neither stored as a managed secret nor set in 
 Store it (`ctrlyoke secret set NAME`, or the Secrets tab in the dashboard's settings) or export
 `NAME` in the environment that launches ctrlyoke. `ctrlyoke secret check <file>` checks every
 declared secret without starting a harness. By default a missing secret is a warning when a run
-starts; set `execution.strictContextResolution` to `fail` to make it an error.
+starts; set `execution.contextResolutionFailure` to `fail` to make it an error.
 
 "No encrypted OS credential store is available" means the host has no usable credential-store
 backend (common on headless Linux). Use environment variables instead of managed secrets there.
@@ -78,7 +78,7 @@ condition's `onFail` defaults to `stopWorkflow`, so the run stops. Set `onFail: 
 
 **The script could not run.** A command that cannot be started (for example, an interpreter that is
 not installed) or a timeout is an error, not a failed condition, and it is handled by
-`errorBehavior` (`onError: stop`, `retry`, or `continue`). Check the script path or command and the
+`errorBehavior` (`onError: stopWorkflow`, `retry`, or `continue`). Check the script path or command and the
 timeout (`timeout` on the condition, or the `execution.scriptTimeout` setting). A script file that
 is missing usually makes its interpreter exit non-zero, which counts as a failed condition instead.
 

@@ -1542,7 +1542,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
 
     configService.setCliOverlay({
       execution: {
-        strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
+        contextResolutionFailure: CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
       },
     });
     try {
@@ -1556,7 +1556,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
           reportCompatibilityDiagnostics: (diagnostics) =>
             failDiagnostics.push(...diagnostics),
         }),
-        /Step blocked by execution\.strictContextResolution="fail"/u
+        /Step blocked by execution\.contextResolutionFailure="fail"/u
       );
       assert.strictEqual(failIntegration.sentPrompts.length, 0);
       assert.strictEqual(failIntegrationLookups, 0);
@@ -1575,7 +1575,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     const warnDiagnostics: CompatibilityDiagnostic[] = [];
     configService.setCliOverlay({
       execution: {
-        strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
+        contextResolutionFailure: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
       },
     });
     try {
@@ -1603,7 +1603,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
 
     configService.setCliOverlay({
       execution: {
-        strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
+        contextResolutionFailure: CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
       },
     });
     try {
@@ -1639,7 +1639,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
 
     configService.setCliOverlay({
       execution: {
-        strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
+        contextResolutionFailure: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
       },
     });
     try {
@@ -1670,7 +1670,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
 
     configService.setCliOverlay({
       execution: {
-        strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
+        contextResolutionFailure: CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
       },
     });
     try {
@@ -1734,7 +1734,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
 
     configService.setCliOverlay({
       execution: {
-        strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
+        contextResolutionFailure: CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
       },
     });
     try {
@@ -1801,17 +1801,17 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       "```",
     ].join("\n");
 
-    const run = async (strictContextResolution: boolean): Promise<void> => {
+    const run = async (contextResolutionFailure: boolean): Promise<void> => {
       const queue = new PromptQueue();
       queue.loadPrompts({ steps: [{ prompt: promptText }] });
       const integration = new MockHarnessIntegration(undefined, false);
       const diagnostics: CompatibilityDiagnostic[] = [];
 
       configService.setCliOverlay(
-        strictContextResolution
+        contextResolutionFailure
           ? {
               execution: {
-                strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
+                contextResolutionFailure: CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
               },
             }
           : {}

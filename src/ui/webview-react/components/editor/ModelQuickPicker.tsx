@@ -80,6 +80,7 @@ export const ModelQuickPicker: React.FC<ModelQuickPickerProps> = ({
           setProperty("model", v === INHERIT_DEFAULT_OPTION ? undefined : v);
           setFooterOpenPicker(null);
         }}
+        schemaPath="model"
         options={[
           { value: INHERIT_DEFAULT_OPTION, label: defaultModelLabel },
           ...(models.length === 0

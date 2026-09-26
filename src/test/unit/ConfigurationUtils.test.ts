@@ -44,37 +44,37 @@ suite("ConfigurationUtils — allowed external file roots", () => {
     configService.setWorkspaceBackend(makeBackend({}));
   });
 
-  test("getAllowedExternalFileRootsByScope splits user vs workspace roots", () => {
+  test("getTrustedExternalRootsByScope splits user vs workspace roots", () => {
     configService.setUserBackend(
       makeBackend({
-        permissions: { allowedExternalFileRoots: ["/home/user/logs"] },
+        permissions: { trustedExternalRoots: ["/home/user/logs"] },
       })
     );
     configService.setWorkspaceBackend(
       makeBackend({
-        permissions: { allowedExternalFileRoots: ["/shared/logs"] },
+        permissions: { trustedExternalRoots: ["/shared/logs"] },
       })
     );
 
     const { user, workspace } =
-      ConfigurationUtils.getAllowedExternalFileRootsByScope();
+      ConfigurationUtils.getTrustedExternalRootsByScope();
     assert.deepStrictEqual(user, ["/home/user/logs"]);
     assert.deepStrictEqual(workspace, ["/shared/logs"]);
   });
 
-  test("getAllowedExternalFileRoots unions both scopes (not array-replace)", () => {
+  test("getTrustedExternalRoots unions both scopes (not array-replace)", () => {
     configService.setUserBackend(
       makeBackend({
-        permissions: { allowedExternalFileRoots: ["/home/user/logs"] },
+        permissions: { trustedExternalRoots: ["/home/user/logs"] },
       })
     );
     configService.setWorkspaceBackend(
       makeBackend({
-        permissions: { allowedExternalFileRoots: ["/shared/logs"] },
+        permissions: { trustedExternalRoots: ["/shared/logs"] },
       })
     );
 
-    const all = ConfigurationUtils.getAllowedExternalFileRoots();
+    const all = ConfigurationUtils.getTrustedExternalRoots();
     assert.deepStrictEqual(
       [...all].sort(),
       ["/home/user/logs", "/shared/logs"].sort()
@@ -84,7 +84,7 @@ suite("ConfigurationUtils — allowed external file roots", () => {
   test("getEffectiveApprovedExternalFileRoots trusts every user-scope root without a trust-store decision", () => {
     configService.setUserBackend(
       makeBackend({
-        permissions: { allowedExternalFileRoots: ["/home/user/logs"] },
+        permissions: { trustedExternalRoots: ["/home/user/logs"] },
       })
     );
     configService.setWorkspaceBackend(makeBackend({}));
@@ -102,7 +102,7 @@ suite("ConfigurationUtils — allowed external file roots", () => {
     configService.setUserBackend(makeBackend({}));
     configService.setWorkspaceBackend(
       makeBackend({
-        permissions: { allowedExternalFileRoots: ["/shared/logs"] },
+        permissions: { trustedExternalRoots: ["/shared/logs"] },
       })
     );
     const fakeStore = makeFakeTrustStore({}); // no decision recorded
@@ -119,7 +119,7 @@ suite("ConfigurationUtils — allowed external file roots", () => {
     configService.setUserBackend(makeBackend({}));
     configService.setWorkspaceBackend(
       makeBackend({
-        permissions: { allowedExternalFileRoots: ["/shared/logs"] },
+        permissions: { trustedExternalRoots: ["/shared/logs"] },
       })
     );
     const fakeStore = makeFakeTrustStore({
@@ -139,7 +139,7 @@ suite("ConfigurationUtils — allowed external file roots", () => {
     configService.setWorkspaceBackend(
       makeBackend({
         permissions: {
-          allowedExternalFileRoots: ["/shared/logs", "/shared/other"],
+          trustedExternalRoots: ["/shared/logs", "/shared/other"],
         },
       })
     );
@@ -164,12 +164,12 @@ suite("ConfigurationUtils — allowed external file roots", () => {
     });
     configService.setUserBackend(
       makeBackend({
-        permissions: { allowedExternalFileRoots: [userRoot] },
+        permissions: { trustedExternalRoots: [userRoot] },
       })
     );
     configService.setWorkspaceBackend(
       makeBackend({
-        permissions: { allowedExternalFileRoots: [workspaceRoot] },
+        permissions: { trustedExternalRoots: [workspaceRoot] },
       })
     );
 
@@ -216,17 +216,17 @@ suite("ConfigurationUtils — allowed external file roots", () => {
     });
     configService.setUserBackend(
       makeBackend({
-        permissions: { allowedExternalFileRoots: [root] },
+        permissions: { trustedExternalRoots: [root] },
       })
     );
     configService.setWorkspaceBackend(
       makeBackend({
-        permissions: { allowedExternalFileRoots: [equivalentRoot] },
+        permissions: { trustedExternalRoots: [equivalentRoot] },
       })
     );
 
     assert.strictEqual(
-      ConfigurationUtils.getAllowedExternalFileRoots().length,
+      ConfigurationUtils.getTrustedExternalRoots().length,
       1
     );
 
@@ -263,7 +263,7 @@ suite("ConfigurationUtils — allowed external file roots", () => {
     configService.setUserBackend(makeBackend({}));
     configService.setWorkspaceBackend(
       makeBackend({
-        permissions: { allowedExternalFileRoots: [approvedAtWorkspace] },
+        permissions: { trustedExternalRoots: [approvedAtWorkspace] },
       })
     );
 
@@ -285,7 +285,7 @@ suite("ConfigurationUtils — context resolution failure mode", () => {
 
   test("reads the configured mode and falls back to warn", () => {
     configService.setUserBackend(
-      makeBackend({ execution: { strictContextResolution: "fail" } })
+      makeBackend({ execution: { contextResolutionFailure: "fail" } })
     );
     assert.strictEqual(
       ConfigurationUtils.getContextResolutionFailureMode(),
@@ -463,7 +463,7 @@ suite("ConfigurationUtils — cost settings", () => {
             "byo-model": { inputPerMTok: 3, outputPerMTok: 15 },
           },
         },
-        ui: { hideCost: false },
+        ui: { showCostEstimates: true },
       })
     );
 
@@ -471,11 +471,11 @@ suite("ConfigurationUtils — cost settings", () => {
       ConfigurationUtils.getModelPricingOverride("claude-cli", "byo-model"),
       { inputPerMTok: 3, outputPerMTok: 15 }
     );
-    assert.strictEqual(ConfigurationUtils.shouldHideCost(), false);
+    assert.strictEqual(ConfigurationUtils.shouldShowCostEstimates(), true);
   });
 
   test("reads the hide-cost setting", () => {
-    configService.setUserBackend(makeBackend({ ui: { hideCost: true } }));
-    assert.strictEqual(ConfigurationUtils.shouldHideCost(), true);
+    configService.setUserBackend(makeBackend({ ui: { showCostEstimates: false } }));
+    assert.strictEqual(ConfigurationUtils.shouldShowCostEstimates(), false);
   });
 });

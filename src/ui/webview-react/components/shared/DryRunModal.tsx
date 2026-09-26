@@ -17,13 +17,13 @@ import {
   PREVIEW_TRUNCATION_REASON_COPY,
   PREVIEW_TRUNCATION_REASONS,
   WORKTREE_CONFIG_ORIGINS,
-  WORKTREE_MODE_OPTIONS,
   WORKTREE_MODES,
 } from "@root/types/DashboardConstants";
 import type {
   CompatibilityDiagnostic,
   CompatibilityDiagnosticSeverity,
 } from "@root/types/CompatibilityTypes";
+import { WORKTREE_MODE_OPTIONS_META } from "@root/types/SchemaUiMetadata";
 import type {
   CategorizedPromptPreview,
   CategorizedPromptSectionPreview,
@@ -223,7 +223,10 @@ function DefinitionList({
 }
 
 const WORKTREE_MODE_LABEL: Record<string, string> = Object.fromEntries(
-  WORKTREE_MODE_OPTIONS.map((option) => [option.value, option.label])
+  Object.values(WORKTREE_MODE_OPTIONS_META).map((option) => [
+    option.value,
+    option.label,
+  ])
 );
 
 function WorktreeSummary({

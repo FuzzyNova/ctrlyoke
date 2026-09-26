@@ -17,6 +17,29 @@ afterEach(() => {
 });
 
 describe("McpServerForm round trips", () => {
+  it("annotates server fields with their schema properties", () => {
+    render(
+      createElement(McpServerForm, {
+        value: {
+          ...EMPTY_MCP_SERVER_FORM_STATE,
+          id: "server",
+          command: "node",
+          args: "server.js",
+          autoApprove: ["tool_a"],
+        },
+        onChange: vi.fn(),
+        onSubmit: vi.fn(),
+        onCancel: vi.fn(),
+        submitLabel: "Save",
+        schemaPath: "mcpServers[]",
+      })
+    );
+
+    expect(screen.getByLabelText("Arguments, property mcpServers[].args")).toHaveAttribute("title", expect.stringContaining("property: mcpServers[].args"));
+    expect(screen.getByLabelText("Auto-approve tools, property mcpServers[].autoApprove")).toHaveAttribute("title", expect.stringContaining("property: mcpServers[].autoApprove"));
+    expect(screen.getByLabelText("Environment, property mcpServers[].env")).toHaveAttribute("title", expect.stringContaining("property: mcpServers[].env"));
+  });
+
   it("preserves remote headers, denied tools, and auto-approve allowlists", () => {
     const server: McpServerConfig = {
       id: "remote",

@@ -7,9 +7,9 @@ import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import {
   WORKTREE_KEEP_HELP_TEXT,
-  WORKTREE_MODE_HELP_TEXT,
   WORKTREE_MODES,
 } from "@root/types/DashboardConstants";
+import { SCHEMA_DESCRIPTIONS } from "@root/types/generated/SchemaDescriptions";
 
 function createSettings(
   sources: Record<string, "user" | "workspace" | "default"> = {}
@@ -40,8 +40,12 @@ describe("DefaultsHarnessPage execution defaults", () => {
       screen.getByText(/Pre\/end-condition scripts always run headless/i)
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Execution mode" }));
-    await user.click(screen.getByRole("button", { name: "Headless" }));
+    await user.click(
+      screen.getByRole("button", {
+        name: /^Interactive, property defaults\.executionMode/,
+      })
+    );
+    await user.click(screen.getByRole("button", { name: /^Headless/ }));
 
     expect(onUpdate).toHaveBeenCalledWith("defaults.executionMode", "headless");
   });
@@ -66,14 +70,60 @@ describe("DefaultsHarnessPage execution defaults", () => {
     );
 
     expect(screen.getByText("Worktree Defaults")).toBeInTheDocument();
-    expect(screen.getByText(WORKTREE_MODE_HELP_TEXT)).toBeInTheDocument();
-    expect(screen.getByLabelText("Branch")).toHaveValue("settings-branch");
-    expect(screen.getByLabelText("Base")).toHaveValue("main");
-    expect(screen.getByLabelText("Setup")).toHaveValue("npm ci");
+    expect(
+      screen.getByText(SCHEMA_DESCRIPTIONS["defaults.worktree"])
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Branch, property defaults.worktree.branch")
+    ).toHaveValue("settings-branch");
+    expect(
+      screen.getByLabelText("Base, property defaults.worktree.base")
+    ).toHaveValue("main");
+    expect(
+      screen.getByLabelText("Setup, property defaults.worktree.setup")
+    ).toHaveValue("npm ci");
   });
 
-  it("renders progressive Managed worktree defaults with keep, merge, and the live-checkout warning", () => {
+  it("writes false when the None worktree default is selected", async () => {
     const onUpdate = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <DefaultsHarnessPage
+        settings={createSettings()}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={onUpdate}
+        onReset={() => {}}
+      />
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: /^Named, property defaults\.worktree/,
+      })
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: /^Named, defaults\.worktree: \{ mode: named/,
+      })
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: /^Named, property defaults\.worktree/,
+      })
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: /^None, defaults\.worktree: false/,
+      })
+    );
+
+    expect(onUpdate).toHaveBeenLastCalledWith("defaults.worktree", false);
+  });
+
+  it("renders progressive Managed worktree defaults with keep, merge, and the live-checkout warning", async () => {
+    const onUpdate = vi.fn();
+    const user = userEvent.setup();
     const settings = createSettings();
     settings.settings.defaults.worktree = {
       mode: WORKTREE_MODES.MANAGED,
@@ -92,8 +142,12 @@ describe("DefaultsHarnessPage execution defaults", () => {
       />
     );
 
-    expect(screen.getByLabelText("Base")).toHaveValue("main");
-    expect(screen.getByLabelText("Setup")).toHaveValue("npm ci");
+    expect(
+      screen.getByLabelText("Base, property defaults.worktree.base")
+    ).toHaveValue("main");
+    expect(
+      screen.getByLabelText("Setup, property defaults.worktree.setup")
+    ).toHaveValue("npm ci");
     expect(screen.getByLabelText("Keep directory")).toBeChecked();
     expect(screen.getByLabelText("Merge")).toBeChecked();
     expect(screen.getByText(WORKTREE_KEEP_HELP_TEXT)).toBeInTheDocument();
@@ -103,11 +157,23 @@ describe("DefaultsHarnessPage execution defaults", () => {
       )
     ).toBeInTheDocument();
 
-    screen.getByLabelText("Keep directory").click();
-    expect(onUpdate).toHaveBeenCalledWith("defaults.worktree.keep", false);
+    await user.click(screen.getByLabelText("Keep directory"));
+    expect(onUpdate).toHaveBeenCalledWith("defaults.worktree", {
+      mode: WORKTREE_MODES.MANAGED,
+      base: "main",
+      setup: "npm ci",
+      keep: false,
+      merge: true,
+    });
 
-    screen.getByLabelText("Merge").click();
-    expect(onUpdate).toHaveBeenCalledWith("defaults.worktree.merge", false);
+    await user.click(screen.getByLabelText("Merge"));
+    expect(onUpdate).toHaveBeenCalledWith("defaults.worktree", {
+      mode: WORKTREE_MODES.MANAGED,
+      base: "main",
+      setup: "npm ci",
+      keep: true,
+      merge: false,
+    });
   });
 
   it("shows the active-scope reset affordance", async () => {

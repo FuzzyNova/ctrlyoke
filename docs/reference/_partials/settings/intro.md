@@ -7,7 +7,7 @@ same shape:
 
 Objects merge key by key across the two files. An array or a single value in
 the workspace file replaces the user value entirely. The one exception is
-[`permissions.allowedExternalFileRoots`](#external-file-roots): ctrlyoke
+[`permissions.trustedExternalRoots`](#external-file-roots): ctrlyoke
 combines the roots from both files. When you run the `ctrlyoke` CLI, the
 flags you pass override both files for that run.
 

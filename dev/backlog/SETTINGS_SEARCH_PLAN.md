@@ -75,13 +75,22 @@ export interface SettingsCatalogEntry {
   tab: GlobalSettingsTab;
   /** Sub-page, for the six Workflow Defaults pages. */
   page?: DrawerPage;
-  label: string;
-  description?: string;
+  /** Display copy for pathless landmarks only. */
+  landmarkLabel?: string;
+  landmarkDescription?: string;
   /** Synonyms the label/description don't contain. */
   keywords?: readonly string[];
   devOnly?: boolean;
 }
 ```
+
+Do not store schema-backed labels or descriptions in this catalog. Resolve a
+real setting's label from `SchemaUiMetadata` (`SCHEMA_FIELD_META`, with the
+shared path humanizer for fields without an explicit alias) and its description
+from generated `SCHEMA_DESCRIPTIONS[path]`. Keep explicit `landmarkLabel` and
+`landmarkDescription` copy with pathless landmark entries. This makes catalog search
+text follow the same label metadata and schema prose as the rendered setting
+rows without maintaining another copy.
 
 ### Make the catalog the source, not a copy
 

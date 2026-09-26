@@ -72,11 +72,11 @@ const SAFE_ERROR_DESCRIPTION =
 export function UsageCard({
   snapshot,
   harnessId,
-  hideCost,
+  showCostEstimates,
 }: {
   snapshot: HarnessUsageSnapshot | undefined;
   harnessId: HarnessId;
-  hideCost: boolean;
+  showCostEstimates: boolean;
 }) {
   const percentDirection = useSettingsStore(
     (state) =>
@@ -153,7 +153,7 @@ export function UsageCard({
           </div>
         ))}
       </div>
-      {!hideCost && observed.monthly?.costUsd !== undefined && (
+      {showCostEstimates && observed.monthly?.costUsd !== undefined && (
         <div className="text-description-fg">
           Observed token value:{" "}
           {formatCostLabel(

@@ -265,7 +265,7 @@ describe("EditorSection", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Headless" }));
+      fireEvent.click(screen.getByRole("button", { name: /^Headless/ }));
     });
 
     expect(useEditorStore.getState().properties.executionMode).toBe("headless");
@@ -297,7 +297,7 @@ describe("EditorSection", () => {
   it("hides the header step color quick picker when step colors are off", () => {
     useSettingsStore
       .getState()
-      .updateGlobalSetting("stepColorMode", STEP_COLOR_MODES.OFF);
+      .updateGlobalSetting("stepColorMode", STEP_COLOR_MODES.NONE);
     render(<EditorSection />);
 
     expect(screen.queryByLabelText("Step color")).not.toBeInTheDocument();

@@ -1201,7 +1201,7 @@ suite("ContextExpander.expandContextSplit", () => {
       configService.setUserBackend({
         getAll: () => ({
           permissions: {
-            allowedExternalFileRoots: [freshTemporaryRoot("inherited")],
+            trustedExternalRoots: [freshTemporaryRoot("inherited")],
           },
         }),
         set: async () => {},

@@ -10,9 +10,9 @@ import {
   type HookEvent,
   type NotificationKind,
   type StepStatus,
-  HOOK_EVENT_METADATA,
   HOOK_EVENT_NAMES,
 } from "../../types/DashboardConstants";
+import { HOOK_EVENT_OPTIONS_META } from "../../types/SchemaUiMetadata";
 import type {
   WorkflowRunAddress,
   WorkflowSummary,
@@ -143,7 +143,7 @@ export function buildWorkflowCompletionNotification(
 
   const isFailure = state === EXECUTION_STATES.ERROR;
   const mode = settings.events.workflowComplete;
-  if (mode === NOTIFICATION_EVENT_MODES.NEVER) {
+  if (mode === NOTIFICATION_EVENT_MODES.NONE) {
     return undefined;
   }
   if (mode === NOTIFICATION_EVENT_MODES.FAILURES_ONLY && !isFailure) {
@@ -187,7 +187,7 @@ export function buildPromptCompletionNotification(
 
   const isFailure = stepStatus.state === STEP_STATUS.FAILED;
   const mode = settings.events.promptComplete;
-  if (mode === NOTIFICATION_EVENT_MODES.NEVER) {
+  if (mode === NOTIFICATION_EVENT_MODES.NONE) {
     return undefined;
   }
   if (mode === NOTIFICATION_EVENT_MODES.FAILURES_ONLY && !isFailure) {
@@ -352,8 +352,7 @@ export function buildHookNotificationEvent(
     return null;
   }
 
-  const meta = HOOK_EVENT_METADATA.find((m) => m.event === artifact.hookEvent);
-  const label = meta?.label ?? artifact.hookEvent;
+  const label = HOOK_EVENT_OPTIONS_META[artifact.hookEvent]?.label ?? artifact.hookEvent;
 
   const titleParts = ["ctrlyoke -", label];
   const bodyParts: string[] = [];

@@ -63,7 +63,7 @@ describe("ExecutionModeQuickPicker", () => {
       fireEvent.click(screen.getByRole("button", { name: "Execution mode" }));
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Headless" }));
+      fireEvent.click(screen.getByRole("button", { name: /^Headless/ }));
     });
 
     expect(useEditorStore.getState().properties.executionMode).toBe(
@@ -84,7 +84,7 @@ describe("ExecutionModeQuickPicker", () => {
     });
     await act(async () => {
       fireEvent.click(
-        screen.getByRole("button", { name: "Inherit (Interactive)" })
+        screen.getByRole("button", { name: /^Inherit \(Interactive\)/ })
       );
     });
 
@@ -102,7 +102,7 @@ describe("ExecutionModeQuickPicker", () => {
 
     fireEvent.click(trigger);
     expect(
-      screen.queryByRole("button", { name: "Headless" })
+      screen.queryByRole("button", { name: /^Headless/ })
     ).not.toBeInTheDocument();
   });
 });
