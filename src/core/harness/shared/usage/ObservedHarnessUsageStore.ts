@@ -35,6 +35,7 @@ import {
   isNewerSchemaError,
   PERSISTED_STORES,
 } from "../../../../utils/PersistedSchemaGuard";
+import { migrateToCurrent } from "../../../../utils/FormatMigrations";
 
 export const OBSERVED_USAGE_SCHEMA_VERSION =
   CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.OBSERVED_USAGE];
@@ -459,7 +460,9 @@ async function readProjectUsageBuckets(
 ): Promise<ObservedHarnessUsageBuckets | undefined> {
   try {
     const raw = await fs.readFile(filePath, "utf8");
-    const data = validateStore(JSON.parse(raw));
+    const data = validateStore(
+      migrateToCurrent(PERSISTED_STORES.OBSERVED_USAGE, JSON.parse(raw)).doc
+    );
     validateBucketsForRollup(data.buckets);
     return data.buckets;
   } catch {
@@ -629,7 +632,9 @@ export class ObservedHarnessUsageStore {
           this.filePath
         );
       }
-      return validateStore(parsed);
+      return validateStore(
+        migrateToCurrent(PERSISTED_STORES.OBSERVED_USAGE, parsed).doc
+      );
     } catch (error) {
       if (isNewerSchemaError(error)) throw error;
       const code = (error as NodeJS.ErrnoException).code;

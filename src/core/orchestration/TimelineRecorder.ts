@@ -24,6 +24,7 @@ import {
   CURRENT_SCHEMA_VERSIONS,
   PERSISTED_STORES,
 } from "../../utils/PersistedSchemaGuard";
+import { migrateToCurrent } from "../../utils/FormatMigrations";
 
 export class TimelineRecorder {
   static readonly MANIFEST_FILE_NAME = TIMELINE_STORAGE_FILES.MANIFEST;
@@ -104,7 +105,8 @@ export class TimelineRecorder {
 
   async readManifest(manifestPath: string): Promise<WorkflowRunManifest> {
     const content = await fs.promises.readFile(manifestPath, "utf8");
-    return JSON.parse(content) as WorkflowRunManifest;
+    return migrateToCurrent(PERSISTED_STORES.TIMELINE, JSON.parse(content))
+      .doc as WorkflowRunManifest;
   }
 
   private async writeManifestDirect(

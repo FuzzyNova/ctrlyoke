@@ -16,6 +16,7 @@ import {
   CURRENT_SCHEMA_VERSIONS,
   PERSISTED_STORES,
 } from "./PersistedSchemaGuard";
+import { migrateToCurrent } from "./FormatMigrations";
 
 export const PROJECT_METADATA_FILE_NAME = "project.json";
 const PRIVATE_DIRECTORY_MODE = 0o700;
@@ -289,6 +290,10 @@ function parseMetadata(
     throw new Error(`Invalid project metadata at ${metadataPath}.`);
   }
   assertWritableSchema(PERSISTED_STORES.PROJECT_METADATA, value, metadataPath);
+  value = migrateToCurrent(PERSISTED_STORES.PROJECT_METADATA, value).doc;
+  if (!isRecord(value)) {
+    throw new Error(`Invalid project metadata at ${metadataPath}.`);
+  }
   if (
     value.schemaVersion !==
     CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.PROJECT_METADATA]

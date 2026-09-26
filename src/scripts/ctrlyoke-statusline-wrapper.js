@@ -18,6 +18,11 @@ const {
   formatUsagePercentForDisplay,
   formatBrandedStatusLine: formatSharedBrandedStatusLine,
 } = require("./ctrlyoke-statusline-format.js");
+const {
+  migrateToCurrent,
+  CURRENT_SCHEMA_VERSIONS,
+  PERSISTED_STORES,
+} = require("./ctrlyoke-format-migrations.js");
 
 // Supported harnesses refresh their statusline frequently. Keep forwarding below
 // the documented ~300 ms Antigravity poll cadence for a consistent contract.
@@ -82,7 +87,20 @@ let snapshotSequence = 0;
 
 function readSettingsFile(settingsPath) {
   try {
-    const parsed = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+    const raw = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+    let parsed;
+    try {
+      const migration = migrateToCurrent(PERSISTED_STORES.SETTINGS, raw);
+      if (
+        migration.fromVersion >
+        CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.SETTINGS]
+      ) {
+        return { found: true, unsupported: true, settings: {} };
+      }
+      parsed = migration.doc;
+    } catch {
+      return { found: true, settings: {} };
+    }
     return {
       found: true,
       settings:
@@ -142,14 +160,17 @@ function resolveStatusLineSettings(
 ) {
   const userSettings = readSettingsFile(
     path.join(homeDirectory, ".ctrlyoke", "settings.json")
-  ).settings;
+  );
+  if (userSettings.unsupported) {
+    return { ...DEFAULT_STATUSLINE_SETTINGS, enabled: false };
+  }
   const workspaceSettings =
     typeof context.workspaceRoot === "string"
       ? readWorkspaceSettings(context.workspaceRoot)
       : findWorkspaceSettingsFromCwd(
           getStatusLineWorkspaceDirectory(context.payload)
         );
-  const settings = userSettings;
+  const settings = userSettings.settings;
   const statusLine = settings.statusLine;
   const tracking =
     statusLine && typeof statusLine === "object" && !Array.isArray(statusLine)

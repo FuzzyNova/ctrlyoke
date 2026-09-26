@@ -1,0 +1,233 @@
+{
+  "schemaVersion": 1,
+  "general": {
+    "defaultFormat": "yaml",
+    "defaultTemplate": "blank",
+    "autoLoadRecentSession": true,
+    "omitPreviouslyAttachedAgentsSkillsOnResume": true,
+    "includeFullDiffsInPriorContext": true
+  },
+  "defaults": {
+    "harness": "copilot-cli",
+    "models": {
+      "copilot-cli": "claude-sonnet-4.6",
+      "claude-cli": "sonnet",
+      "codex-cli": "gpt-5.5",
+      "opencode-cli": "opencode/big-pickle",
+      "qwen-cli": "qwen3.5-plus",
+      "antigravity-cli": "gemini-3.6-flash-medium"
+    },
+    "additionalArgs": {},
+    "agent": "",
+    "skills": [],
+    "secrets": [],
+    "executionMode": "interactive",
+    "resumeSession": false,
+    "priorContext": "none",
+    "mcpServers": [],
+    "hooks": [],
+    "errorBehavior": null,
+    "toolPermissions": {
+      "mode": "allowAll",
+      "allowedTools": [
+        "write",
+        "shell(git status)",
+        "shell(git diff)",
+        "shell(git add:*)",
+        "shell(git commit:*)",
+        "shell(git log:*)",
+        "shell(npm:*)",
+        "shell(yarn:*)",
+        "shell(pnpm:*)",
+        "shell(node:*)",
+        "shell(npx:*)"
+      ],
+      "deniedTools": [
+        "shell(rm:*)",
+        "shell(del:*)",
+        "shell(Remove-Item:*)",
+        "shell(rd:*)",
+        "shell(rmdir:*)",
+        "shell(sudo:*)",
+        "shell(chmod:*)",
+        "shell(chown:*)",
+        "shell(git push:*)",
+        "shell(git reset:*)",
+        "shell(git checkout:*)",
+        "shell(git clean:*)",
+        "shell(docker rm:*)",
+        "shell(docker rmi:*)",
+        "shell(kubectl delete:*)"
+      ]
+    },
+    "endCondition": null,
+    "preCondition": null,
+    "worktree": false
+  },
+  "worktrees": {
+    "root": ""
+  },
+  "coordination": {
+    "readNotesPageSize": 50,
+    "maxNoteLength": 2000,
+    "maxEntries": 1000,
+    "maxBoardBytes": 5242880,
+    "maxEntryAgeDays": 7,
+    "cliParticipantTtlMinutes": 30,
+    "allowExternalParticipants": true
+  },
+  "storage": {
+    "runHistoryLocation": "user"
+  },
+  "permissions": {
+    "codexSandboxMode": "workspace-write",
+    "codexApprovalPolicy": "on-request",
+    "trustedExternalRoots": [],
+    "heuristicSecretRedactionEnabled": true
+  },
+  "usageTracking": {
+    "enabled": true,
+    "providerRefreshEnabled": true,
+    "persistObservedUsage": true,
+    "warningPercentUsed": 80,
+    "percentDirection": "used"
+  },
+  "modelPricing": {},
+  "statusLine": {
+    "useDifferentFormatPerHarness": true,
+    "byHarness": {
+      "claude-cli": {
+        "enabled": true,
+        "customCommand": "",
+        "useCtrlyokeStyle": true
+      }
+    }
+  },
+  "execution": {
+    "injectMode": true,
+    "maxPromptTimeoutSec": -1,
+    "scriptTimeoutSec": 3600,
+    "ctrlyokeMcpMode": "native",
+    "closeTerminalOnComplete": false,
+    "autoDeleteTempFiles": true,
+    "contextResolutionFailure": "warn"
+  },
+  "queue": {
+    "maxSize": 100,
+    "maxParallelSteps": 6,
+    "maxWorkflowExecutionTimeSec": -1,
+    "unlimitedMode": false,
+    "notifyOnExtension": true
+  },
+  "runs": {
+    "maxRuns": -1,
+    "historySearchCacheMb": 320
+  },
+  "terminal": {
+    "fontSize": 14,
+    "lineHeight": 1.2,
+    "scrollback": 5000,
+    "cursorStyle": "block",
+    "cursorBlink": true,
+    "macOptionIsMeta": false,
+    "wordSeparators": " ()[]{}',\"`",
+    "replayBufferKb": 50,
+    "shellExecutable": "",
+    "mobileControlBar": "auto",
+    "mobileBarLayout": {
+      "bar": [
+        "modifier:ctrl",
+        "key:esc",
+        "key:tab",
+        "key:up",
+        "key:down",
+        "key:left",
+        "key:right",
+        "key:enter"
+      ],
+      "popup": [
+        "shortcut:shift-tab",
+        "shortcut:ctrl-c",
+        "shortcut:ctrl-z",
+        "shortcut:ctrl-l",
+        "shortcut:ctrl-r",
+        "shortcut:ctrl-a"
+      ],
+      "hidden": []
+    },
+    "mobileCustomShortcuts": []
+  },
+  "ui": {
+    "showCliCommand": true,
+    "showHeadlessPermissionWarning": true,
+    "autoFocusOutputOnExecution": true,
+    "openPromptsInSecondGroup": false,
+    "respectGitignoreForCompletions": true,
+    "autoExpandEditorWhenTyping": true,
+    "useAbsolutePathReferences": false,
+    "outputVirtualizationRowThreshold": 200,
+    "collapsedToolOutputLineCount": 3,
+    "confirmDeleteOperations": true,
+    "confirmResetOperations": true,
+    "confirmContinuationDiscardOperations": true,
+    "hideGitIgnoredFiles": false,
+    "atomicContextReferences": true,
+    "offerTrustForUntrustedFileLinks": true,
+    "showCostEstimates": true,
+    "stepColorMode": "none",
+    "harnessColors": {
+      "byHarness": {},
+      "script": "#808080"
+    }
+  },
+  "server": {
+    "autoStart": false,
+    "port": 4747,
+    "standalonePort": 4748,
+    "fallbackPorts": [],
+    "theme": "auto",
+    "bindAddress": "127.0.0.1",
+    "tls": {
+      "enabled": false,
+      "certPath": "",
+      "keyPath": ""
+    },
+    "iconBgColor": "#3994BC",
+    "iconFgColor": "#051923"
+  },
+  "notifications": {
+    "vscode": {
+      "enabled": true
+    },
+    "browser": {
+      "mode": "never"
+    },
+    "events": {
+      "workflowComplete": "all",
+      "promptComplete": "none",
+      "hookEvents": {
+        "stop": false,
+        "sessionStart": false,
+        "preToolUse": false,
+        "postToolUse": false,
+        "userPromptSubmit": false,
+        "permissionRequest": false,
+        "notification": false,
+        "error": false
+      }
+    },
+    "toastLevel": "all",
+    "includeWorkflowName": true,
+    "includePromptName": true,
+    "onlyWhenWindowUnfocused": true
+  },
+  "commit": {
+    "harness": "",
+    "model": "",
+    "systemPrompt": "Generate a conventional commit message based on the included git diff. Return ONLY the final commit message content based on the included diff — no explanation, no code fences, no author or co-author attribution lines. Treat the provided diff and any optional user draft as the complete context for composing the message; do not read extra instruction files or inspect other workspace files unless explicitly instructed. Follow the Conventional Commits format: one or more 'type(scope): short description' header lines (use multiple headers if the change covers multiple distinct features or fixes), followed by a blank line, then one or more body paragraphs explaining the implementation details of what changed and why. Use markdown formatting in the body to improve readability where appropriate. Use bullet points for lists where necessary. If you are explicitly instructed to submit the message with a tool, call that tool with the complete commit message and do not repeat the message outside the tool call.\n\nExample format:\nfeat(auth): add OAuth2 login support\n\nImplemented OAuth2 authorization code flow using the existing HTTP client. Token refresh is handled automatically on 401 responses. Session state is persisted to localStorage to survive page reloads\n\nOnly return or submit the commit message, no extra text. Here is the git diff to generate the commit message for:\n"
+  },
+  "diagnostics": {
+    "verboseLogging": false,
+    "logRawCliOutput": false
+  }
+}

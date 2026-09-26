@@ -374,6 +374,19 @@ async function main() {
     logLevel: "silent",
   });
 
+  const formatMigrationsCtx = await esbuild.context({
+    entryPoints: ["src/utils/FormatMigrations.ts"],
+    bundle: true,
+    format: "cjs",
+    minify: production,
+    sourcemap: !production,
+    sourcesContent: false,
+    platform: "node",
+    target: "es2020",
+    outfile: "out/scripts/ctrlyoke-format-migrations.js",
+    logLevel: "silent",
+  });
+
   // Build MCP server (separate executable for CLI tools)
   const mcpCtx = await esbuild.context({
     entryPoints: ["src/mcp-server.ts"],
@@ -473,6 +486,7 @@ async function main() {
     await webviewScriptsCtx.watch();
     await ctx.watch();
     await statuslineFormatCtx.watch();
+    await formatMigrationsCtx.watch();
     await mcpCtx.watch();
     await historySearchRebuildWorkerCtx.watch();
     await historySearchMatcherWorkerCtx.watch();
@@ -481,6 +495,7 @@ async function main() {
     await webviewScriptsCtx.rebuild();
     await ctx.rebuild();
     await statuslineFormatCtx.rebuild();
+    await formatMigrationsCtx.rebuild();
     await mcpCtx.rebuild();
     await historySearchRebuildWorkerCtx.rebuild();
     await historySearchMatcherWorkerCtx.rebuild();
@@ -488,6 +503,7 @@ async function main() {
     await webviewScriptsCtx.dispose();
     await ctx.dispose();
     await statuslineFormatCtx.dispose();
+    await formatMigrationsCtx.dispose();
     await mcpCtx.dispose();
     await historySearchRebuildWorkerCtx.dispose();
     await historySearchMatcherWorkerCtx.dispose();

@@ -11,6 +11,7 @@ import {
   refuseNewerSchema,
 } from "../utils/PersistedSchemaGuard";
 import { Log } from "../utils/Log";
+import { migrateToCurrent } from "../utils/FormatMigrations";
 
 const warnedNewerSettingsPaths = new Set<string>();
 
@@ -89,6 +90,10 @@ export class FileConfigBackend implements ConfigBackend {
             `[FileConfigBackend] Reading newer settings format ${version} best-effort from ${this.configPath}; writes are disabled until ctrlyoke is updated.`
           );
         }
+      }
+      if (!isNewerSchemaVersion(PERSISTED_STORES.SETTINGS, version)) {
+        return migrateToCurrent(PERSISTED_STORES.SETTINGS, parsed)
+          .doc as PartialCtrlYokeSettings;
       }
       return parsed;
     } catch {

@@ -16,6 +16,7 @@ import {
   hasNewerSchema,
   PERSISTED_STORES,
 } from "./PersistedSchemaGuard";
+import { migrateToCurrent } from "./FormatMigrations";
 import {
   isOwnerStale,
   isProcessAlive,
@@ -283,7 +284,10 @@ export async function readWorkflowLockAtPath(
 ): Promise<WorkflowRunnerLock | null> {
   try {
     const content = await fs.promises.readFile(lockPath, "utf8");
-    const parsed: unknown = JSON.parse(content);
+    const raw: unknown = JSON.parse(content);
+    const parsed = hasNewerSchema(PERSISTED_STORES.RUNNER_LOCK, raw)
+      ? raw
+      : migrateToCurrent(PERSISTED_STORES.RUNNER_LOCK, raw).doc;
     // Keep development upgrades tolerant of locks written before schema v2.
     // A legacy object is still returned for liveness-only callers; callers
     // needing ownership classification pass it through the structured

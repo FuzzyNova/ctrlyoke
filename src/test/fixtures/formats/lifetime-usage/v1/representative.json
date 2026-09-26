@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": 1,
+  "harnesses": {
+    "claude-cli": {
+      "inputTokens": 10,
+      "outputTokens": 4,
+      "totalTokens": 14,
+      "estimatedCostUsd": 0.01,
+      "lastUpdatedAt": 1
+    }
+  }
+}

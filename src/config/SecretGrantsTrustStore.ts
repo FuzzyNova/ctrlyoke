@@ -34,7 +34,11 @@ export class SecretGrantsTrustStore {
   }
 
   private load(): SecretGrantsTrustFile {
-    return loadTrustDecisionFile(this.storePath, "Secret grants trust store");
+    return loadTrustDecisionFile(
+      PERSISTED_STORES.SECRET_GRANTS_TRUST,
+      this.storePath,
+      "Secret grants trust store"
+    );
   }
 
   private async save(data: SecretGrantsTrustFile): Promise<void> {

@@ -29,6 +29,7 @@ import {
   isNewerSchemaError,
   PERSISTED_STORES,
 } from "../../../../utils/PersistedSchemaGuard";
+import { migrateToCurrent } from "../../../../utils/FormatMigrations";
 import { normalizeUsageTimestamp } from "./UsageTimestampUtils";
 import { ObservedHarnessUsageStore } from "./ObservedHarnessUsageStore";
 import type { IHarnessUsageProvider } from "./IHarnessUsageProvider";
@@ -437,7 +438,10 @@ export class HarnessUsageService {
   private async loadPersistedProviderSnapshots(): Promise<void> {
     try {
       const raw = await fs.readFile(this.providerSnapshotsFile, "utf8");
-      const parsed: unknown = JSON.parse(raw);
+      const parsed: unknown = migrateToCurrent(
+        PERSISTED_STORES.PROVIDER_USAGE,
+        JSON.parse(raw)
+      ).doc;
       assertWritableSchema(
         PERSISTED_STORES.PROVIDER_USAGE,
         parsed,
@@ -564,7 +568,10 @@ async function readPersistedProviderUsage(
 ): Promise<PersistedProviderUsage | undefined> {
   try {
     const raw = await fs.readFile(filePath, "utf8");
-    const parsed: unknown = JSON.parse(raw);
+    const parsed: unknown = migrateToCurrent(
+      PERSISTED_STORES.PROVIDER_USAGE,
+      JSON.parse(raw)
+    ).doc;
     assertWritableSchema(PERSISTED_STORES.PROVIDER_USAGE, parsed, filePath);
     if (
       !isRecord(parsed) ||

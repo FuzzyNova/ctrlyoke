@@ -40,6 +40,7 @@ import {
   isNewerSchemaError,
   PERSISTED_STORES,
 } from "../../../../utils/PersistedSchemaGuard";
+import { migrateToCurrent } from "../../../../utils/FormatMigrations";
 
 export const LIFETIME_USAGE_SCHEMA_VERSION =
   CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.LIFETIME_USAGE];
@@ -1024,7 +1025,7 @@ export class LifetimeUsageStore {
         this.filePath
       );
     }
-    return parsed;
+    return migrateToCurrent(PERSISTED_STORES.LIFETIME_USAGE, parsed).doc;
   }
 
   private async readOrReset(now: number): Promise<LifetimeUsageStoreData> {

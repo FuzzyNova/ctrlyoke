@@ -52,6 +52,7 @@ import {
   refuseNewerSchema,
   type NewerSchemaError,
 } from "../utils/PersistedSchemaGuard";
+import { migrateToCurrent } from "../utils/FormatMigrations";
 
 type ParallelValidationProperties = Pick<
   ExecutionProperties,
@@ -246,6 +247,10 @@ export class PromptFileParser {
       contentPath,
       path.extname(contentPath).toLowerCase() === ".json" ? "JSON" : "YAML"
     );
+    parsed = migrateToCurrent(PERSISTED_STORES.WORKFLOW_DEFINITION, parsed).doc;
+    if (parsed?._runtime) {
+      parsed = migrateToCurrent(PERSISTED_STORES.RUN_FILE, parsed).doc;
+    }
     this.validateAuthoredParallelStructure(parsed);
 
     if (
@@ -546,6 +551,7 @@ export class PromptFileParser {
           filePath,
           "Markdown frontmatter"
         );
+        migrateToCurrent(PERSISTED_STORES.WORKFLOW_DEFINITION, frontmatter);
         promptContent = content.slice(frontmatterMatch[0].length);
       }
 

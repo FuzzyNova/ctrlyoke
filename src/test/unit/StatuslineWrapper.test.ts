@@ -1216,6 +1216,21 @@ suite("Shared statusline wrappers", function () {
       assert.match(malformed.stdout, /^ctrlyoke /);
     });
 
+    test(`${provider} disables ctrlyoke output for newer settings formats`, async () => {
+      await createHome();
+      const settingsPath = path.join(tempHome, ".ctrlyoke", "settings.json");
+      await fs.mkdir(path.dirname(settingsPath), { recursive: true });
+      await fs.writeFile(settingsPath, JSON.stringify({ schemaVersion: 2 }));
+
+      const result = await runWrapper(
+        script,
+        JSON.stringify({ model: { id: `${provider}-model` } }),
+        { HOME: tempHome, USERPROFILE: tempHome }
+      );
+      assert.strictEqual(result.code, 0);
+      assert.strictEqual(result.stdout, "");
+    });
+
     test(`${provider} forwards without snapshot or branding when disabled`, async () => {
       await createHome();
       tempDirectory = await fs.mkdtemp(

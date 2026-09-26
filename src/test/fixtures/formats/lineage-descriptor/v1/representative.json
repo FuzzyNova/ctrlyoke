@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "workflowKey": "fixture-workflow",
+  "workflowName": "Fixture workflow",
+  "originalFile": "workflow.ctrlyoke.json",
+  "isSystemGenerated": false,
+  "sourceWorkflowKey": "source-workflow",
+  "sourceRunRef": { "workflowKey": "source-workflow", "runId": 1 },
+  "sourceWorkflowName": "Source",
+  "variantCreatedAt": 1,
+  "isFavorite": false,
+  "createdAt": 1,
+  "lastModifiedAt": 1,
+  "latestRunRef": { "workflowKey": "fixture-workflow", "runId": 1 },
+  "nextRunId": 2,
+  "revision": 2
+}

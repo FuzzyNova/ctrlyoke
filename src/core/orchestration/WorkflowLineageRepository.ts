@@ -23,6 +23,7 @@ import {
   CURRENT_SCHEMA_VERSIONS,
   PERSISTED_STORES,
 } from "../../utils/PersistedSchemaGuard";
+import { migrateToCurrent } from "../../utils/FormatMigrations";
 
 const DESCRIPTOR_SCHEMA_VERSION =
   CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.LINEAGE_DESCRIPTOR];
@@ -192,7 +193,10 @@ export class WorkflowLineageRepository {
       WorkflowPaths.descriptorPath(workspaceRoot, workflowKey),
       "utf8"
     );
-    return JSON.parse(content) as WorkflowLineageDescriptor;
+    return migrateToCurrent(
+      PERSISTED_STORES.LINEAGE_DESCRIPTOR,
+      JSON.parse(content)
+    ).doc as WorkflowLineageDescriptor;
   }
 
   /**
@@ -621,9 +625,10 @@ export class WorkflowLineageRepository {
         try {
           const stat = await fs.promises.lstat(filePath);
           if (!stat.isFile() || stat.isSymbolicLink()) continue;
-          const parsed = JSON.parse(
-            await fs.promises.readFile(filePath, "utf8")
-          ) as {
+          const parsed = migrateToCurrent(
+            PERSISTED_STORES.RUN_FILE,
+            JSON.parse(await fs.promises.readFile(filePath, "utf8"))
+          ).doc as {
             priorContext?: unknown;
             steps?: Array<{ priorContext?: unknown }>;
             finalStep?: { priorContext?: unknown };

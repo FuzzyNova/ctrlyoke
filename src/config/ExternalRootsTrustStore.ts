@@ -71,7 +71,11 @@ export class ExternalRootsTrustStore {
   }
 
   private load(): ExternalRootsTrustFile {
-    return loadTrustDecisionFile(this.storePath, "External roots trust store");
+    return loadTrustDecisionFile(
+      PERSISTED_STORES.EXTERNAL_ROOTS_TRUST,
+      this.storePath,
+      "External roots trust store"
+    );
   }
 
   private async save(data: ExternalRootsTrustFile): Promise<void> {
