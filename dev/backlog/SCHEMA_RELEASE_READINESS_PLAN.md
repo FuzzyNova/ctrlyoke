@@ -30,7 +30,7 @@
 | --- | ---------------------------------------------------------------------- | ------------------------------------------- | ---- | ----- |
 | 1   | Version marker on authored files + migration plan                      | **Yes** (user); newer files refused cleanly | 1, 2 | E     |
 | 2   | Publish schemas at `https://ctrlyoke.dev/schema/v1/…`, allow `$schema` | **Yes** (user)                              | 3    | E     |
-| 3   | Unit-suffixed duration fields                                          | Recommended                                 | 4    | B     |
+| 3   | All durations in seconds, with a `Sec` suffix                          | **Yes** (user)                              | 4    | B     |
 | 4   | Strict prompt steps / workflow root                                    | Recommended; draft 2020-12, verified        | 5    | D     |
 | 5   | Top-level `statusLine` keyed by harness ID; new `diagnostics` group    | **Yes** (user)                              | 6    | B     |
 | 6   | Single-source lineage metadata in `workflow.json`                      | **Yes** (user)                              | 7    | C     |
@@ -310,37 +310,70 @@ existing per-command integers and document an additive-only policy for them in t
 
 ---
 
-## 4. Unit-suffixed durations (item 3)
+## 4. Durations: seconds everywhere, with a `Sec` suffix (item 3)
 
-The script `timeout` bug happened because a unit lived only in prose.
+**Decision (2026-09-26): every user-authored duration is in seconds, and its name says so.**
+The script `timeout` bug happened because two surfaces sharing one field disagreed on the
+unit, and the unit lived only in prose. One unit removes the disagreement; the suffix makes
+the unit visible wherever the value appears (YAML, JSON, the dashboard, diffs).
 
-| Today                                                    | Unit | Rename to                           |
-| -------------------------------------------------------- | ---- | ----------------------------------- |
-| `timeout` (endCondition, preCondition, scriptStep, root) | ms   | `timeoutMs`                         |
-| `execution.scriptTimeout`                                | s    | `execution.scriptTimeoutSec`        |
-| `execution.maxPromptTimeout`                             | s    | `execution.maxPromptTimeoutSec`     |
-| `queue.maxWorkflowExecutionTime`                         | s    | `queue.maxWorkflowExecutionTimeSec` |
-| `hooks[].timeoutSec`, `errorBehavior.retryDelayMs`       | —    | already suffixed; unchanged         |
+Why seconds rather than milliseconds:
 
-Other unit-bearing names (`replayBufferKb`, `historySearchCacheMb`, `maxEntryAgeDays`,
-`cliParticipantTtlMinutes`, `maxBoardBytes`) already carry their unit. CLI flags
-(`--timeout`, `--script-timeout <seconds>`) are CLI API; keep their names and state the unit
-in `--help`.
+- Nothing ctrlyoke times needs millisecond precision: scripts, prompts, hooks and retry
+  delays run for seconds to hours. In milliseconds a 10-minute condition is `600000`, where
+  a dropped zero is an easy 10× error.
+- Seconds is already the majority (`scriptTimeout`, `maxPromptTimeout`,
+  `maxWorkflowExecutionTime`, `hooks[].timeoutSec`, the CLI's `--script-timeout <seconds>`),
+  and harness hook formats such as Claude's are in seconds too, so ctrlyoke's values pass
+  straight through.
 
-Touchpoints for `timeout` → `timeoutMs`:
+| Today                                                    | Unit today | Rename to                           |
+| -------------------------------------------------------- | ---------- | ----------------------------------- |
+| `timeout` (endCondition, preCondition, scriptStep, root) | **ms**     | `timeoutSec`                        |
+| `errorBehavior.retryDelayMs`                             | **ms**     | `errorBehavior.retryDelaySec`       |
+| `execution.scriptTimeout`                                | s          | `execution.scriptTimeoutSec`        |
+| `execution.maxPromptTimeout`                             | s          | `execution.maxPromptTimeoutSec`     |
+| `queue.maxWorkflowExecutionTime`                         | s          | `queue.maxWorkflowExecutionTimeSec` |
+| `hooks[].timeoutSec`                                     | s          | unchanged                           |
 
-- **Types and parsing:** `ScriptProperties.timeout` (`CtrlYokeTypes.ts`),
-  `WorkflowStepSanitizer.ts` (4 sites), `PromptFileParser.ts:270`.
+Rules:
+
+- **Fractional seconds are allowed** (`type: number`, `exclusiveMinimum: 0`) for
+  `timeoutSec` and `retryDelaySec`, so a sub-second delay stays expressible
+  (`retryDelaySec: 0.5`). `hooks[].timeoutSec` stays an integer, because it is passed through
+  to harness hook configs. The `-1` "unlimited" settings stay integers (§8.3).
+- **Milliseconds stay internal.** Node timers and `Date.now()` are ms, so convert once where
+  values are read. Use one shared helper (e.g. `secondsToMs()` beside
+  `ConfigurationUtils.getScriptTimeoutMs`), never an inline `* 1000` at each call site. That
+  per-site conversion is exactly where the original bug lived.
+- **This reverses the 2026-09-26 bug fix's unit, on purpose.** That fix made script steps read
+  `timeout` as ms, to match conditions and the schema at the time. The rename moves every
+  surface to seconds together. The `WorkflowExecutor` script-step path and both condition
+  paths go through the same helper, and the execution preview shows `timeout=…s` again.
+- **Other unit-bearing names** (`replayBufferKb`, `historySearchCacheMb`, `maxEntryAgeDays`,
+  `cliParticipantTtlMinutes`, `maxBoardBytes`) already carry their unit and are not durations
+  a user tunes in the same breath; leave them. CLI flags (`--timeout`,
+  `--script-timeout <seconds>`) are CLI API; keep their names and state the unit in `--help`.
+
+Touchpoints for `timeout` → `timeoutSec` and `retryDelayMs` → `retryDelaySec`:
+
+- **Types and parsing:** `ScriptProperties.timeout` and `ErrorBehavior.retryDelayMs`
+  (`CtrlYokeTypes.ts`), `WorkflowStepSanitizer.ts` (4 sites), `PromptFileParser.ts:270`.
 - **Execution:** `WorkflowExecutor.ts` (script step + two condition sites),
-  `EndConditionEvaluator.ts:282`, `ExecutionPreviewService.ts`.
-- **Dashboard:** `ScriptConditionEditor.tsx`, `editorStore.ts` (`scriptTimeout` state),
-  `PromptEditor.tsx`, `utils/executionPreview.ts`.
+  `EndConditionEvaluator.ts:282`, `ExecutionPreviewService.ts` (timeout label and the
+  `retryDelayMs` description), and the `errorBehavior` retry path.
+- **Dashboard:** `ScriptConditionEditor.tsx` (label becomes "Timeout (s)"), `editorStore.ts`
+  (`scriptTimeout` state), `PromptEditor.tsx`, `utils/executionPreview.ts`, and the
+  errorBehavior editor.
 - **Everything else:** `PromptPropertyCompletionProvider.ts`, `END_CONDITION_PROPERTIES.TIMEOUT`,
-  schema UI metadata, `docs/workflows/end-conditions.md` (example `timeout: 60000`), and the
-  generated reference pages.
+  schema UI metadata, `docs/workflows/end-conditions.md` (example `timeout: 60000` becomes
+  `timeoutSec: 60`), and the generated reference pages.
+- **Tests:** `interactiveScriptStep.test.ts` (asserts the ms value handed to the PTY
+  spawner), and any condition or errorBehavior test with a literal ms value.
 
 Pre-release, so this is a straight rename: no tombstone and no migration. Grep the repo's own
-`.ctrlyoke/` workflows and `src/templates/` for the old keys.
+`.ctrlyoke/` workflows and `src/templates/` for the old keys, and convert their values
+(÷ 1000) while renaming.
 
 ---
 
@@ -618,7 +651,7 @@ so the schema never rejects something the runtime accepts.
 | ------------------------------------------------------------------------------------ | --------------------------------------------------------- |
 | `sessionId` (number form)                                                            | `integer`, `minimum: 1` (it's a 1-based prompt reference) |
 | `endCondition.maxRetries`                                                            | `integer` (keep `-1..100`)                                |
-| `timeoutMs` (all script surfaces)                                                    | `integer`, `minimum: 1` — see below                       |
+| `timeoutSec`, `retryDelaySec`                                                        | `number`, `exclusiveMinimum: 0` (fractional allowed, §4)  |
 | `hooks[].timeoutSec`                                                                 | `minimum: 1`                                              |
 | `server.port`, `server.standalonePort`, `server.fallbackPorts[]`                     | `integer`, `1..65535`                                     |
 | `queue.maxSize`, `terminal.scrollback`, `ui.outputVirtualizationRowThreshold`        | `integer`                                                 |
@@ -626,8 +659,9 @@ so the schema never rejects something the runtime accepts.
 
 **Timeout `0` is currently inconsistent.** Conditions treat `0` as "use the default"
 (`EndConditionEvaluator.ts:282`: `condition.timeout || …`). Script steps treat it as a literal
-0 ms since the unit fix (`step.timeout ?? …`). `minimum: 1` removes the ambiguity from
-authored files; also make the code use `??` everywhere.
+0 ms since the 2026-09-26 unit fix (`step.timeout ?? …`). `exclusiveMinimum: 0` removes the
+ambiguity from authored files; the shared seconds→ms helper (§4) should use `??` so every
+surface agrees.
 
 `parallelGroupDefinition.endIndex ≥ startIndex` can't be expressed in the schema; leave it to
 the parser.
