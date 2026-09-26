@@ -55,8 +55,9 @@ Important `extension.ts` conventions:
 1. ask `PtyProcessManager` to gracefully stop AI CLI sessions first
 2. dispose the hosted server and clear the module-scoped reference
 3. dispose the orchestrator
+4. `Log.dispose()`, last, in a `finally`
 
-Do not duplicate cleanup already handled by `context.subscriptions`; PTY hard-kill fallback and other disposables run there after deactivation returns.
+Do not duplicate cleanup already handled by `context.subscriptions`; PTY hard-kill fallback and other disposables run there. **VS Code does not wait for an async `deactivate()` before disposing `context.subscriptions`**: it calls `deactivate()`, disposes the subscriptions as soon as the call returns its promise (i.e. at the first `await`), and only then awaits it. Everything after `deactivate()`'s first `await` therefore runs with the subscriptions already gone, and so does every subscription's own `dispose()` that runs later in the list. That is why the `Log` output channel is deliberately kept out of `context.subscriptions` and closed by `deactivate()` itself. Writing to a closed channel throws `Channel has been closed`, which used to abort `workflowOrchestrator.dispose()` partway through and skip `disposeTelemetry()`. Anything else a late shutdown step depends on needs the same treatment.
 </deactivation>
 
 <mcpServer>

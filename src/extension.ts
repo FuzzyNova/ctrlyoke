@@ -1676,25 +1676,32 @@ function registerCommands(
 export async function deactivate(): Promise<void> {
   Log.debug("[Extension] ctrlyoke: Extension deactivating...");
 
-  // Run concurrently: the Ctrl+C sweep tells every AI CLI session to stop while
-  // workflow instances cancel and flush their durable state. Sequencing these
-  // would put the full settle window in front of the terminal shutdown for no
-  // benefit — each signals a different layer of the same exit.
-  await Promise.all([
-    getPtyProcessManager()?.gracefulShutdownAllAiCliSessions(),
-    workflowOrchestrator?.shutdown(),
-  ]);
+  try {
+    // Run concurrently: the Ctrl+C sweep tells every AI CLI session to stop while
+    // workflow instances cancel and flush their durable state. Sequencing these
+    // would put the full settle window in front of the terminal shutdown for no
+    // benefit — each signals a different layer of the same exit.
+    await Promise.all([
+      getPtyProcessManager()?.gracefulShutdownAllAiCliSessions(),
+      workflowOrchestrator?.shutdown(),
+    ]);
 
-  hostedServer?.dispose();
-  hostedServer = undefined;
-  unprotectServerToken?.();
-  unprotectServerToken = undefined;
+    hostedServer?.dispose();
+    hostedServer = undefined;
+    unprotectServerToken?.();
+    unprotectServerToken = undefined;
 
-  if (workflowOrchestrator) {
-    workflowOrchestrator.dispose();
+    if (workflowOrchestrator) {
+      workflowOrchestrator.dispose();
+    }
+
+    disposeTelemetry();
+
+    Log.debug("[Extension] ctrlyoke: Extension deactivated");
+  } finally {
+    // Last, and not via context.subscriptions: VS Code disposes those as soon
+    // as this function hits its first await, so everything above would
+    // otherwise be logging to a closed channel.
+    Log.dispose();
   }
-
-  disposeTelemetry();
-
-  Log.debug("[Extension] ctrlyoke: Extension deactivated");
 }

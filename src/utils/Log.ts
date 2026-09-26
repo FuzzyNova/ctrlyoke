@@ -39,8 +39,80 @@ const LOG_LEVEL_LABELS: Record<LogLevel, string> = {
   [LogLevel.OFF]: "OFF",
 };
 
+/**
+ * Wraps the extension's {@link vscode.LogOutputChannel} so that writing to it
+ * can never throw.
+ *
+ * VS Code's shutdown sequence makes that guarantee necessary: it calls the
+ * extension's `deactivate()`, disposes `context.subscriptions` *without*
+ * awaiting the returned promise, and only then awaits it. Anything that logs
+ * from a subscription's `dispose()` or from after `deactivate()`'s first
+ * `await` can therefore reach a channel VS Code has already closed, and a
+ * closed channel throws `Channel has been closed` from every write — which
+ * escapes into, and aborts, whatever cleanup was doing the logging.
+ *
+ * The first write that fails marks the channel closed; from then on writes are
+ * dropped and the file log (written separately by {@link Log}) carries on.
+ */
+export class SafeLogOutputChannel implements vscode.Disposable {
+  private channel: vscode.LogOutputChannel | undefined;
+
+  constructor(channel: vscode.LogOutputChannel) {
+    this.channel = channel;
+  }
+
+  /** The underlying channel, or `undefined` once it is closed. */
+  get raw(): vscode.LogOutputChannel | undefined {
+    return this.channel;
+  }
+
+  /** Write `message` through the channel's method for `level`. */
+  write(level: LogLevel, message: string): void {
+    this.use((channel) => {
+      switch (level) {
+        case LogLevel.TRACE:
+          channel.trace(message);
+          break;
+        case LogLevel.DEBUG:
+          channel.debug(message);
+          break;
+        case LogLevel.WARN:
+          channel.warn(message);
+          break;
+        case LogLevel.ERROR:
+          channel.error(message);
+          break;
+        default:
+          channel.info(message);
+          break;
+      }
+    });
+  }
+
+  appendLine(message: string): void {
+    this.use((channel) => channel.appendLine(message));
+  }
+
+  dispose(): void {
+    this.use((channel) => channel.dispose());
+    this.channel = undefined;
+  }
+
+  private use(action: (channel: vscode.LogOutputChannel) => void): void {
+    if (!this.channel) {
+      return;
+    }
+    try {
+      action(this.channel);
+    } catch {
+      // Closed underneath us (see class doc) — stop writing to it.
+      this.channel = undefined;
+    }
+  }
+}
+
 export class Log {
-  private static outputChannel: vscode.LogOutputChannel;
+  private static outputChannel: SafeLogOutputChannel | undefined;
   private static logLevel: LogLevel = LogLevel.INFO;
   private static logFilePath: string | undefined;
   /** True when running as the standalone CLI binary (not VS Code extension). */
@@ -67,10 +139,16 @@ export class Log {
     // { log: true } registers this as a LogOutputChannel, which is what makes
     // "ctrlyoke" appear as its own entry in "Developer: Set Log Level..." —
     // a plain createOutputChannel() never shows up there.
-    this.outputChannel = vscode.window.createOutputChannel("ctrlyoke", {
+    //
+    // Deliberately NOT pushed onto context.subscriptions: VS Code disposes
+    // those before an async deactivate() finishes, and the extension keeps
+    // logging until it does. extension.ts's deactivate() calls Log.dispose()
+    // as its very last step instead.
+    this.outputChannel?.dispose();
+    const channel = vscode.window.createOutputChannel("ctrlyoke", {
       log: true,
     });
-    context.subscriptions.push(this.outputChannel);
+    this.outputChannel = new SafeLogOutputChannel(channel);
 
     this.workspaceRoot = workspaceRoot;
 
@@ -84,9 +162,9 @@ export class Log {
       // > ctrlyoke) when present, falling back to the global default —
       // vscode.env.logLevel only ever reflects the global default and would
       // ignore a ctrlyoke-specific override.
-      this.logLevel = Log.fromVSCodeLogLevel(this.outputChannel.logLevel);
+      this.logLevel = Log.fromVSCodeLogLevel(channel.logLevel);
       context.subscriptions.push(
-        this.outputChannel.onDidChangeLogLevel((level) => {
+        channel.onDidChangeLogLevel((level) => {
           Log.logLevel = Log.fromVSCodeLogLevel(level);
         })
       );
@@ -266,12 +344,23 @@ export class Log {
    * Used by components that need direct access to the output channel.
    */
   static getOutputChannel(): vscode.LogOutputChannel {
-    if (!this.outputChannel) {
+    const channel = this.outputChannel?.raw;
+    if (!channel) {
       throw new Error(
-        "Log.initialize() must be called before accessing output channel"
+        "The ctrlyoke output channel is not open (Log.initialize() not called, or already disposed)"
       );
     }
-    return this.outputChannel;
+    return channel;
+  }
+
+  /**
+   * Close the output channel. Called last in the extension's `deactivate()`,
+   * after every other shutdown step has had its chance to log. Later calls to
+   * the logging methods still reach the log file; only the channel is gone.
+   */
+  static dispose(): void {
+    this.outputChannel?.dispose();
+    this.outputChannel = undefined;
   }
 
   static trace(message: string, ...args: any[]): void {
@@ -321,9 +410,7 @@ export class Log {
    */
   static appendLine(message: string): void {
     message = secretRedactionService.redactText(message);
-    if (this.outputChannel) {
-      this.outputChannel.appendLine(message);
-    }
+    this.outputChannel?.appendLine(message);
     if (this.logFilePath) {
       try {
         fs.appendFileSync(this.logFilePath, message + "\n");
@@ -363,25 +450,7 @@ export class Log {
     // renders as "[info]" with VS Code's own timestamp, which — stacked on
     // top of our manual prefix — is what produced the double
     // timestamp/level lines in the Output panel.
-    if (this.outputChannel) {
-      switch (level) {
-        case LogLevel.TRACE:
-          this.outputChannel.trace(formattedMessage);
-          break;
-        case LogLevel.DEBUG:
-          this.outputChannel.debug(formattedMessage);
-          break;
-        case LogLevel.WARN:
-          this.outputChannel.warn(formattedMessage);
-          break;
-        case LogLevel.ERROR:
-          this.outputChannel.error(formattedMessage);
-          break;
-        default:
-          this.outputChannel.info(formattedMessage);
-          break;
-      }
-    }
+    this.outputChannel?.write(level, formattedMessage);
 
     if (IS_DEV_MODE) {
       // Also log to console for development
