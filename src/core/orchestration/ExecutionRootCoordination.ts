@@ -74,6 +74,17 @@ export interface CoordinationFoldOptions {
   processLivenessCheck?: ProcessLivenessCheck;
 }
 
+function hasRunAddress(
+  participant: CoordinationParticipant,
+  address: NonNullable<CoordinationParticipant["address"]>
+): boolean {
+  return (
+    participant.kind === COORDINATION_PARTICIPANT_KINDS.CTRL_YOKE_STEP &&
+    participant.address?.workflowKey === address.workflowKey &&
+    participant.address?.runRef === address.runRef
+  );
+}
+
 interface ParticipantLeaseRecord {
   participant: CoordinationParticipant;
   live: boolean;
@@ -552,11 +563,11 @@ export class CoordinationParticipantRegistry {
   }
 
   /**
-   * Close attested ctrlyoke participants for a settled run target. Sequential
+   * Close ctrlyoke participants for a settled run target. Sequential
    * participants are run-scoped because an injected PTY can retain an older
    * step index; grouped participants are narrowed by their group and step.
    */
-  async closeAttestedParticipants(
+  async closeRunParticipants(
     address: NonNullable<CoordinationParticipant["address"]>
   ): Promise<void> {
     await this.store.transaction(async (transaction) => {
@@ -565,14 +576,11 @@ export class CoordinationParticipantRegistry {
         this.foldOptions()
       ).participants.filter(
         (participant) =>
-          participant.attested &&
-          participant.kind === COORDINATION_PARTICIPANT_KINDS.CTRL_YOKE_STEP &&
-          participant.address?.workflowKey === address.workflowKey &&
-          participant.address?.runRef === address.runRef &&
+          hasRunAddress(participant, address) &&
           (address.parallelGroupId === undefined
-            ? participant.address.parallelGroupId === undefined
-            : participant.address.parallelGroupId === address.parallelGroupId &&
-              participant.address.stepIndex === address.stepIndex)
+            ? participant.address?.parallelGroupId === undefined
+            : participant.address?.parallelGroupId === address.parallelGroupId &&
+              participant.address?.stepIndex === address.stepIndex)
       );
       for (const participant of participants) {
         await transaction.append(
@@ -582,8 +590,8 @@ export class CoordinationParticipantRegistry {
     });
   }
 
-  /** Close every attested participant from a group after its join boundary. */
-  async closeAttestedGroupParticipants(
+  /** Close every participant from a group after its join boundary. */
+  async closeGroupParticipants(
     address: NonNullable<CoordinationParticipant["address"]>
   ): Promise<void> {
     if (!address.parallelGroupId) return;
@@ -593,11 +601,8 @@ export class CoordinationParticipantRegistry {
         this.foldOptions()
       ).participants.filter(
         (participant) =>
-          participant.attested &&
-          participant.kind === COORDINATION_PARTICIPANT_KINDS.CTRL_YOKE_STEP &&
-          participant.address?.workflowKey === address.workflowKey &&
-          participant.address?.runRef === address.runRef &&
-          participant.address.parallelGroupId === address.parallelGroupId
+          hasRunAddress(participant, address) &&
+          participant.address?.parallelGroupId === address.parallelGroupId
       );
       for (const participant of participants) {
         await transaction.append(
@@ -619,11 +624,8 @@ export class CoordinationParticipantRegistry {
       );
       for (const participant of fold.participants) {
         if (
-          !participant.attested ||
-          participant.kind !== COORDINATION_PARTICIPANT_KINDS.CTRL_YOKE_STEP ||
-          participant.address?.workflowKey !== address.workflowKey ||
-          participant.address?.runRef !== address.runRef ||
-          participant.address.parallelGroupId !== address.parallelGroupId
+          !hasRunAddress(participant, address) ||
+          participant.address?.parallelGroupId !== address.parallelGroupId
         ) {
           continue;
         }

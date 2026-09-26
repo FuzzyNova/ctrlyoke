@@ -1,8 +1,8 @@
 # Parallel-group join does not release claims held by skill/CLI members
 
 - **Found:** 2026-09-26 by claude-cli while fixing `coordination-cli-participant-identity-not-stable`
-- **Area:** `src/core/orchestration/ExecutionRootCoordination.ts` (`releaseClaimsForGroup`, `closeAttestedGroupParticipants`, `closeAttestedParticipants`)
-- **Severity:** medium: stale claims can deny the next step's paths for up to the CLI TTL (30 min)
+- **Area:** `src/core/orchestration/ExecutionRootCoordination.ts` (`releaseClaimsForGroup`, `closeGroupParticipants`, `closeRunParticipants`)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

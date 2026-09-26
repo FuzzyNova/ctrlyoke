@@ -862,7 +862,7 @@ export class WorkflowInstance {
     if (!address) return;
     await new CoordinationParticipantRegistry(
       this.executionWorkspace.executionRoot
-    ).closeAttestedParticipants(address);
+    ).closeRunParticipants(address);
   }
 
   private async releaseCoordinationGroupClaims(
@@ -879,7 +879,7 @@ export class WorkflowInstance {
     await registry.releaseClaimsForGroup(address);
     // A sanitising MCP client may omit the member step index. At the join all
     // members are settled, so closing the whole group is then unambiguous.
-    await registry.closeAttestedGroupParticipants(address);
+    await registry.closeGroupParticipants(address);
   }
 
   private async cancelTarget(target: WorkflowAttemptTarget): Promise<void> {
