@@ -142,6 +142,9 @@ export function GlobalSettingsDrawer() {
     SETTING_SCOPES.USER
   );
   const [shouldRender, setShouldRender] = useState(globalSettingsOpen);
+  // Drives the slide transform separately from `globalSettingsOpen` so a fresh
+  // mount first paints off-screen (translate-y-full) and only then slides in.
+  const [isSlidIn, setIsSlidIn] = useState(false);
   const visibleTabs = TABS.filter(
     (t) => t.id !== GLOBAL_SETTINGS_TABS.DEVELOPER || dev?.enabled
   );
@@ -152,11 +155,29 @@ export function GlobalSettingsDrawer() {
     effectiveActiveTab === GLOBAL_SETTINGS_TABS.MCP_MANAGER;
 
   useEffect(() => {
-    if (globalSettingsOpen) {
+    if (!globalSettingsOpen) {
+      setIsSlidIn(false);
+      return;
+    }
+    if (!shouldRender) {
       setShouldRender(true);
       return;
     }
-    if (!shouldRender) return;
+    // The drawer is now mounted at translate-y-full. Wait two frames so that
+    // off-screen position is actually painted before flipping to translate-y-0;
+    // otherwise the browser coalesces both styles and the drawer pops in.
+    let innerFrame = 0;
+    const outerFrame = window.requestAnimationFrame(() => {
+      innerFrame = window.requestAnimationFrame(() => setIsSlidIn(true));
+    });
+    return () => {
+      window.cancelAnimationFrame(outerFrame);
+      window.cancelAnimationFrame(innerFrame);
+    };
+  }, [globalSettingsOpen, shouldRender]);
+
+  useEffect(() => {
+    if (globalSettingsOpen || !shouldRender) return;
 
     const timer = window.setTimeout(() => setShouldRender(false), 220);
     return () => window.clearTimeout(timer);
@@ -220,7 +241,7 @@ export function GlobalSettingsDrawer() {
       ref={drawerRef}
       className={`absolute inset-0 flex flex-col z-drawer bg-panel-bg border-t border-panel-border
         transition-transform duration-200 ease-out
-        ${globalSettingsOpen ? "translate-y-0" : "translate-y-full pointer-events-none"}`}
+        ${isSlidIn ? "translate-y-0" : "translate-y-full pointer-events-none"}`}
       aria-hidden={!globalSettingsOpen}
       onTransitionEnd={(event) => {
         if (
