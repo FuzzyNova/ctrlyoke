@@ -139,6 +139,18 @@ NOTE: `npm run test:harness` runs real harnesses, costs money, and is very slow 
 - When you do write an entry: pick the most specific instruction file via the routing table in `CLAUDE.md`, keep it concise and forward-looking (the durable rule/constraint/why, not a play-by-play), don't restate what the code or schema already makes obvious, and prefer editing/tightening an existing bullet over appending a near-duplicate. Verify any file/symbol/line references against the current code first — these files are asserted as fact, so a stale citation is worse than none.
 </knowledgeCapture>
 
+<bugTracking>
+## Bug Tracking & Filing
+- **Bugs found during development go in `dev/bugs/`**, one document per bug. Don't leave them in personal scratchpads or harness-private memory. Public-facing, user-reported bugs belong in GitHub issues. `dev/bugs/` is for internal findings made while working on the repo.
+- **Directories**:
+  - `dev/bugs/backlog/` — open, confirmed bugs awaiting fix.
+  - `dev/bugs/implemented/` — resolved bugs (move here via `git mv` in the fixing commit).
+  - `dev/bugs/rejected/` — closed as won't-fix, duplicate, or as-designed (move here via `git mv`).
+- **Resolution note**: When moving a bug out of `backlog/`, replace its `**Severity:**` line with `**Resolution:**`. For a fixed bug, give the fixing commit hash or plan. For a rejected bug, give a one-line reason.
+- **Naming**: Use kebab-case descriptive filenames without numeric IDs (e.g. `dev/bugs/backlog/<descriptive-slug>.md`). Files retain their slug across lifecycle transitions so commit links remain stable.
+- **Template & guidelines**: See `dev/bugs/README.md`. In parallel workflows or multi-agent roots, claim your bug filename via `claim_paths` before authoring.
+</bugTracking>
+
 <fileEditing>
 
 - **Prefer your built-in edit tools for ordinary file edits.** ctrlyoke shows those
