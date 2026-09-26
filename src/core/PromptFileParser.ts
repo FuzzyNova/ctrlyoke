@@ -2,10 +2,12 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import Ajv from "ajv/dist/2020";
 import * as yaml from "js-yaml";
+import type { ErrorObject, ValidateFunction } from "ajv";
 import {
   ExecutionProperties,
   ParallelGroupDefinition,
   PromptFile,
+  ParsedPromptFile,
   PromptStep,
   WorkflowStep,
   ScriptStep,
@@ -66,8 +68,10 @@ export function getAuthoredSourcePath(
 }
 
 export class PromptFileParser {
-  private ajv = new Ajv({ allowUnionTypes: true });
   private promptSchema: any;
+  private strictValidator?: ValidateFunction;
+  private relaxedValidator?: ValidateFunction;
+  private ajv = new Ajv({ allErrors: true, allowUnionTypes: true });
 
   constructor(
     private readonly platform?: PlatformAdapter,
@@ -102,6 +106,10 @@ export class PromptFileParser {
       );
 
       this.promptSchema = JSON.parse(promptSchemaContent);
+      this.strictValidator = this.ajv.compile(this.promptSchema);
+      this.relaxedValidator = this.ajv.compile(
+        PromptFileParser.createRelaxedSchema(this.promptSchema)
+      );
 
       Log.debug("[PromptFileParser] JSON schema loaded successfully");
     } catch (error) {
@@ -118,7 +126,7 @@ export class PromptFileParser {
    * Parse and validate a prompt file
    * Supports .ctrlyoke.yaml/.yml, .ctrlyoke.json, and .prompt.md files
    */
-  async parsePromptFile(filePath: string): Promise<PromptFile | null> {
+  async parsePromptFile(filePath: string): Promise<ParsedPromptFile | null> {
     try {
       const ext = path.extname(filePath).toLowerCase();
 
@@ -162,7 +170,9 @@ export class PromptFileParser {
         stripLegacyWorkingFileLineageMetadata(parsed);
       }
 
-      return await this.validateAndNormalize(parsed, filePath);
+      const { workflow, warnings } =
+        await this.validateAndNormalizeWithWarnings(parsed, filePath);
+      return PromptFileParser.withWarnings(workflow, warnings);
     } catch (error) {
       Log.error(`[PromptFileParser] Failed to parse file ${filePath}:`, error);
       if (this.userFeedbackSink) {
@@ -182,7 +192,7 @@ export class PromptFileParser {
 
   /**
    * Validate an already-parsed object against the schema and normalize it into
-   * a PromptFile. Shared by parsePromptFile (disk-backed) and callers that
+   * a parsed workflow with warnings. Shared by parsePromptFile (disk-backed) and callers that
    * already have a parsed object in memory (e.g. template variable substitution)
    * and only need the same schema/normalization guarantees applied.
    * @param parsed Raw parsed YAML/JSON object (no `_templateMeta` or other authoring-only keys)
@@ -191,7 +201,18 @@ export class PromptFileParser {
   async validateAndNormalize(
     parsed: any,
     contentPath: string
-  ): Promise<PromptFile> {
+  ): Promise<ParsedPromptFile> {
+    const { workflow, warnings } = await this.validateAndNormalizeWithWarnings(
+      parsed,
+      contentPath
+    );
+    return PromptFileParser.withWarnings(workflow, warnings);
+  }
+
+  private async validateAndNormalizeWithWarnings(
+    parsed: any,
+    contentPath: string
+  ): Promise<{ workflow: PromptFile; warnings: WorkflowValidationWarning[] }> {
     this.validateAuthoredParallelStructure(parsed);
 
     if (
@@ -207,14 +228,247 @@ export class PromptFileParser {
       }
     }
 
-    if (this.promptSchema && !this.ajv.validate(this.promptSchema, parsed)) {
-      const errors = this.ajv.errors
-        ?.map((err) => `${err.instancePath}: ${err.message}`)
-        .join(", ");
-      throw new Error(`Validation failed: ${errors}`);
+    const warnings = this.validateSchemaAndGetWarnings(parsed);
+    return {
+      workflow: await this.normalizePromptFile(parsed, contentPath),
+      warnings,
+    };
+  }
+
+  private static createRelaxedSchema(schema: Record<string, unknown>): any {
+    const relaxed = structuredClone(schema) as Record<string, unknown>;
+    const visit = (value: unknown): void => {
+      if (Array.isArray(value)) {
+        value.forEach(visit);
+        return;
+      }
+      if (!isObject(value)) return;
+      if (value.unevaluatedProperties === false) {
+        delete value.unevaluatedProperties;
+      }
+      for (const child of Object.values(value)) visit(child);
+    };
+    visit(relaxed);
+    return relaxed;
+  }
+
+  /** Strictly validate first; only unknown-key closure failures can be warnings. */
+  private validateSchemaAndGetWarnings(
+    parsed: unknown
+  ): WorkflowValidationWarning[] {
+    if (!this.strictValidator || !this.relaxedValidator) return [];
+
+    if (this.strictValidator(parsed)) return [];
+    const originalErrors = [...(this.strictValidator.errors ?? [])];
+    if (!this.relaxedValidator(parsed)) {
+      throw this.schemaValidationError(originalErrors);
     }
 
-    return await this.normalizePromptFile(parsed, contentPath);
+    let scratch = structuredClone(parsed);
+    const warnings: WorkflowValidationWarning[] = [];
+    while (!this.strictValidator(scratch)) {
+      const errors = [...(this.strictValidator.errors ?? [])];
+      const candidates = new Map<string, ErrorObject>();
+      for (const error of errors) {
+        if (
+          error.keyword !== "unevaluatedProperties" ||
+          typeof error.params.unevaluatedProperty !== "string"
+        ) {
+          continue;
+        }
+        const propertyPath = PromptFileParser.joinPointer(
+          error.instancePath,
+          error.params.unevaluatedProperty
+        );
+        candidates.set(propertyPath, error);
+      }
+
+      const deepestFirst = [...candidates.entries()].sort(
+        ([left], [right]) =>
+          PromptFileParser.pointerDepth(right) -
+          PromptFileParser.pointerDepth(left)
+      );
+      let removed = false;
+      for (const [propertyPath, error] of deepestFirst) {
+        const candidate = structuredClone(scratch);
+        if (!PromptFileParser.deleteAtPointer(candidate, propertyPath)) {
+          continue;
+        }
+        if (!this.relaxedValidator(candidate)) continue;
+
+        const propertyName = String(error.params.unevaluatedProperty);
+        warnings.push(
+          this.createUnknownPropertyWarning(parsed, propertyPath, propertyName)
+        );
+        scratch = candidate;
+        removed = true;
+        break;
+      }
+
+      if (!removed) {
+        throw this.schemaValidationError(errors);
+      }
+    }
+
+    return warnings;
+  }
+
+  private schemaValidationError(errors: readonly ErrorObject[]): Error {
+    const message = errors
+      .map((error) => `${error.instancePath}: ${error.message}`)
+      .join(", ");
+    return new Error(`Validation failed: ${message}`);
+  }
+
+  private createUnknownPropertyWarning(
+    original: unknown,
+    propertyPointer: string,
+    propertyName: string
+  ): WorkflowValidationWarning {
+    const parentPointer = propertyPointer.slice(
+      0,
+      propertyPointer.lastIndexOf("/")
+    );
+    const validKeys = this.getValidKeysAtPointer(original, parentPointer);
+    const suggestion = PromptFileParser.nearestKey(propertyName, validKeys);
+    const suggestionText = suggestion ? ` Did you mean '${suggestion}'?` : "";
+    return {
+      code: WORKFLOW_VALIDATION_WARNING_CODES.UNKNOWN_PROPERTY,
+      propertyPointer,
+      message: `Unknown property '${propertyName}' at ${propertyPointer}.${suggestionText} It may also be a field from a newer ctrlyoke.`,
+    };
+  }
+
+  private getValidKeysAtPointer(
+    original: unknown,
+    instancePointer: string
+  ): string[] {
+    const target = PromptFileParser.getAtPointer(original, instancePointer);
+    const defs = this.promptSchema?.$defs ?? {};
+    let schemas: unknown[];
+    if (instancePointer === "") {
+      schemas = [
+        defs.singleStepRoot,
+        defs.executionProperties,
+        defs.workflowOnlyProperties,
+        this.promptSchema?.oneOf?.[1]?.allOf?.[2],
+      ];
+    } else if (instancePointer.endsWith("/_runtime")) {
+      schemas = [defs.promptRuntimeMetadata];
+    } else if (instancePointer.endsWith("/endCondition")) {
+      schemas = [defs.endCondition];
+    } else if (instancePointer.endsWith("/preCondition")) {
+      schemas = [defs.preCondition];
+    } else if (isObject(target) && Array.isArray(target.parallel)) {
+      schemas = [defs.parallelGroupItem];
+    } else {
+      // workflowStep is the shared closure for ordinary steps, finalStep, and
+      // parallel members. Its oneOf intentionally supplies both step kinds.
+      schemas = [defs.workflowStep];
+    }
+
+    const names = new Set<string>();
+    const visited = new Set<unknown>();
+    const visit = (schema: unknown): void => {
+      if (!isObject(schema) || visited.has(schema)) return;
+      visited.add(schema);
+      if (typeof schema.$ref === "string" && schema.$ref.startsWith("#/")) {
+        const refSegments = schema.$ref
+          .slice(2)
+          .split("/")
+          .map(PromptFileParser.unescapePointerSegment);
+        let referenced: any = this.promptSchema;
+        for (const segment of refSegments) referenced = referenced?.[segment];
+        visit(referenced);
+      }
+      if (isObject(schema.properties)) {
+        Object.keys(schema.properties).forEach((name) => names.add(name));
+      }
+      for (const key of ["allOf", "anyOf", "oneOf"] as const) {
+        const alternatives = schema[key];
+        if (Array.isArray(alternatives)) alternatives.forEach(visit);
+      }
+    };
+    schemas.forEach(visit);
+    return [...names];
+  }
+
+  private static getAtPointer(value: unknown, pointer: string): unknown {
+    if (pointer === "") return value;
+    const segments = pointer
+      .replace(/^\//, "")
+      .split("/")
+      .map(PromptFileParser.unescapePointerSegment);
+    let current: any = value;
+    for (const segment of segments) current = current?.[segment];
+    return current;
+  }
+
+  private static nearestKey(
+    key: string,
+    candidates: readonly string[]
+  ): string | undefined {
+    let nearest: string | undefined;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (const candidate of candidates) {
+      const distance = PromptFileParser.editDistance(key, candidate);
+      if (
+        distance < nearestDistance ||
+        (distance === nearestDistance && candidate < (nearest ?? ""))
+      ) {
+        nearest = candidate;
+        nearestDistance = distance;
+      }
+    }
+    return nearest;
+  }
+
+  private static editDistance(left: string, right: string): number {
+    const row = Array.from({ length: right.length + 1 }, (_, index) => index);
+    for (let leftIndex = 1; leftIndex <= left.length; leftIndex++) {
+      let previousDiagonal = row[0];
+      row[0] = leftIndex;
+      for (let rightIndex = 1; rightIndex <= right.length; rightIndex++) {
+        const previous = row[rightIndex];
+        row[rightIndex] = Math.min(
+          row[rightIndex] + 1,
+          row[rightIndex - 1] + 1,
+          previousDiagonal +
+            (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1)
+        );
+        previousDiagonal = previous;
+      }
+    }
+    return row[right.length];
+  }
+
+  private static joinPointer(parent: string, key: string): string {
+    return `${parent}/${PromptFileParser.escapePointerSegment(key)}`;
+  }
+
+  private static pointerDepth(pointer: string): number {
+    return pointer === "" ? 0 : pointer.split("/").length - 1;
+  }
+
+  private static deleteAtPointer(value: unknown, pointer: string): boolean {
+    const segments = pointer
+      .replace(/^\//, "")
+      .split("/")
+      .map(PromptFileParser.unescapePointerSegment);
+    const property = segments.pop();
+    if (property === undefined) return false;
+    let parent: any = value;
+    for (const segment of segments) parent = parent?.[segment];
+    if (!isObject(parent) || !hasOwn(parent, property)) return false;
+    return delete parent[property];
+  }
+
+  private static escapePointerSegment(segment: string): string {
+    return segment.replace(/~/g, "~0").replace(/\//g, "~1");
+  }
+
+  private static unescapePointerSegment(segment: string): string {
+    return segment.replace(/~1/g, "/").replace(/~0/g, "~");
   }
 
   /**
@@ -222,7 +476,9 @@ export class PromptFileParser {
    * @param filePath Path to the .prompt.md file
    * @returns PromptFile with single prompt item
    */
-  async parseMarkdownPromptFile(filePath: string): Promise<PromptFile | null> {
+  async parseMarkdownPromptFile(
+    filePath: string
+  ): Promise<ParsedPromptFile | null> {
     try {
       const content = await fs.readFile(filePath, "utf8");
 
@@ -233,14 +489,17 @@ export class PromptFileParser {
         throw new Error("Prompt file is empty");
       }
 
-      return {
-        steps: [
-          {
-            prompt: promptText,
-            // Properties omitted will be undefined - global setting used at execution time
-          },
-        ],
-      };
+      return PromptFileParser.withWarnings(
+        {
+          steps: [
+            {
+              prompt: promptText,
+              // Properties omitted will be undefined - global setting used at execution time
+            },
+          ],
+        },
+        []
+      );
     } catch (error) {
       Log.error(
         `[PromptFileParser] Failed to read markdown prompt file ${filePath}:`,
@@ -259,6 +518,20 @@ export class PromptFileParser {
       }
       return null;
     }
+  }
+
+  private static withWarnings(
+    workflow: PromptFile,
+    warnings: WorkflowValidationWarning[]
+  ): ParsedPromptFile {
+    const parsedFile = { ...workflow } as ParsedPromptFile;
+    // Parser diagnostics are part of the parse result, not workflow data. Keep
+    // them accessible to callers without letting object spreads persist them.
+    Object.defineProperty(parsedFile, "warnings", {
+      value: warnings,
+      enumerable: false,
+    });
+    return parsedFile;
   }
 
   /** Validate file references early while retaining the authored prompt value. */

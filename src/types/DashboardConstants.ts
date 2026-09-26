@@ -2902,11 +2902,13 @@ export const SCRIPT_VALUELESS_OPERATORS: readonly string[] = [
 
 // ============================================================================
 // WORKFLOW VALIDATION WARNINGS - non-blocking findings from
-// `PromptFileParser.validateWorkflowSteps`. A workflow that produces only
-// warnings still parses, loads, and runs; the codes exist so CLI/JSON consumers
-// can identify a finding without parsing its prose.
+// `PromptFileParser`. A workflow that produces only warnings still parses,
+// loads, and runs; stable codes let CLI/JSON consumers identify a finding
+// without parsing its prose.
 // ============================================================================
 export const WORKFLOW_VALIDATION_WARNING_CODES = {
+  /** An unrecognized optional key will be ignored by this ctrlyoke version. */
+  UNKNOWN_PROPERTY: "unknown-property",
   /**
    * A script comparison states a `compareSource`/`operator` but gives no
    * `expected` value, so the stated comparison never runs and the check falls

@@ -720,6 +720,202 @@ suite("Workflow template schema", () => {
     );
   });
 
+  test("accepts the schema closure probe shapes and repository workflows", async () => {
+    const validProbes = [
+      {
+        steps: [
+          {
+            prompt: "Implement the change",
+            preCondition: { script: "npm test" },
+            endCondition: { script: "npm test", expected: 0 },
+          },
+          {
+            parallel: [
+              { prompt: "Review the implementation" },
+              { type: "script", script: "npm run lint" },
+            ],
+            failFast: true,
+          },
+        ],
+        finalStep: { prompt: "Summarize the result" },
+      },
+      {
+        prompt: "Use a single-step prompt workflow",
+        worktree: true,
+        vars: { target: "workspace" },
+        trustedExternalRoots: ["/shared/fixtures"],
+      },
+      {
+        type: "script",
+        script: "npm test",
+        _templateMeta: { name: "Script check" },
+      },
+      {
+        _templateMeta: { name: "Harness template" },
+        steps: [{ prompt: "Work with {harness}", harness: "{harness}" }],
+      },
+      {
+        steps: [
+          {
+            prompt: "Run file step",
+            _runtime: {
+              harness: "claude-cli",
+              sessionId: "session",
+              startedAt: 1,
+              completedAt: 2,
+              terminalStatus: "completed",
+            },
+          },
+        ],
+        parallelGroups: [],
+        startedAt: 1,
+        definitionRevision: 1,
+        _runtime: {
+          schemaVersion: 1,
+          currentIndex: 1,
+          executionState: "completed",
+        },
+      },
+    ];
+
+    for (const probe of validProbes) {
+      assert.strictEqual(
+        validate(probe),
+        true,
+        JSON.stringify(validate.errors)
+      );
+    }
+
+    const parser = new PromptFileParser();
+    const templateDirectory = path.resolve(
+      __dirname,
+      "../../../src/templates/workflows"
+    );
+    const repoWorkflowDirectory = path.resolve(
+      __dirname,
+      "../../../.ctrlyoke/workflows"
+    );
+    const templateFiles = fs
+      .readdirSync(templateDirectory)
+      .filter((name) => /\.ctrlyoke\.(?:ya?ml|json)$/u.test(name))
+      .map((name) => path.join(templateDirectory, name));
+    const repoWorkflowFiles = fs.existsSync(repoWorkflowDirectory)
+      ? fs
+          .readdirSync(repoWorkflowDirectory)
+          .filter((name) => /\.ctrlyoke\.(?:ya?ml|json)$/u.test(name))
+          .map((name) => path.join(repoWorkflowDirectory, name))
+      : [];
+
+    for (const filePath of [...templateFiles, ...repoWorkflowFiles]) {
+      const parsed = await parser.parsePromptFile(filePath);
+      assert.ok(parsed, `${filePath} should parse`);
+      if (templateFiles.includes(filePath)) {
+        assert.deepStrictEqual(
+          parsed.warnings,
+          [],
+          `${filePath} should not have unknown-key warnings`
+        );
+      }
+    }
+  });
+
+  test("downgrades only unknown-key closure failures and reports exact paths", async () => {
+    const tempDirectory = fs.mkdtempSync(
+      path.join(require("os").tmpdir(), "ctrlyoke-schema-closure-")
+    );
+    const parser = new PromptFileParser();
+    const cases: Array<{ document: unknown; path: string }> = [
+      {
+        document: { steps: [{ prompt: "Do work", endConditon: {} }] },
+        path: "/steps/0/endConditon",
+      },
+      {
+        document: { steps: [{ prompt: "Do work" }], endConditon: {} },
+        path: "/endConditon",
+      },
+      {
+        document: { prompt: "Do work", endConditon: {} },
+        path: "/endConditon",
+      },
+      {
+        document: { type: "script", script: "npm test", scriptt: true },
+        path: "/scriptt",
+      },
+      {
+        document: {
+          steps: [{ prompt: "Do work" }],
+          finalStep: { prompt: "Finish", endConditon: {} },
+        },
+        path: "/finalStep/endConditon",
+      },
+      {
+        document: {
+          steps: [
+            {
+              parallel: [
+                { prompt: "Do work", endConditon: {} },
+                { prompt: "Review" },
+              ],
+            },
+          ],
+        },
+        path: "/steps/0/parallel/0/endConditon",
+      },
+      {
+        document: {
+          steps: [{ prompt: "Do work", _runtime: { elasped: 1 } }],
+        },
+        path: "/steps/0/_runtime/elasped",
+      },
+      {
+        document: {
+          steps: [
+            {
+              parallel: [{ prompt: "One" }, { prompt: "Two" }],
+              failfast: false,
+            },
+          ],
+        },
+        path: "/steps/0/failfast",
+      },
+    ];
+
+    try {
+      for (const [index, { document, path: expectedPath }] of cases.entries()) {
+        assert.strictEqual(
+          validate(document),
+          false,
+          `probe ${index} must fail strict schema validation`
+        );
+        const filePath = path.join(
+          tempDirectory,
+          `probe-${index}.ctrlyoke.json`
+        );
+        fs.writeFileSync(filePath, JSON.stringify(document), "utf8");
+        const parsed = await parser.parsePromptFile(filePath);
+        assert.ok(parsed, `probe ${index} should load with warnings`);
+        assert.deepStrictEqual(
+          parsed.warnings.map((warning) => warning.propertyPointer),
+          [expectedPath],
+          `probe ${index} warning path`
+        );
+        assert.ok(parsed.warnings[0].message.includes("newer ctrlyoke"));
+      }
+
+      for (const document of [
+        { steps: [{ prompt: "Do work", script: "npm test" }] },
+        { steps: [{ prompt: "Do work", worktree: true }] },
+      ]) {
+        assert.strictEqual(validate(document), false);
+        const filePath = path.join(tempDirectory, "hard-error.ctrlyoke.json");
+        fs.writeFileSync(filePath, JSON.stringify(document), "utf8");
+        assert.strictEqual(await parser.parsePromptFile(filePath), null);
+      }
+    } finally {
+      fs.rmSync(tempDirectory, { recursive: true, force: true });
+    }
+  });
+
   test("accepts managed shorthand and object forms at both workflow roots", () => {
     const validWorkflows = [
       { prompt: "Implement the change", worktree: true },

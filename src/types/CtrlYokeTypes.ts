@@ -361,6 +361,11 @@ export interface PromptFile extends ExecutionProperties {
   vars?: Record<string, string>;
 }
 
+/** A parsed workflow plus non-blocking schema warnings for authored unknown keys. */
+export interface ParsedPromptFile extends PromptFile {
+  warnings: WorkflowValidationWarning[];
+}
+
 /**
  * Runtime state for workflow-level finalStep execution.
  */
@@ -981,12 +986,10 @@ export type PreConditionAction = Exclude<ConditionAction, "retry">;
 export type ScriptStepAction = Exclude<ConditionAction, "retry" | "skipPrompt">;
 
 /**
- * A non-blocking finding from `PromptFileParser.validateWorkflowSteps`: the
- * workflow parses, loads, and runs, but something it states will not take
- * effect. Unlike `errors`, which are prose a human reads once before the load
- * is abandoned, a warning survives into CI output and dashboards, so it carries
- * a stable `code` and an RFC 6901 `propertyPointer` and consumers identify it
- * by those rather than by parsing `message`.
+ * A non-blocking finding from PromptFileParser: the workflow parses, loads, and
+ * runs, but something it states may not take effect. Warnings carry a stable
+ * `code` and RFC 6901 `propertyPointer`; consumers identify them by those
+ * rather than by parsing `message`.
  */
 export interface WorkflowValidationWarning {
   code: WorkflowValidationWarningCode;

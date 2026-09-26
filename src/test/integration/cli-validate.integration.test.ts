@@ -199,6 +199,53 @@ suite("ctrlyoke validate compatibility command", () => {
     );
   });
 
+  test("reports unknown fields with exact paths and fails them in strict mode", async function () {
+    this.timeout(30000);
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-validate-"));
+    temporaryRoots.push(root);
+    const workflow = path.join(root, "typo.ctrlyoke.yaml");
+    await fs.writeFile(
+      workflow,
+      ["steps:", "  - prompt: Do the work", "    endConditon: {}"].join("\n"),
+      "utf8"
+    );
+
+    const human = await runCli(["validate", workflow], root);
+    assert.strictEqual(human.code, 0, human.stderr);
+    assert.match(human.stdout, /\/steps\/0\/endConditon/u);
+    assert.match(human.stdout, /did you mean 'endCondition'/iu);
+    assert.match(human.stdout, /newer ctrlyoke/u);
+
+    const json = await runCli(["validate", workflow, "--json"], root);
+    assert.strictEqual(json.code, 0, json.stderr);
+    const result = JSON.parse(json.stdout) as {
+      success: boolean;
+      warnings: Array<{ code: string; propertyPointer: string }>;
+    };
+    assert.strictEqual(result.success, true);
+    assert.deepStrictEqual(
+      result.warnings.map((warning) => [warning.code, warning.propertyPointer]),
+      [["unknown-property", "/steps/0/endConditon"]]
+    );
+
+    const strict = await runCli(
+      ["validate", workflow, "--strict", "--json"],
+      root
+    );
+    assert.strictEqual(strict.code, 2, strict.stderr);
+    const strictResult = JSON.parse(strict.stdout) as {
+      success: boolean;
+      error: string;
+      warnings: Array<{ propertyPointer: string }>;
+    };
+    assert.strictEqual(strictResult.success, false);
+    assert.match(strictResult.error, /Unknown workflow fields/u);
+    assert.strictEqual(
+      strictResult.warnings[0].propertyPointer,
+      "/steps/0/endConditon"
+    );
+  });
+
   test("fails on a semantic error the schema cannot catch", async function () {
     this.timeout(30000);
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-validate-"));

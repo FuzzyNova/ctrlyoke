@@ -2,6 +2,10 @@
 
 YAML is the most readable way to author multi-step workflows by hand.
 
+The YAML schema flags unknown keys as editor squiggles when the Red Hat YAML
+extension is version 1.20 or newer. Older versions still provide ordinary YAML
+and type checking, but do not recognize the schema's unknown-key closures.
+
 ## Example
 
 ```yaml

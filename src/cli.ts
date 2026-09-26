@@ -354,8 +354,8 @@ program
     "Analyze every AI consumer on each installed harness"
   )
   .option(
-    "--strict <policy>",
-    "Fail on compatibility warnings: lossy, unverified, or all"
+    "--strict [policy]",
+    "Treat unknown workflow fields as errors; with a policy, also fail on compatibility warnings"
   )
   .option("--json", "Emit one versioned JSON result line")
   .action(async (file: string, options: ValidateCommandOptions) => {
@@ -499,7 +499,7 @@ function getCliOutputStepName(
 interface ValidateCommandOptions {
   harness?: string;
   allInstalledHarnesses?: boolean;
-  strict?: string;
+  strict?: string | boolean;
   json?: boolean;
 }
 
@@ -1911,10 +1911,10 @@ async function validateCommand(
     } else if (options.allInstalledHarnesses) {
       target = { kind: CLI_VALIDATE_TARGET_KINDS.ALL_INSTALLED_HARNESSES };
     }
-    if (options.strict !== undefined) {
+    if (typeof options.strict === "string") {
       if (!compatibilityRequested) {
         throw new Error(
-          "--strict requires --harness or --all-installed-harnesses"
+          "--strict <policy> requires --harness or --all-installed-harnesses"
         );
       }
       strictPolicy = parseCliValidateStrictPolicy(options.strict);
@@ -1995,6 +1995,32 @@ async function validateCommand(
       parallelGroups: result.parallelGroups,
       workflowProperties: result,
     });
+    const warnings = [...result.warnings, ...stepValidation.warnings];
+
+    if (options.strict !== undefined && result.warnings.length > 0) {
+      const message = `Unknown workflow fields are errors in strict mode: ${result.warnings.map((warning) => warning.propertyPointer).join(", ")}`;
+      if (options.json) {
+        process.stdout.write(
+          JSON.stringify(
+            buildCliValidationJsonResult({
+              success: false,
+              parsed: true,
+              workflowFile: resolvedFile,
+              warnings,
+              error: message,
+            })
+          ) + "\n"
+        );
+      } else {
+        console.error(
+          chalk.red(`✗ ${path.basename(resolvedFile)} failed validation`)
+        );
+        renderCliValidationWarnings(warnings);
+        console.error(chalk.red(`  ${message}`));
+      }
+      process.exit(2);
+      return;
+    }
 
     if (!stepValidation.valid) {
       const message = stepValidation.errors.join("; ");
@@ -2005,7 +2031,7 @@ async function validateCommand(
               success: false,
               parsed: true,
               workflowFile: resolvedFile,
-              warnings: stepValidation.warnings,
+              warnings,
               error: message,
             })
           ) + "\n"
@@ -2031,14 +2057,14 @@ async function validateCommand(
               parsed: true,
               workflowFile: resolvedFile,
               consumerCount: 0,
-              warnings: stepValidation.warnings,
+              warnings,
             })
           ) + "\n"
         );
       } else {
         console.log(chalk.green(`✓ ${path.basename(resolvedFile)} is valid`));
         console.log(chalk.dim(`  ${result.steps?.length ?? 1} prompt(s)`));
-        renderCliValidationWarnings(stepValidation.warnings);
+        renderCliValidationWarnings(warnings);
       }
       process.exit(0);
       return;
@@ -2096,7 +2122,7 @@ async function validateCommand(
               strict: strictPolicy,
               consumerCount: analysis.consumerCount,
               diagnostics: analysis.diagnostics,
-              warnings: stepValidation.warnings,
+              warnings,
             })
           ) + "\n"
         );
@@ -2111,7 +2137,7 @@ async function validateCommand(
           analysis.consumerCount,
           analysis.diagnostics
         );
-        renderCliValidationWarnings(stepValidation.warnings);
+        renderCliValidationWarnings(warnings);
       }
       process.exit(failed ? 1 : 0);
     } finally {
@@ -2138,9 +2164,9 @@ async function validateCommand(
 }
 
 /**
- * Workflow warnings, printed under whichever validation summary ran. They never
- * change the exit code: `--strict` is a compatibility policy keyed on
- * compatibility diagnostic codes, and these findings are harness-independent.
+ * Workflow warnings, printed under whichever validation summary ran. Unknown
+ * property warnings become errors in strict mode; other findings remain
+ * non-blocking and harness-independent.
  */
 function renderCliValidationWarnings(
   warnings: readonly WorkflowValidationWarning[]

@@ -82,7 +82,13 @@
   "oneOf": [
     {
       "title": "Single Step",
-      "$ref": "#/$defs/singleStepRoot"
+      "$ref": "#/$defs/singleStepRoot",
+      "type": "object",
+      "properties": {
+        "_templateMeta": {
+          "$ref": "#/properties/_templateMeta"
+        }
+      }
     },
     {
       "title": "Multiple Steps (or Working File)",
@@ -135,7 +141,14 @@
           },
           "required": ["steps"]
         }
-      ]
+      ],
+      "type": "object",
+      "properties": {
+        "_templateMeta": {
+          "$ref": "#/properties/_templateMeta"
+        }
+      },
+      "unevaluatedProperties": false
     }
   ],
   "$defs": {
@@ -340,6 +353,7 @@
     "singleStepRoot": {
       "oneOf": [
         {
+          "type": "object",
           "allOf": [
             {
               "$ref": "#/$defs/promptStep"
@@ -347,9 +361,16 @@
             {
               "$ref": "#/$defs/workflowOnlyProperties"
             }
-          ]
+          ],
+          "properties": {
+            "_templateMeta": {
+              "$ref": "#/properties/_templateMeta"
+            }
+          },
+          "unevaluatedProperties": false
         },
         {
+          "type": "object",
           "allOf": [
             {
               "$ref": "#/$defs/rootScriptStep"
@@ -357,7 +378,12 @@
             {
               "$ref": "#/$defs/workflowOnlyProperties"
             }
-          ]
+          ],
+          "properties": {
+            "_templateMeta": {
+              "$ref": "#/properties/_templateMeta"
+            }
+          }
         }
       ]
     },
@@ -436,7 +462,7 @@
         }
       },
       "required": ["type", "script"],
-      "additionalProperties": false
+      "unevaluatedProperties": false
     },
     "workflowRunAddress": {
       "type": "object",
@@ -635,6 +661,7 @@
       }
     },
     "workflowStep": {
+      "type": "object",
       "allOf": [
         {
           "oneOf": [
@@ -658,7 +685,8 @@
             "required": ["trustedExternalRoots"]
           }
         }
-      ]
+      ],
+      "unevaluatedProperties": false
     },
     "parallelGroupItem": {
       "type": "object",
@@ -689,7 +717,7 @@
         }
       },
       "required": ["parallel"],
-      "additionalProperties": false
+      "unevaluatedProperties": false
     },
     "parallelGroupDefinition": {
       "type": "object",
@@ -751,6 +779,12 @@
             }
           },
           "required": ["prompt"]
+        },
+        {
+          "not": {
+            "type": "object",
+            "required": ["script"]
+          }
         }
       ]
     },
@@ -852,8 +886,7 @@
           "$ref": "#/$defs/scriptProperties/properties/returns"
         }
       },
-      "required": ["type", "script"],
-      "additionalProperties": false
+      "required": ["type", "script"]
     },
     "endCondition": {
       "type": "object",
@@ -923,7 +956,7 @@
         }
       },
       "required": ["script"],
-      "additionalProperties": false
+      "unevaluatedProperties": false
     },
     "scriptProperties": {
       "type": "object",
@@ -1037,7 +1070,7 @@
         }
       },
       "required": ["script"],
-      "additionalProperties": false
+      "unevaluatedProperties": false
     },
     "errorBehavior": {
       "type": "object",
@@ -1137,7 +1170,8 @@
             }
           }
         }
-      ]
+      ],
+      "unevaluatedProperties": false
     },
     "runtimeMetadata": {
       "type": "object",

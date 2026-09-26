@@ -59,6 +59,10 @@ allOf:
 oneOf:
   - title: Single Step
     $ref: '#/$defs/singleStepRoot'
+    type: object
+    properties:
+      _templateMeta:
+        $ref: '#/properties/_templateMeta'
   - title: Multiple Steps (or Working File)
     allOf:
       - $ref: '#/$defs/executionProperties'
@@ -100,6 +104,11 @@ oneOf:
             $ref: '#/$defs/runtimeMetadata'
         required:
           - steps
+    type: object
+    properties:
+      _templateMeta:
+        $ref: '#/properties/_templateMeta'
+    unevaluatedProperties: false
 $defs:
   harnessId:
     type: string
@@ -303,12 +312,21 @@ $defs:
           broader scope.
   singleStepRoot:
     oneOf:
-      - allOf:
+      - type: object
+        allOf:
           - $ref: '#/$defs/promptStep'
           - $ref: '#/$defs/workflowOnlyProperties'
-      - allOf:
+        properties:
+          _templateMeta:
+            $ref: '#/properties/_templateMeta'
+        unevaluatedProperties: false
+      - type: object
+        allOf:
           - $ref: '#/$defs/rootScriptStep'
           - $ref: '#/$defs/workflowOnlyProperties'
+        properties:
+          _templateMeta:
+            $ref: '#/properties/_templateMeta'
   rootScriptStep:
     type: object
     description: A top-level script workflow with workflow-only properties.
@@ -362,7 +380,7 @@ $defs:
     required:
       - type
       - script
-    additionalProperties: false
+    unevaluatedProperties: false
   workflowRunAddress:
     type: object
     additionalProperties: false
@@ -589,6 +607,7 @@ $defs:
           the recovery gesture. Use null to explicitly disable an inherited policy.
         $ref: '#/$defs/errorBehaviorDefault'
   workflowStep:
+    type: object
     allOf:
       - oneOf:
           - $ref: '#/$defs/promptStep'
@@ -601,6 +620,7 @@ $defs:
           type: object
           required:
             - trustedExternalRoots
+    unevaluatedProperties: false
   parallelGroupItem:
     type: object
     description: >-
@@ -629,7 +649,7 @@ $defs:
         default: true
     required:
       - parallel
-    additionalProperties: false
+    unevaluatedProperties: false
   parallelGroupDefinition:
     type: object
     description: Normalized working-file topology for one authored parallel group.
@@ -693,6 +713,10 @@ $defs:
             description: Per-prompt runtime execution metadata (optional, added automatically during execution)
         required:
           - prompt
+      - not:
+          type: object
+          required:
+            - script
   scriptStep:
     type: object
     description: A workflow step that runs a shell script/command with no AI interaction.
@@ -785,7 +809,6 @@ $defs:
     required:
       - type
       - script
-    additionalProperties: false
   endCondition:
     type: object
     description: >-
@@ -865,7 +888,7 @@ $defs:
           halt execution (default).
     required:
       - script
-    additionalProperties: false
+    unevaluatedProperties: false
   scriptProperties:
     type: object
     description: Shared script execution properties used by endCondition, preCondition, and scriptStep.
@@ -1001,7 +1024,7 @@ $defs:
           (default). 'stopWorkflow': halt execution.
     required:
       - script
-    additionalProperties: false
+    unevaluatedProperties: false
   errorBehavior:
     type: object
     description: >-
@@ -1097,6 +1120,7 @@ $defs:
             description: >-
               Whether a failed member remains terminal for its parallel group. False when a per-step
               continue policy resolved the failure.
+    unevaluatedProperties: false
   runtimeMetadata:
     type: object
     description: >-

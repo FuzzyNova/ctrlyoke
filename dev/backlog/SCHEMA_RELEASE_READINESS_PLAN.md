@@ -31,7 +31,7 @@
 | 1   | Version marker on authored files + migration plan                      | **Yes** (user); newer files refused cleanly | 1, 2 | E     |
 | 2   | Publish schemas at `https://ctrlyoke.dev/schema/v1/…`, allow `$schema` | **Yes** (user)                              | 3    | E     |
 | 3   | All durations in seconds, with a `Sec` suffix                          | Done 2026-09-26                             | 4    | B     |
-| 4   | Strict prompt steps / workflow root                                    | In progress                                 | 5    | D     |
+| 4   | Strict prompt steps / workflow root                                    | Done 2026-09-26                             | 5    | D     |
 | 5   | Top-level `statusLine` keyed by harness ID; new `diagnostics` group    | Done 2026-09-26                             | 6    | B     |
 | 6   | Single-source lineage metadata in `workflow.json`                      | Done 2026-09-26                             | 7    | C     |
 | 7   | Constrain `vars` key names                                             | Done 2026-09-26                             | 8.1  | A     |
@@ -51,8 +51,9 @@ Phases are ordered in §12. The governing idea: **finish every shape change (A�
 stamp and freeze `v1` (E)**, so the baseline that ships is the final one and no migration is
 ever written for a pre-release rename.
 
-Item 4's schema dialect and `$defs` migration touchpoints were completed 2026-09-26. Schema
-closures and the lenient loader remain pending.
+Item 4's schema dialect, `$defs` migration touchpoints, closures, and lenient loader were
+completed 2026-09-26. Parser warnings are carried in its result; dashboard surfacing remains
+the next step. Root `$schema` and `schemaVersion` properties are deferred to phase E.
 
 ---
 
@@ -471,8 +472,9 @@ component that is itself composed further. Closing `promptStep` directly would r
 | Step `_runtime`                          | `promptRuntimeMetadata`                                                            |
 | Conditions                               | `endCondition`, `preCondition` (switch from `additionalProperties`)                |
 
-Every root branch must also declare `$schema`, `schemaVersion` and `_templateMeta`, and the
-multi-step branch every run-file root field (after §7's removals). The root-level `allOf`
+Every root branch must also declare `_templateMeta` and the multi-step branch every current
+run-file root field (after §7's removals). Do not add `$schema` or `schemaVersion` as root
+properties yet; phase E adds them with the version-marker work. The root-level `allOf`
 `if`/`then` rule for template placeholders lives outside the `oneOf` branches, so it neither
 helps nor hurts the closures.
 
@@ -529,7 +531,7 @@ pass. The warnings refer to the original document; the pruned clone is only scra
 Two error-quality notes carry over from today rather than being introduced by this change:
 a hard error inside `oneOf` still surfaces as "must have required property 'prompt'", and a
 named worktree with `merge` as "worktree must be boolean". Picking the most relevant error
-from a `oneOf` failure is worth a separate small fix while in `PromptFileParser`.
+from a `oneOf` failure is a separate follow-up and was left out of this item.
 
 ---
 
