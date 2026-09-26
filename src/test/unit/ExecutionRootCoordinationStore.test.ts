@@ -41,6 +41,7 @@ suite("ExecutionRootCoordinationStore", function () {
       from: {
         participantId,
         label: participantId,
+        kind: "external" as const,
         attested: false,
       },
       text,
@@ -57,7 +58,12 @@ suite("ExecutionRootCoordinationStore", function () {
       seq,
       at: new Date(seq).toISOString(),
       kind: "claim",
-      from: { participantId, label: participantId, attested: false },
+      from: {
+        participantId,
+        label: participantId,
+        kind: "external" as const,
+        attested: false,
+      },
       paths: [claimPath],
       via: "cli",
     };
@@ -160,7 +166,7 @@ suite("ExecutionRootCoordinationStore", function () {
       const childCode = `
         const { ExecutionRootCoordinationStore } = require(process.argv[1]);
         new ExecutionRootCoordinationStore(process.argv[2])
-          .append({ kind: "note", from: { participantId: process.argv[3], label: process.argv[3], attested: false }, via: "cli", text: "child" })
+          .append({ kind: "note", from: { participantId: process.argv[3], label: process.argv[3], kind: "external", attested: false }, via: "cli", text: "child" })
           .catch((error) => { console.error(error); process.exitCode = 1; });
       `;
       const count = 12;
@@ -374,7 +380,12 @@ suite("ExecutionRootCoordinationStore", function () {
       await store.append(claim("holder", "src/settled.ts", 1));
       await store.append({
         kind: "release",
-        from: { participantId: "holder", label: "holder", attested: false },
+        from: {
+          participantId: "holder",
+          label: "holder",
+          kind: "external" as const,
+          attested: false,
+        },
         paths: ["src/settled.ts"],
         via: "cli",
       });
@@ -393,7 +404,12 @@ suite("ExecutionRootCoordinationStore", function () {
   function lifecycle(participantId: string, kind: "join" | "leave") {
     return {
       kind,
-      from: { participantId, label: participantId, attested: false },
+      from: {
+        participantId,
+        label: participantId,
+        kind: "external" as const,
+        attested: false,
+      },
       via: "cli" as const,
     };
   }

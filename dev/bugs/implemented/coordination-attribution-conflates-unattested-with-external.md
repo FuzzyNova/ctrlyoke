@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-26 by step 0 (claude-cli) of the coordination test workflow, seen live
 - **Area:** `src/mcp-server.ts` (`participantAttribution`), `src/ui/webview-react/utils/coordinationPresentation.ts`
-- **Severity:** low: misleading text; no behaviour change
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

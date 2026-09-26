@@ -14,6 +14,7 @@ import {
   isProcessAlive,
   type ProcessLivenessCheck,
 } from "../../utils/LockSafetyPrimitives";
+import { resolveCoordinationParticipantKind } from "../../utils/CoordinationAttribution";
 import {
   ExecutionRootCoordinationStore,
   DEFAULT_COORDINATION_SETTINGS,
@@ -98,9 +99,10 @@ function participantFromEntry(
 
   return {
     participantId: entry.from.participantId,
-    kind: entry.from.address
-      ? COORDINATION_PARTICIPANT_KINDS.CTRL_YOKE_STEP
-      : COORDINATION_PARTICIPANT_KINDS.EXTERNAL,
+    kind: resolveCoordinationParticipantKind(
+      entry.from.kind,
+      entry.from.address
+    ),
     attested: entry.from.attested,
     label: entry.from.label,
     via: entry.via,
@@ -421,6 +423,7 @@ function participantEntry(
     from: {
       participantId: participant.participantId,
       label: participant.label,
+      kind: participant.kind,
       attested: participant.attested,
       ...(participant.address ? { address: participant.address } : {}),
     },
@@ -662,6 +665,7 @@ export class CoordinationParticipantRegistry {
         from: {
           participantId: participant.participantId,
           label: participant.label,
+          kind: participant.kind,
           attested: participant.attested,
           ...(participant.address ? { address: participant.address } : {}),
         },
@@ -862,6 +866,7 @@ export class CoordinationParticipantRegistry {
           from: {
             participantId: participant.participantId,
             label: participant.label,
+            kind: participant.kind,
             attested: participant.attested,
             ...(participant.address ? { address: participant.address } : {}),
           },

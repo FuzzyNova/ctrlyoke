@@ -3117,6 +3117,7 @@ describe("outputRows", () => {
             from: {
               participantId: "external-1",
               label: "reviewer",
+              kind: "ctrlyoke-step",
               attested: false,
               address: {
                 workflowKey: "workflow-1" as never,

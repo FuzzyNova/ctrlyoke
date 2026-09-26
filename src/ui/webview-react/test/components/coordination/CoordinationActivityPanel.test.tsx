@@ -11,7 +11,10 @@ import { CoordinationSection } from "@components/settings/CoordinationSection";
 import { useCoordinationActivity } from "@hooks/useCoordinationActivity";
 import { useWorkflowStore } from "@store/workflowStore";
 import { MESSAGE_TYPES, SETTING_SCOPES } from "@root/types/DashboardConstants";
-import type { CoordinationScopeSnapshot } from "@root/types/CtrlYokeTypes";
+import type {
+  CoordinationEntry,
+  CoordinationScopeSnapshot,
+} from "@root/types/CtrlYokeTypes";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 
 const boardPath = "C:\\workspace\\.git\\ctrlyoke\\coordination\\board.jsonl";
@@ -37,10 +40,46 @@ const scope: CoordinationScopeSnapshot = {
       from: {
         participantId: "external-1",
         label: "reviewer",
+        kind: "external",
         attested: false,
       },
       text: "untrusted <instruction>",
       via: "cli",
+    },
+    {
+      seq: 13,
+      at: "2026-09-11T12:01:00.000Z",
+      kind: "note",
+      from: {
+        participantId: "legacy-step",
+        label: "skill member",
+        attested: false,
+        address: {
+          workflowKey: "workflow-1" as never,
+          runRef: "run-1" as never,
+          stepIndex: 1,
+        },
+      },
+      text: "legacy skill note",
+      via: "cli",
+    } as unknown as CoordinationEntry,
+    {
+      seq: 14,
+      at: "2026-09-11T12:02:00.000Z",
+      kind: "note",
+      from: {
+        participantId: "attested-step",
+        label: "trusted member",
+        kind: "ctrlyoke-step",
+        attested: true,
+        address: {
+          workflowKey: "workflow-1" as never,
+          runRef: "run-1" as never,
+          stepIndex: 2,
+        },
+      },
+      text: "attested note",
+      via: "mcp",
     },
   ],
   claims: [],
@@ -77,17 +116,24 @@ describe("CoordinationActivityPanel", () => {
     expect(result.current.participants[0]?.address).toBeUndefined();
   });
 
-  it("shows no-run external participants and marks notes as untrusted", () => {
+  it("attributes external, legacy skill, and attested entries accurately", () => {
     act(() => useWorkflowStore.setState({ coordinationScope: scope }));
     render(<CoordinationActivityPanel />);
 
     expect(
       screen.getAllByText("reviewer (unattested external session)")
     ).toHaveLength(2);
-    expect(screen.getByText(/Note \(untrusted board content\)/));
     expect(
-      screen.getByText(/Note \(untrusted board content\)/).parentElement
-    ).toHaveTextContent("untrusted <instruction>");
+      screen.getByText("skill member (unattested ctrlyoke step (skill/CLI))")
+    );
+    expect(screen.getByText("trusted member (attested ctrlyoke step)"));
+    const notes = screen.getAllByText(/Note \(untrusted board content\)/);
+    expect(notes).toHaveLength(3);
+    expect(
+      notes.some((note) =>
+        note.parentElement?.textContent?.includes("untrusted <instruction>")
+      )
+    ).toBe(true);
     expect(screen.getByRole("complementary")).toHaveAttribute(
       "data-coordination-panel",
       "true"

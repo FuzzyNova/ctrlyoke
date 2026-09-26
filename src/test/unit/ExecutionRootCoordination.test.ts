@@ -60,6 +60,7 @@ suite("ExecutionRootCoordination", function () {
       from: {
         participantId: value.participantId,
         label: value.label,
+        kind: value.kind,
         attested: value.attested,
         ...(value.address ? { address: value.address } : {}),
       },
@@ -80,6 +81,7 @@ suite("ExecutionRootCoordination", function () {
       from: {
         participantId: value.participantId,
         label: value.label,
+        kind: value.kind,
         attested: value.attested,
       },
       paths,
@@ -100,6 +102,7 @@ suite("ExecutionRootCoordination", function () {
         from: {
           participantId: first.participantId,
           label: first.label,
+          kind: first.kind,
           attested: false,
         },
         paths: ["src/a.ts"],
@@ -114,6 +117,7 @@ suite("ExecutionRootCoordination", function () {
         from: {
           participantId: second.participantId,
           label: second.label,
+          kind: second.kind,
           attested: false,
         },
         via: second.via,
