@@ -467,6 +467,7 @@ suite("external watcher patterns", () => {
         },
         lineageRepository: {
           listLineageKeys: async () => [],
+          readWorkflowDisplayName: async () => "fixture",
           pruneStaleStagingDirs: async () => undefined,
         },
         findInstanceForWorkingFile: () => [],

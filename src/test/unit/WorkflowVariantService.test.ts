@@ -138,10 +138,11 @@ suite("WorkflowVariantService", () => {
       address.workflowKey
     );
 
-    assert.strictEqual(copied.workflowName, "Source Copy");
     assert.strictEqual(copied.harness, HARNESS_IDS.CODEX_CLI);
     assert.strictEqual(copied.model, "variant-model");
-    assert.strictEqual(copied.isFavorite, false);
+    assert.strictEqual(copiedDescriptor.workflowName, "Source Copy");
+    assert.strictEqual(copiedDescriptor.originalFile, undefined);
+    assert.strictEqual(copiedDescriptor.isFavorite, false);
     assert.deepStrictEqual(copied._runtime, {
       schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.RUN_FILE],
       currentIndex: 0,

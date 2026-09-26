@@ -49,6 +49,7 @@ import {
 } from "./ExternalExecutionResolver";
 import { readWorkflowLockOwnershipInspection } from "../../utils/WorkflowLockInspector";
 import { WorktreeManager } from "./WorktreeManager";
+import { stripLegacyWorkingFileLineageMetadata } from "../../utils/WorkingFileMetadata";
 
 export interface ExternalRunWatchBroadcast {
   notifyWorkflowAdded(summary: WorkflowSummary): void;
@@ -87,6 +88,10 @@ export interface ExternalRunWatchInstance {
 
 export interface ExternalRunWatchLineageRepository {
   listLineageKeys(workspaceRoot: string): Promise<WorkflowKey[]>;
+  readWorkflowDisplayName(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey
+  ): Promise<string>;
   pruneStaleStagingDirs(
     workspaceRoot: string,
     workflowKey: WorkflowKey
@@ -516,7 +521,10 @@ export class ExternalRunWatchCoordinator {
       id: workflowId,
       workflowKey,
       runRef,
-      workflowName: workingFile.workflowName ?? workflowId,
+      workflowName: await this.host.lineageRepository.readWorkflowDisplayName(
+        workspaceFolderPath,
+        workflowKey
+      ),
       filePath: workingFilePath,
       workingFilePath,
       executionState,
@@ -650,7 +658,9 @@ export class ExternalRunWatchCoordinator {
       | undefined;
     try {
       const content = await fs.promises.readFile(workingFilePath, "utf8");
-      const workingFile = JSON.parse(content) as WorkingFile;
+      const workingFile = stripLegacyWorkingFileLineageMetadata(
+        JSON.parse(content) as WorkingFile
+      );
       steps = ((workingFile.steps as WorkflowStep[]) ?? []).map((p) => ({
         ...p,
         status: undefined as unknown as string,

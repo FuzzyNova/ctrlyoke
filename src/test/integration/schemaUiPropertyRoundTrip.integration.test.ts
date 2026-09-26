@@ -110,11 +110,7 @@ const NOT_AUTHORABLE = new Map<string, string>([
   ["_runtime", "engine-written runtime block"],
   ["_templateMeta", "template-authoring surface, not a workflow property"],
   ["runtimeMetadata", "engine-written runtime block"],
-  ["originalFile", "working-file bookkeeping"],
-  ["workflowName", "working-file bookkeeping, renamed via its own message"],
   ["startedAt", "engine-written timestamp"],
-  ["lastModifiedAt", "engine-written timestamp"],
-  ["isFavorite", "working-file bookkeeping, toggled via its own message"],
   ["definitionRevision", "engine-written optimistic-concurrency counter"],
   ["steps", "the step list itself, not a property of a step"],
   [

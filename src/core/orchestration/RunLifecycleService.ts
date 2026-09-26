@@ -978,7 +978,9 @@ export class RunLifecycleService {
       {
         definitionRevision,
         definition: buildDefinitionSnapshot(
-          workingFile.workflowName ?? "",
+          await this.host
+            .getLineageRepository()
+            .readWorkflowDisplayName(workspaceRoot, workflowKey),
           workingFile.steps ?? [],
           workingFile._runtime?.pendingRewind?.fromStepIndex,
           workingFile.finalStep,

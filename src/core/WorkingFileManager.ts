@@ -32,6 +32,7 @@ import { withFileLock } from "../utils/FileLockUtils";
 import { writeFileAtomic } from "../utils/AtomicFileUtils";
 import { runStateWriteOptions } from "../utils/RunStateWrites";
 import { invalidateRunSummaryFor } from "./orchestration/RunSummaryCache";
+import { stripLegacyWorkingFileLineageMetadata } from "../utils/WorkingFileMetadata";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import {
   buildDefinitionSnapshot,
@@ -135,33 +136,13 @@ async function readWorkingFileFromDisk(
 ): Promise<WorkingFile> {
   try {
     const content = await fs.readFile(workingFilePath, "utf-8");
-    return stripTimelineDuplicatedWorkingFileOutput(
+    const workingFile = stripLegacyWorkingFileLineageMetadata(
       JSON.parse(content) as WorkingFile
     );
+    return stripTimelineDuplicatedWorkingFileOutput(workingFile);
   } catch (error) {
     throw new Error(`Failed to read working file: ${getErrorMessage(error)}`);
   }
-}
-
-function getRuntimeSnapshot(workingFile: WorkingFile): {
-  workflow?: WorkingFileRuntime;
-  steps: Array<WorkflowStep["_runtime"]>;
-  finalStep?: WorkflowStep["_runtime"];
-} {
-  return {
-    workflow: workingFile._runtime,
-    steps: (workingFile.steps ?? [])
-      .map((step) => step._runtime)
-      .filter((runtime) => runtime !== undefined),
-    finalStep: workingFile.finalStep?._runtime,
-  };
-}
-
-function bumpLastModifiedAt(workingFile: WorkingFile): void {
-  workingFile.lastModifiedAt = Math.max(
-    Date.now(),
-    (workingFile.lastModifiedAt ?? 0) + 1
-  );
 }
 
 type WorkingFileWriteOptions = {
@@ -618,9 +599,8 @@ export class WorkingFileManager {
    * @param nameForFile Display name or file path used to generate the lineage's WorkflowKey
    * @param steps Steps to store in the draft
    * @param workspaceFolder Current workspace folder
-   * @param workflowName Computed workflow name for the working file
-   * @param originalFilePath The true source file path (if any). Only set for file-based workflows;
-   *   leave undefined for ephemeral/dashboard-created workflows so the save dialog defaults correctly.
+   * @param workflowName Computed display name stored in the lineage descriptor
+   * @param originalFilePath The source file path stored in the lineage descriptor, if any.
    * @returns The draft's path and the lineage's new WorkflowKey
    */
   public async createWorkingFile(
@@ -648,10 +628,7 @@ export class WorkingFileManager {
       );
 
     const workingFile: WorkingFile = {
-      ...(originalFilePath ? { originalFile: originalFilePath } : {}),
-      workflowName,
       startedAt: Date.now(),
-      lastModifiedAt: Date.now(),
       definitionRevision: 1,
       steps: identifiedSteps.map(stripViewOnlyWorkflowStepFields),
       parallelGroups: topology.parallelGroups,
@@ -738,16 +715,7 @@ export class WorkingFileManager {
     const finalStepRuntime = this.queueAccess.getFinalStepRuntime();
     const workingFile: WorkingFile = {
       ...head,
-      ...(descriptor.originalFile
-        ? { originalFile: descriptor.originalFile }
-        : {}),
-      workflowName:
-        this.queueAccess.getWorkflowName() ??
-        head?.workflowName ??
-        descriptor.workflowName,
       startedAt,
-      lastModifiedAt: startedAt,
-      isFavorite: descriptor.isFavorite,
       definitionRevision: 1,
       steps: ensureStepIds(this.queueAccess.getSteps()).map(
         stripViewOnlyWorkflowStepFields
@@ -777,7 +745,7 @@ export class WorkingFileManager {
       EXECUTION_STATES.RUNNING,
       workingFile.definitionRevision ?? 1,
       buildDefinitionSnapshot(
-        workingFile.workflowName ?? descriptor.workflowName,
+        descriptor.workflowName,
         workingFile.steps ?? [],
         undefined,
         workingFile.finalStep,
@@ -905,13 +873,7 @@ export class WorkingFileManager {
       : undefined;
     const workingFile: WorkingFile = {
       ...source,
-      ...(descriptor.originalFile
-        ? { originalFile: descriptor.originalFile }
-        : {}),
-      workflowName: source.workflowName ?? descriptor.workflowName,
       startedAt,
-      lastModifiedAt: startedAt,
-      isFavorite: descriptor.isFavorite,
       definitionRevision: 1,
       steps: identifiedSteps,
       parallelGroups: sourceTopology.parallelGroups,
@@ -933,7 +895,7 @@ export class WorkingFileManager {
       initialTimelineState,
       workingFile.definitionRevision ?? 1,
       buildDefinitionSnapshot(
-        workingFile.workflowName ?? descriptor.workflowName,
+        descriptor.workflowName,
         workingFile.steps ?? [],
         undefined,
         workingFile.finalStep,
@@ -1071,14 +1033,12 @@ export class WorkingFileManager {
             { recursive: true }
           );
           await writeSnapshotAtomic(snapshotPath, snapshotBytes);
-          const now = Date.now();
           const pendingRewind = {
             fromStepIndex: boundary,
             baseDefinitionRevision: sourceRevision,
           };
           const workingFile: WorkingFile = {
             ...sourceForRewind,
-            lastModifiedAt: now,
             definitionRevision: sourceRevision + 1,
             steps: topology.steps.map((step, index) =>
               index < boundary
@@ -1256,10 +1216,8 @@ export class WorkingFileManager {
             result,
           };
         }
-        const now = Date.now();
         const workingFile: WorkingFile = {
           ...transformed,
-          lastModifiedAt: now,
           definitionRevision: sourceRevision + 1,
         };
         await writeWorkingFileAtomicTo(runFilePath, workingFile, {
@@ -1324,26 +1282,28 @@ export class WorkingFileManager {
   public static async updateWorkflowNameAtRun(
     workspaceFolderPath: string,
     workflowKey: WorkflowKey,
-    runRef: RunRef,
+    _runRef: RunRef,
     workflowName: string,
-    expectedDefinitionRevision: number,
+    _expectedDefinitionRevision: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
-  ): Promise<{
-    workingFile: WorkingFile;
-    definitionRevision: number;
-    descriptorRevision: number;
-  }> {
-    return this.mutateRunDefinition(
+  ): Promise<{ descriptorRevision: number }> {
+    const runFilePath = WorkflowPaths.runFilePath(
       workspaceFolderPath,
       workflowKey,
-      runRef,
-      expectedDefinitionRevision,
-      (source) => ({
-        workingFile: { ...source, workflowName },
-        result: undefined,
-      }),
-      { lineageRepository, allowDuringPendingRewind: true }
+      _runRef
     );
+    const workingFile =
+      await WorkingFileManager.readWorkingFileFromDisk(runFilePath);
+    assertDefinitionRevision(
+      _expectedDefinitionRevision,
+      workingFile.definitionRevision ?? 1
+    );
+    const descriptor = await lineageRepository.updateDescriptor(
+      workspaceFolderPath,
+      workflowKey,
+      (current) => ({ ...current, workflowName })
+    );
+    return { descriptorRevision: descriptor.revision };
   }
 
   /**
@@ -1894,7 +1854,6 @@ export class WorkingFileManager {
           }
           const committed: WorkingFile = {
             ...current,
-            lastModifiedAt: Date.now(),
             _runtime: nextRuntime,
           };
           await writeWorkingFileAtomicTo(runFilePath, committed, {
@@ -1979,8 +1938,6 @@ export class WorkingFileManager {
       // Read current working file from disk
       const workingFile = await this.readWorkingFile(workingFilePath);
       this.assertExpectedDefinitionRevision(workingFile);
-      const originalRuntime = getRuntimeSnapshot(workingFile);
-
       // CRITICAL FIX: Merge steps from disk instead of blindly overwriting
       // This preserves MCP-appended steps that may have been added while we were running
       // BUT: Skip merge for intentional writes (delete/update) to avoid undoing changes
@@ -2049,19 +2006,7 @@ export class WorkingFileManager {
           `_runtime: ${stepsWithRuntime}/${workingFile.steps.length} steps`
       );
 
-      // Update workflow name if set in state. A name change is a definition
-      // change even when the queue's revision predates the name assignment
-      // (for example, the first prompt naming an ephemeral workflow).
-      const workflowName = this.queueAccess.getWorkflowName();
       const definitionRevision = this.queueAccess.getDefinitionRevision();
-      const definitionChanged =
-        definitionRevision !== (workingFile.definitionRevision ?? 1) ||
-        (workflowName !== undefined &&
-          workflowName !== workingFile.workflowName);
-      if (workflowName) {
-        workingFile.workflowName = workflowName;
-      }
-
       // Definition revision is bumped by the queue's definition-mutating methods
       // (append/insert/replace/delete/reorder); this just serializes the current
       // in-memory value.
@@ -2087,14 +2032,6 @@ export class WorkingFileManager {
           : {}),
       };
 
-      const runtimeChanged = !isDeepStrictEqual(
-        originalRuntime,
-        getRuntimeSnapshot(workingFile)
-      );
-      if (definitionChanged || runtimeChanged) {
-        bumpLastModifiedAt(workingFile);
-      }
-
       // Write atomically while holding lock
       await this.writeWorkingFileAtomic(workingFilePath, workingFile, {
         skipLock: true,
@@ -2102,10 +2039,8 @@ export class WorkingFileManager {
         attemptedFields: [
           "steps",
           "finalStep._runtime",
-          "workflowName",
           "definitionRevision",
           "_runtime",
-          "lastModifiedAt",
         ],
       });
     };
@@ -2163,14 +2098,11 @@ export class WorkingFileManager {
           updatedAt: patch.updatedAt ?? Date.now(),
         } as NonNullable<typeof currentRuntime.worktree>,
       };
-      if (!isDeepStrictEqual(currentRuntime, nextRuntime)) {
-        bumpLastModifiedAt(workingFile);
-      }
       workingFile._runtime = nextRuntime;
       await writeWorkingFileAtomicTo(workingFilePath, workingFile, {
         skipLock: true,
         operation: "updateWorktreeRuntimeAtRun",
-        attemptedFields: ["_runtime.worktree", "lastModifiedAt"],
+        attemptedFields: ["_runtime.worktree"],
       });
     });
   }
@@ -2206,14 +2138,11 @@ export class WorkingFileManager {
             updatedAt: patch.updatedAt ?? Date.now(),
           } as NonNullable<typeof currentRuntime.worktree>,
         };
-        if (!isDeepStrictEqual(currentRuntime, nextRuntime)) {
-          bumpLastModifiedAt(workingFile);
-        }
         workingFile._runtime = nextRuntime;
         await this.writeWorkingFileAtomic(workingFilePath, workingFile, {
           skipLock: true,
           operation: "updateWorktreeRuntime",
-          attemptedFields: ["_runtime.worktree", "lastModifiedAt"],
+          attemptedFields: ["_runtime.worktree"],
         });
       });
     });
@@ -2242,14 +2171,11 @@ export class WorkingFileManager {
           ...currentRuntime,
           worktreeNotice: notice,
         };
-        if (!isDeepStrictEqual(currentRuntime, nextRuntime)) {
-          bumpLastModifiedAt(workingFile);
-        }
         workingFile._runtime = nextRuntime;
         await this.writeWorkingFileAtomic(workingFilePath, workingFile, {
           skipLock: true,
           operation: "updateWorktreeNotice",
-          attemptedFields: ["_runtime.worktreeNotice", "lastModifiedAt"],
+          attemptedFields: ["_runtime.worktreeNotice"],
         });
       });
     });
@@ -2322,7 +2248,6 @@ export class WorkingFileManager {
         }
 
         if (modified) {
-          workingFile.lastModifiedAt = Date.now();
           workingFile.definitionRevision =
             (workingFile.definitionRevision ?? 1) + 1;
           await this.writeWorkingFileAtomic(workingFilePath, workingFile, {
@@ -2332,7 +2257,6 @@ export class WorkingFileManager {
               ...Object.keys(properties),
               "harness",
               "model",
-              "lastModifiedAt",
               "definitionRevision",
             ],
           });

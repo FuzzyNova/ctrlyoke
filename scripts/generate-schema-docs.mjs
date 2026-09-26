@@ -245,11 +245,7 @@ const WORKFLOW_PAGES = [
           {
             pointer: WORKFLOW_ROOT_PROPERTIES,
             include: [
-              "originalFile",
-              "workflowName",
               "startedAt",
-              "lastModifiedAt",
-              "isFavorite",
               "definitionRevision",
               "parallelGroups",
               "_runtime",

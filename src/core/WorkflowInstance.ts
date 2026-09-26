@@ -44,6 +44,7 @@ import {
   type ParallelGroupDefinition,
 } from "../types/CtrlYokeTypes";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
+import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
 import { resolveReportedScriptProperties } from "../utils/ScriptComparison";
 import { pathsEqual } from "../utils/PathCasing";
 import { generateWorkflowNameFromPrompt } from "../utils/workflowNaming";
@@ -223,6 +224,7 @@ interface ActiveTargetResources {
 }
 
 export class WorkflowInstance {
+  private readonly lineageRepository = new WorkflowLineageRepository();
   /** Unique identifier — stable for this instance's lifetime */
   readonly id: string;
   /** Editable display name (kept in sync with queue's workflowName) */
@@ -1536,10 +1538,11 @@ export class WorkflowInstance {
     // Read working file FIRST so this.filePath is correct when queue state fires
     // (onDidChangeState → getSummary() → filePath must already be set)
     const workingFile = await this.promptQueue.readWorkingFile(workingFilePath);
+    const originalFile = await this.readLineageOriginalFile(workingFilePath);
     if (workingFile?.steps) {
-      const filePath = workingFile.originalFile || workingFilePath;
+      const filePath = originalFile || workingFilePath;
       this.filePath = filePath;
-      this.sourceDefinitionPath = workingFile.originalFile;
+      this.sourceDefinitionPath = originalFile;
       this.currentPromptFile = {
         filePath,
         promptFile: {
@@ -1598,10 +1601,11 @@ export class WorkflowInstance {
   async autoLoadFromWorkingFile(workingFilePath: string): Promise<void> {
     // Read working file FIRST so this.filePath is correct when queue state fires
     const workingFile = await this.promptQueue.readWorkingFile(workingFilePath);
+    const originalFile = await this.readLineageOriginalFile(workingFilePath);
     if (workingFile?.steps) {
-      const filePath = workingFile.originalFile || workingFilePath;
+      const filePath = originalFile || workingFilePath;
       this.filePath = filePath;
-      this.sourceDefinitionPath = workingFile.originalFile;
+      this.sourceDefinitionPath = originalFile;
       this.currentPromptFile = {
         filePath,
         promptFile: {
@@ -4977,12 +4981,19 @@ export class WorkflowInstance {
     this.promptFileWatcher.setupFileWatcher(
       filePath,
       async (changedFilePath: string) => {
-        await this.promptFileLoader.reloadFromWorkingFile(changedFilePath);
+        await this.promptFileLoader.reloadFromWorkingFile(
+          changedFilePath,
+          undefined,
+          false,
+          this.workspaceFolderPath ?? this.platform.getWorkspaceRoot()
+        );
 
         const workingFile =
           await this.promptQueue.readWorkingFile(changedFilePath);
         if (workingFile?.steps) {
-          const fp = workingFile.originalFile || changedFilePath;
+          const fp =
+            (await this.readLineageOriginalFile(changedFilePath)) ??
+            changedFilePath;
           this.currentPromptFile = {
             filePath: fp,
             promptFile: {
@@ -5013,6 +5024,24 @@ export class WorkflowInstance {
         }
         this.currentPromptFile = undefined;
       }
+    );
+  }
+
+  private async readLineageOriginalFile(
+    workingFilePath: string
+  ): Promise<string | undefined> {
+    const address =
+      WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath);
+    const workspaceRoot =
+      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+    if (!address || !workspaceRoot) return undefined;
+    return (
+      (
+        await this.lineageRepository.tryReadDescriptor(
+          workspaceRoot,
+          address.workflowKey
+        )
+      )?.originalFile ?? undefined
     );
   }
 

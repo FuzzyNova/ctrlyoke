@@ -411,7 +411,6 @@ export class RunContinuationService {
         );
         const workingFile: WorkingFile = {
           ...source,
-          lastModifiedAt: Date.now(),
           definitionRevision: sourceRevision + 1,
           steps: nextTopology.steps,
           parallelGroups: nextTopology.parallelGroups,
@@ -624,7 +623,6 @@ export class RunContinuationService {
         };
         const workingFile: WorkingFile = {
           ...source,
-          lastModifiedAt: Date.now(),
           definitionRevision: sourceRevision + 1,
           steps: nextTopology.steps,
           parallelGroups: nextTopology.parallelGroups,
@@ -730,10 +728,6 @@ export class RunContinuationService {
         };
         const workingFile: WorkingFile = {
           ...source,
-          lastModifiedAt: Math.max(
-            Date.now(),
-            (source.lastModifiedAt ?? 0) + 1
-          ),
           // Claiming is runtime persistence. It must never create a new
           // definition revision or invalidate the definition snapshot.
           definitionRevision,
@@ -1125,7 +1119,6 @@ export class RunContinuationService {
         }
         const persisted: WorkingFile = {
           ...workingFile,
-          lastModifiedAt: Date.now(),
           definitionRevision: sourceRevision + 1,
         };
         await writeWorkingFileAtomic(runFilePath, persisted);

@@ -58,6 +58,7 @@ import {
   resolveQueueLimitPolicy,
 } from "./utils/QueueLimitUtils";
 import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
+import { stripLegacyWorkingFileLineageMetadata } from "./utils/WorkingFileMetadata";
 import { RunContinuationService } from "./core/orchestration/RunContinuationService";
 import {
   flattenParallelItems,
@@ -977,7 +978,10 @@ export class CtrlYokeMCPServer {
       metadata: {
         workflowKey: selected.workflowKey,
         runRef: selected.runRef,
-        workflowName: queueData.workflowName,
+        workflowName: await lineageRepository.readWorkflowDisplayName(
+          this.workspaceRoot,
+          selected.workflowKey
+        ),
         harness: queueData.harness ?? null,
         model: queueData.model ?? null,
         currentIndex: runtime.currentIndex,
@@ -1666,7 +1670,9 @@ export class CtrlYokeMCPServer {
           }
           try {
             const content = await fs.readFile(filePath, "utf8");
-            const data: WorkingFile = JSON.parse(content);
+            const data = stripLegacyWorkingFileLineageMetadata(
+              JSON.parse(content) as WorkingFile
+            );
             const runtime = data._runtime || {
               currentIndex: 0,
               executionState: EXECUTION_STATES.IDLE,
@@ -1680,6 +1686,10 @@ export class CtrlYokeMCPServer {
               return null;
             }
             const allSteps = (data.steps || []) as WorkflowStep[];
+            const descriptor = await lineageRepository.readDescriptor(
+              this.workspaceRoot,
+              workflowKey
+            );
             const completedCount = allSteps.filter(
               (p) => p._runtime?.completedAt !== undefined
             ).length;
@@ -1687,7 +1697,7 @@ export class CtrlYokeMCPServer {
             return {
               workflowKey,
               runRef,
-              workflowName: data.workflowName,
+              workflowName: descriptor.workflowName,
               executionState: runtime.executionState,
               harness: data.harness ?? null,
               model: data.model ?? null,
@@ -1695,7 +1705,7 @@ export class CtrlYokeMCPServer {
               totalSteps: allSteps.length,
               completedSteps: completedCount,
               startedAt: data.startedAt ?? null,
-              lastModifiedAt: data.lastModifiedAt ?? null,
+              lastModifiedAt: descriptor.lastModifiedAt ?? null,
               workingFile: filePath,
               runDirectory: WorkflowPaths.runDirectoryForWorkingFile(filePath),
               ...(runtime.worktree

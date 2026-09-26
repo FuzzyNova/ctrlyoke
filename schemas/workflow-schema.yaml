@@ -86,23 +86,9 @@ oneOf:
             description: Normalized working-file topology for authored parallel groups.
             items:
               $ref: '#/definitions/parallelGroupDefinition'
-          originalFile:
-            type: string
-            description: Path to original prompt file (working files only)
-          workflowName:
-            type: string
-            description: Derived workflow name (working files only)
           startedAt:
             type: number
             description: Timestamp when workflow started (working files only)
-          lastModifiedAt:
-            type: number
-            description: Timestamp when the working file's definition was last modified (working files only)
-          isFavorite:
-            type: boolean
-            description: >-
-              Whether the workflow is pinned to the top of recent workflow history (working files
-              only)
           definitionRevision:
             type: integer
             minimum: 1

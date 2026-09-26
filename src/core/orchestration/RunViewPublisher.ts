@@ -23,6 +23,7 @@ import { OutputHistoryManager } from "./OutputHistoryManager";
 import { PostMessageDashboardSink } from "../../ui/PostMessageDashboardSink";
 import { WorkflowTaggedSink } from "../WorkflowTaggedSink";
 import type { IDashboardSink } from "../../types/IDashboardSink";
+import { stripLegacyWorkingFileLineageMetadata } from "../../utils/WorkingFileMetadata";
 
 export interface DefinitionRollbackInvalidation {
   fromRevision: number;
@@ -89,6 +90,7 @@ export interface RunViewPublisherLineageRepository {
   ): Promise<{
     revision: number;
     lastModifiedAt: number;
+    workflowName: string;
     isSystemGenerated?: boolean;
   }>;
 }
@@ -99,6 +101,7 @@ interface AddressedRunView {
   runSummaries: RunViewLoadedMessage["runSummaries"];
   workflowProperties: RunViewLoadedMessage["workflowProperties"];
   descriptorRevision: number;
+  workflowName: string;
   isSystemGenerated: boolean;
 }
 
@@ -354,7 +357,9 @@ export class RunViewPublisher {
     const logPrefix = `[readAddressedRunView] ${logContext} address=${addressLabel}`;
     const filePath = this.resolveAddressFilePath(workspaceRoot, address);
     const content = await fs.promises.readFile(filePath, "utf-8");
-    const workingFile = JSON.parse(content) as WorkingFile;
+    const workingFile = stripLegacyWorkingFileLineageMetadata(
+      JSON.parse(content) as WorkingFile
+    );
     Log.debug(`${logPrefix} definition read at ${Date.now() - startTime}ms`);
 
     const historyManager = new OutputHistoryManager(workspaceRoot);
@@ -387,6 +392,7 @@ export class RunViewPublisher {
       runSummaries,
       workflowProperties,
       descriptorRevision: descriptor.revision,
+      workflowName: descriptor.workflowName,
       isSystemGenerated: descriptor.isSystemGenerated ?? false,
     };
   }
@@ -434,6 +440,7 @@ export class RunViewPublisher {
         ? { runDirectory: this.resolveAddressDirectory(workspaceRoot, address) }
         : {}),
       workingFile,
+      workflowName: view.workflowName,
       history: view.history,
       runSummaries: view.runSummaries,
       workflowProperties: view.workflowProperties,

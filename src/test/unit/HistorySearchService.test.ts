@@ -100,6 +100,21 @@ suite("HistorySearchService", () => {
     assert.strictEqual(results[1]?.eventKind, "response");
     assert.strictEqual(results[1]?.matchField, "content");
     assert.strictEqual(results[1]?.matchContext, "Prompt 1");
+
+    const descriptorPath = WorkflowPaths.descriptorPath(
+      workspaceRoot,
+      workflowId as WorkflowKey
+    );
+    const descriptor = JSON.parse(
+      await fs.readFile(descriptorPath, "utf8")
+    ) as WorkflowLineageDescriptor;
+    descriptor.workflowName = "Renamed Demo";
+    await fs.writeFile(descriptorPath, JSON.stringify(descriptor), "utf8");
+    const renamedResults = await service.search("needle", workspaceRoot);
+    assert.deepStrictEqual(
+      renamedResults.results.map((result) => result.workflowName),
+      ["Renamed Demo", "Renamed Demo"]
+    );
   });
 
   test("classifies structured CLI event matches and derives final-step context", async () => {
@@ -772,7 +787,10 @@ suite("HistorySearchService", () => {
   /** Writes a lineage descriptor directly — the test-only equivalent of WorkflowLineageRepository.createLineage. */
   async function writeWorkingFile(
     workflowId: string,
-    overrides: Partial<WorkingFile>
+    overrides: Partial<WorkingFile> & {
+      workflowName?: string;
+      originalFile?: string;
+    }
   ): Promise<void> {
     const workflowKey = workflowId as WorkflowKey;
     await fs.mkdir(WorkflowPaths.lineageDir(workspaceRoot, workflowKey), {

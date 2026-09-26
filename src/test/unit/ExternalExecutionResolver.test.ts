@@ -49,7 +49,6 @@ function makeObserver(): RunnerHostIdentity {
 
 function makeWorkingFile(executionState?: ExecutionState): WorkingFile {
   return {
-    workflowName: "Resolver fixture",
     startedAt: NOW - 1_000,
     definitionRevision: 1,
     steps: [{ prompt: "fixture" }],

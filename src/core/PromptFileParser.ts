@@ -18,6 +18,8 @@ import {
   type WorkflowValidationWarning,
 } from "../types/CtrlYokeTypes";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
+import * as WorkflowPaths from "../utils/WorkflowPaths";
+import { stripLegacyWorkingFileLineageMetadata } from "../utils/WorkingFileMetadata";
 import { Log } from "../utils/Log";
 import { getVariableKeyErrors } from "../utils/KeyValueKeyKinds";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
@@ -149,6 +151,15 @@ export class PromptFileParser {
         throw new Error(
           `Unsupported file extension: ${ext}. Supported: .yaml, .yml, .json, .md`
         );
+      }
+
+      if (
+        WorkflowPaths.parseWorkingFileAddressFromPath(filePath) &&
+        parsed &&
+        typeof parsed === "object" &&
+        !Array.isArray(parsed)
+      ) {
+        stripLegacyWorkingFileLineageMetadata(parsed);
       }
 
       return await this.validateAndNormalize(parsed, filePath);

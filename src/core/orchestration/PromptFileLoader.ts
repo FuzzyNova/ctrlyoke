@@ -19,6 +19,8 @@ import {
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 import { findMissingWorkflowAssetDirectories } from "../../utils/WorkflowAssetWarnings";
 import { StatusMessageReporter } from "./StatusMessageReporter";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 
 /**
  * PromptFileLoader
@@ -32,6 +34,7 @@ import { StatusMessageReporter } from "./StatusMessageReporter";
  * - Validation and error handling
  */
 export class PromptFileLoader {
+  private readonly lineageRepository = new WorkflowLineageRepository();
   private lastCompatibilityDiagnostics: CompatibilityDiagnostic[] = [];
   private lastMissingAssetDirectories: string[] = [];
 
@@ -289,6 +292,19 @@ export class PromptFileLoader {
       // Read working file
       const workingFile =
         await this.promptQueue.readWorkingFile(workingFilePath);
+      const address =
+        WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath);
+      const descriptor =
+        address && workspaceFolderPath
+          ? await this.lineageRepository.tryReadDescriptor(
+              workspaceFolderPath,
+              address.workflowKey
+            )
+          : undefined;
+      if (descriptor) {
+        await this.promptQueue.updateWorkflowName(descriptor.workflowName);
+      }
+      const originalFilePath = descriptor?.originalFile;
 
       // Validate prompts (only if there are prompts to validate)
       if (workingFile.steps?.length) {
@@ -332,13 +348,16 @@ export class PromptFileLoader {
           workingFilePath,
           preventRunningAutoStart
         );
+        if (descriptor) {
+          await this.promptQueue.updateWorkflowName(descriptor.workflowName);
+        }
 
         const dashboard = this.getDashboard();
         if (dashboard) {
           // Use original file basename when available; fall back to workflow name for ephemeral workflows
-          const fileName = workingFile.originalFile
-            ? path.basename(workingFile.originalFile)
-            : workingFile.workflowName || path.basename(workingFilePath);
+          const fileName = originalFilePath
+            ? path.basename(originalFilePath)
+            : descriptor?.workflowName || path.basename(workingFilePath);
           // Get the restored state to send accurate prompt info with runtime state
           const restoredState = this.promptQueue.getState();
           dashboard.updateSessionRestored(
@@ -397,7 +416,7 @@ export class PromptFileLoader {
       await this.warnAboutMissingWorkflowAssets(
         workingFile,
         workspaceFolderPath,
-        workingFile.originalFile
+        originalFilePath
       );
 
       Log.trace(

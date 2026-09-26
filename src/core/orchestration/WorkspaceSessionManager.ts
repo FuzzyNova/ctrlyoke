@@ -7,6 +7,7 @@ import { EXECUTION_STATES } from "../../types/DashboardConstants";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
+import { stripLegacyWorkingFileLineageMetadata } from "../../utils/WorkingFileMetadata";
 
 /**
  * WorkspaceSessionManager
@@ -49,10 +50,14 @@ export class WorkspaceSessionManager {
       // Load from working file
       await onLoad(workingFilePath);
 
-      // Extract workflow name from filename for logging
-      const workflowName = this.extractWorkflowName(
-        path.basename(path.dirname(path.dirname(workingFilePath)))
-      );
+      const address =
+        WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath);
+      const workflowName = address
+        ? await this.lineageRepository.readWorkflowDisplayName(
+            workspaceFolderPath,
+            address.workflowKey
+          )
+        : path.basename(workingFilePath);
 
       Log.debug(
         `[WorkspaceSessionManager] ctrlyoke: Auto-loaded recent session: ${workflowName} (${path.basename(workingFilePath)})`
@@ -157,9 +162,11 @@ export class WorkspaceSessionManager {
             : WorkflowPaths.draftFilePath(workspaceFolderPath, workflowKey);
 
           const content = await fs.readFile(filePath, "utf8");
-          const workingFile = JSON.parse(content) as WorkingFile;
+          const workingFile = stripLegacyWorkingFileLineageMetadata(
+            JSON.parse(content) as WorkingFile
+          );
           const timestamp =
-            workingFile.lastModifiedAt || workingFile.startedAt || 0;
+            descriptor.lastModifiedAt || workingFile.startedAt || 0;
 
           return { filePath, workingFile, timestamp };
         } catch (error) {
@@ -183,17 +190,6 @@ export class WorkspaceSessionManager {
         } => entry !== undefined
       )
       .sort((a, b) => b.timestamp - a.timestamp);
-  }
-
-  /**
-   * Extract a display workflow name from a lineage's WorkflowKey.
-   * Removes the trailing creation-timestamp segment.
-   *
-   * @param workflowKey e.g. "workflow-2024-12-22T15-30-00"
-   * @returns Workflow name (e.g., "workflow")
-   */
-  private extractWorkflowName(workflowKey: string): string {
-    return workflowKey.replace(/-\d{4}-\d{2}-\d{2}T.*$/, "");
   }
 
   /**
@@ -270,7 +266,11 @@ export class WorkspaceSessionManager {
           }
 
           sessions.push({
-            label: `${statusIcon} ${workingFile.workflowName}`,
+            label: `${statusIcon} ${await this.lineageRepository.readWorkflowDisplayName(
+              workspaceFolderPath,
+              WorkflowPaths.parseWorkingFileAddressFromPath(filePath)!
+                .workflowKey
+            )}`,
             description: `${completedCount}/${totalCount} completed`,
             detail,
             filePath,

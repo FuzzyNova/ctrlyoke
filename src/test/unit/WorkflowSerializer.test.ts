@@ -99,11 +99,7 @@ function schemaBackedFieldNames(): {
     schema.oneOf[1].allOf?.find((node) => node.properties?.steps) ?? {}
   );
   const runtimeOnlyWorkflowFields = new Set([
-    "originalFile",
-    "workflowName",
     "startedAt",
-    "lastModifiedAt",
-    "isFavorite",
     "definitionRevision",
     "_runtime",
     "parallelGroups",

@@ -772,11 +772,7 @@ export interface WorkflowAttemptTransition {
  * Stored at `.runs/<workflowKey>/{draft,run-<ts>}/workflow.ctrlyoke.json` in run storage.
  */
 export interface WorkingFile extends PromptFile {
-  originalFile?: string; // Path to original prompt file (undefined for ephemeral/dashboard-created workflows)
-  workflowName: string; // Derived from original filename
   startedAt: number; // Timestamp when workflow started
-  lastModifiedAt?: number; // Timestamp when workflow was last modified (optional for backward compatibility)
-  isFavorite?: boolean; // Whether the workflow should be pinned to the top of recent workflow history
   /**
    * Monotonic counter bumped in-memory by `PromptQueue` on every definition-changing
    * mutation (append/insert/replace/delete/reorder/property edit, or a rewind's suffix

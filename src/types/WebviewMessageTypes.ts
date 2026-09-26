@@ -1838,6 +1838,7 @@ export interface RunViewLoadedMessage {
   address: WorkflowViewAddress;
   runDirectory?: string;
   workingFile: WorkingFile;
+  workflowName?: string;
   history: WorkflowOutputHistory | null;
   runSummaries: RunSummary[];
   workflowProperties: Record<string, unknown>;

@@ -59,35 +59,11 @@ Root fields present only in a run's working copy.
 
 Normalized working-file topology for authored parallel groups.
 
-### `originalFile` {#run-file-root-originalfile}
-
-- **Type:** `string`
-
-Path to original prompt file (working files only)
-
-### `workflowName` {#run-file-root-workflowname}
-
-- **Type:** `string`
-
-Derived workflow name (working files only)
-
 ### `startedAt` {#run-file-root-startedat}
 
 - **Type:** `number`
 
 Timestamp when workflow started (working files only)
-
-### `lastModifiedAt` {#run-file-root-lastmodifiedat}
-
-- **Type:** `number`
-
-Timestamp when the working file's definition was last modified (working files only)
-
-### `isFavorite` {#run-file-root-isfavorite}
-
-- **Type:** `boolean`
-
-Whether the workflow is pinned to the top of recent workflow history (working files only)
 
 ### `definitionRevision` {#run-file-root-definitionrevision}
 

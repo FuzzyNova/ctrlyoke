@@ -2674,8 +2674,8 @@ export function createMessageHandlers(
       );
     }
     useWorkflowStore.getState().loadWorkflow({
-      fileName: workingFile.workflowName,
-      workflowName: workingFile.workflowName,
+      fileName: message.workflowName ?? address.workflowKey,
+      workflowName: message.workflowName ?? address.workflowKey,
       steps: workingFile.steps ?? [],
       parallelGroups: workingFile.parallelGroups ?? [],
       executionState: resolvedExecutionState,

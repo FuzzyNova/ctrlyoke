@@ -189,9 +189,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       },
     }));
     const workingFile: WorkingFile = {
-      workflowName: descriptor.workflowName,
       startedAt: 1,
-      lastModifiedAt: 1,
       definitionRevision: 4,
       steps,
       ...(options.parallelGroups

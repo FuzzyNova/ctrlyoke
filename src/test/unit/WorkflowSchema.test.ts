@@ -646,10 +646,7 @@ suite("Workflow template schema", () => {
       updatedAt: 400,
     };
     const runFile = {
-      workflowName: "Implement",
       startedAt: 100,
-      lastModifiedAt: 150,
-      isFavorite: true,
       definitionRevision: 3,
       steps: [
         {
@@ -683,7 +680,6 @@ suite("Workflow template schema", () => {
       false
     );
     assert.strictEqual(validate({ ...runFile, definitionRevision: 0 }), false);
-    assert.strictEqual(validate({ ...runFile, isFavorite: "yes" }), false);
   });
 
   test("accepts every workflow-only root property on a single-step script workflow", () => {

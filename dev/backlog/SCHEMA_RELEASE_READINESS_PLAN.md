@@ -33,7 +33,7 @@
 | 3   | All durations in seconds, with a `Sec` suffix                          | Done 2026-09-26                             | 4    | B     |
 | 4   | Strict prompt steps / workflow root                                    | Recommended; draft 2020-12, verified        | 5    | D     |
 | 5   | Top-level `statusLine` keyed by harness ID; new `diagnostics` group    | Done 2026-09-26                             | 6    | B     |
-| 6   | Single-source lineage metadata in `workflow.json`                      | **Yes** (user)                              | 7    | C     |
+| 6   | Single-source lineage metadata in `workflow.json`                      | Done 2026-09-26                             | 7    | C     |
 | 7   | Constrain `vars` key names                                             | Done 2026-09-26                             | 8.1  | A     |
 | 8   | `mcpServerConfig`: exactly one of `command`/`url`                      | Done 2026-09-26                             | 8.2  | A     |
 | 9   | Integer/range tightening (+ timeout-`0` unification)                   | Done 2026-09-26                             | 8.3  | A     |

@@ -22,6 +22,8 @@ Top-level ctrlyoke core orchestration only: workflow registry, per-workflow runt
   resolved just before execution/preview. The semantic base is the input
   definition path for direct loads or the lineage descriptor's `originalFile`
   for dashboard views; never derive it from a run-storage working-copy path.
+  The descriptor is also the sole owner of lineage-wide `workflowName`,
+  `isFavorite`, and `lastModifiedAt`; run files hold per-run `startedAt` only.
 
 ## Execution ownership
 

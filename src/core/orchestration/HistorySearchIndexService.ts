@@ -707,11 +707,15 @@ export class HistorySearchIndexService {
         if (match === undefined || !matchesFilters(document, filters)) {
           return;
         }
-        const result = projectHistorySearchResult(
+        const projected = projectHistorySearchResult(
           document,
           match,
           snippetChars
         );
+        const result = {
+          ...projected,
+          workflowName: await resolveWorkflowName(projected.workflowKey),
+        };
         groupBuffer.push({
           result,
           dedupeKey: getHistorySearchDocumentDedupeKey(document, result),

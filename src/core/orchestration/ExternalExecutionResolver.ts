@@ -288,7 +288,6 @@ function isWorkingFile(value: unknown): value is WorkingFile {
     return false;
   }
   if (
-    typeof value.workflowName !== "string" ||
     typeof value.startedAt !== "number" ||
     !Number.isFinite(value.startedAt) ||
     !Array.isArray(value.steps) ||
