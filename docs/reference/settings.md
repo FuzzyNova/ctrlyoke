@@ -286,7 +286,7 @@ Fields:
 - **Type:** `{ mode?, allowedTools?, deniedTools? }` or `null`
 - **Workflow field:** [`toolPermissions`](/reference/workflow-schema#execution-properties-toolpermissions) — a workflow or step value overrides this default
 
-Default tool permission settings for prompt execution. Allowed Tools and Denied Tools are currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; Qwen is inline granular support and OpenCode uses OPENCODE\_CONFIG\_CONTENT without writing a workspace opencode.json. Codex and Antigravity provide a derived mode-only summary and do NOT ENFORCE these lists.
+Default tool permission settings for prompt execution. Allowed Tools and Denied Tools are currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; Qwen is inline granular support and OpenCode uses OPENCODE\_CONFIG\_CONTENT without writing a workspace opencode.json. Codex and Antigravity only support an overall permission mode, not individual tool patterns, and do NOT ENFORCE these lists.
 
 Accepted forms:
 
@@ -336,8 +336,8 @@ Accepted forms:
 Fields:
 
 - `mode` · `"dangerouslyAllowAll" | "allowAll" | "custom" | "none"` — Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects deny list. 'custom' uses allowedTools + deniedTools only. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config).
-- `allowedTools` · `string[]` — Tool patterns to allow (used in custom mode). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE\_CONFIG\_CONTENT and writes no workspace opencode.json. Codex and Antigravity provide a derived mode-only summary; Allowed Tools are NOT ENFORCED by those harnesses.
-- `deniedTools` · `string[]` — Tool patterns to deny (takes precedence over allow list). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE\_CONFIG\_CONTENT and writes no workspace opencode.json. Codex and Antigravity provide a derived mode-only summary; Denied Tools are NOT ENFORCED by those harnesses.
+- `allowedTools` · `string[]` — Tool patterns to allow (used in custom mode). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE\_CONFIG\_CONTENT and writes no workspace opencode.json. Codex and Antigravity only support an overall permission mode, not individual tool patterns; Allowed Tools are NOT ENFORCED by those harnesses.
+- `deniedTools` · `string[]` — Tool patterns to deny (takes precedence over allow list). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE\_CONFIG\_CONTENT and writes no workspace opencode.json. Codex and Antigravity only support an overall permission mode, not individual tool patterns; Denied Tools are NOT ENFORCED by those harnesses.
 
 ### `defaults.endCondition` {#defaults-endcondition}
 

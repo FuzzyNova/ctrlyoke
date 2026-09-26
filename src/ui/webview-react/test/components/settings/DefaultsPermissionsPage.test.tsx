@@ -111,7 +111,7 @@ describe("DefaultsPermissionsPage compatibility summary", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Codex and Antigravity CLI provide a derived mode-only summary; Allowed Tools are NOT ENFORCED by these harnesses."
+        "Codex and Antigravity CLI only support an overall permission mode, not individual tool patterns; Allowed Tools are NOT ENFORCED by these harnesses."
       )
     ).toBeInTheDocument();
   });

@@ -85,7 +85,7 @@ export function permissionCapabilitySummary(
   if (notEnforced.length > 0) {
     diagnostics.push({
       severity: "warning",
-      message: `${joinLabels(notEnforced)} provide a derived mode-only summary; ${label} are NOT ENFORCED by these harnesses.`,
+      message: `${joinLabels(notEnforced)} only support an overall permission mode, not individual tool patterns; ${label} are NOT ENFORCED by these harnesses.`,
     });
   }
 

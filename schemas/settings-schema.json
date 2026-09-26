@@ -137,7 +137,7 @@
         },
         "toolPermissions": {
           "$ref": "workflow-schema.json#/definitions/toolPermissions",
-          "description": "Default tool permission settings for prompt execution. Allowed Tools and Denied Tools are currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; Qwen is inline granular support and OpenCode uses OPENCODE_CONFIG_CONTENT without writing a workspace opencode.json. Codex and Antigravity provide a derived mode-only summary and do NOT ENFORCE these lists."
+          "description": "Default tool permission settings for prompt execution. Allowed Tools and Denied Tools are currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; Qwen is inline granular support and OpenCode uses OPENCODE_CONFIG_CONTENT without writing a workspace opencode.json. Codex and Antigravity only support an overall permission mode, not individual tool patterns, and do NOT ENFORCE these lists."
         },
         "endCondition": {
           "$ref": "workflow-schema.json#/definitions/endConditionDefault",
