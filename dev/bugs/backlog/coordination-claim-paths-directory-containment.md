@@ -44,3 +44,12 @@ Because there is no hierarchical prefix check (e.g., checking if one path is a p
 1. Enhance `pathsOverlap()` to account for directory containment:
    Normalize paths (stripping redundant trailing slashes) and check whether `left` is a prefix directory of `right` (`right.startsWith(left + "/")`) or vice versa, in addition to glob overlap checks.
 2. In `claim_paths`, document whether directory claims are permitted and whether callers should explicitly use recursive wildcards (`dir/**`). If bare directory names are disallowed, validate and return a helpful diagnostic error rather than silently granting a no-op claim.
+
+## Planning Note (2026-09-26)
+
+This bug and `coordination-overlapping-wildcard-claims-granted.md` share one root cause: `pathsOverlap()`
+guesses overlap from a few sample strings instead of computing it. Fix both in one change. Replace the
+sample heuristic with a real segment-wise glob intersection test. Also treat every claim `P` as covering
+`P` itself and everything under `P/`, so a bare directory claim protects its descendants and still
+interacts correctly with wildcard claims (for example, `dev/bugs` vs `dev/*/README.md`). Bare
+directory claims stay permitted, and `claim_paths` documents that they are recursive.

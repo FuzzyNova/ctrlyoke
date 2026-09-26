@@ -30,3 +30,12 @@ In one execution root, call `claim_paths` from two distinct participants or two 
 ## Suggested Fix
 
 Use a conservative intersection check for supported glob syntax. If it cannot prove that two patterns are disjoint, deny the second claim and report the existing owner. Add a regression case for `a*` versus `*b`, including a concrete shared path, and cases for non-overlapping patterns to preserve useful parallel claims.
+
+## Planning Note (2026-09-26)
+
+This bug and `coordination-overlapping-wildcard-claims-granted.md` share one root cause: `pathsOverlap()`
+guesses overlap from a few sample strings instead of computing it. Fix both in one change. Replace the
+sample heuristic with a real segment-wise glob intersection test. Also treat every claim `P` as covering
+`P` itself and everything under `P/`, so a bare directory claim protects its descendants and still
+interacts correctly with wildcard claims (for example, `dev/bugs` vs `dev/*/README.md`). Bare
+directory claims stay permitted, and `claim_paths` documents that they are recursive.
