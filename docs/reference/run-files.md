@@ -42,7 +42,7 @@ by hand is only needed when two synced machines share one run-history folder.
 | Section | Purpose |
 | --- | --- |
 | [Run file root](#run-file-root) | Root fields present only in a run's working copy. |
-| [Workflow runtime](#workflow-runtime) | Workflow-level runtime execution state for working files (optional, added automatically by ctrlyoke during execution) |
+| [Workflow runtime](#workflow-runtime) | Workflow-level runtime execution state for working files (optional, added automatically by ctrlyoke during execution). |
 | [Step runtime](#step-runtime) | Per-prompt runtime execution metadata (optional, added automatically during execution). |
 | [Parallel group topology](#parallel-group-topology) | Normalized working-file topology for one authored parallel group. |
 | [Condition evaluation](#condition-evaluation) | Latest script-condition evaluation retained for the automation result projection (written automatically during execution). |
@@ -78,13 +78,13 @@ Monotonic optimistic-concurrency counter, bumped on every definition-changing ed
 
 ## Workflow runtime {#workflow-runtime}
 
-Workflow-level runtime execution state for working files (optional, added automatically by ctrlyoke during execution)
+Workflow-level runtime execution state for working files (optional, added automatically by ctrlyoke during execution). Its schemaVersion tracks run-file metadata independently of the root schemaVersion, which tracks the workflow-definition format.
 
 ### `schemaVersion` {#workflow-runtime-schemaversion}
 
 - **Type:** `number`
 
-Run-file format version, stamped on every write. A file written by a newer ctrlyoke is refused rather than overwritten.
+Run-file format version for \_runtime metadata and run bookkeeping, stamped on every write. It is independent of the root schemaVersion, which versions the workflow definition format. A file written by a newer ctrlyoke is refused rather than overwritten.
 
 ### `currentIndex` {#workflow-runtime-currentindex}
 

@@ -45,7 +45,7 @@ suite("HistorySearchIndexLayout", () => {
 
   async function record(
     name: string,
-    indexSchemaVersion: string | undefined
+    indexSchemaVersion: number | undefined
   ): Promise<void> {
     const packageRoot = path.join(tempRoot, name);
     await fs.mkdir(packageRoot, { recursive: true });
@@ -74,6 +74,9 @@ suite("HistorySearchIndexLayout", () => {
   const current = searchIndexVersionDirName(INDEX_SCHEMA_VERSION);
 
   test("each schema version gets its own directory under .search-index", () => {
+    assert.ok(
+      Number.isInteger(INDEX_SCHEMA_VERSION) && INDEX_SCHEMA_VERSION > 0
+    );
     const workspace = path.join(tempRoot, "ws");
     const dir = getSearchIndexDir(workspace, RUN_HISTORY_LOCATIONS.WORKSPACE);
     assert.strictEqual(path.basename(dir), current);
@@ -85,12 +88,12 @@ suite("HistorySearchIndexLayout", () => {
   });
 
   test("keeps versions live installations use and prunes the rest", async () => {
-    await record("other", "9.9.9");
-    await seed(`${current}/`, "v9.9.9/", "v1.0.0/");
+    await record("other", 9);
+    await seed(`${current}/`, "v9/", "v1/");
 
     await pruneSearchIndexVersions(indexRoot);
 
-    assert.deepStrictEqual(await remaining(), [current, "v9.9.9"].sort());
+    assert.deepStrictEqual(await remaining(), [current, "v9"].sort());
   });
 
   test("removes the pre-versioning index once no installation can use it", async () => {

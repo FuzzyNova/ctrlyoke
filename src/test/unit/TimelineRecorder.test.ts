@@ -10,8 +10,14 @@ import {
 } from "../../types/DashboardConstants";
 import {
   TIMELINE_EVENT_TYPES,
+  TIMELINE_SCHEMA_VERSION,
   type WorkflowTimelineEventDraft,
 } from "../../types/WorkflowTimelineTypes";
+import {
+  CURRENT_SCHEMA_VERSIONS,
+  isNewerSchemaError,
+  PERSISTED_STORES,
+} from "../../utils/PersistedSchemaGuard";
 import { buildDefinitionSnapshot } from "../../core/WorkflowStepSanitizer";
 import { Log } from "../../utils/Log";
 import {
@@ -101,6 +107,73 @@ suite("TimelineRecorder", () => {
     assert.strictEqual(manifest.eventCount, 5);
     assert.strictEqual(manifest.nextSequence, 6);
     assert.strictEqual(manifest.lastUpdatedAt, 131);
+  });
+
+  test("reads legacy string versions and stamps the integer baseline on write", async () => {
+    const manifest = JSON.parse(
+      await fs.readFile(manifestPath, "utf8")
+    ) as Record<string, unknown>;
+    manifest.schemaVersion = "2.4.0";
+    await fs.writeFile(manifestPath, JSON.stringify(manifest));
+
+    await recorder.appendEvents(manifestPath, [
+      createStatusEventDraft(110, "legacy"),
+    ]);
+
+    const written = JSON.parse(await fs.readFile(manifestPath, "utf8")) as {
+      schemaVersion: unknown;
+    };
+    assert.strictEqual(written.schemaVersion, TIMELINE_SCHEMA_VERSION);
+  });
+
+  test("reads newer manifests but refuses every mutation before appending events", async () => {
+    const manifest = JSON.parse(
+      await fs.readFile(manifestPath, "utf8")
+    ) as Record<string, unknown>;
+    manifest.schemaVersion =
+      CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.TIMELINE] + 1;
+    await fs.writeFile(manifestPath, JSON.stringify(manifest));
+    const eventPath = path.join(tempDir, "events.jsonl");
+    const eventsBefore = await fs.readFile(eventPath, "utf8");
+
+    assert.strictEqual(
+      (await recorder.readManifest(manifestPath)).schemaVersion,
+      CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.TIMELINE] + 1
+    );
+    await assert.rejects(
+      () =>
+        recorder.appendEvents(manifestPath, [
+          createStatusEventDraft(110, "newer"),
+        ]),
+      (error: unknown) =>
+        isNewerSchemaError(error) && error.store === PERSISTED_STORES.TIMELINE
+    );
+    assert.strictEqual(await fs.readFile(eventPath, "utf8"), eventsBefore);
+  });
+
+  test("does not replace a newer manifest when initializing a damaged run", async () => {
+    const manifest = JSON.parse(
+      await fs.readFile(manifestPath, "utf8")
+    ) as Record<string, unknown>;
+    manifest.schemaVersion =
+      CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.TIMELINE] + 1;
+    const original = JSON.stringify(manifest);
+    await fs.writeFile(manifestPath, original);
+    await fs.rm(path.join(tempDir, "events.jsonl"));
+
+    await assert.rejects(
+      () =>
+        recorder.initializeRunAt(
+          tempDir,
+          "wf-timeline",
+          1,
+          100,
+          EXECUTION_STATES.RUNNING
+        ),
+      (error: unknown) =>
+        isNewerSchemaError(error) && error.store === PERSISTED_STORES.TIMELINE
+    );
+    assert.strictEqual(await fs.readFile(manifestPath, "utf8"), original);
   });
 
   test("serializes manifest updates with concurrent append operations", async () => {

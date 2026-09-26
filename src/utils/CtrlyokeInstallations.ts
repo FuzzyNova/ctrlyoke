@@ -44,7 +44,7 @@ export interface InstallationRecord {
    * The history search index version this host reads and writes. Hosts from
    * before per-version index directories leave it unset.
    */
-  indexSchemaVersion?: string;
+  indexSchemaVersion?: number;
 }
 
 interface InstallationsFile {

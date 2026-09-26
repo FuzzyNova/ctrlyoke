@@ -1175,11 +1175,11 @@
     },
     "runtimeMetadata": {
       "type": "object",
-      "description": "Workflow-level runtime execution state for working files (optional, added automatically by ctrlyoke during execution)",
+      "description": "Workflow-level runtime execution state for working files (optional, added automatically by ctrlyoke during execution). Its schemaVersion tracks run-file metadata independently of the root schemaVersion, which tracks the workflow-definition format.",
       "properties": {
         "schemaVersion": {
           "type": "number",
-          "description": "Run-file format version, stamped on every write. A file written by a newer ctrlyoke is refused rather than overwritten."
+          "description": "Run-file format version for _runtime metadata and run bookkeeping, stamped on every write. It is independent of the root schemaVersion, which versions the workflow definition format. A file written by a newer ctrlyoke is refused rather than overwritten."
         },
         "currentIndex": {
           "type": "number",

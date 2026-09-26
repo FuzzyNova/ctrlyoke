@@ -926,7 +926,6 @@ describe("loadHistoryRun", () => {
       },
     ];
     const history: WorkflowOutputHistory = {
-      schemaVersion: "1.1.0",
       workflowId: "wf-history",
       runId: 3,
       startedAt: 100,
@@ -955,7 +954,6 @@ describe("hydrateLiveRunHistory", () => {
       sequence: 4,
     };
     const history: WorkflowOutputHistory = {
-      schemaVersion: "1.1.0",
       workflowId: "wf-live-history",
       runId: 3,
       startedAt: 100,
@@ -1099,7 +1097,6 @@ describe("snapshot replay structural sharing", () => {
 
   it("preserves liveOrderedEntries identity when hydrateLiveRunHistory re-delivers the same timeline", () => {
     const makeHistory = (): WorkflowOutputHistory => ({
-      schemaVersion: "1.1.0",
       workflowId: "wf-rehydrate",
       runId: 3,
       startedAt: 100,
@@ -1129,7 +1126,6 @@ describe("snapshot replay structural sharing", () => {
 
   it("preserves historyOutputs identity when loadHistoryRun re-delivers the same run", () => {
     const makeHistory = (): WorkflowOutputHistory => ({
-      schemaVersion: "1.1.0",
       workflowId: "wf-history-replay",
       runId: 3,
       startedAt: 100,
@@ -1349,7 +1345,6 @@ describe("hydrateLiveRunHistory activity reconciliation", () => {
   /** The durable timeline the run has written so far, as the snapshot replays it. */
   function makeHistory(): WorkflowOutputHistory {
     return {
-      schemaVersion: "1.1.0",
       workflowId: "wf-live-dup",
       runId: 21,
       startedAt: 100,

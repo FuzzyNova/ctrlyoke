@@ -100,7 +100,7 @@ suite("LifetimeUsageStore", () => {
       recursive: true,
     });
     const manifest: WorkflowRunManifest = {
-      schemaVersion: "2.4.0",
+      schemaVersion: 1,
       storageKind: "timeline",
       workflowId: workflowKey,
       runId: 1,

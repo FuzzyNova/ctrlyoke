@@ -1019,7 +1019,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     await fs.writeFile(
       WorkflowPaths.manifestPath(workspace, workflowKey, runRef),
       JSON.stringify({
-        schemaVersion: "2.3.0",
+        schemaVersion: 1,
         storageKind: "timeline",
         workflowId: workflowKey,
         runId: 1,

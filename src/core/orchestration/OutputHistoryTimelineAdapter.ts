@@ -140,7 +140,6 @@ export class OutputHistoryTimelineAdapter {
     events: WorkflowTimelineEvent[]
   ): WorkflowOutputHistory {
     const history: WorkflowOutputHistory = {
-      schemaVersion: "1.1.0",
       workflowId: manifest.workflowId,
       runId: manifest.runId,
       startedAt: manifest.startedAt,
