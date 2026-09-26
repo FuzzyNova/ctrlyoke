@@ -189,7 +189,7 @@ export interface WorkflowExecutionContext {
   unregisterActiveTarget?: (target: ExecutionTarget) => void;
   cancelTarget?: (target: ExecutionTarget) => Promise<void>;
   releaseTargetResources?: (target: ExecutionTarget) => Promise<void>;
-  /** Close the attested coordination participant when a target settles. */
+  /** Close the addressed coordination participant when a target settles. */
   closeCoordinationParticipant?: (
     target: WorkflowAttemptTarget
   ) => Promise<void>;

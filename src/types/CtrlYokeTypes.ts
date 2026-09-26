@@ -419,6 +419,7 @@ export interface CoordinationEntry {
   from: {
     participantId: string;
     label: string;
+    kind: CoordinationParticipant["kind"];
     attested: boolean;
     address?: CoordinationParticipant["address"];
   };

@@ -60,6 +60,7 @@ suite("ExecutionRootCoordination", function () {
       from: {
         participantId: value.participantId,
         label: value.label,
+        kind: value.kind,
         attested: value.attested,
         ...(value.address ? { address: value.address } : {}),
       },
@@ -80,6 +81,7 @@ suite("ExecutionRootCoordination", function () {
       from: {
         participantId: value.participantId,
         label: value.label,
+        kind: value.kind,
         attested: value.attested,
       },
       paths,
@@ -100,6 +102,7 @@ suite("ExecutionRootCoordination", function () {
         from: {
           participantId: first.participantId,
           label: first.label,
+          kind: first.kind,
           attested: false,
         },
         paths: ["src/a.ts"],
@@ -114,6 +117,7 @@ suite("ExecutionRootCoordination", function () {
         from: {
           participantId: second.participantId,
           label: second.label,
+          kind: second.kind,
           attested: false,
         },
         via: second.via,
@@ -129,6 +133,134 @@ suite("ExecutionRootCoordination", function () {
       ["first"]
     );
     assert.deepStrictEqual(folded.claims, []);
+  });
+
+  test("detects path and glob intersections conservatively", () => {
+    const overlappingPairs: Array<[string, string]> = [
+      ["a*/file.txt", "*b/file.txt"],
+      ["a*/file.txt", "ab/file.txt"],
+      ["*b/file.txt", "ab/file.txt"],
+      ["dir", "dir/child.ts"],
+      ["dir/", "dir/**"],
+      ["src/**", "src/core/x.ts"],
+      ["**/*.md", "docs/a.md"],
+      ["[ab]x", "bx"],
+      ["dev/bugs", "dev/*/README.md"],
+      ["./dir//", "dir/child.ts"],
+    ];
+    const disjointPairs: Array<[string, string]> = [
+      ["a*/f", "b*/f"],
+      ["src/*.ts", "src/*.js"],
+      ["src/core", "src/corex"],
+      ["x?", "xyz"],
+      ["[ab]x", "cx"],
+      ["dev/bugs", "dev/bugsy/x"],
+    ];
+
+    const foldPair = (leftPath: string, rightPath: string) => {
+      const first = participant("first");
+      const second = participant("second", { pid: 43 });
+      return foldCoordinationEntries(
+        [
+          join(first, 1),
+          claim(first, [leftPath], 2),
+          join(second, 3),
+          claim(second, [rightPath], 4),
+        ],
+        { now: 1_000, processLivenessCheck: () => true }
+      );
+    };
+
+    for (const [left, right] of overlappingPairs) {
+      assert.strictEqual(
+        foldPair(left, right).claims.length,
+        1,
+        `${left} vs ${right}`
+      );
+      assert.strictEqual(
+        foldPair(right, left).claims.length,
+        1,
+        `${right} vs ${left}`
+      );
+    }
+    for (const [left, right] of disjointPairs) {
+      assert.strictEqual(
+        foldPair(left, right).claims.length,
+        2,
+        `${left} vs ${right}`
+      );
+    }
+  });
+
+  test("a shared concrete path conflicts with each overlapping wildcard claim", async () => {
+    const root = await tempDirectory();
+    try {
+      const registry = new CoordinationParticipantRegistry(root, {
+        now: () => 10_000,
+      });
+      const first = await registry.registerParticipant({
+        kind: "external",
+        label: "first",
+        via: COORDINATION_PARTICIPANT_VIA.MCP,
+      });
+      const second = await registry.registerParticipant({
+        kind: "external",
+        label: "second",
+        via: COORDINATION_PARTICIPANT_VIA.MCP,
+      });
+      assert.deepStrictEqual((await first.claim(["a*/file.txt"])).granted, [
+        "a*/file.txt",
+      ]);
+      assert.deepStrictEqual(
+        (await second.claim(["*b/file.txt"])).denied.map(
+          (item) => item.owner.participantId
+        ),
+        [first.participantId]
+      );
+      assert.deepStrictEqual(
+        (await second.claim(["ab/file.txt"])).denied.map(
+          (item) => item.owner.participantId
+        ),
+        [first.participantId]
+      );
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  test("directory claims deny descendants in either claim order", async () => {
+    for (const [firstPath, secondPath] of [
+      ["dir", "dir/child.ts"],
+      ["dir/child.ts", "dir"],
+    ]) {
+      const root = await tempDirectory();
+      try {
+        const registry = new CoordinationParticipantRegistry(root, {
+          now: () => 10_000,
+        });
+        const first = await registry.registerParticipant({
+          kind: "external",
+          label: "first",
+          via: COORDINATION_PARTICIPANT_VIA.MCP,
+        });
+        const second = await registry.registerParticipant({
+          kind: "external",
+          label: "second",
+          via: COORDINATION_PARTICIPANT_VIA.MCP,
+        });
+        assert.deepStrictEqual((await first.claim([firstPath])).granted, [
+          firstPath,
+        ]);
+        assert.deepStrictEqual(
+          (await second.claim([secondPath])).denied.map(
+            (item) => item.owner.participantId
+          ),
+          [first.participantId]
+        );
+      } finally {
+        await removeDirectory(root);
+      }
+    }
   });
 
   test("reaps only pid-dead MCP participants, not merely heartbeat-stale ones", () => {
@@ -332,7 +464,7 @@ suite("ExecutionRootCoordination", function () {
     }
   });
 
-  test("closes an attested participant for a settled sequential run", async () => {
+  test("closes an unattested CLI participant for a settled sequential run", async () => {
     const root = await tempDirectory();
     try {
       const registry = new CoordinationParticipantRegistry(root, {
@@ -343,15 +475,15 @@ suite("ExecutionRootCoordination", function () {
         workflowKey: "workflow" as WorkflowKey,
         runRef: "run-1" as RunRef,
       };
-      const lease = await registry.registerAttestedParticipant({
+      const lease = await registry.registerParticipant({
         kind: "ctrlyoke-step",
         label: "step",
-        via: COORDINATION_PARTICIPANT_VIA.MCP,
+        via: COORDINATION_PARTICIPANT_VIA.CLI,
         address: { ...address, stepIndex: 0 },
       });
       await lease.claim(["src/a.ts"]);
 
-      await registry.closeAttestedParticipants({
+      await registry.closeRunParticipants({
         ...address,
         stepIndex: 1,
       });
@@ -364,7 +496,7 @@ suite("ExecutionRootCoordination", function () {
     }
   });
 
-  test("releases group claims at the join without closing participants", async () => {
+  test("releases and closes an unattested CLI group member at the join", async () => {
     const root = await tempDirectory();
     try {
       const registry = new CoordinationParticipantRegistry(root, {
@@ -376,19 +508,115 @@ suite("ExecutionRootCoordination", function () {
         runRef: "run-1" as RunRef,
         parallelGroupId: "group-1",
       };
-      const lease = await registry.registerAttestedParticipant({
+      const lease = await registry.registerParticipant({
         kind: "ctrlyoke-step",
         label: "group member",
-        via: COORDINATION_PARTICIPANT_VIA.MCP,
+        via: COORDINATION_PARTICIPANT_VIA.CLI,
         address: { ...address, stepIndex: 1 },
       });
       await lease.claim(["src/a.ts"]);
 
       await registry.releaseClaimsForGroup(address);
+      await registry.closeGroupParticipants(address);
+
+      const folded = await registry.fold();
+      assert.strictEqual(folded.participants.length, 0);
+      assert.strictEqual(folded.claims.length, 0);
+
+      const laterParticipant = await registry.registerParticipant({
+        kind: "ctrlyoke-step",
+        label: "later step",
+        via: COORDINATION_PARTICIPANT_VIA.CLI,
+        address: {
+          workflowKey: address.workflowKey,
+          runRef: address.runRef,
+          stepIndex: 2,
+        },
+      });
+      const claimResult = await laterParticipant.claim(["src/a.ts"]);
+      assert.deepStrictEqual(claimResult.granted, ["src/a.ts"]);
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  test("settlement leaves external claims untouched", async () => {
+    const root = await tempDirectory();
+    try {
+      const registry = new CoordinationParticipantRegistry(root, {
+        now: () => 10_000,
+        processLivenessCheck: () => true,
+      });
+      const address = {
+        workflowKey: "workflow" as WorkflowKey,
+        runRef: "run-1" as RunRef,
+        parallelGroupId: "group-1",
+      };
+      const external = await registry.registerParticipant({
+        kind: "external",
+        label: "external session",
+        via: COORDINATION_PARTICIPANT_VIA.CLI,
+      });
+      await external.claim(["src/a.ts"]);
+
+      await registry.releaseClaimsForGroup(address);
+      await registry.closeGroupParticipants(address);
 
       const folded = await registry.fold();
       assert.strictEqual(folded.participants.length, 1);
-      assert.strictEqual(folded.claims.length, 0);
+      assert.strictEqual(
+        folded.participants[0].participantId,
+        external.participantId
+      );
+      assert.strictEqual(folded.claims.length, 1);
+      assert.strictEqual(
+        folded.claims[0].owner.participantId,
+        external.participantId
+      );
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  test("group settlement leaves members of other runs and groups untouched", async () => {
+    const root = await tempDirectory();
+    try {
+      const registry = new CoordinationParticipantRegistry(root, {
+        now: () => 10_000,
+        processLivenessCheck: () => true,
+      });
+      const address = {
+        workflowKey: "workflow" as WorkflowKey,
+        runRef: "run-1" as RunRef,
+        parallelGroupId: "group-1",
+      };
+      const otherRun = await registry.registerParticipant({
+        kind: "ctrlyoke-step",
+        label: "other run",
+        via: COORDINATION_PARTICIPANT_VIA.CLI,
+        address: { ...address, runRef: "run-2" as RunRef, stepIndex: 1 },
+      });
+      const otherGroup = await registry.registerParticipant({
+        kind: "ctrlyoke-step",
+        label: "other group",
+        via: COORDINATION_PARTICIPANT_VIA.CLI,
+        address: { ...address, parallelGroupId: "group-2", stepIndex: 1 },
+      });
+      await otherRun.claim(["src/other-run.ts"]);
+      await otherGroup.claim(["src/other-group.ts"]);
+
+      await registry.releaseClaimsForGroup(address);
+      await registry.closeGroupParticipants(address);
+
+      const folded = await registry.fold();
+      assert.deepStrictEqual(
+        folded.participants.map(({ participantId }) => participantId).sort(),
+        [otherRun.participantId, otherGroup.participantId].sort()
+      );
+      assert.deepStrictEqual(folded.claims.map(({ path }) => path).sort(), [
+        "src/other-group.ts",
+        "src/other-run.ts",
+      ]);
     } finally {
       await removeDirectory(root);
     }

@@ -99,6 +99,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
   let priorCommitOutput: string | undefined;
   let priorExecutionRoot: string | undefined;
   let priorParticipantLabel: string | undefined;
+  let priorMcpCliMode: string | undefined;
   let priorPromptIndex: string | undefined;
   let priorParallelGroupId: string | undefined;
   let priorMaxParallelSteps: string | undefined;
@@ -123,6 +124,11 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       delete process.env.CTRLYOKE_PARTICIPANT_LABEL;
     } else {
       process.env.CTRLYOKE_PARTICIPANT_LABEL = priorParticipantLabel;
+    }
+    if (priorMcpCliMode === undefined) {
+      delete process.env.CTRLYOKE_MCP_CLI_MODE;
+    } else {
+      process.env.CTRLYOKE_MCP_CLI_MODE = priorMcpCliMode;
     }
     if (priorPromptIndex === undefined) {
       delete process.env.CTRLYOKE_PROMPT_INDEX;
@@ -325,6 +331,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     priorCommitOutput = process.env.CTRLYOKE_COMMIT_OUTPUT;
     priorExecutionRoot = process.env.CTRLYOKE_EXECUTION_ROOT;
     priorParticipantLabel = process.env.CTRLYOKE_PARTICIPANT_LABEL;
+    priorMcpCliMode = process.env.CTRLYOKE_MCP_CLI_MODE;
     priorPromptIndex = process.env.CTRLYOKE_PROMPT_INDEX;
     priorParallelGroupId = process.env.CTRLYOKE_PARALLEL_GROUP_ID;
     priorMaxParallelSteps = process.env.CTRLYOKE_MAX_PARALLEL_STEPS;
@@ -332,6 +339,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     delete process.env.CTRLYOKE_COMMIT_OUTPUT;
     delete process.env.CTRLYOKE_EXECUTION_ROOT;
     delete process.env.CTRLYOKE_PARTICIPANT_LABEL;
+    delete process.env.CTRLYOKE_MCP_CLI_MODE;
     delete process.env.CTRLYOKE_PROMPT_INDEX;
     delete process.env.CTRLYOKE_PARALLEL_GROUP_ID;
     delete process.env.CTRLYOKE_MAX_PARALLEL_STEPS;
@@ -473,6 +481,33 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
     assert.deepStrictEqual(released.released, ["src/a.ts"]);
     assert.strictEqual(released.scope.claimSummary.count, 0);
+  });
+
+  test("attributes unattested CLI steps separately from external sessions", async () => {
+    const server = await setup();
+    const active = await prepareActiveRun("cli-attribution");
+    process.env.CTRLYOKE_MCP_CLI_MODE = "true";
+
+    const posted = responseJson(
+      await server.invokeTool(MCP_POST_NOTE_TOOL_NAME, {
+        text: "skill mode note",
+      })
+    );
+
+    assert.strictEqual(posted.scope.participants[0].kind, "ctrlyoke-step");
+    assert.match(
+      posted.scope.participants[0].attribution,
+      /unattested ctrlyoke step \(skill\/CLI\)/
+    );
+    const notes = responseJson(
+      await server.invokeTool(MCP_READ_NOTES_TOOL_NAME, {})
+    );
+    assert.strictEqual(notes.entries[0].from.kind, "ctrlyoke-step");
+    assert.match(
+      notes.entries[0].attribution,
+      /unattested ctrlyoke step \(skill\/CLI\)/
+    );
+    await releaseActiveRun(active.run, active.ownerToken);
   });
 
   test("reports a denied owner with label and attestation state", async () => {

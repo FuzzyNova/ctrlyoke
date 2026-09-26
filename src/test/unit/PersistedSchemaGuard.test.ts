@@ -463,7 +463,12 @@ suite("PersistedSchemaGuard", () => {
       const store = new ExecutionRootCoordinationStore(tempRoot);
       const note = {
         kind: "note" as const,
-        from: { participantId: "p", label: "p", attested: false },
+        from: {
+          participantId: "p",
+          label: "p",
+          kind: "external" as const,
+          attested: false,
+        },
         text: "hello",
         via: "cli" as const,
       };

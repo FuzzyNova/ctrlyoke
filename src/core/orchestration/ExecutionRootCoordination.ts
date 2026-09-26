@@ -1,4 +1,5 @@
 import {
+  COORDINATION_GLOB_TOKENS,
   COORDINATION_ENTRY_KINDS,
   COORDINATION_PARTICIPANT_KINDS,
   COORDINATION_PARTICIPANT_VIA,
@@ -13,6 +14,7 @@ import {
   isProcessAlive,
   type ProcessLivenessCheck,
 } from "../../utils/LockSafetyPrimitives";
+import { resolveCoordinationParticipantKind } from "../../utils/CoordinationAttribution";
 import {
   ExecutionRootCoordinationStore,
   DEFAULT_COORDINATION_SETTINGS,
@@ -73,6 +75,17 @@ export interface CoordinationFoldOptions {
   processLivenessCheck?: ProcessLivenessCheck;
 }
 
+function hasRunAddress(
+  participant: CoordinationParticipant,
+  address: NonNullable<CoordinationParticipant["address"]>
+): boolean {
+  return (
+    participant.kind === COORDINATION_PARTICIPANT_KINDS.CTRL_YOKE_STEP &&
+    participant.address?.workflowKey === address.workflowKey &&
+    participant.address?.runRef === address.runRef
+  );
+}
+
 interface ParticipantLeaseRecord {
   participant: CoordinationParticipant;
   live: boolean;
@@ -86,9 +99,10 @@ function participantFromEntry(
 
   return {
     participantId: entry.from.participantId,
-    kind: entry.from.address
-      ? COORDINATION_PARTICIPANT_KINDS.CTRL_YOKE_STEP
-      : COORDINATION_PARTICIPANT_KINDS.EXTERNAL,
+    kind: resolveCoordinationParticipantKind(
+      entry.from.kind,
+      entry.from.address
+    ),
     attested: entry.from.attested,
     label: entry.from.label,
     via: entry.via,
@@ -120,99 +134,208 @@ function isParticipantLive(
 }
 
 function pathsOverlap(left: string, right: string): boolean {
-  if (left === right) return true;
-  return (
-    globMatches(left, right) ||
-    globMatches(right, left) ||
-    globSamplesOverlap(left, right)
-  );
+  const leftSegments = normalizeClaimPath(left).split("/");
+  const rightSegments = normalizeClaimPath(right).split("/");
+  // A claim includes its exact path and every descendant. Appending a globstar
+  // represents that coverage for both literal and patterned claims.
+  leftSegments.push(COORDINATION_GLOB_TOKENS.GLOBSTAR_SEGMENT);
+  rightSegments.push(COORDINATION_GLOB_TOKENS.GLOBSTAR_SEGMENT);
+  return globPatternsOverlap(leftSegments, rightSegments);
 }
 
-function hasMagic(value: string): boolean {
-  return value.includes("*") || value.includes("?") || value.includes("[");
+function normalizeClaimPath(value: string): string {
+  return value
+    .replace(/\\/g, "/")
+    .replace(/\/{2,}/g, "/")
+    .replace(/^(?:\.\/)+/, "")
+    .replace(/\/+$/, "");
 }
 
-function globMatches(pattern: string, candidate: string): boolean {
-  if (!hasMagic(pattern)) return pattern === candidate;
+type SegmentToken =
+  | { kind: typeof COORDINATION_GLOB_TOKENS.STAR }
+  | { kind: typeof COORDINATION_GLOB_TOKENS.ANY }
+  | { kind: typeof COORDINATION_GLOB_TOKENS.LITERAL; value: string }
+  | {
+      kind: typeof COORDINATION_GLOB_TOKENS.CLASS;
+      ranges: Array<[number, number]>;
+      negated: boolean;
+    };
 
-  let expression = "^";
-  for (let index = 0; index < pattern.length; index += 1) {
-    const character = pattern[index];
-    if (character === "*") {
-      if (pattern[index + 1] === "*") {
-        if (pattern[index + 2] === "/") {
-          expression += "(?:.*/)?";
-          index += 2;
-        } else {
-          expression += ".*";
-          index += 1;
-        }
-      } else {
-        expression += "[^/]*";
-      }
-    } else if (character === "?") {
-      expression += "[^/]";
-    } else if (character === "[") {
-      const closing = pattern.indexOf("]", index + 1);
-      if (closing > index + 1) {
-        expression += pattern.slice(index, closing + 1);
-        index = closing;
-      } else {
-        expression += "\\[";
-      }
-    } else {
-      expression += escapeRegExp(character);
-    }
-  }
-  expression += "$";
-  return new RegExp(expression).test(candidate);
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function globSamples(pattern: string): string[] {
-  const samples = [""];
+function parseSegment(pattern: string): SegmentToken[] | undefined {
+  const tokens: SegmentToken[] = [];
   let index = 0;
   while (index < pattern.length) {
     const character = pattern[index];
-    if (character === "*" && pattern[index + 1] === "*") {
-      const existing = [...samples];
-      for (const sample of existing) samples.push(`${sample}nested/`);
-      index += pattern[index + 2] === "/" ? 3 : 2;
-      continue;
-    }
-    if (character === "*" || character === "?") {
-      for (const sampleIndex of samples.keys()) {
-        samples[sampleIndex] += character === "*" ? "x" : "x";
-      }
+    if (character === "\\") {
+      if (index + 1 >= pattern.length) return undefined;
+      tokens.push({
+        kind: COORDINATION_GLOB_TOKENS.LITERAL,
+        value: pattern[index + 1],
+      });
+      index += 2;
+    } else if (character === "*") {
+      if (tokens[tokens.length - 1]?.kind !== COORDINATION_GLOB_TOKENS.STAR)
+        tokens.push({ kind: COORDINATION_GLOB_TOKENS.STAR });
       index += 1;
-      continue;
-    }
-    if (character === "[") {
+    } else if (character === "?") {
+      tokens.push({ kind: COORDINATION_GLOB_TOKENS.ANY });
+      index += 1;
+    } else if (character === "[") {
       const closing = pattern.indexOf("]", index + 1);
-      if (closing > index + 1) {
-        const content = pattern.slice(index + 1, closing);
-        const candidate = content[0] === "!" ? "x" : content[0];
-        for (const sampleIndex of samples.keys())
-          samples[sampleIndex] += candidate;
-        index = closing + 1;
-        continue;
+      if (closing < 0 || closing === index + 1) return undefined;
+      let content = pattern.slice(index + 1, closing);
+      const negated = content[0] === "!";
+      if (negated) content = content.slice(1);
+      if (
+        !content ||
+        content.includes("[") ||
+        content.includes("/") ||
+        content.includes("\\")
+      )
+        return undefined;
+      const ranges: Array<[number, number]> = [];
+      for (let offset = 0; offset < content.length; offset += 1) {
+        const start = content.charCodeAt(offset);
+        if (content[offset + 1] === "-") {
+          if (offset + 2 >= content.length) return undefined;
+          const end = content.charCodeAt(offset + 2);
+          if (start > end) return undefined;
+          ranges.push([start, end]);
+          offset += 2;
+        } else {
+          ranges.push([start, start]);
+        }
       }
+      tokens.push({ kind: COORDINATION_GLOB_TOKENS.CLASS, ranges, negated });
+      index = closing + 1;
+    } else {
+      tokens.push({ kind: COORDINATION_GLOB_TOKENS.LITERAL, value: character });
+      index += 1;
     }
-    for (const sampleIndex of samples.keys()) samples[sampleIndex] += character;
-    index += 1;
   }
-  return samples;
+  return tokens;
 }
 
-function globSamplesOverlap(left: string, right: string): boolean {
-  if (!hasMagic(left) && !hasMagic(right)) return false;
-  return (
-    globSamples(left).some((sample) => globMatches(right, sample)) ||
-    globSamples(right).some((sample) => globMatches(left, sample))
+function tokenAccepts(token: SegmentToken, code: number): boolean {
+  if (code === 47) return false;
+  if (
+    token.kind === COORDINATION_GLOB_TOKENS.ANY ||
+    token.kind === COORDINATION_GLOB_TOKENS.STAR
+  )
+    return true;
+  if (token.kind === COORDINATION_GLOB_TOKENS.LITERAL)
+    return token.value.charCodeAt(0) === code;
+  const included = token.ranges.some(
+    ([start, end]) => code >= start && code <= end
   );
+  return token.negated ? !included : included;
+}
+
+function tokensOverlap(left: SegmentToken, right: SegmentToken): boolean {
+  // Unicode is represented as UTF-16 code units, so checking range boundaries
+  // and literals is sufficient to decide whether these predicates intersect.
+  const candidates = new Set<number>([0, 1, 46, 47, 48, 65, 97, 0xffff]);
+  for (const token of [left, right]) {
+    if (token.kind === COORDINATION_GLOB_TOKENS.LITERAL)
+      candidates.add(token.value.charCodeAt(0));
+    if (token.kind === COORDINATION_GLOB_TOKENS.CLASS) {
+      for (const [start, end] of token.ranges) {
+        candidates.add(start);
+        candidates.add(end);
+        if (start > 0) candidates.add(start - 1);
+        if (end < 0xffff) candidates.add(end + 1);
+      }
+    }
+  }
+  return [...candidates].some(
+    (code) => tokenAccepts(left, code) && tokenAccepts(right, code)
+  );
+}
+
+function segmentsOverlap(left: string, right: string): boolean {
+  const leftTokens = parseSegment(left);
+  const rightTokens = parseSegment(right);
+  // Unknown class/escape syntax is treated as possibly intersecting.
+  if (!leftTokens || !rightTokens) return true;
+  const visited = new Set<string>();
+  const walk = (leftIndex: number, rightIndex: number): boolean => {
+    const key = `${leftIndex}:${rightIndex}`;
+    if (visited.has(key)) return false;
+    visited.add(key);
+    if (leftIndex === leftTokens.length && rightIndex === rightTokens.length)
+      return true;
+    const a = leftTokens[leftIndex];
+    const b = rightTokens[rightIndex];
+    if (
+      a?.kind === COORDINATION_GLOB_TOKENS.STAR &&
+      walk(leftIndex + 1, rightIndex)
+    )
+      return true;
+    if (
+      b?.kind === COORDINATION_GLOB_TOKENS.STAR &&
+      walk(leftIndex, rightIndex + 1)
+    )
+      return true;
+    if (a && b && tokensOverlap(a, b)) {
+      const nextA =
+        a.kind === COORDINATION_GLOB_TOKENS.STAR ? leftIndex : leftIndex + 1;
+      const nextB =
+        b.kind === COORDINATION_GLOB_TOKENS.STAR ? rightIndex : rightIndex + 1;
+      if (walk(nextA, nextB)) return true;
+    }
+    return false;
+  };
+  return walk(0, 0);
+}
+
+function globPatternsOverlap(
+  left: readonly string[],
+  right: readonly string[]
+): boolean {
+  const visited = new Set<string>();
+  const walk = (leftIndex: number, rightIndex: number): boolean => {
+    const key = `${leftIndex}:${rightIndex}`;
+    if (visited.has(key)) return false;
+    visited.add(key);
+    if (leftIndex === left.length && rightIndex === right.length) return true;
+    const a = left[leftIndex];
+    const b = right[rightIndex];
+    if (
+      a === COORDINATION_GLOB_TOKENS.GLOBSTAR_SEGMENT &&
+      walk(leftIndex + 1, rightIndex)
+    )
+      return true;
+    if (
+      b === COORDINATION_GLOB_TOKENS.GLOBSTAR_SEGMENT &&
+      walk(leftIndex, rightIndex + 1)
+    )
+      return true;
+    if (
+      a !== undefined &&
+      b !== undefined &&
+      a !== COORDINATION_GLOB_TOKENS.GLOBSTAR_SEGMENT &&
+      b !== COORDINATION_GLOB_TOKENS.GLOBSTAR_SEGMENT &&
+      segmentsOverlap(a, b)
+    ) {
+      if (walk(leftIndex + 1, rightIndex + 1)) return true;
+    }
+    if (
+      a === COORDINATION_GLOB_TOKENS.GLOBSTAR_SEGMENT &&
+      rightIndex < right.length &&
+      b !== COORDINATION_GLOB_TOKENS.GLOBSTAR_SEGMENT &&
+      walk(leftIndex, rightIndex + 1)
+    )
+      return true;
+    if (
+      b === COORDINATION_GLOB_TOKENS.GLOBSTAR_SEGMENT &&
+      leftIndex < left.length &&
+      a !== COORDINATION_GLOB_TOKENS.GLOBSTAR_SEGMENT &&
+      walk(leftIndex + 1, rightIndex)
+    )
+      return true;
+    return false;
+  };
+  return walk(0, 0);
 }
 
 export function foldCoordinationEntries(
@@ -300,6 +423,7 @@ function participantEntry(
     from: {
       participantId: participant.participantId,
       label: participant.label,
+      kind: participant.kind,
       attested: participant.attested,
       ...(participant.address ? { address: participant.address } : {}),
     },
@@ -442,11 +566,11 @@ export class CoordinationParticipantRegistry {
   }
 
   /**
-   * Close attested ctrlyoke participants for a settled run target. Sequential
+   * Close ctrlyoke participants for a settled run target. Sequential
    * participants are run-scoped because an injected PTY can retain an older
    * step index; grouped participants are narrowed by their group and step.
    */
-  async closeAttestedParticipants(
+  async closeRunParticipants(
     address: NonNullable<CoordinationParticipant["address"]>
   ): Promise<void> {
     await this.store.transaction(async (transaction) => {
@@ -455,14 +579,12 @@ export class CoordinationParticipantRegistry {
         this.foldOptions()
       ).participants.filter(
         (participant) =>
-          participant.attested &&
-          participant.kind === COORDINATION_PARTICIPANT_KINDS.CTRL_YOKE_STEP &&
-          participant.address?.workflowKey === address.workflowKey &&
-          participant.address?.runRef === address.runRef &&
+          hasRunAddress(participant, address) &&
           (address.parallelGroupId === undefined
-            ? participant.address.parallelGroupId === undefined
-            : participant.address.parallelGroupId === address.parallelGroupId &&
-              participant.address.stepIndex === address.stepIndex)
+            ? participant.address?.parallelGroupId === undefined
+            : participant.address?.parallelGroupId ===
+                address.parallelGroupId &&
+              participant.address?.stepIndex === address.stepIndex)
       );
       for (const participant of participants) {
         await transaction.append(
@@ -472,8 +594,8 @@ export class CoordinationParticipantRegistry {
     });
   }
 
-  /** Close every attested participant from a group after its join boundary. */
-  async closeAttestedGroupParticipants(
+  /** Close every participant from a group after its join boundary. */
+  async closeGroupParticipants(
     address: NonNullable<CoordinationParticipant["address"]>
   ): Promise<void> {
     if (!address.parallelGroupId) return;
@@ -483,11 +605,8 @@ export class CoordinationParticipantRegistry {
         this.foldOptions()
       ).participants.filter(
         (participant) =>
-          participant.attested &&
-          participant.kind === COORDINATION_PARTICIPANT_KINDS.CTRL_YOKE_STEP &&
-          participant.address?.workflowKey === address.workflowKey &&
-          participant.address?.runRef === address.runRef &&
-          participant.address.parallelGroupId === address.parallelGroupId
+          hasRunAddress(participant, address) &&
+          participant.address?.parallelGroupId === address.parallelGroupId
       );
       for (const participant of participants) {
         await transaction.append(
@@ -509,11 +628,8 @@ export class CoordinationParticipantRegistry {
       );
       for (const participant of fold.participants) {
         if (
-          !participant.attested ||
-          participant.kind !== COORDINATION_PARTICIPANT_KINDS.CTRL_YOKE_STEP ||
-          participant.address?.workflowKey !== address.workflowKey ||
-          participant.address?.runRef !== address.runRef ||
-          participant.address.parallelGroupId !== address.parallelGroupId
+          !hasRunAddress(participant, address) ||
+          participant.address?.parallelGroupId !== address.parallelGroupId
         ) {
           continue;
         }
@@ -550,6 +666,7 @@ export class CoordinationParticipantRegistry {
         from: {
           participantId: participant.participantId,
           label: participant.label,
+          kind: participant.kind,
           attested: participant.attested,
           ...(participant.address ? { address: participant.address } : {}),
         },
@@ -750,6 +867,7 @@ export class CoordinationParticipantRegistry {
           from: {
             participantId: participant.participantId,
             label: participant.label,
+            kind: participant.kind,
             attested: participant.attested,
             ...(participant.address ? { address: participant.address } : {}),
           },

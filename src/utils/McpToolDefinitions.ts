@@ -549,7 +549,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: MCP_CLAIM_PATHS_TOOL_NAME,
     description:
-      "Advisory claim execution-root-relative paths before editing them. A denial identifies the current owner; claims never enforce filesystem access.",
+      "Advisory claim execution-root-relative paths before editing them. Each claim covers the path itself and everything beneath it; globs are supported. A denial identifies the current owner; claims never enforce filesystem access.",
     inputSchema: {
       type: "object",
       properties: {
@@ -557,7 +557,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
           type: "array",
           items: { type: "string" },
           description:
-            "Execution-root-relative files or literal globs to claim.",
+            "Execution-root-relative paths or globs to claim. Each claim covers its path and everything beneath it.",
         },
         reason: {
           type: "string",

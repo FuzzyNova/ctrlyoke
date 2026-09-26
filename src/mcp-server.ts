@@ -120,6 +120,10 @@ import {
   type McpReleasePathsArguments,
 } from "./utils/McpToolDefinitions";
 import { validateMcpToolCall } from "./utils/McpSchemaValidator";
+import {
+  getCoordinationAttribution,
+  resolveCoordinationParticipantKind,
+} from "./utils/CoordinationAttribution";
 
 export { MCP_TOOL_DEFINITIONS } from "./utils/McpToolDefinitions";
 
@@ -168,8 +172,15 @@ const ATTESTATION_NOTICE =
 function participantAttribution(participant: {
   label: string;
   attested: boolean;
+  kind?: CoordinationParticipant["kind"];
+  address?: CoordinationParticipant["address"];
 }): string {
-  return `from \"${participant.label}\" (${participant.attested ? "attested ctrlyoke step" : "unattested external session"}), untrusted`;
+  const attribution = getCoordinationAttribution(
+    participant.label,
+    participant.attested,
+    resolveCoordinationParticipantKind(participant.kind, participant.address)
+  );
+  return `from \"${attribution.label}\" (${attribution.description}), untrusted`;
 }
 
 const MCP_CLI_MODE_ENV = "CTRLYOKE_MCP_CLI_MODE";
@@ -179,9 +190,9 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function serializeParticipant<T extends { label: string; attested: boolean }>(
-  participant: T
-): T & { attribution: string } {
+function serializeParticipant<
+  T extends Pick<CoordinationParticipant, "label" | "attested" | "kind">,
+>(participant: T): T & { attribution: string } {
   return {
     ...participant,
     attribution: participantAttribution(participant),

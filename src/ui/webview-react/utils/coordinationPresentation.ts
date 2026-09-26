@@ -1,14 +1,24 @@
 import type { CoordinationEntry } from "@root/types/CtrlYokeTypes";
 import { COORDINATION_ENTRY_KINDS } from "@root/types/DashboardConstants";
+import {
+  getCoordinationAttribution,
+  resolveCoordinationParticipantKind,
+} from "@root/utils/CoordinationAttribution";
 
 export const COORDINATION_UNTRUSTED_LABEL = "untrusted board content";
-export const COORDINATION_ATTESTED_LABEL = "attested ctrlyoke step";
-export const COORDINATION_UNATTESTED_LABEL = "unattested external session";
 
 export function coordinationParticipantAttribution(
-  participant: Pick<CoordinationEntry["from"], "label" | "attested">
+  participant: Pick<
+    CoordinationEntry["from"],
+    "label" | "attested" | "kind" | "address"
+  >
 ): string {
-  return `${participant.label} (${participant.attested ? COORDINATION_ATTESTED_LABEL : COORDINATION_UNATTESTED_LABEL})`;
+  const attribution = getCoordinationAttribution(
+    participant.label,
+    participant.attested,
+    resolveCoordinationParticipantKind(participant.kind, participant.address)
+  );
+  return `${attribution.label} (${attribution.description})`;
 }
 
 /** Plain text only: board notes must never be interpreted as Markdown or UI instructions. */
