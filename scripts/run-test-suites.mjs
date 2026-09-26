@@ -60,7 +60,12 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { availableParallelism, tmpdir } from "node:os";
+import {
+  availableParallelism,
+  constants as osConstants,
+  setPriority,
+  tmpdir,
+} from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { cleanStaleTestTempDirs } from "./clean-stale-test-temp.mjs";
@@ -564,7 +569,28 @@ async function runSuitesConcurrently(plan) {
   }
 }
 
+/**
+ * Drops this process to below-normal CPU priority before anything is spawned.
+ *
+ * A full run oversubscribes the machine on purpose -- six VS Code instances,
+ * the Vitest pool, and every `git`/`node` they spawn -- and at normal priority
+ * that competes head-on with the editor the developer is typing in. The
+ * children inherit the lower priority (Windows passes BELOW_NORMAL down to
+ * processes created without an explicit class; POSIX children inherit the
+ * nice value), so an idle machine still gives the tests every core while
+ * interactive work wins whenever it wants one. Best-effort: a platform that
+ * refuses must never fail the run.
+ */
+function lowerOwnPriority() {
+  try {
+    setPriority(osConstants.priority.PRIORITY_BELOW_NORMAL);
+  } catch {
+    // Leave the run at normal priority.
+  }
+}
+
 async function main() {
+  lowerOwnPriority();
   const bail = process.argv.includes("--bail");
   // `--bail` means "the later suites did not run", which concurrency cannot
   // honour -- by the time one suite fails the others are already going.
