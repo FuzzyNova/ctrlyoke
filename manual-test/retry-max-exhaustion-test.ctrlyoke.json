@@ -5,7 +5,7 @@
     "compareSource": "stdout",
     "expected": "true",
     "maxRetries": 2,
-    "timeout": 5000,
+    "timeoutSec": 5,
     "onFail": "retry",
     "retryPrompt": "Validation failed (expected behavior for this test).\n\nScript output: $endCondition:stdout\n\nPlease respond with: 'Retry acknowledged.'"
   }

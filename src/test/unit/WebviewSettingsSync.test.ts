@@ -1175,12 +1175,12 @@ suite("WebviewSettingsSync", () => {
         sessionId: "abc-123",
         mcpServers: ["ctrlyoke"],
         hooks: [{ type: "postToolUse", command: "echo done" }],
-        errorBehavior: { onError: "retry", maxRetries: 3, retryDelayMs: 2000 },
+        errorBehavior: { onError: "retry", maxRetries: 3, retryDelaySec: 2 },
         endCondition: {
           script: "npm test",
           expected: "true",
           maxRetries: 3,
-          timeout: 60,
+          timeoutSec: 0.06,
           retryPrompt: "Fix the failing tests",
         },
         preCondition: { script: "check.sh", expected: "ok" },
@@ -1257,7 +1257,7 @@ suite("WebviewSettingsSync", () => {
       );
       assert.deepStrictEqual(
         props.errorBehavior,
-        { onError: "retry", maxRetries: 3, retryDelayMs: 2000 },
+        { onError: "retry", maxRetries: 3, retryDelaySec: 2 },
         "errorBehavior should be loaded from working file"
       );
       assert.deepStrictEqual(
@@ -1975,7 +1975,7 @@ suite("WebviewSettingsSync", () => {
       const errorBehavior = {
         onError: "retry",
         maxRetries: 2,
-        retryDelayMs: 1500,
+        retryDelaySec: 1.5,
       };
 
       const cases: Array<{

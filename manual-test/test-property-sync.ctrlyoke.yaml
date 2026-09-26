@@ -51,13 +51,13 @@ hooks:
 errorBehavior:
   onError: retry
   maxRetries: 2
-  retryDelayMs: 5000
+  retryDelaySec: 5
 
 endCondition:
   script: manual-test/.ctrlyoke/scripts/always_true.py
   compareSource: stdout
   expected: "true"
-  timeout: 30000
+  timeoutSec: 30
   maxRetries: 2
   resumeSessionOnRetry: true
   onPass: continue
@@ -76,7 +76,7 @@ preCondition:
   script: manual-test/.ctrlyoke/scripts/always_true.py
   compareSource: stdout
   expected: "true"
-  timeout: 10000
+  timeoutSec: 10
   onPass: continue
   onFail: skipPrompt
 
@@ -126,7 +126,7 @@ steps:
         Script:         always_true.py
         Returns:        "true"
         Compare Source: stdout
-        Timeout:        15000ms
+        Timeout:        15s
         On Pass:        continue
         On Fail:        stopWorkflow
 
@@ -137,7 +137,7 @@ steps:
         Script:         always_true.py
         Returns:        "true"
         Compare Source: stdout
-        Timeout:        45000ms
+        Timeout:        45s
         Max Retries:    3
         Resume On Retry: false
         On Pass:        continue
@@ -176,7 +176,7 @@ steps:
       script: manual-test/.ctrlyoke/scripts/always_true.py
       compareSource: stdout
       expected: "true"
-      timeout: 15000
+      timeoutSec: 15
       onPass: continue
       onFail: stopWorkflow
 
@@ -187,7 +187,7 @@ steps:
       script: manual-test/.ctrlyoke/scripts/always_true.py
       compareSource: stdout
       expected: "true"
-      timeout: 45000
+      timeoutSec: 45
       maxRetries: 3
       resumeSessionOnRetry: false
       onPass: continue
@@ -300,6 +300,6 @@ finalStep:
   script: manual-test/.ctrlyoke/scripts/always_true.py
   compareSource: stdout
   expected: "true"
-  timeout: 10000
+  timeoutSec: 10
   onPass: continue
   onFail: continue

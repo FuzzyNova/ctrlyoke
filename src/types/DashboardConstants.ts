@@ -3066,7 +3066,7 @@ export const PROMPT_PROPERTIES = {
   // Script step properties
   SCRIPT: "script",
   ENV: "env",
-  TIMEOUT: "timeout",
+  TIMEOUT: "timeoutSec",
   COMPARE_SOURCE: "compareSource",
   OPERATOR: "operator",
   EXPECTED: "expected",
@@ -3147,7 +3147,7 @@ export type WorkflowPropertyKey = (typeof WORKFLOW_PROPERTY_KEYS)[number];
 export const END_CONDITION_PROPERTIES = {
   SCRIPT: "script",
   EXPECTED: "expected",
-  TIMEOUT: "timeout",
+  TIMEOUT: "timeoutSec",
   MAX_RETRIES: "maxRetries",
   RETRY_PROMPT: "retryPrompt",
   RESUME_SESSION_ON_RETRY: "resumeSessionOnRetry",

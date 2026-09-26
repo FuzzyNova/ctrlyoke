@@ -324,13 +324,13 @@ suite("VarSubstitutor Tests", () => {
           script: "check.sh",
           onPass: "continue",
           onFail: "skipPrompt",
-          timeout: 30,
+          timeoutSec: 0.03,
         },
         { x: "y" }
       );
       assert.strictEqual(result.onPass, "continue");
       assert.strictEqual(result.onFail, "skipPrompt");
-      assert.strictEqual(result.timeout, 30);
+      assert.strictEqual(result.timeoutSec, 0.03);
     });
   });
 
@@ -366,14 +366,14 @@ suite("VarSubstitutor Tests", () => {
           type: "script",
           name: "Deploy",
           script: "npm run deploy",
-          timeout: 60,
+          timeoutSec: 0.06,
           onPass: "continue",
           onFail: "stopWorkflow",
         },
         { x: "y" }
       );
       assert.strictEqual(result.name, "Deploy");
-      assert.strictEqual(result.timeout, 60);
+      assert.strictEqual(result.timeoutSec, 0.06);
       assert.strictEqual(result.onPass, "continue");
       assert.strictEqual(result.onFail, "stopWorkflow");
     });

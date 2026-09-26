@@ -40,7 +40,9 @@ describe("HooksEditor compatibility diagnostics", () => {
     render(<ControlledEditor />);
 
     expect(
-      screen.getByRole("option", { name: "Notification, hooks[].event: notification" })
+      screen.getByRole("option", {
+        name: "Notification, hooks[].event: notification",
+      })
     ).toBeInTheDocument();
     fireEvent.change(screen.getByRole("combobox"), {
       target: { value: "notification" },
@@ -153,9 +155,24 @@ describe("HooksEditor compatibility diagnostics", () => {
     expect(screen.getByLabelText("Value for HOOK_TOKEN")).toHaveValue(
       "${secret:HOOK_TOKEN}"
     );
-    expect(screen.getByLabelText("Timeout (seconds), property defaults.hooks[].timeoutSec")).toHaveValue(30);
-    expect(screen.getByLabelText("Event, property defaults.hooks[].event")).toHaveAttribute("title", expect.stringContaining("property: defaults.hooks[].event"));
-    expect(screen.getByLabelText("Environment, property defaults.hooks[].env")).toHaveAttribute("title", expect.stringContaining("property: defaults.hooks[].env"));
+    const timeout = screen.getByLabelText(
+      "Timeout (seconds), property defaults.hooks[].timeoutSec"
+    );
+    expect(timeout).toHaveValue(30);
+    expect(timeout).toHaveAttribute("min", "1");
+    expect(timeout).toHaveAttribute("step", "1");
+    expect(
+      screen.getByLabelText("Event, property defaults.hooks[].event")
+    ).toHaveAttribute(
+      "title",
+      expect.stringContaining("property: defaults.hooks[].event")
+    );
+    expect(
+      screen.getByLabelText("Environment, property defaults.hooks[].env")
+    ).toHaveAttribute(
+      "title",
+      expect.stringContaining("property: defaults.hooks[].env")
+    );
 
     fireEvent.click(
       screen.getByRole("button", { name: "+ Add environment variable" })
@@ -181,6 +198,9 @@ describe("HooksEditor compatibility diagnostics", () => {
     expect(onChange).toHaveBeenLastCalledWith([
       expect.objectContaining({ timeoutSec: 45 }),
     ]);
+    const updateCount = onChange.mock.calls.length;
+    fireEvent.change(timeout, { target: { value: "1.5" } });
+    expect(onChange).toHaveBeenCalledTimes(updateCount);
   });
 
   it("gives the script editor its own full-width row", () => {

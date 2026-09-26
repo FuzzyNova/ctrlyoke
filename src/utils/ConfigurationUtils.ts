@@ -51,6 +51,11 @@ interface ExternalRootsTrustStoreLike {
   ): string[];
 }
 
+/** Convert an authored seconds value to milliseconds, preserving omission. */
+export function secondsToMs(seconds: number | undefined): number | undefined {
+  return seconds === undefined ? undefined : seconds * 1000;
+}
+
 function dedupeExternalRoots(roots: readonly string[]): string[] {
   const seen = new Set<string>();
   return roots.filter((root) => {
@@ -271,6 +276,8 @@ export const PATH_CONSTANTS = {
  * Centralizes all settings access for consistency and testability.
  */
 export const ConfigurationUtils = {
+  secondsToMs,
+
   /**
    * Check if CLI command should be shown in dashboard output
    */
@@ -361,7 +368,7 @@ export const ConfigurationUtils = {
    * User configures in seconds, this returns milliseconds
    */
   getScriptTimeoutMs(): number {
-    return configService.get(CONFIG_KEYS.EXECUTION).scriptTimeout * 1000;
+    return secondsToMs(configService.get(CONFIG_KEYS.EXECUTION).scriptTimeout)!;
   },
 
   /**
@@ -648,8 +655,7 @@ export const ConfigurationUtils = {
     workspaceIdentity: string,
     trustStore: ExternalRootsTrustStoreLike = externalRootsTrustStore
   ): string[] {
-    const { workspace } =
-      ConfigurationUtils.getTrustedExternalRootsByScope();
+    const { workspace } = ConfigurationUtils.getTrustedExternalRootsByScope();
     return trustStore.getPendingRoots(workspaceIdentity, workspace);
   },
 
@@ -956,7 +962,8 @@ export const ConfigurationUtils = {
   /** Get how declared context references that fail to resolve should be handled. */
   getContextResolutionFailureMode(): ContextResolutionFailureMode {
     return (
-      configService.get(CONFIG_KEYS.EXECUTION).contextResolutionFailure ?? "warn"
+      configService.get(CONFIG_KEYS.EXECUTION).contextResolutionFailure ??
+      "warn"
     );
   },
 

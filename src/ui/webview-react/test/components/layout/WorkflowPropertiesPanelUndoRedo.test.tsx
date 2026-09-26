@@ -555,7 +555,7 @@ const VALIDATION_CASES: UndoCase[] = [
     tab: "Validation",
     setup: seedPreConditionOnly,
     run: () => {
-      commitInput(requireElement("settings-pre-timeout"), "5000");
+      commitInput(requireElement("settings-pre-timeout"), "5");
     },
   },
   {
@@ -1064,7 +1064,7 @@ describe("WorkflowPropertiesPanel undo/redo sequences", () => {
     fireEvent.click(requireElement("settings-pre-ignore-case"));
     checkpoints.push(propertiesJson());
 
-    commitInput(requireElement("settings-pre-timeout"), "9000");
+    commitInput(requireElement("settings-pre-timeout"), "9");
     checkpoints.push(propertiesJson());
 
     // Every gesture must be its own entry, and every checkpoint distinct.

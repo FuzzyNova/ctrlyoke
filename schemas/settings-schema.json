@@ -444,7 +444,7 @@
         },
         "scriptTimeout": {
           "type": "number",
-          "description": "Maximum time in seconds for pre-condition, end-condition, and script-step scripts to run. A script's own `timeout` (in milliseconds) overrides it.",
+          "description": "Maximum time in seconds for pre-condition, end-condition, and script-step scripts to run. A script's own `timeoutSec` (in seconds) overrides it.",
           "default": 3600
         },
         "closeTerminalOnComplete": {

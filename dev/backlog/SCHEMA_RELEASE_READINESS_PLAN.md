@@ -26,26 +26,26 @@
 
 ## 0. The 18 items and their decisions
 
-| #   | Item                                                                   | Decision                                     | §    | Phase |
-| --- | ---------------------------------------------------------------------- | -------------------------------------------- | ---- | ----- |
-| 1   | Version marker on authored files + migration plan                      | **Yes** (user); newer files refused cleanly  | 1, 2 | E     |
-| 2   | Publish schemas at `https://ctrlyoke.dev/schema/v1/…`, allow `$schema` | **Yes** (user)                               | 3    | E     |
-| 3   | All durations in seconds, with a `Sec` suffix                          | **Yes** (user)                               | 4    | B     |
-| 4   | Strict prompt steps / workflow root                                    | Recommended; draft 2020-12, verified         | 5    | D     |
-| 5   | Top-level `statusLine` keyed by harness ID; new `diagnostics` group    | **Yes** (user)                               | 6    | B     |
-| 6   | Single-source lineage metadata in `workflow.json`                      | **Yes** (user)                               | 7    | C     |
-| 7   | Constrain `vars` key names                                             | Done 2026-09-26                              | 8.1  | A     |
-| 8   | `mcpServerConfig`: exactly one of `command`/`url`                      | Done 2026-09-26                              | 8.2  | A     |
-| 9   | Integer/range tightening (+ timeout-`0` unification)                   | Partial — Done 2026-09-26; B fields deferred | 8.3  | A     |
-| 10  | `workflowKey` rejects `.`/`..`                                         | Done 2026-09-26                              | 8.4  | A     |
-| 11  | Script-step `executionMode` description                                | Done 2026-09-26                              | 9    | A     |
-| 12  | `endCondition.maxRetries` default description                          | Done 2026-09-26                              | 9    | A     |
-| 13  | `passRetryPrompt` description                                          | Done 2026-09-26                              | 9    | A     |
-| 14  | `defaults.priorContext` description / disallow run address             | Done 2026-09-26                              | 9    | A     |
-| 15  | Delete dead root `_runtime.harness` rule                               | Done 2026-09-26                              | 10.1 | A     |
-| 16  | Single-source harness-keyed lists                                      | Done 2026-09-26                              | 10.2 | A     |
-| 17  | Consistent `default` keyword                                           | Done 2026-09-26                              | 10.3 | A     |
-| 18  | Stale `responseText` claim in `copilot-instructions.md`                | Done 2026-09-26                              | 11   | A     |
+| #   | Item                                                                   | Decision                                    | §    | Phase |
+| --- | ---------------------------------------------------------------------- | ------------------------------------------- | ---- | ----- |
+| 1   | Version marker on authored files + migration plan                      | **Yes** (user); newer files refused cleanly | 1, 2 | E     |
+| 2   | Publish schemas at `https://ctrlyoke.dev/schema/v1/…`, allow `$schema` | **Yes** (user)                              | 3    | E     |
+| 3   | All durations in seconds, with a `Sec` suffix                          | Done 2026-09-26                             | 4    | B     |
+| 4   | Strict prompt steps / workflow root                                    | Recommended; draft 2020-12, verified        | 5    | D     |
+| 5   | Top-level `statusLine` keyed by harness ID; new `diagnostics` group    | **Yes** (user)                              | 6    | B     |
+| 6   | Single-source lineage metadata in `workflow.json`                      | **Yes** (user)                              | 7    | C     |
+| 7   | Constrain `vars` key names                                             | Done 2026-09-26                             | 8.1  | A     |
+| 8   | `mcpServerConfig`: exactly one of `command`/`url`                      | Done 2026-09-26                             | 8.2  | A     |
+| 9   | Integer/range tightening (+ timeout-`0` unification)                   | Done 2026-09-26                             | 8.3  | A     |
+| 10  | `workflowKey` rejects `.`/`..`                                         | Done 2026-09-26                             | 8.4  | A     |
+| 11  | Script-step `executionMode` description                                | Done 2026-09-26                             | 9    | A     |
+| 12  | `endCondition.maxRetries` default description                          | Done 2026-09-26                             | 9    | A     |
+| 13  | `passRetryPrompt` description                                          | Done 2026-09-26                             | 9    | A     |
+| 14  | `defaults.priorContext` description / disallow run address             | Done 2026-09-26                             | 9    | A     |
+| 15  | Delete dead root `_runtime.harness` rule                               | Done 2026-09-26                             | 10.1 | A     |
+| 16  | Single-source harness-keyed lists                                      | Done 2026-09-26                             | 10.2 | A     |
+| 17  | Consistent `default` keyword                                           | Done 2026-09-26                             | 10.3 | A     |
+| 18  | Stale `responseText` claim in `copilot-instructions.md`                | Done 2026-09-26                             | 11   | A     |
 
 Phases are ordered in §12. The governing idea: **finish every shape change (A–D) first, then
 stamp and freeze `v1` (E)**, so the baseline that ships is the final one and no migration is
@@ -669,15 +669,13 @@ configurations.
 | `queue.maxSize`, `terminal.scrollback`, `ui.outputVirtualizationRowThreshold`                  | `integer`                                                 |
 | `runs.maxRuns`, `execution.maxPromptTimeout`, `queue.maxWorkflowExecutionTime` (current names) | `integer`, `minimum: -1`                                  |
 
-This implementation completes every row except `timeoutSec`/`retryDelaySec` and the timeout-0
-unification; those land with the duration rename in §4. Existing `DEFAULT_SETTINGS`, bundled
-templates, and `.ctrlyoke` workflow files were checked against the tightened constraints.
+The duration fields use positive fractional seconds, hook timeouts are positive integers, and condition/script timeout `0` uses the same explicit-value semantics throughout. Existing `DEFAULT_SETTINGS`, bundled templates, and `.ctrlyoke` workflow files were checked against the tightened constraints.
 
-**Timeout `0` is currently inconsistent.** Conditions treat `0` as "use the default"
-(`EndConditionEvaluator.ts:282`: `condition.timeout || …`). Script steps treat it as a literal
-0 ms since the 2026-09-26 unit fix (`step.timeout ?? …`). `exclusiveMinimum: 0` removes the
-ambiguity from authored files; the shared seconds→ms helper (§4) should use `??` so every
-surface agrees.
+Before the duration rename, conditions treated `0` as "use the default"
+(`condition.timeout || …`), while script steps treated it as a literal 0 ms. The shared
+seconds→ms helper now preserves explicit values and each execution path uses `??` only to
+select the configured default when the field is absent. `exclusiveMinimum: 0` rejects zero in
+authored files.
 
 `parallelGroupDefinition.endIndex ≥ startIndex` can't be expressed in the schema; leave it to
 the parser.

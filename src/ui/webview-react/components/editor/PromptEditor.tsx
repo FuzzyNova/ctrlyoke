@@ -130,7 +130,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     stepType,
     stepEnabled,
     scriptCommand,
-    scriptTimeout,
+    scriptTimeoutSec,
     scriptOnPass,
     scriptOnFail,
     scriptCompareSource,
@@ -142,7 +142,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     scriptShell,
     originalPromptData,
     setScriptCommand,
-    setScriptTimeout,
+    setScriptTimeoutSec,
     setScriptOnPass,
     setScriptOnFail,
     setScriptCompareSource,
@@ -956,7 +956,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       ...(properties.errorBehavior !== undefined && {
         errorBehavior: properties.errorBehavior,
       }),
-      ...(scriptTimeout !== undefined && { timeout: scriptTimeout }),
+      ...(scriptTimeoutSec !== undefined && { timeoutSec: scriptTimeoutSec }),
       ...(scriptOnPass !== CONDITION_ACTIONS.CONTINUE && {
         onPass: scriptOnPass,
       }),
@@ -989,7 +989,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       scriptExpected,
       scriptIgnoreCase,
       scriptShell,
-      scriptTimeout,
+      scriptTimeoutSec,
       stepEnabled,
     ]
   );
@@ -1194,7 +1194,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         ...(properties.errorBehavior !== undefined && {
           errorBehavior: properties.errorBehavior,
         }),
-        ...(scriptTimeout !== undefined && { timeout: scriptTimeout }),
+        ...(scriptTimeoutSec !== undefined && { timeoutSec: scriptTimeoutSec }),
         ...(scriptOnPass !== CONDITION_ACTIONS.CONTINUE && {
           onPass: scriptOnPass,
         }),
@@ -1223,7 +1223,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           ? ["secrets"]
           : []),
         ...(properties.errorBehavior === undefined ? ["errorBehavior"] : []),
-        ...(scriptTimeout === undefined ? ["timeout"] : []),
+        ...(scriptTimeoutSec === undefined ? ["timeoutSec"] : []),
         ...(scriptOnPass === CONDITION_ACTIONS.CONTINUE ? ["onPass"] : []),
         ...(scriptOnFail === CONDITION_ACTIONS.STOP_WORKFLOW ? ["onFail"] : []),
         ...(scriptCompareSource === DEFAULT_COMPARE_SOURCE
@@ -1315,7 +1315,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   }, [
     isScriptMode,
     scriptCommand,
-    scriptTimeout,
+    scriptTimeoutSec,
     scriptOnPass,
     scriptOnFail,
     scriptCompareSource,
@@ -1413,7 +1413,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   const handleScriptChange = useCallback(
     (updated: ScriptConditionValue) => {
       setScriptCommand(updated.script ?? "");
-      setScriptTimeout(updated.timeout);
+      setScriptTimeoutSec(updated.timeoutSec);
       setScriptOnPass(updated.onPass ?? CONDITION_ACTIONS.CONTINUE);
       setScriptOnFail(updated.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW);
       setScriptCompareSource(updated.compareSource ?? DEFAULT_COMPARE_SOURCE);
@@ -1426,7 +1426,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     },
     [
       setScriptCommand,
-      setScriptTimeout,
+      setScriptTimeoutSec,
       setScriptOnPass,
       setScriptOnFail,
       setScriptCompareSource,
@@ -1531,7 +1531,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             schemaPath="steps[]"
             value={{
               script: scriptCommand,
-              timeout: scriptTimeout,
+              timeoutSec: scriptTimeoutSec,
               onPass: scriptOnPass,
               onFail: scriptOnFail,
               compareSource: scriptCompareSource,

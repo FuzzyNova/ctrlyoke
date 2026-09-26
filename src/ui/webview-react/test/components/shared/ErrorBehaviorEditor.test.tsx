@@ -18,15 +18,12 @@ describe("ErrorBehaviorEditor", () => {
 
     await user.click(screen.getAllByRole("button")[0]);
     await user.click(
-      screen
-        .getAllByText("Retry")[0]
-        .closest("button") as HTMLButtonElement
+      screen.getAllByText("Retry")[0].closest("button") as HTMLButtonElement
     );
 
     expect(onChange).toHaveBeenCalledWith({
       onError: "retry",
       maxRetries: 1,
-      retryDelayMs: 0,
     });
   });
 
@@ -40,11 +37,25 @@ describe("ErrorBehaviorEditor", () => {
     );
 
     const trigger = screen.getByRole("button", { name: /Stop Workflow/ });
-    expect(trigger).toHaveAttribute("aria-label", expect.stringContaining("defaults.errorBehavior.onError"));
-    expect(trigger).toHaveAttribute("title", expect.stringContaining("property: defaults.errorBehavior.onError"));
+    expect(trigger).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("defaults.errorBehavior.onError")
+    );
+    expect(trigger).toHaveAttribute(
+      "title",
+      expect.stringContaining("property: defaults.errorBehavior.onError")
+    );
     fireEvent.click(trigger);
-    expect(screen.getByRole("button", { name: "Retry, defaults.errorBehavior.onError: retry" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Continue, defaults.errorBehavior.onError: continue" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Retry, defaults.errorBehavior.onError: retry",
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Continue, defaults.errorBehavior.onError: continue",
+      })
+    ).toBeInTheDocument();
   });
 
   it("commits retry numeric values on blur", () => {
@@ -52,7 +63,7 @@ describe("ErrorBehaviorEditor", () => {
 
     render(
       <ErrorBehaviorEditor
-        value={{ onError: "retry", maxRetries: 2, retryDelayMs: 500 }}
+        value={{ onError: "retry", maxRetries: 2, retryDelaySec: 0.5 }}
         onChange={onChange}
         idPrefix="test-error"
       />
@@ -62,19 +73,19 @@ describe("ErrorBehaviorEditor", () => {
     fireEvent.change(maxRetries, { target: { value: "4" } });
     fireEvent.blur(maxRetries);
 
-    const retryDelay = screen.getByLabelText("Retry Delay (ms)");
-    fireEvent.change(retryDelay, { target: { value: "1500" } });
+    const retryDelay = screen.getByLabelText("Retry Delay (s)");
+    fireEvent.change(retryDelay, { target: { value: "1.5" } });
     fireEvent.blur(retryDelay);
 
     expect(onChange).toHaveBeenNthCalledWith(1, {
       onError: "retry",
       maxRetries: 4,
-      retryDelayMs: 500,
+      retryDelaySec: 0.5,
     });
     expect(onChange).toHaveBeenNthCalledWith(2, {
       onError: "retry",
       maxRetries: 2,
-      retryDelayMs: 1500,
+      retryDelaySec: 1.5,
     });
   });
 });

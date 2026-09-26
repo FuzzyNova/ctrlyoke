@@ -21,7 +21,7 @@ steps:
   - name: script-default-exit
     type: script
     script: manual-test/.ctrlyoke/scripts/forward.js default-stdout default-stderr 0
-    timeout: 10000
+    timeoutSec: 10
 
   # compareSource stdout: stdout must equal "stdout-match". The exit code is NOT
   # a hidden second condition — only the text is compared.
@@ -30,7 +30,7 @@ steps:
     script: manual-test/.ctrlyoke/scripts/forward.js stdout-match x 0
     compareSource: stdout
     expected: stdout-match
-    timeout: 10000
+    timeoutSec: 10
 
   # compareSource stderr: stderr must equal "stderr-match"; exit code is ignored
   # Intentionally exits 1 to prove exit code is not evaluated in stderr mode.
@@ -40,7 +40,7 @@ steps:
     compareSource: stderr
     expected: stderr-match
     onFail: continue
-    timeout: 10000
+    timeoutSec: 10
 
   # compareSource exitCode: exit code must equal 42; stdout/stderr are ignored
   - name: script-exitcode
@@ -49,7 +49,7 @@ steps:
     compareSource: exitCode
     expected: 42
     onFail: continue
-    timeout: 10000
+    timeoutSec: 10
 
   # ── Prompts with failing preConditions → all skipped ─────────────────────────
 

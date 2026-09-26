@@ -5,7 +5,7 @@
     "compareSource": "stdout",
     "expected": "success",
     "maxRetries": 3,
-    "timeout": 5000,
+    "timeoutSec": 5,
     "retryPrompt": "This retry prompt should NEVER appear because timeouts are execution errors, not validation failures."
   }
 }

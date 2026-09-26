@@ -254,11 +254,11 @@ Fields:
 - `event` · `"stop" | "sessionStart" | "preToolUse" | "postToolUse" | "userPromptSubmit" | "permissionRequest" | "notification" | "error"` · required — Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), agentStop (Copilot), notify (Codex). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.
 - `command` · `string` · required — Command to execute. Resolved relative to workspace root if not absolute.
 - `env` · map of `string` — Environment map consumed by the hook process. Secret references are allowed only as ${secret:NAME} values.
-- `timeoutSec` · `number` — Timeout in seconds. Only respected by CLIs that support per-hook timeouts.
+- `timeoutSec` · `integer` — Timeout in seconds. Only respected by CLIs that support per-hook timeouts.
 
 ### `defaults.errorBehavior` {#defaults-errorbehavior}
 
-- **Type:** `{ onError, maxRetries?, retryDelayMs? }` or `null`
+- **Type:** `{ onError, maxRetries?, retryDelaySec? }` or `null`
 - **Default:** `null`
 - **Workflow field:** [`errorBehavior`](/reference/workflow-schema#execution-properties-errorbehavior) — a workflow or step value overrides this default
 
@@ -268,7 +268,7 @@ Fields:
 
 - `onError` · `"stopWorkflow" | "retry" | "continue"` · required — What to do when a step phase cannot run or otherwise encounters an internal error.
 - `maxRetries` · `integer` — Maximum retry attempts when onError is retry.
-- `retryDelayMs` · `integer` — Delay before retrying, in milliseconds.
+- `retryDelaySec` · `number` — Delay before retrying, in seconds.
 
 ### `defaults.toolPermissions` {#defaults-toolpermissions}
 
@@ -342,7 +342,7 @@ Fields:
 - `env` · map of `string` — Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.
 - `compareSource` · `"stdout" | "stderr" | "exitCode"` — Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.
 - `returns` · removed — Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.
-- `timeout` · `number` — Timeout in milliseconds. When omitted, the `execution.scriptTimeout` setting applies.
+- `timeoutSec` · `number` — Timeout in seconds. When omitted, the `execution.scriptTimeout` setting applies.
 - `shell` · `string` — Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. "pwsh", "bash", "cmd". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted.
 - `operator` · `"eq" | "ne" | "contains" | "notContains" | "gte" | "gt" | "lte" | "lt" | "matches" | "isEmpty" | "isNotEmpty"` — How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag.
 - `expected` · `string` or `number` — Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.
@@ -368,7 +368,7 @@ Fields:
 - `env` · map of `string` — Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.
 - `compareSource` · `"stdout" | "stderr" | "exitCode"` — Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.
 - `returns` · removed — Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.
-- `timeout` · `number` — Timeout in milliseconds. When omitted, the `execution.scriptTimeout` setting applies.
+- `timeoutSec` · `number` — Timeout in seconds. When omitted, the `execution.scriptTimeout` setting applies.
 - `shell` · `string` — Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. "pwsh", "bash", "cmd". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted.
 - `operator` · `"eq" | "ne" | "contains" | "notContains" | "gte" | "gt" | "lte" | "lt" | "matches" | "isEmpty" | "isNotEmpty"` — How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag.
 - `expected` · `string` or `number` — Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.
@@ -846,7 +846,7 @@ Maximum time in seconds to wait for a prompt to complete. Use -1 for unlimited.
 - **Type:** `number`
 - **Default:** `3600`
 
-Maximum time in seconds for pre-condition, end-condition, and script-step scripts to run. A script's own `timeout` (in milliseconds) overrides it.
+Maximum time in seconds for pre-condition, end-condition, and script-step scripts to run. A script's own `timeoutSec` (in seconds) overrides it.
 
 ### `execution.closeTerminalOnComplete` {#execution-closeterminaloncomplete}
 

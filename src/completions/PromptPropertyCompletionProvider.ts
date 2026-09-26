@@ -38,11 +38,11 @@ export class PromptPropertyCompletionProvider
       insertSnippet: `${PROMPT_PROPERTIES.SCRIPT}: `,
     },
     {
-      key: "timeout",
-      detail: "Timeout in milliseconds",
+      key: "timeoutSec",
+      detail: "Timeout in seconds",
       documentation:
-        "Timeout in milliseconds. Defaults to the `execution.scriptTimeout` setting.",
-      insertSnippet: "timeout: ",
+        "Timeout in seconds. Defaults to the `execution.scriptTimeout` setting.",
+      insertSnippet: "timeoutSec: ",
     },
     {
       key: PROMPT_PROPERTIES.COMPARE_SOURCE,
@@ -200,7 +200,7 @@ export class PromptPropertyCompletionProvider
       key: PROMPT_PROPERTIES.ERROR_BEHAVIOR,
       detail: "Harness/session failure policy",
       documentation:
-        "Controls what happens when the harness itself fails. `onError` supports `stopWorkflow`, `retry`, or `continue`. `maxRetries` and `retryDelayMs` apply when retry is selected.",
+        "Controls what happens when the harness itself fails. `onError` supports `stopWorkflow`, `retry`, or `continue`. `maxRetries` and `retryDelaySec` apply when retry is selected.",
       insertSnippet: `${PROMPT_PROPERTIES.ERROR_BEHAVIOR}:\n  onError: stopWorkflow`,
     },
     {
@@ -419,7 +419,7 @@ export class PromptPropertyCompletionProvider
     scriptItem.documentation = new vscode.MarkdownString(
       "Runs a shell command or script file with no AI interaction.\n\n" +
         "Required additional property: `script` (the command or path to execute).\n\n" +
-        "Optional: `timeout` (ms), `compareSource`/`operator`/`expected`, `onPass`, `onFail`."
+        "Optional: `timeoutSec` (seconds), `compareSource`/`operator`/`expected`, `onPass`, `onFail`."
     );
     scriptItem.insertText = STEP_TYPES.SCRIPT;
     scriptItem.sortText = `1_${STEP_TYPES.SCRIPT}`;

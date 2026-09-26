@@ -1256,7 +1256,7 @@ export class ExecutionPreviewService {
   ): ConditionPreview {
     const retry: RetryPreview = {
       maxAttempts: end?.maxRetries === -1 ? -1 : (end?.maxRetries ?? 0) + 1,
-      ...(end?.timeout !== undefined ? { backoffSeconds: 0 } : {}),
+      ...(end?.timeoutSec !== undefined ? { backoffSeconds: 0 } : {}),
     };
     return {
       pre: [this.toConditionDefinition("pre", pre)],
@@ -1281,8 +1281,8 @@ export class ExecutionPreviewService {
       scriptPath,
       description: [
         formatComparison(condition),
-        condition.timeout !== undefined
-          ? `timeout=${condition.timeout}ms`
+        condition.timeoutSec !== undefined
+          ? `timeout=${condition.timeoutSec}s`
           : undefined,
         `onPass=${condition.onPass ?? CONDITION_ACTIONS.CONTINUE}`,
         `onFail=${condition.onFail ?? (kind === "pre" ? CONDITION_ACTIONS.SKIP_PROMPT : CONDITION_ACTIONS.STOP_WORKFLOW)}`,
@@ -1298,8 +1298,8 @@ export class ExecutionPreviewService {
       errorBehavior.maxRetries !== undefined
         ? `maxRetries=${errorBehavior.maxRetries}`
         : undefined,
-      errorBehavior.retryDelayMs !== undefined
-        ? `retryDelayMs=${errorBehavior.retryDelayMs}`
+      errorBehavior.retryDelaySec !== undefined
+        ? `retryDelaySec=${errorBehavior.retryDelaySec}s`
         : undefined,
     ]
       .filter((part): part is string => Boolean(part))

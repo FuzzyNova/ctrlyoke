@@ -49,7 +49,7 @@ describe("stepClipboard", () => {
         {
           type: STEP_TYPES.SCRIPT,
           script: "npm test",
-          timeout: 30,
+          timeoutSec: 0.03,
           expected: "true",
         },
         false
@@ -71,7 +71,7 @@ describe("stepClipboard", () => {
           type: STEP_TYPES.SCRIPT,
           script: "npm test",
           enabled: false,
-          timeout: 30,
+          timeoutSec: 0.03,
         },
         true
       )
@@ -95,7 +95,7 @@ describe("stepClipboard", () => {
           secrets: ["DEPLOY_TOKEN"],
           errorBehavior: { onError: "retry", maxRetries: 2 },
           executionMode: "headless",
-          timeout: 30,
+          timeoutSec: 0.03,
         } as never,
         false
       ).properties

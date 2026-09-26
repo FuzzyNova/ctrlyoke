@@ -575,13 +575,13 @@ suite("PromptFileLoader Tests", () => {
         assert.deepStrictEqual(loaded.errorBehavior, {
           onError: "retry",
           maxRetries: 2,
-          retryDelayMs: 5000,
+          retryDelaySec: 5,
         });
         assert.deepStrictEqual(loaded.preCondition, {
           script: "manual-test/.ctrlyoke/scripts/always_true.py",
           expected: "true",
           compareSource: "stdout",
-          timeout: 10000,
+          timeoutSec: 10,
           onPass: "continue",
           onFail: "skipPrompt",
         });
@@ -589,7 +589,7 @@ suite("PromptFileLoader Tests", () => {
           script: "manual-test/.ctrlyoke/scripts/always_true.py",
           expected: "true",
           compareSource: "stdout",
-          timeout: 30000,
+          timeoutSec: 30,
           maxRetries: 2,
           resumeSessionOnRetry: true,
           onPass: "continue",
@@ -610,7 +610,7 @@ suite("PromptFileLoader Tests", () => {
           script: "manual-test/.ctrlyoke/scripts/always_true.py",
           expected: "true",
           compareSource: "stdout",
-          timeout: 10000,
+          timeoutSec: 10,
           onPass: "continue",
           onFail: "continue",
         });
@@ -647,7 +647,7 @@ suite("PromptFileLoader Tests", () => {
         script: "manual-test/.ctrlyoke/scripts/always_true.py",
         expected: "true",
         compareSource: "stdout",
-        timeout: 15000,
+        timeoutSec: 15,
         onPass: "continue",
         onFail: "stopWorkflow",
       });
@@ -655,7 +655,7 @@ suite("PromptFileLoader Tests", () => {
         script: "manual-test/.ctrlyoke/scripts/always_true.py",
         expected: "true",
         compareSource: "stdout",
-        timeout: 45000,
+        timeoutSec: 45,
         maxRetries: 3,
         resumeSessionOnRetry: false,
         onPass: "continue",

@@ -208,7 +208,7 @@ describe("enterEditMode", () => {
         errorBehavior: {
           onError: "retry",
           maxRetries: 2,
-          retryDelayMs: 1000,
+          retryDelaySec: 1,
         },
       })
     );
@@ -216,7 +216,7 @@ describe("enterEditMode", () => {
     expect(store().properties.errorBehavior).toEqual({
       onError: "retry",
       maxRetries: 2,
-      retryDelayMs: 1000,
+      retryDelaySec: 1,
     });
   });
 

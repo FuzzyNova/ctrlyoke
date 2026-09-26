@@ -7,12 +7,9 @@
 # Mostly script steps so re-running costs nothing except the one "say hi"
 # prompt.
 #
-# One gotcha found by actually running this file once (do not "simplify" it
-# back out — the obvious version silently no-ops):
-#   - A scriptStep's `timeout` is interpreted as SECONDS (multiplied by 1000
-#     internally), even though scriptProperties.timeout's own schema
-#     description says "milliseconds". Step 3 below sets `timeout: 3`
-#     (seconds) to actually fire before timeout_script.py's 20s sleep ends.
+# User-authored script timeouts are seconds and include the unit in the key.
+# Step 3 uses 0.003 seconds (3 ms) to fire before timeout_script.py's 20s sleep
+# ends.
 #
 # always_false.py prints "false" and exits 0, so steps 1 and 4 compare its
 # stdout explicitly (`compareSource: stdout` + `expected: "true"`). The default
@@ -28,7 +25,7 @@
 #      (onFail: continue). Both surface warning messages around real AI
 #      output without stopping the run.
 #   3. continuing-script-execution-error — timeout_script.py sleeps well
-#      past the 3s timeout, which is a genuine execution ERROR (the script
+#      past the 3ms timeout, which is a genuine execution ERROR (the script
 #      never returns), not a validation failure — so errorBehavior, not
 #      onFail, governs it. onError: continue keeps the workflow going.
 #   4. terminal-script-failure — always_false.py fails again (same explicit
@@ -68,7 +65,7 @@ steps:
   - name: continuing-script-execution-error
     type: script
     script: manual-test/.ctrlyoke/scripts/timeout_script.py
-    timeout: 3
+    timeoutSec: 0.003
     errorBehavior:
       onError: continue
 

@@ -3,7 +3,10 @@ import * as path from "path";
 import { suite, test, teardown } from "mocha";
 import { configService } from "../../config/CtrlYokeConfigService";
 import type { ConfigBackend } from "../../config/CtrlYokeConfigService";
-import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import {
+  ConfigurationUtils,
+  secondsToMs,
+} from "../../utils/ConfigurationUtils";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
 import {
   PERMISSION_MODES,
@@ -34,6 +37,12 @@ function makeFakeTrustStore(decisions: Record<string, "allow" | "deny">) {
 }
 
 suite("ConfigurationUtils — allowed external file roots", () => {
+  test("secondsToMs converts fractions and preserves zero and omission", () => {
+    assert.strictEqual(secondsToMs(0.25), 250);
+    assert.strictEqual(secondsToMs(0), 0);
+    assert.strictEqual(secondsToMs(undefined), undefined);
+  });
+
   teardown(() => {
     // CtrlYokeConfigService has no "unset backend" method; reassigning
     // undefined-shaped backends keeps other suites (which construct their
@@ -225,10 +234,7 @@ suite("ConfigurationUtils — allowed external file roots", () => {
       })
     );
 
-    assert.strictEqual(
-      ConfigurationUtils.getTrustedExternalRoots().length,
-      1
-    );
+    assert.strictEqual(ConfigurationUtils.getTrustedExternalRoots().length, 1);
 
     const inherited = ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
       "workspace-id",
@@ -475,7 +481,9 @@ suite("ConfigurationUtils — cost settings", () => {
   });
 
   test("reads the hide-cost setting", () => {
-    configService.setUserBackend(makeBackend({ ui: { showCostEstimates: false } }));
+    configService.setUserBackend(
+      makeBackend({ ui: { showCostEstimates: false } })
+    );
     assert.strictEqual(ConfigurationUtils.shouldShowCostEstimates(), false);
   });
 });

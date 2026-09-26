@@ -152,7 +152,7 @@ export type ErrorBehaviorAction =
 export interface ErrorBehavior {
   onError: ErrorBehaviorAction;
   maxRetries?: number;
-  retryDelayMs?: number;
+  retryDelaySec?: number;
 }
 
 /**
@@ -1027,7 +1027,7 @@ export interface ScriptProperties {
   expected?: string | number;
   /** Compare text case-insensitively. Only applies to string operators. */
   ignoreCase?: boolean;
-  timeout?: number;
+  timeoutSec?: number;
   /** Pins the shell for this script's inline-text execution path. See scriptProperties description. */
   shell?: string;
 }

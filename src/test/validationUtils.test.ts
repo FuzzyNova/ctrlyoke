@@ -126,7 +126,7 @@ suite("ValidationUtils Extended Tests", () => {
       const condition = {
         script: "test.py",
         expected: "true",
-        timeout: 5000,
+        timeoutSec: 5,
       };
       const result = ValidationUtils.validateEndCondition(condition);
       assert.strictEqual(result.valid, true);
@@ -171,7 +171,7 @@ suite("ValidationUtils Extended Tests", () => {
       const condition = {
         script: "test.py",
         expected: "true",
-        timeout: 0,
+        timeoutSec: 0,
       };
       const result = ValidationUtils.validateEndCondition(condition);
       assert.strictEqual(result.valid, false);
@@ -182,7 +182,7 @@ suite("ValidationUtils Extended Tests", () => {
       const condition = {
         script: "test.py",
         expected: "true",
-        timeout: -1000,
+        timeoutSec: -1,
       };
       const result = ValidationUtils.validateEndCondition(condition);
       assert.strictEqual(result.valid, false);
@@ -421,7 +421,7 @@ suite("ValidationUtils Extended Tests", () => {
     });
 
     test("should accept valid positive timeout", () => {
-      const result = ValidationUtils.validateTimeout(5000);
+      const result = ValidationUtils.validateTimeout(5);
       assert.strictEqual(result.valid, true);
     });
 
@@ -432,12 +432,12 @@ suite("ValidationUtils Extended Tests", () => {
     });
 
     test("should reject negative timeout", () => {
-      const result = ValidationUtils.validateTimeout(-1000);
+      const result = ValidationUtils.validateTimeout(-1);
       assert.strictEqual(result.valid, false);
     });
 
-    test("should reject timeout > 300000ms (5 minutes)", () => {
-      const result = ValidationUtils.validateTimeout(400000);
+    test("should reject timeout > 300 seconds (5 minutes)", () => {
+      const result = ValidationUtils.validateTimeout(400);
       assert.strictEqual(result.valid, false);
       assert.ok(result.errors.some((e) => e.includes("5 minute")));
     });
@@ -448,8 +448,8 @@ suite("ValidationUtils Extended Tests", () => {
       assert.ok(stringResult.errors.some((e) => e.includes("number")));
     });
 
-    test("should accept boundary value 300000ms", () => {
-      const result = ValidationUtils.validateTimeout(300000);
+    test("should accept boundary value 300 seconds", () => {
+      const result = ValidationUtils.validateTimeout(300);
       assert.strictEqual(result.valid, true);
     });
   });

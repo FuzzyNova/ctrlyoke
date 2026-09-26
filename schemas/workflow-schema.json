@@ -405,8 +405,8 @@
         "compareSource": {
           "$ref": "#/definitions/scriptStep/properties/compareSource"
         },
-        "timeout": {
-          "$ref": "#/definitions/scriptStep/properties/timeout"
+        "timeoutSec": {
+          "$ref": "#/definitions/scriptStep/properties/timeoutSec"
         },
         "shell": {
           "$ref": "#/definitions/scriptStep/properties/shell"
@@ -807,8 +807,8 @@
         "compareSource": {
           "$ref": "#/definitions/scriptProperties/properties/compareSource"
         },
-        "timeout": {
-          "$ref": "#/definitions/scriptProperties/properties/timeout"
+        "timeoutSec": {
+          "$ref": "#/definitions/scriptProperties/properties/timeoutSec"
         },
         "shell": {
           "$ref": "#/definitions/scriptProperties/properties/shell"
@@ -873,7 +873,7 @@
     },
     "endCondition": {
       "type": "object",
-      "description": "Validation that runs after the prompt completes. Shares script/env/compareSource/operator/expected/timeout with preCondition and scriptStep via scriptProperties.",
+      "description": "Validation that runs after the prompt completes. Shares script/env/compareSource/operator/expected/timeoutSec with preCondition and scriptStep via scriptProperties.",
       "allOf": [
         {
           "$ref": "#/definitions/scriptProperties"
@@ -892,8 +892,8 @@
         "returns": {
           "$ref": "#/definitions/scriptProperties/properties/returns"
         },
-        "timeout": {
-          "$ref": "#/definitions/scriptProperties/properties/timeout"
+        "timeoutSec": {
+          "$ref": "#/definitions/scriptProperties/properties/timeoutSec"
         },
         "shell": {
           "$ref": "#/definitions/scriptProperties/properties/shell"
@@ -965,9 +965,10 @@
           "not": {},
           "description": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0."
         },
-        "timeout": {
+        "timeoutSec": {
           "type": "number",
-          "description": "Timeout in milliseconds. When omitted, the `execution.scriptTimeout` setting applies."
+          "exclusiveMinimum": 0,
+          "description": "Timeout in seconds. When omitted, the `execution.scriptTimeout` setting applies."
         },
         "shell": {
           "type": "string",
@@ -1023,8 +1024,8 @@
         "returns": {
           "$ref": "#/definitions/scriptProperties/properties/returns"
         },
-        "timeout": {
-          "$ref": "#/definitions/scriptProperties/properties/timeout"
+        "timeoutSec": {
+          "$ref": "#/definitions/scriptProperties/properties/timeoutSec"
         },
         "shell": {
           "$ref": "#/definitions/scriptProperties/properties/shell"
@@ -1068,10 +1069,10 @@
           "minimum": 1,
           "description": "Maximum retry attempts when onError is retry."
         },
-        "retryDelayMs": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Delay before retrying, in milliseconds."
+        "retryDelaySec": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Delay before retrying, in seconds."
         }
       },
       "required": ["onError"],
@@ -1621,7 +1622,7 @@
           "description": "Environment map consumed by the hook process. Secret references are allowed only as ${secret:NAME} values."
         },
         "timeoutSec": {
-          "type": "number",
+          "type": "integer",
           "minimum": 1,
           "description": "Timeout in seconds. Only respected by CLIs that support per-hook timeouts."
         }

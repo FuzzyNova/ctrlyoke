@@ -142,7 +142,12 @@ function buildSchemaBackedStep(
   type: "prompt" | "script"
 ): Record<string, unknown> {
   const step: Record<string, unknown> = Object.fromEntries(
-    fields.map((field) => [field, schemaSentinel(context, field)])
+    fields
+      .filter((field) => type !== "prompt" || field !== "timeoutSec")
+      .map((field) => [
+        field,
+        field === "timeoutSec" ? 0.5 : schemaSentinel(context, field),
+      ])
   );
   step.type = type;
   step._runtime = { startedAt: 123, terminalStatus: "completed" };
@@ -351,7 +356,7 @@ suite("WorkflowSerializer", () => {
               errorBehavior: {
                 onError: "retry",
                 maxRetries: 2,
-                retryDelayMs: 2500,
+                retryDelaySec: 2.5,
               },
               steps: [
                 {
@@ -398,7 +403,7 @@ suite("WorkflowSerializer", () => {
         assert.deepStrictEqual(saved.errorBehavior, {
           onError: "retry",
           maxRetries: 2,
-          retryDelayMs: 2500,
+          retryDelaySec: 2.5,
         });
         assert.deepStrictEqual(saved.steps[0].errorBehavior, {
           onError: "continue",

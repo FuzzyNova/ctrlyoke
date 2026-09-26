@@ -93,7 +93,7 @@ export class ValidationUtils {
           operator: { type: "string", nullable: true },
           expected: { type: ["string", "number"], nullable: true },
           ignoreCase: { type: "boolean", nullable: true },
-          timeout: { type: "number", nullable: true },
+          timeoutSec: { type: "number", exclusiveMinimum: 0, nullable: true },
           maxRetries: { type: "number", nullable: true },
           retryPrompt: { type: "string", nullable: true },
           passRetryPrompt: { type: "string", nullable: true },
@@ -168,7 +168,11 @@ export class ValidationUtils {
               operator: { type: "string", nullable: true },
               expected: { type: ["string", "number"], nullable: true },
               ignoreCase: { type: "boolean", nullable: true },
-              timeout: { type: "number", nullable: true },
+              timeoutSec: {
+                type: "number",
+                exclusiveMinimum: 0,
+                nullable: true,
+              },
               maxRetries: { type: "number", nullable: true },
               retryPrompt: { type: "string", nullable: true },
               passRetryPrompt: { type: "string", nullable: true },
@@ -266,8 +270,8 @@ export class ValidationUtils {
     }
 
     if (
-      condition.timeout !== undefined &&
-      (typeof condition.timeout !== "number" || condition.timeout <= 0)
+      condition.timeoutSec !== undefined &&
+      (typeof condition.timeoutSec !== "number" || condition.timeoutSec <= 0)
     ) {
       errors.push("End condition timeout must be a positive number");
     }
@@ -435,9 +439,9 @@ export class ValidationUtils {
       errors.push("Timeout must be positive");
     }
 
-    if (timeout > 300000) {
+    if (timeout > 300) {
       // 5 minutes max
-      errors.push("Timeout cannot exceed 5 minutes (300000ms)");
+      errors.push("Timeout cannot exceed 5 minutes (300 seconds)");
     }
 
     return { valid: errors.length === 0, errors };

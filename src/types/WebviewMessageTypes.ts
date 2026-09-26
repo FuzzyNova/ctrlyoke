@@ -359,7 +359,7 @@ export interface OutputStatusMessage {
 export interface EndConditionConfig {
   script: string;
   returns?: string;
-  timeout?: number;
+  timeoutSec?: number;
   maxRetries?: number;
   retryPrompt?: string;
   passRetryPrompt?: string;
@@ -603,8 +603,7 @@ export interface DevBuildCompletedMessage {
 export interface DevRestartingMessage {
   type: typeof MESSAGE_TYPES.DEV_RESTARTING;
   command:
-    | "workbench.action.reloadWindow"
-    | "workbench.action.restartExtensionHost";
+    "workbench.action.reloadWindow" | "workbench.action.restartExtensionHost";
 }
 
 export interface DevCommandUnavailableMessage {

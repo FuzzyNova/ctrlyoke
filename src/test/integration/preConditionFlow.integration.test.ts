@@ -401,7 +401,7 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
       await writeWorkflow({
         preCondition: {
           script: RETRY_GATE_SCRIPT,
-          timeout: GATE_TIMEOUT_MS,
+          timeoutSec: GATE_TIMEOUT_MS / 1000,
         },
         errorBehavior: { onError: "retry", maxRetries: 1 },
       })
@@ -452,7 +452,7 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
       await writeWorkflow({
         preCondition: {
           script: SHARED_BUDGET_GATE_SCRIPT,
-          timeout: GATE_TIMEOUT_MS,
+          timeoutSec: GATE_TIMEOUT_MS / 1000,
         },
         errorBehavior: { onError: "retry", maxRetries: 1 },
       })

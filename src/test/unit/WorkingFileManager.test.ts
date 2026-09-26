@@ -1813,14 +1813,14 @@ suite("WorkingFileManager", () => {
         workspace,
         workflowKey,
         runRef,
-        { type: "script", script: "npm test", timeout: 30 },
+        { type: "script", script: "npm test", timeoutSec: 0.03 },
         undefined,
         1
       );
       assert.deepStrictEqual(script.workingFile.finalStep, {
         type: "script",
         script: "npm test",
-        timeout: 30,
+        timeoutSec: 0.03,
       });
 
       const prompt = await WorkingFileManager.updateFinalStepAtRun(

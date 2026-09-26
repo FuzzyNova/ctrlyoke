@@ -367,11 +367,11 @@ Environment map consumed by the script process. Secret references are allowed on
 
 Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.
 
-### `timeout` {#script-step-timeout}
+### `timeoutSec` {#script-step-timeoutsec}
 
 - **Type:** `number`
 
-Timeout in milliseconds. When omitted, the `execution.scriptTimeout` setting applies.
+Timeout in seconds. When omitted, the `execution.scriptTimeout` setting applies.
 
 ### `shell` {#script-step-shell}
 
@@ -498,11 +498,11 @@ Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compar
 
 Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.
 
-### `timeout` {#pre-condition-timeout}
+### `timeoutSec` {#pre-condition-timeoutsec}
 
 - **Type:** `number`
 
-Timeout in milliseconds. When omitted, the `execution.scriptTimeout` setting applies.
+Timeout in seconds. When omitted, the `execution.scriptTimeout` setting applies.
 
 ### `shell` {#pre-condition-shell}
 
@@ -544,7 +544,7 @@ What to do when the pre-condition check fails. 'continue': run the prompt anyway
 
 ## End condition {#end-condition}
 
-Validation that runs after the prompt completes. Shares script/env/compareSource/operator/expected/timeout with preCondition and scriptStep via scriptProperties.
+Validation that runs after the prompt completes. Shares script/env/compareSource/operator/expected/timeoutSec with preCondition and scriptStep via scriptProperties.
 
 Also includes every field from [Shared script fields](#script-fields).
 
@@ -573,11 +573,11 @@ Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compar
 
 Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.
 
-### `timeout` {#end-condition-timeout}
+### `timeoutSec` {#end-condition-timeoutsec}
 
 - **Type:** `number`
 
-Timeout in milliseconds. When omitted, the `execution.scriptTimeout` setting applies.
+Timeout in seconds. When omitted, the `execution.scriptTimeout` setting applies.
 
 ### `shell` {#end-condition-shell}
 
@@ -671,11 +671,11 @@ Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compar
 
 Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.
 
-### `timeout` {#script-fields-timeout}
+### `timeoutSec` {#script-fields-timeoutsec}
 
 - **Type:** `number`
 
-Timeout in milliseconds. When omitted, the `execution.scriptTimeout` setting applies.
+Timeout in seconds. When omitted, the `execution.scriptTimeout` setting applies.
 
 ### `shell` {#script-fields-shell}
 
@@ -719,12 +719,11 @@ What to do when a step phase cannot run or otherwise encounters an internal erro
 
 Maximum retry attempts when onError is retry.
 
-### `retryDelayMs` {#error-behavior-retrydelayms}
+### `retryDelaySec` {#error-behavior-retrydelaysec}
 
-- **Type:** `integer`
-- **Constraints:** minimum 0
+- **Type:** `number`
 
-Delay before retrying, in milliseconds.
+Delay before retrying, in seconds.
 
 ## Worktree {#worktree}
 
@@ -822,7 +821,7 @@ Environment map consumed by the hook process. Secret references are allowed only
 
 ### `timeoutSec` {#hook-entry-timeoutsec}
 
-- **Type:** `number`
+- **Type:** `integer`
 - **Constraints:** minimum 1
 
 Timeout in seconds. Only respected by CLIs that support per-hook timeouts.

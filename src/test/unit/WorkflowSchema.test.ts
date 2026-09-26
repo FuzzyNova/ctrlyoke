@@ -125,6 +125,73 @@ suite("Workflow template schema", () => {
       );
   });
 
+  test("uses positive fractional seconds for workflow script and retry timeouts", () => {
+    const validWorkflow = {
+      steps: [
+        {
+          type: "script",
+          script: "true",
+          timeoutSec: 0.25,
+        },
+        {
+          prompt: "hi",
+          endCondition: { script: "true", timeoutSec: 1.25 },
+          preCondition: { script: "true", timeoutSec: 0.5 },
+          errorBehavior: {
+            onError: "retry",
+            retryDelaySec: 0.75,
+          },
+        },
+      ],
+    };
+    assert.strictEqual(
+      validate(validWorkflow),
+      true,
+      JSON.stringify(validate.errors)
+    );
+
+    for (const timeoutSec of [0, -0.5]) {
+      assert.strictEqual(
+        validate({ steps: [{ type: "script", script: "true", timeoutSec }] }),
+        false
+      );
+      assert.strictEqual(
+        validate({
+          steps: [
+            { prompt: "hi", endCondition: { script: "true", timeoutSec } },
+          ],
+        }),
+        false
+      );
+      assert.strictEqual(
+        validate({
+          steps: [
+            {
+              prompt: "hi",
+              errorBehavior: { onError: "retry", retryDelaySec: timeoutSec },
+            },
+          ],
+        }),
+        false
+      );
+    }
+
+    assert.strictEqual(
+      validate({
+        hooks: [{ event: "stop", command: "true", timeoutSec: 1.5 }],
+        steps: [{ prompt: "hi" }],
+      }),
+      false
+    );
+    assert.strictEqual(
+      validate({
+        hooks: [{ event: "stop", command: "true", timeoutSec: 1 }],
+        steps: [{ prompt: "hi" }],
+      }),
+      true
+    );
+  });
+
   test("tightens settings numbers without invalidating defaults", () => {
     const settingsSchema = JSON.parse(
       fs.readFileSync(

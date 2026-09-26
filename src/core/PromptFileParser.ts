@@ -281,7 +281,7 @@ export class PromptFileParser {
       step.executionMode = source.executionMode;
     if (source.secrets !== undefined) step.secrets = source.secrets;
     if (source.env !== undefined) step.env = source.env;
-    if (source.timeout !== undefined) step.timeout = source.timeout;
+    if (source.timeoutSec !== undefined) step.timeoutSec = source.timeoutSec;
     if (source.compareSource !== undefined)
       step.compareSource = source.compareSource;
     if (source.operator !== undefined) step.operator = source.operator;

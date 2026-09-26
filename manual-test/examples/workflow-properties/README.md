@@ -138,7 +138,7 @@ newChatSession: true
 endCondition:
   script: npm test
   expected: "true"
-  timeout: 30000
+  timeoutSec: 30
   maxRetries: 2
   retryPrompt: |
     Validation failed: {error}
