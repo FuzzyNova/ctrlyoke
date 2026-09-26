@@ -21,7 +21,7 @@ combines the roots from both files. When you run the `ctrlyoke` CLI, the
 flags you pass override both files for that run.
 
 Some settings are machine-specific and are read only from user scope:
-`worktrees`, `storage`, `permissions.statusLineTracking`, and
+`worktrees`, `storage`, `statusLine`, and
 `usageTracking.enabled`. ctrlyoke ignores these settings in a workspace file.
 
 The dashboard's Settings page edits these files for you. If you edit a file by
@@ -65,6 +65,8 @@ fields.
 | [`server`](#server) | ctrlyoke hosted server settings. |
 | [`notifications`](#notifications) | Notification settings. |
 | [`commit`](#commit) | Commit message generation settings. |
+| [`statusLine`](#statusline) | Machine-only settings for providers that install a global statusline command. |
+| [`diagnostics`](#diagnostics) | Logging and diagnostic output settings. |
 | [Top-level settings](#top-level) | Settings that sit directly at the root of settings.json. |
 | [Shared types](#shared-types) | Value shapes referenced by more than one setting. |
 
@@ -342,7 +344,7 @@ Fields:
 - `env` · map of `string` — Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.
 - `compareSource` · `"stdout" | "stderr" | "exitCode"` — Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.
 - `returns` · removed — Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.
-- `timeoutSec` · `number` — Timeout in seconds. When omitted, the `execution.scriptTimeout` setting applies.
+- `timeoutSec` · `number` — Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.
 - `shell` · `string` — Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. "pwsh", "bash", "cmd". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted.
 - `operator` · `"eq" | "ne" | "contains" | "notContains" | "gte" | "gt" | "lte" | "lt" | "matches" | "isEmpty" | "isNotEmpty"` — How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag.
 - `expected` · `string` or `number` — Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.
@@ -368,7 +370,7 @@ Fields:
 - `env` · map of `string` — Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.
 - `compareSource` · `"stdout" | "stderr" | "exitCode"` — Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.
 - `returns` · removed — Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.
-- `timeoutSec` · `number` — Timeout in seconds. When omitted, the `execution.scriptTimeout` setting applies.
+- `timeoutSec` · `number` — Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.
 - `shell` · `string` — Pin the shell that runs this script's inline text. Used only when `script` is inline text rather than a path to a script file with a known extension. Free-form executable name or path, e.g. "pwsh", "bash", "cmd". Overrides the `terminal.shellExecutable` setting for this one script; falls back to it, then platform auto-detect, when omitted.
 - `operator` · `"eq" | "ne" | "contains" | "notContains" | "gte" | "gt" | "lte" | "lt" | "matches" | "isEmpty" | "isNotEmpty"` — How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag.
 - `expected` · `string` or `number` — Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.
@@ -540,234 +542,6 @@ Sandbox mode for Codex CLI.
 
 Approval policy for Codex CLI tool calls.
 
-### `permissions.statusLineTracking` {#permissions-statuslinetracking}
-
-- **Type:** `{ useDifferentFormatPerHarness?, sharedFormat?, claude?, … }`
-
-Machine-only settings for providers that install a global statusline command.
-
-### `permissions.statusLineTracking.useDifferentFormatPerHarness` {#permissions-statuslinetracking-usedifferentformatperharness}
-
-- **Type:** `boolean`
-- **Default:** `false`
-
-Configure each harness's statusline format independently. When false (the default), every harness renders 'sharedFormat' and the per-harness 'format' values are left untouched but unused.
-
-### `permissions.statusLineTracking.sharedFormat` {#permissions-statuslinetracking-sharedformat}
-
-- **Type:** [statusLineFormat](#type-statuslineformat)
-
-Statusline format every harness renders while 'useDifferentFormatPerHarness' is false.
-
-<details><summary>Default value</summary>
-
-```json
-[
-  {
-    "type": "literal",
-    "text": "ctrlyoke"
-  },
-  {
-    "type": "field",
-    "field": "model"
-  },
-  {
-    "type": "literal",
-    "text": "·"
-  },
-  {
-    "type": "field",
-    "field": "context"
-  },
-  {
-    "type": "literal",
-    "text": "·"
-  },
-  {
-    "type": "field",
-    "field": "usage"
-  }
-]
-```
-
-</details>
-
-### `permissions.statusLineTracking.claude` {#permissions-statuslinetracking-claude}
-
-- **Type:** [statusLineTrackingSettings](#type-statuslinetrackingsettings)
-
-Statusline settings for Claude CLI.
-
-<details><summary>Default value</summary>
-
-```json
-{
-  "enabled": true,
-  "customCommand": "",
-  "useCtrlyokeStyle": true,
-  "format": [
-    {
-      "type": "literal",
-      "text": "ctrlyoke"
-    },
-    {
-      "type": "field",
-      "field": "model"
-    },
-    {
-      "type": "literal",
-      "text": "·"
-    },
-    {
-      "type": "field",
-      "field": "context"
-    },
-    {
-      "type": "literal",
-      "text": "·"
-    },
-    {
-      "type": "field",
-      "field": "usage"
-    }
-  ]
-}
-```
-
-</details>
-
-### `permissions.statusLineTracking.antigravity` {#permissions-statuslinetracking-antigravity}
-
-- **Type:** [statusLineTrackingSettings](#type-statuslinetrackingsettings)
-
-Statusline settings for Antigravity CLI.
-
-<details><summary>Default value</summary>
-
-```json
-{
-  "enabled": true,
-  "customCommand": "",
-  "useCtrlyokeStyle": true,
-  "format": [
-    {
-      "type": "literal",
-      "text": "ctrlyoke"
-    },
-    {
-      "type": "field",
-      "field": "model"
-    },
-    {
-      "type": "literal",
-      "text": "·"
-    },
-    {
-      "type": "field",
-      "field": "context"
-    },
-    {
-      "type": "literal",
-      "text": "·"
-    },
-    {
-      "type": "field",
-      "field": "usage"
-    }
-  ]
-}
-```
-
-</details>
-
-### `permissions.statusLineTracking.copilot` {#permissions-statuslinetracking-copilot}
-
-- **Type:** [statusLineTrackingSettings](#type-statuslinetrackingsettings)
-
-Statusline settings for Copilot CLI.
-
-<details><summary>Default value</summary>
-
-```json
-{
-  "enabled": true,
-  "customCommand": "",
-  "useCtrlyokeStyle": true,
-  "format": [
-    {
-      "type": "literal",
-      "text": "ctrlyoke"
-    },
-    {
-      "type": "field",
-      "field": "model"
-    },
-    {
-      "type": "literal",
-      "text": "·"
-    },
-    {
-      "type": "field",
-      "field": "context"
-    },
-    {
-      "type": "literal",
-      "text": "·"
-    },
-    {
-      "type": "field",
-      "field": "usage"
-    }
-  ]
-}
-```
-
-</details>
-
-### `permissions.statusLineTracking.qwen` {#permissions-statuslinetracking-qwen}
-
-- **Type:** [statusLineTrackingSettings](#type-statuslinetrackingsettings)
-
-Statusline settings for Qwen Code.
-
-<details><summary>Default value</summary>
-
-```json
-{
-  "enabled": true,
-  "customCommand": "",
-  "useCtrlyokeStyle": true,
-  "format": [
-    {
-      "type": "literal",
-      "text": "ctrlyoke"
-    },
-    {
-      "type": "field",
-      "field": "model"
-    },
-    {
-      "type": "literal",
-      "text": "·"
-    },
-    {
-      "type": "field",
-      "field": "context"
-    },
-    {
-      "type": "literal",
-      "text": "·"
-    },
-    {
-      "type": "field",
-      "field": "usage"
-    }
-  ]
-}
-```
-
-</details>
-
 ### `permissions.trustedExternalRoots` {#permissions-trustedexternalroots}
 
 - **Type:** `string[]`
@@ -833,21 +607,6 @@ Execution settings.
 
 When true, keeps the TUI alive between prompts and writes follow-up prompts directly into the PTY. Faster than restarting and avoids the Claude Code resume cache bug.
 
-### `execution.maxPromptTimeout` {#execution-maxprompttimeout}
-
-- **Type:** `integer`
-- **Default:** `-1`
-- **Constraints:** minimum -1
-
-Maximum time in seconds to wait for a prompt to complete. Use -1 for unlimited.
-
-### `execution.scriptTimeout` {#execution-scripttimeout}
-
-- **Type:** `number`
-- **Default:** `3600`
-
-Maximum time in seconds for pre-condition, end-condition, and script-step scripts to run. A script's own `timeoutSec` (in seconds) overrides it.
-
 ### `execution.closeTerminalOnComplete` {#execution-closeterminaloncomplete}
 
 - **Type:** `boolean`
@@ -868,6 +627,28 @@ Automatically delete categorized prompt temp files after execution. Set to false
 - **Default:** `"warn"`
 
 How to handle a declared reference that fails to resolve: a missing/invalid secret (!NAME), an unknown skill (/skill:) or MCP server (/mcp:), an unresolved @file/#selection/#sym reference, or an unresolved ~diff/~staged/~stash/~&lt;hash> git reference. 'warn' (default) reports a diagnostic and lets the step run anyway. 'fail' stops the step before the harness spawns, naming the unresolved reference.
+
+### `execution.maxPromptTimeoutSec` {#execution-maxprompttimeoutsec}
+
+- **Type:** `integer`
+- **Default:** `-1`
+- **Constraints:** minimum -1
+
+Maximum time in seconds to wait for a prompt to complete. Use -1 for unlimited.
+
+### `execution.scriptTimeoutSec` {#execution-scripttimeoutsec}
+
+- **Type:** `number`
+- **Default:** `3600`
+
+Maximum time in seconds for pre-condition, end-condition, and script-step scripts to run. A script's own `timeoutSec` (in seconds) overrides it.
+
+### `execution.ctrlyokeMcpMode` {#execution-ctrlyokemcpmode}
+
+- **Type:** `"native" | "skill"`
+- **Default:** `"native"`
+
+Whether ctrlyoke's own MCP server is attached natively or replaced with the built-in MCP tools skill. Only affects ctrlyoke's server, not other MCP servers configured in a workflow.
 
 ## `queue` {#queue}
 
@@ -895,14 +676,6 @@ Maximum number of prompts allowed in the queue.
 
 Maximum number of active members in a parallel step group.
 
-### `queue.maxWorkflowExecutionTime` {#queue-maxworkflowexecutiontime}
-
-- **Type:** `integer`
-- **Default:** `-1`
-- **Constraints:** minimum -1
-
-Maximum total execution time in seconds for a workflow. Use -1 for unlimited.
-
 ### `queue.unlimitedMode` {#queue-unlimitedmode}
 
 - **Type:** `boolean`
@@ -916,6 +689,14 @@ Disable queue size and time limits.
 - **Default:** `true`
 
 Show a notification when the queue is extended.
+
+### `queue.maxWorkflowExecutionTimeSec` {#queue-maxworkflowexecutiontimesec}
+
+- **Type:** `integer`
+- **Default:** `-1`
+- **Constraints:** minimum -1
+
+Maximum total execution time in seconds for a workflow. Use -1 for unlimited.
 
 ## `runs` {#runs}
 
@@ -1078,13 +859,6 @@ UI display settings.
 - **Default:** `true`
 
 Show the CLI command being executed.
-
-### `ui.logRawCliOutput` {#ui-lograwclioutput}
-
-- **Type:** `boolean`
-- **Default:** `false`
-
-Log raw CLI output to the extension output channel.
 
 ### `ui.showHeadlessPermissionWarning` {#ui-showheadlesspermissionwarning}
 
@@ -1501,6 +1275,256 @@ Only return or submit the commit message, no extra text. Here is the git diff to
 
 </details>
 
+## `statusLine` {#statusline}
+
+Machine-only settings for providers that install a global statusline command.
+
+### `statusLine.useDifferentFormatPerHarness` {#statusline-usedifferentformatperharness}
+
+- **Type:** `boolean`
+- **Default:** `false`
+
+Configure each harness's statusline format independently. When false (the default), every harness renders 'sharedFormat' and the per-harness 'format' values are left untouched but unused.
+
+### `statusLine.sharedFormat` {#statusline-sharedformat}
+
+- **Type:** [statusLineFormat](#type-statuslineformat)
+
+Statusline format every harness renders while 'useDifferentFormatPerHarness' is false.
+
+<details><summary>Default value</summary>
+
+```json
+[
+  {
+    "type": "literal",
+    "text": "ctrlyoke"
+  },
+  {
+    "type": "field",
+    "field": "model"
+  },
+  {
+    "type": "literal",
+    "text": "·"
+  },
+  {
+    "type": "field",
+    "field": "context"
+  },
+  {
+    "type": "literal",
+    "text": "·"
+  },
+  {
+    "type": "field",
+    "field": "usage"
+  }
+]
+```
+
+</details>
+
+### `statusLine.byHarness` {#statusline-byharness}
+
+- **Type:** `{ claude-cli?, copilot-cli?, qwen-cli?, … }`
+
+Statusline configuration keyed by ctrlyoke harness ID.
+
+### `statusLine.byHarness.claude-cli` {#statusline-byharness-claude-cli}
+
+- **Type:** [statusLineSettings](#type-statuslinesettings)
+
+Statusline settings for Claude CLI.
+
+<details><summary>Default value</summary>
+
+```json
+{
+  "enabled": true,
+  "customCommand": "",
+  "useCtrlyokeStyle": true,
+  "format": [
+    {
+      "type": "literal",
+      "text": "ctrlyoke"
+    },
+    {
+      "type": "field",
+      "field": "model"
+    },
+    {
+      "type": "literal",
+      "text": "·"
+    },
+    {
+      "type": "field",
+      "field": "context"
+    },
+    {
+      "type": "literal",
+      "text": "·"
+    },
+    {
+      "type": "field",
+      "field": "usage"
+    }
+  ]
+}
+```
+
+</details>
+
+### `statusLine.byHarness.copilot-cli` {#statusline-byharness-copilot-cli}
+
+- **Type:** [statusLineSettings](#type-statuslinesettings)
+
+Statusline settings for Copilot CLI.
+
+<details><summary>Default value</summary>
+
+```json
+{
+  "enabled": true,
+  "customCommand": "",
+  "useCtrlyokeStyle": true,
+  "format": [
+    {
+      "type": "literal",
+      "text": "ctrlyoke"
+    },
+    {
+      "type": "field",
+      "field": "model"
+    },
+    {
+      "type": "literal",
+      "text": "·"
+    },
+    {
+      "type": "field",
+      "field": "context"
+    },
+    {
+      "type": "literal",
+      "text": "·"
+    },
+    {
+      "type": "field",
+      "field": "usage"
+    }
+  ]
+}
+```
+
+</details>
+
+### `statusLine.byHarness.qwen-cli` {#statusline-byharness-qwen-cli}
+
+- **Type:** [statusLineSettings](#type-statuslinesettings)
+
+Statusline settings for Qwen Code.
+
+<details><summary>Default value</summary>
+
+```json
+{
+  "enabled": true,
+  "customCommand": "",
+  "useCtrlyokeStyle": true,
+  "format": [
+    {
+      "type": "literal",
+      "text": "ctrlyoke"
+    },
+    {
+      "type": "field",
+      "field": "model"
+    },
+    {
+      "type": "literal",
+      "text": "·"
+    },
+    {
+      "type": "field",
+      "field": "context"
+    },
+    {
+      "type": "literal",
+      "text": "·"
+    },
+    {
+      "type": "field",
+      "field": "usage"
+    }
+  ]
+}
+```
+
+</details>
+
+### `statusLine.byHarness.antigravity-cli` {#statusline-byharness-antigravity-cli}
+
+- **Type:** [statusLineSettings](#type-statuslinesettings)
+
+Statusline settings for Antigravity CLI.
+
+<details><summary>Default value</summary>
+
+```json
+{
+  "enabled": true,
+  "customCommand": "",
+  "useCtrlyokeStyle": true,
+  "format": [
+    {
+      "type": "literal",
+      "text": "ctrlyoke"
+    },
+    {
+      "type": "field",
+      "field": "model"
+    },
+    {
+      "type": "literal",
+      "text": "·"
+    },
+    {
+      "type": "field",
+      "field": "context"
+    },
+    {
+      "type": "literal",
+      "text": "·"
+    },
+    {
+      "type": "field",
+      "field": "usage"
+    }
+  ]
+}
+```
+
+</details>
+
+## `diagnostics` {#diagnostics}
+
+Logging and diagnostic output settings.
+
+### `diagnostics.verboseLogging` {#diagnostics-verboselogging}
+
+- **Type:** `boolean`
+- **Default:** `false`
+
+Enable verbose diagnostic logging for troubleshooting.
+
+### `diagnostics.logRawCliOutput` {#diagnostics-lograwclioutput}
+
+- **Type:** `boolean`
+- **Default:** `false`
+
+Log raw CLI output to the extension output channel.
+
 ## Top-level settings {#top-level}
 
 ### `modelPricing` {#modelpricing}
@@ -1517,20 +1541,6 @@ Fields:
 - `cachedInputPerMTok` · `number`
 - `cacheWritePerMTok` · `number`
 - `reasoningPerMTok` · `number`
-
-### `ctrlyokeMcpMode` {#ctrlyokemcpmode}
-
-- **Type:** `"native" | "skill"`
-- **Default:** `"native"`
-
-Whether ctrlyoke's own MCP server is attached natively or replaced with the built-in MCP tools skill. Only affects ctrlyoke's server, not other MCP servers configured in a workflow.
-
-### `enableDiagnosticLogs` {#enablediagnosticlogs}
-
-- **Type:** `boolean`
-- **Default:** `false`
-
-Enable verbose diagnostic logging for troubleshooting.
 
 ## Shared types {#shared-types}
 
@@ -1555,34 +1565,34 @@ Fields:
 - `text` · `string` · required
 - `color` · `"default" | "red" | "yellow" | "green" | "cyan" | "blue" | "magenta" | "white" | "gray"`
 
-### statusLineTrackingSettings {#type-statuslinetrackingsettings}
+### statusLineSettings {#type-statuslinesettings}
 
 - **Type:** `{ enabled?, customCommand?, useCtrlyokeStyle?, … }`
 
 Statusline settings for one harness.
 
-#### `statusLineTrackingSettings.enabled` {#type-statuslinetrackingsettings-enabled}
+#### `statusLineSettings.enabled` {#type-statuslinesettings-enabled}
 
 - **Type:** `boolean`
 - **Default:** `true`
 
 Install ctrlyoke's statusline command for this harness.
 
-#### `statusLineTrackingSettings.customCommand` {#type-statuslinetrackingsettings-customcommand}
+#### `statusLineSettings.customCommand` {#type-statuslinesettings-customcommand}
 
 - **Type:** `string`
 - **Default:** `""`
 
 Command to run for the provider's statusline output.
 
-#### `statusLineTrackingSettings.useCtrlyokeStyle` {#type-statuslinetrackingsettings-usectrlyokestyle}
+#### `statusLineSettings.useCtrlyokeStyle` {#type-statuslinesettings-usectrlyokestyle}
 
 - **Type:** `boolean`
 - **Default:** `true`
 
 Show ctrlyoke's branded statusline instead of custom-command output.
 
-#### `statusLineTrackingSettings.format` {#type-statuslinetrackingsettings-format}
+#### `statusLineSettings.format` {#type-statuslinesettings-format}
 
 - **Type:** [statusLineFormat](#type-statuslineformat)
 

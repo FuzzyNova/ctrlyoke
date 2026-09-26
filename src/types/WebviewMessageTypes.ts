@@ -42,7 +42,7 @@ import {
   type SettingWriteScope,
   type SecretRegistryActionState,
   type SecretRegistryState,
-  type StatusLineTrackingHarnessId,
+  type StatusLineHarnessId,
   type SessionKind,
   type ShellKind,
   type TerminalEndReason,
@@ -1687,7 +1687,7 @@ export interface UpdateExternalRootDecisionMessage {
 /** Webview → Extension: disable global statusline tracking for one harness. */
 export interface DisableStatusLineTrackingMessage {
   type: typeof MESSAGE_TYPES.DISABLE_STATUS_LINE_TRACKING;
-  harnessId: StatusLineTrackingHarnessId;
+  harnessId: StatusLineHarnessId;
   restoreCustomCommand: boolean;
 }
 

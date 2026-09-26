@@ -27,7 +27,7 @@ export interface ConfigBackend {
 const WORKSPACE_FORBIDDEN_SETTING_ROOTS = [
   SETTING_PATHS.WORKTREES,
   SETTING_PATHS.STORAGE,
-  SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING,
+  SETTING_PATHS.STATUS_LINE,
   SETTING_PATHS.USAGE_TRACKING_ENABLED,
 ] as const;
 
@@ -265,7 +265,7 @@ export class CtrlYokeConfigService {
       );
     }
     if (
-      forbiddenRoot === SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING ||
+      forbiddenRoot === SETTING_PATHS.STATUS_LINE ||
       forbiddenRoot === SETTING_PATHS.USAGE_TRACKING_ENABLED
     ) {
       throw new Error(

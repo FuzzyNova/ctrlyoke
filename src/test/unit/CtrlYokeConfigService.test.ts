@@ -52,11 +52,11 @@ suite("CtrlYokeConfigService", () => {
       CTRLYOKE_SETTINGS_DEFAULTS.queue.maxParallelSteps
     );
     assert.strictEqual(
-      all.enableDiagnosticLogs,
-      CTRLYOKE_SETTINGS_DEFAULTS.enableDiagnosticLogs
+      all.diagnostics.verboseLogging,
+      CTRLYOKE_SETTINGS_DEFAULTS.diagnostics.verboseLogging
     );
     assert.strictEqual(
-      all.permissions.statusLineTracking.antigravity.enabled,
+      all.statusLine.byHarness["antigravity-cli"].enabled,
       true
     );
     assert.strictEqual(
@@ -68,9 +68,9 @@ suite("CtrlYokeConfigService", () => {
   test("resolves nested statusline settings through the config hierarchy", () => {
     service.setUserBackend(
       makeBackend({
-        permissions: {
-          statusLineTracking: {
-            antigravity: {
+        statusLine: {
+          byHarness: {
+            "antigravity-cli": {
               enabled: false,
               customCommand: "",
               useCtrlyokeStyle: true,
@@ -80,15 +80,15 @@ suite("CtrlYokeConfigService", () => {
       })
     );
     assert.strictEqual(
-      service.get("permissions").statusLineTracking.antigravity.enabled,
+      service.get("statusLine").byHarness["antigravity-cli"].enabled,
       false
     );
 
     service.setWorkspaceBackend(
       makeBackend({
-        permissions: {
-          statusLineTracking: {
-            antigravity: {
+        statusLine: {
+          byHarness: {
+            "antigravity-cli": {
               enabled: true,
               customCommand: "",
               useCtrlyokeStyle: true,
@@ -98,7 +98,7 @@ suite("CtrlYokeConfigService", () => {
       })
     );
     assert.strictEqual(
-      service.get("permissions").statusLineTracking.antigravity.enabled,
+      service.get("statusLine").byHarness["antigravity-cli"].enabled,
       false,
       "workspace statusline values are ignored because they are machine-scoped"
     );
@@ -108,12 +108,12 @@ suite("CtrlYokeConfigService", () => {
     service.setUserBackend(
       makeBackend({
         defaults: { harness: "claude-cli" },
-        enableDiagnosticLogs: true,
+        diagnostics: { verboseLogging: true },
       })
     );
     const all = service.getAll();
     assert.strictEqual(all.defaults.harness, "claude-cli");
-    assert.strictEqual(all.enableDiagnosticLogs, true);
+    assert.strictEqual(all.diagnostics.verboseLogging, true);
     // Other defaults should still be present
     assert.strictEqual(
       all.defaults.executionMode,
@@ -164,8 +164,8 @@ suite("CtrlYokeConfigService", () => {
     assert.strictEqual(all.defaults.executionMode, "headless");
     // scriptTimeout should still come from defaults
     assert.strictEqual(
-      all.execution.scriptTimeout,
-      CTRLYOKE_SETTINGS_DEFAULTS.execution.scriptTimeout
+      all.execution.scriptTimeoutSec,
+      CTRLYOKE_SETTINGS_DEFAULTS.execution.scriptTimeoutSec
     );
     assert.strictEqual(
       all.execution.closeTerminalOnComplete,
@@ -323,7 +323,7 @@ suite("CtrlYokeConfigService", () => {
 
     await assert.rejects(
       service.set(
-        "permissions.statusLineTracking.claude.enabled",
+        "statusLine.byHarness.claude-cli.enabled",
         false,
         "workspace"
       ),
@@ -352,15 +352,16 @@ suite("CtrlYokeConfigService", () => {
   test("filters forbidden workspace paths while preserving allowed siblings", () => {
     service.setUserBackend(
       makeBackend({
-        permissions: {
-          statusLineTracking: {
-            antigravity: {
+        statusLine: {
+          byHarness: {
+            "antigravity-cli": {
               enabled: true,
               customCommand: "user-command",
               useCtrlyokeStyle: true,
             },
           },
         },
+        permissions: {},
         usageTracking: {
           enabled: true,
           providerRefreshEnabled: false,
@@ -370,16 +371,16 @@ suite("CtrlYokeConfigService", () => {
     service.setWorkspaceBackend({
       filePath: "workspace-settings.json",
       getAll: () => ({
-        permissions: {
-          statusLineTracking: {
-            antigravity: {
+        statusLine: {
+          byHarness: {
+            "antigravity-cli": {
               enabled: false,
               customCommand: "workspace-command",
               useCtrlyokeStyle: false,
             },
           },
-          trustedExternalRoots: ["/shared/logs"],
         },
+        permissions: { trustedExternalRoots: ["/shared/logs"] },
         usageTracking: {
           enabled: false,
           providerRefreshEnabled: true,
@@ -389,13 +390,12 @@ suite("CtrlYokeConfigService", () => {
     });
 
     assert.strictEqual(
-      service.get("permissions").statusLineTracking.antigravity.enabled,
+      service.get("statusLine").byHarness["antigravity-cli"].enabled,
       true
     );
-    assert.deepStrictEqual(
-      service.get("permissions").trustedExternalRoots,
-      ["/shared/logs"]
-    );
+    assert.deepStrictEqual(service.get("permissions").trustedExternalRoots, [
+      "/shared/logs",
+    ]);
     assert.strictEqual(service.get("usageTracking").enabled, true);
     assert.strictEqual(
       service.get("usageTracking").providerRefreshEnabled,
@@ -406,8 +406,8 @@ suite("CtrlYokeConfigService", () => {
       undefined
     );
     assert.strictEqual(
-      service.getScoped("permissions", "workspace")?.statusLineTracking,
-      undefined
+      service.getLeafSources()["statusLine.byHarness.antigravity-cli"],
+      "user"
     );
     assert.strictEqual(service.resolve("permissions").source, "workspace");
     assert.strictEqual(
@@ -415,7 +415,7 @@ suite("CtrlYokeConfigService", () => {
       "user"
     );
     assert.strictEqual(
-      service.getLeafSources()["permissions.statusLineTracking.antigravity"],
+      service.getLeafSources()["statusLine.byHarness.antigravity-cli"],
       "user"
     );
   });
@@ -463,14 +463,14 @@ suite("FileConfigBackend", () => {
       configPath,
       JSON.stringify({
         defaults: { harness: "claude-cli" },
-        enableDiagnosticLogs: true,
+        diagnostics: { verboseLogging: true },
       }),
       "utf-8"
     );
     const backend = new FileConfigBackend(configPath);
     const result = backend.getAll();
     assert.strictEqual(result.defaults?.harness, "claude-cli");
-    assert.strictEqual(result.enableDiagnosticLogs, true);
+    assert.strictEqual(result.diagnostics?.verboseLogging, true);
   });
 
   test("getAll() returns {} on invalid JSON", () => {
@@ -508,7 +508,7 @@ suite("FileConfigBackend", () => {
       configPath,
       JSON.stringify({
         defaults: { executionMode: "interactive", harness: "copilot-cli" },
-        execution: { scriptTimeout: 60 },
+        execution: { scriptTimeoutSec: 60 },
       }),
       "utf-8"
     );
@@ -517,7 +517,7 @@ suite("FileConfigBackend", () => {
     const content = JSON.parse(fs.readFileSync(configPath, "utf-8"));
     assert.strictEqual(content.defaults.executionMode, "headless");
     assert.strictEqual(content.defaults.harness, "copilot-cli");
-    assert.strictEqual(content.execution.scriptTimeout, 60);
+    assert.strictEqual(content.execution.scriptTimeoutSec, 60);
   });
 
   test("set() with undefined removes the key", async () => {
@@ -526,15 +526,15 @@ suite("FileConfigBackend", () => {
       configPath,
       JSON.stringify({
         defaults: { harness: "claude-cli" },
-        enableDiagnosticLogs: true,
+        diagnostics: { verboseLogging: true },
       }),
       "utf-8"
     );
     const backend = new FileConfigBackend(configPath);
-    await backend.set("enableDiagnosticLogs", undefined);
+    await backend.set("diagnostics.verboseLogging", undefined);
     const content = JSON.parse(fs.readFileSync(configPath, "utf-8"));
     assert.ok(
-      !("enableDiagnosticLogs" in content),
+      !("verboseLogging" in content.diagnostics),
       "key should be deleted when value is undefined"
     );
   });

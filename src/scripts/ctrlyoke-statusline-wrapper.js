@@ -52,6 +52,13 @@ const STATUSLINE_PROVIDERS = Object.freeze({
   QWEN: "qwen",
 });
 
+const STATUSLINE_HARNESS_IDS = Object.freeze({
+  [STATUSLINE_PROVIDERS.CLAUDE]: "claude-cli",
+  [STATUSLINE_PROVIDERS.ANTIGRAVITY]: "antigravity-cli",
+  [STATUSLINE_PROVIDERS.COPILOT]: "copilot-cli",
+  [STATUSLINE_PROVIDERS.QWEN]: "qwen-cli",
+});
+
 const DEFAULT_STATUSLINE_SETTINGS = Object.freeze({
   enabled: true,
   customCommand: "",
@@ -143,16 +150,14 @@ function resolveStatusLineSettings(
           getStatusLineWorkspaceDirectory(context.payload)
         );
   const settings = userSettings;
-  const permissions = settings.permissions;
+  const statusLine = settings.statusLine;
   const tracking =
-    permissions &&
-    typeof permissions === "object" &&
-    !Array.isArray(permissions)
-      ? permissions.statusLineTracking
+    statusLine && typeof statusLine === "object" && !Array.isArray(statusLine)
+      ? statusLine
       : undefined;
   const configured =
     tracking && typeof tracking === "object" && !Array.isArray(tracking)
-      ? tracking[provider]
+      ? tracking.byHarness?.[STATUSLINE_HARNESS_IDS[provider]]
       : undefined;
   const userUsageTracking = settings.usageTracking;
   const workspaceUsageTracking = workspaceSettings.usageTracking;
@@ -517,6 +522,7 @@ module.exports = {
   CONTEXT_THRESHOLDS,
   FORWARD_TIMEOUT_MS,
   STATUSLINE_PROVIDERS,
+  STATUSLINE_HARNESS_IDS,
   DEFAULT_STATUSLINE_SETTINGS,
   asFiniteNumber,
   buildSnapshotPayload,

@@ -912,7 +912,7 @@ definitions:
       timeoutSec:
         type: number
         exclusiveMinimum: 0
-        description: Timeout in seconds. When omitted, the `execution.scriptTimeout` setting applies.
+        description: Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.
       shell:
         type: string
         description: >-

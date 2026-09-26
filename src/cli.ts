@@ -717,10 +717,10 @@ async function runCommand(
   if (options.timeout !== undefined || options.scriptTimeout !== undefined) {
     overlay.execution = {
       ...(options.timeout !== undefined && {
-        maxPromptTimeout: options.timeout,
+        maxPromptTimeoutSec: options.timeout,
       }),
       ...(options.scriptTimeout !== undefined && {
-        scriptTimeout: options.scriptTimeout,
+        scriptTimeoutSec: options.scriptTimeout,
       }),
     };
   }

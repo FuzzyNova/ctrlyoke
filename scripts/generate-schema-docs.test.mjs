@@ -35,7 +35,7 @@ test("every settings leaf is documented with its compiled default", () => {
   const settings = pageEndingWith(result, "settings");
   assert.match(
     settings,
-    /### `execution\.scriptTimeout` \{#execution-scripttimeout\}/
+    /### `execution\.scriptTimeoutSec` \{#execution-scripttimeoutsec\}/
   );
   assert.match(settings, /\*\*Default:\*\* `3600`/);
   assert.match(

@@ -9,41 +9,40 @@ import {
   MESSAGE_TYPES,
   SETTING_PATHS,
   SETTING_SCOPES,
-  STATUS_LINE_TRACKING_PROVIDERS,
+  STATUS_LINE_HARNESS_IDS,
 } from "@root/types/DashboardConstants";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
-import type { StatusLineTrackingSettings } from "@root/types/CtrlYokeSettings";
+import type { StatusLineHarnessSettings } from "@root/types/CtrlYokeSettings";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
-import type { StatusLineTrackingHarnessId } from "@root/types/DashboardConstants";
+import type { StatusLineHarnessId } from "@root/types/DashboardConstants";
 import {
   DEFAULT_STATUS_LINE_FORMAT,
   STATUS_LINE_FIELD_IDS,
 } from "@root/utils/StatuslineFormat";
 
 function makeSettings(
-  harnessId: StatusLineTrackingHarnessId,
-  overrides: Partial<StatusLineTrackingSettings> = {}
+  harnessId: StatusLineHarnessId,
+  overrides: Partial<StatusLineHarnessSettings> = {}
 ): FullGlobalSettings {
   const provider =
     harnessId === HARNESS_IDS.CLAUDE_CLI
-      ? STATUS_LINE_TRACKING_PROVIDERS.CLAUDE
+      ? STATUS_LINE_HARNESS_IDS.CLAUDE
       : harnessId === HARNESS_IDS.ANTIGRAVITY_CLI
-        ? STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+        ? STATUS_LINE_HARNESS_IDS.ANTIGRAVITY
         : harnessId === HARNESS_IDS.COPILOT_CLI
-          ? STATUS_LINE_TRACKING_PROVIDERS.COPILOT
-          : STATUS_LINE_TRACKING_PROVIDERS.QWEN;
+          ? STATUS_LINE_HARNESS_IDS.COPILOT
+          : STATUS_LINE_HARNESS_IDS.QWEN;
   return {
     settings: {
       ...CTRLYOKE_SETTINGS_DEFAULTS,
-      permissions: {
-        ...CTRLYOKE_SETTINGS_DEFAULTS.permissions,
-        statusLineTracking: {
-          ...CTRLYOKE_SETTINGS_DEFAULTS.permissions.statusLineTracking,
-          useDifferentFormatPerHarness: true,
+      permissions: { ...CTRLYOKE_SETTINGS_DEFAULTS.permissions },
+      statusLine: {
+        ...CTRLYOKE_SETTINGS_DEFAULTS.statusLine,
+        useDifferentFormatPerHarness: true,
+        byHarness: {
+          ...CTRLYOKE_SETTINGS_DEFAULTS.statusLine.byHarness,
           [provider]: {
-            ...CTRLYOKE_SETTINGS_DEFAULTS.permissions.statusLineTracking[
-              provider
-            ],
+            ...CTRLYOKE_SETTINGS_DEFAULTS.statusLine.byHarness[provider],
             ...overrides,
           },
         },
@@ -120,7 +119,7 @@ describe("StatusLineTrackingControls", () => {
 
     expect(getVsCodeApi().postMessage).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
-      path: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_ENABLED,
+      path: SETTING_PATHS.STATUS_LINE_CLAUDE_ENABLED,
       value: true,
       scope: SETTING_SCOPES.USER,
     });
@@ -157,13 +156,13 @@ describe("StatusLineTrackingControls", () => {
 
     expect(getVsCodeApi().postMessage).toHaveBeenNthCalledWith(1, {
       type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
-      path: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_CUSTOM_COMMAND,
+      path: SETTING_PATHS.STATUS_LINE_ANTIGRAVITY_CUSTOM_COMMAND,
       value: "node agy-line.js --compact",
       scope: SETTING_SCOPES.USER,
     });
     expect(getVsCodeApi().postMessage).toHaveBeenNthCalledWith(2, {
       type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
-      path: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_USE_CTRLYOKE_STYLE,
+      path: SETTING_PATHS.STATUS_LINE_ANTIGRAVITY_USE_CTRLYOKE_STYLE,
       value: true,
       scope: SETTING_SCOPES.USER,
     });
@@ -219,9 +218,7 @@ describe("StatusLineTrackingControls", () => {
         <StatusLineTrackingControls
           harnessId={HARNESS_IDS.CLAUDE_CLI}
           settings={settings}
-          sharedDraft={
-            settings.settings.permissions.statusLineTracking.sharedFormat
-          }
+          sharedDraft={settings.settings.statusLine.sharedFormat}
           useDifferentFormatPerHarness={useDifferentFormatPerHarness}
         />
       );
@@ -251,7 +248,7 @@ describe("StatusLineTrackingControls", () => {
     expect(getVsCodeApi().postMessage).toHaveBeenCalledTimes(1);
     expect(getVsCodeApi().postMessage).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
-      path: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_FORMAT,
+      path: SETTING_PATHS.STATUS_LINE_CLAUDE_FORMAT,
       value: [
         ...DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
         { type: "field", field: STATUS_LINE_FIELD_IDS.VERSION },

@@ -307,38 +307,6 @@
           "description": "Approval policy for Codex CLI tool calls.",
           "default": "on-request"
         },
-        "statusLineTracking": {
-          "type": "object",
-          "description": "Machine-only settings for providers that install a global statusline command.",
-          "additionalProperties": false,
-          "properties": {
-            "useDifferentFormatPerHarness": {
-              "type": "boolean",
-              "default": false,
-              "description": "Configure each harness's statusline format independently. When false (the default), every harness renders 'sharedFormat' and the per-harness 'format' values are left untouched but unused."
-            },
-            "sharedFormat": {
-              "description": "Statusline format every harness renders while 'useDifferentFormatPerHarness' is false.",
-              "$ref": "#/definitions/statusLineFormat"
-            },
-            "claude": {
-              "description": "Statusline settings for Claude CLI.",
-              "$ref": "#/definitions/statusLineTrackingSettings"
-            },
-            "antigravity": {
-              "description": "Statusline settings for Antigravity CLI.",
-              "$ref": "#/definitions/statusLineTrackingSettings"
-            },
-            "copilot": {
-              "description": "Statusline settings for Copilot CLI.",
-              "$ref": "#/definitions/statusLineTrackingSettings"
-            },
-            "qwen": {
-              "description": "Statusline settings for Qwen Code.",
-              "$ref": "#/definitions/statusLineTrackingSettings"
-            }
-          }
-        },
         "trustedExternalRoots": {
           "type": "array",
           "items": {
@@ -436,17 +404,6 @@
           "description": "When true, keeps the TUI alive between prompts and writes follow-up prompts directly into the PTY. Faster than restarting and avoids the Claude Code resume cache bug.",
           "default": true
         },
-        "maxPromptTimeout": {
-          "type": "integer",
-          "minimum": -1,
-          "description": "Maximum time in seconds to wait for a prompt to complete. Use -1 for unlimited.",
-          "default": -1
-        },
-        "scriptTimeout": {
-          "type": "number",
-          "description": "Maximum time in seconds for pre-condition, end-condition, and script-step scripts to run. A script's own `timeoutSec` (in seconds) overrides it.",
-          "default": 3600
-        },
         "closeTerminalOnComplete": {
           "type": "boolean",
           "description": "Automatically close the terminal when execution completes.",
@@ -462,6 +419,23 @@
           "enum": ["warn", "fail"],
           "default": "warn",
           "description": "How to handle a declared reference that fails to resolve: a missing/invalid secret (!NAME), an unknown skill (/skill:) or MCP server (/mcp:), an unresolved @file/#selection/#sym reference, or an unresolved ~diff/~staged/~stash/~<hash> git reference. 'warn' (default) reports a diagnostic and lets the step run anyway. 'fail' stops the step before the harness spawns, naming the unresolved reference."
+        },
+        "maxPromptTimeoutSec": {
+          "type": "integer",
+          "minimum": -1,
+          "description": "Maximum time in seconds to wait for a prompt to complete. Use -1 for unlimited.",
+          "default": -1
+        },
+        "scriptTimeoutSec": {
+          "type": "number",
+          "description": "Maximum time in seconds for pre-condition, end-condition, and script-step scripts to run. A script's own `timeoutSec` (in seconds) overrides it.",
+          "default": 3600
+        },
+        "ctrlyokeMcpMode": {
+          "type": "string",
+          "enum": ["native", "skill"],
+          "description": "Whether ctrlyoke's own MCP server is attached natively or replaced with the built-in MCP tools skill. Only affects ctrlyoke's server, not other MCP servers configured in a workflow.",
+          "default": "native"
         }
       }
     },
@@ -481,12 +455,6 @@
           "default": 6,
           "description": "Maximum number of active members in a parallel step group."
         },
-        "maxWorkflowExecutionTime": {
-          "type": "integer",
-          "minimum": -1,
-          "description": "Maximum total execution time in seconds for a workflow. Use -1 for unlimited.",
-          "default": -1
-        },
         "unlimitedMode": {
           "type": "boolean",
           "description": "Disable queue size and time limits.",
@@ -496,6 +464,12 @@
           "type": "boolean",
           "description": "Show a notification when the queue is extended.",
           "default": true
+        },
+        "maxWorkflowExecutionTimeSec": {
+          "type": "integer",
+          "minimum": -1,
+          "description": "Maximum total execution time in seconds for a workflow. Use -1 for unlimited.",
+          "default": -1
         }
       }
     },
@@ -661,11 +635,6 @@
           "description": "Show the CLI command being executed.",
           "default": true
         },
-        "logRawCliOutput": {
-          "type": "boolean",
-          "description": "Log raw CLI output to the extension output channel.",
-          "default": false
-        },
         "showHeadlessPermissionWarning": {
           "type": "boolean",
           "description": "Show a warning when headless execution uses limited tool permissions.",
@@ -756,7 +725,6 @@
           "properties": {
             "byHarness": {
               "type": "object",
-              "description": "Optional hex color overrides for each harness. Remove an override to follow the built-in theme-aware chart color.",
               "additionalProperties": false,
               "properties": {
                 "copilot-cli": {
@@ -783,7 +751,8 @@
                   "type": "string",
                   "pattern": "^#[0-9a-fA-F]{6}$"
                 }
-              }
+              },
+              "description": "Optional hex color overrides for each harness. Remove an override to follow the built-in theme-aware chart color."
             },
             "script": {
               "type": "string",
@@ -1024,16 +993,61 @@
         }
       }
     },
-    "ctrlyokeMcpMode": {
-      "type": "string",
-      "enum": ["native", "skill"],
-      "description": "Whether ctrlyoke's own MCP server is attached natively or replaced with the built-in MCP tools skill. Only affects ctrlyoke's server, not other MCP servers configured in a workflow.",
-      "default": "native"
+    "statusLine": {
+      "type": "object",
+      "description": "Machine-only settings for providers that install a global statusline command.",
+      "additionalProperties": false,
+      "properties": {
+        "useDifferentFormatPerHarness": {
+          "type": "boolean",
+          "default": false,
+          "description": "Configure each harness's statusline format independently. When false (the default), every harness renders 'sharedFormat' and the per-harness 'format' values are left untouched but unused."
+        },
+        "sharedFormat": {
+          "description": "Statusline format every harness renders while 'useDifferentFormatPerHarness' is false.",
+          "$ref": "#/definitions/statusLineFormat"
+        },
+        "byHarness": {
+          "description": "Statusline configuration keyed by ctrlyoke harness ID.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "claude-cli": {
+              "description": "Statusline settings for Claude CLI.",
+              "$ref": "#/definitions/statusLineSettings"
+            },
+            "copilot-cli": {
+              "description": "Statusline settings for Copilot CLI.",
+              "$ref": "#/definitions/statusLineSettings"
+            },
+            "qwen-cli": {
+              "description": "Statusline settings for Qwen Code.",
+              "$ref": "#/definitions/statusLineSettings"
+            },
+            "antigravity-cli": {
+              "description": "Statusline settings for Antigravity CLI.",
+              "$ref": "#/definitions/statusLineSettings"
+            }
+          }
+        }
+      }
     },
-    "enableDiagnosticLogs": {
-      "type": "boolean",
-      "description": "Enable verbose diagnostic logging for troubleshooting.",
-      "default": false
+    "diagnostics": {
+      "type": "object",
+      "description": "Logging and diagnostic output settings.",
+      "additionalProperties": false,
+      "properties": {
+        "verboseLogging": {
+          "type": "boolean",
+          "description": "Enable verbose diagnostic logging for troubleshooting.",
+          "default": false
+        },
+        "logRawCliOutput": {
+          "type": "boolean",
+          "description": "Log raw CLI output to the extension output channel.",
+          "default": false
+        }
+      }
     }
   },
   "definitions": {
@@ -1118,7 +1132,7 @@
         ]
       }
     },
-    "statusLineTrackingSettings": {
+    "statusLineSettings": {
       "description": "Statusline settings for one harness.",
       "type": "object",
       "additionalProperties": false,

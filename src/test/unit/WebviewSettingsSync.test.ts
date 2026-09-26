@@ -14,13 +14,12 @@ import {
   CTRLYOKE_DIR,
   MESSAGE_TYPES,
   HARNESS_IDS,
-  STATUS_LINE_TRACKING_PROVIDERS,
+  STATUS_LINE_HARNESS_IDS,
   PROMPT_PROPERTIES,
   PERMISSION_MODES,
   PANEL_CLIENT_ID,
   type SettingWriteScope,
-  type StatusLineTrackingProvider,
-  type StatusLineTrackingHarnessId,
+  type StatusLineHarnessId,
   WORKFLOW_VIEW_ADDRESS_KIND,
   TRUST_DECISIONS,
 } from "../../types/DashboardConstants";
@@ -38,7 +37,7 @@ import {
   CONFIG_KEYS,
 } from "../../utils/ConfigurationUtils";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
-import type { StatusLineTrackingSettings } from "../../types/CtrlYokeSettings";
+import type { StatusLineHarnessSettings } from "../../types/CtrlYokeSettings";
 import { DEFAULT_STATUS_LINE_FORMAT } from "../../utils/StatuslineFormat";
 import {
   StatuslineManager,
@@ -108,9 +107,9 @@ suite("WebviewSettingsSync", () => {
         restoreCustomCommand: boolean;
       }> = [];
 
-      constructor(readonly settings: StatusLineTrackingSettings) {}
+      constructor(readonly settings: StatusLineHarnessSettings) {}
 
-      getSettings(): StatusLineTrackingSettings {
+      getSettings(): StatusLineHarnessSettings {
         return this.settings;
       }
 
@@ -123,9 +122,7 @@ suite("WebviewSettingsSync", () => {
     }
 
     function makeSync(
-      managers: Partial<
-        Record<StatusLineTrackingHarnessId, FakeStatuslineManager>
-      >,
+      managers: Partial<Record<StatusLineHarnessId, FakeStatuslineManager>>,
       messages: unknown[],
       feedback: unknown[] = []
     ): WebviewSettingsSync {
@@ -192,7 +189,7 @@ suite("WebviewSettingsSync", () => {
           assert.deepStrictEqual(messages, [
             {
               type: MESSAGE_TYPES.GLOBAL_SETTING_UPDATED,
-              path: `${CONFIG_KEYS.PERMISSIONS_STATUS_LINE_TRACKING}.${StatuslineManager.providerForHarness(harnessId)}`,
+              path: `${CONFIG_KEYS.STATUS_LINE}.byHarness.${StatuslineManager.providerForHarness(harnessId)}`,
               value: {
                 enabled: false,
                 customCommand: "node user-statusline.js",
@@ -215,7 +212,7 @@ suite("WebviewSettingsSync", () => {
         })),
         [
           {
-            key: `${CONFIG_KEYS.PERMISSIONS_STATUS_LINE_TRACKING}.claude`,
+            key: `${CONFIG_KEYS.STATUS_LINE}.byHarness.claude-cli`,
             value: {
               enabled: false,
               customCommand: "node user-statusline.js",
@@ -225,7 +222,7 @@ suite("WebviewSettingsSync", () => {
             scope: "user",
           },
           {
-            key: `${CONFIG_KEYS.PERMISSIONS_STATUS_LINE_TRACKING}.antigravity`,
+            key: `${CONFIG_KEYS.STATUS_LINE}.byHarness.antigravity-cli`,
             value: {
               enabled: false,
               customCommand: "node user-statusline.js",
@@ -389,25 +386,25 @@ suite("WebviewSettingsSync", () => {
       }));
       customizedFormat[0] = { type: "literal", text: "customized" };
       const providerSettings = {
-        [STATUS_LINE_TRACKING_PROVIDERS.CLAUDE]: {
+        [STATUS_LINE_HARNESS_IDS.CLAUDE]: {
           enabled: true,
           customCommand: "",
           useCtrlyokeStyle: true,
           format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
         },
-        [STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY]: {
+        [STATUS_LINE_HARNESS_IDS.ANTIGRAVITY]: {
           enabled: true,
           customCommand: "",
           useCtrlyokeStyle: true,
           format: customizedFormat,
         },
-        [STATUS_LINE_TRACKING_PROVIDERS.COPILOT]: {
+        [STATUS_LINE_HARNESS_IDS.COPILOT]: {
           enabled: true,
           customCommand: "",
           useCtrlyokeStyle: true,
           format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
         },
-        [STATUS_LINE_TRACKING_PROVIDERS.QWEN]: {
+        [STATUS_LINE_HARNESS_IDS.QWEN]: {
           enabled: true,
           customCommand: "",
           useCtrlyokeStyle: true,
@@ -416,30 +413,30 @@ suite("WebviewSettingsSync", () => {
       };
       const modeWrites: boolean[] = [];
       const providerWrites: Array<{
-        provider: StatusLineTrackingProvider;
-        format: StatusLineTrackingSettings["format"];
+        provider: StatusLineHarnessId;
+        format: StatusLineHarnessSettings["format"];
       }> = [];
       const originals = {
         isUseDifferentFormatPerHarness:
           ConfigurationUtils.isUseDifferentFormatPerHarness,
         getSharedStatusLineFormat: ConfigurationUtils.getSharedStatusLineFormat,
-        getStatusLineTrackingSettings:
-          ConfigurationUtils.getStatusLineTrackingSettings,
+        getStatusLineHarnessSettings:
+          ConfigurationUtils.getStatusLineHarnessSettings,
         setUseDifferentFormatPerHarness:
           ConfigurationUtils.setUseDifferentFormatPerHarness,
-        setStatusLineTrackingSettings:
-          ConfigurationUtils.setStatusLineTrackingSettings,
+        setStatusLineHarnessSettings:
+          ConfigurationUtils.setStatusLineHarnessSettings,
       };
 
       try {
         ConfigurationUtils.isUseDifferentFormatPerHarness = () => false;
         ConfigurationUtils.getSharedStatusLineFormat = () => sharedFormat;
-        ConfigurationUtils.getStatusLineTrackingSettings = (provider) =>
+        ConfigurationUtils.getStatusLineHarnessSettings = (provider) =>
           providerSettings[provider];
         ConfigurationUtils.setUseDifferentFormatPerHarness = async (value) => {
           modeWrites.push(value);
         };
-        ConfigurationUtils.setStatusLineTrackingSettings = async (
+        ConfigurationUtils.setStatusLineHarnessSettings = async (
           provider,
           settings
         ) => {
@@ -462,15 +459,15 @@ suite("WebviewSettingsSync", () => {
       assert.deepStrictEqual(
         providerWrites.map(({ provider }) => provider),
         [
-          STATUS_LINE_TRACKING_PROVIDERS.CLAUDE,
-          STATUS_LINE_TRACKING_PROVIDERS.COPILOT,
-          STATUS_LINE_TRACKING_PROVIDERS.QWEN,
+          STATUS_LINE_HARNESS_IDS.CLAUDE,
+          STATUS_LINE_HARNESS_IDS.COPILOT,
+          STATUS_LINE_HARNESS_IDS.QWEN,
         ]
       );
       assert.deepStrictEqual(providerWrites[0].format, sharedFormat);
       assert.strictEqual(
         JSON.stringify(
-          providerSettings[STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY].format
+          providerSettings[STATUS_LINE_HARNESS_IDS.ANTIGRAVITY].format
         ),
         JSON.stringify(customizedFormat)
       );
@@ -480,30 +477,30 @@ suite("WebviewSettingsSync", () => {
       const sharedFormat = DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({
         ...segment,
       }));
-      const providerWrites: StatusLineTrackingSettings["format"][] = [];
+      const providerWrites: StatusLineHarnessSettings["format"][] = [];
       const originals = {
         isUseDifferentFormatPerHarness:
           ConfigurationUtils.isUseDifferentFormatPerHarness,
         getSharedStatusLineFormat: ConfigurationUtils.getSharedStatusLineFormat,
-        getStatusLineTrackingSettings:
-          ConfigurationUtils.getStatusLineTrackingSettings,
+        getStatusLineHarnessSettings:
+          ConfigurationUtils.getStatusLineHarnessSettings,
         setUseDifferentFormatPerHarness:
           ConfigurationUtils.setUseDifferentFormatPerHarness,
-        setStatusLineTrackingSettings:
-          ConfigurationUtils.setStatusLineTrackingSettings,
+        setStatusLineHarnessSettings:
+          ConfigurationUtils.setStatusLineHarnessSettings,
       };
 
       try {
         ConfigurationUtils.isUseDifferentFormatPerHarness = () => false;
         ConfigurationUtils.getSharedStatusLineFormat = () => sharedFormat;
-        ConfigurationUtils.getStatusLineTrackingSettings = () => ({
+        ConfigurationUtils.getStatusLineHarnessSettings = () => ({
           enabled: true,
           customCommand: "",
           useCtrlyokeStyle: true,
           format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
         });
         ConfigurationUtils.setUseDifferentFormatPerHarness = async () => {};
-        ConfigurationUtils.setStatusLineTrackingSettings = async (
+        ConfigurationUtils.setStatusLineHarnessSettings = async (
           _provider,
           settings
         ) => {
@@ -534,8 +531,8 @@ suite("WebviewSettingsSync", () => {
         isUseDifferentFormatPerHarness:
           ConfigurationUtils.isUseDifferentFormatPerHarness,
         getSharedStatusLineFormat: ConfigurationUtils.getSharedStatusLineFormat,
-        getStatusLineTrackingSettings:
-          ConfigurationUtils.getStatusLineTrackingSettings,
+        getStatusLineHarnessSettings:
+          ConfigurationUtils.getStatusLineHarnessSettings,
         setUseDifferentFormatPerHarness:
           ConfigurationUtils.setUseDifferentFormatPerHarness,
       };
@@ -545,7 +542,7 @@ suite("WebviewSettingsSync", () => {
         ConfigurationUtils.getSharedStatusLineFormat = () => {
           throw new Error("shared format should not be read");
         };
-        ConfigurationUtils.getStatusLineTrackingSettings = () => {
+        ConfigurationUtils.getStatusLineHarnessSettings = () => {
           throw new Error("provider settings should not be read");
         };
         ConfigurationUtils.setUseDifferentFormatPerHarness = async (value) => {

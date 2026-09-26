@@ -59,4 +59,4 @@ mcpServers:
 
 ## Skill mode
 
-The `ctrlyokeMcpMode` setting controls how the tools reach the harness. `native` (the default) attaches the MCP server. `skill` attaches built-in skills (`ctrlyoke-mcp-tools` and `ctrlyoke-coordination-tools`) instead, which tell the harness how to call the same tools as one-shot shell commands (the [`ctrlyoke-mcp`](/cli/ctrlyoke-mcp) script's `--tool` mode). Use it when MCP servers are blocked or unavailable in your environment (for example by an organization policy). Commit-message generation follows the same setting. Denied tools are left out of the skills.
+The `execution.ctrlyokeMcpMode` setting controls how the tools reach the harness. `native` (the default) attaches the MCP server. `skill` attaches built-in skills (`ctrlyoke-mcp-tools` and `ctrlyoke-coordination-tools`) instead, which tell the harness how to call the same tools as one-shot shell commands (the [`ctrlyoke-mcp`](/cli/ctrlyoke-mcp) script's `--tool` mode). Use it when MCP servers are blocked or unavailable in your environment (for example by an organization policy). Commit-message generation follows the same setting. Denied tools are left out of the skills.

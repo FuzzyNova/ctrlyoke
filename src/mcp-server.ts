@@ -266,7 +266,7 @@ const lineageRepository = new WorkflowLineageRepository();
 
 // Initialize log file only when diagnostic logging is explicitly enabled.
 // CTRLYOKE_DIAGNOSTIC_LOGS=true is passed by the extension when
-// ctrlyoke.enableDiagnosticLogs is on. NODE_ENV=development enables it in dev.
+// ctrlyoke.diagnostics.verboseLogging is on. NODE_ENV=development enables it in dev.
 const workspaceRoot = process.env.CTRLYOKE_WORKSPACE || process.cwd();
 const diagnosticLogsEnabled =
   process.env.CTRLYOKE_DIAGNOSTIC_LOGS === BOOLEAN_STRING_VALUES.TRUE ||

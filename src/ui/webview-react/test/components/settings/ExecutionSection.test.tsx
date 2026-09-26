@@ -27,7 +27,7 @@ describe("ExecutionSection", () => {
     expect(screen.queryByText("Execution mode")).not.toBeInTheDocument();
     expect(
       screen.getByLabelText(
-        /^Max prompt timeout \(seconds, -1 = unlimited\), property execution\.maxPromptTimeout$/
+        /^Max prompt timeout \(seconds, -1 = unlimited\), property execution\.maxPromptTimeoutSec$/
       )
     ).toBeInTheDocument();
     expect(

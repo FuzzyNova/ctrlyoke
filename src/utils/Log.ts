@@ -125,7 +125,7 @@ export class Log {
   /**
    * Initialize logging. In dev builds, automatically uses TRACE level and writes
    * log files unconditionally. In production builds, reads from VS Code's log level
-   * setting and only writes log files when `ctrlyoke.enableDiagnosticLogs` is true.
+   * setting and only writes log files when `diagnostics.verboseLogging` is true.
    *
    * @param workspaceRoot Resolved workspace root (where `.ctrlyoke` lives), or
    *   `undefined` when no folder is open. Passed in by the extension entry point
@@ -179,7 +179,7 @@ export class Log {
       // React to setting changes at runtime
       context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration((e) => {
-          if (e.affectsConfiguration("ctrlyoke.enableDiagnosticLogs")) {
+          if (e.affectsConfiguration("ctrlyoke.diagnostics.verboseLogging")) {
             const enabled = ConfigurationUtils.isDiagnosticLogsEnabled();
             if (enabled && !this.logFilePath) {
               this.openLogFile();

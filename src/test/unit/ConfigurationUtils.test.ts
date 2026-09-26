@@ -10,7 +10,7 @@ import {
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
 import {
   PERMISSION_MODES,
-  STATUS_LINE_TRACKING_PROVIDERS,
+  STATUS_LINE_HARNESS_IDS,
 } from "../../types/DashboardConstants";
 import { ExternalRootsTrustStore } from "../../config/ExternalRootsTrustStore";
 
@@ -404,8 +404,8 @@ suite("ConfigurationUtils — statusline tracking", () => {
     configService.setWorkspaceBackend(makeBackend({}));
 
     assert.strictEqual(
-      ConfigurationUtils.getStatusLineTrackingSettings(
-        STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+      ConfigurationUtils.getStatusLineHarnessSettings(
+        STATUS_LINE_HARNESS_IDS.ANTIGRAVITY
       ).enabled,
       true
     );
@@ -414,9 +414,10 @@ suite("ConfigurationUtils — statusline tracking", () => {
   test("reads the effective value from the config hierarchy", () => {
     configService.setUserBackend(
       makeBackend({
-        permissions: {
-          statusLineTracking: {
-            antigravity: {
+        permissions: {},
+        statusLine: {
+          byHarness: {
+            "antigravity-cli": {
               enabled: false,
               customCommand: "",
               useCtrlyokeStyle: true,
@@ -427,17 +428,18 @@ suite("ConfigurationUtils — statusline tracking", () => {
     );
     configService.setWorkspaceBackend(makeBackend({}));
     assert.strictEqual(
-      ConfigurationUtils.getStatusLineTrackingSettings(
-        STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+      ConfigurationUtils.getStatusLineHarnessSettings(
+        STATUS_LINE_HARNESS_IDS.ANTIGRAVITY
       ).enabled,
       false
     );
 
     configService.setWorkspaceBackend(
       makeBackend({
-        permissions: {
-          statusLineTracking: {
-            antigravity: {
+        permissions: {},
+        statusLine: {
+          byHarness: {
+            "antigravity-cli": {
               enabled: true,
               customCommand: "",
               useCtrlyokeStyle: true,
@@ -447,8 +449,8 @@ suite("ConfigurationUtils — statusline tracking", () => {
       })
     );
     assert.strictEqual(
-      ConfigurationUtils.getStatusLineTrackingSettings(
-        STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+      ConfigurationUtils.getStatusLineHarnessSettings(
+        STATUS_LINE_HARNESS_IDS.ANTIGRAVITY
       ).enabled,
       false
     );

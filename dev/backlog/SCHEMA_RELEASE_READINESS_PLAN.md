@@ -32,7 +32,7 @@
 | 2   | Publish schemas at `https://ctrlyoke.dev/schema/v1/…`, allow `$schema` | **Yes** (user)                              | 3    | E     |
 | 3   | All durations in seconds, with a `Sec` suffix                          | Done 2026-09-26                             | 4    | B     |
 | 4   | Strict prompt steps / workflow root                                    | Recommended; draft 2020-12, verified        | 5    | D     |
-| 5   | Top-level `statusLine` keyed by harness ID; new `diagnostics` group    | **Yes** (user)                              | 6    | B     |
+| 5   | Top-level `statusLine` keyed by harness ID; new `diagnostics` group    | Done 2026-09-26                             | 6    | B     |
 | 6   | Single-source lineage metadata in `workflow.json`                      | **Yes** (user)                              | 7    | C     |
 | 7   | Constrain `vars` key names                                             | Done 2026-09-26                             | 8.1  | A     |
 | 8   | `mcpServerConfig`: exactly one of `command`/`url`                      | Done 2026-09-26                             | 8.2  | A     |
@@ -231,6 +231,9 @@ the host that last wrote settings. Any settings migration must:
 
 §6 changes this very path pre-release. That is exactly the rename that would need a migration
 after release, and it is the worked example to reuse when writing the first real one.
+
+The migration must move the object to the root, rename its four provider keys to harness IDs
+under `byHarness`, and preserve the existing script filenames in harness configuration.
 
 ### 2.6 Published schemas per version
 

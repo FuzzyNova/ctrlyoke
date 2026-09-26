@@ -63,14 +63,14 @@ export function QueueSection({
       <SettingInputRow
         label="Max workflow execution time (seconds, -1 = unlimited)"
         id="queue-max-execution-time"
-        path="queue.maxWorkflowExecutionTime"
+        path="queue.maxWorkflowExecutionTimeSec"
         {...rowProps}
       >
         <LocalNumberInput
           id="queue-max-execution-time"
           min={-1}
-          value={queue.maxWorkflowExecutionTime}
-          onCommit={(v) => onUpdate("queue.maxWorkflowExecutionTime", v)}
+          value={queue.maxWorkflowExecutionTimeSec}
+          onCommit={(v) => onUpdate("queue.maxWorkflowExecutionTimeSec", v)}
           parse={(v) => parseInt(v, 10) || -1}
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />

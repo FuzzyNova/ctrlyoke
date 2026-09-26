@@ -4,7 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
 import { configService } from "../../config/CtrlYokeConfigService";
-import { STATUS_LINE_TRACKING_PROVIDERS } from "../../types/DashboardConstants";
+import { STATUS_LINE_HARNESS_IDS } from "../../types/DashboardConstants";
 import type { ConfigBackend } from "../../config/CtrlYokeConfigService";
 import { AntigravityCliProvider } from "../../core/harness/antigravity/AntigravityCliProvider";
 import { SettingsJsonMcpTracker } from "../../core/harness/shared/SettingsJsonMcpTracker";
@@ -321,9 +321,10 @@ suite("AntigravityCliProvider", () => {
     await fs.writeFile(settingsPath(), JSON.stringify(original));
     configService.setUserBackend(
       makeBackend({
-        permissions: {
-          statusLineTracking: {
-            antigravity: {
+        permissions: {},
+        statusLine: {
+          byHarness: {
+            "antigravity-cli": {
               enabled: false,
               customCommand: "",
               useCtrlyokeStyle: true,
@@ -384,8 +385,8 @@ suite("AntigravityCliProvider", () => {
     ].sort();
     assert.deepStrictEqual(installResults, [false, true]);
     assert.strictEqual(
-      configService.get("permissions").statusLineTracking[
-        STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+      configService.get("statusLine").byHarness[
+        STATUS_LINE_HARNESS_IDS.ANTIGRAVITY
       ].customCommand,
       "node user-statusline.js"
     );
@@ -426,8 +427,8 @@ suite("AntigravityCliProvider", () => {
       alreadyCtrlyoke: true,
     });
     assert.deepStrictEqual(
-      configService.get("permissions").statusLineTracking[
-        STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+      configService.get("statusLine").byHarness[
+        STATUS_LINE_HARNESS_IDS.ANTIGRAVITY
       ],
       {
         enabled: true,
@@ -441,9 +442,10 @@ suite("AntigravityCliProvider", () => {
   test("reports preserved custom output when refreshing an older wrapper", async () => {
     configService.setUserBackend(
       makeBackend({
-        permissions: {
-          statusLineTracking: {
-            antigravity: {
+        permissions: {},
+        statusLine: {
+          byHarness: {
+            "antigravity-cli": {
               enabled: true,
               customCommand: "node user-statusline.js",
               useCtrlyokeStyle: false,
@@ -473,8 +475,8 @@ suite("AntigravityCliProvider", () => {
       alreadyCtrlyoke: true,
     });
     assert.strictEqual(
-      configService.get("permissions").statusLineTracking[
-        STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+      configService.get("statusLine").byHarness[
+        STATUS_LINE_HARNESS_IDS.ANTIGRAVITY
       ].customCommand,
       "node user-statusline.js"
     );
@@ -483,9 +485,10 @@ suite("AntigravityCliProvider", () => {
   test("preserves a live style override when nothing is captured", async () => {
     configService.setUserBackend(
       makeBackend({
-        permissions: {
-          statusLineTracking: {
-            antigravity: {
+        permissions: {},
+        statusLine: {
+          byHarness: {
+            "antigravity-cli": {
               enabled: true,
               customCommand: "",
               useCtrlyokeStyle: false,
@@ -776,9 +779,10 @@ suite("AntigravityCliProvider", () => {
     test("does not consult the snapshot when tracking is disabled", async () => {
       configService.setUserBackend(
         makeBackend({
-          permissions: {
-            statusLineTracking: {
-              antigravity: {
+          permissions: {},
+          statusLine: {
+            byHarness: {
+              "antigravity-cli": {
                 enabled: false,
                 customCommand: "",
                 useCtrlyokeStyle: true,

@@ -12,7 +12,7 @@ import type {
   HarnessColorSettings,
   ModelPricingOverride,
   RunHistoryLocation,
-  StatusLineTrackingSettings,
+  StatusLineHarnessSettings,
   TerminalSettings,
 } from "../types/CtrlYokeSettings";
 import type { PriorContext } from "../types/CtrlYokeTypes";
@@ -26,7 +26,7 @@ import {
   CAPABILITIES_FILE,
   SETTING_PATHS,
   PERMISSION_MODES,
-  type StatusLineTrackingProvider,
+  type StatusLineHarnessId,
   type HarnessId,
   type ContextResolutionFailureMode,
   type PermissionMode,
@@ -79,6 +79,7 @@ export const CONFIG_KEYS = {
   COORDINATION: SETTING_PATHS.COORDINATION,
   STORAGE: SETTING_PATHS.STORAGE,
   PERMISSIONS: "permissions",
+  STATUS_LINE: SETTING_PATHS.STATUS_LINE,
   EXECUTION: "execution",
   QUEUE: "queue",
   RUNS: "runs",
@@ -86,8 +87,7 @@ export const CONFIG_KEYS = {
   UI: "ui",
   SERVER: "server",
   NOTIFICATIONS: "notifications",
-  ENABLE_DIAGNOSTIC_LOGS: "enableDiagnosticLogs",
-  CTRLYOKE_MCP_MODE: "ctrlyokeMcpMode",
+  DIAGNOSTICS: "diagnostics",
   COMMIT: "commit",
 
   // Dot-notation paths (used with configService.set())
@@ -142,8 +142,6 @@ export const CONFIG_KEYS = {
   UI_SHOW_COST_ESTIMATES: SETTING_PATHS.UI_SHOW_COST_ESTIMATES,
   PERMISSIONS_TRUSTED_EXTERNAL_ROOTS:
     SETTING_PATHS.PERMISSIONS_TRUSTED_EXTERNAL_ROOTS,
-  PERMISSIONS_STATUS_LINE_TRACKING:
-    SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING,
   USAGE_TRACKING: "usageTracking",
   USAGE_TRACKING_ENABLED: SETTING_PATHS.USAGE_TRACKING_ENABLED,
   USAGE_TRACKING_PROVIDER_REFRESH_ENABLED:
@@ -299,7 +297,7 @@ export const ConfigurationUtils = {
    * Check if raw CLI output should be logged for debugging
    */
   shouldLogRawCliOutput(): boolean {
-    return configService.get(CONFIG_KEYS.UI).logRawCliOutput;
+    return configService.get(CONFIG_KEYS.DIAGNOSTICS).logRawCliOutput;
   },
 
   /**
@@ -323,7 +321,7 @@ export const ConfigurationUtils = {
    * Dev builds always write log files regardless of this setting.
    */
   isDiagnosticLogsEnabled(): boolean {
-    return configService.get(CONFIG_KEYS.ENABLE_DIAGNOSTIC_LOGS);
+    return configService.get(CONFIG_KEYS.DIAGNOSTICS).verboseLogging;
   },
 
   /**
@@ -350,7 +348,7 @@ export const ConfigurationUtils = {
     return {
       maxQueueSize: queue.maxSize,
       maxParallelSteps: queue.maxParallelSteps,
-      maxWorkflowExecutionTime: queue.maxWorkflowExecutionTime,
+      maxWorkflowExecutionTime: queue.maxWorkflowExecutionTimeSec,
       unlimitedMode: queue.unlimitedMode,
       notifyOnExtension: queue.notifyOnExtension,
     };
@@ -368,7 +366,9 @@ export const ConfigurationUtils = {
    * User configures in seconds, this returns milliseconds
    */
   getScriptTimeoutMs(): number {
-    return secondsToMs(configService.get(CONFIG_KEYS.EXECUTION).scriptTimeout)!;
+    return secondsToMs(
+      configService.get(CONFIG_KEYS.EXECUTION).scriptTimeoutSec
+    )!;
   },
 
   /**
@@ -817,8 +817,8 @@ export const ConfigurationUtils = {
   getMaxPromptExecutionTimeMs(): number | undefined {
     const timeoutSeconds = configService.get(
       CONFIG_KEYS.EXECUTION
-    ).maxPromptTimeout;
-    return timeoutSeconds === -1 ? undefined : timeoutSeconds * 1000;
+    ).maxPromptTimeoutSec;
+    return timeoutSeconds === -1 ? undefined : secondsToMs(timeoutSeconds);
   },
 
   // ============================================================
@@ -907,33 +907,30 @@ export const ConfigurationUtils = {
   },
 
   /** Get the settings for a provider that installs a global statusline command. */
-  getStatusLineTrackingSettings(
-    provider: StatusLineTrackingProvider
-  ): StatusLineTrackingSettings {
-    return configService.get(CONFIG_KEYS.PERMISSIONS).statusLineTracking[
-      provider
-    ];
+  getStatusLineHarnessSettings(
+    provider: StatusLineHarnessId
+  ): StatusLineHarnessSettings {
+    return configService.get(CONFIG_KEYS.STATUS_LINE).byHarness[provider];
   },
 
   /** Get the shared statusline format used when per-harness formats are disabled. */
   getSharedStatusLineFormat(): StatusLineSegment[] {
-    return configService.get(CONFIG_KEYS.PERMISSIONS).statusLineTracking
-      .sharedFormat;
+    return configService.get(CONFIG_KEYS.STATUS_LINE).sharedFormat;
   },
 
   /** Whether statusline formats are configured independently per harness. */
   isUseDifferentFormatPerHarness(): boolean {
-    return configService.get(CONFIG_KEYS.PERMISSIONS).statusLineTracking
+    return configService.get(CONFIG_KEYS.STATUS_LINE)
       .useDifferentFormatPerHarness;
   },
 
   /** Persist one complete machine-scoped statusline provider object. */
-  async setStatusLineTrackingSettings(
-    provider: StatusLineTrackingProvider,
-    settings: StatusLineTrackingSettings
+  async setStatusLineHarnessSettings(
+    provider: StatusLineHarnessId,
+    settings: StatusLineHarnessSettings
   ): Promise<void> {
     await configService.set(
-      `${SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING}.${provider}`,
+      `${SETTING_PATHS.STATUS_LINE}.byHarness.${provider}`,
       settings,
       CONFIG_SCOPE.USER
     );
@@ -942,7 +939,7 @@ export const ConfigurationUtils = {
   /** Persist whether statusline formats are configured independently per harness. */
   async setUseDifferentFormatPerHarness(value: boolean): Promise<void> {
     await configService.set(
-      SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_USE_DIFFERENT_FORMAT_PER_HARNESS,
+      SETTING_PATHS.STATUS_LINE_USE_DIFFERENT_FORMAT_PER_HARNESS,
       value,
       CONFIG_SCOPE.USER
     );
@@ -1259,7 +1256,7 @@ export const ConfigurationUtils = {
 
   /** Get ctrlyoke's own MCP server attachment mode (native server vs. built-in skill). */
   getCtrlYokeMcpMode(): CtrlYokeMcpMode {
-    return configService.get(CONFIG_KEYS.CTRLYOKE_MCP_MODE);
+    return configService.get(CONFIG_KEYS.EXECUTION).ctrlyokeMcpMode;
   },
 
   /**

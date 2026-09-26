@@ -20,11 +20,11 @@ import {
   type CtrlYokeMcpMode,
   CTRLYOKE_MCP_MODES,
   RUN_HISTORY_LOCATIONS,
-  STATUS_LINE_TRACKING_PROVIDERS,
+  STATUS_LINE_HARNESS_IDS,
   STEP_COLOR_MODES,
   TOAST_LEVEL_MODES,
   type StepColorMode,
-  type StatusLineTrackingProvider,
+  type StatusLineHarnessId,
   type ToastLevelMode,
   DEFAULT_MAX_QUEUE_SIZE,
 } from "./DashboardConstants";
@@ -66,7 +66,7 @@ export interface ModelPricingOverride {
 /** Default number of lines shown before a tool result is collapsed. */
 export const DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT = 3;
 
-export interface StatusLineTrackingSettings {
+export interface StatusLineHarnessSettings {
   enabled: boolean;
   /** Empty string = no custom command detected/configured. */
   customCommand: string;
@@ -147,14 +147,6 @@ export interface CtrlYokeGlobalSettings {
     // Codex CLI-specific
     codexSandboxMode: CodexSandboxMode;
     codexApprovalPolicy: CodexApprovalPolicy;
-    /** Settings for providers that install a global statusline command. */
-    statusLineTracking: Record<
-      StatusLineTrackingProvider,
-      StatusLineTrackingSettings
-    > & {
-      useDifferentFormatPerHarness: boolean;
-      sharedFormat: StatusLineSegment[];
-    };
     /**
      * Absolute directory paths outside the workspace that ctrlyoke may read for
      * prompt attachments and open from file links. Workspace files are always
@@ -188,22 +180,29 @@ export interface CtrlYokeGlobalSettings {
     Record<HarnessId, Record<string, ModelPricingOverride>>
   >;
 
+  statusLine: {
+    useDifferentFormatPerHarness: boolean;
+    sharedFormat: StatusLineSegment[];
+    byHarness: Record<StatusLineHarnessId, StatusLineHarnessSettings>;
+  };
+
   // Execution
   execution: {
     /** When true, keep the TUI alive and write follow-up prompts directly into the PTY. */
     injectMode: boolean;
-    maxPromptTimeout: number; // seconds, -1 = unlimited
-    scriptTimeout: number; // seconds
+    maxPromptTimeoutSec: number; // seconds, -1 = unlimited
+    scriptTimeoutSec: number; // seconds
     closeTerminalOnComplete: boolean;
     autoDeleteTempFiles: boolean;
     contextResolutionFailure: ContextResolutionFailureMode;
+    ctrlyokeMcpMode: CtrlYokeMcpMode;
   };
 
   // Queue
   queue: {
     maxSize: number;
     maxParallelSteps: number;
-    maxWorkflowExecutionTime: number; // seconds; -1 = unlimited
+    maxWorkflowExecutionTimeSec: number; // seconds; -1 = unlimited
     unlimitedMode: boolean;
     notifyOnExtension: boolean;
   };
@@ -235,7 +234,6 @@ export interface CtrlYokeGlobalSettings {
   // UI
   ui: {
     showCliCommand: boolean;
-    logRawCliOutput: boolean;
     showHeadlessPermissionWarning: boolean;
     autoFocusOutputOnExecution: boolean;
     openPromptsInSecondGroup: boolean;
@@ -284,6 +282,11 @@ export interface CtrlYokeGlobalSettings {
     harnessColors: HarnessColorSettings;
   };
 
+  diagnostics: {
+    verboseLogging: boolean;
+    logRawCliOutput: boolean;
+  };
+
   // Server (new)
   server: {
     autoStart: boolean;
@@ -318,10 +321,6 @@ export interface CtrlYokeGlobalSettings {
     model: string;
     systemPrompt: string;
   };
-
-  // Advanced
-  ctrlyokeMcpMode: CtrlYokeMcpMode;
-  enableDiagnosticLogs: boolean;
 }
 
 export interface CtrlYokeNotificationSettings {
@@ -462,36 +461,6 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
   permissions: {
     codexSandboxMode: CODEX_SANDBOX_MODES.WORKSPACE_WRITE,
     codexApprovalPolicy: CODEX_APPROVAL_POLICIES.ON_REQUEST,
-    statusLineTracking: {
-      useDifferentFormatPerHarness: false,
-      sharedFormat: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({
-        ...segment,
-      })),
-      [STATUS_LINE_TRACKING_PROVIDERS.CLAUDE]: {
-        enabled: true,
-        customCommand: "",
-        useCtrlyokeStyle: true,
-        format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
-      },
-      [STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY]: {
-        enabled: true,
-        customCommand: "",
-        useCtrlyokeStyle: true,
-        format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
-      },
-      [STATUS_LINE_TRACKING_PROVIDERS.COPILOT]: {
-        enabled: true,
-        customCommand: "",
-        useCtrlyokeStyle: true,
-        format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
-      },
-      [STATUS_LINE_TRACKING_PROVIDERS.QWEN]: {
-        enabled: true,
-        customCommand: "",
-        useCtrlyokeStyle: true,
-        format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
-      },
-    },
     trustedExternalRoots: [],
     heuristicSecretRedactionEnabled: true,
   },
@@ -503,10 +472,41 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     percentDirection: "used",
   },
   modelPricing: {},
+  statusLine: {
+    useDifferentFormatPerHarness: false,
+    sharedFormat: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
+    byHarness: {
+      [STATUS_LINE_HARNESS_IDS.CLAUDE]: {
+        enabled: true,
+        customCommand: "",
+        useCtrlyokeStyle: true,
+        format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
+      },
+      [STATUS_LINE_HARNESS_IDS.ANTIGRAVITY]: {
+        enabled: true,
+        customCommand: "",
+        useCtrlyokeStyle: true,
+        format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
+      },
+      [STATUS_LINE_HARNESS_IDS.COPILOT]: {
+        enabled: true,
+        customCommand: "",
+        useCtrlyokeStyle: true,
+        format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
+      },
+      [STATUS_LINE_HARNESS_IDS.QWEN]: {
+        enabled: true,
+        customCommand: "",
+        useCtrlyokeStyle: true,
+        format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
+      },
+    },
+  },
   execution: {
     injectMode: true,
-    maxPromptTimeout: -1,
-    scriptTimeout: 3600,
+    maxPromptTimeoutSec: -1,
+    scriptTimeoutSec: 3600,
+    ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.NATIVE,
     closeTerminalOnComplete: false,
     autoDeleteTempFiles: true,
     contextResolutionFailure: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
@@ -514,7 +514,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
   queue: {
     maxSize: DEFAULT_MAX_QUEUE_SIZE,
     maxParallelSteps: 6,
-    maxWorkflowExecutionTime: -1,
+    maxWorkflowExecutionTimeSec: -1,
     unlimitedMode: false,
     notifyOnExtension: true,
   },
@@ -542,7 +542,6 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
   },
   ui: {
     showCliCommand: true,
-    logRawCliOutput: false,
     showHeadlessPermissionWarning: true,
     autoFocusOutputOnExecution: true,
     openPromptsInSecondGroup: false,
@@ -623,6 +622,5 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
       "Session state is persisted to localStorage to survive page reloads\n\n" +
       "Only return or submit the commit message, no extra text. Here is the git diff to generate the commit message for:\n",
   },
-  ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.NATIVE,
-  enableDiagnosticLogs: false,
+  diagnostics: { verboseLogging: false, logRawCliOutput: false },
 };

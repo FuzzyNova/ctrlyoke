@@ -382,17 +382,17 @@ export function GeneralSection({
           label="MCP mode"
           description="Controls only ctrlyoke's own MCP server (queue/coordination/commit tools) — never any other MCP servers a workflow configures. Native attaches ctrlyoke's real MCP server. Skill replaces it with the built-in MCP-tools skill instead, for environments where MCP configuration itself is unavailable (e.g. blocked by policy)."
           id="settings-ctrlyoke-mcp-mode"
-          path="ctrlyokeMcpMode"
+          path="execution.ctrlyokeMcpMode"
           {...rowProps}
         >
           <CustomSelect
             id="settings-ctrlyoke-mcp-mode"
-            value={settings.settings.ctrlyokeMcpMode}
-            onChange={(v) => onUpdate("ctrlyokeMcpMode", v)}
-            schemaPath="ctrlyokeMcpMode"
+            value={settings.settings.execution.ctrlyokeMcpMode}
+            onChange={(v) => onUpdate("execution.ctrlyokeMcpMode", v)}
+            schemaPath="execution.ctrlyokeMcpMode"
             options={toSelectOptions(
               CTRLYOKE_MCP_MODE_OPTIONS_META,
-              "ctrlyokeMcpMode"
+              "execution.ctrlyokeMcpMode"
             )}
           />
         </SettingInputRow>
@@ -404,22 +404,22 @@ export function GeneralSection({
         <SettingToggleRow
           label="Enable diagnostic logs"
           description="Write detailed diagnostic logs to help troubleshoot issues."
-          checked={settings.settings.enableDiagnosticLogs}
-          onChange={(v) => onUpdate("enableDiagnosticLogs", v)}
-          path="enableDiagnosticLogs"
+          checked={settings.settings.diagnostics.verboseLogging}
+          onChange={(v) => onUpdate("diagnostics.verboseLogging", v)}
+          path="diagnostics.verboseLogging"
           {...rowProps}
         />
         <SettingToggleRow
           label="Log raw CLI output"
           description={
-            !settings.settings.enableDiagnosticLogs
+            !settings.settings.diagnostics.verboseLogging
               ? "Unavailable — requires diagnostic logs to be enabled."
               : "Write raw CLI output to a log file for debugging."
           }
-          checked={ui.logRawCliOutput}
-          onChange={(v) => onUpdate("ui.logRawCliOutput", v)}
-          disabled={!settings.settings.enableDiagnosticLogs}
-          path="ui.logRawCliOutput"
+          checked={settings.settings.diagnostics.logRawCliOutput}
+          onChange={(v) => onUpdate("diagnostics.logRawCliOutput", v)}
+          disabled={!settings.settings.diagnostics.verboseLogging}
+          path="diagnostics.logRawCliOutput"
           {...rowProps}
         />
       </div>

@@ -6,7 +6,7 @@ import {
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
   PERSISTENT_VALUE_INSTALL_RESULT_KINDS,
-  STATUS_LINE_TRACKING_PROVIDERS,
+  STATUS_LINE_HARNESS_IDS,
   TOKEN_TOTAL_CONFIDENCE,
 } from "../../../types/DashboardConstants";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
@@ -108,7 +108,7 @@ export class CopilotCliProvider implements ICliProvider {
   static readonly CLI_HELP_COMMAND = `${CopilotCliProvider.CLI_COMMAND} --help`;
 
   private static readonly statuslineManager = StatuslineManager.forProvider(
-    STATUS_LINE_TRACKING_PROVIDERS.COPILOT
+    STATUS_LINE_HARNESS_IDS.COPILOT
   );
 
   readonly config: HarnessConfig = {
@@ -406,8 +406,8 @@ export class CopilotCliProvider implements ICliProvider {
             this.statuslineInstallResult = undefined;
             if (
               workspaceRoot &&
-              ConfigurationUtils.getStatusLineTrackingSettings(
-                STATUS_LINE_TRACKING_PROVIDERS.COPILOT
+              ConfigurationUtils.getStatusLineHarnessSettings(
+                STATUS_LINE_HARNESS_IDS.COPILOT
               ).enabled
             ) {
               this.statuslineInstallResult = await this.registerStatusLine(

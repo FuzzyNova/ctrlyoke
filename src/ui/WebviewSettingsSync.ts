@@ -16,13 +16,13 @@ import {
   VSCODE_COMMANDS,
   PROMPT_PROPERTIES,
   WORKFLOW_PROPERTY_KEYS,
-  STATUS_LINE_TRACKING_PROVIDERS,
+  STATUS_LINE_HARNESS_IDS,
   type HarnessId,
   type HarnessStatusString,
   type SettingWriteScope,
   USER_FEEDBACK_SEVERITY,
-  isStatusLineTrackingHarnessId,
-  type StatusLineTrackingHarnessId,
+  isStatusLineHarnessId,
+  type StatusLineHarnessId,
   WORKFLOW_VIEW_ADDRESS_KIND,
   NETWORK_INTERFACE_FAMILIES,
   TRUST_DECISIONS,
@@ -82,7 +82,7 @@ import type {
   SetStatusLineFormatModeMessage,
   WorkflowDefinitionMutation,
 } from "../types/WebviewMessageTypes";
-import type { StatusLineTrackingSettings } from "../types/CtrlYokeSettings";
+import type { StatusLineHarnessSettings } from "../types/CtrlYokeSettings";
 import { isDefaultStatusLineFormat } from "../utils/StatuslineFormat";
 import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
 import { isLoopbackBindAddress } from "../utils/NetworkUtils";
@@ -118,7 +118,7 @@ export interface WorkflowExternalRootIdentity {
 }
 
 type StatuslineManagerFactory = (
-  harnessId: StatusLineTrackingHarnessId
+  harnessId: StatusLineHarnessId
 ) => StatuslineManagerLike;
 
 type LicenseAccessFactory = () => Promise<LicenseAccessState>;
@@ -1188,7 +1188,7 @@ export class WebviewSettingsSync {
     postMessage: PostMessageFn = this.postMessage
   ): Promise<void> {
     if (
-      !isStatusLineTrackingHarnessId(request?.harnessId) ||
+      !isStatusLineHarnessId(request?.harnessId) ||
       typeof request?.restoreCustomCommand !== "boolean"
     ) {
       this.reportStatuslineFailure(
@@ -1200,7 +1200,7 @@ export class WebviewSettingsSync {
     const { harnessId, restoreCustomCommand } = request;
     const statuslineProvider = StatuslineManager.providerForHarness(harnessId);
     let manager: StatuslineManagerLike;
-    let currentSettings: StatusLineTrackingSettings;
+    let currentSettings: StatusLineHarnessSettings;
     try {
       manager = this.getStatuslineManager(harnessId);
       currentSettings = manager.getSettings();
@@ -1214,7 +1214,7 @@ export class WebviewSettingsSync {
     let configDisabled = false;
 
     try {
-      await ConfigurationUtils.setStatusLineTrackingSettings(
+      await ConfigurationUtils.setStatusLineHarnessSettings(
         statuslineProvider,
         {
           ...currentSettings,
@@ -1236,7 +1236,7 @@ export class WebviewSettingsSync {
       let rollbackError: unknown;
       if (configDisabled) {
         try {
-          await ConfigurationUtils.setStatusLineTrackingSettings(
+          await ConfigurationUtils.setStatusLineHarnessSettings(
             statuslineProvider,
             currentSettings
           );
@@ -1267,7 +1267,7 @@ export class WebviewSettingsSync {
     this.emitMessage(
       {
         type: MESSAGE_TYPES.GLOBAL_SETTING_UPDATED,
-        path: `${CONFIG_KEYS.PERMISSIONS_STATUS_LINE_TRACKING}.${statuslineProvider}`,
+        path: `${CONFIG_KEYS.STATUS_LINE}.byHarness.${statuslineProvider}`,
         value: {
           ...currentSettings,
           enabled: false,
@@ -1320,14 +1320,14 @@ export class WebviewSettingsSync {
     ) {
       try {
         const sharedFormat = ConfigurationUtils.getSharedStatusLineFormat();
-        for (const provider of Object.values(STATUS_LINE_TRACKING_PROVIDERS)) {
+        for (const provider of Object.values(STATUS_LINE_HARNESS_IDS)) {
           const currentSettings =
-            ConfigurationUtils.getStatusLineTrackingSettings(provider);
+            ConfigurationUtils.getStatusLineHarnessSettings(provider);
           if (!isDefaultStatusLineFormat(currentSettings.format)) {
             continue;
           }
 
-          await ConfigurationUtils.setStatusLineTrackingSettings(provider, {
+          await ConfigurationUtils.setStatusLineHarnessSettings(provider, {
             ...currentSettings,
             format: sharedFormat.map((segment) => ({
               ...segment,

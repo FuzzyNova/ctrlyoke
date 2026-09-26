@@ -371,7 +371,7 @@ Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compar
 
 - **Type:** `number`
 
-Timeout in seconds. When omitted, the `execution.scriptTimeout` setting applies.
+Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.
 
 ### `shell` {#script-step-shell}
 
@@ -502,7 +502,7 @@ Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto 
 
 - **Type:** `number`
 
-Timeout in seconds. When omitted, the `execution.scriptTimeout` setting applies.
+Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.
 
 ### `shell` {#pre-condition-shell}
 
@@ -577,7 +577,7 @@ Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto 
 
 - **Type:** `number`
 
-Timeout in seconds. When omitted, the `execution.scriptTimeout` setting applies.
+Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.
 
 ### `shell` {#end-condition-shell}
 
@@ -675,7 +675,7 @@ Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto 
 
 - **Type:** `number`
 
-Timeout in seconds. When omitted, the `execution.scriptTimeout` setting applies.
+Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.
 
 ### `shell` {#script-fields-shell}
 

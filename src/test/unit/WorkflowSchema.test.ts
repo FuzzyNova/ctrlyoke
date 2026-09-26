@@ -8,7 +8,7 @@ import { formatRunRef } from "../../utils/WorkflowPaths";
 import {
   HARNESS_IDS,
   PERMISSION_MODES,
-  STATUS_LINE_TRACKING_PROVIDERS,
+  STATUS_LINE_HARNESS_IDS,
 } from "../../types/DashboardConstants";
 import { VARIABLE_NAME_PATTERN_SOURCE } from "../../utils/KeyValueKeyKinds";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
@@ -206,12 +206,12 @@ suite("Workflow template schema", () => {
       CTRLYOKE_SETTINGS_DEFAULTS;
     const defaults = {
       execution: {
-        maxPromptTimeout: execution.maxPromptTimeout,
-        scriptTimeout: execution.scriptTimeout,
+        maxPromptTimeoutSec: execution.maxPromptTimeoutSec,
+        scriptTimeoutSec: execution.scriptTimeoutSec,
       },
       queue: {
         maxSize: queue.maxSize,
-        maxWorkflowExecutionTime: queue.maxWorkflowExecutionTime,
+        maxWorkflowExecutionTimeSec: queue.maxWorkflowExecutionTimeSec,
       },
       runs: { maxRuns: runs.maxRuns },
       terminal: { scrollback: terminal.scrollback },
@@ -233,11 +233,11 @@ suite("Workflow template schema", () => {
     assert.strictEqual(validateSettings({ server: { port: 0 } }), false);
     assert.strictEqual(validateSettings({ queue: { maxSize: 1.5 } }), false);
     assert.strictEqual(
-      validateSettings({ execution: { maxPromptTimeout: 1.5 } }),
+      validateSettings({ execution: { maxPromptTimeoutSec: 1.5 } }),
       false
     );
     assert.strictEqual(
-      validateSettings({ queue: { maxWorkflowExecutionTime: 1.5 } }),
+      validateSettings({ queue: { maxWorkflowExecutionTimeSec: 1.5 } }),
       false
     );
     assert.strictEqual(validateSettings({ runs: { maxRuns: -2 } }), false);
@@ -276,17 +276,33 @@ suite("Workflow template schema", () => {
     );
     const expectedHarnessIds = Object.values(HARNESS_IDS);
     const sortedHarnessIds = [...expectedHarnessIds].sort();
-    const harnessKeyedSchemaPaths = [
-      ["properties", "defaults", "properties", "models"],
-      ["properties", "defaults", "properties", "additionalArgs"],
-      [
-        "properties",
-        "ui",
-        "properties",
-        "harnessColors",
-        "properties",
-        "byHarness",
-      ],
+    const harnessKeyedSchemaPaths: Array<{
+      path: string[];
+      expected: string[];
+    }> = [
+      {
+        path: ["properties", "defaults", "properties", "models"],
+        expected: sortedHarnessIds,
+      },
+      {
+        path: ["properties", "defaults", "properties", "additionalArgs"],
+        expected: sortedHarnessIds,
+      },
+      {
+        path: ["properties", "statusLine", "properties", "byHarness"],
+        expected: Object.values(STATUS_LINE_HARNESS_IDS).sort(),
+      },
+      {
+        path: [
+          "properties",
+          "ui",
+          "properties",
+          "harnessColors",
+          "properties",
+          "byHarness",
+        ],
+        expected: sortedHarnessIds,
+      },
     ];
     const getSchemaAtPath = (
       source: Record<string, unknown>,
@@ -297,31 +313,14 @@ suite("Workflow template schema", () => {
         source
       );
 
-    for (const schemaPath of harnessKeyedSchemaPaths) {
+    for (const { path: schemaPath, expected } of harnessKeyedSchemaPaths) {
       const keyedObject = getSchemaAtPath(settingsSchema, schemaPath);
       assert.deepStrictEqual(
         Object.keys(keyedObject.properties as Record<string, unknown>).sort(),
-        sortedHarnessIds,
+        expected,
         schemaPath.join(".")
       );
     }
-
-    const statusLineTracking = getSchemaAtPath(settingsSchema, [
-      "properties",
-      "permissions",
-      "properties",
-      "statusLineTracking",
-    ]);
-    assert.deepStrictEqual(
-      Object.keys(statusLineTracking.properties as Record<string, unknown>)
-        .filter(
-          (key) =>
-            key !== "useDifferentFormatPerHarness" && key !== "sharedFormat"
-        )
-        .sort(),
-      Object.values(STATUS_LINE_TRACKING_PROVIDERS).sort(),
-      "properties.permissions.properties.statusLineTracking"
-    );
 
     assert.deepStrictEqual(
       schema.definitions.harnessId.enum,

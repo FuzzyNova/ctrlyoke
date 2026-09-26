@@ -13,7 +13,7 @@ import {
   statuslineLauncherDirectory,
   statuslineScriptFileName,
 } from "../../core/harness/shared/StatuslineLauncher";
-import { STATUS_LINE_TRACKING_PROVIDERS } from "../../types/DashboardConstants";
+import { STATUS_LINE_HARNESS_IDS } from "../../types/DashboardConstants";
 
 suite("StatuslineLauncher", () => {
   let tempRoot: string;
@@ -82,7 +82,7 @@ suite("StatuslineLauncher", () => {
 
     const scriptPath = await resolveStatuslineScriptPath(
       root,
-      STATUS_LINE_TRACKING_PROVIDERS.CLAUDE
+      STATUS_LINE_HARNESS_IDS.CLAUDE
     );
 
     const launcher = statuslineLauncherDirectory();
@@ -94,7 +94,7 @@ suite("StatuslineLauncher", () => {
       scriptPath,
       path.join(
         launcher,
-        statuslineScriptFileName(STATUS_LINE_TRACKING_PROVIDERS.CLAUDE)
+        statuslineScriptFileName(STATUS_LINE_HARNESS_IDS.CLAUDE)
       )
     );
     assert.ok((await deployedMarkers()).every((text) => text === "// v0.2.0"));
@@ -156,13 +156,10 @@ suite("StatuslineLauncher", () => {
     );
 
     assert.strictEqual(
-      await resolveStatuslineScriptPath(
-        root,
-        STATUS_LINE_TRACKING_PROVIDERS.QWEN
-      ),
+      await resolveStatuslineScriptPath(root, STATUS_LINE_HARNESS_IDS.QWEN),
       path.join(
         packageStatuslineDirectory(root),
-        statuslineScriptFileName(STATUS_LINE_TRACKING_PROVIDERS.QWEN)
+        statuslineScriptFileName(STATUS_LINE_HARNESS_IDS.QWEN)
       )
     );
   });

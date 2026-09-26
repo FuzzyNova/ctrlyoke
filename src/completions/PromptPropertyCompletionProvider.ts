@@ -41,7 +41,7 @@ export class PromptPropertyCompletionProvider
       key: "timeoutSec",
       detail: "Timeout in seconds",
       documentation:
-        "Timeout in seconds. Defaults to the `execution.scriptTimeout` setting.",
+        "Timeout in seconds. Defaults to the `execution.scriptTimeoutSec` setting.",
       insertSnippet: "timeoutSec: ",
     },
     {
