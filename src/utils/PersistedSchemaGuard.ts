@@ -33,6 +33,9 @@ export const PERSISTED_STORES = {
   LIFETIME_USAGE: "lifetime-usage",
   OBSERVED_USAGE: "observed-usage",
   PROVIDER_USAGE: "provider-usage",
+  MANAGED_WORKTREE_RECORD: "managed-worktree-record",
+  NAMED_WORKTREE_SETUP: "named-worktree-setup",
+  INSTALLATIONS: "installations",
 } as const;
 
 export type PersistedStore =
@@ -56,6 +59,9 @@ export const CURRENT_SCHEMA_VERSIONS = {
   [PERSISTED_STORES.LIFETIME_USAGE]: 1,
   [PERSISTED_STORES.OBSERVED_USAGE]: 1,
   [PERSISTED_STORES.PROVIDER_USAGE]: 1,
+  [PERSISTED_STORES.MANAGED_WORKTREE_RECORD]: 1,
+  [PERSISTED_STORES.NAMED_WORKTREE_SETUP]: 1,
+  [PERSISTED_STORES.INSTALLATIONS]: 1,
 } as const satisfies Record<PersistedStore, number>;
 
 const STORE_LABELS: Record<PersistedStore, string> = {
@@ -72,6 +78,9 @@ const STORE_LABELS: Record<PersistedStore, string> = {
   [PERSISTED_STORES.LIFETIME_USAGE]: "lifetime usage statistics",
   [PERSISTED_STORES.OBSERVED_USAGE]: "observed usage statistics",
   [PERSISTED_STORES.PROVIDER_USAGE]: "harness quota snapshot",
+  [PERSISTED_STORES.MANAGED_WORKTREE_RECORD]: "managed worktree record",
+  [PERSISTED_STORES.NAMED_WORKTREE_SETUP]: "named worktree setup record",
+  [PERSISTED_STORES.INSTALLATIONS]: "installation registry",
 };
 
 /** Thrown instead of writing a store that a newer ctrlyoke version owns. */

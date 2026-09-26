@@ -9,6 +9,7 @@ import {
   findOlderCli,
   INSTALLATION_KINDS,
   installationsFilePath,
+  markNoticeShown,
   readLiveInstallations,
   recordInstallation,
 } from "../../utils/CtrlyokeInstallations";
@@ -82,6 +83,38 @@ suite("CtrlyokeInstallations", () => {
     assert.deepStrictEqual(others, []);
     const file = JSON.parse(await fs.readFile(installationsFilePath(), "utf8"));
     assert.strictEqual(Object.keys(file.installations).length, 1);
+  });
+
+  test("reads a newer registry but does not rewrite it when recording or marking a notice", async () => {
+    const extension = await packageRoot("newer-ext");
+    const filePath = installationsFilePath();
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    const newerFile = {
+      schemaVersion: 2,
+      installations: {
+        "vscode-extension:newer": {
+          kind: INSTALLATION_KINDS.VSCODE_EXTENSION,
+          version: "9.0.0",
+          packageRoot: extension,
+          lastSeen: Date.now(),
+        },
+      },
+      notices: {},
+      extensionOnlyMetadata: { retained: true },
+    };
+    const serialized = JSON.stringify(newerFile, null, 2);
+    await fs.writeFile(filePath, serialized);
+
+    const displayed = await readLiveInstallations();
+    assert.strictEqual(displayed[0]?.version, "9.0.0");
+    await recordInstallation({
+      kind: INSTALLATION_KINDS.CLI,
+      version: "1.0.0",
+      packageRoot: extension,
+    });
+    await markNoticeShown("extension:old<new");
+
+    assert.strictEqual(await fs.readFile(filePath, "utf8"), serialized);
   });
 
   test("the bundled CLI and its extension keep separate records", async () => {

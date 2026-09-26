@@ -88,6 +88,14 @@ import {
   runtimeTrustedRootRegistry,
   type RuntimeTrustedRootHandle,
 } from "../../utils/RuntimeTrustedRootRegistry";
+import {
+  CURRENT_SCHEMA_VERSIONS,
+  PERSISTED_STORES,
+  assertWritableSchema,
+  isNewerSchemaVersion,
+  readSchemaVersion,
+} from "../../utils/PersistedSchemaGuard";
+import { migrateToCurrent } from "../../utils/FormatMigrations";
 
 export type WorktreeMode =
   typeof WORKTREE_MODES.MANAGED | typeof WORKTREE_MODES.NAMED;
@@ -104,8 +112,10 @@ export type WorktreeLifecycleOwner =
 export type ManagedWorktreeRecoveryOutcome =
   (typeof WORKTREE_RECOVERY_OUTCOMES)[keyof typeof WORKTREE_RECOVERY_OUTCOMES];
 
-export const MANAGED_WORKTREE_RECORD_SCHEMA_VERSION = 1 as const;
-export const NAMED_WORKTREE_SETUP_RECORD_SCHEMA_VERSION = 1 as const;
+export const MANAGED_WORKTREE_RECORD_SCHEMA_VERSION =
+  CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.MANAGED_WORKTREE_RECORD];
+export const NAMED_WORKTREE_SETUP_RECORD_SCHEMA_VERSION =
+  CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.NAMED_WORKTREE_SETUP];
 
 export type NamedWorktreeSetupOutcome =
   | typeof WORKTREE_SETUP_OUTCOMES.PENDING
@@ -730,6 +740,11 @@ export class WorktreeManager {
               "Managed ownership record is missing or mismatched."
             );
           }
+          assertWritableSchema(
+            PERSISTED_STORES.MANAGED_WORKTREE_RECORD,
+            record,
+            recordPath
+          );
           if (
             !(await this.tryResolveLocalBranch(repositoryRoot, info.branchName))
           ) {
@@ -1434,7 +1449,13 @@ export class WorktreeManager {
       await this.reconcileBlockedManagedWorktrees(
         sourceCheckoutRoot,
         commonDirectory,
-        records
+        records.filter(
+          (record) =>
+            !isNewerSchemaVersion(
+              PERSISTED_STORES.MANAGED_WORKTREE_RECORD,
+              record.schemaVersion
+            )
+        )
       );
       records = await this.readRecords(commonDirectory);
       const existingRecord = records.find(
@@ -1443,6 +1464,13 @@ export class WorktreeManager {
           record.workflowKey === identity.workflowKey &&
           record.runRef === identity.runRef
       );
+      if (existingRecord) {
+        assertWritableSchema(
+          PERSISTED_STORES.MANAGED_WORKTREE_RECORD,
+          existingRecord,
+          this.recordPath(commonDirectory, existingRecord.branchName)
+        );
+      }
       const generatedBranchName = createManagedBranchName(
         options.workflowName ?? String(identity.workflowKey),
         identity.runRef
@@ -1624,7 +1652,13 @@ export class WorktreeManager {
       await this.reconcileBlockedManagedWorktrees(
         sourceCheckoutRoot,
         commonDirectory,
-        records
+        records.filter(
+          (record) =>
+            !isNewerSchemaVersion(
+              PERSISTED_STORES.MANAGED_WORKTREE_RECORD,
+              record.schemaVersion
+            )
+        )
       );
       records = await this.readRecords(commonDirectory);
       const record = records.find(
@@ -1637,6 +1671,11 @@ export class WorktreeManager {
           (options.runRef === undefined || candidate.runRef === options.runRef)
       );
       if (!record) return undefined;
+      assertWritableSchema(
+        PERSISTED_STORES.MANAGED_WORKTREE_RECORD,
+        record,
+        this.recordPath(commonDirectory, record.branchName)
+      );
 
       const branchTip = await this.tryResolveLocalBranch(
         sourceCheckoutRoot,
@@ -1727,6 +1766,14 @@ export class WorktreeManager {
     const entries = await listGitWorktrees(sourceCheckoutRoot);
     const result: WorktreeInfo[] = [];
     for (const record of records) {
+      if (
+        isNewerSchemaVersion(
+          PERSISTED_STORES.MANAGED_WORKTREE_RECORD,
+          record.schemaVersion
+        )
+      ) {
+        continue;
+      }
       if (!pathsEqual(record.sourceCheckoutRoot, sourceCheckoutRoot)) continue;
       if (
         options.workflowKey !== undefined &&
@@ -1886,12 +1933,20 @@ export class WorktreeManager {
           : undefined;
       const createdAt = record?.createdAt;
       const branchCleanup = record
-        ? await this.getBranchCleanupEligibility(
-            sourceRoot,
-            record,
-            entry,
-            inUse
+        ? isNewerSchemaVersion(
+            PERSISTED_STORES.MANAGED_WORKTREE_RECORD,
+            record.schemaVersion
           )
+          ? {
+              eligible: false,
+              reason: "A newer ctrlyoke owns this worktree record.",
+            }
+          : await this.getBranchCleanupEligibility(
+              sourceRoot,
+              record,
+              entry,
+              inUse
+            )
         : { eligible: false, reason: "Only ctrlyoke-owned branches qualify." };
       managedEntries.push({
         worktreePath: entry.worktreePath,
@@ -1934,6 +1989,30 @@ export class WorktreeManager {
     );
 
     for (const staleRecord of staleManagedRecords) {
+      if (
+        isNewerSchemaVersion(
+          PERSISTED_STORES.MANAGED_WORKTREE_RECORD,
+          staleRecord.schemaVersion
+        )
+      ) {
+        managedEntries.push({
+          worktreePath: staleRecord.worktreePath,
+          headCommit: staleRecord.lastVerifiedBranchTip,
+          branchName: staleRecord.branchName,
+          ownership: "managed",
+          lifecycleState: staleRecord.lifecycleState,
+          directoryState: staleRecord.directoryState,
+          branchState: staleRecord.branchState,
+          createdAt: staleRecord.createdAt,
+          ageMs: now - staleRecord.createdAt,
+          inUse: false,
+          leaseOwners: [],
+          stale: false,
+          branchCleanupEligible: false,
+          branchCleanupReason: "A newer ctrlyoke owns this worktree record.",
+        });
+        continue;
+      }
       // A record lands here only when `listGitWorktrees` returned no matching
       // entry at all — i.e. Git's own admin dir for this worktree is gone.
       // (A merely-prunable worktree, whose admin dir survives but whose
@@ -2048,6 +2127,21 @@ export class WorktreeManager {
       );
     }
     if (options.action === WORKTREE_MANAGEMENT_ACTIONS.PRUNE) {
+      const commonDirectory = await this.requireCommonDirectory(sourceRoot);
+      const records = await this.readRecords(commonDirectory);
+      const newerRecord = records.find((record) =>
+        isNewerSchemaVersion(
+          PERSISTED_STORES.MANAGED_WORKTREE_RECORD,
+          record.schemaVersion
+        )
+      );
+      if (newerRecord) {
+        assertWritableSchema(
+          PERSISTED_STORES.MANAGED_WORKTREE_RECORD,
+          newerRecord,
+          this.recordPath(commonDirectory, newerRecord.branchName)
+        );
+      }
       await pruneWorktrees(sourceRoot);
       return;
     }
@@ -2069,6 +2163,11 @@ export class WorktreeManager {
           "Only a valid ctrlyoke ownership record can be changed."
         );
       }
+      assertWritableSchema(
+        PERSISTED_STORES.MANAGED_WORKTREE_RECORD,
+        record,
+        this.recordPath(commonDirectory, record.branchName)
+      );
       if (options.action === WORKTREE_MANAGEMENT_ACTIONS.REPAIR) {
         if (!pathsEqual(record.worktreePath, options.worktreePath ?? "")) {
           throw new Error(
@@ -2366,6 +2465,20 @@ export class WorktreeManager {
     );
     const namedSetupRecord =
       await this.tryReadNamedSetupRecord(namedSetupRecordPath);
+    if (
+      namedSetupRecord &&
+      isNewerSchemaVersion(
+        PERSISTED_STORES.NAMED_WORKTREE_SETUP,
+        namedSetupRecord.schemaVersion
+      ) &&
+      options.setup?.trim()
+    ) {
+      assertWritableSchema(
+        PERSISTED_STORES.NAMED_WORKTREE_SETUP,
+        namedSetupRecord,
+        namedSetupRecordPath
+      );
+    }
     const mapSourcePath = (sourcePath: string): string =>
       path.resolve(
         executionCheckoutRoot,
@@ -2671,9 +2784,10 @@ export class WorktreeManager {
   ): Promise<ManagedWorktreeOwnershipRecord | undefined> {
     return this.tryReadJsonRecord<ManagedWorktreeOwnershipRecord>(
       recordPath,
+      PERSISTED_STORES.MANAGED_WORKTREE_RECORD,
       (parsed) => {
         if (
-          parsed.schemaVersion !== MANAGED_WORKTREE_RECORD_SCHEMA_VERSION ||
+          readSchemaVersion(parsed) === undefined ||
           typeof parsed.branchName !== "string" ||
           typeof parsed.worktreePath !== "string" ||
           typeof parsed.sourceCheckoutRoot !== "string" ||
@@ -2702,9 +2816,10 @@ export class WorktreeManager {
   ): Promise<NamedWorktreeSetupRecord | undefined> {
     return this.tryReadJsonRecord<NamedWorktreeSetupRecord>(
       recordPath,
+      PERSISTED_STORES.NAMED_WORKTREE_SETUP,
       (parsed) => {
         if (
-          parsed.schemaVersion !== NAMED_WORKTREE_SETUP_RECORD_SCHEMA_VERSION ||
+          readSchemaVersion(parsed) === undefined ||
           typeof parsed.worktreePath !== "string" ||
           (parsed.setupOutcome !== WORKTREE_SETUP_OUTCOMES.PENDING &&
             parsed.setupOutcome !== WORKTREE_SETUP_OUTCOMES.RUNNING &&
@@ -2721,13 +2836,20 @@ export class WorktreeManager {
 
   private async tryReadJsonRecord<T>(
     recordPath: string,
+    store:
+      | typeof PERSISTED_STORES.MANAGED_WORKTREE_RECORD
+      | typeof PERSISTED_STORES.NAMED_WORKTREE_SETUP,
     validate: (parsed: Partial<T>) => T | undefined
   ): Promise<T | undefined> {
     try {
       const parsed = JSON.parse(
         await fs.readFile(recordPath, "utf8")
       ) as Partial<T>;
-      return validate(parsed);
+      const version = readSchemaVersion(parsed);
+      if (isNewerSchemaVersion(store, version)) {
+        return validate(parsed);
+      }
+      return validate(migrateToCurrent(store, parsed).doc as Partial<T>);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
       // A partially written/corrupt record is not ownership or setup evidence.
@@ -2750,6 +2872,23 @@ export class WorktreeManager {
     recordPath: string,
     record: ManagedWorktreeOwnershipRecord | NamedWorktreeSetupRecord
   ): Promise<void> {
+    const store =
+      "branchName" in record
+        ? PERSISTED_STORES.MANAGED_WORKTREE_RECORD
+        : PERSISTED_STORES.NAMED_WORKTREE_SETUP;
+    try {
+      const current = JSON.parse(
+        await fs.readFile(recordPath, "utf8")
+      ) as unknown;
+      assertWritableSchema(store, current, recordPath);
+    } catch (error) {
+      if (
+        (error as NodeJS.ErrnoException).code !== "ENOENT" &&
+        !(error instanceof SyntaxError)
+      ) {
+        throw error;
+      }
+    }
     await fs.mkdir(path.dirname(recordPath), { recursive: true });
     await writeFileAtomic(recordPath, `${JSON.stringify(record, null, 2)}\n`);
   }
@@ -3109,7 +3248,7 @@ export class WorktreeManager {
         : {}),
     };
     await this.persistRuntime({
-      schemaVersion: 1,
+      schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.RUN_FILE],
       mode: WORKTREE_MODES.MANAGED,
       origin: args.origin,
       branchName: args.record.branchName,
@@ -3336,7 +3475,7 @@ export class WorktreeManager {
     origin: WorktreeOrigin = "created"
   ): WorkingFileWorktreeRuntimePatch {
     return {
-      schemaVersion: 1,
+      schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.RUN_FILE],
       mode: "named",
       origin,
       branchName,
