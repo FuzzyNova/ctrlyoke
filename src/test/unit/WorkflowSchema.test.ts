@@ -349,6 +349,11 @@ suite("Workflow template schema", () => {
       updatedAt: 400,
     };
     const runFile = {
+      workflowName: "Implement",
+      startedAt: 100,
+      lastModifiedAt: 150,
+      isFavorite: true,
+      definitionRevision: 3,
       steps: [
         {
           prompt: "Implement the change",
@@ -378,6 +383,37 @@ suite("Workflow template schema", () => {
         ...runFile,
         _runtime: { ...runFile._runtime, worktree: { ...worktree, extra: 1 } },
       }),
+      false
+    );
+    assert.strictEqual(validate({ ...runFile, definitionRevision: 0 }), false);
+    assert.strictEqual(validate({ ...runFile, isFavorite: "yes" }), false);
+  });
+
+  test("accepts every workflow-only root property on a single-step script workflow", () => {
+    const scriptRoot = {
+      type: "script",
+      script: "npm test",
+      worktree: "feature/script",
+      vars: { target: "ci" },
+      trustedExternalRoots: ["/shared/fixtures"],
+    };
+    assert.strictEqual(
+      validate(scriptRoot),
+      true,
+      JSON.stringify(validate.errors)
+    );
+    assert.strictEqual(
+      validate({ ...scriptRoot, trustedExternalRoots: null }),
+      true,
+      JSON.stringify(validate.errors)
+    );
+    assert.strictEqual(
+      validate({ ...scriptRoot, _templateMeta: { name: "Script check" } }),
+      true,
+      JSON.stringify(validate.errors)
+    );
+    assert.strictEqual(
+      validate({ ...scriptRoot, trustedExternalRoots: [""] }),
       false
     );
   });

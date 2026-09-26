@@ -856,7 +856,7 @@ Maximum time in seconds to wait for a prompt to complete. Use -1 for unlimited.
 - **Type:** `number`
 - **Default:** `3600`
 
-Maximum time in seconds for end-condition scripts to run.
+Maximum time in seconds for pre-condition, end-condition, and script-step scripts to run. A script's own `timeout` (in milliseconds) overrides it.
 
 ### `execution.closeTerminalOnComplete` {#execution-closeterminaloncomplete}
 

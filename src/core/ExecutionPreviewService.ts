@@ -1282,7 +1282,7 @@ export class ExecutionPreviewService {
       description: [
         formatComparison(condition),
         condition.timeout !== undefined
-          ? `timeout=${condition.timeout}s`
+          ? `timeout=${condition.timeout}ms`
           : undefined,
         `onPass=${condition.onPass ?? CONDITION_ACTIONS.CONTINUE}`,
         `onFail=${condition.onFail ?? (kind === "pre" ? CONDITION_ACTIONS.SKIP_PROMPT : CONDITION_ACTIONS.STOP_WORKFLOW)}`,

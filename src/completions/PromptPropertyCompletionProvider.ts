@@ -41,7 +41,7 @@ export class PromptPropertyCompletionProvider
       key: "timeout",
       detail: "Timeout in milliseconds",
       documentation:
-        "Timeout in milliseconds. Defaults to the `ctrlyoke.scriptTimeout` extension setting.",
+        "Timeout in milliseconds. Defaults to the `execution.scriptTimeout` setting.",
       insertSnippet: "timeout: ",
     },
     {

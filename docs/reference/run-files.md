@@ -77,6 +77,25 @@ Derived workflow name (working files only)
 
 Timestamp when workflow started (working files only)
 
+### `lastModifiedAt` {#run-file-root-lastmodifiedat}
+
+- **Type:** `number`
+
+Timestamp when the working file's definition was last modified (working files only)
+
+### `isFavorite` {#run-file-root-isfavorite}
+
+- **Type:** `boolean`
+
+Whether the workflow is pinned to the top of recent workflow history (working files only)
+
+### `definitionRevision` {#run-file-root-definitionrevision}
+
+- **Type:** `integer`
+- **Constraints:** minimum 1
+
+Monotonic optimistic-concurrency counter, bumped on every definition-changing edit and not on runtime-only writes. Starts at 1; each promoted run restarts its own sequence at 1 (working files only).
+
 ### `_runtime` {#run-file-root-runtime}
 
 - **Type:** [Workflow runtime](#workflow-runtime)

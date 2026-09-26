@@ -2498,10 +2498,8 @@ export class WorkflowExecutor {
       }
       runtime.beginAttempt(target, attemptIndex, Date.now());
 
-      const timeout =
-        step.timeout != null
-          ? step.timeout * 1000
-          : ConfigurationUtils.getScriptTimeoutMs();
+      // `timeout` is milliseconds for every script surface (scriptProperties).
+      const timeout = step.timeout ?? ConfigurationUtils.getScriptTimeoutMs();
 
       const signedStepIndex = this.getSignedStepIndex(target);
       const timestampMs = Date.now();

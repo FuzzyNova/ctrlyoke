@@ -113,6 +113,9 @@ const NOT_AUTHORABLE = new Map<string, string>([
   ["originalFile", "working-file bookkeeping"],
   ["workflowName", "working-file bookkeeping, renamed via its own message"],
   ["startedAt", "engine-written timestamp"],
+  ["lastModifiedAt", "engine-written timestamp"],
+  ["isFavorite", "working-file bookkeeping, toggled via its own message"],
+  ["definitionRevision", "engine-written optimistic-concurrency counter"],
   ["steps", "the step list itself, not a property of a step"],
   [
     "parallelGroups",

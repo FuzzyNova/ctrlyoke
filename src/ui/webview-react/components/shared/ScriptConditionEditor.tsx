@@ -201,7 +201,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   const [shellInput, setShellInput] = useState(v.shell ?? "");
 
   // Local string state for timeout to prevent auto-reset when clearing.
-  // Empty string means "inherit from settings" (ctrlyoke.scriptTimeout) — timeout stays
+  // Empty string means "inherit from settings" (execution.scriptTimeout) — timeout stays
   // undefined on the underlying value across all variants; the runtime (EndConditionEvaluator,
   // WorkflowExecutor) already falls back to ConfigurationUtils.getScriptTimeoutMs() whenever
   // timeout is unset, so there is no separate UI-level default to keep in sync.
@@ -322,7 +322,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
     });
   };
 
-  // Shared across variants: empty input inherits ctrlyoke.scriptTimeout; otherwise commit the
+  // Shared across variants: empty input inherits execution.scriptTimeout; otherwise commit the
   // parsed number verbatim (no minimum/maximum substitution — those aren't enforced anywhere
   // downstream, so clamping here would just be another UI-invented magic number).
   const commitTimeout = () => {

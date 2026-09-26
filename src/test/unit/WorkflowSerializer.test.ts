@@ -102,6 +102,9 @@ function schemaBackedFieldNames(): {
     "originalFile",
     "workflowName",
     "startedAt",
+    "lastModifiedAt",
+    "isFavorite",
+    "definitionRevision",
     "_runtime",
     "parallelGroups",
   ]);
