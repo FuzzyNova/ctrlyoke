@@ -61,6 +61,7 @@ import {
   type CliValidationJsonHarness,
 } from "./cli/CliJsonResultBuilder";
 import { Log } from "./utils/Log";
+import { getVariableKeyErrors } from "./utils/KeyValueKeyKinds";
 import { setRuntimeMode } from "./utils/RuntimeMode";
 import {
   ensureCtrlyokeShimsExecutable,
@@ -1372,7 +1373,14 @@ function mergeCliVarsIntoWorkflow(
   if (Object.keys(vars).length === 0) {
     return;
   }
-  workflow.vars = { ...(workflow.vars ?? {}), ...vars };
+  const mergedVars = { ...(workflow.vars ?? {}), ...vars };
+  const variableKeyErrors = getVariableKeyErrors(Object.keys(mergedVars));
+  if (variableKeyErrors.length > 0) {
+    throw new Error(
+      `Invalid workflow variables: ${variableKeyErrors.join(", ")}`
+    );
+  }
+  workflow.vars = mergedVars;
 }
 
 function assertSecretGrantsApproved(

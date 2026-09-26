@@ -354,7 +354,8 @@
           "description": "When true, keeps the TUI alive between prompts and writes follow-up prompts directly into the PTY. Faster than restarting and avoids the Claude Code resume cache bug."
         },
         "maxPromptTimeout": {
-          "type": "number",
+          "type": "integer",
+          "minimum": -1,
           "description": "Maximum time in seconds to wait for a prompt to complete. Use -1 for unlimited."
         },
         "scriptTimeout": {
@@ -383,7 +384,7 @@
       "additionalProperties": false,
       "properties": {
         "maxSize": {
-          "type": "number",
+          "type": "integer",
           "description": "Maximum number of prompts allowed in the queue."
         },
         "maxParallelSteps": {
@@ -393,7 +394,8 @@
           "description": "Maximum number of active members in a parallel step group."
         },
         "maxWorkflowExecutionTime": {
-          "type": "number",
+          "type": "integer",
+          "minimum": -1,
           "description": "Maximum total execution time in seconds for a workflow. Use -1 for unlimited."
         },
         "unlimitedMode": {
@@ -412,7 +414,8 @@
       "additionalProperties": false,
       "properties": {
         "maxRuns": {
-          "type": "number",
+          "type": "integer",
+          "minimum": -1,
           "description": "Deletes entire runs—definition and output—oldest first. -1 keeps all runs."
         },
         "historySearchCacheMb": {
@@ -440,7 +443,7 @@
           "description": "Terminal line height multiplier."
         },
         "scrollback": {
-          "type": "number",
+          "type": "integer",
           "minimum": 1000,
           "maximum": 50000,
           "description": "Maximum scrollback lines retained in memory."
@@ -563,7 +566,7 @@
           "description": "Send absolute file paths to the harness/model instead of relative paths. Stored workflow text stays relative regardless of this setting. Forced on in multi-root workspaces and by harnesses that require it (e.g. Antigravity)."
         },
         "outputVirtualizationRowThreshold": {
-          "type": "number",
+          "type": "integer",
           "minimum": -1,
           "description": "Minimum projected output row count before the Output panel uses virtualization. Use 0 to always virtualize, -1 to never virtualize."
         },
@@ -661,17 +664,23 @@
           "description": "Automatically start the hosted dashboard server when the VS Code extension activates."
         },
         "port": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
           "description": "Port for the ctrlyoke hosted server."
         },
         "standalonePort": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
           "description": "Port for the standalone (non-extension) ctrlyoke server."
         },
         "fallbackPorts": {
           "type": "array",
           "items": {
-            "type": "number"
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
           },
           "description": "Ordered ports to try, in order, if 'port' is already in use, before falling back to an OS-assigned port. Useful for a stable, bookmarkable URL across restarts when 'port' is often taken by another running instance."
         },

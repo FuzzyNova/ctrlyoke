@@ -173,6 +173,33 @@ suite("CLI run command parser", () => {
     assert.deepStrictEqual(calls.run?.options.var, { foo: "bar", baz: "qux" });
   });
 
+  test("rejects invalid and case-colliding --var names", async () => {
+    const originalExit = process.exit;
+    const originalError = console.error;
+    process.exit = ((code?: number) => {
+      throw new Error(`process.exit(${code})`);
+    }) as typeof process.exit;
+    console.error = () => undefined;
+    try {
+      await assert.rejects(
+        createRunProgram({}).parseAsync(["run", "--var", "bad-name=value"], {
+          from: "user",
+        }),
+        /process\.exit\(2\)/
+      );
+      await assert.rejects(
+        createRunProgram({}).parseAsync(
+          ["run", "--var", "foo=one", "--var", "FOO=two"],
+          { from: "user" }
+        ),
+        /process\.exit\(2\)/
+      );
+    } finally {
+      process.exit = originalExit;
+      console.error = originalError;
+    }
+  });
+
   test("parses --dry-run without changing the normal run options", async () => {
     const calls: {
       run?: { file: string | undefined; options: RunCommandOptions };

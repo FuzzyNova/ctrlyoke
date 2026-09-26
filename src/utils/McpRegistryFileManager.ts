@@ -57,7 +57,7 @@ function isMcpServerConfig(value: unknown): value is McpServerConfig {
   return (
     typeof server.id === "string" &&
     server.id.trim().length > 0 &&
-    (hasCommand || hasUrl) &&
+    hasCommand !== hasUrl &&
     (server.args === undefined || isStringArray(server.args)) &&
     (server.env === undefined || isStringRecord(server.env)) &&
     isBooleanOrStringArray(server.autoApprove) &&

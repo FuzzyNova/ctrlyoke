@@ -19,6 +19,7 @@ import {
 } from "../types/CtrlYokeTypes";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
+import { getVariableKeyErrors } from "../utils/KeyValueKeyKinds";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
 import {
@@ -181,6 +182,19 @@ export class PromptFileParser {
     contentPath: string
   ): Promise<PromptFile> {
     this.validateAuthoredParallelStructure(parsed);
+
+    if (
+      parsed?.vars &&
+      typeof parsed.vars === "object" &&
+      !Array.isArray(parsed.vars)
+    ) {
+      const variableKeyErrors = getVariableKeyErrors(Object.keys(parsed.vars));
+      if (variableKeyErrors.length > 0) {
+        throw new Error(
+          `Validation failed: vars: ${variableKeyErrors.join(", ")}`
+        );
+      }
+    }
 
     if (this.promptSchema && !this.ajv.validate(this.promptSchema, parsed)) {
       const errors = this.ajv.errors

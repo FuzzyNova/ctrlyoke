@@ -72,6 +72,16 @@ test("settings references resolve against the sibling workflow schema", () => {
   assert.match(pageEndingWith(result, "settings"), /"sibling-schema-resolved"/);
 });
 
+test("object constraints preserve the documented MCP config shape", () => {
+  const settings = pageEndingWith(build(), "settings");
+  assert.match(
+    settings,
+    /\*\*Type:\*\* array of \(`string` or `\{ id, description\?, command\?,/i
+  );
+  assert.match(settings, /- `command` · `string`/);
+  assert.match(settings, /- `url` · `string`/);
+});
+
 test("a new workflow definition must be assigned to a docs section", () => {
   const inputs = loadSchemaDocumentationInputs();
   inputs.workflowSchema.definitions.brandNewShape = { type: "object" };

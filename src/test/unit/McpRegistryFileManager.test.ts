@@ -92,6 +92,21 @@ suite("McpRegistryFileManager", () => {
     );
   });
 
+  test("rejects MCP entries that provide both command and URL", async () => {
+    const manager = new McpRegistryFileManager(workspaceRoot);
+    await assert.rejects(
+      manager.addOrUpdate(
+        {
+          id: "ambiguous",
+          command: "node",
+          url: "https://example.test",
+        },
+        SETTING_SCOPES.WORKSPACE
+      ),
+      /Invalid MCP server config/
+    );
+  });
+
   test("falls back to the remaining scope when removing one copy of a shared server", async () => {
     const manager = new McpRegistryFileManager(workspaceRoot);
 

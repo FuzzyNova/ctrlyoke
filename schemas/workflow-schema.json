@@ -325,6 +325,9 @@
       "description": "Workflow-level variable defaults for {{varName}} substitution. CLI --var key=value flags override these at runtime. Substituted into: prompt text, model, additionalArgs, hook command/env, preCondition script/env, endCondition script/env/retryPrompt/passRetryPrompt, script-step script/env, and worktree setup commands. Every script and condition process also receives each var as a CTRLYOKE_VAR_<KEY> environment variable regardless of {{varName}} usage.",
       "additionalProperties": {
         "type": "string"
+      },
+      "propertyNames": {
+        "pattern": "^\\w+$"
       }
     },
     "workflowOnlyProperties": {
@@ -467,7 +470,7 @@
         "workflowKey": {
           "type": "string",
           "minLength": 1,
-          "pattern": "^[^/\\\\]+$",
+          "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$",
           "description": "Stable workflow lineage key within the current workspace."
         },
         "runRef": {
@@ -597,7 +600,7 @@
           "description": "User-defined hooks run alongside ctrlyoke's completion-detection hooks. Supported events vary by harness; unsupported events are silently skipped."
         },
         "sessionId": {
-          "type": ["string", "number"],
+          "oneOf": [{ "type": "string" }, { "type": "integer", "minimum": 1 }],
           "description": "Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value \"finalStep\" (resume the session established by the most recent final step execution — works on any prompt, not just the final step itself; on first pass when no final step session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution."
         },
         "skills": {
@@ -913,7 +916,7 @@
           "$ref": "#/definitions/scriptProperties/properties/ignoreCase"
         },
         "maxRetries": {
-          "type": "number",
+          "type": "integer",
           "description": "Maximum number of retry attempts when validation fails. Use -1 for unlimited retries (use with caution), 0 for no retries (default), or 1-100 for a specific limit.",
           "minimum": -1,
           "maximum": 100
@@ -1627,6 +1630,7 @@
         },
         "timeoutSec": {
           "type": "number",
+          "minimum": 1,
           "description": "Timeout in seconds. Only respected by CLIs that support per-hook timeouts."
         }
       }
@@ -1699,6 +1703,10 @@
           "description": "Tool names from this server to deny at execution time. Use bare tool names without the mcp__<serverid>__ prefix (e.g. [\"append_step\"]). Translated to mcp__<id>__<tool> deny patterns and merged into the harness permission args. Supported on harnesses that accept tool deny patterns."
         }
       },
+      "oneOf": [
+        { "required": ["command"], "not": { "required": ["url"] } },
+        { "required": ["url"], "not": { "required": ["command"] } }
+      ],
       "required": ["id"],
       "additionalProperties": false
     },

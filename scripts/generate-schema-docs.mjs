@@ -501,6 +501,12 @@ class SchemaRenderer {
     if (isRemoved(schema)) {
       return "removed";
     }
+    // A oneOf can constrain which property combination is valid without
+    // changing the containing object's shape (for example, exactly one of
+    // command/url). Keep documenting the declared object properties.
+    if (schema.type === "object" && schema.properties) {
+      return this.objectLabel(schema);
+    }
     if ("const" in schema) {
       return code(JSON.stringify(schema.const));
     }
@@ -608,6 +614,9 @@ class SchemaRenderer {
       return [];
     }
     const schema = this.deref(raw);
+    if (schema.type === "object" && schema.properties) {
+      return [{ suffix, schema }];
+    }
     const alternatives = alternativesOf(schema);
     if (alternatives) {
       return alternatives.flatMap((alt) => this.containersOf(alt, suffix));

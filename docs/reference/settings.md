@@ -358,7 +358,7 @@ Fields:
 - `operator` · `"eq" | "ne" | "contains" | "notContains" | "gte" | "gt" | "lte" | "lt" | "matches" | "isEmpty" | "isNotEmpty"` — How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag.
 - `expected` · `string` or `number` — Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.
 - `ignoreCase` · `boolean` — Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.
-- `maxRetries` · `number` — Maximum number of retry attempts when validation fails. Use -1 for unlimited retries (use with caution), 0 for no retries (default), or 1-100 for a specific limit.
+- `maxRetries` · `integer` — Maximum number of retry attempts when validation fails. Use -1 for unlimited retries (use with caution), 0 for no retries (default), or 1-100 for a specific limit.
 - `retryPrompt` · `string` — Template for retry prompt. Supports $preCondition:&lt;field> and $endCondition:&lt;field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:\* works in the step and retry prompts; $endCondition:\* is only available in the retry prompt.
 - `passRetryPrompt` · `string` — Template for pass-retry prompt. Supports $preCondition:&lt;field> and $endCondition:&lt;field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:\* works in the step and retry prompts; $endCondition:\* is only available in the retry prompt. If omitted, the step's own prompt is re-sent.
 - `resumeSessionOnRetry` · `boolean` — Whether retries continue in the same session. Default: true (retries resume the existing session for context continuity). Set to false to start a fresh session for each retry.
@@ -846,8 +846,9 @@ When true, keeps the TUI alive between prompts and writes follow-up prompts dire
 
 ### `execution.maxPromptTimeout` {#execution-maxprompttimeout}
 
-- **Type:** `number`
+- **Type:** `integer`
 - **Default:** `-1`
+- **Constraints:** minimum -1
 
 Maximum time in seconds to wait for a prompt to complete. Use -1 for unlimited.
 
@@ -892,7 +893,7 @@ not isolate members from each other or merge their work.
 
 ### `queue.maxSize` {#queue-maxsize}
 
-- **Type:** `number`
+- **Type:** `integer`
 - **Default:** `100`
 
 Maximum number of prompts allowed in the queue.
@@ -907,8 +908,9 @@ Maximum number of active members in a parallel step group.
 
 ### `queue.maxWorkflowExecutionTime` {#queue-maxworkflowexecutiontime}
 
-- **Type:** `number`
+- **Type:** `integer`
 - **Default:** `-1`
+- **Constraints:** minimum -1
 
 Maximum total execution time in seconds for a workflow. Use -1 for unlimited.
 
@@ -932,8 +934,9 @@ Execution run retention settings. History is always on.
 
 ### `runs.maxRuns` {#runs-maxruns}
 
-- **Type:** `number`
+- **Type:** `integer`
 - **Default:** `-1`
+- **Constraints:** minimum -1
 
 Deletes entire runs—definition and output—oldest first. -1 keeps all runs.
 
@@ -967,7 +970,7 @@ Terminal line height multiplier.
 
 ### `terminal.scrollback` {#terminal-scrollback}
 
-- **Type:** `number`
+- **Type:** `integer`
 - **Default:** `5000`
 - **Constraints:** minimum 1000 · maximum 50000
 
@@ -1138,7 +1141,7 @@ Send absolute file paths to the harness/model instead of relative paths. Stored 
 
 ### `ui.outputVirtualizationRowThreshold` {#ui-outputvirtualizationrowthreshold}
 
-- **Type:** `number`
+- **Type:** `integer`
 - **Default:** `200`
 - **Constraints:** minimum -1
 
@@ -1251,21 +1254,23 @@ Automatically start the hosted dashboard server when the VS Code extension activ
 
 ### `server.port` {#server-port}
 
-- **Type:** `number`
+- **Type:** `integer`
 - **Default:** `4747`
+- **Constraints:** minimum 1 · maximum 65535
 
 Port for the ctrlyoke hosted server.
 
 ### `server.standalonePort` {#server-standaloneport}
 
-- **Type:** `number`
+- **Type:** `integer`
 - **Default:** `4748`
+- **Constraints:** minimum 1 · maximum 65535
 
 Port for the standalone (non-extension) ctrlyoke server.
 
 ### `server.fallbackPorts` {#server-fallbackports}
 
-- **Type:** `number[]`
+- **Type:** `integer[]`
 - **Default:** `[]`
 
 Ordered ports to try, in order, if 'port' is already in use, before falling back to an OS-assigned port. Useful for a stable, bookmarkable URL across restarts when 'port' is often taken by another running instance.

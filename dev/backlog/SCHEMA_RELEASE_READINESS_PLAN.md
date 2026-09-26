@@ -26,26 +26,26 @@
 
 ## 0. The 18 items and their decisions
 
-| #   | Item                                                                   | Decision                                    | §    | Phase |
-| --- | ---------------------------------------------------------------------- | ------------------------------------------- | ---- | ----- |
-| 1   | Version marker on authored files + migration plan                      | **Yes** (user); newer files refused cleanly | 1, 2 | E     |
-| 2   | Publish schemas at `https://ctrlyoke.dev/schema/v1/…`, allow `$schema` | **Yes** (user)                              | 3    | E     |
-| 3   | All durations in seconds, with a `Sec` suffix                          | **Yes** (user)                              | 4    | B     |
-| 4   | Strict prompt steps / workflow root                                    | Recommended; draft 2020-12, verified        | 5    | D     |
-| 5   | Top-level `statusLine` keyed by harness ID; new `diagnostics` group    | **Yes** (user)                              | 6    | B     |
-| 6   | Single-source lineage metadata in `workflow.json`                      | **Yes** (user)                              | 7    | C     |
-| 7   | Constrain `vars` key names                                             | Recommended                                 | 8.1  | A     |
-| 8   | `mcpServerConfig`: exactly one of `command`/`url`                      | Recommended                                 | 8.2  | A     |
-| 9   | Integer/range tightening (+ timeout-`0` unification)                   | Recommended                                 | 8.3  | A     |
-| 10  | `workflowKey` rejects `.`/`..`                                         | Recommended (low)                           | 8.4  | A     |
-| 11  | Script-step `executionMode` description                                | Fix                                         | 9    | A     |
-| 12  | `endCondition.maxRetries` default description                          | Fix                                         | 9    | A     |
-| 13  | `passRetryPrompt` description                                          | Fix                                         | 9    | A     |
-| 14  | `defaults.priorContext` description / disallow run address             | Fix                                         | 9    | A     |
-| 15  | Delete dead root `_runtime.harness` rule                               | Fix                                         | 10.1 | A     |
-| 16  | Single-source harness-keyed lists                                      | Fix                                         | 10.2 | A     |
-| 17  | Consistent `default` keyword                                           | Fix                                         | 10.3 | A     |
-| 18  | Stale `responseText` claim in `copilot-instructions.md`                | Fix                                         | 11   | A     |
+| #   | Item                                                                   | Decision                                     | §    | Phase |
+| --- | ---------------------------------------------------------------------- | -------------------------------------------- | ---- | ----- |
+| 1   | Version marker on authored files + migration plan                      | **Yes** (user); newer files refused cleanly  | 1, 2 | E     |
+| 2   | Publish schemas at `https://ctrlyoke.dev/schema/v1/…`, allow `$schema` | **Yes** (user)                               | 3    | E     |
+| 3   | All durations in seconds, with a `Sec` suffix                          | **Yes** (user)                               | 4    | B     |
+| 4   | Strict prompt steps / workflow root                                    | Recommended; draft 2020-12, verified         | 5    | D     |
+| 5   | Top-level `statusLine` keyed by harness ID; new `diagnostics` group    | **Yes** (user)                               | 6    | B     |
+| 6   | Single-source lineage metadata in `workflow.json`                      | **Yes** (user)                               | 7    | C     |
+| 7   | Constrain `vars` key names                                             | Done 2026-09-26                              | 8.1  | A     |
+| 8   | `mcpServerConfig`: exactly one of `command`/`url`                      | Done 2026-09-26                              | 8.2  | A     |
+| 9   | Integer/range tightening (+ timeout-`0` unification)                   | Partial — Done 2026-09-26; B fields deferred | 8.3  | A     |
+| 10  | `workflowKey` rejects `.`/`..`                                         | Done 2026-09-26                              | 8.4  | A     |
+| 11  | Script-step `executionMode` description                                | Fix                                          | 9    | A     |
+| 12  | `endCondition.maxRetries` default description                          | Fix                                          | 9    | A     |
+| 13  | `passRetryPrompt` description                                          | Fix                                          | 9    | A     |
+| 14  | `defaults.priorContext` description / disallow run address             | Fix                                          | 9    | A     |
+| 15  | Delete dead root `_runtime.harness` rule                               | Fix                                          | 10.1 | A     |
+| 16  | Single-source harness-keyed lists                                      | Fix                                          | 10.2 | A     |
+| 17  | Consistent `default` keyword                                           | Fix                                          | 10.3 | A     |
+| 18  | Stale `responseText` claim in `copilot-instructions.md`                | Fix                                          | 11   | A     |
 
 Phases are ordered in §12. The governing idea: **finish every shape change (A–D) first, then
 stamp and freeze `v1` (E)**, so the baseline that ships is the final one and no migration is
@@ -636,12 +636,15 @@ Add `propertyNames: { "pattern": "^\\w+$" }` to `varsConfig`, matching
 `VARIABLE_NAME_PATTERN_SOURCE` (`KeyValueKeyKinds.ts:14`). Add a test asserting the schema
 pattern equals the code constant. Keys differing only in case (`foo`/`FOO`) collide in
 `CTRLYOKE_VAR_*` (`ScriptProcessRunner.ts:80` upper-cases them). JSON Schema can't express
-that, so `PromptFileParser` reports it as a validation error. Apply the same rules to
-`--var` flags. A bad key can never work, so a hard error is appropriate here.
+that, so `PromptFileParser` reports it as a validation error. The parser and CLI use the
+same key-validation helper, including when CLI values are merged with workflow defaults.
+A bad key can never work, so a hard error is appropriate here.
 
 ### 8.2 `mcpServerConfig` (item 8)
 
-Enforce what the description already promises:
+Enforce what the description already promises in both the schema and managed MCP registry
+reader. The registry check previously accepted both fields; it now requires exactly one,
+matching the schema:
 
 ```json
 "oneOf": [
@@ -650,21 +653,25 @@ Enforce what the description already promises:
 ]
 ```
 
-Optionally also tie `args`/`env` to `command` and `transport`/`headers` to `url` with
-`dependencies`. First find the runtime check in the MCP registry path and match it exactly,
-so the schema never rejects something the runtime accepts.
+Do not tie `args`/`env` to `command` or `transport`/`headers` to `url`: the runtime accepts
+those fields with either transport, so schema dependencies would reject runtime-accepted
+configurations.
 
 ### 8.3 Numbers (item 9)
 
-| Field                                                                                | Change                                                    |
-| ------------------------------------------------------------------------------------ | --------------------------------------------------------- |
-| `sessionId` (number form)                                                            | `integer`, `minimum: 1` (it's a 1-based prompt reference) |
-| `endCondition.maxRetries`                                                            | `integer` (keep `-1..100`)                                |
-| `timeoutSec`, `retryDelaySec`                                                        | `number`, `exclusiveMinimum: 0` (fractional allowed, §4)  |
-| `hooks[].timeoutSec`                                                                 | `minimum: 1`                                              |
-| `server.port`, `server.standalonePort`, `server.fallbackPorts[]`                     | `integer`, `1..65535`                                     |
-| `queue.maxSize`, `terminal.scrollback`, `ui.outputVirtualizationRowThreshold`        | `integer`                                                 |
-| `runs.maxRuns`, `execution.maxPromptTimeoutSec`, `queue.maxWorkflowExecutionTimeSec` | `integer`, `minimum: -1`                                  |
+| Field                                                                                          | Change                                                    |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `sessionId` (number form)                                                                      | `integer`, `minimum: 1` (it's a 1-based prompt reference) |
+| `endCondition.maxRetries`                                                                      | `integer` (keep `-1..100`)                                |
+| `timeoutSec`, `retryDelaySec`                                                                  | `number`, `exclusiveMinimum: 0` (fractional allowed, §4)  |
+| `hooks[].timeoutSec`                                                                           | `minimum: 1`                                              |
+| `server.port`, `server.standalonePort`, `server.fallbackPorts[]`                               | `integer`, `1..65535`                                     |
+| `queue.maxSize`, `terminal.scrollback`, `ui.outputVirtualizationRowThreshold`                  | `integer`                                                 |
+| `runs.maxRuns`, `execution.maxPromptTimeout`, `queue.maxWorkflowExecutionTime` (current names) | `integer`, `minimum: -1`                                  |
+
+This implementation completes every row except `timeoutSec`/`retryDelaySec` and the timeout-0
+unification; those land with the duration rename in §4. Existing `DEFAULT_SETTINGS`, bundled
+templates, and `.ctrlyoke` workflow files were checked against the tightened constraints.
 
 **Timeout `0` is currently inconsistent.** Conditions treat `0` as "use the default"
 (`EndConditionEvaluator.ts:282`: `condition.timeout || …`). Script steps treat it as a literal
@@ -755,14 +762,14 @@ After implementation, record the durable rules where the next agent will look:
 
 ## 12. Order
 
-| Phase | Items                                         | Notes                                                                                                                                                                                             |
-| ----- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phase | Items                                         | Notes                                                                                                                                                                                                                                                               |
+| ----- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **A** | 7–18                                          | Independent and small; any order. Regenerate docs/YAML schema after each schema edit (`npm run generate-schema-docs`, `npm run generate-schema`). §8.3's `timeoutSec`/`retryDelaySec` rows and the timeout-`0` unification land with B, since they name B's fields. |
-| **B** | 3, 5                                          | The two rename sets; do them together so the settings file only changes shape once.                                                                                                               |
-| **C** | 6                                             | Needs B's settled field names; bumps the search index.                                                                                                                                            |
-| **D** | 4                                             | Last shape change: the draft 2020-12 move, closures, lenient loader and `ValidationUtils` deletion, after all renames and §7's removals.                                                          |
-| **E** | 1, 2 + §2.2 skeleton + §2.8                   | Add `schemaVersion` fields and guard stores, convert semver strings, build `FormatMigrations` with empty chains, publish `/schema/v1/`, and **freeze the fixture corpus from the release build.** |
-| post  | §2.4 `ctrlyoke migrate`, first real migration | When the first breaking change lands after release.                                                                                                                                               |
+| **B** | 3, 5                                          | The two rename sets; do them together so the settings file only changes shape once.                                                                                                                                                                                 |
+| **C** | 6                                             | Needs B's settled field names; bumps the search index.                                                                                                                                                                                                              |
+| **D** | 4                                             | Last shape change: the draft 2020-12 move, closures, lenient loader and `ValidationUtils` deletion, after all renames and §7's removals.                                                                                                                            |
+| **E** | 1, 2 + §2.2 skeleton + §2.8                   | Add `schemaVersion` fields and guard stores, convert semver strings, build `FormatMigrations` with empty chains, publish `/schema/v1/`, and **freeze the fixture corpus from the release build.**                                                                   |
+| post  | §2.4 `ctrlyoke migrate`, first real migration | When the first breaking change lands after release.                                                                                                                                                                                                                 |
 
 ### Release checklist (end of phase E)
 

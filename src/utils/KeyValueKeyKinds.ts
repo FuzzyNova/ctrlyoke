@@ -16,6 +16,26 @@ export const VARIABLE_NAME_PATTERN = new RegExp(
   `^${VARIABLE_NAME_PATTERN_SOURCE}$`
 );
 
+/** Return workflow-variable key errors shared by file parsing and CLI overrides. */
+export function getVariableKeyErrors(keys: readonly string[]): string[] {
+  const errors: string[] = [];
+  const seen = new Set<string>();
+
+  for (const key of keys) {
+    if (!VARIABLE_NAME_PATTERN.test(key)) {
+      errors.push(`Variable name "${key}" must match ^\\w+$`);
+    }
+    const normalized = key.toLowerCase();
+    if (seen.has(normalized)) {
+      errors.push(`Variable names must not differ only by case ("${key}")`);
+    } else {
+      seen.add(normalized);
+    }
+  }
+
+  return errors;
+}
+
 const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const HEADER_TOKEN_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 

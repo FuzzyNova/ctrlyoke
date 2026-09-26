@@ -6,6 +6,8 @@ import * as yaml from "js-yaml";
 import { PromptFileParser } from "../../core/PromptFileParser";
 import { formatRunRef } from "../../utils/WorkflowPaths";
 import { PERMISSION_MODES } from "../../types/DashboardConstants";
+import { VARIABLE_NAME_PATTERN_SOURCE } from "../../utils/KeyValueKeyKinds";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 
 suite("Workflow template schema", () => {
   const schemaPath = path.resolve(
@@ -28,6 +30,150 @@ suite("Workflow template schema", () => {
       validate(template),
       true,
       JSON.stringify(validate.errors)
+    );
+  });
+
+  test("uses the shared variable-name pattern and rejects case collisions", async () => {
+    assert.strictEqual(
+      schema.definitions.varsConfig.propertyNames.pattern,
+      `^${VARIABLE_NAME_PATTERN_SOURCE}$`
+    );
+    assert.strictEqual(
+      validate({ vars: { valid_name2: "ok" }, steps: [{ prompt: "hi" }] }),
+      true,
+      JSON.stringify(validate.errors)
+    );
+    assert.strictEqual(
+      validate({ vars: { "bad-name": "no" }, steps: [{ prompt: "hi" }] }),
+      false
+    );
+
+    await assert.rejects(
+      new PromptFileParser().validateAndNormalize(
+        { vars: { foo: "one", FOO: "two" }, steps: [{ prompt: "hi" }] },
+        process.cwd()
+      ),
+      /vars: Variable names must not differ only by case/
+    );
+  });
+
+  test("requires exactly one MCP command or URL", () => {
+    const workflow = (entry: Record<string, unknown>) => ({
+      mcpServers: [{ id: "server", ...entry }],
+      steps: [{ prompt: "hi" }],
+    });
+
+    assert.strictEqual(validate(workflow({ command: "node" })), true);
+    assert.strictEqual(
+      validate(workflow({ url: "https://example.test" })),
+      true
+    );
+    assert.strictEqual(
+      validate(workflow({ command: "node", url: "https://example.test" })),
+      false
+    );
+    assert.strictEqual(validate(workflow({})), false);
+  });
+
+  test("tightens integer fields, ports, and workflow run addresses", () => {
+    assert.strictEqual(
+      validate({ steps: [{ prompt: "hi", sessionId: 1 }] }),
+      true
+    );
+    assert.strictEqual(
+      validate({ steps: [{ prompt: "hi", sessionId: 1.5 }] }),
+      false
+    );
+    assert.strictEqual(
+      validate({ steps: [{ prompt: "hi", sessionId: 0 }] }),
+      false
+    );
+    assert.strictEqual(
+      validate({
+        steps: [{ prompt: "hi" }],
+        endCondition: { script: "true", maxRetries: 1.5 },
+      }),
+      false
+    );
+    assert.strictEqual(
+      validate({
+        steps: [{ prompt: "hi" }],
+        hooks: [{ event: "stop", command: "x", timeoutSec: 0 }],
+      }),
+      false
+    );
+
+    for (const workflowKey of [".", ".."])
+      assert.strictEqual(
+        validate({
+          steps: [
+            {
+              prompt: "hi",
+              priorContext: {
+                workflowKey,
+                runRef: formatRunRef(Date.UTC(2026, 8, 23)),
+              },
+            },
+          ],
+        }),
+        false,
+        workflowKey
+      );
+  });
+
+  test("tightens settings numbers without invalidating defaults", () => {
+    const settingsSchema = JSON.parse(
+      fs.readFileSync(
+        path.resolve(__dirname, "../../../schemas/settings-schema.json"),
+        "utf-8"
+      )
+    );
+    const settingsAjv = new Ajv({ allErrors: true });
+    settingsAjv.addSchema(schema, "workflow-schema.json");
+    const validateSettings = settingsAjv.compile(settingsSchema);
+    const { execution, queue, runs, terminal, ui, server } =
+      CTRLYOKE_SETTINGS_DEFAULTS;
+    const defaults = {
+      execution: {
+        maxPromptTimeout: execution.maxPromptTimeout,
+        scriptTimeout: execution.scriptTimeout,
+      },
+      queue: {
+        maxSize: queue.maxSize,
+        maxWorkflowExecutionTime: queue.maxWorkflowExecutionTime,
+      },
+      runs: { maxRuns: runs.maxRuns },
+      terminal: { scrollback: terminal.scrollback },
+      ui: {
+        outputVirtualizationRowThreshold: ui.outputVirtualizationRowThreshold,
+      },
+      server: {
+        port: server.port,
+        standalonePort: server.standalonePort,
+        fallbackPorts: server.fallbackPorts,
+      },
+    };
+    assert.strictEqual(
+      validateSettings(defaults),
+      true,
+      JSON.stringify(validateSettings.errors)
+    );
+    assert.strictEqual(validateSettings({ server: { port: 65536 } }), false);
+    assert.strictEqual(validateSettings({ server: { port: 0 } }), false);
+    assert.strictEqual(validateSettings({ queue: { maxSize: 1.5 } }), false);
+    assert.strictEqual(
+      validateSettings({ execution: { maxPromptTimeout: 1.5 } }),
+      false
+    );
+    assert.strictEqual(
+      validateSettings({ queue: { maxWorkflowExecutionTime: 1.5 } }),
+      false
+    );
+    assert.strictEqual(validateSettings({ runs: { maxRuns: -2 } }), false);
+    assert.strictEqual(validateSettings({ runs: { maxRuns: 1.5 } }), false);
+    assert.strictEqual(
+      validateSettings({ server: { fallbackPorts: [65536] } }),
+      false
     );
   });
 

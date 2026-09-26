@@ -177,7 +177,7 @@ Accepted forms:
 
 ### `sessionId` {#execution-properties-sessionid}
 
-- **Type:** `string` or `number`
+- **Type:** `string` or `integer`
 
 Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value "finalStep" (resume the session established by the most recent final step execution — works on any prompt, not just the final step itself; on first pass when no final step session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution.
 
@@ -605,7 +605,7 @@ Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Def
 
 ### `maxRetries` {#end-condition-maxretries}
 
-- **Type:** `number`
+- **Type:** `integer`
 - **Constraints:** minimum -1 · maximum 100
 
 Maximum number of retry attempts when validation fails. Use -1 for unlimited retries (use with caution), 0 for no retries (default), or 1-100 for a specific limit.
@@ -823,6 +823,7 @@ Environment map consumed by the hook process. Secret references are allowed only
 ### `timeoutSec` {#hook-entry-timeoutsec}
 
 - **Type:** `number`
+- **Constraints:** minimum 1
 
 Timeout in seconds. Only respected by CLIs that support per-hook timeouts.
 
@@ -899,7 +900,7 @@ Identifies one completed run for `priorContext` imports.
 
 - **Type:** `string`
 - **Required:** yes
-- **Constraints:** at least 1 character(s) · pattern `^[^/\\]+$`
+- **Constraints:** at least 1 character(s) · pattern `^(?!\.{1,2}$)[^/\\]+$`
 
 Stable workflow lineage key within the current workspace.
 
