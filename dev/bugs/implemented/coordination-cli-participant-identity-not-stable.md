@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-26 by step 0 (claude-cli) of the coordination test workflow, reproduced live
 - **Area:** `src/mcp-server.ts` (`getCoordinationState`), `src/core/orchestration/ExecutionRootCoordination.ts`
-- **Severity:** high: skill-mode coordination cannot release claims, and its participant list is wrong
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -205,6 +205,53 @@ suite("ExecutionRootCoordination", function () {
     }
   });
 
+  test("reuses one CLI participant per run address across separate calls", async () => {
+    const root = await tempDirectory();
+    let now = 10_000;
+    try {
+      const address = {
+        workflowKey: "wf" as WorkflowKey,
+        runRef: "run-1" as RunRef,
+        stepIndex: 1,
+        parallelGroupId: "group-1",
+      };
+      // A fresh registry per call mirrors the skill CLI, where every tool call
+      // is a new process with no in-memory lease.
+      const newRegistry = () =>
+        new CoordinationParticipantRegistry(root, {
+          now: () => now,
+          processLivenessCheck: () => true,
+        });
+      const registerCliStep = (stepAddress = address) =>
+        newRegistry().registerParticipant({
+          kind: "ctrlyoke-step",
+          label: "wf:1",
+          via: COORDINATION_PARTICIPANT_VIA.CLI,
+          address: stepAddress,
+        });
+
+      const first = await registerCliStep();
+      await first.claim(["src/a.ts"]);
+
+      now += 60_000;
+      const second = await registerCliStep();
+      assert.strictEqual(second.participantId, first.participantId);
+      assert.ok(second.leaseExpiresAt! > first.leaseExpiresAt!);
+      assert.deepStrictEqual((await second.claim(["src/a.ts"])).denied, []);
+      assert.deepStrictEqual(await second.release(), ["src/a.ts"]);
+
+      const sibling = await registerCliStep({ ...address, stepIndex: 2 });
+      assert.notStrictEqual(sibling.participantId, first.participantId);
+      assert.strictEqual((await newRegistry().fold()).participants.length, 2);
+
+      now = second.leaseExpiresAt! + 1;
+      const afterExpiry = await registerCliStep();
+      assert.notStrictEqual(afterExpiry.participantId, first.participantId);
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
   test("re-claiming an owned path is idempotent and overlapping globs name the owner", async () => {
     const root = await tempDirectory();
     try {

@@ -308,6 +308,47 @@ function participantEntry(
   };
 }
 
+function sameParticipantAddress(
+  left: CoordinationParticipant["address"],
+  right: CoordinationParticipant["address"]
+): boolean {
+  return (
+    left !== undefined &&
+    right !== undefined &&
+    left.workflowKey === right.workflowKey &&
+    left.runRef === right.runRef &&
+    left.stepIndex === right.stepIndex &&
+    left.parallelGroupId === right.parallelGroupId
+  );
+}
+
+/**
+ * A CLI-delivered participant has no process that outlives one tool call, so
+ * each call registers again. Its run address is the only stable identity it
+ * has; reuse the live participant already holding that address so its claims
+ * stay releasable across calls. Addressless (external) CLI callers have no
+ * stable key and still register per call.
+ */
+function findResumableCliParticipant(
+  participants: readonly CoordinationParticipant[],
+  registration: CoordinationParticipantRegistration,
+  attested: boolean
+): CoordinationParticipant | undefined {
+  if (
+    registration.via !== COORDINATION_PARTICIPANT_VIA.CLI ||
+    !registration.address
+  ) {
+    return undefined;
+  }
+  return participants.find(
+    (participant) =>
+      participant.via === COORDINATION_PARTICIPANT_VIA.CLI &&
+      participant.kind === registration.kind &&
+      participant.attested === attested &&
+      sameParticipantAddress(participant.address, registration.address)
+  );
+}
+
 function findLiveParticipant(
   entries: readonly CoordinationEntry[],
   participantId: string,
@@ -544,29 +585,41 @@ export class CoordinationParticipantRegistry {
     ) {
       throw new Error("External coordination participants are disabled");
     }
-    const now = this.now();
-    const configuredTtlMinutes =
-      this.cliParticipantTtlMinutes ??
-      configService.get("coordination").cliParticipantTtlMinutes;
-    const ttlMinutes =
-      configuredTtlMinutes > 0 && Number.isFinite(configuredTtlMinutes)
-        ? configuredTtlMinutes
-        : DEFAULT_COORDINATION_CLI_PARTICIPANT_TTL_MINUTES;
-    const participant: CoordinationParticipant = {
-      participantId: generateOwnerToken(),
-      kind: registration.kind,
-      attested,
-      label: registration.label,
-      via: registration.via,
-      ...(registration.address ? { address: registration.address } : {}),
-      ...(registration.via === COORDINATION_PARTICIPANT_VIA.MCP
-        ? { pid: process.pid, lastHeartbeat: now }
-        : { leaseExpiresAt: now + ttlMinutes * 60 * 1_000 }),
-    };
-    await this.store.append(
-      participantEntry(participant, COORDINATION_ENTRY_KINDS.JOIN)
-    );
-    return this.createLease(participant);
+    // Find and register under one board lock, so two concurrent CLI calls
+    // from the same step cannot both miss and register twice.
+    return this.store.transaction(async (transaction) => {
+      const resumable = findResumableCliParticipant(
+        foldCoordinationEntries(transaction.entries, this.foldOptions())
+          .participants,
+        registration,
+        attested
+      );
+      if (resumable) {
+        return this.createLease(
+          await this.refresh(resumable.participantId, transaction)
+        );
+      }
+
+      const now = this.now();
+      const participant: CoordinationParticipant = {
+        participantId: generateOwnerToken(),
+        kind: registration.kind,
+        attested,
+        label: registration.label,
+        via: registration.via,
+        ...(registration.address ? { address: registration.address } : {}),
+        ...(registration.via === COORDINATION_PARTICIPANT_VIA.MCP
+          ? { pid: process.pid, lastHeartbeat: now }
+          : {
+              leaseExpiresAt:
+                now + this.getCliParticipantTtlMinutes() * 60 * 1_000,
+            }),
+      };
+      await transaction.append(
+        participantEntry(participant, COORDINATION_ENTRY_KINDS.JOIN)
+      );
+      return this.createLease(participant);
+    });
   }
 
   private foldOptions(): CoordinationFoldOptions {

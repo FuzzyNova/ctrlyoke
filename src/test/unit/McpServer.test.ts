@@ -810,6 +810,51 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.strictEqual(note.from.attested, false);
   });
 
+  test("releases a claim made by an earlier CLI coordination call", async () => {
+    await setup();
+    await new ProjectStateRegistry().initialize(workspaceRoot);
+    const run = await createRun(
+      "cli-coordination-release",
+      "2026-01-01T00-00-00-000Z",
+      {
+        currentIndex: 0,
+        executionState: EXECUTION_STATES.RUNNING,
+      }
+    );
+    const callCli = (tool: string, args: object) => {
+      const result = runMcpToolCli(
+        [
+          "--tool",
+          tool,
+          "--args",
+          JSON.stringify(args),
+          "--workspace",
+          workspaceRoot,
+          "--working-file",
+          run.runFilePath,
+          "--execution-root",
+          workspaceRoot,
+        ],
+        undefined,
+        workspaceRoot
+      );
+      assert.strictEqual(
+        result.status,
+        0,
+        `CLI failed: stdout=${result.stdout} stderr=${result.stderr}`
+      );
+      return JSON.parse(result.stdout);
+    };
+
+    const claimed = callCli(MCP_CLAIM_PATHS_TOOL_NAME, { paths: ["src/a.ts"] });
+    assert.deepStrictEqual(claimed.granted, ["src/a.ts"]);
+
+    const released = callCli(MCP_RELEASE_PATHS_TOOL_NAME, {});
+    assert.deepStrictEqual(released.released, ["src/a.ts"]);
+    assert.strictEqual(released.scope.claimSummary.count, 0);
+    assert.strictEqual(released.scope.participants.length, 1);
+  });
+
   test("rejects a CLI coordination call for a bad working-file address", async () => {
     await setup();
     const result = runMcpToolCli(
