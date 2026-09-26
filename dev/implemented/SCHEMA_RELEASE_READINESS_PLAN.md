@@ -1,6 +1,9 @@
 # Schema and Persisted-Format Release Readiness
 
-> **Status:** In progress — phases A–D and phase E implementation items 1–2 are complete; only release-cut verification remains. Written 2026-09-26 against current code.
+> **Status:** Implemented 2026-09-26 — all 18 items and phases A–E are done. Two release-cut
+> actions remain by design (§12 checklist): re-capture or confirm the fixture corpus from the
+> actual release build, and deploy and verify `/schema/v1/` live. §2.4's `ctrlyoke migrate` ships
+> with the first real migration after release.
 >
 > **Problem in one line:** once ctrlyoke ships, every persisted shape — workflow files,
 > `settings.json`, run history, the search index — becomes a compatibility contract, and today
