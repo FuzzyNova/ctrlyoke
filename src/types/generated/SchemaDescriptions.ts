@@ -6,7 +6,10 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "_runtime.additionalArgs": "Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). Use null at prompt level to explicitly disable additional args even if the workflow or settings define some. Example: \"--effort high --max-turns 10\"",
   "_runtime.agent": "Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. Use null to explicitly disable inherited agent selection.",
   "_runtime.completedAt": "Timestamp when this prompt completed execution (set for all terminal states, not just successful completion)",
+  "_runtime.contextWindowSize": "Context window size in tokens, captured from the last completed output",
+  "_runtime.contextWindowUsed": "Context window tokens in use, captured from the last completed output",
   "_runtime.currentIndex": "Index of currently executing prompt (0-based)",
+  "_runtime.elapsed": "Completed prompt duration in seconds",
   "_runtime.endCondition": "End condition validation to run after this prompt completes. Use null to explicitly disable end condition inheritance from the workflow level (even if the workflow defines one). Omitting this field inherits the workflow-level end condition (if any).",
   "_runtime.endCondition.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.",
   "_runtime.endCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
@@ -85,6 +88,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "_runtime.priorContext[]": "1-based prompt number",
   "_runtime.resumeSession": "Whether to resume the existing chat session for this prompt. When omitted, defaults to the `defaults.resumeSession` setting (default: false). Set to true to continue in the existing session for context continuity. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry.",
   "_runtime.retryCount": "Number of retry attempts for this prompt",
+  "_runtime.schemaVersion": "Run-file format version, stamped on every write. A file written by a newer ctrlyoke is refused rather than overwritten.",
   "_runtime.secrets": "Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets replace workflow-level secrets (no merging). Use null to explicitly disable an inherited grant array; inline !NAME references in prompt text remain authoritative grants.",
   "_runtime.sessionId": "Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value \"finalStep\" (resume the session established by the most recent final step execution — works on any prompt, not just the final step itself; on first pass when no final step session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution.",
   "_runtime.skills": "Portable ctrlyoke prompt attachments. ctrlyoke attaches each selected skill's content to the prompt, so skills work the same on every harness. The Agents & Skills settings page separately manages optional harness-native discovery directories whose behavior varies by harness; native discovery does not determine workflow skills support. Prompt-level skills replace workflow-level skills (no merging). Use null to explicitly disable inherited skills.",
@@ -106,6 +110,13 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "_runtime.toolPermissions.deniedTools": "Tool patterns to deny (takes precedence over allow list). Currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode. Qwen uses inline granular support. OpenCode delivers permissions through OPENCODE_CONFIG_CONTENT and writes no workspace opencode.json. Codex and Antigravity provide a derived mode-only summary; Denied Tools are NOT ENFORCED by those harnesses.",
   "_runtime.toolPermissions.mode": "Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects deny list. 'custom' uses allowedTools + deniedTools only. 'none' passes no permission flags at all — it does not deny tools; the harness applies whatever permissions are configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config).",
   "_runtime.totalPausedDuration": "Accumulated time spent paused before the current pause, in milliseconds",
+  "_runtime.worktree": "Disk-authoritative lifecycle metadata for a worktree-backed run. Distinct from the authored root `worktree` setting: this records the checkout the run actually used.",
+  "_runtime.worktree.changedFileCount": "Number of files in the landed branch diff from baseCommit, when known",
+  "_runtime.worktree.comparisonBaseLabel": "Recorded comparison base used for named-branch divergence, when known",
+  "_runtime.worktree.dirty": "Whether the named checkout had uncommitted changes at run start",
+  "_runtime.worktree.origin": "Whether ctrlyoke created the worktree, found it already present, or recovered it after an interrupted run",
+  "_runtime.worktree.sourceCheckoutDirty": "Whether source checkout changes existed when the managed worktree was created",
+  "_runtime.worktreeNotice": "Durable notice recorded when an inherited worktree default degraded to ordinary execution",
   "_templateMeta": "Marks the file as a reusable template and describes its placeholders. Removed when the template is instantiated.",
   "_templateMeta.description": "Short explanation shown in the template picker.",
   "_templateMeta.name": "Display name shown in the template picker.",
@@ -243,6 +254,9 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "finalStep._runtime.additionalArgs": "Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). Use null at prompt level to explicitly disable additional args even if the workflow or settings define some. Example: \"--effort high --max-turns 10\"",
   "finalStep._runtime.agent": "Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. Use null to explicitly disable inherited agent selection.",
   "finalStep._runtime.completedAt": "Timestamp when this prompt completed execution (set for all terminal states, not just successful completion)",
+  "finalStep._runtime.contextWindowSize": "Context window size in tokens, captured from the last completed output",
+  "finalStep._runtime.contextWindowUsed": "Context window tokens in use, captured from the last completed output",
+  "finalStep._runtime.elapsed": "Completed prompt duration in seconds",
   "finalStep._runtime.endCondition": "End condition validation to run after this prompt completes. Use null to explicitly disable end condition inheritance from the workflow level (even if the workflow defines one). Omitting this field inherits the workflow-level end condition (if any).",
   "finalStep._runtime.endCondition.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.",
   "finalStep._runtime.endCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
@@ -532,6 +546,9 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[]._runtime.additionalArgs": "Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). Use null at prompt level to explicitly disable additional args even if the workflow or settings define some. Example: \"--effort high --max-turns 10\"",
   "steps[]._runtime.agent": "Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. Use null to explicitly disable inherited agent selection.",
   "steps[]._runtime.completedAt": "Timestamp when this prompt completed execution (set for all terminal states, not just successful completion)",
+  "steps[]._runtime.contextWindowSize": "Context window size in tokens, captured from the last completed output",
+  "steps[]._runtime.contextWindowUsed": "Context window tokens in use, captured from the last completed output",
+  "steps[]._runtime.elapsed": "Completed prompt duration in seconds",
   "steps[]._runtime.endCondition": "End condition validation to run after this prompt completes. Use null to explicitly disable end condition inheritance from the workflow level (even if the workflow defines one). Omitting this field inherits the workflow-level end condition (if any).",
   "steps[]._runtime.endCondition.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.",
   "steps[]._runtime.endCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
@@ -662,6 +679,9 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[].parallel[]._runtime.additionalArgs": "Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies to all harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). Use null at prompt level to explicitly disable additional args even if the workflow or settings define some. Example: \"--effort high --max-turns 10\"",
   "steps[].parallel[]._runtime.agent": "Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. Use null to explicitly disable inherited agent selection.",
   "steps[].parallel[]._runtime.completedAt": "Timestamp when this prompt completed execution (set for all terminal states, not just successful completion)",
+  "steps[].parallel[]._runtime.contextWindowSize": "Context window size in tokens, captured from the last completed output",
+  "steps[].parallel[]._runtime.contextWindowUsed": "Context window tokens in use, captured from the last completed output",
+  "steps[].parallel[]._runtime.elapsed": "Completed prompt duration in seconds",
   "steps[].parallel[]._runtime.endCondition": "End condition validation to run after this prompt completes. Use null to explicitly disable end condition inheritance from the workflow level (even if the workflow defines one). Omitting this field inherits the workflow-level end condition (if any).",
   "steps[].parallel[]._runtime.endCondition.compareSource": "Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.",
   "steps[].parallel[]._runtime.endCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
@@ -1114,6 +1134,59 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "allowAll",
     "custom",
     "none"
+  ],
+  "_runtime.worktree.branchState": [
+    "present",
+    "deleted",
+    "missing"
+  ],
+  "_runtime.worktree.directoryState": [
+    "present",
+    "removed",
+    "missing",
+    "remove-failed"
+  ],
+  "_runtime.worktree.landingOutcome": [
+    "landed",
+    "no-changes",
+    "blocked"
+  ],
+  "_runtime.worktree.lifecycleOwner": [
+    "ctrlyoke",
+    "user"
+  ],
+  "_runtime.worktree.lifecycleState": [
+    "provisioning",
+    "ready",
+    "finalizing",
+    "settled",
+    "blocked",
+    "orphaned"
+  ],
+  "_runtime.worktree.mergeOutcome": [
+    "fast-forward",
+    "merge-commit",
+    "conflict",
+    "blocked",
+    "abort-failed"
+  ],
+  "_runtime.worktree.mode": [
+    "managed",
+    "named"
+  ],
+  "_runtime.worktree.origin": [
+    "created",
+    "discovered",
+    "recovered"
+  ],
+  "_runtime.worktree.schemaVersion": [
+    1
+  ],
+  "_runtime.worktree.setupOutcome": [
+    "pending",
+    "running",
+    "succeeded",
+    "failed"
   ],
   "_templateMeta.variables.*.type": [
     "text",

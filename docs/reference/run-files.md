@@ -85,6 +85,12 @@ Timestamp when workflow started (working files only)
 
 Workflow-level runtime execution state for working files (optional, added automatically by ctrlyoke during execution)
 
+### `schemaVersion` {#workflow-runtime-schemaversion}
+
+- **Type:** `number`
+
+Run-file format version, stamped on every write. A file written by a newer ctrlyoke is refused rather than overwritten.
+
 ### `currentIndex` {#workflow-runtime-currentindex}
 
 - **Type:** `number`
@@ -159,6 +165,156 @@ Durable marker for an in-place, nonzero rewind. The full pre-rewind file is kept
 - **Required:** yes
 
 Definition revision the rewind was taken from
+
+### `worktree` {#workflow-runtime-worktree}
+
+- **Type:** `{ schemaVersion: 1, mode, origin, … }`
+
+Disk-authoritative lifecycle metadata for a worktree-backed run. Distinct from the authored root `worktree` setting: this records the checkout the run actually used.
+
+### `worktree.schemaVersion` {#workflow-runtime-worktree-schemaversion}
+
+- **Type:** `1`
+- **Required:** yes
+
+### `worktree.mode` {#workflow-runtime-worktree-mode}
+
+- **Type:** `"managed" | "named"`
+- **Required:** yes
+
+### `worktree.origin` {#workflow-runtime-worktree-origin}
+
+- **Type:** `"created" | "discovered" | "recovered"`
+- **Required:** yes
+
+Whether ctrlyoke created the worktree, found it already present, or recovered it after an interrupted run
+
+### `worktree.branchName` {#workflow-runtime-worktree-branchname}
+
+- **Type:** `string`
+- **Required:** yes
+
+### `worktree.worktreePath` {#workflow-runtime-worktree-worktreepath}
+
+- **Type:** `string`
+- **Required:** yes
+
+### `worktree.executionRoot` {#workflow-runtime-worktree-executionroot}
+
+- **Type:** `string`
+- **Required:** yes
+
+### `worktree.executionCheckoutRoot` {#workflow-runtime-worktree-executioncheckoutroot}
+
+- **Type:** `string`
+- **Required:** yes
+
+### `worktree.sourceCheckoutRoot` {#workflow-runtime-worktree-sourcecheckoutroot}
+
+- **Type:** `string`
+- **Required:** yes
+
+### `worktree.namedWorkspaceRoots` {#workflow-runtime-worktree-namedworkspaceroots}
+
+- **Type:** array of `{ name, fsPath }`
+- **Required:** yes
+
+Fields:
+
+- `name` · `string` · required
+- `fsPath` · `string` · required
+
+### `worktree.baseCommit` {#workflow-runtime-worktree-basecommit}
+
+- **Type:** `string`
+- **Required:** yes
+
+### `worktree.comparisonBaseLabel` {#workflow-runtime-worktree-comparisonbaselabel}
+
+- **Type:** `string`
+
+Recorded comparison base used for named-branch divergence, when known
+
+### `worktree.comparisonBaseCommit` {#workflow-runtime-worktree-comparisonbasecommit}
+
+- **Type:** `string`
+
+### `worktree.changedFileCount` {#workflow-runtime-worktree-changedfilecount}
+
+- **Type:** `number`
+
+Number of files in the landed branch diff from baseCommit, when known
+
+### `worktree.dirty` {#workflow-runtime-worktree-dirty}
+
+- **Type:** `boolean`
+
+Whether the named checkout had uncommitted changes at run start
+
+### `worktree.sourceCheckoutDirty` {#workflow-runtime-worktree-sourcecheckoutdirty}
+
+- **Type:** `boolean`
+
+Whether source checkout changes existed when the managed worktree was created
+
+### `worktree.targetBranch` {#workflow-runtime-worktree-targetbranch}
+
+- **Type:** `string`
+
+### `worktree.lifecycleOwner` {#workflow-runtime-worktree-lifecycleowner}
+
+- **Type:** `"ctrlyoke" | "user"`
+- **Required:** yes
+
+### `worktree.lifecycleState` {#workflow-runtime-worktree-lifecyclestate}
+
+- **Type:** `"provisioning" | "ready" | "finalizing" | "settled" | "blocked" | "orphaned"`
+- **Required:** yes
+
+### `worktree.setupOutcome` {#workflow-runtime-worktree-setupoutcome}
+
+- **Type:** `"pending" | "running" | "succeeded" | "failed"`
+
+### `worktree.landingOutcome` {#workflow-runtime-worktree-landingoutcome}
+
+- **Type:** `"landed" | "no-changes" | "blocked"`
+
+### `worktree.mergeOutcome` {#workflow-runtime-worktree-mergeoutcome}
+
+- **Type:** `"fast-forward" | "merge-commit" | "conflict" | "blocked" | "abort-failed"`
+
+### `worktree.directoryState` {#workflow-runtime-worktree-directorystate}
+
+- **Type:** `"present" | "removed" | "missing" | "remove-failed"`
+- **Required:** yes
+
+### `worktree.branchState` {#workflow-runtime-worktree-branchstate}
+
+- **Type:** `"present" | "deleted" | "missing"`
+- **Required:** yes
+
+### `worktree.finalBranchTip` {#workflow-runtime-worktree-finalbranchtip}
+
+- **Type:** `string`
+
+### `worktree.conflictFiles` {#workflow-runtime-worktree-conflictfiles}
+
+- **Type:** `string[]`
+
+### `worktree.message` {#workflow-runtime-worktree-message}
+
+- **Type:** `string`
+
+### `worktree.updatedAt` {#workflow-runtime-worktree-updatedat}
+
+- **Type:** `number`
+- **Required:** yes
+
+### `worktreeNotice` {#workflow-runtime-worktreenotice}
+
+- **Type:** `string`
+
+Durable notice recorded when an inherited worktree default degraded to ordinary execution
 
 ### `finalStep` {#workflow-runtime-finalstep}
 
@@ -245,6 +401,24 @@ Terminal state of this prompt. Absent or 'completed' means successful completion
 - **Type:** `number`
 
 Number of retry attempts for this prompt
+
+### `elapsed` {#step-runtime-elapsed}
+
+- **Type:** `number`
+
+Completed prompt duration in seconds
+
+### `contextWindowUsed` {#step-runtime-contextwindowused}
+
+- **Type:** `number`
+
+Context window tokens in use, captured from the last completed output
+
+### `contextWindowSize` {#step-runtime-contextwindowsize}
+
+- **Type:** `number`
+
+Context window size in tokens, captured from the last completed output
 
 ### `failureKind` {#step-runtime-failurekind}
 

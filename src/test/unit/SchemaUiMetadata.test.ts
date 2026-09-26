@@ -44,7 +44,14 @@ import {
   TERMINAL_CURSOR_STYLES,
   TERMINAL_MOBILE_CONTROL_BAR,
   TOAST_LEVEL_MODES,
+  WORKTREE_BRANCH_STATES,
+  WORKTREE_DIRECTORY_STATES,
+  WORKTREE_LANDING_OUTCOMES,
+  WORKTREE_LIFECYCLE_OWNERS,
+  WORKTREE_LIFECYCLE_STATES,
+  WORKTREE_MERGE_OUTCOMES,
   WORKTREE_MODES,
+  WORKTREE_SETUP_OUTCOMES,
   WORKFLOW_FILE_FORMATS,
 } from "../../types/DashboardConstants";
 import { SCHEMA_ENUMS } from "../../types/generated/SchemaDescriptions";
@@ -199,7 +206,46 @@ const CONSTANT_BINDINGS: Array<{
   {
     name: "WORKTREE_MODES",
     values: Object.values(WORKTREE_MODES),
-    paths: ["worktree.mode", "defaults.worktree.mode"],
+    paths: [
+      "worktree.mode",
+      "defaults.worktree.mode",
+      "_runtime.worktree.mode",
+    ],
+  },
+  {
+    name: "WORKTREE_LIFECYCLE_OWNERS",
+    values: Object.values(WORKTREE_LIFECYCLE_OWNERS),
+    paths: ["_runtime.worktree.lifecycleOwner"],
+  },
+  {
+    name: "WORKTREE_LIFECYCLE_STATES",
+    values: Object.values(WORKTREE_LIFECYCLE_STATES),
+    paths: ["_runtime.worktree.lifecycleState"],
+  },
+  {
+    name: "WORKTREE_SETUP_OUTCOMES",
+    values: Object.values(WORKTREE_SETUP_OUTCOMES),
+    paths: ["_runtime.worktree.setupOutcome"],
+  },
+  {
+    name: "WORKTREE_LANDING_OUTCOMES",
+    values: Object.values(WORKTREE_LANDING_OUTCOMES),
+    paths: ["_runtime.worktree.landingOutcome"],
+  },
+  {
+    name: "WORKTREE_MERGE_OUTCOMES",
+    values: Object.values(WORKTREE_MERGE_OUTCOMES),
+    paths: ["_runtime.worktree.mergeOutcome"],
+  },
+  {
+    name: "WORKTREE_DIRECTORY_STATES",
+    values: Object.values(WORKTREE_DIRECTORY_STATES),
+    paths: ["_runtime.worktree.directoryState"],
+  },
+  {
+    name: "WORKTREE_BRANCH_STATES",
+    values: Object.values(WORKTREE_BRANCH_STATES),
+    paths: ["_runtime.worktree.branchState"],
   },
   {
     name: "NOTIFICATION_EVENT_MODES",

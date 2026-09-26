@@ -1066,6 +1066,15 @@ definitions:
           retryCount:
             type: number
             description: Number of retry attempts for this prompt
+          elapsed:
+            type: number
+            description: Completed prompt duration in seconds
+          contextWindowUsed:
+            type: number
+            description: Context window tokens in use, captured from the last completed output
+          contextWindowSize:
+            type: number
+            description: Context window size in tokens, captured from the last completed output
           failureKind:
             type: string
             enum:
@@ -1089,6 +1098,11 @@ definitions:
       Workflow-level runtime execution state for working files (optional, added automatically by
       ctrlyoke during execution)
     properties:
+      schemaVersion:
+        type: number
+        description: >-
+          Run-file format version, stamped on every write. A file written by a newer ctrlyoke is
+          refused rather than overwritten.
       currentIndex:
         type: number
         description: Index of currently executing prompt (0-based)
@@ -1151,6 +1165,148 @@ definitions:
           - fromStepIndex
           - baseDefinitionRevision
         additionalProperties: false
+      worktree:
+        type: object
+        description: >-
+          Disk-authoritative lifecycle metadata for a worktree-backed run. Distinct from the
+          authored root `worktree` setting: this records the checkout the run actually used.
+        properties:
+          schemaVersion:
+            type: number
+            const: 1
+          mode:
+            type: string
+            enum:
+              - managed
+              - named
+          origin:
+            type: string
+            enum:
+              - created
+              - discovered
+              - recovered
+            description: >-
+              Whether ctrlyoke created the worktree, found it already present, or recovered it after
+              an interrupted run
+          branchName:
+            type: string
+          worktreePath:
+            type: string
+          executionRoot:
+            type: string
+          executionCheckoutRoot:
+            type: string
+          sourceCheckoutRoot:
+            type: string
+          namedWorkspaceRoots:
+            type: array
+            items:
+              type: object
+              properties:
+                name:
+                  type: string
+                fsPath:
+                  type: string
+              required:
+                - name
+                - fsPath
+              additionalProperties: false
+          baseCommit:
+            type: string
+          comparisonBaseLabel:
+            type: string
+            description: Recorded comparison base used for named-branch divergence, when known
+          comparisonBaseCommit:
+            type: string
+          changedFileCount:
+            type: number
+            description: Number of files in the landed branch diff from baseCommit, when known
+          dirty:
+            type: boolean
+            description: Whether the named checkout had uncommitted changes at run start
+          sourceCheckoutDirty:
+            type: boolean
+            description: Whether source checkout changes existed when the managed worktree was created
+          targetBranch:
+            type: string
+          lifecycleOwner:
+            type: string
+            enum:
+              - ctrlyoke
+              - user
+          lifecycleState:
+            type: string
+            enum:
+              - provisioning
+              - ready
+              - finalizing
+              - settled
+              - blocked
+              - orphaned
+          setupOutcome:
+            type: string
+            enum:
+              - pending
+              - running
+              - succeeded
+              - failed
+          landingOutcome:
+            type: string
+            enum:
+              - landed
+              - no-changes
+              - blocked
+          mergeOutcome:
+            type: string
+            enum:
+              - fast-forward
+              - merge-commit
+              - conflict
+              - blocked
+              - abort-failed
+          directoryState:
+            type: string
+            enum:
+              - present
+              - removed
+              - missing
+              - remove-failed
+          branchState:
+            type: string
+            enum:
+              - present
+              - deleted
+              - missing
+          finalBranchTip:
+            type: string
+          conflictFiles:
+            type: array
+            items:
+              type: string
+          message:
+            type: string
+          updatedAt:
+            type: number
+        required:
+          - schemaVersion
+          - mode
+          - origin
+          - branchName
+          - worktreePath
+          - executionRoot
+          - executionCheckoutRoot
+          - sourceCheckoutRoot
+          - namedWorkspaceRoots
+          - baseCommit
+          - lifecycleOwner
+          - lifecycleState
+          - directoryState
+          - branchState
+          - updatedAt
+        additionalProperties: false
+      worktreeNotice:
+        type: string
+        description: Durable notice recorded when an inherited worktree default degraded to ordinary execution
       finalStep:
         type: object
         description: >-

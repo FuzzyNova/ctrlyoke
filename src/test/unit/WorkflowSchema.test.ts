@@ -326,6 +326,62 @@ suite("Workflow template schema", () => {
     assert.strictEqual(valid, true, JSON.stringify(validate.errors));
   });
 
+  test("accepts the runtime metadata ctrlyoke writes to run files", () => {
+    const worktree = {
+      schemaVersion: 1,
+      mode: "managed",
+      origin: "created",
+      branchName: "ctrlyoke/run-1",
+      worktreePath: "/worktrees/run-1",
+      executionRoot: "/worktrees/run-1",
+      executionCheckoutRoot: "/worktrees/run-1",
+      sourceCheckoutRoot: "/repo",
+      namedWorkspaceRoots: [{ name: "repo", fsPath: "/repo" }],
+      baseCommit: "abc123",
+      lifecycleOwner: "ctrlyoke",
+      lifecycleState: "settled",
+      setupOutcome: "succeeded",
+      landingOutcome: "landed",
+      mergeOutcome: "fast-forward",
+      directoryState: "removed",
+      branchState: "present",
+      conflictFiles: [],
+      updatedAt: 400,
+    };
+    const runFile = {
+      steps: [
+        {
+          prompt: "Implement the change",
+          _runtime: {
+            elapsed: 12,
+            contextWindowUsed: 10,
+            contextWindowSize: 20,
+          },
+        },
+      ],
+      _runtime: {
+        schemaVersion: 2,
+        currentIndex: 1,
+        executionState: "completed",
+        worktree,
+        worktreeNotice: "Inherited worktree default degraded to none.",
+      },
+    };
+
+    assert.strictEqual(
+      validate(runFile),
+      true,
+      JSON.stringify(validate.errors)
+    );
+    assert.strictEqual(
+      validate({
+        ...runFile,
+        _runtime: { ...runFile._runtime, worktree: { ...worktree, extra: 1 } },
+      }),
+      false
+    );
+  });
+
   test("accepts managed shorthand and object forms at both workflow roots", () => {
     const validWorkflows = [
       { prompt: "Implement the change", worktree: true },
