@@ -526,25 +526,24 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     >
       {/* Header */}
       <div className="drawer-header shrink-0 flex items-center justify-between px-4 py-0 border-b border-panel-border bg-sidebar-drop-bg">
-        <div className="flex items-center gap-2">
-          <h3
-            id="prompt-properties-heading"
-            className="flex items-center gap-1 text-xs font-semibold uppercase leading-none text-foreground"
-          >
-            <Icon name="settings" className="text-xs leading-none" />
-            <span>Prompt Properties</span>
-          </h3>
-          <button
-            type="button"
-            className="w-5 h-5 flex items-center justify-center rounded opacity-60 hover:opacity-100 hover:bg-toolbar-hover-bg transition-all"
-            onClick={handleResetAllToInherit}
-            title="Reset all to inherit"
-            aria-label="Reset all to inherit"
-          >
-            <Icon name="debug-restart" className="text-xs" />
-          </button>
-        </div>
+        <h3
+          id="prompt-properties-heading"
+          className="flex min-w-0 flex-1 items-center gap-1 text-xs font-semibold uppercase leading-none text-foreground"
+        >
+          <Icon name="settings" className="text-xs leading-none" />
+          <span>Prompt Properties</span>
+        </h3>
+        <button
+          type="button"
+          className="ml-1 flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-60 transition-all hover:bg-toolbar-hover-bg hover:opacity-100"
+          onClick={handleResetAllToInherit}
+          title="Reset all to inherit"
+          aria-label="Reset all to inherit"
+        >
+          <Icon name="debug-restart" className="text-xs" />
+        </button>
         <ExitButton
+          className="ml-2"
           onClick={onClose}
           title="Close properties drawer"
           aria-label="Close properties drawer"

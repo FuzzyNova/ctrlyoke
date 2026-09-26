@@ -472,13 +472,6 @@
           "group": "z_ctrlyoke@3"
         }
       ],
-      "view/title": [
-        {
-          "command": "ctrlyoke.addOutputChannelToPromptEditor",
-          "when": "view == workbench.panel.output",
-          "group": "navigation"
-        }
-      ],
       "editor/lineNumber/context": [
         {
           "command": "ctrlyoke.addSelectionToPromptEditor",
