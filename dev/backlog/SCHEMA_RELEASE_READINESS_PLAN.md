@@ -44,7 +44,7 @@
 | 14  | `defaults.priorContext` description / disallow run address             | Done 2026-09-26                              | 9    | A     |
 | 15  | Delete dead root `_runtime.harness` rule                               | Done 2026-09-26                              | 10.1 | A     |
 | 16  | Single-source harness-keyed lists                                      | Done 2026-09-26                              | 10.2 | A     |
-| 17  | Consistent `default` keyword                                           | Fix                                          | 10.3 | A     |
+| 17  | Consistent `default` keyword                                           | Done 2026-09-26                              | 10.3 | A     |
 | 18  | Stale `responseText` claim in `copilot-instructions.md`                | Done 2026-09-26                              | 11   | A     |
 
 Phases are ordered in §12. The governing idea: **finish every shape change (A–D) first, then
@@ -735,11 +735,12 @@ they keep template placeholders out of non-template files — so keep them.
 
 ### 10.3 `default` keyword (item 17)
 
-Ten settings declare `default` today, all matching `DEFAULT_SETTINGS`; the generated docs
-already read defaults from code. Add `default` to **every leaf** setting (IntelliSense shows
-it on hover), and add a test asserting each schema `default` deep-equals the
-`DEFAULT_SETTINGS` value at that path, and that no leaf lacks one. Container objects and
-format arrays are exempt.
+Settings now declare `default` for every leaf with a value in
+`CTRLYOKE_SETTINGS_DEFAULTS` (IntelliSense shows it on hover). A path-driven test asserts each
+schema `default` deep-equals the configured value and rejects any undocumented leaf without a
+default. Container objects and statusline format arrays are exempt. The only optional leaves
+without a configured default are the sparse per-harness `defaults.additionalArgs` and
+`ui.harnessColors.byHarness` entries; their absence means no override.
 
 ---
 

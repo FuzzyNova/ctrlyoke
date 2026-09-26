@@ -91,7 +91,7 @@ suite("Notification settings defaults", () => {
     );
   });
 
-  test("accepts the notification settings leaf without a schema default", () => {
+  test("accepts the notification settings leaf and exposes its default", () => {
     const schema = JSON.parse(
       fs.readFileSync(
         path.resolve(__dirname, "../../../schemas/settings-schema.json"),
@@ -126,6 +126,9 @@ suite("Notification settings defaults", () => {
         .properties.hookEvents.properties as Record<string, any>
     ).notification;
     assert.strictEqual(notificationSchema.type, "boolean");
-    assert.strictEqual("default" in notificationSchema, false);
+    assert.strictEqual(
+      notificationSchema.default,
+      CTRLYOKE_SETTINGS_DEFAULTS.notifications.events.hookEvents.notification
+    );
   });
 });
