@@ -6,7 +6,6 @@ import { setup, suite, teardown, test } from "mocha";
 import { SettingsJsonMcpTracker } from "../../core/harness/shared/SettingsJsonMcpTracker";
 import { StatuslineManager } from "../../core/harness/shared/StatuslineManager";
 import {
-  packageStatuslineDirectory,
   resetStatuslineLauncherCache,
   STATUSLINE_LAUNCHER_FILES,
   statuslineLauncherDirectory,
@@ -16,6 +15,7 @@ import {
   recordInstallation,
 } from "../../utils/CtrlyokeInstallations";
 import { configService } from "../../config/CtrlYokeConfigService";
+import { writeStatuslinePackage } from "../helpers/statuslinePackage";
 import {
   HARNESS_IDS,
   STATUS_LINE_TRACKING_PROVIDERS,
@@ -215,18 +215,10 @@ suite("StatuslineManager", () => {
 
   suite("shared launcher", () => {
     /** A package whose statusline scripts can be deployed. */
-    async function packageRoot(name: string): Promise<string> {
-      const root = path.join(tempHome, name);
-      const scripts = packageStatuslineDirectory(root);
-      await fs.mkdir(scripts, { recursive: true });
-      await fs.writeFile(
-        path.join(root, "package.json"),
-        JSON.stringify({ version: "0.2.0" })
-      );
-      for (const file of STATUSLINE_LAUNCHER_FILES) {
-        await fs.writeFile(path.join(scripts, file), "// script");
-      }
-      return root;
+    function packageRoot(name: string): Promise<string> {
+      return writeStatuslinePackage(path.join(tempHome, name), {
+        version: "0.2.0",
+      });
     }
 
     function disableAllProviders(): void {
@@ -264,7 +256,7 @@ suite("StatuslineManager", () => {
     ): Promise<StatuslineManager> {
       const manager = StatuslineManager.forHarness(HARNESS_IDS.COPILOT_CLI);
       const scriptPath = await manager.resolveScriptPath(root);
-      assert.ok(scriptPath.startsWith(statuslineLauncherDirectory()));
+      assert.ok(scriptPath?.startsWith(statuslineLauncherDirectory()));
       await manager.install(tempHome, `node "${scriptPath}"`);
       disableAllProviders();
       return manager;

@@ -5,6 +5,7 @@ import * as path from "path";
 import { suite, teardown, test } from "mocha";
 import { ClaudeStatuslineSidecar } from "../../core/harness/claude/ClaudeStatuslineSidecar";
 import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
+import { writeStatuslinePackage } from "../helpers/statuslinePackage";
 import {
   parseClaudeQuotaSnapshot,
   parseClaudeRateLimitWindows,
@@ -166,11 +167,14 @@ suite("ClaudeUsageProvider", () => {
       })
     );
 
+    const extensionPath = await writeStatuslinePackage(
+      path.join(tempDirectory, "extension root")
+    );
     const provider = new ClaudeCliProvider();
     await provider.buildCliArgs(
       {} as never,
       false,
-      "C:/extension root",
+      extensionPath,
       path.join(tempDirectory, "workspace"),
       undefined,
       { promptIndex: 0, allPrompts: [], workingFilePath: "workflow.md" }

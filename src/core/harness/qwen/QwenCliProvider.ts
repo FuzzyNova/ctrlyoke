@@ -364,6 +364,12 @@ export class QwenCliProvider implements ICliProvider {
   ): Promise<StatuslineInstallResult> {
     const scriptPath =
       await QwenCliProvider.statuslineManager.resolveScriptPath(extensionPath);
+    if (!scriptPath) {
+      Log.warn(
+        `[QwenCliProvider] Skipping Qwen statusline: no statusline script under ${extensionPath}`
+      );
+      return { kind: "no-op", captured: false };
+    }
     const command = CliNotificationMonitor.buildNodeCommand(
       scriptPath,
       ""

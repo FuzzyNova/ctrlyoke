@@ -717,6 +717,12 @@ export class CopilotCliProvider implements ICliProvider {
       await CopilotCliProvider.statuslineManager.resolveScriptPath(
         extensionPath
       );
+    if (!scriptPath) {
+      Log.warn(
+        `[CopilotCliProvider] Skipping Copilot statusline: no statusline script under ${extensionPath}`
+      );
+      return { kind: "no-op", captured: false };
+    }
     const command = CliNotificationMonitor.buildNodeCommand(
       scriptPath,
       ""

@@ -14,6 +14,7 @@ import {
   statuslineScriptFileName,
 } from "../../core/harness/shared/StatuslineLauncher";
 import { STATUS_LINE_TRACKING_PROVIDERS } from "../../types/DashboardConstants";
+import { writeStatuslinePackage } from "../helpers/statuslinePackage";
 
 suite("StatuslineLauncher", () => {
   let tempRoot: string;
@@ -44,23 +45,15 @@ suite("StatuslineLauncher", () => {
   });
 
   /** A package root whose statusline scripts all contain `marker`. */
-  async function packageRoot(
+  function packageRoot(
     name: string,
     version: string,
     marker: string
   ): Promise<string> {
-    const root = path.join(tempRoot, name);
-    const scripts = packageStatuslineDirectory(root);
-    await fs.mkdir(scripts, { recursive: true });
-    await fs.writeFile(
-      path.join(root, "package.json"),
-      JSON.stringify({ version }),
-      "utf8"
-    );
-    for (const file of STATUSLINE_LAUNCHER_FILES) {
-      await fs.writeFile(path.join(scripts, file), `// ${marker}`, "utf8");
-    }
-    return root;
+    return writeStatuslinePackage(path.join(tempRoot, name), {
+      version,
+      contents: `// ${marker}`,
+    });
   }
 
   async function deployedMarkers(): Promise<string[]> {
@@ -146,13 +139,9 @@ suite("StatuslineLauncher", () => {
     assert.ok((await deployedMarkers()).every((text) => text === "// v0.2.0"));
   });
 
-  test("falls back to the package's own scripts when it has none to copy", async () => {
-    const root = path.join(tempRoot, "no-scripts");
-    await fs.mkdir(root, { recursive: true });
-    await fs.writeFile(
-      path.join(root, "package.json"),
-      JSON.stringify({ version: "0.2.0" }),
-      "utf8"
+  test("falls back to the package's own scripts when the launcher cannot deploy", async () => {
+    const root = await writeStatuslinePackage(
+      path.join(tempRoot, "unversioned")
     );
 
     assert.strictEqual(
@@ -165,6 +154,27 @@ suite("StatuslineLauncher", () => {
         statuslineScriptFileName(STATUS_LINE_TRACKING_PROVIDERS.QWEN)
       )
     );
+  });
+
+  test("resolves nothing when neither the launcher nor the package has the script", async () => {
+    const root = path.join(tempRoot, "no-scripts");
+    await fs.mkdir(root, { recursive: true });
+    await fs.writeFile(
+      path.join(root, "package.json"),
+      JSON.stringify({ version: "0.2.0" }),
+      "utf8"
+    );
+
+    for (const packageRootPath of [root, "extension"]) {
+      assert.strictEqual(
+        await resolveStatuslineScriptPath(
+          packageRootPath,
+          STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+        ),
+        undefined,
+        packageRootPath
+      );
+    }
   });
 
   test("removeStatuslineLauncher leaves unrelated files in the directory", async () => {

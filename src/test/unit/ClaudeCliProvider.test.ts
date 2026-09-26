@@ -6,6 +6,7 @@ import { setup, suite, teardown, test } from "mocha";
 import { configService } from "../../config/CtrlYokeConfigService";
 import type { ConfigBackend } from "../../config/CtrlYokeConfigService";
 import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
+import { writeStatuslinePackage } from "../helpers/statuslinePackage";
 import {
   EXECUTION_MODES,
   HARNESS_IDS,
@@ -172,12 +173,15 @@ suite("ClaudeCliProvider", () => {
     configService.setUserBackend(userSettings);
     const settingsPath = path.join(tempHome, ".claude", "settings.json");
     await fs.mkdir(path.dirname(settingsPath), { recursive: true });
+    const extensionPath = await writeStatuslinePackage(
+      path.join(tempHome, "extension")
+    );
     const provider = new ClaudeCliProvider();
 
     await provider.buildCliArgs(
       {} as never,
       false,
-      "C:\\extension",
+      extensionPath,
       workspaceRoot,
       undefined,
       {

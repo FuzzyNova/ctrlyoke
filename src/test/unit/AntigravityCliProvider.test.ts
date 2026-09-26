@@ -8,8 +8,13 @@ import { STATUS_LINE_TRACKING_PROVIDERS } from "../../types/DashboardConstants";
 import type { ConfigBackend } from "../../config/CtrlYokeConfigService";
 import { AntigravityCliProvider } from "../../core/harness/antigravity/AntigravityCliProvider";
 import { SettingsJsonMcpTracker } from "../../core/harness/shared/SettingsJsonMcpTracker";
+import {
+  packageStatuslineDirectory,
+  statuslineScriptFileName,
+} from "../../core/harness/shared/StatuslineLauncher";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
 import { DEFAULT_STATUS_LINE_FORMAT } from "../../utils/StatuslineFormat";
+import { writeStatuslinePackage } from "../helpers/statuslinePackage";
 
 function makeBackend(data: PartialCtrlYokeSettings): ConfigBackend {
   return {
@@ -39,7 +44,7 @@ suite("AntigravityCliProvider", () => {
   let workspaceRoot: string;
   let originalHome: string | undefined;
   let originalUserProfile: string | undefined;
-  const extensionPath = "C:\\extension root";
+  let extensionPath: string;
 
   setup(async () => {
     tempHome = await fs.mkdtemp(path.join(os.tmpdir(), "agy-provider-home-"));
@@ -50,6 +55,9 @@ suite("AntigravityCliProvider", () => {
     originalUserProfile = process.env.USERPROFILE;
     process.env.HOME = tempHome;
     process.env.USERPROFILE = tempHome;
+    extensionPath = await writeStatuslinePackage(
+      path.join(tempHome, "extension root")
+    );
     await fs.mkdir(path.join(tempHome, ".gemini", "config"), {
       recursive: true,
     });
@@ -75,6 +83,16 @@ suite("AntigravityCliProvider", () => {
     await fs.rm(tempHome, { recursive: true, force: true });
     await fs.rm(workspaceRoot, { recursive: true, force: true });
   });
+
+  /** The unquoted command agy's naive whitespace split requires. */
+  function expectedStatusLineCommand(): string {
+    return `node ${path
+      .join(
+        packageStatuslineDirectory(extensionPath),
+        statuslineScriptFileName(STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY)
+      )
+      .replace(/\\/g, "/")}`;
+  }
 
   function settingsPath(): string {
     return path.join(tempHome, ".gemini", "antigravity-cli", "settings.json");
@@ -273,6 +291,45 @@ suite("AntigravityCliProvider", () => {
     }
   });
 
+  test("never points agy at a statusline script that does not exist", async () => {
+    await fs.mkdir(path.dirname(settingsPath()), { recursive: true });
+    const original = JSON.stringify({
+      statusLine: { type: "command", command: "node user-statusline.js" },
+    });
+    await fs.writeFile(settingsPath(), original);
+    const provider = new AntigravityCliProvider();
+
+    try {
+      await provider.buildCliArgs(
+        {} as never,
+        false,
+        "extension",
+        workspaceRoot,
+        undefined,
+        {
+          promptIndex: 0,
+          allPrompts: [],
+          workingFilePath: path.join(workspaceRoot, "workflow.md"),
+        }
+      );
+
+      assert.strictEqual(await fs.readFile(settingsPath(), "utf8"), original);
+      assert.strictEqual(
+        provider.consumeStatuslineInstallResult()?.kind,
+        "no-op"
+      );
+      assert.strictEqual(
+        provider.getHeadlessSpawnEnv().CTRLYOKE_AGY_STATUSLINE_TOKEN,
+        undefined
+      );
+    } finally {
+      await provider.cleanupWorkspaceArtifacts(
+        workspaceRoot,
+        path.join(workspaceRoot, "workflow.md")
+      );
+    }
+  });
+
   test("captures the baseline once and keeps the install through cleanup", async () => {
     await fs.mkdir(path.dirname(settingsPath()), { recursive: true });
     await fs.writeFile(
@@ -289,7 +346,7 @@ suite("AntigravityCliProvider", () => {
       const settings = JSON.parse(await fs.readFile(settingsPath(), "utf8"));
       assert.strictEqual(
         settings.statusLine.command,
-        "node C:/extension root/out/scripts/ctrlyoke-antigravity-statusline.js"
+        expectedStatusLineCommand()
       );
       assert.ok(!settings.statusLine.command.includes('"'));
       assert.strictEqual(
@@ -311,7 +368,7 @@ suite("AntigravityCliProvider", () => {
     const persisted = JSON.parse(await fs.readFile(settingsPath(), "utf8"));
     assert.strictEqual(
       persisted.statusLine.command,
-      "node C:/extension root/out/scripts/ctrlyoke-antigravity-statusline.js"
+      expectedStatusLineCommand()
     );
   });
 
@@ -376,7 +433,7 @@ suite("AntigravityCliProvider", () => {
     const settings = JSON.parse(await fs.readFile(settingsPath(), "utf8"));
     assert.strictEqual(
       settings.statusLine.command,
-      "node C:/extension root/out/scripts/ctrlyoke-antigravity-statusline.js"
+      expectedStatusLineCommand()
     );
     const installResults = [
       first.consumeStatuslineInstallResult()?.captured,
@@ -418,7 +475,7 @@ suite("AntigravityCliProvider", () => {
     );
     assert.strictEqual(
       harnessSettings.statusLine.command,
-      "node C:/extension root/out/scripts/ctrlyoke-antigravity-statusline.js"
+      expectedStatusLineCommand()
     );
     assert.deepStrictEqual(provider.consumeStatuslineInstallResult(), {
       kind: "written",

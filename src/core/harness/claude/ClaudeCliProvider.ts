@@ -949,6 +949,12 @@ export class ClaudeCliProvider implements ICliProvider {
       await ClaudeCliProvider.statuslineManager.resolveScriptPath(
         extensionPath
       );
+    if (!scriptPath) {
+      Log.warn(
+        `[ClaudeCliProvider] Skipping Claude statusline: no statusline script under ${extensionPath}`
+      );
+      return { kind: "no-op", captured: false };
+    }
     const command = CliNotificationMonitor.buildNodeCommand(
       scriptPath,
       ""

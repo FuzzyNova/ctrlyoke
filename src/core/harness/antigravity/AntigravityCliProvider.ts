@@ -834,6 +834,12 @@ export class AntigravityCliProvider implements ICliProvider {
       await AntigravityCliProvider.statuslineManager.resolveScriptPath(
         extensionPath
       );
+    if (!scriptPath) {
+      Log.warn(
+        `[AntigravityCliProvider] Skipping Antigravity statusline: no statusline script under ${extensionPath}`
+      );
+      return { kind: "no-op", captured: false };
+    }
     // agy's statusline runner uses the same naive, unquoted whitespace split
     // as its hook runner. Passing an empty directory and trimming the result
     // gives the exact `node <script>` command from the wrapper contract.

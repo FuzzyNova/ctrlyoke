@@ -152,9 +152,10 @@ export class StatuslineManager implements StatuslineManagerLike {
   /**
    * The script path for this provider's statusline command: the shared
    * `~/.ctrlyoke/bin` launcher, or this package's own copy when the launcher
-   * cannot be deployed (see StatuslineLauncher).
+   * cannot be deployed (see StatuslineLauncher). `undefined` when neither
+   * exists; callers must then leave the harness config untouched.
    */
-  resolveScriptPath(packageRoot: string): Promise<string> {
+  resolveScriptPath(packageRoot: string): Promise<string | undefined> {
     return resolveStatuslineScriptPath(packageRoot, this.provider);
   }
 

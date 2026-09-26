@@ -189,15 +189,23 @@ export function deployStatuslineLauncher(
   return pending;
 }
 
-/** The statusline script path to put in harness config for `provider`. */
+/**
+ * The absolute statusline script path to put in harness config for
+ * `provider`, or `undefined` when neither the launcher nor the package has
+ * that script. Harness config is machine-global and outlives this process, so
+ * a path that does not resolve to a real file (an uncompiled checkout, a
+ * relative or placeholder package root) must never be written there: the
+ * harness would fail on every launch until something rewrote it.
+ */
 export async function resolveStatuslineScriptPath(
   packageRoot: string,
   provider: StatusLineTrackingProvider
-): Promise<string> {
+): Promise<string | undefined> {
   const directory =
     (await deployStatuslineLauncher(packageRoot)) ??
-    packageStatuslineDirectory(packageRoot);
-  return path.join(directory, statuslineScriptFileName(provider));
+    packageStatuslineDirectory(path.resolve(packageRoot));
+  const scriptPath = path.join(directory, statuslineScriptFileName(provider));
+  return fs.existsSync(scriptPath) ? scriptPath : undefined;
 }
 
 /** Delete the launcher directory's statusline files. Never throws. */
