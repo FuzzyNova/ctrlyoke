@@ -17,7 +17,7 @@ dev/bugs/
 1. **File-per-bug**: Each bug lives in its own markdown document.
 2. **Kebab-case naming**: Use descriptive slugs without numeric IDs (e.g. `dev/bugs/backlog/coordination-claim-paths-directory-containment.md`). Numeric sequences collide when multiple agents or worktrees work in parallel.
 3. **Preserve filenames across transitions**: When resolving or rejecting a bug, move the file with `git mv dev/bugs/backlog/<name>.md dev/bugs/implemented/` (or `dev/bugs/rejected/`). Keeping the original slug ensures commit history and document links remain unbroken.
-4. **Add a resolution note when moving**: Replace the `**Severity:**` line with `**Resolution:**`. For a fixed bug, give the fixing commit hash (or the plan that fixed it), e.g. `**Resolution:** fixed in 1a2b3c4d`. For a rejected bug, give a one-line reason, e.g. `**Resolution:** rejected: as designed, claims are advisory`. Because the move happens in the fixing commit itself, the hash isn't known yet; write the plan name there, or amend the note in a follow-up.
+4. **Add a resolution note when moving**: Replace the `**Severity:**` line with `**Resolution:**`. For a fixed bug, write `**Resolution:** fixed in this commit` when the move is part of the fixing commit, or give the fixing commit hash when the move comes later (e.g. `**Resolution:** fixed in 1a2b3c4d`). For a rejected bug, give a one-line reason, e.g. `**Resolution:** rejected: as designed, claims are advisory`.
 5. **Coordination**: In parallel workflows or multi-agent execution roots, claim your target filename via `claim_paths` before authoring.
 
 ---

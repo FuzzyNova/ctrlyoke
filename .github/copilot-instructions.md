@@ -146,7 +146,7 @@ NOTE: `npm run test:harness` runs real harnesses, costs money, and is very slow 
   - `dev/bugs/backlog/` — open, confirmed bugs awaiting fix.
   - `dev/bugs/implemented/` — resolved bugs (move here via `git mv` in the fixing commit).
   - `dev/bugs/rejected/` — closed as won't-fix, duplicate, or as-designed (move here via `git mv`).
-- **Resolution note**: When moving a bug out of `backlog/`, replace its `**Severity:**` line with `**Resolution:**`. For a fixed bug, give the fixing commit hash or plan. For a rejected bug, give a one-line reason.
+- **Resolution note**: When moving a bug out of `backlog/`, replace its `**Severity:**` line with `**Resolution:**`. For a fixed bug, write "fixed in this commit" if the move is part of the fix, or otherwise the hash of the commit that fixed it. For a rejected bug, give a one-line reason.
 - **Naming**: Use kebab-case descriptive filenames without numeric IDs (e.g. `dev/bugs/backlog/<descriptive-slug>.md`). Files retain their slug across lifecycle transitions so commit links remain stable.
 - **Template & guidelines**: See `dev/bugs/README.md`. In parallel workflows or multi-agent roots, claim your bug filename via `claim_paths` before authoring.
 </bugTracking>
