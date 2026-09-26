@@ -104,6 +104,15 @@ export const COORDINATION_PARTICIPANT_VIA = {
   CLI: "cli",
 } as const;
 
+/** Internal glob tokens used when checking coordination claim intersections. */
+export const COORDINATION_GLOB_TOKENS = {
+  STAR: "star",
+  ANY: "any",
+  LITERAL: "literal",
+  CLASS: "class",
+  GLOBSTAR_SEGMENT: "**",
+} as const;
+
 /** Participant kinds represented on an execution-root coordination board. */
 export const COORDINATION_PARTICIPANT_KINDS = {
   CTRL_YOKE_STEP: "ctrlyoke-step",

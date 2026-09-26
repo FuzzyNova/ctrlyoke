@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-26 by step 2 (codex-cli) of the coordination test workflow; reproduced with the skill CLI
 - **Area:** `src/core/orchestration/ExecutionRootCoordination.ts` (`pathsOverlap`, `globSamplesOverlap`)
-- **Severity:** medium: agents can both believe they own the same file set
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -131,6 +131,134 @@ suite("ExecutionRootCoordination", function () {
     assert.deepStrictEqual(folded.claims, []);
   });
 
+  test("detects path and glob intersections conservatively", () => {
+    const overlappingPairs: Array<[string, string]> = [
+      ["a*/file.txt", "*b/file.txt"],
+      ["a*/file.txt", "ab/file.txt"],
+      ["*b/file.txt", "ab/file.txt"],
+      ["dir", "dir/child.ts"],
+      ["dir/", "dir/**"],
+      ["src/**", "src/core/x.ts"],
+      ["**/*.md", "docs/a.md"],
+      ["[ab]x", "bx"],
+      ["dev/bugs", "dev/*/README.md"],
+      ["./dir//", "dir/child.ts"],
+    ];
+    const disjointPairs: Array<[string, string]> = [
+      ["a*/f", "b*/f"],
+      ["src/*.ts", "src/*.js"],
+      ["src/core", "src/corex"],
+      ["x?", "xyz"],
+      ["[ab]x", "cx"],
+      ["dev/bugs", "dev/bugsy/x"],
+    ];
+
+    const foldPair = (leftPath: string, rightPath: string) => {
+      const first = participant("first");
+      const second = participant("second", { pid: 43 });
+      return foldCoordinationEntries(
+        [
+          join(first, 1),
+          claim(first, [leftPath], 2),
+          join(second, 3),
+          claim(second, [rightPath], 4),
+        ],
+        { now: 1_000, processLivenessCheck: () => true }
+      );
+    };
+
+    for (const [left, right] of overlappingPairs) {
+      assert.strictEqual(
+        foldPair(left, right).claims.length,
+        1,
+        `${left} vs ${right}`
+      );
+      assert.strictEqual(
+        foldPair(right, left).claims.length,
+        1,
+        `${right} vs ${left}`
+      );
+    }
+    for (const [left, right] of disjointPairs) {
+      assert.strictEqual(
+        foldPair(left, right).claims.length,
+        2,
+        `${left} vs ${right}`
+      );
+    }
+  });
+
+  test("a shared concrete path conflicts with each overlapping wildcard claim", async () => {
+    const root = await tempDirectory();
+    try {
+      const registry = new CoordinationParticipantRegistry(root, {
+        now: () => 10_000,
+      });
+      const first = await registry.registerParticipant({
+        kind: "external",
+        label: "first",
+        via: COORDINATION_PARTICIPANT_VIA.MCP,
+      });
+      const second = await registry.registerParticipant({
+        kind: "external",
+        label: "second",
+        via: COORDINATION_PARTICIPANT_VIA.MCP,
+      });
+      assert.deepStrictEqual((await first.claim(["a*/file.txt"])).granted, [
+        "a*/file.txt",
+      ]);
+      assert.deepStrictEqual(
+        (await second.claim(["*b/file.txt"])).denied.map(
+          (item) => item.owner.participantId
+        ),
+        [first.participantId]
+      );
+      assert.deepStrictEqual(
+        (await second.claim(["ab/file.txt"])).denied.map(
+          (item) => item.owner.participantId
+        ),
+        [first.participantId]
+      );
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  test("directory claims deny descendants in either claim order", async () => {
+    for (const [firstPath, secondPath] of [
+      ["dir", "dir/child.ts"],
+      ["dir/child.ts", "dir"],
+    ]) {
+      const root = await tempDirectory();
+      try {
+        const registry = new CoordinationParticipantRegistry(root, {
+          now: () => 10_000,
+        });
+        const first = await registry.registerParticipant({
+          kind: "external",
+          label: "first",
+          via: COORDINATION_PARTICIPANT_VIA.MCP,
+        });
+        const second = await registry.registerParticipant({
+          kind: "external",
+          label: "second",
+          via: COORDINATION_PARTICIPANT_VIA.MCP,
+        });
+        assert.deepStrictEqual((await first.claim([firstPath])).granted, [
+          firstPath,
+        ]);
+        assert.deepStrictEqual(
+          (await second.claim([secondPath])).denied.map(
+            (item) => item.owner.participantId
+          ),
+          [first.participantId]
+        );
+      } finally {
+        await removeDirectory(root);
+      }
+    }
+  });
+
   test("reaps only pid-dead MCP participants, not merely heartbeat-stale ones", () => {
     const value = participant("mcp");
     const entries = [join(value, 1), claim(value, ["src/a.ts"], 2)];

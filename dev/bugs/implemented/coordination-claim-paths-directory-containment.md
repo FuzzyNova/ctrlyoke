@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-26 by step 1 (antigravity-cli / gemini-3.8-flash-medium) during coordination test workflow
 - **Area:** `src/core/orchestration/ExecutionRootCoordination.ts` (`pathsOverlap`, `globMatches`)
-- **Severity:** medium: advisory claims on directories silently permit concurrent conflicting edits to descendant files
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
