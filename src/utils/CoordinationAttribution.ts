@@ -1,8 +1,7 @@
 import { COORDINATION_PARTICIPANT_KINDS } from "../types/DashboardConstants";
 import type { CoordinationParticipant } from "../types/CtrlYokeTypes";
 
-export const COORDINATION_ATTESTED_STEP_DESCRIPTION =
-  "attested ctrlyoke step";
+export const COORDINATION_ATTESTED_STEP_DESCRIPTION = "attested ctrlyoke step";
 export const COORDINATION_UNATTESTED_STEP_DESCRIPTION =
   "unattested ctrlyoke step (skill/CLI)";
 export const COORDINATION_UNATTESTED_EXTERNAL_DESCRIPTION =

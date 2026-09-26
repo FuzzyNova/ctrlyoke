@@ -191,9 +191,8 @@ function describeError(error: unknown): string {
 }
 
 function serializeParticipant<
-  T extends Pick<CoordinationParticipant, "label" | "attested" | "kind">
->(participant: T
-): T & { attribution: string } {
+  T extends Pick<CoordinationParticipant, "label" | "attested" | "kind">,
+>(participant: T): T & { attribution: string } {
   return {
     ...participant,
     attribution: participantAttribution(participant),

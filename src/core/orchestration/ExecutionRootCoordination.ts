@@ -582,7 +582,8 @@ export class CoordinationParticipantRegistry {
           hasRunAddress(participant, address) &&
           (address.parallelGroupId === undefined
             ? participant.address?.parallelGroupId === undefined
-            : participant.address?.parallelGroupId === address.parallelGroupId &&
+            : participant.address?.parallelGroupId ===
+                address.parallelGroupId &&
               participant.address?.stepIndex === address.stepIndex)
       );
       for (const participant of participants) {

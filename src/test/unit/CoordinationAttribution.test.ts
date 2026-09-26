@@ -29,7 +29,10 @@ suite("CoordinationAttribution", () => {
       }),
       "ctrlyoke-step"
     );
-    assert.strictEqual(resolveCoordinationParticipantKind(undefined), "external");
+    assert.strictEqual(
+      resolveCoordinationParticipantKind(undefined),
+      "external"
+    );
     assert.strictEqual(
       resolveCoordinationParticipantKind("external", {
         workflowKey: "workflow" as never,

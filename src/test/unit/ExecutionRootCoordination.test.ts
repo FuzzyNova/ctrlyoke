@@ -613,10 +613,10 @@ suite("ExecutionRootCoordination", function () {
         folded.participants.map(({ participantId }) => participantId).sort(),
         [otherRun.participantId, otherGroup.participantId].sort()
       );
-      assert.deepStrictEqual(
-        folded.claims.map(({ path }) => path).sort(),
-        ["src/other-group.ts", "src/other-run.ts"]
-      );
+      assert.deepStrictEqual(folded.claims.map(({ path }) => path).sort(), [
+        "src/other-group.ts",
+        "src/other-run.ts",
+      ]);
     } finally {
       await removeDirectory(root);
     }
