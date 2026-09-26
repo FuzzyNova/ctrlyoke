@@ -290,6 +290,15 @@ existing per-command integers and document an additive-only policy for them in t
   the `$id`. Anything that compiles the
   settings schema with Ajv must `addSchema(workflowSchema)` first — it is keyed by `$id`, so no
   network access is needed.
+- **Verify editors stay offline.** A relative `$ref` resolves against the schema's `$id`, so an
+  editor that honours `$id` over the file URI it loaded the schema from would try to fetch
+  `https://ctrlyoke.dev/schema/v1/workflow.json` — which does not exist until the site
+  publishes it, and breaks offline editing. Before shipping the `$id`s, confirm with
+  `vscode-json-languageservice` and `yaml-language-server` that the settings schema, loaded
+  through the local `jsonValidation` association, resolves `workflow.json#/$defs/…` to the
+  bundled `out/schemas/workflow-schema.json`. If it does not, rename the bundled copy so its
+  file name matches the `$id`'s last segment, or keep the file-relative
+  `workflow-schema.json#/$defs/…` spelling and register that key with Ajv as well.
 - **Allow a root `$schema` key** (`type: string`, `format: uri`) on every root form: the
   multi-step root, the single-step prompt root, `rootScriptStep` and the settings root.
   Today settings rejects it, and so does a single-step script file (confirmed with Ajv).
@@ -748,7 +757,7 @@ After implementation, record the durable rules where the next agent will look:
 
 | Phase | Items                                         | Notes                                                                                                                                                                                             |
 | ----- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A** | 7–18                                          | Independent and small; any order. Regenerate docs/YAML schema after each schema edit (`npm run generate-schema-docs`, `npm run generate-schema`).                                                 |
+| **A** | 7–18                                          | Independent and small; any order. Regenerate docs/YAML schema after each schema edit (`npm run generate-schema-docs`, `npm run generate-schema`). §8.3's `timeoutSec`/`retryDelaySec` rows and the timeout-`0` unification land with B, since they name B's fields. |
 | **B** | 3, 5                                          | The two rename sets; do them together so the settings file only changes shape once.                                                                                                               |
 | **C** | 6                                             | Needs B's settled field names; bumps the search index.                                                                                                                                            |
 | **D** | 4                                             | Last shape change: the draft 2020-12 move, closures, lenient loader and `ValidationUtils` deletion, after all renames and §7's removals.                                                          |
