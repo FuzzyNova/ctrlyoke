@@ -58,12 +58,12 @@ test("a new settings field without a description fails generation", () => {
 
 test("settings references resolve against the sibling workflow schema", () => {
   const inputs = loadSchemaDocumentationInputs();
-  inputs.workflowSchema.definitions.harnessId = {
+  inputs.workflowSchema.$defs.harnessId = {
     type: "string",
     const: "sibling-schema-resolved",
   };
   inputs.settingsSchema.properties.defaults.properties.agent = {
-    $ref: "workflow-schema.json#/definitions/harnessId",
+    $ref: "workflow-schema.json#/$defs/harnessId",
     description: "External reference used by this test.",
   };
 
@@ -84,7 +84,7 @@ test("object constraints preserve the documented MCP config shape", () => {
 
 test("a new workflow definition must be assigned to a docs section", () => {
   const inputs = loadSchemaDocumentationInputs();
-  inputs.workflowSchema.definitions.brandNewShape = { type: "object" };
+  inputs.workflowSchema.$defs.brandNewShape = { type: "object" };
   const { errors } = buildSchemaDocumentation(inputs);
   assert.ok(
     errors.some((error) => error.includes('"brandNewShape"')),

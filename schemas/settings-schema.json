@@ -1,5 +1,5 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "ctrlyoke Global Settings",
   "description": "Configuration schema for .ctrlyoke/settings.json",
   "type": "object",
@@ -44,7 +44,7 @@
       "additionalProperties": false,
       "properties": {
         "harness": {
-          "$ref": "workflow-schema.json#/definitions/harnessId",
+          "$ref": "workflow-schema.json#/$defs/harnessId",
           "description": "The default harness to use for new workflows.",
           "default": "copilot-cli"
         },
@@ -105,17 +105,17 @@
           "additionalProperties": false
         },
         "agent": {
-          "$ref": "workflow-schema.json#/definitions/agent",
+          "$ref": "workflow-schema.json#/$defs/agent",
           "description": "Default portable ctrlyoke workflow agent attachment for new workflows. Native harness agent discovery is managed separately by the Agents & Skills settings page.",
           "default": ""
         },
         "skills": {
-          "$ref": "workflow-schema.json#/definitions/skills",
+          "$ref": "workflow-schema.json#/$defs/skills",
           "description": "Default portable ctrlyoke workflow skill attachments for new workflows. Native harness skill discovery is managed separately by the Agents & Skills settings page and does not determine workflow skill support.",
           "default": []
         },
         "secrets": {
-          "$ref": "workflow-schema.json#/definitions/secrets",
+          "$ref": "workflow-schema.json#/$defs/secrets",
           "description": "Default secret environment-variable names granted to new workflows. Values are resolved by the execution host and never stored in workflow definitions.",
           "default": []
         },
@@ -133,10 +133,10 @@
         "priorContext": {
           "oneOf": [
             {
-              "$ref": "workflow-schema.json#/definitions/priorContextKeyword"
+              "$ref": "workflow-schema.json#/$defs/priorContextKeyword"
             },
             {
-              "$ref": "workflow-schema.json#/definitions/priorContextPromptNumbers"
+              "$ref": "workflow-schema.json#/$defs/priorContextPromptNumbers"
             }
           ],
           "description": "Default priorContext for every step that doesn't set its own.",
@@ -146,7 +146,7 @@
           "type": "array",
           "description": "Default MCP servers to attach to each prompt execution.",
           "items": {
-            "$ref": "workflow-schema.json#/definitions/mcpServerEntry"
+            "$ref": "workflow-schema.json#/$defs/mcpServerEntry"
           },
           "default": []
         },
@@ -154,17 +154,17 @@
           "type": "array",
           "description": "User-defined hooks to run at various execution lifecycle points.",
           "items": {
-            "$ref": "workflow-schema.json#/definitions/userHookConfig"
+            "$ref": "workflow-schema.json#/$defs/userHookConfig"
           },
           "default": []
         },
         "errorBehavior": {
-          "$ref": "workflow-schema.json#/definitions/errorBehaviorDefault",
+          "$ref": "workflow-schema.json#/$defs/errorBehaviorDefault",
           "description": "Default policy for internal errors in any step phase. `null` (the default) stops the workflow unless the workflow or step sets its own policy.",
           "default": null
         },
         "toolPermissions": {
-          "$ref": "workflow-schema.json#/definitions/toolPermissions",
+          "$ref": "workflow-schema.json#/$defs/toolPermissions",
           "description": "Default tool permission settings for prompt execution. Allowed Tools and Denied Tools are currently supported by Copilot CLI, Claude CLI, Qwen Code, and OpenCode; Qwen is inline granular support and OpenCode uses OPENCODE_CONFIG_CONTENT without writing a workspace opencode.json. Codex and Antigravity only support an overall permission mode, not individual tool patterns, and do NOT ENFORCE these lists.",
           "default": {
             "mode": "allowAll",
@@ -201,17 +201,17 @@
           }
         },
         "endCondition": {
-          "$ref": "workflow-schema.json#/definitions/endConditionDefault",
+          "$ref": "workflow-schema.json#/$defs/endConditionDefault",
           "description": "Default end condition for new workflows. `null` (the default) means new workflows have no end condition.",
           "default": null
         },
         "preCondition": {
-          "$ref": "workflow-schema.json#/definitions/preConditionDefault",
+          "$ref": "workflow-schema.json#/$defs/preConditionDefault",
           "description": "Default pre-condition for new workflows. `null` (the default) means new workflows have no pre-condition.",
           "default": null
         },
         "worktree": {
-          "$ref": "workflow-schema.json#/definitions/worktreeConfig",
+          "$ref": "workflow-schema.json#/$defs/worktreeConfig",
           "description": "Default worktree behavior for workflows that omit a root worktree value. Uses the same false, shorthand, and object forms as workflow worktree; an inherited value degrades to ordinary execution when the workspace is not eligible.",
           "default": false
         }
@@ -361,7 +361,7 @@
       "type": "object",
       "description": "Optional per-harness/per-model USD pricing overrides. Rates are USD per one million tokens.",
       "propertyNames": {
-        "$ref": "workflow-schema.json#/definitions/harnessId"
+        "$ref": "workflow-schema.json#/$defs/harnessId"
       },
       "additionalProperties": {
         "type": "object",
@@ -972,7 +972,7 @@
         "harness": {
           "anyOf": [
             {
-              "$ref": "workflow-schema.json#/definitions/harnessId"
+              "$ref": "workflow-schema.json#/$defs/harnessId"
             },
             {
               "const": ""
@@ -1005,7 +1005,7 @@
         },
         "sharedFormat": {
           "description": "Statusline format every harness renders while 'useDifferentFormatPerHarness' is false.",
-          "$ref": "#/definitions/statusLineFormat"
+          "$ref": "#/$defs/statusLineFormat"
         },
         "byHarness": {
           "description": "Statusline configuration keyed by ctrlyoke harness ID.",
@@ -1014,19 +1014,19 @@
           "properties": {
             "claude-cli": {
               "description": "Statusline settings for Claude CLI.",
-              "$ref": "#/definitions/statusLineSettings"
+              "$ref": "#/$defs/statusLineSettings"
             },
             "copilot-cli": {
               "description": "Statusline settings for Copilot CLI.",
-              "$ref": "#/definitions/statusLineSettings"
+              "$ref": "#/$defs/statusLineSettings"
             },
             "qwen-cli": {
               "description": "Statusline settings for Qwen Code.",
-              "$ref": "#/definitions/statusLineSettings"
+              "$ref": "#/$defs/statusLineSettings"
             },
             "antigravity-cli": {
               "description": "Statusline settings for Antigravity CLI.",
-              "$ref": "#/definitions/statusLineSettings"
+              "$ref": "#/$defs/statusLineSettings"
             }
           }
         }
@@ -1050,7 +1050,7 @@
       }
     }
   },
-  "definitions": {
+  "$defs": {
     "statusLineFormat": {
       "description": "Ordered statusline segments. Used both for a provider's own 'format' and for the shared 'sharedFormat' that applies to every harness when 'useDifferentFormatPerHarness' is false.",
       "type": "array",
@@ -1154,7 +1154,7 @@
         },
         "format": {
           "description": "Statusline format for this harness, used only while 'useDifferentFormatPerHarness' is true.",
-          "$ref": "#/definitions/statusLineFormat"
+          "$ref": "#/$defs/statusLineFormat"
         }
       }
     }

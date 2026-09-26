@@ -65,7 +65,7 @@ interface SchemaNode {
 }
 
 interface WorkflowSchema {
-  definitions: Record<string, SchemaNode>;
+  $defs: Record<string, SchemaNode>;
   oneOf: SchemaNode[];
 }
 
@@ -91,10 +91,10 @@ function schemaBackedFieldNames(): {
     fsSync.readFileSync(schemaPath, "utf8")
   ) as WorkflowSchema;
   const executionFields = directSchemaPropertyNames(
-    schema.definitions.executionProperties
+    schema.$defs.executionProperties
   );
-  const promptFields = directSchemaPropertyNames(schema.definitions.promptStep);
-  const scriptFields = directSchemaPropertyNames(schema.definitions.scriptStep);
+  const promptFields = directSchemaPropertyNames(schema.$defs.promptStep);
+  const scriptFields = directSchemaPropertyNames(schema.$defs.scriptStep);
   const multiStepWorkflowFields = directSchemaPropertyNames(
     schema.oneOf[1].allOf?.find((node) => node.properties?.steps) ?? {}
   );

@@ -23,7 +23,7 @@ const OPTIONAL_NO_DEFAULT_LEAVES = [
   },
 ] as const;
 
-const LOCAL_DEFINITION_REF_PREFIX = "#/definitions/";
+const LOCAL_DEFINITION_REF_PREFIX = "#/$defs/";
 
 suite("Settings schema defaults", () => {
   const schemaPath = path.resolve(
@@ -32,15 +32,13 @@ suite("Settings schema defaults", () => {
   );
   const schema = JSON.parse(
     fs.readFileSync(schemaPath, "utf-8")
-  ) as SettingsSchema & { definitions: Record<string, SettingsSchema> };
+  ) as SettingsSchema & { $defs: Record<string, SettingsSchema> };
 
   test("every leaf default matches DEFAULT_SETTINGS", () => {
     const walk = (node: SettingsSchema, segments: string[]): void => {
       if (node.$ref?.startsWith(LOCAL_DEFINITION_REF_PREFIX)) {
         const definition =
-          schema.definitions[
-            node.$ref.slice(LOCAL_DEFINITION_REF_PREFIX.length)
-          ];
+          schema.$defs[node.$ref.slice(LOCAL_DEFINITION_REF_PREFIX.length)];
         assert.ok(definition, `Missing schema definition for ${node.$ref}`);
         walk(definition, segments);
         return;

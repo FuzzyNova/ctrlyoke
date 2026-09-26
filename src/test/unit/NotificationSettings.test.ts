@@ -1,7 +1,7 @@
 import * as assert from "assert";
 import * as fs from "fs";
 import * as path from "path";
-import Ajv from "ajv";
+import Ajv from "ajv/dist/2020";
 import { suite, test } from "mocha";
 import {
   BROWSER_NOTIFICATION_MODES,

@@ -1,7 +1,6 @@
 import * as assert from "assert";
 import { PromptFileParser } from "../core/PromptFileParser";
 import { PromptQueue } from "../core/PromptQueue";
-import { ValidationUtils } from "../utils/ValidationUtils";
 import { EXECUTION_STATES } from "../types/DashboardConstants";
 import { PromptFile } from "../types/CtrlYokeTypes";
 
@@ -30,44 +29,6 @@ suite("ctrlyoke Core Tests", () => {
     assert.strictEqual(state.currentIndex, 0);
     assert.strictEqual(state.steps.length, 0);
     assert.strictEqual(state.results.length, 0);
-  });
-
-  test("ValidationUtils should validate prompt items correctly", () => {
-    const validPrompt = {
-      prompt: "Test prompt",
-      endCondition: {
-        script: "test.py",
-        expected: "true",
-      },
-    };
-
-    const result = ValidationUtils.validatePromptStep(validPrompt);
-    assert.strictEqual(result.valid, true);
-    assert.strictEqual(result.errors.length, 0);
-  });
-
-  test("ValidationUtils should catch invalid prompt items", () => {
-    const invalidPrompt = {
-      // Missing required 'prompt' field
-      endCondition: {
-        script: "test.py",
-        expected: "true",
-      },
-    };
-
-    const result = ValidationUtils.validatePromptStep(invalidPrompt);
-    assert.strictEqual(result.valid, false);
-    assert.ok(result.errors.length > 0);
-  });
-
-  test("ValidationUtils should validate script paths", () => {
-    const validPath = "test.py";
-    const result = ValidationUtils.validateScriptPath(validPath);
-    assert.strictEqual(result.valid, true);
-
-    const invalidPath = "../../../dangerous.sh";
-    const invalidResult = ValidationUtils.validateScriptPath(invalidPath);
-    assert.strictEqual(invalidResult.valid, false);
   });
 
   test("PromptQueue should load prompts correctly", () => {

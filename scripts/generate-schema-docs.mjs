@@ -104,129 +104,123 @@ const WORKFLOW_PAGES = [
             pointer: WORKFLOW_ROOT_PROPERTIES,
             include: ["steps", "finalStep"],
           },
-          { pointer: "#/definitions/workflowOnlyProperties/properties" },
+          { pointer: "#/$defs/workflowOnlyProperties/properties" },
           { pointer: "#/properties" },
         ],
-        refs: ["#/definitions/workflowOnlyProperties"],
+        refs: ["#/$defs/workflowOnlyProperties"],
         linkSettingsDefaults: true,
       },
       {
         id: "execution-properties",
         title: "Execution properties",
-        refs: ["#/definitions/executionProperties"],
-        properties: [
-          { pointer: "#/definitions/executionProperties/properties" },
-        ],
+        refs: ["#/$defs/executionProperties"],
+        properties: [{ pointer: "#/$defs/executionProperties/properties" }],
         linkSettingsDefaults: true,
       },
       {
         id: "prompt-step",
         title: "Prompt step",
         summary: "A step that sends a prompt to a harness.",
-        refs: ["#/definitions/promptStep"],
-        properties: [
-          { pointer: "#/definitions/promptStep/allOf/1/properties" },
-        ],
+        refs: ["#/$defs/promptStep"],
+        properties: [{ pointer: "#/$defs/promptStep/allOf/1/properties" }],
       },
       {
         id: "script-step",
         title: "Script step",
-        refs: ["#/definitions/scriptStep", "#/definitions/rootScriptStep"],
-        properties: [{ pointer: "#/definitions/scriptStep/properties" }],
+        refs: ["#/$defs/scriptStep", "#/$defs/rootScriptStep"],
+        properties: [{ pointer: "#/$defs/scriptStep/properties" }],
       },
       {
         id: "parallel-group",
         title: "Parallel group",
-        refs: ["#/definitions/parallelGroupItem"],
-        properties: [{ pointer: "#/definitions/parallelGroupItem/properties" }],
+        refs: ["#/$defs/parallelGroupItem"],
+        properties: [{ pointer: "#/$defs/parallelGroupItem/properties" }],
       },
       {
         id: "pre-condition",
         title: "Pre-condition",
-        refs: ["#/definitions/preCondition"],
-        properties: [{ pointer: "#/definitions/preCondition/properties" }],
+        refs: ["#/$defs/preCondition"],
+        properties: [{ pointer: "#/$defs/preCondition/properties" }],
       },
       {
         id: "end-condition",
         title: "End condition",
-        refs: ["#/definitions/endCondition"],
-        properties: [{ pointer: "#/definitions/endCondition/properties" }],
+        refs: ["#/$defs/endCondition"],
+        properties: [{ pointer: "#/$defs/endCondition/properties" }],
       },
       {
         id: "script-fields",
         title: "Shared script fields",
-        refs: ["#/definitions/scriptProperties"],
-        properties: [{ pointer: "#/definitions/scriptProperties/properties" }],
+        refs: ["#/$defs/scriptProperties"],
+        properties: [{ pointer: "#/$defs/scriptProperties/properties" }],
       },
       {
         id: "error-behavior",
         title: "Error behavior",
-        refs: ["#/definitions/errorBehavior"],
-        properties: [{ pointer: "#/definitions/errorBehavior/properties" }],
+        refs: ["#/$defs/errorBehavior"],
+        properties: [{ pointer: "#/$defs/errorBehavior/properties" }],
       },
       {
         id: "worktree",
         title: "Worktree",
         summary:
           "Where the workflow runs: the working checkout or a Git worktree.",
-        refs: ["#/definitions/worktreeConfig"],
-        schema: "#/definitions/worktreeConfig",
+        refs: ["#/$defs/worktreeConfig"],
+        schema: "#/$defs/worktreeConfig",
       },
       {
         id: "vars",
         title: "Variables",
-        refs: ["#/definitions/varsConfig"],
-        schema: "#/definitions/varsConfig",
+        refs: ["#/$defs/varsConfig"],
+        schema: "#/$defs/varsConfig",
       },
       {
         id: "hook-entry",
         title: "Hook entry",
         summary: "One user-defined hook in a `hooks` array.",
-        refs: ["#/definitions/userHookConfig"],
-        properties: [{ pointer: "#/definitions/userHookConfig/properties" }],
+        refs: ["#/$defs/userHookConfig"],
+        properties: [{ pointer: "#/$defs/userHookConfig/properties" }],
       },
       {
         id: "mcp-server-entry",
         title: "MCP server entry",
-        refs: ["#/definitions/mcpServerConfig"],
-        properties: [{ pointer: "#/definitions/mcpServerConfig/properties" }],
+        refs: ["#/$defs/mcpServerConfig"],
+        properties: [{ pointer: "#/$defs/mcpServerConfig/properties" }],
       },
       {
         id: "run-address",
         title: "Run address",
         summary: "Identifies one completed run for `priorContext` imports.",
-        refs: ["#/definitions/workflowRunAddress"],
-        properties: [
-          { pointer: "#/definitions/workflowRunAddress/properties" },
-        ],
+        refs: ["#/$defs/workflowRunAddress"],
+        properties: [{ pointer: "#/$defs/workflowRunAddress/properties" }],
       },
       {
         id: "harness-ids",
         title: "Harness IDs",
         summary: "The harnesses a workflow or step can select.",
-        refs: ["#/definitions/harnessId"],
-        schema: "#/definitions/harnessId",
+        refs: ["#/$defs/harnessId"],
+        schema: "#/$defs/harnessId",
       },
       {
         id: "template-metadata",
         title: "Template metadata",
-        refs: ["#/definitions/templateMetadata"],
-        properties: [{ pointer: "#/definitions/templateMetadata/properties" }],
+        refs: ["#/$defs/templateMetadata"],
+        properties: [{ pointer: "#/$defs/templateMetadata/properties" }],
       },
       {
         id: "template-variable",
         title: "Template variable",
         summary: "One entry in `_templateMeta.variables`.",
-        refs: ["#/definitions/templateVariableMetadata"],
+        refs: ["#/$defs/templateVariableMetadata"],
         properties: [
-          { pointer: "#/definitions/templateVariableMetadata/properties" },
+          { pointer: "#/$defs/templateVariableMetadata/properties" },
         ],
       },
       {
         id: "template-placeholder",
         title: "Template placeholder",
-        refs: ["#/definitions/templatePlaceholder"],
-        schema: "#/definitions/templatePlaceholder",
+        refs: ["#/$defs/templatePlaceholder"],
+        schema: "#/$defs/templatePlaceholder",
       },
     ],
   },
@@ -256,48 +250,42 @@ const WORKFLOW_PAGES = [
       {
         id: "workflow-runtime",
         title: "Workflow runtime",
-        refs: ["#/definitions/runtimeMetadata"],
-        properties: [{ pointer: "#/definitions/runtimeMetadata/properties" }],
+        refs: ["#/$defs/runtimeMetadata"],
+        properties: [{ pointer: "#/$defs/runtimeMetadata/properties" }],
       },
       {
         id: "step-runtime",
         title: "Step runtime",
-        refs: ["#/definitions/promptRuntimeMetadata"],
+        refs: ["#/$defs/promptRuntimeMetadata"],
         properties: [
-          { pointer: "#/definitions/promptRuntimeMetadata/allOf/3/properties" },
+          { pointer: "#/$defs/promptRuntimeMetadata/allOf/3/properties" },
         ],
       },
       {
         id: "parallel-group-topology",
         title: "Parallel group topology",
-        refs: ["#/definitions/parallelGroupDefinition"],
-        properties: [
-          { pointer: "#/definitions/parallelGroupDefinition/properties" },
-        ],
+        refs: ["#/$defs/parallelGroupDefinition"],
+        properties: [{ pointer: "#/$defs/parallelGroupDefinition/properties" }],
       },
       {
         id: "condition-evaluation",
         title: "Condition evaluation",
-        refs: ["#/definitions/conditionEvaluationSummary"],
+        refs: ["#/$defs/conditionEvaluationSummary"],
         properties: [
-          { pointer: "#/definitions/conditionEvaluationSummary/properties" },
+          { pointer: "#/$defs/conditionEvaluationSummary/properties" },
         ],
       },
       {
         id: "token-totals",
         title: "Token totals",
-        refs: ["#/definitions/workflowTokenTotals"],
-        properties: [
-          { pointer: "#/definitions/workflowTokenTotals/properties" },
-        ],
+        refs: ["#/$defs/workflowTokenTotals"],
+        properties: [{ pointer: "#/$defs/workflowTokenTotals/properties" }],
       },
       {
         id: "harness-token-totals",
         title: "Harness token totals",
-        refs: ["#/definitions/harnessTokenTotals"],
-        properties: [
-          { pointer: "#/definitions/harnessTokenTotals/properties" },
-        ],
+        refs: ["#/$defs/harnessTokenTotals"],
+        properties: [{ pointer: "#/$defs/harnessTokenTotals/properties" }],
       },
     ],
   },
@@ -937,8 +925,8 @@ function buildSettingsPage(
   workflowSchema
 ) {
   const refTargets = new Map(
-    Object.keys(settingsSchema.definitions ?? {}).map((name) => [
-      `#/definitions/${name}`,
+    Object.keys(settingsSchema.$defs ?? {}).map((name) => [
+      `#/$defs/${name}`,
       { label: name, page: SETTINGS_PAGE, anchor: `type-${slug(name)}` },
     ])
   );
@@ -1016,7 +1004,7 @@ function buildSettingsPage(
     }
   }
 
-  const definitions = Object.entries(settingsSchema.definitions ?? {});
+  const definitions = Object.entries(settingsSchema.$defs ?? {});
   if (definitions.length > 0) {
     const section = {
       id: "shared-types",
@@ -1028,7 +1016,7 @@ function buildSettingsPage(
     body.push(...partials.get(section.id));
     for (const [name, definition] of definitions) {
       body.push(
-        `### ${name} {#${refTargets.get(`#/definitions/${name}`).anchor}}`,
+        `### ${name} {#${refTargets.get(`#/$defs/${name}`).anchor}}`,
         "",
         ...renderer.renderFieldBody({
           level: 4,
@@ -1200,8 +1188,8 @@ function workflowCoverageErrors(workflowSchema) {
     ...(section.schema ? [section.schema] : []),
     ...(section.properties ?? []).map(({ pointer }) => pointer),
   ]);
-  for (const name of Object.keys(workflowSchema.definitions)) {
-    const pointer = `#/definitions/${name}`;
+  for (const name of Object.keys(workflowSchema.$defs)) {
+    const pointer = `#/$defs/${name}`;
     const claimed = claimedPointers.some(
       (claim) => claim === pointer || claim.startsWith(`${pointer}/`)
     );

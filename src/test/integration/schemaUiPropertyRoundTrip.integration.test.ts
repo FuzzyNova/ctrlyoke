@@ -4,7 +4,7 @@ import * as fs from "fs/promises";
 import { readFileSync, readdirSync } from "fs";
 import * as os from "os";
 import * as path from "path";
-import Ajv from "ajv";
+import Ajv from "ajv/dist/2020";
 import {
   createPromotedRun,
   createRoundTripHarness,
@@ -68,7 +68,7 @@ type SchemaObject = Record<string, unknown>;
 const schema = JSON.parse(readFileSync(SCHEMA_PATH, "utf8")) as SchemaObject;
 
 function definition(name: string): SchemaObject {
-  const definitions = schema.definitions as Record<string, SchemaObject>;
+  const definitions = schema.$defs as Record<string, SchemaObject>;
   const found = definitions[name];
   assert.ok(found, `schema definition ${name} not found`);
   return found;

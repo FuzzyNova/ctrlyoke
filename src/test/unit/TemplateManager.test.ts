@@ -380,7 +380,7 @@ suite("TemplateManager variable metadata", () => {
         )
       );
       const schemaKeys = Object.keys(
-        schema.definitions.executionProperties.properties
+        schema.$defs.executionProperties.properties
       ).sort();
 
       assert.deepStrictEqual(schemaKeys, [...EXECUTION_PROPERTY_KEYS].sort());

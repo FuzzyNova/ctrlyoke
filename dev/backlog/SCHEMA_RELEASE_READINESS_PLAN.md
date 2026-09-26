@@ -31,7 +31,7 @@
 | 1   | Version marker on authored files + migration plan                      | **Yes** (user); newer files refused cleanly | 1, 2 | E     |
 | 2   | Publish schemas at `https://ctrlyoke.dev/schema/v1/…`, allow `$schema` | **Yes** (user)                              | 3    | E     |
 | 3   | All durations in seconds, with a `Sec` suffix                          | Done 2026-09-26                             | 4    | B     |
-| 4   | Strict prompt steps / workflow root                                    | Recommended; draft 2020-12, verified        | 5    | D     |
+| 4   | Strict prompt steps / workflow root                                    | In progress                                 | 5    | D     |
 | 5   | Top-level `statusLine` keyed by harness ID; new `diagnostics` group    | Done 2026-09-26                             | 6    | B     |
 | 6   | Single-source lineage metadata in `workflow.json`                      | Done 2026-09-26                             | 7    | C     |
 | 7   | Constrain `vars` key names                                             | Done 2026-09-26                             | 8.1  | A     |
@@ -50,6 +50,9 @@
 Phases are ordered in §12. The governing idea: **finish every shape change (A–D) first, then
 stamp and freeze `v1` (E)**, so the baseline that ships is the final one and no migration is
 ever written for a pre-release rename.
+
+Item 4's schema dialect and `$defs` migration touchpoints were completed 2026-09-26. Schema
+closures and the lenient loader remain pending.
 
 ---
 

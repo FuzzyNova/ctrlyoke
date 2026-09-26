@@ -1,7 +1,7 @@
 import * as assert from "assert";
 import * as fs from "fs";
 import * as path from "path";
-import Ajv from "ajv";
+import Ajv from "ajv/dist/2020";
 import * as yaml from "js-yaml";
 import { PromptFileParser } from "../../core/PromptFileParser";
 import { formatRunRef } from "../../utils/WorkflowPaths";
@@ -37,9 +37,21 @@ suite("Workflow template schema", () => {
     );
   });
 
+  test("requires the prompt field on prompt steps", () => {
+    assert.strictEqual(
+      validate({ steps: [{ prompt: "Test prompt" }] }),
+      true,
+      JSON.stringify(validate.errors)
+    );
+    assert.strictEqual(
+      validate({ steps: [{ endCondition: { script: "test.py" } }] }),
+      false
+    );
+  });
+
   test("uses the shared variable-name pattern and rejects case collisions", async () => {
     assert.strictEqual(
-      schema.definitions.varsConfig.propertyNames.pattern,
+      schema.$defs.varsConfig.propertyNames.pattern,
       `^${VARIABLE_NAME_PATTERN_SOURCE}$`
     );
     assert.strictEqual(
@@ -322,10 +334,7 @@ suite("Workflow template schema", () => {
       );
     }
 
-    assert.deepStrictEqual(
-      schema.definitions.harnessId.enum,
-      expectedHarnessIds
-    );
+    assert.deepStrictEqual(schema.$defs.harnessId.enum, expectedHarnessIds);
   });
 
   test("accepts toolPermissions mode none and rejects passthrough", () => {

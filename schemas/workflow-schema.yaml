@@ -1,4 +1,4 @@
-$schema: http://json-schema.org/draft-07/schema#
+$schema: https://json-schema.org/draft/2020-12/schema
 title: ctrlyoke Prompt Schema
 type: object
 description: >-
@@ -12,7 +12,7 @@ properties:
     description: >-
       Marks the file as a reusable template and describes its placeholders. Removed when the
       template is instantiated.
-    $ref: '#/definitions/templateMetadata'
+    $ref: '#/$defs/templateMetadata'
 allOf:
   - if:
       not:
@@ -21,48 +21,48 @@ allOf:
     then:
       properties:
         harness:
-          $ref: '#/definitions/harnessId'
+          $ref: '#/$defs/harnessId'
         steps:
           type: array
           items:
             type: object
             properties:
               harness:
-                $ref: '#/definitions/harnessId'
+                $ref: '#/$defs/harnessId'
               _runtime:
                 type: object
                 properties:
                   harness:
-                    $ref: '#/definitions/harnessId'
+                    $ref: '#/$defs/harnessId'
               parallel:
                 type: array
                 items:
                   type: object
                   properties:
                     harness:
-                      $ref: '#/definitions/harnessId'
+                      $ref: '#/$defs/harnessId'
                     _runtime:
                       type: object
                       properties:
                         harness:
-                          $ref: '#/definitions/harnessId'
+                          $ref: '#/$defs/harnessId'
         finalStep:
           type: object
           properties:
             harness:
-              $ref: '#/definitions/harnessId'
+              $ref: '#/$defs/harnessId'
             _runtime:
               type: object
               properties:
                 harness:
-                  $ref: '#/definitions/harnessId'
+                  $ref: '#/$defs/harnessId'
 oneOf:
   - title: Single Step
-    $ref: '#/definitions/singleStepRoot'
+    $ref: '#/$defs/singleStepRoot'
   - title: Multiple Steps (or Working File)
     allOf:
-      - $ref: '#/definitions/executionProperties'
-      - $ref: '#/definitions/workflowOnlyProperties'
+      - $ref: '#/$defs/executionProperties'
+      - $ref: '#/$defs/workflowOnlyProperties'
       - properties:
           steps:
             description: >-
@@ -71,10 +71,10 @@ oneOf:
             type: array
             items:
               oneOf:
-                - $ref: '#/definitions/workflowStep'
-                - $ref: '#/definitions/parallelGroupItem'
+                - $ref: '#/$defs/workflowStep'
+                - $ref: '#/$defs/parallelGroupItem'
           finalStep:
-            $ref: '#/definitions/workflowStep'
+            $ref: '#/$defs/workflowStep'
             description: >-
               A step that always runs after all queued prompts complete. Can be an AI prompt or a
               script step. If mcpServers includes "ctrlyoke" and the finalStep appends prompts,
@@ -85,7 +85,7 @@ oneOf:
             type: array
             description: Normalized working-file topology for authored parallel groups.
             items:
-              $ref: '#/definitions/parallelGroupDefinition'
+              $ref: '#/$defs/parallelGroupDefinition'
           startedAt:
             type: number
             description: Timestamp when workflow started (working files only)
@@ -97,10 +97,10 @@ oneOf:
               not on runtime-only writes. Starts at 1; each promoted run restarts its own sequence
               at 1 (working files only).
           _runtime:
-            $ref: '#/definitions/runtimeMetadata'
+            $ref: '#/$defs/runtimeMetadata'
         required:
           - steps
-definitions:
+$defs:
   harnessId:
     type: string
     enum:
@@ -134,7 +134,7 @@ definitions:
         propertyNames:
           pattern: ^[a-z][a-zA-Z0-9]*$
         additionalProperties:
-          $ref: '#/definitions/templateVariableMetadata'
+          $ref: '#/$defs/templateVariableMetadata'
     additionalProperties: false
   templateVariableMetadata:
     type: object
@@ -265,10 +265,10 @@ definitions:
         description: >-
           Run the workflow in the working checkout or in a Git worktree. When omitted, the
           `defaults.worktree` setting applies.
-        $ref: '#/definitions/worktreeConfig'
+        $ref: '#/$defs/worktreeConfig'
       vars:
         description: Default values for `{{varName}}` substitutions.
-        $ref: '#/definitions/varsConfig'
+        $ref: '#/$defs/varsConfig'
       trustedExternalRoots:
         oneOf:
           - type: array
@@ -304,61 +304,61 @@ definitions:
   singleStepRoot:
     oneOf:
       - allOf:
-          - $ref: '#/definitions/promptStep'
-          - $ref: '#/definitions/workflowOnlyProperties'
+          - $ref: '#/$defs/promptStep'
+          - $ref: '#/$defs/workflowOnlyProperties'
       - allOf:
-          - $ref: '#/definitions/rootScriptStep'
-          - $ref: '#/definitions/workflowOnlyProperties'
+          - $ref: '#/$defs/rootScriptStep'
+          - $ref: '#/$defs/workflowOnlyProperties'
   rootScriptStep:
     type: object
     description: A top-level script workflow with workflow-only properties.
     properties:
       type:
-        $ref: '#/definitions/scriptStep/properties/type'
+        $ref: '#/$defs/scriptStep/properties/type'
       name:
-        $ref: '#/definitions/scriptStep/properties/name'
+        $ref: '#/$defs/scriptStep/properties/name'
       enabled:
-        $ref: '#/definitions/scriptStep/properties/enabled'
+        $ref: '#/$defs/scriptStep/properties/enabled'
       color:
-        $ref: '#/definitions/scriptStep/properties/color'
+        $ref: '#/$defs/scriptStep/properties/color'
       executionMode:
-        $ref: '#/definitions/scriptStep/properties/executionMode'
+        $ref: '#/$defs/scriptStep/properties/executionMode'
       script:
-        $ref: '#/definitions/scriptStep/properties/script'
+        $ref: '#/$defs/scriptStep/properties/script'
       env:
-        $ref: '#/definitions/scriptStep/properties/env'
+        $ref: '#/$defs/scriptStep/properties/env'
       compareSource:
-        $ref: '#/definitions/scriptStep/properties/compareSource'
+        $ref: '#/$defs/scriptStep/properties/compareSource'
       timeoutSec:
-        $ref: '#/definitions/scriptStep/properties/timeoutSec'
+        $ref: '#/$defs/scriptStep/properties/timeoutSec'
       shell:
-        $ref: '#/definitions/scriptStep/properties/shell'
+        $ref: '#/$defs/scriptStep/properties/shell'
       errorBehavior:
-        $ref: '#/definitions/scriptStep/properties/errorBehavior'
+        $ref: '#/$defs/scriptStep/properties/errorBehavior'
       secrets:
-        $ref: '#/definitions/scriptStep/properties/secrets'
+        $ref: '#/$defs/scriptStep/properties/secrets'
       onPass:
-        $ref: '#/definitions/scriptStep/properties/onPass'
+        $ref: '#/$defs/scriptStep/properties/onPass'
       onFail:
-        $ref: '#/definitions/scriptStep/properties/onFail'
+        $ref: '#/$defs/scriptStep/properties/onFail'
       _runtime:
-        $ref: '#/definitions/scriptStep/properties/_runtime'
+        $ref: '#/$defs/scriptStep/properties/_runtime'
       worktree:
-        $ref: '#/definitions/workflowOnlyProperties/properties/worktree'
+        $ref: '#/$defs/workflowOnlyProperties/properties/worktree'
       vars:
-        $ref: '#/definitions/workflowOnlyProperties/properties/vars'
+        $ref: '#/$defs/workflowOnlyProperties/properties/vars'
       trustedExternalRoots:
-        $ref: '#/definitions/workflowOnlyProperties/properties/trustedExternalRoots'
+        $ref: '#/$defs/workflowOnlyProperties/properties/trustedExternalRoots'
       _templateMeta:
         $ref: '#/properties/_templateMeta'
       operator:
-        $ref: '#/definitions/scriptStep/properties/operator'
+        $ref: '#/$defs/scriptStep/properties/operator'
       expected:
-        $ref: '#/definitions/scriptStep/properties/expected'
+        $ref: '#/$defs/scriptStep/properties/expected'
       ignoreCase:
-        $ref: '#/definitions/scriptStep/properties/ignoreCase'
+        $ref: '#/$defs/scriptStep/properties/ignoreCase'
       returns:
-        $ref: '#/definitions/scriptStep/properties/returns'
+        $ref: '#/$defs/scriptStep/properties/returns'
     required:
       - type
       - script
@@ -390,8 +390,8 @@ definitions:
           Harness to use for this prompt. Determines which AI CLI executes the prompt. Optional -
           defaults to the `defaults.harness` setting.
         oneOf:
-          - $ref: '#/definitions/harnessId'
-          - $ref: '#/definitions/templatePlaceholder'
+          - $ref: '#/$defs/harnessId'
+          - $ref: '#/$defs/templatePlaceholder'
       model:
         type: string
         description: >-
@@ -471,7 +471,7 @@ definitions:
           so it works the same on every harness. Native harness agent discovery is managed
           separately in the Agents & Skills settings page and does not determine workflow agent
           support. Use null to explicitly disable inherited agent selection.
-        $ref: '#/definitions/agent'
+        $ref: '#/$defs/agent'
       resumeSession:
         type: boolean
         description: >-
@@ -483,7 +483,7 @@ definitions:
         oneOf:
           - type: array
             items:
-              $ref: '#/definitions/mcpServerEntry'
+              $ref: '#/$defs/mcpServerEntry'
             description: >-
               MCP servers to attach. Registry IDs resolve against ctrlyoke's managed MCP registry;
               include "ctrlyoke" to enable dynamic queue extension.
@@ -499,7 +499,7 @@ definitions:
         oneOf:
           - type: array
             items:
-              $ref: '#/definitions/userHookConfig'
+              $ref: '#/$defs/userHookConfig'
             description: >-
               User-defined hooks. Per-event override: events present replace the tier below for that
               event; absent events inherit.
@@ -529,16 +529,16 @@ definitions:
           harness; native discovery does not determine workflow skills support. Prompt-level skills
           replace workflow-level skills (no merging). Use null to explicitly disable inherited
           skills.
-        $ref: '#/definitions/skills'
+        $ref: '#/$defs/skills'
       secrets:
         description: >-
           Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets
           replace workflow-level secrets (no merging). Use null to explicitly disable an inherited
           grant array; inline !NAME references in prompt text remain authoritative grants.
-        $ref: '#/definitions/secrets'
+        $ref: '#/$defs/secrets'
       endCondition:
         oneOf:
-          - $ref: '#/definitions/endCondition'
+          - $ref: '#/$defs/endCondition'
           - type: 'null'
         description: >-
           End condition validation to run after this prompt completes. Use null to explicitly
@@ -546,7 +546,7 @@ definitions:
           one). Omitting this field inherits the workflow-level end condition (if any).
       preCondition:
         oneOf:
-          - $ref: '#/definitions/preCondition'
+          - $ref: '#/$defs/preCondition'
           - type: 'null'
         description: >-
           Script gate that runs before the prompt. Determines whether to run the prompt, skip it, or
@@ -561,7 +561,7 @@ definitions:
           run in this workspace. Addresses never contain local paths. When omitted, no context is
           injected. Note: combining with resumeSession:true may duplicate context (accepted
           limitation).
-        $ref: '#/definitions/priorContext'
+        $ref: '#/$defs/priorContext'
       additionalArgs:
         oneOf:
           - type: string
@@ -579,7 +579,7 @@ definitions:
           `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and
           rely entirely on the harness's own local configuration; null behaves the same as mode
           'none'.
-        $ref: '#/definitions/toolPermissions'
+        $ref: '#/$defs/toolPermissions'
       errorBehavior:
         description: >-
           Internal-error policy for every step phase: pre-conditions, prompts/harnesses,
@@ -587,12 +587,12 @@ definitions:
           `defaults.errorBehavior` setting. Worktree setup is outside this policy: setup runs before
           any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is
           the recovery gesture. Use null to explicitly disable an inherited policy.
-        $ref: '#/definitions/errorBehaviorDefault'
+        $ref: '#/$defs/errorBehaviorDefault'
   workflowStep:
     allOf:
       - oneOf:
-          - $ref: '#/definitions/promptStep'
-          - $ref: '#/definitions/scriptStep'
+          - $ref: '#/$defs/promptStep'
+          - $ref: '#/$defs/scriptStep'
       - not:
           type: object
           required:
@@ -617,7 +617,7 @@ definitions:
         type: array
         items:
           allOf:
-            - $ref: '#/definitions/workflowStep'
+            - $ref: '#/$defs/workflowStep'
             - not:
                 type: object
                 required:
@@ -654,7 +654,7 @@ definitions:
   promptStep:
     type: object
     allOf:
-      - $ref: '#/definitions/executionProperties'
+      - $ref: '#/$defs/executionProperties'
       - properties:
           type:
             type: string
@@ -689,7 +689,7 @@ definitions:
               File paths are resolved relative to the prompt file's directory, then workspace root,
               then .ctrlyoke directory. Absolute paths are also supported.
           _runtime:
-            $ref: '#/definitions/promptRuntimeMetadata'
+            $ref: '#/$defs/promptRuntimeMetadata'
             description: Per-prompt runtime execution metadata (optional, added automatically during execution)
         required:
           - prompt
@@ -727,18 +727,18 @@ definitions:
           Omitting this field inherits the workflow's executionMode, then the defaults.executionMode
           setting.
       script:
-        $ref: '#/definitions/scriptProperties/properties/script'
+        $ref: '#/$defs/scriptProperties/properties/script'
       env:
-        $ref: '#/definitions/scriptProperties/properties/env'
+        $ref: '#/$defs/scriptProperties/properties/env'
       compareSource:
-        $ref: '#/definitions/scriptProperties/properties/compareSource'
+        $ref: '#/$defs/scriptProperties/properties/compareSource'
       timeoutSec:
-        $ref: '#/definitions/scriptProperties/properties/timeoutSec'
+        $ref: '#/$defs/scriptProperties/properties/timeoutSec'
       shell:
-        $ref: '#/definitions/scriptProperties/properties/shell'
+        $ref: '#/$defs/scriptProperties/properties/shell'
       errorBehavior:
         oneOf:
-          - $ref: '#/definitions/errorBehavior'
+          - $ref: '#/$defs/errorBehavior'
           - type: 'null'
         description: >-
           Internal-error policy for this script step when it cannot run or evaluation breaks. Use
@@ -772,16 +772,16 @@ definitions:
           What to do when the script fails or returns is not matched. 'continue': log a warning and
           advance the queue. 'stopWorkflow': halt execution (default).
       _runtime:
-        $ref: '#/definitions/promptRuntimeMetadata'
+        $ref: '#/$defs/promptRuntimeMetadata'
         description: Per-step runtime execution metadata (optional, added automatically during execution)
       operator:
-        $ref: '#/definitions/scriptProperties/properties/operator'
+        $ref: '#/$defs/scriptProperties/properties/operator'
       expected:
-        $ref: '#/definitions/scriptProperties/properties/expected'
+        $ref: '#/$defs/scriptProperties/properties/expected'
       ignoreCase:
-        $ref: '#/definitions/scriptProperties/properties/ignoreCase'
+        $ref: '#/$defs/scriptProperties/properties/ignoreCase'
       returns:
-        $ref: '#/definitions/scriptProperties/properties/returns'
+        $ref: '#/$defs/scriptProperties/properties/returns'
     required:
       - type
       - script
@@ -793,26 +793,26 @@ definitions:
       script/env/compareSource/operator/expected/timeoutSec with preCondition and scriptStep via
       scriptProperties.
     allOf:
-      - $ref: '#/definitions/scriptProperties'
+      - $ref: '#/$defs/scriptProperties'
     properties:
       script:
-        $ref: '#/definitions/scriptProperties/properties/script'
+        $ref: '#/$defs/scriptProperties/properties/script'
       env:
-        $ref: '#/definitions/scriptProperties/properties/env'
+        $ref: '#/$defs/scriptProperties/properties/env'
       compareSource:
-        $ref: '#/definitions/scriptProperties/properties/compareSource'
+        $ref: '#/$defs/scriptProperties/properties/compareSource'
       returns:
-        $ref: '#/definitions/scriptProperties/properties/returns'
+        $ref: '#/$defs/scriptProperties/properties/returns'
       timeoutSec:
-        $ref: '#/definitions/scriptProperties/properties/timeoutSec'
+        $ref: '#/$defs/scriptProperties/properties/timeoutSec'
       shell:
-        $ref: '#/definitions/scriptProperties/properties/shell'
+        $ref: '#/$defs/scriptProperties/properties/shell'
       operator:
-        $ref: '#/definitions/scriptProperties/properties/operator'
+        $ref: '#/$defs/scriptProperties/properties/operator'
       expected:
-        $ref: '#/definitions/scriptProperties/properties/expected'
+        $ref: '#/$defs/scriptProperties/properties/expected'
       ignoreCase:
-        $ref: '#/definitions/scriptProperties/properties/ignoreCase'
+        $ref: '#/$defs/scriptProperties/properties/ignoreCase'
       maxRetries:
         type: integer
         description: >-
@@ -957,26 +957,26 @@ definitions:
       Script gate that runs before the prompt. Determines whether to run the prompt, skip it, or
       stop the workflow.
     allOf:
-      - $ref: '#/definitions/scriptProperties'
+      - $ref: '#/$defs/scriptProperties'
     properties:
       script:
-        $ref: '#/definitions/scriptProperties/properties/script'
+        $ref: '#/$defs/scriptProperties/properties/script'
       env:
-        $ref: '#/definitions/scriptProperties/properties/env'
+        $ref: '#/$defs/scriptProperties/properties/env'
       compareSource:
-        $ref: '#/definitions/scriptProperties/properties/compareSource'
+        $ref: '#/$defs/scriptProperties/properties/compareSource'
       returns:
-        $ref: '#/definitions/scriptProperties/properties/returns'
+        $ref: '#/$defs/scriptProperties/properties/returns'
       timeoutSec:
-        $ref: '#/definitions/scriptProperties/properties/timeoutSec'
+        $ref: '#/$defs/scriptProperties/properties/timeoutSec'
       shell:
-        $ref: '#/definitions/scriptProperties/properties/shell'
+        $ref: '#/$defs/scriptProperties/properties/shell'
       operator:
-        $ref: '#/definitions/scriptProperties/properties/operator'
+        $ref: '#/$defs/scriptProperties/properties/operator'
       expected:
-        $ref: '#/definitions/scriptProperties/properties/expected'
+        $ref: '#/$defs/scriptProperties/properties/expected'
       ignoreCase:
-        $ref: '#/definitions/scriptProperties/properties/ignoreCase'
+        $ref: '#/$defs/scriptProperties/properties/ignoreCase'
       onPass:
         type: string
         enum:
@@ -1037,7 +1037,7 @@ definitions:
       value. The step's response text is not stored here — the run's events.jsonl is the only record
       of step output.
     allOf:
-      - $ref: '#/definitions/executionProperties'
+      - $ref: '#/$defs/executionProperties'
       - not:
           type: object
           required:
@@ -1150,7 +1150,7 @@ definitions:
           - admission
         additionalProperties: false
       tokenTotals:
-        $ref: '#/definitions/workflowTokenTotals'
+        $ref: '#/$defs/workflowTokenTotals'
         description: >-
           Latest run-scoped token aggregate projected from timeline history (working files only,
           written automatically during execution)
@@ -1345,12 +1345,12 @@ definitions:
             type: number
             description: Timestamp when final step execution completed
           preCondition:
-            $ref: '#/definitions/conditionEvaluationSummary'
+            $ref: '#/$defs/conditionEvaluationSummary'
             description: >-
               Latest pre-condition evaluation retained for the final step's automation result
               projection
           endCondition:
-            $ref: '#/definitions/conditionEvaluationSummary'
+            $ref: '#/$defs/conditionEvaluationSummary'
             description: >-
               Latest end-condition evaluation retained for the final step's automation result
               projection
@@ -1393,7 +1393,7 @@ definitions:
       error:
         type: string
       operator:
-        $ref: '#/definitions/scriptProperties/properties/operator'
+        $ref: '#/$defs/scriptProperties/properties/operator'
     required:
       - passed
       - script
@@ -1476,9 +1476,9 @@ definitions:
         type: object
         description: Same aggregate partitioned by the harness recorded on each immutable attempt output.
         propertyNames:
-          $ref: '#/definitions/harnessId'
+          $ref: '#/$defs/harnessId'
         additionalProperties:
-          $ref: '#/definitions/harnessTokenTotals'
+          $ref: '#/$defs/harnessTokenTotals'
       byLocalDay:
         type: object
         description: Same per-harness subtotals partitioned by the attempt start's local day (YYYY-MM-DD).
@@ -1487,9 +1487,9 @@ definitions:
         additionalProperties:
           type: object
           propertyNames:
-            $ref: '#/definitions/harnessId'
+            $ref: '#/$defs/harnessId'
           additionalProperties:
-            $ref: '#/definitions/harnessTokenTotals'
+            $ref: '#/$defs/harnessTokenTotals'
   userHookConfig:
     type: object
     required:
@@ -1645,9 +1645,9 @@ definitions:
       - type: 'null'
   priorContext:
     oneOf:
-      - $ref: '#/definitions/priorContextKeyword'
-      - $ref: '#/definitions/priorContextPromptNumbers'
-      - $ref: '#/definitions/workflowRunAddress'
+      - $ref: '#/$defs/priorContextKeyword'
+      - $ref: '#/$defs/priorContextPromptNumbers'
+      - $ref: '#/$defs/workflowRunAddress'
         description: >-
           Import all resolved queue and final-step output from one completed run in this same
           workspace.
@@ -1699,16 +1699,16 @@ definitions:
     oneOf:
       - type: string
         description: A well-known MCP server ID (e.g., "ctrlyoke" to enable dynamic queue extension).
-      - $ref: '#/definitions/mcpServerConfig'
+      - $ref: '#/$defs/mcpServerConfig'
   endConditionDefault:
     oneOf:
-      - $ref: '#/definitions/endCondition'
+      - $ref: '#/$defs/endCondition'
       - type: 'null'
   preConditionDefault:
     oneOf:
-      - $ref: '#/definitions/preCondition'
+      - $ref: '#/$defs/preCondition'
       - type: 'null'
   errorBehaviorDefault:
     oneOf:
-      - $ref: '#/definitions/errorBehavior'
+      - $ref: '#/$defs/errorBehavior'
       - type: 'null'

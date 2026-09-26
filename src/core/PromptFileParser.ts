@@ -1,6 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
-import Ajv from "ajv";
+import Ajv from "ajv/dist/2020";
 import * as yaml from "js-yaml";
 import {
   ExecutionProperties,
