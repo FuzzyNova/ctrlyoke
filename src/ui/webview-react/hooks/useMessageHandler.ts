@@ -858,6 +858,7 @@ export function createMessageHandlers(
       finalStepStatus: message.finalStepStatus ?? null,
       finalStepLoopCount: message.finalStepLoopCount ?? 0,
       finalStepPhase: message.finalStepPhase ?? null,
+      schemaWarnings: message.schemaWarnings ?? [],
     });
     persistViewedWorkingFilePath(message.workingFilePath);
     applyWorkflowChange();
@@ -927,6 +928,7 @@ export function createMessageHandlers(
       finalStepStatus: message.finalStepStatus ?? null,
       finalStepLoopCount: message.finalStepLoopCount ?? 0,
       finalStepPhase: message.finalStepPhase ?? null,
+      schemaWarnings: message.schemaWarnings ?? [],
     });
     persistViewedWorkingFilePath(message.workingFilePath);
     applyWorkflowChange({ preserveViewAddress: isReplay });

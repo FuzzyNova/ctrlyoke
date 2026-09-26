@@ -209,6 +209,11 @@ export class PromptFileParser {
     return PromptFileParser.withWarnings(workflow, warnings);
   }
 
+  /** Return non-blocking schema warnings without running workflow normalization. */
+  getSchemaWarnings(parsed: unknown): WorkflowValidationWarning[] {
+    return this.validateSchemaAndGetWarnings(parsed);
+  }
+
   private async validateAndNormalizeWithWarnings(
     parsed: any,
     contentPath: string

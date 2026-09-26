@@ -54,6 +54,7 @@ import {
   PROPERTY_EDITOR_MODES,
   STEP_COLOR_MODES,
   USER_FEEDBACK_SEVERITY,
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
 } from "@root/types/DashboardConstants";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 import { getDictionaryUris } from "@utils/dictionaryUris";
@@ -164,6 +165,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     currentStep,
     finalStepStatus,
     finalStep,
+    schemaWarnings,
   } = useWorkflowStore();
   const {
     propertiesDrawerOpen,
@@ -1478,6 +1480,15 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       ref={editorContainerRef}
       className="prompt-editor flex flex-col flex-1 min-h-0 overflow-hidden"
     >
+      <FieldDiagnostic
+        id="workflow-schema-warnings"
+        diagnostics={schemaWarnings.map((warning) => ({
+          id: warning.propertyPointer,
+          severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+          message: warning.message,
+        }))}
+        className="border-b border-[var(--vscode-widget-border,var(--vscode-panel-border))] px-2 py-1"
+      />
       {/* CodeMirror Editor + Properties Drawer container (prompt mode only) */}
       {!isScriptMode && (
         // overflow-clip (not overflow-hidden): PropertiesDrawer's closed-state

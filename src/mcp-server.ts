@@ -121,6 +121,8 @@ import {
   type McpReleasePathsArguments,
 } from "./utils/McpToolDefinitions";
 import { validateMcpToolCall } from "./utils/McpSchemaValidator";
+import { PromptFileParser } from "./core/PromptFileParser";
+import type { WorkflowValidationWarning } from "./types/CtrlYokeTypes";
 
 export { MCP_TOOL_DEFINITIONS } from "./utils/McpToolDefinitions";
 
@@ -324,6 +326,7 @@ function toWorkflowStepUpdates(
 
 export class CtrlYokeMCPServer {
   private server: InstanceType<typeof Server>;
+  private readonly promptFileParser = new PromptFileParser();
   private workspaceRoot: string;
   private operationQueue: Promise<void> = Promise.resolve();
   private coordinationState?: CoordinationState;
@@ -958,6 +961,25 @@ export class CtrlYokeMCPServer {
     };
 
     const allSteps = (queueData.steps || []) as WorkflowStep[];
+    let schemaWarnings: WorkflowValidationWarning[] = [];
+    const workflowDescriptor = await lineageRepository.readDescriptor(
+      this.workspaceRoot,
+      selected.workflowKey
+    );
+    if (workflowDescriptor.originalFile) {
+      const parsedSource = await this.promptFileParser.parsePromptFile(
+        workflowDescriptor.originalFile
+      );
+      schemaWarnings = parsedSource?.warnings ?? [];
+    }
+    if (schemaWarnings.length === 0) {
+      try {
+        schemaWarnings = this.promptFileParser.getSchemaWarnings(queueData);
+      } catch {
+        // Workflow status remains available when another validation issue is
+        // present; warnings are advisory and must not fail this read tool.
+      }
+    }
     const steps = allSteps.map((p, index) => ({
       index,
       prompt: isScriptStep(p) ? `(script) ${p.script}` : p.prompt,
@@ -996,6 +1018,7 @@ export class CtrlYokeMCPServer {
         descriptorRevision: selected.descriptorRevision,
       },
       steps,
+      schemaWarnings,
     };
 
     return {

@@ -26,6 +26,11 @@ import { writeWorkflowBundle } from "../../utils/WorkflowBundleWriter";
 import { parseAllFileReferences } from "../../utils/FileReferenceParser";
 import { resolveReferencePath } from "../../platform/WorkspaceRootResolver";
 import { StatusMessageReporter } from "../../core/orchestration/StatusMessageReporter";
+import { PostMessageDashboardSink } from "../../ui/PostMessageDashboardSink";
+import {
+  MESSAGE_TYPES,
+  WORKFLOW_VALIDATION_WARNING_CODES,
+} from "../../types/DashboardConstants";
 
 function createNoopStatusReporter(): StatusMessageReporter {
   return new StatusMessageReporter(
@@ -45,6 +50,45 @@ suite("PromptFileLoader Tests", () => {
   });
 
   suite("operational feedback", () => {
+    test("forwards unknown-key warnings in FILE_SELECTED while loading the workflow", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-schema-warning-load-")
+      );
+      tempDirs.push(tempDir);
+      const filePath = path.join(tempDir, "workflow.ctrlyoke.yaml");
+      await fs.writeFile(
+        filePath,
+        "harnes: typo\nsteps:\n  - prompt: runs normally\n",
+        "utf8"
+      );
+      const messages: Array<Record<string, unknown>> = [];
+      const dashboard = new PostMessageDashboardSink((message) =>
+        messages.push(message as Record<string, unknown>)
+      );
+      const queue = new PromptQueue();
+      const loader = new PromptFileLoader(
+        new PromptFileParser(),
+        queue,
+        () => dashboard
+      );
+
+      await loader.loadPromptFile(filePath);
+
+      const fileSelected = messages.find(
+        (message) => message.type === MESSAGE_TYPES.FILE_SELECTED
+      );
+      assert.ok(fileSelected);
+      assert.deepStrictEqual(fileSelected.schemaWarnings, [
+        {
+          code: WORKFLOW_VALIDATION_WARNING_CODES.UNKNOWN_PROPERTY,
+          propertyPointer: "/harnes",
+          message:
+            "Unknown property 'harnes' at /harnes. Did you mean 'harness'? It may also be a field from a newer ctrlyoke.",
+        },
+      ]);
+      assert.strictEqual(queue.getState().steps.length, 1);
+    });
+
     test("reports parse failures through the feedback sink", async () => {
       const feedback: UserFeedback[] = [];
       const parser = {

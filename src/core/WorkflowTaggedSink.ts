@@ -9,6 +9,7 @@ import type {
   ParallelGroupDefinition,
   WorkflowViewAddress,
   WorktreeRunProjection,
+  WorkflowValidationWarning,
 } from "../types/CtrlYokeTypes";
 import type {
   FinalStepPhase,
@@ -54,7 +55,8 @@ export class WorkflowTaggedSink implements IDashboardSink {
     workflowIdOrProperties?: string | Record<string, unknown>,
     workflowProperties?: Record<string, unknown>,
     parallelGroups?: ParallelGroupDefinition[],
-    activeStepIndices?: number[]
+    activeStepIndices?: number[],
+    schemaWarnings?: WorkflowValidationWarning[]
   ): Promise<void> {
     const properties =
       typeof workflowIdOrProperties === "string"
@@ -69,7 +71,8 @@ export class WorkflowTaggedSink implements IDashboardSink {
       this.workflowId,
       properties,
       parallelGroups,
-      activeStepIndices
+      activeStepIndices,
+      schemaWarnings
     );
   }
 
@@ -90,7 +93,8 @@ export class WorkflowTaggedSink implements IDashboardSink {
     workflowProperties?: Record<string, unknown>,
     parallelGroups?: ParallelGroupDefinition[],
     activeStepIndices?: number[],
-    definitionRevision?: number
+    definitionRevision?: number,
+    schemaWarnings?: WorkflowValidationWarning[]
   ): Promise<void> {
     const properties =
       typeof workflowIdOrProperties === "string"
@@ -109,7 +113,8 @@ export class WorkflowTaggedSink implements IDashboardSink {
       properties,
       parallelGroups,
       activeStepIndices,
-      definitionRevision
+      definitionRevision,
+      schemaWarnings
     );
   }
 

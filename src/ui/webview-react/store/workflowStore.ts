@@ -25,7 +25,10 @@ import type {
   WorktreeRunProjection,
   CoordinationScopeSnapshot,
 } from "@root/types/CtrlYokeTypes";
-import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
+import type {
+  ParallelGroupDefinition,
+  WorkflowValidationWarning,
+} from "@root/types/CtrlYokeTypes";
 
 /**
  * Runtime execution status the extension stamps onto each step (`setStepStatus`
@@ -270,6 +273,7 @@ interface WorkflowState {
   finalStepStatus: StepStatus | null;
   finalStepLoopCount: number;
   finalStepPhase: FinalStepPhase | null;
+  schemaWarnings: WorkflowValidationWarning[];
 
   // Live ordered output entries (queue + finalStep outputs and status messages)
   liveOrderedEntries: OrderedHistoryEntry[];
@@ -439,6 +443,7 @@ interface WorkflowActions {
     finalStepStatus?: StepStatus | null;
     finalStepLoopCount?: number;
     finalStepPhase?: FinalStepPhase | null;
+    schemaWarnings?: WorkflowValidationWarning[];
     /**
      * Same-view snapshot replay: keep live output and streaming/runtime state
      * instead of clearing them. Only pass true when the incoming snapshot
@@ -536,6 +541,7 @@ const initialState: WorkflowState = {
   finalStepStatus: null,
   finalStepLoopCount: 0,
   finalStepPhase: null,
+  schemaWarnings: [],
   liveOrderedEntries: [],
   liveSequence: 0,
   liveActivityEntries: [],
@@ -1443,6 +1449,7 @@ export const useWorkflowStore = create<
         finalStepStatus = null,
         finalStepLoopCount = 0,
         finalStepPhase = null,
+        schemaWarnings = [],
         preserveLiveOutput = false,
         preserveUndoHistory = preserveLiveOutput,
       }) => {
@@ -1491,6 +1498,7 @@ export const useWorkflowStore = create<
             finalStepStatus,
             finalStepLoopCount,
             finalStepPhase,
+            schemaWarnings,
             // Clear runtime state on new workflow. `preserveReferences`
             // keeps the existing (already-empty) references stable so a
             // replayed clear is identity-neutral.

@@ -1,6 +1,6 @@
 # Schema and Persisted-Format Release Readiness
 
-> **Status:** Proposed — not implemented. Written 2026-09-26 against current code.
+> **Status:** In progress — phases A–D are complete; phase E remains proposed. Written 2026-09-26 against current code.
 >
 > **Problem in one line:** once ctrlyoke ships, every persisted shape — workflow files,
 > `settings.json`, run history, the search index — becomes a compatibility contract, and today
@@ -51,9 +51,9 @@ Phases are ordered in §12. The governing idea: **finish every shape change (A�
 stamp and freeze `v1` (E)**, so the baseline that ships is the final one and no migration is
 ever written for a pre-release rename.
 
-Item 4's schema dialect, `$defs` migration touchpoints, closures, and lenient loader were
-completed 2026-09-26. Parser warnings are carried in its result; dashboard surfacing remains
-the next step. Root `$schema` and `schemaVersion` properties are deferred to phase E.
+Item 4's schema dialect, `$defs` migration touchpoints, closures, lenient loader, and warning
+surfacing in the extension, VS Code/hosted dashboards, and MCP `workflow_status` were
+completed 2026-09-26. Root `$schema` and `schemaVersion` properties are deferred to phase E.
 
 ---
 
@@ -419,8 +419,9 @@ ignored.
    algorithm. It then loads the file and attaches one warning per key: the path, the nearest
    valid key by edit distance ("did you mean `endCondition`?"), and "or a field from a newer
    ctrlyoke".
-4. The dashboard shows these as `FieldDiagnostic`-style warnings. `ctrlyoke validate` prints
-   them, and `--strict` turns them into errors for CI.
+4. The VS Code and hosted dashboards show these as `FieldDiagnostic`-style warnings.
+   MCP `workflow_status` includes warnings from the authored source in its result.
+   `ctrlyoke validate` prints them, and `--strict` turns them into errors for CI.
 5. §2.7 supplies the other half: anything an older host must not ignore bumps
    `schemaVersion`, so leniency only ever ignores genuinely optional fields.
 

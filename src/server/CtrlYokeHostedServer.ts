@@ -411,7 +411,8 @@ export class CtrlYokeHostedServer
     workflowId?: string,
     workflowProperties?: Record<string, unknown>,
     parallelGroups?: import("../types/CtrlYokeTypes").ParallelGroupDefinition[],
-    activeStepIndices?: number[]
+    activeStepIndices?: number[],
+    schemaWarnings?: import("../types/CtrlYokeTypes").WorkflowValidationWarning[]
   ): Promise<void> {
     return this.sink.updateFileSelected(
       fileName,
@@ -422,7 +423,8 @@ export class CtrlYokeHostedServer
       workflowId,
       workflowProperties,
       parallelGroups,
-      activeStepIndices
+      activeStepIndices,
+      schemaWarnings
     );
   }
   async updateSessionRestored(
@@ -442,7 +444,8 @@ export class CtrlYokeHostedServer
     workflowProperties?: Record<string, unknown>,
     parallelGroups?: ParallelGroupDefinition[],
     activeStepIndices?: number[],
-    definitionRevision?: number
+    definitionRevision?: number,
+    schemaWarnings?: import("../types/CtrlYokeTypes").WorkflowValidationWarning[]
   ): Promise<void> {
     return this.sink.updateSessionRestored(
       fileName,
@@ -457,7 +460,8 @@ export class CtrlYokeHostedServer
       workflowProperties,
       parallelGroups,
       activeStepIndices,
-      definitionRevision
+      definitionRevision,
+      schemaWarnings
     );
   }
   updateExecutionStarted(

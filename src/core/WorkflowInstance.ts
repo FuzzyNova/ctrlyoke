@@ -1001,7 +1001,8 @@ export class WorkflowInstance {
       this.getWorkflowPropertiesForDashboard(),
       state.parallelGroups,
       this.getActiveStepIndices(),
-      state.definitionRevision
+      state.definitionRevision,
+      this.promptFileLoader.getLastSchemaWarnings()
     );
     this.outputCaptureBuffer.replayTo(
       this.dashboardSink,
@@ -1048,7 +1049,8 @@ export class WorkflowInstance {
       this.getWorkflowPropertiesForDashboard(),
       state.parallelGroups,
       this.getActiveStepIndices(),
-      options?.asReplacement ? undefined : state.definitionRevision
+      options?.asReplacement ? undefined : state.definitionRevision,
+      this.promptFileLoader.getLastSchemaWarnings()
     );
     this.outputCaptureBuffer.replayTo(
       sink,

@@ -2341,6 +2341,32 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.strictEqual(output.outputs[0].responseText, "the finished answer");
   });
 
+  test("includes authored schema warnings in workflow_status", async () => {
+    const server = await setup();
+    const run = await createRun("schema-warnings", "2026-01-01T00-00-00-000Z");
+    const sourcePath = path.join(workspaceRoot, "authored-workflow.yaml");
+    await fs.writeFile(
+      sourcePath,
+      "harnes: typo\nsteps:\n  - prompt: loaded\n",
+      "utf8"
+    );
+    const descriptorPath = WorkflowPaths.descriptorPath(
+      workspaceRoot,
+      run.workflowKey
+    );
+    const descriptor = JSON.parse(
+      await fs.readFile(descriptorPath, "utf8")
+    ) as WorkflowLineageDescriptor;
+    descriptor.originalFile = sourcePath;
+    await fs.writeFile(descriptorPath, JSON.stringify(descriptor), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const status = responseJson(await server.invokeTool("workflow_status", {}));
+
+    assert.strictEqual(status.schemaWarnings.length, 1);
+    assert.strictEqual(status.schemaWarnings[0].propertyPointer, "/harnes");
+  });
+
   test("names the valid range when read_output is given a step that does not exist", async () => {
     const server = await setup();
     const run = await createRun("bad-index", "2026-01-01T00-00-00-000Z", {

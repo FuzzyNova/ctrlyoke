@@ -72,6 +72,7 @@ import type {
   ParallelGroupDefinition,
   StepDisplayProperties,
   CoordinationScopeSnapshot,
+  WorkflowValidationWarning,
 } from "./CtrlYokeTypes";
 import type {
   CtrlYokeGlobalSettings,
@@ -655,6 +656,7 @@ export interface FileSelectedMessage {
   finalStepPhase?: FinalStepPhase | null;
   workflowProperties?: Record<string, any>;
   activeStepIndices?: number[];
+  schemaWarnings?: WorkflowValidationWarning[];
 }
 
 /**
@@ -677,6 +679,7 @@ export interface SessionRestoredMessage {
   workflowProperties?: Record<string, any>;
   /** The definition head that produced `steps`; absent for legacy producers. */
   definitionRevision?: number;
+  schemaWarnings?: WorkflowValidationWarning[];
 }
 
 /**

@@ -66,6 +66,7 @@ import {
   SESSION_KINDS,
   TERMINAL_SESSION_STATUS,
   WORKFLOW_VIEW_ADDRESS_KIND,
+  WORKFLOW_VALIDATION_WARNING_CODES,
 } from "@root/types/DashboardConstants";
 
 // The vscode mock is set up in test/setup.ts (window.vscodeApi).
@@ -118,6 +119,26 @@ describe("PromptEditor accessibility names", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Queue$/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Run$/ })).toBeInTheDocument();
+  });
+});
+
+describe("PromptEditor workflow schema warnings", () => {
+  it("renders schema warnings with the shared FieldDiagnostic component", () => {
+    useWorkflowStore.setState({
+      schemaWarnings: [
+        {
+          code: WORKFLOW_VALIDATION_WARNING_CODES.UNKNOWN_PROPERTY,
+          propertyPointer: "/harnes",
+          message: "Unknown property 'harnes' at /harnes.",
+        },
+      ],
+    });
+
+    render(<PromptEditor />);
+
+    expect(
+      screen.getByText("Unknown property 'harnes' at /harnes.")
+    ).toBeInTheDocument();
   });
 });
 

@@ -3,7 +3,11 @@ import { PromptFileParser } from "../PromptFileParser";
 import { PromptQueue } from "../PromptQueue";
 import { Log } from "../../utils/Log";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import { PromptFile, EXECUTION_STATES } from "../../types/CtrlYokeTypes";
+import {
+  PromptFile,
+  EXECUTION_STATES,
+  type WorkflowValidationWarning,
+} from "../../types/CtrlYokeTypes";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import { normalizeAgentSelection } from "../WorkflowStepSanitizer";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
@@ -37,6 +41,7 @@ export class PromptFileLoader {
   private readonly lineageRepository = new WorkflowLineageRepository();
   private lastCompatibilityDiagnostics: CompatibilityDiagnostic[] = [];
   private lastMissingAssetDirectories: string[] = [];
+  private lastSchemaWarnings: WorkflowValidationWarning[] = [];
 
   constructor(
     private promptFileParser: PromptFileParser,
@@ -61,6 +66,10 @@ export class PromptFileLoader {
 
   getLastMissingAssetDirectories(): readonly string[] {
     return this.lastMissingAssetDirectories;
+  }
+
+  getLastSchemaWarnings(): WorkflowValidationWarning[] {
+    return [...this.lastSchemaWarnings];
   }
 
   /**
@@ -92,7 +101,8 @@ export class PromptFileLoader {
         promptFile,
         path.basename(filePath),
         workspaceFolderPath,
-        filePath // real source file path — stored as originalFile
+        filePath, // real source file path — stored as originalFile
+        promptFile.warnings
       );
     } catch (error) {
       Log.error("[PromptFileLoader] Failed to load prompt file:", error);
@@ -125,7 +135,8 @@ export class PromptFileLoader {
         promptFile,
         displayName,
         workspaceFolderPath,
-        undefined // no source file — Save As is the only export path
+        undefined, // no source file — Save As is the only export path
+        []
       );
     } catch (error) {
       Log.error(
@@ -150,8 +161,10 @@ export class PromptFileLoader {
     promptFile: PromptFile,
     displayName: string,
     workspaceFolderPath: string | undefined,
-    originalFilePath: string | undefined
+    originalFilePath: string | undefined,
+    schemaWarnings: WorkflowValidationWarning[]
   ): Promise<string | undefined> {
+    this.lastSchemaWarnings = [...schemaWarnings];
     if (!promptFile.steps) {
       notifyUserFeedback(
         this.userFeedbackSink,
@@ -254,7 +267,12 @@ export class PromptFileLoader {
         promptFile.steps,
         undefined,
         promptFile.finalStep ?? null,
-        this.promptQueue.getFinalStepRuntime()
+        this.promptQueue.getFinalStepRuntime(),
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        schemaWarnings
       );
     }
 
@@ -339,6 +357,7 @@ export class PromptFileLoader {
       }
 
       if (actualMode === PROMPT_FILE_RELOAD_MODES.REPLACE) {
+        this.lastSchemaWarnings = [];
         // Scenario 1: Loading a different session (resume/auto-load)
         // Clear queue and restore full state including completed prompts, currentIndex, etc.
         Log.debug(
