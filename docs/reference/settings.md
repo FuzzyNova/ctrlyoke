@@ -214,22 +214,11 @@ Resume an existing session when running a workflow.
 
 ### `defaults.priorContext` {#defaults-priorcontext}
 
-- **Type:** `"all" | "previous" | "none" | "finalStepAll" | "finalStepPrevious"` or `integer[]` or `{ workflowKey, runRef }`
+- **Type:** `"all" | "previous" | "none" | "finalStepAll" | "finalStepPrevious"` or `integer[]`
 - **Default:** `"none"`
 - **Workflow field:** [`priorContext`](/reference/workflow-schema#execution-properties-priorcontext) — a workflow or step value overrides this default
 
-Prior context to inject before the first prompt.
-
-Accepted forms:
-
-- `"all" | "previous" | "none" | "finalStepAll" | "finalStepPrevious"` — Keyword shorthand: 'all' = all prior queue prompt outputs, 'previous' = immediately preceding queue prompt output, 'none' = no injection, 'finalStepAll' = all previous final step loop outputs, 'finalStepPrevious' = immediately preceding final step loop output
-- `integer[]` — Specific prior prompt numbers to include (1-based, e.g. [1, 3] includes prompts 1 and 3)
-- `{ workflowKey, runRef }` — Import all resolved queue and final-step output from one completed run in this same workspace.
-
-Fields:
-
-- `workflowKey` · `string` · required — Stable workflow lineage key within the current workspace.
-- `runRef` · `string` · required — Stable completed-run reference within workflowKey.
+Default priorContext for every step that doesn't set its own.
 
 ### `defaults.mcpServers` {#defaults-mcpservers}
 
@@ -358,12 +347,12 @@ Fields:
 - `operator` · `"eq" | "ne" | "contains" | "notContains" | "gte" | "gt" | "lte" | "lt" | "matches" | "isEmpty" | "isNotEmpty"` — How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag.
 - `expected` · `string` or `number` — Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.
 - `ignoreCase` · `boolean` — Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.
-- `maxRetries` · `integer` — Maximum number of retry attempts when validation fails. Use -1 for unlimited retries (use with caution), 0 for no retries (default), or 1-100 for a specific limit.
+- `maxRetries` · `integer` — Maximum number of retry attempts. Use -1 for unlimited retries (with caution), 0 for no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.
 - `retryPrompt` · `string` — Template for retry prompt. Supports $preCondition:&lt;field> and $endCondition:&lt;field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:\* works in the step and retry prompts; $endCondition:\* is only available in the retry prompt.
-- `passRetryPrompt` · `string` — Template for pass-retry prompt. Supports $preCondition:&lt;field> and $endCondition:&lt;field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:\* works in the step and retry prompts; $endCondition:\* is only available in the retry prompt. If omitted, the step's own prompt is re-sent.
+- `passRetryPrompt` · `string` — Template for the prompt sent after the end condition passes and onPass is 'retry'. Supports $preCondition:&lt;field> and $endCondition:&lt;field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource); both prefixes are substituted on a pass retry. If omitted, the step's own prompt is re-sent.
 - `resumeSessionOnRetry` · `boolean` — Whether retries continue in the same session. Default: true (retries resume the existing session for context continuity). Set to false to start a fresh session for each retry.
 - `onPass` · `"continue" | "retry" | "stopWorkflow"` — What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately.
-- `onFail` · `"continue" | "retry" | "stopWorkflow"` — What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times). 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default). When 'retry' is set and maxRetries is unset, defaults to 1 retry.
+- `onFail` · `"continue" | "retry" | "stopWorkflow"` — What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times). 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default).
 
 ### `defaults.preCondition` {#defaults-precondition}
 
@@ -1478,7 +1467,7 @@ Commit message generation settings.
 
 ### `commit.harness` {#commit-harness}
 
-- **Type:** `"" | "copilot-cli" | "claude-cli" | "codex-cli" | "opencode-cli" | "qwen-cli" | "antigravity-cli"`
+- **Type:** `"copilot-cli" | "claude-cli" | "codex-cli" | "opencode-cli" | "qwen-cli" | "antigravity-cli"` or `""`
 - **Default:** `""`
 
 Harness to use for commit message generation. Empty = use the workspace default harness.

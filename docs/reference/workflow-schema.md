@@ -346,7 +346,7 @@ Optional authored identity colour for this step.
 
 - **Type:** `"interactive" | "headless"`
 
-Where this script step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Omitting this field inherits the global default.
+Where this script step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow's executionMode, then the defaults.executionMode setting.
 
 ### `script` {#script-step-script}
 
@@ -608,7 +608,7 @@ Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Def
 - **Type:** `integer`
 - **Constraints:** minimum -1 · maximum 100
 
-Maximum number of retry attempts when validation fails. Use -1 for unlimited retries (use with caution), 0 for no retries (default), or 1-100 for a specific limit.
+Maximum number of retry attempts. Use -1 for unlimited retries (with caution), 0 for no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.
 
 ### `retryPrompt` {#end-condition-retryprompt}
 
@@ -620,7 +620,7 @@ Template for retry prompt. Supports $preCondition:&lt;field> and $endCondition:&
 
 - **Type:** `string`
 
-Template for pass-retry prompt. Supports $preCondition:&lt;field> and $endCondition:&lt;field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:\* works in the step and retry prompts; $endCondition:\* is only available in the retry prompt. If omitted, the step's own prompt is re-sent.
+Template for the prompt sent after the end condition passes and onPass is 'retry'. Supports $preCondition:&lt;field> and $endCondition:&lt;field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource); both prefixes are substituted on a pass retry. If omitted, the step's own prompt is re-sent.
 
 ### `resumeSessionOnRetry` {#end-condition-resumesessiononretry}
 
@@ -640,7 +640,7 @@ What to do when the end condition passes. 'continue': advance to the next step (
 - **Type:** `"continue" | "retry" | "stopWorkflow"`
 - **Default:** `"stopWorkflow"`
 
-What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times). 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default). When 'retry' is set and maxRetries is unset, defaults to 1 retry.
+What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times). 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default).
 
 ## Shared script fields {#script-fields}
 

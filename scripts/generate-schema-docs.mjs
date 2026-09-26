@@ -75,6 +75,8 @@ const STRUCTURAL_WORKFLOW_DEFINITIONS = new Set([
   "mcpServerEntry",
   "preConditionDefault",
   "priorContext",
+  "priorContextKeyword",
+  "priorContextPromptNumbers",
   "secrets",
   "skills",
   "singleStepRoot",

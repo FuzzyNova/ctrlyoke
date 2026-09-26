@@ -114,8 +114,13 @@
           "description": "Resume an existing session when running a workflow."
         },
         "priorContext": {
-          "$ref": "workflow-schema.json#/definitions/priorContext",
-          "description": "Prior context to inject before the first prompt."
+          "oneOf": [
+            { "$ref": "workflow-schema.json#/definitions/priorContextKeyword" },
+            {
+              "$ref": "workflow-schema.json#/definitions/priorContextPromptNumbers"
+            }
+          ],
+          "description": "Default priorContext for every step that doesn't set its own."
         },
         "mcpServers": {
           "type": "array",
@@ -313,6 +318,9 @@
     "modelPricing": {
       "type": "object",
       "description": "Optional per-harness/per-model USD pricing overrides. Rates are USD per one million tokens.",
+      "propertyNames": {
+        "$ref": "workflow-schema.json#/definitions/harnessId"
+      },
       "additionalProperties": {
         "type": "object",
         "additionalProperties": {
@@ -833,15 +841,9 @@
       "additionalProperties": false,
       "properties": {
         "harness": {
-          "type": "string",
-          "enum": [
-            "",
-            "copilot-cli",
-            "claude-cli",
-            "codex-cli",
-            "opencode-cli",
-            "qwen-cli",
-            "antigravity-cli"
+          "anyOf": [
+            { "$ref": "workflow-schema.json#/definitions/harnessId" },
+            { "const": "" }
           ],
           "description": "Harness to use for commit message generation. Empty = use the workspace default harness."
         },

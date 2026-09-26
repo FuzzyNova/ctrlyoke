@@ -38,14 +38,14 @@
 | 8   | `mcpServerConfig`: exactly one of `command`/`url`                      | Done 2026-09-26                              | 8.2  | A     |
 | 9   | Integer/range tightening (+ timeout-`0` unification)                   | Partial — Done 2026-09-26; B fields deferred | 8.3  | A     |
 | 10  | `workflowKey` rejects `.`/`..`                                         | Done 2026-09-26                              | 8.4  | A     |
-| 11  | Script-step `executionMode` description                                | Fix                                          | 9    | A     |
-| 12  | `endCondition.maxRetries` default description                          | Fix                                          | 9    | A     |
-| 13  | `passRetryPrompt` description                                          | Fix                                          | 9    | A     |
-| 14  | `defaults.priorContext` description / disallow run address             | Fix                                          | 9    | A     |
-| 15  | Delete dead root `_runtime.harness` rule                               | Fix                                          | 10.1 | A     |
-| 16  | Single-source harness-keyed lists                                      | Fix                                          | 10.2 | A     |
+| 11  | Script-step `executionMode` description                                | Done 2026-09-26                              | 9    | A     |
+| 12  | `endCondition.maxRetries` default description                          | Done 2026-09-26                              | 9    | A     |
+| 13  | `passRetryPrompt` description                                          | Done 2026-09-26                              | 9    | A     |
+| 14  | `defaults.priorContext` description / disallow run address             | Done 2026-09-26                              | 9    | A     |
+| 15  | Delete dead root `_runtime.harness` rule                               | Done 2026-09-26                              | 10.1 | A     |
+| 16  | Single-source harness-keyed lists                                      | Done 2026-09-26                              | 10.2 | A     |
 | 17  | Consistent `default` keyword                                           | Fix                                          | 10.3 | A     |
-| 18  | Stale `responseText` claim in `copilot-instructions.md`                | Fix                                          | 11   | A     |
+| 18  | Stale `responseText` claim in `copilot-instructions.md`                | Done 2026-09-26                              | 11   | A     |
 
 Phases are ordered in §12. The governing idea: **finish every shape change (A–D) first, then
 stamp and freeze `v1` (E)**, so the baseline that ships is the final one and no migration is
@@ -693,18 +693,18 @@ these, so this only improves the error. Lowest priority in the plan.
 
 ## 9. Description fixes (items 11–14)
 
-- **11 — `scriptStep.executionMode`:** "…Omitting this field inherits the workflow's
-  `executionMode`, then the `defaults.executionMode` setting." (`PropertyResolver.ts:120`.)
-- **12 — `endCondition.maxRetries`:** "…0 for no retries (the default), except that when
-  `onPass` or `onFail` is `retry` and this is unset, one retry is allowed." Then trim the
-  now-duplicated sentence from `onFail`. (`EndConditionHandler.ts:154`.)
-- **13 — `passRetryPrompt`:** verify which placeholders `EndConditionHandler`/`PromptQueue`
-  substitute on a pass retry, then state it directly instead of reusing `retryPrompt`'s "only
-  available in the retry prompt" wording.
-- **14 — `defaults.priorContext`:** "Default `priorContext` for every step that doesn't set
-  its own." Also restrict the settings form to the keyword and number-array forms. A fixed
-  `{ workflowKey, runRef }` address as a global default is meaningless, so replace the `$ref`
-  with a local `oneOf` that `$ref`s only those two branches of `priorContext`.
+- **11 — `scriptStep.executionMode`:** omitting it inherits the workflow's `executionMode`,
+  then the `defaults.executionMode` setting (`PropertyResolver.resolveExecutionMode`).
+- **12 — `endCondition.maxRetries`:** 0 means no retries by default; when either `onPass` or
+  `onFail` is `retry` and this field is omitted, one retry is allowed (`EndConditionHandler`).
+  Keep the `onFail` description free of a duplicate default claim.
+- **13 — `passRetryPrompt`:** pass retries substitute both `$preCondition:<field>` and
+  `$endCondition:<field>` placeholders. `CliPromptPreparer` applies the same
+  `substituteConditionOutputRefs` path to pass-retry prompts and ordinary retry prompts.
+- **14 — `defaults.priorContext`:** this is the default `priorContext` for each step that
+  doesn't set its own. The settings form allows only the keyword and number-array branches;
+  it references their dedicated `priorContextKeyword` and `priorContextPromptNumbers`
+  definitions, not the run-address branch.
 
 The script-timeout description and the stale `ctrlyoke.scriptTimeout` references were fixed
 with the 2026-09-26 bugs.
@@ -747,7 +747,7 @@ format arrays are exempt.
 
 In `.github/copilot-instructions.md` → Debugging, the `run-<timestamp>/workflow.ctrlyoke.json`
 bullet lists `responseText` among `_runtime` fields. Step output lives only in `events.jsonl`
-(the `promptRuntimeMetadata` description says so). Replace it with "(harness, sessionId,
+(the `promptRuntimeMetadata` description says so). It now lists "(harness, sessionId,
 timestamps, terminal status)".
 
 After implementation, record the durable rules where the next agent will look:

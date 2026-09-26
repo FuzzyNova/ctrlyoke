@@ -5,7 +5,11 @@ import Ajv from "ajv";
 import * as yaml from "js-yaml";
 import { PromptFileParser } from "../../core/PromptFileParser";
 import { formatRunRef } from "../../utils/WorkflowPaths";
-import { PERMISSION_MODES } from "../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  PERMISSION_MODES,
+  STATUS_LINE_TRACKING_PROVIDERS,
+} from "../../types/DashboardConstants";
 import { VARIABLE_NAME_PATTERN_SOURCE } from "../../utils/KeyValueKeyKinds";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 
@@ -174,6 +178,87 @@ suite("Workflow template schema", () => {
     assert.strictEqual(
       validateSettings({ server: { fallbackPorts: [65536] } }),
       false
+    );
+    assert.strictEqual(
+      validateSettings({ defaults: { priorContext: "all" } }),
+      true
+    );
+    assert.strictEqual(
+      validateSettings({ defaults: { priorContext: [1, 3] } }),
+      true
+    );
+    assert.strictEqual(
+      validateSettings({
+        defaults: {
+          priorContext: {
+            workflowKey: "example",
+            runRef: formatRunRef(Date.UTC(2026, 8, 23)),
+          },
+        },
+      }),
+      false
+    );
+  });
+
+  test("keeps harness-keyed schema properties aligned with supported harnesses", () => {
+    const settingsSchema = JSON.parse(
+      fs.readFileSync(
+        path.resolve(__dirname, "../../../schemas/settings-schema.json"),
+        "utf-8"
+      )
+    );
+    const expectedHarnessIds = Object.values(HARNESS_IDS);
+    const sortedHarnessIds = [...expectedHarnessIds].sort();
+    const harnessKeyedSchemaPaths = [
+      ["properties", "defaults", "properties", "models"],
+      ["properties", "defaults", "properties", "additionalArgs"],
+      [
+        "properties",
+        "ui",
+        "properties",
+        "harnessColors",
+        "properties",
+        "byHarness",
+      ],
+    ];
+    const getSchemaAtPath = (
+      source: Record<string, unknown>,
+      schemaPath: string[]
+    ): Record<string, unknown> =>
+      schemaPath.reduce<Record<string, unknown>>(
+        (current, segment) => current[segment] as Record<string, unknown>,
+        source
+      );
+
+    for (const schemaPath of harnessKeyedSchemaPaths) {
+      const keyedObject = getSchemaAtPath(settingsSchema, schemaPath);
+      assert.deepStrictEqual(
+        Object.keys(keyedObject.properties as Record<string, unknown>).sort(),
+        sortedHarnessIds,
+        schemaPath.join(".")
+      );
+    }
+
+    const statusLineTracking = getSchemaAtPath(settingsSchema, [
+      "properties",
+      "permissions",
+      "properties",
+      "statusLineTracking",
+    ]);
+    assert.deepStrictEqual(
+      Object.keys(statusLineTracking.properties as Record<string, unknown>)
+        .filter(
+          (key) =>
+            key !== "useDifferentFormatPerHarness" && key !== "sharedFormat"
+        )
+        .sort(),
+      Object.values(STATUS_LINE_TRACKING_PROVIDERS).sort(),
+      "properties.permissions.properties.statusLineTracking"
+    );
+
+    assert.deepStrictEqual(
+      schema.definitions.harnessId.enum,
+      expectedHarnessIds
     );
   });
 
