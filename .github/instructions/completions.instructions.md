@@ -67,7 +67,7 @@ It tries `executeDocumentSymbolProvider` (exact name+range match, see `findDocum
 - branches on whether the current item contains `type: script`
 - also owns `type: prompt | script` enum-value completions
 
-Its property lists are hand-maintained, not schema-derived. If workflow step fields change in `DashboardConstants` or the schema, this provider must be updated explicitly.
+Its prompt and script key sets are derived from `schemas/workflow-schema.json`, including the prompt step's shared `executionProperties`. Keep only display details and insertion snippets as optional overrides in the provider; a new schema property should be offered automatically. `_runtime` is deliberately omitted because execution generates it rather than users authoring it. The provider reads the packaged schema from `out/schemas/`, with the sibling `out/schemas/` fallback used by compiled tests.
 </yamlWorkflowKeys>
 
 <referenceContracts>

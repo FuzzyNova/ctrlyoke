@@ -1,8 +1,8 @@
 # Workflow key completion offers `allowDynamicExtension`, which the schema rejects
 
 - **Found:** 2026-09-27 by the long-running bug-fix workflow final step (claude-cli, helper agent)
-- **Area:** `src/completions/PromptPropertyCompletionProvider.ts` (`AI_PROMPT_PROPERTIES`)
-- **Severity:** low
+- **Area:** `src/completions/PromptPropertyCompletionProvider.ts` (step property completions)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
