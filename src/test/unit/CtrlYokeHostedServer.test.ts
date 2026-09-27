@@ -1,5 +1,7 @@
 import * as assert from "assert";
+import * as fs from "fs";
 import { request as httpRequest } from "http";
+import * as path from "path";
 import { suite, test } from "mocha";
 import { DashboardBroadcastHub } from "../../ui/DashboardBroadcastHub";
 import { createHostedHarnessStatusUpdate } from "../../server/HostedServerMessageFactory";
@@ -20,6 +22,38 @@ import {
   RunSecretRedactor,
   secretRedactionService,
 } from "../../utils/SecretRedactionService";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
+
+function sendJsonRequest(
+  port: number,
+  requestPath: string,
+  method: "POST" | "PUT",
+  body: unknown
+): Promise<{ statusCode: number | undefined; body: string }> {
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(
+      {
+        hostname: "127.0.0.1",
+        port,
+        path: requestPath,
+        method,
+        headers: { "content-type": "application/json" },
+      },
+      (res) => {
+        let responseBody = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk: string) => {
+          responseBody += chunk;
+        });
+        res.on("end", () =>
+          resolve({ statusCode: res.statusCode, body: responseBody })
+        );
+      }
+    );
+    request.on("error", reject);
+    request.end(JSON.stringify(body));
+  });
+}
 
 suite("sanitizeBrowserClientId", () => {
   test("passes through a well-formed tabId", () => {
@@ -182,6 +216,73 @@ suite("CtrlYokeHostedServer file history route", () => {
       assert.deepStrictEqual(JSON.parse(response.body), {
         error: "ref is required",
       });
+    } finally {
+      server.dispose();
+    }
+  });
+});
+
+suite("CtrlYokeHostedServer JSON body limits", () => {
+  test("saves a 1 MB workspace viewer file", async () => {
+    const token = "large-file-save-token";
+    const workspaceRoot = makeTempDir("ctrlyoke-hosted-large-save-");
+    const server = new CtrlYokeHostedServer(
+      new DashboardBroadcastHub(),
+      {} as never,
+      (() => ({})) as never,
+      0,
+      workspaceRoot,
+      [],
+      token
+    );
+
+    try {
+      const serverUrl = await server.listen();
+      if (!serverUrl) throw new Error("Hosted server did not start");
+      const url = new URL(serverUrl);
+      const content = "a".repeat(1024 * 1024);
+      const response = await sendJsonRequest(
+        Number(url.port),
+        `/api/workspace-viewer/file?token=${encodeURIComponent(token)}`,
+        "PUT",
+        { path: "large.txt", content }
+      );
+
+      assert.strictEqual(response.statusCode, 200);
+      assert.strictEqual(
+        fs.readFileSync(path.join(workspaceRoot, "large.txt"), "utf8"),
+        content
+      );
+    } finally {
+      server.dispose();
+      removeTempDir(workspaceRoot);
+    }
+  });
+
+  test("keeps the default JSON body limit for ordinary routes", async () => {
+    const token = "default-json-limit-token";
+    const server = new CtrlYokeHostedServer(
+      new DashboardBroadcastHub(),
+      {} as never,
+      (() => ({})) as never,
+      0,
+      process.cwd(),
+      [],
+      token
+    );
+
+    try {
+      const serverUrl = await server.listen();
+      if (!serverUrl) throw new Error("Hosted server did not start");
+      const url = new URL(serverUrl);
+      const response = await sendJsonRequest(
+        Number(url.port),
+        `/api/workspace-viewer/stage?token=${encodeURIComponent(token)}`,
+        "POST",
+        { path: "file.txt", content: "a".repeat(70 * 1024) }
+      );
+
+      assert.strictEqual(response.statusCode, 413);
     } finally {
       server.dispose();
     }

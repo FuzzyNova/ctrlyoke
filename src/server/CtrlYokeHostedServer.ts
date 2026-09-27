@@ -79,7 +79,10 @@ import {
   type WebPushSubscriptionPayload,
 } from "./WebPushService";
 import { pngIconService } from "./PngIconService";
-import { HostedWorkspaceViewerService } from "./HostedWorkspaceViewerService";
+import {
+  HostedWorkspaceViewerService,
+  MAX_FILE_SIZE,
+} from "./HostedWorkspaceViewerService";
 import { parseWorkspaceTreeQuery } from "./WorkspaceTreeRoute";
 import { WorkspaceTreeHttpError } from "./WorkspaceTreeErrors";
 import type {
@@ -102,6 +105,13 @@ import { isLoopbackBindAddress } from "../utils/NetworkUtils";
 
 const THEME_VAR_KEY_PATTERN = /^--[A-Za-z0-9_-]+$/;
 const SIBLING_SERVER_PROBE_TIMEOUT_MS = 1000;
+const DEFAULT_JSON_BODY_LIMIT = "64kb";
+const JSON_STRING_MAX_BYTE_EXPANSION_FACTOR = 6;
+const WORKSPACE_FILE_JSON_METADATA_HEADROOM_BYTES = 4 * 1024;
+const WORKSPACE_FILE_JSON_BODY_LIMIT_BYTES =
+  MAX_FILE_SIZE * JSON_STRING_MAX_BYTE_EXPANSION_FACTOR +
+  WORKSPACE_FILE_JSON_METADATA_HEADROOM_BYTES;
+const WORKSPACE_FILE_ROUTE_PATH = "/api/workspace-viewer/file";
 
 function redactHostedTransportMessage(message: unknown): unknown {
   return secretRedactionService.redactValue(message);
@@ -250,7 +260,17 @@ export class CtrlYokeHostedServer
         `[CtrlYokeHostedServer] ctrlyoke WebSocket server error: ${err.message}`
       );
     });
-    this.app.use(express.json({ limit: "64kb" }));
+    const defaultJsonParser = express.json({ limit: DEFAULT_JSON_BODY_LIMIT });
+    const workspaceFileJsonParser = express.json({
+      limit: WORKSPACE_FILE_JSON_BODY_LIMIT_BYTES,
+    });
+    this.app.use((req, res, next) => {
+      const parser =
+        req.method === "PUT" && req.path === WORKSPACE_FILE_ROUTE_PATH
+          ? workspaceFileJsonParser
+          : defaultJsonParser;
+      parser(req, res, next);
+    });
     installSecretRedactionMiddleware(this.app);
     this.setupRoutes();
     this.setupWebSocket();
@@ -1039,7 +1059,7 @@ export class CtrlYokeHostedServer
     );
 
     this.app.get(
-      "/api/workspace-viewer/file",
+      WORKSPACE_FILE_ROUTE_PATH,
       requireToken,
       async (req, res) => {
         const filePath =
@@ -1060,9 +1080,8 @@ export class CtrlYokeHostedServer
     );
 
     this.app.put(
-      "/api/workspace-viewer/file",
+      WORKSPACE_FILE_ROUTE_PATH,
       requireToken,
-      express.json({ limit: "5mb" }),
       async (req, res) => {
         const body = req.body as { path?: unknown; content?: unknown };
         if (typeof body.path !== "string" || typeof body.content !== "string") {

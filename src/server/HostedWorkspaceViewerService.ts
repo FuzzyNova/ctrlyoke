@@ -123,7 +123,7 @@ import {
 
 const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 10_000;
-const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
+export const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
 const BINARY_CHECK_BYTES = 8192;
 const WORKSPACE_TREE_STAT_CONCURRENCY = 8;
 const SEARCH_MAX_DURATION_MS = 3000;
