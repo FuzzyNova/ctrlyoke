@@ -423,15 +423,13 @@ export function parseConditionOutputRefs(text: string): ConditionOutputMatch[] {
   const matches: ConditionOutputMatch[] = [];
   const maskedText = maskFencedCodeBlocks(text);
   const regex = new RegExp(
-    `${NOT_AFTER_BOUNDARY}\\$([A-Za-z][A-Za-z0-9]*(?::[A-Za-z0-9,\\-]*)?)`,
+    `${NOT_AFTER_BOUNDARY}\\$([A-Za-z]+)(?::([A-Za-z]+))?`,
     "g"
   );
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(maskedText)) !== null) {
-    const body = match[1];
-    const separatorIndex = body.indexOf(":");
-    const phase = separatorIndex === -1 ? body : body.slice(0, separatorIndex);
+    const phase = match[1];
     if (
       phase !== SCRIPT_OUTPUT_SOURCES.PRE_CONDITION &&
       phase !== SCRIPT_OUTPUT_SOURCES.END_CONDITION
@@ -439,7 +437,7 @@ export function parseConditionOutputRefs(text: string): ConditionOutputMatch[] {
       continue;
     }
 
-    const field = separatorIndex === -1 ? "" : body.slice(separatorIndex + 1);
+    const field = match[2] ?? "";
     matches.push({
       phase,
       field,
