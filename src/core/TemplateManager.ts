@@ -500,13 +500,34 @@ export class TemplateManager {
    * Handles plain {varName}, {file:varName}, and {text:varName} placeholders.
    */
   replaceVariables(content: string, variables: Record<string, string>): string {
-    let result = content;
-    for (const [key, value] of Object.entries(variables)) {
-      // Replace all forms: {varName}, {file:varName}, {text:varName}
-      const pattern = new RegExp(`\\{(?:file:|text:)?${key}\\}`, "g");
-      result = result.replace(pattern, value);
+    return content.replace(
+      /\{(?:file:|text:)?([a-z][a-zA-Z0-9]*)\}/g,
+      (placeholder, name: string) => variables[name] ?? placeholder
+    );
+  }
+
+  /** Replace template placeholders only in scalar values, never in object keys. */
+  private substituteVariablesInValues(
+    value: unknown,
+    variables: Record<string, string>
+  ): unknown {
+    if (typeof value === "string") {
+      return this.replaceVariables(value, variables);
     }
-    return result;
+    if (Array.isArray(value)) {
+      return value.map((entry) =>
+        this.substituteVariablesInValues(entry, variables)
+      );
+    }
+    if (value !== null && typeof value === "object") {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, entry]) => [
+          key,
+          this.substituteVariablesInValues(entry, variables),
+        ])
+      );
+    }
+    return value;
   }
 
   /**
@@ -550,12 +571,13 @@ export class TemplateManager {
       }
     }
 
-    // Replace variables in raw template string
-    const substituted = this.replaceVariables(templateContent, withDefaults);
-
-    // Parse (yaml.load handles both YAML and JSON).
+    // Parse first (yaml.load handles both YAML and JSON), then replace only
+    // scalar values so user input cannot change the template's YAML structure.
     // Strip _templateMeta — it's template-authoring metadata, not a workflow execution field.
-    const parsed = jsYaml.load(substituted) as Record<string, unknown>;
+    const parsed = this.substituteVariablesInValues(
+      jsYaml.load(templateContent),
+      withDefaults
+    ) as Record<string, unknown>;
     delete parsed["_templateMeta"];
 
     // Validate/normalize with the same schema and step-building logic a
