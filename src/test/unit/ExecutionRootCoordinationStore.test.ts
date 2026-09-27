@@ -483,12 +483,21 @@ suite("ExecutionRootCoordinationStore", function () {
       const store = new ExecutionRootCoordinationStore(root);
       await store.append(lifecycle("holder", "join"));
       await store.append(claim("holder", "src/held.ts", 2));
+      await store.append(lifecycle("holder", "join"));
+      await store.append(lifecycle("holder", "join"));
       await store.append(note("other", "unrelated"));
 
       const result = await store.read({ limit: 10 });
       assert.deepStrictEqual(
         result.entries.map((entry) => entry.kind),
-        ["join", "claim", "note"]
+        ["join", "claim", "join", "note"]
+      );
+      assert.deepStrictEqual(
+        result.entries
+          .filter((entry) => entry.kind === "join")
+          .map((entry) => entry.seq),
+        [1, 4],
+        "the lifecycle start and latest lease join should remain"
       );
     } finally {
       await removeDirectory(root);

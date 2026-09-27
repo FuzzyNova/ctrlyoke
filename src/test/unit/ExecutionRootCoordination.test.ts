@@ -15,6 +15,7 @@ import {
   CoordinationParticipantRegistry,
   foldCoordinationEntries,
 } from "../../core/orchestration/ExecutionRootCoordination";
+import { ExecutionRootCoordinationStore } from "../../core/orchestration/ExecutionRootCoordinationStore";
 import { STALE_HEARTBEAT_MS } from "../../utils/LockSafetyPrimitives";
 import * as fs from "fs/promises";
 import * as os from "os";
@@ -375,6 +376,33 @@ suite("ExecutionRootCoordination", function () {
     );
   });
 
+  test("keeps a CLI claim live when a later join renews its lifecycle lease", () => {
+    const firstJoin = participant("cli", {
+      via: COORDINATION_PARTICIPANT_VIA.CLI,
+      leaseExpiresAt: 50,
+      pid: undefined,
+      lastHeartbeat: undefined,
+    });
+    const latestJoin = { ...firstJoin, leaseExpiresAt: 75 };
+    const folded = foldCoordinationEntries(
+      [
+        join(firstJoin, 1),
+        claim(firstJoin, ["src/held.ts"], 2),
+        join(latestJoin, 3),
+      ],
+      { now: 55 }
+    );
+
+    assert.deepStrictEqual(
+      folded.participants.map((value) => value.participantId),
+      ["cli"]
+    );
+    assert.deepStrictEqual(
+      folded.claims.map((value) => value.path),
+      ["src/held.ts"]
+    );
+  });
+
   test("keeps claims for a live MCP participant with a current heartbeat", () => {
     const value = participant("mcp", {
       lastHeartbeat: 1_000 + STALE_HEARTBEAT_MS + 1,
@@ -420,6 +448,58 @@ suite("ExecutionRootCoordination", function () {
       assert.strictEqual(COORDINATION_CLI_LEASE_TTL_MS, 30 * 60 * 1_000);
     } finally {
       await removeDirectory(root);
+    }
+  });
+
+  test("compacts repeated CLI refreshes while preserving live claims and calls", async () => {
+    for (const startsWithClaim of [false, true]) {
+      const root = await tempDirectory();
+      try {
+        const registry = new CoordinationParticipantRegistry(root, {
+          now: () => 10_000,
+          processLivenessCheck: () => true,
+          retention: { maxEntries: 5 },
+        });
+        const lease = await registry.registerParticipant({
+          kind: "external",
+          label: "CLI agent",
+          via: COORDINATION_PARTICIPANT_VIA.CLI,
+        });
+        if (startsWithClaim) await lease.claim(["src/held.ts"]);
+
+        const beforeRefreshes = await registry.fold();
+        for (let index = 0; index < 25; index += 1) {
+          await registry.heartbeatParticipant(lease.participantId);
+        }
+        assert.deepStrictEqual(await registry.fold(), beforeRefreshes);
+        const compactedEntries = (
+          await new ExecutionRootCoordinationStore(root).read({ limit: 100 })
+        ).entries;
+        assert.strictEqual(
+          compactedEntries.filter(
+            (entry) => entry.kind === COORDINATION_ENTRY_KINDS.JOIN
+          ).length,
+          2
+        );
+        assert.deepStrictEqual(
+          (await registry.fold()).claims.map((entry) => entry.path),
+          beforeRefreshes.claims.map((entry) => entry.path)
+        );
+
+        assert.deepStrictEqual(
+          (await registry.claimPaths(lease.participantId, ["src/later.ts"]))
+            .granted,
+          ["src/later.ts"]
+        );
+        await registry.postNote(lease.participantId, "still active");
+        assert.deepStrictEqual(
+          await registry.releasePaths(lease.participantId),
+          startsWithClaim ? ["src/held.ts", "src/later.ts"] : ["src/later.ts"]
+        );
+        assert.deepStrictEqual((await registry.fold()).claims, []);
+      } finally {
+        await removeDirectory(root);
+      }
     }
   });
 

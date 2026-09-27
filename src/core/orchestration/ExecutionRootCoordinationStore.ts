@@ -279,30 +279,28 @@ export function trimmingPreservesUnresolvedClaims(
  * alone reach `maxEntries`, every subsequent append fails permanently with no
  * removable candidate, and the only recovery is deleting the board by hand.
  *
- * A lifecycle is every `join` since the participant's last `leave`, not just
- * the most recent one: the registry re-emits `join` to refresh a lease, so one
- * participant routinely has several open joins at once. Settling only the last
- * would strand the earlier ones and leave the ownership fold still reporting a
- * departed participant as live. Matching by sequence also folds each completed
- * cycle of a participant that re-registers (a reused MCP server rejoining after
- * an orchestrator-issued close) rather than only its last one.
+ * A lifecycle is every `join` since the participant's last `leave`. For an
+ * open lifecycle, retain its first join as the lifecycle start marker (so
+ * claims before later refreshes still belong to a registered participant) and
+ * its last join as the current lease/liveness record; intermediate refresh
+ * joins are redundant. This bounds a long-lived participant to two joins per
+ * lifecycle. Matching by sequence also folds each completed cycle of a
+ * participant that re-registers (a reused MCP server rejoining after an
+ * orchestrator-issued close) rather than only its last one.
  *
- * A participant still holding an unresolved claim is skipped entirely, so this
- * can never strand a claim without the `leave` that would cancel it.
+ * Claims remain in the board independently of refresh joins. Keeping both
+ * lifecycle endpoints preserves the liveness record needed to fold those
+ * claims, and the retention invariant verifies that compaction did not drop
+ * any unresolved claim.
  */
 function compactDepartedParticipants(
-  entries: readonly CoordinationEntry[],
-  resolveClaims: CoordinationUnresolvedClaimResolver = unresolvedClaims
+  entries: readonly CoordinationEntry[]
 ): CoordinationEntry[] {
-  const claimHolders = new Set(
-    resolveClaims(entries).map((claim) => claim.entry.from.participantId)
-  );
   const settled = new Set<number>();
   const openJoins = new Map<string, number[]>();
 
   for (const entry of entries) {
     const { participantId } = entry.from;
-    if (claimHolders.has(participantId)) continue;
     if (entry.kind === COORDINATION_ENTRY_KINDS.JOIN) {
       const open = openJoins.get(participantId) ?? [];
       open.push(entry.seq);
@@ -313,6 +311,12 @@ function compactDepartedParticipants(
       }
       openJoins.delete(participantId);
       settled.add(entry.seq);
+    }
+  }
+
+  for (const joinSequences of openJoins.values()) {
+    for (const sequence of joinSequences.slice(1, -1)) {
+      settled.add(sequence);
     }
   }
 
@@ -487,8 +491,7 @@ export class ExecutionRootCoordinationStore {
           const now = this.options.now?.() ?? Date.now();
           const compactedExisting = removeOldNotes(
             compactDepartedParticipants(
-              compactSettledClaims(entries, this.options.unresolvedClaims),
-              this.options.unresolvedClaims
+              compactSettledClaims(entries, this.options.unresolvedClaims)
             ),
             now,
             settings.maxEntryAgeDays
@@ -508,8 +511,7 @@ export class ExecutionRootCoordinationStore {
             compactSettledClaims(
               [...compactedExisting, persisted],
               this.options.unresolvedClaims
-            ),
-            this.options.unresolvedClaims
+            )
           );
           const fitted = trimNotesToCaps(
             compacted,

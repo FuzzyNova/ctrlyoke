@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-27 by step 2 (Codex) of the coordination test workflow
 - **Area:** `src/core/orchestration/ExecutionRootCoordination.ts`, `src/core/orchestration/ExecutionRootCoordinationStore.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -23,7 +23,10 @@ This is distinct from dead participants whose final join is never followed by a 
 
 ## Suggested Fix
 
-During compaction, retain only the newest `join` entry for each currently live participant, provided that this preserves claim ownership and lease state. The earlier joins are superseded by that newest entry; existing notes and claims already carry their own author metadata. Add a small-cap regression test that repeatedly refreshes one live participant without leaving and confirms that later coordination calls still succeed.
+Fold liveness per lifecycle from its latest join, then retain the first and last
+join for each open lifecycle during compaction. Add a small-cap regression test
+that repeatedly refreshes one live participant, with and without claims, and
+confirms that later coordination calls still succeed.
 
 ## Planning Notes (orchestrator review, 2026-09-27)
 
@@ -35,7 +38,7 @@ the current fold, and code reading suggests a related latent bug:
   a `claim` only if the participant's record is live *at that point in the
   sequence*. `claimPaths()` always refreshes (appends a `join`) right before its
   `claim`, so each claim is governed by the join just before it.
-- **Latent bug (to be verified with a failing test first):** for a CLI-delivered
+- **Confirmed latent bug:** for a CLI-delivered
   participant (lease-based liveness), once the lease on the join before a claim
   expires, the fold marks the record non-live there and skips the claim, even
   though a later `join` renewed the lease. Example: join1 (t=20, expires 50),
@@ -55,3 +58,12 @@ Recommended design:
    of the participant's claims) and the **last** join (current lease) of each
    open lifecycle, and drops the joins in between. That bounds a live
    participant to two joins, however often it refreshes.
+
+## Resolution Notes
+
+The latent fold bug was confirmed with the planned failing regression: at time
+55, the first CLI join's lease had expired at 50, but a later join's lease was
+valid through 75. The old fold dropped the intervening claim. The fold now uses
+the latest join in each lifecycle for liveness, and compaction retains that
+lifecycle's first and last joins. Regression coverage verifies claims survive
+refresh compaction and later claim, note, and release calls continue to work.

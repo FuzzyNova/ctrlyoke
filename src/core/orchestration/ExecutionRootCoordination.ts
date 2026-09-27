@@ -339,19 +339,42 @@ export function foldCoordinationEntries(
   const processLivenessCheck = options.processLivenessCheck ?? isProcessAlive;
   const participantRecords = new Map<string, ParticipantLeaseRecord>();
   const claims = new Map<string, CoordinationClaim>();
+  const activeLifecycles = new Map<string, ParticipantLeaseRecord>();
+  const lifecycleByEntry = new Map<CoordinationEntry, ParticipantLeaseRecord>();
+
+  // Refresh joins update one lifecycle's liveness for every claim/release in
+  // that lifecycle. Resolve the latest join first so an earlier lease expiring
+  // does not erase claims that a later refresh still keeps live.
+  for (const entry of entries) {
+    if (entry.kind === COORDINATION_ENTRY_KINDS.JOIN) {
+      const participant = participantFromEntry(entry);
+      if (!participant) continue;
+      const lifecycle = activeLifecycles.get(participant.participantId) ?? {
+        participant,
+        live: false,
+      };
+      lifecycle.participant = participant;
+      lifecycle.live = isParticipantLive(
+        participant,
+        now,
+        processLivenessCheck
+      );
+      activeLifecycles.set(participant.participantId, lifecycle);
+      lifecycleByEntry.set(entry, lifecycle);
+    } else if (entry.kind === COORDINATION_ENTRY_KINDS.LEAVE) {
+      const lifecycle = activeLifecycles.get(entry.from.participantId);
+      if (lifecycle) lifecycleByEntry.set(entry, lifecycle);
+      activeLifecycles.delete(entry.from.participantId);
+    } else {
+      const lifecycle = activeLifecycles.get(entry.from.participantId);
+      if (lifecycle) lifecycleByEntry.set(entry, lifecycle);
+    }
+  }
 
   for (const entry of entries) {
-    const participant = participantFromEntry(entry);
-    if (entry.kind === COORDINATION_ENTRY_KINDS.JOIN && participant) {
-      const live = isParticipantLive(participant, now, processLivenessCheck);
-      participantRecords.set(participant.participantId, { participant, live });
-      if (!live) {
-        for (const [claimPath, claim] of claims) {
-          if (claim.owner.participantId === participant.participantId) {
-            claims.delete(claimPath);
-          }
-        }
-      }
+    const lifecycle = lifecycleByEntry.get(entry);
+    if (entry.kind === COORDINATION_ENTRY_KINDS.JOIN && lifecycle) {
+      participantRecords.set(lifecycle.participant.participantId, lifecycle);
       continue;
     }
 
@@ -365,7 +388,7 @@ export function foldCoordinationEntries(
       continue;
     }
 
-    const participantRecord = participantRecords.get(entry.from.participantId);
+    const participantRecord = lifecycle;
     if (!participantRecord?.live) continue;
 
     if (entry.kind === COORDINATION_ENTRY_KINDS.CLAIM) {
