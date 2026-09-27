@@ -42,3 +42,8 @@ if the result is `>= 1000` promote to the next unit. Single-source the unit ladd
 intentional, e.g. via an option) instead of maintaining a second copy. Add tests for
 `999_949`, `999_950`, `999_999`, `1_000_000` in both paths, plus `999_999_999` for the
 statusline's M→B boundary.
+
+Note: the webview's `formatMagnitude` (`src/ui/webview-react/utils/number.ts`) has the
+same shape, and its test currently *expects* `999_999 → "1000.0K"`. Treat that as the
+same defect: reuse the shared ladder there too and update the test to `"1.0M"` (or the
+helper's equivalent) rather than keeping a third copy.
