@@ -43,6 +43,7 @@ export interface CoordinationStoreOptions {
   retention?: Partial<CoordinationRetentionOptions>;
   now?: () => number;
   unresolvedClaims?: CoordinationUnresolvedClaimResolver;
+  liveParticipants?: CoordinationLiveParticipantResolver;
 }
 
 export interface CoordinationBoardScope {
@@ -198,6 +199,10 @@ export type CoordinationUnresolvedClaimResolver = (
   entries: readonly CoordinationEntry[]
 ) => readonly CoordinationActiveClaim[];
 
+export type CoordinationLiveParticipantResolver = (
+  entries: readonly CoordinationEntry[]
+) => ReadonlySet<string>;
+
 /**
  * Return explicit claims that have not been cancelled by a later release.
  * This deliberately errs on the side of protecting a claim: liveness-aware
@@ -294,10 +299,18 @@ export function trimmingPreservesUnresolvedClaims(
  * any unresolved claim.
  */
 function compactDepartedParticipants(
-  entries: readonly CoordinationEntry[]
+  entries: readonly CoordinationEntry[],
+  liveParticipants: ReadonlySet<string> | undefined,
+  activeClaims: readonly CoordinationActiveClaim[],
+  now: number,
+  maxEntryAgeDays: number
 ): CoordinationEntry[] {
   const settled = new Set<number>();
   const openJoins = new Map<string, number[]>();
+  const unresolvedClaimParticipants = new Set(
+    activeClaims.map((claim) => claim.entry.from.participantId)
+  );
+  const cutoff = now - maxEntryAgeDays * 24 * 60 * 60 * 1_000;
 
   for (const entry of entries) {
     const { participantId } = entry.from;
@@ -314,7 +327,20 @@ function compactDepartedParticipants(
     }
   }
 
-  for (const joinSequences of openJoins.values()) {
+  for (const [participantId, joinSequences] of openJoins) {
+    const joins = joinSequences
+      .map((sequence) => entries.find((entry) => entry.seq === sequence))
+      .filter((entry): entry is CoordinationEntry => entry !== undefined);
+    const latestJoin = joins.at(-1);
+    const latestJoinAt = latestJoin ? Date.parse(latestJoin.at) : Number.NaN;
+    const departed = liveParticipants
+      ? !liveParticipants.has(participantId)
+      : Number.isFinite(latestJoinAt) && latestJoinAt < cutoff;
+    if (departed && !unresolvedClaimParticipants.has(participantId)) {
+      for (const sequence of joinSequences) settled.add(sequence);
+      continue;
+    }
+
     for (const sequence of joinSequences.slice(1, -1)) {
       settled.add(sequence);
     }
@@ -381,8 +407,13 @@ function trimNotesToCaps(
   while (exceedsCaps()) {
     const candidates = removable();
     if (candidates.length === 0) {
+      const hasUnresolvedClaims = entries.some(
+        (entry) => entry.kind === COORDINATION_ENTRY_KINDS.CLAIM
+      );
       throw new Error(
-        "Coordination board capacity exceeded: cannot append without dropping an unresolved claim"
+        hasUnresolvedClaims
+          ? "Coordination board capacity exceeded: unresolved claims fill the board; release claims or increase maxEntries or maxBoardBytes"
+          : "Coordination board capacity exceeded: only non-evictable participant lifecycle entries remain; increase maxEntries or maxBoardBytes"
       );
     }
 
@@ -489,9 +520,15 @@ export class ExecutionRootCoordinationStore {
             at: entry.at ?? new Date().toISOString(),
           };
           const now = this.options.now?.() ?? Date.now();
+          const resolveClaims = this.options.unresolvedClaims ?? unresolvedClaims;
+          const activeClaims = resolveClaims(entries);
           const compactedExisting = removeOldNotes(
             compactDepartedParticipants(
-              compactSettledClaims(entries, this.options.unresolvedClaims)
+              compactSettledClaims(entries, this.options.unresolvedClaims),
+              this.options.liveParticipants?.(entries),
+              activeClaims,
+              now,
+              settings.maxEntryAgeDays
             ),
             now,
             settings.maxEntryAgeDays
@@ -511,7 +548,11 @@ export class ExecutionRootCoordinationStore {
             compactSettledClaims(
               [...compactedExisting, persisted],
               this.options.unresolvedClaims
-            )
+            ),
+            this.options.liveParticipants?.([...compactedExisting, persisted]),
+            resolveClaims([...compactedExisting, persisted]),
+            now,
+            settings.maxEntryAgeDays
           );
           const fitted = trimNotesToCaps(
             compacted,

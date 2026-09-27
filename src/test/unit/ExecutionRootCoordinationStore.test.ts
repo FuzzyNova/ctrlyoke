@@ -374,7 +374,7 @@ suite("ExecutionRootCoordinationStore", function () {
 
       await assert.rejects(
         store.append(claim("other", "src/other.ts", 2)),
-        /capacity exceeded.*unresolved claim/
+        /capacity exceeded: unresolved claims fill the board/
       );
       const result = await store.read({ limit: 10 });
       assert.strictEqual(result.entries.length, 1);
@@ -498,6 +498,76 @@ suite("ExecutionRootCoordinationStore", function () {
           .map((entry) => entry.seq),
         [1, 4],
         "the lifecycle start and latest lease join should remain"
+      );
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  test("ages out only claim-free lifecycles whose latest join is old", async () => {
+    const root = await tempDirectory("lifecycle-age");
+    let now = Date.parse("2026-09-01T12:00:00.000Z");
+    const store = new ExecutionRootCoordinationStore(root, {
+      now: () => now,
+      retention: { maxEntryAgeDays: 7 },
+    });
+    const at = (date: string) => ({ at: date });
+    try {
+      await store.append({
+        ...lifecycle("dead", "join"),
+        ...at("2026-09-01T12:00:00.000Z"),
+      });
+      await store.append({
+        ...lifecycle("dead", "join"),
+        ...at("2026-09-05T12:00:00.000Z"),
+      });
+      await store.append({
+        ...lifecycle("claimed", "join"),
+        ...at("2026-09-01T12:00:00.000Z"),
+      });
+      await store.append({
+        ...claim("claimed", "src/held.ts", 4),
+        at: "2026-09-01T12:00:00.000Z",
+      });
+      await store.append({
+        ...lifecycle("refreshed", "join"),
+        ...at("2026-09-01T12:00:00.000Z"),
+      });
+      await store.append({
+        ...lifecycle("refreshed", "join"),
+        ...at("2026-09-19T12:00:00.000Z"),
+      });
+
+      now = Date.parse("2026-09-20T12:00:00.000Z");
+      await store.append(note("writer", "trigger retention"));
+
+      const entries = (await store.read({ limit: 20 })).entries;
+      assert.deepStrictEqual(
+        entries.map((entry) => `${entry.kind}:${entry.from.participantId}`),
+        [
+          "join:claimed",
+          "claim:claimed",
+          "join:refreshed",
+          "join:refreshed",
+          "note:writer",
+        ]
+      );
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  test("reports lifecycle capacity separately when no unresolved claim remains", async () => {
+    const root = await tempDirectory("lifecycle-over-cap");
+    try {
+      const store = new ExecutionRootCoordinationStore(root, {
+        retention: { maxEntries: 1 },
+      });
+      await store.append(lifecycle("live", "join"));
+
+      await assert.rejects(
+        store.append(lifecycle("other", "join")),
+        /capacity exceeded: only non-evictable participant lifecycle entries remain/
       );
     } finally {
       await removeDirectory(root);

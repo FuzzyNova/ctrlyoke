@@ -503,6 +503,58 @@ suite("ExecutionRootCoordination", function () {
     }
   });
 
+  test("reclaims capacity from dead PID and expired CLI participant joins", async () => {
+    for (const staleKind of ["pid", "lease"] as const) {
+      const root = await tempDirectory();
+      let now = 10_000;
+      let processAlive = true;
+      try {
+        const registry = new CoordinationParticipantRegistry(root, {
+          now: () => now,
+          processLivenessCheck: () => processAlive,
+          cliParticipantTtlMinutes: 1,
+          retention: { maxEntries: 5 },
+        });
+        const staleVia =
+          staleKind === "pid"
+            ? COORDINATION_PARTICIPANT_VIA.MCP
+            : COORDINATION_PARTICIPANT_VIA.CLI;
+        for (let index = 0; index < 5; index += 1) {
+          await registry.registerParticipant({
+            kind: "external",
+            label: `stale-${index}`,
+            via: staleVia,
+          });
+        }
+
+        if (staleKind === "pid") {
+          processAlive = false;
+        } else {
+          now += 60 * 1_000 + 1;
+        }
+        const writer = await registry.registerParticipant({
+          kind: "external",
+          label: "current writer",
+          via: COORDINATION_PARTICIPANT_VIA.CLI,
+        });
+        await registry.postNote(writer.participantId, "capacity recovered");
+
+        const entries = (
+          await new ExecutionRootCoordinationStore(root).read({ limit: 20 })
+        ).entries;
+        assert.deepStrictEqual(
+          entries.map((entry) => entry.kind),
+          ["join", "join", "note"]
+        );
+        assert.strictEqual(entries[0].from.participantId, writer.participantId);
+        assert.strictEqual(entries[1].from.participantId, writer.participantId);
+        assert.strictEqual(entries[2].text, "capacity recovered");
+      } finally {
+        await removeDirectory(root);
+      }
+    }
+  });
+
   test("reuses one CLI participant per run address across separate calls", async () => {
     const root = await tempDirectory();
     let now = 10_000;

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-27 by step 1 (antigravity) of the coordination test workflow
 - **Area:** `src/core/orchestration/ExecutionRootCoordinationStore.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

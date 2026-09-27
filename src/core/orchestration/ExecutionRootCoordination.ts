@@ -23,6 +23,7 @@ import {
   type CoordinationReadResult,
   type CoordinationRetentionOptions,
   type CoordinationBoardTransaction,
+  type CoordinationLiveParticipantResolver,
   type CoordinationUnresolvedClaimResolver,
 } from "./ExecutionRootCoordinationStore";
 
@@ -521,6 +522,10 @@ export class CoordinationParticipantRegistry {
         this.resolveLiveClaims(
           entries
         )) satisfies CoordinationUnresolvedClaimResolver,
+      liveParticipants: ((entries) =>
+        this.resolveLiveParticipantIds(
+          entries
+        )) satisfies CoordinationLiveParticipantResolver,
     });
     this.now = options.now ?? Date.now;
     this.processLivenessCheck = options.processLivenessCheck;
@@ -528,6 +533,16 @@ export class CoordinationParticipantRegistry {
   }
 
   private readonly cliParticipantTtlMinutes?: number;
+
+  private resolveLiveParticipantIds(
+    entries: readonly CoordinationEntry[]
+  ): ReadonlySet<string> {
+    return new Set(
+      foldCoordinationEntries(entries, this.foldOptions()).participants.map(
+        (participant) => participant.participantId
+      )
+    );
+  }
 
   private resolveLiveClaims(
     entries: readonly CoordinationEntry[]
