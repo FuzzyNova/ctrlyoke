@@ -231,9 +231,10 @@ function unresolvedClaims(
         }
       } else {
         for (const claimPath of entry.paths) {
-          const claim = active.get(claimPathForCompare(claimPath));
+          const claimKey = claimPathForCompare(claimPath);
+          const claim = active.get(claimKey);
           if (claim?.entry.from.participantId === entry.from.participantId) {
-            active.delete(claimPath);
+            active.delete(claimKey);
           }
         }
       }
@@ -311,6 +312,7 @@ function compactDepartedParticipants(
     activeClaims.map((claim) => claim.entry.from.participantId)
   );
   const cutoff = now - maxEntryAgeDays * 24 * 60 * 60 * 1_000;
+  const entryBySequence = new Map(entries.map((entry) => [entry.seq, entry]));
 
   for (const entry of entries) {
     const { participantId } = entry.from;
@@ -328,10 +330,7 @@ function compactDepartedParticipants(
   }
 
   for (const [participantId, joinSequences] of openJoins) {
-    const joins = joinSequences
-      .map((sequence) => entries.find((entry) => entry.seq === sequence))
-      .filter((entry): entry is CoordinationEntry => entry !== undefined);
-    const latestJoin = joins.at(-1);
+    const latestJoin = entryBySequence.get(joinSequences.at(-1)!);
     const latestJoinAt = latestJoin ? Date.parse(latestJoin.at) : Number.NaN;
     const departed = liveParticipants
       ? !liveParticipants.has(participantId)
@@ -520,7 +519,8 @@ export class ExecutionRootCoordinationStore {
             at: entry.at ?? new Date().toISOString(),
           };
           const now = this.options.now?.() ?? Date.now();
-          const resolveClaims = this.options.unresolvedClaims ?? unresolvedClaims;
+          const resolveClaims =
+            this.options.unresolvedClaims ?? unresolvedClaims;
           const activeClaims = resolveClaims(entries);
           const compactedExisting = removeOldNotes(
             compactDepartedParticipants(

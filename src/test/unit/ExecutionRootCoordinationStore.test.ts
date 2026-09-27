@@ -328,7 +328,7 @@ suite("ExecutionRootCoordinationStore", function () {
             kind: "external",
             attested: false,
           },
-          paths: ["coordination-probe/r2/dir"],
+          paths: ["COORDINATION-probe/r2/dir/"],
           via: "cli",
         },
       ];
