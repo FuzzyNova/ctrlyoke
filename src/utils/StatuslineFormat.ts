@@ -1,4 +1,5 @@
-import { formatCompactTokenMagnitude } from "./TokenFormatting";
+// Keep this standalone statusline module dependent only on import-free leaves.
+import { formatCompactTokenMagnitude } from "./CompactMagnitude";
 
 /**
  * Version of the snapshot file the statusline scripts write for ctrlyoke's

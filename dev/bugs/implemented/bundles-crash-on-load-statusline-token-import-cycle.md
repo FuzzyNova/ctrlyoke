@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-27 by the long-running bug-fix workflow final step (claude-cli)
 - **Area:** `src/utils/StatuslineFormat.ts`, `src/utils/TokenFormatting.ts`, `src/utils/TokenSemantics.ts`, `src/types/DashboardConstants.ts`, `esbuild.js` bundles
-- **Severity:** critical
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

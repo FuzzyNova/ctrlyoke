@@ -1,4 +1,4 @@
-import { formatCompactTokenMagnitude } from "@root/utils/TokenFormatting";
+import { formatCompactTokenMagnitude } from "@root/utils/CompactMagnitude";
 
 /**
  * Numeric utility functions
