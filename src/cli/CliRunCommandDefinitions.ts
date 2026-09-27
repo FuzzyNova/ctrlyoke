@@ -2,6 +2,7 @@ import { Command } from "commander";
 import chalk from "chalk";
 import {
   PERMISSION_MODES,
+  SETTING_PATHS,
   isPermissionMode,
   type PermissionMode,
 } from "../types/DashboardConstants";
@@ -161,12 +162,12 @@ function addExecutionOptions(command: Command): Command {
     )
     .option(
       "-t, --timeout <seconds>",
-      "Override the execution.maxPromptTimeout setting for this run (-1 = unlimited)",
+      `Override the ${SETTING_PATHS.EXECUTION_MAX_PROMPT_TIMEOUT_SEC} setting for this run (-1 = unlimited)`,
       parseTimeoutSeconds
     )
     .option(
       "--script-timeout <seconds>",
-      "Override the execution.scriptTimeout setting for this run",
+      `Override the ${SETTING_PATHS.EXECUTION_SCRIPT_TIMEOUT_SEC} setting for this run`,
       parseTimeoutSeconds
     )
     .option("--headless", "Force headless mode (CI/CD, no user interaction)")

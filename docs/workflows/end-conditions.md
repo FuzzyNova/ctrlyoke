@@ -167,7 +167,7 @@ variables are exported to them as `CTRLYOKE_VAR_<KEY>` environment variables.
 
 A script that cannot be run at all — for example an unsupported file type or a
 spawn failure — is an internal error, not a failed validation. It is handled by
-the step's `errorBehavior` policy (`stop`, `retry`, or `continue`) rather than by
+the step's `errorBehavior` policy (`stopWorkflow`, `retry`, or `continue`) rather than by
 `onFail`.
 
 ## Condition output references

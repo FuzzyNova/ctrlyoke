@@ -41,7 +41,7 @@ key you leave out keeps the default shown below.
     "models": { "claude-cli": "sonnet" },
     "executionMode": "headless"
   },
-  "execution": { "scriptTimeout": 120 },
+  "execution": { "scriptTimeoutSec": 120 },
   "queue": { "maxParallelSteps": 4 }
 }
 ```

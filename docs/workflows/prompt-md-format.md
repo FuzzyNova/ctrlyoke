@@ -1,6 +1,6 @@
 # Prompt Markdown format
 
-`.prompt.md` is the lightest-weight way to use ctrlyoke. The entire file content, trimmed, becomes the prompt of a single step. ctrlyoke does not parse YAML frontmatter in these files, so any frontmatter is sent to the harness as part of the prompt text. Harness, model, and every other property come from your `defaults.*` settings.
+`.prompt.md` is the lightest-weight way to use ctrlyoke. The file becomes the prompt of a single step, with an optional leading YAML frontmatter block. ctrlyoke reads `schemaVersion` from that block, removes the block from the prompt, and trims the remaining prompt text. The frontmatter must be valid YAML; an invalid block makes the file fail to load. Harness, model, and every other property come from your `defaults.*` settings.
 
 ## Example
 
