@@ -35,7 +35,7 @@ Step indices are **zero-based** everywhere in these tools, except `sessionId` in
 Returns `workflowKey`, `runRef`, a `metadata` object, and `steps`.
 
 - `metadata`: `workflowName`, `harness`, `model`, `currentIndex`, `totalSteps`, `completedSteps`, `executionState`, `maxQueueSize` and `remainingSlots` (numbers, or `"unlimited"`), `workingFile`, `runDirectory`, `definitionRevision`, `descriptorRevision`.
-- `steps[]`: `index`, `prompt` (script steps show as `(script) <command>`), `status` (`completed`, `running`, or `pending`), `model`.
+- `steps[]`: `index`, `prompt` (script steps show as `(script) <command>`), `status` (`completed`, `failed`, `cancelled`, `skipped`, `running`, or `pending`), `model`.
 
 ## `append_step`
 

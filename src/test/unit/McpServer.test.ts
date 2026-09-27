@@ -42,8 +42,10 @@ import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
   PARALLEL_GROUP_ADMISSION,
+  PROMPT_TERMINAL_STATUS,
   RUNNER_IDS,
   RUN_HISTORY_LOCATIONS,
+  STEP_STATUS,
   type ExecutionState,
 } from "../../types/DashboardConstants";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
@@ -2419,6 +2421,57 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       await server.invokeTool(MCP_READ_OUTPUT_TOOL_NAME, {})
     );
     assert.strictEqual(output.outputs[0].responseText, "the finished answer");
+  });
+
+  test("reports started parallel group members as running", async () => {
+    const server = await setup();
+    const run = await createRun("parallel-status", "2026-01-01T00-00-00-000Z", {
+      stepCount: 3,
+      currentIndex: 0,
+      parallelGroups: [
+        { id: "status-group", startIndex: 0, endIndex: 2, failFast: true },
+      ],
+      executionState: EXECUTION_STATES.RUNNING,
+    });
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.steps = workingFile.steps!.map((step) => ({
+      ...step,
+      _runtime: { startedAt: 1 },
+    }));
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const status = responseJson(await server.invokeTool("workflow_status", {}));
+
+    assert.deepStrictEqual(
+      status.steps.map((step: { status: string }) => step.status),
+      [STEP_STATUS.RUNNING, STEP_STATUS.RUNNING, STEP_STATUS.RUNNING]
+    );
+  });
+
+  test("reports terminal failures instead of completed", async () => {
+    const server = await setup();
+    const run = await createRun("failed-step-status", "2026-01-01T00-00-00-000Z", {
+      stepCount: 2,
+      currentIndex: 1,
+      executionState: EXECUTION_STATES.ERROR,
+    });
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.steps![0]._runtime = {
+      startedAt: 1,
+      completedAt: 2,
+      terminalStatus: PROMPT_TERMINAL_STATUS.FAILED,
+    };
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const status = responseJson(await server.invokeTool("workflow_status", {}));
+
+    assert.strictEqual(status.steps[0].status, STEP_STATUS.FAILED);
   });
 
   test("returns the newer workflow format refusal as a tool error", async () => {

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-27 by step 0 (claude-cli) of the coordination test workflow
 - **Area:** `src/mcp-server.ts` (`CtrlYokeMCPServer.getStepStatus`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

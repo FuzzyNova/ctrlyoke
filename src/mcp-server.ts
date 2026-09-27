@@ -34,7 +34,6 @@ import * as path from "path";
 import type {
   WorkflowStep,
   WorkingFile,
-  WorkingFileRuntime,
   CoordinationParticipant,
 } from "./types/CtrlYokeTypes";
 import { isScriptStep } from "./types/CtrlYokeTypes";
@@ -58,6 +57,7 @@ import {
   resolveQueueLimitPolicy,
 } from "./utils/QueueLimitUtils";
 import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
+import { deriveStepStatusesFromRuntime } from "./utils/StepStatusDerivation";
 import { stripLegacyWorkingFileLineageMetadata } from "./utils/WorkingFileMetadata";
 import { RunContinuationService } from "./core/orchestration/RunContinuationService";
 import {
@@ -979,6 +979,11 @@ export class CtrlYokeMCPServer {
     };
 
     const allSteps = (queueData.steps || []) as WorkflowStep[];
+    const stepStatuses = deriveStepStatusesFromRuntime(
+      allSteps,
+      runtime.currentIndex,
+      runtime.executionState
+    );
     let schemaWarnings: WorkflowValidationWarning[] = [];
     const workflowDescriptor = await lineageRepository.readDescriptor(
       this.workspaceRoot,
@@ -1004,7 +1009,7 @@ export class CtrlYokeMCPServer {
     const steps = allSteps.map((p, index) => ({
       index,
       prompt: isScriptStep(p) ? `(script) ${p.script}` : p.prompt,
-      status: this.getStepStatus(index, runtime, allSteps),
+      status: stepStatuses[index],
       model: isScriptStep(p) ? undefined : p.model,
     }));
 
@@ -1480,6 +1485,11 @@ export class CtrlYokeMCPServer {
       currentIndex: 0,
       executionState: EXECUTION_STATES.IDLE,
     };
+    const stepStatuses = deriveStepStatusesFromRuntime(
+      allSteps,
+      runtime.currentIndex,
+      runtime.executionState
+    );
 
     const defaultIndices =
       context.groupStartBoundary === undefined
@@ -1535,7 +1545,7 @@ export class CtrlYokeMCPServer {
         const baseOutput = {
           index: i,
           prompt: isScriptStep(p) ? `(script) ${p.script}` : p.prompt,
-          status: this.getStepStatus(i, runtime, allSteps),
+          status: stepStatuses[i],
           responseText: fullResponseText,
         };
 
@@ -2007,26 +2017,6 @@ export class CtrlYokeMCPServer {
         `${operation}: the attached ctrlyoke run file ${filePath} is not valid JSON, so nothing was done (${describeError(error)}).`
       );
     }
-  }
-
-  /**
-   * Determine step status based on per-step completedAt (source of truth)
-   */
-  private getStepStatus(
-    index: number,
-    runtime: WorkingFileRuntime,
-    steps: WorkflowStep[]
-  ): string {
-    if (steps[index]?._runtime?.completedAt !== undefined) {
-      return "completed";
-    }
-    if (index === runtime.currentIndex) {
-      return "running";
-    }
-    if (index < runtime.currentIndex) {
-      return "completed"; // Fallback for steps before current
-    }
-    return "pending";
   }
 
   /**

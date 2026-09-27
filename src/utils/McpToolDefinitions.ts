@@ -300,7 +300,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: MCP_WORKFLOW_STATUS_TOOL_NAME,
     description:
-      "See the steps in your workflow: which have finished, which is running now, and which are still queued.",
+      "See each workflow step's status: completed, failed, cancelled, skipped, running, or pending.",
     inputSchema: { type: "object", properties: {} },
   },
   {
