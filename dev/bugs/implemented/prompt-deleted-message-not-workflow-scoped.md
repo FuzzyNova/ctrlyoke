@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-27 by the long-running bug-fix workflow final step (claude-cli)
 - **Area:** `promptDeleted` message path — `src/core/WorkflowTaggedSink.ts`, `src/ui/PostMessageDashboardSink.ts`, `src/types/WebviewMessageTypes.ts`, `src/ui/webview-react/hooks/useMessageHandler.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

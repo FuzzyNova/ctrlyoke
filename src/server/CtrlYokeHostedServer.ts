@@ -678,14 +678,16 @@ export class CtrlYokeHostedServer
     steps: any[],
     finalStep?: WorkflowStep | null,
     parallelGroups?: ParallelGroupDefinition[],
-    definitionRevision?: number
+    definitionRevision?: number,
+    workflowId?: string
   ): void {
     this.sink.updatePromptDeleted(
       fileName,
       steps,
       finalStep,
       parallelGroups,
-      definitionRevision
+      definitionRevision,
+      workflowId
     );
   }
   updateFinalStep(

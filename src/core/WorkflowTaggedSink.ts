@@ -316,7 +316,8 @@ export class WorkflowTaggedSink implements IDashboardSink {
       steps,
       finalStep,
       parallelGroups,
-      definitionRevision
+      definitionRevision,
+      this.workflowId
     );
   }
 
