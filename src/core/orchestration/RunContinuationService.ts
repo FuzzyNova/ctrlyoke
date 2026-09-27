@@ -784,14 +784,16 @@ export class RunContinuationService {
               : (change.updates as WorkflowStep),
           ])[0]
         );
+        const mergedStep = mergeWorkflowStepUpdate(
+          topology.steps[index],
+          incomingStep,
+          change.clearProperties
+        );
+        assertStepHasRequiredContent(mergedStep);
         const nextTopology = replaceParallelGroupStep(
           topology,
           index,
-          mergeWorkflowStepUpdate(
-            topology.steps[index],
-            incomingStep,
-            change.clearProperties
-          )
+          mergedStep
         );
         assertStartedStepPositionsPreserved(
           topology.steps,
@@ -1229,7 +1231,12 @@ function assertEditableDuringExecution(
  * queue's disk merge uses stepId directly; this floor is not a second merge
  * identity rule.
  */
-const NON_CLEARABLE_STEP_PROPERTIES = ["_runtime", "status", "details"];
+const NON_CLEARABLE_STEP_PROPERTIES = [
+  "_runtime",
+  "status",
+  "details",
+  "type",
+];
 
 function assertClearablePropertiesAreEditable(
   clearProperties: string[] | undefined
@@ -1241,6 +1248,18 @@ function assertClearablePropertiesAreEditable(
     throw new Error(
       `Cannot clear internal step ${rejected.length === 1 ? "property" : "properties"}: ${rejected.join(", ")}`
     );
+  }
+}
+
+function assertStepHasRequiredContent(step: WorkflowStep): void {
+  if (step.type === "script") {
+    if (typeof step.script !== "string" || step.script.trim().length === 0) {
+      throw new Error("A script step must keep a non-empty script");
+    }
+    return;
+  }
+  if (typeof step.prompt !== "string" || step.prompt.trim().length === 0) {
+    throw new Error("A prompt step must keep a non-empty prompt");
   }
 }
 

@@ -1397,6 +1397,137 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     }
   });
 
+  test("merges a partial edit into a pending script step", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("edit-script-step");
+    try {
+      const file = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+      file.steps![2] = {
+        type: "script",
+        script: "npm test",
+        name: "tests",
+        onFail: "stopWorkflow",
+        _runtime: { stepId: "script-step-2" },
+      };
+      await fs.writeFile(run.runFilePath, JSON.stringify(file), "utf8");
+
+      await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 2,
+        updates: { name: "renamed tests" },
+      });
+
+      const persisted = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+      assert.deepStrictEqual(persisted.steps?.[2], {
+        type: "script",
+        script: "npm test",
+        name: "renamed tests",
+        onFail: "stopWorkflow",
+        _runtime: { stepId: "script-step-2" },
+      });
+
+      await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 2,
+        updates: { type: "prompt", prompt: "now a prompt" },
+      });
+      const replaced = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+      assert.deepStrictEqual(replaced.steps?.[2], {
+        type: "prompt",
+        prompt: "now a prompt",
+      });
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
+  test("validates the effective harness and model when editing a step", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun(
+      "edit-invalid-capability"
+    );
+    try {
+      await fs.mkdir(path.join(workspaceRoot, ".ctrlyoke"), {
+        recursive: true,
+      });
+      await fs.writeFile(
+        path.join(workspaceRoot, ".ctrlyoke", "capabilities.json"),
+        JSON.stringify({
+          harnesses: [
+            {
+              id: "claude-cli",
+              available: true,
+              models: [{ value: "valid-model" }],
+            },
+          ],
+        }),
+        "utf8"
+      );
+      const before = await fs.readFile(run.runFilePath, "utf8");
+
+      await assert.rejects(
+        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 2,
+          updates: { harness: "not-installed" },
+        }),
+        /Invalid harness 'not-installed'/
+      );
+      await assert.rejects(
+        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 2,
+          updates: { harness: "claude-cli", model: "bad-model" },
+        }),
+        /Invalid model 'bad-model'/
+      );
+      assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
+  test("refuses edits that clear required prompt or script content", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun(
+      "edit-required-content"
+    );
+    try {
+      const file = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+      file.steps![2] = {
+        type: "script",
+        script: "npm test",
+        _runtime: { stepId: "script-step-2" },
+      };
+      await fs.writeFile(run.runFilePath, JSON.stringify(file), "utf8");
+      const before = await fs.readFile(run.runFilePath, "utf8");
+
+      await assert.rejects(
+        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 3,
+          updates: {},
+          clearProperties: ["prompt"],
+        }),
+        /non-empty prompt/
+      );
+      await assert.rejects(
+        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 2,
+          updates: {},
+          clearProperties: ["script"],
+        }),
+        /non-empty script/
+      );
+      assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
   test("removes a pending step", async () => {
     const server = await setup();
     const { run, ownerToken } = await prepareActiveRun("remove-step");

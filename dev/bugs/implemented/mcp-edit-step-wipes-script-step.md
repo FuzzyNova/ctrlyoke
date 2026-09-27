@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-27 by the long-running bug-fix workflow final step (claude-cli, helper agent)
 - **Area:** `src/core/WorkflowStepSanitizer.ts` (`mergeWorkflowStepUpdate`), `src/core/orchestration/RunContinuationService.ts`, `src/mcp-server.ts` (`handleStepEdit`)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
