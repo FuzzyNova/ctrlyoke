@@ -884,8 +884,6 @@ export class CtrlYokeHostedServer
       const svgPath = path.join(webviewDist, HOSTED_ICON_FILES.APP_ICON_SVG);
       void this.serveColorizedPng(svgPath, "large", res);
     });
-    this.app.use(express.static(webviewDist, { index: false }));
-
     // Token is required for the HTML entry point and all API routes.
     const requireToken: express.RequestHandler = (req, res, next) => {
       if (this.requestHasValidToken(req)) return next();
@@ -900,6 +898,7 @@ export class CtrlYokeHostedServer
     };
     this.app.get("/manifest.webmanifest", requireToken, (_req, res) => {
       this.setNoStore(res);
+      res.locals.skipSecretRedaction = true;
       res
         .type("application/manifest+json")
         .send(JSON.stringify(this.buildManifest()));
@@ -965,8 +964,12 @@ export class CtrlYokeHostedServer
     // Serve index.html through buildHtml so all placeholders are patched first.
     this.app.get(["/", "/index.html"], requireTokenForPage, (req, res) => {
       this.setNoStore(res);
+      res.locals.skipSecretRedaction = true;
       res.send(this.buildHtml(webviewDist, req.get("host")));
     });
+    // Register static files after the explicit HTML entry route so /index.html
+    // receives the same token check and hosted-page patching as /.
+    this.app.use(express.static(webviewDist, { index: false }));
     this.app.get("/api/workflow-files", requireToken, async (_req, res) => {
       const files = findWorkflowFilesInWorkspace(this.workspaceRoot);
       const trackedFiles = await getGitTrackedFiles(this.workspaceRoot).catch(
@@ -1734,6 +1737,7 @@ export class CtrlYokeHostedServer
     // SPA fallback: any unmatched route gets the patched index.html (token required).
     this.app.use(requireTokenForPage, (req, res) => {
       this.setNoStore(res);
+      res.locals.skipSecretRedaction = true;
       res.send(this.buildHtml(webviewDist, req.get("host")));
     });
   }
@@ -2619,8 +2623,11 @@ export class CtrlYokeHostedServer
 
   private resolveWebviewDist(): string {
     // Vite outputs to out/ui/webview-react/ relative to the extension root.
-    // __dirname at runtime = out/ (esbuild resolves __dirname to the output file's directory).
-    return path.join(__dirname, "ui", "webview-react");
+    // Bundled entrypoints resolve __dirname to out/, while plain tsc output
+    // (including extension-host tests) resolves it to out/server/.
+    const bundledDist = path.join(__dirname, "ui", "webview-react");
+    if (fs.existsSync(path.join(bundledDist, "index.html"))) return bundledDist;
+    return path.join(__dirname, "..", "ui", "webview-react");
   }
 }
 

@@ -83,7 +83,8 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
   async function withServer(
     testBody: (root: string, port: number, token: string) => Promise<void>
   ): Promise<void> {
-    const token = "workspace-file-redaction-token";
+    const token =
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     const workspaceRoot = makeTempDir("ctrlyoke-hosted-file-redaction-");
     const server = new CtrlYokeHostedServer(
       new DashboardBroadcastHub(),
@@ -103,6 +104,49 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
       removeTempDir(workspaceRoot);
     }
   }
+
+  test("keeps the access token in the hosted page manifest link and start URL", async () => {
+    await withServer(async (_root, port, token) => {
+      const page = await sendGetRequest(port, `/?token=${token}`);
+      assert.strictEqual(page.statusCode, 200);
+      assert.ok(
+        page.body.includes(
+          `<link rel="manifest" href="/manifest.webmanifest?token=${token}" />`
+        )
+      );
+
+      const manifest = await sendGetRequest(
+        port,
+        `/manifest.webmanifest?token=${token}`
+      );
+      assert.strictEqual(manifest.statusCode, 200);
+      assert.strictEqual(
+        JSON.parse(manifest.body).start_url,
+        `/?token=${token}`
+      );
+    });
+  });
+
+  test("requires a token and patches /index.html as a hosted page", async () => {
+    await withServer(async (_root, port, token) => {
+      const unauthorized = await sendGetRequest(port, "/index.html");
+      assert.strictEqual(unauthorized.statusCode, 401);
+
+      const response = await sendGetRequest(
+        port,
+        `/index.html?token=${token}`
+      );
+      assert.strictEqual(response.statusCode, 200);
+      const rootPage = await sendGetRequest(port, `/?token=${token}`);
+      assert.strictEqual(response.body, rootPage.body);
+      assert.ok(response.body.includes("/standalone-shim.js"));
+      assert.ok(response.body.includes(`/manifest.webmanifest?token=${token}`));
+      assert.ok(!response.body.includes("{{cspSource}}"));
+      assert.ok(!response.body.includes("{{codiconsUri}}"));
+      assert.ok(!response.body.includes("{{customIconsUri}}"));
+      assert.ok(!response.body.includes("{{typoUri}}"));
+    });
+  });
 
   test("returns credential files read-only with redacted content", async () => {
     await withServer(async (root, port, token) => {

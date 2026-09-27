@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-27 by the long-running bug-fix workflow final step (claude-cli, helper agent)
 - **Area:** `src/server/CtrlYokeHostedServer.ts` (`buildHtml`, `/manifest.webmanifest` route), `src/server/SecretRedactionMiddleware.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
