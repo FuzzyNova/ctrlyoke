@@ -30,7 +30,10 @@ import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { TempFileManager } from "../../../utils/TempFileManager";
 import { Log } from "../../../utils/Log";
 import { ctrlYokeToolFamilies } from "./CliProviderUtils";
-import { parseInlinePriorContextRefs } from "../../../utils/FileReferenceParser";
+import {
+  fenceLiteral,
+  parseInlinePriorContextRefs,
+} from "../../../utils/FileReferenceParser";
 import { substituteConditionOutputRefs } from "../../ConditionOutputRefs";
 import {
   getEffectiveSecretGrants,
@@ -138,7 +141,8 @@ export class CliPromptPreparer {
       {
         preCondition: workflowContext?.preConditionResult,
         endCondition: workflowContext?.endConditionResult,
-      }
+      },
+      fenceLiteral
     );
     const originalPromptText = conditionOutputSubstitution.text;
     const harnessId = resolvedProperties?.harness ?? HARNESS_IDS.COPILOT_CLI;
