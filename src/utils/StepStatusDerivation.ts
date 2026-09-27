@@ -1,6 +1,8 @@
 import {
   EXECUTION_STATES,
+  IN_FLIGHT_EXECUTION_STATES,
   STEP_STATUS,
+  type ExecutionState,
   type PromptTerminalStatus,
   type StepStatus,
 } from "../types/DashboardConstants";
@@ -102,6 +104,11 @@ export function isUnstartedRunFile(workingFile: {
  * stays pinned at the group's `startIndex` until the join, so every member
  * after the first would otherwise read as PENDING while a worker is executing
  * it.
+ *
+ * A step is only painted in flight while the run is in an
+ * `IN_FLIGHT_EXECUTION_STATES` state. Pause lets the current step finish, so
+ * a PAUSING run still has that step executing. Once PAUSED, the step has
+ * settled with `completedAt` and the next step is PENDING.
  */
 export function deriveStepStatusesFromRuntime(
   steps: readonly StepWithRuntimeStatus[],
@@ -114,7 +121,7 @@ export function deriveStepStatusesFromRuntime(
     if (stepRuntime?.completedAt !== undefined) {
       return stepRuntime.terminalStatus ?? STEP_STATUS.COMPLETED;
     }
-    if (executionState !== EXECUTION_STATES.RUNNING) {
+    if (!IN_FLIGHT_EXECUTION_STATES.has(executionState as ExecutionState)) {
       return STEP_STATUS.PENDING;
     }
     if (stepRuntime?.startedAt !== undefined || index === currentIndex) {

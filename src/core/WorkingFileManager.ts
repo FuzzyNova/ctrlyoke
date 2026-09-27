@@ -17,6 +17,7 @@ import type {
 import type { FinalStepRuntimeState } from "../types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
+  IN_FLIGHT_EXECUTION_STATES,
   HARNESS_IDS,
   PROMPT_PROPERTIES,
   QUEUE_POSITION,
@@ -1595,9 +1596,9 @@ export class WorkingFileManager {
           currentIndex,
           newPendingOrder,
           pendingGroups,
-          source._runtime?.executionState === EXECUTION_STATES.RUNNING ||
-            source._runtime?.executionState === EXECUTION_STATES.PAUSING ||
-            source._runtime?.executionState === EXECUTION_STATES.CANCELLING
+          IN_FLIGHT_EXECUTION_STATES.has(
+            source._runtime?.executionState as ExecutionState
+          )
         );
         return {
           workingFile: {

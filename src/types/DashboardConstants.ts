@@ -1007,6 +1007,18 @@ export const ACTIVE_EXECUTION_STATES: ReadonlySet<ExecutionState> = new Set([
   EXECUTION_STATES.CANCELLING,
 ]);
 
+/**
+ * Lifecycle states in which the current step may still be executing. PAUSING
+ * lets the in-flight step finish before pausing, and CANCELLING waits for its
+ * process to exit, so both still have a live step. PAUSED does not: by then the
+ * step that was running when pause was pressed has completed.
+ */
+export const IN_FLIGHT_EXECUTION_STATES: ReadonlySet<ExecutionState> = new Set([
+  EXECUTION_STATES.RUNNING,
+  EXECUTION_STATES.PAUSING,
+  EXECUTION_STATES.CANCELLING,
+]);
+
 // ============================================================================
 // ACTION TYPES - Prompt editor actions (Run/Queue)
 // ============================================================================

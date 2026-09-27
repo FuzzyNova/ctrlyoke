@@ -97,6 +97,27 @@ suite("StepStatusDerivation", () => {
     );
   });
 
+  test("keeps the current step in flight while pausing or cancelling", () => {
+    // Pause lets the in-flight step finish before the run pauses, and cancel
+    // waits for its process to exit, so the step is still executing.
+    const steps = [
+      { _runtime: { completedAt: 1 } },
+      { _runtime: { startedAt: 2 } },
+      {},
+    ];
+
+    for (const state of [
+      EXECUTION_STATES.PAUSING,
+      EXECUTION_STATES.CANCELLING,
+    ]) {
+      assert.deepStrictEqual(
+        deriveStepStatusesFromRuntime(steps, 1, state),
+        [STEP_STATUS.COMPLETED, STEP_STATUS.RUNNING, STEP_STATUS.PENDING],
+        state
+      );
+    }
+  });
+
   test("paints every claimed-but-unsettled parallel member in flight", () => {
     // currentIndex stays pinned at the group's startIndex until the join, so a
     // positional rule would report members 1 and 2 as PENDING while workers
