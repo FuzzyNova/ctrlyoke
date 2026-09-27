@@ -406,10 +406,7 @@ suite("WorkflowSerializer", () => {
         });
         assert.strictEqual(saved.steps[0]._runtime, undefined);
         assert.strictEqual(saved._runtime, undefined);
-        assert.strictEqual(
-          saved.$schema,
-          "https://ctrlyoke.dev/schema/v1/workflow.json"
-        );
+        assert.strictEqual(saved.$schema, undefined);
         assert.ok(
           messages.some(
             (message) => message.type === MESSAGE_TYPES.WORKFLOW_SAVED
@@ -467,11 +464,7 @@ suite("WorkflowSerializer", () => {
         );
 
         const serialized = await fs.readFile(outputPath, "utf8");
-        assert.ok(
-          serialized.startsWith(
-            "# yaml-language-server: $schema=https://ctrlyoke.dev/schema/v1/workflow.json\n"
-          )
-        );
+        assert.ok(!serialized.includes("yaml-language-server"));
         assert.strictEqual(
           [...serialized.matchAll(/^    script: \|[-+]?\r?$/gm)].length,
           scripts.length

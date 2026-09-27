@@ -4,10 +4,7 @@ import * as path from "path";
 import * as jsYaml from "js-yaml";
 import { suite, teardown, test } from "mocha";
 import { TemplateManager } from "../../core/TemplateManager";
-import {
-  PUBLISHED_SCHEMA_URLS,
-  WORKFLOW_FILE_FORMATS,
-} from "../../types/DashboardConstants";
+import { WORKFLOW_FILE_FORMATS } from "../../types/DashboardConstants";
 import { EXECUTION_PROPERTY_KEYS } from "../../types/CtrlYokeTypes";
 import {
   makeTempDir as createTempDir,
@@ -288,11 +285,7 @@ suite("TemplateManager variable metadata", () => {
         await fs.promises.readFile(createdPath, "utf-8")
       ) as any;
       const source = await fs.promises.readFile(createdPath, "utf-8");
-      assert.ok(
-        source.startsWith(
-          `# yaml-language-server: $schema=${PUBLISHED_SCHEMA_URLS.WORKFLOW}\n`
-        )
-      );
+      assert.ok(!source.includes("yaml-language-server"));
       assert.strictEqual(parsed._templateMeta.name, "My Copy");
       assert.strictEqual(parsed._templateMeta.description, "Keep me");
       assert.strictEqual(parsed._templateMeta.variables.feature.type, "text");
@@ -320,7 +313,7 @@ suite("TemplateManager variable metadata", () => {
       );
       assert.strictEqual(parsed._templateMeta.name, "Snapshot");
       assert.strictEqual(parsed.steps[0].prompt, "Ship it");
-      assert.strictEqual(parsed.$schema, PUBLISHED_SCHEMA_URLS.WORKFLOW);
+      assert.strictEqual(parsed.$schema, undefined);
     });
 
     test("discovers YAML, YML, and JSON templates", async () => {

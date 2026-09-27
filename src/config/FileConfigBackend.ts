@@ -12,7 +12,6 @@ import {
 } from "../utils/PersistedSchemaGuard";
 import { Log } from "../utils/Log";
 import { migrateToCurrent } from "../utils/FormatMigrations";
-import { PUBLISHED_SCHEMA_URLS } from "../types/DashboardConstants";
 
 const warnedNewerSettingsPaths = new Set<string>();
 
@@ -108,8 +107,10 @@ export class FileConfigBackend implements ConfigBackend {
   }
 
   private async save(data: PartialCtrlYokeSettings): Promise<void> {
+    // Never stamp `$schema`: in VS Code a document's `$schema` replaces the
+    // extension's bundled `jsonValidation` association, so a remote URL would
+    // break offline validation and pin dev builds to the published schema.
     data.schemaVersion = CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.SETTINGS];
-    data.$schema = PUBLISHED_SCHEMA_URLS.SETTINGS;
     const dir = path.dirname(this.configPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });

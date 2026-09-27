@@ -9,7 +9,6 @@ import {
   PROMPT_PROPERTIES,
   PANEL_CLIENT_ID,
   WORKFLOW_FILE_FORMATS,
-  PUBLISHED_SCHEMA_URLS,
   type WorkflowFileFormat,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../types/DashboardConstants";
@@ -678,22 +677,17 @@ export class WorkflowSerializer {
         throw new Error(this.getBundleBlockerMessage(analysis.plan.blockers));
       }
 
-      let serialized: string;
-      if (format === WORKFLOW_FILE_FORMATS.YAML) {
-        const yamlWorkflow = { ...analysis.workflow };
-        delete yamlWorkflow.$schema;
-        serialized = `# yaml-language-server: $schema=${PUBLISHED_SCHEMA_URLS.WORKFLOW}\n${yaml.dump(
-          yamlWorkflow,
-          {
-            lineWidth: -1,
-            noRefs: true,
-            quoteStyle: "double",
-          }
-        )}`;
-      } else {
-        analysis.workflow.$schema = PUBLISHED_SCHEMA_URLS.WORKFLOW;
-        serialized = JSON.stringify(analysis.workflow, null, 2);
-      }
+      // No `$schema` key or YAML modeline: the extension's bundled
+      // `jsonValidation`/`yamlValidation` associations already cover
+      // `*.ctrlyoke.*`, and an in-document schema URL would override them.
+      const serialized =
+        format === WORKFLOW_FILE_FORMATS.YAML
+          ? yaml.dump(analysis.workflow, {
+              lineWidth: -1,
+              noRefs: true,
+              quoteStyle: "double",
+            })
+          : JSON.stringify(analysis.workflow, null, 2);
 
       // Re-run the exact preflight immediately before the write. The dialog's
       // warning is advisory and may now be stale; this remains the authority.

@@ -35,4 +35,5 @@ Platform-agnostic settings resolution for shared core code. `src/config/` owns t
 - When adding/changing a setting, update the type and default in `CtrlYokeSettings.ts`, then verify the accessor path in `ConfigurationUtils` and any webview/settings sync code that exposes it.
 - If you add a deeper nested settings object, verify `PartialCtrlYokeSettings` is still permissive enough for sparse file writes and CLI overlays.
 - Preserve atomic writes in `FileConfigBackend`; interrupted writes must not leave `settings.json` truncated.
+- Never make a writer (settings, workflow save, templates) emit `$schema` or a `# yaml-language-server: $schema=` modeline. In VS Code and Red Hat YAML, an in-document schema URL _replaces_ the bundled `package.json` `jsonValidation`/`yamlValidation` association with no fallback. The editor then downloads `https://ctrlyoke.dev/schema/…`, which breaks offline, is rejected as "untrusted" unless the user adds the domain to `json.schemaDownload.trustedDomains`, and pins dev builds to the published schema. The schemas still allow a hand-added `$schema` for other editors.
 </changeChecklist>

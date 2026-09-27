@@ -9,7 +9,6 @@ import { formatRunRef } from "../../utils/WorkflowPaths";
 import {
   HARNESS_IDS,
   PERMISSION_MODES,
-  PUBLISHED_SCHEMA_URLS,
   STATUS_LINE_HARNESS_IDS,
 } from "../../types/DashboardConstants";
 import { VARIABLE_NAME_PATTERN_SOURCE } from "../../utils/KeyValueKeyKinds";
@@ -61,11 +60,11 @@ suite("Workflow template schema", () => {
         "utf8"
       );
       assert.strictEqual(template.schemaVersion, 1, fileName);
+      // An in-file schema link would override the extension's bundled
+      // yamlValidation association and fetch the remote schema instead.
       assert.ok(
-        source.startsWith(
-          `# yaml-language-server: $schema=${PUBLISHED_SCHEMA_URLS.WORKFLOW}\n`
-        ),
-        `${fileName} should link to the published workflow schema`
+        !source.includes("yaml-language-server"),
+        `${fileName} should rely on the bundled schema association`
       );
     }
   });

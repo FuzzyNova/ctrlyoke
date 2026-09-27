@@ -345,11 +345,15 @@ existing per-command integers and document an additive-only policy for them in t
 - **Allow a root `$schema` key** (`type: string`, `format: uri`) on every root form: the
   multi-step root, the single-step prompt root, `rootScriptStep` and the settings root.
   Today settings rejects it, and so does a single-step script file (confirmed with Ajv).
-- **Writers emit it:** new JSON workflow files and `settings.json` created by `init` include
-  `$schema`. New YAML files get the `# yaml-language-server: $schema=…` modeline, not a
-  `$schema:` key. `yaml-language-server` 1.24.0 also accepts an inline `$schema` key
-  (changelog, verified 2026-09-26), and the schema will allow the key, but older Red Hat YAML
-  extensions only honour the modeline.
+- **Writers do not emit it (reversed 2026-09-27).** The first implementation stamped
+  `$schema` into settings/JSON workflows and a `# yaml-language-server: $schema=…` modeline
+  into YAML. In VS Code a document's `$schema` (and in Red Hat YAML the modeline) _replaces_
+  the extension's `jsonValidation`/`yamlValidation` association rather than falling back to
+  it. VS Code then tries to download the remote URL, which fails offline, fails before the
+  site is deployed, and even when live is refused as "untrusted" unless the user adds
+  `ctrlyoke.dev` to `json.schemaDownload.trustedDomains`. It also pins dev builds to the
+  published schema instead of the bundled one. The schema still _allows_ `$schema` so users
+  of other editors can add it by hand. The docs tell VS Code users not to.
 - **Keep the local `jsonValidation`/`yamlValidation`** associations in `package.json`
   (`./out/schemas/…`), so editing works offline and against unreleased dev schemas.
 - **Deploy:** copy `schemas/*.json` (and `schemas/archive/**`) into the landing build output
@@ -822,7 +826,7 @@ After implementation, record the durable rules where the next agent will look:
 - [ ] Provisional fixture corpus re-captured or confirmed from the actual release build (including optional fields and both run-file version numbers) and committed.
 - [x] `schemas/` copied to `schemas/archive/v1/`; the publish script checks the archive remains byte-identical while v1 is current.
 - [ ] `/schema/v1/` deployed and verified live with the right headers at the actual release cut.
-- [x] Built-in YAML templates carry the workflow schema modeline; `WorkflowSerializer` and custom-template writers stamp workflow schema hints, and settings writes stamp `$schema` with `schemaVersion`. Workspace `init` currently creates only `.ctrlyoke/.gitignore`, not a settings file.
+- [x] Writers stamp `schemaVersion` only. No writer emits `$schema` or a YAML schema modeline (§3, reversed 2026-09-27). Workspace `init` currently creates only `.ctrlyoke/.gitignore`, not a settings file.
 
 ---
 

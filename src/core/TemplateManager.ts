@@ -12,7 +12,6 @@ import {
   DISCOVERY_SOURCES,
   TEMPLATE_VARIABLE_TYPES,
   WORKFLOW_FILE_FORMATS,
-  PUBLISHED_SCHEMA_URLS,
   TEMPLATE_SCOPES,
   TEMPLATE_IDS,
   type TemplateVariableType,
@@ -622,23 +621,15 @@ export class TemplateManager {
     template: Record<string, unknown>,
     format: WorkflowFileFormat
   ): string {
+    // No `$schema` key or YAML modeline — see WorkflowSerializer's save path.
     if (format === WORKFLOW_FILE_FORMATS.YAML) {
-      const yamlTemplate = { ...template };
-      delete yamlTemplate.$schema;
-      return `# yaml-language-server: $schema=${PUBLISHED_SCHEMA_URLS.WORKFLOW}\n${jsYaml.dump(
-        yamlTemplate,
-        {
-          lineWidth: -1,
-          noRefs: true,
-          quoteStyle: "double",
-        }
-      )}`;
+      return jsYaml.dump(template, {
+        lineWidth: -1,
+        noRefs: true,
+        quoteStyle: "double",
+      });
     }
-    return JSON.stringify(
-      { ...template, $schema: PUBLISHED_SCHEMA_URLS.WORKFLOW },
-      null,
-      2
-    );
+    return JSON.stringify(template, null, 2);
   }
 
   /**

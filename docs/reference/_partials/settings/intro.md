@@ -18,9 +18,12 @@ Some settings are machine-specific and are read only from user scope:
 The dashboard's Settings page edits these files for you. If you edit a file by
 hand in VS Code, ctrlyoke checks every `.ctrlyoke/settings.json` against its
 settings schema, so completion and error checking work as you type. Don't
-add a `$schema` key. The schema doesn't allow unknown keys, so that key is
-reported as an error. Every key is optional, and a key you leave out keeps
-the default shown below.
+add a `$schema` key in VS Code: a `$schema` URL replaces the extension's
+bundled schema, so VS Code downloads the published copy instead, which fails
+offline and needs `ctrlyoke.dev` in `json.schemaDownload.trustedDomains`. In
+other editors, set `$schema` to
+`https://ctrlyoke.dev/schema/v1/settings.json`. Every key is optional, and a
+key you leave out keeps the default shown below.
 
 ```json
 {

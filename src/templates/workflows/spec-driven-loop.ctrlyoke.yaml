@@ -1,4 +1,3 @@
-# yaml-language-server: $schema=https://ctrlyoke.dev/schema/v1/workflow.json
 schemaVersion: 1
 _templateMeta:
   name: Spec-Driven Loop
