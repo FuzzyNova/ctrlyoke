@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-27 by the long-running bug-fix workflow final step (claude-cli, helper agent)
 - **Area:** `src/core/EndConditionHandler.ts` (retry step construction), `src/core/WorkflowExecutor.ts` (`createSendRetryPromptCallback`)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

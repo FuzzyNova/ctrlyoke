@@ -476,6 +476,185 @@ suite("WorkflowExecutor condition shell reporting", () => {
 
     assert.deepStrictEqual(evaluator.shells, ["pwsh", "pwsh"]);
   });
+
+  test("uses resumeSessionOnRetry false for a fresh-session retry", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const sentResumeValues: Array<boolean | undefined> = [];
+    integration.onSend = async (_prompt, workflowContext) => {
+      sentResumeValues.push(workflowContext?.resolvedProperties?.resumeSession);
+      return { responseText: "ok" };
+    };
+    const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+      shellEvaluationResult(false),
+      shellEvaluationResult(true),
+    ]);
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "initial",
+          resumeSession: true,
+          endCondition: {
+            script: "check-result",
+            onFail: CONDITION_ACTIONS.RETRY,
+            maxRetries: 1,
+            retryPrompt: "retry",
+            resumeSessionOnRetry: false,
+          },
+        },
+      ],
+    });
+
+    await makeExecutor(queue, evaluator).execute(
+      integration,
+      makeContext(integration)
+    );
+
+    assert.deepStrictEqual(integration.sentPrompts, ["initial", "retry"]);
+    assert.deepStrictEqual(sentResumeValues, [true, false]);
+  });
+
+  test("resumes the session on end-condition retries when true or omitted", async () => {
+    for (const resumeSessionOnRetry of [true, undefined]) {
+      const queue = new PromptQueue();
+      const integration = new MockHarnessIntegration(undefined, false);
+      const sentResumeValues: Array<boolean | undefined> = [];
+      integration.onSend = async (_prompt, workflowContext) => {
+        sentResumeValues.push(
+          workflowContext?.resolvedProperties?.resumeSession
+        );
+        return { responseText: "ok" };
+      };
+      const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+        shellEvaluationResult(false),
+        shellEvaluationResult(true),
+      ]);
+      queue.loadPrompts({
+        steps: [
+          {
+            prompt: "initial",
+            endCondition: {
+              script: "check-result",
+              onFail: CONDITION_ACTIONS.RETRY,
+              maxRetries: 1,
+              retryPrompt: "retry",
+              ...(resumeSessionOnRetry === undefined
+                ? {}
+                : { resumeSessionOnRetry }),
+            },
+          },
+        ],
+      });
+
+      await makeExecutor(queue, evaluator).execute(
+        integration,
+        makeContext(integration)
+      );
+
+      assert.deepStrictEqual(sentResumeValues, [false, true]);
+    }
+  });
+
+  test("preserves step args and tool permissions on an end-condition retry", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const retryResolvedProperties: Array<{
+      additionalArgs?: string;
+      toolPermissions?: PromptStep["toolPermissions"];
+    }> = [];
+    integration.onSend = async (prompt, workflowContext) => {
+      if (prompt.prompt === "retry") {
+        retryResolvedProperties.push({
+          additionalArgs: workflowContext?.resolvedProperties?.additionalArgs,
+          toolPermissions: workflowContext?.resolvedProperties?.toolPermissions,
+        });
+      }
+      return { responseText: "ok" };
+    };
+    const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+      shellEvaluationResult(false),
+      shellEvaluationResult(true),
+    ]);
+    const toolPermissions: NonNullable<PromptStep["toolPermissions"]> = {
+      mode: "custom",
+      allowedTools: ["Read"],
+      deniedTools: ["Write"],
+    };
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "initial",
+          additionalArgs: "--effort high",
+          toolPermissions,
+          endCondition: {
+            script: "check-result",
+            onFail: CONDITION_ACTIONS.RETRY,
+            maxRetries: 1,
+            retryPrompt: "retry",
+          },
+        },
+      ],
+    });
+
+    await makeExecutor(queue, evaluator).execute(
+      integration,
+      makeContext(integration)
+    );
+
+    assert.deepStrictEqual(retryResolvedProperties, [
+      {
+        additionalArgs: "--effort high",
+        toolPermissions,
+      },
+    ]);
+  });
+
+  test("re-sends an end-condition retry after a retry harness failure", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    let sendCount = 0;
+    integration.onSend = async () => {
+      sendCount += 1;
+      if (sendCount === 2) {
+        integration.harnessErrorFailure = true;
+        return { success: false };
+      }
+      integration.harnessErrorFailure = false;
+      return { responseText: "ok" };
+    };
+    const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+      shellEvaluationResult(false),
+      shellEvaluationResult(true),
+    ]);
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "initial",
+          errorBehavior: {
+            onError: CONDITION_ACTIONS.RETRY,
+            maxRetries: 2,
+          },
+          endCondition: {
+            script: "check-result",
+            onFail: CONDITION_ACTIONS.RETRY,
+            maxRetries: 1,
+            retryPrompt: "retry",
+          },
+        },
+      ],
+    });
+
+    await makeExecutor(queue, evaluator).execute(
+      integration,
+      makeContext(integration)
+    );
+
+    assert.deepStrictEqual(integration.sentPrompts, [
+      "initial",
+      "retry",
+      "retry",
+    ]);
+  });
 });
 
 suite("WorkflowExecutor finalStep phase 2", () => {
