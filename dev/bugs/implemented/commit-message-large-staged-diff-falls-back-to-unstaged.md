@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-27 by the long-running bug-fix workflow final step (claude-cli)
 - **Area:** `src/git/CommitMessageGenerator.ts` (`CommitMessageGenerator.getDiff`)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

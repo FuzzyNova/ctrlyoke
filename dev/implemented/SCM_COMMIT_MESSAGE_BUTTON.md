@@ -158,7 +158,7 @@ new file mode 100644
 ...
 ```
 
-The 8 KB cap applies to the **combined** output of both sources.
+The 750 KB cap applies to the **combined** output of both sources.
 
 If the combined fallback diff is also empty (tracked diff empty, no untracked files), `getDiff` returns `null` — working tree is clean, nothing to commit.
 
@@ -386,7 +386,7 @@ Because `WorkspaceCommitArea` is reused in both desktop and mobile layouts via `
 | Nothing staged AND clean working tree | Error: "Nothing to commit — working tree is clean."                                                                        |
 | Nothing staged, but unstaged changes  | Proceed with working tree diff; CLI still runs `git add .` before commit; VS Code and hosted viewer should surface context |
 | Harness not configured/found          | Error: "No harness configured." (link to settings)                                                                         |
-| Diff exceeds 8 KB                     | Warn user; truncate and continue                                                                                           |
+| Diff exceeds 750 KB                   | Warn user; truncate and continue                                                                                           |
 | Generation fails                      | Error notification; SCM input / hosted textarea / terminal left unchanged                                                  |
 | `git commit` fails (CLI/server)       | Surface the git error message                                                                                              |
 | User cancels (VS Code)                | Silent cancel; input box left unchanged                                                                                    |

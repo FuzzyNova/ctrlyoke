@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import {
   CommitMessageGenerator,
+  getMaxDiffSizeLabel,
   type CommitMessageWorkflowHost,
 } from "../git/CommitMessageGenerator";
 import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
@@ -124,7 +125,7 @@ export class ScmCommitCommand {
 
             if (diffResult.truncated) {
               void vscode.window.showWarningMessage(
-                "ctrlyoke: Diff exceeded 8 KB and was truncated. Commit message may be incomplete."
+                `ctrlyoke: Diff exceeded ${getMaxDiffSizeLabel()} and was truncated. Commit message may be incomplete.`
               );
             }
 

@@ -2508,8 +2508,11 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
     configService.setCliOverlay(overlay);
   }
 
-  const { CommitMessageGenerationError, CommitMessageGenerator } =
-    await import("./git/CommitMessageGenerator");
+  const {
+    CommitMessageGenerationError,
+    CommitMessageGenerator,
+    getMaxDiffSizeLabel,
+  } = await import("./git/CommitMessageGenerator");
   const generator = new CommitMessageGenerator(
     undefined,
     cliRunnerHostIdentity
@@ -2525,7 +2528,7 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
   if (diffResult.truncated) {
     console.error(
       chalk.yellow(
-        "Warning: Diff exceeded 8 KB and was truncated. Commit message may be incomplete."
+        `Warning: Diff exceeded ${getMaxDiffSizeLabel()} and was truncated. Commit message may be incomplete.`
       )
     );
   }
