@@ -19,12 +19,7 @@ import {
   writeFileAtomic,
   WORKFLOW_CRITICAL_RENAME_BUDGET_MS,
 } from "../../utils/AtomicFileUtils";
-
-function errorWithCode(code: string): NodeJS.ErrnoException {
-  const error = new Error(`simulated ${code}`) as NodeJS.ErrnoException;
-  error.code = code;
-  return error;
-}
+import { errorWithCode } from "../helpers/errnoError";
 
 suite("AtomicFileUtils", () => {
   test("retries a destination that is only momentarily held", async () => {

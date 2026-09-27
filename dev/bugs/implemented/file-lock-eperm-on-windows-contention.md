@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-26 by claude-cli (coordination bug-fixing review pass) during `npm test`
 - **Area:** `src/utils/FileLockUtils.ts` (`acquireLock`)
-- **Severity:** low: intermittent failure of concurrent first-use callers on Windows; seen as a flaky test
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -22,6 +22,11 @@ Error: EPERM: operation not permitted, open '...\notifications\vapid-keys.json.l
    example, run `WebPushService.getPublicKey()` from four fresh instances under `Promise.all`.
 2. Sometimes one caller rejects with `EPERM` instead of waiting its turn.
 
+The same failure also surfaced as
+`ExecutionRootCoordinationStore > assigns gapless sequences across separate node processes`
+(`EPERM ... coordinationoard.jsonl.lock`). Sixteen processes each taking the same lock 60 times
+reproduced it 1–4 times per run before the fix and never after it.
+
 ## Root Cause
 
 `acquireLock` retries only when `fs.open(lockPath, "wx")` fails with `EEXIST`. On Windows, opening
@@ -34,3 +39,11 @@ caller fails. It should instead treat it as "the lock is still held" and retry.
 In `acquireLock`, treat `EPERM`/`EACCES` from the exclusive open like `EEXIST`: sleep for
 `LOCK_RETRY_DELAY_MS` and retry until the timeout. Keep rethrowing any other codes. Add a unit test
 that stubs `fs.open` to fail once with `EPERM` and asserts that the lock is still acquired.
+
+## Fix
+
+`acquireLock` retries `EPERM`/`EACCES`/`EBUSY` from the exclusive open, using
+`isTransientSharingError`, which is now exported from `AtomicFileUtils.ts` so the rename retry and the
+lock share one list of codes. If an attempt never sees `EEXIST` and ends on a sharing error, the
+lock was never held and the location is unwritable, so the real error is rethrown instead of
+`FileLockTimeoutError`. `withFileLock` takes an injectable `open` for the unit tests.

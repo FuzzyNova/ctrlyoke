@@ -19,8 +19,8 @@ import * as fs from "fs/promises";
  * a platform branch nothing exercises.
  */
 
-/** Errors that mean "the destination is momentarily held", not "denied". */
-const TRANSIENT_RENAME_CODES = new Set(["EPERM", "EACCES", "EBUSY"]);
+/** Errors that mean "the path is momentarily held", not "denied". */
+const TRANSIENT_SHARING_CODES = new Set(["EPERM", "EACCES", "EBUSY"]);
 
 /**
  * Default window for a caller whose failure costs little — a settings sidecar,
@@ -87,9 +87,14 @@ function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function isTransientRenameError(error: unknown): boolean {
+/**
+ * True for the Windows sharing failures that clear once another handle lets go:
+ * a rename over a file someone has open, or an exclusive create of a path whose
+ * previous file was unlinked but is still delete-pending (`FileLockUtils`).
+ */
+export function isTransientSharingError(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException | undefined)?.code;
-  return code !== undefined && TRANSIENT_RENAME_CODES.has(code);
+  return code !== undefined && TRANSIENT_SHARING_CODES.has(code);
 }
 
 /**
@@ -122,7 +127,7 @@ export async function renameWithTransientRetry(
       await rename(source, destination);
       return;
     } catch (error) {
-      if (!isTransientRenameError(error)) {
+      if (!isTransientSharingError(error)) {
         throw error;
       }
       const elapsedMs = now() - startedAt;

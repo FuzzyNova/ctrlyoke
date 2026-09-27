@@ -3,7 +3,8 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, test, afterEach } from "mocha";
-import { withFileLock } from "../../utils/FileLockUtils";
+import { FileLockTimeoutError, withFileLock } from "../../utils/FileLockUtils";
+import { errorWithCode } from "../helpers/errnoError";
 
 suite("FileLockUtils", () => {
   const tempPaths: string[] = [];
@@ -114,6 +115,55 @@ suite("FileLockUtils", () => {
         return { ok: true, message: "done" };
       });
       assert.deepStrictEqual(value, { ok: true, message: "done" });
+    });
+
+    // Windows fails an exclusive create with EPERM/EACCES while the previous
+    // holder's unlinked lock file is still delete-pending. That is a lock
+    // hand-over in progress, not a denial.
+    test("retries a lock file that is momentarily delete-pending", async () => {
+      for (const code of ["EPERM", "EACCES"]) {
+        const target = tempTarget();
+        let attempts = 0;
+        const result = await withFileLock(target, async () => "acquired", {
+          open: async (lockPath, flags) => {
+            attempts += 1;
+            if (attempts === 1) {
+              throw errorWithCode(code);
+            }
+            return fs.open(lockPath, flags);
+          },
+        });
+        assert.strictEqual(result, "acquired", code);
+        assert.strictEqual(attempts, 2, code);
+      }
+    });
+
+    test("reports the real permission error when the lock can never be created", async () => {
+      const target = tempTarget();
+      await assert.rejects(
+        withFileLock(target, async () => undefined, {
+          timeoutMs: 200,
+          open: async () => {
+            throw errorWithCode("EACCES");
+          },
+        }),
+        (error: NodeJS.ErrnoException) => error.code === "EACCES"
+      );
+    });
+
+    test("still times out as held when a sharing error follows a held lock", async () => {
+      const target = tempTarget();
+      let attempts = 0;
+      await assert.rejects(
+        withFileLock(target, async () => undefined, {
+          timeoutMs: 200,
+          open: async () => {
+            attempts += 1;
+            throw errorWithCode(attempts === 1 ? "EEXIST" : "EPERM");
+          },
+        }),
+        FileLockTimeoutError
+      );
     });
   });
 });
