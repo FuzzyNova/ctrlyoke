@@ -17,6 +17,7 @@ import {
   type StepExecutionOutcome,
   type ParallelGroupOutcome,
   type ParallelGroupDefinition,
+  type ScriptProperties,
 } from "../types/CtrlYokeTypes";
 import {
   WorkflowContext,
@@ -370,6 +371,20 @@ function getExecutionTargetRunKey(target: ExecutionTarget): string {
 
 function isStepEnabled(step: WorkflowStep | undefined | null): boolean {
   return step != null && step.enabled !== false;
+}
+
+/** Map condition-authored script fields through the shared comparison resolver. */
+function toReportedConditionProperties(condition: ScriptProperties) {
+  return resolveReportedScriptProperties({
+    script: condition.script,
+    env: condition.env,
+    compareSource: condition.compareSource,
+    operator: condition.operator,
+    expected: condition.expected,
+    ignoreCase: condition.ignoreCase,
+    timeoutSec: condition.timeoutSec,
+    shell: condition.shell,
+  });
 }
 
 type PromptFailureDisposition =
@@ -1943,15 +1958,7 @@ export class WorkflowExecutor {
         const preReport = await this.scriptExecutionReporter.report({
           context,
           source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
-          properties: resolveReportedScriptProperties({
-            script: resolvedPreCondition.script,
-            env: resolvedPreCondition.env,
-            compareSource: resolvedPreCondition.compareSource,
-            operator: resolvedPreCondition.operator,
-            expected: resolvedPreCondition.expected,
-            ignoreCase: resolvedPreCondition.ignoreCase,
-            timeoutSec: resolvedPreCondition.timeoutSec,
-          }),
+          properties: toReportedConditionProperties(resolvedPreCondition),
           phase: EXECUTION_PHASES.PRE_CONDITION,
           target: this.toOutputExecutionTarget(target),
           signedStepIndex: this.getSignedStepIndex(target),
@@ -3706,15 +3713,7 @@ export class WorkflowExecutor {
     const endReport = await this.scriptExecutionReporter.report({
       context,
       source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
-      properties: resolveReportedScriptProperties({
-        script: endCondition.script,
-        env: endCondition.env,
-        compareSource: endCondition.compareSource,
-        operator: endCondition.operator,
-        expected: endCondition.expected,
-        ignoreCase: endCondition.ignoreCase,
-        timeoutSec: endCondition.timeoutSec,
-      }),
+      properties: toReportedConditionProperties(endCondition),
       phase: EXECUTION_PHASES.END_CONDITION,
       target: this.toOutputExecutionTarget(target),
       signedStepIndex: signedStepIndex ?? this.getSignedStepIndex(target),
@@ -3782,15 +3781,7 @@ export class WorkflowExecutor {
         this.scriptExecutionReporter.report({
           context,
           source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
-          properties: resolveReportedScriptProperties({
-            script: condition.script,
-            env: condition.env,
-            compareSource: condition.compareSource,
-            operator: condition.operator,
-            expected: condition.expected,
-            ignoreCase: condition.ignoreCase,
-            timeoutSec: condition.timeoutSec,
-          }),
+          properties: toReportedConditionProperties(condition),
           phase: EXECUTION_PHASES.END_CONDITION,
           target: this.toOutputExecutionTarget(target),
           signedStepIndex: signedStepIndex ?? this.getSignedStepIndex(target),

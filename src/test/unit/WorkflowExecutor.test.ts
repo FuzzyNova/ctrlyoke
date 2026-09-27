@@ -196,6 +196,41 @@ class FixedEvaluationEvaluator extends EndConditionEvaluator {
   }
 }
 
+class RecordingShellEvaluator extends EndConditionEvaluator {
+  readonly shells: Array<string | undefined> = [];
+
+  constructor(
+    platform: MockPlatform,
+    private readonly results: EvaluationResult[]
+  ) {
+    super(platform);
+  }
+
+  override async evaluateCondition(
+    condition: ScriptProperties
+  ): Promise<EvaluationResult> {
+    this.shells.push(condition.shell);
+    const result = this.results.shift();
+    if (!result) {
+      throw new Error("Unexpected condition evaluation");
+    }
+    return result;
+  }
+}
+
+function shellEvaluationResult(passed: boolean): EvaluationResult {
+  return {
+    passed,
+    actual: passed ? "0" : "1",
+    errored: false,
+    stdout: "",
+    stderr: "",
+    result: "",
+    duration: 1,
+    exitCode: passed ? 0 : 1,
+  };
+}
+
 class RecordingSnapshotService extends WorkspaceSnapshotService {
   captureCount = 0;
 
@@ -362,6 +397,84 @@ suite("WorkflowExecutor token totals", () => {
     assert.strictEqual(tokens?.cached, usage.cachedInputTokens);
     assert.strictEqual(tokens?.cacheCreated, usage.cacheCreatedTokens);
     assert.strictEqual(tokens?.total, 200);
+  });
+});
+
+suite("WorkflowExecutor condition shell reporting", () => {
+  test("passes a pre-condition shell override to the evaluator", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+      shellEvaluationResult(true),
+    ]);
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "run after gate",
+          preCondition: { script: "check-gate", shell: "pwsh" },
+        },
+      ],
+    });
+
+    await makeExecutor(queue, evaluator).execute(
+      integration,
+      makeContext(integration)
+    );
+
+    assert.deepStrictEqual(evaluator.shells, ["pwsh"]);
+  });
+
+  test("passes the initial end-condition shell override to the evaluator", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+      shellEvaluationResult(true),
+    ]);
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "check result",
+          endCondition: { script: "check-result", shell: "pwsh" },
+        },
+      ],
+    });
+
+    await makeExecutor(queue, evaluator).execute(
+      integration,
+      makeContext(integration)
+    );
+
+    assert.deepStrictEqual(evaluator.shells, ["pwsh"]);
+  });
+
+  test("passes the end-condition shell override during retry re-evaluation", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+      shellEvaluationResult(false),
+      shellEvaluationResult(true),
+    ]);
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "check result",
+          endCondition: {
+            script: "check-result",
+            shell: "pwsh",
+            onFail: CONDITION_ACTIONS.RETRY,
+            maxRetries: 1,
+            retryPrompt: "try again",
+          },
+        },
+      ],
+    });
+
+    await makeExecutor(queue, evaluator).execute(
+      integration,
+      makeContext(integration)
+    );
+
+    assert.deepStrictEqual(evaluator.shells, ["pwsh", "pwsh"]);
   });
 });
 
