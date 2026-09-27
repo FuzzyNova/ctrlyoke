@@ -148,6 +148,10 @@ function compareNumeric(
     return false;
   }
   switch (operator) {
+    case SCRIPT_OPERATORS.EQ:
+      return actualNumber === expectedNumber;
+    case SCRIPT_OPERATORS.NE:
+      return actualNumber !== expectedNumber;
     case SCRIPT_OPERATORS.GTE:
       return actualNumber >= expectedNumber;
     case SCRIPT_OPERATORS.GT:
@@ -202,7 +206,10 @@ export function compareScriptOutput(
     return { passed: input.exitCode === 0, actual };
   }
 
-  if (operatorIsNumeric(operator)) {
+  const comparesExitCodeEquality =
+    compareSource === COMPARE_SOURCES.EXIT_CODE &&
+    (operator === SCRIPT_OPERATORS.EQ || operator === SCRIPT_OPERATORS.NE);
+  if (operatorIsNumeric(operator) || comparesExitCodeEquality) {
     return { passed: compareNumeric(operator, actual, expected), actual };
   }
 
