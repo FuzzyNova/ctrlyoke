@@ -1,6 +1,11 @@
 import "@testing-library/jest-dom";
 import { configure } from "@testing-library/react";
 import { vi } from "vitest";
+import { isolateTestFile } from "./fileIsolation";
+
+// Must run first: it resets the module registry and the shared window that the
+// mocks below are then installed into.
+isolateTestFile();
 
 // waitFor/findBy* give up after 1s by default, which is a performance
 // assertion in disguise: under `npm test` (this pool beside six extension

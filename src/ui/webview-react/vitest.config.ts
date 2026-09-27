@@ -46,6 +46,14 @@ export default defineConfig({
     // in the setup file.  Test files still use explicit vitest imports.
     globals: true,
 
+    // Reuse each worker's jsdom window across the files it runs instead of
+    // building a fresh environment per file, which cost more CPU than running
+    // the tests themselves. test/setup.ts restores per-file isolation for what
+    // matters (module registry, web storage, rendered DOM); a test that leaves
+    // global state behind — a timer or rAF loop, a patched window property,
+    // a flag it toggled on — must undo it in its own afterEach.
+    isolate: false,
+
     // Vitest's 5s default is too tight for this suite. The heavy jsdom
     // component tests (WorkflowPropertiesPanel, the output pane) legitimately
     // cost several hundred ms each in isolation, and running 200+ files across

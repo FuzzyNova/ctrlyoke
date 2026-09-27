@@ -26,36 +26,68 @@ flake. This plan tracks what remains after the first two fixes landed:
   The sixth runs only `WorktreeManager.test.ts` (60 tests) for about 4m. It
   takes about 2m in isolation, so load roughly doubles it.
 
-## 1. Cut Vitest's jsdom environment cost (try first)
+## 1. Cut Vitest's jsdom environment cost
 
-Vitest's own breakdown from a full `npm test`:
+**Done: `isolate: false`.** Each worker now reuses one jsdom window across
+the files it runs. `test/fileIsolation.ts`, called first from `test/setup.ts`,
+restores per-file isolation for what actually leaked. The rules for test
+authors are in `webview-react.instructions.md`.
 
-```
-Duration 223s (transform 67s, setup 203s, import 187s, tests 476s, environment 1263s)
-```
+Measured with the UI suite alone at 16 workers, three alternating pairs on an
+idle machine. CPU is machine-wide busy time from `os.cpus()` deltas across the
+run.
 
-Building environments costs about 2.6× the CPU time of running the tests. With
-the default `isolate: true`, each of the 250 files gets a fresh jsdom. This is
-the largest CPU consumer in the whole run, and it is almost as slow as the
-extension suite.
+| Mode          | Workers | Wall     | CPU          |
+| ------------- | ------- | -------- | ------------ |
+| isolate (old) | 16      | 119–121s | 1,448–1,496s |
+| shared (new)  | 16      | 90–91s   | 497–512s     |
+| shared        | 8       | 93s      | 522s         |
+| shared        | 4       | 113s     | 528s         |
+| isolate (old) | 8       | 109s     | 1,119s       |
 
-Options, in order:
+The suite uses about **66% less CPU** and about **25% less wall time**. The
+CPU saving is what matters when several `npm test` runs share the machine.
+Inside a full `npm test` on 2026-09-26, the ui suite took 2m52s, compared with
+the 3m34s–3m46s baseline. Its setup fell from 203s to 33s. This is one run, so
+treat the figures as indicative.
 
-1. **`isolate: false`** in `src/ui/webview-react/vitest.config.ts`. Each
-   worker then reuses one environment and module graph across files. The risk
-   is state leaking between files: Zustand stores, module-level singletons,
-   `vi.mock` hoisting, globals set in `test/setup.ts`, and DOM left behind.
-   Measure the change and fix the files that start failing, most likely by
-   giving `setup.ts` a real `afterEach` reset for the stores. If only a few
-   files resist, isolate just those with Vitest `projects`, rather than giving
-   up on the whole suite.
-2. **happy-dom** instead of jsdom. Its environment is much cheaper, but it
-   implements the DOM less faithfully. Try this only if `isolate: false` is not
-   enough.
-3. **Re-tune `uiWorkers`** after either change. Fewer, cheaper workers may beat 16.
+Findings worth keeping:
 
-Success means `environment` falls well below `tests` in the Duration line, and
-the ui suite's wall time falls without new flakes across several runs.
+- **Ignore the `environment` figure in shared mode.** Vitest 4's
+  `runBaseTests` re-reports the worker's one-time environment setup time for
+  every file, so it stays around 420s even though jsdom is now built once per
+  worker. The real change shows in `setup` (73s → 7s), `import` (120s → 65s)
+  and total CPU.
+- **Wall time is now set by one file, not by parallelism.**
+  `WorkflowPropertiesPanelUndoRedo.test.tsx` runs 86 synchronous full-panel
+  tests at about 1s each, which takes 83–86s even on an idle machine and in
+  either mode. That is why 8 and 16 workers finish together. Splitting it into
+  3–4 files is the next cheap wall-time win.
+- **Re-tune `uiWorkers`.** 8 workers match 16 on both wall time and CPU, and
+  would leave more cores to the extension shards that run beside it.
+  `planParallelism` in `scripts/run-test-suites.mjs` still gives the suite 16.
+  This has not been changed yet; measure it under a full `npm test` before
+  changing it.
+- happy-dom (the old option 2) is no longer needed. What remains of the suite's
+  CPU is mostly the tests themselves.
+
+The leaks that `fileIsolation.ts` guards against, each of which failed real
+tests during the migration (439 failures on the first run, then 0 across 9
+parallel runs and a deterministic single-worker pass over all 250 files):
+
+- Testing Library's auto-cleanup reaches only the first file in a worker.
+- A `vi.mock` has no effect on a module that an earlier file already imported
+  (fixed by calling `vi.resetModules()` per file).
+- `window.__ctrlyokeStandalone` is set at file level and never unset.
+- Profiler state is kept in `localStorage`, and its rAF loop keeps running.
+- `HTMLElement.prototype.offsetWidth/offsetHeight` stubs are never restored.
+- `vi.stubGlobal` makes `requestAnimationFrame` synchronous for every later
+  file.
+- Mermaid appends its render container directly to `body`.
+
+Removing listeners and timers registered by `node_modules` code broke later
+files: React DOM registers its document listeners only once per document, so
+the guard records only registrations whose caller is repo source.
 
 ## 2. Coordinate concurrent `npm test` runs across worktrees
 
