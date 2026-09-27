@@ -19,6 +19,7 @@ import {
   MCP_COMMIT_MESSAGE_DENIED_TOOL_NAMES,
   MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
 } from "../utils/McpToolDefinitions";
+import { fenceLiteral } from "../utils/FileReferenceParser";
 import {
   CLI_EVENT_TYPES,
   EXECUTION_MODES,
@@ -100,6 +101,16 @@ export interface DiffResult {
 
 export function getMaxDiffSizeLabel(): string {
   return `${Math.floor(MAX_DIFF_BYTES / 1024)} KB`;
+}
+
+export function buildCommitMessagePrompt(
+  diff: string,
+  commitPrompt: string,
+  instructionsSection = "",
+  mcpInstruction = ""
+): string {
+  const fencedDiff = fenceLiteral(diff, "diff");
+  return `${commitPrompt}\n\n${fencedDiff}${instructionsSection}${mcpInstruction}`;
 }
 
 function isNotGitRepositoryError(error: unknown): boolean {
@@ -339,14 +350,14 @@ export class CommitMessageGenerator {
     const mcpInstruction = useMcpCapture
       ? `\n\nSubmit the commit message using the \`${COMMIT_MESSAGE_MCP_TOOL}\` tool. Do not output it as text.`
       : "";
-    // Fence the diff so its literal content (e.g. an added file's leading
-    // `<!DOCTYPE html>`) is never mistaken for a ctrlyoke reference trigger
-    // (`@`/`#`/`~`/`!`) by the context-expansion or secret-grant parsers,
-    // which both treat fenced blocks as suppressed. An unfenced diff line
-    // like `+<!DOCTYPE html>` previously parsed as an inline `!DOCTYPE`
-    // secret grant and hard-failed the run at preflight.
-    const fencedDiff = "```diff\n" + diff + "\n```";
-    const fullPrompt = `${commitPrompt}\n\n${fencedDiff}${instructionsSection}${mcpInstruction}`;
+    // Keep diff content inert for every prompt-reference parser, even when
+    // added Markdown contains its own fenced code blocks.
+    const fullPrompt = buildCommitMessagePrompt(
+      diff,
+      commitPrompt,
+      instructionsSection,
+      mcpInstruction
+    );
 
     const mcpServerConfig: McpServerConfig | undefined = useMcpCapture
       ? {

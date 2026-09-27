@@ -6,11 +6,17 @@ import * as path from "path";
 import { suite, test } from "mocha";
 import { promisify } from "util";
 import {
+  buildCommitMessagePrompt,
   buildCommitWorkflowOverrides,
   CommitMessageGenerator,
   CommitMessageGenerationError,
   MAX_DIFF_BYTES,
 } from "../../git/CommitMessageGenerator";
+import { parseSecretReferences } from "../../utils/SecretReferenceParser";
+import {
+  parseAtReferences,
+  parseInlinePriorContextRefs,
+} from "../../utils/FileReferenceParser";
 import {
   EXECUTION_MODES,
   HARNESS_IDS,
@@ -27,6 +33,48 @@ import type {
 const execFileAsync = promisify(execFile);
 
 suite("CommitMessageGenerator", () => {
+  test("keeps references inside a staged Markdown code block inert in the prompt", async () => {
+    const cwd = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-commit-prompt-fence-")
+    );
+    try {
+      const runGit = async (args: string[]): Promise<void> => {
+        await execFileAsync("git", args, { cwd, encoding: "utf8" });
+      };
+
+      await runGit(["init"]);
+      await runGit(["config", "user.email", "test@example.com"]);
+      await runGit(["config", "user.name", "CtrlYoke Test"]);
+      await runGit(["config", "commit.gpgsign", "false"]);
+      const markdown = [
+        "# Added example",
+        "",
+        "```html",
+        `<${"!DOCTYPE"} html>`,
+        "<p>See @src/x.ts and $previous.</p>",
+        "```",
+        "",
+      ].join("\n");
+      await fs.writeFile(path.join(cwd, "README.md"), markdown);
+      await runGit(["add", "README.md"]);
+
+      const stagedDiff = await new CommitMessageGenerator().getDiff(cwd);
+      assert.ok(stagedDiff?.staged);
+      const prompt = buildCommitMessagePrompt(
+        stagedDiff.diff,
+        "Write a concise commit message."
+      );
+
+      assert.deepStrictEqual(parseSecretReferences(prompt), []);
+      assert.deepStrictEqual(parseAtReferences(prompt), []);
+      assert.deepStrictEqual(parseInlinePriorContextRefs(prompt), []);
+    } finally {
+      await fs.rm(cwd, { recursive: true, force: true, maxRetries: 5 }).catch(
+        () => {}
+      );
+    }
+  });
+
   test("carries the persisted run address on generation errors", () => {
     const workflowKey =
       "commit-message-generation-20260824-120000" as WorkflowKey;
