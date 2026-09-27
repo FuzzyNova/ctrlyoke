@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-27 by the long-running bug-fix workflow final step (claude-cli)
 - **Area:** `src/cli/CliTerminalFormatter.ts` (`countOutputLines`, `writeBoundedScriptChunk`, script output finalisation)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -90,6 +90,14 @@ function countOutputLines(text: string): number {
   return text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
 }
 
+function countNewOutputLines(text: string, endsWithNewline: boolean): number {
+  if (!text) return 0;
+  const newlineCount = (text.match(/\n/g) ?? []).length;
+  const trailingLine = text.endsWith("\n") ? 0 : 1;
+  const alreadyOpenLine = endsWithNewline ? 0 : 1;
+  return newlineCount + trailingLine - alreadyOpenLine;
+}
+
 function formatTruncationNotice(detail: string): string {
   return `… ${detail} (see ${EVENTS_LOG_PATH_HINT})`;
 }
@@ -628,10 +636,7 @@ export class CliTerminalFormatter {
     if (state) {
       const totalText = output.response;
       state.totalChars = Math.max(state.totalChars, totalText.length);
-      state.totalLines = Math.max(
-        state.totalLines,
-        countOutputLines(totalText)
-      );
+      state.totalLines = countOutputLines(totalText);
       if (!state.endsWithNewline) process.stdout.write("\n");
       const omittedLines = Math.max(0, state.totalLines - state.shownLines);
       const omittedChars = Math.max(0, state.totalChars - state.shownChars);
@@ -664,7 +669,9 @@ export class CliTerminalFormatter {
     state: ScriptStreamingState
   ): void {
     state.totalChars += chunk.length;
-    state.totalLines += countOutputLines(chunk);
+    const endsWithNewline = state.endsWithNewline;
+    state.totalLines += countNewOutputLines(chunk, endsWithNewline);
+    state.endsWithNewline = chunk.endsWith("\n");
 
     const remainingChars = Math.max(
       0,
@@ -677,7 +684,7 @@ export class CliTerminalFormatter {
     if (remainingChars === 0 || remainingLines === 0) return;
 
     let visible = chunk.slice(0, remainingChars);
-    const visibleLines = countOutputLines(visible);
+    const visibleLines = countNewOutputLines(visible, endsWithNewline);
     if (visibleLines > remainingLines) {
       const pieces = visible.split("\n");
       visible = pieces.slice(0, remainingLines).join("\n");
@@ -686,8 +693,7 @@ export class CliTerminalFormatter {
 
     process.stdout.write(visible);
     state.shownChars += visible.length;
-    state.shownLines += countOutputLines(visible);
-    state.endsWithNewline = visible.endsWith("\n");
+    state.shownLines += countNewOutputLines(visible, endsWithNewline);
   }
 
   private static renderScriptVerdict(

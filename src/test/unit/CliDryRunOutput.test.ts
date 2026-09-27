@@ -373,7 +373,33 @@ CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_S
     assert.ok(output.includes("line 199"));
     assert.ok(!output.includes("line 200"));
     assert.ok(output.includes("script output truncated"));
-    assert.ok(output.includes("more lines"));
+    assert.ok(output.includes("40 more lines"));
+  });
+
+  test("does not count single-character chunks as separate script lines", () => {
+    const output = runFormatterScript(`
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: "", elapsed: 0, isStreaming: true }, { stepIndex: 0, stepName: "script", key: "single-char" });
+for (let index = 0; index < 300; index++) {
+  CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: ".", elapsed: 0, isStreaming: true }, { stepIndex: 0, stepName: "script", key: "single-char" });
+}
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: ".".repeat(300), elapsed: 0, isStreaming: false }, { stepIndex: 0, stepName: "script", key: "single-char" });`);
+
+    assert.ok(output.includes(".".repeat(300)));
+    assert.ok(!output.includes("script output truncated"));
+  });
+
+  test("counts a line split across chunks once", () => {
+    const output = runFormatterScript(`
+const firstChunk = Array.from({ length: 199 }, (_, index) => "line " + index + "\\n").join("");
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: "", elapsed: 0, isStreaming: true }, { stepIndex: 0, stepName: "script", key: "split-line" });
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: firstChunk, elapsed: 0, isStreaming: true }, { stepIndex: 0, stepName: "script", key: "split-line" });
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: "split ", elapsed: 0, isStreaming: true }, { stepIndex: 0, stepName: "script", key: "split-line" });
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: "line\\nlast\\n", elapsed: 0, isStreaming: true }, { stepIndex: 0, stepName: "script", key: "split-line" });
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: firstChunk + "split line\\nlast\\n", elapsed: 0, isStreaming: false }, { stepIndex: 0, stepName: "script", key: "split-line" });`);
+
+    assert.ok(output.includes("split line"));
+    assert.ok(output.includes("script output truncated: 1 more lines"));
+    assert.ok(!output.includes("script output truncated: 2 more lines"));
   });
 
   test("labels condition, worktree-setup, and ordinary script headers", () => {
