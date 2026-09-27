@@ -432,7 +432,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         { index: 2, updates: { prompt: "edited by a member" } },
       ],
       [MCP_REMOVE_STEP_TOOL_NAME, { index: 2 }],
-      [MCP_REORDER_STEPS_TOOL_NAME, { indices: [1, 3, 2] }],
+      [MCP_REORDER_STEPS_TOOL_NAME, { indices: [3, 2] }],
     ] as const;
 
     for (const [index, [toolName, args]] of invocations.entries()) {
@@ -1556,7 +1556,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     try {
       const result = responseJson(
         await server.invokeTool(MCP_REORDER_STEPS_TOOL_NAME, {
-          indices: [1, 3, 2],
+          indices: [3, 2],
         })
       );
       const persisted = JSON.parse(
@@ -1568,6 +1568,43 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         persisted.steps?.map((step) => (step as { prompt: string }).prompt),
         ["completed", "in flight", "pending-b", "pending-a"]
       );
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
+  test("reorders not-yet-started steps while keeping pending parallel groups intact", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun(
+      "reorder-parallel-block"
+    );
+    try {
+      const workingFile = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+      workingFile.steps?.push({ prompt: "tail" });
+      workingFile.parallelGroups = [
+        { id: "group-reorder", startIndex: 2, endIndex: 3, failFast: true },
+      ];
+      await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+
+      const result = responseJson(
+        await server.invokeTool(MCP_REORDER_STEPS_TOOL_NAME, {
+          indices: [4, 2, 3],
+        })
+      );
+      const persisted = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+
+      assert.strictEqual(result.success, true);
+      assert.deepStrictEqual(
+        persisted.steps?.map((step) => (step as { prompt: string }).prompt),
+        ["completed", "in flight", "tail", "pending-a", "pending-b"]
+      );
+      assert.deepStrictEqual(persisted.parallelGroups, [
+        { id: "group-reorder", startIndex: 3, endIndex: 4, failFast: true },
+      ]);
     } finally {
       await releaseActiveRun(run, ownerToken);
     }
@@ -1600,7 +1637,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
           server.invokeTool(MCP_REORDER_STEPS_TOOL_NAME, {
             indices: [0, 2, 1],
           }),
-        /completed step/i
+        /not-yet-started step indices/i
       );
     } finally {
       await releaseActiveRun(run, ownerToken);
@@ -1634,7 +1671,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
           server.invokeTool(MCP_REORDER_STEPS_TOOL_NAME, {
             indices: [2, 1, 3],
           }),
-        /currently executing/i
+        /not-yet-started step indices/i
       );
     } finally {
       await releaseActiveRun(run, ownerToken);

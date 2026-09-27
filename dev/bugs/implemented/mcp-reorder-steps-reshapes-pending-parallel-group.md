@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-27 by the long-running bug-fix workflow final step (claude-cli, helper agent)
 - **Area:** `src/core/orchestration/RunContinuationService.ts` (`reorderStepsAtRun`), `src/core/ParallelGroupTopology.ts`, `src/types/McpToolDefinitions.ts` (`reorder_steps` description), `src/cli/StepCommands.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

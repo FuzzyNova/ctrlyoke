@@ -269,6 +269,59 @@ suite("CLI step command handlers", () => {
     );
   });
 
+  test("reorders not-yet-started steps without splitting a parallel group", async () => {
+    await seedRun(EXECUTION_STATES.RUNNING, 1, [
+      { prompt: "completed", _runtime: { completedAt: 10 } },
+      { prompt: "in flight", _runtime: { startedAt: 11 } },
+      { prompt: "group first" },
+      { prompt: "group second" },
+      { prompt: "tail" },
+    ]);
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspaceRoot,
+      workflowKey,
+      runRef
+    );
+    const workingFile = JSON.parse(await fs.readFile(runFilePath, "utf8")) as {
+      parallelGroups?: unknown;
+    };
+    workingFile.parallelGroups = [
+      { id: "cli-group", startIndex: 2, endIndex: 3, failFast: true },
+    ];
+    await fs.writeFile(runFilePath, JSON.stringify(workingFile), "utf8");
+    const ownerToken = await acquireExternalLock();
+    try {
+      await reorderStepsCommand(
+        { ...reorderOptions(), order: "4,2,3" },
+        context(),
+        new RecordingIo()
+      );
+
+      const persisted = JSON.parse(await fs.readFile(runFilePath, "utf8")) as {
+        steps?: WorkflowStep[];
+        parallelGroups?: Array<{
+          id: string;
+          startIndex: number;
+          endIndex: number;
+          failFast: boolean;
+        }>;
+      };
+      assert.deepStrictEqual(
+        persisted.steps?.map((step) => (step as { prompt: string }).prompt),
+        ["completed", "in flight", "tail", "group first", "group second"]
+      );
+      assert.deepStrictEqual(persisted.parallelGroups, [
+        { id: "cli-group", startIndex: 3, endIndex: 4, failFast: true },
+      ]);
+    } finally {
+      await WorkflowLockManager.releaseLock(
+        workspaceRoot,
+        workflowKey,
+        ownerToken
+      );
+    }
+  });
+
   test("rejects an unresolvable --run reference", async () => {
     await seedRun(EXECUTION_STATES.IDLE, 0, [{ prompt: "pending" }]);
     await assert.rejects(
