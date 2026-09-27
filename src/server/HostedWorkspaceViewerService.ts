@@ -308,9 +308,8 @@ function normalizeScmPath(p: string): string {
 }
 
 /**
- * Classifies raw `git log` decoration ref names (from `%D`) into typed labels
- * used by the commit-history git-graph pills. Examples of inputs:
- *   "HEAD -> main", "origin/main", "tag: v1.0", "HEAD", "upstream/feature"
+ * Classifies full `git log` decoration ref names (from `%D`) into typed labels
+ * used by the commit-history git-graph pills.
  */
 function classifyRefNames(refNames: string[]): GitRefLabel[] {
   const labels: GitRefLabel[] = [];
@@ -326,18 +325,29 @@ function classifyRefNames(refNames: string[]): GitRefLabel[] {
 
     if (name === "HEAD") {
       labels.push({ name, type: "head" });
-    } else if (name.startsWith("tag: ")) {
-      labels.push({ name: name.slice("tag: ".length).trim(), type: "tag" });
-    } else if (/^[^/]+\/HEAD$/.test(name)) {
-      // "<remote>/HEAD" (e.g. origin/HEAD) is a symbolic alias for the
-      // remote's default branch, not a real branch — skip it so it doesn't
+    } else if (name.startsWith("tag: refs/tags/")) {
+      labels.push({ name: name.slice("tag: refs/tags/".length), type: "tag" });
+    } else if (name.startsWith("refs/tags/")) {
+      labels.push({ name: name.slice("refs/tags/".length), type: "tag" });
+    } else if (/^refs\/remotes\/[^/]+\/HEAD$/.test(name)) {
+      // "refs/remotes/<remote>/HEAD" (e.g. origin/HEAD) is a symbolic alias
+      // for the remote's default branch, not a real branch — skip it so it doesn't
       // render as a second, redundant remote-branch pill alongside the
       // branch it points to (e.g. origin/main).
       continue;
-    } else if (name.includes("/")) {
-      // Anything with a slash is a remote-tracking ref (e.g. origin/main).
-      labels.push({ name, type: GIT_REF_LABEL_TYPES.REMOTE_BRANCH });
+    } else if (name.startsWith("refs/remotes/")) {
+      labels.push({
+        name: name.slice("refs/remotes/".length),
+        type: GIT_REF_LABEL_TYPES.REMOTE_BRANCH,
+      });
+    } else if (name.startsWith("refs/heads/")) {
+      labels.push({
+        name: name.slice("refs/heads/".length),
+        type: GIT_REF_LABEL_TYPES.LOCAL_BRANCH,
+      });
     } else {
+      // Keep bare or otherwise unrecognized decoration names visible as local
+      // labels, matching git's non-remote behavior.
       labels.push({ name, type: GIT_REF_LABEL_TYPES.LOCAL_BRANCH });
     }
   }
@@ -2023,7 +2033,7 @@ export class HostedWorkspaceViewerService {
     const [historyRows, unpushedHashes] = await Promise.all([
       // Omitting max-count is intentional: the complete result is the frozen
       // snapshot from which all later pages are served.
-      getFileHistoryCommits(repoRoot, gitPath, undefined, 0, headHash),
+      getFileHistoryCommits(repoRoot, gitPath, undefined, 0, headHash, true),
       this.getUnpushedHistoryHashes(repoRoot, headHash),
     ]);
     const entries = historyRows
@@ -2358,7 +2368,13 @@ export class HostedWorkspaceViewerService {
     const metadata = await this.getCommitLogMetadata(repoRoot);
     // Omitting max-count is intentional: the complete result is the frozen
     // snapshot from which all later pages are served.
-    const rows = await getRecentCommits(repoRoot, undefined, 0, safeBranch);
+    const rows = await getRecentCommits(
+      repoRoot,
+      undefined,
+      0,
+      safeBranch,
+      true
+    );
     const commits: WorkspaceCommitLogEntry[] = rows.map((c) => ({
       hash: c.hash,
       shortHash: c.shortHash,

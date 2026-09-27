@@ -1750,6 +1750,7 @@ suite("HostedWorkspaceViewerService", function () {
       const root = createWorkspace();
       runGit(root, "init");
       configureGitIdentity(root);
+      runGit(root, "checkout", "-b", "feature/login");
       commitFile(root, "a.txt", "one\n", "first");
       commitFile(root, "b.txt", "two\n", "second");
       const branch = runGit(root, "branch", "--show-current");
@@ -1768,9 +1769,28 @@ suite("HostedWorkspaceViewerService", function () {
       assert.ok(
         head.refs.some(
           (r) =>
-            r.type === GIT_REF_LABEL_TYPES.LOCAL_BRANCH && r.name === branch
+            r.type === GIT_REF_LABEL_TYPES.LOCAL_BRANCH &&
+            r.name === "feature/login"
         ),
-        `expected a localBranch ref named ${branch}`
+        "expected HEAD -> refs/heads/feature/login to be a local branch label"
+      );
+    });
+
+    test("strips the full tag prefix while preserving slashes in tag names", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "a.txt", "one\n", "tagged commit");
+      runGit(root, "tag", "release/v1.0");
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const result = await svc.getCommitLog();
+
+      assert.ok(
+        result.commits[0]?.refs.some(
+          (ref) => ref.type === "tag" && ref.name === "release/v1.0"
+        ),
+        "expected tag label to preserve the slash-containing tag name"
       );
     });
 
@@ -1781,6 +1801,7 @@ suite("HostedWorkspaceViewerService", function () {
       runGit(remoteRoot, "init", "--bare");
       runGit(path.dirname(root), "clone", remoteRoot, path.basename(root));
       configureGitIdentity(root);
+      runGit(root, "checkout", "-b", "feature/login");
 
       commitFile(root, "tracked.txt", "one\n", "initial commit");
       runGit(root, "push", "-u", "origin", "HEAD");
@@ -1796,12 +1817,13 @@ suite("HostedWorkspaceViewerService", function () {
       const remoteBranchRefs = head.refs.filter(
         (r) => r.type === GIT_REF_LABEL_TYPES.REMOTE_BRANCH
       );
+      assert.strictEqual(branch, "feature/login");
       assert.strictEqual(
         remoteBranchRefs.length,
         1,
         `expected exactly one remoteBranch pill, got: ${JSON.stringify(remoteBranchRefs)}`
       );
-      assert.strictEqual(remoteBranchRefs[0].name, `origin/${branch}`);
+      assert.strictEqual(remoteBranchRefs[0].name, "origin/feature/login");
     });
 
     test("flags merge commits via isMerge", async () => {
