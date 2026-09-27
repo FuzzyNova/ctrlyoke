@@ -74,3 +74,23 @@ Although `EXECUTION_ROOT_COORDINATION_PLAN.md` (lines 704–716) documented that
 2. In `removeOldNotes` (or a generalized `pruneExpiredEntries`):
    - Evict `join` entries that exceed `maxEntryAgeDays` if the participant has no active unresolved claims.
 3. Update the error message in `trimNotesToCaps` to accurately differentiate between boards full of unresolved claims versus non-evictable entries.
+
+## Planning Notes (orchestrator review, 2026-09-27)
+
+- Sequenced **after** `coordination-live-join-refreshes-exhaust-board-capacity`.
+  That fix makes the fold lifecycle-based (liveness from the latest join since
+  the last `leave`) and compacts each open lifecycle down to its first and last
+  join. Build on that; don't re-derive it.
+- The store has no liveness knowledge. `CoordinationParticipantRegistry` (the
+  only production constructor of `ExecutionRootCoordinationStore`) already
+  injects an `unresolvedClaims` resolver backed by the fold. It should inject
+  liveness the same way, e.g. a resolver returning the live participant IDs from
+  `foldCoordinationEntries(...).participants`. Compaction then settles every
+  lifecycle whose participant is not live and holds no unresolved claim, exactly
+  as a `leave` would.
+- Bare-store fallback (`appendCoordinationEntry()` and tests, with no resolver):
+  age out a lifecycle's joins once its **latest** join is older than
+  `maxEntryAgeDays` and the participant holds no unresolved claim. Never prune
+  based on an earlier join's age.
+- Error message: `trimNotesToCaps` should tell apart "unresolved claims fill the
+  board" from "only non-evictable lifecycle entries remain".

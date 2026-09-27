@@ -51,3 +51,22 @@ is explicitly dependency-free so the MCP server/CLI bundles can use it.
   comparison-only, per `PathCasing.ts`'s own guidance.
 - Add unit coverage that stubs `process.platform` to `win32` for both overlap and
   release, plus a POSIX case asserting case-sensitivity is preserved there.
+
+## Planning Notes (orchestrator review, 2026-09-27)
+
+There are three case-sensitive claim-path comparisons, not two. All three must
+use the same single-sourced helper (normalize, then `foldPathForCompare`),
+otherwise a release written with different casing is reported as `released` but
+never cancels the claim in the fold:
+
+- `pathsOverlap()` (`ExecutionRootCoordination.ts:136`): overlap and containment.
+- `foldCoordinationEntries()` release handling (`:401`,
+  `releasePaths.includes(claimPath)`). This decides whether a persisted
+  `release` entry actually cancels a claim.
+- `CoordinationParticipantRegistry.releasePaths()` (`:901`, `paths.includes(claim.path)`).
+
+The store's default `unresolvedClaims()` resolver
+(`ExecutionRootCoordinationStore.ts`) also keys by the exact path string. It errs
+toward keeping claims, so this is not a correctness hole, but it should use the
+same helper for consistency. `ExecutionRootCoordination.ts` imports the store, so
+put the helper somewhere both can import without a cycle.
