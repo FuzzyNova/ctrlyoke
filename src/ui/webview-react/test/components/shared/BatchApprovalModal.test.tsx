@@ -10,7 +10,7 @@ vi.mock("@hooks/useMessageHandler", () => ({ sendMessage }));
 
 beforeEach(() => {
   sendMessage.mockClear();
-  useBatchApprovalStore.setState({ pendingRequest: null });
+  useBatchApprovalStore.setState({ requests: [] });
 });
 
 function setRequest() {
@@ -53,7 +53,7 @@ describe("BatchApprovalModal", () => {
         },
       }
     );
-    expect(useBatchApprovalStore.getState().pendingRequest).toBeNull();
+    expect(useBatchApprovalStore.getState().requests).toEqual([]);
   });
 
   it("moves an unchecked item to deniedValues on confirm", async () => {
@@ -87,6 +87,50 @@ describe("BatchApprovalModal", () => {
       MESSAGE_TYPES.BATCH_APPROVAL_RESPONSE,
       { id: "req-1", result: null }
     );
-    expect(useBatchApprovalStore.getState().pendingRequest).toBeNull();
+    expect(useBatchApprovalStore.getState().requests).toEqual([]);
+  });
+
+  it("answers queued requests in order", async () => {
+    const user = userEvent.setup();
+    useBatchApprovalStore.getState().setPendingRequest({
+      id: "approval-first",
+      title: "First approval",
+      description: "Review first request",
+      items: [{ value: "FIRST", label: "FIRST", checked: true }],
+    });
+    useBatchApprovalStore.getState().setPendingRequest({
+      id: "approval-second",
+      title: "Second approval",
+      description: "Review second request",
+      items: [{ value: "SECOND", label: "SECOND", checked: true }],
+    });
+
+    render(<BatchApprovalModal />);
+    expect(
+      screen.getByRole("heading", { name: "First approval" })
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    expect(sendMessage).toHaveBeenLastCalledWith(
+      MESSAGE_TYPES.BATCH_APPROVAL_RESPONSE,
+      {
+        id: "approval-first",
+        result: { approvedValues: ["FIRST"], deniedValues: [] },
+      }
+    );
+    expect(
+      screen.getByRole("heading", { name: "Second approval" })
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    expect(sendMessage).toHaveBeenLastCalledWith(
+      MESSAGE_TYPES.BATCH_APPROVAL_RESPONSE,
+      {
+        id: "approval-second",
+        result: { approvedValues: ["SECOND"], deniedValues: [] },
+      }
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(useBatchApprovalStore.getState().requests).toEqual([]);
   });
 });

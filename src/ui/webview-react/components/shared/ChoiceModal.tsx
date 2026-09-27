@@ -4,7 +4,7 @@ import { Button } from "./Button";
 import { Modal } from "./Modal";
 
 export function ChoiceModal() {
-  const request = useChoiceStore((state) => state.pendingRequest);
+  const request = useChoiceStore((state) => state.requests[0] ?? null);
   const respond = useChoiceStore((state) => state.respond);
   const dismiss = useChoiceStore((state) => state.dismiss);
   const [selectedValue, setSelectedValue] = useState<string>("");

@@ -10,7 +10,7 @@ import { Modal } from "./Modal";
  * globally, in App.tsx.
  */
 export function BatchApprovalModal() {
-  const request = useBatchApprovalStore((state) => state.pendingRequest);
+  const request = useBatchApprovalStore((state) => state.requests[0] ?? null);
   const respond = useBatchApprovalStore((state) => state.respond);
   const dismiss = useBatchApprovalStore((state) => state.dismiss);
   const [checkedValues, setCheckedValues] = useState<Set<string>>(new Set());
