@@ -86,6 +86,11 @@ export class PromptFileParser {
   private relaxedValidator?: ValidateFunction;
   private ajv = new Ajv({ allErrors: true, allowUnionTypes: true });
 
+  private async readWorkflowFileContent(filePath: string): Promise<string> {
+    const content = await fs.readFile(filePath, "utf8");
+    return content.startsWith("\uFEFF") ? content.slice(1) : content;
+  }
+
   constructor(
     private readonly platform?: PlatformAdapter,
     private readonly userFeedbackSink?: UserFeedbackSink
@@ -150,7 +155,7 @@ export class PromptFileParser {
         return this.parseMarkdownPromptFile(filePath);
       }
 
-      const content = await fs.readFile(filePath, "utf8");
+      const content = await this.readWorkflowFileContent(filePath);
       let parsed: any;
 
       // Parse based on file extension
@@ -541,7 +546,7 @@ export class PromptFileParser {
     filePath: string
   ): Promise<ParsedPromptFile | null> {
     try {
-      const content = await fs.readFile(filePath, "utf8");
+      const content = await this.readWorkflowFileContent(filePath);
 
       const frontmatterMatch = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u.exec(
         content
