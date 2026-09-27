@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-27 by the long-running bug-fix workflow final step (claude-cli, helper agent)
 - **Area:** `src/config/FileConfigBackend.ts` (`load`, `set`)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

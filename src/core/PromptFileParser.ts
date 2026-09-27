@@ -24,6 +24,7 @@ import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { stripLegacyWorkingFileLineageMetadata } from "../utils/WorkingFileMetadata";
 import { Log } from "../utils/Log";
+import { stripLeadingBom } from "../utils/TextUtils";
 import { getVariableKeyErrors } from "../utils/KeyValueKeyKinds";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
@@ -88,7 +89,7 @@ export class PromptFileParser {
 
   private async readWorkflowFileContent(filePath: string): Promise<string> {
     const content = await fs.readFile(filePath, "utf8");
-    return content.startsWith("\uFEFF") ? content.slice(1) : content;
+    return stripLeadingBom(content);
   }
 
   constructor(
