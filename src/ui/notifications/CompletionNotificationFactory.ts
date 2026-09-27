@@ -352,7 +352,8 @@ export function buildHookNotificationEvent(
     return null;
   }
 
-  const label = HOOK_EVENT_OPTIONS_META[artifact.hookEvent]?.label ?? artifact.hookEvent;
+  const label =
+    HOOK_EVENT_OPTIONS_META[artifact.hookEvent]?.label ?? artifact.hookEvent;
 
   const titleParts = ["ctrlyoke -", label];
   const bodyParts: string[] = [];

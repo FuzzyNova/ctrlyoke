@@ -72,10 +72,9 @@ describe("AdvancedPermissionsSection — allowed external file roots", () => {
     );
     await user.click(screen.getByRole("button", { name: "Add" }));
 
-    expect(onUpdate).toHaveBeenCalledWith(
-      "permissions.trustedExternalRoots",
-      ["/home/user/logs"]
-    );
+    expect(onUpdate).toHaveBeenCalledWith("permissions.trustedExternalRoots", [
+      "/home/user/logs",
+    ]);
   });
 
   it("shows workspace decisions and posts decision changes without editing the request list", async () => {

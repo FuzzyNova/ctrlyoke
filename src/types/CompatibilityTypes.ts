@@ -421,7 +421,5 @@ function getDeclarationDiagnosticCode(
 }
 
 function hookEventLabel(capability: string): string {
-  return (
-    HOOK_EVENT_OPTIONS_META[capability as HookEvent]?.label ?? capability
-  );
+  return HOOK_EVENT_OPTIONS_META[capability as HookEvent]?.label ?? capability;
 }

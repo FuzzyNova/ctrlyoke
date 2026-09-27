@@ -35,9 +35,26 @@ describe("McpServerForm round trips", () => {
       })
     );
 
-    expect(screen.getByLabelText("Arguments, property mcpServers[].args")).toHaveAttribute("title", expect.stringContaining("property: mcpServers[].args"));
-    expect(screen.getByLabelText("Auto-approve tools, property mcpServers[].autoApprove")).toHaveAttribute("title", expect.stringContaining("property: mcpServers[].autoApprove"));
-    expect(screen.getByLabelText("Environment, property mcpServers[].env")).toHaveAttribute("title", expect.stringContaining("property: mcpServers[].env"));
+    expect(
+      screen.getByLabelText("Arguments, property mcpServers[].args")
+    ).toHaveAttribute(
+      "title",
+      expect.stringContaining("property: mcpServers[].args")
+    );
+    expect(
+      screen.getByLabelText(
+        "Auto-approve tools, property mcpServers[].autoApprove"
+      )
+    ).toHaveAttribute(
+      "title",
+      expect.stringContaining("property: mcpServers[].autoApprove")
+    );
+    expect(
+      screen.getByLabelText("Environment, property mcpServers[].env")
+    ).toHaveAttribute(
+      "title",
+      expect.stringContaining("property: mcpServers[].env")
+    );
   });
 
   it("preserves remote headers, denied tools, and auto-approve allowlists", () => {

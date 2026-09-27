@@ -43,7 +43,11 @@ function snapshot(): WorkspaceStatsSnapshot {
 describe("StatTileGrid", () => {
   it("renders partial totals and every required disclosure", () => {
     render(
-      <StatTileGrid snapshot={snapshot()} isNarrow={false} showCostEstimates={true} />
+      <StatTileGrid
+        snapshot={snapshot()}
+        isNarrow={false}
+        showCostEstimates={true}
+      />
     );
 
     expect(screen.getByText("12")).toBeInTheDocument();
@@ -66,7 +70,11 @@ describe("StatTileGrid", () => {
 
   it("suppresses the cost tile when showCostEstimates is disabled", () => {
     render(
-      <StatTileGrid snapshot={snapshot()} isNarrow={true} showCostEstimates={false} />
+      <StatTileGrid
+        snapshot={snapshot()}
+        isNarrow={true}
+        showCostEstimates={false}
+      />
     );
 
     expect(screen.queryByText("Estimated cost")).not.toBeInTheDocument();

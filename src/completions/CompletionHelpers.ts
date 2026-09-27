@@ -1499,11 +1499,9 @@ export async function getPromptFileCompletions(
       .slice(0, MAX_ITEMS);
   }
   // Truncate only after ranking, so the best matches always survive the cap.
-  return items
-    .slice(0, MAX_ITEMS)
-    .map((item, rank) => ({
-      ...item,
-      sortText: formatRankSortKey(rank),
-      rank,
-    }));
+  return items.slice(0, MAX_ITEMS).map((item, rank) => ({
+    ...item,
+    sortText: formatRankSortKey(rank),
+    rank,
+  }));
 }

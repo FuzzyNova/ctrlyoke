@@ -9,7 +9,10 @@ import {
   type CompareSource,
   type ScriptOperator,
 } from "../types/DashboardConstants";
-import { COMPARE_SOURCE_OPTIONS_META, SCRIPT_OPERATOR_OPTIONS_META } from "../types/SchemaUiMetadata";
+import {
+  COMPARE_SOURCE_OPTIONS_META,
+  SCRIPT_OPERATOR_OPTIONS_META,
+} from "../types/SchemaUiMetadata";
 
 /**
  * Longest `actual` a regex is run against. A `matches` pattern is authored by the

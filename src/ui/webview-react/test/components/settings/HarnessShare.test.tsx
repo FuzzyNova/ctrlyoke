@@ -96,7 +96,10 @@ describe("Harness share", () => {
 
     const user = userEvent.setup();
     render(
-      <StatsUsageSection showCostEstimates={true} activeScope={SETTING_SCOPES.USER} />
+      <StatsUsageSection
+        showCostEstimates={true}
+        activeScope={SETTING_SCOPES.USER}
+      />
     );
     const share = getShareSection();
 
@@ -128,7 +131,10 @@ describe("Harness share", () => {
     });
 
     render(
-      <StatsUsageSection showCostEstimates={true} activeScope={SETTING_SCOPES.USER} />
+      <StatsUsageSection
+        showCostEstimates={true}
+        activeScope={SETTING_SCOPES.USER}
+      />
     );
     const share = getShareSection();
     const bar = share.querySelector(
@@ -150,7 +156,10 @@ describe("Harness share", () => {
     });
 
     render(
-      <StatsUsageSection showCostEstimates={true} activeScope={SETTING_SCOPES.USER} />
+      <StatsUsageSection
+        showCostEstimates={true}
+        activeScope={SETTING_SCOPES.USER}
+      />
     );
     const share = getShareSection();
 
@@ -172,7 +181,10 @@ describe("Harness share", () => {
     useWorkspaceStatsStore.setState({ snapshot: snapshot({}) });
 
     render(
-      <StatsUsageSection showCostEstimates={true} activeScope={SETTING_SCOPES.USER} />
+      <StatsUsageSection
+        showCostEstimates={true}
+        activeScope={SETTING_SCOPES.USER}
+      />
     );
     const share = getShareSection();
 
@@ -191,7 +203,10 @@ describe("Harness share", () => {
     });
 
     render(
-      <StatsUsageSection showCostEstimates={false} activeScope={SETTING_SCOPES.USER} />
+      <StatsUsageSection
+        showCostEstimates={false}
+        activeScope={SETTING_SCOPES.USER}
+      />
     );
 
     expect(screen.queryByText("≈$38.20")).not.toBeInTheDocument();

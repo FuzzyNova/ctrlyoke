@@ -24,8 +24,7 @@ import { Icon } from "../shared/Icon";
 
 /** One row of the run panel's flat draft+run list. */
 export type RunPanelRow =
-  | { kind: "draft" }
-  | { kind: "run"; summary: RunSummary };
+  { kind: "draft" } | { kind: "run"; summary: RunSummary };
 
 interface RunSummaryRowProps {
   row: RunPanelRow;

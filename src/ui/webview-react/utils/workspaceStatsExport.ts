@@ -155,7 +155,9 @@ export function buildWorkspaceStatsExport(
     start: LIFETIME_PERIOD_START,
     end: formatDate(snapshot.updatedAt),
   };
-  const disclaimer = !showCostEstimates ? HIDDEN_COST_DISCLAIMER : FULL_DISCLAIMER;
+  const disclaimer = !showCostEstimates
+    ? HIDDEN_COST_DISCLAIMER
+    : FULL_DISCLAIMER;
   const totals = {
     workflowCount: snapshot.workflowCount,
     runCount: snapshot.runCount,

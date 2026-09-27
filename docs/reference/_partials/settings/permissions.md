@@ -6,10 +6,7 @@ the workspace, add it to `permissions.trustedExternalRoots`:
 ```json
 {
   "permissions": {
-    "trustedExternalRoots": [
-      "C:/Users/me/.codex/sessions",
-      "C:/temp/repros"
-    ]
+    "trustedExternalRoots": ["C:/Users/me/.codex/sessions", "C:/temp/repros"]
   }
 }
 ```

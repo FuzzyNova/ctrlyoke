@@ -1006,8 +1006,7 @@ suite("ClaudeLogParser", () => {
       );
       assert.strictEqual(fileEditEvents.length, 1);
       const hunks = (fileEditEvents[0].data as any).structuredPatch as
-        | Array<{ oldStart: number; newStart: number }>
-        | undefined;
+        Array<{ oldStart: number; newStart: number }> | undefined;
       assert.ok(hunks && hunks.length > 0, "expected structuredPatch hunks");
       assert.strictEqual(hunks[0].oldStart, 482);
       assert.strictEqual(hunks[0].newStart, 482);
@@ -4150,8 +4149,7 @@ suite("CodexLogParser", () => {
       // corrected offset (482), not the line-number-less default (1).
       for (const editEvent of fileEditEvents) {
         const hunks = (editEvent.data as any).structuredPatch as
-          | Array<{ oldStart: number; newStart: number }>
-          | undefined;
+          Array<{ oldStart: number; newStart: number }> | undefined;
         assert.ok(hunks && hunks.length > 0, "expected structuredPatch hunks");
         assert.strictEqual(hunks[0].oldStart, 482);
         assert.strictEqual(hunks[0].newStart, 482);
@@ -4217,8 +4215,7 @@ suite("CodexLogParser", () => {
         assert.ok(fileEditEvents.length > 0, "expected FILE_EDIT events");
         for (const editEvent of fileEditEvents) {
           const hunks = (editEvent.data as any).structuredPatch as
-            | Array<{ oldStart: number; newStart: number }>
-            | undefined;
+            Array<{ oldStart: number; newStart: number }> | undefined;
           assert.ok(
             hunks && hunks.length > 0,
             "expected structuredPatch hunks"
@@ -4645,8 +4642,7 @@ suite("CodexLogParser", () => {
       // exec-<uuid> call_id, via path-based correlation.
       for (const editEvent of fileEditEvents) {
         const hunks = (editEvent.data as any).structuredPatch as
-          | Array<{ oldStart: number; newStart: number }>
-          | undefined;
+          Array<{ oldStart: number; newStart: number }> | undefined;
         assert.ok(hunks && hunks.length > 0, "expected structuredPatch hunks");
         assert.strictEqual(hunks[0].oldStart, 120);
         assert.strictEqual(hunks[0].newStart, 120);

@@ -6,14 +6,14 @@ The notification you actually want from a harness is "it is blocked waiting on m
 Today you can only get it by opting into raw hook events under
 `notifications.events.hookEvents`, and the right raw event depends on the harness:
 
-| Harness  | Fires when the user is actually asked                 | Fires on every tool call (noise)            |
-| -------- | ----------------------------------------------------- | ------------------------------------------- |
-| Copilot  | `notification` (permission / elicitation dialogs)     | `permissionRequest` (asks the active mode, even yolo) |
-| Codex    | `permissionRequest`                                   | —  (`notification` is n/a)                  |
-| Claude   | `notification` (`permission_prompt`) **and** `permissionRequest` | — (turning both on double-notifies) |
-| Qwen     | same shape as Claude                                  | —                                           |
-| OpenCode | `permissionRequest` (`permission.asked`)              | — (`notification` is n/a)                   |
-| Antigravity | n/a                                                | n/a                                         |
+| Harness     | Fires when the user is actually asked                            | Fires on every tool call (noise)                      |
+| ----------- | ---------------------------------------------------------------- | ----------------------------------------------------- |
+| Copilot     | `notification` (permission / elicitation dialogs)                | `permissionRequest` (asks the active mode, even yolo) |
+| Codex       | `permissionRequest`                                              | — (`notification` is n/a)                             |
+| Claude      | `notification` (`permission_prompt`) **and** `permissionRequest` | — (turning both on double-notifies)                   |
+| Qwen        | same shape as Claude                                             | —                                                     |
+| OpenCode    | `permissionRequest` (`permission.asked`)                         | — (`notification` is n/a)                             |
+| Antigravity | n/a                                                              | n/a                                                   |
 
 Because `hookEvents` is one global switchboard, `permissionRequest` has to be on for
 Codex and off for Copilot. Mixed-harness workflows can't be configured correctly.
@@ -129,7 +129,7 @@ The OpenCode plugin (`ctrlyoke-opencode-plugin.ts`) reads the same env var.
 Add a "Waiting for input" toggle to the **Events** group, next to Workflow/Prompt
 complete, not in the Hook Events list. Its description names the harnesses that
 support it. Update the Hook Events blurb to point to it:
-"Most people want *Waiting for input* above; these are raw per-harness events."
+"Most people want _Waiting for input_ above; these are raw per-harness events."
 
 ### 5. (Optional, later) Workflow schema
 

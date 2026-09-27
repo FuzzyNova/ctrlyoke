@@ -575,7 +575,8 @@ suite("PromptFileSplitter Tests", () => {
 
       result.chunks.forEach((chunk, i) => {
         assert.ok(
-          chunk.startsWith("<priorContext>") && chunk.endsWith("</priorContext>"),
+          chunk.startsWith("<priorContext>") &&
+            chunk.endsWith("</priorContext>"),
           "Each chunk must remain valid, well-formed priorContext XML"
         );
         assert.ok(

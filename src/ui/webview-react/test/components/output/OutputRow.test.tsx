@@ -178,7 +178,9 @@ describe("OutputRow token stats", () => {
 
   it("hides cost when the setting is disabled", () => {
     useSettingsStore.setState({
-      fullGlobalSettings: { settings: { ui: { showCostEstimates: false } } } as never,
+      fullGlobalSettings: {
+        settings: { ui: { showCostEstimates: false } },
+      } as never,
     });
     const { container } = render(
       <OutputRow

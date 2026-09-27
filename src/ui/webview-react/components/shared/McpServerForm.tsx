@@ -1,7 +1,10 @@
 import { useId } from "react";
 import type { McpServerConfig } from "@root/types/CtrlYokeTypes";
 import { MCP_FORM_TABS } from "@root/types/DashboardConstants";
-import { MCP_TRANSPORT_OPTIONS_META, toSelectOptions } from "@root/types/SchemaUiMetadata";
+import {
+  MCP_TRANSPORT_OPTIONS_META,
+  toSelectOptions,
+} from "@root/types/SchemaUiMetadata";
 import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
 import { CustomSelect } from "./CustomSelect";
 import { KeyValueRowsEditor } from "./KeyValueRowsEditor";
@@ -305,7 +308,10 @@ export function McpServerForm({
                 transport: transport as McpServerTransport,
               })
             }
-            options={toSelectOptions(MCP_TRANSPORT_OPTIONS_META, `${schemaPath}.transport`)}
+            options={toSelectOptions(
+              MCP_TRANSPORT_OPTIONS_META,
+              `${schemaPath}.transport`
+            )}
             triggerTitle="Choose the transport used by the remote MCP server"
             schemaPath={`${schemaPath}.transport`}
           />
@@ -333,7 +339,10 @@ export function McpServerForm({
         </span>
         <textarea
           id={`${autoApproveId}-tools`}
-          aria-label={schemaAriaLabel("Auto-approve tools", `${schemaPath}.autoApprove`)}
+          aria-label={schemaAriaLabel(
+            "Auto-approve tools",
+            `${schemaPath}.autoApprove`
+          )}
           title={schemaTitle(`${schemaPath}.autoApprove`)}
           placeholder="tool_name"
           value={
@@ -362,7 +371,10 @@ export function McpServerForm({
         <input
           id={autoApproveId}
           type="checkbox"
-          aria-label={schemaAriaLabel("Auto-approve all tools", `${schemaPath}.autoApprove`)}
+          aria-label={schemaAriaLabel(
+            "Auto-approve all tools",
+            `${schemaPath}.autoApprove`
+          )}
           title={schemaTitle(`${schemaPath}.autoApprove`)}
           checked={value.autoApprove === true}
           onChange={(event) =>
