@@ -23,6 +23,22 @@ import * as path from "path";
 suite("ExecutionRootCoordination", function () {
   this.timeout(30_000);
 
+  async function withPlatform<T>(
+    platform: NodeJS.Platform,
+    action: () => T | Promise<T>
+  ): Promise<T> {
+    const descriptor = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", {
+      ...descriptor,
+      value: platform,
+    });
+    try {
+      return await action();
+    } finally {
+      if (descriptor) Object.defineProperty(process, "platform", descriptor);
+    }
+  }
+
   async function tempDirectory(): Promise<string> {
     return fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-coordination-registry-")
@@ -190,6 +206,76 @@ suite("ExecutionRootCoordination", function () {
         `${left} vs ${right}`
       );
     }
+  });
+
+  test("uses Windows path casing for claim overlap and release", async () => {
+    const root = await tempDirectory();
+    try {
+      await withPlatform("win32", async () => {
+        const registry = new CoordinationParticipantRegistry(root, {
+          now: () => 10_000,
+          processLivenessCheck: () => true,
+        });
+        const owner = await registry.registerParticipant({
+          kind: "external",
+          label: "owner",
+          via: COORDINATION_PARTICIPANT_VIA.MCP,
+        });
+        const contender = await registry.registerParticipant({
+          kind: "external",
+          label: "contender",
+          via: COORDINATION_PARTICIPANT_VIA.MCP,
+        });
+        const originalPath = "Coordination-Probe/R2/DIR";
+        assert.deepStrictEqual((await owner.claim([originalPath])).granted, [
+          originalPath,
+        ]);
+        assert.deepStrictEqual(
+          (
+            await contender.claim(["coordination-probe/r2/dir/child.txt"])
+          ).denied.map((item) => item.owner.participantId),
+          [owner.participantId]
+        );
+        assert.deepStrictEqual(
+          await owner.release(["coordination-probe/r2/dir"]),
+          [originalPath]
+        );
+        assert.deepStrictEqual((await registry.fold()).claims, []);
+
+        const classEntries = [
+          join(participant("class-owner"), 1),
+          claim(participant("class-owner"), ["[A-Z]ile.ts"], 2),
+          join(participant("class-contender", { pid: 43 }), 3),
+          claim(participant("class-contender", { pid: 43 }), ["file.ts"], 4),
+        ];
+        assert.strictEqual(
+          foldCoordinationEntries(classEntries, {
+            now: 1_000,
+            processLivenessCheck: () => true,
+          }).claims.length,
+          1
+        );
+      });
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  test("keeps claim path comparisons case-sensitive on Linux", async () => {
+    await withPlatform("linux", () => {
+      const first = participant("first");
+      const second = participant("second", { pid: 43 });
+      const folded = foldCoordinationEntries(
+        [
+          join(first, 1),
+          claim(first, ["Coordination-Probe/R2/DIR"], 2),
+          join(second, 3),
+          claim(second, ["coordination-probe/r2/dir/child.txt"], 4),
+        ],
+        { now: 1_000, processLivenessCheck: () => true }
+      );
+      assert.strictEqual(folded.claims.length, 2);
+    });
   });
 
   test("a shared concrete path conflicts with each overlapping wildcard claim", async () => {

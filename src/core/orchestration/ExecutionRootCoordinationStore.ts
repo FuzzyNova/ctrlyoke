@@ -9,6 +9,7 @@ import type { CoordinationEntry } from "../../types/CtrlYokeTypes";
 import { COORDINATION_ENTRY_KINDS } from "../../types/DashboardConstants";
 import { withFileLock } from "../../utils/FileLockUtils";
 import { splitLines } from "../../utils/TextLines";
+import { claimPathForCompare } from "../../utils/CoordinationClaimPath";
 import {
   assertWritableSchema,
   CURRENT_SCHEMA_VERSIONS,
@@ -211,7 +212,10 @@ function unresolvedClaims(
   for (const entry of entries) {
     if (entry.kind === COORDINATION_ENTRY_KINDS.CLAIM) {
       for (const claimPath of entry.paths ?? []) {
-        active.set(claimPath, { entry, path: claimPath });
+        active.set(claimPathForCompare(claimPath), {
+          entry,
+          path: claimPath,
+        });
       }
     } else if (entry.kind === COORDINATION_ENTRY_KINDS.RELEASE) {
       if (entry.paths === undefined) {
@@ -222,7 +226,7 @@ function unresolvedClaims(
         }
       } else {
         for (const claimPath of entry.paths) {
-          const claim = active.get(claimPath);
+          const claim = active.get(claimPathForCompare(claimPath));
           if (claim?.entry.from.participantId === entry.from.participantId) {
             active.delete(claimPath);
           }

@@ -15,6 +15,7 @@ import {
   type ProcessLivenessCheck,
 } from "../../utils/LockSafetyPrimitives";
 import { resolveCoordinationParticipantKind } from "../../utils/CoordinationAttribution";
+import { claimPathForCompare } from "../../utils/CoordinationClaimPath";
 import {
   ExecutionRootCoordinationStore,
   DEFAULT_COORDINATION_SETTINGS,
@@ -134,21 +135,13 @@ function isParticipantLive(
 }
 
 function pathsOverlap(left: string, right: string): boolean {
-  const leftSegments = normalizeClaimPath(left).split("/");
-  const rightSegments = normalizeClaimPath(right).split("/");
+  const leftSegments = claimPathForCompare(left).split("/");
+  const rightSegments = claimPathForCompare(right).split("/");
   // A claim includes its exact path and every descendant. Appending a globstar
   // represents that coverage for both literal and patterned claims.
   leftSegments.push(COORDINATION_GLOB_TOKENS.GLOBSTAR_SEGMENT);
   rightSegments.push(COORDINATION_GLOB_TOKENS.GLOBSTAR_SEGMENT);
   return globPatternsOverlap(leftSegments, rightSegments);
-}
-
-function normalizeClaimPath(value: string): string {
-  return value
-    .replace(/\\/g, "/")
-    .replace(/\/{2,}/g, "/")
-    .replace(/^(?:\.\/)+/, "")
-    .replace(/\/+$/, "");
 }
 
 type SegmentToken =
@@ -394,11 +387,12 @@ export function foldCoordinationEntries(
         });
       }
     } else if (entry.kind === COORDINATION_ENTRY_KINDS.RELEASE) {
-      const releasePaths = entry.paths;
+      const releasePaths = entry.paths?.map(claimPathForCompare);
       for (const [claimPath, claim] of claims) {
         if (
           claim.owner.participantId === entry.from.participantId &&
-          (releasePaths === undefined || releasePaths.includes(claimPath))
+          (releasePaths === undefined ||
+            releasePaths.includes(claimPathForCompare(claimPath)))
         ) {
           claims.delete(claimPath);
         }
@@ -898,7 +892,11 @@ export class CoordinationParticipantRegistry {
         .filter(
           (claim) =>
             claim.owner.participantId === participant.participantId &&
-            (paths === undefined || paths.includes(claim.path))
+            (paths === undefined ||
+              paths.some(
+                (path) =>
+                  claimPathForCompare(path) === claimPathForCompare(claim.path)
+              ))
         )
         .map((claim) => claim.path);
       if (released.length > 0) {

@@ -22,6 +22,19 @@ const execFileAsync = promisify(execFile);
 suite("ExecutionRootCoordinationStore", function () {
   this.timeout(30_000);
 
+  function withPlatform<T>(platform: NodeJS.Platform, action: () => T): T {
+    const descriptor = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", {
+      ...descriptor,
+      value: platform,
+    });
+    try {
+      return action();
+    } finally {
+      if (descriptor) Object.defineProperty(process, "platform", descriptor);
+    }
+  }
+
   async function tempDirectory(name: string): Promise<string> {
     return fs.mkdtemp(path.join(os.tmpdir(), `ctrlyoke-coordination-${name}-`));
   }
@@ -299,6 +312,31 @@ suite("ExecutionRootCoordinationStore", function () {
     } finally {
       await removeDirectory(root);
     }
+  });
+
+  test("resolves differently-cased releases on Windows during retention checks", () => {
+    withPlatform("win32", () => {
+      const settledEntries: CoordinationEntry[] = [
+        claim("holder", "Coordination-Probe/R2/DIR", 1),
+        {
+          seq: 2,
+          at: new Date(2).toISOString(),
+          kind: "release",
+          from: {
+            participantId: "holder",
+            label: "holder",
+            kind: "external",
+            attested: false,
+          },
+          paths: ["coordination-probe/r2/dir"],
+          via: "cli",
+        },
+      ];
+      assert.strictEqual(
+        trimmingPreservesUnresolvedClaims(settledEntries, []),
+        true
+      );
+    });
   });
 
   test("evicts notes from the largest contributor and preserves a quiet participant", async () => {
