@@ -592,6 +592,16 @@ async function runCommand(
   options: RunOptions | RerunOptions | AppendOptions | ContinueOptions,
   operation: CliRunOperation = { kind: CLI_RUN_OPERATION_KINDS.RUN }
 ): Promise<void> {
+  if (options.harness !== undefined) {
+    try {
+      assertHarnessId(options.harness);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(chalk.red(`Error: ${message}`));
+      process.exit(2);
+    }
+  }
+
   CliTerminalFormatter.setColorEnabled(options.color !== false);
 
   if (

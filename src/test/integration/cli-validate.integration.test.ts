@@ -183,6 +183,45 @@ suite("ctrlyoke validate compatibility command", () => {
     assert.match(missingFile.stdout, /File not found/u);
   });
 
+  test("rejects an unknown harness for run, rerun, and append", async function () {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-run-harness-")
+    );
+    temporaryRoots.push(root);
+    const workflow = path.join(root, "workflow.ctrlyoke.yaml");
+    await fs.writeFile(workflow, "prompt: Must not run\n", "utf8");
+
+    const commands = [
+      ["run", workflow, "--harness", "bogus", "--headless", "--json"],
+      [
+        "rerun",
+        "--workflow",
+        "missing-workflow",
+        "--harness",
+        "bogus",
+        "--json",
+      ],
+      [
+        "append",
+        "--workflow",
+        "missing-workflow",
+        "--run",
+        "1",
+        "--harness",
+        "bogus",
+        "--prompt",
+        "Must not run",
+        "--json",
+      ],
+    ];
+
+    for (const args of commands) {
+      const result = await runCli(args, root);
+      assert.strictEqual(result.code, 2, `${args[0]}: ${result.stderr}`);
+      assert.match(result.stderr, /Invalid harness: bogus/u);
+    }
+  });
+
   test("reports a half-configured comparison as a warning without failing", async function () {
     this.timeout(30000);
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-validate-"));
