@@ -78,7 +78,7 @@ export function resolveScriptComparison(config: ScriptComparisonConfig): {
 export function resolveReportedScriptProperties<
   T extends ScriptComparisonConfig,
 >(
-  properties: T
+  properties: T & { timeout?: never }
 ): Omit<T, "expected"> & {
   compareSource: CompareSource;
   operator: ScriptOperator;

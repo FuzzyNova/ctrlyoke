@@ -2543,7 +2543,7 @@ export class WorkflowExecutor {
         operator: step.operator,
         expected: step.expected,
         ignoreCase: step.ignoreCase,
-        timeout,
+        timeoutSec: step.timeoutSec,
         shell: effectiveStep.shell,
       });
       const outputChunks: string[] = [];

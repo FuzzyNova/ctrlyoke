@@ -218,6 +218,17 @@ class RecordingShellEvaluator extends EndConditionEvaluator {
   }
 }
 
+class RecordingScriptTimeoutEvaluator extends EndConditionEvaluator {
+  result: EvaluationResult | undefined;
+
+  override async evaluateCondition(
+    ...args: Parameters<EndConditionEvaluator["evaluateCondition"]>
+  ): Promise<EvaluationResult> {
+    this.result = await super.evaluateCondition(...args);
+    return this.result;
+  }
+}
+
 function shellEvaluationResult(passed: boolean): EvaluationResult {
   return {
     passed,
@@ -2303,6 +2314,35 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       queue.getState().results[0].status,
       STEP_STATUS.COMPLETED
     );
+  });
+
+  test("honours a script step timeoutSec below the global script timeout", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new RecordingScriptTimeoutEvaluator(new MockPlatform());
+    const executor = makeExecutor(queue, evaluator);
+    queue.loadPrompts({
+      steps: [
+        {
+          type: "script",
+          script: `node -e "setTimeout(() => {}, 10000)"`,
+          timeoutSec: 1,
+          errorBehavior: { onError: "continue" },
+        },
+      ],
+    });
+
+    configService.setCliOverlay({
+      execution: { scriptTimeoutSec: 30 },
+    });
+    try {
+      await executor.execute(integration, makeContext(integration));
+    } finally {
+      configService.setCliOverlay({});
+    }
+
+    assert.strictEqual(evaluator.result?.timeout, true);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
   });
 
   test("fails before sending missing or empty prompt-file references", async () => {
