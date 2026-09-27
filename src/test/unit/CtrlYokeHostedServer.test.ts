@@ -19,6 +19,7 @@ import {
 import { configService } from "../../config/CtrlYokeConfigService";
 import { buildTestNotificationEvent } from "../../ui/notifications/CompletionNotificationFactory";
 import {
+  REDACTION_MARKER,
   RunSecretRedactor,
   secretRedactionService,
 } from "../../utils/SecretRedactionService";
@@ -54,6 +55,123 @@ function sendJsonRequest(
     request.end(JSON.stringify(body));
   });
 }
+
+function sendGetRequest(
+  port: number,
+  requestPath: string
+): Promise<{ statusCode: number | undefined; body: string }> {
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(
+      { hostname: "127.0.0.1", port, path: requestPath, method: "GET" },
+      (res) => {
+        let responseBody = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk: string) => {
+          responseBody += chunk;
+        });
+        res.on("end", () =>
+          resolve({ statusCode: res.statusCode, body: responseBody })
+        );
+      }
+    );
+    request.on("error", reject);
+    request.end();
+  });
+}
+
+suite("CtrlYokeHostedServer workspace file redaction", () => {
+  async function withServer(
+    testBody: (root: string, port: number, token: string) => Promise<void>
+  ): Promise<void> {
+    const token = "workspace-file-redaction-token";
+    const workspaceRoot = makeTempDir("ctrlyoke-hosted-file-redaction-");
+    const server = new CtrlYokeHostedServer(
+      new DashboardBroadcastHub(),
+      {} as never,
+      (() => ({})) as never,
+      0,
+      workspaceRoot,
+      [],
+      token
+    );
+    try {
+      const serverUrl = await server.listen();
+      if (!serverUrl) throw new Error("Hosted server did not start");
+      await testBody(workspaceRoot, Number(new URL(serverUrl).port), token);
+    } finally {
+      server.dispose();
+      removeTempDir(workspaceRoot);
+    }
+  }
+
+  test("returns credential files read-only with redacted content", async () => {
+    await withServer(async (root, port, token) => {
+      fs.writeFileSync(
+        path.join(root, "app.env"),
+        "# config\nAPI_KEY=sk-live-4f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c\nPORT=3000\n"
+      );
+      const response = await sendGetRequest(
+        port,
+        `/api/workspace-viewer/file?path=app.env&token=${encodeURIComponent(token)}`
+      );
+
+      assert.strictEqual(response.statusCode, 200);
+      const file = JSON.parse(response.body) as {
+        content: string;
+        readOnly?: boolean;
+        reason?: string;
+      };
+      assert.strictEqual(file.readOnly, true);
+      assert.match(file.reason ?? "", /secret/i);
+      assert.ok(file.content.includes(REDACTION_MARKER));
+      assert.ok(!file.content.includes("sk-live-"));
+    });
+  });
+
+  test("rejects saving a newly introduced redaction marker without changing the file", async () => {
+    await withServer(async (root, port, token) => {
+      const original = "PORT=3000\n";
+      fs.writeFileSync(path.join(root, "app.env"), original);
+      const response = await sendJsonRequest(
+        port,
+        `/api/workspace-viewer/file?token=${encodeURIComponent(token)}`,
+        "PUT",
+        {
+          path: "app.env",
+          content: `API_KEY=${REDACTION_MARKER}\nPORT=4000\n`,
+        }
+      );
+
+      assert.strictEqual(response.statusCode, 400);
+      assert.strictEqual(
+        fs.readFileSync(path.join(root, "app.env"), "utf8"),
+        original
+      );
+    });
+  });
+
+  test("ordinary files still round-trip through GET and PUT", async () => {
+    await withServer(async (root, port, token) => {
+      fs.writeFileSync(path.join(root, "notes.txt"), "hello\n");
+      const fileUrl = `/api/workspace-viewer/file?path=notes.txt&token=${encodeURIComponent(token)}`;
+      const read = await sendGetRequest(port, fileUrl);
+      assert.strictEqual(read.statusCode, 200);
+      assert.strictEqual(JSON.parse(read.body).content, "hello\n");
+
+      const save = await sendJsonRequest(
+        port,
+        `/api/workspace-viewer/file?token=${encodeURIComponent(token)}`,
+        "PUT",
+        { path: "notes.txt", content: "updated\n" }
+      );
+      assert.strictEqual(save.statusCode, 200);
+      assert.strictEqual(
+        fs.readFileSync(path.join(root, "notes.txt"), "utf8"),
+        "updated\n"
+      );
+    });
+  });
+});
 
 suite("sanitizeBrowserClientId", () => {
   test("passes through a well-formed tabId", () => {

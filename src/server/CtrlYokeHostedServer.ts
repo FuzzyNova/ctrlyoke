@@ -82,6 +82,7 @@ import { pngIconService } from "./PngIconService";
 import {
   HostedWorkspaceViewerService,
   MAX_FILE_SIZE,
+  RedactionMarkerSaveError,
 } from "./HostedWorkspaceViewerService";
 import { parseWorkspaceTreeQuery } from "./WorkspaceTreeRoute";
 import { WorkspaceTreeHttpError } from "./WorkspaceTreeErrors";
@@ -1071,7 +1072,9 @@ export class CtrlYokeHostedServer
           return;
         }
         try {
-          res.json(await this.viewerService.readFile(filePath));
+          const file = await this.viewerService.readFile(filePath);
+          res.locals.skipSecretRedaction = true;
+          res.json(file);
         } catch (err) {
           Log.error(
             `[CtrlYokeHostedServer] workspace-viewer GET /file error: ${String(err)}`
@@ -1100,6 +1103,8 @@ export class CtrlYokeHostedServer
           const message = err instanceof Error ? err.message : String(err);
           if (message === "Path not allowed") {
             res.status(403).json({ error: message });
+          } else if (err instanceof RedactionMarkerSaveError) {
+            res.status(400).json({ error: message });
           } else {
             Log.error(
               `[CtrlYokeHostedServer] workspace-viewer PUT /file error: ${message}`

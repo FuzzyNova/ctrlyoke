@@ -109,6 +109,10 @@ import {
 import { pathsEqual } from "../utils/PathCasing";
 import { streamFileLines } from "../utils/TextLines";
 import {
+  REDACTION_MARKER,
+  secretRedactionService,
+} from "../utils/SecretRedactionService";
+import {
   WorkspaceListingSnapshotCache,
   type WorkspaceEntryMetadata,
 } from "./WorkspaceListingSnapshotCache";
@@ -146,6 +150,13 @@ const GIT_REF_DIFF_REFS = {
 } as const;
 
 type GitRefDiffKind = "workingTree" | "staged" | "stash" | "commit";
+
+export class RedactionMarkerSaveError extends Error {
+  constructor() {
+    super("Cannot save content containing the redaction marker");
+    this.name = "RedactionMarkerSaveError";
+  }
+}
 const SEARCH_FALLBACK_SKIP_DIRECTORIES = new Set([
   ".git",
   "node_modules",
@@ -1290,13 +1301,23 @@ export class HostedWorkspaceViewerService {
     const eol = raw.includes("\r\n") ? LINE_ENDINGS.CRLF : LINE_ENDINGS.LF;
     const relPath = this.relativePath(resolved);
 
+    const redactedContent = secretRedactionService.redactText(raw);
+    const wasRedacted = redactedContent !== raw;
+
     return {
       path: relPath,
       name: path.basename(resolved),
       language: languageFromPath(resolved),
       size: stat.size,
       eol,
-      content: raw,
+      content: redactedContent,
+      ...(wasRedacted
+        ? {
+            readOnly: true,
+            reason:
+              "File contains secrets and cannot be edited in the hosted viewer",
+          }
+        : {}),
     };
   }
 
@@ -1343,11 +1364,13 @@ export class HostedWorkspaceViewerService {
     // Check if existing file is binary — refuse to overwrite
     let originalEol: (typeof LINE_ENDINGS)[keyof typeof LINE_ENDINGS] =
       LINE_ENDINGS.LF;
+    let existingContent: string | undefined;
     try {
       if (await this.isBinaryFile(resolved)) {
         throw new Error("Cannot overwrite binary file");
       }
       const existing = await fs.promises.readFile(resolved, "utf8");
+      existingContent = existing;
       originalEol = existing.includes("\r\n")
         ? LINE_ENDINGS.CRLF
         : LINE_ENDINGS.LF;
@@ -1359,6 +1382,13 @@ export class HostedWorkspaceViewerService {
         throw err;
       }
       // File doesn't exist yet — new file, keep LF
+    }
+
+    if (
+      req.content.includes(REDACTION_MARKER) &&
+      !existingContent?.includes(REDACTION_MARKER)
+    ) {
+      throw new RedactionMarkerSaveError();
     }
 
     // Normalize incoming content to the original EOL

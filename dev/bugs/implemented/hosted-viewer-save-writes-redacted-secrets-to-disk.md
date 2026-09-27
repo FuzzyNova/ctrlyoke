@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-27 by the long-running bug-fix workflow final step (claude-cli, helper agent)
 - **Area:** `src/server/SecretRedactionMiddleware.ts`, `src/server/CtrlYokeHostedServer.ts` (workspace-viewer file routes), `src/server/HostedWorkspaceViewerService.ts` (`readFile`, `saveFile`)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
