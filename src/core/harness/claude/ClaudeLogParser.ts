@@ -797,7 +797,23 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           ? resultText.includes("Async agent launched successfully")
           : resultText.includes("Monitor started");
       if (block.is_error !== true && launchConfirmed) {
-        this.backgroundFollowUpState.launch(toolUseId, summary);
+        // A Monitor's result names its task as `toolUseResult.taskId` — not
+        // `backgroundTaskId` or `agentId` — so record it here, or a TaskStop
+        // of that Monitor cannot be correlated back to this launch. A stopped
+        // task never sends a notification, so the launch would otherwise
+        // block completion for the rest of the session.
+        const monitorTaskId =
+          candidateType === CLAUDE_TOOL_NAMES.MONITOR &&
+          typeof resultMetadata?.taskId === "string"
+            ? resultMetadata.taskId
+            : undefined;
+        if (monitorTaskId) {
+          this.backgroundTaskLaunchToolUseIds.set(monitorTaskId, toolUseId);
+        }
+        this.backgroundFollowUpState.launch(toolUseId, {
+          ...summary,
+          ...(monitorTaskId ? { taskId: monitorTaskId } : {}),
+        });
       }
     }
   }

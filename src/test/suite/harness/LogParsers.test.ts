@@ -1636,6 +1636,83 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual(parser.hasPendingBackgroundWork(), true);
     });
 
+    test("should clear a stopped Monitor, whose launch result names its task as taskId", () => {
+      // Real capture: a Monitor's result carries `toolUseResult.taskId`, not
+      // `backgroundTaskId`, and a stopped task never sends a notification —
+      // this Monitor used to stay pending for the rest of the session.
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_monitor_stopped",
+              name: "Monitor",
+              input: { description: "bisect results", timeout_ms: 1800000 },
+            },
+          ],
+          stop_reason: "tool_use",
+        },
+      });
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_monitor_stopped",
+              content:
+                "Monitor started (task b24c70xkd, expires in 30m unless the source ends first).",
+            },
+          ],
+        },
+        toolUseResult: {
+          taskId: "b24c70xkd",
+          timeoutMs: 1800000,
+          persistent: false,
+        },
+      });
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+      assert.strictEqual(
+        parser.getBackgroundWorkHoldSnapshot().pendingTasks[0]?.taskId,
+        "b24c70xkd"
+      );
+
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_monitor_task_stop",
+              name: "TaskStop",
+              input: { task_id: "b24c70xkd" },
+            },
+          ],
+          stop_reason: "tool_use",
+        },
+      });
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_monitor_task_stop",
+              content:
+                '{"message":"Successfully stopped task: b24c70xkd","task_id":"b24c70xkd"}',
+            },
+          ],
+        },
+        toolUseResult: {
+          message: "Successfully stopped task: b24c70xkd",
+          task_id: "b24c70xkd",
+        },
+      });
+
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+    });
+
     test("should track a foreground Bash call auto-promoted to background after it times out", () => {
       // No run_in_background on the input at all: the call started as an
       // ordinary synchronous Bash command and only became background because
