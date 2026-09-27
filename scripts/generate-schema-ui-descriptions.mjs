@@ -16,6 +16,7 @@ const HEADER =
 function collectSchemaUiData(settingsSchema, workflowSchema) {
   const siblingSchemas = {
     "settings-schema.json": settingsSchema,
+    "workflow.json": workflowSchema,
     "workflow-schema.json": workflowSchema,
   };
   const descriptions = {};

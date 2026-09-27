@@ -18,6 +18,7 @@ type SharedWrapper = {
     COPILOT: string;
     QWEN: string;
   };
+  STATUSLINE_HARNESS_IDS: Record<string, string>;
   formatBrandedStatusLine(
     provider: string,
     payload: Record<string, unknown>,
@@ -151,11 +152,13 @@ async function writeMachineSettings(
   await writeStatusLineSettings(
     homeDirectory,
     {
-      [provider]: {
-        enabled: true,
-        customCommand: "",
-        useCtrlyokeStyle: true,
-        ...settings,
+      byHarness: {
+        [shared.STATUSLINE_HARNESS_IDS[provider]]: {
+          enabled: true,
+          customCommand: "",
+          useCtrlyokeStyle: true,
+          ...settings,
+        },
       },
     },
     settings.percentDirection
@@ -164,7 +167,7 @@ async function writeMachineSettings(
 
 async function writeStatusLineSettings(
   homeDirectory: string,
-  statusLineTracking: Record<string, unknown>,
+  statusLine: Record<string, unknown>,
   percentDirection?: "used" | "remaining"
 ): Promise<void> {
   const filePath = path.join(homeDirectory, ".ctrlyoke", "settings.json");
@@ -172,9 +175,7 @@ async function writeStatusLineSettings(
   await fs.writeFile(
     filePath,
     JSON.stringify({
-      permissions: {
-        statusLineTracking,
-      },
+      statusLine,
       usageTracking: {
         percentDirection,
       },
@@ -807,8 +808,12 @@ suite("Shared statusline wrappers", function () {
     await writeStatusLineSettings(tempHome, {
       useDifferentFormatPerHarness: false,
       sharedFormat,
-      claude: { format: [{ type: "literal", text: "claude" }] },
-      antigravity: { format: [{ type: "literal", text: "antigravity" }] },
+      byHarness: {
+        "claude-cli": { format: [{ type: "literal", text: "claude" }] },
+        "antigravity-cli": {
+          format: [{ type: "literal", text: "antigravity" }],
+        },
+      },
     });
 
     for (const provider of [
@@ -823,17 +828,24 @@ suite("Shared statusline wrappers", function () {
   test("resolves each provider format in per-harness mode", async () => {
     await createHome();
     const formats = {
-      claude: [{ type: "literal", text: "claude" }],
-      antigravity: [{ type: "literal", text: "antigravity" }],
+      "claude-cli": [{ type: "literal", text: "claude" }],
+      "antigravity-cli": [{ type: "literal", text: "antigravity" }],
     };
     await writeStatusLineSettings(tempHome, {
       useDifferentFormatPerHarness: true,
       sharedFormat: [{ type: "literal", text: "ignored" }],
-      claude: { format: formats.claude },
-      antigravity: { format: formats.antigravity },
+      byHarness: {
+        "claude-cli": { format: formats["claude-cli"] },
+        "antigravity-cli": { format: formats["antigravity-cli"] },
+      },
     });
 
-    for (const [provider, format] of Object.entries(formats)) {
+    for (const [harnessId, format] of Object.entries(formats)) {
+      const provider =
+        harnessId ===
+        shared.STATUSLINE_HARNESS_IDS[shared.STATUSLINE_PROVIDERS.CLAUDE]
+          ? shared.STATUSLINE_PROVIDERS.CLAUDE
+          : shared.STATUSLINE_PROVIDERS.ANTIGRAVITY;
       const settings = shared.resolveStatusLineSettings(provider, tempHome);
       assert.deepStrictEqual(settings.format, format);
     }
@@ -844,8 +856,12 @@ suite("Shared statusline wrappers", function () {
     const sharedFormat = [{ type: "literal", text: "shared" }];
     await writeStatusLineSettings(tempHome, {
       sharedFormat,
-      claude: { format: [{ type: "literal", text: "claude" }] },
-      antigravity: { format: [{ type: "literal", text: "antigravity" }] },
+      byHarness: {
+        "claude-cli": { format: [{ type: "literal", text: "claude" }] },
+        "antigravity-cli": {
+          format: [{ type: "literal", text: "antigravity" }],
+        },
+      },
     });
 
     for (const provider of [
@@ -902,7 +918,7 @@ suite("Shared statusline wrappers", function () {
       tempHome,
       {
         useDifferentFormatPerHarness: true,
-        claude: { format },
+        byHarness: { "claude-cli": { format } },
       },
       "remaining"
     );
@@ -925,11 +941,8 @@ suite("Shared statusline wrappers", function () {
     });
     await writeWorkspaceSettings(tempDirectory, {
       usageTracking: { percentDirection: "remaining" },
-      permissions: {
-        statusLineTracking: {
-          claude: { enabled: false },
-        },
-      },
+      permissions: {},
+      statusLine: { byHarness: { "claude-cli": { enabled: false } } },
     });
 
     const settings = shared.resolveStatusLineSettings(
@@ -1201,6 +1214,21 @@ suite("Shared statusline wrappers", function () {
         { HOME: tempHome, USERPROFILE: tempHome }
       );
       assert.match(malformed.stdout, /^ctrlyoke /);
+    });
+
+    test(`${provider} disables ctrlyoke output for newer settings formats`, async () => {
+      await createHome();
+      const settingsPath = path.join(tempHome, ".ctrlyoke", "settings.json");
+      await fs.mkdir(path.dirname(settingsPath), { recursive: true });
+      await fs.writeFile(settingsPath, JSON.stringify({ schemaVersion: 2 }));
+
+      const result = await runWrapper(
+        script,
+        JSON.stringify({ model: { id: `${provider}-model` } }),
+        { HOME: tempHome, USERPROFILE: tempHome }
+      );
+      assert.strictEqual(result.code, 0);
+      assert.strictEqual(result.stdout, "");
     });
 
     test(`${provider} forwards without snapshot or branding when disabled`, async () => {

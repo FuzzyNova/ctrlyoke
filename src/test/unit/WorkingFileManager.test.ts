@@ -72,9 +72,7 @@ async function writeTempJson(filePath: string, data: unknown): Promise<void> {
 
 function makeMinimalWorkingFile(): WorkingFile {
   return {
-    workflowName: "test-workflow",
     startedAt: Date.now(),
-    lastModifiedAt: Date.now(),
     definitionRevision: 1,
     steps: [{ prompt: "do the thing" }],
     _runtime: {
@@ -186,7 +184,7 @@ suite("WorkingFileManager", () => {
       await writeTempJson(filePath, workingFile);
 
       const result = await manager.readWorkingFile(filePath);
-      assert.strictEqual(result.workflowName, "test-workflow");
+      assert.strictEqual(result.startedAt, workingFile.startedAt);
       assert.strictEqual(result.steps!.length, 1);
       assert.strictEqual(
         (result.steps![0] as PromptStep).prompt,
@@ -382,7 +380,7 @@ suite("WorkingFileManager", () => {
 
       const content = await fs.readFile(workingFilePath, "utf-8");
       const parsed = JSON.parse(content) as WorkingFile;
-      assert.strictEqual(parsed.workflowName, "test-workflow");
+      assert.strictEqual(Object.hasOwn(parsed, "workflowName"), false);
       assert.strictEqual(parsed.steps!.length, 1);
       assert.strictEqual(parsed.definitionRevision, 1);
     });
@@ -408,7 +406,7 @@ suite("WorkingFileManager", () => {
       assert.strictEqual(parsed.definitionRevision, 3);
     });
 
-    test("updateWorkingFileDirect preserves lastModifiedAt for runtime-only writes", async () => {
+    test("updateWorkingFileDirect strips lineage fields from existing run files", async () => {
       const workingFilePath = tempFile("runtime-timestamp");
       await writeTempJson(workingFilePath, {
         ...makeMinimalWorkingFile(),
@@ -423,11 +421,11 @@ suite("WorkingFileManager", () => {
       const persisted = JSON.parse(
         await fs.readFile(workingFilePath, "utf-8")
       ) as WorkingFile;
-      assert.strictEqual(persisted.lastModifiedAt, 1_234);
+      assert.strictEqual(Object.hasOwn(persisted, "lastModifiedAt"), false);
       assert.strictEqual(persisted.definitionRevision, 4);
     });
 
-    test("updateWorkingFileDirect bumps lastModifiedAt for runtime writes", async () => {
+    test("updateWorkingFileDirect does not persist lineage metadata", async () => {
       const workingFilePath = tempFile("runtime-timestamp-change");
       await writeTempJson(workingFilePath, {
         ...makeMinimalWorkingFile(),
@@ -443,11 +441,11 @@ suite("WorkingFileManager", () => {
       const persisted = JSON.parse(
         await fs.readFile(workingFilePath, "utf-8")
       ) as WorkingFile;
-      assert.ok((persisted.lastModifiedAt ?? 0) > 1);
+      assert.strictEqual(Object.hasOwn(persisted, "lastModifiedAt"), false);
       assert.strictEqual(persisted.definitionRevision, 4);
     });
 
-    test("updateWorkingFileDirect bumps lastModifiedAt for definition writes", async () => {
+    test("definition writes leave recency metadata in the descriptor", async () => {
       const workingFilePath = tempFile("definition-timestamp");
       await writeTempJson(workingFilePath, {
         ...makeMinimalWorkingFile(),
@@ -462,7 +460,7 @@ suite("WorkingFileManager", () => {
       const persisted = JSON.parse(
         await fs.readFile(workingFilePath, "utf-8")
       ) as WorkingFile;
-      assert.ok((persisted.lastModifiedAt ?? 0) > 1);
+      assert.strictEqual(Object.hasOwn(persisted, "lastModifiedAt"), false);
       assert.strictEqual(persisted.definitionRevision, 5);
     });
 
@@ -532,7 +530,7 @@ suite("WorkingFileManager", () => {
         EXECUTION_STATES.PAUSED
       );
       assert.strictEqual(persisted.definitionRevision, 7);
-      assert.ok((persisted.lastModifiedAt ?? 0) > 1_234);
+      assert.strictEqual(Object.hasOwn(persisted, "lastModifiedAt"), false);
     });
 
     test("atomically patches worktree runtime without disturbing queue runtime or definition revision", async () => {
@@ -576,7 +574,7 @@ suite("WorkingFileManager", () => {
       });
       assert.strictEqual(persisted.definitionRevision, 9);
       assert.strictEqual(access.getDefinitionRevision(), 9);
-      assert.ok((persisted.lastModifiedAt ?? 0) > 1_234);
+      assert.strictEqual(Object.hasOwn(persisted, "lastModifiedAt"), false);
     });
 
     test("invalidates the run summary cache when worktree runtime changes", async () => {
@@ -1813,14 +1811,14 @@ suite("WorkingFileManager", () => {
         workspace,
         workflowKey,
         runRef,
-        { type: "script", script: "npm test", timeout: 30 },
+        { type: "script", script: "npm test", timeoutSec: 0.03 },
         undefined,
         1
       );
       assert.deepStrictEqual(script.workingFile.finalStep, {
         type: "script",
         script: "npm test",
-        timeout: 30,
+        timeoutSec: 0.03,
       });
 
       const prompt = await WorkingFileManager.updateFinalStepAtRun(
@@ -1989,7 +1987,12 @@ suite("WorkingFileManager", () => {
         "Renamed run",
         2
       );
-      assert.strictEqual(renamed.workingFile.workflowName, "Renamed run");
+      assert.strictEqual(renamed.descriptorRevision, 3);
+      const descriptor = await new WorkflowLineageRepository().readDescriptor(
+        workspace,
+        workflowKey
+      );
+      assert.strictEqual(descriptor.workflowName, "Renamed run");
     });
 
     test("updatePropertiesAtRun leaves definitionRevision alone when nothing changed", async () => {

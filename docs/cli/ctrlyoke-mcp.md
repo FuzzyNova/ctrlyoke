@@ -36,7 +36,7 @@ To drive ctrlyoke from outside a workflow — start, append to, or continue runs
 
 ## One-shot tool mode
 
-With `--tool`, the server calls a single tool, prints its JSON result to stdout, and exits (exit code `1` and a message on stderr on failure). This is what the built-in skills use when the `ctrlyokeMcpMode` setting is `skill`; they invoke the same script as `node <path>/out/mcp-server.js`.
+With `--tool`, the server calls a single tool, prints its JSON result to stdout, and exits (exit code `1` and a message on stderr on failure). This is what the built-in skills use when the `execution.ctrlyokeMcpMode` setting is `skill`; they invoke the same script as `node <path>/out/mcp-server.js`.
 
 ```sh
 ctrlyoke-mcp --tool workflow_status --args '{}' \

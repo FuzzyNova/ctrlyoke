@@ -319,7 +319,9 @@ function cloneEndCondition(value: unknown): EndCondition | null | undefined {
     ...(typeof value.ignoreCase === "boolean" && {
       ignoreCase: value.ignoreCase,
     }),
-    ...(typeof value.timeout === "number" && { timeout: value.timeout }),
+    ...(typeof value.timeoutSec === "number" && {
+      timeoutSec: value.timeoutSec,
+    }),
     ...(typeof value.maxRetries === "number" && {
       maxRetries: value.maxRetries,
     }),
@@ -364,7 +366,9 @@ function clonePreCondition(value: unknown): PreCondition | null | undefined {
     ...(typeof value.ignoreCase === "boolean" && {
       ignoreCase: value.ignoreCase,
     }),
-    ...(typeof value.timeout === "number" && { timeout: value.timeout }),
+    ...(typeof value.timeoutSec === "number" && {
+      timeoutSec: value.timeoutSec,
+    }),
     ...(typeof value.onPass === "string" && {
       onPass: value.onPass as PreCondition["onPass"],
     }),
@@ -387,8 +391,8 @@ function cloneErrorBehavior(value: unknown): ErrorBehavior | null | undefined {
     ...(typeof value.maxRetries === "number" && {
       maxRetries: value.maxRetries,
     }),
-    ...(typeof value.retryDelayMs === "number" && {
-      retryDelayMs: value.retryDelayMs,
+    ...(typeof value.retryDelaySec === "number" && {
+      retryDelaySec: value.retryDelaySec,
     }),
   };
 }
@@ -486,7 +490,9 @@ export function sanitizeClipboardWorkflowStep(step: unknown): WorkflowStep {
         step.executionMode === EXECUTION_MODES.HEADLESS) && {
         executionMode: step.executionMode,
       }),
-      ...(typeof step.timeout === "number" && { timeout: step.timeout }),
+      ...(typeof step.timeoutSec === "number" && {
+        timeoutSec: step.timeoutSec,
+      }),
       ...(typeof step.compareSource === "string" && {
         compareSource: step.compareSource as ScriptStep["compareSource"],
       }),
@@ -627,9 +633,9 @@ export function buildScriptStepFromProperties(
     ...(props.enabled !== undefined && {
       enabled: props.enabled as boolean,
     }),
-    ...(props.timeout !== undefined &&
-      props.timeout !== null && {
-        timeout: props.timeout as number,
+    ...(props.timeoutSec !== undefined &&
+      props.timeoutSec !== null && {
+        timeoutSec: props.timeoutSec as number,
       }),
     ...(typeof props.shell === "string" && { shell: props.shell }),
     ...(props.onPass !== undefined &&

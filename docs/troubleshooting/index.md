@@ -26,7 +26,7 @@ Logs are written to `.ctrlyoke/logs/` in the workspace:
 | `ctrlyoke-<harness>-hook-debug.log`  | Every hook invocation for Copilot CLI, Claude Code, Qwen Code, and Antigravity. Check it when a step never completes |
 | `ctrlyoke-codex-notify-debug.log`    | The Codex CLI equivalent of the hook log                                                                             |
 | `ctrlyoke-opencode-plugin-debug.log` | The OpenCode equivalent of the hook log                                                                              |
-| `ctrlyoke-mcp-<timestamp>.log`       | The ctrlyoke MCP server, written only when the `enableDiagnosticLogs` setting is on                                  |
+| `ctrlyoke-mcp-<timestamp>.log`       | The ctrlyoke MCP server, written only when the `diagnostics.verboseLogging` setting is on                            |
 
 `ctrlyoke: Show Output Panel` shows the extension's log in VS Code's Output panel.
 

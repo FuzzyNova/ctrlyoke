@@ -10,7 +10,7 @@ import { writeStatuslinePackage } from "../helpers/statuslinePackage";
 import {
   EXECUTION_MODES,
   HARNESS_IDS,
-  STATUS_LINE_TRACKING_PROVIDERS,
+  STATUS_LINE_HARNESS_IDS,
 } from "../../types/DashboardConstants";
 import type { PromptStep } from "../../types/CtrlYokeTypes";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
@@ -159,16 +159,17 @@ suite("ClaudeCliProvider", () => {
 
   test("uses Claude statusline tracking independently of usageTracking", async () => {
     const userSettings = makeBackend({
-      permissions: {
-        statusLineTracking: {
-          claude: {
+      usageTracking: { enabled: false },
+      permissions: {},
+      statusLine: {
+        byHarness: {
+          "claude-cli": {
             enabled: true,
             customCommand: "node user-statusline.js",
             useCtrlyokeStyle: false,
           },
         },
       },
-      usageTracking: { enabled: false },
     });
     configService.setUserBackend(userSettings);
     const settingsPath = path.join(tempHome, ".claude", "settings.json");
@@ -211,9 +212,8 @@ suite("ClaudeCliProvider", () => {
     await provider.cleanupWorkspaceArtifacts(workspaceRoot);
     assert.ok((await fs.readFile(settingsPath, "utf8")).includes("statusLine"));
     assert.strictEqual(
-      configService.get("permissions").statusLineTracking[
-        STATUS_LINE_TRACKING_PROVIDERS.CLAUDE
-      ].customCommand,
+      configService.get("statusLine").byHarness[STATUS_LINE_HARNESS_IDS.CLAUDE]
+        .customCommand,
       "node user-statusline.js"
     );
   });

@@ -12,7 +12,7 @@ combines the roots from both files. When you run the `ctrlyoke` CLI, the
 flags you pass override both files for that run.
 
 Some settings are machine-specific and are read only from user scope:
-`worktrees`, `storage`, `permissions.statusLineTracking`, and
+`worktrees`, `storage`, `statusLine`, and
 `usageTracking.enabled`. ctrlyoke ignores these settings in a workspace file.
 
 The dashboard's Settings page edits these files for you. If you edit a file by

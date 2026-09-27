@@ -12,6 +12,7 @@ import { HostedWebSocketUserFeedbackSink } from "../../server/HostedWebSocketUse
 import {
   MESSAGE_TYPES,
   TOAST_LEVEL_MODES,
+  USER_FEEDBACK_ACTIONS,
 } from "../../types/DashboardConstants";
 import type { UserFeedbackMessage } from "../../types/WebviewMessageTypes";
 
@@ -58,6 +59,28 @@ suite("VsCodeUserFeedbackSink", () => {
     sink.notify({ ...feedback, severity: "error" });
 
     assert.deepStrictEqual(calls, ["warning", "error"]);
+  });
+
+  test("offers Update for a newer workflow format refusal", () => {
+    const calls: string[][] = [];
+    const sink = new VsCodeUserFeedbackSink({
+      showInformationMessage: () => undefined,
+      showWarningMessage: () => undefined,
+      showErrorMessage: (message, ...items) => {
+        calls.push([message, ...items]);
+        return undefined;
+      },
+    });
+
+    sink.notify({
+      severity: "error",
+      message: "workflow.ctrlyoke.yaml uses workflow format 2.",
+      action: USER_FEEDBACK_ACTIONS.UPDATE_EXTENSION,
+    });
+
+    assert.deepStrictEqual(calls, [
+      ["workflow.ctrlyoke.yaml uses workflow format 2.", "Update"],
+    ]);
   });
 
   test("suppresses severities below the resolved toast level", () => {

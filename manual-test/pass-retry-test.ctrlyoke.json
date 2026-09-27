@@ -8,7 +8,7 @@
         "compareSource": "stdout",
         "expected": "true",
         "maxRetries": 2,
-        "timeout": 10000,
+        "timeoutSec": 10,
         "onPass": "retry",
         "passRetryPrompt": "The end condition is still passing, so this is a bounded pass retry. Read @manual-test/counter.txt, increment the number by 1, and save only that number."
       }
@@ -21,7 +21,7 @@
         "compareSource": "stdout",
         "expected": "true",
         "maxRetries": 3,
-        "timeout": 10000,
+        "timeoutSec": 10,
         "onPass": "retry",
         "onFail": "continue",
         "passRetryPrompt": "The marker is still at 3, so the condition passed again. Increment @manual-test/counter.txt to 4 and save only that number. The next condition check should fail and onFail: continue should advance the workflow."

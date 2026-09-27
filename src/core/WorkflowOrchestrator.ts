@@ -2432,7 +2432,6 @@ export class WorkflowOrchestrator {
       const queueWorkflow = instance.promptQueue.getWorkflowFile();
       workflow = {
         ...queueWorkflow,
-        workflowName: state?.workflowName ?? "",
         startedAt: 0,
         definitionRevision: state?.definitionRevision ?? 1,
         steps: state?.steps ?? queueWorkflow.steps ?? [],
@@ -2518,7 +2517,7 @@ export class WorkflowOrchestrator {
     const preview = await service.build({
       workflow,
       scope,
-      workflowName: workflow.workflowName,
+      workflowName: state?.workflowName ?? "",
       sourcePath: previewSourcePath,
       sourceDefinitionPath:
         (await this.getViewSourceDefinitionPath(clientId)) ?? undefined,
@@ -3269,10 +3268,17 @@ export class WorkflowOrchestrator {
     { definitionRevision: number; descriptorRevision: number } | undefined
   > {
     if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
-      await this.getInstanceForClient(clientId).updateWorkflowName(
-        workflowName
-      );
-      await this.recordDefinitionWrite(undefined, clientId);
+      const instance = this.getInstanceForClient(clientId);
+      await instance.updateWorkflowName(workflowName);
+      const state = instance.promptQueue.getState();
+      const workspaceRoot = this.currentWorkspaceFolderPath;
+      if (state.workflowKey && workspaceRoot) {
+        await this.lineageRepository.updateDescriptor(
+          workspaceRoot,
+          state.workflowKey,
+          (descriptor) => ({ ...descriptor, workflowName })
+        );
+      }
       return undefined;
     }
     const runAddress = mutation.address;
@@ -3293,10 +3299,10 @@ export class WorkflowOrchestrator {
           this.lineageRepository
         );
         latest = {
-          definitionRevision: written.definitionRevision,
+          definitionRevision: mutation.expectedDefinitionRevision,
           descriptorRevision: written.descriptorRevision,
         };
-        return written.definitionRevision;
+        return mutation.expectedDefinitionRevision;
       },
       // A rename leaves steps/output untouched — same as any other property
       // write — so viewers only need the lightweight properties push, not a

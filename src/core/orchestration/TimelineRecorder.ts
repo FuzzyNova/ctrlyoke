@@ -19,6 +19,12 @@ import { withFileLock } from "../../utils/FileLockUtils";
 import { splitLines, streamFileLines } from "../../utils/TextLines";
 import { invalidateRunSummaryFor } from "./RunSummaryCache";
 import { secretRedactionService } from "../../utils/SecretRedactionService";
+import {
+  assertWritableSchema,
+  CURRENT_SCHEMA_VERSIONS,
+  PERSISTED_STORES,
+} from "../../utils/PersistedSchemaGuard";
+import { migrateToCurrent } from "../../utils/FormatMigrations";
 
 export class TimelineRecorder {
   static readonly MANIFEST_FILE_NAME = TIMELINE_STORAGE_FILES.MANIFEST;
@@ -55,10 +61,15 @@ export class TimelineRecorder {
     const eventsPath =
       TimelineRecorder.getEventsPathFromManifestPath(manifestPath);
     try {
-      const [manifestStat, eventsStat] = await Promise.all([
-        fs.promises.lstat(manifestPath),
-        fs.promises.lstat(eventsPath),
-      ]);
+      const manifestStat = await fs.promises.lstat(manifestPath);
+      if (manifestStat.isFile() && !manifestStat.isSymbolicLink()) {
+        assertWritableSchema(
+          PERSISTED_STORES.TIMELINE,
+          await this.readManifest(manifestPath),
+          manifestPath
+        );
+      }
+      const eventsStat = await fs.promises.lstat(eventsPath);
       if (
         manifestStat.isFile() &&
         !manifestStat.isSymbolicLink() &&
@@ -94,17 +105,26 @@ export class TimelineRecorder {
 
   async readManifest(manifestPath: string): Promise<WorkflowRunManifest> {
     const content = await fs.promises.readFile(manifestPath, "utf8");
-    return JSON.parse(content) as WorkflowRunManifest;
+    return migrateToCurrent(PERSISTED_STORES.TIMELINE, JSON.parse(content))
+      .doc as WorkflowRunManifest;
   }
 
   private async writeManifestDirect(
     manifestPath: string,
     manifest: WorkflowRunManifest
   ): Promise<void> {
+    assertWritableSchema(PERSISTED_STORES.TIMELINE, manifest, manifestPath);
     try {
       await fs.promises.writeFile(
         manifestPath,
-        JSON.stringify(secretRedactionService.redactValue(manifest), null, 2),
+        JSON.stringify(
+          secretRedactionService.redactValue({
+            ...manifest,
+            schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.TIMELINE],
+          }),
+          null,
+          2
+        ),
         "utf8"
       );
     } finally {
@@ -219,6 +239,7 @@ export class TimelineRecorder {
     return this.runSerializedManifestOperation(manifestPath, async () =>
       withFileLock(manifestPath, async () => {
         const manifest = await this.readManifest(manifestPath);
+        assertWritableSchema(PERSISTED_STORES.TIMELINE, manifest, manifestPath);
         let nextSequence = manifest.nextSequence;
 
         const events: WorkflowTimelineEvent[] = drafts.map((draft) => ({
@@ -272,6 +293,7 @@ export class TimelineRecorder {
     return this.runSerializedManifestOperation(manifestPath, async () =>
       withFileLock(manifestPath, async () => {
         const manifest = await this.readManifest(manifestPath);
+        assertWritableSchema(PERSISTED_STORES.TIMELINE, manifest, manifestPath);
         if (definitionRevision <= manifest.definitionRevision) {
           return { committed: false };
         }

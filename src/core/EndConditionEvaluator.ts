@@ -279,7 +279,8 @@ export class EndConditionEvaluator {
 
       // Execute script with timeout from config or per-condition override
       const timeout =
-        condition.timeout || ConfigurationUtils.getScriptTimeoutMs();
+        ConfigurationUtils.secondsToMs(condition.timeoutSec) ??
+        ConfigurationUtils.getScriptTimeoutMs();
       const result = await this.executeScript(
         command.executable,
         command.args,

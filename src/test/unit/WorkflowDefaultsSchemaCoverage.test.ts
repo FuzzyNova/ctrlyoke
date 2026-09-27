@@ -10,7 +10,8 @@ const RESHAPED_DEFAULTS: Record<string, string> = {
 };
 
 const DEFAULT_OPT_OUTS: Record<string, string> = {
-  sessionId: "Session IDs identify a particular run and cannot be a reusable default.",
+  sessionId:
+    "Session IDs identify a particular run and cannot be a reusable default.",
   vars: "Workflow variables are authored per workflow and may contain workflow-specific values.",
 };
 
@@ -29,25 +30,20 @@ suite("Workflow defaults schema coverage", () => {
       fs.readFile(settingsSchemaPath, "utf8"),
     ]);
     const workflowSchema = JSON.parse(workflowSchemaText) as {
-      definitions?: Record<
-        string,
-        { properties?: Record<string, unknown> }
-      >;
+      $defs?: Record<string, { properties?: Record<string, unknown> }>;
     };
     const settingsSchema = JSON.parse(settingsSchemaText) as {
       properties?: Record<string, { properties?: Record<string, unknown> }>;
     };
     const defaultsProperties = new Set(
-      Object.keys(
-        settingsSchema.properties?.defaults?.properties ?? {}
-      )
+      Object.keys(settingsSchema.properties?.defaults?.properties ?? {})
     );
     const workflowPropertyNames = [
       ...Object.keys(
-        workflowSchema.definitions?.executionProperties?.properties ?? {}
+        workflowSchema.$defs?.executionProperties?.properties ?? {}
       ),
       ...Object.keys(
-        workflowSchema.definitions?.workflowOnlyProperties?.properties ?? {}
+        workflowSchema.$defs?.workflowOnlyProperties?.properties ?? {}
       ),
     ];
 
@@ -64,7 +60,8 @@ suite("Workflow defaults schema coverage", () => {
       const [root, child] = targetPath.split(".");
       const targetProperties = settingsSchema.properties?.[root]?.properties;
       assert.ok(
-        targetProperties && Object.prototype.hasOwnProperty.call(targetProperties, child),
+        targetProperties &&
+          Object.prototype.hasOwnProperty.call(targetProperties, child),
         `${property} maps to missing settings schema path ${targetPath}`
       );
     }

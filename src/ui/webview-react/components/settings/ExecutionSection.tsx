@@ -59,14 +59,14 @@ export function ExecutionSection({
       <SettingInputRow
         label="Max prompt timeout (seconds, -1 = unlimited)"
         id="exec-max-prompt-timeout"
-        path="execution.maxPromptTimeout"
+        path="execution.maxPromptTimeoutSec"
         {...rowProps}
       >
         <LocalNumberInput
           id="exec-max-prompt-timeout"
           min={-1}
-          value={exec.maxPromptTimeout}
-          onCommit={(v) => onUpdate("execution.maxPromptTimeout", v)}
+          value={exec.maxPromptTimeoutSec}
+          onCommit={(v) => onUpdate("execution.maxPromptTimeoutSec", v)}
           parse={(v) => parseInt(v, 10) || -1}
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
@@ -74,14 +74,14 @@ export function ExecutionSection({
       <SettingInputRow
         label="Script timeout (seconds)"
         id="exec-script-timeout"
-        path="execution.scriptTimeout"
+        path="execution.scriptTimeoutSec"
         {...rowProps}
       >
         <LocalNumberInput
           id="exec-script-timeout"
           min={1}
-          value={exec.scriptTimeout}
-          onCommit={(v) => onUpdate("execution.scriptTimeout", v)}
+          value={exec.scriptTimeoutSec}
+          onCommit={(v) => onUpdate("execution.scriptTimeoutSec", v)}
           parse={(v) => parseInt(v, 10) || 30}
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />

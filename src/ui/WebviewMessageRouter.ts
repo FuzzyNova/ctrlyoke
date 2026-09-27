@@ -12,7 +12,7 @@ import {
   PANEL_CLIENT_ID,
   QUEUE_POSITION,
   USER_FEEDBACK_SEVERITY,
-  isStatusLineTrackingHarnessId,
+  isStatusLineHarnessId,
   END_CONDITION_SCRIPT_TYPES,
   HISTORY_SEARCH_COUNT_STATES,
   type EndConditionScriptType,
@@ -1915,7 +1915,7 @@ export class WebviewMessageRouter {
       MESSAGE_TYPES.DISABLE_STATUS_LINE_TRACKING,
       async (message, ctx) => {
         if (
-          !isStatusLineTrackingHarnessId(message.harnessId) ||
+          !isStatusLineHarnessId(message.harnessId) ||
           typeof message.restoreCustomCommand !== "boolean"
         ) {
           Log.warn(

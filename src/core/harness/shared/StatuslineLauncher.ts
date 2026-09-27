@@ -23,8 +23,9 @@ import * as os from "os";
 import * as path from "path";
 import {
   CTRLYOKE_DIR,
-  STATUS_LINE_TRACKING_PROVIDERS,
-  type StatusLineTrackingProvider,
+  STATUS_LINE_HARNESS_IDS,
+  STATUSLINE_SCRIPT_FILE_NAMES,
+  type StatusLineHarnessId,
 } from "../../../types/DashboardConstants";
 import { writeFileAtomic } from "../../../utils/AtomicFileUtils";
 import { compareVersions } from "../../../utils/CtrlyokeInstallations";
@@ -36,18 +37,17 @@ const PACKAGE_SCRIPTS_DIR = path.join("out", "scripts");
 
 /** The provider script a harness runs; it `require`s its shared siblings. */
 export function statuslineScriptFileName(
-  provider: StatusLineTrackingProvider
+  provider: StatusLineHarnessId
 ): string {
-  return `ctrlyoke-${provider}-statusline.js`;
+  return STATUSLINE_SCRIPT_FILE_NAMES[provider];
 }
 
 /** Every file the provider scripts need, copied as one set. */
 export const STATUSLINE_LAUNCHER_FILES: readonly string[] = [
   "ctrlyoke-statusline-wrapper.js",
   "ctrlyoke-statusline-format.js",
-  ...Object.values(STATUS_LINE_TRACKING_PROVIDERS).map(
-    statuslineScriptFileName
-  ),
+  "ctrlyoke-format-migrations.js",
+  ...Object.values(STATUS_LINE_HARNESS_IDS).map(statuslineScriptFileName),
 ];
 
 interface LauncherManifest {
@@ -199,7 +199,7 @@ export function deployStatuslineLauncher(
  */
 export async function resolveStatuslineScriptPath(
   packageRoot: string,
-  provider: StatusLineTrackingProvider
+  provider: StatusLineHarnessId
 ): Promise<string | undefined> {
   const directory =
     (await deployStatuslineLauncher(packageRoot)) ??

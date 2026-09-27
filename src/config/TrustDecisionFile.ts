@@ -6,6 +6,7 @@ import {
   readSchemaVersion,
   type PersistedStore,
 } from "../utils/PersistedSchemaGuard";
+import { migrateToCurrent } from "../utils/FormatMigrations";
 
 /** On-disk shape shared by the user-local trust-decision stores. */
 export interface TrustDecisionFile<Decision> {
@@ -20,6 +21,7 @@ export interface TrustDecisionFile<Decision> {
  * refuse to downgrade a file a newer ctrlyoke wrote.
  */
 export function loadTrustDecisionFile<Decision>(
+  store: PersistedStore,
   storePath: string,
   label: string
 ): TrustDecisionFile<Decision> {
@@ -30,7 +32,9 @@ export function loadTrustDecisionFile<Decision>(
     return { decisions: {} };
   }
   try {
-    const parsed = JSON.parse(content) as Partial<TrustDecisionFile<Decision>>;
+    const parsed = migrateToCurrent(store, JSON.parse(content)).doc as Partial<
+      TrustDecisionFile<Decision>
+    >;
     const schemaVersion = readSchemaVersion(parsed);
     return {
       ...(schemaVersion !== undefined ? { schemaVersion } : {}),

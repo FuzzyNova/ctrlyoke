@@ -5,14 +5,15 @@ import {
   MESSAGE_TYPES,
   SETTING_PATHS,
   SETTING_SCOPES,
-  STATUS_LINE_TRACKING_PROVIDERS,
+  STATUS_LINE_HARNESS_IDS,
 } from "@root/types/DashboardConstants";
-import type {
-  StatusLineTrackingHarnessId,
-  StatusLineTrackingProvider,
-} from "@root/types/DashboardConstants";
+import type { StatusLineHarnessId } from "@root/types/DashboardConstants";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
-import type { StatusLineSegment } from "@root/utils/StatuslineFormat";
+import {
+  STATUS_LINE_FORMAT_PROVIDERS,
+  type StatusLineFormatProvider,
+  type StatusLineSegment,
+} from "@root/utils/StatuslineFormat";
 import { AnimatedSection } from "@components/shared/AnimatedSection";
 import { sendMessage } from "@hooks/useMessageHandler";
 import { Button } from "@components/shared/Button";
@@ -26,7 +27,7 @@ import { StatusLineFormatEditor } from "./StatusLineFormatEditor";
 import { StatusLinePreview } from "./StatusLinePreview";
 
 interface Props {
-  harnessId: StatusLineTrackingHarnessId;
+  harnessId: StatusLineHarnessId;
   settings: FullGlobalSettings;
   sharedDraft?: StatusLineSegment[];
   useDifferentFormatPerHarness?: boolean;
@@ -40,62 +41,54 @@ interface StatusLineSettingPaths {
 }
 
 const STATUS_LINE_SETTING_PATHS: Partial<
-  Record<StatusLineTrackingProvider, StatusLineSettingPaths>
+  Record<StatusLineHarnessId, StatusLineSettingPaths>
 > = {
-  [STATUS_LINE_TRACKING_PROVIDERS.CLAUDE]: {
-    enabled: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_ENABLED,
-    customCommand:
-      SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_CUSTOM_COMMAND,
-    useCtrlyokeStyle:
-      SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_USE_CTRLYOKE_STYLE,
-    format: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_FORMAT,
+  [STATUS_LINE_HARNESS_IDS.CLAUDE]: {
+    enabled: SETTING_PATHS.STATUS_LINE_CLAUDE_ENABLED,
+    customCommand: SETTING_PATHS.STATUS_LINE_CLAUDE_CUSTOM_COMMAND,
+    useCtrlyokeStyle: SETTING_PATHS.STATUS_LINE_CLAUDE_USE_CTRLYOKE_STYLE,
+    format: SETTING_PATHS.STATUS_LINE_CLAUDE_FORMAT,
   },
-  [STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY]: {
-    enabled: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_ENABLED,
-    customCommand:
-      SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_CUSTOM_COMMAND,
-    useCtrlyokeStyle:
-      SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_USE_CTRLYOKE_STYLE,
-    format: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_FORMAT,
+  [STATUS_LINE_HARNESS_IDS.ANTIGRAVITY]: {
+    enabled: SETTING_PATHS.STATUS_LINE_ANTIGRAVITY_ENABLED,
+    customCommand: SETTING_PATHS.STATUS_LINE_ANTIGRAVITY_CUSTOM_COMMAND,
+    useCtrlyokeStyle: SETTING_PATHS.STATUS_LINE_ANTIGRAVITY_USE_CTRLYOKE_STYLE,
+    format: SETTING_PATHS.STATUS_LINE_ANTIGRAVITY_FORMAT,
   },
-  [STATUS_LINE_TRACKING_PROVIDERS.COPILOT]: {
-    enabled: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_COPILOT_ENABLED,
-    customCommand:
-      SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_COPILOT_CUSTOM_COMMAND,
-    useCtrlyokeStyle:
-      SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_COPILOT_USE_CTRLYOKE_STYLE,
-    format: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_COPILOT_FORMAT,
+  [STATUS_LINE_HARNESS_IDS.COPILOT]: {
+    enabled: SETTING_PATHS.STATUS_LINE_COPILOT_ENABLED,
+    customCommand: SETTING_PATHS.STATUS_LINE_COPILOT_CUSTOM_COMMAND,
+    useCtrlyokeStyle: SETTING_PATHS.STATUS_LINE_COPILOT_USE_CTRLYOKE_STYLE,
+    format: SETTING_PATHS.STATUS_LINE_COPILOT_FORMAT,
   },
-  [STATUS_LINE_TRACKING_PROVIDERS.QWEN]: {
-    enabled: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_QWEN_ENABLED,
-    customCommand:
-      SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_QWEN_CUSTOM_COMMAND,
-    useCtrlyokeStyle:
-      SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_QWEN_USE_CTRLYOKE_STYLE,
-    format: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_QWEN_FORMAT,
+  [STATUS_LINE_HARNESS_IDS.QWEN]: {
+    enabled: SETTING_PATHS.STATUS_LINE_QWEN_ENABLED,
+    customCommand: SETTING_PATHS.STATUS_LINE_QWEN_CUSTOM_COMMAND,
+    useCtrlyokeStyle: SETTING_PATHS.STATUS_LINE_QWEN_USE_CTRLYOKE_STYLE,
+    format: SETTING_PATHS.STATUS_LINE_QWEN_FORMAT,
   },
 };
 
 const RESTORE_LABEL_MAX_LENGTH = 56;
 
 function providerForHarness(
-  harnessId: StatusLineTrackingHarnessId
-): StatusLineTrackingProvider {
+  harnessId: StatusLineHarnessId
+): StatusLineHarnessId {
   switch (harnessId) {
     case HARNESS_IDS.CLAUDE_CLI:
-      return STATUS_LINE_TRACKING_PROVIDERS.CLAUDE;
+      return STATUS_LINE_HARNESS_IDS.CLAUDE;
     case HARNESS_IDS.ANTIGRAVITY_CLI:
-      return STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY;
+      return STATUS_LINE_HARNESS_IDS.ANTIGRAVITY;
     case HARNESS_IDS.COPILOT_CLI:
-      return STATUS_LINE_TRACKING_PROVIDERS.COPILOT;
+      return STATUS_LINE_HARNESS_IDS.COPILOT;
     case HARNESS_IDS.QWEN_CLI:
-      return STATUS_LINE_TRACKING_PROVIDERS.QWEN;
+      return STATUS_LINE_HARNESS_IDS.QWEN;
     default:
       throw new Error(`Unsupported statusline harness: ${harnessId}`);
   }
 }
 
-function getDisableWarning(harnessId: StatusLineTrackingHarnessId): string {
+function getDisableWarning(harnessId: StatusLineHarnessId): string {
   switch (harnessId) {
     case HARNESS_IDS.CLAUDE_CLI:
       return "Disabling Claude statusline tracking loses token/quota data.";
@@ -109,6 +102,17 @@ function getDisableWarning(harnessId: StatusLineTrackingHarnessId): string {
       throw new Error(`Unsupported statusline harness: ${harnessId}`);
   }
 }
+
+const STATUS_LINE_FORMAT_PROVIDER_BY_HARNESS: Record<
+  StatusLineHarnessId,
+  StatusLineFormatProvider
+> = {
+  [STATUS_LINE_HARNESS_IDS.CLAUDE]: STATUS_LINE_FORMAT_PROVIDERS.CLAUDE,
+  [STATUS_LINE_HARNESS_IDS.ANTIGRAVITY]:
+    STATUS_LINE_FORMAT_PROVIDERS.ANTIGRAVITY,
+  [STATUS_LINE_HARNESS_IDS.COPILOT]: STATUS_LINE_FORMAT_PROVIDERS.COPILOT,
+  [STATUS_LINE_HARNESS_IDS.QWEN]: STATUS_LINE_FORMAT_PROVIDERS.QWEN,
+};
 
 function getPlainScriptBasename(command: string): string | undefined {
   if (
@@ -157,9 +161,9 @@ function sendGlobalSetting(path: string, value: unknown): void {
 export function StatusLineTrackingControls({
   harnessId,
   settings,
-  sharedDraft = settings.settings.permissions.statusLineTracking.sharedFormat,
-  useDifferentFormatPerHarness = settings.settings.permissions
-    .statusLineTracking.useDifferentFormatPerHarness,
+  sharedDraft = settings.settings.statusLine.sharedFormat,
+  useDifferentFormatPerHarness = settings.settings.statusLine
+    .useDifferentFormatPerHarness,
 }: Props) {
   const provider = providerForHarness(harnessId);
   const paths = STATUS_LINE_SETTING_PATHS[provider];
@@ -168,7 +172,8 @@ export function StatusLineTrackingControls({
       `Missing statusline setting paths for provider: ${provider}`
     );
   }
-  const tracking = settings.settings.permissions.statusLineTracking[provider];
+  const tracking = settings.settings.statusLine.byHarness[provider];
+  const formatProvider = STATUS_LINE_FORMAT_PROVIDER_BY_HARNESS[provider];
   const snapshot = useHarnessUsageStore(
     (state) => state.snapshotsByHarness[harnessId]
   );
@@ -256,7 +261,7 @@ export function StatusLineTrackingControls({
         <StatusLineFormatEditor
           format={tracking.format}
           onCommit={(format) => sendGlobalSetting(paths.format, format)}
-          provider={provider}
+          provider={formatProvider}
           snapshot={snapshot}
           percentDirection={settings.settings.usageTracking.percentDirection}
         />
@@ -266,7 +271,7 @@ export function StatusLineTrackingControls({
       >
         <StatusLinePreview
           format={sharedDraft}
-          provider={provider}
+          provider={formatProvider}
           snapshot={snapshot}
           percentDirection={settings.settings.usageTracking.percentDirection}
         />

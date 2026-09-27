@@ -5,7 +5,7 @@
     "compareSource": "stdout",
     "expected": "true",
     "maxRetries": 5,
-    "timeout": 10000,
+    "timeoutSec": 10,
     "onFail": "retry",
     "retryPrompt": "The counter validation failed. read @manual-test/counter.txt and increment the number by 1. Remember to save ONLY the number, nothing else."
   }

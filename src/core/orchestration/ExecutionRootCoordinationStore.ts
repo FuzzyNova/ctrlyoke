@@ -15,6 +15,7 @@ import {
   hasNewerSchema,
   PERSISTED_STORES,
 } from "../../utils/PersistedSchemaGuard";
+import { migrateToCurrent } from "../../utils/FormatMigrations";
 import {
   resolveExecutionRootScope,
   scopeStorageRoot,
@@ -107,7 +108,11 @@ async function readEntries(boardPath: string): Promise<CoordinationEntry[]> {
 
   return splitLines(contents)
     .filter((line) => line.trim().length > 0)
-    .map((line) => JSON.parse(line) as CoordinationEntry);
+    .map(
+      (line) =>
+        migrateToCurrent(PERSISTED_STORES.COORDINATION_BOARD, JSON.parse(line))
+          .doc as CoordinationEntry
+    );
 }
 
 async function verifyBoardScope(scope: CoordinationBoardScope): Promise<void> {

@@ -564,7 +564,8 @@ export class CtrlYokeWebviewProvider
     workflowId?: string,
     workflowProperties?: Record<string, unknown>,
     parallelGroups?: ParallelGroupDefinition[],
-    activeStepIndices?: number[]
+    activeStepIndices?: number[],
+    schemaWarnings?: import("../types/CtrlYokeTypes").WorkflowValidationWarning[]
   ): Promise<void> {
     await this.sink.updateFileSelected(
       fileName,
@@ -575,7 +576,8 @@ export class CtrlYokeWebviewProvider
       workflowId,
       workflowProperties,
       parallelGroups,
-      activeStepIndices
+      activeStepIndices,
+      schemaWarnings
     );
     await this.settingsSync.sendWorkflowPropertiesToSettings(
       undefined,
@@ -600,7 +602,8 @@ export class CtrlYokeWebviewProvider
     workflowProperties?: Record<string, unknown>,
     parallelGroups?: ParallelGroupDefinition[],
     activeStepIndices?: number[],
-    definitionRevision?: number
+    definitionRevision?: number,
+    schemaWarnings?: import("../types/CtrlYokeTypes").WorkflowValidationWarning[]
   ): Promise<void> {
     await this.sink.updateSessionRestored(
       fileName,
@@ -615,7 +618,8 @@ export class CtrlYokeWebviewProvider
       workflowProperties,
       parallelGroups,
       activeStepIndices,
-      definitionRevision
+      definitionRevision,
+      schemaWarnings
     );
     await this.settingsSync.sendWorkflowPropertiesToSettings(
       undefined,

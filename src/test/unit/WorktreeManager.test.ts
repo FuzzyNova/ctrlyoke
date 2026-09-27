@@ -710,6 +710,52 @@ suite("WorktreeManager", function () {
     await resolved.lease.release();
   });
 
+  test("does not rewrite a newer named worktree setup record", async () => {
+    const { parent, repository } = await makeRepository("setup-newer-schema");
+    const instance = manager(parent);
+    const resolved = await resolve(
+      instance,
+      repository,
+      "feature/newer-setup",
+      {
+        setup: `node -e "require('fs').writeFileSync('setup-marker.txt', 'ok')"`,
+      }
+    );
+    await resolved.lease.release();
+    const commonDirectory = path.resolve(
+      repository,
+      execFileSync("git", ["-C", repository, "rev-parse", "--git-common-dir"], {
+        encoding: "utf8",
+      }).trim()
+    );
+    const recordDirectory = path.join(
+      commonDirectory,
+      "ctrlyoke",
+      "named-worktrees"
+    );
+    const [recordFile] = await fs.readdir(recordDirectory);
+    const recordPath = path.join(recordDirectory, recordFile);
+    const original = JSON.parse(await fs.readFile(recordPath, "utf8"));
+    const newer = { ...original, schemaVersion: 2 };
+    const serialized = JSON.stringify(newer, null, 2);
+    await fs.writeFile(recordPath, serialized);
+
+    await assert.rejects(
+      resolve(instance, repository, "feature/newer-setup", {
+        setup: `node -e "require('fs').writeFileSync('setup-marker.txt', 'changed')"`,
+      }),
+      /newer version of ctrlyoke/
+    );
+    assert.strictEqual(await fs.readFile(recordPath, "utf8"), serialized);
+    assert.strictEqual(
+      await fs.readFile(
+        path.join(resolved.worktreePath, "setup-marker.txt"),
+        "utf8"
+      ),
+      "ok"
+    );
+  });
+
   test("creates an atomic ownership record and re-enters idempotently", async () => {
     const { parent, repository } = await makeRepository("managed-create");
     const instance = manager(parent);
@@ -1911,6 +1957,49 @@ suite("WorktreeManager", function () {
     assert.ok(reconciledAfterRemove, "the reconciled record stays visible");
     assert.strictEqual(reconciledAfterRemove?.stale, false);
     assert.strictEqual(reconciledAfterRemove?.directoryState, "removed");
+  });
+
+  test("keeps a newer managed record listed and untouched when Git forgets its worktree", async () => {
+    const { parent, repository } = await makeRepository(
+      "management-newer-schema"
+    );
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    await info.lease.release();
+    const recordPath = await instance.managedWorktreeRecordPath(
+      repository,
+      info.branchName
+    );
+    const record = JSON.parse(await fs.readFile(recordPath, "utf8"));
+    const newerRecord = { ...record, schemaVersion: 2 };
+    await fs.writeFile(recordPath, JSON.stringify(newerRecord, null, 2));
+
+    await fs.rm(info.worktreePath, { recursive: true, force: true });
+    execFileSync("git", ["-C", repository, "worktree", "prune"], {
+      stdio: "ignore",
+    });
+
+    const state = await instance.getManagementState(repository);
+    const listed = state.entries.find(
+      (entry) => entry.branchName === info.branchName
+    );
+    assert.ok(listed, "newer ownership remains visible");
+    assert.strictEqual(listed?.ownership, "managed");
+    assert.strictEqual(listed?.branchCleanupEligible, false);
+    await assert.rejects(
+      instance.applyManagementAction({
+        sourceCheckoutRoot: repository,
+        action: WORKTREE_MANAGEMENT_ACTIONS.CLEANUP_BRANCH,
+        branchName: info.branchName,
+        confirmed: true,
+      }),
+      /newer version of ctrlyoke/
+    );
+    assert.deepStrictEqual(
+      JSON.parse(await fs.readFile(recordPath, "utf8")),
+      newerRecord
+    );
+    assert.ok(localBranchExists(repository, info.branchName));
   });
 
   test("reconciles and force-removes a worktree whose directory survives its Git admin entry", async () => {

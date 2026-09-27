@@ -11,7 +11,7 @@ import { WebviewLog } from "./logger";
  * to it) — see ExternalRunWatchSession / orchestration.instructions.md.
  *
  * Logs every write at TRACE (only persisted when the user has enabled
- * ctrlyoke's Trace log level + `ctrlyoke.enableDiagnosticLogs`, so this is
+ * ctrlyoke's Trace log level + `ctrlyoke.diagnostics.verboseLogging`, so this is
  * safe to leave attached to a production install) and escalates to WARN
  * the moment a store crosses a burst threshold, so the culprit shows up in
  * `.ctrlyoke/logs/` even without trawling a huge trace log by hand.

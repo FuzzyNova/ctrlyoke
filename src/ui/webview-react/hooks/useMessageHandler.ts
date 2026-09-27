@@ -645,6 +645,7 @@ export function createMessageHandlers(
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.GLOBAL_SETTINGS_LOADED] = (message) => {
     const settingsStore = useSettingsStore.getState();
+    settingsStore.setGlobalSettingsReadOnly(message.readOnly ?? false);
     if (message.settings) {
       settingsStore.setFullGlobalSettings(message.settings);
       if (message.settings.licenseAccess) {
@@ -858,6 +859,7 @@ export function createMessageHandlers(
       finalStepStatus: message.finalStepStatus ?? null,
       finalStepLoopCount: message.finalStepLoopCount ?? 0,
       finalStepPhase: message.finalStepPhase ?? null,
+      schemaWarnings: message.schemaWarnings ?? [],
     });
     persistViewedWorkingFilePath(message.workingFilePath);
     applyWorkflowChange();
@@ -927,6 +929,7 @@ export function createMessageHandlers(
       finalStepStatus: message.finalStepStatus ?? null,
       finalStepLoopCount: message.finalStepLoopCount ?? 0,
       finalStepPhase: message.finalStepPhase ?? null,
+      schemaWarnings: message.schemaWarnings ?? [],
     });
     persistViewedWorkingFilePath(message.workingFilePath);
     applyWorkflowChange({ preserveViewAddress: isReplay });
@@ -2674,8 +2677,8 @@ export function createMessageHandlers(
       );
     }
     useWorkflowStore.getState().loadWorkflow({
-      fileName: workingFile.workflowName,
-      workflowName: workingFile.workflowName,
+      fileName: message.workflowName ?? address.workflowKey,
+      workflowName: message.workflowName ?? address.workflowKey,
       steps: workingFile.steps ?? [],
       parallelGroups: workingFile.parallelGroups ?? [],
       executionState: resolvedExecutionState,

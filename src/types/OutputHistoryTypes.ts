@@ -91,8 +91,6 @@ export type OrderedHistoryEntry =
  * manifest.json + events.jsonl storage.
  */
 export interface WorkflowOutputHistory {
-  schemaVersion: "1.1.0";
-
   // Run metadata
   workflowId: string;
   runId: number;

@@ -143,16 +143,17 @@ suite("ClaudeUsageProvider", () => {
     process.env.USERPROFILE = tempDirectory;
     configService.setUserBackend(
       backend({
-        permissions: {
-          statusLineTracking: {
-            claude: {
+        usageTracking: { enabled: false },
+        permissions: {},
+        statusLine: {
+          byHarness: {
+            "claude-cli": {
               enabled: true,
               customCommand: "",
               useCtrlyokeStyle: true,
             },
           },
         },
-        usageTracking: { enabled: false },
       })
     );
     configService.setWorkspaceBackend(backend({}));
@@ -208,16 +209,17 @@ suite("ClaudeUsageProvider", () => {
     process.env.USERPROFILE = tempDirectory;
     configService.setUserBackend(
       backend({
-        permissions: {
-          statusLineTracking: {
-            claude: {
+        usageTracking: { enabled: true },
+        permissions: {},
+        statusLine: {
+          byHarness: {
+            "claude-cli": {
               enabled: false,
               customCommand: "",
               useCtrlyokeStyle: true,
             },
           },
         },
-        usageTracking: { enabled: true },
       })
     );
     configService.setWorkspaceBackend(backend({}));

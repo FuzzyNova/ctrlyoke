@@ -29,7 +29,7 @@ export const TIMELINE_STORAGE_FILES = {
 } as const;
 
 export const TIMELINE_STORAGE_KIND = "timeline" as const;
-export const TIMELINE_SCHEMA_VERSION = "2.4.0" as const;
+export const TIMELINE_SCHEMA_VERSION = 1 as const;
 
 export const TIMELINE_EVENT_TYPES = {
   WORKFLOW_RUNTIME_TRANSITION_RECORDED: "workflowRuntimeTransitionRecorded",

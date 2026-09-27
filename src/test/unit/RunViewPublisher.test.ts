@@ -110,10 +110,16 @@ class FakeLineageRepository implements RunViewPublisherLineageRepository {
   async readDescriptor(): Promise<{
     revision: number;
     lastModifiedAt: number;
+    workflowName: string;
     isSystemGenerated: boolean;
   }> {
     this.events.push("read");
-    return { revision: 3, lastModifiedAt: 12, isSystemGenerated: false };
+    return {
+      revision: 3,
+      lastModifiedAt: 12,
+      workflowName: "fixture",
+      isSystemGenerated: false,
+    };
   }
 }
 

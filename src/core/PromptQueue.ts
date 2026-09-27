@@ -312,8 +312,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
   /** Return the durable projection for the currently executing parallel group. */
   public getActiveParallelGroupRuntime():
-    | ActiveParallelGroupRuntime
-    | undefined {
+    ActiveParallelGroupRuntime | undefined {
     return this.activeParallelGroupRuntime
       ? { ...this.activeParallelGroupRuntime }
       : undefined;
@@ -630,7 +629,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         totalExecutionTime: 0,
         queueExtensions: 0,
         workingFilePath,
-        workflowName: workingFile.workflowName, // Restore workflow name from working file
         workflowKey: lineageAddress?.workflowKey,
         runRef: lineageAddress?.runRef,
         definitionRevision: workingFile.definitionRevision ?? 1,
@@ -2878,18 +2876,11 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    */
   public async updateWorkflowName(workflowName: string): Promise<void> {
     this.assertNoPendingRewindWorkflowMutation("rename the workflow");
-    // Update in-memory state (always allow this)
     this.state.workflowName = workflowName;
-
-    // Update working file if it exists
-    // If no working file yet (brand new workflow), the name will be included when the working file is created
-    if (this.state.workingFilePath) {
-      this.bumpDefinitionRevision();
-      await this.updateWorkingFile(true);
-    }
-
     this.emitStateChange();
-    Log.debug(`[PromptQueue] Updated workflow name to: ${workflowName}`);
+    Log.debug(
+      `[PromptQueue] Updated in-memory workflow name to: ${workflowName}`
+    );
   }
 
   /**

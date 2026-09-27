@@ -2,7 +2,7 @@
  * ModelConstants - Single source of truth for model definitions
  *
  * This file defines all supported AI models with their display names.
- * Other files (ModelRegistry.ts, ValidationUtils.ts, CtrlYokeWebviewProvider.ts)
+ * Other files (ModelRegistry.ts, CtrlYokeWebviewProvider.ts)
  * import from here instead of maintaining duplicate lists.
  *
  * package.json enums are synced via: `npm run sync-models`

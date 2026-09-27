@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "branchName": "ctrlyoke/fixture-worktree",
+  "worktreePath": "../fixture-worktree",
+  "sourceCheckoutRoot": "..",
+  "baseCommit": "0123456789abcdef0123456789abcdef01234567",
+  "lastVerifiedBranchTip": "0123456789abcdef0123456789abcdef01234567",
+  "stateRoot": "..",
+  "workflowKey": "fixture-workflow",
+  "runRef": "run-1",
+  "createdAt": 1790464107000,
+  "lifecycleState": "ready",
+  "directoryState": "present",
+  "branchState": "present"
+}

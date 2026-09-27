@@ -3,6 +3,18 @@ import * as path from "path";
 import * as os from "os";
 import type { ConfigBackend } from "./CtrlYokeConfigService";
 import type { PartialCtrlYokeSettings } from "../types/CtrlYokeSettings";
+import {
+  CURRENT_SCHEMA_VERSIONS,
+  isNewerSchemaVersion,
+  PERSISTED_STORES,
+  readSchemaVersion,
+  refuseNewerSchema,
+} from "../utils/PersistedSchemaGuard";
+import { Log } from "../utils/Log";
+import { migrateToCurrent } from "../utils/FormatMigrations";
+import { PUBLISHED_SCHEMA_URLS } from "../types/DashboardConstants";
+
+const warnedNewerSettingsPaths = new Set<string>();
 
 export class FileConfigBackend implements ConfigBackend {
   private cache?: PartialCtrlYokeSettings;
@@ -13,12 +25,17 @@ export class FileConfigBackend implements ConfigBackend {
   // calls; without this queue, the second call's load() can run before the
   // first call's save() lands, so the second write clobbers the first.
   private writeQueue: Promise<void> = Promise.resolve();
+  private newerSchemaVersion?: number;
 
   constructor(private readonly configPath: string) {}
 
   /** Returns the path this backend reads from */
   get filePath(): string {
     return this.configPath;
+  }
+
+  get isReadOnly(): boolean {
+    return this.newerSchemaVersion !== undefined;
   }
 
   /** Load and parse the config file. Returns {} if file doesn't exist or is invalid JSON. */
@@ -34,6 +51,13 @@ export class FileConfigBackend implements ConfigBackend {
   set(settingPath: string, value: unknown): Promise<void> {
     const write = this.writeQueue.then(async () => {
       const current = this.load();
+      if (this.newerSchemaVersion !== undefined) {
+        refuseNewerSchema(
+          PERSISTED_STORES.SETTINGS,
+          this.newerSchemaVersion,
+          this.configPath
+        );
+      }
       this.setNestedValue(
         current as Record<string, unknown>,
         settingPath.split("."),
@@ -57,7 +81,22 @@ export class FileConfigBackend implements ConfigBackend {
       return {};
     }
     try {
-      return JSON.parse(content) as PartialCtrlYokeSettings;
+      const parsed = JSON.parse(content) as PartialCtrlYokeSettings;
+      const version = readSchemaVersion(parsed);
+      if (isNewerSchemaVersion(PERSISTED_STORES.SETTINGS, version)) {
+        this.newerSchemaVersion = version;
+        if (!warnedNewerSettingsPaths.has(this.configPath)) {
+          warnedNewerSettingsPaths.add(this.configPath);
+          Log.warn(
+            `[FileConfigBackend] Reading newer settings format ${version} best-effort from ${this.configPath}; writes are disabled until ctrlyoke is updated.`
+          );
+        }
+      }
+      if (!isNewerSchemaVersion(PERSISTED_STORES.SETTINGS, version)) {
+        return migrateToCurrent(PERSISTED_STORES.SETTINGS, parsed)
+          .doc as PartialCtrlYokeSettings;
+      }
+      return parsed;
     } catch {
       // File exists but contains invalid JSON (e.g. interrupted prior write).
       // Log to stderr so the user/developer can diagnose the issue.
@@ -69,6 +108,8 @@ export class FileConfigBackend implements ConfigBackend {
   }
 
   private async save(data: PartialCtrlYokeSettings): Promise<void> {
+    data.schemaVersion = CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.SETTINGS];
+    data.$schema = PUBLISHED_SCHEMA_URLS.SETTINGS;
     const dir = path.dirname(this.configPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });

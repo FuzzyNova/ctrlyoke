@@ -137,6 +137,10 @@ want to use it. Anyone who wants one file can archive the directory themselves.
   "exportedAt": "2026-08-14T18:04:00.000Z",
   "exportedByVersion": "0.9.x",
   "sourceRoot": "C:\\dev\\ctrlyoke", // what relative paths inside are relative to
+  "lineage": {
+    "workflowName": "Fix tests",
+    "originalFile": "workflows/fix-tests.ctrlyoke.yaml", // optional
+  },
   "provenance": {
     "workflowKey": "fix-tests-2026-08-01T…",
     "runRef": "run-1786712286",

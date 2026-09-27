@@ -63,7 +63,7 @@ import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import * as jsonc from "jsonc-parser";
 import * as yaml from "js-yaml";
-import Ajv from "ajv";
+import Ajv from "ajv/dist/2020";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, "..", "..");

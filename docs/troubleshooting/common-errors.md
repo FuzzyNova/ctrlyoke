@@ -79,7 +79,7 @@ condition's `onFail` defaults to `stopWorkflow`, so the run stops. Set `onFail: 
 **The script could not run.** A command that cannot be started (for example, an interpreter that is
 not installed) or a timeout is an error, not a failed condition, and it is handled by
 `errorBehavior` (`onError: stopWorkflow`, `retry`, or `continue`). Check the script path or command and the
-timeout (`timeout` on the condition, or the `execution.scriptTimeout` setting). A script file that
+timeout (`timeout` on the condition, or the `execution.scriptTimeoutSec` setting). A script file that
 is missing usually makes its interpreter exit non-zero, which counts as a failed condition instead.
 
 ## Dynamic queue did nothing

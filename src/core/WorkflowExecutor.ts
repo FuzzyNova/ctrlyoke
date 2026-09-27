@@ -1950,7 +1950,7 @@ export class WorkflowExecutor {
             operator: resolvedPreCondition.operator,
             expected: resolvedPreCondition.expected,
             ignoreCase: resolvedPreCondition.ignoreCase,
-            timeout: resolvedPreCondition.timeout,
+            timeoutSec: resolvedPreCondition.timeoutSec,
           }),
           phase: EXECUTION_PHASES.PRE_CONDITION,
           target: this.toOutputExecutionTarget(target),
@@ -1962,7 +1962,9 @@ export class WorkflowExecutor {
           onFail: resolvedPreCondition.onFail ?? CONDITION_ACTIONS.SKIP_PROMPT,
           statusLabel:
             SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.PRE_CONDITION],
-          timeoutMs: resolvedPreCondition.timeout,
+          timeoutMs:
+            ConfigurationUtils.secondsToMs(resolvedPreCondition.timeoutSec) ??
+            ConfigurationUtils.getScriptTimeoutMs(),
           vars: workflowFileForPre.vars,
           secretNames: preSecretNames,
           emitStatus: false,
@@ -2498,8 +2500,9 @@ export class WorkflowExecutor {
       }
       runtime.beginAttempt(target, attemptIndex, Date.now());
 
-      // `timeout` is milliseconds for every script surface (scriptProperties).
-      const timeout = step.timeout ?? ConfigurationUtils.getScriptTimeoutMs();
+      const timeout =
+        ConfigurationUtils.secondsToMs(step.timeoutSec) ??
+        ConfigurationUtils.getScriptTimeoutMs();
 
       const signedStepIndex = this.getSignedStepIndex(target);
       const timestampMs = Date.now();
@@ -3469,8 +3472,9 @@ export class WorkflowExecutor {
         nextAttemptIndex,
         maxRetries
       );
-      if ((policy.retryDelayMs ?? 0) > 0) {
-        await this.delay(policy.retryDelayMs!);
+      const retryDelayMs = ConfigurationUtils.secondsToMs(policy.retryDelaySec);
+      if ((retryDelayMs ?? 0) > 0) {
+        await this.delay(retryDelayMs!);
       }
       return {
         outcome: WORKFLOW_EXECUTION_OUTCOMES.RETRY,
@@ -3709,7 +3713,7 @@ export class WorkflowExecutor {
         operator: endCondition.operator,
         expected: endCondition.expected,
         ignoreCase: endCondition.ignoreCase,
-        timeout: endCondition.timeout,
+        timeoutSec: endCondition.timeoutSec,
       }),
       phase: EXECUTION_PHASES.END_CONDITION,
       target: this.toOutputExecutionTarget(target),
@@ -3721,7 +3725,9 @@ export class WorkflowExecutor {
       onFail: endCondition.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
       actionForErrored: this.getErrorConditionAction(errorBehavior),
       statusLabel: SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.END_CONDITION],
-      timeoutMs: endCondition.timeout,
+      timeoutMs:
+        ConfigurationUtils.secondsToMs(endCondition.timeoutSec) ??
+        ConfigurationUtils.getScriptTimeoutMs(),
       vars,
       secretNames,
       actionDetail: endConditionActionDetail,
@@ -3783,7 +3789,7 @@ export class WorkflowExecutor {
             operator: condition.operator,
             expected: condition.expected,
             ignoreCase: condition.ignoreCase,
-            timeout: condition.timeout,
+            timeoutSec: condition.timeoutSec,
           }),
           phase: EXECUTION_PHASES.END_CONDITION,
           target: this.toOutputExecutionTarget(target),
@@ -3796,7 +3802,9 @@ export class WorkflowExecutor {
           actionForErrored: this.getErrorConditionAction(errorBehavior),
           statusLabel:
             SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.END_CONDITION],
-          timeoutMs: condition.timeout,
+          timeoutMs:
+            ConfigurationUtils.secondsToMs(condition.timeoutSec) ??
+            ConfigurationUtils.getScriptTimeoutMs(),
           vars,
           secretNames,
           actionDetail: endConditionActionDetail,
@@ -5027,8 +5035,11 @@ export class WorkflowExecutor {
         statusTimestampMs
       );
 
-      if ((errorBehavior.retryDelayMs ?? 0) > 0) {
-        await this.delay(errorBehavior.retryDelayMs!);
+      const retryDelayMs = ConfigurationUtils.secondsToMs(
+        errorBehavior.retryDelaySec
+      );
+      if ((retryDelayMs ?? 0) > 0) {
+        await this.delay(retryDelayMs!);
       }
 
       return { outcome: WORKFLOW_EXECUTION_OUTCOMES.RETRY };

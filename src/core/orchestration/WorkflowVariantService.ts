@@ -76,13 +76,7 @@ export class WorkflowVariantService {
     const source =
       await this.workingFileManager.readWorkingFileFromDisk(sourceFilePath);
     const createdAt = Date.now();
-    const workingFile = this.buildDraft(
-      source,
-      sourceDescriptor.originalFile,
-      workflowName,
-      request.overrides,
-      createdAt
-    );
+    const workingFile = this.buildDraft(source, request.overrides, createdAt);
 
     let created: CreatedLineage | undefined;
     try {
@@ -142,26 +136,17 @@ export class WorkflowVariantService {
 
   private buildDraft(
     source: WorkingFile,
-    originalFile: string | undefined,
-    workflowName: string,
     overrides: WorkflowVariantRequest["overrides"],
     createdAt: number
   ): WorkingFile {
     const {
       _runtime: _sourceRuntime,
-      isFavorite: _sourceFavorite,
       startedAt: _sourceStartedAt,
-      lastModifiedAt: _sourceLastModifiedAt,
-      originalFile: _sourceOriginalFile,
       ...authoredDefinition
     } = source;
     return {
       ...authoredDefinition,
-      ...(originalFile ? { originalFile } : {}),
-      workflowName,
       startedAt: createdAt,
-      lastModifiedAt: createdAt,
-      isFavorite: false,
       definitionRevision: 1,
       steps: (source.steps ?? []).map(sanitizeStep),
       ...(source.finalStep

@@ -21,7 +21,7 @@ import { readLiveInstallations } from "../../utils/CtrlyokeInstallations";
 import { projectStateRoot } from "../../utils/ProjectStatePaths";
 
 /** Bump for any change to the manifest or document shard format. */
-export const INDEX_SCHEMA_VERSION = "4.2.0" as const;
+export const INDEX_SCHEMA_VERSION = 1 as const;
 
 const VERSION_DIR_PREFIX = "v";
 const VERSION_DIR_PATTERN = /^v\d/u;
@@ -37,7 +37,7 @@ export function getSearchIndexRoot(
   );
 }
 
-export function searchIndexVersionDirName(version: string): string {
+export function searchIndexVersionDirName(version: number): string {
   return `${VERSION_DIR_PREFIX}${version}`;
 }
 

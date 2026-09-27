@@ -391,8 +391,8 @@ function updateSchema(
 
   // Find the model property - it lives in executionProperties (shared mixin)
   const modelProperty =
-    schema.definitions?.executionProperties?.properties?.model ||
-    schema.definitions?.promptItem?.properties?.model;
+    schema.$defs?.executionProperties?.properties?.model ||
+    schema.$defs?.promptItem?.properties?.model;
 
   if (!modelProperty) {
     console.warn(

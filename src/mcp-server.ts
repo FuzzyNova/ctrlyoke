@@ -58,6 +58,7 @@ import {
   resolveQueueLimitPolicy,
 } from "./utils/QueueLimitUtils";
 import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
+import { stripLegacyWorkingFileLineageMetadata } from "./utils/WorkingFileMetadata";
 import { RunContinuationService } from "./core/orchestration/RunContinuationService";
 import {
   flattenParallelItems,
@@ -85,6 +86,13 @@ import {
   getStateHomeWarning,
 } from "./utils/ProjectStateRegistry";
 import { ctrlyokeStateHome } from "./utils/ProjectStatePaths";
+import {
+  isNewerSchemaError,
+  isNewerSchemaVersion,
+  PERSISTED_STORES,
+  readSchemaVersion,
+  refuseNewerSchema,
+} from "./utils/PersistedSchemaGuard";
 import {
   initializeRunHistoryLocation,
   parseRunHistoryLocation,
@@ -124,6 +132,8 @@ import {
   getCoordinationAttribution,
   resolveCoordinationParticipantKind,
 } from "./utils/CoordinationAttribution";
+import { PromptFileParser } from "./core/PromptFileParser";
+import type { WorkflowValidationWarning } from "./types/CtrlYokeTypes";
 
 export { MCP_TOOL_DEFINITIONS } from "./utils/McpToolDefinitions";
 
@@ -277,7 +287,7 @@ const lineageRepository = new WorkflowLineageRepository();
 
 // Initialize log file only when diagnostic logging is explicitly enabled.
 // CTRLYOKE_DIAGNOSTIC_LOGS=true is passed by the extension when
-// ctrlyoke.enableDiagnosticLogs is on. NODE_ENV=development enables it in dev.
+// ctrlyoke.diagnostics.verboseLogging is on. NODE_ENV=development enables it in dev.
 const workspaceRoot = process.env.CTRLYOKE_WORKSPACE || process.cwd();
 const diagnosticLogsEnabled =
   process.env.CTRLYOKE_DIAGNOSTIC_LOGS === BOOLEAN_STRING_VALUES.TRUE ||
@@ -334,6 +344,7 @@ function toWorkflowStepUpdates(
 
 export class CtrlYokeMCPServer {
   private server: InstanceType<typeof Server>;
+  private readonly promptFileParser = new PromptFileParser();
   private workspaceRoot: string;
   private operationQueue: Promise<void> = Promise.resolve();
   private coordinationState?: CoordinationState;
@@ -968,6 +979,28 @@ export class CtrlYokeMCPServer {
     };
 
     const allSteps = (queueData.steps || []) as WorkflowStep[];
+    let schemaWarnings: WorkflowValidationWarning[] = [];
+    const workflowDescriptor = await lineageRepository.readDescriptor(
+      this.workspaceRoot,
+      selected.workflowKey
+    );
+    if (workflowDescriptor.originalFile) {
+      const parsedSource = await this.promptFileParser.parsePromptFile(
+        workflowDescriptor.originalFile
+      );
+      if (this.promptFileParser.lastNewerSchemaError) {
+        throw new Error(this.promptFileParser.lastNewerSchemaError.message);
+      }
+      schemaWarnings = parsedSource?.warnings ?? [];
+    }
+    if (schemaWarnings.length === 0) {
+      try {
+        schemaWarnings = this.promptFileParser.getSchemaWarnings(queueData);
+      } catch {
+        // Workflow status remains available when another validation issue is
+        // present; warnings are advisory and must not fail this read tool.
+      }
+    }
     const steps = allSteps.map((p, index) => ({
       index,
       prompt: isScriptStep(p) ? `(script) ${p.script}` : p.prompt,
@@ -988,7 +1021,10 @@ export class CtrlYokeMCPServer {
       metadata: {
         workflowKey: selected.workflowKey,
         runRef: selected.runRef,
-        workflowName: queueData.workflowName,
+        workflowName: await lineageRepository.readWorkflowDisplayName(
+          this.workspaceRoot,
+          selected.workflowKey
+        ),
         harness: queueData.harness ?? null,
         model: queueData.model ?? null,
         currentIndex: runtime.currentIndex,
@@ -1003,6 +1039,7 @@ export class CtrlYokeMCPServer {
         descriptorRevision: selected.descriptorRevision,
       },
       steps,
+      schemaWarnings,
     };
 
     return {
@@ -1677,7 +1714,9 @@ export class CtrlYokeMCPServer {
           }
           try {
             const content = await fs.readFile(filePath, "utf8");
-            const data: WorkingFile = JSON.parse(content);
+            const data = stripLegacyWorkingFileLineageMetadata(
+              JSON.parse(content) as WorkingFile
+            );
             const runtime = data._runtime || {
               currentIndex: 0,
               executionState: EXECUTION_STATES.IDLE,
@@ -1691,6 +1730,10 @@ export class CtrlYokeMCPServer {
               return null;
             }
             const allSteps = (data.steps || []) as WorkflowStep[];
+            const descriptor = await lineageRepository.readDescriptor(
+              this.workspaceRoot,
+              workflowKey
+            );
             const completedCount = allSteps.filter(
               (p) => p._runtime?.completedAt !== undefined
             ).length;
@@ -1698,7 +1741,7 @@ export class CtrlYokeMCPServer {
             return {
               workflowKey,
               runRef,
-              workflowName: data.workflowName,
+              workflowName: descriptor.workflowName,
               executionState: runtime.executionState,
               harness: data.harness ?? null,
               model: data.model ?? null,
@@ -1706,7 +1749,7 @@ export class CtrlYokeMCPServer {
               totalSteps: allSteps.length,
               completedSteps: completedCount,
               startedAt: data.startedAt ?? null,
-              lastModifiedAt: data.lastModifiedAt ?? null,
+              lastModifiedAt: descriptor.lastModifiedAt ?? null,
               workingFile: filePath,
               runDirectory: WorkflowPaths.runDirectoryForWorkingFile(filePath),
               ...(runtime.worktree
@@ -1904,6 +1947,9 @@ export class CtrlYokeMCPServer {
         `${operation}: the attached ctrlyoke run file no longer exists at ${filePath}, so nothing was done (${describeError(error)}). Its run history may have been deleted, or this harness session may have outlived the workspace it was launched from.`
       );
     }
+    // Mutations resolve here before reaching the shared continuation service;
+    // refuse a newer definition root at the MCP boundary as well as on reads.
+    await this.readAttachedRun(operation, filePath);
     let descriptorRevision: number;
     try {
       descriptorRevision = (
@@ -1940,8 +1986,23 @@ export class CtrlYokeMCPServer {
       );
     }
     try {
-      return JSON.parse(content) as WorkingFile;
+      const workingFile = JSON.parse(content) as WorkingFile;
+      const schemaVersion = readSchemaVersion(workingFile);
+      if (
+        isNewerSchemaVersion(
+          PERSISTED_STORES.WORKFLOW_DEFINITION,
+          schemaVersion
+        )
+      ) {
+        refuseNewerSchema(
+          PERSISTED_STORES.WORKFLOW_DEFINITION,
+          schemaVersion as number,
+          `${path.basename(filePath)} (JSON)`
+        );
+      }
+      return workingFile;
     } catch (error) {
+      if (isNewerSchemaError(error)) throw error;
       throw new Error(
         `${operation}: the attached ctrlyoke run file ${filePath} is not valid JSON, so nothing was done (${describeError(error)}).`
       );

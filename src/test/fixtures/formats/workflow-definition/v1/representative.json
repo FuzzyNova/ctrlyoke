@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "prompt": "Implement the requested change.",
+  "model": "claude-sonnet-4.6",
+  "endCondition": {
+    "script": "node check.js",
+    "timeoutSec": 600,
+    "maxRetries": 2
+  },
+  "vars": { "issue_id": "123" },
+  "trustedExternalRoots": null
+}

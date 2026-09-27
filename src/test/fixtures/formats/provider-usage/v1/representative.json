@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "snapshots": {
+    "claude-cli": {
+      "status": "available",
+      "fetchedAt": 1,
+      "quota": { "five_hour": { "usedPercent": 25, "resetsAt": 2 } }
+    }
+  }
+}

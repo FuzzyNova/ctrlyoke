@@ -100,7 +100,7 @@ function resolveRef(
   const pointer = hashIndex === -1 ? "" : ref.slice(hashIndex);
   const targetDocument = ref.startsWith("#")
     ? document
-    : schemaFile === "workflow-schema.json"
+    : schemaFile === "workflow.json" || schemaFile === "workflow-schema.json"
       ? workflowSchema
       : undefined;
   assert.ok(targetDocument, `Unsupported $ref: ${ref}`);
@@ -192,6 +192,7 @@ function walk(
 
   const properties = resolved.properties as Record<string, SchemaNode>;
   for (const [key, childSchema] of Object.entries(properties)) {
+    if (!prefix && key === "$schema") continue;
     walk(
       childSchema,
       prefix ? `${prefix}.${key}` : key,
@@ -211,7 +212,7 @@ function allSettingPaths(): Map<string, string> {
 /**
  * `SETTING_PATHS` in DashboardConstants.ts is the shared registry a few
  * controls use instead of writing their dot path inline (e.g.
- * `path={SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_ENABLED}`).
+ * `path={SETTING_PATHS.STATUS_LINE_CLAUDE_ENABLED}`).
  * Defining a value there is not itself proof of a live control — the registry
  * also backs config plumbing — so this only maps path -> constant name; the
  * caller still has to confirm the constant is referenced from webview source.
@@ -285,7 +286,7 @@ const SETTINGS_ENUM_METADATA = [
     "STEP_COLOR_MODE_OPTIONS_META",
   ],
   [
-    "ctrlyokeMcpMode",
+    "execution.ctrlyokeMcpMode",
     CTRLYOKE_MCP_MODE_OPTIONS_META,
     "CTRLYOKE_MCP_MODE_OPTIONS_META",
   ],

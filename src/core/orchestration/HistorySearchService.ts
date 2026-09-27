@@ -83,7 +83,7 @@ export class HistorySearchService {
 
     const indexAttemptStart = Date.now();
     try {
-      return await getSharedHistorySearchIndexService(
+      const response = await getSharedHistorySearchIndexService(
         workspaceFolderPath
       ).search(
         request,
@@ -93,6 +93,26 @@ export class HistorySearchService {
         onPartialResults,
         options
       );
+      const workflowNames = new Map<WorkflowKey, string>();
+      for (const workflowKey of new Set(
+        response.results.map((result) => result.workflowKey)
+      )) {
+        workflowNames.set(
+          workflowKey,
+          await this.lineageRepository.readWorkflowDisplayName(
+            workspaceFolderPath,
+            workflowKey
+          )
+        );
+      }
+      return {
+        ...response,
+        results: response.results.map((result) => ({
+          ...result,
+          workflowName:
+            workflowNames.get(result.workflowKey) ?? result.workflowName,
+        })),
+      };
     } catch (error) {
       if (error instanceof HistorySearchCancelledError) {
         // Superseded by a newer search — not a failure, so it must not fall

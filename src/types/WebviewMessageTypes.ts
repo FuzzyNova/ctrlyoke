@@ -42,7 +42,7 @@ import {
   type SettingWriteScope,
   type SecretRegistryActionState,
   type SecretRegistryState,
-  type StatusLineTrackingHarnessId,
+  type StatusLineHarnessId,
   type SessionKind,
   type ShellKind,
   type TerminalEndReason,
@@ -72,6 +72,7 @@ import type {
   ParallelGroupDefinition,
   StepDisplayProperties,
   CoordinationScopeSnapshot,
+  WorkflowValidationWarning,
 } from "./CtrlYokeTypes";
 import type {
   CtrlYokeGlobalSettings,
@@ -359,7 +360,7 @@ export interface OutputStatusMessage {
 export interface EndConditionConfig {
   script: string;
   returns?: string;
-  timeout?: number;
+  timeoutSec?: number;
   maxRetries?: number;
   retryPrompt?: string;
   passRetryPrompt?: string;
@@ -603,8 +604,7 @@ export interface DevBuildCompletedMessage {
 export interface DevRestartingMessage {
   type: typeof MESSAGE_TYPES.DEV_RESTARTING;
   command:
-    | "workbench.action.reloadWindow"
-    | "workbench.action.restartExtensionHost";
+    "workbench.action.reloadWindow" | "workbench.action.restartExtensionHost";
 }
 
 export interface DevCommandUnavailableMessage {
@@ -656,6 +656,7 @@ export interface FileSelectedMessage {
   finalStepPhase?: FinalStepPhase | null;
   workflowProperties?: Record<string, any>;
   activeStepIndices?: number[];
+  schemaWarnings?: WorkflowValidationWarning[];
 }
 
 /**
@@ -678,6 +679,7 @@ export interface SessionRestoredMessage {
   workflowProperties?: Record<string, any>;
   /** The definition head that produced `steps`; absent for legacy producers. */
   definitionRevision?: number;
+  schemaWarnings?: WorkflowValidationWarning[];
 }
 
 /**
@@ -1666,6 +1668,7 @@ export interface OpenGlobalSettingsTabMessage {
 export interface GlobalSettingsLoadedMessage {
   type: typeof MESSAGE_TYPES.GLOBAL_SETTINGS_LOADED;
   settings: FullGlobalSettings;
+  readOnly?: boolean;
   commitMessageGeneration?: CommitMessageGenerationRecord | null;
 }
 
@@ -1688,7 +1691,7 @@ export interface UpdateExternalRootDecisionMessage {
 /** Webview → Extension: disable global statusline tracking for one harness. */
 export interface DisableStatusLineTrackingMessage {
   type: typeof MESSAGE_TYPES.DISABLE_STATUS_LINE_TRACKING;
-  harnessId: StatusLineTrackingHarnessId;
+  harnessId: StatusLineHarnessId;
   restoreCustomCommand: boolean;
 }
 
@@ -1839,6 +1842,7 @@ export interface RunViewLoadedMessage {
   address: WorkflowViewAddress;
   runDirectory?: string;
   workingFile: WorkingFile;
+  workflowName?: string;
   history: WorkflowOutputHistory | null;
   runSummaries: RunSummary[];
   workflowProperties: Record<string, unknown>;

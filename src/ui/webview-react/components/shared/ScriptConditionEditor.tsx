@@ -90,7 +90,7 @@ export interface ScriptConditionValue {
   operator?: string;
   ignoreCase?: boolean;
   compareSource?: string;
-  timeout?: number;
+  timeoutSec?: number;
   shell?: string;
   onPass?: string;
   onFail?: string;
@@ -173,12 +173,23 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
     COMPARE_SOURCE_OPTIONS_META,
     compareSourcePath
   );
-  const operatorOptions = toSelectOptions(SCRIPT_OPERATOR_OPTIONS_META, operatorPath);
+  const operatorOptions = toSelectOptions(
+    SCRIPT_OPERATOR_OPTIONS_META,
+    operatorPath
+  );
   const actionOptions =
     variant === PROMPT_PROPERTIES.END_CONDITION
-      ? [CONDITION_ACTIONS.CONTINUE, CONDITION_ACTIONS.RETRY, CONDITION_ACTIONS.STOP_WORKFLOW]
+      ? [
+          CONDITION_ACTIONS.CONTINUE,
+          CONDITION_ACTIONS.RETRY,
+          CONDITION_ACTIONS.STOP_WORKFLOW,
+        ]
       : variant === PROMPT_PROPERTIES.PRE_CONDITION
-        ? [CONDITION_ACTIONS.CONTINUE, CONDITION_ACTIONS.SKIP_PROMPT, CONDITION_ACTIONS.STOP_WORKFLOW]
+        ? [
+            CONDITION_ACTIONS.CONTINUE,
+            CONDITION_ACTIONS.SKIP_PROMPT,
+            CONDITION_ACTIONS.STOP_WORKFLOW,
+          ]
         : [CONDITION_ACTIONS.CONTINUE, CONDITION_ACTIONS.STOP_WORKFLOW];
   const actionOptionsFor = (property: "onPass" | "onFail") =>
     actionOptions.map((action) => ({
@@ -206,7 +217,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   // WorkflowExecutor) already falls back to ConfigurationUtils.getScriptTimeoutMs() whenever
   // timeout is unset, so there is no separate UI-level default to keep in sync.
   const [timeoutInput, setTimeoutInput] = useState(
-    v.timeout !== undefined ? String(v.timeout) : ""
+    v.timeoutSec !== undefined ? String(v.timeoutSec) : ""
   );
   const [maxRetriesInput, setMaxRetriesInput] = useState(
     String(v.maxRetries ?? 1)
@@ -237,8 +248,8 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   }, [v.shell]);
 
   useEffect(() => {
-    setTimeoutInput(v.timeout !== undefined ? String(v.timeout) : "");
-  }, [v.timeout]);
+    setTimeoutInput(v.timeoutSec !== undefined ? String(v.timeoutSec) : "");
+  }, [v.timeoutSec]);
 
   useEffect(() => {
     setMaxRetriesInput(String(v.maxRetries ?? 1));
@@ -327,16 +338,16 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   // downstream, so clamping here would just be another UI-invented magic number).
   const commitTimeout = () => {
     if (timeoutInput.trim() === "") {
-      update({ timeout: undefined });
+      update({ timeoutSec: undefined });
       return;
     }
-    const parsed = parseInt(timeoutInput, 10);
+    const parsed = parseFloat(timeoutInput);
     if (isNaN(parsed)) {
-      setTimeoutInput(v.timeout !== undefined ? String(v.timeout) : "");
+      setTimeoutInput(v.timeoutSec !== undefined ? String(v.timeoutSec) : "");
       return;
     }
     setTimeoutInput(String(parsed));
-    update({ timeout: parsed });
+    update({ timeoutSec: parsed });
   };
 
   const commitShell = () => {
@@ -424,7 +435,8 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
     (s) => s.workflowProperties.executionMode ?? s.globalSettings.executionMode
   );
   const defaultExecutionModeLabel = `Inherit (${
-      EXECUTION_MODE_OPTIONS_META[resolvedExecutionMode]?.label ?? resolvedExecutionMode
+    EXECUTION_MODE_OPTIONS_META[resolvedExecutionMode]?.label ??
+    resolvedExecutionMode
   })`;
   // One generated sentence, shared with the execution preview and the CLI
   // verdict, so all three describe a condition the same way.
@@ -554,7 +566,10 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
               type="text"
               id={`${idPrefix}-expected`}
               title={schemaTitle(`${schemaPath}.expected`)}
-              aria-label={schemaAriaLabel("Expected value", `${schemaPath}.expected`)}
+              aria-label={schemaAriaLabel(
+                "Expected value",
+                `${schemaPath}.expected`
+              )}
               value={expectedInput}
               onChange={(e) => setExpectedInput(e.target.value)}
               onBlur={(e) =>
@@ -591,8 +606,15 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             <input
               type="checkbox"
               id={`${idPrefix}-ignore-case`}
-              aria-label={schemaAriaLabel("Ignore case", `${schemaPath}.ignoreCase`)}
-              title={schemaTitle(`${schemaPath}.ignoreCase`, undefined, "Compare text without regard to letter case. Does not apply to numeric, regex, or emptiness operators.")}
+              aria-label={schemaAriaLabel(
+                "Ignore case",
+                `${schemaPath}.ignoreCase`
+              )}
+              title={schemaTitle(
+                `${schemaPath}.ignoreCase`,
+                undefined,
+                "Compare text without regard to letter case. Does not apply to numeric, regex, or emptiness operators."
+              )}
               checked={v.ignoreCase ?? false}
               onChange={(e) =>
                 update({ ignoreCase: e.target.checked ? true : undefined })
@@ -659,19 +681,23 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           <label
             htmlFor={`${idPrefix}-timeout`}
             className="text-xs font-medium text-foreground"
-            title={schemaTitle(`${schemaPath}.timeout`)}
+            title={schemaTitle(`${schemaPath}.timeoutSec`)}
           >
-            Timeout (ms)
+            Timeout (s)
           </label>
           <input
             type="number"
             id={`${idPrefix}-timeout`}
-            aria-label={schemaAriaLabel("Timeout (ms)", `${schemaPath}.timeout`)}
-            title={schemaTitle(`${schemaPath}.timeout`)}
+            aria-label={schemaAriaLabel(
+              "Timeout (s)",
+              `${schemaPath}.timeoutSec`
+            )}
+            title={schemaTitle(`${schemaPath}.timeoutSec`)}
             value={timeoutInput}
             onChange={(e) => setTimeoutInput(e.target.value)}
             onBlur={commitTimeout}
-            min={0}
+            min={0.001}
+            step="any"
             placeholder="Default (from settings)"
             disabled={disabled}
             className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
@@ -681,7 +707,11 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           <label
             htmlFor={`${idPrefix}-shell`}
             className="text-xs font-medium text-foreground"
-            title={schemaTitle(`${schemaPath}.shell`, undefined, "Pins the interpreter for this script's inline text. Script files with a known extension (.ps1, .sh) always use their own interpreter.")}
+            title={schemaTitle(
+              `${schemaPath}.shell`,
+              undefined,
+              "Pins the interpreter for this script's inline text. Script files with a known extension (.ps1, .sh) always use their own interpreter."
+            )}
             aria-label={schemaAriaLabel("Shell", `${schemaPath}.shell`)}
           >
             Shell
@@ -713,7 +743,10 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           <input
             type="text"
             id={`${idPrefix}-shell-path`}
-            aria-label={schemaAriaLabel("Custom shell path", `${schemaPath}.shell`)}
+            aria-label={schemaAriaLabel(
+              "Custom shell path",
+              `${schemaPath}.shell`
+            )}
             title={schemaTitle(`${schemaPath}.shell`)}
             value={shellInput}
             onChange={(e) => setShellInput(e.target.value)}
@@ -746,7 +779,10 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             <input
               type="number"
               id={`${idPrefix}-max-retries`}
-              aria-label={schemaAriaLabel("Max Retries", `${schemaPath}.maxRetries`)}
+              aria-label={schemaAriaLabel(
+                "Max Retries",
+                `${schemaPath}.maxRetries`
+              )}
               title={schemaTitle(`${schemaPath}.maxRetries`)}
               value={maxRetriesInput}
               onChange={(e) => setMaxRetriesInput(e.target.value)}
@@ -772,8 +808,15 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             <label
               htmlFor={`${idPrefix}-execution-mode`}
               className="text-xs font-medium text-foreground"
-              title={schemaTitle(`${schemaPath}.executionMode`, undefined, EXECUTION_MODE_HELP_TEXT)}
-              aria-label={schemaAriaLabel("Execution Mode", `${schemaPath}.executionMode`)}
+              title={schemaTitle(
+                `${schemaPath}.executionMode`,
+                undefined,
+                EXECUTION_MODE_HELP_TEXT
+              )}
+              aria-label={schemaAriaLabel(
+                "Execution Mode",
+                `${schemaPath}.executionMode`
+              )}
             >
               Execution Mode
             </label>
@@ -794,7 +837,10 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
                   label: defaultExecutionModeLabel,
                   pseudo: { writes: "omit executionMode" },
                 },
-                ...toSelectOptions(EXECUTION_MODE_OPTIONS_META, `${schemaPath}.executionMode`),
+                ...toSelectOptions(
+                  EXECUTION_MODE_OPTIONS_META,
+                  `${schemaPath}.executionMode`
+                ),
               ]}
               disabled={disabled}
               schemaPath={`${schemaPath}.executionMode`}
@@ -879,8 +925,15 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             <input
               type="checkbox"
               id={`${idPrefix}-resume-session-on-retry`}
-              aria-label={schemaAriaLabel("Resume Session on Retry", `${schemaPath}.resumeSessionOnRetry`)}
-              title={schemaTitle(`${schemaPath}.resumeSessionOnRetry`, undefined, "When enabled, retries continue in the same session. Uncheck to start a fresh session for each retry.")}
+              aria-label={schemaAriaLabel(
+                "Resume Session on Retry",
+                `${schemaPath}.resumeSessionOnRetry`
+              )}
+              title={schemaTitle(
+                `${schemaPath}.resumeSessionOnRetry`,
+                undefined,
+                "When enabled, retries continue in the same session. Uncheck to start a fresh session for each retry."
+              )}
               checked={v.resumeSessionOnRetry ?? true}
               onChange={(e) =>
                 update({ resumeSessionOnRetry: e.target.checked })
@@ -891,7 +944,11 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             <label
               htmlFor={`${idPrefix}-resume-session-on-retry`}
               className="text-xs font-medium text-foreground cursor-pointer"
-              title={schemaTitle(`${schemaPath}.resumeSessionOnRetry`, undefined, "When enabled, retries continue in the same session. Uncheck to start a fresh session for each retry.")}
+              title={schemaTitle(
+                `${schemaPath}.resumeSessionOnRetry`,
+                undefined,
+                "When enabled, retries continue in the same session. Uncheck to start a fresh session for each retry."
+              )}
             >
               Resume Session on Retry
             </label>

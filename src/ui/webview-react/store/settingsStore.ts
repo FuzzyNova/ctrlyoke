@@ -214,6 +214,7 @@ interface SettingsState {
 
   // Full global settings (from configService, loaded on demand)
   fullGlobalSettings: FullGlobalSettings | null;
+  globalSettingsReadOnly: boolean;
 
   // Server running state (toggled by ENABLE_SERVER / DISABLE_SERVER)
   serverRunning: boolean;
@@ -321,6 +322,7 @@ interface SettingsActions {
 
   // Full global settings
   setFullGlobalSettings: (settings: FullGlobalSettings) => void;
+  setGlobalSettingsReadOnly: (readOnly: boolean) => void;
 
   // Server running state
   setServerRunning: (running: boolean) => void;
@@ -501,6 +503,7 @@ const initialState: SettingsState = {
   workflowLoaded: false,
   workflowExternalRootsApprovalRequired: false,
   fullGlobalSettings: null,
+  globalSettingsReadOnly: false,
   serverRunning: false,
   licenseAccess: { isPro: false, hasRemoteAccess: false, trialEndsAt: null },
   licenseMachines: [],
@@ -636,6 +639,8 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
       set({ workflowExternalRootsApprovalRequired: required }),
 
     setFullGlobalSettings: (settings) => set({ fullGlobalSettings: settings }),
+    setGlobalSettingsReadOnly: (globalSettingsReadOnly) =>
+      set({ globalSettingsReadOnly }),
 
     setServerRunning: (running) => set({ serverRunning: running }),
 

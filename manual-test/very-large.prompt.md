@@ -1275,7 +1275,7 @@ CopilotIntegration (abstract base)
 // Prompt sent via stdin, not command argument
 const result = await this.spawnProcess("claude", args, {
   stdin: promptText,
-  timeout: 300000, // 5 minutes
+  timeoutSec: 300, // 5 minutes
   onStdout: (chunk) => this.streamingChunkEmitter.fire(chunk),
 });
 ```

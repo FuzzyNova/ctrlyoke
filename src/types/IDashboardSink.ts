@@ -4,6 +4,7 @@ import type {
   WorkflowViewAddress,
   WorktreeRunProjection,
   ParallelGroupDefinition,
+  WorkflowValidationWarning,
 } from "./CtrlYokeTypes";
 import type {
   FinalStepPhase,
@@ -40,7 +41,8 @@ export interface IDashboardSink {
     workflowId?: string,
     workflowProperties?: Record<string, unknown>,
     parallelGroups?: ParallelGroupDefinition[],
-    activeStepIndices?: number[]
+    activeStepIndices?: number[],
+    schemaWarnings?: WorkflowValidationWarning[]
   ): Promise<void>;
 
   updateSessionRestored(
@@ -60,7 +62,8 @@ export interface IDashboardSink {
     workflowProperties?: Record<string, unknown>,
     parallelGroups?: ParallelGroupDefinition[],
     activeStepIndices?: number[],
-    definitionRevision?: number
+    definitionRevision?: number,
+    schemaWarnings?: WorkflowValidationWarning[]
   ): Promise<void>;
 
   loadOutputHistoryForWorkflow?(

@@ -18,19 +18,17 @@ import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 
 function createSettings(
   useDifferentFormatPerHarness = false,
-  sharedFormat: StatusLineSegment[] = CTRLYOKE_SETTINGS_DEFAULTS.permissions
-    .statusLineTracking.sharedFormat
+  sharedFormat: StatusLineSegment[] = CTRLYOKE_SETTINGS_DEFAULTS.statusLine
+    .sharedFormat
 ): FullGlobalSettings {
   return {
     settings: {
       ...CTRLYOKE_SETTINGS_DEFAULTS,
-      permissions: {
-        ...CTRLYOKE_SETTINGS_DEFAULTS.permissions,
-        statusLineTracking: {
-          ...CTRLYOKE_SETTINGS_DEFAULTS.permissions.statusLineTracking,
-          useDifferentFormatPerHarness,
-          sharedFormat,
-        },
+      permissions: { ...CTRLYOKE_SETTINGS_DEFAULTS.permissions },
+      statusLine: {
+        ...CTRLYOKE_SETTINGS_DEFAULTS.statusLine,
+        useDifferentFormatPerHarness,
+        sharedFormat,
       },
     },
     sources: {},
@@ -126,7 +124,7 @@ describe("StatusLineSection", () => {
 
     expect(getVsCodeApi().postMessage).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
-      path: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_SHARED_FORMAT,
+      path: SETTING_PATHS.STATUS_LINE_SHARED_FORMAT,
       value: [
         ...DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
         { type: "field", field: STATUS_LINE_FIELD_IDS.VERSION },

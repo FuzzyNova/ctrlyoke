@@ -479,7 +479,7 @@ suite("EndConditionEvaluator Tests", () => {
         script: "echo hello",
         compareSource: "stdout" as const,
         expected: "hello",
-        timeout: 5000,
+        timeoutSec: 5,
       };
 
       const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -651,7 +651,7 @@ suite("EndConditionEvaluator Tests", () => {
       const condition = {
         script:
           process.platform === "win32" ? "ping -n 10 localhost" : "sleep 5",
-        timeout: 100, // Very short timeout
+        timeoutSec: 0.1, // Very short timeout
       };
 
       const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -674,7 +674,7 @@ suite("EndConditionEvaluator Tests", () => {
         script: process.platform === "win32" ? "echo test" : "echo test",
         compareSource: "stdout" as const,
         expected: "test",
-        timeout: 5000,
+        timeoutSec: 5,
       };
 
       const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -779,7 +779,7 @@ suite("EndConditionEvaluator Tests", () => {
         script: process.platform === "win32" ? "echo hello" : "echo hello",
         compareSource: "stdout" as const,
         expected: "hello",
-        timeout: 5000,
+        timeoutSec: 5,
       };
 
       const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -801,7 +801,7 @@ suite("EndConditionEvaluator Tests", () => {
         script: 'node -e "process.exit(1)"',
         compareSource: "exitCode" as const,
         expected: 1,
-        timeout: 5000,
+        timeoutSec: 5,
       };
 
       const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -827,7 +827,7 @@ suite("EndConditionEvaluator Tests", () => {
         compareSource: "stdout" as const,
         operator: "contains" as const,
         expected: "expected",
-        timeout: 5000,
+        timeoutSec: 5,
       };
 
       const workspaceFolder = vscode.workspace.workspaceFolders?.[0];

@@ -58,6 +58,36 @@ suite("ctrlyoke validate compatibility command", () => {
     assert.strictEqual(result.target, null);
   });
 
+  test("refuses newer workflow formats with exit 2 and a distinct JSON code", async function () {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-validate-newer-")
+    );
+    temporaryRoots.push(root);
+    const workflow = path.join(root, "future.ctrlyoke.yaml");
+    await fs.writeFile(
+      workflow,
+      "schemaVersion: 2\nfutureWorkflowProperty: true\n",
+      "utf8"
+    );
+
+    const human = await runCli(["validate", workflow], root);
+    assert.strictEqual(human.code, 2);
+    assert.match(
+      human.stderr,
+      /future\.ctrlyoke\.yaml \(YAML\) uses workflow format 2/u
+    );
+    assert.match(human.stderr, /supports format 1/u);
+
+    const json = await runCli(["validate", workflow, "--json"], root);
+    assert.strictEqual(json.code, 2);
+    const result = JSON.parse(json.stdout) as {
+      error: string;
+      errorCode: string;
+    };
+    assert.strictEqual(result.errorCode, "workflow-newer-format");
+    assert.strictEqual(result.error, human.stderr.trim());
+  });
+
   test("analyzes one target and filters all-installed targets to available harnesses", async function () {
     this.timeout(60000);
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-validate-"));
@@ -196,6 +226,53 @@ suite("ctrlyoke validate compatibility command", () => {
     assert.strictEqual(
       result.warnings[0].propertyPointer,
       "/steps/0/endCondition/expected"
+    );
+  });
+
+  test("reports unknown fields with exact paths and fails them in strict mode", async function () {
+    this.timeout(30000);
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-validate-"));
+    temporaryRoots.push(root);
+    const workflow = path.join(root, "typo.ctrlyoke.yaml");
+    await fs.writeFile(
+      workflow,
+      ["steps:", "  - prompt: Do the work", "    endConditon: {}"].join("\n"),
+      "utf8"
+    );
+
+    const human = await runCli(["validate", workflow], root);
+    assert.strictEqual(human.code, 0, human.stderr);
+    assert.match(human.stdout, /\/steps\/0\/endConditon/u);
+    assert.match(human.stdout, /did you mean 'endCondition'/iu);
+    assert.match(human.stdout, /newer ctrlyoke/u);
+
+    const json = await runCli(["validate", workflow, "--json"], root);
+    assert.strictEqual(json.code, 0, json.stderr);
+    const result = JSON.parse(json.stdout) as {
+      success: boolean;
+      warnings: Array<{ code: string; propertyPointer: string }>;
+    };
+    assert.strictEqual(result.success, true);
+    assert.deepStrictEqual(
+      result.warnings.map((warning) => [warning.code, warning.propertyPointer]),
+      [["unknown-property", "/steps/0/endConditon"]]
+    );
+
+    const strict = await runCli(
+      ["validate", workflow, "--strict", "--json"],
+      root
+    );
+    assert.strictEqual(strict.code, 2, strict.stderr);
+    const strictResult = JSON.parse(strict.stdout) as {
+      success: boolean;
+      error: string;
+      warnings: Array<{ propertyPointer: string }>;
+    };
+    assert.strictEqual(strictResult.success, false);
+    assert.match(strictResult.error, /Unknown workflow fields/u);
+    assert.strictEqual(
+      strictResult.warnings[0].propertyPointer,
+      "/steps/0/endConditon"
     );
   });
 

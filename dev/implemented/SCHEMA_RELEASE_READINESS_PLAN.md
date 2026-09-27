@@ -1,6 +1,9 @@
 # Schema and Persisted-Format Release Readiness
 
-> **Status:** Proposed — not implemented. Written 2026-09-26 against current code.
+> **Status:** Implemented 2026-09-26 — all 18 items and phases A–E are done. Two release-cut
+> actions remain by design (§12 checklist): re-capture or confirm the fixture corpus from the
+> actual release build, and deploy and verify `/schema/v1/` live. §2.4's `ctrlyoke migrate` ships
+> with the first real migration after release.
 >
 > **Problem in one line:** once ctrlyoke ships, every persisted shape — workflow files,
 > `settings.json`, run history, the search index — becomes a compatibility contract, and today
@@ -26,30 +29,35 @@
 
 ## 0. The 18 items and their decisions
 
-| #   | Item                                                                   | Decision                                    | §    | Phase |
-| --- | ---------------------------------------------------------------------- | ------------------------------------------- | ---- | ----- |
-| 1   | Version marker on authored files + migration plan                      | **Yes** (user); newer files refused cleanly | 1, 2 | E     |
-| 2   | Publish schemas at `https://ctrlyoke.dev/schema/v1/…`, allow `$schema` | **Yes** (user)                              | 3    | E     |
-| 3   | All durations in seconds, with a `Sec` suffix                          | **Yes** (user)                              | 4    | B     |
-| 4   | Strict prompt steps / workflow root                                    | Recommended; draft 2020-12, verified        | 5    | D     |
-| 5   | Top-level `statusLine` keyed by harness ID; new `diagnostics` group    | **Yes** (user)                              | 6    | B     |
-| 6   | Single-source lineage metadata in `workflow.json`                      | **Yes** (user)                              | 7    | C     |
-| 7   | Constrain `vars` key names                                             | Recommended                                 | 8.1  | A     |
-| 8   | `mcpServerConfig`: exactly one of `command`/`url`                      | Recommended                                 | 8.2  | A     |
-| 9   | Integer/range tightening (+ timeout-`0` unification)                   | Recommended                                 | 8.3  | A     |
-| 10  | `workflowKey` rejects `.`/`..`                                         | Recommended (low)                           | 8.4  | A     |
-| 11  | Script-step `executionMode` description                                | Fix                                         | 9    | A     |
-| 12  | `endCondition.maxRetries` default description                          | Fix                                         | 9    | A     |
-| 13  | `passRetryPrompt` description                                          | Fix                                         | 9    | A     |
-| 14  | `defaults.priorContext` description / disallow run address             | Fix                                         | 9    | A     |
-| 15  | Delete dead root `_runtime.harness` rule                               | Fix                                         | 10.1 | A     |
-| 16  | Single-source harness-keyed lists                                      | Fix                                         | 10.2 | A     |
-| 17  | Consistent `default` keyword                                           | Fix                                         | 10.3 | A     |
-| 18  | Stale `responseText` claim in `copilot-instructions.md`                | Fix                                         | 11   | A     |
+| #   | Item                                                                   | Decision                                                                                                                                                             | §    | Phase |
+| --- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | ----- |
+| 1   | Version marker on authored files + migration plan                      | Implementation complete — format v1 guards, empty-chain migration/read hooks, and persisted-store inventory coverage done 2026-09-26; release fixture freeze pending | 1, 2 | E     |
+| 2   | Publish schemas at `https://ctrlyoke.dev/schema/v1/…`, allow `$schema` | Done 2026-09-26 (publication pipeline implemented; production release pending)                                                                                       | 3    | E     |
+| 3   | All durations in seconds, with a `Sec` suffix                          | Done 2026-09-26                                                                                                                                                      | 4    | B     |
+| 4   | Strict prompt steps / workflow root                                    | Done 2026-09-26                                                                                                                                                      | 5    | D     |
+| 5   | Top-level `statusLine` keyed by harness ID; new `diagnostics` group    | Done 2026-09-26                                                                                                                                                      | 6    | B     |
+| 6   | Single-source lineage metadata in `workflow.json`                      | Done 2026-09-26                                                                                                                                                      | 7    | C     |
+| 7   | Constrain `vars` key names                                             | Done 2026-09-26                                                                                                                                                      | 8.1  | A     |
+| 8   | `mcpServerConfig`: exactly one of `command`/`url`                      | Done 2026-09-26                                                                                                                                                      | 8.2  | A     |
+| 9   | Integer/range tightening (+ timeout-`0` unification)                   | Done 2026-09-26                                                                                                                                                      | 8.3  | A     |
+| 10  | `workflowKey` rejects `.`/`..`                                         | Done 2026-09-26                                                                                                                                                      | 8.4  | A     |
+| 11  | Script-step `executionMode` description                                | Done 2026-09-26                                                                                                                                                      | 9    | A     |
+| 12  | `endCondition.maxRetries` default description                          | Done 2026-09-26                                                                                                                                                      | 9    | A     |
+| 13  | `passRetryPrompt` description                                          | Done 2026-09-26                                                                                                                                                      | 9    | A     |
+| 14  | `defaults.priorContext` description / disallow run address             | Done 2026-09-26                                                                                                                                                      | 9    | A     |
+| 15  | Delete dead root `_runtime.harness` rule                               | Done 2026-09-26                                                                                                                                                      | 10.1 | A     |
+| 16  | Single-source harness-keyed lists                                      | Done 2026-09-26                                                                                                                                                      | 10.2 | A     |
+| 17  | Consistent `default` keyword                                           | Done 2026-09-26                                                                                                                                                      | 10.3 | A     |
+| 18  | Stale `responseText` claim in `copilot-instructions.md`                | Done 2026-09-26                                                                                                                                                      | 11   | A     |
 
 Phases are ordered in §12. The governing idea: **finish every shape change (A–D) first, then
 stamp and freeze `v1` (E)**, so the baseline that ships is the final one and no migration is
 ever written for a pre-release rename.
+
+Item 4's schema dialect, `$defs` migration touchpoints, closures, lenient loader, and warning
+surfacing in the extension, VS Code/hosted dashboards, and MCP `workflow_status` were
+completed 2026-09-26. Authored workflow and settings `schemaVersion` fields and the root
+`$schema` key landed in phase E.
 
 ---
 
@@ -57,24 +65,25 @@ ever written for a pre-release rename.
 
 ### 1.1 Inventory of what is persisted today
 
-| Store                                  | Location                                           | Version marker today                                        | Guarded?                                 |
-| -------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------- |
-| Authored workflow file                 | user's repo (`*.ctrlyoke.yaml/json`, `.prompt.md`) | **none**                                                    | no                                       |
-| `settings.json` (user + workspace)     | `~/.ctrlyoke/`, `.ctrlyoke/`                       | **none**                                                    | no                                       |
-| Run working file                       | `.runs/<key>/run-*/workflow.ctrlyoke.json`         | `_runtime.schemaVersion` = 1                                | yes (`RUN_FILE`)                         |
-| Lineage descriptor                     | `.runs/<key>/workflow.json`                        | `schemaVersion` = 1                                         | yes                                      |
-| Runner lock                            | `.runs/<key>/runner.json`                          | `schemaVersion` = 2                                         | yes                                      |
-| Timeline manifest + `events.jsonl`     | `run-*/manifest.json`, `run-*/events.jsonl`        | manifest `schemaVersion` = **`"2.4.0"` (string)**           | **no**                                   |
-| History search index                   | `.search-index/v<ver>/`                            | `INDEX_SCHEMA_VERSION` = **`"4.2.0"` (string)**, per dir    | derived; rebuild on mismatch             |
-| Trust stores, coordination, usage (×3) | `~/.ctrlyoke/…`, project state                     | `schemaVersion` = 1                                         | yes                                      |
-| Project metadata                       | `ProjectStateRegistry`                             | `schemaVersion` = 1                                         | own ad-hoc check, not via the guard      |
-| Managed/named worktree records         | `WorktreeManager`                                  | `schemaVersion` = 1                                         | verify                                   |
-| `installations.json`                   | `~/.ctrlyoke/`                                     | 1                                                           | verify                                   |
-| Statusline launcher / snapshot         | `~/.ctrlyoke/bin/`, sidecar                        | manifest version / `STATUSLINE_SNAPSHOT_PROTOCOL_VERSION` 1 | own protocol                             |
-| CLI `--json` outputs                   | stdout                                             | per-command `*_JSON_SCHEMA_VERSION` = 1                     | public API — separate policy (see §2.10) |
+| Store                                  | Location                                           | Version marker today                                                       | Guarded?                                                                                                |
+| -------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Authored workflow file                 | user's repo (`*.ctrlyoke.yaml/json`, `.prompt.md`) | optional root `schemaVersion` = 1; absent means 1                          | yes (`WORKFLOW_DEFINITION`; newer files refused at load)                                                |
+| `settings.json` (user + workspace)     | `~/.ctrlyoke/`, `.ctrlyoke/`                       | optional root `schemaVersion` = 1; absent means 1                          | yes (`SETTINGS`; newer files read best-effort and cannot be written)                                    |
+| Run working file                       | `.runs/<key>/run-*/workflow.ctrlyoke.json`         | `_runtime.schemaVersion` = 1                                               | yes (`RUN_FILE`)                                                                                        |
+| Lineage descriptor                     | `.runs/<key>/workflow.json`                        | `schemaVersion` = 1                                                        | yes                                                                                                     |
+| Runner lock                            | `.runs/<key>/runner.json`                          | `schemaVersion` = 2                                                        | yes                                                                                                     |
+| Timeline manifest + `events.jsonl`     | `run-*/manifest.json`, `run-*/events.jsonl`        | manifest `schemaVersion` = **1 (integer)**; events have no separate marker | yes (`TIMELINE`, manifest guards run mutations)                                                         |
+| History search index                   | `.search-index/v<ver>/`                            | `INDEX_SCHEMA_VERSION` = **1 (integer)**, per directory and index manifest | derived; rebuild on mismatch                                                                            |
+| Trust stores, coordination, usage (×3) | `~/.ctrlyoke/…`, project state                     | `schemaVersion` = 1                                                        | yes                                                                                                     |
+| Project metadata                       | `ProjectStateRegistry`                             | `schemaVersion` = 1                                                        | yes (`PROJECT_METADATA`)                                                                                |
+| Managed/named worktree records         | `WorktreeManager`                                  | each record has `schemaVersion` = 1                                        | yes (`MANAGED_WORKTREE_RECORD`, `NAMED_WORKTREE_SETUP`; newer records remain visible and are read-only) |
+| `installations.json`                   | `~/.ctrlyoke/`                                     | file `schemaVersion` = 1; host `indexSchemaVersion` is an integer          | yes (`INSTALLATIONS`; newer files are read for display but never rewritten)                             |
+| Statusline launcher / snapshot         | `~/.ctrlyoke/bin/`, sidecar                        | manifest version / `STATUSLINE_SNAPSHOT_PROTOCOL_VERSION` 1                | own protocol                                                                                            |
+| CLI `--json` outputs                   | stdout                                             | per-command `*_JSON_SCHEMA_VERSION` = 1                                    | public API — separate policy (see §2.10)                                                                |
 
-`WorkflowOutputHistory.schemaVersion: "1.1.0"` (`OutputHistoryTypes.ts`) is a projection built
-from the timeline. Verify it is never persisted; if it isn't, delete the field.
+`WorkflowOutputHistory` (`OutputHistoryTypes.ts`) is a projection built from the timeline and
+sent to the webview; it is never persisted. It has no persisted format version and carries no
+`schemaVersion` field.
 
 ### 1.2 Decisions
 
@@ -90,13 +99,26 @@ from the timeline. Verify it is never persisted; if it isn't, delete the field.
   (`WorkflowSerializer`, template instantiation, `init`) always stamp it.
 - **`settings.json`:** optional root `schemaVersion: 1`, same absent-means-1 rule, stamped by
   `FileConfigBackend` on write.
+- Built-in workflow templates carry `schemaVersion: 1`; parser-normalized template
+  instantiations and `WorkflowSerializer` exports carry the same version. The workspace `init`
+  flow currently creates only `.ctrlyoke/.gitignore` and does not author a workflow or settings
+  file; a future init path that creates either file must use these version-stamping writers.
 - **Run files carry two numbers with two meanings.** A run file is also a workflow definition,
   so it has root `schemaVersion` (the _definition_ format, same as an authored file) and
   `_runtime.schemaVersion` (the _run-file_ format: runtime blocks, root bookkeeping).
   Document this in the schema descriptions; they are bumped independently.
-- **New guarded stores:** add `WORKFLOW_DEFINITION`, `SETTINGS` and `TIMELINE` to
-  `PERSISTED_STORES`, and route `ProjectStateRegistry` through the guard instead of its
-  hand-rolled check.
+- **New guarded stores:** `WORKFLOW_DEFINITION`, `SETTINGS`, `TIMELINE` and
+  `PROJECT_METADATA` are in `PERSISTED_STORES` at version 1. `TIMELINE` and
+  `PROJECT_METADATA` were added with the engine-owned version unification; authored workflow
+  and settings now use the first two stores. `ProjectStateRegistry` uses the shared guard.
+- **Inventory audit follow-up (done 2026-09-26):** managed worktree records, named worktree
+  setup records and `installations.json` are registered stores with integer versions, empty
+  migration chains, provisional fixtures and guarded readers/writers. A newer worktree record
+  remains visible as managed ownership, is excluded from cleanup/reconciliation, and is never
+  overwritten. A newer named setup record remains available for display and blocks setup
+  rewriting. A newer installations file remains readable for mismatch display; recording an
+  installation or notice skips the write and logs once per path. Installation recording stays
+  best-effort and never throws into extension activation or CLI startup.
 - **Newer-than-supported behaviour:**
   - a **workflow file** newer than the host is **refused at load with a clean error**
     (decided 2026-09-26; see §1.3). Running it could misinterpret fields, and read-only
@@ -104,6 +126,11 @@ from the timeline. Verify it is never persisted; if it isn't, delete the field.
   - **settings** newer than the host are read best-effort with a one-time warning, and the
     settings UI refuses to write them (today an older host silently ignores unknown keys —
     `CLI_DISTRIBUTION_PLAN.md` §3.4's "Low–medium: confusing" row);
+  - **managed worktree records** newer than the host remain visible as owned, read-only
+    records; they are not reconciled away or cleaned up. **Named worktree setup records** are
+    read best-effort but block setup-record rewrites;
+  - **`installations.json`** newer than the host is read for display with a one-time warning;
+    `recordInstallation` and `markNoticeShown` skip writes without throwing;
   - everything else keeps the existing guard semantics (read, display, never write).
 
 ### 1.3 The refusal for a newer workflow file
@@ -232,6 +259,9 @@ the host that last wrote settings. Any settings migration must:
 §6 changes this very path pre-release. That is exactly the rename that would need a migration
 after release, and it is the worked example to reuse when writing the first real one.
 
+The migration must move the object to the root, rename its four provider keys to harness IDs
+under `byHarness`, and preserve the existing script filenames in harness configuration.
+
 ### 2.6 Published schemas per version
 
 - `https://ctrlyoke.dev/schema/v1/workflow.json` and `…/v1/settings.json` hold the **latest
@@ -262,7 +292,9 @@ backups for changes that transform nothing.
 
 - **Fixture corpus, frozen at release:** `src/test/fixtures/formats/<store>/v<N>/*.json`, with
   representative documents per store, including every optional field and both run-file version
-  numbers. It must be captured from the release build, which is why it can't wait.
+  numbers. The current corpus is provisional and reflects current writer shapes because there is
+  no release build yet. Before release, re-capture or confirm every fixture from the actual
+  release build, including every optional field and both run-file version numbers; then freeze it.
 - **Load test:** every fixture goes through the real reader → migrate → validate against the
   current schema → write → read back unchanged.
 - **Chain test:** the §2.2 invariant, per store.
@@ -290,6 +322,26 @@ existing per-command integers and document an additive-only policy for them in t
   the `$id`. Anything that compiles the
   settings schema with Ajv must `addSchema(workflowSchema)` first — it is keyed by `$id`, so no
   network access is needed.
+- **Verify editors stay offline.** A relative `$ref` resolves against the schema's `$id`, so an
+  editor that honours `$id` over the file URI it loaded the schema from would try to fetch
+  `https://ctrlyoke.dev/schema/v1/workflow.json` — which does not exist until the site
+  publishes it, and breaks offline editing. Before shipping the `$id`s, confirm with
+  `vscode-json-languageservice` and `yaml-language-server` that the settings schema, loaded
+  through the local `jsonValidation` association, resolves `workflow.json#/$defs/…` to the
+  bundled `out/schemas/workflow-schema.json`. If it does not, rename the bundled copy so its
+  file name matches the `$id`'s last segment, or keep the file-relative
+  `workflow-schema.json#/$defs/…` spelling and register that key with Ajv as well.
+- **Verification result (2026-09-26):** `vscode-json-languageservice` 5.7.2 and
+  `yaml-language-server` 1.24.0 were installed only under `.ctrlyoke/temp/`. With
+  the settings schema loaded through its local association and refs spelled
+  `workflow.json#/$defs/…`, both services requested the settings schema and its ref from
+  `out/schemas/` only; the test request log contained no HTTP(S) request. Each service
+  reported the deliberately invalid harness enum, confirming that the cross-file definition
+  was applied. Their file-relative resolver expects `out/schemas/workflow.json`, so the build
+  generates that local alias from `workflow-schema.json`; the source schema's `$id` remains
+  the exact published `/schema/v1/workflow.json` URL. Ajv 8's 2020 implementation also
+  compiled settings with `workflow-schema.json` registered under that `$id` and rejected the
+  invalid harness. The scratch installation did not modify project dependencies.
 - **Allow a root `$schema` key** (`type: string`, `format: uri`) on every root form: the
   multi-step root, the single-step prompt root, `rootScriptStep` and the settings root.
   Today settings rejects it, and so does a single-step script file (confirmed with Ajv).
@@ -403,8 +455,9 @@ ignored.
    algorithm. It then loads the file and attaches one warning per key: the path, the nearest
    valid key by edit distance ("did you mean `endCondition`?"), and "or a field from a newer
    ctrlyoke".
-4. The dashboard shows these as `FieldDiagnostic`-style warnings. `ctrlyoke validate` prints
-   them, and `--strict` turns them into errors for CI.
+4. The VS Code and hosted dashboards show these as `FieldDiagnostic`-style warnings.
+   MCP `workflow_status` includes warnings from the authored source in its result.
+   `ctrlyoke validate` prints them, and `--strict` turns them into errors for CI.
 5. §2.7 supplies the other half: anything an older host must not ignore bumps
    `schemaVersion`, so leniency only ever ignores genuinely optional fields.
 
@@ -456,8 +509,9 @@ component that is itself composed further. Closing `promptStep` directly would r
 | Step `_runtime`                          | `promptRuntimeMetadata`                                                            |
 | Conditions                               | `endCondition`, `preCondition` (switch from `additionalProperties`)                |
 
-Every root branch must also declare `$schema`, `schemaVersion` and `_templateMeta`, and the
-multi-step branch every run-file root field (after §7's removals). The root-level `allOf`
+Every root branch must also declare `_templateMeta` and the multi-step branch every current
+run-file root field (after §7's removals). Do not add `$schema` or `schemaVersion` as root
+properties yet; phase E adds them with the version-marker work. The root-level `allOf`
 `if`/`then` rule for template placeholders lives outside the `oneOf` branches, so it neither
 helps nor hurts the closures.
 
@@ -514,7 +568,7 @@ pass. The warnings refer to the original document; the pruned clone is only scra
 Two error-quality notes carry over from today rather than being introduced by this change:
 a hard error inside `oneOf` still surfaces as "must have required property 'prompt'", and a
 named worktree with `merge` as "worktree must be boolean". Picking the most relevant error
-from a `oneOf` failure is worth a separate small fix while in `PromptFileParser`.
+from a `oneOf` failure is a separate follow-up and was left out of this item.
 
 ---
 
@@ -627,12 +681,15 @@ Add `propertyNames: { "pattern": "^\\w+$" }` to `varsConfig`, matching
 `VARIABLE_NAME_PATTERN_SOURCE` (`KeyValueKeyKinds.ts:14`). Add a test asserting the schema
 pattern equals the code constant. Keys differing only in case (`foo`/`FOO`) collide in
 `CTRLYOKE_VAR_*` (`ScriptProcessRunner.ts:80` upper-cases them). JSON Schema can't express
-that, so `PromptFileParser` reports it as a validation error. Apply the same rules to
-`--var` flags. A bad key can never work, so a hard error is appropriate here.
+that, so `PromptFileParser` reports it as a validation error. The parser and CLI use the
+same key-validation helper, including when CLI values are merged with workflow defaults.
+A bad key can never work, so a hard error is appropriate here.
 
 ### 8.2 `mcpServerConfig` (item 8)
 
-Enforce what the description already promises:
+Enforce what the description already promises in both the schema and managed MCP registry
+reader. The registry check previously accepted both fields; it now requires exactly one,
+matching the schema:
 
 ```json
 "oneOf": [
@@ -641,27 +698,29 @@ Enforce what the description already promises:
 ]
 ```
 
-Optionally also tie `args`/`env` to `command` and `transport`/`headers` to `url` with
-`dependencies`. First find the runtime check in the MCP registry path and match it exactly,
-so the schema never rejects something the runtime accepts.
+Do not tie `args`/`env` to `command` or `transport`/`headers` to `url`: the runtime accepts
+those fields with either transport, so schema dependencies would reject runtime-accepted
+configurations.
 
 ### 8.3 Numbers (item 9)
 
-| Field                                                                                | Change                                                    |
-| ------------------------------------------------------------------------------------ | --------------------------------------------------------- |
-| `sessionId` (number form)                                                            | `integer`, `minimum: 1` (it's a 1-based prompt reference) |
-| `endCondition.maxRetries`                                                            | `integer` (keep `-1..100`)                                |
-| `timeoutSec`, `retryDelaySec`                                                        | `number`, `exclusiveMinimum: 0` (fractional allowed, §4)  |
-| `hooks[].timeoutSec`                                                                 | `minimum: 1`                                              |
-| `server.port`, `server.standalonePort`, `server.fallbackPorts[]`                     | `integer`, `1..65535`                                     |
-| `queue.maxSize`, `terminal.scrollback`, `ui.outputVirtualizationRowThreshold`        | `integer`                                                 |
-| `runs.maxRuns`, `execution.maxPromptTimeoutSec`, `queue.maxWorkflowExecutionTimeSec` | `integer`, `minimum: -1`                                  |
+| Field                                                                                          | Change                                                    |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `sessionId` (number form)                                                                      | `integer`, `minimum: 1` (it's a 1-based prompt reference) |
+| `endCondition.maxRetries`                                                                      | `integer` (keep `-1..100`)                                |
+| `timeoutSec`, `retryDelaySec`                                                                  | `number`, `exclusiveMinimum: 0` (fractional allowed, §4)  |
+| `hooks[].timeoutSec`                                                                           | `minimum: 1`                                              |
+| `server.port`, `server.standalonePort`, `server.fallbackPorts[]`                               | `integer`, `1..65535`                                     |
+| `queue.maxSize`, `terminal.scrollback`, `ui.outputVirtualizationRowThreshold`                  | `integer`                                                 |
+| `runs.maxRuns`, `execution.maxPromptTimeout`, `queue.maxWorkflowExecutionTime` (current names) | `integer`, `minimum: -1`                                  |
 
-**Timeout `0` is currently inconsistent.** Conditions treat `0` as "use the default"
-(`EndConditionEvaluator.ts:282`: `condition.timeout || …`). Script steps treat it as a literal
-0 ms since the 2026-09-26 unit fix (`step.timeout ?? …`). `exclusiveMinimum: 0` removes the
-ambiguity from authored files; the shared seconds→ms helper (§4) should use `??` so every
-surface agrees.
+The duration fields use positive fractional seconds, hook timeouts are positive integers, and condition/script timeout `0` uses the same explicit-value semantics throughout. Existing `DEFAULT_SETTINGS`, bundled templates, and `.ctrlyoke` workflow files were checked against the tightened constraints.
+
+Before the duration rename, conditions treated `0` as "use the default"
+(`condition.timeout || …`), while script steps treated it as a literal 0 ms. The shared
+seconds→ms helper now preserves explicit values and each execution path uses `??` only to
+select the configured default when the field is absent. `exclusiveMinimum: 0` rejects zero in
+authored files.
 
 `parallelGroupDefinition.endIndex ≥ startIndex` can't be expressed in the schema; leave it to
 the parser.
@@ -677,18 +736,18 @@ these, so this only improves the error. Lowest priority in the plan.
 
 ## 9. Description fixes (items 11–14)
 
-- **11 — `scriptStep.executionMode`:** "…Omitting this field inherits the workflow's
-  `executionMode`, then the `defaults.executionMode` setting." (`PropertyResolver.ts:120`.)
-- **12 — `endCondition.maxRetries`:** "…0 for no retries (the default), except that when
-  `onPass` or `onFail` is `retry` and this is unset, one retry is allowed." Then trim the
-  now-duplicated sentence from `onFail`. (`EndConditionHandler.ts:154`.)
-- **13 — `passRetryPrompt`:** verify which placeholders `EndConditionHandler`/`PromptQueue`
-  substitute on a pass retry, then state it directly instead of reusing `retryPrompt`'s "only
-  available in the retry prompt" wording.
-- **14 — `defaults.priorContext`:** "Default `priorContext` for every step that doesn't set
-  its own." Also restrict the settings form to the keyword and number-array forms. A fixed
-  `{ workflowKey, runRef }` address as a global default is meaningless, so replace the `$ref`
-  with a local `oneOf` that `$ref`s only those two branches of `priorContext`.
+- **11 — `scriptStep.executionMode`:** omitting it inherits the workflow's `executionMode`,
+  then the `defaults.executionMode` setting (`PropertyResolver.resolveExecutionMode`).
+- **12 — `endCondition.maxRetries`:** 0 means no retries by default; when either `onPass` or
+  `onFail` is `retry` and this field is omitted, one retry is allowed (`EndConditionHandler`).
+  Keep the `onFail` description free of a duplicate default claim.
+- **13 — `passRetryPrompt`:** pass retries substitute both `$preCondition:<field>` and
+  `$endCondition:<field>` placeholders. `CliPromptPreparer` applies the same
+  `substituteConditionOutputRefs` path to pass-retry prompts and ordinary retry prompts.
+- **14 — `defaults.priorContext`:** this is the default `priorContext` for each step that
+  doesn't set its own. The settings form allows only the keyword and number-array branches;
+  it references their dedicated `priorContextKeyword` and `priorContextPromptNumbers`
+  definitions, not the run-address branch.
 
 The script-timeout description and the stale `ctrlyoke.scriptTimeout` references were fixed
 with the 2026-09-26 bugs.
@@ -719,11 +778,12 @@ they keep template placeholders out of non-template files — so keep them.
 
 ### 10.3 `default` keyword (item 17)
 
-Ten settings declare `default` today, all matching `DEFAULT_SETTINGS`; the generated docs
-already read defaults from code. Add `default` to **every leaf** setting (IntelliSense shows
-it on hover), and add a test asserting each schema `default` deep-equals the
-`DEFAULT_SETTINGS` value at that path, and that no leaf lacks one. Container objects and
-format arrays are exempt.
+Settings now declare `default` for every leaf with a value in
+`CTRLYOKE_SETTINGS_DEFAULTS` (IntelliSense shows it on hover). A path-driven test asserts each
+schema `default` deep-equals the configured value and rejects any undocumented leaf without a
+default. Container objects and statusline format arrays are exempt. The only optional leaves
+without a configured default are the sparse per-harness `defaults.additionalArgs` and
+`ui.harnessColors.byHarness` entries; their absence means no override.
 
 ---
 
@@ -731,13 +791,13 @@ format arrays are exempt.
 
 In `.github/copilot-instructions.md` → Debugging, the `run-<timestamp>/workflow.ctrlyoke.json`
 bullet lists `responseText` among `_runtime` fields. Step output lives only in `events.jsonl`
-(the `promptRuntimeMetadata` description says so). Replace it with "(harness, sessionId,
+(the `promptRuntimeMetadata` description says so). It now lists "(harness, sessionId,
 timestamps, terminal status)".
 
 After implementation, record the durable rules where the next agent will look:
 
 - the migration read pipeline and write-back classes → `utils.instructions.md` (next to
-  `PersistedSchemaGuard`);
+  `PersistedSchemaGuard`) — done;
 - the "strict schema, lenient loader" rule → `core.instructions.md` `parsingAndValidation`,
   amending the bullet that currently says every Ajv failure is fatal, and replacing the "three step allowlists" bullet with the §5.3 closure-placement rule;
 - the §2.5 launcher constraint → `harness-shared.instructions.md`.
@@ -746,22 +806,23 @@ After implementation, record the durable rules where the next agent will look:
 
 ## 12. Order
 
-| Phase | Items                                         | Notes                                                                                                                                                                                             |
-| ----- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A** | 7–18                                          | Independent and small; any order. Regenerate docs/YAML schema after each schema edit (`npm run generate-schema-docs`, `npm run generate-schema`).                                                 |
-| **B** | 3, 5                                          | The two rename sets; do them together so the settings file only changes shape once.                                                                                                               |
-| **C** | 6                                             | Needs B's settled field names; bumps the search index.                                                                                                                                            |
-| **D** | 4                                             | Last shape change: the draft 2020-12 move, closures, lenient loader and `ValidationUtils` deletion, after all renames and §7's removals.                                                          |
-| **E** | 1, 2 + §2.2 skeleton + §2.8                   | Add `schemaVersion` fields and guard stores, convert semver strings, build `FormatMigrations` with empty chains, publish `/schema/v1/`, and **freeze the fixture corpus from the release build.** |
-| post  | §2.4 `ctrlyoke migrate`, first real migration | When the first breaking change lands after release.                                                                                                                                               |
+| Phase | Items                                         | Notes                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A** | 7–18                                          | Independent and small; any order. Regenerate docs/YAML schema after each schema edit (`npm run generate-schema-docs`, `npm run generate-schema`). §8.3's `timeoutSec`/`retryDelaySec` rows and the timeout-`0` unification land with B, since they name B's fields.                                                                                                                                                     |
+| **B** | 3, 5                                          | The two rename sets; do them together so the settings file only changes shape once.                                                                                                                                                                                                                                                                                                                                     |
+| **C** | 6                                             | Needs B's settled field names; bumps the search index.                                                                                                                                                                                                                                                                                                                                                                  |
+| **D** | 4                                             | Last shape change: the draft 2020-12 move, closures, lenient loader and `ValidationUtils` deletion, after all renames and §7's removals.                                                                                                                                                                                                                                                                                |
+| **E** | 1, 2 + §2.2 skeleton + §2.8                   | Workflow/settings version fields, all persisted-store guards, and §1.3 refusal landed 2026-09-26. Empty-chain `FormatMigrations`, read hooks, launcher support, and provisional fixtures landed 2026-09-26. Semver strings converted and the `/schema/v1/` publish pipeline built. At the release cut: deploy and verify `/schema/v1/`, and **re-capture or confirm the fixture corpus from the actual release build.** |
+| post  | §2.4 `ctrlyoke migrate`, first real migration | When the first breaking change lands after release.                                                                                                                                                                                                                                                                                                                                                                     |
 
 ### Release checklist (end of phase E)
 
-- [ ] Every store in §1.1 carries an integer `schemaVersion` and is covered by the guard.
-- [ ] `BASELINE_SCHEMA_VERSIONS` recorded; chain test green with zero migrations.
-- [ ] Fixture corpus captured from the release build and committed.
-- [ ] `schemas/` copied to `schemas/archive/v1/`; `/schema/v1/` live with the right headers.
-- [ ] Built-in templates, `init`, and `WorkflowSerializer` stamp `schemaVersion` and `$schema`.
+- [x] Every store in §1.1 carries an integer `schemaVersion` and is covered by the guard.
+- [x] `BASELINE_SCHEMA_VERSIONS` recorded; chain test green with zero migrations.
+- [ ] Provisional fixture corpus re-captured or confirmed from the actual release build (including optional fields and both run-file version numbers) and committed.
+- [x] `schemas/` copied to `schemas/archive/v1/`; the publish script checks the archive remains byte-identical while v1 is current.
+- [ ] `/schema/v1/` deployed and verified live with the right headers at the actual release cut.
+- [x] Built-in YAML templates carry the workflow schema modeline; `WorkflowSerializer` and custom-template writers stamp workflow schema hints, and settings writes stamp `$schema` with `schemaVersion`. Workspace `init` currently creates only `.ctrlyoke/.gitignore`, not a settings file.
 
 ---
 

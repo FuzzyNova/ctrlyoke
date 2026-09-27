@@ -73,13 +73,13 @@ function fmtScriptCondition(v: unknown): string {
 
 function fmtErrorBehavior(v: unknown): string {
   const eb = v as
-    | { onError?: string; maxRetries?: number; retryDelayMs?: number }
+    | { onError?: string; maxRetries?: number; retryDelaySec?: number }
     | undefined;
   if (!eb?.onError) return "(none)";
   const parts = [eb.onError];
   if (eb.maxRetries !== undefined) parts.push(`maxRetries=${eb.maxRetries}`);
-  if (eb.retryDelayMs !== undefined)
-    parts.push(`retryDelayMs=${eb.retryDelayMs}`);
+  if (eb.retryDelaySec !== undefined)
+    parts.push(`retryDelaySec=${eb.retryDelaySec}`);
   return parts.join(", ");
 }
 

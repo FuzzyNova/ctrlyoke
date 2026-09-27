@@ -22,12 +22,13 @@ export interface ConfigBackend {
   set<T>(path: string, value: T): Promise<void>;
   /** Backing file path used in diagnostics when available. */
   readonly filePath?: string;
+  readonly isReadOnly?: boolean;
 }
 
 const WORKSPACE_FORBIDDEN_SETTING_ROOTS = [
   SETTING_PATHS.WORKTREES,
   SETTING_PATHS.STORAGE,
-  SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING,
+  SETTING_PATHS.STATUS_LINE,
   SETTING_PATHS.USAGE_TRACKING_ENABLED,
 ] as const;
 
@@ -144,6 +145,13 @@ export class CtrlYokeConfigService {
   /** Absolute path of the active workspace-scope settings.json backend, when configured. */
   getWorkspaceFilePath(): string | undefined {
     return this.workspaceBackend?.filePath;
+  }
+
+  /** Whether either persisted settings scope belongs to a newer ctrlyoke. */
+  isSettingsReadOnly(): boolean {
+    return Boolean(
+      this.userBackend?.isReadOnly || this.workspaceBackend?.isReadOnly
+    );
   }
 
   /** Get a top-level setting with source tracking */
@@ -265,7 +273,7 @@ export class CtrlYokeConfigService {
       );
     }
     if (
-      forbiddenRoot === SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING ||
+      forbiddenRoot === SETTING_PATHS.STATUS_LINE ||
       forbiddenRoot === SETTING_PATHS.USAGE_TRACKING_ENABLED
     ) {
       throw new Error(

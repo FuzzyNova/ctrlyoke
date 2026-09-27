@@ -305,7 +305,7 @@ suite("interactive script steps", () => {
           type: STEP_TYPES.SCRIPT,
           script: `node -e "setTimeout(() => {}, 1000)"`,
           executionMode: EXECUTION_MODES.INTERACTIVE,
-          timeout: 10,
+          timeoutSec: 0.01,
         },
       ],
     });

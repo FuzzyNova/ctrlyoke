@@ -6,4 +6,4 @@ model: claude-sonnet-4.5
 
 endCondition:
   script: check_explanation.py
-  timeout: 30000
+  timeoutSec: 30

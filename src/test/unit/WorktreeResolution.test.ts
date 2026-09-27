@@ -144,7 +144,7 @@ suite("WorktreeResolution", () => {
     const workflowSchema = JSON.parse(
       await fs.readFile(workflowSchemaPath, "utf8")
     ) as {
-      definitions: {
+      $defs: {
         worktreeConfig: {
           oneOf: Array<{ properties?: Record<string, unknown> }>;
         };
@@ -153,10 +153,10 @@ suite("WorktreeResolution", () => {
 
     assert.strictEqual(
       settingsSchema.properties.defaults.properties.worktree.$ref,
-      "workflow-schema.json#/definitions/worktreeConfig"
+      "workflow.json#/$defs/worktreeConfig"
     );
     assert.ok(
-      workflowSchema.definitions.worktreeConfig.oneOf.some(
+      workflowSchema.$defs.worktreeConfig.oneOf.some(
         (variant) => variant.properties && "merge" in variant.properties
       )
     );

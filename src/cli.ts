@@ -23,6 +23,7 @@ import {
   WORKFLOW_LOCK_LIVENESS,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   CLI_VALIDATE_TARGET_KINDS,
+  CLI_VALIDATE_ERROR_CODES,
   HARNESS_INFO,
   STATUS_MESSAGE_SEVERITY,
 } from "./types/DashboardConstants";
@@ -61,6 +62,7 @@ import {
   type CliValidationJsonHarness,
 } from "./cli/CliJsonResultBuilder";
 import { Log } from "./utils/Log";
+import { getVariableKeyErrors } from "./utils/KeyValueKeyKinds";
 import { setRuntimeMode } from "./utils/RuntimeMode";
 import {
   ensureCtrlyokeShimsExecutable,
@@ -353,8 +355,8 @@ program
     "Analyze every AI consumer on each installed harness"
   )
   .option(
-    "--strict <policy>",
-    "Fail on compatibility warnings: lossy, unverified, or all"
+    "--strict [policy]",
+    "Treat unknown workflow fields as errors; with a policy, also fail on compatibility warnings"
   )
   .option("--json", "Emit one versioned JSON result line")
   .action(async (file: string, options: ValidateCommandOptions) => {
@@ -498,7 +500,7 @@ function getCliOutputStepName(
 interface ValidateCommandOptions {
   harness?: string;
   allInstalledHarnesses?: boolean;
-  strict?: string;
+  strict?: string | boolean;
   json?: boolean;
 }
 
@@ -716,10 +718,10 @@ async function runCommand(
   if (options.timeout !== undefined || options.scriptTimeout !== undefined) {
     overlay.execution = {
       ...(options.timeout !== undefined && {
-        maxPromptTimeout: options.timeout,
+        maxPromptTimeoutSec: options.timeout,
       }),
       ...(options.scriptTimeout !== undefined && {
-        scriptTimeout: options.scriptTimeout,
+        scriptTimeoutSec: options.scriptTimeout,
       }),
     };
   }
@@ -1372,7 +1374,14 @@ function mergeCliVarsIntoWorkflow(
   if (Object.keys(vars).length === 0) {
     return;
   }
-  workflow.vars = { ...(workflow.vars ?? {}), ...vars };
+  const mergedVars = { ...(workflow.vars ?? {}), ...vars };
+  const variableKeyErrors = getVariableKeyErrors(Object.keys(mergedVars));
+  if (variableKeyErrors.length > 0) {
+    throw new Error(
+      `Invalid workflow variables: ${variableKeyErrors.join(", ")}`
+    );
+  }
+  workflow.vars = mergedVars;
 }
 
 function assertSecretGrantsApproved(
@@ -1463,7 +1472,10 @@ async function dryRunCommand(
       ? { steps: [{ prompt: options.prompt }] }
       : await parser.parsePromptFile(resolvedFile!);
     if (!workflow) {
-      throw new Error(`Failed to load workflow file: ${resolvedFile}`);
+      throw new Error(
+        parser.lastNewerSchemaError?.message ??
+          `Failed to load workflow file: ${resolvedFile}`
+      );
     }
 
     if (resolvedFile) {
@@ -1820,7 +1832,10 @@ async function parseAppendTail(
   const parser = new PromptFileParser(platform, userFeedbackSink);
   const parsed = await parser.parsePromptFile(path.resolve(operation.file));
   if (!parsed?.steps?.length) {
-    throw new Error("Append source must contain at least one workflow step");
+    throw new Error(
+      parser.lastNewerSchemaError?.message ??
+        "Append source must contain at least one workflow step"
+    );
   }
   return parsed.steps;
 }
@@ -1903,10 +1918,10 @@ async function validateCommand(
     } else if (options.allInstalledHarnesses) {
       target = { kind: CLI_VALIDATE_TARGET_KINDS.ALL_INSTALLED_HARNESSES };
     }
-    if (options.strict !== undefined) {
+    if (typeof options.strict === "string") {
       if (!compatibilityRequested) {
         throw new Error(
-          "--strict requires --harness or --all-installed-harnesses"
+          "--strict <policy> requires --harness or --all-installed-harnesses"
         );
       }
       strictPolicy = parseCliValidateStrictPolicy(options.strict);
@@ -1958,6 +1973,26 @@ async function validateCommand(
     const parser = new PromptFileParser();
     const result = await parser.parsePromptFile(resolvedFile);
     if (!result) {
+      const newerSchemaError = parser.lastNewerSchemaError;
+      if (newerSchemaError) {
+        if (options.json) {
+          process.stdout.write(
+            JSON.stringify(
+              buildCliValidationJsonResult({
+                success: false,
+                parsed: false,
+                workflowFile: resolvedFile,
+                error: newerSchemaError.message,
+                errorCode: CLI_VALIDATE_ERROR_CODES.WORKFLOW_NEWER_FORMAT,
+              })
+            ) + "\n"
+          );
+        } else {
+          console.error(newerSchemaError.message);
+        }
+        process.exit(2);
+        return;
+      }
       const message = `${path.basename(resolvedFile)} failed validation`;
       if (options.json) {
         process.stdout.write(
@@ -1987,6 +2022,32 @@ async function validateCommand(
       parallelGroups: result.parallelGroups,
       workflowProperties: result,
     });
+    const warnings = [...result.warnings, ...stepValidation.warnings];
+
+    if (options.strict !== undefined && result.warnings.length > 0) {
+      const message = `Unknown workflow fields are errors in strict mode: ${result.warnings.map((warning) => warning.propertyPointer).join(", ")}`;
+      if (options.json) {
+        process.stdout.write(
+          JSON.stringify(
+            buildCliValidationJsonResult({
+              success: false,
+              parsed: true,
+              workflowFile: resolvedFile,
+              warnings,
+              error: message,
+            })
+          ) + "\n"
+        );
+      } else {
+        console.error(
+          chalk.red(`✗ ${path.basename(resolvedFile)} failed validation`)
+        );
+        renderCliValidationWarnings(warnings);
+        console.error(chalk.red(`  ${message}`));
+      }
+      process.exit(2);
+      return;
+    }
 
     if (!stepValidation.valid) {
       const message = stepValidation.errors.join("; ");
@@ -1997,7 +2058,7 @@ async function validateCommand(
               success: false,
               parsed: true,
               workflowFile: resolvedFile,
-              warnings: stepValidation.warnings,
+              warnings,
               error: message,
             })
           ) + "\n"
@@ -2023,14 +2084,14 @@ async function validateCommand(
               parsed: true,
               workflowFile: resolvedFile,
               consumerCount: 0,
-              warnings: stepValidation.warnings,
+              warnings,
             })
           ) + "\n"
         );
       } else {
         console.log(chalk.green(`✓ ${path.basename(resolvedFile)} is valid`));
         console.log(chalk.dim(`  ${result.steps?.length ?? 1} prompt(s)`));
-        renderCliValidationWarnings(stepValidation.warnings);
+        renderCliValidationWarnings(warnings);
       }
       process.exit(0);
       return;
@@ -2088,7 +2149,7 @@ async function validateCommand(
               strict: strictPolicy,
               consumerCount: analysis.consumerCount,
               diagnostics: analysis.diagnostics,
-              warnings: stepValidation.warnings,
+              warnings,
             })
           ) + "\n"
         );
@@ -2103,7 +2164,7 @@ async function validateCommand(
           analysis.consumerCount,
           analysis.diagnostics
         );
-        renderCliValidationWarnings(stepValidation.warnings);
+        renderCliValidationWarnings(warnings);
       }
       process.exit(failed ? 1 : 0);
     } finally {
@@ -2130,9 +2191,9 @@ async function validateCommand(
 }
 
 /**
- * Workflow warnings, printed under whichever validation summary ran. They never
- * change the exit code: `--strict` is a compatibility policy keyed on
- * compatibility diagnostic codes, and these findings are harness-independent.
+ * Workflow warnings, printed under whichever validation summary ran. Unknown
+ * property warnings become errors in strict mode; other findings remain
+ * non-blocking and harness-independent.
  */
 function renderCliValidationWarnings(
   warnings: readonly WorkflowValidationWarning[]
@@ -2342,10 +2403,14 @@ async function trustWorkflowExternalRootsCommand(
   configService.setUserBackend(userBackend);
   configService.setWorkspaceBackend(workspaceBackend);
 
-  const workflow = await new PromptFileParser().parsePromptFile(resolvedFile);
+  const parser = new PromptFileParser();
+  const workflow = await parser.parsePromptFile(resolvedFile);
   if (!workflow) {
     console.error(
-      chalk.red(`Error: Failed to load workflow file: ${resolvedFile}`)
+      chalk.red(
+        parser.lastNewerSchemaError?.message ??
+          `Error: Failed to load workflow file: ${resolvedFile}`
+      )
     );
     process.exit(2);
   }

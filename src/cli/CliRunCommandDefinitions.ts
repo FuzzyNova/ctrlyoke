@@ -5,6 +5,7 @@ import {
   isPermissionMode,
   type PermissionMode,
 } from "../types/DashboardConstants";
+import { getVariableKeyErrors } from "../utils/KeyValueKeyKinds";
 
 export interface CliExecutionOptions {
   harness?: string;
@@ -237,8 +238,14 @@ function collectVar(
     );
     process.exit(2);
   }
+  const assignment = value.slice(0, eqIndex);
+  const next = { ...previous, [assignment]: value.slice(eqIndex + 1) };
+  const errors = getVariableKeyErrors(Object.keys(next));
+  if (errors.length > 0) {
+    console.error(chalk.red(`Error: --var ${errors.join(", ")}`));
+    process.exit(2);
+  }
   return {
-    ...previous,
-    [value.slice(0, eqIndex)]: value.slice(eqIndex + 1),
+    ...next,
   };
 }

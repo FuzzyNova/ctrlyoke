@@ -9,7 +9,7 @@ An end condition runs after a prompt step completes.
 ```yaml
 endCondition:
   script: npm test
-  timeout: 60000
+  timeoutSec: 60
   maxRetries: 2
   retryPrompt: |
     Validation failed.
@@ -63,7 +63,7 @@ recipe: keep working while the condition passes, and advance once it fails.
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `script`               | Command or script path to execute (required)                                                                                                                                                         |
 | `env`                  | Extra environment variables for the script. Secrets only as `${secret:NAME}` values                                                                                                                  |
-| `timeout`              | Timeout in milliseconds. Defaults to the `execution.scriptTimeout` setting                                                                                                                           |
+| `timeoutSec`           | Timeout in seconds. Defaults to the `execution.scriptTimeoutSec` setting                                                                                                                             |
 | `shell`                | Shell for inline command text, e.g. `pwsh`, `bash`, `cmd`. Ignored for script files                                                                                                                  |
 | `compareSource`        | Which output to compare: `exitCode` (default), `stdout`, `stderr`                                                                                                                                    |
 | `operator`             | How to compare: `eq` (default), `ne`, `contains`, `notContains`, `gte`, `gt`, `lte`, `lt`, `matches`, `isEmpty`, `isNotEmpty`                                                                        |

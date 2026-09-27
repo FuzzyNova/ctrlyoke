@@ -6,7 +6,7 @@ import {
   HEADLESS_SOURCE_MODES,
   HOOK_EVENT_NAMES,
   MODEL_OPTION_VALUES,
-  STATUS_LINE_TRACKING_PROVIDERS,
+  STATUS_LINE_HARNESS_IDS,
 } from "../../../types/DashboardConstants";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import {
@@ -101,7 +101,7 @@ export class QwenCliProvider implements ICliProvider {
   static readonly CLI_HELP_COMMAND = `${QwenCliProvider.CLI_COMMAND} --help`;
 
   private static readonly statuslineManager = StatuslineManager.forProvider(
-    STATUS_LINE_TRACKING_PROVIDERS.QWEN
+    STATUS_LINE_HARNESS_IDS.QWEN
   );
 
   /** Tracker for parallel-safe hooks management in .qwen/settings.json. */
@@ -330,8 +330,8 @@ export class QwenCliProvider implements ICliProvider {
             this.statuslineInstallResult = undefined;
             if (
               workspaceRoot &&
-              ConfigurationUtils.getStatusLineTrackingSettings(
-                STATUS_LINE_TRACKING_PROVIDERS.QWEN
+              ConfigurationUtils.getStatusLineHarnessSettings(
+                STATUS_LINE_HARNESS_IDS.QWEN
               ).enabled
             ) {
               this.statuslineInstallResult = await this.registerStatusLine(

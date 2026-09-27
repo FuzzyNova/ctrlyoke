@@ -5,7 +5,7 @@ import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import {
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
-  STATUS_LINE_TRACKING_PROVIDERS,
+  STATUS_LINE_HARNESS_IDS,
 } from "../../../types/DashboardConstants";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import {
@@ -111,7 +111,7 @@ export class ClaudeCliProvider implements ICliProvider {
   static readonly CLI_HELP_COMMAND = `${ClaudeCliProvider.CLI_COMMAND} --help`;
 
   private static readonly statuslineManager = StatuslineManager.forProvider(
-    STATUS_LINE_TRACKING_PROVIDERS.CLAUDE
+    STATUS_LINE_HARNESS_IDS.CLAUDE
   );
 
   /** Tracks per-prompt hook settings files for cleanup */
@@ -422,8 +422,8 @@ export class ClaudeCliProvider implements ICliProvider {
             this.statuslineInstallResult = undefined;
             if (
               workspaceRoot &&
-              ConfigurationUtils.getStatusLineTrackingSettings(
-                STATUS_LINE_TRACKING_PROVIDERS.CLAUDE
+              ConfigurationUtils.getStatusLineHarnessSettings(
+                STATUS_LINE_HARNESS_IDS.CLAUDE
               ).enabled
             ) {
               this.statuslineInstallResult = await this.registerStatusLine(

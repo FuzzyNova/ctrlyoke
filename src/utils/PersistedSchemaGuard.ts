@@ -20,15 +20,22 @@
 
 /** Shared stores guarded against writes by an older host. */
 export const PERSISTED_STORES = {
+  WORKFLOW_DEFINITION: "workflow-definition",
+  SETTINGS: "settings",
   RUN_FILE: "run-file",
   LINEAGE_DESCRIPTOR: "lineage-descriptor",
   RUNNER_LOCK: "runner-lock",
+  TIMELINE: "timeline",
+  PROJECT_METADATA: "project-metadata",
   EXTERNAL_ROOTS_TRUST: "external-roots-trust",
   SECRET_GRANTS_TRUST: "secret-grants-trust",
   COORDINATION_BOARD: "coordination-board",
   LIFETIME_USAGE: "lifetime-usage",
   OBSERVED_USAGE: "observed-usage",
   PROVIDER_USAGE: "provider-usage",
+  MANAGED_WORKTREE_RECORD: "managed-worktree-record",
+  NAMED_WORKTREE_SETUP: "named-worktree-setup",
+  INSTALLATIONS: "installations",
 } as const;
 
 export type PersistedStore =
@@ -39,27 +46,41 @@ export type PersistedStore =
  * only for a change an older host would misread or silently drop.
  */
 export const CURRENT_SCHEMA_VERSIONS = {
+  [PERSISTED_STORES.WORKFLOW_DEFINITION]: 1,
+  [PERSISTED_STORES.SETTINGS]: 1,
   [PERSISTED_STORES.RUN_FILE]: 1,
   [PERSISTED_STORES.LINEAGE_DESCRIPTOR]: 1,
   [PERSISTED_STORES.RUNNER_LOCK]: 2,
+  [PERSISTED_STORES.TIMELINE]: 1,
+  [PERSISTED_STORES.PROJECT_METADATA]: 1,
   [PERSISTED_STORES.EXTERNAL_ROOTS_TRUST]: 1,
   [PERSISTED_STORES.SECRET_GRANTS_TRUST]: 1,
   [PERSISTED_STORES.COORDINATION_BOARD]: 1,
   [PERSISTED_STORES.LIFETIME_USAGE]: 1,
   [PERSISTED_STORES.OBSERVED_USAGE]: 1,
   [PERSISTED_STORES.PROVIDER_USAGE]: 1,
+  [PERSISTED_STORES.MANAGED_WORKTREE_RECORD]: 1,
+  [PERSISTED_STORES.NAMED_WORKTREE_SETUP]: 1,
+  [PERSISTED_STORES.INSTALLATIONS]: 1,
 } as const satisfies Record<PersistedStore, number>;
 
 const STORE_LABELS: Record<PersistedStore, string> = {
+  [PERSISTED_STORES.WORKFLOW_DEFINITION]: "workflow definition",
+  [PERSISTED_STORES.SETTINGS]: "settings",
   [PERSISTED_STORES.RUN_FILE]: "workflow run",
   [PERSISTED_STORES.LINEAGE_DESCRIPTOR]: "workflow history",
   [PERSISTED_STORES.RUNNER_LOCK]: "runner lock",
+  [PERSISTED_STORES.TIMELINE]: "workflow timeline",
+  [PERSISTED_STORES.PROJECT_METADATA]: "project metadata",
   [PERSISTED_STORES.EXTERNAL_ROOTS_TRUST]: "external file-root approvals",
   [PERSISTED_STORES.SECRET_GRANTS_TRUST]: "secret approvals",
   [PERSISTED_STORES.COORDINATION_BOARD]: "coordination board",
   [PERSISTED_STORES.LIFETIME_USAGE]: "lifetime usage statistics",
   [PERSISTED_STORES.OBSERVED_USAGE]: "observed usage statistics",
   [PERSISTED_STORES.PROVIDER_USAGE]: "harness quota snapshot",
+  [PERSISTED_STORES.MANAGED_WORKTREE_RECORD]: "managed worktree record",
+  [PERSISTED_STORES.NAMED_WORKTREE_SETUP]: "named worktree setup record",
+  [PERSISTED_STORES.INSTALLATIONS]: "installation registry",
 };
 
 /** Thrown instead of writing a store that a newer ctrlyoke version owns. */
@@ -70,15 +91,31 @@ export class NewerSchemaError extends Error {
     readonly filePath?: string
   ) {
     const supported = CURRENT_SCHEMA_VERSIONS[store];
-    super(
-      `This ${STORE_LABELS[store]} was written by a newer version of ctrlyoke ` +
-        `(format ${foundVersion}; this version supports up to ${supported}). ` +
-        `Update ctrlyoke — the VS Code extension, and the CLI with ` +
-        `\`npm install -g ctrlyoke@latest\` — to modify it.` +
-        (filePath ? ` (${filePath})` : "")
-    );
+    const label = STORE_LABELS[store];
+    const message =
+      store === PERSISTED_STORES.WORKFLOW_DEFINITION
+        ? `${filePath ? `${filePath} ` : "This workflow file "}uses workflow format ${foundVersion}, which needs a newer ctrlyoke — this version (${getHostVersion()}) supports format ${supported}. Update ctrlyoke to open it.`
+        : `This ${label} was written by a newer version of ctrlyoke (format ${foundVersion}; this version supports up to ${supported}). Update ctrlyoke to modify it.${filePath ? ` (${filePath})` : ""}`;
+    super(message);
     this.name = "NewerSchemaError";
   }
+}
+
+function getHostVersion(): string {
+  const path = require("path") as typeof import("path");
+  const candidates = [
+    path.resolve(__dirname, "../package.json"),
+    path.resolve(__dirname, "../../package.json"),
+  ];
+  for (const candidate of candidates) {
+    try {
+      const packageJson = require(candidate) as { version?: unknown };
+      if (typeof packageJson.version === "string") return packageJson.version;
+    } catch {
+      // Try the next package location used by compiled and bundled consumers.
+    }
+  }
+  return "unknown";
 }
 
 export function isNewerSchemaError(error: unknown): error is NewerSchemaError {
@@ -171,20 +208,25 @@ export function prepareRunFileForWrite<T extends { _runtime?: object }>(
   workingFile: T,
   filePath: string
 ): T {
-  if (!workingFile._runtime) {
-    return workingFile;
+  if (workingFile._runtime) {
+    assertWritableSchema(
+      PERSISTED_STORES.RUN_FILE,
+      workingFile._runtime,
+      filePath
+    );
   }
-  assertWritableSchema(
-    PERSISTED_STORES.RUN_FILE,
-    workingFile._runtime,
-    filePath
-  );
   return {
     ...workingFile,
-    _runtime: {
-      ...workingFile._runtime,
-      schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.RUN_FILE],
-    },
+    schemaVersion:
+      CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.WORKFLOW_DEFINITION],
+    ...(workingFile._runtime
+      ? {
+          _runtime: {
+            ...workingFile._runtime,
+            schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.RUN_FILE],
+          },
+        }
+      : {}),
   };
 }
 

@@ -4,7 +4,10 @@ import {
   HOOK_EVENT_NAMES,
   NONE_OPTION,
 } from "@root/types/DashboardConstants";
-import { HOOK_EVENT_OPTIONS_META, toSelectOptions } from "@root/types/SchemaUiMetadata";
+import {
+  HOOK_EVENT_OPTIONS_META,
+  toSelectOptions,
+} from "@root/types/SchemaUiMetadata";
 import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
 import type { UserHookConfig } from "@root/types/CtrlYokeTypes";
 import type { CompatibilityDiagnostic } from "@root/types/CompatibilityTypes";
@@ -194,8 +197,20 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
                   }
                   className="h-7 w-full min-w-0 rounded border border-input-border bg-input-bg px-1 py-0.5 text-xs text-input-fg"
                 >
-                  {toSelectOptions(HOOK_EVENT_OPTIONS_META, `${schemaPath}[].event`).map((option) => (
-                    <option key={option.value} value={option.value} aria-label={schemaAriaLabel(option.label, `${schemaPath}[].event`, option.value)} title={schemaTitle(`${schemaPath}[].event`, option.value)}>
+                  {toSelectOptions(
+                    HOOK_EVENT_OPTIONS_META,
+                    `${schemaPath}[].event`
+                  ).map((option) => (
+                    <option
+                      key={option.value}
+                      value={option.value}
+                      aria-label={schemaAriaLabel(
+                        option.label,
+                        `${schemaPath}[].event`,
+                        option.value
+                      )}
+                      title={schemaTitle(`${schemaPath}[].event`, option.value)}
+                    >
                       {option.label}
                     </option>
                   ))}
@@ -212,21 +227,25 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
                 <input
                   type="number"
                   id={`hook-${index}-timeout-sec`}
-                  aria-label={schemaAriaLabel("Timeout (seconds)", `${schemaPath}[].timeoutSec`)}
+                  aria-label={schemaAriaLabel(
+                    "Timeout (seconds)",
+                    `${schemaPath}[].timeoutSec`
+                  )}
                   title={schemaTitle(`${schemaPath}[].timeoutSec`)}
                   value={hook.timeoutSec ?? ""}
-                  min={0}
+                  min={1}
+                  step={1}
                   onChange={(e) => {
                     const raw = e.target.value.trim();
-                    const timeoutSec = raw === "" ? undefined : Number(raw);
-                    handleUpdateHook(
-                      index,
-                      raw === ""
-                        ? { timeoutSec: undefined }
-                        : Number.isFinite(timeoutSec)
-                          ? { timeoutSec }
-                          : {}
-                    );
+                    if (raw === "") {
+                      handleUpdateHook(index, { timeoutSec: undefined });
+                      return;
+                    }
+                    const timeoutSec = Number(raw);
+                    if (!Number.isSafeInteger(timeoutSec) || timeoutSec < 1) {
+                      return;
+                    }
+                    handleUpdateHook(index, { timeoutSec });
                   }}
                   placeholder="Default"
                   className="h-7 w-full min-w-0 rounded border border-input-border bg-input-bg px-2 py-0.5 text-xs text-input-fg"

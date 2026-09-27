@@ -177,7 +177,7 @@ Accepted forms:
 
 ### `sessionId` {#execution-properties-sessionid}
 
-- **Type:** `string` or `number`
+- **Type:** `string` or `integer`
 
 Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value "finalStep" (resume the session established by the most recent final step execution — works on any prompt, not just the final step itself; on first pass when no final step session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution.
 
@@ -346,7 +346,7 @@ Optional authored identity colour for this step.
 
 - **Type:** `"interactive" | "headless"`
 
-Where this script step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Omitting this field inherits the global default.
+Where this script step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow's executionMode, then the defaults.executionMode setting.
 
 ### `script` {#script-step-script}
 
@@ -367,11 +367,11 @@ Environment map consumed by the script process. Secret references are allowed on
 
 Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compare the trimmed text; 'exitCode' compares the numeric exit code. There is no implicit clean-exit requirement layered onto a text comparison.
 
-### `timeout` {#script-step-timeout}
+### `timeoutSec` {#script-step-timeoutsec}
 
 - **Type:** `number`
 
-Timeout in milliseconds. When omitted, the `execution.scriptTimeout` setting applies.
+Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.
 
 ### `shell` {#script-step-shell}
 
@@ -498,11 +498,11 @@ Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compar
 
 Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.
 
-### `timeout` {#pre-condition-timeout}
+### `timeoutSec` {#pre-condition-timeoutsec}
 
 - **Type:** `number`
 
-Timeout in milliseconds. When omitted, the `execution.scriptTimeout` setting applies.
+Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.
 
 ### `shell` {#pre-condition-shell}
 
@@ -544,7 +544,7 @@ What to do when the pre-condition check fails. 'continue': run the prompt anyway
 
 ## End condition {#end-condition}
 
-Validation that runs after the prompt completes. Shares script/env/compareSource/operator/expected/timeout with preCondition and scriptStep via scriptProperties.
+Validation that runs after the prompt completes. Shares script/env/compareSource/operator/expected/timeoutSec with preCondition and scriptStep via scriptProperties.
 
 Also includes every field from [Shared script fields](#script-fields).
 
@@ -573,11 +573,11 @@ Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compar
 
 Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.
 
-### `timeout` {#end-condition-timeout}
+### `timeoutSec` {#end-condition-timeoutsec}
 
 - **Type:** `number`
 
-Timeout in milliseconds. When omitted, the `execution.scriptTimeout` setting applies.
+Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.
 
 ### `shell` {#end-condition-shell}
 
@@ -605,10 +605,10 @@ Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Def
 
 ### `maxRetries` {#end-condition-maxretries}
 
-- **Type:** `number`
+- **Type:** `integer`
 - **Constraints:** minimum -1 · maximum 100
 
-Maximum number of retry attempts when validation fails. Use -1 for unlimited retries (use with caution), 0 for no retries (default), or 1-100 for a specific limit.
+Maximum number of retry attempts. Use -1 for unlimited retries (with caution), 0 for no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.
 
 ### `retryPrompt` {#end-condition-retryprompt}
 
@@ -620,7 +620,7 @@ Template for retry prompt. Supports $preCondition:&lt;field> and $endCondition:&
 
 - **Type:** `string`
 
-Template for pass-retry prompt. Supports $preCondition:&lt;field> and $endCondition:&lt;field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:\* works in the step and retry prompts; $endCondition:\* is only available in the retry prompt. If omitted, the step's own prompt is re-sent.
+Template for the prompt sent after the end condition passes and onPass is 'retry'. Supports $preCondition:&lt;field> and $endCondition:&lt;field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource); both prefixes are substituted on a pass retry. If omitted, the step's own prompt is re-sent.
 
 ### `resumeSessionOnRetry` {#end-condition-resumesessiononretry}
 
@@ -640,7 +640,7 @@ What to do when the end condition passes. 'continue': advance to the next step (
 - **Type:** `"continue" | "retry" | "stopWorkflow"`
 - **Default:** `"stopWorkflow"`
 
-What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times). 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default). When 'retry' is set and maxRetries is unset, defaults to 1 retry.
+What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times). 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default).
 
 ## Shared script fields {#script-fields}
 
@@ -671,11 +671,11 @@ Which output the comparison reads. Default: 'exitCode'. 'stdout'/'stderr' compar
 
 Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.
 
-### `timeout` {#script-fields-timeout}
+### `timeoutSec` {#script-fields-timeoutsec}
 
 - **Type:** `number`
 
-Timeout in milliseconds. When omitted, the `execution.scriptTimeout` setting applies.
+Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies.
 
 ### `shell` {#script-fields-shell}
 
@@ -719,12 +719,11 @@ What to do when a step phase cannot run or otherwise encounters an internal erro
 
 Maximum retry attempts when onError is retry.
 
-### `retryDelayMs` {#error-behavior-retrydelayms}
+### `retryDelaySec` {#error-behavior-retrydelaysec}
 
-- **Type:** `integer`
-- **Constraints:** minimum 0
+- **Type:** `number`
 
-Delay before retrying, in milliseconds.
+Delay before retrying, in seconds.
 
 ## Worktree {#worktree}
 
@@ -822,7 +821,8 @@ Environment map consumed by the hook process. Secret references are allowed only
 
 ### `timeoutSec` {#hook-entry-timeoutsec}
 
-- **Type:** `number`
+- **Type:** `integer`
+- **Constraints:** minimum 1
 
 Timeout in seconds. Only respected by CLIs that support per-hook timeouts.
 
@@ -899,7 +899,7 @@ Identifies one completed run for `priorContext` imports.
 
 - **Type:** `string`
 - **Required:** yes
-- **Constraints:** at least 1 character(s) · pattern `^[^/\\]+$`
+- **Constraints:** at least 1 character(s) · pattern `^(?!\.{1,2}$)[^/\\]+$`
 
 Stable workflow lineage key within the current workspace.
 

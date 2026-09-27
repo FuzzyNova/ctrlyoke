@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "installations": {
+    "cli:fixture": {
+      "kind": "cli",
+      "version": "1.0.0",
+      "packageRoot": "../fixture-cli",
+      "lastSeen": 1790464107000,
+      "indexSchemaVersion": 1
+    }
+  },
+  "notices": {}
+}

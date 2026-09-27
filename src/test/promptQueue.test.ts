@@ -1806,7 +1806,7 @@ suite("PromptQueue State Machine Tests", () => {
         name: "inserted script",
         script: "npm test",
         enabled: true,
-        timeout: 30,
+        timeoutSec: 0.03,
         onPass: CONDITION_ACTIONS.CONTINUE,
         onFail: CONDITION_ACTIONS.STOP_WORKFLOW,
       } as any);
@@ -1819,7 +1819,7 @@ suite("PromptQueue State Machine Tests", () => {
         name: "inserted script",
         script: "npm test",
         enabled: true,
-        timeout: 30,
+        timeoutSec: 0.03,
         onPass: CONDITION_ACTIONS.CONTINUE,
         onFail: CONDITION_ACTIONS.STOP_WORKFLOW,
       });

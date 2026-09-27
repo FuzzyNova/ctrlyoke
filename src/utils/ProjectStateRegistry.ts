@@ -11,15 +11,20 @@ import {
 import type { RunHistoryLocation } from "../types/CtrlYokeSettings";
 import { RUN_HISTORY_LOCATIONS } from "../types/DashboardConstants";
 import { getFrozenRunHistoryLocation } from "./RunHistoryStoragePolicy";
+import {
+  assertWritableSchema,
+  CURRENT_SCHEMA_VERSIONS,
+  PERSISTED_STORES,
+} from "./PersistedSchemaGuard";
+import { migrateToCurrent } from "./FormatMigrations";
 
 export const PROJECT_METADATA_FILE_NAME = "project.json";
-const PROJECT_SCHEMA_VERSION = 1;
 const PRIVATE_DIRECTORY_MODE = 0o700;
 const PRIVATE_FILE_MODE = 0o600;
 const REGISTRY_LOCK_NAME = ".registry";
 
 export interface ProjectStateMetadata {
-  schemaVersion: 1;
+  schemaVersion: (typeof CURRENT_SCHEMA_VERSIONS)[typeof PERSISTED_STORES.PROJECT_METADATA];
   statePath: string;
   gitToplevel?: string;
   createdAt: string;
@@ -256,7 +261,7 @@ async function readOrCreateMetadata(
 
   const now = new Date().toISOString();
   return {
-    schemaVersion: PROJECT_SCHEMA_VERSION,
+    schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.PROJECT_METADATA],
     statePath: existing?.statePath ?? stateRoot,
     ...(gitToplevel !== undefined
       ? { gitToplevel: path.resolve(gitToplevel) }
@@ -284,12 +289,15 @@ function parseMetadata(
   if (!isRecord(value) || typeof value.schemaVersion !== "number") {
     throw new Error(`Invalid project metadata at ${metadataPath}.`);
   }
-  if (value.schemaVersion > PROJECT_SCHEMA_VERSION) {
-    throw new Error(
-      `Project metadata schema ${value.schemaVersion} is newer than supported schema ${PROJECT_SCHEMA_VERSION}: ${metadataPath}`
-    );
+  assertWritableSchema(PERSISTED_STORES.PROJECT_METADATA, value, metadataPath);
+  value = migrateToCurrent(PERSISTED_STORES.PROJECT_METADATA, value).doc;
+  if (!isRecord(value)) {
+    throw new Error(`Invalid project metadata at ${metadataPath}.`);
   }
-  if (value.schemaVersion !== PROJECT_SCHEMA_VERSION) {
+  if (
+    value.schemaVersion !==
+    CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.PROJECT_METADATA]
+  ) {
     throw new Error(
       `Unsupported project metadata schema ${value.schemaVersion}: ${metadataPath}`
     );
@@ -304,7 +312,7 @@ function parseMetadata(
   }
 
   return {
-    schemaVersion: PROJECT_SCHEMA_VERSION,
+    schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.PROJECT_METADATA],
     statePath: value.statePath,
     ...(value.gitToplevel !== undefined
       ? { gitToplevel: value.gitToplevel }

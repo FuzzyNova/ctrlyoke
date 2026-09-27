@@ -77,8 +77,8 @@ Pass either a file or `--prompt`, not both.
 | `--allow-tool <pattern>`     | Allow a tool pattern (repeatable)                                                                                                                                                    |
 | `--deny-tool <pattern>`      | Deny a tool pattern (repeatable)                                                                                                                                                     |
 | `-d, --cwd <path>`           | Workspace directory (default: current directory)                                                                                                                                     |
-| `-t, --timeout <seconds>`    | Override the `execution.maxPromptTimeout` setting for this run (`-1` = unlimited)                                                                                                    |
-| `--script-timeout <seconds>` | Override the `execution.scriptTimeout` setting for this run; a condition's own `timeout` still wins                                                                                  |
+| `-t, --timeout <seconds>`    | Override the `execution.maxPromptTimeoutSec` setting for this run (`-1` = unlimited)                                                                                                 |
+| `--script-timeout <seconds>` | Override the `execution.scriptTimeoutSec` setting for this run; a condition's own `timeout` still wins                                                                               |
 | `--json`                     | Print one JSON result object on stdout when the run ends                                                                                                                             |
 | `-q, --quiet`                | Suppress all output except errors                                                                                                                                                    |
 | `--verbose`                  | Print debug information (execution mode, workspace root, harness, model, vars)                                                                                                       |
@@ -210,9 +210,15 @@ those currently available. The two target options are mutually exclusive;
 neither starts a workflow or an AI session. `--json` emits one JSON line with a
 versioned `schemaVersion: 1` envelope and the shared compatibility diagnostics.
 
-Compatibility errors fail validation by default. CI can additionally fail on
-warnings with `--strict lossy`, `--strict unverified`, or `--strict all`;
-`--strict` requires `--harness` or `--all-installed-harnesses`. Lossy findings
+Compatibility errors fail validation by default. Bare `--strict` also treats
+unknown workflow fields as errors, which is useful in CI:
+
+```bash
+ctrlyoke validate my-workflow.ctrlyoke.yaml --strict
+```
+
+With `--harness` or `--all-installed-harnesses`, add `lossy`, `unverified`, or
+`all` to also fail on the matching compatibility warnings. Lossy findings
 include unsupported and partial translations; unverified findings mean the
 installed version is outside the compatibility evidence.
 
@@ -221,19 +227,23 @@ missing, fails schema or semantic validation, or the options are invalid.
 
 ### Workflow warnings
 
-Separately from compatibility, validation reports workflow findings that hold
-whatever harness runs the file: the workflow is valid and will run, but
-something it states will not take effect. These print under the result and
-appear in `--json` as a `warnings` array of `{ code, message, propertyPointer }`,
-where `propertyPointer` is an RFC 6901 pointer to the authored value. Identify a
+Validation reports workflow findings that hold whatever harness runs the file.
+Unknown fields are ignored by the current ctrlyoke version and reported as
+warnings; the message suggests the nearest valid key and notes that the field
+may come from a newer ctrlyoke. Other warnings describe settings that will not
+take effect. Findings print under the result and appear in `--json` as a
+`warnings` array of `{ code, message, propertyPointer }`, where
+`propertyPointer` is an RFC 6901 pointer to the authored value. Identify a
 finding by its `code`, not by its message.
 
 | Code                           | Meaning                                                                                                                         |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `unknown-property`             | A field is not recognized at this location and will be ignored by this ctrlyoke version.                                        |
 | `script-comparison-incomplete` | A script comparison names a `compareSource` or `operator` but no `expected`, so it is ignored and the check uses exit code `0`. |
 
-Workflow warnings never change the exit code — `--strict` is a compatibility
-policy and does not apply to them.
+Warnings do not change the exit code by default. Bare `--strict` fails on
+`unknown-property` warnings; `--strict <policy>` also applies that rule while
+failing on the selected compatibility warnings.
 
 ## `ctrlyoke commit`
 

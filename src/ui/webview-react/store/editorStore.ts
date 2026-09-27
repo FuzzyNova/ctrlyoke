@@ -48,7 +48,7 @@ export interface EndConditionConfig {
   env?: Record<string, string>;
   returns?: string;
   compareSource?: EndConditionCompareSource;
-  timeout?: number;
+  timeoutSec?: number;
   shell?: string;
   maxRetries?: number;
   retryPrompt?: string;
@@ -133,7 +133,7 @@ export interface SavedNewStepState {
   properties: PropertyValues;
   stepType?: typeof STEP_TYPES.PROMPT | typeof STEP_TYPES.SCRIPT;
   scriptCommand?: string;
-  scriptTimeout?: number;
+  scriptTimeoutSec?: number;
   scriptOnPass?: string;
   scriptOnFail?: string;
   scriptCompareSource?: string;
@@ -191,7 +191,7 @@ interface EditorState {
 
   // Script step content
   scriptCommand: string;
-  scriptTimeout: number | undefined;
+  scriptTimeoutSec: number | undefined;
   scriptOnPass: string;
   scriptOnFail: string;
   scriptCompareSource: string;
@@ -239,7 +239,7 @@ interface EditorActions {
   ) => void;
   setStepEnabled: (enabled: boolean) => void;
   setScriptCommand: (command: string) => void;
-  setScriptTimeout: (timeout: number | undefined) => void;
+  setScriptTimeoutSec: (timeoutSec: number | undefined) => void;
   setScriptOnPass: (value: string) => void;
   setScriptOnFail: (value: string) => void;
   setScriptCompareSource: (value: string) => void;
@@ -327,7 +327,7 @@ const initialState: EditorState = {
   promptText: "",
   promptName: "",
   scriptCommand: "",
-  scriptTimeout: undefined,
+  scriptTimeoutSec: undefined,
   scriptOnPass: CONDITION_ACTIONS.CONTINUE,
   scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
   scriptCompareSource: DEFAULT_COMPARE_SOURCE,
@@ -409,7 +409,7 @@ export const useEditorStore = create<
         promptText: savedNewPromptState.promptText,
         promptName: savedNewPromptState.promptName,
         scriptCommand: savedNewPromptState.scriptCommand ?? "",
-        scriptTimeout: savedNewPromptState.scriptTimeout,
+        scriptTimeoutSec: savedNewPromptState.scriptTimeoutSec,
         scriptOnPass:
           savedNewPromptState.scriptOnPass ?? CONDITION_ACTIONS.CONTINUE,
         scriptOnFail:
@@ -446,7 +446,7 @@ export const useEditorStore = create<
           promptText: "",
           promptName: "",
           scriptCommand: "",
-          scriptTimeout: undefined,
+          scriptTimeoutSec: undefined,
           scriptOnPass: CONDITION_ACTIONS.CONTINUE,
           scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
           scriptCompareSource: DEFAULT_COMPARE_SOURCE,
@@ -469,7 +469,7 @@ export const useEditorStore = create<
           stepEnabled: true,
           stepType: STEP_TYPES.PROMPT,
           scriptCommand: "",
-          scriptTimeout: undefined,
+          scriptTimeoutSec: undefined,
           scriptOnPass: CONDITION_ACTIONS.CONTINUE,
           scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
           scriptCompareSource: DEFAULT_COMPARE_SOURCE,
@@ -500,7 +500,7 @@ export const useEditorStore = create<
         properties: state.properties,
         stepType: state.stepType,
         scriptCommand: state.scriptCommand,
-        scriptTimeout: state.scriptTimeout,
+        scriptTimeoutSec: state.scriptTimeoutSec,
         scriptOnPass: state.scriptOnPass,
         scriptOnFail: state.scriptOnFail,
         scriptCompareSource: state.scriptCompareSource,
@@ -525,7 +525,7 @@ export const useEditorStore = create<
             properties: state.properties,
             stepType: state.stepType,
             scriptCommand: state.scriptCommand,
-            scriptTimeout: state.scriptTimeout,
+            scriptTimeoutSec: state.scriptTimeoutSec,
             scriptOnPass: state.scriptOnPass,
             scriptOnFail: state.scriptOnFail,
             scriptCompareSource: state.scriptCompareSource,
@@ -570,9 +570,9 @@ export const useEditorStore = create<
         scriptCommand: pendingEdit
           ? (pendingEdit.scriptCommand ?? "")
           : promptData.script,
-        scriptTimeout: pendingEdit
-          ? pendingEdit.scriptTimeout
-          : promptData.timeout,
+        scriptTimeoutSec: pendingEdit
+          ? pendingEdit.scriptTimeoutSec
+          : promptData.timeoutSec,
         scriptOnPass: pendingEdit
           ? (pendingEdit.scriptOnPass ?? CONDITION_ACTIONS.CONTINUE)
           : (promptData.onPass ?? CONDITION_ACTIONS.CONTINUE),
@@ -644,7 +644,7 @@ export const useEditorStore = create<
           ? pendingEdit.promptName
           : (promptData.name ?? ""),
         scriptCommand: pendingEdit?.scriptCommand ?? "",
-        scriptTimeout: pendingEdit?.scriptTimeout,
+        scriptTimeoutSec: pendingEdit?.scriptTimeoutSec,
         scriptOnPass: pendingEdit?.scriptOnPass ?? CONDITION_ACTIONS.CONTINUE,
         scriptOnFail:
           pendingEdit?.scriptOnFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
@@ -687,7 +687,7 @@ export const useEditorStore = create<
         promptText: savedNewPromptState.promptText,
         promptName: savedNewPromptState.promptName,
         scriptCommand: savedNewPromptState.scriptCommand ?? "",
-        scriptTimeout: savedNewPromptState.scriptTimeout,
+        scriptTimeoutSec: savedNewPromptState.scriptTimeoutSec,
         scriptOnPass:
           savedNewPromptState.scriptOnPass ?? CONDITION_ACTIONS.CONTINUE,
         scriptOnFail:
@@ -726,7 +726,7 @@ export const useEditorStore = create<
           promptText: "",
           promptName: "",
           scriptCommand: "",
-          scriptTimeout: undefined,
+          scriptTimeoutSec: undefined,
           scriptOnPass: CONDITION_ACTIONS.CONTINUE,
           scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
           scriptCompareSource: DEFAULT_COMPARE_SOURCE,
@@ -750,7 +750,7 @@ export const useEditorStore = create<
           stepType: STEP_TYPES.PROMPT,
           stepEnabled: true,
           scriptCommand: "",
-          scriptTimeout: undefined,
+          scriptTimeoutSec: undefined,
           scriptOnPass: CONDITION_ACTIONS.CONTINUE,
           scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
           scriptCompareSource: DEFAULT_COMPARE_SOURCE,
@@ -782,7 +782,7 @@ export const useEditorStore = create<
       properties: state.properties,
       stepType: state.stepType,
       scriptCommand: state.scriptCommand,
-      scriptTimeout: state.scriptTimeout,
+      scriptTimeoutSec: state.scriptTimeoutSec,
       scriptOnPass: state.scriptOnPass,
       scriptOnFail: state.scriptOnFail,
       scriptCompareSource: state.scriptCompareSource,
@@ -805,7 +805,7 @@ export const useEditorStore = create<
         promptText: savedNewPromptState.promptText,
         promptName: savedNewPromptState.promptName,
         scriptCommand: savedNewPromptState.scriptCommand ?? "",
-        scriptTimeout: savedNewPromptState.scriptTimeout,
+        scriptTimeoutSec: savedNewPromptState.scriptTimeoutSec,
         scriptOnPass:
           savedNewPromptState.scriptOnPass ?? CONDITION_ACTIONS.CONTINUE,
         scriptOnFail:
@@ -840,7 +840,7 @@ export const useEditorStore = create<
           promptText: "",
           promptName: "",
           scriptCommand: "",
-          scriptTimeout: undefined,
+          scriptTimeoutSec: undefined,
           scriptOnPass: CONDITION_ACTIONS.CONTINUE,
           scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
           scriptCompareSource: DEFAULT_COMPARE_SOURCE,
@@ -863,7 +863,7 @@ export const useEditorStore = create<
           stepType: STEP_TYPES.PROMPT,
           stepEnabled: true,
           scriptCommand: "",
-          scriptTimeout: undefined,
+          scriptTimeoutSec: undefined,
           scriptOnPass: CONDITION_ACTIONS.CONTINUE,
           scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
           scriptCompareSource: DEFAULT_COMPARE_SOURCE,
@@ -908,9 +908,9 @@ export const useEditorStore = create<
       isDirty: true,
     }),
 
-  setScriptTimeout: (timeout) =>
+  setScriptTimeoutSec: (timeout) =>
     set({
-      scriptTimeout: timeout,
+      scriptTimeoutSec: timeout,
       isDirty: true,
     }),
 
@@ -1213,7 +1213,7 @@ export const useEditorStore = create<
       promptText: "",
       promptName: "",
       scriptCommand: "",
-      scriptTimeout: undefined,
+      scriptTimeoutSec: undefined,
       scriptOnPass: CONDITION_ACTIONS.CONTINUE,
       scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
       scriptCompareSource: DEFAULT_COMPARE_SOURCE,
@@ -1237,7 +1237,7 @@ export const useEditorStore = create<
       promptText: "",
       promptName: "",
       scriptCommand: "",
-      scriptTimeout: undefined,
+      scriptTimeoutSec: undefined,
       scriptOnPass: CONDITION_ACTIONS.CONTINUE,
       scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
       scriptCompareSource: DEFAULT_COMPARE_SOURCE,

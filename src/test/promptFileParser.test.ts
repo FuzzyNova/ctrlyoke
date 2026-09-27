@@ -128,7 +128,7 @@ suite("PromptFileParser Tests", () => {
       assert.ok(endCondition);
       assert.strictEqual(endCondition.script, "check_explanation.py");
       assert.strictEqual(endCondition.expected, undefined);
-      assert.strictEqual(endCondition.timeout, 30000);
+      assert.strictEqual(endCondition.timeoutSec, 30);
     });
 
     test("should preserve errorBehavior in parsed result", async () => {
@@ -145,7 +145,7 @@ suite("PromptFileParser Tests", () => {
               errorBehavior: {
                 onError: "retry",
                 maxRetries: 3,
-                retryDelayMs: 1000,
+                retryDelaySec: 1,
               },
               hooks: [{ event: "error", command: "echo hook" }],
               steps: [
@@ -167,7 +167,7 @@ suite("PromptFileParser Tests", () => {
         assert.deepStrictEqual(result.errorBehavior, {
           onError: "retry",
           maxRetries: 3,
-          retryDelayMs: 1000,
+          retryDelaySec: 1,
         });
         assert.deepStrictEqual(result.hooks, [
           { event: "error", command: "echo hook" },

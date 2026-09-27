@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import {
-  HARNESS_IDS,
+  STATUS_LINE_HARNESS_IDS,
   MESSAGE_TYPES,
   SETTING_PATHS,
   SETTING_SCOPES,
-  type StatusLineTrackingHarnessId,
 } from "@root/types/DashboardConstants";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import { AnimatedSection } from "@components/shared/AnimatedSection";
@@ -13,12 +12,7 @@ import { sendMessage } from "@hooks/useMessageHandler";
 import { StatusLineFormatEditor } from "./stats/StatusLineFormatEditor";
 import { StatusLineTrackingControls } from "./stats/StatusLineTrackingControls";
 
-const STATUS_LINE_HARNESS_IDS: StatusLineTrackingHarnessId[] = [
-  HARNESS_IDS.CLAUDE_CLI,
-  HARNESS_IDS.ANTIGRAVITY_CLI,
-  HARNESS_IDS.COPILOT_CLI,
-  HARNESS_IDS.QWEN_CLI,
-];
+const STATUS_LINE_HARNESSES = Object.values(STATUS_LINE_HARNESS_IDS);
 
 interface Props {
   settings: FullGlobalSettings;
@@ -26,7 +20,7 @@ interface Props {
 
 export function StatusLineSection({ settings }: Props) {
   const { useDifferentFormatPerHarness, sharedFormat } =
-    settings.settings.permissions.statusLineTracking;
+    settings.settings.statusLine;
   const [sharedDraft, setSharedDraft] = useState(sharedFormat);
 
   useEffect(() => {
@@ -67,9 +61,7 @@ export function StatusLineSection({ settings }: Props) {
               useDifferentFormatPerHarness,
             })
           }
-          path={
-            SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_USE_DIFFERENT_FORMAT_PER_HARNESS
-          }
+          path={SETTING_PATHS.STATUS_LINE_USE_DIFFERENT_FORMAT_PER_HARNESS}
           sources={settings.sources}
           onReset={(path) => sendGlobalSetting(path, undefined)}
           activeScope={SETTING_SCOPES.USER}
@@ -78,17 +70,14 @@ export function StatusLineSection({ settings }: Props) {
           <StatusLineFormatEditor
             format={sharedFormat}
             onCommit={(format) =>
-              sendGlobalSetting(
-                SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_SHARED_FORMAT,
-                format
-              )
+              sendGlobalSetting(SETTING_PATHS.STATUS_LINE_SHARED_FORMAT, format)
             }
             onDraftChange={setSharedDraft}
             hidePreview
             title="Shared status line format"
           />
         </AnimatedSection>
-        {STATUS_LINE_HARNESS_IDS.map((harnessId) => (
+        {STATUS_LINE_HARNESSES.map((harnessId) => (
           <StatusLineTrackingControls
             key={harnessId}
             harnessId={harnessId}

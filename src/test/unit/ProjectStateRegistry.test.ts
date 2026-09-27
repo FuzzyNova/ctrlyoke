@@ -11,6 +11,11 @@ import {
 } from "../../utils/RunHistoryStoragePolicy";
 import { projectStateRoot } from "../../utils/ProjectStatePaths";
 import { RUN_HISTORY_LOCATIONS } from "../../types/DashboardConstants";
+import {
+  CURRENT_SCHEMA_VERSIONS,
+  isNewerSchemaError,
+  PERSISTED_STORES,
+} from "../../utils/PersistedSchemaGuard";
 
 suite("ProjectStateRegistry", () => {
   let stateRoot: string;
@@ -62,7 +67,8 @@ suite("ProjectStateRegistry", () => {
     await fs.writeFile(
       path.join(projectRoot, "project.json"),
       JSON.stringify({
-        schemaVersion: 2,
+        schemaVersion:
+          CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.PROJECT_METADATA] + 1,
         statePath: stateRoot,
         createdAt: new Date().toISOString(),
         lastOpenedAt: new Date().toISOString(),
@@ -71,7 +77,9 @@ suite("ProjectStateRegistry", () => {
 
     await assert.rejects(
       () => registry.initialize(stateRoot),
-      /newer than supported schema/
+      (error: unknown) =>
+        isNewerSchemaError(error) &&
+        error.store === PERSISTED_STORES.PROJECT_METADATA
     );
   });
 

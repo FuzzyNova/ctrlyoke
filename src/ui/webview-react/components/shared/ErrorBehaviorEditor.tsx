@@ -2,7 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { CustomSelect } from "./CustomSelect";
 import type { ErrorBehavior } from "@root/types/CtrlYokeTypes";
 import { CONDITION_ACTIONS } from "@root/types/DashboardConstants";
-import { ERROR_BEHAVIOR_ACTION_OPTIONS_META, toSelectOptions } from "@root/types/SchemaUiMetadata";
+import {
+  ERROR_BEHAVIOR_ACTION_OPTIONS_META,
+  toSelectOptions,
+} from "@root/types/SchemaUiMetadata";
 import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
 
 const DEFAULT_ERROR_BEHAVIOR: ErrorBehavior = {
@@ -24,7 +27,9 @@ function applyActionDefaults(
   return {
     onError,
     maxRetries: current.maxRetries ?? 1,
-    retryDelayMs: current.retryDelayMs ?? 0,
+    ...(current.retryDelaySec !== undefined && {
+      retryDelaySec: current.retryDelaySec,
+    }),
   };
 }
 
@@ -48,7 +53,7 @@ export function ErrorBehaviorEditor({
     String(resolvedValue.maxRetries ?? 1)
   );
   const [retryDelayInput, setRetryDelayInput] = useState(
-    String(resolvedValue.retryDelayMs ?? 0)
+    String(resolvedValue.retryDelaySec ?? "")
   );
 
   useEffect(() => {
@@ -56,8 +61,8 @@ export function ErrorBehaviorEditor({
   }, [resolvedValue.maxRetries]);
 
   useEffect(() => {
-    setRetryDelayInput(String(resolvedValue.retryDelayMs ?? 0));
-  }, [resolvedValue.retryDelayMs]);
+    setRetryDelayInput(String(resolvedValue.retryDelaySec ?? ""));
+  }, [resolvedValue.retryDelaySec]);
 
   const isRetry = resolvedValue.onError === CONDITION_ACTIONS.RETRY;
 
@@ -67,7 +72,11 @@ export function ErrorBehaviorEditor({
         <label
           htmlFor={`${idPrefix}-on-error`}
           className="text-xs font-semibold uppercase text-description-fg"
-          title={schemaTitle(`${schemaPath}.onError`, undefined, "What ctrlyoke should do when a step phase encounters an internal error, including pre-conditions, prompts/harnesses, end-conditions, and script steps.")}
+          title={schemaTitle(
+            `${schemaPath}.onError`,
+            undefined,
+            "What ctrlyoke should do when a step phase encounters an internal error, including pre-conditions, prompts/harnesses, end-conditions, and script steps."
+          )}
         >
           On Error
         </label>
@@ -82,7 +91,10 @@ export function ErrorBehaviorEditor({
               )
             )
           }
-          options={toSelectOptions(ERROR_BEHAVIOR_ACTION_OPTIONS_META, `${schemaPath}.onError`)}
+          options={toSelectOptions(
+            ERROR_BEHAVIOR_ACTION_OPTIONS_META,
+            `${schemaPath}.onError`
+          )}
           disabled={disabled}
           schemaPath={`${schemaPath}.onError`}
         />
@@ -100,7 +112,10 @@ export function ErrorBehaviorEditor({
             </label>
             <input
               id={`${idPrefix}-max-retries`}
-              aria-label={schemaAriaLabel("Max Retries", `${schemaPath}.maxRetries`)}
+              aria-label={schemaAriaLabel(
+                "Max Retries",
+                `${schemaPath}.maxRetries`
+              )}
               title={schemaTitle(`${schemaPath}.maxRetries`)}
               type="number"
               min={1}
@@ -118,7 +133,6 @@ export function ErrorBehaviorEditor({
                   ...resolvedValue,
                   onError: CONDITION_ACTIONS.RETRY,
                   maxRetries: nextValue,
-                  retryDelayMs: resolvedValue.retryDelayMs ?? 0,
                 });
               }}
               disabled={disabled}
@@ -129,32 +143,38 @@ export function ErrorBehaviorEditor({
           <div className="flex flex-col gap-1">
             <label
               htmlFor={`${idPrefix}-retry-delay`}
-              title={schemaTitle(`${schemaPath}.retryDelayMs`)}
+              title={schemaTitle(`${schemaPath}.retryDelaySec`)}
               className="text-xs font-semibold uppercase text-description-fg"
             >
-              Retry Delay (ms)
+              Retry Delay (s)
             </label>
             <input
               id={`${idPrefix}-retry-delay`}
-              aria-label={schemaAriaLabel("Retry Delay (ms)", `${schemaPath}.retryDelayMs`)}
-              title={schemaTitle(`${schemaPath}.retryDelayMs`)}
+              aria-label={schemaAriaLabel(
+                "Retry Delay (s)",
+                `${schemaPath}.retryDelaySec`
+              )}
+              title={schemaTitle(`${schemaPath}.retryDelaySec`)}
               type="number"
-              min={0}
-              step={100}
-              inputMode="numeric"
+              min={0.001}
+              step="any"
+              inputMode="decimal"
               value={retryDelayInput}
               onChange={(event) => setRetryDelayInput(event.target.value)}
               onBlur={() => {
-                const parsed = parseInt(retryDelayInput, 10);
-                const nextValue = Number.isNaN(parsed)
-                  ? 0
-                  : Math.max(0, parsed);
-                setRetryDelayInput(String(nextValue));
+                const parsed = parseFloat(retryDelayInput);
+                const nextValue =
+                  Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+                setRetryDelayInput(
+                  nextValue === undefined ? "" : String(nextValue)
+                );
+                const withoutRetryDelay = { ...resolvedValue };
+                delete withoutRetryDelay.retryDelaySec;
                 onChange({
-                  ...resolvedValue,
+                  ...withoutRetryDelay,
                   onError: CONDITION_ACTIONS.RETRY,
                   maxRetries: resolvedValue.maxRetries ?? 1,
-                  retryDelayMs: nextValue,
+                  ...(nextValue !== undefined && { retryDelaySec: nextValue }),
                 });
               }}
               disabled={disabled}

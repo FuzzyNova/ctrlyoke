@@ -52,8 +52,8 @@ export function getExecutionPreviewEditorSnapshot():
       type: STEP_TYPES.SCRIPT,
       script: editor.scriptCommand,
       ...(editor.promptName.trim() ? { name: editor.promptName.trim() } : {}),
-      ...(editor.scriptTimeout !== undefined
-        ? { timeout: editor.scriptTimeout }
+      ...(editor.scriptTimeoutSec !== undefined
+        ? { timeoutSec: editor.scriptTimeoutSec }
         : {}),
       ...(editor.scriptOnPass !== CONDITION_ACTIONS.CONTINUE
         ? { onPass: editor.scriptOnPass as ScriptStep["onPass"] }

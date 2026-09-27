@@ -1845,7 +1845,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
         const startedAt =
           WorkflowPaths.parseRunRefTimestamp(parsed.runRef) ?? 0;
         return {
-          schemaVersion: "2.4.0",
+          schemaVersion: 1,
           storageKind: "timeline",
           workflowId: workflowKey,
           runId: startedAt - Date.UTC(2025, 0, 1),

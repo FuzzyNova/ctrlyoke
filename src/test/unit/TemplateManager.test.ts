@@ -4,7 +4,10 @@ import * as path from "path";
 import * as jsYaml from "js-yaml";
 import { suite, teardown, test } from "mocha";
 import { TemplateManager } from "../../core/TemplateManager";
-import { WORKFLOW_FILE_FORMATS } from "../../types/DashboardConstants";
+import {
+  PUBLISHED_SCHEMA_URLS,
+  WORKFLOW_FILE_FORMATS,
+} from "../../types/DashboardConstants";
 import { EXECUTION_PROPERTY_KEYS } from "../../types/CtrlYokeTypes";
 import {
   makeTempDir as createTempDir,
@@ -284,6 +287,12 @@ suite("TemplateManager variable metadata", () => {
       const parsed = jsYaml.load(
         await fs.promises.readFile(createdPath, "utf-8")
       ) as any;
+      const source = await fs.promises.readFile(createdPath, "utf-8");
+      assert.ok(
+        source.startsWith(
+          `# yaml-language-server: $schema=${PUBLISHED_SCHEMA_URLS.WORKFLOW}\n`
+        )
+      );
       assert.strictEqual(parsed._templateMeta.name, "My Copy");
       assert.strictEqual(parsed._templateMeta.description, "Keep me");
       assert.strictEqual(parsed._templateMeta.variables.feature.type, "text");
@@ -311,6 +320,7 @@ suite("TemplateManager variable metadata", () => {
       );
       assert.strictEqual(parsed._templateMeta.name, "Snapshot");
       assert.strictEqual(parsed.steps[0].prompt, "Ship it");
+      assert.strictEqual(parsed.$schema, PUBLISHED_SCHEMA_URLS.WORKFLOW);
     });
 
     test("discovers YAML, YML, and JSON templates", async () => {
@@ -380,7 +390,7 @@ suite("TemplateManager variable metadata", () => {
         )
       );
       const schemaKeys = Object.keys(
-        schema.definitions.executionProperties.properties
+        schema.$defs.executionProperties.properties
       ).sort();
 
       assert.deepStrictEqual(schemaKeys, [...EXECUTION_PROPERTY_KEYS].sort());
@@ -418,7 +428,7 @@ suite("TemplateManager variable metadata", () => {
           script: "npm test",
           expected: "ok",
           compareSource: "stdout",
-          timeout: 1_000,
+          timeoutSec: 1,
           maxRetries: 2,
           retryPrompt: "retry $endCondition:stdout",
           passRetryPrompt: "pass $endCondition:stdout",
@@ -430,7 +440,7 @@ suite("TemplateManager variable metadata", () => {
           script: "npm run precheck",
           compareSource: "exitCode",
           expected: "0",
-          timeout: 500,
+          timeoutSec: 0.5,
           onPass: "continue",
           onFail: "skipPrompt",
         },
@@ -444,7 +454,7 @@ suite("TemplateManager variable metadata", () => {
         errorBehavior: {
           onError: "retry",
           maxRetries: 3,
-          retryDelayMs: 25,
+          retryDelaySec: 0.025,
         },
       };
       const runtime = {
@@ -473,7 +483,7 @@ suite("TemplateManager variable metadata", () => {
         script: "npm run verify",
         compareSource: "stderr",
         expected: "warning",
-        timeout: 2_000,
+        timeoutSec: 2,
         errorBehavior: executionProperties.errorBehavior,
         onPass: "stopWorkflow",
         onFail: "continue",
@@ -535,12 +545,13 @@ suite("TemplateManager variable metadata", () => {
         script: "npm run verify",
         compareSource: "stderr",
         expected: "warning",
-        timeout: 2_000,
+        timeoutSec: 2,
         errorBehavior: executionProperties.errorBehavior,
         onPass: "stopWorkflow",
         onFail: "continue",
       };
       assert.deepStrictEqual(workflow, {
+        schemaVersion: 1,
         ...executionProperties,
         vars: { branch: "main" },
         steps: [expectedPrompt, expectedScript],

@@ -9,6 +9,7 @@ import {
   PROMPT_PROPERTIES,
   PANEL_CLIENT_ID,
   WORKFLOW_FILE_FORMATS,
+  PUBLISHED_SCHEMA_URLS,
   type WorkflowFileFormat,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../types/DashboardConstants";
@@ -18,6 +19,10 @@ import {
 } from "../utils/ConfigurationUtils";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import { Log } from "../utils/Log";
+import {
+  CURRENT_SCHEMA_VERSIONS,
+  PERSISTED_STORES,
+} from "../utils/PersistedSchemaGuard";
 import {
   getVsCodeWorkspaceRoot,
   getVsCodeNamedWorkspaceRoots,
@@ -33,6 +38,7 @@ import type {
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
 import { WorkflowLineageRepository } from "../core/orchestration/WorkflowLineageRepository";
+import { stripLegacyWorkingFileLineageMetadata } from "../utils/WorkingFileMetadata";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import type { PostMessageFn } from "./WebviewSettingsSync";
 import {
@@ -82,8 +88,7 @@ export class WorkflowSerializer {
     private readonly templateManager: TemplateManager,
     private readonly getManager: () => WorkflowOrchestrator | undefined,
     private readonly getOutputHistoryManager: () =>
-      | OutputHistoryManager
-      | undefined,
+      OutputHistoryManager | undefined,
     private readonly workspaceState: vscode.Memento
   ) {}
 
@@ -385,7 +390,6 @@ export class WorkflowSerializer {
 
       const workflowDisplayName =
         descriptor?.workflowName ||
-        workingFile.workflowName ||
         path
           .basename(workingFilePath)
           .replace(/\.ctrlyoke\.(ya?ml|json)$/i, "");
@@ -531,7 +535,10 @@ export class WorkflowSerializer {
   private buildCleanWorkflow(
     workingFile: Record<string, any>
   ): Record<string, unknown> {
-    const clean: Record<string, unknown> = {};
+    const clean: Record<string, unknown> = {
+      schemaVersion:
+        CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.WORKFLOW_DEFINITION],
+    };
 
     for (const field of WorkflowSerializer.WORKFLOW_FIELDS) {
       if (
@@ -575,7 +582,7 @@ export class WorkflowSerializer {
       );
       const authoredSteps: Record<string, unknown>[] = [];
 
-      for (let index = 0; index < cleanSteps.length; ) {
+      for (let index = 0; index < cleanSteps.length;) {
         const group = groupsByStart.get(index);
         if (!group) {
           authoredSteps.push(cleanSteps[index]);
@@ -673,12 +680,18 @@ export class WorkflowSerializer {
 
       let serialized: string;
       if (format === WORKFLOW_FILE_FORMATS.YAML) {
-        serialized = yaml.dump(analysis.workflow, {
-          lineWidth: -1,
-          noRefs: true,
-          quoteStyle: "double",
-        });
+        const yamlWorkflow = { ...analysis.workflow };
+        delete yamlWorkflow.$schema;
+        serialized = `# yaml-language-server: $schema=${PUBLISHED_SCHEMA_URLS.WORKFLOW}\n${yaml.dump(
+          yamlWorkflow,
+          {
+            lineWidth: -1,
+            noRefs: true,
+            quoteStyle: "double",
+          }
+        )}`;
       } else {
+        analysis.workflow.$schema = PUBLISHED_SCHEMA_URLS.WORKFLOW;
         serialized = JSON.stringify(analysis.workflow, null, 2);
       }
 
@@ -1272,7 +1285,9 @@ export class WorkflowSerializer {
               : WorkflowPaths.draftDir(workspaceRoot, address.workflowKey);
 
           try {
-            const workingFile = (await readJsonFile(filePath)) as WorkingFile;
+            const workingFile = stripLegacyWorkingFileLineageMetadata(
+              (await readJsonFile(filePath)) as WorkingFile
+            );
             const historyManager =
               this.getOutputHistoryManager() ??
               new OutputHistoryManager(workspaceRoot);
@@ -1297,7 +1312,7 @@ export class WorkflowSerializer {
             };
 
             const lastModified =
-              workingFile.lastModifiedAt || workingFile.startedAt || 0;
+              descriptor.lastModifiedAt || workingFile.startedAt || 0;
 
             let executionState: string =
               workingFile._runtime?.executionState || EXECUTION_STATES.IDLE;
@@ -1345,7 +1360,7 @@ export class WorkflowSerializer {
             return {
               address,
               runDirectory,
-              workflowName: workingFile.workflowName || workflowKey,
+              workflowName: descriptor.workflowName || workflowKey,
               executionState,
               startedAt: workingFile.startedAt || 0,
               lastModifiedAt: lastModified,

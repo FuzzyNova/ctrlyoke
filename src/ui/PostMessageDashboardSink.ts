@@ -17,6 +17,7 @@ import type {
   WorkflowViewAddress,
   WorktreeRunProjection,
   ParallelGroupDefinition,
+  WorkflowValidationWarning,
 } from "../types/CtrlYokeTypes";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import type { CtrlYokeNotificationEvent } from "./notifications/CompletionNotificationFactory";
@@ -72,7 +73,8 @@ export class PostMessageDashboardSink implements IDashboardSink {
     workflowId?: string,
     workflowProperties?: Record<string, unknown>,
     parallelGroups?: ParallelGroupDefinition[],
-    activeStepIndices?: number[]
+    activeStepIndices?: number[],
+    schemaWarnings?: WorkflowValidationWarning[]
   ): Promise<void> {
     this.send({
       type: MESSAGE_TYPES.FILE_SELECTED,
@@ -87,6 +89,7 @@ export class PostMessageDashboardSink implements IDashboardSink {
       ...(workflowProperties !== undefined ? { workflowProperties } : {}),
       ...(parallelGroups !== undefined ? { parallelGroups } : {}),
       ...(activeStepIndices !== undefined ? { activeStepIndices } : {}),
+      ...(schemaWarnings !== undefined ? { schemaWarnings } : {}),
     });
   }
 
@@ -107,7 +110,8 @@ export class PostMessageDashboardSink implements IDashboardSink {
     workflowProperties?: Record<string, unknown>,
     parallelGroups?: ParallelGroupDefinition[],
     activeStepIndices?: number[],
-    definitionRevision?: number
+    definitionRevision?: number,
+    schemaWarnings?: WorkflowValidationWarning[]
   ): Promise<void> {
     this.send({
       type: MESSAGE_TYPES.SESSION_RESTORED,
@@ -126,6 +130,7 @@ export class PostMessageDashboardSink implements IDashboardSink {
       ...(parallelGroups !== undefined ? { parallelGroups } : {}),
       ...(activeStepIndices !== undefined ? { activeStepIndices } : {}),
       ...(definitionRevision !== undefined ? { definitionRevision } : {}),
+      ...(schemaWarnings !== undefined ? { schemaWarnings } : {}),
     });
   }
 

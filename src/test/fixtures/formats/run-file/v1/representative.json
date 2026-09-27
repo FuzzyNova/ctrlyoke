@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "steps": [{ "prompt": "Run fixture" }],
+  "_runtime": {
+    "schemaVersion": 1,
+    "currentIndex": 0,
+    "executionState": "completed"
+  }
+}

@@ -24,6 +24,12 @@ export const WORKFLOW_FILE_FORMATS = {
 export type WorkflowFileFormat =
   (typeof WORKFLOW_FILE_FORMATS)[keyof typeof WORKFLOW_FILE_FORMATS];
 
+/** Published format-1 schemas linked from newly authored workflow/settings files. */
+export const PUBLISHED_SCHEMA_URLS = {
+  WORKFLOW: "https://ctrlyoke.dev/schema/v1/workflow.json",
+  SETTINGS: "https://ctrlyoke.dev/schema/v1/settings.json",
+} as const;
+
 /** Completion trigger discriminants shared by the extension host and webview. */
 export const COMPLETION_TRIGGERS = {
   SLASH: "/",
@@ -161,17 +167,6 @@ export const RUN_HISTORY_LOCATIONS = {
   USER: "user",
   WORKSPACE: "workspace",
 } as const;
-
-/** Providers that install a global statusline command. */
-export const STATUS_LINE_TRACKING_PROVIDERS = {
-  CLAUDE: "claude",
-  ANTIGRAVITY: "antigravity",
-  COPILOT: "copilot",
-  QWEN: "qwen",
-} as const;
-
-export type StatusLineTrackingProvider =
-  (typeof STATUS_LINE_TRACKING_PROVIDERS)[keyof typeof STATUS_LINE_TRACKING_PROVIDERS];
 
 /** String representations used when booleans cross a text-based boundary. */
 export const BOOLEAN_STRING_VALUES = {
@@ -1146,22 +1141,30 @@ export const HARNESS_IDS = {
 } as const;
 
 /** Harnesses whose global statusline can be managed by ctrlyoke. */
-export type StatusLineTrackingHarnessId =
-  | typeof HARNESS_IDS.CLAUDE_CLI
-  | typeof HARNESS_IDS.ANTIGRAVITY_CLI
-  | typeof HARNESS_IDS.COPILOT_CLI
-  | typeof HARNESS_IDS.QWEN_CLI;
+export const STATUS_LINE_HARNESS_IDS = {
+  CLAUDE: HARNESS_IDS.CLAUDE_CLI,
+  ANTIGRAVITY: HARNESS_IDS.ANTIGRAVITY_CLI,
+  COPILOT: HARNESS_IDS.COPILOT_CLI,
+  QWEN: HARNESS_IDS.QWEN_CLI,
+} as const;
 
-export function isStatusLineTrackingHarnessId(
+export type StatusLineHarnessId =
+  (typeof STATUS_LINE_HARNESS_IDS)[keyof typeof STATUS_LINE_HARNESS_IDS];
+
+export function isStatusLineHarnessId(
   value: unknown
-): value is StatusLineTrackingHarnessId {
-  return (
-    value === HARNESS_IDS.CLAUDE_CLI ||
-    value === HARNESS_IDS.ANTIGRAVITY_CLI ||
-    value === HARNESS_IDS.COPILOT_CLI ||
-    value === HARNESS_IDS.QWEN_CLI
-  );
+): value is StatusLineHarnessId {
+  return Object.values(STATUS_LINE_HARNESS_IDS).some((id) => id === value);
 }
+
+/** Stable script filenames used by harness configuration and the launcher. */
+export const STATUSLINE_SCRIPT_FILE_NAMES: Record<StatusLineHarnessId, string> =
+  {
+    [STATUS_LINE_HARNESS_IDS.CLAUDE]: "ctrlyoke-claude-statusline.js",
+    [STATUS_LINE_HARNESS_IDS.ANTIGRAVITY]: "ctrlyoke-antigravity-statusline.js",
+    [STATUS_LINE_HARNESS_IDS.COPILOT]: "ctrlyoke-copilot-statusline.js",
+    [STATUS_LINE_HARNESS_IDS.QWEN]: "ctrlyoke-qwen-statusline.js",
+  };
 
 /** Claude tool names used by provider-specific execution state tracking. */
 export const CLAUDE_TOOL_NAMES = {
@@ -1612,6 +1615,14 @@ export const CLI_VALIDATE_STRICT_POLICIES = {
   ALL: "all",
 } as const;
 
+export const CLI_VALIDATE_ERROR_CODES = {
+  WORKFLOW_NEWER_FORMAT: "workflow-newer-format",
+} as const;
+
+export const USER_FEEDBACK_ACTIONS = {
+  UPDATE_EXTENSION: "update-extension",
+} as const;
+
 export type CliValidateStrictPolicy =
   (typeof CLI_VALIDATE_STRICT_POLICIES)[keyof typeof CLI_VALIDATE_STRICT_POLICIES];
 
@@ -1626,43 +1637,41 @@ export const SETTING_PATHS = {
   UI_SHOW_COST_ESTIMATES: "ui.showCostEstimates",
   SERVER_AUTO_START: "server.autoStart",
   COMMIT_SYSTEM_PROMPT: "commit.systemPrompt",
-  PERMISSIONS_STATUS_LINE_TRACKING: "permissions.statusLineTracking",
-  PERMISSIONS_STATUS_LINE_TRACKING_USE_DIFFERENT_FORMAT_PER_HARNESS:
-    "permissions.statusLineTracking.useDifferentFormatPerHarness",
-  PERMISSIONS_STATUS_LINE_TRACKING_SHARED_FORMAT:
-    "permissions.statusLineTracking.sharedFormat",
-  PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_ENABLED:
-    "permissions.statusLineTracking.claude.enabled",
-  PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_CUSTOM_COMMAND:
-    "permissions.statusLineTracking.claude.customCommand",
-  PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_USE_CTRLYOKE_STYLE:
-    "permissions.statusLineTracking.claude.useCtrlyokeStyle",
-  PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_FORMAT:
-    "permissions.statusLineTracking.claude.format",
-  PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_ENABLED:
-    "permissions.statusLineTracking.antigravity.enabled",
-  PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_CUSTOM_COMMAND:
-    "permissions.statusLineTracking.antigravity.customCommand",
-  PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_USE_CTRLYOKE_STYLE:
-    "permissions.statusLineTracking.antigravity.useCtrlyokeStyle",
-  PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_FORMAT:
-    "permissions.statusLineTracking.antigravity.format",
-  PERMISSIONS_STATUS_LINE_TRACKING_COPILOT_ENABLED:
-    "permissions.statusLineTracking.copilot.enabled",
-  PERMISSIONS_STATUS_LINE_TRACKING_COPILOT_CUSTOM_COMMAND:
-    "permissions.statusLineTracking.copilot.customCommand",
-  PERMISSIONS_STATUS_LINE_TRACKING_COPILOT_USE_CTRLYOKE_STYLE:
-    "permissions.statusLineTracking.copilot.useCtrlyokeStyle",
-  PERMISSIONS_STATUS_LINE_TRACKING_COPILOT_FORMAT:
-    "permissions.statusLineTracking.copilot.format",
-  PERMISSIONS_STATUS_LINE_TRACKING_QWEN_ENABLED:
-    "permissions.statusLineTracking.qwen.enabled",
-  PERMISSIONS_STATUS_LINE_TRACKING_QWEN_CUSTOM_COMMAND:
-    "permissions.statusLineTracking.qwen.customCommand",
-  PERMISSIONS_STATUS_LINE_TRACKING_QWEN_USE_CTRLYOKE_STYLE:
-    "permissions.statusLineTracking.qwen.useCtrlyokeStyle",
-  PERMISSIONS_STATUS_LINE_TRACKING_QWEN_FORMAT:
-    "permissions.statusLineTracking.qwen.format",
+  STATUS_LINE: "statusLine",
+  STATUS_LINE_USE_DIFFERENT_FORMAT_PER_HARNESS:
+    "statusLine.useDifferentFormatPerHarness",
+  STATUS_LINE_SHARED_FORMAT: "statusLine.sharedFormat",
+  STATUS_LINE_CLAUDE_ENABLED: "statusLine.byHarness.claude-cli.enabled",
+  STATUS_LINE_CLAUDE_CUSTOM_COMMAND:
+    "statusLine.byHarness.claude-cli.customCommand",
+  STATUS_LINE_CLAUDE_USE_CTRLYOKE_STYLE:
+    "statusLine.byHarness.claude-cli.useCtrlyokeStyle",
+  STATUS_LINE_CLAUDE_FORMAT: "statusLine.byHarness.claude-cli.format",
+  STATUS_LINE_ANTIGRAVITY_ENABLED:
+    "statusLine.byHarness.antigravity-cli.enabled",
+  STATUS_LINE_ANTIGRAVITY_CUSTOM_COMMAND:
+    "statusLine.byHarness.antigravity-cli.customCommand",
+  STATUS_LINE_ANTIGRAVITY_USE_CTRLYOKE_STYLE:
+    "statusLine.byHarness.antigravity-cli.useCtrlyokeStyle",
+  STATUS_LINE_ANTIGRAVITY_FORMAT: "statusLine.byHarness.antigravity-cli.format",
+  STATUS_LINE_COPILOT_ENABLED: "statusLine.byHarness.copilot-cli.enabled",
+  STATUS_LINE_COPILOT_CUSTOM_COMMAND:
+    "statusLine.byHarness.copilot-cli.customCommand",
+  STATUS_LINE_COPILOT_USE_CTRLYOKE_STYLE:
+    "statusLine.byHarness.copilot-cli.useCtrlyokeStyle",
+  STATUS_LINE_COPILOT_FORMAT: "statusLine.byHarness.copilot-cli.format",
+  STATUS_LINE_QWEN_ENABLED: "statusLine.byHarness.qwen-cli.enabled",
+  STATUS_LINE_QWEN_CUSTOM_COMMAND:
+    "statusLine.byHarness.qwen-cli.customCommand",
+  STATUS_LINE_QWEN_USE_CTRLYOKE_STYLE:
+    "statusLine.byHarness.qwen-cli.useCtrlyokeStyle",
+  STATUS_LINE_QWEN_FORMAT: "statusLine.byHarness.qwen-cli.format",
+  EXECUTION_SCRIPT_TIMEOUT_SEC: "execution.scriptTimeoutSec",
+  EXECUTION_MAX_PROMPT_TIMEOUT_SEC: "execution.maxPromptTimeoutSec",
+  QUEUE_MAX_WORKFLOW_EXECUTION_TIME_SEC: "queue.maxWorkflowExecutionTimeSec",
+  EXECUTION_CTRLYOKE_MCP_MODE: "execution.ctrlyokeMcpMode",
+  DIAGNOSTICS_VERBOSE_LOGGING: "diagnostics.verboseLogging",
+  DIAGNOSTICS_LOG_RAW_CLI_OUTPUT: "diagnostics.logRawCliOutput",
   USAGE_TRACKING_ENABLED: "usageTracking.enabled",
   USAGE_TRACKING_PERCENT_DIRECTION: "usageTracking.percentDirection",
 } as const;
@@ -2916,11 +2925,13 @@ export const SCRIPT_VALUELESS_OPERATORS: readonly string[] = [
 
 // ============================================================================
 // WORKFLOW VALIDATION WARNINGS - non-blocking findings from
-// `PromptFileParser.validateWorkflowSteps`. A workflow that produces only
-// warnings still parses, loads, and runs; the codes exist so CLI/JSON consumers
-// can identify a finding without parsing its prose.
+// `PromptFileParser`. A workflow that produces only warnings still parses,
+// loads, and runs; stable codes let CLI/JSON consumers identify a finding
+// without parsing its prose.
 // ============================================================================
 export const WORKFLOW_VALIDATION_WARNING_CODES = {
+  /** An unrecognized optional key will be ignored by this ctrlyoke version. */
+  UNKNOWN_PROPERTY: "unknown-property",
   /**
    * A script comparison states a `compareSource`/`operator` but gives no
    * `expected` value, so the stated comparison never runs and the check falls
@@ -3075,7 +3086,7 @@ export const PROMPT_PROPERTIES = {
   // Script step properties
   SCRIPT: "script",
   ENV: "env",
-  TIMEOUT: "timeout",
+  TIMEOUT: "timeoutSec",
   COMPARE_SOURCE: "compareSource",
   OPERATOR: "operator",
   EXPECTED: "expected",
@@ -3156,7 +3167,7 @@ export type WorkflowPropertyKey = (typeof WORKFLOW_PROPERTY_KEYS)[number];
 export const END_CONDITION_PROPERTIES = {
   SCRIPT: "script",
   EXPECTED: "expected",
-  TIMEOUT: "timeout",
+  TIMEOUT: "timeoutSec",
   MAX_RETRIES: "maxRetries",
   RETRY_PROMPT: "retryPrompt",
   RESUME_SESSION_ON_RETRY: "resumeSessionOnRetry",

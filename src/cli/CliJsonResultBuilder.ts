@@ -5,6 +5,7 @@ import {
   FINAL_STEP_PHASES,
   STEP_STATUS,
   STEP_TYPES,
+  CLI_VALIDATE_ERROR_CODES,
   type ExecutionMode,
   type ExecutionState,
   type FailureKind,
@@ -78,6 +79,9 @@ export interface CliValidationJsonResult {
    */
   warnings: WorkflowValidationWarning[];
   error: string | null;
+  errorCode:
+    | (typeof CLI_VALIDATE_ERROR_CODES)[keyof typeof CLI_VALIDATE_ERROR_CODES]
+    | null;
 }
 
 export interface CliValidationJsonResultInput {
@@ -90,6 +94,7 @@ export interface CliValidationJsonResultInput {
   diagnostics?: readonly CompatibilityDiagnostic[];
   warnings?: readonly WorkflowValidationWarning[];
   error?: string;
+  errorCode?: CliValidationJsonResult["errorCode"];
 }
 
 export function buildCliValidationJsonResult(
@@ -106,6 +111,7 @@ export function buildCliValidationJsonResult(
     diagnostics: [...(input.diagnostics ?? [])],
     warnings: [...(input.warnings ?? [])],
     error: input.error ?? null,
+    errorCode: input.errorCode ?? null,
   };
 }
 

@@ -152,7 +152,7 @@ export type ErrorBehaviorAction =
 export interface ErrorBehavior {
   onError: ErrorBehaviorAction;
   maxRetries?: number;
-  retryDelayMs?: number;
+  retryDelaySec?: number;
 }
 
 /**
@@ -340,6 +340,8 @@ export const EXECUTION_PROPERTY_KEYS = [
 ] as const satisfies readonly (keyof ExecutionProperties)[];
 
 export interface PromptFile extends ExecutionProperties {
+  /** Workflow definition schema version; omitted on hand-authored legacy files (format 1). */
+  schemaVersion?: number;
   /** Worktree selection authored at the workflow root. */
   worktree?: WorktreeConfig;
   /** External roots requested for this workflow, or null to disable access. */
@@ -359,6 +361,11 @@ export interface PromptFile extends ExecutionProperties {
    * `CTRLYOKE_VAR_<KEY>` environment variable regardless of `{{varName}}` usage.
    */
   vars?: Record<string, string>;
+}
+
+/** A parsed workflow plus non-blocking schema warnings for authored unknown keys. */
+export interface ParsedPromptFile extends PromptFile {
+  warnings: WorkflowValidationWarning[];
 }
 
 /**
@@ -773,11 +780,7 @@ export interface WorkflowAttemptTransition {
  * Stored at `.runs/<workflowKey>/{draft,run-<ts>}/workflow.ctrlyoke.json` in run storage.
  */
 export interface WorkingFile extends PromptFile {
-  originalFile?: string; // Path to original prompt file (undefined for ephemeral/dashboard-created workflows)
-  workflowName: string; // Derived from original filename
   startedAt: number; // Timestamp when workflow started
-  lastModifiedAt?: number; // Timestamp when workflow was last modified (optional for backward compatibility)
-  isFavorite?: boolean; // Whether the workflow should be pinned to the top of recent workflow history
   /**
    * Monotonic counter bumped in-memory by `PromptQueue` on every definition-changing
    * mutation (append/insert/replace/delete/reorder/property edit, or a rewind's suffix
@@ -986,12 +989,10 @@ export type PreConditionAction = Exclude<ConditionAction, "retry">;
 export type ScriptStepAction = Exclude<ConditionAction, "retry" | "skipPrompt">;
 
 /**
- * A non-blocking finding from `PromptFileParser.validateWorkflowSteps`: the
- * workflow parses, loads, and runs, but something it states will not take
- * effect. Unlike `errors`, which are prose a human reads once before the load
- * is abandoned, a warning survives into CI output and dashboards, so it carries
- * a stable `code` and an RFC 6901 `propertyPointer` and consumers identify it
- * by those rather than by parsing `message`.
+ * A non-blocking finding from PromptFileParser: the workflow parses, loads, and
+ * runs, but something it states may not take effect. Warnings carry a stable
+ * `code` and RFC 6901 `propertyPointer`; consumers identify them by those
+ * rather than by parsing `message`.
  */
 export interface WorkflowValidationWarning {
   code: WorkflowValidationWarningCode;
@@ -1028,7 +1029,7 @@ export interface ScriptProperties {
   expected?: string | number;
   /** Compare text case-insensitively. Only applies to string operators. */
   ignoreCase?: boolean;
-  timeout?: number;
+  timeoutSec?: number;
   /** Pins the shell for this script's inline-text execution path. See scriptProperties description. */
   shell?: string;
 }

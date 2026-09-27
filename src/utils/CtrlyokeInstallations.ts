@@ -18,6 +18,13 @@ import { writeFileAtomic } from "./AtomicFileUtils";
 import { withFileLock } from "./FileLockUtils";
 import { foldPathForCompare } from "./PathCasing";
 import { ctrlyokeStateHome } from "./ProjectStatePaths";
+import {
+  CURRENT_SCHEMA_VERSIONS,
+  PERSISTED_STORES,
+  isNewerSchemaVersion,
+  readSchemaVersion,
+} from "./PersistedSchemaGuard";
+import { migrateToCurrent } from "./FormatMigrations";
 
 export const INSTALLATIONS_FILE_NAME = "installations.json";
 
@@ -30,7 +37,9 @@ export const INSTALLATION_KINDS = {
 export type InstallationKind =
   (typeof INSTALLATION_KINDS)[keyof typeof INSTALLATION_KINDS];
 
-const INSTALLATIONS_SCHEMA_VERSION = 1;
+export const INSTALLATIONS_SCHEMA_VERSION =
+  CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.INSTALLATIONS];
+const warnedNewerInstallationsFiles = new Set<string>();
 
 /** Entries not seen for this long are ignored and pruned. */
 const INSTALLATION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
@@ -44,7 +53,7 @@ export interface InstallationRecord {
    * The history search index version this host reads and writes. Hosts from
    * before per-version index directories leave it unset.
    */
-  indexSchemaVersion?: string;
+  indexSchemaVersion?: number;
 }
 
 interface InstallationsFile {
@@ -56,6 +65,16 @@ interface InstallationsFile {
   installations: Record<string, InstallationRecord>;
   /** Mismatch warnings already shown, keyed by {@link mismatchNoticeKey}. */
   notices?: Record<string, number>;
+  /** Process-local read-only marker; never serialized. */
+  newerSchema?: boolean;
+}
+
+function warnNewerInstallationsFile(filePath: string, version: number): void {
+  if (warnedNewerInstallationsFiles.has(filePath)) return;
+  warnedNewerInstallationsFiles.add(filePath);
+  process.stderr.write(
+    `The installation registry at ${filePath} uses format ${version}; this ctrlyoke supports format ${INSTALLATIONS_SCHEMA_VERSION}. It can be read but will not be modified.\n`
+  );
 }
 
 export function installationsFilePath(): string {
@@ -92,13 +111,30 @@ async function readFile(filePath: string): Promise<InstallationsFile> {
     const parsed = JSON.parse(
       await fs.promises.readFile(filePath, "utf8")
     ) as Partial<InstallationsFile>;
+    const version = readSchemaVersion(parsed);
+    if (isNewerSchemaVersion(PERSISTED_STORES.INSTALLATIONS, version)) {
+      warnNewerInstallationsFile(filePath, version!);
+      return {
+        schemaVersion: version!,
+        installations:
+          parsed &&
+          typeof parsed.installations === "object" &&
+          parsed.installations !== null
+            ? parsed.installations
+            : {},
+        ...(parsed?.notices ? { notices: parsed.notices } : {}),
+        newerSchema: true,
+      };
+    }
     if (!parsed || typeof parsed.installations !== "object") {
       return emptyFile();
     }
+    const migrated = migrateToCurrent(PERSISTED_STORES.INSTALLATIONS, parsed)
+      .doc as Partial<InstallationsFile>;
     return {
       schemaVersion: INSTALLATIONS_SCHEMA_VERSION,
-      installations: parsed.installations ?? {},
-      ...(parsed.notices ? { notices: parsed.notices } : {}),
+      installations: migrated.installations ?? {},
+      ...(migrated.notices ? { notices: migrated.notices } : {}),
     };
   } catch {
     return emptyFile();
@@ -167,6 +203,13 @@ export async function recordInstallation(
     await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
     return await withFileLock(filePath, async () => {
       const file = await readFile(filePath);
+      if (file.newerSchema) {
+        return {
+          others: Object.values(file.installations)
+            .filter((record) => isLive(record, now))
+            .sort((a, b) => compareVersions(b.version, a.version)),
+        };
+      }
       const selfKey = `${self.kind}:${foldPathForCompare(path.resolve(self.packageRoot))}`;
       const installations: Record<string, InstallationRecord> = {};
       for (const [key, record] of Object.entries(file.installations)) {
@@ -238,6 +281,7 @@ export async function markNoticeShown(
   try {
     await withFileLock(filePath, async () => {
       const file = await readFile(filePath);
+      if (file.newerSchema) return;
       await writeFileAtomic(
         filePath,
         JSON.stringify(

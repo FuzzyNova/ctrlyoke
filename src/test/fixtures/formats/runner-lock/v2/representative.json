@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 2,
+  "pid": 1234,
+  "startedAt": 1,
+  "lastHeartbeat": 2,
+  "hostInstanceId": "fixture-host",
+  "workflowKey": "fixture-workflow",
+  "runRef": { "workflowKey": "fixture-workflow", "runId": 1 },
+  "runId": 1,
+  "ownerToken": "fixture-token"
+}

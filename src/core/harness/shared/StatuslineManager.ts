@@ -3,15 +3,14 @@ import * as path from "path";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { parseArgString } from "../../../utils/CliArgParser";
 import {
-  STATUS_LINE_TRACKING_PROVIDERS,
+  STATUS_LINE_HARNESS_IDS,
   HARNESS_IDS,
   SETTING_SCOPES,
   SETTING_PATHS,
-  type StatusLineTrackingHarnessId,
-  type StatusLineTrackingProvider,
+  type StatusLineHarnessId,
 } from "../../../types/DashboardConstants";
 import { configService } from "../../../config/CtrlYokeConfigService";
-import type { StatusLineTrackingSettings } from "../../../types/CtrlYokeSettings";
+import type { StatusLineHarnessSettings } from "../../../types/CtrlYokeSettings";
 import { countLiveInstallationRoots } from "../../../utils/CtrlyokeInstallations";
 import { pathsEqual } from "../../../utils/PathCasing";
 import { SettingsJsonMcpTracker } from "./SettingsJsonMcpTracker";
@@ -46,7 +45,7 @@ export interface StatuslineInstallResult {
 }
 
 export interface StatuslineManagerLike {
-  getSettings(): StatusLineTrackingSettings;
+  getSettings(): StatusLineHarnessSettings;
   uninstall(
     workspaceRoot: string,
     restoreCustomCommand: boolean
@@ -67,37 +66,37 @@ interface StatuslineProviderDefinition {
  */
 export class StatuslineManager implements StatuslineManagerLike {
   private static readonly definitions = new Map<
-    StatusLineTrackingProvider,
+    StatusLineHarnessId,
     StatuslineProviderDefinition
   >();
 
-  static forProvider(provider: StatusLineTrackingProvider): StatuslineManager {
+  static forProvider(provider: StatusLineHarnessId): StatuslineManager {
     return new StatuslineManager(provider, this.getDefinition(provider));
   }
 
   static providerForHarness(
-    harnessId: StatusLineTrackingHarnessId
-  ): StatusLineTrackingProvider {
+    harnessId: StatusLineHarnessId
+  ): StatusLineHarnessId {
     switch (harnessId) {
       case HARNESS_IDS.CLAUDE_CLI:
-        return STATUS_LINE_TRACKING_PROVIDERS.CLAUDE;
+        return STATUS_LINE_HARNESS_IDS.CLAUDE;
       case HARNESS_IDS.ANTIGRAVITY_CLI:
-        return STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY;
+        return STATUS_LINE_HARNESS_IDS.ANTIGRAVITY;
       case HARNESS_IDS.COPILOT_CLI:
-        return STATUS_LINE_TRACKING_PROVIDERS.COPILOT;
+        return STATUS_LINE_HARNESS_IDS.COPILOT;
       case HARNESS_IDS.QWEN_CLI:
-        return STATUS_LINE_TRACKING_PROVIDERS.QWEN;
+        return STATUS_LINE_HARNESS_IDS.QWEN;
       default:
         throw new Error(`Unsupported statusline harness: ${harnessId}`);
     }
   }
 
-  static forHarness(harnessId: StatusLineTrackingHarnessId): StatuslineManager {
+  static forHarness(harnessId: StatusLineHarnessId): StatuslineManager {
     return this.forProvider(this.providerForHarness(harnessId));
   }
 
   private static getDefinition(
-    provider: StatusLineTrackingProvider
+    provider: StatusLineHarnessId
   ): StatuslineProviderDefinition {
     const existing = this.definitions.get(provider);
     if (existing) {
@@ -105,21 +104,21 @@ export class StatuslineManager implements StatuslineManagerLike {
     }
 
     const tracker =
-      provider === STATUS_LINE_TRACKING_PROVIDERS.CLAUDE
+      provider === STATUS_LINE_HARNESS_IDS.CLAUDE
         ? SettingsJsonMcpTracker.getInstance("claude-cli-settings", {
             projectConfigPath: () =>
               path.join(os.homedir(), ".claude", "settings.json"),
             userConfigPath: () =>
               path.join(os.homedir(), ".claude", "settings.json"),
           })
-        : provider === STATUS_LINE_TRACKING_PROVIDERS.COPILOT
+        : provider === STATUS_LINE_HARNESS_IDS.COPILOT
           ? SettingsJsonMcpTracker.getInstance("copilot-cli-settings", {
               projectConfigPath: () =>
                 path.join(os.homedir(), ".copilot", "settings.json"),
               userConfigPath: () =>
                 path.join(os.homedir(), ".copilot", "settings.json"),
             })
-          : provider === STATUS_LINE_TRACKING_PROVIDERS.QWEN
+          : provider === STATUS_LINE_HARNESS_IDS.QWEN
             ? SettingsJsonMcpTracker.getInstance("qwen-cli-settings", {
                 projectConfigPath: () =>
                   path.join(os.homedir(), ".qwen", "settings.json"),
@@ -141,12 +140,12 @@ export class StatuslineManager implements StatuslineManagerLike {
   }
 
   private constructor(
-    private readonly provider: StatusLineTrackingProvider,
+    private readonly provider: StatusLineHarnessId,
     private readonly definition: StatuslineProviderDefinition
   ) {}
 
-  getSettings(): StatusLineTrackingSettings {
-    return ConfigurationUtils.getStatusLineTrackingSettings(this.provider);
+  getSettings(): StatusLineHarnessSettings {
+    return ConfigurationUtils.getStatusLineHarnessSettings(this.provider);
   }
 
   /**
@@ -178,7 +177,7 @@ export class StatuslineManager implements StatuslineManagerLike {
           customCommand !== undefined &&
           this.isCtrlyokeStatuslineCommand(customCommand);
         alreadyCtrlyoke = isCtrlyokeCommand;
-        const enabledSettingPath = `${SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING}.${this.provider}.enabled`;
+        const enabledSettingPath = `${SETTING_PATHS.STATUS_LINE}.byHarness.${this.provider}.enabled`;
         // The automatic veto materializes a user-scoped disabled setting. A later
         // user-scoped re-enable is the explicit opt-in that permits replacement,
         // so no separate persisted "already asked" flag is needed.
@@ -193,7 +192,7 @@ export class StatuslineManager implements StatuslineManagerLike {
         ) {
           if (settings.enabled) {
             collision = true;
-            await ConfigurationUtils.setStatusLineTrackingSettings(
+            await ConfigurationUtils.setStatusLineHarnessSettings(
               this.provider,
               {
                 ...settings,
@@ -209,14 +208,11 @@ export class StatuslineManager implements StatuslineManagerLike {
           !this.isCtrlyokeStatuslineCommand(customCommand)
         ) {
           captured = true;
-          await ConfigurationUtils.setStatusLineTrackingSettings(
-            this.provider,
-            {
-              ...settings,
-              customCommand,
-              useCtrlyokeStyle: false,
-            }
-          );
+          await ConfigurationUtils.setStatusLineHarnessSettings(this.provider, {
+            ...settings,
+            customCommand,
+            useCtrlyokeStyle: false,
+          });
         }
       },
       (currentValue, hadKey) =>
@@ -278,7 +274,7 @@ export class StatuslineManager implements StatuslineManagerLike {
   ): Promise<void> {
     try {
       const launcherDirectory = statuslineLauncherDirectory();
-      for (const provider of Object.values(STATUS_LINE_TRACKING_PROVIDERS)) {
+      for (const provider of Object.values(STATUS_LINE_HARNESS_IDS)) {
         const manager = this.forProvider(provider);
         if (
           manager.getSettings().enabled ||
@@ -316,7 +312,7 @@ export class StatuslineManager implements StatuslineManagerLike {
   }
 
   private getPersistentValueKey(): string {
-    return this.provider === STATUS_LINE_TRACKING_PROVIDERS.QWEN
+    return this.provider === STATUS_LINE_HARNESS_IDS.QWEN
       ? QWEN_STATUS_LINE_SETTING_KEY
       : STATUS_LINE_SETTING_KEY;
   }

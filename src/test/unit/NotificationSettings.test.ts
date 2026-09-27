@@ -1,7 +1,8 @@
 import * as assert from "assert";
 import * as fs from "fs";
 import * as path from "path";
-import Ajv from "ajv";
+import Ajv from "ajv/dist/2020";
+import addFormats from "ajv-formats";
 import { suite, test } from "mocha";
 import {
   BROWSER_NOTIFICATION_MODES,
@@ -91,7 +92,7 @@ suite("Notification settings defaults", () => {
     );
   });
 
-  test("accepts the notification settings leaf without a schema default", () => {
+  test("accepts the notification settings leaf and exposes its default", () => {
     const schema = JSON.parse(
       fs.readFileSync(
         path.resolve(__dirname, "../../../schemas/settings-schema.json"),
@@ -105,7 +106,8 @@ suite("Notification settings defaults", () => {
       )
     ) as Record<string, unknown>;
     const ajv = new Ajv({ allErrors: true });
-    ajv.addSchema(workflowSchema, "workflow-schema.json");
+    addFormats(ajv);
+    ajv.addSchema(workflowSchema, workflowSchema.$id as string);
     const validate = ajv.compile(schema);
 
     assert.strictEqual(
@@ -126,6 +128,9 @@ suite("Notification settings defaults", () => {
         .properties.hookEvents.properties as Record<string, any>
     ).notification;
     assert.strictEqual(notificationSchema.type, "boolean");
-    assert.strictEqual("default" in notificationSchema, false);
+    assert.strictEqual(
+      notificationSchema.default,
+      CTRLYOKE_SETTINGS_DEFAULTS.notifications.events.hookEvents.notification
+    );
   });
 });

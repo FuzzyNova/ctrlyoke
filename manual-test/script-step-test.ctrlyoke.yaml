@@ -16,7 +16,7 @@ steps:
     script: manual-test/.ctrlyoke/scripts/always_true.py
     compareSource: stdout
     expected: "true"
-    timeout: 10000
+    timeoutSec: 10
 
   - name: confirm-script-ran
     prompt: |

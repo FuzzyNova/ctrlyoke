@@ -54,6 +54,7 @@ import {
   PROPERTY_EDITOR_MODES,
   STEP_COLOR_MODES,
   USER_FEEDBACK_SEVERITY,
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
 } from "@root/types/DashboardConstants";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 import { getDictionaryUris } from "@utils/dictionaryUris";
@@ -130,7 +131,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     stepType,
     stepEnabled,
     scriptCommand,
-    scriptTimeout,
+    scriptTimeoutSec,
     scriptOnPass,
     scriptOnFail,
     scriptCompareSource,
@@ -142,7 +143,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     scriptShell,
     originalPromptData,
     setScriptCommand,
-    setScriptTimeout,
+    setScriptTimeoutSec,
     setScriptOnPass,
     setScriptOnFail,
     setScriptCompareSource,
@@ -164,6 +165,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     currentStep,
     finalStepStatus,
     finalStep,
+    schemaWarnings,
   } = useWorkflowStore();
   const {
     propertiesDrawerOpen,
@@ -956,7 +958,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       ...(properties.errorBehavior !== undefined && {
         errorBehavior: properties.errorBehavior,
       }),
-      ...(scriptTimeout !== undefined && { timeout: scriptTimeout }),
+      ...(scriptTimeoutSec !== undefined && { timeoutSec: scriptTimeoutSec }),
       ...(scriptOnPass !== CONDITION_ACTIONS.CONTINUE && {
         onPass: scriptOnPass,
       }),
@@ -989,7 +991,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       scriptExpected,
       scriptIgnoreCase,
       scriptShell,
-      scriptTimeout,
+      scriptTimeoutSec,
       stepEnabled,
     ]
   );
@@ -1194,7 +1196,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         ...(properties.errorBehavior !== undefined && {
           errorBehavior: properties.errorBehavior,
         }),
-        ...(scriptTimeout !== undefined && { timeout: scriptTimeout }),
+        ...(scriptTimeoutSec !== undefined && { timeoutSec: scriptTimeoutSec }),
         ...(scriptOnPass !== CONDITION_ACTIONS.CONTINUE && {
           onPass: scriptOnPass,
         }),
@@ -1223,7 +1225,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           ? ["secrets"]
           : []),
         ...(properties.errorBehavior === undefined ? ["errorBehavior"] : []),
-        ...(scriptTimeout === undefined ? ["timeout"] : []),
+        ...(scriptTimeoutSec === undefined ? ["timeoutSec"] : []),
         ...(scriptOnPass === CONDITION_ACTIONS.CONTINUE ? ["onPass"] : []),
         ...(scriptOnFail === CONDITION_ACTIONS.STOP_WORKFLOW ? ["onFail"] : []),
         ...(scriptCompareSource === DEFAULT_COMPARE_SOURCE
@@ -1315,7 +1317,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   }, [
     isScriptMode,
     scriptCommand,
-    scriptTimeout,
+    scriptTimeoutSec,
     scriptOnPass,
     scriptOnFail,
     scriptCompareSource,
@@ -1413,7 +1415,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   const handleScriptChange = useCallback(
     (updated: ScriptConditionValue) => {
       setScriptCommand(updated.script ?? "");
-      setScriptTimeout(updated.timeout);
+      setScriptTimeoutSec(updated.timeoutSec);
       setScriptOnPass(updated.onPass ?? CONDITION_ACTIONS.CONTINUE);
       setScriptOnFail(updated.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW);
       setScriptCompareSource(updated.compareSource ?? DEFAULT_COMPARE_SOURCE);
@@ -1426,7 +1428,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     },
     [
       setScriptCommand,
-      setScriptTimeout,
+      setScriptTimeoutSec,
       setScriptOnPass,
       setScriptOnFail,
       setScriptCompareSource,
@@ -1478,6 +1480,15 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       ref={editorContainerRef}
       className="prompt-editor flex flex-col flex-1 min-h-0 overflow-hidden"
     >
+      <FieldDiagnostic
+        id="workflow-schema-warnings"
+        diagnostics={schemaWarnings.map((warning) => ({
+          id: warning.propertyPointer,
+          severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+          message: warning.message,
+        }))}
+        className="border-b border-[var(--vscode-widget-border,var(--vscode-panel-border))] px-2 py-1"
+      />
       {/* CodeMirror Editor + Properties Drawer container (prompt mode only) */}
       {!isScriptMode && (
         // overflow-clip (not overflow-hidden): PropertiesDrawer's closed-state
@@ -1531,7 +1542,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             schemaPath="steps[]"
             value={{
               script: scriptCommand,
-              timeout: scriptTimeout,
+              timeoutSec: scriptTimeoutSec,
               onPass: scriptOnPass,
               onFail: scriptOnFail,
               compareSource: scriptCompareSource,

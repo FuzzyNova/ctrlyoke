@@ -3,11 +3,14 @@ import * as path from "path";
 import { suite, test, teardown } from "mocha";
 import { configService } from "../../config/CtrlYokeConfigService";
 import type { ConfigBackend } from "../../config/CtrlYokeConfigService";
-import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import {
+  ConfigurationUtils,
+  secondsToMs,
+} from "../../utils/ConfigurationUtils";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
 import {
   PERMISSION_MODES,
-  STATUS_LINE_TRACKING_PROVIDERS,
+  STATUS_LINE_HARNESS_IDS,
 } from "../../types/DashboardConstants";
 import { ExternalRootsTrustStore } from "../../config/ExternalRootsTrustStore";
 
@@ -34,6 +37,12 @@ function makeFakeTrustStore(decisions: Record<string, "allow" | "deny">) {
 }
 
 suite("ConfigurationUtils — allowed external file roots", () => {
+  test("secondsToMs converts fractions and preserves zero and omission", () => {
+    assert.strictEqual(secondsToMs(0.25), 250);
+    assert.strictEqual(secondsToMs(0), 0);
+    assert.strictEqual(secondsToMs(undefined), undefined);
+  });
+
   teardown(() => {
     // CtrlYokeConfigService has no "unset backend" method; reassigning
     // undefined-shaped backends keeps other suites (which construct their
@@ -225,10 +234,7 @@ suite("ConfigurationUtils — allowed external file roots", () => {
       })
     );
 
-    assert.strictEqual(
-      ConfigurationUtils.getTrustedExternalRoots().length,
-      1
-    );
+    assert.strictEqual(ConfigurationUtils.getTrustedExternalRoots().length, 1);
 
     const inherited = ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
       "workspace-id",
@@ -398,8 +404,8 @@ suite("ConfigurationUtils — statusline tracking", () => {
     configService.setWorkspaceBackend(makeBackend({}));
 
     assert.strictEqual(
-      ConfigurationUtils.getStatusLineTrackingSettings(
-        STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+      ConfigurationUtils.getStatusLineHarnessSettings(
+        STATUS_LINE_HARNESS_IDS.ANTIGRAVITY
       ).enabled,
       true
     );
@@ -408,9 +414,10 @@ suite("ConfigurationUtils — statusline tracking", () => {
   test("reads the effective value from the config hierarchy", () => {
     configService.setUserBackend(
       makeBackend({
-        permissions: {
-          statusLineTracking: {
-            antigravity: {
+        permissions: {},
+        statusLine: {
+          byHarness: {
+            "antigravity-cli": {
               enabled: false,
               customCommand: "",
               useCtrlyokeStyle: true,
@@ -421,17 +428,18 @@ suite("ConfigurationUtils — statusline tracking", () => {
     );
     configService.setWorkspaceBackend(makeBackend({}));
     assert.strictEqual(
-      ConfigurationUtils.getStatusLineTrackingSettings(
-        STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+      ConfigurationUtils.getStatusLineHarnessSettings(
+        STATUS_LINE_HARNESS_IDS.ANTIGRAVITY
       ).enabled,
       false
     );
 
     configService.setWorkspaceBackend(
       makeBackend({
-        permissions: {
-          statusLineTracking: {
-            antigravity: {
+        permissions: {},
+        statusLine: {
+          byHarness: {
+            "antigravity-cli": {
               enabled: true,
               customCommand: "",
               useCtrlyokeStyle: true,
@@ -441,8 +449,8 @@ suite("ConfigurationUtils — statusline tracking", () => {
       })
     );
     assert.strictEqual(
-      ConfigurationUtils.getStatusLineTrackingSettings(
-        STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+      ConfigurationUtils.getStatusLineHarnessSettings(
+        STATUS_LINE_HARNESS_IDS.ANTIGRAVITY
       ).enabled,
       false
     );
@@ -475,7 +483,9 @@ suite("ConfigurationUtils — cost settings", () => {
   });
 
   test("reads the hide-cost setting", () => {
-    configService.setUserBackend(makeBackend({ ui: { showCostEstimates: false } }));
+    configService.setUserBackend(
+      makeBackend({ ui: { showCostEstimates: false } })
+    );
     assert.strictEqual(ConfigurationUtils.shouldShowCostEstimates(), false);
   });
 });

@@ -7,7 +7,7 @@ Runtime hook scripts used by CLI harnesses for session start/stop detection, too
 </purpose>
 
 <buildAndDeployment>
-- `src/scripts/*` is copied verbatim to `out/scripts/*` by the `copy-scripts` esbuild plugin. Do not add imports that require bundling, path rewriting, or transpilation, except for the deliberate statusline-wrapper boundary: `src/scripts/ctrlyoke-statusline-wrapper.js` requires the sibling `out/scripts/ctrlyoke-statusline-format.js`, which `esbuild.js` separately bundles from `src/utils/StatuslineFormat.ts`. This keeps the detached CommonJS process and the extension/webview on one formatter implementation while preserving the wrapper's standalone deployment shape.
+- `src/scripts/*` is copied verbatim to `out/scripts/*` by the `copy-scripts` esbuild plugin. Do not add imports that require bundling, path rewriting, or transpilation, except for the deliberate statusline-wrapper boundary: `src/scripts/ctrlyoke-statusline-wrapper.js` requires the sibling `out/scripts/ctrlyoke-statusline-format.js`, which `esbuild.js` separately bundles from `src/utils/StatuslineFormat.ts`, and `ctrlyoke-format-migrations.js`, bundled from `src/utils/FormatMigrations.ts` for settings-version checks in the detached launcher.
 - All stdin-based hooks stay plain CommonJS and depend only on Node built-ins plus `ctrlyoke-hook-utils.js`.
 - `ctrlyoke-opencode-plugin.ts` is the exception: it must remain TypeScript + ESM and is loaded from the extension installation through OpenCode's inline `plugin[]` config. A provider-owned `.opencode/plugin/` copy is only a warning-backed compatibility fallback.
 </buildAndDeployment>

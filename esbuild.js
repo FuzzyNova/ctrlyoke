@@ -202,13 +202,26 @@ const copySchemasPlugin = {
 
       // Copy all schema files
       if (fs.existsSync(srcSchemas)) {
-        const files = fs.readdirSync(srcSchemas);
-        files.forEach((file) => {
-          const srcFile = path.join(srcSchemas, file);
-          const outFile = path.join(outSchemas, file);
-          fs.copyFileSync(srcFile, outFile);
-          console.log(`[copy] ${file} -> out/schemas/${file}`);
+        const entries = fs.readdirSync(srcSchemas, { withFileTypes: true });
+        entries.forEach((entry) => {
+          const srcPath = path.join(srcSchemas, entry.name);
+          const outPath = path.join(outSchemas, entry.name);
+          if (entry.isDirectory()) {
+            copyDirRecursive(srcPath, outPath);
+            console.log(`[copy] ${entry.name}/ -> out/schemas/${entry.name}/`);
+            return;
+          }
+          fs.copyFileSync(srcPath, outPath);
+          console.log(`[copy] ${entry.name} -> out/schemas/${entry.name}`);
         });
+        // Draft 2020-12 settings refs use workflow.json, matching the
+        // workflow schema's published $id. Keep this local editor alias
+        // generated from the one canonical source schema.
+        fs.copyFileSync(
+          path.join(srcSchemas, "workflow-schema.json"),
+          path.join(outSchemas, "workflow.json")
+        );
+        console.log("[copy] workflow-schema.json -> out/schemas/workflow.json");
       }
     });
   },
@@ -374,6 +387,19 @@ async function main() {
     logLevel: "silent",
   });
 
+  const formatMigrationsCtx = await esbuild.context({
+    entryPoints: ["src/utils/FormatMigrations.ts"],
+    bundle: true,
+    format: "cjs",
+    minify: production,
+    sourcemap: !production,
+    sourcesContent: false,
+    platform: "node",
+    target: "es2020",
+    outfile: "out/scripts/ctrlyoke-format-migrations.js",
+    logLevel: "silent",
+  });
+
   // Build MCP server (separate executable for CLI tools)
   const mcpCtx = await esbuild.context({
     entryPoints: ["src/mcp-server.ts"],
@@ -473,6 +499,7 @@ async function main() {
     await webviewScriptsCtx.watch();
     await ctx.watch();
     await statuslineFormatCtx.watch();
+    await formatMigrationsCtx.watch();
     await mcpCtx.watch();
     await historySearchRebuildWorkerCtx.watch();
     await historySearchMatcherWorkerCtx.watch();
@@ -481,6 +508,7 @@ async function main() {
     await webviewScriptsCtx.rebuild();
     await ctx.rebuild();
     await statuslineFormatCtx.rebuild();
+    await formatMigrationsCtx.rebuild();
     await mcpCtx.rebuild();
     await historySearchRebuildWorkerCtx.rebuild();
     await historySearchMatcherWorkerCtx.rebuild();
@@ -488,6 +516,7 @@ async function main() {
     await webviewScriptsCtx.dispose();
     await ctx.dispose();
     await statuslineFormatCtx.dispose();
+    await formatMigrationsCtx.dispose();
     await mcpCtx.dispose();
     await historySearchRebuildWorkerCtx.dispose();
     await historySearchMatcherWorkerCtx.dispose();

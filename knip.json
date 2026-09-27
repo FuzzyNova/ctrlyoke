@@ -6,7 +6,6 @@
     "src/test/runTest.ts",
     "src/test/suite/index.ts",
     "src/test/**/*.test.ts",
-    "src/test/unit/ValidationUtils.ts",
     "src/ui/webview-react/postcss.config.js",
     "src/ui/webview-react/tailwind.config.js",
     "src/ui/webview-react/scripts/bootstrapScript.ts",

@@ -195,9 +195,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       },
     }));
     const workingFile: WorkingFile = {
-      workflowName: descriptor.workflowName,
       startedAt: 1,
-      lastModifiedAt: 1,
       definitionRevision: 4,
       steps,
       ...(options.parallelGroups
@@ -2421,6 +2419,52 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       await server.invokeTool(MCP_READ_OUTPUT_TOOL_NAME, {})
     );
     assert.strictEqual(output.outputs[0].responseText, "the finished answer");
+  });
+
+  test("returns the newer workflow format refusal as a tool error", async () => {
+    const server = await setup();
+    const run = await createRun("newer-format", "2026-01-01T00-00-00-000Z");
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.schemaVersion = 2;
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    await assert.rejects(
+      () =>
+        server.invokeTool(MCP_APPEND_STEP_TOOL_NAME, {
+          position: "end",
+          steps: [{ prompt: "must not append" }],
+        }),
+      /workflow\.ctrlyoke\.json \(JSON\) uses workflow format 2[\s\S]*supports format 1/u
+    );
+  });
+
+  test("includes authored schema warnings in workflow_status", async () => {
+    const server = await setup();
+    const run = await createRun("schema-warnings", "2026-01-01T00-00-00-000Z");
+    const sourcePath = path.join(workspaceRoot, "authored-workflow.yaml");
+    await fs.writeFile(
+      sourcePath,
+      "harnes: typo\nsteps:\n  - prompt: loaded\n",
+      "utf8"
+    );
+    const descriptorPath = WorkflowPaths.descriptorPath(
+      workspaceRoot,
+      run.workflowKey
+    );
+    const descriptor = JSON.parse(
+      await fs.readFile(descriptorPath, "utf8")
+    ) as WorkflowLineageDescriptor;
+    descriptor.originalFile = sourcePath;
+    await fs.writeFile(descriptorPath, JSON.stringify(descriptor), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const status = responseJson(await server.invokeTool("workflow_status", {}));
+
+    assert.strictEqual(status.schemaWarnings.length, 1);
+    assert.strictEqual(status.schemaWarnings[0].propertyPointer, "/harnes");
   });
 
   test("names the valid range when read_output is given a step that does not exist", async () => {

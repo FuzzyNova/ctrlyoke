@@ -3100,7 +3100,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
         {
           type: "script",
           script: `node -e "setTimeout(() => {}, 1000)"`,
-          timeout: 0.01,
+          timeoutSec: 0.01,
           errorBehavior: { onError: "continue" },
         },
         { prompt: "after-script-error" },
@@ -3148,7 +3148,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
           preCondition: {
             script: `node -e "require('fs').appendFileSync('${markerCommand}', 'x')"`,
           },
-          errorBehavior: { onError: "retry", maxRetries: 1, retryDelayMs: 0 },
+          errorBehavior: { onError: "retry", maxRetries: 1, retryDelaySec: 0 },
         },
         { prompt: "after-retry" },
       ],

@@ -22,7 +22,7 @@ import { ANTIGRAVITY_STREAM_JSON_EVENTS } from "./AntigravityProtocolConstants";
 import {
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
-  STATUS_LINE_TRACKING_PROVIDERS,
+  STATUS_LINE_HARNESS_IDS,
   type HookEvent,
 } from "../../../types/DashboardConstants";
 import type {
@@ -122,7 +122,7 @@ export class AntigravityCliProvider implements ICliProvider {
    * two leases cannot interfere with each other's files or baselines.
    */
   private static readonly statuslineManager = StatuslineManager.forProvider(
-    STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+    STATUS_LINE_HARNESS_IDS.ANTIGRAVITY
   );
 
   readonly config: HarnessConfig = {
@@ -316,8 +316,8 @@ export class AntigravityCliProvider implements ICliProvider {
             this.logParser.setStreamJsonUsage();
             if (
               workspaceRoot &&
-              ConfigurationUtils.getStatusLineTrackingSettings(
-                STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+              ConfigurationUtils.getStatusLineHarnessSettings(
+                STATUS_LINE_HARNESS_IDS.ANTIGRAVITY
               ).enabled
             ) {
               this.statuslineInstallResult = await this.registerStatusLine(
@@ -357,8 +357,8 @@ export class AntigravityCliProvider implements ICliProvider {
   /** Observe stream-json usage without adding a second event-mapping path. */
   observeHeadlessStdout(chunk: string): void {
     if (
-      !ConfigurationUtils.getStatusLineTrackingSettings(
-        STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+      !ConfigurationUtils.getStatusLineHarnessSettings(
+        STATUS_LINE_HARNESS_IDS.ANTIGRAVITY
       ).enabled
     ) {
       this.streamJsonUsage.reset();

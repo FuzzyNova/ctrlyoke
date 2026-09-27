@@ -18,11 +18,11 @@ import { configService } from "../../config/CtrlYokeConfigService";
 import { writeStatuslinePackage } from "../helpers/statuslinePackage";
 import {
   HARNESS_IDS,
-  STATUS_LINE_TRACKING_PROVIDERS,
+  STATUS_LINE_HARNESS_IDS,
 } from "../../types/DashboardConstants";
 import type {
   PartialCtrlYokeSettings,
-  StatusLineTrackingSettings,
+  StatusLineHarnessSettings,
 } from "../../types/CtrlYokeSettings";
 
 suite("StatuslineManager", () => {
@@ -47,12 +47,10 @@ suite("StatuslineManager", () => {
     configService.setUserBackend({
       getAll: () => userSettings,
       set: async (settingPath, value) => {
-        if (settingPath === "permissions.statusLineTracking.qwen") {
+        if (settingPath === "statusLine.byHarness.qwen-cli") {
           userSettings = {
-            permissions: {
-              statusLineTracking: {
-                qwen: value as StatusLineTrackingSettings,
-              },
+            statusLine: {
+              byHarness: { "qwen-cli": value as StatusLineHarnessSettings },
             },
           };
         }
@@ -77,11 +75,11 @@ suite("StatuslineManager", () => {
   test("maps Copilot and Qwen harnesses to their statusline providers", () => {
     assert.strictEqual(
       StatuslineManager.providerForHarness(HARNESS_IDS.COPILOT_CLI),
-      STATUS_LINE_TRACKING_PROVIDERS.COPILOT
+      STATUS_LINE_HARNESS_IDS.COPILOT
     );
     assert.strictEqual(
       StatuslineManager.providerForHarness(HARNESS_IDS.QWEN_CLI),
-      STATUS_LINE_TRACKING_PROVIDERS.QWEN
+      STATUS_LINE_HARNESS_IDS.QWEN
     );
   });
 
@@ -180,13 +178,14 @@ suite("StatuslineManager", () => {
       collision: true,
     });
     assert.strictEqual(await fs.readFile(settingsPath, "utf8"), presetText);
-    const disabledSettings = userSettings.permissions?.statusLineTracking?.qwen;
+    const disabledSettings = userSettings.statusLine?.byHarness?.["qwen-cli"];
     assert.strictEqual(disabledSettings?.enabled, false);
 
     userSettings = {
-      permissions: {
-        statusLineTracking: {
-          qwen: {
+      permissions: {},
+      statusLine: {
+        byHarness: {
+          "qwen-cli": {
             ...disabledSettings!,
             enabled: true,
           },
@@ -226,11 +225,11 @@ suite("StatuslineManager", () => {
         enabled: false,
         customCommand: "",
         useCtrlyokeStyle: true,
-      } as StatusLineTrackingSettings;
+      } as StatusLineHarnessSettings;
       userSettings = {
-        permissions: {
-          statusLineTracking: Object.fromEntries(
-            Object.values(STATUS_LINE_TRACKING_PROVIDERS).map((provider) => [
+        statusLine: {
+          byHarness: Object.fromEntries(
+            Object.values(STATUS_LINE_HARNESS_IDS).map((provider) => [
               provider,
               disabled,
             ])

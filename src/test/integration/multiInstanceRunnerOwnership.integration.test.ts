@@ -200,6 +200,7 @@ function createHost(
   internal.lineageRepository = {
     listLineageKeys: async () => [WORKFLOW_KEY],
     pruneStaleStagingDirs: async () => undefined,
+    readWorkflowDisplayName: async () => "Shared ownership",
   };
   internal.replayWorkflowStateTo = async () => undefined;
   internal.loadFreshInstanceAndReplay = async (filePath: string) => {

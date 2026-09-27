@@ -80,6 +80,17 @@ import { workflowViewAddressKey } from "@utils/viewAddress";
 // ---------------------------------------------------------------------------
 
 function dispatch(type: string, payload: Record<string, unknown> = {}) {
+  const workingFile = payload.workingFile;
+  if (
+    type === MESSAGE_TYPES.RUN_VIEW_LOADED &&
+    payload.workflowName === undefined &&
+    typeof workingFile === "object" &&
+    workingFile !== null &&
+    "workflowName" in workingFile &&
+    typeof workingFile.workflowName === "string"
+  ) {
+    payload = { ...payload, workflowName: workingFile.workflowName };
+  }
   window.dispatchEvent(
     new MessageEvent("message", { data: { type, ...payload } })
   );

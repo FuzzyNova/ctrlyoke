@@ -14,7 +14,10 @@ const fullSettings: FullGlobalSettings = {
 
 describe("GlobalSettingsDrawer", () => {
   beforeEach(() => {
-    useSettingsStore.setState({ fullGlobalSettings: fullSettings });
+    useSettingsStore.setState({
+      fullGlobalSettings: fullSettings,
+      globalSettingsReadOnly: false,
+    });
     useUiStore.setState({
       globalSettingsOpen: true,
       globalSettingsActiveTab: "statusline",
@@ -52,5 +55,18 @@ describe("GlobalSettingsDrawer", () => {
 
     expect(content).toHaveClass("max-w-none");
     expect(content).not.toHaveClass("max-w-2xl");
+  });
+
+  it("disables settings controls when the settings file uses a newer format", () => {
+    useSettingsStore.setState({ globalSettingsReadOnly: true });
+
+    render(<GlobalSettingsDrawer />);
+
+    expect(document.querySelector("fieldset")).toBeDisabled();
+    expect(
+      screen.getByText(
+        "These settings use a newer format. Update ctrlyoke to edit them."
+      )
+    ).toBeInTheDocument();
   });
 });

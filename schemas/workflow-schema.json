@@ -1,12 +1,13 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctrlyoke.dev/schema/v1/workflow.json",
   "title": "ctrlyoke Prompt Schema",
   "type": "object",
   "description": "Schema for ctrlyoke workflows. Steps should be in final-form format with all context references (e.g., @path/to/file, @path/to/dir/, #selection:path:line-line, #sym.<kind>:path:symbol:line-line) included directly in the prompt text. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. ctrlyoke expands these references into inline file/symbol content before sending to the AI.",
   "properties": {
     "_templateMeta": {
       "description": "Marks the file as a reusable template and describes its placeholders. Removed when the template is instantiated.",
-      "$ref": "#/definitions/templateMetadata"
+      "$ref": "#/$defs/templateMetadata"
     }
   },
   "allOf": [
@@ -19,15 +20,7 @@
       "then": {
         "properties": {
           "harness": {
-            "$ref": "#/definitions/harnessId"
-          },
-          "_runtime": {
-            "type": "object",
-            "properties": {
-              "harness": {
-                "$ref": "#/definitions/harnessId"
-              }
-            }
+            "$ref": "#/$defs/harnessId"
           },
           "steps": {
             "type": "array",
@@ -35,13 +28,13 @@
               "type": "object",
               "properties": {
                 "harness": {
-                  "$ref": "#/definitions/harnessId"
+                  "$ref": "#/$defs/harnessId"
                 },
                 "_runtime": {
                   "type": "object",
                   "properties": {
                     "harness": {
-                      "$ref": "#/definitions/harnessId"
+                      "$ref": "#/$defs/harnessId"
                     }
                   }
                 },
@@ -51,13 +44,13 @@
                     "type": "object",
                     "properties": {
                       "harness": {
-                        "$ref": "#/definitions/harnessId"
+                        "$ref": "#/$defs/harnessId"
                       },
                       "_runtime": {
                         "type": "object",
                         "properties": {
                           "harness": {
-                            "$ref": "#/definitions/harnessId"
+                            "$ref": "#/$defs/harnessId"
                           }
                         }
                       }
@@ -71,13 +64,13 @@
             "type": "object",
             "properties": {
               "harness": {
-                "$ref": "#/definitions/harnessId"
+                "$ref": "#/$defs/harnessId"
               },
               "_runtime": {
                 "type": "object",
                 "properties": {
                   "harness": {
-                    "$ref": "#/definitions/harnessId"
+                    "$ref": "#/$defs/harnessId"
                   }
                 }
               }
@@ -90,16 +83,32 @@
   "oneOf": [
     {
       "title": "Single Step",
-      "$ref": "#/definitions/singleStepRoot"
+      "$ref": "#/$defs/singleStepRoot",
+      "type": "object",
+      "properties": {
+        "$schema": {
+          "type": "string",
+          "format": "uri",
+          "description": "Schema URL used by JSON-aware editors for validation and completion."
+        },
+        "schemaVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Workflow definition format version. Absent means format 1. ctrlyoke stamps this field when it writes workflow files; older ctrlyoke versions refuse to open a newer format."
+        },
+        "_templateMeta": {
+          "$ref": "#/properties/_templateMeta"
+        }
+      }
     },
     {
       "title": "Multiple Steps (or Working File)",
       "allOf": [
         {
-          "$ref": "#/definitions/executionProperties"
+          "$ref": "#/$defs/executionProperties"
         },
         {
-          "$ref": "#/definitions/workflowOnlyProperties"
+          "$ref": "#/$defs/workflowOnlyProperties"
         },
         {
           "properties": {
@@ -109,44 +118,28 @@
               "items": {
                 "oneOf": [
                   {
-                    "$ref": "#/definitions/workflowStep"
+                    "$ref": "#/$defs/workflowStep"
                   },
                   {
-                    "$ref": "#/definitions/parallelGroupItem"
+                    "$ref": "#/$defs/parallelGroupItem"
                   }
                 ]
               }
             },
             "finalStep": {
-              "$ref": "#/definitions/workflowStep",
+              "$ref": "#/$defs/workflowStep",
               "description": "A step that always runs after all queued prompts complete. Can be an AI prompt or a script step. If mcpServers includes \"ctrlyoke\" and the finalStep appends prompts, those prompts run before finalStep executes again. Working files store resolved harness/model/session metadata on finalStep._runtime; workflow phase/status remains in the root _runtime.finalStep block."
             },
             "parallelGroups": {
               "type": "array",
               "description": "Normalized working-file topology for authored parallel groups.",
               "items": {
-                "$ref": "#/definitions/parallelGroupDefinition"
+                "$ref": "#/$defs/parallelGroupDefinition"
               }
-            },
-            "originalFile": {
-              "type": "string",
-              "description": "Path to original prompt file (working files only)"
-            },
-            "workflowName": {
-              "type": "string",
-              "description": "Derived workflow name (working files only)"
             },
             "startedAt": {
               "type": "number",
               "description": "Timestamp when workflow started (working files only)"
-            },
-            "lastModifiedAt": {
-              "type": "number",
-              "description": "Timestamp when the working file's definition was last modified (working files only)"
-            },
-            "isFavorite": {
-              "type": "boolean",
-              "description": "Whether the workflow is pinned to the top of recent workflow history (working files only)"
             },
             "definitionRevision": {
               "type": "integer",
@@ -154,15 +147,32 @@
               "description": "Monotonic optimistic-concurrency counter, bumped on every definition-changing edit and not on runtime-only writes. Starts at 1; each promoted run restarts its own sequence at 1 (working files only)."
             },
             "_runtime": {
-              "$ref": "#/definitions/runtimeMetadata"
+              "$ref": "#/$defs/runtimeMetadata"
             }
           },
           "required": ["steps"]
         }
-      ]
+      ],
+      "type": "object",
+      "properties": {
+        "$schema": {
+          "type": "string",
+          "format": "uri",
+          "description": "Schema URL used by JSON-aware editors for validation and completion."
+        },
+        "schemaVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Workflow definition format version. Absent means format 1. Run files use this root field for the workflow definition and `_runtime.schemaVersion` independently for run metadata."
+        },
+        "_templateMeta": {
+          "$ref": "#/properties/_templateMeta"
+        }
+      },
+      "unevaluatedProperties": false
     }
   ],
-  "definitions": {
+  "$defs": {
     "harnessId": {
       "type": "string",
       "enum": [
@@ -198,7 +208,7 @@
             "pattern": "^[a-z][a-zA-Z0-9]*$"
           },
           "additionalProperties": {
-            "$ref": "#/definitions/templateVariableMetadata"
+            "$ref": "#/$defs/templateVariableMetadata"
           }
         }
       },
@@ -325,6 +335,9 @@
       "description": "Workflow-level variable defaults for {{varName}} substitution. CLI --var key=value flags override these at runtime. Substituted into: prompt text, model, additionalArgs, hook command/env, preCondition script/env, endCondition script/env/retryPrompt/passRetryPrompt, script-step script/env, and worktree setup commands. Every script and condition process also receives each var as a CTRLYOKE_VAR_<KEY> environment variable regardless of {{varName}} usage.",
       "additionalProperties": {
         "type": "string"
+      },
+      "propertyNames": {
+        "pattern": "^\\w+$"
       }
     },
     "workflowOnlyProperties": {
@@ -333,11 +346,11 @@
       "properties": {
         "worktree": {
           "description": "Run the workflow in the working checkout or in a Git worktree. When omitted, the `defaults.worktree` setting applies.",
-          "$ref": "#/definitions/worktreeConfig"
+          "$ref": "#/$defs/worktreeConfig"
         },
         "vars": {
           "description": "Default values for `{{varName}}` substitutions.",
-          "$ref": "#/definitions/varsConfig"
+          "$ref": "#/$defs/varsConfig"
         },
         "trustedExternalRoots": {
           "oneOf": [
@@ -361,24 +374,57 @@
     "singleStepRoot": {
       "oneOf": [
         {
+          "type": "object",
           "allOf": [
             {
-              "$ref": "#/definitions/promptStep"
+              "$ref": "#/$defs/promptStep"
             },
             {
-              "$ref": "#/definitions/workflowOnlyProperties"
+              "$ref": "#/$defs/workflowOnlyProperties"
             }
-          ]
+          ],
+          "properties": {
+            "$schema": {
+              "type": "string",
+              "format": "uri",
+              "description": "Schema URL used by JSON-aware editors for validation and completion."
+            },
+            "schemaVersion": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Workflow definition format version. Absent means format 1."
+            },
+            "_templateMeta": {
+              "$ref": "#/properties/_templateMeta"
+            }
+          },
+          "unevaluatedProperties": false
         },
         {
+          "type": "object",
           "allOf": [
             {
-              "$ref": "#/definitions/rootScriptStep"
+              "$ref": "#/$defs/rootScriptStep"
             },
             {
-              "$ref": "#/definitions/workflowOnlyProperties"
+              "$ref": "#/$defs/workflowOnlyProperties"
             }
-          ]
+          ],
+          "properties": {
+            "$schema": {
+              "type": "string",
+              "format": "uri",
+              "description": "Schema URL used by JSON-aware editors for validation and completion."
+            },
+            "schemaVersion": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Workflow definition format version. Absent means format 1."
+            },
+            "_templateMeta": {
+              "$ref": "#/properties/_templateMeta"
+            }
+          }
         }
       ]
     },
@@ -386,78 +432,88 @@
       "type": "object",
       "description": "A top-level script workflow with workflow-only properties.",
       "properties": {
+        "$schema": {
+          "type": "string",
+          "format": "uri",
+          "description": "Schema URL used by JSON-aware editors for validation and completion."
+        },
+        "schemaVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Workflow definition format version. Absent means format 1."
+        },
         "type": {
-          "$ref": "#/definitions/scriptStep/properties/type"
+          "$ref": "#/$defs/scriptStep/properties/type"
         },
         "name": {
-          "$ref": "#/definitions/scriptStep/properties/name"
+          "$ref": "#/$defs/scriptStep/properties/name"
         },
         "enabled": {
-          "$ref": "#/definitions/scriptStep/properties/enabled"
+          "$ref": "#/$defs/scriptStep/properties/enabled"
         },
         "color": {
-          "$ref": "#/definitions/scriptStep/properties/color"
+          "$ref": "#/$defs/scriptStep/properties/color"
         },
         "executionMode": {
-          "$ref": "#/definitions/scriptStep/properties/executionMode"
+          "$ref": "#/$defs/scriptStep/properties/executionMode"
         },
         "script": {
-          "$ref": "#/definitions/scriptStep/properties/script"
+          "$ref": "#/$defs/scriptStep/properties/script"
         },
         "env": {
-          "$ref": "#/definitions/scriptStep/properties/env"
+          "$ref": "#/$defs/scriptStep/properties/env"
         },
         "compareSource": {
-          "$ref": "#/definitions/scriptStep/properties/compareSource"
+          "$ref": "#/$defs/scriptStep/properties/compareSource"
         },
-        "timeout": {
-          "$ref": "#/definitions/scriptStep/properties/timeout"
+        "timeoutSec": {
+          "$ref": "#/$defs/scriptStep/properties/timeoutSec"
         },
         "shell": {
-          "$ref": "#/definitions/scriptStep/properties/shell"
+          "$ref": "#/$defs/scriptStep/properties/shell"
         },
         "errorBehavior": {
-          "$ref": "#/definitions/scriptStep/properties/errorBehavior"
+          "$ref": "#/$defs/scriptStep/properties/errorBehavior"
         },
         "secrets": {
-          "$ref": "#/definitions/scriptStep/properties/secrets"
+          "$ref": "#/$defs/scriptStep/properties/secrets"
         },
         "onPass": {
-          "$ref": "#/definitions/scriptStep/properties/onPass"
+          "$ref": "#/$defs/scriptStep/properties/onPass"
         },
         "onFail": {
-          "$ref": "#/definitions/scriptStep/properties/onFail"
+          "$ref": "#/$defs/scriptStep/properties/onFail"
         },
         "_runtime": {
-          "$ref": "#/definitions/scriptStep/properties/_runtime"
+          "$ref": "#/$defs/scriptStep/properties/_runtime"
         },
         "worktree": {
-          "$ref": "#/definitions/workflowOnlyProperties/properties/worktree"
+          "$ref": "#/$defs/workflowOnlyProperties/properties/worktree"
         },
         "vars": {
-          "$ref": "#/definitions/workflowOnlyProperties/properties/vars"
+          "$ref": "#/$defs/workflowOnlyProperties/properties/vars"
         },
         "trustedExternalRoots": {
-          "$ref": "#/definitions/workflowOnlyProperties/properties/trustedExternalRoots"
+          "$ref": "#/$defs/workflowOnlyProperties/properties/trustedExternalRoots"
         },
         "_templateMeta": {
           "$ref": "#/properties/_templateMeta"
         },
         "operator": {
-          "$ref": "#/definitions/scriptStep/properties/operator"
+          "$ref": "#/$defs/scriptStep/properties/operator"
         },
         "expected": {
-          "$ref": "#/definitions/scriptStep/properties/expected"
+          "$ref": "#/$defs/scriptStep/properties/expected"
         },
         "ignoreCase": {
-          "$ref": "#/definitions/scriptStep/properties/ignoreCase"
+          "$ref": "#/$defs/scriptStep/properties/ignoreCase"
         },
         "returns": {
-          "$ref": "#/definitions/scriptStep/properties/returns"
+          "$ref": "#/$defs/scriptStep/properties/returns"
         }
       },
       "required": ["type", "script"],
-      "additionalProperties": false
+      "unevaluatedProperties": false
     },
     "workflowRunAddress": {
       "type": "object",
@@ -467,7 +523,7 @@
         "workflowKey": {
           "type": "string",
           "minLength": 1,
-          "pattern": "^[^/\\\\]+$",
+          "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$",
           "description": "Stable workflow lineage key within the current workspace."
         },
         "runRef": {
@@ -485,10 +541,10 @@
           "description": "Harness to use for this prompt. Determines which AI CLI executes the prompt. Optional - defaults to the `defaults.harness` setting.",
           "oneOf": [
             {
-              "$ref": "#/definitions/harnessId"
+              "$ref": "#/$defs/harnessId"
             },
             {
-              "$ref": "#/definitions/templatePlaceholder"
+              "$ref": "#/$defs/templatePlaceholder"
             }
           ]
         },
@@ -558,7 +614,7 @@
         },
         "agent": {
           "description": "Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). ctrlyoke attaches the agent's content to the prompt wrapped in <agentInstructions> tags, so it works the same on every harness. Native harness agent discovery is managed separately in the Agents & Skills settings page and does not determine workflow agent support. Use null to explicitly disable inherited agent selection.",
-          "$ref": "#/definitions/agent"
+          "$ref": "#/$defs/agent"
         },
         "resumeSession": {
           "type": "boolean",
@@ -569,7 +625,7 @@
             {
               "type": "array",
               "items": {
-                "$ref": "#/definitions/mcpServerEntry"
+                "$ref": "#/$defs/mcpServerEntry"
               },
               "description": "MCP servers to attach. Registry IDs resolve against ctrlyoke's managed MCP registry; include \"ctrlyoke\" to enable dynamic queue extension."
             },
@@ -585,7 +641,7 @@
             {
               "type": "array",
               "items": {
-                "$ref": "#/definitions/userHookConfig"
+                "$ref": "#/$defs/userHookConfig"
               },
               "description": "User-defined hooks. Per-event override: events present replace the tier below for that event; absent events inherit."
             },
@@ -597,21 +653,21 @@
           "description": "User-defined hooks run alongside ctrlyoke's completion-detection hooks. Supported events vary by harness; unsupported events are silently skipped."
         },
         "sessionId": {
-          "type": ["string", "number"],
+          "oneOf": [{ "type": "string" }, { "type": "integer", "minimum": 1 }],
           "description": "Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value \"finalStep\" (resume the session established by the most recent final step execution — works on any prompt, not just the final step itself; on first pass when no final step session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution."
         },
         "skills": {
           "description": "Portable ctrlyoke prompt attachments. ctrlyoke attaches each selected skill's content to the prompt, so skills work the same on every harness. The Agents & Skills settings page separately manages optional harness-native discovery directories whose behavior varies by harness; native discovery does not determine workflow skills support. Prompt-level skills replace workflow-level skills (no merging). Use null to explicitly disable inherited skills.",
-          "$ref": "#/definitions/skills"
+          "$ref": "#/$defs/skills"
         },
         "secrets": {
           "description": "Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets replace workflow-level secrets (no merging). Use null to explicitly disable an inherited grant array; inline !NAME references in prompt text remain authoritative grants.",
-          "$ref": "#/definitions/secrets"
+          "$ref": "#/$defs/secrets"
         },
         "endCondition": {
           "oneOf": [
             {
-              "$ref": "#/definitions/endCondition"
+              "$ref": "#/$defs/endCondition"
             },
             {
               "type": "null"
@@ -622,7 +678,7 @@
         "preCondition": {
           "oneOf": [
             {
-              "$ref": "#/definitions/preCondition"
+              "$ref": "#/$defs/preCondition"
             },
             {
               "type": "null"
@@ -632,7 +688,7 @@
         },
         "priorContext": {
           "description": "Controls injection of prior prompt outputs into this prompt's text before sending to the AI. 'all' injects all prior outputs; 'previous' injects the immediately preceding output; 'none' disables injection; an array of integers ([1, 3]) injects specific prompts by 1-based index; or { workflowKey, runRef } imports the complete terminal output from one run in this workspace. Addresses never contain local paths. When omitted, no context is injected. Note: combining with resumeSession:true may duplicate context (accepted limitation).",
-          "$ref": "#/definitions/priorContext"
+          "$ref": "#/$defs/priorContext"
         },
         "additionalArgs": {
           "oneOf": [
@@ -647,23 +703,24 @@
         },
         "toolPermissions": {
           "description": "Tool permission overrides for this prompt/workflow. Resolves prompt → workflow → the `defaults.toolPermissions` setting. Set mode to 'none' to pass no permission flags and rely entirely on the harness's own local configuration; null behaves the same as mode 'none'.",
-          "$ref": "#/definitions/toolPermissions"
+          "$ref": "#/$defs/toolPermissions"
         },
         "errorBehavior": {
           "description": "Internal-error policy for every step phase: pre-conditions, prompts/harnesses, end-conditions, and script steps. Resolves prompt → workflow → the `defaults.errorBehavior` setting. Worktree setup is outside this policy: setup runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run is the recovery gesture. Use null to explicitly disable an inherited policy.",
-          "$ref": "#/definitions/errorBehaviorDefault"
+          "$ref": "#/$defs/errorBehaviorDefault"
         }
       }
     },
     "workflowStep": {
+      "type": "object",
       "allOf": [
         {
           "oneOf": [
             {
-              "$ref": "#/definitions/promptStep"
+              "$ref": "#/$defs/promptStep"
             },
             {
-              "$ref": "#/definitions/scriptStep"
+              "$ref": "#/$defs/scriptStep"
             }
           ]
         },
@@ -679,7 +736,8 @@
             "required": ["trustedExternalRoots"]
           }
         }
-      ]
+      ],
+      "unevaluatedProperties": false
     },
     "parallelGroupItem": {
       "type": "object",
@@ -691,7 +749,7 @@
           "items": {
             "allOf": [
               {
-                "$ref": "#/definitions/workflowStep"
+                "$ref": "#/$defs/workflowStep"
               },
               {
                 "not": {
@@ -710,7 +768,7 @@
         }
       },
       "required": ["parallel"],
-      "additionalProperties": false
+      "unevaluatedProperties": false
     },
     "parallelGroupDefinition": {
       "type": "object",
@@ -739,7 +797,7 @@
       "type": "object",
       "allOf": [
         {
-          "$ref": "#/definitions/executionProperties"
+          "$ref": "#/$defs/executionProperties"
         },
         {
           "properties": {
@@ -767,11 +825,17 @@
               "description": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.<kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported."
             },
             "_runtime": {
-              "$ref": "#/definitions/promptRuntimeMetadata",
+              "$ref": "#/$defs/promptRuntimeMetadata",
               "description": "Per-prompt runtime execution metadata (optional, added automatically during execution)"
             }
           },
           "required": ["prompt"]
+        },
+        {
+          "not": {
+            "type": "object",
+            "required": ["script"]
+          }
         }
       ]
     },
@@ -801,27 +865,27 @@
         "executionMode": {
           "type": "string",
           "enum": ["interactive", "headless"],
-          "description": "Where this script step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Omitting this field inherits the global default."
+          "description": "Where this script step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow's executionMode, then the defaults.executionMode setting."
         },
         "script": {
-          "$ref": "#/definitions/scriptProperties/properties/script"
+          "$ref": "#/$defs/scriptProperties/properties/script"
         },
         "env": {
-          "$ref": "#/definitions/scriptProperties/properties/env"
+          "$ref": "#/$defs/scriptProperties/properties/env"
         },
         "compareSource": {
-          "$ref": "#/definitions/scriptProperties/properties/compareSource"
+          "$ref": "#/$defs/scriptProperties/properties/compareSource"
         },
-        "timeout": {
-          "$ref": "#/definitions/scriptProperties/properties/timeout"
+        "timeoutSec": {
+          "$ref": "#/$defs/scriptProperties/properties/timeoutSec"
         },
         "shell": {
-          "$ref": "#/definitions/scriptProperties/properties/shell"
+          "$ref": "#/$defs/scriptProperties/properties/shell"
         },
         "errorBehavior": {
           "oneOf": [
             {
-              "$ref": "#/definitions/errorBehavior"
+              "$ref": "#/$defs/errorBehavior"
             },
             {
               "type": "null"
@@ -857,64 +921,63 @@
           "description": "What to do when the script fails or returns is not matched. 'continue': log a warning and advance the queue. 'stopWorkflow': halt execution (default)."
         },
         "_runtime": {
-          "$ref": "#/definitions/promptRuntimeMetadata",
+          "$ref": "#/$defs/promptRuntimeMetadata",
           "description": "Per-step runtime execution metadata (optional, added automatically during execution)"
         },
         "operator": {
-          "$ref": "#/definitions/scriptProperties/properties/operator"
+          "$ref": "#/$defs/scriptProperties/properties/operator"
         },
         "expected": {
-          "$ref": "#/definitions/scriptProperties/properties/expected"
+          "$ref": "#/$defs/scriptProperties/properties/expected"
         },
         "ignoreCase": {
-          "$ref": "#/definitions/scriptProperties/properties/ignoreCase"
+          "$ref": "#/$defs/scriptProperties/properties/ignoreCase"
         },
         "returns": {
-          "$ref": "#/definitions/scriptProperties/properties/returns"
+          "$ref": "#/$defs/scriptProperties/properties/returns"
         }
       },
-      "required": ["type", "script"],
-      "additionalProperties": false
+      "required": ["type", "script"]
     },
     "endCondition": {
       "type": "object",
-      "description": "Validation that runs after the prompt completes. Shares script/env/compareSource/operator/expected/timeout with preCondition and scriptStep via scriptProperties.",
+      "description": "Validation that runs after the prompt completes. Shares script/env/compareSource/operator/expected/timeoutSec with preCondition and scriptStep via scriptProperties.",
       "allOf": [
         {
-          "$ref": "#/definitions/scriptProperties"
+          "$ref": "#/$defs/scriptProperties"
         }
       ],
       "properties": {
         "script": {
-          "$ref": "#/definitions/scriptProperties/properties/script"
+          "$ref": "#/$defs/scriptProperties/properties/script"
         },
         "env": {
-          "$ref": "#/definitions/scriptProperties/properties/env"
+          "$ref": "#/$defs/scriptProperties/properties/env"
         },
         "compareSource": {
-          "$ref": "#/definitions/scriptProperties/properties/compareSource"
+          "$ref": "#/$defs/scriptProperties/properties/compareSource"
         },
         "returns": {
-          "$ref": "#/definitions/scriptProperties/properties/returns"
+          "$ref": "#/$defs/scriptProperties/properties/returns"
         },
-        "timeout": {
-          "$ref": "#/definitions/scriptProperties/properties/timeout"
+        "timeoutSec": {
+          "$ref": "#/$defs/scriptProperties/properties/timeoutSec"
         },
         "shell": {
-          "$ref": "#/definitions/scriptProperties/properties/shell"
+          "$ref": "#/$defs/scriptProperties/properties/shell"
         },
         "operator": {
-          "$ref": "#/definitions/scriptProperties/properties/operator"
+          "$ref": "#/$defs/scriptProperties/properties/operator"
         },
         "expected": {
-          "$ref": "#/definitions/scriptProperties/properties/expected"
+          "$ref": "#/$defs/scriptProperties/properties/expected"
         },
         "ignoreCase": {
-          "$ref": "#/definitions/scriptProperties/properties/ignoreCase"
+          "$ref": "#/$defs/scriptProperties/properties/ignoreCase"
         },
         "maxRetries": {
-          "type": "number",
-          "description": "Maximum number of retry attempts when validation fails. Use -1 for unlimited retries (use with caution), 0 for no retries (default), or 1-100 for a specific limit.",
+          "type": "integer",
+          "description": "Maximum number of retry attempts. Use -1 for unlimited retries (with caution), 0 for no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.",
           "minimum": -1,
           "maximum": 100
         },
@@ -924,7 +987,7 @@
         },
         "passRetryPrompt": {
           "type": "string",
-          "description": "Template for pass-retry prompt. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:* works in the step and retry prompts; $endCondition:* is only available in the retry prompt. If omitted, the step's own prompt is re-sent."
+          "description": "Template for the prompt sent after the end condition passes and onPass is 'retry'. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource); both prefixes are substituted on a pass retry. If omitted, the step's own prompt is re-sent."
         },
         "resumeSessionOnRetry": {
           "type": "boolean",
@@ -940,11 +1003,11 @@
           "type": "string",
           "enum": ["continue", "retry", "stopWorkflow"],
           "default": "stopWorkflow",
-          "description": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times). 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default). When 'retry' is set and maxRetries is unset, defaults to 1 retry."
+          "description": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times). 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default)."
         }
       },
       "required": ["script"],
-      "additionalProperties": false
+      "unevaluatedProperties": false
     },
     "scriptProperties": {
       "type": "object",
@@ -970,9 +1033,10 @@
           "not": {},
           "description": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0."
         },
-        "timeout": {
+        "timeoutSec": {
           "type": "number",
-          "description": "Timeout in milliseconds. When omitted, the `execution.scriptTimeout` setting applies."
+          "exclusiveMinimum": 0,
+          "description": "Timeout in seconds. When omitted, the `execution.scriptTimeoutSec` setting applies."
         },
         "shell": {
           "type": "string",
@@ -1012,36 +1076,36 @@
       "description": "Script gate that runs before the prompt. Determines whether to run the prompt, skip it, or stop the workflow.",
       "allOf": [
         {
-          "$ref": "#/definitions/scriptProperties"
+          "$ref": "#/$defs/scriptProperties"
         }
       ],
       "properties": {
         "script": {
-          "$ref": "#/definitions/scriptProperties/properties/script"
+          "$ref": "#/$defs/scriptProperties/properties/script"
         },
         "env": {
-          "$ref": "#/definitions/scriptProperties/properties/env"
+          "$ref": "#/$defs/scriptProperties/properties/env"
         },
         "compareSource": {
-          "$ref": "#/definitions/scriptProperties/properties/compareSource"
+          "$ref": "#/$defs/scriptProperties/properties/compareSource"
         },
         "returns": {
-          "$ref": "#/definitions/scriptProperties/properties/returns"
+          "$ref": "#/$defs/scriptProperties/properties/returns"
         },
-        "timeout": {
-          "$ref": "#/definitions/scriptProperties/properties/timeout"
+        "timeoutSec": {
+          "$ref": "#/$defs/scriptProperties/properties/timeoutSec"
         },
         "shell": {
-          "$ref": "#/definitions/scriptProperties/properties/shell"
+          "$ref": "#/$defs/scriptProperties/properties/shell"
         },
         "operator": {
-          "$ref": "#/definitions/scriptProperties/properties/operator"
+          "$ref": "#/$defs/scriptProperties/properties/operator"
         },
         "expected": {
-          "$ref": "#/definitions/scriptProperties/properties/expected"
+          "$ref": "#/$defs/scriptProperties/properties/expected"
         },
         "ignoreCase": {
-          "$ref": "#/definitions/scriptProperties/properties/ignoreCase"
+          "$ref": "#/$defs/scriptProperties/properties/ignoreCase"
         },
         "onPass": {
           "type": "string",
@@ -1057,7 +1121,7 @@
         }
       },
       "required": ["script"],
-      "additionalProperties": false
+      "unevaluatedProperties": false
     },
     "errorBehavior": {
       "type": "object",
@@ -1073,10 +1137,10 @@
           "minimum": 1,
           "description": "Maximum retry attempts when onError is retry."
         },
-        "retryDelayMs": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Delay before retrying, in milliseconds."
+        "retryDelaySec": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Delay before retrying, in seconds."
         }
       },
       "required": ["onError"],
@@ -1087,7 +1151,7 @@
       "description": "Per-prompt runtime execution metadata (optional, added automatically during execution). Execution-property fields record the values the step actually ran with after inheritance, including the session ID the harness reported; secrets are recorded by name only, never by value. The step's response text is not stored here — the run's events.jsonl is the only record of step output.",
       "allOf": [
         {
-          "$ref": "#/definitions/executionProperties"
+          "$ref": "#/$defs/executionProperties"
         },
         {
           "not": {
@@ -1157,15 +1221,16 @@
             }
           }
         }
-      ]
+      ],
+      "unevaluatedProperties": false
     },
     "runtimeMetadata": {
       "type": "object",
-      "description": "Workflow-level runtime execution state for working files (optional, added automatically by ctrlyoke during execution)",
+      "description": "Workflow-level runtime execution state for working files (optional, added automatically by ctrlyoke during execution). Its schemaVersion tracks run-file metadata independently of the root schemaVersion, which tracks the workflow-definition format.",
       "properties": {
         "schemaVersion": {
           "type": "number",
-          "description": "Run-file format version, stamped on every write. A file written by a newer ctrlyoke is refused rather than overwritten."
+          "description": "Run-file format version for _runtime metadata and run bookkeeping, stamped on every write. It is independent of the root schemaVersion, which versions the workflow definition format. A file written by a newer ctrlyoke is refused rather than overwritten."
         },
         "currentIndex": {
           "type": "number",
@@ -1216,7 +1281,7 @@
           "additionalProperties": false
         },
         "tokenTotals": {
-          "$ref": "#/definitions/workflowTokenTotals",
+          "$ref": "#/$defs/workflowTokenTotals",
           "description": "Latest run-scoped token aggregate projected from timeline history (working files only, written automatically during execution)"
         },
         "pendingRewind": {
@@ -1423,11 +1488,11 @@
               "description": "Timestamp when final step execution completed"
             },
             "preCondition": {
-              "$ref": "#/definitions/conditionEvaluationSummary",
+              "$ref": "#/$defs/conditionEvaluationSummary",
               "description": "Latest pre-condition evaluation retained for the final step's automation result projection"
             },
             "endCondition": {
-              "$ref": "#/definitions/conditionEvaluationSummary",
+              "$ref": "#/$defs/conditionEvaluationSummary",
               "description": "Latest end-condition evaluation retained for the final step's automation result projection"
             }
           },
@@ -1472,7 +1537,7 @@
           "type": "string"
         },
         "operator": {
-          "$ref": "#/definitions/scriptProperties/properties/operator"
+          "$ref": "#/$defs/scriptProperties/properties/operator"
         }
       },
       "required": [
@@ -1571,10 +1636,10 @@
           "type": "object",
           "description": "Same aggregate partitioned by the harness recorded on each immutable attempt output.",
           "propertyNames": {
-            "$ref": "#/definitions/harnessId"
+            "$ref": "#/$defs/harnessId"
           },
           "additionalProperties": {
-            "$ref": "#/definitions/harnessTokenTotals"
+            "$ref": "#/$defs/harnessTokenTotals"
           }
         },
         "byLocalDay": {
@@ -1586,10 +1651,10 @@
           "additionalProperties": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/definitions/harnessId"
+              "$ref": "#/$defs/harnessId"
             },
             "additionalProperties": {
-              "$ref": "#/definitions/harnessTokenTotals"
+              "$ref": "#/$defs/harnessTokenTotals"
             }
           }
         }
@@ -1626,7 +1691,8 @@
           "description": "Environment map consumed by the hook process. Secret references are allowed only as ${secret:NAME} values."
         },
         "timeoutSec": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 1,
           "description": "Timeout in seconds. Only respected by CLIs that support per-hook timeouts."
         }
       }
@@ -1699,6 +1765,10 @@
           "description": "Tool names from this server to deny at execution time. Use bare tool names without the mcp__<serverid>__ prefix (e.g. [\"append_step\"]). Translated to mcp__<id>__<tool> deny patterns and merged into the harness permission args. Supported on harnesses that accept tool deny patterns."
         }
       },
+      "oneOf": [
+        { "required": ["command"], "not": { "required": ["url"] } },
+        { "required": ["url"], "not": { "required": ["command"] } }
+      ],
       "required": ["id"],
       "additionalProperties": false
     },
@@ -1738,31 +1808,31 @@
     "priorContext": {
       "oneOf": [
         {
-          "type": "string",
-          "enum": [
-            "all",
-            "previous",
-            "none",
-            "finalStepAll",
-            "finalStepPrevious"
-          ],
-          "description": "Keyword shorthand: 'all' = all prior queue prompt outputs, 'previous' = immediately preceding queue prompt output, 'none' = no injection, 'finalStepAll' = all previous final step loop outputs, 'finalStepPrevious' = immediately preceding final step loop output"
+          "$ref": "#/$defs/priorContextKeyword"
         },
         {
-          "type": "array",
-          "items": {
-            "type": "integer",
-            "minimum": 1,
-            "description": "1-based prompt number"
-          },
-          "minItems": 1,
-          "description": "Specific prior prompt numbers to include (1-based, e.g. [1, 3] includes prompts 1 and 3)"
+          "$ref": "#/$defs/priorContextPromptNumbers"
         },
         {
-          "$ref": "#/definitions/workflowRunAddress",
+          "$ref": "#/$defs/workflowRunAddress",
           "description": "Import all resolved queue and final-step output from one completed run in this same workspace."
         }
       ]
+    },
+    "priorContextKeyword": {
+      "type": "string",
+      "enum": ["all", "previous", "none", "finalStepAll", "finalStepPrevious"],
+      "description": "Keyword shorthand: 'all' = all prior queue prompt outputs, 'previous' = immediately preceding queue prompt output, 'none' = no injection, 'finalStepAll' = all previous final step loop outputs, 'finalStepPrevious' = immediately preceding final step loop output"
+    },
+    "priorContextPromptNumbers": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "1-based prompt number"
+      },
+      "minItems": 1,
+      "description": "Specific prior prompt numbers to include (1-based, e.g. [1, 3] includes prompts 1 and 3)"
     },
     "agent": {
       "oneOf": [
@@ -1815,14 +1885,14 @@
           "description": "A well-known MCP server ID (e.g., \"ctrlyoke\" to enable dynamic queue extension)."
         },
         {
-          "$ref": "#/definitions/mcpServerConfig"
+          "$ref": "#/$defs/mcpServerConfig"
         }
       ]
     },
     "endConditionDefault": {
       "oneOf": [
         {
-          "$ref": "#/definitions/endCondition"
+          "$ref": "#/$defs/endCondition"
         },
         {
           "type": "null"
@@ -1832,7 +1902,7 @@
     "preConditionDefault": {
       "oneOf": [
         {
-          "$ref": "#/definitions/preCondition"
+          "$ref": "#/$defs/preCondition"
         },
         {
           "type": "null"
@@ -1842,7 +1912,7 @@
     "errorBehaviorDefault": {
       "oneOf": [
         {
-          "$ref": "#/definitions/errorBehavior"
+          "$ref": "#/$defs/errorBehavior"
         },
         {
           "type": "null"

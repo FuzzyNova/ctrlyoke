@@ -779,7 +779,7 @@ suite("PropertyResolver Tests", () => {
 
     test("injects the MCP tools skill in skill mode when ctrlyoke is requested", () => {
       configService.setCliOverlay({
-        ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.SKILL,
+        execution: { ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.SKILL },
       });
 
       const resolved = PropertyResolver.resolve(
@@ -799,7 +799,7 @@ suite("PropertyResolver Tests", () => {
       // Each built-in skill is a whole document in the prompt. Attaching the
       // pair unconditionally spends that budget teaching tools the step denied.
       configService.setCliOverlay({
-        ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.SKILL,
+        execution: { ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.SKILL },
       });
 
       const coordinationOnly = PropertyResolver.resolve(
@@ -829,7 +829,7 @@ suite("PropertyResolver Tests", () => {
 
     test("does not duplicate a skill the step already attached manually", () => {
       configService.setCliOverlay({
-        ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.SKILL,
+        execution: { ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.SKILL },
       });
 
       const resolved = PropertyResolver.resolve(
@@ -849,7 +849,7 @@ suite("PropertyResolver Tests", () => {
 
     test("injects no skill when every ctrlyoke tool is denied", () => {
       configService.setCliOverlay({
-        ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.SKILL,
+        execution: { ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.SKILL },
       });
 
       const resolved = PropertyResolver.resolve(
@@ -873,7 +873,7 @@ suite("PropertyResolver Tests", () => {
 
     test("does not inject the MCP tools skill in skill mode without ctrlyoke", () => {
       configService.setCliOverlay({
-        ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.SKILL,
+        execution: { ctrlyokeMcpMode: CTRLYOKE_MCP_MODES.SKILL },
       });
 
       const resolved = PropertyResolver.resolve(

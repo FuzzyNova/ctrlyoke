@@ -65,7 +65,7 @@ interface SchemaNode {
 }
 
 interface WorkflowSchema {
-  definitions: Record<string, SchemaNode>;
+  $defs: Record<string, SchemaNode>;
   oneOf: SchemaNode[];
 }
 
@@ -91,19 +91,15 @@ function schemaBackedFieldNames(): {
     fsSync.readFileSync(schemaPath, "utf8")
   ) as WorkflowSchema;
   const executionFields = directSchemaPropertyNames(
-    schema.definitions.executionProperties
+    schema.$defs.executionProperties
   );
-  const promptFields = directSchemaPropertyNames(schema.definitions.promptStep);
-  const scriptFields = directSchemaPropertyNames(schema.definitions.scriptStep);
+  const promptFields = directSchemaPropertyNames(schema.$defs.promptStep);
+  const scriptFields = directSchemaPropertyNames(schema.$defs.scriptStep);
   const multiStepWorkflowFields = directSchemaPropertyNames(
     schema.oneOf[1].allOf?.find((node) => node.properties?.steps) ?? {}
   );
   const runtimeOnlyWorkflowFields = new Set([
-    "originalFile",
-    "workflowName",
     "startedAt",
-    "lastModifiedAt",
-    "isFavorite",
     "definitionRevision",
     "_runtime",
     "parallelGroups",
@@ -142,7 +138,12 @@ function buildSchemaBackedStep(
   type: "prompt" | "script"
 ): Record<string, unknown> {
   const step: Record<string, unknown> = Object.fromEntries(
-    fields.map((field) => [field, schemaSentinel(context, field)])
+    fields
+      .filter((field) => type !== "prompt" || field !== "timeoutSec")
+      .map((field) => [
+        field,
+        field === "timeoutSec" ? 0.5 : schemaSentinel(context, field),
+      ])
   );
   step.type = type;
   step._runtime = { startedAt: 123, terminalStatus: "completed" };
@@ -351,7 +352,7 @@ suite("WorkflowSerializer", () => {
               errorBehavior: {
                 onError: "retry",
                 maxRetries: 2,
-                retryDelayMs: 2500,
+                retryDelaySec: 2.5,
               },
               steps: [
                 {
@@ -398,13 +399,17 @@ suite("WorkflowSerializer", () => {
         assert.deepStrictEqual(saved.errorBehavior, {
           onError: "retry",
           maxRetries: 2,
-          retryDelayMs: 2500,
+          retryDelaySec: 2.5,
         });
         assert.deepStrictEqual(saved.steps[0].errorBehavior, {
           onError: "continue",
         });
         assert.strictEqual(saved.steps[0]._runtime, undefined);
         assert.strictEqual(saved._runtime, undefined);
+        assert.strictEqual(
+          saved.$schema,
+          "https://ctrlyoke.dev/schema/v1/workflow.json"
+        );
         assert.ok(
           messages.some(
             (message) => message.type === MESSAGE_TYPES.WORKFLOW_SAVED
@@ -462,6 +467,11 @@ suite("WorkflowSerializer", () => {
         );
 
         const serialized = await fs.readFile(outputPath, "utf8");
+        assert.ok(
+          serialized.startsWith(
+            "# yaml-language-server: $schema=https://ctrlyoke.dev/schema/v1/workflow.json\n"
+          )
+        );
         assert.strictEqual(
           [...serialized.matchAll(/^    script: \|[-+]?\r?$/gm)].length,
           scripts.length
@@ -672,9 +682,11 @@ suite("WorkflowSerializer", () => {
         );
 
         const saved = JSON.parse(await fs.readFile(outputPath, "utf8")) as {
+          schemaVersion: number;
           steps: Array<Record<string, unknown>>;
           parallelGroups?: unknown;
         };
+        assert.strictEqual(saved.schemaVersion, 1);
         assert.strictEqual(saved.parallelGroups, undefined);
         assert.deepStrictEqual(saved.steps[1], {
           parallel: [

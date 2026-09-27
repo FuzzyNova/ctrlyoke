@@ -47,7 +47,7 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
       endCondition: {
         script: "check.js",
         expected: "done",
-        timeout: 30,
+        timeoutSec: 0.03,
         maxRetries: 2,
         retryPrompt: "retry",
         passRetryPrompt: "keep going",
@@ -58,7 +58,7 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
       preCondition: {
         script: "pre.js",
         expected: "true",
-        timeout: 10,
+        timeoutSec: 0.01,
         compareSource: "stdout",
         onPass: CONDITION_ACTIONS.CONTINUE,
         onFail: CONDITION_ACTIONS.SKIP_PROMPT,
@@ -110,7 +110,7 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
       endCondition: {
         script: "check.js",
         expected: "done",
-        timeout: 30,
+        timeoutSec: 0.03,
         maxRetries: 2,
         retryPrompt: "retry",
         passRetryPrompt: "keep going",
@@ -121,7 +121,7 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
       preCondition: {
         script: "pre.js",
         expected: "true",
-        timeout: 10,
+        timeoutSec: 0.01,
         compareSource: "stdout",
         onPass: CONDITION_ACTIONS.CONTINUE,
         onFail: CONDITION_ACTIONS.SKIP_PROMPT,
@@ -144,7 +144,7 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
       color: "#123456",
       executionMode: "interactive",
       enabled: true,
-      timeout: 45,
+      timeoutSec: 0.045,
       onPass: CONDITION_ACTIONS.CONTINUE,
       onFail: CONDITION_ACTIONS.STOP_WORKFLOW,
       _runtime: {
@@ -164,7 +164,7 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
       script: "npm test",
       color: "#123456",
       executionMode: "interactive",
-      timeout: 45,
+      timeoutSec: 0.045,
       onPass: CONDITION_ACTIONS.CONTINUE,
       onFail: CONDITION_ACTIONS.STOP_WORKFLOW,
     });

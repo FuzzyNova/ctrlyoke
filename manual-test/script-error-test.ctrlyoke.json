@@ -3,7 +3,7 @@
   "endCondition": {
     "script": "manual-test/.ctrlyoke/scripts/throws_error.py",
     "maxRetries": 3,
-    "timeout": 10000,
+    "timeoutSec": 10,
     "retryPrompt": "This retry prompt should NEVER appear because script crashes are execution errors, not validation failures."
   }
 }

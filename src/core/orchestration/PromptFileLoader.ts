@@ -3,7 +3,11 @@ import { PromptFileParser } from "../PromptFileParser";
 import { PromptQueue } from "../PromptQueue";
 import { Log } from "../../utils/Log";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import { PromptFile, EXECUTION_STATES } from "../../types/CtrlYokeTypes";
+import {
+  PromptFile,
+  EXECUTION_STATES,
+  type WorkflowValidationWarning,
+} from "../../types/CtrlYokeTypes";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import { normalizeAgentSelection } from "../WorkflowStepSanitizer";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
@@ -19,6 +23,8 @@ import {
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 import { findMissingWorkflowAssetDirectories } from "../../utils/WorkflowAssetWarnings";
 import { StatusMessageReporter } from "./StatusMessageReporter";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 
 /**
  * PromptFileLoader
@@ -32,8 +38,10 @@ import { StatusMessageReporter } from "./StatusMessageReporter";
  * - Validation and error handling
  */
 export class PromptFileLoader {
+  private readonly lineageRepository = new WorkflowLineageRepository();
   private lastCompatibilityDiagnostics: CompatibilityDiagnostic[] = [];
   private lastMissingAssetDirectories: string[] = [];
+  private lastSchemaWarnings: WorkflowValidationWarning[] = [];
 
   constructor(
     private promptFileParser: PromptFileParser,
@@ -58,6 +66,10 @@ export class PromptFileLoader {
 
   getLastMissingAssetDirectories(): readonly string[] {
     return this.lastMissingAssetDirectories;
+  }
+
+  getLastSchemaWarnings(): WorkflowValidationWarning[] {
+    return [...this.lastSchemaWarnings];
   }
 
   /**
@@ -89,7 +101,8 @@ export class PromptFileLoader {
         promptFile,
         path.basename(filePath),
         workspaceFolderPath,
-        filePath // real source file path — stored as originalFile
+        filePath, // real source file path — stored as originalFile
+        promptFile.warnings
       );
     } catch (error) {
       Log.error("[PromptFileLoader] Failed to load prompt file:", error);
@@ -122,7 +135,8 @@ export class PromptFileLoader {
         promptFile,
         displayName,
         workspaceFolderPath,
-        undefined // no source file — Save As is the only export path
+        undefined, // no source file — Save As is the only export path
+        []
       );
     } catch (error) {
       Log.error(
@@ -147,8 +161,10 @@ export class PromptFileLoader {
     promptFile: PromptFile,
     displayName: string,
     workspaceFolderPath: string | undefined,
-    originalFilePath: string | undefined
+    originalFilePath: string | undefined,
+    schemaWarnings: WorkflowValidationWarning[]
   ): Promise<string | undefined> {
+    this.lastSchemaWarnings = [...schemaWarnings];
     if (!promptFile.steps) {
       notifyUserFeedback(
         this.userFeedbackSink,
@@ -251,7 +267,12 @@ export class PromptFileLoader {
         promptFile.steps,
         undefined,
         promptFile.finalStep ?? null,
-        this.promptQueue.getFinalStepRuntime()
+        this.promptQueue.getFinalStepRuntime(),
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        schemaWarnings
       );
     }
 
@@ -289,6 +310,19 @@ export class PromptFileLoader {
       // Read working file
       const workingFile =
         await this.promptQueue.readWorkingFile(workingFilePath);
+      const address =
+        WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath);
+      const descriptor =
+        address && workspaceFolderPath
+          ? await this.lineageRepository.tryReadDescriptor(
+              workspaceFolderPath,
+              address.workflowKey
+            )
+          : undefined;
+      if (descriptor) {
+        await this.promptQueue.updateWorkflowName(descriptor.workflowName);
+      }
+      const originalFilePath = descriptor?.originalFile;
 
       // Validate prompts (only if there are prompts to validate)
       if (workingFile.steps?.length) {
@@ -323,6 +357,7 @@ export class PromptFileLoader {
       }
 
       if (actualMode === PROMPT_FILE_RELOAD_MODES.REPLACE) {
+        this.lastSchemaWarnings = [];
         // Scenario 1: Loading a different session (resume/auto-load)
         // Clear queue and restore full state including completed prompts, currentIndex, etc.
         Log.debug(
@@ -332,13 +367,16 @@ export class PromptFileLoader {
           workingFilePath,
           preventRunningAutoStart
         );
+        if (descriptor) {
+          await this.promptQueue.updateWorkflowName(descriptor.workflowName);
+        }
 
         const dashboard = this.getDashboard();
         if (dashboard) {
           // Use original file basename when available; fall back to workflow name for ephemeral workflows
-          const fileName = workingFile.originalFile
-            ? path.basename(workingFile.originalFile)
-            : workingFile.workflowName || path.basename(workingFilePath);
+          const fileName = originalFilePath
+            ? path.basename(originalFilePath)
+            : descriptor?.workflowName || path.basename(workingFilePath);
           // Get the restored state to send accurate prompt info with runtime state
           const restoredState = this.promptQueue.getState();
           dashboard.updateSessionRestored(
@@ -397,7 +435,7 @@ export class PromptFileLoader {
       await this.warnAboutMissingWorkflowAssets(
         workingFile,
         workspaceFolderPath,
-        workingFile.originalFile
+        originalFilePath
       );
 
       Log.trace(

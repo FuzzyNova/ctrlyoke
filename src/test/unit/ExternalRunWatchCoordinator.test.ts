@@ -37,6 +37,10 @@ class TestLineageRepository implements ExternalRunWatchLineageRepository {
     return Promise.resolve(this.keys);
   }
 
+  readWorkflowDisplayName(): Promise<string> {
+    return Promise.resolve("fixture");
+  }
+
   pruneStaleStagingDirs(): Promise<void> {
     return Promise.resolve();
   }

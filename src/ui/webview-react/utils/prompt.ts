@@ -23,7 +23,7 @@ interface EndCondition {
   operator?: ScriptOperator;
   expected?: string | number;
   ignoreCase?: boolean;
-  timeout?: number;
+  timeoutSec?: number;
   maxRetries?: number;
   retryPrompt?: string;
   passRetryPrompt?: string;

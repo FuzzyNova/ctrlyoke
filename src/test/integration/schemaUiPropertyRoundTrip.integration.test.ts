@@ -4,7 +4,7 @@ import * as fs from "fs/promises";
 import { readFileSync, readdirSync } from "fs";
 import * as os from "os";
 import * as path from "path";
-import Ajv from "ajv";
+import Ajv from "ajv/dist/2020";
 import {
   createPromotedRun,
   createRoundTripHarness,
@@ -68,7 +68,7 @@ type SchemaObject = Record<string, unknown>;
 const schema = JSON.parse(readFileSync(SCHEMA_PATH, "utf8")) as SchemaObject;
 
 function definition(name: string): SchemaObject {
-  const definitions = schema.definitions as Record<string, SchemaObject>;
+  const definitions = schema.$defs as Record<string, SchemaObject>;
   const found = definitions[name];
   assert.ok(found, `schema definition ${name} not found`);
   return found;
@@ -110,11 +110,7 @@ const NOT_AUTHORABLE = new Map<string, string>([
   ["_runtime", "engine-written runtime block"],
   ["_templateMeta", "template-authoring surface, not a workflow property"],
   ["runtimeMetadata", "engine-written runtime block"],
-  ["originalFile", "working-file bookkeeping"],
-  ["workflowName", "working-file bookkeeping, renamed via its own message"],
   ["startedAt", "engine-written timestamp"],
-  ["lastModifiedAt", "engine-written timestamp"],
-  ["isFavorite", "working-file bookkeeping, toggled via its own message"],
   ["definitionRevision", "engine-written optimistic-concurrency counter"],
   ["steps", "the step list itself, not a property of a step"],
   [
@@ -159,7 +155,7 @@ const SAMPLES: Record<string, unknown> = {
     maxRetries: 2,
   },
   env: { DEPLOY_TOKEN: "${secret:DEPLOY_TOKEN}" },
-  errorBehavior: { onError: "retry", maxRetries: 2, retryDelayMs: 500 },
+  errorBehavior: { onError: "retry", maxRetries: 2, retryDelaySec: 0.5 },
   executionMode: "headless",
   harness: "claude-cli",
   hooks: [
@@ -186,7 +182,7 @@ const SAMPLES: Record<string, unknown> = {
   sessionId: "seeded-session-id",
   shell: "bash",
   skills: ["seeded-skill"],
-  timeout: 45000,
+  timeoutSec: 45,
   toolPermissions: {
     mode: "custom",
     allowedTools: ["Bash"],
@@ -423,7 +419,7 @@ const UI_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
   ["sessionId", ["settings-session-id"]],
   ["shell", ["${idPrefix}-shell"]],
   ["skills", ["settings-skills"]],
-  ["timeout", ["${idPrefix}-timeout"]],
+  ["timeoutSec", ["${idPrefix}-timeout"]],
   ["toolPermissions", ["settings-permission-mode"]],
   ["trustedExternalRoots", ["settings-trusted-external-roots-mode"]],
   ["vars", ["settings-vars"]],
@@ -765,7 +761,7 @@ suite("Schema -> dashboard property round trip", () => {
             secrets: ["DEPLOY_TOKEN"],
             errorBehavior: { onError: "continue" },
             executionMode: "headless",
-            timeout: 60000,
+            timeoutSec: 60,
           },
         ];
       });
@@ -777,7 +773,7 @@ suite("Schema -> dashboard property round trip", () => {
         promptName: "Deploy",
         properties: {
           type: "script",
-          timeout: 60000,
+          timeoutSec: 60,
           executionMode: "headless",
         },
       });
@@ -790,7 +786,7 @@ suite("Schema -> dashboard property round trip", () => {
         secrets: ["DEPLOY_TOKEN"],
         errorBehavior: { onError: "continue" },
         executionMode: "headless",
-        timeout: 60000,
+        timeoutSec: 60,
       });
     });
 
@@ -838,7 +834,7 @@ suite("Schema -> dashboard property round trip", () => {
           {
             type: "script",
             script: SCRIPT_TEXT,
-            timeout: 60000,
+            timeoutSec: 60,
             onPass: "stopWorkflow",
             onFail: "continue",
             compareSource: "stdout",
@@ -853,7 +849,7 @@ suite("Schema -> dashboard property round trip", () => {
         text: SCRIPT_TEXT,
         properties: { type: "script" },
         clearProperties: [
-          "timeout",
+          "timeoutSec",
           "onPass",
           "onFail",
           "compareSource",

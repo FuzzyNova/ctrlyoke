@@ -153,4 +153,4 @@ Used only by ctrlyoke's commit-message generation, which denies every other tool
       deniedTools: [edit_step, remove_step, reorder_steps]
   ```
 
-- With the `ctrlyokeMcpMode: "skill"` setting, the same tools are delivered as built-in skills that call [`ctrlyoke-mcp`](/cli/ctrlyoke-mcp) in one-shot mode instead of attaching the MCP server.
+- With the `execution.ctrlyokeMcpMode: "skill"` setting, the same tools are delivered as built-in skills that call [`ctrlyoke-mcp`](/cli/ctrlyoke-mcp) in one-shot mode instead of attaching the MCP server.

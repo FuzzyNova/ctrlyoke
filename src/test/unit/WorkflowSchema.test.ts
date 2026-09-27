@@ -1,11 +1,19 @@
 import * as assert from "assert";
 import * as fs from "fs";
 import * as path from "path";
-import Ajv from "ajv";
+import Ajv from "ajv/dist/2020";
+import addFormats from "ajv-formats";
 import * as yaml from "js-yaml";
 import { PromptFileParser } from "../../core/PromptFileParser";
 import { formatRunRef } from "../../utils/WorkflowPaths";
-import { PERMISSION_MODES } from "../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  PERMISSION_MODES,
+  PUBLISHED_SCHEMA_URLS,
+  STATUS_LINE_HARNESS_IDS,
+} from "../../types/DashboardConstants";
+import { VARIABLE_NAME_PATTERN_SOURCE } from "../../utils/KeyValueKeyKinds";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 
 suite("Workflow template schema", () => {
   const schemaPath = path.resolve(
@@ -13,9 +21,9 @@ suite("Workflow template schema", () => {
     "../../../schemas/workflow-schema.json"
   );
   const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8"));
-  const validate = new Ajv({ allErrors: true, allowUnionTypes: true }).compile(
-    schema
-  );
+  const workflowAjv = new Ajv({ allErrors: true, allowUnionTypes: true });
+  addFormats(workflowAjv);
+  const validate = workflowAjv.compile(schema);
 
   test("accepts the bundled Template Starter", () => {
     const templatePath = path.resolve(
@@ -23,12 +31,442 @@ suite("Workflow template schema", () => {
       "../../../src/templates/workflows/template-starter.ctrlyoke.yaml"
     );
     const template = yaml.load(fs.readFileSync(templatePath, "utf-8"));
+    assert.strictEqual(
+      (template as { schemaVersion?: number }).schemaVersion,
+      1
+    );
 
     assert.strictEqual(
       validate(template),
       true,
       JSON.stringify(validate.errors)
     );
+  });
+
+  test("stamps every bundled workflow template with schemaVersion 1", () => {
+    const workflowsDirectory = path.resolve(
+      __dirname,
+      "../../../src/templates/workflows"
+    );
+    const templateFiles = fs
+      .readdirSync(workflowsDirectory)
+      .filter((fileName) => fileName.endsWith(".ctrlyoke.yaml"));
+    assert.ok(templateFiles.length > 0);
+    for (const fileName of templateFiles) {
+      const template = yaml.load(
+        fs.readFileSync(path.join(workflowsDirectory, fileName), "utf8")
+      ) as { schemaVersion?: number };
+      const source = fs.readFileSync(
+        path.join(workflowsDirectory, fileName),
+        "utf8"
+      );
+      assert.strictEqual(template.schemaVersion, 1, fileName);
+      assert.ok(
+        source.startsWith(
+          `# yaml-language-server: $schema=${PUBLISHED_SCHEMA_URLS.WORKFLOW}\n`
+        ),
+        `${fileName} should link to the published workflow schema`
+      );
+    }
+  });
+
+  test("requires the prompt field on prompt steps", () => {
+    assert.strictEqual(
+      validate({ steps: [{ prompt: "Test prompt" }] }),
+      true,
+      JSON.stringify(validate.errors)
+    );
+    assert.strictEqual(
+      validate({ steps: [{ endCondition: { script: "test.py" } }] }),
+      false
+    );
+  });
+
+  test("accepts schemaVersion and $schema on every closed workflow root and settings root", () => {
+    const roots = [
+      {
+        $schema: "https://ctrlyoke.dev/schema/v1/workflow.json",
+        schemaVersion: 1,
+        steps: [{ prompt: "multi-step root" }],
+      },
+      {
+        $schema: "https://ctrlyoke.dev/schema/v1/workflow.json",
+        schemaVersion: 1,
+        prompt: "single prompt root",
+      },
+      {
+        $schema: "https://ctrlyoke.dev/schema/v1/workflow.json",
+        schemaVersion: 1,
+        type: "script",
+        script: "echo root script",
+      },
+    ];
+    for (const root of roots) {
+      assert.strictEqual(validate(root), true, JSON.stringify(validate.errors));
+    }
+
+    const settingsSchema = JSON.parse(
+      fs.readFileSync(
+        path.resolve(__dirname, "../../../schemas/settings-schema.json"),
+        "utf8"
+      )
+    );
+    const settingsAjv = new Ajv({ allErrors: true });
+    addFormats(settingsAjv);
+    settingsAjv.addSchema(schema, schema.$id);
+    const validateSettings = settingsAjv.compile(settingsSchema);
+    assert.strictEqual(
+      validateSettings({
+        $schema: "https://ctrlyoke.dev/schema/v1/settings.json",
+        schemaVersion: 1,
+      }),
+      true,
+      JSON.stringify(validateSettings.errors)
+    );
+    assert.strictEqual(
+      validateSettings({ defaults: { harness: "not-a-harness" } }),
+      false,
+      "the settings schema should resolve workflow.json by its $id"
+    );
+    assert.strictEqual(
+      validate({ schemaVersion: 0, steps: [{ prompt: "x" }] }),
+      false
+    );
+  });
+
+  test("refuses newer workflow versions before schema validation for YAML, JSON, and Markdown", async () => {
+    const tempDir = fs.mkdtempSync(path.join(__dirname, "schema-refusal-"));
+    try {
+      const cases = [
+        [
+          "deploy.ctrlyoke.yaml",
+          "schemaVersion: 2\nunknownFutureField: true\n",
+        ],
+        [
+          "deploy.ctrlyoke.json",
+          JSON.stringify({ schemaVersion: 2, future: true }),
+        ],
+        [
+          "deploy.prompt.md",
+          "---\nschemaVersion: 2\nfuture: true\n---\nDo the work",
+        ],
+      ] as const;
+      for (const [fileName, content] of cases) {
+        const filePath = path.join(tempDir, fileName);
+        fs.writeFileSync(filePath, content, "utf8");
+        const parser = new PromptFileParser();
+        assert.strictEqual(await parser.parsePromptFile(filePath), null);
+        assert.match(
+          parser.lastNewerSchemaError?.message ?? "",
+          new RegExp(
+            `${fileName.replaceAll(".", "\\.")} \\([^)]+\\) uses workflow format 2`
+          )
+        );
+        assert.match(
+          parser.lastNewerSchemaError?.message ?? "",
+          /supports format 1/u
+        );
+        assert.match(
+          parser.lastNewerSchemaError?.message ?? "",
+          /this version \([^)]+\)/u
+        );
+        assert.match(
+          parser.lastNewerSchemaError?.message ?? "",
+          /Update ctrlyoke to open it\./u
+        );
+      }
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("uses the shared variable-name pattern and rejects case collisions", async () => {
+    assert.strictEqual(
+      schema.$defs.varsConfig.propertyNames.pattern,
+      `^${VARIABLE_NAME_PATTERN_SOURCE}$`
+    );
+    assert.strictEqual(
+      validate({ vars: { valid_name2: "ok" }, steps: [{ prompt: "hi" }] }),
+      true,
+      JSON.stringify(validate.errors)
+    );
+    assert.strictEqual(
+      validate({ vars: { "bad-name": "no" }, steps: [{ prompt: "hi" }] }),
+      false
+    );
+
+    await assert.rejects(
+      new PromptFileParser().validateAndNormalize(
+        { vars: { foo: "one", FOO: "two" }, steps: [{ prompt: "hi" }] },
+        process.cwd()
+      ),
+      /vars: Variable names must not differ only by case/
+    );
+  });
+
+  test("requires exactly one MCP command or URL", () => {
+    const workflow = (entry: Record<string, unknown>) => ({
+      mcpServers: [{ id: "server", ...entry }],
+      steps: [{ prompt: "hi" }],
+    });
+
+    assert.strictEqual(validate(workflow({ command: "node" })), true);
+    assert.strictEqual(
+      validate(workflow({ url: "https://example.test" })),
+      true
+    );
+    assert.strictEqual(
+      validate(workflow({ command: "node", url: "https://example.test" })),
+      false
+    );
+    assert.strictEqual(validate(workflow({})), false);
+  });
+
+  test("tightens integer fields, ports, and workflow run addresses", () => {
+    assert.strictEqual(
+      validate({ steps: [{ prompt: "hi", sessionId: 1 }] }),
+      true
+    );
+    assert.strictEqual(
+      validate({ steps: [{ prompt: "hi", sessionId: 1.5 }] }),
+      false
+    );
+    assert.strictEqual(
+      validate({ steps: [{ prompt: "hi", sessionId: 0 }] }),
+      false
+    );
+    assert.strictEqual(
+      validate({
+        steps: [{ prompt: "hi" }],
+        endCondition: { script: "true", maxRetries: 1.5 },
+      }),
+      false
+    );
+    assert.strictEqual(
+      validate({
+        steps: [{ prompt: "hi" }],
+        hooks: [{ event: "stop", command: "x", timeoutSec: 0 }],
+      }),
+      false
+    );
+
+    for (const workflowKey of [".", ".."])
+      assert.strictEqual(
+        validate({
+          steps: [
+            {
+              prompt: "hi",
+              priorContext: {
+                workflowKey,
+                runRef: formatRunRef(Date.UTC(2026, 8, 23)),
+              },
+            },
+          ],
+        }),
+        false,
+        workflowKey
+      );
+  });
+
+  test("uses positive fractional seconds for workflow script and retry timeouts", () => {
+    const validWorkflow = {
+      steps: [
+        {
+          type: "script",
+          script: "true",
+          timeoutSec: 0.25,
+        },
+        {
+          prompt: "hi",
+          endCondition: { script: "true", timeoutSec: 1.25 },
+          preCondition: { script: "true", timeoutSec: 0.5 },
+          errorBehavior: {
+            onError: "retry",
+            retryDelaySec: 0.75,
+          },
+        },
+      ],
+    };
+    assert.strictEqual(
+      validate(validWorkflow),
+      true,
+      JSON.stringify(validate.errors)
+    );
+
+    for (const timeoutSec of [0, -0.5]) {
+      assert.strictEqual(
+        validate({ steps: [{ type: "script", script: "true", timeoutSec }] }),
+        false
+      );
+      assert.strictEqual(
+        validate({
+          steps: [
+            { prompt: "hi", endCondition: { script: "true", timeoutSec } },
+          ],
+        }),
+        false
+      );
+      assert.strictEqual(
+        validate({
+          steps: [
+            {
+              prompt: "hi",
+              errorBehavior: { onError: "retry", retryDelaySec: timeoutSec },
+            },
+          ],
+        }),
+        false
+      );
+    }
+
+    assert.strictEqual(
+      validate({
+        hooks: [{ event: "stop", command: "true", timeoutSec: 1.5 }],
+        steps: [{ prompt: "hi" }],
+      }),
+      false
+    );
+    assert.strictEqual(
+      validate({
+        hooks: [{ event: "stop", command: "true", timeoutSec: 1 }],
+        steps: [{ prompt: "hi" }],
+      }),
+      true
+    );
+  });
+
+  test("tightens settings numbers without invalidating defaults", () => {
+    const settingsSchema = JSON.parse(
+      fs.readFileSync(
+        path.resolve(__dirname, "../../../schemas/settings-schema.json"),
+        "utf-8"
+      )
+    );
+    const settingsAjv = new Ajv({ allErrors: true });
+    addFormats(settingsAjv);
+    settingsAjv.addSchema(schema, schema.$id);
+    const validateSettings = settingsAjv.compile(settingsSchema);
+    const { execution, queue, runs, terminal, ui, server } =
+      CTRLYOKE_SETTINGS_DEFAULTS;
+    const defaults = {
+      execution: {
+        maxPromptTimeoutSec: execution.maxPromptTimeoutSec,
+        scriptTimeoutSec: execution.scriptTimeoutSec,
+      },
+      queue: {
+        maxSize: queue.maxSize,
+        maxWorkflowExecutionTimeSec: queue.maxWorkflowExecutionTimeSec,
+      },
+      runs: { maxRuns: runs.maxRuns },
+      terminal: { scrollback: terminal.scrollback },
+      ui: {
+        outputVirtualizationRowThreshold: ui.outputVirtualizationRowThreshold,
+      },
+      server: {
+        port: server.port,
+        standalonePort: server.standalonePort,
+        fallbackPorts: server.fallbackPorts,
+      },
+    };
+    assert.strictEqual(
+      validateSettings(defaults),
+      true,
+      JSON.stringify(validateSettings.errors)
+    );
+    assert.strictEqual(validateSettings({ server: { port: 65536 } }), false);
+    assert.strictEqual(validateSettings({ server: { port: 0 } }), false);
+    assert.strictEqual(validateSettings({ queue: { maxSize: 1.5 } }), false);
+    assert.strictEqual(
+      validateSettings({ execution: { maxPromptTimeoutSec: 1.5 } }),
+      false
+    );
+    assert.strictEqual(
+      validateSettings({ queue: { maxWorkflowExecutionTimeSec: 1.5 } }),
+      false
+    );
+    assert.strictEqual(validateSettings({ runs: { maxRuns: -2 } }), false);
+    assert.strictEqual(validateSettings({ runs: { maxRuns: 1.5 } }), false);
+    assert.strictEqual(
+      validateSettings({ server: { fallbackPorts: [65536] } }),
+      false
+    );
+    assert.strictEqual(
+      validateSettings({ defaults: { priorContext: "all" } }),
+      true
+    );
+    assert.strictEqual(
+      validateSettings({ defaults: { priorContext: [1, 3] } }),
+      true
+    );
+    assert.strictEqual(
+      validateSettings({
+        defaults: {
+          priorContext: {
+            workflowKey: "example",
+            runRef: formatRunRef(Date.UTC(2026, 8, 23)),
+          },
+        },
+      }),
+      false
+    );
+  });
+
+  test("keeps harness-keyed schema properties aligned with supported harnesses", () => {
+    const settingsSchema = JSON.parse(
+      fs.readFileSync(
+        path.resolve(__dirname, "../../../schemas/settings-schema.json"),
+        "utf-8"
+      )
+    );
+    const expectedHarnessIds = Object.values(HARNESS_IDS);
+    const sortedHarnessIds = [...expectedHarnessIds].sort();
+    const harnessKeyedSchemaPaths: Array<{
+      path: string[];
+      expected: string[];
+    }> = [
+      {
+        path: ["properties", "defaults", "properties", "models"],
+        expected: sortedHarnessIds,
+      },
+      {
+        path: ["properties", "defaults", "properties", "additionalArgs"],
+        expected: sortedHarnessIds,
+      },
+      {
+        path: ["properties", "statusLine", "properties", "byHarness"],
+        expected: Object.values(STATUS_LINE_HARNESS_IDS).sort(),
+      },
+      {
+        path: [
+          "properties",
+          "ui",
+          "properties",
+          "harnessColors",
+          "properties",
+          "byHarness",
+        ],
+        expected: sortedHarnessIds,
+      },
+    ];
+    const getSchemaAtPath = (
+      source: Record<string, unknown>,
+      schemaPath: string[]
+    ): Record<string, unknown> =>
+      schemaPath.reduce<Record<string, unknown>>(
+        (current, segment) => current[segment] as Record<string, unknown>,
+        source
+      );
+
+    for (const { path: schemaPath, expected } of harnessKeyedSchemaPaths) {
+      const keyedObject = getSchemaAtPath(settingsSchema, schemaPath);
+      assert.deepStrictEqual(
+        Object.keys(keyedObject.properties as Record<string, unknown>).sort(),
+        expected,
+        schemaPath.join(".")
+      );
+    }
+
+    assert.deepStrictEqual(schema.$defs.harnessId.enum, expectedHarnessIds);
   });
 
   test("accepts toolPermissions mode none and rejects passthrough", () => {
@@ -349,10 +787,7 @@ suite("Workflow template schema", () => {
       updatedAt: 400,
     };
     const runFile = {
-      workflowName: "Implement",
       startedAt: 100,
-      lastModifiedAt: 150,
-      isFavorite: true,
       definitionRevision: 3,
       steps: [
         {
@@ -386,7 +821,6 @@ suite("Workflow template schema", () => {
       false
     );
     assert.strictEqual(validate({ ...runFile, definitionRevision: 0 }), false);
-    assert.strictEqual(validate({ ...runFile, isFavorite: "yes" }), false);
   });
 
   test("accepts every workflow-only root property on a single-step script workflow", () => {
@@ -416,6 +850,202 @@ suite("Workflow template schema", () => {
       validate({ ...scriptRoot, trustedExternalRoots: [""] }),
       false
     );
+  });
+
+  test("accepts the schema closure probe shapes and repository workflows", async () => {
+    const validProbes = [
+      {
+        steps: [
+          {
+            prompt: "Implement the change",
+            preCondition: { script: "npm test" },
+            endCondition: { script: "npm test", expected: 0 },
+          },
+          {
+            parallel: [
+              { prompt: "Review the implementation" },
+              { type: "script", script: "npm run lint" },
+            ],
+            failFast: true,
+          },
+        ],
+        finalStep: { prompt: "Summarize the result" },
+      },
+      {
+        prompt: "Use a single-step prompt workflow",
+        worktree: true,
+        vars: { target: "workspace" },
+        trustedExternalRoots: ["/shared/fixtures"],
+      },
+      {
+        type: "script",
+        script: "npm test",
+        _templateMeta: { name: "Script check" },
+      },
+      {
+        _templateMeta: { name: "Harness template" },
+        steps: [{ prompt: "Work with {harness}", harness: "{harness}" }],
+      },
+      {
+        steps: [
+          {
+            prompt: "Run file step",
+            _runtime: {
+              harness: "claude-cli",
+              sessionId: "session",
+              startedAt: 1,
+              completedAt: 2,
+              terminalStatus: "completed",
+            },
+          },
+        ],
+        parallelGroups: [],
+        startedAt: 1,
+        definitionRevision: 1,
+        _runtime: {
+          schemaVersion: 1,
+          currentIndex: 1,
+          executionState: "completed",
+        },
+      },
+    ];
+
+    for (const probe of validProbes) {
+      assert.strictEqual(
+        validate(probe),
+        true,
+        JSON.stringify(validate.errors)
+      );
+    }
+
+    const parser = new PromptFileParser();
+    const templateDirectory = path.resolve(
+      __dirname,
+      "../../../src/templates/workflows"
+    );
+    const repoWorkflowDirectory = path.resolve(
+      __dirname,
+      "../../../.ctrlyoke/workflows"
+    );
+    const templateFiles = fs
+      .readdirSync(templateDirectory)
+      .filter((name) => /\.ctrlyoke\.(?:ya?ml|json)$/u.test(name))
+      .map((name) => path.join(templateDirectory, name));
+    const repoWorkflowFiles = fs.existsSync(repoWorkflowDirectory)
+      ? fs
+          .readdirSync(repoWorkflowDirectory)
+          .filter((name) => /\.ctrlyoke\.(?:ya?ml|json)$/u.test(name))
+          .map((name) => path.join(repoWorkflowDirectory, name))
+      : [];
+
+    for (const filePath of [...templateFiles, ...repoWorkflowFiles]) {
+      const parsed = await parser.parsePromptFile(filePath);
+      assert.ok(parsed, `${filePath} should parse`);
+      if (templateFiles.includes(filePath)) {
+        assert.deepStrictEqual(
+          parsed.warnings,
+          [],
+          `${filePath} should not have unknown-key warnings`
+        );
+      }
+    }
+  });
+
+  test("downgrades only unknown-key closure failures and reports exact paths", async () => {
+    const tempDirectory = fs.mkdtempSync(
+      path.join(require("os").tmpdir(), "ctrlyoke-schema-closure-")
+    );
+    const parser = new PromptFileParser();
+    const cases: Array<{ document: unknown; path: string }> = [
+      {
+        document: { steps: [{ prompt: "Do work", endConditon: {} }] },
+        path: "/steps/0/endConditon",
+      },
+      {
+        document: { steps: [{ prompt: "Do work" }], endConditon: {} },
+        path: "/endConditon",
+      },
+      {
+        document: { prompt: "Do work", endConditon: {} },
+        path: "/endConditon",
+      },
+      {
+        document: { type: "script", script: "npm test", scriptt: true },
+        path: "/scriptt",
+      },
+      {
+        document: {
+          steps: [{ prompt: "Do work" }],
+          finalStep: { prompt: "Finish", endConditon: {} },
+        },
+        path: "/finalStep/endConditon",
+      },
+      {
+        document: {
+          steps: [
+            {
+              parallel: [
+                { prompt: "Do work", endConditon: {} },
+                { prompt: "Review" },
+              ],
+            },
+          ],
+        },
+        path: "/steps/0/parallel/0/endConditon",
+      },
+      {
+        document: {
+          steps: [{ prompt: "Do work", _runtime: { elasped: 1 } }],
+        },
+        path: "/steps/0/_runtime/elasped",
+      },
+      {
+        document: {
+          steps: [
+            {
+              parallel: [{ prompt: "One" }, { prompt: "Two" }],
+              failfast: false,
+            },
+          ],
+        },
+        path: "/steps/0/failfast",
+      },
+    ];
+
+    try {
+      for (const [index, { document, path: expectedPath }] of cases.entries()) {
+        assert.strictEqual(
+          validate(document),
+          false,
+          `probe ${index} must fail strict schema validation`
+        );
+        const filePath = path.join(
+          tempDirectory,
+          `probe-${index}.ctrlyoke.json`
+        );
+        fs.writeFileSync(filePath, JSON.stringify(document), "utf8");
+        const parsed = await parser.parsePromptFile(filePath);
+        assert.ok(parsed, `probe ${index} should load with warnings`);
+        assert.deepStrictEqual(
+          parsed.warnings.map((warning) => warning.propertyPointer),
+          [expectedPath],
+          `probe ${index} warning path`
+        );
+        assert.ok(parsed.warnings[0].message.includes("newer ctrlyoke"));
+      }
+
+      for (const document of [
+        { steps: [{ prompt: "Do work", script: "npm test" }] },
+        { steps: [{ prompt: "Do work", worktree: true }] },
+      ]) {
+        assert.strictEqual(validate(document), false);
+        const filePath = path.join(tempDirectory, "hard-error.ctrlyoke.json");
+        fs.writeFileSync(filePath, JSON.stringify(document), "utf8");
+        assert.strictEqual(await parser.parsePromptFile(filePath), null);
+      }
+    } finally {
+      fs.rmSync(tempDirectory, { recursive: true, force: true });
+    }
   });
 
   test("accepts managed shorthand and object forms at both workflow roots", () => {
