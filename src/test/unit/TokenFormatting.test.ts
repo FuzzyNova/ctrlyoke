@@ -23,6 +23,14 @@ suite("TokenFormatting", () => {
     );
   });
 
+  test("promotes values when rounding reaches the next unit", () => {
+    assert.strictEqual(formatTokenCount(999_949), "999.9k");
+    assert.strictEqual(formatTokenCount(999_950), "1M");
+    assert.strictEqual(formatTokenCount(999_999), "1M");
+    assert.strictEqual(formatTokenCount(1_000_000), "1M");
+    assert.strictEqual(formatTokenCount(999_999_999), "1B");
+  });
+
   test("formats partial totals as lower bounds", () => {
     assert.strictEqual(
       formatTokenTotal(410_000, WORKFLOW_TOKEN_COVERAGE.PARTIAL),

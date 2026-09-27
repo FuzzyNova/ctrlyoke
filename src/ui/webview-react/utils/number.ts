@@ -1,3 +1,5 @@
+import { formatCompactTokenMagnitude } from "@root/utils/TokenFormatting";
+
 /**
  * Numeric utility functions
  */
@@ -8,7 +10,7 @@ export function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * Formats a non-negative magnitude using one decimal place for K and M tiers.
+ * Formats a non-negative magnitude using one decimal place for compact tiers.
  * Negative values stay unscaled, and non-finite values pass through using
  * their JavaScript string representation.
  */
@@ -16,11 +18,8 @@ export function formatMagnitude(value: number): string {
   if (!Number.isFinite(value)) {
     return value.toString();
   }
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`;
-  }
   if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}K`;
+    return formatCompactTokenMagnitude(value, { uppercaseSuffix: true });
   }
   return value.toString();
 }

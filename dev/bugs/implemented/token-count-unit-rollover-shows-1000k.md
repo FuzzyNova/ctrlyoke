@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-27 by the long-running bug-fix workflow final step (claude-cli)
 - **Area:** `src/utils/TokenFormatting.ts` (`formatTokenCount`), `src/utils/StatuslineFormat.ts` (`compactTokenCount`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
