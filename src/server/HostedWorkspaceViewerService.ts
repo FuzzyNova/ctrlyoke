@@ -1495,9 +1495,11 @@ export class HostedWorkspaceViewerService {
     repoRoot: string
   ): Promise<WorkspaceScmStatusResponse> {
     const [statusResult, syncCountsResult] = await Promise.allSettled([
-      execFileAsync("git", ["-C", repoRoot, "status", "--porcelain=v1"], {
-        timeout: GIT_TIMEOUT_MS,
-      }),
+      execFileAsync(
+        "git",
+        ["-C", repoRoot, "status", "--porcelain=v1", "-z"],
+        { timeout: GIT_TIMEOUT_MS }
+      ),
       this.getSyncCounts(repoRoot),
     ]);
 
@@ -1563,7 +1565,7 @@ export class HostedWorkspaceViewerService {
   }
 
   /**
-   * Parse `git status --porcelain=v1` output for a repo rooted at `repoRoot`.
+   * Parse `git status --porcelain=v1 -z` output for a repo rooted at `repoRoot`.
    * Git reports repo-relative paths; each is mapped back to a viewer path via
    * `relativePath()` (plain in single-root, folder-name-prefixed in multi-root)
    * so status entries match the same convention as the tree/file/diff APIs and
@@ -1578,18 +1580,20 @@ export class HostedWorkspaceViewerService {
     const trustedRoots = this.trustedRoots;
     const files: WorkspaceScmFile[] = [];
 
-    for (const line of output.split("\n")) {
-      if (line.length < 3) {
+    const records = output.split("\0");
+    for (let index = 0; index < records.length; index++) {
+      const record = records[index];
+      if (!record || record.length < 4) {
         continue;
       }
-      const x = line[0] ?? " ";
-      const y = line[1] ?? " ";
-      let filePath = line.slice(3);
+      const x = record[0] ?? " ";
+      const y = record[1] ?? " ";
+      const filePath = record.slice(3);
 
-      // Renamed files: "old-path -> new-path"
-      const arrowIdx = filePath.indexOf(" -> ");
-      if (arrowIdx !== -1) {
-        filePath = filePath.slice(arrowIdx + 4);
+      // In -z mode rename/copy records list the new path first and the
+      // original path in the following NUL-terminated field.
+      if (x === "R" || y === "R" || x === "C" || y === "C") {
+        index++;
       }
 
       const normalized = normalizeScmPath(filePath);

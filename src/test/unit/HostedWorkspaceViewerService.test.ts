@@ -1326,6 +1326,41 @@ suite("HostedWorkspaceViewerService", function () {
         kind: "untracked",
       });
     });
+
+    test("preserves unusual and renamed paths for reading and staging", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "old name.txt", "renamed content\n", "initial");
+      runGit(root, "mv", "old name.txt", "new name.txt");
+      fs.writeFileSync(path.join(root, "a b.txt"), "space content\n");
+      fs.writeFileSync(path.join(root, "café.txt"), "unicode content\n");
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const result = await svc.getStatus();
+      const expectedPaths = ["a b.txt", "café.txt", "new name.txt"];
+      assert.deepStrictEqual(
+        result.files.map((file) => file.path).sort(),
+        expectedPaths.sort()
+      );
+
+      for (const [filePath, expectedContent] of [
+        ["a b.txt", "space content\n"],
+        ["café.txt", "unicode content\n"],
+        ["new name.txt", "renamed content\n"],
+      ]) {
+        const file = await svc.readFile(filePath);
+        assert.strictEqual(file.content, expectedContent);
+        await svc.stageFile(filePath);
+      }
+
+      assert.deepStrictEqual(
+        runGit(root, "diff", "--cached", "--name-only")
+          .split("\n")
+          .sort(),
+        ["a b.txt", "café.txt", "new name.txt", "old name.txt"].sort()
+      );
+    });
   });
 
   // ── diff payloads ─────────────────────────────────────────────────────────
