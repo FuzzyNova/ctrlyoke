@@ -184,6 +184,9 @@ import {
   type PromptCompleteData,
 } from "./OutputCaptureBuffer";
 import { WorkflowStateMachine } from "./WorkflowStateMachine";
+import type { ExternalRunWatchInstance } from "./orchestration/ExternalRunWatchCoordinator";
+import type { RunLifecycleInstancePort } from "./orchestration/RunLifecycleService";
+import type { RunViewPublisherInstance } from "./orchestration/RunViewPublisher";
 import {
   buildTerminalEndedMessage,
   getPtyProcessManager,
@@ -230,7 +233,12 @@ interface ActiveTargetResources {
   ptySessionId?: string;
 }
 
-export class WorkflowInstance {
+export class WorkflowInstance
+  implements
+    RunLifecycleInstancePort,
+    RunViewPublisherInstance,
+    ExternalRunWatchInstance
+{
   private readonly lineageRepository = new WorkflowLineageRepository();
   /** Unique identifier — stable for this instance's lifetime */
   readonly id: string;
@@ -701,16 +709,6 @@ export class WorkflowInstance {
     );
   }
 
-  /** Exposes the injected feedback port to the future caller migrations. */
-  getUserFeedbackSink(): UserFeedbackSink | undefined {
-    return this.userFeedbackSink;
-  }
-
-  /** Resolved worktree selection for the current execution attempt. */
-  getWorktreeResolution(): WorkspaceWorktreeResolution {
-    return this.worktreeResolution;
-  }
-
   private async analyzeWorkflowCompatibility(
     workflow: PromptFile
   ): Promise<CompatibilityDiagnostic[]> {
@@ -979,51 +977,9 @@ export class WorkflowInstance {
   }
 
   /**
-   * Send a full SESSION_RESTORED state sync to the dashboard.
-   * Called by WorkflowOrchestrator when this workflow becomes the active view,
-   * and internally when flushing the event buffer.
-   */
-  sendFullStateToDashboard(): void {
-    if (!this.dashboardSink) {
-      return;
-    }
-    const state = this.promptQueue.getState();
-    const executionState = this.getAuthoritativeExecutionState();
-    const fileName = this.currentPromptFile
-      ? path.basename(this.currentPromptFile.filePath)
-      : state.workflowName || DEFAULT_WORKFLOW_NAME;
-    Log.trace(
-      `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: status=${executionState}, currentIndex=${state.currentIndex}, prompts=${state.steps.length}, bufferSteps=${this.outputCaptureBuffer.stepBufferSize}, finalBufferLoops=${this.outputCaptureBuffer.finalStepBufferSize}`
-    );
-    this.dashboardSink.updateSessionRestored(
-      fileName,
-      state.steps,
-      state.results,
-      executionState,
-      state.currentIndex,
-      state.workflowName || undefined,
-      this.promptQueue.getWorkflowFile().finalStep ?? null,
-      this.promptQueue.getFinalStepRuntime(),
-      undefined,
-      this.getWorkflowPropertiesForDashboard(),
-      state.parallelGroups,
-      this.getActiveStepIndices(),
-      state.definitionRevision,
-      this.promptFileLoader.getLastSchemaWarnings()
-    );
-    this.outputCaptureBuffer.replayTo(
-      this.dashboardSink,
-      { status: executionState, currentIndex: state.currentIndex },
-      this.promptQueue.getFinalStepRuntime(),
-      `[inst:${this.id.slice(0, 8)}]`,
-      this.getActiveTargetKeys()
-    );
-  }
-
-  /**
    * Replay the full current state of this workflow to an explicit sink.
-   * Unlike sendFullStateToDashboard(), this bypasses the broadcast hub so
-   * only the provided sink receives the messages — used for per-client
+   * This bypasses the broadcast hub so only the provided sink receives the
+   * messages — used for per-client
    * workflow switches in the hosted server.
    *
    * `asReplacement` marks a replay that *replaces* the client's displayed
@@ -1352,14 +1308,6 @@ export class WorkflowInstance {
   }
 
   /**
-   * Set the current prompt file reference (for WorkflowOrchestrator draft prompt setup).
-   */
-  setCurrentPromptFile(filePath: string, promptFile: PromptFile): void {
-    this.currentPromptFile = { filePath, promptFile };
-    this.sourceDefinitionPath = undefined;
-  }
-
-  /**
    * Keep the in-memory prompt file aligned with the queue after dashboard/appends.
    * This avoids relying on the working-file watcher for local writes, which is
    * intentionally muted in idle/completed states to preserve the dashboard view.
@@ -1384,13 +1332,6 @@ export class WorkflowInstance {
         })),
       },
     };
-  }
-
-  /**
-   * Set up a file watcher for the given file path (for WorkflowOrchestrator draft prompt setup).
-   */
-  initializeFileWatcher(filePath: string): void {
-    this.setupPromptFileWatcher(filePath);
   }
 
   async readWorkingFile(workingFilePath: string): Promise<WorkingFile> {
@@ -2518,31 +2459,6 @@ export class WorkflowInstance {
   }
 
   /**
-   * Clear current workflow state.
-   */
-  clearWorkflow(): void {
-    const executionState = this.getAuthoritativeExecutionState();
-    if (
-      executionState === EXECUTION_STATES.RUNNING ||
-      executionState === EXECUTION_STATES.PAUSING ||
-      executionState === EXECUTION_STATES.PAUSED
-    ) {
-      Log.warn(
-        `[WorkflowInstance] clearWorkflow called on active instance inst:${this.id.slice(0, 8)} (${executionState}) — ignoring`
-      );
-      return;
-    }
-
-    this.activeHistoryFilePath = "";
-    this.currentPromptFile = undefined;
-    this.promptQueue.clearQueue();
-    this.lastKnownStepCount = 0;
-    this.pendingRunAfterCancel = null;
-    this.propagateWorkflowNameToIntegrations();
-    Log.debug("[WorkflowInstance] Workflow state cleared");
-  }
-
-  /**
    * Clear only the stale working file path without wiping prompts or currentPromptFile.
    * Used when the working file is deleted externally (removed from history) so that
    * ensureEphemeralWorkingFile() will create a fresh one on the next property write or run.
@@ -3625,30 +3541,6 @@ export class WorkflowInstance {
       workflow,
       modeOverride,
       restartFromBeginning
-    );
-  }
-
-  /**
-   * Build the WorkflowExecutionContext passed to WorkflowExecutor.execute().
-   * Captures all per-run closure state (integration reference, buffer callbacks,
-   * lazy dashboard getter) so startWorkflowExecution stays focused on
-   * lock/lifecycle/cleanup concerns.
-   */
-  public buildWorkflowExecutionContext(
-    activeIntegration: HarnessIntegration,
-    historyFilePath: string,
-    workingFilePath: string | undefined,
-    targetRunIndices?: Map<string, number>,
-    targetKeyedExecution: boolean = false
-  ): WorkflowExecutionContext {
-    return new WorkflowStartupPipeline(
-      this.createWorkflowStartupPipelinePort()
-    ).buildWorkflowExecutionContext(
-      activeIntegration,
-      historyFilePath,
-      workingFilePath,
-      targetRunIndices,
-      targetKeyedExecution
     );
   }
 

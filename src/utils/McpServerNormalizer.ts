@@ -32,21 +32,6 @@ export interface McpServerNormalizationResult {
  * included, while every other managed server needs its full config.
  */
 export class McpServerNormalizer {
-  static async applyFromRegistry(
-    properties: ResolvedProperties,
-    workspaceRoot?: string,
-    effectivePromptText = ""
-  ): Promise<ResolvedProperties> {
-    const registry = new McpRegistryFileManager(workspaceRoot);
-    return (
-      await this.applyWithDiagnostics(
-        properties,
-        await registry.readAll(),
-        effectivePromptText
-      )
-    ).properties;
-  }
-
   static async applyFromRegistryWithDiagnostics(
     properties: ResolvedProperties,
     workspaceRoot: string | undefined,

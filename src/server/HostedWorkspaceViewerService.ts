@@ -318,6 +318,56 @@ function normalizeScmPath(p: string): string {
   return p.replace(/\\/g, "/").replace(/\/+$/, "");
 }
 
+/** Decode Git's C-quoted path form, including UTF-8 bytes written as octal. */
+function decodeGitPath(p: string): string {
+  if (p.length < 2 || p[0] !== '"' || p[p.length - 1] !== '"') {
+    return p;
+  }
+
+  const bytes: number[] = [];
+  for (let index = 1; index < p.length - 1; index++) {
+    const character = p[index] ?? "";
+    if (character !== "\\") {
+      bytes.push(...Buffer.from(character, "utf8"));
+      continue;
+    }
+
+    const escaped = p[++index] ?? "";
+    const simpleEscapes: Record<string, number> = {
+      a: 0x07,
+      b: 0x08,
+      t: 0x09,
+      n: 0x0a,
+      v: 0x0b,
+      f: 0x0c,
+      r: 0x0d,
+      "\\": 0x5c,
+      '"': 0x22,
+    };
+    if (Object.prototype.hasOwnProperty.call(simpleEscapes, escaped)) {
+      bytes.push(simpleEscapes[escaped] ?? 0);
+      continue;
+    }
+
+    if (/[0-7]/.test(escaped)) {
+      let octal = escaped;
+      for (
+        let digitCount = 1;
+        digitCount < 3 && /[0-7]/.test(p[index + 1] ?? "");
+        digitCount++
+      ) {
+        octal += p[++index] ?? "";
+      }
+      bytes.push(Number.parseInt(octal, 8));
+      continue;
+    }
+
+    bytes.push(...Buffer.from(escaped, "utf8"));
+  }
+
+  return Buffer.from(bytes).toString("utf8");
+}
+
 /**
  * Classifies full `git log` decoration ref names (from `%D`) into typed labels
  * used by the commit-history git-graph pills.
@@ -1537,7 +1587,15 @@ export class HostedWorkspaceViewerService {
     const [statusResult, syncCountsResult] = await Promise.allSettled([
       execFileAsync(
         "git",
-        ["-C", repoRoot, "status", "--porcelain=v1", "-z"],
+        [
+          "-c",
+          "core.quotepath=false",
+          "-C",
+          repoRoot,
+          "status",
+          "--porcelain=v1",
+          "-z",
+        ],
         { timeout: GIT_TIMEOUT_MS }
       ),
       this.getSyncCounts(repoRoot),
@@ -1620,7 +1678,8 @@ export class HostedWorkspaceViewerService {
     const trustedRoots = this.trustedRoots;
     const files: WorkspaceScmFile[] = [];
 
-    const records = output.split("\0");
+    const nulDelimited = output.includes("\0");
+    const records = nulDelimited ? output.split("\0") : output.split(/\r?\n/);
     for (let index = 0; index < records.length; index++) {
       const record = records[index];
       if (!record || record.length < 4) {
@@ -1628,15 +1687,25 @@ export class HostedWorkspaceViewerService {
       }
       const x = record[0] ?? " ";
       const y = record[1] ?? " ";
-      const filePath = record.slice(3);
+      let filePath = record.slice(3);
 
       // In -z mode rename/copy records list the new path first and the
       // original path in the following NUL-terminated field.
+      let renamedFrom: string | undefined;
       if (x === "R" || y === "R" || x === "C" || y === "C") {
-        index++;
+        if (nulDelimited) {
+          renamedFrom = records[index + 1];
+          index++;
+        } else {
+          const separatorIndex = filePath.indexOf(" -> ");
+          if (separatorIndex >= 0) {
+            renamedFrom = filePath.slice(0, separatorIndex);
+            filePath = filePath.slice(separatorIndex + 4);
+          }
+        }
       }
 
-      const normalized = normalizeScmPath(filePath);
+      const normalized = normalizeScmPath(decodeGitPath(filePath));
       if (!normalized) {
         continue;
       }
@@ -1668,6 +1737,21 @@ export class HostedWorkspaceViewerService {
         unstagedStatus,
         kind,
       });
+
+      if (renamedFrom) {
+        const oldPath = normalizeScmPath(decodeGitPath(renamedFrom));
+        if (oldPath) {
+          const oldAbsPath = path.resolve(repoRoot, oldPath);
+          if (isPathWithinAnyDirectory(oldAbsPath, trustedRoots)) {
+            files.push({
+              path: this.relativePath(oldAbsPath),
+              stagedStatus,
+              unstagedStatus,
+              kind: SCM_FILE_KINDS.DELETED,
+            });
+          }
+        }
+      }
     }
 
     return files;
@@ -2935,13 +3019,6 @@ export class HostedWorkspaceViewerService {
 
   dispose(): void {
     this.listingSnapshotCache.dispose();
-    this.fileHistorySnapshots.clear();
-    this.commitLogSnapshots.clear();
-    this.gitRefDiffSnapshots.clear();
-  }
-
-  clear(): void {
-    this.listingSnapshotCache.clear();
     this.fileHistorySnapshots.clear();
     this.commitLogSnapshots.clear();
     this.gitRefDiffSnapshots.clear();

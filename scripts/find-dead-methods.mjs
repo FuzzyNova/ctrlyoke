@@ -12,10 +12,17 @@
  * This script walks every class/method declaration reachable from BOTH the
  * root tsconfig.json (extension host, core engine, CLI/MCP binaries, harness
  * code, tests) and src/ui/webview-react/tsconfig.json (the React dashboard),
- * combined into a single TypeScript program, and uses the language service's
- * findReferences (the same engine behind VS Code "Find All References") to
- * count non-declaration usages. Anything at zero is reported as a dead-method
- * candidate.
+ * combined into a single TypeScript program. Repository scripts are also
+ * checked as reference sources: TypeScript references handle statically typed
+ * calls, and a narrow ClassName.method() / .method() text check catches calls
+ * hidden behind dynamic CommonJS requires. Production methods can be called
+ * from docs/build/maintenance scripts outside both tsconfigs. The language
+ * service's findReferences (the same engine behind VS Code "Find All
+ * References") counts non-declaration usages. It can miss calls through
+ * structural interfaces, Pick/derived types, or factory return types, so the
+ * checker also matches production property calls against their receiver types
+ * and the declaring class type. Anything at zero after both checks is
+ * reported as a dead-method candidate.
  *
  * Why both projects have to be combined into one program: the webview
  * imports directly from extension-side directories via path aliases
@@ -39,7 +46,9 @@
  *    resolves calls through an interface/base-class-typed variable (or a
  *    framework's own runtime dispatch, e.g. React calling `render()` /
  *    `componentDidCatch()` on a class extending `Component`) to that type's
- *    symbol, not the subclass's override symbol, and undercounts them.
+ *    symbol, not the subclass's override symbol. Statically typed property
+ *    calls are covered by receiver-type matching below; runtime-only dispatch
+ *    still uses the fixed ignored-name list.
  *  - Skips a small fixed list of duck-typed lifecycle/magic method names
  *    (dispose, toString, toJSON, React lifecycle hooks, etc.) that get
  *    called reflectively by frameworks rather than by direct reference.
@@ -101,6 +110,30 @@ const IGNORED_METHOD_NAMES = new Set([
 
 const KEEP_TAG = "@keep";
 
+function readRepositoryScriptSources() {
+  return ts.sys
+    .readDirectory(path.join(ROOT, "scripts"), [".mjs", ".js", ".ts"])
+    .map((fileName) => ts.sys.readFile(fileName) ?? "");
+}
+
+function hasRepositoryScriptReference(candidate, scriptSources) {
+  const escapedClassName = candidate.className.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&"
+  );
+  const escapedMethodName = candidate.methodName.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&"
+  );
+  const classQualifiedCall = new RegExp(
+    `\\b${escapedClassName}\\s*\\.\\s*${escapedMethodName}\\s*\\(`
+  );
+  const methodCall = new RegExp(`\\.\\s*${escapedMethodName}\\s*\\(`);
+  return scriptSources.some(
+    (source) => classQualifiedCall.test(source) || methodCall.test(source)
+  );
+}
+
 function parseTsconfig(configPath, basePath) {
   const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
   if (configFile.error) {
@@ -116,6 +149,13 @@ function loadCombinedProjectConfig() {
   const webview = parseTsconfig(WEBVIEW_TSCONFIG_PATH, WEBVIEW_ROOT);
 
   const fileNames = [...new Set([...root.fileNames, ...webview.fileNames])];
+  const scriptFileNames = ts.sys.readDirectory(
+    path.join(ROOT, "scripts"),
+    [".mjs", ".js", ".ts"]
+  );
+  fileNames.push(
+    ...scriptFileNames.filter((fileName) => !fileNames.includes(fileName))
+  );
 
   // Base the merged options on the webview config (it carries the `paths`
   // aliases and their base path) and widen `lib`/`target` to a superset that
@@ -128,6 +168,7 @@ function loadCombinedProjectConfig() {
     target: ts.ScriptTarget.ES2022,
     lib: ["lib.es2022.d.ts", "lib.dom.d.ts", "lib.dom.iterable.d.ts"],
     moduleResolution: ts.ModuleResolutionKind.Bundler,
+    allowJs: true,
     noEmit: true,
     skipLibCheck: true,
   };
@@ -196,9 +237,24 @@ function collectMethodCandidates(sourceFile, checker) {
       if (hasKeepTag(member, sourceFile)) continue;
       if (heritageDeclaresMemberName(classNode, methodName, checker)) continue;
 
+      const classSymbol = classNode.name
+        ? checker.getSymbolAtLocation(classNode.name)
+        : checker.getTypeAtLocation(classNode).symbol;
+
       candidates.push({
         className,
         methodName,
+        ownerType: classSymbol
+          ? checker.getDeclaredTypeOfSymbol(classSymbol)
+          : undefined,
+        ownerStaticType: classSymbol
+          ? checker.getTypeOfSymbolAtLocation(classSymbol, classNode)
+          : undefined,
+        isStatic:
+          isMethod &&
+          member.modifiers?.some(
+            (modifier) => modifier.kind === ts.SyntaxKind.StaticKeyword
+          ) === true,
         fileName: sourceFile.fileName,
         pos: member.name.getStart(sourceFile),
         line:
@@ -218,6 +274,45 @@ function collectMethodCandidates(sourceFile, checker) {
 
   visit(sourceFile);
   return candidates;
+}
+
+/**
+ * findReferences is symbol-based and can return only the interface member for
+ * `value.method()` even when `value` came from a concrete class factory. Match
+ * those calls by checking whether the declaring class instance (or static
+ * side) is assignable to the call receiver type. This also covers Pick and
+ * other derived receiver types without hardcoding particular interfaces.
+ */
+function collectTypedPropertyCalls(sourceFiles, checker) {
+  const callsByName = new Map();
+  for (const sourceFile of sourceFiles) {
+    if (isTestFile(sourceFile.fileName)) continue;
+    function visit(node) {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isPropertyAccessExpression(node.expression)
+      ) {
+        const access = node.expression;
+        const receiverType = checker.getTypeAtLocation(access.expression);
+        const calls = callsByName.get(access.name.text) ?? [];
+        calls.push(receiverType);
+        callsByName.set(access.name.text, calls);
+      }
+      ts.forEachChild(node, visit);
+    }
+    visit(sourceFile);
+  }
+  return callsByName;
+}
+
+function hasTypedProductionCall(candidate, callsByName, checker) {
+  const ownerType = candidate.isStatic
+    ? candidate.ownerStaticType
+    : candidate.ownerType;
+  if (!ownerType) return false;
+  return (callsByName.get(candidate.methodName) ?? []).some((receiverType) =>
+    checker.isTypeAssignableTo(ownerType, receiverType)
+  );
 }
 
 function isSameDeclarationEntry(entry, candidate) {
@@ -247,6 +342,7 @@ function isTestFile(fileName) {
 function main() {
   const jsonOutput = process.argv.includes("--json");
   const projectConfig = loadCombinedProjectConfig();
+  const scriptSources = readRepositoryScriptSources();
   const service = createLanguageService(projectConfig);
   const program = service.getProgram();
   if (!program) throw new Error("Failed to build TypeScript program");
@@ -261,6 +357,7 @@ function main() {
           .resolve(sf.fileName)
           .startsWith(path.resolve(ROOT, "src") + path.sep)
     );
+  const typedPropertyCalls = collectTypedPropertyCalls(sourceFiles, checker);
 
   let candidateCount = 0;
   const deadMethods = [];
@@ -280,6 +377,14 @@ function main() {
           externalRefCount++;
           if (!isTestFile(entry.fileName)) productionRefCount++;
         }
+      }
+      if (hasTypedProductionCall(candidate, typedPropertyCalls, checker)) {
+        externalRefCount++;
+        productionRefCount++;
+      }
+      if (hasRepositoryScriptReference(candidate, scriptSources)) {
+        externalRefCount++;
+        productionRefCount++;
       }
 
       const record = {
@@ -311,7 +416,8 @@ function main() {
   }
 
   console.log(
-    `Scanned ${sourceFiles.length} files (extension + webview, combined program), ` +
+    `Scanned ${sourceFiles.length} candidate files (extension + webview, combined program; ` +
+      `repository scripts are reference sources), ` +
       `${candidateCount} class-method candidates.\n`
   );
 

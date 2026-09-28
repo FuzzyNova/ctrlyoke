@@ -319,11 +319,6 @@ export class CliIntegration extends HarnessIntegration {
     return this.executionWorkspace.executionRoot;
   }
 
-  /** Immutable execution-workspace contract used to construct this integration. */
-  public getExecutionWorkspace(): ExecutionWorkspace {
-    return this.executionWorkspace;
-  }
-
   override getExecutionWorkspaceIdentity(): string {
     return getExecutionWorkspaceIdentity(this.executionWorkspace);
   }

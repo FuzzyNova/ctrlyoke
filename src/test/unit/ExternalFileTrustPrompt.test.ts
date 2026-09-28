@@ -16,7 +16,10 @@ import {
   EXTERNAL_FILE_TRUST_SCOPES,
   TRUST_DECISIONS,
 } from "../../types/DashboardConstants";
-import type { ExternalRootTrustDecision } from "../../config/ExternalRootsTrustStore";
+import type {
+  ExternalRootTrustDecision,
+  ExternalRootsTrustStore,
+} from "../../config/ExternalRootsTrustStore";
 
 class FakeInteractionPort implements UserInteractionPort {
   constructor(private readonly choice: string | undefined) {}
@@ -37,7 +40,9 @@ class FakeInteractionPort implements UserInteractionPort {
   lastRequest: ChoiceRequest | undefined;
 }
 
-class RecordingTrustStore {
+class RecordingTrustStore
+  implements Pick<ExternalRootsTrustStore, "setDecisions">
+{
   readonly decisions: Array<{
     scopeIdentity: string;
     roots: readonly string[];

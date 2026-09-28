@@ -36,20 +36,6 @@ suite("SecretGrantsTrustStore", () => {
     assert.strictEqual(store.getDecision(workspaceA, "DENIED_TOKEN"), "deny");
   });
 
-  test("getApprovedGrants only returns allowed names", async () => {
-    await store.setDecisions(workspaceA, ["ALLOWED_TOKEN"], "allow");
-    await store.setDecisions(workspaceA, ["DENIED_TOKEN"], "deny");
-
-    assert.deepStrictEqual(
-      store.getApprovedGrants(workspaceA, [
-        "ALLOWED_TOKEN",
-        "DENIED_TOKEN",
-        "PENDING_TOKEN",
-      ]),
-      ["ALLOWED_TOKEN"]
-    );
-  });
-
   test("getPendingGrants excludes both allowed and denied names", async () => {
     await store.setDecisions(workspaceA, ["ALLOWED_TOKEN"], "allow");
     await store.setDecisions(workspaceA, ["DENIED_TOKEN"], "deny");

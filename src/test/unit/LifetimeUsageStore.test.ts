@@ -157,35 +157,6 @@ suite("LifetimeUsageStore", () => {
     assert.strictEqual(data.totals.attemptCount, 201);
   });
 
-  test("full rebuild reproduces incremental totals", async () => {
-    const firstRunRef = formatRunRef(baseTime);
-    const secondRunRef = formatRunRef(baseTime + 1000);
-    await writeManifest(firstRunRef, 7);
-    await writeManifest(secondRunRef, 9, baseTime + 1000);
-    await store.upsertRunContribution(contribution(firstRunRef, 7), baseTime);
-    await store.upsertRunContribution(
-      contribution(secondRunRef, 9, baseTime + 1000),
-      baseTime + 1000
-    );
-
-    const incremental = await store.read(baseTime + 1000);
-    const rebuilt = await store.fullRebuild(baseTime + 2000);
-    assert.deepStrictEqual(
-      {
-        runCount: rebuilt.runCount,
-        total: rebuilt.totals.total,
-        attempts: rebuilt.totals.attemptCount,
-        outcomes: rebuilt.outcomes,
-      },
-      {
-        runCount: incremental.runCount,
-        total: incremental.totals.total,
-        attempts: incremental.totals.attemptCount,
-        outcomes: incremental.outcomes,
-      }
-    );
-  });
-
   test("quarantines corrupt data and returns an empty store", async () => {
     await fs.mkdir(path.dirname(store.getPath()), { recursive: true });
     await fs.writeFile(store.getPath(), "not-json", "utf8");
@@ -197,7 +168,6 @@ suite("LifetimeUsageStore", () => {
       store.getLastErrorCode(),
       LIFETIME_USAGE_ERROR_CODES.MALFORMED_DATA
     );
-    assert.strictEqual(store.isBackfillRequired(), true);
     const files = await fs.readdir(path.dirname(store.getPath()));
     assert.ok(
       files.some((file) => file.startsWith("lifetime-stats.json.corrupt-"))

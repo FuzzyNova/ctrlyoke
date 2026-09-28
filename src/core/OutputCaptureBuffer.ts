@@ -416,7 +416,7 @@ export class OutputCaptureBuffer {
 
   /**
    * Replay all buffered output state to the given dashboard sink.
-   * Called by WorkflowInstance.sendFullStateToDashboard() after the initial
+   * Called by WorkflowInstance.replayFullStateTo() after the initial
    * SESSION_RESTORED message to restore in-progress and completed output.
    */
   replayTo(
@@ -431,7 +431,7 @@ export class OutputCaptureBuffer {
     if (this.completedStepOutputs.size > 0) {
       for (const [stepIndex, entry] of this.completedStepOutputs) {
         Log.trace(
-          `${instanceTag} sendFullStateToDashboard: replaying completed step ${stepIndex} (${entry.outputs.length} attempt(s))`
+          `${instanceTag} replayFullStateTo: replaying completed step ${stepIndex} (${entry.outputs.length} attempt(s))`
         );
         // Send retry state BEFORE outputs so the webview store's addCliOutput
         // guard accepts attemptIndex > 0.
@@ -452,7 +452,7 @@ export class OutputCaptureBuffer {
     if (this.finalStepCompletedOutputs.size > 0) {
       for (const [loopIndex, entry] of this.finalStepCompletedOutputs) {
         Log.trace(
-          `${instanceTag} sendFullStateToDashboard: replaying finalStep loop ${loopIndex} (${entry.outputs.length} attempt(s))`
+          `${instanceTag} replayFullStateTo: replaying finalStep loop ${loopIndex} (${entry.outputs.length} attempt(s))`
         );
         for (const output of entry.outputs) {
           dashboardSink.updateFinalStepOutput(loopIndex, output);
@@ -491,7 +491,7 @@ export class OutputCaptureBuffer {
           continue;
         }
         Log.trace(
-          `${instanceTag} sendFullStateToDashboard: replaying step ${stepIndex} buffer (${buffer.accumulatedText.length} chars, attemptIndex=${buffer.attemptIndex})`
+          `${instanceTag} replayFullStateTo: replaying step ${stepIndex} buffer (${buffer.accumulatedText.length} chars, attemptIndex=${buffer.attemptIndex})`
         );
 
         // Belt-and-suspenders: ensure retryState was already sent above so
@@ -509,7 +509,7 @@ export class OutputCaptureBuffer {
             const maxRetries =
               promptStepTyped?.endCondition?.maxRetries ?? buffer.attemptIndex;
             Log.trace(
-              `${instanceTag} sendFullStateToDashboard: sending fallback retryState for step ${stepIndex} (attempt ${buffer.attemptIndex}/${maxRetries})`
+              `${instanceTag} replayFullStateTo: sending fallback retryState for step ${stepIndex} (attempt ${buffer.attemptIndex}/${maxRetries})`
             );
             dashboardSink.updateRetryAttempt(
               stepIndex,
@@ -518,7 +518,7 @@ export class OutputCaptureBuffer {
             );
           } else {
             Log.trace(
-              `${instanceTag} sendFullStateToDashboard: retryState already sent for step ${stepIndex} (attempt ${completedEntry.retryState.currentRetry}/${completedEntry.retryState.maxRetries})`
+              `${instanceTag} replayFullStateTo: retryState already sent for step ${stepIndex} (attempt ${completedEntry.retryState.currentRetry}/${completedEntry.retryState.maxRetries})`
             );
           }
         }
@@ -580,7 +580,7 @@ export class OutputCaptureBuffer {
       const buffer = this.finalStepOutputBuffer.get(loopIndex);
       if (buffer) {
         Log.trace(
-          `${instanceTag} sendFullStateToDashboard: replaying finalStep loop ${loopIndex} buffer (${buffer.accumulatedText.length} chars, events=${buffer.accumulatedEvents.length}, attemptIndex=${buffer.attemptIndex})`
+          `${instanceTag} replayFullStateTo: replaying finalStep loop ${loopIndex} buffer (${buffer.accumulatedText.length} chars, events=${buffer.accumulatedEvents.length}, attemptIndex=${buffer.attemptIndex})`
         );
         dashboardSink.updateFinalStepOutput(loopIndex, {
           prompt: buffer.prompt,

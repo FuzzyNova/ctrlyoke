@@ -293,18 +293,14 @@ suite("HarnessCapabilityRegistry", () => {
 
   test("does not produce states for unmodeled domains", async () => {
     const registry = makeRegistry();
-    assert.strictEqual(
-      await registry.getEffectiveCapabilityState(
-        HARNESS_IDS.COPILOT_CLI,
-        CAPABILITY_DOMAINS.HOOKS,
-        "sessionStart"
-      ),
-      undefined
-    );
     const snapshot = await registry.getSnapshot();
     assert.deepStrictEqual(snapshot.enabledDomains, [
       CAPABILITY_DOMAINS.PERMISSIONS,
     ]);
+    assert.strictEqual(
+      snapshot.harnesses[HARNESS_IDS.COPILOT_CLI].effective?.hooks,
+      undefined
+    );
   });
 
   test("supports an arbitrary enabled domain set and typed leaf dispatch", async () => {
@@ -315,21 +311,11 @@ suite("HarnessCapabilityRegistry", () => {
       Object.values(CAPABILITY_DOMAINS)
     );
 
-    const image = await registry.getEffectiveCapabilityState(
-      HARNESS_IDS.COPILOT_CLI,
-      CAPABILITY_DOMAINS.PROMPT_INPUTS,
-      "images"
-    );
-    const hook = await registry.getEffectiveCapabilityState(
-      HARNESS_IDS.COPILOT_CLI,
-      CAPABILITY_DOMAINS.HOOKS,
-      "stop"
-    );
-    const mcp = await registry.getEffectiveCapabilityState(
-      HARNESS_IDS.COPILOT_CLI,
-      CAPABILITY_DOMAINS.MCP,
-      "perServerToolFiltering"
-    );
+    const snapshot = await registry.getSnapshot();
+    const effective = snapshot.harnesses[HARNESS_IDS.COPILOT_CLI].effective;
+    const image = effective?.promptInputs?.images;
+    const hook = effective?.hooks?.stop;
+    const mcp = effective?.mcp?.perServerToolFiltering;
 
     assert.strictEqual(image?.verification, "verified");
     assert.strictEqual(hook?.fidelity, "partial");
@@ -462,13 +448,6 @@ suite("HarnessCapabilityRegistry", () => {
         ),
       /Invalid capability declaration/
     );
-    assert.throws(
-      () =>
-        HarnessCapabilityRegistry.deserializeSnapshot(
-          JSON.stringify({ schemaVersion: 1, enabledDomains: ["unknown"] })
-        ),
-      /Invalid harness capability snapshot shape|Unknown capability domain/
-    );
   });
 
   test("round-trips the schema-versioned snapshot with independent dimensions", async () => {
@@ -478,8 +457,7 @@ suite("HarnessCapabilityRegistry", () => {
       allHarnessDomainFacts(),
       Object.values(CAPABILITY_DOMAINS)
     );
-    const serialized = await registry.serializeSnapshot();
-    const snapshot = HarnessCapabilityRegistry.deserializeSnapshot(serialized);
+    const snapshot = await registry.getSnapshot();
     const qwen = snapshot.harnesses[HARNESS_IDS.QWEN_CLI];
 
     assert.strictEqual(snapshot.schemaVersion, 1);

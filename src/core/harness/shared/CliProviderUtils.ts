@@ -19,7 +19,6 @@ import { parseArgString } from "../../../utils/CliArgParser";
 import { resolveCliCommand } from "./CliLauncherResolver";
 import { CLI_VERSION_CHECK_TIMEOUT_MS } from "./interfaces/ICliProvider";
 import {
-  applyPreparedMutations,
   type CliProviderPreparation,
 } from "./interfaces/PreparedMutation";
 import {
@@ -128,7 +127,6 @@ export interface SettingsJsonMcpEntryOptions {
  *
  * **Single source of truth for:**
  * - Workspace directory resolution (`getWorkspaceDirs`)
- * - MCP configuration injection (`buildMcpConfigBlock`)
  * - Session resume decision (`shouldResumeSession`)
  * - Process environment construction (`buildProcessEnv`)
  * - Shell-aware CLI version checks (`checkCliAvailability`, `getCliVersion`)
@@ -407,75 +405,6 @@ export class CliProviderUtils {
       ),
       declaredRoots: workflowContext.workflowFile.trustedExternalRoots,
     };
-  }
-
-  /**
-   * Build MCP configuration block for dynamic queue extension
-   *
-   * Common logic for checking whether MCP config should be injected and
-   * calling the provider's getMcpConfigArgs. Each provider still defines
-   * its own getMcpConfigArgs (for format-specific config generation), but
-   * the decision logic and PromptIdentity check are shared here.
-   *
-   * @param workflowContext - Workflow context with resolved properties
-   * @param workspaceRoot - Workspace root directory
-   * @param extensionPath Extension installation directory
-   * @param getMcpConfigArgs - Provider-specific MCP config args generator
-   * @returns CLI arguments to add, or empty array if MCP not needed
-   */
-  static async buildMcpConfigBlock(
-    workflowContext:
-      | {
-          promptIndex: number;
-          allPrompts: unknown[];
-          filePath?: string;
-          resolvedProperties?: ResolvedProperties;
-          workingFilePath?: string;
-          stateRoot?: string;
-          secretEnvironment?: Readonly<Record<string, string>>;
-        }
-      | undefined,
-    workspaceRoot: string | undefined,
-    extensionPath: string,
-    getMcpConfigArgs: (
-      mcpServerPath: string | undefined,
-      workspaceRoot: string,
-      workingFilePath?: string,
-      additionalEnv?: Record<string, string>,
-      userServers?: McpServerConfig[],
-      stateRoot?: string,
-      secretEnvironment?: Readonly<Record<string, string>>
-    ) => Promise<string[] | null>
-  ): Promise<string[]> {
-    const preparation = await CliProviderUtils.planMcpConfigBlock(
-      workflowContext,
-      workspaceRoot,
-      extensionPath,
-      async (
-        mcpServerPath,
-        resolvedWorkspaceRoot,
-        workingFilePath,
-        additionalEnv,
-        userServers,
-        stateRoot,
-        secretEnvironment
-      ) => ({
-        cliArgs:
-          (await getMcpConfigArgs(
-            mcpServerPath,
-            resolvedWorkspaceRoot,
-            workingFilePath,
-            additionalEnv,
-            userServers,
-            stateRoot,
-            secretEnvironment
-          )) ?? [],
-        mutations: [],
-        diagnostics: [],
-      })
-    );
-    await applyPreparedMutations(preparation.mutations);
-    return preparation.cliArgs;
   }
 
   /**

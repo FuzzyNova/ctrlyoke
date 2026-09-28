@@ -8,7 +8,6 @@ import {
   DISCOVERY_SOURCES,
   HARNESS_IDS,
   MCP_SKILL_NAMES,
-  type HarnessId,
 } from "../../types/DashboardConstants";
 import { SkillDiscovery, type SkillInfo } from "../../utils/SkillDiscovery";
 import { SkillExpander } from "../../utils/SkillExpander";
@@ -301,49 +300,6 @@ suite("SkillDiscovery helpers", () => {
     return skillPath;
   }
 
-  test("identifies a skill native to one harness but not another", async () => {
-    const claudePath = await createSkill(
-      path.join(workspaceRoot, ".claude", "skills"),
-      "shared"
-    );
-    const discovered = skill("shared", claudePath);
-
-    assert.strictEqual(
-      SkillDiscovery.isSkillNativeToHarness(
-        discovered,
-        HARNESS_IDS.CLAUDE_CLI,
-        workspaceRoot
-      ),
-      true
-    );
-    assert.strictEqual(
-      SkillDiscovery.isSkillNativeToHarness(
-        discovered,
-        HARNESS_IDS.COPILOT_CLI,
-        workspaceRoot
-      ),
-      false
-    );
-    assert.strictEqual(
-      SkillDiscovery.findSkillForHarness(
-        [discovered],
-        "shared",
-        HARNESS_IDS.CLAUDE_CLI,
-        workspaceRoot
-      ),
-      discovered
-    );
-    assert.strictEqual(
-      SkillDiscovery.findSkillForHarness(
-        [discovered],
-        "shared",
-        HARNESS_IDS.COPILOT_CLI,
-        workspaceRoot
-      ),
-      undefined
-    );
-  });
-
   test("identifies a ctrlyoke-only skill", async () => {
     const ctrlyokePath = await createSkill(
       path.join(workspaceRoot, ".ctrlyoke", "skills"),
@@ -351,16 +307,6 @@ suite("SkillDiscovery helpers", () => {
     );
     const discovered = skill("portable", ctrlyokePath);
 
-    for (const harnessId of Object.values(HARNESS_IDS) as HarnessId[]) {
-      assert.strictEqual(
-        SkillDiscovery.isSkillNativeToHarness(
-          discovered,
-          harnessId,
-          workspaceRoot
-        ),
-        false
-      );
-    }
     assert.strictEqual(
       SkillDiscovery.resolveCtrlYokeSkillInvocation(
         [discovered],

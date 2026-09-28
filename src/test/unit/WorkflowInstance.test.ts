@@ -12,6 +12,7 @@ import {
 } from "../../core/HarnessIntegration";
 import { IntegrationFactory } from "../../core/IntegrationFactory";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
+import { WorkflowStartupPipeline } from "../../core/orchestration/WorkflowStartupPipeline";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
 import {
   ACTION_TYPES,
@@ -61,6 +62,30 @@ function createResolvedProperties(
 
 function integrationCacheKey(props: ResolvedProperties): string {
   return `${props.harness}::${spawnIdentityHash(props)}`;
+}
+
+async function loadPromptFileForTest(
+  instance: WorkflowInstance,
+  filePath: string,
+  promptFile: { steps?: unknown[] }
+): Promise<void> {
+  const loader = (instance as any).promptFileLoader;
+  const parser = (instance as any).promptFileParser;
+  const parsePromptFile = parser.parsePromptFile.bind(parser);
+  loader.loadPromptFile = async () => `${filePath}.working`;
+  parser.parsePromptFile = async (requestedPath: string) =>
+    requestedPath === filePath
+      ? promptFile
+      : parsePromptFile(requestedPath);
+  (instance as any).setupPromptFileWatcher = () => {};
+  const queue = instance.promptQueue;
+  const clearQueue = queue.clearQueue.bind(queue);
+  queue.clearQueue = () => {};
+  try {
+    assert.strictEqual(await instance.loadPromptFile(filePath), true);
+  } finally {
+    queue.clearQueue = clearQueue;
+  }
 }
 
 /** Test-only shim mirroring OutputHistoryManager.test.ts's initTestRun helper. */
@@ -334,11 +359,9 @@ suite("WorkflowInstance target resources", () => {
       process.cwd()
     );
     const initial = new MockHarnessIntegration(undefined, false);
-    const context = (instance as any).buildWorkflowExecutionContext(
-      initial,
-      "",
-      undefined
-    );
+    const context = new WorkflowStartupPipeline(
+      (instance as any).createWorkflowStartupPipelinePort()
+    ).buildWorkflowExecutionContext(initial, "", undefined);
     const firstProperties = createResolvedProperties({ model: "model-one" });
     const secondProperties = createResolvedProperties({ model: "model-two" });
 
@@ -427,11 +450,9 @@ suite("WorkflowInstance target resources", () => {
       process.cwd()
     );
     const initial = new MockHarnessIntegration(undefined, false);
-    const context = (instance as any).buildWorkflowExecutionContext(
-      initial,
-      "",
-      undefined
-    );
+    const context = new WorkflowStartupPipeline(
+      (instance as any).createWorkflowStartupPipelinePort()
+    ).buildWorkflowExecutionContext(initial, "", undefined);
     const resuming = createResolvedProperties();
     const fresh = createResolvedProperties({ resumeSession: false });
 
@@ -482,11 +503,9 @@ suite("WorkflowInstance target resources", () => {
       process.cwd()
     );
     const initial = new MockHarnessIntegration(undefined, false);
-    const context = (instance as any).buildWorkflowExecutionContext(
-      initial,
-      "",
-      undefined
-    );
+    const context = new WorkflowStartupPipeline(
+      (instance as any).createWorkflowStartupPipelinePort()
+    ).buildWorkflowExecutionContext(initial, "", undefined);
 
     try {
       const holder = context.getIntegrationForPrompt(
@@ -500,7 +519,7 @@ suite("WorkflowInstance target resources", () => {
       holder.holdAiSession("ai-session-1", "pty-1");
       taker.holdAiSession("ai-session-2", "pty-2");
 
-      await context.releaseConflictingAiSession("ai-session-1", taker);
+      await context.releaseConflictingAiSession!("ai-session-1", taker);
 
       assert.deepStrictEqual(holder.releasedAiSessions, ["ai-session-1"]);
       assert.deepStrictEqual(
@@ -517,7 +536,7 @@ suite("WorkflowInstance target resources", () => {
       ]);
 
       posted.length = 0;
-      await context.releaseConflictingAiSession("ai-session-unrelated", taker);
+      await context.releaseConflictingAiSession!("ai-session-unrelated", taker);
       assert.deepStrictEqual(
         posted,
         [],
@@ -784,7 +803,7 @@ suite("WorkflowInstance finalStep replay", () => {
       },
     ]);
 
-    instance.sendFullStateToDashboard();
+    instance.replayFullStateTo(dashboardSink);
 
     assert.strictEqual(sessionRestoredCalls.length, 1);
     assert.strictEqual(
@@ -958,7 +977,8 @@ suite("WorkflowInstance runtime transitions", () => {
     };
 
     instance.promptQueue.loadPrompts(promptFile);
-    instance.setCurrentPromptFile(
+    await loadPromptFileForTest(
+      instance,
       "/workspace/example.ctrlyoke.yaml",
       promptFile
     );
@@ -1233,7 +1253,9 @@ suite("WorkflowInstance runtime transitions", () => {
     assert.strictEqual(runtime.startExecution(), true);
     await instance.promptQueue.commitRuntimeTransition({ persist: false });
 
-    await instance.promptQueue.markCurrentAsSent();
+    await instance.promptQueue.markStepAsSent(
+      instance.promptQueue.getState().currentIndex
+    );
     runtime.beginAttempt({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 }, 0);
     instance.promptQueue.markInFlightPromptCancelled();
     assert.strictEqual(runtime.requestStop(), true);
@@ -1695,7 +1717,7 @@ suite("WorkflowInstance append-and-continue", () => {
       const baseWorkingFile =
         await instance.promptQueue.readWorkingFile(workingFilePath);
       instance.promptQueue.loadPrompts(baseWorkingFile, workingFilePath);
-      instance.setCurrentPromptFile(baseSourcePath, baseWorkingFile);
+      await loadPromptFileForTest(instance, baseSourcePath, baseWorkingFile);
 
       const appendPath = path.join(
         tempWorkspace,
@@ -2314,7 +2336,7 @@ suite("WorkflowInstance append-and-continue", () => {
     (instance.promptQueue as any).state.results[0].status =
       STEP_STATUS.COMPLETED;
 
-    instance.setCurrentPromptFile("ephemeral.prompt.md", {
+    await loadPromptFileForTest(instance, "ephemeral.prompt.md", {
       steps: [{ prompt: "first prompt" }],
     });
 
@@ -2381,7 +2403,7 @@ suite("WorkflowInstance append-and-continue", () => {
       STEP_STATUS.COMPLETED;
     (instance.promptQueue as any).state.results[1].status = STEP_STATUS.PENDING;
 
-    instance.setCurrentPromptFile("workflow.prompt.md", {
+    await loadPromptFileForTest(instance, "workflow.prompt.md", {
       steps: [{ prompt: "completed prompt" }, { prompt: "appended prompt" }],
     });
 
@@ -2449,7 +2471,7 @@ suite("WorkflowInstance append-and-continue", () => {
     );
 
     instance.promptQueue.loadPrompts({ steps: [{ prompt: "fresh prompt" }] });
-    instance.setCurrentPromptFile("workflow.prompt.md", {
+    await loadPromptFileForTest(instance, "workflow.prompt.md", {
       steps: [{ prompt: "fresh prompt" }],
     });
     (instance as any).prepareExecutionWorktree = async () => {
@@ -2513,7 +2535,7 @@ suite("WorkflowInstance append-and-continue", () => {
       { prompt: "third" },
     ];
     instance.promptQueue.loadPrompts({ steps });
-    instance.setCurrentPromptFile("workflow.prompt.md", { steps });
+    await loadPromptFileForTest(instance, "workflow.prompt.md", { steps });
     // Mid-run: step 0 done, step 1 in flight.
     (instance.promptQueue as any).state.currentIndex = 1;
     (instance.promptQueue as any).state.results[0].status =
@@ -2594,7 +2616,7 @@ suite("WorkflowInstance append-and-continue", () => {
     instance.promptQueue.loadPrompts({
       steps: [{ prompt: "an hour of work" }],
     });
-    instance.setCurrentPromptFile("workflow.ctrlyoke.json", {
+    await loadPromptFileForTest(instance, "workflow.ctrlyoke.json", {
       steps: [{ prompt: "an hour of work" }],
     });
     const workflowKey = "doomed-2026-07-30T14-00-00-000";
@@ -2856,7 +2878,7 @@ suite("WorkflowInstance append-and-continue", () => {
     instance.promptQueue.loadPrompts({
       steps: [{ prompt: "missing secret", secrets: [missingSecretName] }],
     });
-    instance.setCurrentPromptFile("workflow.ctrlyoke.json", {
+    await loadPromptFileForTest(instance, "workflow.ctrlyoke.json", {
       steps: [{ prompt: "missing secret", secrets: [missingSecretName] }],
     });
     (instance as any).activeHistoryFilePath = "history.json";
@@ -2935,7 +2957,7 @@ suite("WorkflowInstance append-and-continue", () => {
       process.cwd()
     );
     instance.promptQueue.loadPrompts({ steps: [{ prompt: "worktree" }] });
-    instance.setCurrentPromptFile("workflow.ctrlyoke.json", {
+    await loadPromptFileForTest(instance, "workflow.ctrlyoke.json", {
       steps: [{ prompt: "worktree" }],
     });
     (instance as any).activeHistoryFilePath = "history.json";
@@ -3020,7 +3042,9 @@ suite("WorkflowInstance append-and-continue", () => {
       () => {},
       process.cwd()
     );
-    const context = (instance as any).buildWorkflowExecutionContext(
+    const context = new WorkflowStartupPipeline(
+      (instance as any).createWorkflowStartupPipelinePort()
+    ).buildWorkflowExecutionContext(
       initialIntegration,
       "",
       undefined
@@ -3105,7 +3129,11 @@ suite("WorkflowInstance secret-grant approval callback", () => {
       steps: [{ prompt: "use the approved secret", secrets: [secretName] }],
     };
     instance.promptQueue.loadPrompts(workflow);
-    instance.setCurrentPromptFile("workflow.ctrlyoke.json", workflow);
+    await loadPromptFileForTest(
+      instance,
+      "workflow.ctrlyoke.json",
+      workflow as any
+    );
     (instance as any).ensureRunnerLock = async () => {};
     (instance as any).prepareExecutionWorktree = async () => {};
     (instance as any).computeTargetRunIndices = async () => new Map();

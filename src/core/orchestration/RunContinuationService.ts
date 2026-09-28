@@ -41,7 +41,6 @@ import { assertDefinitionRevision } from "./RevisionPrecondition";
 import {
   appendParallelGroupMembers,
   deleteParallelGroupStep,
-  insertParallelGroupSteps,
   insertParallelGroupTopology,
   normalizeParallelGroupTopology,
   reorderParallelGroupPendingSteps,
@@ -244,7 +243,7 @@ export class RunContinuationService {
         `Cannot ${action} while run is in state ${executionState}`
       );
     }
-    // Mirrors `WorkflowOrchestrator.validateExplicitContinuationTarget`: an
+    // Mirrors `RunLifecycleService.validateExplicitContinuationTarget`: an
     // orphaned run (no live lock naming it) can be adopted by a fresh execution
     // owner from its own persisted position, whether it was left RUNNING by a
     // dead process or PAUSED by one. Keep the two in step — this is the same
@@ -832,76 +831,6 @@ export class RunContinuationService {
     );
   }
 
-  /** Insert one step at an explicit array position. */
-  static async insertStepAtRun(
-    workspaceRoot: string,
-    workflowKey: WorkflowKey,
-    runRef: RunRef,
-    index: number,
-    step: WorkflowStep,
-    expectedDefinitionRevision: number,
-    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
-    allowInterruptedRun = false
-  ): Promise<RunContinuationMutationResult> {
-    return this.mutateRunDefinition(
-      workspaceRoot,
-      workflowKey,
-      runRef,
-      expectedDefinitionRevision,
-      (source) => {
-        const topology = normalizeParallelGroupTopology({
-          steps: source.steps ?? [],
-          parallelGroups: source.parallelGroups,
-        });
-        if (
-          !Number.isInteger(index) ||
-          index < 0 ||
-          index > topology.steps.length
-        ) {
-          throw new Error(`Invalid insert index: ${index}`);
-        }
-        assertEditableDuringExecution(source, topology.steps, index, "insert");
-        const placement = resolveParallelGroupInsertIndex(
-          topology,
-          index,
-          PARALLEL_GROUP_INSERT_POSITIONS.AFTER
-        );
-        const insertIndex = placement.insertedIndex;
-        const identifiedStep = ensureStepIds([
-          ...topology.steps,
-          stripStepRuntime([step])[0],
-        ]).at(-1)!;
-        const nextTopology = insertParallelGroupSteps(topology, index, [
-          stripViewOnlyWorkflowStepFields(identifiedStep),
-        ]);
-        assertStartedStepPositionsPreserved(
-          topology.steps,
-          nextTopology.steps,
-          "insert"
-        );
-        const currentIndex = source._runtime?.currentIndex ?? 0;
-        return {
-          workingFile: {
-            ...source,
-            steps: nextTopology.steps,
-            parallelGroups: nextTopology.parallelGroups,
-            _runtime: source._runtime
-              ? {
-                  ...source._runtime,
-                  currentIndex:
-                    insertIndex < currentIndex
-                      ? currentIndex + 1
-                      : currentIndex,
-                }
-              : source._runtime,
-          },
-          result: undefined,
-        };
-      },
-      { lineageRepository, allowInterruptedRun }
-    );
-  }
-
   /** Remove one explicitly addressed step. */
   static async removeStepAtRun(
     workspaceRoot: string,
@@ -950,29 +879,6 @@ export class RunContinuationService {
         };
       },
       { lineageRepository, allowInterruptedRun }
-    );
-  }
-
-  /** Reorder pending steps while preserving the execution prefix. */
-  static async reorderPendingStepsAtRun(
-    workspaceRoot: string,
-    workflowKey: WorkflowKey,
-    runRef: RunRef,
-    newPendingOrder: number[],
-    expectedDefinitionRevision: number,
-    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
-    pendingGroups?: PendingParallelGroupRange[],
-    allowInterruptedRun = false
-  ): Promise<RunContinuationMutationResult> {
-    return this.reorderStepsWithOrder(
-      workspaceRoot,
-      workflowKey,
-      runRef,
-      expectedDefinitionRevision,
-      () => newPendingOrder,
-      lineageRepository,
-      pendingGroups,
-      allowInterruptedRun
     );
   }
 

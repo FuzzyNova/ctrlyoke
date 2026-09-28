@@ -722,10 +722,13 @@ suite("ExecutionPreviewService", () => {
         { steps: [] },
         { defaults, hostCanProvidePty: false }
       ).properties;
-      const executionProperties = await McpServerNormalizer.applyFromRegistry(
-        rawProperties,
-        root
-      );
+      const executionProperties = (
+        await McpServerNormalizer.applyFromRegistryWithDiagnostics(
+          rawProperties,
+          root,
+          ""
+        )
+      ).properties;
       let executionServerIds: string[] = [];
       await CliProviderUtils.planMcpConfigBlock(
         {

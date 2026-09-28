@@ -50,6 +50,7 @@ import {
 import { readWorkflowLockOwnershipInspection } from "../../utils/WorkflowLockInspector";
 import { WorktreeManager } from "./WorktreeManager";
 import { stripLegacyWorkingFileLineageMetadata } from "../../utils/WorkingFileMetadata";
+import type { RunViewPublisherExternalRunWatchPort } from "./RunViewPublisher";
 
 export interface ExternalRunWatchBroadcast {
   notifyWorkflowAdded(summary: WorkflowSummary): void;
@@ -120,7 +121,9 @@ export interface ExternalRunWatchEntry {
   lastStepStatuses: StepStatus[];
 }
 
-export class ExternalRunWatchCoordinator {
+export class ExternalRunWatchCoordinator
+  implements RunViewPublisherExternalRunWatchPort
+{
   private readonly externalRunSessions = new Map<
     string,
     ExternalRunWatchEntry

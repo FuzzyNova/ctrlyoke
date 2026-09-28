@@ -226,10 +226,6 @@ export class ExecutionPreviewService {
     return redactExecutionPreview(preview);
   }
 
-  preview(request: ExecutionPreviewRequest): Promise<WorkflowExecutionPreview> {
-    return this.build(request);
-  }
-
   private async buildUnredacted(
     request: ExecutionPreviewRequest
   ): Promise<WorkflowExecutionPreview> {

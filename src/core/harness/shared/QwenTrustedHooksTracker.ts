@@ -126,10 +126,6 @@ export class QwenTrustedHooksTracker {
     });
   }
 
-  getActiveWorkflowCount(): number {
-    return this.workflowKeys.size;
-  }
-
   getReferenceCount(key: string): number {
     return this.references.get(key) ?? 0;
   }

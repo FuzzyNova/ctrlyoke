@@ -230,21 +230,6 @@ export async function analyzeWorkflowBundle(
   return { workflow, plan };
 }
 
-/** Class form for consumers that prefer dependency injection over a function. */
-export class WorkflowBundleAnalyzer {
-  analyze(
-    cleanWorkflow: Record<string, unknown>,
-    sourceDefinitionPathOrOptions: string | WorkflowBundleAnalyzerOptions = {},
-    additionalOptions: WorkflowBundleAnalyzerOptions = {}
-  ): Promise<WorkflowBundleAnalysis> {
-    return analyzeWorkflowBundle(
-      cleanWorkflow,
-      sourceDefinitionPathOrOptions,
-      additionalOptions
-    );
-  }
-}
-
 function collectPromptFields(workflow: Record<string, unknown>): PromptField[] {
   const fields: PromptField[] = [];
   if (typeof workflow.prompt === "string") {

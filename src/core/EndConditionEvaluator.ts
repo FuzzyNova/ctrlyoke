@@ -1038,33 +1038,6 @@ export class EndConditionEvaluator {
   }
 
   /**
-   * Validate script before execution
-   */
-  async validateScript(
-    scriptPath: string
-  ): Promise<{ valid: boolean; error?: string }> {
-    try {
-      const stats = await fs.promises.stat(scriptPath);
-
-      if (!stats.isFile()) {
-        return { valid: false, error: "Path is not a file" };
-      }
-
-      const command = this.getScriptCommand(scriptPath);
-      if (!command) {
-        return { valid: false, error: "Unsupported script type" };
-      }
-
-      return { valid: true };
-    } catch (error) {
-      return {
-        valid: false,
-        error: error instanceof Error ? error.message : "File not found",
-      };
-    }
-  }
-
-  /**
    * Kill all running processes
    */
   killAllProcesses(): void {

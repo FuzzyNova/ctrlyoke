@@ -157,52 +157,6 @@ export class HarnessCapabilityRegistry {
     };
   }
 
-  async serializeSnapshot(): Promise<string> {
-    return JSON.stringify(await this.getSnapshot());
-  }
-
-  static deserializeSnapshot(
-    serialized: string
-  ): HarnessCapabilityRegistrySnapshot {
-    const parsed: unknown = JSON.parse(serialized);
-    if (!isRecord(parsed)) {
-      throw new Error("Invalid harness capability snapshot");
-    }
-    if (parsed.schemaVersion !== HARNESS_CAPABILITY_SNAPSHOT_SCHEMA_VERSION) {
-      throw new Error(
-        `Unsupported harness capability snapshot schema: ${String(
-          parsed.schemaVersion
-        )}`
-      );
-    }
-    if (!Array.isArray(parsed.enabledDomains) || !isRecord(parsed.harnesses)) {
-      throw new Error("Invalid harness capability snapshot shape");
-    }
-    const snapshot = parsed as unknown as HarnessCapabilityRegistrySnapshot;
-    HarnessCapabilityRegistry.validateEnabledDomainList(
-      snapshot.enabledDomains
-    );
-    for (const harnessId of HARNESS_ID_LIST) {
-      const installed = snapshot.harnesses[harnessId];
-      if (!isRecord(installed) || !isRecord(installed.descriptor)) {
-        throw new Error(`Missing capability snapshot for harness ${harnessId}`);
-      }
-      const descriptor =
-        installed.descriptor as unknown as HarnessCapabilityDescriptor;
-      if (descriptor.harnessId !== harnessId) {
-        throw new Error(
-          `Capability snapshot ${String(descriptor.harnessId)} is mapped to ${harnessId}`
-        );
-      }
-      HarnessCapabilityRegistry.validateDescriptor(
-        harnessId,
-        descriptor,
-        snapshot.enabledDomains
-      );
-    }
-    return snapshot;
-  }
-
   /**
    * Return the adapter-owned declarations used by customer documentation.
    * This intentionally performs no availability or version probes.
@@ -219,28 +173,6 @@ export class HarnessCapabilityRegistry {
         };
       }),
     };
-  }
-
-  /**
-   * Resolve one enabled capability. Unmodeled domains intentionally return
-   * undefined rather than an unsupported or unknown state.
-   */
-  async getEffectiveCapabilityState(
-    harnessId: HarnessId,
-    domain: CapabilityDomain,
-    capability: string
-  ): Promise<EffectiveCapabilityState | undefined> {
-    if (!this.enabledDomains.includes(domain)) {
-      return undefined;
-    }
-
-    const installed = await this.getInstalledCapabilities(harnessId);
-    const domainState = installed.effective[domain];
-    if (!domainState || typeof domainState !== "object") {
-      return undefined;
-    }
-    const state = getCapabilityLeaf(domainState, capability);
-    return isEffectiveCapabilityState(state) ? state : undefined;
   }
 
   /** Re-run availability/version detection for one harness or the full set. */
@@ -494,22 +426,6 @@ function findCapabilityLeaves(
     }
   }
   return declarations;
-}
-
-function isEffectiveCapabilityState(
-  value: unknown
-): value is EffectiveCapabilityState {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "fidelity" in value &&
-    "mechanism" in value &&
-    "verification" in value
-  );
-}
-
-function getCapabilityLeaf(value: object, capability: string): unknown {
-  return Object.entries(value).find(([key]) => key === capability)?.[1];
 }
 
 function parseVersion(version: string): ParsedVersion | undefined {

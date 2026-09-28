@@ -120,11 +120,4 @@ export class PropertyResolver {
       prompt.executionMode ?? workflow.executionMode ?? defaults.executionMode
     );
   }
-
-  static resolveEndCondition(
-    prompt: PromptStep,
-    workflow: PromptFile
-  ): ResolvedProperties["endCondition"] {
-    return this.resolve(prompt, workflow).endCondition;
-  }
 }

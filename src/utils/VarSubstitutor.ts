@@ -2,7 +2,6 @@ import type { ResolvedProperties } from "./PropertyResolver";
 import type {
   UserHookConfig,
   EndCondition,
-  PreCondition,
   ScriptStep,
   ScriptProperties,
 } from "../types/CtrlYokeTypes";
@@ -21,8 +20,8 @@ import { VARIABLE_NAME_PATTERN_SOURCE } from "./KeyValueKeyKinds";
  *   - Resolved model
  *   - Resolved additionalArgs
  *   - Hook commands and hook `env` values (`resolvedProperties.hooks[]`)
- *   - preCondition `script` and `env` (`applyToPreCondition`, shared with
- *     endCondition/scriptStep via `applyToScriptProperties`)
+ *   - preCondition `script` and `env` (shared with endCondition/scriptStep via
+ *     `applyToScriptProperties`)
  *   - endCondition `script`, `env`, `retryPrompt`, `passRetryPrompt`
  *   - Script-step `script` and `env` (`applyToScriptStep`)
  *
@@ -89,25 +88,6 @@ export class VarSubstitutor {
   }
 
   /**
-   * Returns true if `text` contains any `{{key}}` placeholder.
-   */
-  static hasPlaceholders(text: string): boolean {
-    const maskedText = maskFencedCodeBlocks(text);
-    this.PLACEHOLDER_RE.lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = this.PLACEHOLDER_RE.exec(text)) !== null) {
-      if (
-        !maskedText
-          .slice(match.index, match.index + match[0].length)
-          .includes("\x00")
-      ) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /**
    * Apply var substitution to the prompt text string.
    * Returns the substituted string, or the original if vars is empty.
    */
@@ -152,18 +132,6 @@ export class VarSubstitutor {
           ? this.applyToEndCondition(props.endCondition, vars)
           : undefined,
     };
-  }
-
-  /**
-   * Apply var substitution to a preCondition's `script` and `env`.
-   * No-ops (returns the input unchanged) when `vars` is empty.
-   */
-  static applyToPreCondition(
-    cond: PreCondition,
-    vars: Record<string, string>
-  ): PreCondition {
-    if (Object.keys(vars).length === 0) return cond;
-    return this.applyToScriptProperties(cond, vars);
   }
 
   /**

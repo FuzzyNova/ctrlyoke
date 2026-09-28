@@ -7,14 +7,8 @@
 import {
   UniversalCliOutput,
   OutputMetadata,
-  ToolCall,
-  ToolResult,
   CliEvent,
-  TextData,
-  ThinkingBlock,
-  ToolResultData,
 } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
 import { normalizeCliEvents } from "../../../utils/CliEventNormalizer";
 
 /**
@@ -34,88 +28,6 @@ export interface DashboardOutput {
  * All methods are static for easy use without instantiation.
  */
 export class CliOutputFormatter {
-  /**
-   * Format output as plain text for VS Code Output panel.
-   * Produces a human-readable text representation of the CLI response.
-   * Events are rendered in chronological order as they occurred.
-   *
-   * @param output - The universal CLI output to format
-   * @returns Plain text representation suitable for Output panel
-   *
-   * @example
-   * ```typescript
-   * const text = CliOutputFormatter.toPlainText(output);
-   * outputChannel.appendLine(text);
-   * ```
-   */
-  static toPlainText(output: UniversalCliOutput): string {
-    const parts: string[] = [];
-
-    // Render events in chronological order
-    for (const event of output.events) {
-      switch (event.type) {
-        case CLI_EVENT_TYPES.TEXT:
-          const textData = event.data as TextData;
-          if (textData.text) {
-            parts.push(textData.text);
-          }
-          break;
-
-        case CLI_EVENT_TYPES.TOOL_CALL:
-          const toolCall = event.data as ToolCall;
-          parts.push("\n--- Tool Call ---");
-          parts.push(this.formatToolCall(toolCall));
-          break;
-
-        case CLI_EVENT_TYPES.THINKING:
-          const thinkingBlock = event.data as ThinkingBlock;
-          parts.push("\n--- Thinking ---");
-          const label = thinkingBlock.label ? `[${thinkingBlock.label}] ` : "";
-          parts.push(`${label}${thinkingBlock.text}`);
-          break;
-
-        case CLI_EVENT_TYPES.TOOL_RESULT:
-          const resultData = event.data as ToolResultData;
-          parts.push(this.formatToolResult(resultData.result));
-          break;
-      }
-    }
-
-    return parts.join("\n");
-  }
-
-  /**
-   * Format a single tool call for plain text display.
-   *
-   * @param tool - The tool call to format
-   * @returns Formatted tool call string
-   */
-  private static formatToolCall(tool: ToolCall): string {
-    const lines: string[] = [];
-
-    // Format tool name and parameters
-    const paramsStr = JSON.stringify(tool.parameters, null, 2);
-    lines.push(`• ${tool.name}(${paramsStr})`);
-
-    // Add result if available
-    if (tool.result) {
-      lines.push(this.formatToolResult(tool.result));
-    }
-
-    return lines.join("\n");
-  }
-
-  /**
-   * Format a tool result for plain text display.
-   *
-   * @param result - The tool result to format
-   * @returns Formatted result string with success/failure indicator
-   */
-  private static formatToolResult(result: ToolResult): string {
-    const icon = result.success ? "✓" : "✗";
-    const message = result.output || result.error || "";
-    return `  Result: ${icon} ${message}`;
-  }
 
   /**
    * Format output as structured data for dashboard webview.
@@ -176,42 +88,5 @@ export class CliOutputFormatter {
     }
 
     return parts.join(" | ");
-  }
-
-  /**
-   * Create an empty UniversalCliOutput structure.
-   * Useful for initializing output before parsing.
-   *
-   * @returns Empty UniversalCliOutput with default values
-   */
-  static createEmpty(): UniversalCliOutput {
-    return {
-      events: [],
-      metadata: {},
-    };
-  }
-
-  /**
-   * Merge multiple CLI outputs into a single output.
-   * Useful for streaming scenarios where chunks need to be combined.
-   * Events from all outputs are concatenated in order.
-   *
-   * @param outputs - Array of outputs to merge
-   * @returns Combined UniversalCliOutput with all events in order
-   */
-  static merge(outputs: UniversalCliOutput[]): UniversalCliOutput {
-    if (outputs.length === 0) {
-      return this.createEmpty();
-    }
-
-    if (outputs.length === 1) {
-      return outputs[0];
-    }
-
-    return {
-      events: normalizeCliEvents(outputs.flatMap((o) => o.events)),
-      // Use metadata from the last output (most complete)
-      metadata: outputs[outputs.length - 1].metadata,
-    };
   }
 }

@@ -1670,7 +1670,10 @@ suite("WorkflowExecutor finalStep phase 2", () => {
         { id: "recovery", startIndex: 0, endIndex: 2, failFast: false },
       ],
     });
-    await queue.completeStep(0);
+    await queue.persistStepOutcome({
+      target: { kind: "queue", stepIndex: 0 },
+      status: "completed",
+    });
     await queue.cancelStep(1);
 
     await makeExecutor(queue).execute(

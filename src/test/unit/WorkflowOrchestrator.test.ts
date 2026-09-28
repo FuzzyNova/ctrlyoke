@@ -1254,7 +1254,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       getQueueState: () => ({ workflowKey: other }),
     });
 
-    await internal.bindClientToAddressedLineage(
+    await internal.runViewPublisher.bindClientToAddressedLineage(
       { workflowKey: other, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
       () => undefined,
       "client-a"
@@ -1275,7 +1275,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
   test("leaves the binding alone when the address is another run of the same lineage", async () => {
     const { internal, replays } = createLineageBindingHarness();
 
-    await internal.bindClientToAddressedLineage(
+    await internal.runViewPublisher.bindClientToAddressedLineage(
       {
         workflowKey: "bound" as never,
         kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
@@ -1301,7 +1301,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       getQueueState: () => ({ workflowKey: other }),
     });
 
-    await internal.bindClientToAddressedLineage(
+    await internal.runViewPublisher.bindClientToAddressedLineage(
       { workflowKey: other, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
       () => undefined,
       "client-a"
@@ -1344,7 +1344,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     },
   ];
 
-  await internal.bindClientToAddressedLineage(
+  await internal.runViewPublisher.bindClientToAddressedLineage(
     {
       workflowKey: other,
       kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
@@ -1391,7 +1391,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     },
   ];
 
-  await internal.bindClientToAddressedLineage(
+  await internal.runViewPublisher.bindClientToAddressedLineage(
     {
       workflowKey: boundKey,
       kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
@@ -1437,7 +1437,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       },
     ];
 
-    await internal.bindClientToAddressedLineage(
+    await internal.runViewPublisher.bindClientToAddressedLineage(
       {
         workflowKey: boundKey,
         kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
@@ -1483,7 +1483,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       promoted: false,
     });
     assert.strictEqual(
-      internal.findInstanceForLineage(boundKey),
+      internal.workflowInstanceRegistry.findInstanceForLineage(boundKey),
       prepared,
       "the prepared instance must outrank the outgoing run's terminal owner"
     );
@@ -1521,7 +1521,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     await internal.switchClientToPreparedExecution(prepared, "client-a");
     // The nested bind that `replayWorkflowStateTo` performs via its own
     // `loadRunViewForClient` — the step that used to revert the binding.
-    await internal.bindClientToAddressedLineage(
+    await internal.runViewPublisher.bindClientToAddressedLineage(
       {
         workflowKey: boundKey,
         kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
@@ -1560,7 +1560,10 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     };
     internal.instances.set("instance-executing", executing);
 
-    assert.strictEqual(internal.findInstanceForLineage(boundKey), executing);
+    assert.strictEqual(
+      internal.workflowInstanceRegistry.findInstanceForLineage(boundKey),
+      executing
+    );
   });
 
   // Nothing deletes `lineageExecutionOwners` entries, so the rank they confer
@@ -1589,7 +1592,10 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       promoted: true,
     });
 
-    assert.strictEqual(internal.findInstanceForLineage(boundKey), live);
+    assert.strictEqual(
+      internal.workflowInstanceRegistry.findInstanceForLineage(boundKey),
+      live
+    );
   });
 
   // The bug this reproduces: continuing an already-completed run reuses that
@@ -1624,7 +1630,10 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       promoted: false,
     });
 
-    assert.strictEqual(internal.findInstanceForLineage(boundKey), continuing);
+    assert.strictEqual(
+      internal.workflowInstanceRegistry.findInstanceForLineage(boundKey),
+      continuing
+    );
   });
 
   test("materializes an addressed instance only when the lineage has none resident", async () => {
@@ -1633,7 +1642,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     const other = "other" as never;
     const runRef = "run-2026-07-21T10-30-00-000Z" as never;
 
-    await internal.bindClientToAddressedLineage(
+    await internal.runViewPublisher.bindClientToAddressedLineage(
       { workflowKey: other, kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN, runRef },
       () => undefined,
       "client-a"
@@ -1658,12 +1667,12 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       id: "instance-other",
       getQueueState: () => ({ workflowKey: other }),
     });
-    await internal.bindClientToAddressedLineage(
+    await internal.runViewPublisher.bindClientToAddressedLineage(
       address,
       () => undefined,
       "client-a"
     );
-    await internal.bindClientToAddressedLineage(
+    await internal.runViewPublisher.bindClientToAddressedLineage(
       address,
       () => undefined,
       "client-a"
@@ -2211,10 +2220,6 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       internal.currentWorkspaceFolderPath = workspace;
       internal.viewAddressRegistry = new Map();
       internal.viewMessageSinks = new Map();
-      internal.bindClientToAddressedLineage = async () => {
-        bindCalls += 1;
-        return null;
-      };
       internal.resolveAddressFilePath = () => {
         resolveCalls += 1;
         return "";
@@ -2225,6 +2230,10 @@ suite("WorkflowOrchestrator handleClientReady", () => {
           revision: 4,
           lastModifiedAt: 1_753_000_000_000,
         }),
+      };
+      internal.runViewPublisher.bindClientToAddressedLineage = async () => {
+        bindCalls += 1;
+        return null;
       };
 
       await orchestrator.loadRunSummariesForClient(
@@ -3019,35 +3028,7 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
   });
 });
 
-suite("WorkflowOrchestrator active workflow helpers", () => {
-  test("getRunningWorkflows includes pausing workflows", () => {
-    const orchestrator = createTestOrchestrator();
-    const internal = orchestrator as any;
-
-    const running = {
-      getQueueState: () => ({ status: EXECUTION_STATES.RUNNING }),
-    };
-    const pausing = {
-      getQueueState: () => ({ status: EXECUTION_STATES.PAUSING }),
-    };
-    const paused = {
-      getQueueState: () => ({ status: EXECUTION_STATES.PAUSED }),
-    };
-
-    internal.instances = new Map<string, any>([
-      ["running", running],
-      ["pausing", pausing],
-      ["paused", paused],
-    ]);
-
-    assert.deepStrictEqual(orchestrator.getRunningWorkflows(), [
-      running,
-      pausing,
-    ]);
-  });
-});
-
-suite("WorkflowOrchestrator promoteInstanceToLive", () => {
+suite("WorkflowInstanceRegistry promoteInstanceToLive", () => {
   // Regression: a multi-step run that briefly hits a terminal state gets retired
   // (moved to retiredInstances), then re-registered as RUNNING on the next step.
   // The re-registration must remove the retired copy so the instance is never in
@@ -3061,7 +3042,8 @@ suite("WorkflowOrchestrator promoteInstanceToLive", () => {
     internal.instances = new Map<string, any>();
     internal.retiredInstances = new Map<string, any>([["wf-1", instance]]);
 
-    const wasRetired = internal.promoteInstanceToLive(instance);
+    const wasRetired =
+      internal.workflowInstanceRegistry.promoteInstanceToLive(instance);
 
     assert.strictEqual(wasRetired, true);
     assert.strictEqual(internal.instances.get("wf-1"), instance);
@@ -3080,7 +3062,8 @@ suite("WorkflowOrchestrator promoteInstanceToLive", () => {
     internal.instances = new Map<string, any>();
     internal.retiredInstances = new Map<string, any>();
 
-    const wasRetired = internal.promoteInstanceToLive(instance);
+    const wasRetired =
+      internal.workflowInstanceRegistry.promoteInstanceToLive(instance);
 
     assert.strictEqual(wasRetired, false);
     assert.strictEqual(internal.instances.get("wf-2"), instance);
@@ -3251,8 +3234,8 @@ suite("WorkflowOrchestrator addressed write revision publishing", () => {
   });
 
   // Setting a start position is the most common prelude to pressing Continue,
-  // and `validateExplicitContinuationTarget` checks both revisions the rewind
-  // just moved.
+  // and `RunLifecycleService.validateExplicitContinuationTarget` checks both
+  // revisions the rewind just moved.
   test("publishes a rewind's revisions before its snapshot invalidation", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-rewind-revisions-")
@@ -5235,7 +5218,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
       ],
     ]);
 
-    internal.adoptInstanceLineageAddress(
+    internal.workflowInstanceRegistry.adoptInstanceLineageAddress(
       { id: "new-instance" },
       {
         workflowKey: newKey,
@@ -5270,7 +5253,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
       ["client-a", { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT }],
     ]);
 
-    internal.adoptInstanceLineageAddress(
+    internal.workflowInstanceRegistry.adoptInstanceLineageAddress(
       { id: "instance" },
       { workflowKey, runRef }
     );
@@ -5297,7 +5280,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
       ],
     ]);
 
-    internal.adoptInstanceLineageAddress(
+    internal.workflowInstanceRegistry.adoptInstanceLineageAddress(
       { id: "instance" },
       { workflowKey, runRef: newRun }
     );
@@ -5332,7 +5315,10 @@ suite("WorkflowOrchestrator client view addressing", () => {
       loaded.push(address);
     };
 
-    internal.adoptInstanceLineageAddress(instance, { workflowKey, runRef });
+    internal.workflowInstanceRegistry.adoptInstanceLineageAddress(instance, {
+      workflowKey,
+      runRef,
+    });
     internal.syncExecutingRunViews(instance);
     // RUNNING is emitted many times per run; only the first may publish.
     internal.syncExecutingRunViews(instance);

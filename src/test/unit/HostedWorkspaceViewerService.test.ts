@@ -609,29 +609,6 @@ suite("HostedWorkspaceViewerService", function () {
       assert.strictEqual(first.totalEntries, 2);
       assert.strictEqual(second.entries[0]?.path, "secondary");
     });
-
-    test("clears listing snapshots on request and disposal", async () => {
-      const root = createWorkspace();
-      const svc = new HostedWorkspaceViewerService(root);
-      const listing = await svc.listDirectory({
-        path: "",
-        includeGitIgnored: true,
-      });
-      svc.clear();
-      await assert.rejects(
-        svc.listDirectory({ listingId: listing.listingId, offset: 0 }),
-        (error: unknown) => error instanceof WorkspaceTreeExpiredError
-      );
-      const fresh = await svc.listDirectory({
-        path: "",
-        includeGitIgnored: true,
-      });
-      svc.dispose();
-      await assert.rejects(
-        svc.listDirectory({ listingId: fresh.listingId, offset: 0 }),
-        (error: unknown) => error instanceof WorkspaceTreeExpiredError
-      );
-    });
   });
 
   // ── getFileHistory ────────────────────────────────────────────────────────
@@ -1338,7 +1315,12 @@ suite("HostedWorkspaceViewerService", function () {
 
       const svc = new HostedWorkspaceViewerService(root);
       const result = await svc.getStatus();
-      const expectedPaths = ["a b.txt", "café.txt", "new name.txt"];
+      const expectedPaths = [
+        "a b.txt",
+        "café.txt",
+        "new name.txt",
+        "old name.txt",
+      ];
       assert.deepStrictEqual(
         result.files.map((file) => file.path).sort(),
         expectedPaths.sort()
@@ -1355,8 +1337,11 @@ suite("HostedWorkspaceViewerService", function () {
       }
 
       assert.deepStrictEqual(
-        runGit(root, "diff", "--cached", "--name-only")
-          .split("\n")
+        // -z keeps non-ASCII paths unquoted; --no-renames lists both sides of
+        // the staged rename regardless of the user's diff.renames config.
+        runGit(root, "diff", "--cached", "--name-only", "--no-renames", "-z")
+          .split("\0")
+          .filter(Boolean)
           .sort(),
         ["a b.txt", "café.txt", "new name.txt", "old name.txt"].sort()
       );
@@ -1808,7 +1793,7 @@ suite("HostedWorkspaceViewerService", function () {
       const branch = runGit(root, "branch", "--show-current");
       // git log --decorate then reports both the remote branch and "origin/HEAD"
       // on the same commit.
-      runGit(root, "remote", "set-head", "origin", "-a");
+      runGit(root, "remote", "set-head", "origin", branch);
 
       const svc = new HostedWorkspaceViewerService(root);
       const result = await svc.getCommitLog();

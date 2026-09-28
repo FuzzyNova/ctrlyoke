@@ -340,22 +340,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     });
   }
 
-  /** Clear a joined group's durable admission projection. */
-  public async clearActiveParallelGroup(groupId?: string): Promise<void> {
-    await this.workingFileManager.runInQueue(async () => {
-      if (
-        !this.activeParallelGroupRuntime ||
-        (groupId !== undefined &&
-          this.activeParallelGroupRuntime.groupId !== groupId)
-      ) {
-        return;
-      }
-      this.activeParallelGroupRuntime = undefined;
-      this.emitStateChange();
-      await this.workingFileManager.updateWorkingFileDirect();
-    });
-  }
-
   public markInFlightPromptCancelled(): void {
     const currentIndex = this.state.currentIndex;
     this.state.results.forEach((result, index) => {
@@ -873,27 +857,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   }
 
   /**
-   * Clear queue and results.
-   * NOTE: Only called from tests (production code uses clearQueue() instead).
-   */
-  clear(): void {
-    this.stateMachine.requestStop();
-    this.state.steps = [];
-    this.state.parallelGroups = [];
-    this.state.results = [];
-    this.activeParallelGroupRuntime = undefined;
-    if (this.workflowFile) {
-      this.workflowFile = {
-        ...this.workflowFile,
-        steps: [],
-        parallelGroups: [],
-      };
-    }
-    this.emitStateChange();
-    Log.debug("[PromptQueue] Queue cleared");
-  }
-
-  /**
    * Get current queue state
    */
   getState(): QueueState {
@@ -1001,22 +964,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     return this.state.steps[this.state.currentIndex];
   }
 
-  /**
-   * Mark current prompt as sent
-   * Note: Does NOT automatically move to next prompt. WorkflowOrchestrator handles
-   * end condition evaluation and decides when to move to next prompt (including retries).
-   */
-  async markCurrentAsSent(): Promise<void> {
-    if (!this.hasNext()) {
-      return;
-    }
-
-    await this.markStepAsSent(this.state.currentIndex);
-
-    // WorkflowOrchestrator handles end condition evaluation and workflow progression
-    // Do NOT set up timers or automatically move to next prompt here
-  }
-
   async markStepAsSent(stepIndex: number): Promise<void> {
     const currentResult = this.state.results[stepIndex];
     if (!currentResult) {
@@ -1026,55 +973,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     currentResult.status = STEP_STATUS.SENT;
     currentResult.timestamp = new Date();
     this.emitStateChange();
-  }
-
-  /**
-   * Mark current prompt as completed and move to next
-   * Note: This only updates state. WorkflowOrchestrator's loop handles actual execution progression.
-   */
-  async completeCurrentAndMoveNext(): Promise<void> {
-    if (!this.hasNext()) {
-      return;
-    }
-
-    const index = this.state.currentIndex;
-    await this.completeStep(index);
-
-    this.state.currentIndex++;
-    this.emitStateChange();
-
-    // Update working file with new currentIndex and completedPrompts
-    await this.updateWorkingFile();
-  }
-
-  async completeStep(
-    stepIndex: number,
-    metadata?: Partial<PromptRuntimeMetadata>
-  ): Promise<void> {
-    const currentResult = this.state.results[stepIndex];
-    if (!currentResult) {
-      return;
-    }
-
-    this.completeStepState(stepIndex, metadata);
-    this.emitStateChange();
-  }
-
-  /**
-   * Mark current prompt as skipped and move to next.
-   * Persists SKIPPED in _runtime so reload/restore preserves the terminal state.
-   */
-  async skipCurrentAndMoveNext(): Promise<void> {
-    if (!this.hasNext()) {
-      return;
-    }
-
-    const index = this.state.currentIndex;
-    await this.skipStep(index);
-    this.state.currentIndex++;
-    this.emitStateChange();
-
-    await this.updateWorkingFile();
   }
 
   async skipStep(
@@ -1339,16 +1237,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     }
 
     (this.workflowFile as any)[property] = value;
-  }
-
-  /**
-   * Get failed prompts count
-   * @internal Test-only method — not used in production code paths.
-   */
-  getFailedCount(): number {
-    return this.state.results.filter(
-      (result) => result.status === STEP_STATUS.FAILED
-    ).length;
   }
 
   /**
@@ -1821,22 +1709,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     this.cacheRuntimeOutput(promptIndex, {
       responseText: existing + additionalText,
     });
-  }
-
-  /**
-   * Get queue extension statistics
-   * @internal Test-only method — not used in production code paths.
-   */
-  getQueueExtensionStats(): {
-    queueExtensions: number;
-    currentSize: number;
-    lastReloadTime?: number;
-  } {
-    return {
-      queueExtensions: this.state.queueExtensions,
-      currentSize: this.state.steps.length,
-      lastReloadTime: this.state.lastReloadTime,
-    };
   }
 
   /**
@@ -3155,7 +3027,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    * True while a step is actually in flight, which is what makes the step at
    * `currentIndex` untouchable. PAUSED is deliberately excluded: a pause is only
    * ever confirmed at a step boundary (`WorkflowExecutor.confirmPauseAndStop`,
-   * after `completeCurrentAndMoveNext()`), so a paused run's `currentIndex`
+   * after `commitStepOutcomeAndAdvance()`), so a paused run's `currentIndex`
    * names the next PENDING step — nothing is executing. Treating PAUSED as
    * in-flight is what made "pause, then edit the next step" fail.
    *

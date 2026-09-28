@@ -3,33 +3,6 @@ import { splitLines } from "../../../utils/TextLines";
 import { UnifiedDiffHunk } from "../../../types/CliOutputTypes";
 
 /**
- * Generic CLI response structure (normalized across all CLIs)
- */
-export interface CliJsonResponse {
-  type?: string;
-  subtype?: string;
-  is_error?: boolean;
-  result?: string;
-  response?: string;
-  content?: string;
-  usage?: CliUsage;
-  session_id?: string;
-  thread_id?: string;
-  model?: string;
-  error?: string;
-  duration_ms?: number;
-}
-
-/**
- * Generic usage statistics structure
- */
-export interface CliUsage {
-  input_tokens: number;
-  output_tokens: number;
-  total_tokens?: number;
-}
-
-/**
  * Shared response parsing utilities for CLI integrations
  *
  * Supports:
@@ -150,63 +123,6 @@ export class CliParseUtils {
     }
 
     return objects;
-  }
-
-  /**
-   * Extract usage statistics from various JSON formats
-   *
-   * @param json JSON object with usage field
-   * @returns Normalized usage statistics
-   */
-  static extractUsageStats(json: any): CliUsage | undefined {
-    if (!json.usage) {
-      return undefined;
-    }
-
-    const { input_tokens, output_tokens } = json.usage;
-    return {
-      input_tokens,
-      output_tokens,
-      total_tokens: json.usage.total_tokens || input_tokens + output_tokens,
-    };
-  }
-
-  /**
-   * Extract session ID from various JSON formats
-   *
-   * Different CLIs use different field names:
-   * - Claude: session_id
-   * - Codex: thread_id
-   * - Copilot: session (from logs, not JSON)
-   *
-   * @param json JSON object or text output
-   * @returns Session ID if found
-   */
-  static extractSessionId(json: any): string | undefined {
-    return json.session_id || json.thread_id;
-  }
-
-  /**
-   * Format usage statistics as a human-readable string
-   *
-   * @param usage Usage statistics object
-   * @param model Optional model name to include
-   * @returns Formatted string like "Usage: 1234 input + 5678 output = 6912 tokens | Model: claude-sonnet-4.5"
-   */
-  static formatStatistics(usage: CliUsage | undefined, model?: string): string {
-    if (!usage) {
-      return "";
-    }
-
-    const { input_tokens, output_tokens, total_tokens } = usage;
-    const total = total_tokens || input_tokens + output_tokens;
-    let stats = `Usage: ${input_tokens} input + ${output_tokens} output = ${total} tokens`;
-
-    if (model) {
-      stats += ` | Model: ${model}`;
-    }
-
-    return stats;
   }
 
   /**

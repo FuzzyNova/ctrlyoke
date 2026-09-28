@@ -66,7 +66,6 @@ suite("VarSubstitutor Tests", () => {
         VarSubstitutor.substitute(text, { resolved: "yes" }),
         text
       );
-      assert.strictEqual(VarSubstitutor.hasPlaceholders(text), false);
     });
 
     test("handles empty string value", () => {
@@ -81,16 +80,6 @@ suite("VarSubstitutor Tests", () => {
         VarSubstitutor.substitute("{{path}}", { path: "C:\\Users\\foo" }),
         "C:\\Users\\foo"
       );
-    });
-  });
-
-  suite("hasPlaceholders", () => {
-    test("returns true when placeholder present", () => {
-      assert.strictEqual(VarSubstitutor.hasPlaceholders("{{key}}"), true);
-    });
-
-    test("returns false when no placeholder", () => {
-      assert.strictEqual(VarSubstitutor.hasPlaceholders("no vars"), false);
     });
   });
 
@@ -293,44 +282,6 @@ suite("VarSubstitutor Tests", () => {
         { x: "y" }
       );
       assert.strictEqual(result.preCondition, undefined);
-    });
-  });
-
-  suite("applyToPreCondition", () => {
-    test("substitutes script and env", () => {
-      const result = VarSubstitutor.applyToPreCondition(
-        { script: "check-{{env}}.sh", env: { TARGET: "{{env}}" } },
-        { env: "prod" }
-      );
-      assert.strictEqual(result.script, "check-prod.sh");
-      assert.strictEqual(result.env!.TARGET, "prod");
-    });
-
-    test("returns same object reference when vars is empty", () => {
-      const cond = { script: "check-{{env}}.sh" };
-      const result = VarSubstitutor.applyToPreCondition(cond, {});
-      assert.strictEqual(result, cond);
-    });
-
-    test("does not mutate the input object", () => {
-      const cond = { script: "check-{{env}}.sh" };
-      VarSubstitutor.applyToPreCondition(cond, { env: "prod" });
-      assert.strictEqual(cond.script, "check-{{env}}.sh");
-    });
-
-    test("preserves onPass/onFail and other fields untouched", () => {
-      const result = VarSubstitutor.applyToPreCondition(
-        {
-          script: "check.sh",
-          onPass: "continue",
-          onFail: "skipPrompt",
-          timeoutSec: 0.03,
-        },
-        { x: "y" }
-      );
-      assert.strictEqual(result.onPass, "continue");
-      assert.strictEqual(result.onFail, "skipPrompt");
-      assert.strictEqual(result.timeoutSec, 0.03);
     });
   });
 

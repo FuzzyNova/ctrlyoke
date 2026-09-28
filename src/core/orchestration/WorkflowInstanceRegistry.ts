@@ -26,6 +26,7 @@ import type { UserInteractionPort } from "../../ui/UserInteractionPort";
 import { getPtyProcessManager } from "../harness/PtyProcessManager";
 import { Log } from "../../utils/Log";
 import type { RunViewPublisherRegistryPort } from "./RunViewPublisher";
+import type { RunLifecycleRegistryPort } from "./RunLifecycleService";
 
 export interface LineageExecutionClaim {
   instanceId: string;
@@ -132,7 +133,9 @@ export interface WorkflowInstanceRegistryHost extends WorkflowInstanceRegistryBu
 }
 
 /** Owns workflow instances, retirement, lineage binding, and client viewers. */
-export class WorkflowInstanceRegistry implements RunViewPublisherRegistryPort {
+export class WorkflowInstanceRegistry
+  implements RunViewPublisherRegistryPort, RunLifecycleRegistryPort
+{
   private readonly instances = new Map<string, WorkflowInstance>();
   private readonly retiredInstances = new Map<string, WorkflowInstance>();
   private readonly viewerRegistry = new Map<string, string | null>();
@@ -344,16 +347,6 @@ export class WorkflowInstanceRegistry implements RunViewPublisherRegistryPort {
 
   getAllWorkflows(): WorkflowInstance[] {
     return [...this.instances.values()];
-  }
-
-  getRunningWorkflows(): WorkflowInstance[] {
-    return [...this.instances.values()].filter((workflow) => {
-      const status = workflow.getQueueState().status;
-      return (
-        status === EXECUTION_STATES.RUNNING ||
-        status === EXECUTION_STATES.PAUSING
-      );
-    });
   }
 
   getActiveWorkflow(): WorkflowInstance | undefined {

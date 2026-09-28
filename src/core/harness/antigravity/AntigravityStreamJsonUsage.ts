@@ -148,14 +148,6 @@ export class AntigravityStreamJsonUsageAccumulator {
     }
   }
 
-  getLatestStepUsage(): AntigravityStreamJsonUsage | undefined {
-    return this.latestStepUsage;
-  }
-
-  getTerminalUsage(): AntigravityStreamJsonUsage | undefined {
-    return this.terminalUsage;
-  }
-
   getSnapshot(): AntigravityStreamJsonUsageSnapshot {
     const snapshot: AntigravityStreamJsonUsageSnapshot = {};
     if (this.latestStepUsage) {

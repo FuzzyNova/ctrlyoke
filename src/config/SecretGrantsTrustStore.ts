@@ -61,21 +61,6 @@ export class SecretGrantsTrustStore {
     ];
   }
 
-  /** Filter candidate names down to those with an allow decision. */
-  getApprovedGrants(
-    workspaceIdentity: string,
-    candidateNames: readonly string[]
-  ): string[] {
-    const identity =
-      SecretGrantsTrustStore.canonicalWorkspaceIdentity(workspaceIdentity);
-    const decisions = this.load().decisions;
-    return candidateNames.filter(
-      (name) =>
-        decisions[SecretGrantsTrustStore.keyFor(identity, name)] ===
-        TRUST_DECISIONS.ALLOW
-    );
-  }
-
   /** Filter candidate names down to those with no recorded decision. */
   getPendingGrants(
     workspaceIdentity: string,

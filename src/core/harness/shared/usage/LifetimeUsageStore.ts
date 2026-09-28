@@ -26,11 +26,9 @@ import { withFileLock } from "../../../../utils/FileLockUtils";
 import {
   assertValidRunRef,
   assertValidWorkflowKey,
-  isLineageDirEntry,
   isRunDirEntry,
   lineageDir,
   manifestPath,
-  runsRoot,
 } from "../../../../utils/WorkflowPaths";
 import { lifetimeStatsPath } from "../../../../utils/UsagePaths";
 import {
@@ -50,7 +48,6 @@ export const LIFETIME_USAGE_ERROR_CODES = {
   /** Written by a newer ctrlyoke: left untouched, and not updated here. */
   NEWER_DATA: "lifetime-usage-newer-data",
   WRITE_FAILED: "lifetime-usage-write-failed",
-  BACKFILL_REQUIRED: "lifetime-usage-backfill-required",
 } as const;
 
 export interface LifetimeUsageStoreData {
@@ -630,7 +627,6 @@ export class LifetimeUsageStore {
   >();
   private readonly lineageSkippedRunCounts = new Map<WorkflowKey, number>();
   private lastErrorCode: string | undefined;
-  private backfillRequired = false;
 
   constructor(private readonly workspaceRoot: string) {
     this.filePath = lifetimeStatsPath(workspaceRoot);
@@ -642,10 +638,6 @@ export class LifetimeUsageStore {
 
   getLastErrorCode(): string | undefined {
     return this.lastErrorCode;
-  }
-
-  isBackfillRequired(): boolean {
-    return this.backfillRequired;
   }
 
   /** Testable/operational cache eviction; correctness never depends on it. */
@@ -848,57 +840,6 @@ export class LifetimeUsageStore {
     await this.updateLineageDirectoryMtime(workflowKey, dirMtimeMs, now);
   }
 
-  /** Discard the rollup and derive it from every persisted run manifest. */
-  async fullRebuild(now: number = Date.now()): Promise<LifetimeUsageStoreData> {
-    await fs.mkdir(path.dirname(this.filePath), { recursive: true });
-    try {
-      return await withFileLock(this.filePath, async () => {
-        // A malformed file is what a rebuild replaces; a newer one is refused.
-        await this.readExisting().catch((error: unknown) => {
-          if (isNewerSchemaError(error)) throw error;
-        });
-        const data = emptyStore(now);
-        this.recentContributionCache.clear();
-        let lineageEntries: Dirent[] = [];
-        try {
-          lineageEntries = await fs.readdir(runsRoot(this.workspaceRoot), {
-            withFileTypes: true,
-          });
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-        }
-        for (const entry of lineageEntries) {
-          if (!isLineageDirEntry(entry)) continue;
-          const workflowKey = entry.name as WorkflowKey;
-          const scanned = await this.scanLineage(workflowKey);
-          if (scanned.lineage) {
-            data.lineages[workflowKey] = scanned.lineage;
-            data.skippedRunCount += scanned.skippedRunCount;
-            this.lineageSkippedRunCounts.set(
-              workflowKey,
-              scanned.skippedRunCount
-            );
-            for (const contribution of scanned.contributions) {
-              this.remember(
-                `${contribution.workflowKey}/${contribution.runRef}`,
-                contribution
-              );
-            }
-          }
-        }
-        recomputeGrandTotals(data);
-        data.updatedAt = now;
-        await this.writeAtomic(data);
-        this.backfillRequired = false;
-        return data;
-      });
-    } catch (error) {
-      const wrapped = new Error(LIFETIME_USAGE_ERROR_CODES.WRITE_FAILED);
-      wrapped.cause = error;
-      throw wrapped;
-    }
-  }
-
   private remember(key: string, contribution: LifetimeRunContribution): void {
     this.recentContributionCache.delete(key);
     this.recentContributionCache.set(key, cloneContribution(contribution));
@@ -1035,7 +976,6 @@ export class LifetimeUsageStore {
     } catch (error) {
       if (isNewerSchemaError(error)) throw error;
       this.lastErrorCode = LIFETIME_USAGE_ERROR_CODES.MALFORMED_DATA;
-      this.backfillRequired = true;
       await this.quarantineMalformedFile();
       return emptyStore(now);
     }

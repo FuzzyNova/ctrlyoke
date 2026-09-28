@@ -681,11 +681,24 @@ export class CliTerminalFormatter {
       0,
       MAX_SCRIPT_OUTPUT_LINES - state.shownLines
     );
-    if (remainingChars === 0 || remainingLines === 0) return;
+    if (
+      remainingChars === 0 ||
+      (remainingLines === 0 && endsWithNewline)
+    ) {
+      return;
+    }
 
     let visible = chunk.slice(0, remainingChars);
     const visibleLines = countNewOutputLines(visible, endsWithNewline);
-    if (visibleLines > remainingLines) {
+    if (remainingLines === 0 && !endsWithNewline) {
+      // The already displayed partial line still has room for its remaining
+      // characters and terminator. Stop after that newline so later lines do
+      // not cross the output limit.
+      const newlineIndex = visible.indexOf("\n");
+      if (newlineIndex >= 0) {
+        visible = visible.slice(0, newlineIndex + 1);
+      }
+    } else if (visibleLines > remainingLines) {
       const pieces = visible.split("\n");
       visible = pieces.slice(0, remainingLines).join("\n");
     }

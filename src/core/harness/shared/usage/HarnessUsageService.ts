@@ -14,10 +14,7 @@ import type {
   HarnessUsageSnapshot,
   HarnessUsageWindow,
 } from "../../../../types/UsageTypes";
-import {
-  defaultStaleAfterMs,
-  isHarnessQuotaStale,
-} from "../../../../types/UsageTypes";
+import { defaultStaleAfterMs } from "../../../../types/UsageTypes";
 import { renameWithTransientRetry } from "../../../../utils/AtomicFileUtils";
 import { getErrorMessage } from "../../../../utils/ErrorUtils";
 import { withFileLock } from "../../../../utils/FileLockUtils";
@@ -301,13 +298,6 @@ export class HarnessUsageService {
       probe.abort();
     }
     this.inFlightProbes.clear();
-  }
-
-  isQuotaStale(harnessId: HarnessId, now: number = this.now()): boolean {
-    return isHarnessQuotaStale(
-      this.quotaCache.get(harnessId) ?? this.createUnavailableQuota(harnessId),
-      now
-    );
   }
 
   private async refreshOne(

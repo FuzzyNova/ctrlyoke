@@ -126,7 +126,6 @@ import {
 } from "./orchestration/RunViewPublisher";
 import {
   RunLifecycleService,
-  type ExplicitContinuationValidation,
   type RunLifecycleViewPort,
 } from "./orchestration/RunLifecycleService";
 import {
@@ -839,23 +838,6 @@ export class WorkflowOrchestrator {
    * Silently retire a workflow from the registry — no confirmation, no stop prompts.
    * Called automatically when a workflow reaches COMPLETED, ERROR, or STOPPED state.
    */
-  /**
-   * Move an instance into the live registry, enforcing the invariant that an
-   * instance lives in EITHER `instances` OR `retiredInstances` — never both.
-   *
-   * The inverse of {@link retireWorkflow}. Used when a retired instance becomes
-   * active again (a multi-step run that briefly hit a terminal state, or a
-   * restart from the dashboard). Leaving a stale `retiredInstances` copy behind
-   * makes the still-running workflow look retired to `setViewedWorkflowId` and
-   * `unregisterClient`, which can dispose the shared instance object out from
-   * under the live run.
-   *
-   * @returns true if a stale retired entry was removed.
-   */
-  public promoteInstanceToLive(instance: WorkflowInstance): boolean {
-    return this.workflowInstanceRegistry.promoteInstanceToLive(instance);
-  }
-
   private retireWorkflow(workflowId: string): void {
     this.workflowInstanceRegistry.retireWorkflow(workflowId);
   }
@@ -867,10 +849,6 @@ export class WorkflowOrchestrator {
   /** @keep Standalone server API; see dev/backlog/STANDALONE_SERVER_PLAN.md. */
   getAllWorkflows(): WorkflowInstance[] {
     return this.workflowInstanceRegistry.getAllWorkflows();
-  }
-
-  getRunningWorkflows(): WorkflowInstance[] {
-    return this.workflowInstanceRegistry.getRunningWorkflows();
   }
 
   getUserFeedbackSink(): UserFeedbackSink {
@@ -2897,18 +2875,6 @@ export class WorkflowOrchestrator {
     }
   }
 
-  public async bindClientToAddressedLineage(
-    address: WorkflowViewAddress,
-    send: (message: unknown) => void,
-    clientId: string
-  ): Promise<string | null> {
-    return this.runViewPublisher.bindClientToAddressedLineage(
-      address,
-      send,
-      clientId
-    );
-  }
-
   /**
    * Instances are lineage-scoped: viewing *any* run of a lineage binds to its
    * single runtime owner, so every run view renders the same TerminalView; the
@@ -3163,12 +3129,6 @@ export class WorkflowOrchestrator {
       throw new Error("No workspace folder is open");
     }
     return workspaceRoot;
-  }
-
-  public findInstanceForLineage(
-    workflowKey: WorkflowKey
-  ): WorkflowInstance | undefined {
-    return this.workflowInstanceRegistry.findInstanceForLineage(workflowKey);
   }
 
   /**
@@ -4299,20 +4259,6 @@ export class WorkflowOrchestrator {
     }
   }
 
-  public async validateExplicitContinuationTarget(
-    address: { workflowKey: WorkflowKey; runRef: RunRef },
-    expectedDefinitionRevision: number,
-    expectedDescriptorRevision: number,
-    clientId: string
-  ): Promise<ExplicitContinuationValidation> {
-    return this.runLifecycleService.validateExplicitContinuationTarget(
-      address,
-      expectedDefinitionRevision,
-      expectedDescriptorRevision,
-      clientId
-    );
-  }
-
   /** One lifecycle operation shared by dashboard actions and startup recovery. */
   async discardContinuationAtRun(
     address: { workflowKey: WorkflowKey; runRef: RunRef },
@@ -4904,12 +4850,6 @@ export class WorkflowOrchestrator {
     );
   }
 
-  public isWorkflowViewedByAnyClient(workflowId: string): boolean {
-    return this.workflowInstanceRegistry.isWorkflowViewedByAnyClient(
-      workflowId
-    );
-  }
-
   /**
    * `send` registers this client's addressed-view channel. It must be supplied
    * by every real connection: server-initiated view pushes (`syncExecutingRunViews`,
@@ -4951,54 +4891,6 @@ export class WorkflowOrchestrator {
    */
   private buildWorkflowInstance(): WorkflowInstance {
     return this.workflowInstanceRegistry.buildWorkflowInstanceForHost();
-  }
-
-  /**
-   * Adopts an instance's own lineage as the view address of every client bound
-   * to it, whenever that instance's lineage identity changes.
-   *
-   * The other writers of the address registry — `loadRunViewForClient` and
-   * `syncExecutingRunViews` — are never involved when an instance creates a
-   * lineage for itself (first property edit or rename on a brand-new
-   * workflow). Without this, such a client keeps the address of whatever it
-   * viewed previously, and every addressed guard then validates revisions of a
-   * file the client is not editing — or a lineage-scoped command reaches into
-   * the wrong workflow.
-   *
-   * A client already addressed *inside* this lineage is never repointed here,
-   * because a silent registry write is the wrong answer for both clients that
-   * can be in that position when a lineage gains a RunRef:
-   *   - the one holding the lineage draft the promotion just deleted, which
-   *     must be *shown* the new run — {@link syncExecutingRunViews} does that,
-   *     and it can only recognise that client while its address still reads
-   *     `draft`;
-   *   - one deliberately reading an older run of the same lineage, which keeps
-   *     its view (only the run's initiator follows a promotion).
-   * Moving either one here left the backend addressing a run the client had
-   * never been told about, so its next edit or run action was rejected against
-   * an address it was not displaying.
-   */
-  public adoptInstanceLineageAddress(
-    instance: WorkflowInstance,
-    state: QueueState
-  ): void {
-    this.workflowInstanceRegistry.adoptInstanceLineageAddress(instance, state);
-    const address = lineageAddressOf(state);
-
-    for (const [clientId, viewedInstanceId] of this.viewerRegistry) {
-      if (viewedInstanceId !== instance.id) {
-        continue;
-      }
-      if (
-        address?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
-        this.getViewAddress(clientId)?.workflowKey === address.workflowKey
-      ) {
-        continue;
-      }
-      this.workflowInstanceRegistry
-        .getViewAddressRegistry()
-        .set(clientId, address);
-    }
   }
 
   /**
