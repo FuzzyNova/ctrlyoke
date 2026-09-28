@@ -15,7 +15,6 @@ import { IntegrationFactory } from "./core/IntegrationFactory";
 import { WorkflowInstance } from "./core/WorkflowInstance";
 import {
   EXECUTION_STATES,
-  STEP_STATUS,
   HARNESS_IDS,
   EXECUTION_MODES,
   FINAL_STEP_PHASES,
@@ -55,6 +54,7 @@ import {
   CliTerminalFormatter,
   type CliOutputTarget,
 } from "./cli/CliTerminalFormatter";
+import { getExitCode as getTypedExitCode } from "./cli/CliExitCode";
 import {
   buildCliJsonResult,
   buildCliPreviewJsonResult,
@@ -173,6 +173,11 @@ const runStateRefusals = trackRunStateRefusals();
 const cliBinDirectory = getCtrlyokeBinDirectory();
 if (cliBinDirectory) {
   ensureCtrlyokeShimsExecutable(cliBinDirectory);
+}
+
+/** Determine a structured exit code from the final queue state. */
+function getExitCode(state: QueueState): number {
+  return getTypedExitCode(state);
 }
 
 const cliRunnerHostIdentity: RunnerHostIdentity = {
@@ -1193,6 +1198,8 @@ async function runCommand(
       if (Object.keys(config.vars).length > 0) {
         const workflowFile = instance.promptQueue.getWorkflowFile();
         mergeCliVarsIntoWorkflow(workflowFile, config.vars);
+        instance.promptQueue.updateWorkflowProperty("vars", workflowFile.vars);
+        await instance.promptQueue.updateWorkingFile(true);
       }
 
       assertSecretGrantsApproved(
@@ -2610,41 +2617,4 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
     console.error(chalk.red(`Error: ${errMsg}`));
     process.exit(1);
   }
-}
-
-/**
- * Determine a structured exit code from the final queue state.
- *
- * Exit codes:
- *   0 – success (all prompts completed)
- *   1 – prompt(s) failed (general AI / end-condition failure)
- *   3 – provider error (CLI not installed, auth failure, command not found)
- *   4 – timeout exceeded
- */
-function getExitCode(state: QueueState): number {
-  if (state.status === EXECUTION_STATES.COMPLETED) return 0;
-  if (state.status === EXECUTION_STATES.ERROR) {
-    // Scan failed results for a clue about the error category.
-    const failedResult = state.results?.find(
-      (r) => r.status === STEP_STATUS.FAILED && r.error
-    );
-    const errorMsg = (failedResult?.error ?? "").toLowerCase();
-    if (
-      errorMsg.includes("timeout") ||
-      errorMsg.includes("timed out") ||
-      errorMsg.includes("time limit")
-    ) {
-      return 4;
-    }
-    if (
-      errorMsg.includes("not installed") ||
-      errorMsg.includes("not found") ||
-      errorMsg.includes("command not found") ||
-      errorMsg.includes("enoent")
-    ) {
-      return 3;
-    }
-    return 1;
-  }
-  return 1;
 }

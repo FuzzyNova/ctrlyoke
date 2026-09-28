@@ -90,6 +90,7 @@ import {
 import { getEffectiveSecretGrants } from "../utils/SecretReferenceParser";
 import { McpServerNormalizer } from "../utils/McpServerNormalizer";
 import { PromptFileResolver } from "./PromptFileResolver";
+import { resolvePromptTextWithVariables } from "./PromptTextResolver";
 import {
   CliOutputFormatter,
   DashboardOutput,
@@ -834,8 +835,7 @@ export class WorkflowExecutor {
       configuredWidth: context.dynamicQueueConfig.maxParallelSteps,
       fanOutEnabled: context.parallelGroupFanOutEnabled,
       excludeTerminalMembers: true,
-      resolvePromptText: (promptText, variables) =>
-        this.resolveEffectivePrompt(promptText, context, { ...variables }),
+      ...this.getPromptFileResolutionOptions(context),
       normalizeProperties: async (
         properties,
         memberStep,
@@ -3501,7 +3501,8 @@ export class WorkflowExecutor {
       target,
       signedStepIndex,
       attemptIndex,
-      `${phase}: ${reason}`
+      `${phase}: ${reason}`,
+      result.timeout ? FAILURE_KINDS.TIMEOUT : undefined
     );
     return { outcome: WORKFLOW_EXECUTION_OUTCOMES.STOP };
   }
@@ -3511,7 +3512,8 @@ export class WorkflowExecutor {
     target: ExecutionTarget,
     signedStepIndex: number,
     attemptIndex: number,
-    reason: string
+    reason: string,
+    failureKind?: typeof FAILURE_KINDS.TIMEOUT
   ): Promise<void> {
     const runtime = this.getRuntime();
     runtime.failAttempt(target, attemptIndex, reason);
@@ -3523,7 +3525,7 @@ export class WorkflowExecutor {
           message: reason,
         });
       }
-      await this.promptQueue.failStep(target.stepIndex, reason);
+      await this.promptQueue.failStep(target.stepIndex, reason, failureKind);
     } else {
       await this.setFinalStepRuntime(context, {
         phase: FINAL_STEP_PHASES.FINAL_STEP,
@@ -4555,10 +4557,22 @@ export class WorkflowExecutor {
     context: WorkflowExecutionContext,
     variables: Record<string, string> | undefined
   ): Promise<string> {
-    const substituted = VarSubstitutor.applyToPromptText(
+    const { promptFileResolver, sourceDefinitionPath } =
+      this.getPromptFileResolutionOptions(context);
+    return resolvePromptTextWithVariables(
       promptText,
-      variables ?? {}
+      variables ?? {},
+      promptFileResolver,
+      sourceDefinitionPath
     );
+  }
+
+  private getPromptFileResolutionOptions(
+    context: WorkflowExecutionContext
+  ): {
+    promptFileResolver: PromptFileResolver;
+    sourceDefinitionPath?: string;
+  } {
     const executionWorkspace = context.executionWorkspace;
     const usesLegacyNoWorktreeContext =
       !executionWorkspace.sourceCheckoutRoot &&
@@ -4591,10 +4605,10 @@ export class WorkflowExecutor {
       allowWorkflowRelativeReferences:
         definitionPath.allowWorkflowRelativeReferences,
     });
-    return resolver.resolvePromptValue(
-      substituted,
-      definitionPath.executionPath
-    );
+    return {
+      promptFileResolver: resolver,
+      sourceDefinitionPath: definitionPath.executionPath,
+    };
   }
 
   private getParallelGroupStartBoundary(stepIndex: number): number {
@@ -4910,6 +4924,7 @@ export class WorkflowExecutor {
     if (
       failureKind === FAILURE_KINDS.PROCESS_EXIT ||
       failureKind === FAILURE_KINDS.HARNESS_ERROR ||
+      failureKind === FAILURE_KINDS.HARNESS_NOT_INSTALLED ||
       failureKind === FAILURE_KINDS.TIMEOUT
     ) {
       return this.handleHarnessFailure(
@@ -4948,7 +4963,11 @@ export class WorkflowExecutor {
 
     runtime.failAttempt(target, attemptIndex, failureReason);
     if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-      await this.promptQueue.failStep(target.stepIndex, failureReason);
+      await this.promptQueue.failStep(
+        target.stepIndex,
+        failureReason,
+        failureKind
+      );
     }
 
     // Write a final (non-streaming) error CLI output so the failure is visible
@@ -5007,6 +5026,7 @@ export class WorkflowExecutor {
     failureKind:
       | typeof FAILURE_KINDS.PROCESS_EXIT
       | typeof FAILURE_KINDS.HARNESS_ERROR
+      | typeof FAILURE_KINDS.HARNESS_NOT_INSTALLED
       | typeof FAILURE_KINDS.TIMEOUT,
     resolvedProperties?: ResolvedProperties
   ): Promise<PromptFailureDisposition> {
@@ -5023,9 +5043,11 @@ export class WorkflowExecutor {
     const failureLabel =
       failureKind === FAILURE_KINDS.PROCESS_EXIT
         ? "Process exited unexpectedly"
-        : failureKind === FAILURE_KINDS.TIMEOUT
-          ? "Harness execution timed out"
-          : "Harness reported an error";
+        : failureKind === FAILURE_KINDS.HARNESS_NOT_INSTALLED
+          ? "Harness CLI is unavailable"
+          : failureKind === FAILURE_KINDS.TIMEOUT
+            ? "Harness execution timed out"
+            : "Harness reported an error";
 
     if (canRetryErrorBehavior(errorBehavior, attemptIndex)) {
       const nextAttemptIndex = attemptIndex + 1;
@@ -5141,7 +5163,11 @@ export class WorkflowExecutor {
     await persistFailureOutput();
 
     if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-      await this.promptQueue.failStep(target.stepIndex, failureReason);
+      await this.promptQueue.failStep(
+        target.stepIndex,
+        failureReason,
+        failureKind
+      );
     } else {
       await this.setFinalStepRuntime(context, {
         phase: FINAL_STEP_PHASES.FINAL_STEP,

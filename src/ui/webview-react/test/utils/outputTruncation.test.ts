@@ -33,6 +33,40 @@ describe("outputTruncation", () => {
     );
   });
 
+  it("does not count a trailing newline as an extra output line", () => {
+    const preview = buildCollapsedOutputPreview("a\nb\nc\nd\ne\n", {
+      expanded: false,
+      maxLines: 3,
+      maxChars: 1000,
+    });
+
+    expect(preview).toMatchObject({
+      fullLineCount: 5,
+      visibleLineCount: 3,
+      hiddenLineCount: 2,
+      isTruncated: true,
+    });
+    expect(formatCollapsedOutputToggleLabel(preview, false)).toBe(
+      "[show 2 more lines]"
+    );
+  });
+
+  it("shows all output when a trailing newline leaves only one hidden line", () => {
+    const preview = buildCollapsedOutputPreview("a\nb\nc\nd\n", {
+      expanded: false,
+      maxLines: 3,
+      maxChars: 1000,
+    });
+
+    expect(preview).toMatchObject({
+      fullLineCount: 4,
+      visibleLineCount: 4,
+      hiddenLineCount: 0,
+      visibleText: "a\nb\nc\nd\n",
+      isTruncated: false,
+    });
+  });
+
   it("truncates a long single line by character count", () => {
     const text = "x".repeat(1600);
 

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-27 by the long-running bug-fix workflow final step (claude-cli, two helper agents independently)
 - **Area:** `src/core/PromptFileParser.ts` (`validateSchemaAndGetWarnings`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

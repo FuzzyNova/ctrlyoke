@@ -98,6 +98,7 @@ import {
 } from "../utils/ConfigurationUtils";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import { PromptFileResolver } from "./PromptFileResolver";
+import { resolvePromptTextWithVariables } from "./PromptTextResolver";
 import { resolveWorktreeSelection } from "../utils/WorktreeResolution";
 import {
   evaluateWorkspaceEligibility,
@@ -752,13 +753,12 @@ export class ExecutionPreviewService {
     if (isScriptStep(step)) {
       return Promise.resolve(VarSubstitutor.applyToScriptStep(step, variables));
     }
-    const substituted = VarSubstitutor.applyToPromptText(
+    return resolvePromptTextWithVariables(
       step.prompt,
-      variables
-    );
-    return this.promptFileResolver
-      .resolvePromptValue(substituted, sourceDefinitionPath)
-      .then((prompt) => ({ ...step, prompt }));
+      variables,
+      this.promptFileResolver,
+      sourceDefinitionPath
+    ).then((prompt) => ({ ...step, prompt }));
   }
 
   private scriptAsPrompt(step: ScriptStep): PromptStep {

@@ -443,6 +443,31 @@ describe("generateMarkdownExport", () => {
     expect(md).toContain("3.5s");
   });
 
+  it.each([1_000_000, 999_960])(
+    "formats a %i-token context window using the shared token units",
+    (contextWindowUsed) => {
+      const outputs = [
+        {
+          type: "cli" as const,
+          target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+          timestamp: 1000,
+          attemptIndex: 0,
+          data: {
+            tokens: {
+              prompt: 0,
+              completion: 0,
+              contextWindowUsed,
+              contextWindowSize: 1_000_000,
+            },
+          },
+        },
+      ];
+
+      const md = generateMarkdownExport(outputs, metadata);
+      expect(md).toContain("Context: 1M/1M (100%)");
+    }
+  );
+
   it("renders CLI command block when present", () => {
     const outputs = [
       {

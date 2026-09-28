@@ -73,6 +73,7 @@ import {
   buildCollapsedSingleLinePreview,
   buildCollapsedOutputPreview,
   getCollapsedOutputMaxChars,
+  stripTrailingNewline,
   splitTextIntoLineSegments,
   takeTrailingLines,
 } from "./outputTruncation";
@@ -1377,7 +1378,7 @@ function estimateBashOutputHeight(
     // largest bias on this row kind.
     totalHeight +=
       estimateWrappedLineCount(
-        preview.visibleText,
+        stripTrailingNewline(preview.visibleText),
         outputContentWidth,
         outputFontSize - 1,
         {

@@ -7,6 +7,7 @@ import {
   getMcpLocalSource,
   HARNESS_IDS,
   SETTING_SCOPES,
+  SPECIAL_TARGET_IDS,
 } from "../../types/DashboardConstants";
 import { safeDiscoverLocalMcpServers } from "../../utils/McpDiscoveryUtils";
 
@@ -31,6 +32,7 @@ suite("McpDiscoveryUtils", () => {
     appDataRoot = path.join(userHome, "AppData", "Roaming");
 
     await fs.mkdir(workspaceRoot, { recursive: true });
+    await fs.mkdir(path.join(workspaceRoot, ".codex"), { recursive: true });
     await fs.mkdir(appDataRoot, { recursive: true });
     await fs.mkdir(path.join(userHome, ".copilot"), { recursive: true });
     await fs.mkdir(path.join(userHome, ".codex"), { recursive: true });
@@ -276,5 +278,67 @@ suite("McpDiscoveryUtils", () => {
       transport: "streamable-http",
       headers: { Authorization: "Bearer token" },
     });
+  });
+
+  test("decodes Codex TOML Windows path escapes once", async () => {
+    const configPath = path.join(workspaceRoot, ".codex", "config.toml");
+    await fs.writeFile(
+      configPath,
+      String.raw`[mcp_servers.winsrv]
+command = "C:\\tools\\node.exe"
+args = ["C:\\new\\server.js"]
+`,
+      "utf-8"
+    );
+
+    const result = await safeDiscoverLocalMcpServers(workspaceRoot);
+    const entry = result.servers.find(
+      (server) =>
+        server.id === "winsrv" &&
+        server.source ===
+          getMcpLocalSource(HARNESS_IDS.CODEX_CLI, SETTING_SCOPES.WORKSPACE)
+    );
+
+    assert.strictEqual(entry?.command, String.raw`C:\tools\node.exe`);
+    assert.deepStrictEqual(entry?.args, [String.raw`C:\new\server.js`]);
+  });
+
+  test("discovers Codex TOML env sub-table values", async () => {
+    await fs.writeFile(
+      path.join(workspaceRoot, ".codex", "config.toml"),
+      `[mcp_servers.ctx7]\ncommand = "npx"\n[mcp_servers.ctx7.env]\nAPI_KEY = "abc"\n`,
+      "utf-8"
+    );
+
+    const result = await safeDiscoverLocalMcpServers(workspaceRoot);
+    const entry = result.servers.find(
+      (server) =>
+        server.id === "ctx7" &&
+        server.source ===
+          getMcpLocalSource(HARNESS_IDS.CODEX_CLI, SETTING_SCOPES.WORKSPACE)
+    );
+
+    assert.deepStrictEqual(entry?.env, { API_KEY: "abc" });
+  });
+
+  test("discovers VS Code MCP servers from JSONC with trailing commas", async () => {
+    const configPath = path.join(workspaceRoot, ".vscode", "mcp.json");
+    await fs.mkdir(path.dirname(configPath), { recursive: true });
+    await fs.writeFile(
+      configPath,
+      '{ "servers": { "gh": { "command": "npx", "args": ["-y", "server-github",], }, }, }',
+      "utf-8"
+    );
+
+    const result = await safeDiscoverLocalMcpServers(workspaceRoot);
+    const entry = result.servers.find(
+      (server) =>
+        server.id === "gh" &&
+        server.source ===
+          getMcpLocalSource(SPECIAL_TARGET_IDS.VSCODE, SETTING_SCOPES.WORKSPACE)
+    );
+
+    assert.strictEqual(entry?.command, "npx");
+    assert.deepStrictEqual(entry?.args, ["-y", "server-github"]);
   });
 });

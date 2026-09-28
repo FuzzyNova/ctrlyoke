@@ -370,9 +370,9 @@ export function getHistorySearchActiveFilterCount(
     filters.harnesses.length !== ALL_WORKFLOW_HARNESSES.length,
     filters.executionStates.length !== ALL_WORKFLOW_STATES.length,
     filters.pathContains.trim().length > 0,
-    filters.dateRange.preset !== DEFAULT_DATE_RANGE_FILTER.preset,
-    filters.dateRange.from.length > 0,
-    filters.dateRange.to.length > 0,
+    filters.dateRange.preset !== DEFAULT_DATE_RANGE_FILTER.preset ||
+      filters.dateRange.from.length > 0 ||
+      filters.dateRange.to.length > 0,
     filters.workflowOnly,
   ].filter(Boolean).length;
 }

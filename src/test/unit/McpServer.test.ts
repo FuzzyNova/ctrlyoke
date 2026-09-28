@@ -1068,6 +1068,75 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.strictEqual(output.outputs[0].nextCursor, "3");
   });
 
+  test("ends a page before a surrogate pair", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "surrogate-page-end",
+      "2026-01-01T00-00-00-000Z",
+      {
+        responseText: "AB😀CD",
+      }
+    );
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const output = responseJson(
+      await server.invokeTool("read_output", { indices: [0], limit: 3 })
+    );
+
+    assert.strictEqual(output.outputs[0].responseText, "AB");
+    assert.strictEqual(output.outputs[0].nextCursor, "2");
+  });
+
+  test("advances a cursor past a surrogate pair", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "surrogate-cursor-start",
+      "2026-01-01T00-00-00-000Z",
+      {
+        responseText: "AB😀CD",
+      }
+    );
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const output = responseJson(
+      await server.invokeTool("read_output", {
+        indices: [0],
+        cursor: "3",
+      })
+    );
+
+    assert.strictEqual(output.outputs[0].responseText, "CD");
+  });
+
+  test("starts a tail after a surrogate pair", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "surrogate-tail-start",
+      "2026-01-01T00-00-00-000Z",
+      {
+        responseText: "AB😀CD",
+      }
+    );
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const output = responseJson(
+      await server.invokeTool("read_output", { indices: [0], tail: 3 })
+    );
+
+    assert.strictEqual(output.outputs[0].responseText, "CD");
+  });
+
+  test("rejects a zero read_output limit", async () => {
+    const server = await setup();
+    const run = await createRun("zero-limit", "2026-01-01T00-00-00-000Z");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    await assert.rejects(
+      () => server.invokeTool("read_output", { indices: [0], limit: 0 }),
+      /limit.*(?:positive integer|greater than or equal to 1)/
+    );
+  });
+
   test("resumes from a cursor through the end without another cursor", async () => {
     const server = await setup();
     const run = await createRun("resume-page", "2026-01-01T00-00-00-000Z", {
@@ -1181,7 +1250,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
     await assert.rejects(
       () => server.invokeTool("read_output", { indices: [0], limit: -1 }),
-      /limit must be a non-negative integer/
+      /limit.*(?:positive integer|greater than or equal to 1)/
     );
     await assert.rejects(
       () => server.invokeTool("read_output", { indices: [0], tail: "2" }),

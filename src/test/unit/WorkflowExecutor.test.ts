@@ -31,7 +31,9 @@ import {
   STEP_STATUS,
   CONDITION_ACTIONS,
   TOKEN_TOTAL_CONFIDENCE,
+  FAILURE_KINDS,
 } from "../../types/DashboardConstants";
+import { getExitCode } from "../../cli/CliExitCode";
 import { configService } from "../../config/CtrlYokeConfigService";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import { CliEvent } from "../../types/WebviewMessageTypes";
@@ -2257,6 +2259,49 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     }
   });
 
+  test("substitutes variables inside prompt files and reports unresolved variables", async () => {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-executor-prompt-file-content-vars-")
+    );
+    try {
+      const sourceDefinitionPath = path.join(root, "workflow.ctrlyoke.json");
+      await fs.writeFile(
+        path.join(root, "review.prompt.md"),
+        "Review {{target}} and {{unknownFromFile}} carefully.",
+        "utf8"
+      );
+      const integration = new MockHarnessIntegration(undefined, false);
+      const queue = new PromptQueue();
+      const diagnostics: CompatibilityDiagnostic[] = [];
+      queue.loadPrompts({
+        vars: { target: "lib" },
+        steps: [{ prompt: "./review.prompt.md" }],
+      });
+
+      await makeExecutor(queue).execute(integration, {
+        ...makeContext(integration),
+        workspaceFolderPath: root,
+        sourceDefinitionPath,
+        reportCompatibilityDiagnostics: (reported) =>
+          diagnostics.push(...reported),
+      });
+
+      assert.deepStrictEqual(integration.sentPrompts, [
+        "Review lib and {{unknownFromFile}} carefully.",
+      ]);
+      assert.ok(
+        diagnostics.some(
+          (diagnostic) =>
+            diagnostic.code ===
+              PROMPT_DIAGNOSTIC_CODES.VARIABLE_SUBSTITUTION_IGNORED &&
+            diagnostic.message.includes("{{unknownFromFile}} in prompt text")
+        )
+      );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("substitutes {{var}} in a preCondition's script and env before running it", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
@@ -2739,6 +2784,60 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       queue.getState().results[0].preCondition?.error,
       "evaluator failed"
     );
+  });
+
+  test("reports a timed-out script step as a timeout failure to the CLI", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const platform = new MockPlatform();
+    const evaluator = new FixedEvaluationEvaluator(platform, {
+      passed: false,
+      actual: "",
+      errored: true,
+      stdout: "",
+      stderr: "",
+      result: "",
+      duration: 1000,
+      error: "timed out after 1000ms",
+      timeout: true,
+    });
+    const executor = makeExecutor(queue, evaluator);
+    queue.loadPrompts({
+      steps: [{ type: "script", script: "node slow-script.js" }],
+    });
+
+    await executor.execute(integration, makeContext(integration));
+
+    assert.strictEqual(
+      queue.getState().results[0].failureKind,
+      FAILURE_KINDS.TIMEOUT
+    );
+    assert.strictEqual(getExitCode(queue.getState()), 4);
+  });
+
+  test("keeps ordinary script failures at CLI exit code 1", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const platform = new MockPlatform();
+    const evaluator = new FixedEvaluationEvaluator(platform, {
+      passed: false,
+      actual: "",
+      errored: true,
+      stdout: "",
+      stderr: "script failed",
+      result: "",
+      duration: 3,
+      error: "script failed",
+    });
+    const executor = makeExecutor(queue, evaluator);
+    queue.loadPrompts({
+      steps: [{ type: "script", script: "node failing-script.js" }],
+    });
+
+    await executor.execute(integration, makeContext(integration));
+
+    assert.strictEqual(queue.getState().results[0].failureKind, undefined);
+    assert.strictEqual(getExitCode(queue.getState()), 1);
   });
 
   test("runs finalStep once after queue drains", async () => {

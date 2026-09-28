@@ -65,6 +65,7 @@ import {
 } from "./WorkspaceInitializer";
 import {
   ScriptProcessRunner,
+  resolveScriptInvocation,
   type ScriptProcessResult,
 } from "./ScriptProcessRunner";
 import {
@@ -251,12 +252,13 @@ export class DefaultWorktreeSetupRunner implements WorktreeSetupRunner {
   }: WorktreeSetupRunnerArgs): Promise<ScriptProcessResult> {
     const runner = new ScriptProcessRunner(executionRoot);
     try {
+      const invocation = resolveScriptInvocation(command);
       return await runner.run({
         cwd: executionRoot,
         timeout: timeoutMs,
-        argv: [command],
+        argv: invocation.argv,
         vars,
-        viaShell: true,
+        windowsVerbatimArguments: invocation.windowsVerbatimArguments,
       });
     } finally {
       runner.dispose();

@@ -1,6 +1,28 @@
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import { CliProcessManager } from "../../utils/CliProcessManager";
 import { Log } from "../../utils/Log";
+import { resolveShellInvocation } from "../harness/PtyProcessManager";
+
+export interface ResolvedScriptInvocation {
+  argv: readonly [string, ...string[]];
+  windowsVerbatimArguments: boolean;
+}
+
+/** Resolve script text to the explicit shell argv used by headless execution. */
+export function resolveScriptInvocation(
+  script: string,
+  shellOverride?: string
+): ResolvedScriptInvocation {
+  const invocation = resolveShellInvocation(script, shellOverride);
+  const argv: [string, ...string[]] = [
+    invocation.executable,
+    ...invocation.args,
+  ];
+  return {
+    argv,
+    windowsVerbatimArguments: invocation.windowsVerbatimArguments,
+  };
+}
 
 export interface ScriptProcessRunnerOptions {
   /** Directory in which the process must run. */

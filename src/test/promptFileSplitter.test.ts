@@ -532,6 +532,42 @@ suite("PromptFileSplitter Tests", () => {
     });
   });
 
+  suite("chunk limits", () => {
+    test("keeps every chunk within the line limit after a small merge candidate", () => {
+      const splitter = new PromptFileSplitter();
+      const prompt =
+        Array(1700).fill("x").join("\n") +
+        "\n\n" +
+        Array(1000).fill("y").join("\n") +
+        "\n\n" +
+        Array(1700).fill("z").join("\n");
+
+      const result = splitter.split(prompt);
+
+      assert.deepStrictEqual(result.lineCounts, [1700, 1000, 1700]);
+      assert.ok(result.lineCounts.every((count) => count <= 1800));
+    });
+
+    test("keeps every chunk within the token limit after a small merge candidate", () => {
+      const maxTokensPerFile = 100;
+      const splitter = new PromptFileSplitter({
+        maxTokensPerFile,
+        minChunkSize: 50,
+        splitOnAttachmentBoundaries: false,
+      });
+      const prompt =
+        "word ".repeat(70) +
+        "\n\n" +
+        "middle ".repeat(30) +
+        "\n\n" +
+        "last ".repeat(70);
+
+      const result = splitter.split(prompt);
+
+      assert.ok(result.tokenCounts.every((count) => count <= maxTokensPerFile));
+    });
+  });
+
   suite("splitContextContent", () => {
     test("should not split when content fits both limits", () => {
       const splitter = new PromptFileSplitter();

@@ -29,6 +29,7 @@ import { configService } from "../../../config/CtrlYokeConfigService";
 import type { CliExecutionTransportCoordinator } from "./CliTransportCoordinator";
 import type { CliResolvedCommand } from "./CliLauncherResolver";
 import { AsyncMutex } from "./AsyncMutex";
+import { CliTransportError } from "./CliTransportError";
 
 interface CliInteractiveStartupCoordinatorLike {
   resolveSession(params: {
@@ -459,6 +460,16 @@ export class CliExecutionRunner {
       return success;
     } catch (error) {
       hookMonitor?.stop();
+      if (
+        error instanceof CliTransportError &&
+        error.failureKind === FAILURE_KINDS.HARNESS_NOT_INSTALLED
+      ) {
+        session.updateFailure(error.failureKind, error.message);
+        this.deps.runtimeState.setFailureReason(
+          this.deps.failureTracker.markHarnessNotInstalled(error.message)
+        );
+        return false;
+      }
       Log.error("[CliExecutionRunner] Headless execution error", error);
       this.deps.runtimeState.setFailureReason(getErrorMessage(error));
       return false;

@@ -25,7 +25,7 @@ export const DEFAULT_COLLAPSED_COMMAND_MAX_CHARS = 160;
  */
 export const SCRIPT_OUTPUT_LINES_PER_ROW = 30;
 
-function stripTrailingNewline(text: string): string {
+export function stripTrailingNewline(text: string): string {
   return text.endsWith("\n") ? text.slice(0, -1) : text;
 }
 
@@ -180,7 +180,8 @@ export interface CollapsedSingleLinePreviewOptions {
 }
 
 function countLines(text: string): number {
-  return text.length === 0 ? 0 : text.split("\n").length;
+  const body = stripTrailingNewline(text);
+  return body.length === 0 ? 0 : body.split("\n").length;
 }
 
 function getLineLimitEnd(text: string, maxLines: number): number {

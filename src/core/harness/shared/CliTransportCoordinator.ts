@@ -33,6 +33,8 @@ import {
 import type { PtyProcessManager, PtySession } from "../PtyProcessManager";
 import type { TerminalStartedMessage } from "../../../types/WebviewMessageTypes";
 import { CliLogEventPump } from "./CliLogEventPump";
+import { FAILURE_KINDS } from "../../../types/DashboardConstants";
+import { CliTransportError } from "./CliTransportError";
 import {
   HeadlessLogTail,
   type HeadlessProcessResult,
@@ -604,6 +606,9 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       if (source?.logTail) {
         await source.logTail.finish();
       }
+      if (error instanceof CliTransportError) {
+        throw error;
+      }
       Log.error("[CliTransportCoordinator] Headless execution error", error);
       return false;
     } finally {
@@ -758,18 +763,30 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     );
     const env = { ...baseEnv, ...options.env, ...secretEnv };
 
-    const result = await this.withProcessEnvOverrides(
-      { ...headlessEnvOverrides, ...secretEnv },
-      async () =>
-        this.deps.processManager.spawn(command, args, {
-          cwd: this.deps.runtimeState.getWorkspaceRoot() || "",
-          timeout: options.timeout,
-          onStdout: options.onStdout,
-          shell: false,
-          windowsVerbatimArguments: options.windowsVerbatimArguments,
-          env,
-        })
-    );
+    let result: SpawnResult;
+    try {
+      result = await this.withProcessEnvOverrides(
+        { ...headlessEnvOverrides, ...secretEnv },
+        async () =>
+          this.deps.processManager.spawn(command, args, {
+            cwd: this.deps.runtimeState.getWorkspaceRoot() || "",
+            timeout: options.timeout,
+            onStdout: options.onStdout,
+            shell: false,
+            windowsVerbatimArguments: options.windowsVerbatimArguments,
+            env,
+          })
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
+        throw new CliTransportError(
+          `Harness CLI could not be started: ${getErrorMessage(error)}`,
+          FAILURE_KINDS.HARNESS_NOT_INSTALLED,
+          { cause: error }
+        );
+      }
+      throw error;
+    }
 
     Log.info("[CliTransportCoordinator] Process exited - execution complete");
     return result;

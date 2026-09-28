@@ -346,17 +346,17 @@ export class PromptFileSplitter {
         (currentTokens + paraTokens > this.packingTokenLimit ||
           currentLines + paraLines > this.config.maxLinesPerFile)
       ) {
-        // Finalize the current chunk if it meets the minimum size.
-        // Exception: when the next paragraph is itself oversized (it will be
-        // sub-split line-by-line below), keep the existing small content in
-        // currentChunk so it gets bundled with the first lines of that
-        // paragraph rather than becoming a tiny isolated standalone file.
+        // Finalize the current chunk when it meets the minimum size. A small
+        // first chunk may still be bundled with an oversized paragraph and
+        // split line-by-line below, but never merge into a chunk that already
+        // exists: doing so can exceed either configured limit.
         const nextParaOversized =
           paraTokens > this.packingTokenLimit ||
           paraLines > this.config.maxLinesPerFile;
         if (
           currentTokens >= this.config.minChunkSize ||
-          (!nextParaOversized && chunks.length === 0)
+          chunks.length > 0 ||
+          !nextParaOversized
         ) {
           chunks.push(currentChunk.trim());
           currentChunk = "";

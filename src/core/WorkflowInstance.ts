@@ -130,6 +130,7 @@ import {
 } from "./orchestration/ScriptExecutionReporter";
 import {
   ScriptProcessRunner,
+  resolveScriptInvocation,
   type ScriptProcessResult,
 } from "./orchestration/ScriptProcessRunner";
 
@@ -4223,13 +4224,15 @@ export class WorkflowInstance {
             vars: args.vars,
             evaluate: async (onOutput): Promise<EvaluationResult> => {
               const startedAt = Date.now();
+              const invocation = resolveScriptInvocation(args.command);
               processResult = await processRunner.run({
                 cwd: args.executionRoot,
                 timeout: args.timeoutMs,
-                argv: [args.command],
+                argv: invocation.argv,
                 vars: args.vars,
                 onOutput,
-                viaShell: true,
+                windowsVerbatimArguments:
+                  invocation.windowsVerbatimArguments,
               });
               const comparison = this.endConditionEvaluator.evaluateResult(
                 {

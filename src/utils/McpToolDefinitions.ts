@@ -458,6 +458,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
         },
         limit: {
           type: "number",
+          minimum: 1,
           description:
             "Maximum number of characters to return from the selected step. Omit to read through the end.",
         },

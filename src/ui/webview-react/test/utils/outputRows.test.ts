@@ -2059,6 +2059,72 @@ describe("outputRows", () => {
     );
   });
 
+  it("uses the newline-adjusted collapsed preview in bash row-height estimates", () => {
+    const allMessages: OutputMessage[] = [
+      {
+        type: "cli",
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+        timestamp: 1000,
+        attemptIndex: 0,
+        runIndex: 0,
+        data: {
+          prompt: "Run command",
+          response: "",
+          elapsed: 0.5,
+          isStreaming: false,
+          structured: {
+            events: [
+              {
+                type: CLI_EVENT_TYPES.BASH_COMMAND,
+                data: {
+                  command: "node script.js",
+                  status: OPERATION_STATUS.COMPLETED,
+                  output: "a\nb\nc\nd\n",
+                },
+              },
+            ],
+            metadata: {},
+          },
+        },
+      },
+    ];
+    const result = buildOutputRows({
+      allMessages,
+      steps,
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+      outputContentWidth: 360,
+    });
+
+    const bashRow = result.rows.find(
+      (row) =>
+        row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
+        row.event.type === CLI_EVENT_TYPES.BASH_COMMAND
+    );
+
+    if (!bashRow || bashRow.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT) {
+      throw new Error("Expected bash structured-event row");
+    }
+
+    expect(bashRow.estimateSize).toBe(
+      TOOL_CALL_BLOCK_VERTICAL_CHROME +
+        toolCallLineHeight(13) +
+        4 * toolResultLineHeight(13)
+    );
+  });
+
   it("uses collapsed character-limited bash previews in row estimates", () => {
     const rowKey = "queue:0:run0:attempt0:event:0";
     const allMessages: OutputMessage[] = [

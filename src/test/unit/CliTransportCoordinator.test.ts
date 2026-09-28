@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { CliTransportCoordinator } from "../../core/harness/shared/CliTransportCoordinator";
+import { CliTransportError } from "../../core/harness/shared/CliTransportError";
 import type { HeadlessStreamingSource } from "../../core/harness/shared/HeadlessLogTail";
 import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
 import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
@@ -9,6 +10,7 @@ import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProv
 import {
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
+  FAILURE_KINDS,
   MESSAGE_TYPES,
   NOTIFICATION_OUTCOME_KINDS,
   SESSION_KINDS,
@@ -161,6 +163,39 @@ const stdoutProviderFactories: ReadonlyArray<{
 ];
 
 suite("CliTransportCoordinator", () => {
+  test("classifies an ENOENT spawn as a missing harness", async () => {
+    const spawnError = Object.assign(new Error("spawn test-cli ENOENT"), {
+      code: "ENOENT",
+    });
+    const coordinator = new CliTransportCoordinator({
+      provider: createHeadlessProvider(),
+      processManager: {
+        spawn: async () => {
+          throw spawnError;
+        },
+        isActive: () => false,
+      } as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+    });
+
+    await assert.rejects(
+      coordinator.executeHeadless([], "prompt", [], async () => true),
+      (error: unknown) => {
+        assert.ok(error instanceof CliTransportError);
+        assert.strictEqual(
+          error.failureKind,
+          FAILURE_KINDS.HARNESS_NOT_INSTALLED
+        );
+        return true;
+      }
+    );
+  });
+
   test("should keep Codex headless hook arguments out of the shell", async () => {
     let preparedCommand:
       { promptArgument: string; cliCommand: string } | undefined;

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-27 by the long-running bug-fix workflow final step (claude-cli, helper agent)
 - **Area:** `src/mcp-server.ts` (`read_output` paging)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

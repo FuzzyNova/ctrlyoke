@@ -490,6 +490,9 @@ export interface IWorkingFileQueueAccess {
   /** Current workflow name */
   getWorkflowName(): string | undefined;
 
+  /** Workflow variables that should be persisted with the current run. */
+  getWorkflowVars?(): Record<string, string> | undefined;
+
   /** Current normalized parallel-group topology. */
   getParallelGroups?(): ParallelGroupDefinition[];
 
@@ -1987,6 +1990,10 @@ export class WorkingFileManager {
       workingFile.steps = this.queueAccess
         .getSteps()
         .map(stripViewOnlyWorkflowStepFields);
+      const workflowVars = this.queueAccess.getWorkflowVars?.();
+      if (workflowVars !== undefined) {
+        workingFile.vars = workflowVars;
+      }
       workingFile.parallelGroups = normalizeParallelGroupTopology({
         steps: this.queueAccess.getSteps(),
         parallelGroups: this.queueAccess.getParallelGroups?.() ?? [],
