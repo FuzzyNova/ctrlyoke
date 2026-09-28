@@ -85,6 +85,11 @@ export interface StreamingHistoryBufferOptions {
  */
 export class StreamingHistoryBuffer {
   private readonly pending = new Map<string, PendingEntry>();
+  /**
+   * Flushes already taken out of `pending` whose write or `onFlushed` publish
+   * has not finished yet, keyed to their history file.
+   */
+  private readonly inFlight = new Map<Promise<void>, string>();
   private readonly maxBufferedChars: number;
   private readonly maxBufferedAgeMs: number;
 
@@ -187,6 +192,12 @@ export class StreamingHistoryBuffer {
   /**
    * Write everything buffered. Pass a history file to flush only that run's
    * entries; omit it to flush every run (process shutdown).
+   *
+   * Also waits for flushes already in flight (a boundary- or timer-triggered
+   * write that started before this call), including their `onFlushed`
+   * publish. Callers rely on "flush resolved" meaning every delta has reached
+   * the live dashboard, so the completed output they send next can never
+   * overtake the streamed tail it supersedes.
    */
   async flush(historyFilePath?: string): Promise<void> {
     const keys = [...this.pending.keys()].filter(
@@ -197,6 +208,11 @@ export class StreamingHistoryBuffer {
     for (const key of keys) {
       await this.flushEntry(key);
     }
+    const inFlight = [...this.inFlight]
+      .filter(([, path]) => !historyFilePath || path === historyFilePath)
+      .map(([promise]) => promise);
+    // Another caller owns (and reports) any failure of these flushes.
+    await Promise.allSettled(inFlight);
   }
 
   private ensureEntry(
@@ -253,6 +269,14 @@ export class StreamingHistoryBuffer {
       return;
     }
 
+    const inFlight = this.writeEntry(entry).finally(() => {
+      this.inFlight.delete(inFlight);
+    });
+    this.inFlight.set(inFlight, entry.historyFilePath);
+    await inFlight;
+  }
+
+  private async writeEntry(entry: PendingEntry): Promise<void> {
     const flush: StreamingHistoryFlush = {
       target: entry.target,
       runIndex: entry.runIndex,

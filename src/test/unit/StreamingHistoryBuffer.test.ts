@@ -178,6 +178,41 @@ suite("StreamingHistoryBuffer", () => {
     assert.strictEqual(writes.length, 2);
   });
 
+  test("flush waits for an in-flight write and its publish", async () => {
+    // An age-cap flush that has already taken the entry out of `pending` is
+    // still writing when the attempt completes. flush() must not resolve until
+    // that batch is published, or the completed output overtakes the streamed
+    // tail and the dashboard draws a spurious follow-up divider.
+    let releaseWrite!: () => void;
+    const writeGate = new Promise<void>((resolve) => {
+      releaseWrite = resolve;
+    });
+    const published: StreamingHistoryFlush[] = [];
+    const buffer = new StreamingHistoryBuffer(
+      async () => {
+        await writeGate;
+        return { sequences: [7] };
+      },
+      { maxBufferedAgeMs: 5 },
+      (flush) => published.push(flush)
+    );
+
+    await buffer.addEvents(HISTORY_FILE, TARGET, 0, 0, [textEvent("tail")]);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    let flushed = false;
+    const flushPromise = buffer.flush(HISTORY_FILE).then(() => {
+      flushed = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.strictEqual(flushed, false, "flush resolved before the write");
+
+    releaseWrite();
+    await flushPromise;
+    assert.strictEqual(published.length, 1);
+    assert.deepStrictEqual(published[0].events, [textEvent("tail")]);
+  });
+
   test("flush is a no-op once buffers are drained", async () => {
     const { buffer, writes } = createBuffer();
 

@@ -3078,6 +3078,72 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     );
   });
 
+  test("flushes the buffered streaming tail before dispatching completed output", async () => {
+    // The history buffer publishes trailing text live only once it is written.
+    // If the `isStreaming: false` output reaches the dashboard first, the late
+    // batch is misread as post-completion activity (a spurious follow-up row).
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+    const order: string[] = [];
+    const outputHistoryManager = new Proxy(
+      {
+        flushPendingWrites: async () => {
+          order.push("flush");
+        },
+      },
+      {
+        get: (target, property) =>
+          Reflect.get(target, property) ?? (async () => undefined),
+      }
+    );
+    const dashboardProvider = new Proxy(
+      {
+        updateCliOutput: (_stepIndex: number, output: CliOutput) => {
+          if (!output.isStreaming) {
+            order.push("completed-output");
+          }
+        },
+        updateFinalStepOutput: (_loopIndex: number, output: CliOutput) => {
+          if (!output.isStreaming) {
+            order.push("completed-final-output");
+          }
+        },
+      },
+      {
+        get: (target, property) =>
+          Reflect.get(target, property) ?? (() => undefined),
+      }
+    );
+
+    queue.loadPrompts({
+      steps: [{ prompt: "queue-step" }],
+      finalStep: { prompt: "final-step" },
+    });
+
+    await executor.execute(integration, {
+      ...makeContext(integration),
+      historyFilePath: "history.json",
+      outputHistoryManager: outputHistoryManager as any,
+      dashboardProvider: dashboardProvider as any,
+    });
+
+    const completedIndices = order
+      .map((entry, index) => (entry === "flush" ? -1 : index))
+      .filter((index) => index >= 0);
+    assert.deepStrictEqual(
+      completedIndices.map((index) => order[index]),
+      ["completed-output", "completed-final-output"]
+    );
+    for (const index of completedIndices) {
+      assert.strictEqual(
+        order[index - 1],
+        "flush",
+        `completed output dispatched before flushing: ${order.join(", ")}`
+      );
+    }
+  });
+
   test("preserves finalStep runtime phase on stop/error during finalStep", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
@@ -3453,6 +3519,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       startStreamingExecutionOutput: async () => {
         historyCallOrder.push("start");
       },
+      flushPendingWrites: async () => undefined,
       appendStatusMessage: async (
         _historyFilePath: string,
         target: unknown,

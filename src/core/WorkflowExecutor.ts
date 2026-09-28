@@ -3093,6 +3093,21 @@ export class WorkflowExecutor {
     integration: HarnessIntegration,
     logContext: string
   ): Promise<void> {
+    // The history manager's streaming buffer holds trailing text for up to
+    // its age cap and only pushes it live once written. Land that tail first:
+    // a streamed batch reaching the dashboard after this `isStreaming: false`
+    // output reads as post-completion activity and draws a spurious
+    // "Follow-up" divider. Same ordering as ScriptExecutionReporter.
+    if (context.historyFilePath && context.outputHistoryManager) {
+      await context.outputHistoryManager
+        .flushPendingWrites(context.historyFilePath)
+        .catch((err) =>
+          Log.warn(
+            `[WorkflowExecutor] Failed to flush streamed ${logContext} before completion:`,
+            err
+          )
+        );
+    }
     this.dispatchCompletedOutput(
       context,
       target,
