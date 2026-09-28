@@ -47,6 +47,7 @@ import {
 } from "./outputUtils";
 import { formatCliCommandDisplay } from "./outputCommandDisplay";
 import { isScriptOutput } from "./outputRenderUtils";
+import { formatTokenCount } from "@root/utils/TokenFormatting";
 
 // ── Private helpers ────────────────────────────────────────────────────────────
 
@@ -527,13 +528,11 @@ export function generateMarkdownExport(
             contextWindowSize,
           } = output.tokens;
           if (contextWindowUsed !== undefined && contextWindowSize) {
-            const fmt = (n: number) =>
-              n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
             const pct = Math.round(
               (contextWindowUsed / contextWindowSize) * 100
             );
             stats.push(
-              `Context: ${fmt(contextWindowUsed)}/${fmt(contextWindowSize)} (${pct}%)`
+              `Context: ${formatTokenCount(contextWindowUsed)}/${formatTokenCount(contextWindowSize)} (${pct}%)`
             );
           }
           const total = prompt + completion;

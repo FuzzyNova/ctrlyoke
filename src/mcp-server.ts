@@ -144,6 +144,22 @@ interface ReadOutputPaging {
   tail?: number;
 }
 
+function startsInsideSurrogatePair(text: string, index: number): boolean {
+  if (index <= 0 || index >= text.length) return false;
+  const preceding = text.charCodeAt(index - 1);
+  const current = text.charCodeAt(index);
+  return (
+    preceding >= 0xd800 &&
+    preceding <= 0xdbff &&
+    current >= 0xdc00 &&
+    current <= 0xdfff
+  );
+}
+
+function movePastSurrogateBoundary(text: string, index: number): number {
+  return startsInsideSurrogatePair(text, index) ? index + 1 : index;
+}
+
 export interface McpToolCallingContext {
   readonly attested: boolean;
   readonly groupMember: boolean;
@@ -1573,16 +1589,32 @@ export class CtrlYokeMCPServer {
         }
 
         if (paging.tail !== undefined) {
+          const tailStart = movePastSurrogateBoundary(
+            fullResponseText,
+            Math.max(0, fullResponseText.length - paging.tail)
+          );
           return {
             ...baseOutput,
             responseText:
-              paging.tail === 0 ? "" : fullResponseText.slice(-paging.tail),
+              paging.tail === 0 ? "" : fullResponseText.slice(tailStart),
           };
         }
 
-        const offset = paging.cursor === undefined ? 0 : Number(paging.cursor);
-        const end =
+        const requestedOffset =
+          paging.cursor === undefined ? 0 : Number(paging.cursor);
+        const offset = movePastSurrogateBoundary(
+          fullResponseText,
+          requestedOffset
+        );
+        const requestedEnd =
           paging.limit === undefined ? undefined : offset + paging.limit;
+        const end =
+          requestedEnd !== undefined &&
+          startsInsideSurrogatePair(fullResponseText, requestedEnd)
+            ? requestedEnd - 1 > offset
+              ? requestedEnd - 1
+              : requestedEnd + 1
+            : requestedEnd;
         const responseText = fullResponseText.slice(offset, end);
         const hasNextCursor =
           paging.limit !== undefined && end! < fullResponseText.length;
@@ -1668,8 +1700,11 @@ export class CtrlYokeMCPServer {
       if (count === undefined) {
         return undefined;
       }
-      if (!Number.isSafeInteger(count) || count < 0) {
-        throw new Error(`read_output: ${name} must be a non-negative integer`);
+      const isLimit = name === "limit";
+      if (!Number.isSafeInteger(count) || count < (isLimit ? 1 : 0)) {
+        throw new Error(
+          `read_output: ${name} must be a ${isLimit ? "positive" : "non-negative"} integer`
+        );
       }
       return count;
     };
