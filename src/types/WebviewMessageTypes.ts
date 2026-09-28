@@ -506,6 +506,8 @@ export interface InitMessageData {
     model: string;
     agent: string;
     executionMode: ExecutionMode;
+    /** Raw global workflow step cap; -1 means unlimited. */
+    maxSteps: number;
     effectiveParallelGroupWidth?: number;
     resumeSession: boolean;
     mcpServers: (string | McpServerConfig)[];
@@ -1595,6 +1597,8 @@ export interface GlobalSettingsUpdatedMessage {
     agent: string;
     skills?: string[];
     executionMode: ExecutionMode;
+    /** Raw global workflow step cap; -1 means unlimited. */
+    maxSteps: number;
     effectiveParallelGroupWidth?: number;
     resumeSession: boolean;
     mcpServers: (string | McpServerConfig)[];

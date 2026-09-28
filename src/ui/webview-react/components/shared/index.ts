@@ -49,6 +49,7 @@ export {
 export { DrawerTabBar } from "./DrawerTabBar";
 export { DrawerRow } from "./DrawerRow";
 export { PriorContextSelect, type KeywordMode } from "./PriorContextSelect";
+export { LimitSelect } from "./LimitSelect";
 export { SkillsSelect } from "./SkillsSelect";
 export {
   McpServersEditor,

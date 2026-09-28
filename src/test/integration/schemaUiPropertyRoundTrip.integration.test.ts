@@ -407,6 +407,7 @@ const UI_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
   ["harness", ["settings-harness"]],
   ["hooks", ["hook-${index}-command"]],
   ["mcpServers", ["settings-mcp-servers"]],
+  ["maxSteps", ["settings-max-steps"]],
   ["model", ["settings-model"]],
   ["onFail", ["${idPrefix}-on-fail"]],
   ["onPass", ["${idPrefix}-on-pass"]],

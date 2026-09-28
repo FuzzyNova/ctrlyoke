@@ -412,7 +412,7 @@ split is:
 | 1    | Phase 1: schemas (`unlimitedValue`, `maxStepsValue`, `maxSteps`, `oneOf` conversions), types and constants, the full rename and `unlimitedMode` removal across backend and UI (the Queue toggle is simply deleted), regenerated artifacts, `schemas/archive/v1/` mirror, `EXECUTION_GUARDRAILS_PLAN.md` edit, schema tests | Done    |
 | 2    | Phase 2: `LimitUtils`, `resolveEffectiveMaxSteps`, every enforcement site, required `RunContinuationService` limit, MCP `workflow_status`, dry-run, tests                                                                                                                                                                  | Done    |
 | 3    | Phase 3 items 1–2, 5–6: `LimitSelect`, option metadata, vocabulary test, and every settings page and `ScriptConditionEditor` switched to it                                                                                                                                                                                | Done    |
-| 4    | Phase 3 items 3–4: the Max Steps control on the Validation page, Set as default, round-trip tests                                                                                                                                                                                                                          | Pending |
+| 4    | Phase 3 items 3–4: the Max Steps control on the Validation page, Set as default, round-trip tests                                                                                                                                                                                                                          | Done    |
 | 5    | Phase 4 docs, the §1.1 vocabulary row, and the acceptance-criteria sweep                                                                                                                                                                                                                                                   | Pending |
 
 Each step updates its row when it commits.
@@ -445,6 +445,14 @@ workflow-control parity failure, unrelated schema-round-trip, CLI dry-run,
 `HostedWorkspaceViewerService`, and `WorkingFileManager` failures, plus Step 3
 retry UI, metadata, and repeated-string failures. The Step 3 failures were
 fixed; the metadata, string-scan, and affected UI suites pass in focused runs.
+
+Step 4 note: the workflow-level control, raw global setting sync, Set as
+default, and round-trip coverage are complete. UI (3,032 tests) and packaging
+(69 tests) pass. The extension suite still has five unrelated failures:
+WorkingFileManager, HostedWorkspaceViewerService, a script-to-prompt mutation
+case in the schema round-trip suite (the live-control ID gate passes), and a
+CLI dry-run chunk-count case. Repository-wide `format:check` still reports 36
+violations outside the changed files; all changed files pass Prettier.
 
 ## Non-goals
 

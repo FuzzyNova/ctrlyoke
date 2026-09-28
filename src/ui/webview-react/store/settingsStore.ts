@@ -115,6 +115,8 @@ export interface GlobalSettings {
   skills: string[];
   secrets?: string[];
   executionMode: ExecutionMode;
+  /** Raw global workflow step cap; -1 means unlimited. */
+  maxSteps: number;
   /** Effective queue fan-out width, available before the settings drawer opens. */
   effectiveParallelGroupWidth: number;
   resumeSession: boolean;
@@ -409,6 +411,7 @@ const initialGlobalSettings: GlobalSettings = {
   skills: [],
   secrets: [],
   executionMode: EXECUTION_MODES.INTERACTIVE,
+  maxSteps: CTRLYOKE_SETTINGS_DEFAULTS.queue.maxSteps,
   effectiveParallelGroupWidth:
     CTRLYOKE_SETTINGS_DEFAULTS.queue.maxParallelSteps,
   resumeSession: false,

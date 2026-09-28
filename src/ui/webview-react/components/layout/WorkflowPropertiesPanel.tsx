@@ -58,6 +58,7 @@ import {
   type ScriptConditionValue,
   ScriptCommandEditor,
   AdditionalArgsEditor,
+  LimitSelect,
   KeyValueRowsEditor,
   TrustedRootsListEditor,
   BranchNameEditor,
@@ -1363,6 +1364,21 @@ const WorkflowPropertiesPanelInner: React.FC<{
     [syncWorkflowPropertiesForUndo, vscode]
   );
 
+  const handleMaxStepsChange = useCallback(
+    (value: number | undefined) => {
+      useSettingsStore
+        .getState()
+        .updateWorkflowProperty(PROMPT_PROPERTIES.MAX_STEPS, value);
+      syncWorkflowPropertiesForUndo();
+      postWorkflowDefinitionMutation(vscode, {
+        type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
+        property: PROMPT_PROPERTIES.MAX_STEPS,
+        value,
+      });
+    },
+    [syncWorkflowPropertiesForUndo, vscode]
+  );
+
   const handleSetAsDefault = useCallback(
     (property: string, value: unknown, harness?: string) => {
       vscode.postMessage({
@@ -2310,6 +2326,42 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   idPrefix="settings-error"
                 />
               </div>
+
+              <FormField
+                label="Max Steps"
+                schemaPath="maxSteps"
+                htmlFor="settings-max-steps"
+                setAsDefaultButton={
+                  <SetAsDefaultButton
+                    property={PROMPT_PROPERTIES.MAX_STEPS}
+                    show={isDifferentFromGlobal(PROMPT_PROPERTIES.MAX_STEPS)}
+                    onSetDefault={() =>
+                      handleSetAsDefault(
+                        PROMPT_PROPERTIES.MAX_STEPS,
+                        workflowProperties.maxSteps
+                      )
+                    }
+                  />
+                }
+              >
+                <LimitSelect
+                  id="settings-max-steps"
+                  label="Max Steps"
+                  path="maxSteps"
+                  value={workflowProperties.maxSteps}
+                  onChange={handleMaxStepsChange}
+                  inheritLabel={
+                    globalSettings.maxSteps === -1
+                      ? "Unlimited"
+                      : String(globalSettings.maxSteps)
+                  }
+                  customFallback={
+                    globalSettings.maxSteps === -1
+                      ? 100
+                      : globalSettings.maxSteps
+                  }
+                />
+              </FormField>
             </div>
           )}
 

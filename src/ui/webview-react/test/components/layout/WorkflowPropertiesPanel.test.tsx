@@ -26,7 +26,9 @@ import { useSecretRegistryStore } from "@store/secretRegistryStore";
 import {
   EXECUTION_MODES,
   HARNESS_IDS,
+  MESSAGE_TYPES,
   PERMISSION_MODES,
+  PROMPT_PROPERTIES,
   WORKTREE_MODES,
 } from "@root/types/DashboardConstants";
 
@@ -73,6 +75,114 @@ describe("WorkflowPropertiesPanel permissions", () => {
     expect(fieldLabel).toHaveAttribute(
       "aria-label",
       "Harness, property harness"
+    );
+  });
+
+  it("supports inherited, unlimited, and custom workflow step caps", () => {
+    useSettingsStore.getState().updateGlobalSetting("maxSteps", 100);
+    useSettingsStore.getState().updateWorkflowProperty("maxSteps", 7);
+    render(<WorkflowPropertiesPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Validation" }));
+
+    const maxSteps = () =>
+      screen.getByRole("button", { name: /property maxSteps/ });
+    expect(maxSteps()).toHaveTextContent("Custom");
+
+    fireEvent.click(maxSteps());
+    fireEvent.click(screen.getByRole("button", { name: /^Inherit \(100\)/ }));
+    expect(
+      useSettingsStore.getState().workflowProperties.maxSteps
+    ).toBeUndefined();
+    expect(postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        property: PROMPT_PROPERTIES.MAX_STEPS,
+        value: undefined,
+      })
+    );
+
+    fireEvent.click(maxSteps());
+    fireEvent.click(screen.getByRole("button", { name: /^Unlimited/ }));
+    expect(useSettingsStore.getState().workflowProperties.maxSteps).toBe(-1);
+
+    fireEvent.click(maxSteps());
+    const customOptions = screen.getAllByRole("button", { name: /^Custom/ });
+    fireEvent.click(customOptions[customOptions.length - 1]);
+    expect(useSettingsStore.getState().workflowProperties.maxSteps).toBe(100);
+    expect(screen.getByLabelText(/^Max Steps Custom/)).toHaveValue(100);
+  });
+
+  it.each([
+    [100, "Inherit (100)"],
+    [-1, "Inherit (Unlimited)"],
+  ])(
+    "shows the resolved global step cap in the inherit label",
+    (value, label) => {
+      useSettingsStore.getState().updateGlobalSetting("maxSteps", value);
+      render(<WorkflowPropertiesPanel />);
+      fireEvent.click(screen.getByRole("tab", { name: "Validation" }));
+
+      expect(
+        screen.getByRole("button", { name: /property maxSteps/ })
+      ).toHaveTextContent(label);
+    }
+  );
+
+  it("prefills Custom from the inherited cap, using 100 when it is unlimited", () => {
+    useSettingsStore.getState().updateGlobalSetting("maxSteps", 42);
+    render(<WorkflowPropertiesPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Validation" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /property maxSteps/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Custom/ }));
+    expect(screen.getByLabelText(/^Max Steps Custom/)).toHaveValue(42);
+
+    act(() => {
+      useSettingsStore.getState().updateGlobalSetting("maxSteps", -1);
+      useSettingsStore.getState().updateWorkflowProperty("maxSteps", undefined);
+    });
+    fireEvent.click(screen.getByRole("button", { name: /property maxSteps/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Custom/ }));
+    expect(screen.getByLabelText(/^Max Steps Custom/)).toHaveValue(100);
+  });
+
+  it("shows Set as Default only for a present step cap that differs globally", () => {
+    useSettingsStore.getState().updateGlobalSetting("maxSteps", 100);
+    render(<WorkflowPropertiesPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Validation" }));
+
+    expect(
+      screen.queryByRole("button", { name: "Set as Default" })
+    ).not.toBeInTheDocument();
+
+    act(() => {
+      useSettingsStore.getState().updateWorkflowProperty("maxSteps", 100);
+    });
+    expect(
+      screen.queryByRole("button", { name: "Set as Default" })
+    ).not.toBeInTheDocument();
+
+    act(() => {
+      useSettingsStore.getState().updateWorkflowProperty("maxSteps", 50);
+    });
+    expect(
+      screen.getByRole("button", { name: "Set as Default" })
+    ).toBeInTheDocument();
+  });
+
+  it("posts the raw unlimited value when setting Max Steps as default", () => {
+    useSettingsStore.getState().updateGlobalSetting("maxSteps", 100);
+    useSettingsStore.getState().updateWorkflowProperty("maxSteps", -1);
+    render(<WorkflowPropertiesPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Validation" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Set as Default" }));
+
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.SET_AS_DEFAULT,
+        property: PROMPT_PROPERTIES.MAX_STEPS,
+        value: -1,
+      })
     );
   });
 

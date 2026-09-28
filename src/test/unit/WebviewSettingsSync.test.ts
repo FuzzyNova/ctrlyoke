@@ -2057,6 +2057,18 @@ suite("WebviewSettingsSync", () => {
           expectedValue: errorBehavior,
         },
         {
+          property: PROMPT_PROPERTIES.MAX_STEPS,
+          value: 25,
+          expectedKey: CONFIG_KEYS.QUEUE_MAX_STEPS,
+          expectedValue: 25,
+        },
+        {
+          property: PROMPT_PROPERTIES.MAX_STEPS,
+          value: -1,
+          expectedKey: CONFIG_KEYS.QUEUE_MAX_STEPS,
+          expectedValue: -1,
+        },
+        {
           property: PROMPT_PROPERTIES.TOOL_PERMISSIONS,
           value: {
             mode: PERMISSION_MODES.CUSTOM,
