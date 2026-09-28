@@ -1198,6 +1198,8 @@ async function runCommand(
       if (Object.keys(config.vars).length > 0) {
         const workflowFile = instance.promptQueue.getWorkflowFile();
         mergeCliVarsIntoWorkflow(workflowFile, config.vars);
+        instance.promptQueue.updateWorkflowProperty("vars", workflowFile.vars);
+        await instance.promptQueue.updateWorkingFile(true);
       }
 
       assertSecretGrantsApproved(

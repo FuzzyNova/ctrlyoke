@@ -4,6 +4,9 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, teardown, test } from "mocha";
+import { projectKey } from "../../utils/ProjectStatePaths";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import { WORKING_FILE_NAME } from "../../utils/WorkflowPaths";
 
 interface CliRunResult {
   code: number;
@@ -13,13 +16,17 @@ interface CliRunResult {
 
 const temporaryRoots: string[] = [];
 
-function runCli(args: string[], cwd: string): Promise<CliRunResult> {
+function runCli(
+  args: string[],
+  cwd: string,
+  env?: NodeJS.ProcessEnv
+): Promise<CliRunResult> {
   const cliPath = path.join(__dirname, "..", "..", "cli.js");
   return new Promise((resolve) => {
     execFile(
       "node",
       [cliPath, ...args],
-      { cwd, maxBuffer: 8 * 1024 * 1024 },
+      { cwd, env: { ...process.env, ...env }, maxBuffer: 8 * 1024 * 1024 },
       (error, stdout, stderr) => {
         resolve({
           code: typeof error?.code === "number" ? error.code : error ? 1 : 0,
@@ -313,6 +320,96 @@ suite("CLI run process harness reporting", () => {
     );
     assert.strictEqual(result.code, 0, result.stderr);
     assert.match(result.stdout, /Harness: claude-cli/);
+  });
+
+  test("persists --var overrides and uses them when continuing a run", async function () {
+    this.timeout(60000);
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-run-vars-"));
+    const stateHome = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-run-vars-state-")
+    );
+    temporaryRoots.push(root, stateHome);
+    const workflow = path.join(root, "vars.ctrlyoke.json");
+    await fs.writeFile(
+      workflow,
+      JSON.stringify({
+        vars: { who: "default" },
+        steps: [
+          {
+            type: "script",
+            script:
+              'node -e "process.exit(require(\'fs\').existsSync(\'continue.flag\') ? 0 : 1)"',
+            onFail: "stopWorkflow",
+          },
+          {
+            type: "script",
+            script:
+              'node -e "require(\'fs\').writeFileSync(\'continued.txt\', \'{{who}}\')"',
+          },
+        ],
+      }),
+      "utf8"
+    );
+
+    const env = { CTRLYOKE_HOME: stateHome };
+    const initialRun = await runCli(
+      [
+        "run",
+        workflow,
+        "--headless",
+        "--json",
+        "--cwd",
+        root,
+        "--var",
+        "who=cli",
+      ],
+      root,
+      env
+    );
+
+    assert.strictEqual(initialRun.code, 1, initialRun.stderr);
+    const run = JSON.parse(initialRun.stdout) as {
+      workflowKey: string;
+      runRef: string;
+    };
+    const projectStateRoot = path.join(
+      stateHome,
+      "projects",
+      projectKey(root)
+    );
+    const workingFilePath = path.join(
+      WorkflowPaths.runsRootForProjectState(projectStateRoot),
+      run.workflowKey,
+      run.runRef,
+      WORKING_FILE_NAME
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(workingFilePath, "utf8")
+    ) as { vars?: Record<string, string> };
+    assert.strictEqual(workingFile.vars?.who, "cli");
+
+    await fs.writeFile(path.join(root, "continue.flag"), "", "utf8");
+    const continuedRun = await runCli(
+      [
+        "continue",
+        "--workflow",
+        run.workflowKey,
+        "--run",
+        run.runRef,
+        "--headless",
+        "--json",
+        "--cwd",
+        root,
+      ],
+      root,
+      env
+    );
+
+    assert.strictEqual(continuedRun.code, 0, continuedRun.stderr);
+    assert.strictEqual(
+      await fs.readFile(path.join(root, "continued.txt"), "utf8"),
+      "cli"
+    );
   });
 });
 

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-27 by the long-running bug-fix workflow final step (claude-cli, helper agent)
 - **Area:** `src/cli.ts` (`mergeCliVarsIntoWorkflow` call in the run path, ~1196-1201)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

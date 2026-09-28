@@ -199,6 +199,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       getRuntimeState: () => this.stateMachine.getSnapshot(),
       getTokenTotals: () => this.state.tokenTotals,
       getWorkflowName: () => this.state.workflowName,
+      getWorkflowVars: () => this.workflowFile?.vars,
       getParallelGroups: () => this.state.parallelGroups,
       getActiveParallelGroupRuntime: () =>
         this.activeParallelGroupRuntime
