@@ -94,7 +94,7 @@ describe("TerminalView empty-pane viewport hint", () => {
     });
     vi.stubGlobal(
       "ResizeObserver",
-      class {
+      class implements Pick<ResizeObserver, "observe" | "disconnect"> {
         observe() {}
         disconnect() {}
       }

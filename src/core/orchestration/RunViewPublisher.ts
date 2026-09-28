@@ -24,6 +24,7 @@ import { PostMessageDashboardSink } from "../../ui/PostMessageDashboardSink";
 import { WorkflowTaggedSink } from "../WorkflowTaggedSink";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import { stripLegacyWorkingFileLineageMetadata } from "../../utils/WorkingFileMetadata";
+import type { RunLifecycleViewPort } from "./RunLifecycleService";
 
 export interface DefinitionRollbackInvalidation {
   fromRevision: number;
@@ -123,7 +124,7 @@ function describeViewAddress(address: WorkflowViewAddress | null): string {
 }
 
 /** Owns addressed run-view reads, fan-out, identity publication, and refreshes. */
-export class RunViewPublisher {
+export class RunViewPublisher implements RunLifecycleViewPort {
   constructor(private readonly host: RunViewPublisherHost) {}
 
   getViewAddress(clientId: string): WorkflowViewAddress | null {

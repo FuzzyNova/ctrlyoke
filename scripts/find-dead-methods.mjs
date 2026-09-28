@@ -12,10 +12,14 @@
  * This script walks every class/method declaration reachable from BOTH the
  * root tsconfig.json (extension host, core engine, CLI/MCP binaries, harness
  * code, tests) and src/ui/webview-react/tsconfig.json (the React dashboard),
- * combined into a single TypeScript program, and uses the language service's
- * findReferences (the same engine behind VS Code "Find All References") to
- * count non-declaration usages. Anything at zero is reported as a dead-method
- * candidate.
+ * combined into a single TypeScript program. Repository scripts are also
+ * checked as reference sources: TypeScript references handle statically typed
+ * calls, and a narrow ClassName.method() / .method() text check catches calls
+ * hidden behind dynamic CommonJS requires. Production methods can be called
+ * from docs/build/maintenance scripts outside both tsconfigs. The language
+ * service's findReferences (the same engine behind VS Code "Find All
+ * References") counts non-declaration usages. Anything at zero is reported
+ * as a dead-method candidate.
  *
  * Why both projects have to be combined into one program: the webview
  * imports directly from extension-side directories via path aliases
@@ -101,6 +105,30 @@ const IGNORED_METHOD_NAMES = new Set([
 
 const KEEP_TAG = "@keep";
 
+function readRepositoryScriptSources() {
+  return ts.sys
+    .readDirectory(path.join(ROOT, "scripts"), [".mjs", ".js", ".ts"])
+    .map((fileName) => ts.sys.readFile(fileName) ?? "");
+}
+
+function hasRepositoryScriptReference(candidate, scriptSources) {
+  const escapedClassName = candidate.className.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&"
+  );
+  const escapedMethodName = candidate.methodName.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&"
+  );
+  const classQualifiedCall = new RegExp(
+    `\\b${escapedClassName}\\s*\\.\\s*${escapedMethodName}\\s*\\(`
+  );
+  const methodCall = new RegExp(`\\.\\s*${escapedMethodName}\\s*\\(`);
+  return scriptSources.some(
+    (source) => classQualifiedCall.test(source) || methodCall.test(source)
+  );
+}
+
 function parseTsconfig(configPath, basePath) {
   const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
   if (configFile.error) {
@@ -116,6 +144,13 @@ function loadCombinedProjectConfig() {
   const webview = parseTsconfig(WEBVIEW_TSCONFIG_PATH, WEBVIEW_ROOT);
 
   const fileNames = [...new Set([...root.fileNames, ...webview.fileNames])];
+  const scriptFileNames = ts.sys.readDirectory(
+    path.join(ROOT, "scripts"),
+    [".mjs", ".js", ".ts"]
+  );
+  fileNames.push(
+    ...scriptFileNames.filter((fileName) => !fileNames.includes(fileName))
+  );
 
   // Base the merged options on the webview config (it carries the `paths`
   // aliases and their base path) and widen `lib`/`target` to a superset that
@@ -128,6 +163,7 @@ function loadCombinedProjectConfig() {
     target: ts.ScriptTarget.ES2022,
     lib: ["lib.es2022.d.ts", "lib.dom.d.ts", "lib.dom.iterable.d.ts"],
     moduleResolution: ts.ModuleResolutionKind.Bundler,
+    allowJs: true,
     noEmit: true,
     skipLibCheck: true,
   };
@@ -247,6 +283,7 @@ function isTestFile(fileName) {
 function main() {
   const jsonOutput = process.argv.includes("--json");
   const projectConfig = loadCombinedProjectConfig();
+  const scriptSources = readRepositoryScriptSources();
   const service = createLanguageService(projectConfig);
   const program = service.getProgram();
   if (!program) throw new Error("Failed to build TypeScript program");
@@ -281,6 +318,10 @@ function main() {
           if (!isTestFile(entry.fileName)) productionRefCount++;
         }
       }
+      if (hasRepositoryScriptReference(candidate, scriptSources)) {
+        externalRefCount++;
+        productionRefCount++;
+      }
 
       const record = {
         location: `${path.relative(ROOT, candidate.fileName)}:${candidate.line}`,
@@ -311,7 +352,8 @@ function main() {
   }
 
   console.log(
-    `Scanned ${sourceFiles.length} files (extension + webview, combined program), ` +
+    `Scanned ${sourceFiles.length} candidate files (extension + webview, combined program; ` +
+      `repository scripts are reference sources), ` +
       `${candidateCount} class-method candidates.\n`
   );
 

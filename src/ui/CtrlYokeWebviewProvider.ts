@@ -68,6 +68,7 @@ import { SecretRegistryService } from "./SecretRegistryService";
 import { WebviewUserInteractionPort } from "./WebviewUserInteractionPort";
 import type { UserInteractionPort } from "./UserInteractionPort";
 import type { LicenseService } from "../license/LicenseService";
+import type { ContextMenuPromptEditorInsertSink } from "../completions/ContextMenuReferenceCommands";
 
 // Re-export CliOutput for external use
 export type { CliOutput } from "../types/WebviewMessageTypes";
@@ -84,7 +85,11 @@ export type { HarnessStatus } from "./WebviewSettingsSync";
  * Save/export/template/history delegated to WorkflowSerializer.
  */
 export class CtrlYokeWebviewProvider
-  implements vscode.WebviewViewProvider, IDashboardProvider, IDashboardSink
+  implements
+    vscode.WebviewViewProvider,
+    IDashboardProvider,
+    IDashboardSink,
+    ContextMenuPromptEditorInsertSink
 {
   private view?: vscode.WebviewView;
   private _pendingActiveWorkflowId: string | undefined;

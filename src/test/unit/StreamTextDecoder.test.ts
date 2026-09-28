@@ -1,8 +1,11 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { attachStreamTextDecoder } from "../../utils/StreamTextDecoder";
+import {
+  attachStreamTextDecoder,
+  type StreamTextDecoderByteStream,
+} from "../../utils/StreamTextDecoder";
 
-class TestByteStream {
+class TestByteStream implements StreamTextDecoderByteStream {
   private listener?: (data: Buffer) => void;
 
   on(event: "data", listener: (data: Buffer) => void): this {

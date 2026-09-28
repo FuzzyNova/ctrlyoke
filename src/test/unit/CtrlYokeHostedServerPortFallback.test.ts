@@ -10,6 +10,11 @@ import * as BuildConfig from "../../utils/BuildConfig";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
+interface FakeHttpServerPort {
+  listen(port: number, bindAddress: string): void;
+  address(): { port: number };
+}
+
 /**
  * Minimal stand-in for Node's http.Server, driving the same
  * error/listening event sequence CtrlYokeHostedServer.listen() reacts to.
@@ -18,7 +23,10 @@ import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
  * configured fallback ports); any other port — including the final `0`
  * retry — succeeds and reports `boundPort` from address().
  */
-class FakeHttpServer extends EventEmitter {
+class FakeHttpServer
+  extends EventEmitter
+  implements FakeHttpServerPort
+{
   listenCalls: number[] = [];
   private readonly failOnPorts: Set<number>;
 

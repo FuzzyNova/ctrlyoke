@@ -178,6 +178,9 @@ import {
   type PromptCompleteData,
 } from "./OutputCaptureBuffer";
 import { WorkflowStateMachine } from "./WorkflowStateMachine";
+import type { ExternalRunWatchInstance } from "./orchestration/ExternalRunWatchCoordinator";
+import type { RunLifecycleInstancePort } from "./orchestration/RunLifecycleService";
+import type { RunViewPublisherInstance } from "./orchestration/RunViewPublisher";
 import {
   buildTerminalEndedMessage,
   getPtyProcessManager,
@@ -224,7 +227,12 @@ interface ActiveTargetResources {
   ptySessionId?: string;
 }
 
-export class WorkflowInstance {
+export class WorkflowInstance
+  implements
+    RunLifecycleInstancePort,
+    RunViewPublisherInstance,
+    ExternalRunWatchInstance
+{
   private readonly lineageRepository = new WorkflowLineageRepository();
   /** Unique identifier — stable for this instance's lifetime */
   readonly id: string;
