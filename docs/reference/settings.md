@@ -227,11 +227,17 @@ Default priorContext for every step that doesn't set its own.
 
 ### `defaults.mcpServers` {#defaults-mcpservers}
 
-- **Type:** array of (`string` or `{ id, description?, command?, … }`)
+- **Type:** array of (`string` or `{ id: "ctrlyoke", deniedTools? }` or `{ id, description?, command?, … }`)
 - **Default:** `[]`
 - **Workflow field:** [`mcpServers`](/reference/workflow-schema#execution-properties-mcpservers) — a workflow or step value overrides this default
 
 Default MCP servers to attach to each prompt execution.
+
+**When `id` is `"ctrlyoke"`:**
+
+Fields:
+
+- `deniedTools` · `string[]`
 
 Fields:
 

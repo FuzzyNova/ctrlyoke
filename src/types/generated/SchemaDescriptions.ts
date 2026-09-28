@@ -55,7 +55,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "_runtime.hooks[].event": "Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), agentStop (Copilot), notify (Codex). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.",
   "_runtime.hooks[].timeoutSec": "Timeout in seconds. Only respected by CLIs that support per-hook timeouts.",
   "_runtime.mcpServers": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to enable dynamic queue extension via ctrlyoke's MCP server. Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers.",
-  "_runtime.mcpServers[]": "A well-known MCP server ID (e.g., \"ctrlyoke\" to enable dynamic queue extension).",
+  "_runtime.mcpServers[]": "A well-known MCP server ID, a user-defined server configuration, or the built-in `ctrlyoke` server with optional deniedTools. For the built-in server, deniedTools lists bare tool names to disable (for example, [\"append_step\"]).",
   "_runtime.mcpServers[].args": "Arguments to pass to the command (stdio servers only)",
   "_runtime.mcpServers[].autoApprove": "Tools to auto-approve: true = all tools, string[] = specific tools",
   "_runtime.mcpServers[].command": "Command to run the MCP server process (stdio servers, e.g. \"npx\" or \"node\")",
@@ -176,7 +176,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "defaults.hooks[].event": "Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), agentStop (Copilot), notify (Codex). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.",
   "defaults.hooks[].timeoutSec": "Timeout in seconds. Only respected by CLIs that support per-hook timeouts.",
   "defaults.mcpServers": "Default MCP servers to attach to each prompt execution.",
-  "defaults.mcpServers[]": "A well-known MCP server ID (e.g., \"ctrlyoke\" to enable dynamic queue extension).",
+  "defaults.mcpServers[]": "A well-known MCP server ID, a user-defined server configuration, or the built-in `ctrlyoke` server with optional deniedTools. For the built-in server, deniedTools lists bare tool names to disable (for example, [\"append_step\"]).",
   "defaults.mcpServers[].args": "Arguments to pass to the command (stdio servers only)",
   "defaults.mcpServers[].autoApprove": "Tools to auto-approve: true = all tools, string[] = specific tools",
   "defaults.mcpServers[].command": "Command to run the MCP server process (stdio servers, e.g. \"npx\" or \"node\")",
@@ -289,7 +289,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "finalStep._runtime.hooks[].event": "Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), agentStop (Copilot), notify (Codex). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.",
   "finalStep._runtime.hooks[].timeoutSec": "Timeout in seconds. Only respected by CLIs that support per-hook timeouts.",
   "finalStep._runtime.mcpServers": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to enable dynamic queue extension via ctrlyoke's MCP server. Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers.",
-  "finalStep._runtime.mcpServers[]": "A well-known MCP server ID (e.g., \"ctrlyoke\" to enable dynamic queue extension).",
+  "finalStep._runtime.mcpServers[]": "A well-known MCP server ID, a user-defined server configuration, or the built-in `ctrlyoke` server with optional deniedTools. For the built-in server, deniedTools lists bare tool names to disable (for example, [\"append_step\"]).",
   "finalStep._runtime.mcpServers[].args": "Arguments to pass to the command (stdio servers only)",
   "finalStep._runtime.mcpServers[].autoApprove": "Tools to auto-approve: true = all tools, string[] = specific tools",
   "finalStep._runtime.mcpServers[].command": "Command to run the MCP server process (stdio servers, e.g. \"npx\" or \"node\")",
@@ -366,7 +366,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "finalStep.hooks[].timeoutSec": "Timeout in seconds. Only respected by CLIs that support per-hook timeouts.",
   "finalStep.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.",
   "finalStep.mcpServers": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to enable dynamic queue extension via ctrlyoke's MCP server. Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers.",
-  "finalStep.mcpServers[]": "A well-known MCP server ID (e.g., \"ctrlyoke\" to enable dynamic queue extension).",
+  "finalStep.mcpServers[]": "A well-known MCP server ID, a user-defined server configuration, or the built-in `ctrlyoke` server with optional deniedTools. For the built-in server, deniedTools lists bare tool names to disable (for example, [\"append_step\"]).",
   "finalStep.mcpServers[].args": "Arguments to pass to the command (stdio servers only)",
   "finalStep.mcpServers[].autoApprove": "Tools to auto-approve: true = all tools, string[] = specific tools",
   "finalStep.mcpServers[].command": "Command to run the MCP server process (stdio servers, e.g. \"npx\" or \"node\")",
@@ -426,7 +426,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "hooks[].timeoutSec": "Timeout in seconds. Only respected by CLIs that support per-hook timeouts.",
   "ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.",
   "mcpServers": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to enable dynamic queue extension via ctrlyoke's MCP server. Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers.",
-  "mcpServers[]": "A well-known MCP server ID (e.g., \"ctrlyoke\" to enable dynamic queue extension).",
+  "mcpServers[]": "A well-known MCP server ID, a user-defined server configuration, or the built-in `ctrlyoke` server with optional deniedTools. For the built-in server, deniedTools lists bare tool names to disable (for example, [\"append_step\"]).",
   "mcpServers[].args": "Arguments to pass to the command (stdio servers only)",
   "mcpServers[].autoApprove": "Tools to auto-approve: true = all tools, string[] = specific tools",
   "mcpServers[].command": "Command to run the MCP server process (stdio servers, e.g. \"npx\" or \"node\")",
@@ -582,7 +582,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[]._runtime.hooks[].event": "Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), agentStop (Copilot), notify (Codex). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.",
   "steps[]._runtime.hooks[].timeoutSec": "Timeout in seconds. Only respected by CLIs that support per-hook timeouts.",
   "steps[]._runtime.mcpServers": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to enable dynamic queue extension via ctrlyoke's MCP server. Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers.",
-  "steps[]._runtime.mcpServers[]": "A well-known MCP server ID (e.g., \"ctrlyoke\" to enable dynamic queue extension).",
+  "steps[]._runtime.mcpServers[]": "A well-known MCP server ID, a user-defined server configuration, or the built-in `ctrlyoke` server with optional deniedTools. For the built-in server, deniedTools lists bare tool names to disable (for example, [\"append_step\"]).",
   "steps[]._runtime.mcpServers[].args": "Arguments to pass to the command (stdio servers only)",
   "steps[]._runtime.mcpServers[].autoApprove": "Tools to auto-approve: true = all tools, string[] = specific tools",
   "steps[]._runtime.mcpServers[].command": "Command to run the MCP server process (stdio servers, e.g. \"npx\" or \"node\")",
@@ -660,7 +660,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[].hooks[].timeoutSec": "Timeout in seconds. Only respected by CLIs that support per-hook timeouts.",
   "steps[].ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.",
   "steps[].mcpServers": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to enable dynamic queue extension via ctrlyoke's MCP server. Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers.",
-  "steps[].mcpServers[]": "A well-known MCP server ID (e.g., \"ctrlyoke\" to enable dynamic queue extension).",
+  "steps[].mcpServers[]": "A well-known MCP server ID, a user-defined server configuration, or the built-in `ctrlyoke` server with optional deniedTools. For the built-in server, deniedTools lists bare tool names to disable (for example, [\"append_step\"]).",
   "steps[].mcpServers[].args": "Arguments to pass to the command (stdio servers only)",
   "steps[].mcpServers[].autoApprove": "Tools to auto-approve: true = all tools, string[] = specific tools",
   "steps[].mcpServers[].command": "Command to run the MCP server process (stdio servers, e.g. \"npx\" or \"node\")",
@@ -715,7 +715,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[].parallel[]._runtime.hooks[].event": "Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), agentStop (Copilot), notify (Codex). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.",
   "steps[].parallel[]._runtime.hooks[].timeoutSec": "Timeout in seconds. Only respected by CLIs that support per-hook timeouts.",
   "steps[].parallel[]._runtime.mcpServers": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to enable dynamic queue extension via ctrlyoke's MCP server. Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers.",
-  "steps[].parallel[]._runtime.mcpServers[]": "A well-known MCP server ID (e.g., \"ctrlyoke\" to enable dynamic queue extension).",
+  "steps[].parallel[]._runtime.mcpServers[]": "A well-known MCP server ID, a user-defined server configuration, or the built-in `ctrlyoke` server with optional deniedTools. For the built-in server, deniedTools lists bare tool names to disable (for example, [\"append_step\"]).",
   "steps[].parallel[]._runtime.mcpServers[].args": "Arguments to pass to the command (stdio servers only)",
   "steps[].parallel[]._runtime.mcpServers[].autoApprove": "Tools to auto-approve: true = all tools, string[] = specific tools",
   "steps[].parallel[]._runtime.mcpServers[].command": "Command to run the MCP server process (stdio servers, e.g. \"npx\" or \"node\")",
@@ -792,7 +792,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[].parallel[].hooks[].timeoutSec": "Timeout in seconds. Only respected by CLIs that support per-hook timeouts.",
   "steps[].parallel[].ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.",
   "steps[].parallel[].mcpServers": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to enable dynamic queue extension via ctrlyoke's MCP server. Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers.",
-  "steps[].parallel[].mcpServers[]": "A well-known MCP server ID (e.g., \"ctrlyoke\" to enable dynamic queue extension).",
+  "steps[].parallel[].mcpServers[]": "A well-known MCP server ID, a user-defined server configuration, or the built-in `ctrlyoke` server with optional deniedTools. For the built-in server, deniedTools lists bare tool names to disable (for example, [\"append_step\"]).",
   "steps[].parallel[].mcpServers[].args": "Arguments to pass to the command (stdio servers only)",
   "steps[].parallel[].mcpServers[].autoApprove": "Tools to auto-approve: true = all tools, string[] = specific tools",
   "steps[].parallel[].mcpServers[].command": "Command to run the MCP server process (stdio servers, e.g. \"npx\" or \"node\")",
@@ -1058,6 +1058,9 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "notification",
     "error"
   ],
+  "_runtime.mcpServers[].id": [
+    "ctrlyoke"
+  ],
   "_runtime.mcpServers[].transport": [
     "streamable-http",
     "sse"
@@ -1271,6 +1274,9 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "notification",
     "error"
   ],
+  "defaults.mcpServers[].id": [
+    "ctrlyoke"
+  ],
   "defaults.mcpServers[].transport": [
     "streamable-http",
     "sse"
@@ -1434,6 +1440,9 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "notification",
     "error"
   ],
+  "finalStep._runtime.mcpServers[].id": [
+    "ctrlyoke"
+  ],
   "finalStep._runtime.mcpServers[].transport": [
     "streamable-http",
     "sse"
@@ -1548,6 +1557,9 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "notification",
     "error"
   ],
+  "finalStep.mcpServers[].id": [
+    "ctrlyoke"
+  ],
   "finalStep.mcpServers[].transport": [
     "streamable-http",
     "sse"
@@ -1639,6 +1651,9 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "permissionRequest",
     "notification",
     "error"
+  ],
+  "mcpServers[].id": [
+    "ctrlyoke"
   ],
   "mcpServers[].transport": [
     "streamable-http",
@@ -1946,6 +1961,9 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "notification",
     "error"
   ],
+  "steps[]._runtime.mcpServers[].id": [
+    "ctrlyoke"
+  ],
   "steps[]._runtime.mcpServers[].transport": [
     "streamable-http",
     "sse"
@@ -2060,6 +2078,9 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "notification",
     "error"
   ],
+  "steps[].mcpServers[].id": [
+    "ctrlyoke"
+  ],
   "steps[].mcpServers[].transport": [
     "streamable-http",
     "sse"
@@ -2149,6 +2170,9 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "permissionRequest",
     "notification",
     "error"
+  ],
+  "steps[].parallel[]._runtime.mcpServers[].id": [
+    "ctrlyoke"
   ],
   "steps[].parallel[]._runtime.mcpServers[].transport": [
     "streamable-http",
@@ -2263,6 +2287,9 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "permissionRequest",
     "notification",
     "error"
+  ],
+  "steps[].parallel[].mcpServers[].id": [
+    "ctrlyoke"
   ],
   "steps[].parallel[].mcpServers[].transport": [
     "streamable-http",

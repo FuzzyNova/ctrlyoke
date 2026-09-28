@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-27 by the long-running bug-fix workflow final step (claude-cli, helper agent)
 - **Area:** `schemas/workflow-schema.json` (`mcpServerEntry`, `mcpServerConfig`), `docs/workflows/dynamic-queue.md`, `docs/reference/mcp-tools.md`, `src/ui/webview-react/components/shared/McpServersEditor.tsx`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

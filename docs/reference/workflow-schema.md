@@ -153,15 +153,19 @@ Whether to resume the existing chat session for this prompt. When omitted, defau
 
 ### `mcpServers` {#execution-properties-mcpservers}
 
-- **Type:** array of (`string` or [MCP server entry](#mcp-server-entry)) or `null`
+- **Type:** array of (`string` or `{ id: "ctrlyoke", deniedTools? }` or [MCP server entry](#mcp-server-entry)) or `null`
 - **Settings default:** [`defaults.mcpServers`](/reference/settings#defaults-mcpservers)
 
 MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include "ctrlyoke" to enable dynamic queue extension via ctrlyoke's MCP server. Use /mcp:&lt;server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers.
 
 Accepted forms:
 
-- array of (`string` or [MCP server entry](#mcp-server-entry)) — MCP servers to attach. Registry IDs resolve against ctrlyoke's managed MCP registry; include "ctrlyoke" to enable dynamic queue extension.
+- array of (`string` or `{ id: "ctrlyoke", deniedTools? }` or [MCP server entry](#mcp-server-entry)) — MCP servers to attach. Registry IDs resolve against ctrlyoke's managed MCP registry; include "ctrlyoke" to enable dynamic queue extension.
 - `null` — Explicitly disable inherited MCP servers.
+
+Fields:
+
+- `deniedTools` · `string[]`
 
 ### `hooks` {#execution-properties-hooks}
 
@@ -828,7 +832,7 @@ Timeout in seconds. Only respected by CLIs that support per-hook timeouts.
 
 ## MCP server entry {#mcp-server-entry}
 
-User-defined MCP server configuration. Exactly one of `command` (stdio) or `url` (remote) must be set.
+User-defined MCP server configuration. Exactly one of `command` (stdio) or `url` (remote) must be set. The built-in `ctrlyoke` server is configured by its ID and can use `deniedTools` to disable selected built-in tools.
 
 ### `id` {#mcp-server-entry-id}
 

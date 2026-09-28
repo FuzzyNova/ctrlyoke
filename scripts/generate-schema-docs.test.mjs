@@ -76,8 +76,9 @@ test("object constraints preserve the documented MCP config shape", () => {
   const settings = pageEndingWith(build(), "settings");
   assert.match(
     settings,
-    /\*\*Type:\*\* array of \(`string` or `\{ id, description\?, command\?,/i
+    /\*\*Type:\*\* array of \(`string` or `\{ id: "ctrlyoke", deniedTools\?\s*\}` or `\{ id, description\?, command\?,/i
   );
+  assert.match(settings, /- `deniedTools` · `string\[\]`/);
   assert.match(settings, /- `command` · `string`/);
   assert.match(settings, /- `url` · `string`/);
 });
