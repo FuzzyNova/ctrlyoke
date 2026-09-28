@@ -1,6 +1,6 @@
 # Workflow `maxSteps` Plan
 
-**Status:** Proposed (2026-09-27)
+**Status:** In progress (2026-09-27) — staged as five orchestrated steps; see [Implementation staging](#implementation-staging).
 
 **Amends:** `dev/backlog/EXECUTION_GUARDRAILS_PLAN.md`. That plan's "Explicitly Rejected Scope"
 lists "`maxSteps`; it duplicates `queue.maxSize`", and its Product Decision says a workflow should
@@ -258,7 +258,7 @@ Gaps found:
   `docs/cli/ctrlyoke.md:175` says the limit applies.
 - Other in-process appends pass no policy either: the dashboard editor (`WorkflowInstance.ts:3263`),
   `RunLifecycleService.ts:740`, and `WorkflowOrchestrator.ts:4606` via
-  `WorkingFileManager.appendStepsToRun`.
+  `WorkingFileManager.appendStepsToRun` (`src/core/WorkingFileManager.ts`).
 
 The MCP server gets its global limit from environment variables set when the harness is spawned,
 so a per-workflow value cannot reach it that way without re-spawning the harness. But
@@ -330,7 +330,7 @@ All phases land together, so the Unlimited picker reaches every limit at once.
    and `WORKFLOW_PROPERTY_KEYS` (`DashboardConstants.ts:3166`, which gives undo/restore for free).
    Add `UNLIMITED_LIMIT`.
 4. Apply the rename table. Regenerate with `npm run generate-schema-docs`,
-   `npm run generate-schema`, and the `SchemaDescriptions.ts` generator, then mirror the result
+   `npm run generate-schema`, and `npm run generate-schema-ui-descriptions` (the `SchemaDescriptions.ts` generator), then mirror the result
    into `schemas/archive/v1/`.
 5. `WorkflowDefaultsSchemaCoverage.test.ts`: `RESHAPED_DEFAULTS.maxSteps = "queue.maxSteps"`.
 6. Edit `EXECUTION_GUARDRAILS_PLAN.md`:
@@ -404,6 +404,23 @@ Update:
 - every mention of `unlimitedMode`
 
 Any worked example should use a `finalStep` orchestrator with `maxSteps: 30`.
+
+## Implementation staging
+
+"All phases land together" means the feature ships as a unit. It is still built as five
+commits, and each one has to leave the tree compiling and `npm test` green. Removing
+`unlimitedMode` from the schema forces the whole rename through in the first commit, so the
+split is:
+
+| Step | Scope | Status |
+| ---- | ----- | ------ |
+| 1 | Phase 1: schemas (`unlimitedValue`, `maxStepsValue`, `maxSteps`, `oneOf` conversions), types and constants, the full rename and `unlimitedMode` removal across backend and UI (the Queue toggle is simply deleted), regenerated artifacts, `schemas/archive/v1/` mirror, `EXECUTION_GUARDRAILS_PLAN.md` edit, schema tests | Pending |
+| 2 | Phase 2: `LimitUtils`, `resolveEffectiveMaxSteps`, every enforcement site, required `RunContinuationService` limit, MCP `workflow_status`, dry-run, tests | Pending |
+| 3 | Phase 3 items 1–2, 5–6: `LimitSelect`, option metadata, vocabulary test, and every settings page and `ScriptConditionEditor` switched to it | Pending |
+| 4 | Phase 3 items 3–4: the Max Steps control on the Validation page, Set as default, round-trip tests | Pending |
+| 5 | Phase 4 docs, the §1.1 vocabulary row, and the acceptance-criteria sweep | Pending |
+
+Each step updates its row when it commits.
 
 ## Non-goals
 
