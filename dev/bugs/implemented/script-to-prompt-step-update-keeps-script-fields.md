@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by the maxSteps orchestrator review pass (`npm test`)
 - **Area:** `src/core/WorkingFileManager.ts` (`updateFinalStepAtRun`, `mergeWorkflowStepUpdate`), dashboard `updatePrompt` routing
-- **Severity:** medium
+- **Resolution:** fixed in 540ffa9a (`mergeWorkflowStepUpdate` infers the step kind from `script`/`prompt` and replaces on a kind change)
 
 ## Symptom
 

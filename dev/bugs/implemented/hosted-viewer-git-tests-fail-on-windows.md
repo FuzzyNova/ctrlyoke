@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by the maxSteps orchestrator review pass (`npm test`)
 - **Area:** `src/server/HostedWorkspaceViewerService.ts`, `src/test/unit/HostedWorkspaceViewerService.test.ts`
-- **Severity:** low
+- **Resolution:** fixed in 540ffa9a (explicit `set-head` fixture, status paths) and f17ce637 (config-independent staged-path check)
 
 ## Symptom
 

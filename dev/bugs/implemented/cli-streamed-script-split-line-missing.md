@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by the maxSteps orchestrator review pass (`npm test`)
 - **Area:** `CliTerminalFormatter.renderScriptOutput` (`src/cli/`)
-- **Severity:** low
+- **Resolution:** fixed in 540ffa9a (partial-line cap in `renderScriptOutput`)
 
 ## Symptom
 
