@@ -4922,6 +4922,7 @@ export class WorkflowExecutor {
     if (
       failureKind === FAILURE_KINDS.PROCESS_EXIT ||
       failureKind === FAILURE_KINDS.HARNESS_ERROR ||
+      failureKind === FAILURE_KINDS.HARNESS_NOT_INSTALLED ||
       failureKind === FAILURE_KINDS.TIMEOUT
     ) {
       return this.handleHarnessFailure(
@@ -4960,7 +4961,11 @@ export class WorkflowExecutor {
 
     runtime.failAttempt(target, attemptIndex, failureReason);
     if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-      await this.promptQueue.failStep(target.stepIndex, failureReason);
+      await this.promptQueue.failStep(
+        target.stepIndex,
+        failureReason,
+        failureKind
+      );
     }
 
     // Write a final (non-streaming) error CLI output so the failure is visible
@@ -5019,6 +5024,7 @@ export class WorkflowExecutor {
     failureKind:
       | typeof FAILURE_KINDS.PROCESS_EXIT
       | typeof FAILURE_KINDS.HARNESS_ERROR
+      | typeof FAILURE_KINDS.HARNESS_NOT_INSTALLED
       | typeof FAILURE_KINDS.TIMEOUT,
     resolvedProperties?: ResolvedProperties
   ): Promise<PromptFailureDisposition> {
@@ -5035,9 +5041,11 @@ export class WorkflowExecutor {
     const failureLabel =
       failureKind === FAILURE_KINDS.PROCESS_EXIT
         ? "Process exited unexpectedly"
-        : failureKind === FAILURE_KINDS.TIMEOUT
-          ? "Harness execution timed out"
-          : "Harness reported an error";
+        : failureKind === FAILURE_KINDS.HARNESS_NOT_INSTALLED
+          ? "Harness CLI is unavailable"
+          : failureKind === FAILURE_KINDS.TIMEOUT
+            ? "Harness execution timed out"
+            : "Harness reported an error";
 
     if (canRetryErrorBehavior(errorBehavior, attemptIndex)) {
       const nextAttemptIndex = attemptIndex + 1;
@@ -5153,7 +5161,11 @@ export class WorkflowExecutor {
     await persistFailureOutput();
 
     if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-      await this.promptQueue.failStep(target.stepIndex, failureReason);
+      await this.promptQueue.failStep(
+        target.stepIndex,
+        failureReason,
+        failureKind
+      );
     } else {
       await this.setFinalStepRuntime(context, {
         phase: FINAL_STEP_PHASES.FINAL_STEP,

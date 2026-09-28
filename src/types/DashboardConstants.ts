@@ -2391,6 +2391,7 @@ export const FAILURE_KINDS = {
   USER_CANCELLED: "userCancelled",
   PROCESS_EXIT: "processExit",
   HARNESS_ERROR: "harnessError",
+  HARNESS_NOT_INSTALLED: "harnessNotInstalled",
   TIMEOUT: "timeout",
   UNKNOWN: "unknown",
 } as const;

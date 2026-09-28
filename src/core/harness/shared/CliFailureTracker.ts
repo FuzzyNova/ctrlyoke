@@ -91,6 +91,12 @@ export class CliFailureTracker {
     return message;
   }
 
+  markHarnessNotInstalled(message: string): string {
+    this.lastFailureKind = FAILURE_KINDS.HARNESS_NOT_INSTALLED;
+    this.lastFailureMessage = message;
+    return message;
+  }
+
   markTimeout(message: string): string {
     this.lastFailureKind = FAILURE_KINDS.TIMEOUT;
     this.lastFailureMessage = message;

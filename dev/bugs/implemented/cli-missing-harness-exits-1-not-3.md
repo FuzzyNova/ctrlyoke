@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-27 by the long-running bug-fix workflow final step (claude-cli, helper agent)
 - **Area:** `src/cli.ts` (`getExitCode`), `src/core/harness/shared/CliTransportCoordinator.ts`, `src/core/HarnessIntegration.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

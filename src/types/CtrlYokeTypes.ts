@@ -1109,6 +1109,8 @@ export interface PromptResult {
   timestamp: Date;
   endConditionResult?: boolean;
   error?: string;
+  /** Structured classification for failures raised by the harness runtime. */
+  failureKind?: FailureKind;
   retryCount?: number; // Track retry attempts for this prompt
   scriptOutput?: string; // Capture last script output for debugging
   preCondition?: ConditionEvaluationSummary;
