@@ -1330,12 +1330,12 @@ suite("PromptQueue State Machine Tests", () => {
           stepIndex: number
         ): Promise<StepExecutionOutcome> => {
           const target = { kind: "queue" as const, stepIndex };
-          await queue.markStepAsSent(stepIndex);
           await new Promise<void>((resolve) =>
             setTimeout(resolve, stepIndex === 0 ? 10 : 0)
           );
-          await queue.completeStep(stepIndex);
-          return { target, status: "completed" };
+          const outcome = { target, status: "completed" as const };
+          await queue.persistStepOutcome(outcome);
+          return outcome;
         };
 
         const outcomes = await Promise.all([

@@ -974,19 +974,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     this.emitStateChange();
   }
 
-  async completeStep(
-    stepIndex: number,
-    metadata?: Partial<PromptRuntimeMetadata>
-  ): Promise<void> {
-    const currentResult = this.state.results[stepIndex];
-    if (!currentResult) {
-      return;
-    }
-
-    this.completeStepState(stepIndex, metadata);
-    this.emitStateChange();
-  }
-
   async skipStep(
     stepIndex: number,
     terminalStatus: PromptTerminalStatus = PROMPT_TERMINAL_STATUS.SKIPPED

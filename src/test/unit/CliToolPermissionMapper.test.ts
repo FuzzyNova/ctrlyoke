@@ -1,7 +1,6 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
-  CliToolPermissionMapper,
   COPILOT_TO_CLAUDE_MAP,
 } from "../../core/harness/shared/CliToolPermissionMapper";
 import { CopilotToolPermissionMapper } from "../../core/harness/copilot/CopilotToolPermissionMapper";
@@ -9,7 +8,13 @@ import { ClaudeToolPermissionMapper } from "../../core/harness/claude/ClaudeTool
 import { PERMISSION_MODES } from "../../types/DashboardConstants";
 import { inspectToolPatternSyntax } from "../../utils/ToolPatternSyntax";
 
-suite("CliToolPermissionMapper", () => {
+class TestCopilotToolPermissionMapper extends CopilotToolPermissionMapper {
+  parsePatternForTest(pattern: string): [string, string] | null {
+    return this.parsePattern(pattern);
+  }
+}
+
+suite("CLI tool permission mappings", () => {
   suite("harness-specific pattern conversion", () => {
     test("converts Copilot patterns through Claude prepare", async () => {
       const application = await new ClaudeToolPermissionMapper().prepare(
@@ -119,36 +124,38 @@ suite("CliToolPermissionMapper", () => {
 
   // ──────────────────────────────────────────────────────────────────────────
   suite("parsePattern", () => {
+    const mapper = new TestCopilotToolPermissionMapper();
+
     test("parses simple tool name", () => {
-      const result = CliToolPermissionMapper.parsePattern("shell");
+      const result = mapper.parsePatternForTest("shell");
       assert.ok(result);
       assert.strictEqual(result![0], "shell");
       assert.strictEqual(result![1], "");
     });
 
     test("parses tool name with arguments", () => {
-      const result = CliToolPermissionMapper.parsePattern("shell(git:*)");
+      const result = mapper.parsePatternForTest("shell(git:*)");
       assert.ok(result);
       assert.strictEqual(result![0], "shell");
       assert.strictEqual(result![1], "(git:*)");
     });
 
     test("parses capitalized tool name", () => {
-      const result = CliToolPermissionMapper.parsePattern("Write");
+      const result = mapper.parsePatternForTest("Write");
       assert.ok(result);
       assert.strictEqual(result![0], "Write");
       assert.strictEqual(result![1], "");
     });
 
     test("parses MCP-style pattern with parentheses", () => {
-      const result = CliToolPermissionMapper.parsePattern("github(search)");
+      const result = mapper.parsePatternForTest("github(search)");
       assert.ok(result);
       assert.strictEqual(result![0], "github");
       assert.strictEqual(result![1], "(search)");
     });
 
     test("returns null for empty string", () => {
-      const result = CliToolPermissionMapper.parsePattern("");
+      const result = mapper.parsePatternForTest("");
       assert.strictEqual(result, null);
     });
   });

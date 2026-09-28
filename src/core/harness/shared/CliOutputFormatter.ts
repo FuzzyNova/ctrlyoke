@@ -89,17 +89,4 @@ export class CliOutputFormatter {
 
     return parts.join(" | ");
   }
-
-  /**
-   * Create an empty UniversalCliOutput structure.
-   * Useful for initializing output before parsing.
-   *
-   * @returns Empty UniversalCliOutput with default values
-   */
-  static createEmpty(): UniversalCliOutput {
-    return {
-      events: [],
-      metadata: {},
-    };
-  }
 }

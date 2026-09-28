@@ -287,36 +287,4 @@ suite("CliOutputFormatter Tests", () => {
       assert.strictEqual(result, "");
     });
   });
-
-  suite("createEmpty", () => {
-    test("returns valid empty structure", () => {
-      const result = CliOutputFormatter.createEmpty();
-
-      assert.deepStrictEqual(result.events, []);
-      assert.deepStrictEqual(result.metadata, {});
-    });
-
-    test("events array is empty", () => {
-      const result = CliOutputFormatter.createEmpty();
-
-      assert.strictEqual(result.events.length, 0);
-    });
-
-    test("all fields have correct types", () => {
-      const result = CliOutputFormatter.createEmpty();
-
-      assert.ok(Array.isArray(result.events));
-      assert.strictEqual(typeof result.metadata, "object");
-      assert.ok(result.metadata !== null);
-    });
-
-    test("returns new object each time", () => {
-      const result1 = CliOutputFormatter.createEmpty();
-      const result2 = CliOutputFormatter.createEmpty();
-
-      assert.notStrictEqual(result1, result2);
-      assert.notStrictEqual(result1.events, result2.events);
-      assert.notStrictEqual(result1.metadata, result2.metadata);
-    });
-  });
 });
