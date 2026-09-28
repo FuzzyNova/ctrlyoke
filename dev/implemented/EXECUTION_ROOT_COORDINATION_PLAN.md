@@ -757,6 +757,16 @@ attributed_, not that it be permanently resident: per-run coordination activity
 is still always visible in the output timeline as a `CoordinationActivityRow`,
 which is where an agent's notes and claims belong.
 
+**`CoordinationActivityRow` removed — 2026-09-28.** The inline row duplicated
+what the step's own `mcp__ctrlyoke__*` tool-call rows already show, and because
+it was spliced into the timeline after hidden/solo filtering it leaked board
+entries (including synthetic "Joined the execution-root coordination scope"
+entries) between the placeholders of hidden steps. Per-run coordination activity
+is now visible only through those tool-call rows, which honour the step's
+visibility; the settings panel is the board's sole dashboard surface. Richer
+formatting of ctrlyoke's own MCP calls is tracked in
+`dev/backlog/CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md`.
+
 Read the board file directly rather than adding a `TIMELINE_EVENT_TYPES` entry:
 the writer is a separate process, so a `TimelineRecorder` call is unavailable to
 it and the extension has to watch the file regardless. `ExternalRunWatchSession`

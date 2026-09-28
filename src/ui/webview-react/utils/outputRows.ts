@@ -18,7 +18,6 @@ import type {
 import type {
   ParallelGroupDefinition,
   ScriptVerdict,
-  CoordinationEntry,
 } from "@root/types/CtrlYokeTypes";
 import {
   OUTPUT_ROW_KINDS,
@@ -78,10 +77,6 @@ import {
   takeTrailingLines,
 } from "./outputTruncation";
 import { formatCliCommandDisplay } from "./outputCommandDisplay";
-import {
-  coordinationEntrySummary,
-  coordinationParticipantAttribution,
-} from "./coordinationPresentation";
 import {
   OUTPUT_ROW_HORIZONTAL_PADDING,
   OUTPUT_SECTION_HEADER_NARROW_THRESHOLD,
@@ -351,13 +346,6 @@ export interface ScriptVerdictRow extends OutputRowBase<
   expanded: boolean;
 }
 
-export interface CoordinationActivityRow extends OutputRowBase<
-  typeof OUTPUT_ROW_KINDS.COORDINATION_ACTIVITY
-> {
-  target: OutputMessageTarget;
-  entry: CoordinationEntry;
-}
-
 export type OutputRenderRow =
   | StepAnchorRow
   | ParallelGroupHeaderRow
@@ -374,8 +362,7 @@ export type OutputRenderRow =
   | ScriptOutputRow
   | ScriptVerdictRow
   | AttemptGroupSummaryRow
-  | StatsRow
-  | CoordinationActivityRow;
+  | StatsRow;
 
 export interface BuildOutputRowsInput {
   allMessages: readonly OutputMessage[];
@@ -418,8 +405,6 @@ export interface BuildOutputRowsInput {
   collapsedAttemptGroupKeys?: ReadonlySet<string>;
   /** Steps whose content is replaced by one StepHiddenRow. */
   hiddenTargetKeys?: ReadonlySet<string>;
-  coordinationEntries?: readonly CoordinationEntry[];
-  coordinationRunAddress?: { workflowKey: string; runRef: string };
   defaultDiffCollapsed: boolean;
   diffViewType?: "split" | "unified";
   outputFontSize?: number;
@@ -1958,17 +1943,6 @@ function estimateOutputRowContentHeight(
           verticalChrome: 22,
         }
       );
-    case OUTPUT_ROW_KINDS.COORDINATION_ACTIVITY:
-      return estimateTextBlockHeight(
-        `${coordinationParticipantAttribution(row.entry.from)}: ${coordinationEntrySummary(row.entry)}`,
-        outputContentWidth,
-        outputFontSize,
-        {
-          charWidthMultiplier: 0.56,
-          lineHeightMultiplier: 1.45,
-          verticalChrome: 20,
-        }
-      );
     case OUTPUT_ROW_KINDS.PLAIN_RESPONSE:
       return row.rawTextOutput
         ? estimateTextBlockHeight(row.text, outputContentWidth, outputFontSize)
@@ -2934,82 +2908,6 @@ export function buildOutputRows(
       if (emitsLeadingChrome) rows[groupStartIndex].groupStart = true;
       if (emitsTrailingChrome) rows[rows.length - 1].groupEnd = true;
     }
-  }
-
-  const coordinationEntries = (input.coordinationEntries ?? [])
-    .filter((entry) => {
-      const address = entry.from.address;
-      return (
-        input.coordinationRunAddress !== undefined &&
-        address?.workflowKey === input.coordinationRunAddress.workflowKey &&
-        address.runRef === input.coordinationRunAddress.runRef &&
-        address.stepIndex !== undefined &&
-        Number.isInteger(address.stepIndex)
-      );
-    })
-    .slice()
-    .sort((left, right) => {
-      const leftTime = Date.parse(left.at);
-      const rightTime = Date.parse(right.at);
-      if (Number.isFinite(leftTime) && Number.isFinite(rightTime)) {
-        if (leftTime !== rightTime) return leftTime - rightTime;
-      } else if (Number.isFinite(leftTime) !== Number.isFinite(rightTime)) {
-        return Number.isFinite(leftTime) ? -1 : 1;
-      }
-      return left.seq - right.seq;
-    });
-  const nextCoordinationInsertByTarget = new Map<string, number>();
-  const shiftRowIndexes = (index: number) => {
-    for (const [key, value] of firstRowIndexByTarget) {
-      if (value >= index) firstRowIndexByTarget.set(key, value + 1);
-    }
-    for (const [key, value] of anchorRowIndexByTarget) {
-      if (value >= index) anchorRowIndexByTarget.set(key, value + 1);
-    }
-  };
-  for (const entry of coordinationEntries) {
-    const stepIndex = entry.from.address?.stepIndex;
-    if (stepIndex === undefined) continue;
-    const target: OutputMessageTarget = {
-      kind: FINAL_STEP_PHASES.QUEUE,
-      index: stepIndex,
-    };
-    const targetKey = getTargetKey(target);
-    uniqueTargets.set(targetKey, target);
-    if (!firstRowIndexByTarget.has(targetKey)) {
-      const parallelGroup = getParallelGroupForStep(
-        input.parallelGroups,
-        stepIndex
-      );
-      if (parallelGroup && !parallelGroupHeaderRows.has(parallelGroup.id)) {
-        const headerRow = buildParallelGroupHeaderRow(input, parallelGroup);
-        parallelGroupHeaderRows.set(parallelGroup.id, headerRow);
-        rows.push(headerRow);
-      }
-      firstRowIndexByTarget.set(targetKey, rows.length);
-      anchorRowIndexByTarget.set(targetKey, rows.length);
-      rows.push({
-        key: `${targetKey}:anchor`,
-        rowKind: OUTPUT_ROW_KINDS.STEP_ANCHOR,
-        target,
-        estimateSize: 1,
-      });
-      nextCoordinationInsertByTarget.set(targetKey, rows.length);
-    }
-    const insertAt =
-      nextCoordinationInsertByTarget.get(targetKey) ??
-      firstRowIndexByTarget.get(targetKey) ??
-      rows.length;
-    const row: CoordinationActivityRow = {
-      key: `coordination:${entry.seq}`,
-      rowKind: OUTPUT_ROW_KINDS.COORDINATION_ACTIVITY,
-      target,
-      entry,
-      estimateSize: 52,
-    };
-    rows.splice(insertAt, 0, row);
-    shiftRowIndexes(insertAt);
-    nextCoordinationInsertByTarget.set(targetKey, insertAt + 1);
   }
 
   // A group's undo is aggregated while its first member's rows are built, which

@@ -172,7 +172,6 @@ export function getOutputRowSearchSegments(
     case OUTPUT_ROW_KINDS.FINAL_STEP_LABEL:
     case OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER:
     case OUTPUT_ROW_KINDS.ATTEMPT_GROUP_SUMMARY:
-    case OUTPUT_ROW_KINDS.COORDINATION_ACTIVITY:
       return [];
     case OUTPUT_ROW_KINDS.SCRIPT_VERDICT:
       return createSegments([

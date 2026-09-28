@@ -225,16 +225,6 @@ const OutputSectionInner: React.FC = () => {
     s.loadedWorkflows.find((w) => w.id === s.activeWorkflowId)
   );
   const executionRunRef = useUiStore((s) => s.executionRunRef);
-  const coordinationRunAddress = useMemo(() => {
-    if (!displayedAddress?.workflowKey) return undefined;
-    const runRef =
-      displayedAddress.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
-        ? displayedAddress.runRef
-        : executionRunRef;
-    return runRef
-      ? { workflowKey: displayedAddress.workflowKey, runRef }
-      : undefined;
-  }, [displayedAddress, executionRunRef]);
   const historyRunMetadata = useWorkflowStore(
     (s) => s.historyOutputs?.runMetadata
   );
@@ -565,7 +555,6 @@ const OutputSectionInner: React.FC = () => {
     invalidateMeasuredRowForUserResize:
       invalidateMeasuredRowForUserResizeForRowModel,
     onDiffViewReset: handleDiffViewReset,
-    coordinationRunAddress,
   });
 
   const outputExport = useOutputExport({

@@ -13,8 +13,10 @@ import { ActionButton } from "../shared/ActionButton";
  * Scope-level view of the execution-root coordination board, rendered below the
  * coordination settings rather than beside the output/terminal panes: it
  * describes the execution root, not the open run, and most workflows never
- * attach the coordination tools at all. Per-run coordination activity still
- * appears inline in the output timeline as a `CoordinationActivityRow`.
+ * attach the coordination tools at all. This panel is the board's only
+ * dashboard surface: the output timeline shows a step's coordination activity
+ * solely as that step's own MCP tool-call rows, so it follows the step's
+ * hide/solo state.
  */
 export const CoordinationActivityPanel: React.FC = () => {
   const { scope, participants, entries } = useCoordinationActivity();

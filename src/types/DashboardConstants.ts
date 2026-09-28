@@ -3543,7 +3543,6 @@ export const OUTPUT_ROW_KINDS = {
   SCRIPT_OUTPUT: "script-output",
   SCRIPT_VERDICT: "script-verdict",
   STATS: "stats",
-  COORDINATION_ACTIVITY: "coordination-activity",
 } as const;
 
 export type OutputRowKind =

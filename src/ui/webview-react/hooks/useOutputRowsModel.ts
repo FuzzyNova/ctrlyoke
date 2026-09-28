@@ -30,7 +30,6 @@ import type {
   StepColorMode,
 } from "@root/types/DashboardConstants";
 import { useUiStore } from "@store/uiStore";
-import { useWorkflowStore } from "@store/workflowStore";
 import { workflowViewAddressKey } from "@utils/viewAddress";
 import {
   BASH_OUTPUT_EXPANSION_SECTIONS,
@@ -84,7 +83,6 @@ interface UseOutputRowsModelInput {
   /** Called when the diff reset version changes — gives the owner a chance to
    *  flush row-height caches before the collapse-state change propagates. */
   onDiffViewReset: () => void;
-  coordinationRunAddress?: { workflowKey: string; runRef: string };
 }
 
 const SHELL_WORKFLOW_ID = "_shell";
@@ -124,7 +122,6 @@ export function useOutputRowsModel({
   invalidateMeasuredRow,
   invalidateMeasuredRowForUserResize,
   onDiffViewReset,
-  coordinationRunAddress,
 }: UseOutputRowsModelInput) {
   const displayedViewAddress = useUiStore(
     (state) => state.displayedViewAddress
@@ -140,9 +137,6 @@ export function useOutputRowsModel({
   const hiddenTargetKeys = useMemo(
     () => new Set(hiddenOutputTargets[hiddenOutputAddressKey]?.keys ?? []),
     [hiddenOutputAddressKey, hiddenOutputTargets]
-  );
-  const coordinationScope = useWorkflowStore(
-    (state) => state.coordinationScope
   );
   const [diffCollapseState, setDiffCollapseState] = useState<
     Map<string, boolean>
@@ -261,8 +255,6 @@ export function useOutputRowsModel({
             outputFontSize,
             outputContentWidth,
             collapsedToolOutputLineCount,
-            coordinationEntries: coordinationScope?.entries,
-            coordinationRunAddress,
           })
       ),
     [
@@ -296,8 +288,6 @@ export function useOutputRowsModel({
       outputFontSize,
       outputContentWidth,
       collapsedToolOutputLineCount,
-      coordinationScope,
-      coordinationRunAddress,
     ]
   );
 

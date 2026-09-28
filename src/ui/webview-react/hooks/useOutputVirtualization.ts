@@ -145,7 +145,6 @@ function getRowHeightBucket(row: OutputRenderRow): string {
     case OUTPUT_ROW_KINDS.SCRIPT_VERDICT:
     case OUTPUT_ROW_KINDS.ATTEMPT_GROUP_SUMMARY:
     case OUTPUT_ROW_KINDS.STATS:
-    case OUTPUT_ROW_KINDS.COORDINATION_ACTIVITY:
       return row.rowKind;
     case OUTPUT_ROW_KINDS.STRUCTURED_EVENT:
       if (row.diff) {

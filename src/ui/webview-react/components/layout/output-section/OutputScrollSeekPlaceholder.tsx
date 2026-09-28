@@ -61,8 +61,6 @@ function getScrollSeekRowLabel(row: OutputRenderRow): string {
       return "Parallel group";
     case OUTPUT_ROW_KINDS.FINAL_STEP_LABEL:
       return row.label;
-    case OUTPUT_ROW_KINDS.COORDINATION_ACTIVITY:
-      return "Coordination activity";
   }
 }
 
