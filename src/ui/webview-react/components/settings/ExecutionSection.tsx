@@ -92,11 +92,11 @@ export function ExecutionSection({
       />
       <SettingToggleRow
         settingKey="execution.injectMode"
-        description={
-          exec.closeTerminalOnComplete
+        {...{
+          description: exec.closeTerminalOnComplete
             ? "Unavailable — inject mode requires keeping the terminal open. Disable 'Close terminal on completion' to enable this."
-            : "Keep the TUI alive between prompts — faster and avoids the Claude Code resume cache bug."
-        }
+            : "Keep the TUI alive between prompts — faster and avoids the Claude Code resume cache bug.",
+        }}
         checked={exec.injectMode ?? false}
         onChange={(v) => onUpdate("execution.injectMode", v)}
         disabled={exec.closeTerminalOnComplete}

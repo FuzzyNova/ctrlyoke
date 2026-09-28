@@ -194,11 +194,11 @@ export function GeneralSection({
         />
         <SettingToggleRow
           settingKey="ui.useAbsolutePathReferences"
-          description={
-            isMultiRoot
+          {...{
+            description: isMultiRoot
               ? "Forced on — multiple workspace folders are open."
-              : "Send absolute file paths to the harness/model instead of relative paths. Stored workflow text always stays relative."
-          }
+              : "Send absolute file paths to the harness/model instead of relative paths. Stored workflow text always stays relative.",
+          }}
           checked={isMultiRoot ? true : ui.useAbsolutePathReferences}
           onChange={(v) => onUpdate("ui.useAbsolutePathReferences", v)}
           disabled={isMultiRoot}
@@ -356,11 +356,11 @@ export function GeneralSection({
         />
         <SettingToggleRow
           settingKey="diagnostics.logRawCliOutput"
-          description={
-            !settings.settings.diagnostics.verboseLogging
+          {...{
+            description: !settings.settings.diagnostics.verboseLogging
               ? "Unavailable — requires diagnostic logs to be enabled."
-              : "Write raw CLI output to a log file for debugging."
-          }
+              : "Write raw CLI output to a log file for debugging.",
+          }}
           checked={settings.settings.diagnostics.logRawCliOutput}
           onChange={(v) => onUpdate("diagnostics.logRawCliOutput", v)}
           disabled={!settings.settings.diagnostics.verboseLogging}

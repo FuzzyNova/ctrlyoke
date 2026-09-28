@@ -4,7 +4,6 @@ import type {
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
 import {
-  WORKTREE_KEEP_HELP_TEXT,
   WORKTREE_MODE_SELECTIONS,
   WORKTREE_MODES,
 } from "@root/types/DashboardConstants";
@@ -25,9 +24,9 @@ import {
   WORKTREE_SELECTION_OPTIONS_META,
   toSelectOptions,
 } from "@root/types/SchemaUiMetadata";
-import { SCHEMA_DESCRIPTIONS } from "@root/types/generated/SchemaDescriptions";
 import { fieldValidationBorderClass } from "@utils/fieldValidation";
 import { HarnessesSection } from "../HarnessesSection";
+import { worktreeSettingDescription } from "../settingsCatalog";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -113,10 +112,8 @@ export function DefaultsHarnessPage({
           Execution Defaults
         </h3>
         <SettingInputRow
-          label="Execution mode"
-          description="Where steps run by default. Interactive spawns a live terminal you can steer; headless runs in the background. Workflows and steps can override this. Pre/end-condition scripts always run headless."
+          settingKey="defaults.executionMode"
           id="defaults-execution-mode"
-          path="defaults.executionMode"
           {...rowProps}
         >
           <CustomSelect
@@ -136,10 +133,8 @@ export function DefaultsHarnessPage({
           Worktree Defaults
         </h3>
         <SettingInputRow
-          label="Worktree mode"
-          description={SCHEMA_DESCRIPTIONS["defaults.worktree"]}
+          settingKey="defaults.worktree"
           id="defaults-worktree-mode"
-          path="defaults.worktree"
           {...rowProps}
         >
           <CustomSelect
@@ -156,10 +151,8 @@ export function DefaultsHarnessPage({
         {worktreeMode === WORKTREE_MODES.NAMED && (
           <>
             <SettingInputRow
-              label="Branch"
-              description="Required local Git branch for the named default."
+              settingKey="defaults.worktree.branch"
               id="defaults-worktree-branch"
-              path="defaults.worktree.branch"
               {...rowProps}
             >
               <input
@@ -181,10 +174,9 @@ export function DefaultsHarnessPage({
               />
             </SettingInputRow>
             <SettingInputRow
-              label="Base"
-              description="Optional Git ref used as the starting point for a new branch."
+              settingKey="defaults.worktree.base"
+              {...{ description: worktreeSettingDescription("named", "base") }}
               id="defaults-worktree-base"
-              path="defaults.worktree.base"
               {...rowProps}
             >
               <input
@@ -201,10 +193,9 @@ export function DefaultsHarnessPage({
               />
             </SettingInputRow>
             <SettingInputRow
-              label="Setup"
-              description="Optional command run after creating a named worktree. Setup is outside step errorBehavior; a failure blocks the worktree and the next Run retries it."
+              settingKey="defaults.worktree.setup"
+              {...{ description: worktreeSettingDescription("named", "setup") }}
               id="defaults-worktree-setup"
-              path="defaults.worktree.setup"
               {...rowProps}
             >
               <input
@@ -225,10 +216,11 @@ export function DefaultsHarnessPage({
         {worktreeMode === WORKTREE_MODES.MANAGED && (
           <>
             <SettingInputRow
-              label="Base"
-              description="Optional Git ref used as the starting point for a new managed worktree."
+              settingKey="defaults.worktree.base"
+              {...{
+                description: worktreeSettingDescription("managed", "base"),
+              }}
               id="defaults-worktree-base"
-              path="defaults.worktree.base"
               {...rowProps}
             >
               <input
@@ -245,10 +237,11 @@ export function DefaultsHarnessPage({
               />
             </SettingInputRow>
             <SettingInputRow
-              label="Setup"
-              description="Optional command run after creating a managed worktree. Setup is outside step errorBehavior; a failure blocks the worktree and the next Run retries it."
+              settingKey="defaults.worktree.setup"
+              {...{
+                description: worktreeSettingDescription("managed", "setup"),
+              }}
               id="defaults-worktree-setup"
-              path="defaults.worktree.setup"
               {...rowProps}
             >
               <input
@@ -265,10 +258,8 @@ export function DefaultsHarnessPage({
               />
             </SettingInputRow>
             <SettingInputRow
-              label="Keep directory"
-              description={WORKTREE_KEEP_HELP_TEXT}
+              settingKey="defaults.worktree.keep"
               id="defaults-worktree-keep"
-              path="defaults.worktree.keep"
               {...rowProps}
             >
               <label className="flex items-center gap-2 min-h-7 text-xs text-foreground">
@@ -290,10 +281,8 @@ export function DefaultsHarnessPage({
               </label>
             </SettingInputRow>
             <SettingInputRow
-              label="Merge"
-              description="Merge is the only worktree option that writes to your live working checkout: it merges the managed branch into the working checkout after every run. The engine requires the captured target branch and a clean checkout, takes an exclusive lease, and aborts cleanly on conflict."
+              settingKey="defaults.worktree.merge"
               id="defaults-worktree-merge"
-              path="defaults.worktree.merge"
               {...rowProps}
             >
               <label className="flex items-center gap-2 min-h-7 text-xs text-foreground">
@@ -322,10 +311,8 @@ export function DefaultsHarnessPage({
           Agent & Skill Defaults
         </h3>
         <SettingInputRow
-          label="Default agent"
-          description="Agent to use when none is specified in the workflow."
+          settingKey="defaults.agent"
           id="defaults-agent"
-          path="defaults.agent"
           {...rowProps}
         >
           <CustomSelect
@@ -343,10 +330,8 @@ export function DefaultsHarnessPage({
           />
         </SettingInputRow>
         <SettingInputRow
-          label="Default skills"
-          description="Skills to include in new workflows by default."
+          settingKey="defaults.skills"
           id="defaults-skills"
-          path="defaults.skills"
           {...rowProps}
         >
           <MultiCheckboxDropdown
@@ -363,10 +348,8 @@ export function DefaultsHarnessPage({
           />
         </SettingInputRow>
         <SettingInputRow
-          label="Default secrets"
-          description="Secret environment-variable names granted to new workflows by default."
+          settingKey="defaults.secrets"
           id="defaults-secrets-control"
-          path="defaults.secrets"
           {...rowProps}
         >
           <SecretGrantsEditor

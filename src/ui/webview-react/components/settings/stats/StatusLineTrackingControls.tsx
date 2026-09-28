@@ -217,20 +217,17 @@ export function StatusLineTrackingControls({
         <span>{harnessName}</span>
       </div>
       <SettingToggleRow
-        label={`Enable ${harnessName} statusline tracking`}
-        description={getDisableWarning(harnessId)}
+        settingKey={`statusLine.byHarness.${harnessId}.enabled`}
+        {...{ description: getDisableWarning(harnessId) }}
         checked={tracking.enabled}
         onChange={handleEnabledChange}
-        path={paths.enabled}
         sources={settings.sources}
         onReset={(path) => sendGlobalSetting(path, undefined)}
         activeScope={SETTING_SCOPES.USER}
       />
       <SettingInputRow
-        label="Custom statusline command"
-        description="Command to run for statusline output. Leave empty to use ctrlyoke's statusline only."
+        settingKey={`statusLine.byHarness.${harnessId}.customCommand`}
         id={`${provider}-custom-command`}
-        path={paths.customCommand}
         sources={settings.sources}
         onReset={(path) => sendGlobalSetting(path, undefined)}
         activeScope={SETTING_SCOPES.USER}
@@ -244,13 +241,11 @@ export function StatusLineTrackingControls({
         />
       </SettingInputRow>
       <SettingToggleRow
-        label="Use ctrlyoke-style statusline"
-        description="Show ctrlyoke's branded statusline. Turn off to show your custom command's output instead — or leave the statusline blank when no custom command is set. Usage tracking keeps collecting data either way."
+        settingKey={`statusLine.byHarness.${harnessId}.useCtrlyokeStyle`}
         checked={tracking.useCtrlyokeStyle}
         onChange={(enabled) =>
           sendGlobalSetting(paths.useCtrlyokeStyle, enabled)
         }
-        path={paths.useCtrlyokeStyle}
         sources={settings.sources}
         onReset={(path) => sendGlobalSetting(path, undefined)}
         activeScope={SETTING_SCOPES.USER}
@@ -259,6 +254,7 @@ export function StatusLineTrackingControls({
         visible={tracking.useCtrlyokeStyle && useDifferentFormatPerHarness}
       >
         <StatusLineFormatEditor
+          searchId={`statusLine.byHarness.${harnessId}.format`}
           format={tracking.format}
           onCommit={(format) => sendGlobalSetting(paths.format, format)}
           provider={formatProvider}

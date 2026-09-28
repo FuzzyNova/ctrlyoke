@@ -47,6 +47,7 @@ interface Props {
   hidePreview?: boolean;
   onDraftChange?: (format: StatusLineSegment[]) => void;
   title?: string;
+  searchId?: string;
 }
 
 function cloneDefaultFormat(): StatusLineSegment[] {
@@ -198,6 +199,7 @@ export function StatusLineFormatEditor({
   hidePreview = false,
   onDraftChange,
   title = "Status line format",
+  searchId = "landmark:statusline:format",
 }: Props) {
   const [draftFormat, setDraftFormat] = useState(format);
   const idCounterRef = useRef(0);
@@ -291,7 +293,10 @@ export function StatusLineFormatEditor({
       aria-label="Status line format"
     >
       <div>
-        <h4 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
+        <h4
+          data-settings-search-id={searchId}
+          className="text-xs font-semibold uppercase text-description-fg tracking-wide"
+        >
           {title}
         </h4>
         <p className="text-xs text-description-fg mt-1">

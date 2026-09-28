@@ -5,13 +5,15 @@ import {
   STATUS_LINE_HARNESS_IDS,
   HOOK_EVENT_NAMES,
   HOOK_EVENT_METADATA,
+  WORKTREE_KEEP_HELP_TEXT,
   type HarnessId,
   type StatusLineHarnessId,
   type HookEvent,
 } from "@root/types/DashboardConstants";
 import { HOOK_EVENT_OPTIONS_META } from "@root/types/SchemaUiMetadata";
+import { SCHEMA_DESCRIPTIONS } from "@root/types/generated/SchemaDescriptions";
 import type { GlobalSettingsTab } from "./settingsTabs";
-import type { DrawerPage } from "@/types/drawerPages";
+import { DRAWER_PAGES, type DrawerPage } from "@/types/drawerPages";
 
 export interface SettingsCatalogEntry {
   id: string;
@@ -555,13 +557,344 @@ const STATIC_SETTINGS_CATALOG = {
       "Verbose; logs the routine 'user-scroll' verdict for every scroll event. Settle-window verdicts (suppressed/programmatic/echo) always log while profiling is on.",
     devOnly: true,
   },
+  "permissions.trustedExternalRoots": {
+    id: "permissions.trustedExternalRoots",
+    path: "permissions.trustedExternalRoots",
+    tab: GLOBAL_SETTINGS_TABS.PERMISSIONS,
+    label: "Trusted external roots",
+  },
+  "ui.offerTrustForUntrustedFileLinks": {
+    id: "ui.offerTrustForUntrustedFileLinks",
+    path: "ui.offerTrustForUntrustedFileLinks",
+    tab: GLOBAL_SETTINGS_TABS.PERMISSIONS,
+    label: "Offer trust for untrusted file links",
+    description:
+      "Allow an AI-generated file link outside trusted roots to offer a Trust Parent Folder action. When off, untrusted links are still blocked outright — this only controls whether the offer appears.",
+  },
+  "permissions.codexSandboxMode": {
+    id: "permissions.codexSandboxMode",
+    path: "permissions.codexSandboxMode",
+    tab: GLOBAL_SETTINGS_TABS.PERMISSIONS,
+    label: "Sandbox mode",
+    context: "Codex",
+  },
+  "permissions.codexApprovalPolicy": {
+    id: "permissions.codexApprovalPolicy",
+    path: "permissions.codexApprovalPolicy",
+    tab: GLOBAL_SETTINGS_TABS.PERMISSIONS,
+    label: "Approval policy",
+    context: "Codex",
+  },
+  "server.autoStart": {
+    id: "server.autoStart",
+    path: "server.autoStart",
+    tab: GLOBAL_SETTINGS_TABS.SERVER,
+    label: "Auto Start",
+    description:
+      "Automatically start the hosted dashboard server when the VS Code extension activates.",
+  },
+  "server.displayAddress": {
+    id: "server.displayAddress",
+    tab: GLOBAL_SETTINGS_TABS.SERVER,
+    label: "Connect via",
+    keywords: ["server IP", "connection address"],
+  },
+  "server.port": {
+    id: "server.port",
+    path: "server.port",
+    tab: GLOBAL_SETTINGS_TABS.SERVER,
+    label: "Server port",
+  },
+  "server.fallbackPorts": {
+    id: "server.fallbackPorts",
+    path: "server.fallbackPorts",
+    tab: GLOBAL_SETTINGS_TABS.SERVER,
+    label: "Fallback ports",
+    description:
+      "If the server port above is already taken, ctrlyoke tries these ports in order before falling back to a random one. Useful for a stable, bookmarkable URL when the server port is often taken by another ctrlyoke window.",
+  },
+  "server.bindAddress": {
+    id: "server.bindAddress",
+    path: "server.bindAddress",
+    tab: GLOBAL_SETTINGS_TABS.SERVER,
+    label: "Bind address",
+  },
+  "server.iconBgColor": {
+    id: "server.iconBgColor",
+    path: "server.iconBgColor",
+    tab: GLOBAL_SETTINGS_TABS.SERVER,
+    label: "Background",
+  },
+  "server.iconFgColor": {
+    id: "server.iconFgColor",
+    path: "server.iconFgColor",
+    tab: GLOBAL_SETTINGS_TABS.SERVER,
+    label: "Foreground",
+  },
+  "server.tls.enabled": {
+    id: "server.tls.enabled",
+    path: "server.tls.enabled",
+    tab: GLOBAL_SETTINGS_TABS.SERVER,
+    label: "Enable HTTPS",
+  },
+  "server.tls.certPath": {
+    id: "server.tls.certPath",
+    path: "server.tls.certPath",
+    tab: GLOBAL_SETTINGS_TABS.SERVER,
+    label: "Certificate file (.pem)",
+    revealedBy: "server.tls.enabled",
+  },
+  "server.tls.keyPath": {
+    id: "server.tls.keyPath",
+    path: "server.tls.keyPath",
+    tab: GLOBAL_SETTINGS_TABS.SERVER,
+    label: "Private key file (.pem)",
+    revealedBy: "server.tls.enabled",
+  },
+  "permissions.heuristicSecretRedactionEnabled": {
+    id: "permissions.heuristicSecretRedactionEnabled",
+    path: "permissions.heuristicSecretRedactionEnabled",
+    tab: GLOBAL_SETTINGS_TABS.SECRETS,
+    label: "Heuristic secret redaction",
+    description:
+      "The exact values of the secrets listed above are always redacted from logs, transports, exports, and history — this cannot be turned off. This setting adds broader pattern-based redaction (e.g. token=..., Bearer ..., private-key blocks) that also catches credentials ctrlyoke was never told about. Turn it off if those patterns are over-matching and corrupting legitimate output, such as code samples or public identifiers that merely look like credentials.",
+  },
+  "statusLine.useDifferentFormatPerHarness": {
+    id: "statusLine.useDifferentFormatPerHarness",
+    path: "statusLine.useDifferentFormatPerHarness",
+    tab: GLOBAL_SETTINGS_TABS.STATUS_LINE,
+    label: "Use a different status line format per harness",
+  },
+  "usageTracking.enabled": {
+    id: "usageTracking.enabled",
+    path: "usageTracking.enabled",
+    tab: GLOBAL_SETTINGS_TABS.STATS,
+    label: "Track harness usage",
+    description:
+      "Watch ctrlyoke-started harness sessions and record their token, cost, and quota usage. Applies machine-wide, across all your workspaces.",
+  },
+  "usageTracking.providerRefreshEnabled": {
+    id: "usageTracking.providerRefreshEnabled",
+    path: "usageTracking.providerRefreshEnabled",
+    tab: GLOBAL_SETTINGS_TABS.STATS,
+    label: "Refresh quota from provider",
+    description:
+      "Actively check each harness's CLI for your current quota and rate-limit usage, so the numbers on this page stay up to date.",
+    revealedBy: "usageTracking.enabled",
+  },
+  "usageTracking.persistObservedUsage": {
+    id: "usageTracking.persistObservedUsage",
+    path: "usageTracking.persistObservedUsage",
+    tab: GLOBAL_SETTINGS_TABS.STATS,
+    label: "Save usage history",
+    description:
+      "Keep a running record of usage in this workspace so totals and stats survive restarts. Off keeps usage in memory for this session only.",
+    revealedBy: "usageTracking.enabled",
+  },
+  "landmark:stats:model-pricing": {
+    id: "landmark:stats:model-pricing",
+    tab: GLOBAL_SETTINGS_TABS.STATS,
+    label: "Model pricing overrides",
+    keywords: ["token rates", "cost", "spend"],
+  },
+  modelPricing: {
+    id: "modelPricing",
+    path: "modelPricing",
+    tab: GLOBAL_SETTINGS_TABS.STATS,
+    label: "Rates",
+  },
+  "defaults.harness": {
+    id: "defaults.harness",
+    path: "defaults.harness",
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "harness",
+    label: "Default harness",
+  },
+  "defaults.executionMode": {
+    id: "defaults.executionMode",
+    path: "defaults.executionMode",
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "harness",
+    label: "Execution mode",
+    description:
+      "Where steps run by default. Interactive spawns a live terminal you can steer; headless runs in the background. Workflows and steps can override this. Pre/end-condition scripts always run headless.",
+  },
+  "defaults.worktree": {
+    id: "defaults.worktree",
+    path: "defaults.worktree",
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "harness",
+    label: "Worktree mode",
+    description: SCHEMA_DESCRIPTIONS["defaults.worktree"],
+  },
+  "defaults.worktree.branch": {
+    id: "defaults.worktree.branch",
+    path: "defaults.worktree.branch",
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "harness",
+    label: "Branch",
+    description: "Required local Git branch for the named default.",
+  },
+  "defaults.worktree.base": {
+    id: "defaults.worktree.base",
+    path: "defaults.worktree.base",
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "harness",
+    label: "Base",
+    description:
+      "Optional Git ref used as the starting point for a new branch.",
+    revealedBy: "defaults.worktree",
+  },
+  "defaults.worktree.setup": {
+    id: "defaults.worktree.setup",
+    path: "defaults.worktree.setup",
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "harness",
+    label: "Setup",
+    description:
+      "Optional command run after creating a named worktree. Setup is outside step errorBehavior; a failure blocks the worktree and the next Run retries it.",
+    revealedBy: "defaults.worktree",
+  },
+  "defaults.worktree.keep": {
+    id: "defaults.worktree.keep",
+    path: "defaults.worktree.keep",
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "harness",
+    label: "Keep directory",
+    description: WORKTREE_KEEP_HELP_TEXT,
+  },
+  "defaults.worktree.merge": {
+    id: "defaults.worktree.merge",
+    path: "defaults.worktree.merge",
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "harness",
+    label: "Merge",
+    description:
+      "Merge is the only worktree option that writes to your live working checkout: it merges the managed branch into the working checkout after every run. The engine requires the captured target branch and a clean checkout, takes an exclusive lease, and aborts cleanly on conflict.",
+    revealedBy: "defaults.worktree",
+  },
+  "defaults.agent": {
+    id: "defaults.agent",
+    path: "defaults.agent",
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "harness",
+    label: "Default agent",
+    description: "Agent to use when none is specified in the workflow.",
+  },
+  "defaults.skills": {
+    id: "defaults.skills",
+    path: "defaults.skills",
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "harness",
+    label: "Default skills",
+    description: "Skills to include in new workflows by default.",
+  },
+  "defaults.secrets": {
+    id: "defaults.secrets",
+    path: "defaults.secrets",
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "harness",
+    label: "Default secrets",
+    description:
+      "Secret environment-variable names granted to new workflows by default.",
+  },
+  "defaults.resumeSession": {
+    id: "defaults.resumeSession",
+    path: "defaults.resumeSession",
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "context",
+    label: "Resume existing session",
+    description: "Attempt to resume the most recent AI session.",
+  },
+  "defaults.priorContext": {
+    id: "defaults.priorContext",
+    path: "defaults.priorContext",
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "context",
+    label: "Prior Context",
+    description: "How to handle prior context between prompts.",
+  },
+  "defaults.mcpServers": {
+    id: "defaults.mcpServers",
+    path: "defaults.mcpServers",
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "mcp",
+    label: "Default MCP servers",
+    description:
+      "MCP servers added here are available to all workflows by default.",
+  },
+  "defaults.hooks": {
+    id: "defaults.hooks",
+    path: "defaults.hooks",
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "hooks",
+    label: "Default hooks",
+    description: "Hooks defined here run for all workflows by default.",
+  },
+  "defaults.toolPermissions.mode": {
+    id: "defaults.toolPermissions.mode",
+    path: "defaults.toolPermissions.mode",
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "permissions",
+    label: "Permission mode",
+  },
+  "defaults.toolPermissions.allowedTools": {
+    id: "defaults.toolPermissions.allowedTools",
+    path: "defaults.toolPermissions.allowedTools",
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "permissions",
+    label: "Allowed tools (one per line)",
+  },
+  "defaults.toolPermissions.deniedTools": {
+    id: "defaults.toolPermissions.deniedTools",
+    path: "defaults.toolPermissions.deniedTools",
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "permissions",
+    label: "Denied tools (one per line)",
+  },
+  "landmark:mcp-manager:servers": {
+    id: "landmark:mcp-manager:servers",
+    tab: GLOBAL_SETTINGS_TABS.MCP_MANAGER,
+    label: "MCP server",
+    keywords: ["stdio", "http transport", "server catalog"],
+  },
+  "landmark:agent-skills:manager": {
+    id: "landmark:agent-skills:manager",
+    tab: GLOBAL_SETTINGS_TABS.AGENT_SKILLS_MANAGER,
+    label: "Agent & Skills Manager",
+    keywords: ["agent", "skill", "subagent"],
+  },
+  "landmark:license:account": {
+    id: "landmark:license:account",
+    tab: GLOBAL_SETTINGS_TABS.LICENSE,
+    label: "License",
+    keywords: ["license key", "activation", "pro", "subscription"],
+  },
+  "landmark:secrets:grants": {
+    id: "landmark:secrets:grants",
+    tab: GLOBAL_SETTINGS_TABS.SECRETS,
+    label: "Secrets",
+    keywords: ["secret", "API key", "environment variable grant"],
+  },
+  "landmark:statusline:format": {
+    id: "landmark:statusline:format",
+    tab: GLOBAL_SETTINGS_TABS.STATUS_LINE,
+    label: "Status line format",
+    keywords: ["segment", "statusline format"],
+  },
 } as const;
 
 type DefaultsModelKey = `defaults.models.${HarnessId}`;
 type DefaultsArgsKey = `defaults.additionalArgs.${HarnessId}`;
 type HarnessColorKey = `ui.harnessColors.byHarness.${HarnessId}`;
+const STATUS_LINE_PROPERTY = {
+  ENABLED: "enabled",
+  CUSTOM_COMMAND: "customCommand",
+  USE_CTRLYOKE_STYLE: "useCtrlyokeStyle",
+  FORMAT: "format",
+} as const;
 type StatusLineProperty =
-  "enabled" | "customCommand" | "useCtrlyokeStyle" | "format";
+  (typeof STATUS_LINE_PROPERTY)[keyof typeof STATUS_LINE_PROPERTY];
 type StatusLineKey =
   `statusLine.byHarness.${StatusLineHarnessId}.${StatusLineProperty}`;
 
@@ -609,27 +942,24 @@ const harnessColorEntries = buildHarnessEntries(
   (harnessId, id) => ({
     id,
     path: id,
-    tab: GLOBAL_SETTINGS_TABS.GENERAL,
+    tab: GLOBAL_SETTINGS_TABS.WORKFLOW,
+    page: "harness",
     label: "Harness step color",
     context: HARNESS_INFO[harnessId as HarnessId].name,
   })
 );
-const statusLineProperties = [
-  "enabled",
-  "customCommand",
-  "useCtrlyokeStyle",
-  "format",
-] as const satisfies readonly StatusLineProperty[];
+const statusLineProperties = Object.values(STATUS_LINE_PROPERTY);
 const statusLineEntries = Object.fromEntries(
   Object.values(STATUS_LINE_HARNESS_IDS).flatMap((harnessId) =>
     statusLineProperties.map((property) => {
       const id =
         `statusLine.byHarness.${harnessId}.${property}` as StatusLineKey;
       const labels: Record<StatusLineProperty, string> = {
-        enabled: "Statusline tracking",
-        customCommand: "Custom statusline command",
-        useCtrlyokeStyle: "Use ctrlyoke-style statusline",
-        format: "Statusline format",
+        [STATUS_LINE_PROPERTY.ENABLED]: "Statusline tracking",
+        [STATUS_LINE_PROPERTY.CUSTOM_COMMAND]: "Custom statusline command",
+        [STATUS_LINE_PROPERTY.USE_CTRLYOKE_STYLE]:
+          "Use ctrlyoke-style statusline",
+        [STATUS_LINE_PROPERTY.FORMAT]: "Statusline format",
       };
       return [
         id,
@@ -637,8 +967,44 @@ const statusLineEntries = Object.fromEntries(
           id,
           path: id,
           tab: GLOBAL_SETTINGS_TABS.STATUS_LINE,
-          label: labels[property],
+          label:
+            property === STATUS_LINE_PROPERTY.ENABLED
+              ? `Enable ${HARNESS_INFO[harnessId as HarnessId].name} statusline tracking`
+              : labels[property],
           context: HARNESS_INFO[harnessId as HarnessId].name,
+          ...(property === STATUS_LINE_PROPERTY.ENABLED
+            ? {
+                description: {
+                  [HARNESS_IDS.CLAUDE_CLI]:
+                    "Disabling Claude statusline tracking loses token/quota data.",
+                  [HARNESS_IDS.ANTIGRAVITY_CLI]:
+                    "Disabling Antigravity statusline tracking loses token/quota and context-window data.",
+                  [HARNESS_IDS.COPILOT_CLI]:
+                    "Disabling Copilot statusline tracking loses token and context-window data.",
+                  [HARNESS_IDS.QWEN_CLI]:
+                    "Disabling Qwen statusline tracking loses token and context-window data.",
+                }[harnessId],
+              }
+            : {}),
+          ...(property === STATUS_LINE_PROPERTY.CUSTOM_COMMAND
+            ? {
+                description:
+                  "Command to run for statusline output. Leave empty to use ctrlyoke's statusline only.",
+              }
+            : {}),
+          ...(property === STATUS_LINE_PROPERTY.USE_CTRLYOKE_STYLE
+            ? {
+                description:
+                  "Show ctrlyoke's branded statusline. Turn off to show your custom command's output instead — or leave the statusline blank when no custom command is set. Usage tracking keeps collecting data either way.",
+              }
+            : {}),
+          ...(property === STATUS_LINE_PROPERTY.CUSTOM_COMMAND ||
+          property === STATUS_LINE_PROPERTY.USE_CTRLYOKE_STYLE
+            ? { revealedBy: `statusLine.byHarness.${harnessId}.enabled` }
+            : {}),
+          ...(property === STATUS_LINE_PROPERTY.FORMAT
+            ? { revealedBy: "statusLine.useDifferentFormatPerHarness" }
+            : {}),
         },
       ];
     })
@@ -681,8 +1047,91 @@ export const SETTINGS_CATALOG = {
   ...buildHookEventEntries(),
 } as const satisfies Record<string, SettingsCatalogEntry>;
 export type SettingsCatalogKey = keyof typeof SETTINGS_CATALOG;
-export const SETTINGS_CATALOG_ENTRIES: readonly SettingsCatalogEntry[] =
-  Object.values(SETTINGS_CATALOG);
+const workflowHarnessOrder = [
+  "defaults.harness",
+  ...Object.values(HARNESS_IDS).flatMap((harnessId) => [
+    `defaults.models.${harnessId}`,
+    `defaults.additionalArgs.${harnessId}`,
+    `ui.harnessColors.byHarness.${harnessId}`,
+  ]),
+  "defaults.executionMode",
+  "defaults.worktree",
+  "defaults.worktree.branch",
+  "defaults.worktree.base",
+  "defaults.worktree.setup",
+  "defaults.worktree.keep",
+  "defaults.worktree.merge",
+  "defaults.agent",
+  "defaults.skills",
+  "defaults.secrets",
+];
+const workflowHarnessRank = new Map(
+  workflowHarnessOrder.map((id, index) => [id, index])
+);
+const allCatalogEntries = Object.values(SETTINGS_CATALOG);
+const hookEventCatalogIds = Object.values(HOOK_EVENT_NAMES).map(
+  (event) => `notifications.events.hookEvents.${event}`
+);
+const notificationOrder = [
+  "notifications.vscode.enabled",
+  "notifications.browser.mode",
+  "notifications.events.workflowComplete",
+  "notifications.events.promptComplete",
+  ...hookEventCatalogIds,
+  "notifications.includeWorkflowName",
+  "notifications.includePromptName",
+  "notifications.toastLevel",
+  "notifications.onlyWhenWindowUnfocused",
+];
+const notificationIds = new Set(notificationOrder);
+const notificationEntries = allCatalogEntries.filter((entry) =>
+  notificationIds.has(entry.id)
+);
+const workflowHarnessEntries = allCatalogEntries.filter(
+  (entry) =>
+    entry.tab === GLOBAL_SETTINGS_TABS.WORKFLOW &&
+    entry.page === DRAWER_PAGES.HARNESS
+);
+export const SETTINGS_CATALOG_ENTRIES: readonly SettingsCatalogEntry[] = [
+  ...allCatalogEntries.filter(
+    (entry) =>
+      (entry.tab !== GLOBAL_SETTINGS_TABS.WORKFLOW ||
+        entry.page !== DRAWER_PAGES.HARNESS) &&
+      !notificationIds.has(entry.id)
+  ),
+  ...notificationOrder.flatMap((id) => {
+    const entry = SETTINGS_CATALOG[id as keyof typeof SETTINGS_CATALOG];
+    return entry ? [entry] : [];
+  }),
+  ...notificationEntries.filter((entry) => !notificationIds.has(entry.id)),
+  ...workflowHarnessOrder.flatMap((id) => {
+    const entry = SETTINGS_CATALOG[id as keyof typeof SETTINGS_CATALOG];
+    return entry ? [entry] : [];
+  }),
+  ...workflowHarnessEntries.filter(
+    (entry) => !workflowHarnessRank.has(entry.id)
+  ),
+];
 export function settingLabel(key: SettingsCatalogKey): string {
   return SETTINGS_CATALOG[key].label;
+}
+
+const WORKTREE_MODE_DESCRIPTIONS = {
+  named: {
+    base: "Optional Git ref used as the starting point for a new branch.",
+    setup:
+      "Optional command run after creating a named worktree. Setup is outside step errorBehavior; a failure blocks the worktree and the next Run retries it.",
+  },
+  managed: {
+    base: "Optional Git ref used as the starting point for a new managed worktree.",
+    setup:
+      "Optional command run after creating a managed worktree. Setup is outside step errorBehavior; a failure blocks the worktree and the next Run retries it.",
+  },
+} as const;
+
+export function worktreeSettingDescription(
+  mode: keyof typeof WORKTREE_MODE_DESCRIPTIONS,
+  field: keyof (typeof WORKTREE_MODE_DESCRIPTIONS)["named"]
+): string {
+  return WORKTREE_MODE_DESCRIPTIONS[mode][field];
 }

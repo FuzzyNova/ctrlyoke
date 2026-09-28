@@ -230,7 +230,9 @@ export function DeveloperSection() {
         </p>
         <SettingToggleRow
           settingKey="developer.enablePerformanceProfiling"
-          description={`Logs slow phases at ${profilerState.slowThresholdMs}ms or slower.`}
+          {...{
+            description: `Logs slow phases at ${profilerState.slowThresholdMs}ms or slower.`,
+          }}
           checked={profilerState.enabled}
           onChange={updateProfilerEnabled}
         />

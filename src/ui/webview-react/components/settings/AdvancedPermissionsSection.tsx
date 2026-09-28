@@ -113,9 +113,8 @@ export function AdvancedPermissionsSection({
           Trusted External Roots
         </h3>
         <SettingInputRow
-          label="Trusted external roots"
+          settingKey="permissions.trustedExternalRoots"
           id="trusted-external-roots"
-          path={SETTING_PATHS.PERMISSIONS_TRUSTED_EXTERNAL_ROOTS}
           {...rowProps}
         >
           <TrustedRootsListEditor
@@ -143,11 +142,9 @@ export function AdvancedPermissionsSection({
         </p>
         <div className="mt-3">
           <SettingToggleRow
-            label="Offer trust for untrusted file links"
-            description="Allow an AI-generated file link outside trusted roots to offer a Trust Parent Folder action. When off, untrusted links are still blocked outright — this only controls whether the offer appears."
+            settingKey="ui.offerTrustForUntrustedFileLinks"
             checked={ui.offerTrustForUntrustedFileLinks}
             onChange={(v) => onUpdate("ui.offerTrustForUntrustedFileLinks", v)}
-            path="ui.offerTrustForUntrustedFileLinks"
             {...rowProps}
           />
         </div>
@@ -162,9 +159,8 @@ export function AdvancedPermissionsSection({
         </p>
         <div className="space-y-3">
           <SettingInputRow
-            label="Sandbox mode"
+            settingKey="permissions.codexSandboxMode"
             id="codex-sandbox-mode"
-            path="permissions.codexSandboxMode"
             {...rowProps}
           >
             <CustomSelect
@@ -179,9 +175,8 @@ export function AdvancedPermissionsSection({
             />
           </SettingInputRow>
           <SettingInputRow
-            label="Approval policy"
+            settingKey="permissions.codexApprovalPolicy"
             id="codex-approval-policy"
-            path="permissions.codexApprovalPolicy"
             {...rowProps}
           >
             <CustomSelect

@@ -661,7 +661,10 @@ export function AgentSkillsManagerSection({
 
   return (
     <div className="space-y-4">
-      <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
+      <h3
+        data-settings-search-id="landmark:agent-skills:manager"
+        className="text-xs font-semibold uppercase text-description-fg tracking-wide"
+      >
         Agent & Skills Manager
       </h3>
 

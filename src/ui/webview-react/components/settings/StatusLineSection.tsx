@@ -54,14 +54,13 @@ export function StatusLineSection({ settings }: Props) {
       </div>
       <div className="space-y-3">
         <SettingToggleRow
-          label="Use a different status line format per harness"
+          settingKey="statusLine.useDifferentFormatPerHarness"
           checked={useDifferentFormatPerHarness}
           onChange={(useDifferentFormatPerHarness) =>
             sendMessage(MESSAGE_TYPES.SET_STATUS_LINE_FORMAT_MODE, {
               useDifferentFormatPerHarness,
             })
           }
-          path={SETTING_PATHS.STATUS_LINE_USE_DIFFERENT_FORMAT_PER_HARNESS}
           sources={settings.sources}
           onReset={(path) => sendGlobalSetting(path, undefined)}
           activeScope={SETTING_SCOPES.USER}

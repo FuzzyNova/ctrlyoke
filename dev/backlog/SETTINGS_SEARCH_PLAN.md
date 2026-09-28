@@ -5,12 +5,24 @@ after `dev/implemented/SCHEMA_UI_NAME_ALIGNMENT_PLAN.md` landed.
 
 ## Progress
 
-Phase 1A adds the shared tab list, typed settings catalog/search, row `settingKey`
-support, search unit coverage, and catalog-backed copy for the first settings
-sections. The terminal shell row needs three catalog IDs for one setting path
-because its visible label changes by platform; the runtime-only descriptions
-for profiler threshold, multi-root paths, diagnostics, and inject mode remain
-overrides so their displayed text stays byte-identical.
+Phase 1 is complete. Phase 1A added the shared tab list, typed settings
+catalog/search, row `settingKey` support, search unit coverage, and catalog-backed
+copy for the first sections. Phase 1B migrated every remaining settings row,
+added the six bespoke-editor landmarks, and added catalog drift guards for
+schema paths, key validity, source coverage, and section row ordering. The
+terminal shell row needs three catalog IDs for one setting path because its
+visible label changes by platform. Runtime-only descriptions for profiler
+threshold, multi-root paths, diagnostics, and inject mode remain overrides so
+their displayed text stays byte-identical. The named and managed worktree modes
+also use different help text for the same base/setup paths, so both descriptions
+are held in the catalog and selected by mode.
+
+The integration schema parity scan now excludes `settingsCatalog.ts`, ensuring
+it proves that section source carries each real setting path through
+`settingKey`. `statusLine.byHarness.*` was added to `DYNAMIC_TEMPLATE_PARENTS`;
+after excluding the catalog, the per-harness rows expose that family through
+template keys just like the other map-valued settings. Search UI and navigation
+remain for Phases 2 and 3.
 
 ## Goal
 

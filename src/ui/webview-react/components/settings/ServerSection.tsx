@@ -314,13 +314,11 @@ export function ServerSection({
         {/* Enable on launch — server-side only; browser clients cannot change server startup */}
         {!isStandalone && (
           <SettingToggleRow
-            label="Auto Start"
-            description="Automatically start the hosted dashboard server when the VS Code extension activates."
+            settingKey="server.autoStart"
             checked={server.autoStart}
             onChange={(value) =>
               onUpdate(SETTING_PATHS.SERVER_AUTO_START, value)
             }
-            path={SETTING_PATHS.SERVER_AUTO_START}
             {...rowProps}
           />
         )}
@@ -352,7 +350,10 @@ export function ServerSection({
         {!isStandalone && serverRunning && displayUrl && (
           <div>
             {showIpSelector && (
-              <SettingInputRow label="Connect via" id="server-display-ip">
+              <SettingInputRow
+                settingKey="server.displayAddress"
+                id="server-display-ip"
+              >
                 <CustomSelect
                   id="server-display-ip"
                   value={selectedDisplayIp ?? ""}
@@ -467,9 +468,8 @@ export function ServerSection({
         {!isStandalone && (
           <div>
             <SettingInputRow
-              label="Server port"
+              settingKey="server.port"
               id="server-port"
-              path="server.port"
               {...rowProps}
             >
               <LocalNumberInput
@@ -498,10 +498,8 @@ export function ServerSection({
             workspace pin a stable, bookmarkable URL. Server-side only. */}
         {!isStandalone && (
           <SettingInputRow
-            label="Fallback ports"
+            settingKey="server.fallbackPorts"
             id="server-fallback-ports"
-            path="server.fallbackPorts"
-            description="If the server port above is already taken, ctrlyoke tries these ports in order before falling back to a random one. Useful for a stable, bookmarkable URL when the server port is often taken by another ctrlyoke window."
             {...rowProps}
           >
             <PortListEditor
@@ -527,9 +525,8 @@ export function ServerSection({
         {!isStandalone && (
           <div>
             <SettingInputRow
-              label="Bind address"
+              settingKey="server.bindAddress"
               id="server-bind"
-              path="server.bindAddress"
               {...rowProps}
             >
               <CustomSelect
@@ -581,9 +578,8 @@ export function ServerSection({
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <SettingInputRow
-                label="Background"
+                settingKey="server.iconBgColor"
                 id="icon-bg-color"
-                path="server.iconBgColor"
                 {...rowProps}
               >
                 <input
@@ -604,9 +600,8 @@ export function ServerSection({
             </div>
             <div>
               <SettingInputRow
-                label="Foreground"
+                settingKey="server.iconFgColor"
                 id="icon-fg-color"
-                path="server.iconFgColor"
                 {...rowProps}
               >
                 <input
@@ -682,11 +677,10 @@ export function ServerSection({
           )}
 
           <SettingToggleRow
-            label="Enable HTTPS"
+            settingKey="server.tls.enabled"
             checked={server.tls?.enabled ?? false}
             onChange={(v) => onUpdate("server.tls.enabled", v)}
             disabled={!licenseAccess.hasRemoteAccess}
-            path="server.tls.enabled"
             {...rowProps}
           />
           <div className="text-xs text-description-fg italic">
@@ -700,9 +694,8 @@ export function ServerSection({
           {server.tls?.enabled && (
             <div className="space-y-3 mt-3">
               <SettingInputRow
-                label="Certificate file (.pem)"
+                settingKey="server.tls.certPath"
                 id="tls-cert-path"
-                path="server.tls.certPath"
                 {...rowProps}
               >
                 <LocalTextInput
@@ -714,9 +707,8 @@ export function ServerSection({
                 />
               </SettingInputRow>
               <SettingInputRow
-                label="Private key file (.pem)"
+                settingKey="server.tls.keyPath"
                 id="tls-key-path"
-                path="server.tls.keyPath"
                 {...rowProps}
               >
                 <LocalTextInput
