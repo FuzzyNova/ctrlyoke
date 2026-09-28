@@ -21,8 +21,13 @@ The integration schema parity scan now excludes `settingsCatalog.ts`, ensuring
 it proves that section source carries each real setting path through
 `settingKey`. `statusLine.byHarness.*` was added to `DYNAMIC_TEMPLATE_PARENTS`;
 after excluding the catalog, the per-harness rows expose that family through
-template keys just like the other map-valued settings. Search UI and navigation
-remain for Phases 2 and 3.
+template keys just like the other map-valued settings.
+
+Phase 2 is complete. The drawer now owns transient search state, shows an
+in-flow search row, highlights and tints matching settings rows, reports match
+counts on settings tabs and Workflow Defaults pages, and displays an empty
+result notice. Search navigation, cross-tab/page jumping, keyboard shortcuts,
+and reveal/scroll behavior remain for Phase 3.
 
 ## Goal
 

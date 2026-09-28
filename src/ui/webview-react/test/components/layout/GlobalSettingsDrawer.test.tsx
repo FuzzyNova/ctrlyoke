@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { GlobalSettingsDrawer } from "@components/layout/GlobalSettingsDrawer";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
@@ -68,5 +68,51 @@ describe("GlobalSettingsDrawer", () => {
         "These settings use a newer format. Update ctrlyoke to edit them."
       )
     ).toBeInTheDocument();
+  });
+
+  it("opens and closes search, clears its query, and shows match badges", () => {
+    render(<GlobalSettingsDrawer />);
+    const toggle = screen.getByRole("button", { name: "Search settings" });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    fireEvent.change(screen.getByRole("textbox", { name: "Search settings" }), {
+      target: { value: "max steps" },
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Queue, 2 matches" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "License, 0 matches" })
+    ).toHaveClass("opacity-40");
+    expect(screen.getByText("1/2")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close search" }));
+    expect(
+      screen.queryByRole("textbox", { name: "Search settings" })
+    ).toBeNull();
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(toggle);
+    expect(
+      screen.getByRole("textbox", { name: "Search settings" })
+    ).toHaveValue("");
+  });
+
+  it("reopens with search closed and empty after the drawer closes", () => {
+    render(<GlobalSettingsDrawer />);
+    fireEvent.click(screen.getByRole("button", { name: "Search settings" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Search settings" }), {
+      target: { value: "queue" },
+    });
+    act(() => useUiStore.setState({ globalSettingsOpen: false }));
+    act(() => useUiStore.setState({ globalSettingsOpen: true }));
+
+    expect(
+      screen.queryByRole("textbox", { name: "Search settings" })
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Search settings" })
+    ).toHaveAttribute("aria-pressed", "false");
   });
 });

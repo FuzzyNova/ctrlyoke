@@ -21,4 +21,19 @@ describe("SettingToggleRow schema labels", () => {
       expect.stringContaining("property: server.autoStart")
     );
   });
+
+  it("keeps toggles outside search context undecorated", () => {
+    const { container } = render(
+      <SettingToggleRow
+        label="Auto Start"
+        checked={false}
+        onChange={() => undefined}
+      />
+    );
+    expect(container.firstElementChild).not.toHaveClass(
+      "rounded-sm",
+      "bg-list-hover-bg/50"
+    );
+    expect(container.querySelector("mark")).toBeNull();
+  });
 });

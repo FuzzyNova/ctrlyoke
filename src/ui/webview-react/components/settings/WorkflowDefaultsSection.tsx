@@ -6,7 +6,11 @@ import type {
 } from "@root/types/WebviewMessageTypes";
 import { useSettingsDrawerTabOverrides } from "../../hooks/useSettingsDrawerTabOverrides";
 import { DrawerTabBar } from "../shared/DrawerTabBar";
-import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
+import {
+  DRAWER_PAGES,
+  DRAWER_TABS,
+  type DrawerPage,
+} from "../../types/drawerPages";
 import { DefaultsHarnessPage } from "./defaults/DefaultsHarnessPage";
 import { DefaultsContextPage } from "./defaults/DefaultsContextPage";
 import { DefaultsValidationPage } from "./defaults/DefaultsValidationPage";
@@ -19,6 +23,8 @@ interface Props {
   activeScope: SettingWriteScope;
   onUpdate: (path: string, value: unknown) => void;
   onReset: (path: string) => void;
+  countsByPage?: ReadonlyMap<DrawerPage, number>;
+  searchActive?: boolean;
 }
 
 export function WorkflowDefaultsSection({
@@ -26,6 +32,8 @@ export function WorkflowDefaultsSection({
   activeScope,
   onUpdate,
   onReset,
+  countsByPage,
+  searchActive = false,
 }: Props) {
   const [activePage, setActivePage] = useState<DrawerPage>(
     DRAWER_PAGES.HARNESS
@@ -64,6 +72,16 @@ export function WorkflowDefaultsSection({
         ariaLabel="Workflow defaults"
         isNarrow={false}
         tabOverrides={tabOverrides}
+        matchCount={
+          searchActive
+            ? (Object.fromEntries(
+                DRAWER_TABS.map((tab) => [
+                  tab.id,
+                  countsByPage?.get(tab.id) ?? 0,
+                ])
+              ) as Partial<Record<DrawerPage, number>>)
+            : undefined
+        }
       />
     </div>
   );

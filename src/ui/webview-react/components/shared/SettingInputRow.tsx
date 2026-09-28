@@ -12,6 +12,8 @@ import {
   type SettingsCatalogEntry,
   type SettingsCatalogKey,
 } from "@components/settings/settingsCatalog";
+import { useSettingMatch } from "@components/settings/SettingsSearchContext";
+import { HighlightedText } from "./HighlightedText";
 
 interface Props {
   label?: string;
@@ -42,6 +44,7 @@ export function SettingInputRow({
   const resolvedLabel = entry?.label ?? label ?? "";
   const resolvedDescription = description ?? entry?.description;
   const resolvedPath = entry?.path ?? (settingKey ? undefined : path);
+  const { isMatch, isActive, tokens } = useSettingMatch(settingKey);
   const source = resolvedPath && sources ? sources[resolvedPath] : undefined;
   const canReset =
     source !== undefined &&
@@ -49,14 +52,17 @@ export function SettingInputRow({
     source === activeScope;
 
   return (
-    <div className="group" data-settings-search-id={entry?.id}>
+    <div
+      className={`group${isMatch ? " rounded-sm bg-list-hover-bg/50" : ""}${isActive ? " outline outline-1 outline-focus-border" : ""}`}
+      data-settings-search-id={entry?.id}
+    >
       <div className="flex items-center gap-1.5 mb-1">
         <label
           htmlFor={id}
           title={resolvedPath ? schemaTitle(resolvedPath) : resolvedDescription}
           className="text-xs text-description-fg"
         >
-          {resolvedLabel}
+          <HighlightedText text={resolvedLabel} tokens={tokens} />
           {resolvedPath && (
             <span className="sr-only">
               {schemaAriaLabel(resolvedLabel, resolvedPath).slice(
@@ -96,7 +102,7 @@ export function SettingInputRow({
       {children}
       {resolvedDescription && (
         <p className="text-xs text-description-fg mt-1">
-          {resolvedDescription}
+          <HighlightedText text={resolvedDescription} tokens={tokens} />
         </p>
       )}
     </div>

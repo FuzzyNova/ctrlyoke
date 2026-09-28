@@ -23,6 +23,8 @@ export interface SegmentedTabBarProps<Id extends string> {
   harnessId?: HarnessId;
   /** Per-tab icon/color overrides driven by resolved property state. */
   tabOverrides?: Partial<Record<Id, TabIconOverride>>;
+  /** Per-tab settings search match counts; undefined means search is inactive. */
+  matchCount?: Partial<Record<Id, number>>;
   /** Override the wrapper div className. */
   className?: string;
 }
@@ -34,6 +36,7 @@ export function SegmentedTabBar<Id extends string>({
   ariaLabel,
   harnessId,
   tabOverrides,
+  matchCount,
   className,
 }: SegmentedTabBarProps<Id>): React.ReactElement {
   return (
@@ -48,6 +51,9 @@ export function SegmentedTabBar<Id extends string>({
       {tabs.map((tab) => {
         const isActive = activeTab === tab.id;
         const override = tabOverrides?.[tab.id];
+        const count = matchCount?.[tab.id];
+        const accessibleLabel =
+          count === undefined ? tab.label : `${tab.label}, ${count} matches`;
         const codicon = override?.codicon ?? tab.codicon;
         const overrideColor = !isActive ? override?.color : undefined;
         const inactiveColor = overrideColor ?? "text-description-fg";
@@ -61,15 +67,15 @@ export function SegmentedTabBar<Id extends string>({
           <button
             key={tab.id}
             type="button"
-            title={tab.label}
-            aria-label={tab.label}
+            title={accessibleLabel}
+            aria-label={accessibleLabel}
             role="tab"
             aria-selected={isActive}
-            className={`cy-tab-hc${isActive ? " cy-tab-hc-selected" : ""} flex-1 flex items-center justify-center py-2 transition-colors cursor-pointer border-b-2 ${
+            className={`cy-tab-hc${isActive ? " cy-tab-hc-selected" : ""} relative flex-1 flex items-center justify-center py-2 transition-colors cursor-pointer border-b-2 ${
               isActive
                 ? `border-b-focus-border ${activeColor}`
                 : `border-b-transparent ${inactiveColor} ${hoverClass}${tab.placeholder ? " opacity-60" : ""}`
-            }`}
+            }${count === 0 ? " opacity-40" : ""}`}
             onClick={() => onTabChange(tab.id)}
           >
             {codicon ? (
@@ -98,6 +104,14 @@ export function SegmentedTabBar<Id extends string>({
               />
             ) : (
               <Icon name="robot" style={{ fontSize: 20 }} />
+            )}
+            {count !== undefined && (
+              <span
+                aria-hidden="true"
+                className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-badge-bg px-1 text-[9px] leading-none text-badge-fg"
+              >
+                {count}
+              </span>
             )}
           </button>
         );

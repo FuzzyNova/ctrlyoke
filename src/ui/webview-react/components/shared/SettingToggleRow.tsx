@@ -11,6 +11,8 @@ import {
   type SettingsCatalogEntry,
   type SettingsCatalogKey,
 } from "@components/settings/settingsCatalog";
+import { useSettingMatch } from "@components/settings/SettingsSearchContext";
+import { HighlightedText } from "./HighlightedText";
 
 interface Props {
   label?: string;
@@ -44,6 +46,7 @@ export function SettingToggleRow({
   const resolvedLabel = entry?.label ?? label ?? "";
   const resolvedDescription = description ?? entry?.description;
   const resolvedPath = entry?.path ?? (settingKey ? undefined : path);
+  const { isMatch, isActive, tokens } = useSettingMatch(settingKey);
   const source = resolvedPath && sources ? sources[resolvedPath] : undefined;
   const canReset =
     source !== undefined &&
@@ -54,7 +57,7 @@ export function SettingToggleRow({
     <label
       data-settings-search-id={entry?.id}
       title={resolvedPath ? schemaTitle(resolvedPath) : resolvedDescription}
-      className={`flex items-start gap-3 py-2 group ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+      className={`flex items-start gap-3 py-2 group ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}${isMatch ? " rounded-sm bg-list-hover-bg/50" : ""}${isActive ? " outline outline-1 outline-focus-border" : ""}`}
     >
       <input
         type="checkbox"
@@ -71,14 +74,16 @@ export function SettingToggleRow({
       />
       <span className="flex flex-col flex-1 min-w-0">
         <span className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-sm text-foreground">{resolvedLabel}</span>
+          <span className="text-sm text-foreground">
+            <HighlightedText text={resolvedLabel} tokens={tokens} />
+          </span>
           {source && source !== INHERIT_DEFAULT_OPTION && (
             <SettingSourceBadge source={source} />
           )}
         </span>
         {resolvedDescription && (
           <span className="text-xs text-description-fg mt-0.5">
-            {resolvedDescription}
+            <HighlightedText text={resolvedDescription} tokens={tokens} />
           </span>
         )}
       </span>

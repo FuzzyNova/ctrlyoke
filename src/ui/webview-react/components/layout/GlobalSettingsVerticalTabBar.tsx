@@ -2,6 +2,7 @@ import { Icon } from "../shared/Icon";
 import type { SettingsTab } from "../settings/settingsTabs";
 interface Tab extends SettingsTab {
   indicator?: boolean;
+  matchCount?: number;
 }
 
 interface Props {
@@ -25,11 +26,20 @@ export function GlobalSettingsVerticalTabBar({
         <button
           key={tab.id}
           onClick={() => onTabChange(tab.id)}
-          title={tab.label}
-          aria-label={tab.label}
+          title={
+            tab.matchCount === undefined
+              ? tab.label
+              : `${tab.label}, ${tab.matchCount} matches`
+          }
+          aria-label={
+            tab.matchCount === undefined
+              ? tab.label
+              : `${tab.label}, ${tab.matchCount} matches`
+          }
           className={`flex items-center gap-2 py-2 text-sm text-left w-full
             border-l-2 transition-colors
             ${iconOnly ? "justify-center px-0" : "px-3"}
+            ${tab.matchCount === 0 ? "opacity-40" : ""}
             ${
               activeTab === tab.id
                 ? "border-focus-border text-foreground bg-list-active-bg"
@@ -38,11 +48,20 @@ export function GlobalSettingsVerticalTabBar({
         >
           <span className="relative shrink-0">
             <Icon name={tab.icon} className="text-base" />
-            {tab.indicator && (
+            {iconOnly && tab.matchCount !== undefined ? (
+              <span className="absolute -right-2 -top-2 flex min-w-4 h-4 items-center justify-center rounded-full bg-badge-bg px-1 text-[9px] leading-none text-badge-fg">
+                {tab.matchCount}
+              </span>
+            ) : tab.indicator ? (
               <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-indicator-success" />
-            )}
+            ) : null}
           </span>
-          {!iconOnly && <span>{tab.label}</span>}
+          {!iconOnly && <span className="min-w-0 flex-1">{tab.label}</span>}
+          {!iconOnly && tab.matchCount !== undefined && (
+            <span className="rounded-full bg-badge-bg px-1.5 py-0.5 text-[10px] leading-none text-badge-fg tabular-nums">
+              {tab.matchCount}
+            </span>
+          )}
         </button>
       ))}
     </div>
