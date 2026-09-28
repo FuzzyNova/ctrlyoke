@@ -18,8 +18,11 @@
  * hidden behind dynamic CommonJS requires. Production methods can be called
  * from docs/build/maintenance scripts outside both tsconfigs. The language
  * service's findReferences (the same engine behind VS Code "Find All
- * References") counts non-declaration usages. Anything at zero is reported
- * as a dead-method candidate.
+ * References") counts non-declaration usages. It can miss calls through
+ * structural interfaces, Pick/derived types, or factory return types, so the
+ * checker also matches production property calls against their receiver types
+ * and the declaring class type. Anything at zero after both checks is
+ * reported as a dead-method candidate.
  *
  * Why both projects have to be combined into one program: the webview
  * imports directly from extension-side directories via path aliases
@@ -43,7 +46,9 @@
  *    resolves calls through an interface/base-class-typed variable (or a
  *    framework's own runtime dispatch, e.g. React calling `render()` /
  *    `componentDidCatch()` on a class extending `Component`) to that type's
- *    symbol, not the subclass's override symbol, and undercounts them.
+ *    symbol, not the subclass's override symbol. Statically typed property
+ *    calls are covered by receiver-type matching below; runtime-only dispatch
+ *    still uses the fixed ignored-name list.
  *  - Skips a small fixed list of duck-typed lifecycle/magic method names
  *    (dispose, toString, toJSON, React lifecycle hooks, etc.) that get
  *    called reflectively by frameworks rather than by direct reference.
@@ -232,9 +237,24 @@ function collectMethodCandidates(sourceFile, checker) {
       if (hasKeepTag(member, sourceFile)) continue;
       if (heritageDeclaresMemberName(classNode, methodName, checker)) continue;
 
+      const classSymbol = classNode.name
+        ? checker.getSymbolAtLocation(classNode.name)
+        : checker.getTypeAtLocation(classNode).symbol;
+
       candidates.push({
         className,
         methodName,
+        ownerType: classSymbol
+          ? checker.getDeclaredTypeOfSymbol(classSymbol)
+          : undefined,
+        ownerStaticType: classSymbol
+          ? checker.getTypeOfSymbolAtLocation(classSymbol, classNode)
+          : undefined,
+        isStatic:
+          isMethod &&
+          member.modifiers?.some(
+            (modifier) => modifier.kind === ts.SyntaxKind.StaticKeyword
+          ) === true,
         fileName: sourceFile.fileName,
         pos: member.name.getStart(sourceFile),
         line:
@@ -254,6 +274,45 @@ function collectMethodCandidates(sourceFile, checker) {
 
   visit(sourceFile);
   return candidates;
+}
+
+/**
+ * findReferences is symbol-based and can return only the interface member for
+ * `value.method()` even when `value` came from a concrete class factory. Match
+ * those calls by checking whether the declaring class instance (or static
+ * side) is assignable to the call receiver type. This also covers Pick and
+ * other derived receiver types without hardcoding particular interfaces.
+ */
+function collectTypedPropertyCalls(sourceFiles, checker) {
+  const callsByName = new Map();
+  for (const sourceFile of sourceFiles) {
+    if (isTestFile(sourceFile.fileName)) continue;
+    function visit(node) {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isPropertyAccessExpression(node.expression)
+      ) {
+        const access = node.expression;
+        const receiverType = checker.getTypeAtLocation(access.expression);
+        const calls = callsByName.get(access.name.text) ?? [];
+        calls.push(receiverType);
+        callsByName.set(access.name.text, calls);
+      }
+      ts.forEachChild(node, visit);
+    }
+    visit(sourceFile);
+  }
+  return callsByName;
+}
+
+function hasTypedProductionCall(candidate, callsByName, checker) {
+  const ownerType = candidate.isStatic
+    ? candidate.ownerStaticType
+    : candidate.ownerType;
+  if (!ownerType) return false;
+  return (callsByName.get(candidate.methodName) ?? []).some((receiverType) =>
+    checker.isTypeAssignableTo(ownerType, receiverType)
+  );
 }
 
 function isSameDeclarationEntry(entry, candidate) {
@@ -298,6 +357,7 @@ function main() {
           .resolve(sf.fileName)
           .startsWith(path.resolve(ROOT, "src") + path.sep)
     );
+  const typedPropertyCalls = collectTypedPropertyCalls(sourceFiles, checker);
 
   let candidateCount = 0;
   const deadMethods = [];
@@ -317,6 +377,10 @@ function main() {
           externalRefCount++;
           if (!isTestFile(entry.fileName)) productionRefCount++;
         }
+      }
+      if (hasTypedProductionCall(candidate, typedPropertyCalls, checker)) {
+        externalRefCount++;
+        productionRefCount++;
       }
       if (hasRepositoryScriptReference(candidate, scriptSources)) {
         externalRefCount++;
