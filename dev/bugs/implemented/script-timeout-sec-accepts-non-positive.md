@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude)
 - **Area:** `schemas/settings-schema.json`, `src/utils/ConfigurationUtils.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

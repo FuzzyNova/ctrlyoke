@@ -15,6 +15,7 @@ import type {
   StatusLineHarnessSettings,
   TerminalSettings,
 } from "../types/CtrlYokeSettings";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "../types/CtrlYokeSettings";
 import type { PriorContext } from "../types/CtrlYokeTypes";
 import type { ToolPermissionConfig } from "../types/ExecutionPropertyTypes";
 import type { StatusLineSegment } from "./StatuslineFormat";
@@ -381,8 +382,13 @@ export const ConfigurationUtils = {
    * User configures in seconds, this returns milliseconds
    */
   getScriptTimeoutMs(): number {
+    const timeoutSec = configService.get(
+      CONFIG_KEYS.EXECUTION
+    ).scriptTimeoutSec;
     return secondsToMs(
-      configService.get(CONFIG_KEYS.EXECUTION).scriptTimeoutSec
+      Number.isFinite(timeoutSec) && timeoutSec > 0
+        ? timeoutSec
+        : CTRLYOKE_SETTINGS_DEFAULTS.execution.scriptTimeoutSec
     )!;
   },
 

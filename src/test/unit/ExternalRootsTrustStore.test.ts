@@ -115,6 +115,74 @@ suite("ExternalRootsTrustStore", () => {
     assert.strictEqual(store.getDecision(workspaceA, root), undefined);
   });
 
+  test("preserves decisions in BOM and trailing-comma JSONC files", async () => {
+    fs.mkdirSync(path.dirname(storePath), { recursive: true });
+    const rootA = path.join(tempDir, "root-a");
+    const rootB = path.join(tempDir, "root-b");
+    const rootC = path.join(tempDir, "root-c");
+    const key = (root: string) =>
+      `${workspaceA}␟${ExternalRootsTrustStore.canonicalizeRoot(root)}`;
+    fs.writeFileSync(
+      storePath,
+      `\uFEFF${JSON.stringify({
+        decisions: { [key(rootA)]: "deny", [key(rootB)]: "allow" },
+      }).replace("}}", ",}}")}`,
+      "utf-8"
+    );
+
+    await store.setDecisions(workspaceA, [rootC], "allow");
+
+    const persisted = JSON.parse(fs.readFileSync(storePath, "utf-8")) as {
+      decisions: Record<string, string>;
+    };
+    assert.deepStrictEqual(persisted.decisions, {
+      [key(rootA)]: "deny",
+      [key(rootB)]: "allow",
+      [key(rootC)]: "allow",
+    });
+  });
+
+  test("refuses to overwrite an unparseable store file", async () => {
+    fs.mkdirSync(path.dirname(storePath), { recursive: true });
+    const original = "{ not valid json";
+    fs.writeFileSync(storePath, original, "utf-8");
+
+    await assert.rejects(
+      store.setDecisions(workspaceA, [rootDir()], "allow"),
+      /contains invalid JSON/
+    );
+    assert.strictEqual(fs.readFileSync(storePath, "utf-8"), original);
+  });
+
+  test("serializes concurrent decisions and leaves valid JSON", async () => {
+    const rootA = path.join(tempDir, "parallel-a");
+    const rootB = path.join(tempDir, "parallel-b");
+    const results = await Promise.allSettled([
+      store.setDecisions("workspace-a", [rootA], "allow"),
+      store.setDecisions("workflow-b", [rootB], "deny"),
+    ]);
+
+    assert.deepStrictEqual(
+      results.map((result) => result.status),
+      ["fulfilled", "fulfilled"]
+    );
+    const persisted = JSON.parse(fs.readFileSync(storePath, "utf-8")) as {
+      decisions: Record<string, string>;
+    };
+    assert.strictEqual(
+      persisted.decisions[
+        `workspace-a␟${ExternalRootsTrustStore.canonicalizeRoot(rootA)}`
+      ],
+      "allow"
+    );
+    assert.strictEqual(
+      persisted.decisions[
+        `workflow-b␟${ExternalRootsTrustStore.canonicalizeRoot(rootB)}`
+      ],
+      "deny"
+    );
+  });
+
   test("canonicalizeRoot uses the nearest existing ancestor for a missing path", () => {
     const nonexistent = path.join(tempDir, "does-not-exist-yet");
     const canonical = ExternalRootsTrustStore.canonicalizeRoot(nonexistent);

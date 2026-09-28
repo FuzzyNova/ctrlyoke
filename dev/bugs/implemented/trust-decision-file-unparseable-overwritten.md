@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude)
 - **Area:** `src/config/TrustDecisionFile.ts` (used by `ExternalRootsTrustStore`, `SecretGrantsTrustStore`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

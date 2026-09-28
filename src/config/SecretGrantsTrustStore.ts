@@ -8,6 +8,7 @@ import {
   type TrustDecisionFile,
 } from "./TrustDecisionFile";
 import { PERSISTED_STORES } from "../utils/PersistedSchemaGuard";
+import { AsyncWriteQueue } from "./AsyncWriteQueue";
 
 export type SecretGrantTrustDecision =
   (typeof TRUST_DECISIONS)[keyof typeof TRUST_DECISIONS];
@@ -23,6 +24,8 @@ const DECISION_KEY_SEPARATOR = "␟";
  * configuration.
  */
 export class SecretGrantsTrustStore {
+  private readonly writeQueue = new AsyncWriteQueue();
+
   constructor(private readonly storePath: string) {}
 
   private static keyFor(workspaceIdentity: string, secretName: string): string {
@@ -86,11 +89,14 @@ export class SecretGrantsTrustStore {
     }
     const identity =
       SecretGrantsTrustStore.canonicalWorkspaceIdentity(workspaceIdentity);
-    const data = this.load();
-    for (const name of names) {
-      data.decisions[SecretGrantsTrustStore.keyFor(identity, name)] = decision;
-    }
-    await this.save(data);
+    await this.writeQueue.enqueue(async () => {
+      const data = this.load();
+      for (const name of names) {
+        data.decisions[SecretGrantsTrustStore.keyFor(identity, name)] =
+          decision;
+      }
+      await this.save(data);
+    });
   }
 }
 
