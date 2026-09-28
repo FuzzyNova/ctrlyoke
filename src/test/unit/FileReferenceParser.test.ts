@@ -593,6 +593,23 @@ suite("FileReferenceParser", () => {
       assert.strictEqual(refs.length, 3);
     });
 
+    test("orders mixed references by token appearance, not earlier prose paths", () => {
+      const prompt =
+        "src/a.ts is mentioned in prose first; then #sym:src/b.ts:Foo:1-5, " +
+        "@src/a.ts, and #selection:src/c.ts:3-4";
+
+      const refs = parseAllFileReferences(prompt);
+
+      assert.deepStrictEqual(
+        refs.map((ref) => [ref.path, ref.symbolName]),
+        [
+          ["src/b.ts", "Foo"],
+          ["src/a.ts", undefined],
+          ["src/c.ts", undefined],
+        ]
+      );
+    });
+
     test("preserves ./ and ../ paths through parse and rewrite round trips", () => {
       const prompts = [
         "@./bare.png",

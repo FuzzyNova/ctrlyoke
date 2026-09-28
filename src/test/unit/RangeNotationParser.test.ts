@@ -26,4 +26,17 @@ suite("RangeNotationParser", () => {
     assert.strictEqual(parseRangeNotation("1,,2"), null);
     assert.strictEqual(parseRangeNotation("abc"), null);
   });
+
+  test("returns null for a range above the expansion limit", () => {
+    assert.strictEqual(parseRangeNotation("1-30000000"), null);
+  });
+
+  test("returns null when multiple ranges cumulatively exceed the limit", () => {
+    assert.strictEqual(parseRangeNotation("1-60,61-101"), null);
+  });
+
+  test("returns null for values outside the safe integer range", () => {
+    assert.strictEqual(parseRangeNotation("9007199254740992"), null);
+    assert.strictEqual(parseRangeNotation("1-9007199254740992"), null);
+  });
 });

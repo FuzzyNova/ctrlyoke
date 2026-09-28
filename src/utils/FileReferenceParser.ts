@@ -600,16 +600,8 @@ export function parseAllFileReferences(prompt: string): FileReference[] {
   // This ensures processing order matches user intent
   const allRefs = [...atRefs, ...fileRefs, ...symRefs];
 
-  // Sort by first occurrence in prompt
-  allRefs.sort((a, b) => {
-    // For symbol refs, search for the #sym: pattern
-    const aSearchStr = a.symbolName ? `#sym:${a.symbolName}` : a.path;
-    const bSearchStr = b.symbolName ? `#sym:${b.symbolName}` : b.path;
-
-    const aIndex = prompt.indexOf(aSearchStr);
-    const bIndex = prompt.indexOf(bSearchStr);
-    return aIndex - bIndex;
-  });
+  // Every parser records the matched token's position in the original prompt.
+  allRefs.sort((a, b) => (a.startOffset ?? 0) - (b.startOffset ?? 0));
 
   return allRefs;
 }
