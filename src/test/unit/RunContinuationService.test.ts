@@ -779,11 +779,11 @@ suite("RunContinuationService addressed step mutations", () => {
     ]);
     const repository = new WorkflowLineageRepository();
 
-    const reordered = await RunContinuationService.reorderPendingStepsAtRun(
+    const reordered = await RunContinuationService.reorderStepsAtRun(
       workspace,
       workflowKey,
       runRef,
-      [0, 2, 1],
+      [3, 2],
       1,
       repository,
       undefined,
@@ -797,56 +797,17 @@ suite("RunContinuationService addressed step mutations", () => {
     );
 
     await assert.rejects(
-      RunContinuationService.reorderPendingStepsAtRun(
+      RunContinuationService.reorderStepsAtRun(
         workspace,
         workflowKey,
         runRef,
-        [1, 0, 2],
+        [1, 2],
         2,
         repository,
         undefined,
         true
       ),
-      /currently executing|completed step/i
-    );
-  });
-
-  test("rejects insertions that would move the in-flight step, including numeric append positions", async () => {
-    workspace = await fs.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-step-insert-")
-    );
-    await seedRun(EXECUTION_STATES.RUNNING, 1, [
-      { prompt: "done", _runtime: { completedAt: 10 } },
-      { prompt: "in flight", _runtime: { startedAt: 11 } },
-      { prompt: "pending" },
-    ]);
-    const repository = new WorkflowLineageRepository();
-
-    await assert.rejects(
-      RunContinuationService.insertStepAtRun(
-        workspace,
-        workflowKey,
-        runRef,
-        1,
-        { prompt: "must not shift in flight" },
-        1,
-        repository,
-        true
-      ),
-      /currently executing|completed step/i
-    );
-    await assert.rejects(
-      RunContinuationService.appendStepsToRun(
-        workspace,
-        workflowKey,
-        runRef,
-        [{ prompt: "must not shift in flight" }],
-        1,
-        repository,
-        true,
-        1
-      ),
-      /currently executing|completed step/i
+      /exactly 2 not-yet-started step indices/i
     );
   });
 

@@ -349,16 +349,6 @@ export class WorkflowInstanceRegistry
     return [...this.instances.values()];
   }
 
-  getRunningWorkflows(): WorkflowInstance[] {
-    return [...this.instances.values()].filter((workflow) => {
-      const status = workflow.getQueueState().status;
-      return (
-        status === EXECUTION_STATES.RUNNING ||
-        status === EXECUTION_STATES.PAUSING
-      );
-    });
-  }
-
   getActiveWorkflow(): WorkflowInstance | undefined {
     const id = this.getViewedWorkflowId(this.panelClientId);
     return id

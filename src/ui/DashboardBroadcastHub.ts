@@ -170,7 +170,7 @@ export class DashboardBroadcastHub
   /** No-op: full state is delivered per-client via replayWorkflowStateTo, never broadcast. */
   async updateFileSelected(): Promise<void> {}
 
-  /** No-op: full state is delivered per-client via replayWorkflowStateTo, never broadcast. */
+  /** Required by IDashboardSink; full state is replayed directly per client. */
   async updateSessionRestored(): Promise<void> {}
 
   updateExecutionStarted(

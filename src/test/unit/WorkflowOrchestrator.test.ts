@@ -3028,34 +3028,6 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
   });
 });
 
-suite("WorkflowOrchestrator active workflow helpers", () => {
-  test("getRunningWorkflows includes pausing workflows", () => {
-    const orchestrator = createTestOrchestrator();
-    const internal = orchestrator as any;
-
-    const running = {
-      getQueueState: () => ({ status: EXECUTION_STATES.RUNNING }),
-    };
-    const pausing = {
-      getQueueState: () => ({ status: EXECUTION_STATES.PAUSING }),
-    };
-    const paused = {
-      getQueueState: () => ({ status: EXECUTION_STATES.PAUSED }),
-    };
-
-    internal.instances = new Map<string, any>([
-      ["running", running],
-      ["pausing", pausing],
-      ["paused", paused],
-    ]);
-
-    assert.deepStrictEqual(orchestrator.getRunningWorkflows(), [
-      running,
-      pausing,
-    ]);
-  });
-});
-
 suite("WorkflowInstanceRegistry promoteInstanceToLive", () => {
   // Regression: a multi-step run that briefly hits a terminal state gets retired
   // (moved to retiredInstances), then re-registered as RUNNING on the next step.

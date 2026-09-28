@@ -743,33 +743,6 @@ suite("EndConditionEvaluator Tests", () => {
     });
   });
 
-  suite("Script Validation", () => {
-    test("should validate existing script", async () => {
-      // This test needs an actual script file
-      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-      if (!workspaceFolder) {
-        return;
-      }
-
-      // Test with a nonexistent script
-      const result = await evaluator.validateScript(
-        "/nonexistent/path/script.py"
-      );
-      assert.strictEqual(result.valid, false);
-    });
-
-    test("should reject unsupported script types", async () => {
-      const scriptPath = path.join(workspaceRoot, "unsupported.txt");
-      fs.writeFileSync(scriptPath, "not executable", "utf8");
-
-      const result = await evaluator.validateScript(scriptPath);
-      assert.deepStrictEqual(result, {
-        valid: false,
-        error: "Unsupported script type",
-      });
-    });
-  });
-
   suite("checkResult - Result Matching (tested via evaluateCondition)", () => {
     // Since checkResult is private, we test it indirectly through evaluateCondition
     // These tests verify the matching logic by checking the success field

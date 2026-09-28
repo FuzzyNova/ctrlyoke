@@ -83,7 +83,7 @@ async function markQueueCompleted(queue: PromptQueue): Promise<void> {
 
 async function markQueueErrored(queue: PromptQueue): Promise<void> {
   await startQueueExecution(queue);
-  await queue.markCurrentAsSent();
+  await queue.markStepAsSent(queue.getState().currentIndex);
   queue.finalizeFailedInFlightPrompt("Error");
   queue.getRuntimeStateMachine().fail();
   await queue.commitRuntimeTransition({ persist: false });
@@ -94,7 +94,7 @@ async function failCurrentPrompt(
   error: string = "Test error"
 ): Promise<void> {
   await startQueueExecution(queue);
-  await queue.markCurrentAsSent();
+  await queue.markStepAsSent(queue.getState().currentIndex);
   queue.finalizeFailedInFlightPrompt(error);
   queue.getRuntimeStateMachine().fail();
   await queue.commitRuntimeTransition({ persist: false });
@@ -848,12 +848,15 @@ suite("PromptQueue State Machine Tests", () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await startQueueExecution(queue);
       // Simulate moving forward past first prompt
-      await queue.markCurrentAsSent();
-      await queue.completeCurrentAndMoveNext();
+      await queue.markStepAsSent(queue.getState().currentIndex);
+      await queue.commitStepOutcomeAndAdvance({
+        target: { kind: "queue", stepIndex: queue.getState().currentIndex },
+        status: "completed",
+      });
       assert.strictEqual(queue.getState().currentIndex, 1);
 
       // Stop while on second prompt
-      await queue.markCurrentAsSent();
+      await queue.markStepAsSent(queue.getState().currentIndex);
       await requestQueueStop(queue);
       await confirmQueueStopped(queue);
 
@@ -868,7 +871,7 @@ suite("PromptQueue State Machine Tests", () => {
     test("should mark SENT prompts as CANCELLED", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await startQueueExecution(queue);
-      await queue.markCurrentAsSent();
+      await queue.markStepAsSent(queue.getState().currentIndex);
       assert.strictEqual(queue.getState().results[0].status, STEP_STATUS.SENT);
       await requestQueueStop(queue);
       assert.strictEqual(
@@ -888,7 +891,7 @@ suite("PromptQueue State Machine Tests", () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await startQueueExecution(queue);
       await requestQueueStop(queue);
-      // First prompt was PENDING (no markCurrentAsSent called), should remain PENDING
+      // The first prompt was never marked as sent, so it remains PENDING.
       // Actually stop marks SENT as CANCELLED, PENDING stays PENDING
       // But currentIndex is reset, so we check result[1] which was never touched
       assert.strictEqual(
@@ -902,8 +905,11 @@ suite("PromptQueue State Machine Tests", () => {
     test("should reset currentIndex to 0", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await startQueueExecution(queue);
-      await queue.markCurrentAsSent();
-      await queue.completeCurrentAndMoveNext();
+      await queue.markStepAsSent(queue.getState().currentIndex);
+      await queue.commitStepOutcomeAndAdvance({
+        target: { kind: "queue", stepIndex: queue.getState().currentIndex },
+        status: "completed",
+      });
       await queue.restart();
       assert.strictEqual(queue.getState().currentIndex, 0);
     });
@@ -911,8 +917,11 @@ suite("PromptQueue State Machine Tests", () => {
     test("should reset all results to PENDING", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await startQueueExecution(queue);
-      await queue.markCurrentAsSent();
-      await queue.completeCurrentAndMoveNext();
+      await queue.markStepAsSent(queue.getState().currentIndex);
+      await queue.commitStepOutcomeAndAdvance({
+        target: { kind: "queue", stepIndex: queue.getState().currentIndex },
+        status: "completed",
+      });
       await queue.restart();
       queue.getState().results.forEach((result) => {
         assert.strictEqual(result.status, STEP_STATUS.PENDING);
@@ -922,8 +931,11 @@ suite("PromptQueue State Machine Tests", () => {
     test("should clear completedIndices", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await startQueueExecution(queue);
-      await queue.markCurrentAsSent();
-      await queue.completeCurrentAndMoveNext();
+      await queue.markStepAsSent(queue.getState().currentIndex);
+      await queue.commitStepOutcomeAndAdvance({
+        target: { kind: "queue", stepIndex: queue.getState().currentIndex },
+        status: "completed",
+      });
       assert.ok(queue.getState().completedIndices.size > 0);
       await queue.restart();
       assert.strictEqual(queue.getState().completedIndices.size, 0);
@@ -969,8 +981,11 @@ suite("PromptQueue State Machine Tests", () => {
 
       // Complete some prompts
       await startQueueExecution(queue);
-      await queue.markCurrentAsSent();
-      await queue.completeCurrentAndMoveNext();
+      await queue.markStepAsSent(queue.getState().currentIndex);
+      await queue.commitStepOutcomeAndAdvance({
+        target: { kind: "queue", stepIndex: queue.getState().currentIndex },
+        status: "completed",
+      });
 
       // Verify completedIndices has entries
       assert.ok(queue.getState().completedIndices.size > 0);
@@ -1139,23 +1154,23 @@ suite("PromptQueue State Machine Tests", () => {
     });
   });
 
-  suite("clear()", () => {
-    test("should request stop and transition to CANCELLING", async () => {
+  suite("clearQueue()", () => {
+    test("should reset the execution state", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await startQueueExecution(queue);
-      queue.clear();
-      assert.strictEqual(queue.getState().status, EXECUTION_STATES.CANCELLING);
+      queue.clearQueue();
+      assert.strictEqual(queue.getState().status, EXECUTION_STATES.IDLE);
     });
 
     test("should empty prompts array", () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      queue.clear();
+      queue.clearQueue();
       assert.strictEqual(queue.getState().steps.length, 0);
     });
 
     test("should empty results array", () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      queue.clear();
+      queue.clearQueue();
       assert.strictEqual(queue.getState().results.length, 0);
     });
   });
@@ -1169,8 +1184,11 @@ suite("PromptQueue State Machine Tests", () => {
     test("hasNext() should return false at end of queue", async () => {
       queue.loadPrompts(createPromptFile([{ prompt: "Only one" }]));
       await startQueueExecution(queue);
-      await queue.markCurrentAsSent();
-      await queue.completeCurrentAndMoveNext();
+      await queue.markStepAsSent(queue.getState().currentIndex);
+      await queue.commitStepOutcomeAndAdvance({
+        target: { kind: "queue", stepIndex: queue.getState().currentIndex },
+        status: "completed",
+      });
       assert.strictEqual(queue.hasNext(), false);
     });
 
@@ -1188,8 +1206,11 @@ suite("PromptQueue State Machine Tests", () => {
     test("getCurrentPrompt() should return null at end of queue", async () => {
       queue.loadPrompts(createPromptFile([{ prompt: "Only one" }]));
       await startQueueExecution(queue);
-      await queue.markCurrentAsSent();
-      await queue.completeCurrentAndMoveNext();
+      await queue.markStepAsSent(queue.getState().currentIndex);
+      await queue.commitStepOutcomeAndAdvance({
+        target: { kind: "queue", stepIndex: queue.getState().currentIndex },
+        status: "completed",
+      });
       assert.strictEqual(queue.getCurrentPrompt(), null);
     });
 
@@ -1198,11 +1219,11 @@ suite("PromptQueue State Machine Tests", () => {
     });
   });
 
-  suite("markCurrentAsSent()", () => {
+  suite("markStepAsSent()", () => {
     test("should update result status to SENT", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await startQueueExecution(queue);
-      await queue.markCurrentAsSent();
+      await queue.markStepAsSent(queue.getState().currentIndex);
       const state = queue.getState();
       assert.strictEqual(state.results[0].status, STEP_STATUS.SENT);
     });
@@ -1211,7 +1232,7 @@ suite("PromptQueue State Machine Tests", () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await startQueueExecution(queue);
       const before = new Date();
-      await queue.markCurrentAsSent();
+      await queue.markStepAsSent(queue.getState().currentIndex);
       const state = queue.getState();
       assert.ok(state.results[0].timestamp >= before);
     });
@@ -1219,21 +1240,27 @@ suite("PromptQueue State Machine Tests", () => {
     test("should not modify if no next prompt", async () => {
       queue.loadPrompts(createPromptFile([{ prompt: "Only one" }]));
       await startQueueExecution(queue);
-      await queue.markCurrentAsSent();
-      await queue.completeCurrentAndMoveNext();
+      await queue.markStepAsSent(queue.getState().currentIndex);
+      await queue.commitStepOutcomeAndAdvance({
+        target: { kind: "queue", stepIndex: queue.getState().currentIndex },
+        status: "completed",
+      });
       // Now at end of queue
-      await queue.markCurrentAsSent();
+      await queue.markStepAsSent(queue.getState().currentIndex);
       // Should not throw or cause issues
       assert.strictEqual(queue.hasNext(), false);
     });
   });
 
-  suite("completeCurrentAndMoveNext()", () => {
+  suite("commitStepOutcomeAndAdvance()", () => {
     test("should mark result as COMPLETED", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await startQueueExecution(queue);
-      await queue.markCurrentAsSent();
-      await queue.completeCurrentAndMoveNext();
+      await queue.markStepAsSent(queue.getState().currentIndex);
+      await queue.commitStepOutcomeAndAdvance({
+        target: { kind: "queue", stepIndex: queue.getState().currentIndex },
+        status: "completed",
+      });
       const state = queue.getState();
       assert.strictEqual(state.results[0].status, STEP_STATUS.COMPLETED);
     });
@@ -1331,8 +1358,11 @@ suite("PromptQueue State Machine Tests", () => {
     test("should add prompt identity to completedIndices", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await startQueueExecution(queue);
-      await queue.markCurrentAsSent();
-      await queue.completeCurrentAndMoveNext();
+      await queue.markStepAsSent(queue.getState().currentIndex);
+      await queue.commitStepOutcomeAndAdvance({
+        target: { kind: "queue", stepIndex: queue.getState().currentIndex },
+        status: "completed",
+      });
       const state = queue.getState();
       assert.ok(state.completedIndices.size > 0);
     });
@@ -1341,8 +1371,11 @@ suite("PromptQueue State Machine Tests", () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await startQueueExecution(queue);
       assert.strictEqual(queue.getState().currentIndex, 0);
-      await queue.markCurrentAsSent();
-      await queue.completeCurrentAndMoveNext();
+      await queue.markStepAsSent(queue.getState().currentIndex);
+      await queue.commitStepOutcomeAndAdvance({
+        target: { kind: "queue", stepIndex: queue.getState().currentIndex },
+        status: "completed",
+      });
       assert.strictEqual(queue.getState().currentIndex, 1);
     });
 
@@ -1352,8 +1385,11 @@ suite("PromptQueue State Machine Tests", () => {
       queue.incrementRetryCount();
       queue.incrementRetryCount();
       assert.strictEqual(queue.getCurrentRetryCount(), 2);
-      await queue.markCurrentAsSent();
-      await queue.completeCurrentAndMoveNext();
+      await queue.markStepAsSent(queue.getState().currentIndex);
+      await queue.commitStepOutcomeAndAdvance({
+        target: { kind: "queue", stepIndex: queue.getState().currentIndex },
+        status: "completed",
+      });
       assert.strictEqual(queue.getCurrentRetryCount(), 0);
     });
   });
@@ -1557,8 +1593,11 @@ suite("PromptQueue State Machine Tests", () => {
     test("getProgress() should return correct current", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await startQueueExecution(queue);
-      await queue.markCurrentAsSent();
-      await queue.completeCurrentAndMoveNext();
+      await queue.markStepAsSent(queue.getState().currentIndex);
+      await queue.commitStepOutcomeAndAdvance({
+        target: { kind: "queue", stepIndex: queue.getState().currentIndex },
+        status: "completed",
+      });
       const progress = queue.getProgress();
       assert.strictEqual(progress.current, 1);
     });
@@ -1566,8 +1605,11 @@ suite("PromptQueue State Machine Tests", () => {
     test("getProgress() should calculate percentage correctly", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await startQueueExecution(queue);
-      await queue.markCurrentAsSent();
-      await queue.completeCurrentAndMoveNext();
+      await queue.markStepAsSent(queue.getState().currentIndex);
+      await queue.commitStepOutcomeAndAdvance({
+        target: { kind: "queue", stepIndex: queue.getState().currentIndex },
+        status: "completed",
+      });
       const progress = queue.getProgress();
       assert.strictEqual(progress.percentage, 33); // 1/3 = 33%
     });
@@ -1582,15 +1624,24 @@ suite("PromptQueue State Machine Tests", () => {
     test("getCompletedCount() should count completed prompts", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await startQueueExecution(queue);
-      await queue.markCurrentAsSent();
-      await queue.completeCurrentAndMoveNext();
+      await queue.markStepAsSent(queue.getState().currentIndex);
+      await queue.commitStepOutcomeAndAdvance({
+        target: { kind: "queue", stepIndex: queue.getState().currentIndex },
+        status: "completed",
+      });
       assert.strictEqual(queue.getCompletedCount(), 1);
     });
 
-    test("getFailedCount() should count failed prompts", async () => {
+    test("getState() should expose the failed prompt count", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await failCurrentPrompt(queue, "Error");
-      assert.strictEqual(queue.getFailedCount(), 1);
+      assert.strictEqual(
+        queue
+          .getState()
+          .results.filter((result) => result.status === STEP_STATUS.FAILED)
+          .length,
+        1
+      );
     });
   });
 
@@ -1701,11 +1752,11 @@ suite("PromptQueue State Machine Tests", () => {
   });
 
   suite("Queue Extension Stats", () => {
-    test("getQueueExtensionStats() should return initial stats", () => {
+    test("getState() should expose queue extension statistics", () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      const stats = queue.getQueueExtensionStats();
+      const stats = queue.getState();
       assert.strictEqual(stats.queueExtensions, 0);
-      assert.strictEqual(stats.currentSize, 3);
+      assert.strictEqual(stats.steps.length, 3);
       assert.strictEqual(stats.lastReloadTime, undefined);
     });
   });

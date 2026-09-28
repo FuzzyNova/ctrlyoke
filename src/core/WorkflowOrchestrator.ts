@@ -851,10 +851,6 @@ export class WorkflowOrchestrator {
     return this.workflowInstanceRegistry.getAllWorkflows();
   }
 
-  getRunningWorkflows(): WorkflowInstance[] {
-    return this.workflowInstanceRegistry.getRunningWorkflows();
-  }
-
   getUserFeedbackSink(): UserFeedbackSink {
     return this.userFeedbackSink;
   }

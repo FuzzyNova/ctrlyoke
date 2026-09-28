@@ -971,51 +971,9 @@ export class WorkflowInstance
   }
 
   /**
-   * Send a full SESSION_RESTORED state sync to the dashboard.
-   * Called by WorkflowOrchestrator when this workflow becomes the active view,
-   * and internally when flushing the event buffer.
-   */
-  sendFullStateToDashboard(): void {
-    if (!this.dashboardSink) {
-      return;
-    }
-    const state = this.promptQueue.getState();
-    const executionState = this.getAuthoritativeExecutionState();
-    const fileName = this.currentPromptFile
-      ? path.basename(this.currentPromptFile.filePath)
-      : state.workflowName || DEFAULT_WORKFLOW_NAME;
-    Log.trace(
-      `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: status=${executionState}, currentIndex=${state.currentIndex}, prompts=${state.steps.length}, bufferSteps=${this.outputCaptureBuffer.stepBufferSize}, finalBufferLoops=${this.outputCaptureBuffer.finalStepBufferSize}`
-    );
-    this.dashboardSink.updateSessionRestored(
-      fileName,
-      state.steps,
-      state.results,
-      executionState,
-      state.currentIndex,
-      state.workflowName || undefined,
-      this.promptQueue.getWorkflowFile().finalStep ?? null,
-      this.promptQueue.getFinalStepRuntime(),
-      undefined,
-      this.getWorkflowPropertiesForDashboard(),
-      state.parallelGroups,
-      this.getActiveStepIndices(),
-      state.definitionRevision,
-      this.promptFileLoader.getLastSchemaWarnings()
-    );
-    this.outputCaptureBuffer.replayTo(
-      this.dashboardSink,
-      { status: executionState, currentIndex: state.currentIndex },
-      this.promptQueue.getFinalStepRuntime(),
-      `[inst:${this.id.slice(0, 8)}]`,
-      this.getActiveTargetKeys()
-    );
-  }
-
-  /**
    * Replay the full current state of this workflow to an explicit sink.
-   * Unlike sendFullStateToDashboard(), this bypasses the broadcast hub so
-   * only the provided sink receives the messages — used for per-client
+   * This bypasses the broadcast hub so only the provided sink receives the
+   * messages — used for per-client
    * workflow switches in the hosted server.
    *
    * `asReplacement` marks a replay that *replaces* the client's displayed
@@ -1341,14 +1299,6 @@ export class WorkflowInstance
   /** Internal accessor used by WorkflowOrchestrator for openCurrentPromptFile */
   getCurrentPromptFilePath(): string | undefined {
     return this.currentPromptFile?.filePath;
-  }
-
-  /**
-   * Set the current prompt file reference (for WorkflowOrchestrator draft prompt setup).
-   */
-  setCurrentPromptFile(filePath: string, promptFile: PromptFile): void {
-    this.currentPromptFile = { filePath, promptFile };
-    this.sourceDefinitionPath = undefined;
   }
 
   /**
