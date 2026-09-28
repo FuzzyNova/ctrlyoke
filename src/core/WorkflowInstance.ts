@@ -96,6 +96,12 @@ import {
 } from "../utils/TelemetryEvents";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { exceedsLimit } from "../utils/LimitUtils";
+import {
+  buildStepLimitError,
+  getEffectiveMaxStepsSource,
+  resolveEffectiveMaxSteps,
+} from "../utils/QueueLimitUtils";
 import { PropertyResolver } from "../utils/PropertyResolver";
 import {
   resolveWorktreeForWorkspace,
@@ -2602,17 +2608,22 @@ export class WorkflowInstance {
         return;
       }
 
-      const queueConfig = ConfigurationUtils.getDynamicQueueConfig();
-      const maxQueueSize = queueConfig.maxQueueSize;
-      const unlimitedMode = queueConfig.unlimitedMode;
       const newSize = currentSize + parsed.steps.length;
+      const workflowMaxSteps = this.promptQueue.getWorkflowFile().maxSteps;
+      const maxSteps = resolveEffectiveMaxSteps(
+        workflowMaxSteps,
+        ConfigurationUtils.getGlobalMaxSteps()
+      );
 
-      if (!unlimitedMode && newSize > maxQueueSize) {
+      if (exceedsLimit(newSize, maxSteps)) {
         notifyUserFeedback(
           this.userFeedbackSink,
           "warning",
-          `Queue size limit exceeded: ${newSize}/${maxQueueSize} prompts. ` +
-            `Enable unlimitedMode or increase maxQueueSize to proceed.`
+          buildStepLimitError(
+            currentSize,
+            maxSteps,
+            getEffectiveMaxStepsSource(workflowMaxSteps)
+          )
         );
         return;
       }
@@ -3260,6 +3271,11 @@ export class WorkflowInstance {
         `[inst:${this.id.slice(0, 8)}] executeEphemeralPrompt: appending to existing workflow ` +
           `(status=${this.getAuthoritativeExecutionState()}, prompts=${currentState.steps.length}, shouldRun=${shouldRun}, action=${action})`
       );
+      const stepLimitError = this.getStepLimitError(1);
+      if (stepLimitError) {
+        notifyUserFeedback(this.userFeedbackSink, "warning", stepLimitError);
+        return;
+      }
       this.reopenRuntimeForContinuationIfNeeded(shouldRun);
       await this.promptQueue.appendSteps([step], "Dashboard editor", position);
       this.syncCurrentPromptFileFromQueue();
@@ -3308,6 +3324,10 @@ export class WorkflowInstance {
     step: WorkflowStep
   ): Promise<void> {
     const state = this.promptQueue.getState();
+    const stepLimitError = this.getStepLimitError(1);
+    if (stepLimitError) {
+      throw new Error(stepLimitError);
+    }
     const executionState = this.getAuthoritativeExecutionState();
     if (executionState !== EXECUTION_STATES.RUNNING) {
       throw new Error(
@@ -3417,6 +3437,23 @@ export class WorkflowInstance {
         runtimePromotionUndoSuppressed
       );
     }
+  }
+
+  private getStepLimitError(additionalSteps: number): string | undefined {
+    const workflowMaxSteps = this.promptQueue.getWorkflowFile().maxSteps;
+    const maxSteps = resolveEffectiveMaxSteps(
+      workflowMaxSteps,
+      ConfigurationUtils.getGlobalMaxSteps()
+    );
+    const currentCount = this.promptQueue.getState().steps.length;
+    const resultingCount = currentCount + additionalSteps;
+    return exceedsLimit(resultingCount, maxSteps)
+      ? buildStepLimitError(
+          currentCount,
+          maxSteps,
+          getEffectiveMaxStepsSource(workflowMaxSteps)
+        )
+      : undefined;
   }
 
   /**
@@ -4231,8 +4268,7 @@ export class WorkflowInstance {
                 argv: invocation.argv,
                 vars: args.vars,
                 onOutput,
-                windowsVerbatimArguments:
-                  invocation.windowsVerbatimArguments,
+                windowsVerbatimArguments: invocation.windowsVerbatimArguments,
               });
               const comparison = this.endConditionEvaluator.evaluateResult(
                 {

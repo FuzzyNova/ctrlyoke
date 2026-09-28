@@ -26,7 +26,7 @@ import {
   type StepColorMode,
   type StatusLineHarnessId,
   type ToastLevelMode,
-  DEFAULT_MAX_QUEUE_SIZE,
+  DEFAULT_MAX_STEPS,
 } from "./DashboardConstants";
 import {
   ICON_BG_COLOR_DEFAULT,
@@ -204,10 +204,9 @@ export interface CtrlYokeGlobalSettings {
 
   // Queue
   queue: {
-    maxSize: number;
+    maxSteps: number;
     maxParallelSteps: number;
     maxWorkflowExecutionTimeSec: number; // seconds; -1 = unlimited
-    unlimitedMode: boolean;
     notifyOnExtension: boolean;
   };
 
@@ -517,10 +516,9 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     contextResolutionFailure: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
   },
   queue: {
-    maxSize: DEFAULT_MAX_QUEUE_SIZE,
+    maxSteps: DEFAULT_MAX_STEPS,
     maxParallelSteps: 6,
     maxWorkflowExecutionTimeSec: -1,
-    unlimitedMode: false,
     notifyOnExtension: true,
   },
   runs: {

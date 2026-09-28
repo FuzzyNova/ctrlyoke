@@ -24,7 +24,7 @@ import {
 import { nextWorkspaceEntrySort } from "@utils/workspaceEntrySort";
 import { getDatePresetRange } from "@utils/dateRangeFilter";
 import { workflowViewAddressKey } from "@utils/viewAddress";
-import { TOAST_MAX_QUEUE_SIZE } from "@/constants";
+import { TOAST_QUEUE_LIMIT } from "@/constants";
 
 // Zustand store is a module singleton — reset between tests.
 beforeEach(() => {
@@ -324,9 +324,7 @@ describe("history search state", () => {
       ...DEFAULT_HISTORY_SEARCH_FILTERS,
       dateRange: { preset: "last7" as const, ...getDatePresetRange("last7") },
     };
-    expect(
-      getHistorySearchActiveFilterCount(presetFilters)
-    ).toBe(1);
+    expect(getHistorySearchActiveFilterCount(presetFilters)).toBe(1);
 
     expect(
       getHistorySearchActiveFilterCount({
@@ -734,11 +732,11 @@ describe("toast queue", () => {
       severity: USER_FEEDBACK_SEVERITY.ERROR,
       dedupeKey: "same",
     });
-    for (let index = 0; index < TOAST_MAX_QUEUE_SIZE + 2; index++) {
+    for (let index = 0; index < TOAST_QUEUE_LIMIT + 2; index++) {
       store().showToast(`Toast ${index}`, USER_FEEDBACK_SEVERITY.SUCCESS);
     }
 
-    expect(store().toastQueue).toHaveLength(TOAST_MAX_QUEUE_SIZE);
+    expect(store().toastQueue).toHaveLength(TOAST_QUEUE_LIMIT);
     expect(
       store().toastQueue.some((toast) => toast.message === "Duplicate")
     ).toBe(false);

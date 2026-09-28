@@ -535,12 +535,9 @@ export class CliProviderUtils {
             const dynamicQueueConfig =
               ConfigurationUtils.getDynamicQueueConfig();
             const env = {
-              CTRLYOKE_MAX_QUEUE_SIZE:
-                dynamicQueueConfig.maxQueueSize.toString(),
+              CTRLYOKE_MAX_STEPS: dynamicQueueConfig.maxSteps.toString(),
               CTRLYOKE_MAX_PARALLEL_STEPS:
                 dynamicQueueConfig.maxParallelSteps.toString(),
-              CTRLYOKE_UNLIMITED_MODE:
-                dynamicQueueConfig.unlimitedMode.toString(),
               CTRLYOKE_DIAGNOSTIC_LOGS:
                 ConfigurationUtils.isDiagnosticLogsEnabled().toString(),
             };

@@ -1113,6 +1113,7 @@ export class WorkingFileManager {
     runRef: RunRef,
     tail: WorkflowStep[],
     expectedDefinitionRevision: number,
+    globalMaxSteps: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
     allowInterruptedRun: boolean = false,
     position: QueuePosition = QUEUE_POSITION.END
@@ -1130,6 +1131,7 @@ export class WorkingFileManager {
       runRef,
       tail,
       expectedDefinitionRevision,
+      globalMaxSteps,
       lineageRepository,
       allowInterruptedRun,
       position

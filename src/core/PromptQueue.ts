@@ -1,6 +1,7 @@
 import * as path from "path";
 import { TypedEmitter } from "../utils/TypedEmitter";
 import { isDeepStrictEqual } from "util";
+import { isUnlimited } from "../utils/LimitUtils";
 import {
   PromptStep,
   PromptFile,
@@ -1365,7 +1366,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     }
 
     // -1 means unlimited retries
-    if (maxRetries === -1) {
+    if (isUnlimited(maxRetries)) {
       return true;
     }
 
@@ -1384,7 +1385,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     const { maxRetries } = resolveRetrySettings(prompt.endCondition);
 
     // -1 means unlimited retries
-    if (maxRetries === -1) {
+    if (isUnlimited(maxRetries)) {
       return true;
     }
 
@@ -1652,7 +1653,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    * Reload prompt file and merge new prompts into queue
    * @param filePath Path to the .ctrlyoke.json file
    * @param parser PromptFileParser instance for reloading
-   * @param maxQueueSize Maximum allowed queue size (0 = unlimited)
+   * @param maxSteps Maximum allowed step count (-1 = unlimited)
    * @returns Number of new prompts added, or -1 if reload failed
    */
   /**

@@ -160,6 +160,7 @@ describe("setGlobalSettings", () => {
       agent: "",
       skills: ["skill-a"],
       executionMode: "headless",
+      maxSteps: 100,
       effectiveParallelGroupWidth: 6,
       resumeSession: true,
       mcpServers: ["ctrlyoke"],

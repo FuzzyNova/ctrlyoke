@@ -1,44 +1,50 @@
 import {
-  BOOLEAN_STRING_VALUES,
-  DEFAULT_MAX_QUEUE_SIZE,
+  DEFAULT_MAX_STEPS,
+  UNLIMITED_LIMIT,
 } from "../types/DashboardConstants";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../types/CtrlYokeSettings";
 
 /**
- * Read the queue size limit from the environment supplied to a harness's MCP
- * server. Invalid, missing, and non-positive values use the shared default.
+ * Read the workflow step limit from the environment supplied to a harness's MCP
+ * server. Invalid or missing values use the shared default. In-process callers
+ * must read `ConfigurationUtils` instead of this environment accessor.
  */
-export function getMaxQueueSize(): number {
-  const envValue = process.env.CTRLYOKE_MAX_QUEUE_SIZE;
+export function getGlobalMaxSteps(): number {
+  const envValue = process.env.CTRLYOKE_MAX_STEPS;
   if (envValue) {
     const parsed = parseInt(envValue, 10);
-    if (!isNaN(parsed) && parsed > 0) {
+    if (!isNaN(parsed) && (parsed === UNLIMITED_LIMIT || parsed > 0)) {
       return parsed;
     }
   }
-  return DEFAULT_MAX_QUEUE_SIZE;
+  return DEFAULT_MAX_STEPS;
 }
 
-/** Whether queue-size enforcement has been explicitly disabled. */
-export function isUnlimitedMode(): boolean {
-  return process.env.CTRLYOKE_UNLIMITED_MODE === BOOLEAN_STRING_VALUES.TRUE;
+export type EffectiveMaxStepsSource =
+  "workflow maxSteps" | "setting queue.maxSteps";
+
+/** An explicit workflow value, including -1, overrides the global setting. */
+export function resolveEffectiveMaxSteps(
+  workflowMaxSteps: number | undefined,
+  globalMaxSteps: number
+): number {
+  return workflowMaxSteps === undefined ? globalMaxSteps : workflowMaxSteps;
 }
 
-/**
- * A resolved queue-capacity policy. Enforcement is the caller's to opt into:
- * the environment variables below are supplied only to a harness's MCP server
- * subprocess, so an in-process caller (the extension host, the CLI) that read
- * them would silently get the default limit instead of the user's configured
- * `queue.maxSize` / `queue.unlimitedMode`.
- */
-export interface QueueLimitPolicy {
-  maxQueueSize: number;
-  unlimited: boolean;
+export function getEffectiveMaxStepsSource(
+  workflowMaxSteps: number | undefined
+): EffectiveMaxStepsSource {
+  return workflowMaxSteps === undefined
+    ? "setting queue.maxSteps"
+    : "workflow maxSteps";
 }
 
-/** Resolve the policy from the MCP server's environment. */
-export function resolveQueueLimitPolicy(): QueueLimitPolicy {
-  return { maxQueueSize: getMaxQueueSize(), unlimited: isUnlimitedMode() };
+export function buildStepLimitError(
+  count: number,
+  limit: number,
+  source: EffectiveMaxStepsSource
+): string {
+  return `Step limit reached: this run has ${count}/${limit} steps (${source}: ${limit}). Do not retry; finish without appending.`;
 }
 
 /**

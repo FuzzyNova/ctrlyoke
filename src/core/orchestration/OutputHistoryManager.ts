@@ -35,6 +35,7 @@ import { Log } from "../../utils/Log";
 import { isNewerRunFile } from "../../utils/PersistedSchemaGuard";
 import { readWorkflowLockInspection } from "../../utils/WorkflowLockInspector";
 import { isUnstartedRunFile } from "../../utils/StepStatusDerivation";
+import { isUnlimited } from "../../utils/LimitUtils";
 import { OutputHistoryTimelineAdapter } from "./OutputHistoryTimelineAdapter";
 import { HistorySearchIndexService } from "./HistorySearchIndexService";
 import { getSharedHistorySearchIndexService } from "./HistorySearchIndexServiceRegistry";
@@ -1439,8 +1440,8 @@ export class OutputHistoryManager {
     maxRuns: number,
     inFlightRunRefs: ReadonlySet<RunRef> = new Set()
   ): Promise<void> {
-    // -1 or 0 means keep all runs
-    if (maxRuns <= 0) {
+    // -1 means keep all runs
+    if (isUnlimited(maxRuns)) {
       return;
     }
 

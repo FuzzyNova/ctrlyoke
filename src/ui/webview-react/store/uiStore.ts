@@ -38,7 +38,7 @@ import { isWorkflowRunning } from "@utils/status";
 import {
   DEFAULT_DESKTOP_SIZES,
   DEFAULT_MOBILE_SIZES,
-  TOAST_MAX_QUEUE_SIZE,
+  TOAST_QUEUE_LIMIT,
 } from "../constants";
 import {
   USER_FEEDBACK_SEVERITY,
@@ -1843,9 +1843,7 @@ export const useUiStore = create<UiState & UiActions>()(
             createdAt: toast.createdAt ?? Date.now(),
           };
           return {
-            toastQueue: [...state.toastQueue, item].slice(
-              -TOAST_MAX_QUEUE_SIZE
-            ),
+            toastQueue: [...state.toastQueue, item].slice(-TOAST_QUEUE_LIMIT),
           };
         }),
 
@@ -1876,9 +1874,7 @@ export const useUiStore = create<UiState & UiActions>()(
             ...options,
           };
           return {
-            toastQueue: [...state.toastQueue, item].slice(
-              -TOAST_MAX_QUEUE_SIZE
-            ),
+            toastQueue: [...state.toastQueue, item].slice(-TOAST_QUEUE_LIMIT),
           };
         }),
 

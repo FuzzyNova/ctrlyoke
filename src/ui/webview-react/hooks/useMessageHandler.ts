@@ -2862,15 +2862,15 @@ export function createMessageHandlers(
   };
 
   // --------------------------------------------------------------------------
-  // QUEUE_SIZE_LIMIT_REACHED - Queue hit size limit
+  // STEP_LIMIT_REACHED - Workflow reached its step limit
   // --------------------------------------------------------------------------
-  handlers[MESSAGE_TYPES.QUEUE_SIZE_LIMIT_REACHED] = (message) => {
+  handlers[MESSAGE_TYPES.STEP_LIMIT_REACHED] = (message) => {
     const store = useWorkflowStore.getState();
     const entry: OrderedStatusHistoryEntry = {
       kind: OUTPUT_HISTORY_KINDS.STATUS,
       target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
       statusMessage: {
-        message: `Queue size limit reached: ${message.currentSize}/${message.maxSize}`,
+        message: `Step limit reached: ${message.currentSteps}/${message.maxSteps}`,
         severity: "warning",
         timestamp: Date.now(),
       },

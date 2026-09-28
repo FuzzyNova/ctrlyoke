@@ -250,16 +250,36 @@ suite("Workflow template schema", () => {
         "workflow.ctrlyoke.yaml"
       );
       const firstStep = parsed.steps?.[0];
-      const parsedServers = "mcpServers" in workflow
-        ? parsed.mcpServers
-        : firstStep && "mcpServers" in firstStep
-          ? firstStep.mcpServers
-          : undefined;
+      const parsedServers =
+        "mcpServers" in workflow
+          ? parsed.mcpServers
+          : firstStep && "mcpServers" in firstStep
+            ? firstStep.mcpServers
+            : undefined;
       assert.deepStrictEqual(parsedServers, mcpServers);
     }
   });
 
   test("tightens integer fields, ports, and workflow run addresses", () => {
+    for (const value of [-1, 1, 30]) {
+      assert.strictEqual(
+        validate({ steps: [{ prompt: "hi" }], maxSteps: value }),
+        true
+      );
+    }
+    for (const value of [0, -2, null]) {
+      assert.strictEqual(
+        validate({ steps: [{ prompt: "hi" }], maxSteps: value }),
+        false
+      );
+    }
+    assert.strictEqual(
+      validate({
+        steps: [{ prompt: "hi" }],
+        endCondition: { script: "true", maxRetries: 0 },
+      }),
+      true
+    );
     assert.strictEqual(
       validate({ steps: [{ prompt: "hi", sessionId: 1 }] }),
       true
@@ -391,7 +411,7 @@ suite("Workflow template schema", () => {
         scriptTimeoutSec: execution.scriptTimeoutSec,
       },
       queue: {
-        maxSize: queue.maxSize,
+        maxSteps: queue.maxSteps,
         maxWorkflowExecutionTimeSec: queue.maxWorkflowExecutionTimeSec,
       },
       runs: { maxRuns: runs.maxRuns },
@@ -412,7 +432,7 @@ suite("Workflow template schema", () => {
     );
     assert.strictEqual(validateSettings({ server: { port: 65536 } }), false);
     assert.strictEqual(validateSettings({ server: { port: 0 } }), false);
-    assert.strictEqual(validateSettings({ queue: { maxSize: 1.5 } }), false);
+    assert.strictEqual(validateSettings({ queue: { maxSteps: 1.5 } }), false);
     assert.strictEqual(
       validateSettings({ execution: { maxPromptTimeoutSec: 1.5 } }),
       false
@@ -423,6 +443,27 @@ suite("Workflow template schema", () => {
     );
     assert.strictEqual(validateSettings({ runs: { maxRuns: -2 } }), false);
     assert.strictEqual(validateSettings({ runs: { maxRuns: 1.5 } }), false);
+    for (const value of [0, -2, null]) {
+      assert.strictEqual(
+        validateSettings({ queue: { maxSteps: value } }),
+        false
+      );
+    }
+    for (const value of [-1, 1, 30]) {
+      assert.strictEqual(
+        validateSettings({ queue: { maxSteps: value } }),
+        true
+      );
+    }
+    assert.strictEqual(
+      validateSettings({ execution: { maxPromptTimeoutSec: 0 } }),
+      false
+    );
+    assert.strictEqual(
+      validateSettings({ queue: { maxWorkflowExecutionTimeSec: 0 } }),
+      false
+    );
+    assert.strictEqual(validateSettings({ runs: { maxRuns: 0 } }), false);
     assert.strictEqual(
       validateSettings({ server: { fallbackPorts: [65536] } }),
       false

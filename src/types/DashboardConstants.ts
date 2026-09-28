@@ -173,8 +173,18 @@ export const CTRLYOKE_DIR = ".ctrlyoke";
 export const LOGS_DIR = "logs";
 export const CAPABILITIES_FILE = "capabilities.json";
 
-/** Default queue limit shared by settings and the standalone MCP server. */
-export const DEFAULT_MAX_QUEUE_SIZE = 100;
+/** Limit value shared by workflow and settings schemas to mean no bound. */
+export const UNLIMITED_LIMIT = -1;
+
+/** Option values used by the shared limit picker; these are UI sentinels. */
+export const LIMIT_SELECTION_VALUES = {
+  UNLIMITED: "unlimited",
+  NEVER: "never",
+  CUSTOM: "custom",
+} as const;
+
+/** Default workflow step limit shared by settings and the standalone MCP server. */
+export const DEFAULT_MAX_STEPS = 100;
 
 /** Feature keys unlocked by a Pro entitlement. Keep gate sites on these constants. */
 export const PRO_FEATURES = {
@@ -227,7 +237,7 @@ export const MESSAGE_TYPES = {
   FINAL_PROMPT_STREAMING_CHUNK: "finalStepStreamingChunk", // Incremental streaming text chunk for finalStep
   FINAL_PROMPT_STREAMING_EVENTS: "finalStepStreamingEvents", // Structured streaming events for finalStep
   COORDINATION_SCOPE_UPDATED: "coordinationScopeUpdated",
-  QUEUE_SIZE_LIMIT_REACHED: "queueSizeLimitReached",
+  STEP_LIMIT_REACHED: "stepLimitReached",
   EXECUTION_TIME_LIMIT_REACHED: "executionTimeLimitReached",
   END_CONDITION_SCRIPT_CREATED: "endConditionScriptCreated",
   END_CONDITION_SCRIPT_CREATION_FAILED: "endConditionScriptCreationFailed",
@@ -3086,6 +3096,7 @@ export const PROMPT_PROPERTIES = {
   VARS: "vars",
   WORKTREE: "worktree",
   TRUSTED_EXTERNAL_ROOTS: "trustedExternalRoots",
+  MAX_STEPS: "maxSteps",
 
   // Step type discriminant
   STEP_TYPE: "type",
@@ -3166,6 +3177,7 @@ export const WORKFLOW_PROPERTY_KEYS = [
   PROMPT_PROPERTIES.TOOL_PERMISSIONS,
   PROMPT_PROPERTIES.WORKTREE,
   PROMPT_PROPERTIES.TRUSTED_EXTERNAL_ROOTS,
+  PROMPT_PROPERTIES.MAX_STEPS,
 ] as const;
 
 export type WorkflowPropertyKey = (typeof WORKFLOW_PROPERTY_KEYS)[number];

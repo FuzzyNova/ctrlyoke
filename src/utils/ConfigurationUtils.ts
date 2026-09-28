@@ -34,6 +34,7 @@ import {
   type StepColorMode,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
+import { isUnlimited } from "./LimitUtils";
 import {
   ExternalRootsTrustStore,
   externalRootsTrustStore,
@@ -118,6 +119,7 @@ export const CONFIG_KEYS = {
   DEFAULTS_TOOL_PERMISSIONS_MODE: "defaults.toolPermissions.mode",
   DEFAULTS_TOOL_PERMISSIONS_ALLOWED: "defaults.toolPermissions.allowedTools",
   DEFAULTS_TOOL_PERMISSIONS_DENIED: "defaults.toolPermissions.deniedTools",
+  QUEUE_MAX_STEPS: "queue.maxSteps",
   DEFAULTS_MCP_SERVERS: "defaults.mcpServers",
   DEFAULTS_HOOKS: "defaults.hooks",
   GENERAL_DEFAULT_TEMPLATE: "general.defaultTemplate",
@@ -346,12 +348,25 @@ export const ConfigurationUtils = {
   getDynamicQueueConfig(): DynamicQueueConfig {
     const queue = configService.get(CONFIG_KEYS.QUEUE);
     return {
-      maxQueueSize: queue.maxSize,
+      maxSteps: queue.maxSteps,
       maxParallelSteps: queue.maxParallelSteps,
       maxWorkflowExecutionTime: queue.maxWorkflowExecutionTimeSec,
-      unlimitedMode: queue.unlimitedMode,
       notifyOnExtension: queue.notifyOnExtension,
     };
+  },
+
+  /** Get the global maximum number of workflow steps, or -1 for unlimited. */
+  getGlobalMaxSteps(): number {
+    return configService.get(CONFIG_KEYS.QUEUE).maxSteps;
+  },
+
+  /** Set the raw global workflow step cap, preserving -1 for unlimited. */
+  async setMaxSteps(value: number): Promise<void> {
+    await configService.set(
+      CONFIG_KEYS.QUEUE_MAX_STEPS,
+      value,
+      CONFIG_SCOPE.USER
+    );
   },
 
   /**
@@ -818,7 +833,9 @@ export const ConfigurationUtils = {
     const timeoutSeconds = configService.get(
       CONFIG_KEYS.EXECUTION
     ).maxPromptTimeoutSec;
-    return timeoutSeconds === -1 ? undefined : secondsToMs(timeoutSeconds);
+    return isUnlimited(timeoutSeconds)
+      ? undefined
+      : secondsToMs(timeoutSeconds);
   },
 
   // ============================================================

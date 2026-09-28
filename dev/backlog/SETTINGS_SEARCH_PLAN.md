@@ -101,10 +101,10 @@ renames a label. Avoid that structurally: give `SettingInputRow` and
 and `description` from the catalog, so the call site becomes
 
 ```tsx
-<SettingToggleRow
-  settingKey="queue.unlimitedMode"
-  checked={queue.unlimitedMode}
-  onChange={(v) => onUpdate("queue.unlimitedMode", v)}
+<SettingInputRow
+  settingKey="queue.maxSteps"
+  value={queue.maxSteps}
+  onChange={(v) => onUpdate("queue.maxSteps", v)}
   {...rowProps}
 />
 ```

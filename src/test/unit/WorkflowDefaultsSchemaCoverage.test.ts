@@ -6,6 +6,7 @@ import { suite, test } from "mocha";
 const RESHAPED_DEFAULTS: Record<string, string> = {
   model: "defaults.models",
   additionalArgs: "defaults.additionalArgs",
+  maxSteps: "queue.maxSteps",
   trustedExternalRoots: "permissions.trustedExternalRoots",
 };
 

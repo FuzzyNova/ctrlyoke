@@ -100,8 +100,9 @@ afterwards.
   history is not moved."
 - `runs.maxRuns`: add that the limit is **per workflow**, and that pruning deletes the definition
   and output too.
-- `queue.maxSize`: add when it is enforced (MCP appends and run continuation) and that it is
-  ignored under `unlimitedMode`.
+- `queue.maxSteps`: describe the effective workflow override and global setting, including that
+  workflow `maxSteps: -1` removes a numeric global cap. Dynamic appends and run continuation
+  enforce the same resolved value.
 - `notifications.vscode.enabled`: it gates **all** VS Code popups, not just workflow completion.
 - `execution.injectMode` / `closeTerminalOnComplete`: add "interactive only" and that each one
   disables the other.

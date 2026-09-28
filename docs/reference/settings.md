@@ -358,7 +358,7 @@ Fields:
 - `operator` · `"eq" | "ne" | "contains" | "notContains" | "gte" | "gt" | "lte" | "lt" | "matches" | "isEmpty" | "isNotEmpty"` — How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag.
 - `expected` · `string` or `number` — Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.
 - `ignoreCase` · `boolean` — Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.
-- `maxRetries` · `integer` — Maximum number of retry attempts. Use -1 for unlimited retries (with caution), 0 for no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.
+- `maxRetries` · `-1` or `integer` — Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.
 - `retryPrompt` · `string` — Template for retry prompt. Supports $preCondition:&lt;field> and $endCondition:&lt;field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:\* works in the step and retry prompts; $endCondition:\* is only available in the retry prompt.
 - `passRetryPrompt` · `string` — Template for the prompt sent after the end condition passes and onPass is 'retry'. Supports $preCondition:&lt;field> and $endCondition:&lt;field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource); both prefixes are substituted on a pass retry. If omitted, the step's own prompt is re-sent.
 - `resumeSessionOnRetry` · `boolean` — Whether retries continue in the same session. Default: true (retries resume the existing session for context continuity). Set to false to start a fresh session for each retry.
@@ -636,11 +636,10 @@ How to handle a declared reference that fails to resolve: a missing/invalid secr
 
 ### `execution.maxPromptTimeoutSec` {#execution-maxprompttimeoutsec}
 
-- **Type:** `integer`
+- **Type:** `-1` or `integer`
 - **Default:** `-1`
-- **Constraints:** minimum -1
 
-Maximum time in seconds to wait for a prompt to complete. Use -1 for unlimited.
+Maximum time in seconds to wait for a prompt to complete. `-1` means unlimited.
 
 ### `execution.scriptTimeoutSec` {#execution-scripttimeoutsec}
 
@@ -667,12 +666,12 @@ Set it to `1` to run grouped steps one at a time. Members share the workflow's
 workspace and its worktree. This setting limits how many run at once. It does
 not isolate members from each other or merge their work.
 
-### `queue.maxSize` {#queue-maxsize}
+### `queue.maxSteps` {#queue-maxsteps}
 
-- **Type:** `integer`
+- **Type:** `-1` or `integer`
 - **Default:** `100`
 
-Maximum number of prompts allowed in the queue.
+Maximum number of entries allowed in the run's steps array. `-1` means unlimited.
 
 ### `queue.maxParallelSteps` {#queue-maxparallelsteps}
 
@@ -682,27 +681,19 @@ Maximum number of prompts allowed in the queue.
 
 Maximum number of active members in a parallel step group.
 
-### `queue.unlimitedMode` {#queue-unlimitedmode}
-
-- **Type:** `boolean`
-- **Default:** `false`
-
-Disable queue size and time limits.
-
 ### `queue.notifyOnExtension` {#queue-notifyonextension}
 
 - **Type:** `boolean`
 - **Default:** `true`
 
-Show a notification when the queue is extended.
+Currently has no effect; queue extension notifications are not implemented.
 
 ### `queue.maxWorkflowExecutionTimeSec` {#queue-maxworkflowexecutiontimesec}
 
-- **Type:** `integer`
+- **Type:** `-1` or `integer`
 - **Default:** `-1`
-- **Constraints:** minimum -1
 
-Maximum total execution time in seconds for a workflow. Use -1 for unlimited.
+Maximum total execution time in seconds for a workflow. `-1` means unlimited.
 
 ## `runs` {#runs}
 
@@ -710,11 +701,10 @@ Execution run retention settings. History is always on.
 
 ### `runs.maxRuns` {#runs-maxruns}
 
-- **Type:** `integer`
+- **Type:** `-1` or `integer`
 - **Default:** `-1`
-- **Constraints:** minimum -1
 
-Deletes entire runs—definition and output—oldest first. -1 keeps all runs.
+Deletes entire runs—definition and output—oldest first. `-1` means unlimited.
 
 ### `runs.historySearchCacheMb` {#runs-historysearchcachemb}
 
@@ -910,11 +900,10 @@ Send absolute file paths to the harness/model instead of relative paths. Stored 
 
 ### `ui.outputVirtualizationRowThreshold` {#ui-outputvirtualizationrowthreshold}
 
-- **Type:** `integer`
+- **Type:** `-1` or `integer`
 - **Default:** `200`
-- **Constraints:** minimum -1
 
-Minimum projected output row count before the Output panel uses virtualization. Use 0 to always virtualize, -1 to never virtualize.
+Minimum projected output row count before the Output panel uses virtualization. 0 means always virtualize. `-1` means never.
 
 ### `ui.collapsedToolOutputLineCount` {#ui-collapsedtooloutputlinecount}
 

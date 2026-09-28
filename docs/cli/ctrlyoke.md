@@ -78,7 +78,7 @@ Pass either a file or `--prompt`, not both.
 | `--deny-tool <pattern>`      | Deny a tool pattern (repeatable)                                                                                                                                                     |
 | `-d, --cwd <path>`           | Workspace directory (default: current directory)                                                                                                                                     |
 | `-t, --timeout <seconds>`    | Override the `execution.maxPromptTimeoutSec` setting for this run (`-1` = unlimited)                                                                                                 |
-| `--script-timeout <seconds>` | Override the `execution.scriptTimeoutSec` setting for this run; a condition's own `timeoutSec` still wins                                                                             |
+| `--script-timeout <seconds>` | Override the `execution.scriptTimeoutSec` setting for this run; a condition's own `timeoutSec` still wins                                                                            |
 | `--json`                     | Print one JSON result object on stdout when the run ends                                                                                                                             |
 | `-q, --quiet`                | Suppress all output except errors                                                                                                                                                    |
 | `--verbose`                  | Print debug information (execution mode, workspace root, harness, model, vars)                                                                                                       |
@@ -172,7 +172,10 @@ ctrlyoke append --workflow release --run 7 --prompt "Also update the changelog"
 ```
 
 The file must contain at least one workflow step; `--prompt` appends a single
-prompt step. The queue-size limit (`queue.maxSize`) applies.
+prompt step. The run's effective `maxSteps` cap applies to this append: the
+workflow's `maxSteps` when present, otherwise the global `queue.maxSteps`
+setting. A workflow value of `-1` removes the cap even when the global setting
+is numeric.
 
 ## `ctrlyoke continue`
 
@@ -514,4 +517,5 @@ versioned one-line result envelope; failures exit with code `2`.
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `CTRLYOKE_HOME`         | Moves the user state home (`<ctrlyokeStateHome>`, default `~/.ctrlyoke`) that holds run history. Settings stay in `~/.ctrlyoke/settings.json` |
 | `CTRLYOKE_WORKING_FILE` | Set by ctrlyoke for harness processes; names the run a step belongs to. Used by `history search --this-workflow`                              |
+| `CTRLYOKE_MAX_STEPS`    | Set for the built-in MCP server process to the global `queue.maxSteps` value; a workflow's `maxSteps` can override it for that run            |
 | Declared secret names   | Resolve a workflow's declared secrets without a credential store (env passthrough)                                                            |

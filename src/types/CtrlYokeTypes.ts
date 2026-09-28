@@ -342,6 +342,8 @@ export const EXECUTION_PROPERTY_KEYS = [
 export interface PromptFile extends ExecutionProperties {
   /** Workflow definition schema version; omitted on hand-authored legacy files (format 1). */
   schemaVersion?: number;
+  /** Maximum number of workflow steps for this run; omitted inherits settings. */
+  maxSteps?: number;
   /** Worktree selection authored at the workflow root. */
   worktree?: WorktreeConfig;
   /** External roots requested for this workflow, or null to disable access. */
@@ -1096,10 +1098,9 @@ export interface QueueState extends WorkflowRuntimeState {
  * Dynamic queue configuration
  */
 export interface DynamicQueueConfig {
-  maxQueueSize: number; // 1-1000 (default: 100)
+  maxSteps: number; // -1 or positive integer (default: 100)
   maxParallelSteps: number; // Active members per parallel group (default: 6)
   maxWorkflowExecutionTime: number; // In seconds (-1 or 3600-604800, default: 86400)
-  unlimitedMode: boolean; // If true, ignore maxQueueSize AND maxWorkflowExecutionTime
   notifyOnExtension: boolean;
 }
 

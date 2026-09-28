@@ -74,6 +74,8 @@ import {
   type ResolvedProperties,
 } from "../utils/PropertyResolver";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { exceedsLimit, isUnlimited } from "../utils/LimitUtils";
+import { resolveEffectiveMaxSteps } from "../utils/QueueLimitUtils";
 import { resolveReportedScriptProperties } from "../utils/ScriptComparison";
 import { sanitizeTerminalOutput } from "../utils/TerminalOutputSanitizer";
 import { VarSubstitutor } from "../utils/VarSubstitutor";
@@ -404,8 +406,7 @@ function canRetryErrorBehavior(
 ): boolean {
   return (
     errorBehavior.onError === CONDITION_ACTIONS.RETRY &&
-    (errorBehavior.maxRetries === -1 ||
-      attemptIndex < (errorBehavior.maxRetries ?? 0))
+    attemptIndex < (errorBehavior.maxRetries ?? 0)
   );
 }
 
@@ -727,8 +728,8 @@ export class WorkflowExecutor {
 
         const queueSizeAfter = this.promptQueue.getState().steps.length;
         if (queueSizeAfter > queueSizeBefore) {
-          const hitQueueSizeLimit = await this.checkQueueSizeLimit(
-            context.dynamicQueueConfig,
+          const hitQueueSizeLimit = await this.checkStepLimit(
+            this.promptQueue.getWorkflowFile().maxSteps,
             queueSizeAfter
           );
           if (hitQueueSizeLimit) {
@@ -3452,7 +3453,7 @@ export class WorkflowExecutor {
     const maxRetries = policy.maxRetries ?? 0;
     const canRetry = canRetryErrorBehavior(policy, attemptIndex);
     const actionText = canRetry
-      ? `retry ${attemptIndex + 1} of ${maxRetries === -1 ? "unlimited" : maxRetries}`
+      ? `retry ${attemptIndex + 1} of ${isUnlimited(maxRetries) ? "unlimited" : maxRetries}`
       : policy.onError === CONDITION_ACTIONS.CONTINUE
         ? CONDITION_ACTIONS.CONTINUE
         : WORKFLOW_EXECUTION_OUTCOMES.STOP;
@@ -4567,9 +4568,7 @@ export class WorkflowExecutor {
     );
   }
 
-  private getPromptFileResolutionOptions(
-    context: WorkflowExecutionContext
-  ): {
+  private getPromptFileResolutionOptions(context: WorkflowExecutionContext): {
     promptFileResolver: PromptFileResolver;
     sourceDefinitionPath?: string;
   } {
@@ -4728,9 +4727,7 @@ export class WorkflowExecutor {
     totalSteps: number
   ): Promise<boolean> {
     const maxTimeSec = dynamicConfig.maxWorkflowExecutionTime;
-    const unlimitedWorkflow = dynamicConfig.unlimitedMode || maxTimeSec === -1;
-
-    if (unlimitedWorkflow) {
+    if (isUnlimited(maxTimeSec)) {
       return false;
     }
 
@@ -4754,19 +4751,19 @@ export class WorkflowExecutor {
     return false;
   }
 
-  private async checkQueueSizeLimit(
-    dynamicConfig: DynamicQueueConfig,
+  private async checkStepLimit(
+    workflowMaxSteps: number | undefined,
     totalSteps: number
   ): Promise<boolean> {
-    if (dynamicConfig.unlimitedMode || dynamicConfig.maxQueueSize <= 0) {
+    const effectiveMaxSteps = resolveEffectiveMaxSteps(
+      workflowMaxSteps,
+      ConfigurationUtils.getGlobalMaxSteps()
+    );
+    if (!exceedsLimit(totalSteps, effectiveMaxSteps)) {
       return false;
     }
 
-    if (totalSteps <= dynamicConfig.maxQueueSize) {
-      return false;
-    }
-
-    const message = `Workflow stopped - Maximum queue size reached (${totalSteps}/${dynamicConfig.maxQueueSize}).`;
+    const message = `Workflow stopped - Maximum step limit reached (${totalSteps}/${effectiveMaxSteps}).`;
     notifyUserFeedback(this.userFeedbackSink, "warning", message);
     Log.trace(`[WorkflowExecutor] ${message}`);
     this.promptQueue.getRuntimeStateMachine().fail();
@@ -5053,7 +5050,7 @@ export class WorkflowExecutor {
       const nextAttemptIndex = attemptIndex + 1;
       const retryCount = nextAttemptIndex;
       const maxRetries = errorBehavior.maxRetries ?? 0;
-      const retryLimit = maxRetries === -1 ? "unlimited" : maxRetries;
+      const retryLimit = isUnlimited(maxRetries) ? "unlimited" : maxRetries;
 
       runtime.failAttempt(target, attemptIndex, failureReason);
       runtime.scheduleRetry(target, nextAttemptIndex, retryCount, maxRetries);

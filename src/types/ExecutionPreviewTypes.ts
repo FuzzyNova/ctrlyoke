@@ -136,6 +136,7 @@ export interface PermissionSettingsPreview {
 
 export interface ExecutionLimitsPreview {
   maxQueueSteps?: number;
+  maxStepsSource?: "workflow maxSteps" | "setting queue.maxSteps";
   maxExecutionSeconds?: number;
   maxTokens?: number;
   violations: string[];

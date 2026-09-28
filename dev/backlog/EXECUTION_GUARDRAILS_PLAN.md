@@ -9,13 +9,12 @@
 ctrlyoke already exposes and enforces execution guardrails through the settings
 layer:
 
-| Concern           | Existing setting                 | Current role                                          |
-| ----------------- | -------------------------------- | ----------------------------------------------------- |
-| Prompt duration   | `execution.maxPromptTimeout`     | Bounds one harness prompt; `-1` is unlimited          |
-| Script duration   | `execution.scriptTimeout`        | Default timeout for pre/end-condition scripts         |
-| Workflow growth   | `queue.maxSize`                  | Bounds the queue, including dynamic appends           |
-| Workflow duration | `queue.maxWorkflowExecutionTime` | Stops at safe execution boundaries; `-1` is unlimited |
-| Explicit opt-out  | `queue.unlimitedMode`            | Disables queue-size and workflow-time limits          |
+| Concern           | Existing setting                    | Current role                                             |
+| ----------------- | ----------------------------------- | -------------------------------------------------------- |
+| Prompt duration   | `execution.maxPromptTimeout`        | Bounds one harness prompt; `-1` is unlimited             |
+| Script duration   | `execution.scriptTimeout`           | Default timeout for pre/end-condition scripts            |
+| Workflow growth   | `queue.maxSteps`                    | Bounds the workflow step list, including dynamic appends |
+| Workflow duration | `queue.maxWorkflowExecutionTimeSec` | Stops at safe execution boundaries; `-1` is unlimited    |
 
 Retry behavior already has focused controls:
 
@@ -25,13 +24,13 @@ Retry behavior already has focused controls:
   particular validation script genuinely needs a different budget.
 
 These settings are the product's guardrail surface. They are configurable at
-the settings scopes supported by `CtrlYokeConfigService`; they are not workflow
-execution properties.
+the settings scopes supported by `CtrlYokeConfigService`. The workflow root may
+override `queue.maxSteps` for a run; no other queue override is supported.
 
 ## Product Decision
 
-Do **not** add a workflow `limits` object or step/workflow/global resolution.
-Do not add per-prompt overrides for queue size, workflow duration, prompt
+Do **not** add a workflow `limits` object or any queue override other than the
+workflow-root `maxSteps` property. Do not add per-prompt overrides for queue size, workflow duration, prompt
 duration, aggregate attempts, observed tokens, or concurrency.
 
 Per-step limits would mainly buy exceptions such as “allow this unusually long
@@ -60,19 +59,18 @@ This plan is an enforcement and consistency audit, not a new schema feature.
   manual append, MCP/API append, working-file reload, and `finalStep` dynamic
   extension.
 - Reject an initially loaded workflow whose executable step count exceeds
-  `queue.maxSize` before its first step starts. Current append paths enforce the
+  `queue.maxSteps` before its first step starts. Current append paths enforce the
   limit, but initial loading relies on later execution checks.
 - Count enabled and disabled queue entries consistently with the existing queue
   definition; do not create a second “billable step” count.
 - Audit `execution.maxPromptTimeout` across interactive/headless transports and
   completion monitors so `-1` and finite values have the same meaning for every
   CLI harness.
-- Audit `queue.maxWorkflowExecutionTime` across normal steps, script steps,
+- Audit `queue.maxWorkflowExecutionTimeSec` across normal steps, script steps,
   retries, `finalStep`, pause/resume, and dynamically extended queues. Continue
   enforcing it only at safe boundaries; do not kill a harness while it may be
   writing files.
-- Keep `unlimitedMode`, `maxSize <= 0`, and `-1` semantics consistent across
-  core, CLI, MCP, dashboard messages, and settings copy.
+- `-1` means unlimited everywhere, read through `LimitUtils`.
 
 ### Phase 2 — Observable outcomes
 
@@ -89,7 +87,7 @@ This plan is an enforcement and consistency audit, not a new schema feature.
 
 - `limits` in `schemas/workflow-schema.json`.
 - Step → workflow → settings limit resolution.
-- `maxSteps`; it duplicates `queue.maxSize`.
+- Other workflow queue overrides; see `dev/implemented/WORKFLOW_MAX_STEPS_PLAN.md`.
 - `maxDurationMs`; it duplicates the existing prompt/workflow/script timeout
   settings.
 - `maxTotalAttempts`; focused retry caps plus workflow time already bound retry
@@ -118,7 +116,7 @@ Observed token totals remain reporting data under
 ## Acceptance Criteria
 
 - No workflow or prompt schema gains a generic `limits` property.
-- Every queue-entry path applies the same effective `queue.maxSize` semantics.
+- Every queue-entry path applies the same effective `queue.maxSteps` semantics.
 - An oversized initial workflow is rejected before any step executes.
 - Prompt and workflow timeouts behave consistently across supported execution
   modes and harnesses.

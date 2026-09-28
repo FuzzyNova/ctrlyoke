@@ -298,6 +298,21 @@ suite("ExecutionPreviewService", () => {
     }
   });
 
+  test("reports the workflow maxSteps cap and its source", async () => {
+    const preview = await createService().build({
+      workflow: {
+        maxSteps: 3,
+        steps: [{ prompt: "one" }, { prompt: "two" }],
+      },
+    });
+
+    assert.deepStrictEqual(preview.steps[0]?.resolvedProperties.limits, {
+      maxQueueSteps: 3,
+      maxStepsSource: "workflow maxSteps",
+      violations: [],
+    });
+  });
+
   test("allows different-harness auto-resume sessions at a shared boundary", async () => {
     const capabilities = createCapabilities();
     capabilities.harnesses[HARNESS_IDS.COPILOT_CLI] = {

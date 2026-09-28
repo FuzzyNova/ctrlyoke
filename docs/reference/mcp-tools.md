@@ -34,7 +34,7 @@ Step indices are **zero-based** everywhere in these tools, except `sessionId` in
 
 Returns `workflowKey`, `runRef`, a `metadata` object, and `steps`.
 
-- `metadata`: `workflowName`, `harness`, `model`, `currentIndex`, `totalSteps`, `completedSteps`, `executionState`, `maxQueueSize` and `remainingSlots` (numbers, or `"unlimited"`), `workingFile`, `runDirectory`, `definitionRevision`, `descriptorRevision`.
+- `metadata`: `workflowName`, `harness`, `model`, `currentIndex`, `totalSteps`, `completedSteps`, `executionState`, `maxSteps` and `remainingSteps` (numbers, or `"unlimited"`), `workingFile`, `runDirectory`, `definitionRevision`, `descriptorRevision`. The limit fields report the effective cap after applying the workflow's `maxSteps` override to the global `queue.maxSteps` setting; `remainingSteps` is based on the current total step count.
 - `steps[]`: `index`, `prompt` (script steps show as `(script) <command>`), `status` (`completed`, `failed`, `cancelled`, `skipped`, `running`, or `pending`), `model`.
 
 ## `append_step`
@@ -49,7 +49,7 @@ Returns `workflowKey`, `runRef`, a `metadata` object, and `steps`.
   - a zero-based index — insert before that step. Completed steps cannot be displaced.
 - `source`: optional label describing why the steps were added.
 
-When `harness` or `model` is set, it is checked against the installed harnesses and their models (when that information is available). The run's step total is capped by `queue.maxSize` unless `queue.unlimitedMode` is on.
+When `harness` or `model` is set, it is checked against the installed harnesses and their models (when that information is available). The run's total step count cannot exceed its effective `maxSteps` cap. A rejected append returns an error such as `Step limit reached: this run has 30/30 steps (workflow maxSteps: 30). Do not retry; finish without appending.` The message identifies whether the cap came from the workflow's `maxSteps` or the global `queue.maxSteps` setting.
 
 Example:
 

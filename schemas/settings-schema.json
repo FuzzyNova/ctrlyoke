@@ -433,9 +433,16 @@
           "description": "How to handle a declared reference that fails to resolve: a missing/invalid secret (!NAME), an unknown skill (/skill:) or MCP server (/mcp:), an unresolved @file/#selection/#sym reference, or an unresolved ~diff/~staged/~stash/~<hash> git reference. 'warn' (default) reports a diagnostic and lets the step run anyway. 'fail' stops the step before the harness spawns, naming the unresolved reference."
         },
         "maxPromptTimeoutSec": {
-          "type": "integer",
-          "minimum": -1,
-          "description": "Maximum time in seconds to wait for a prompt to complete. Use -1 for unlimited.",
+          "oneOf": [
+            {
+              "$ref": "workflow.json#/$defs/unlimitedValue"
+            },
+            {
+              "type": "integer",
+              "minimum": 1
+            }
+          ],
+          "description": "Maximum time in seconds to wait for a prompt to complete. `-1` means unlimited.",
           "default": -1
         },
         "scriptTimeoutSec": {
@@ -456,9 +463,9 @@
       "description": "Queue management settings.",
       "additionalProperties": false,
       "properties": {
-        "maxSize": {
-          "type": "integer",
-          "description": "Maximum number of prompts allowed in the queue.",
+        "maxSteps": {
+          "$ref": "workflow.json#/$defs/maxStepsValue",
+          "description": "Maximum number of entries allowed in the run's steps array. `-1` means unlimited.",
           "default": 100
         },
         "maxParallelSteps": {
@@ -467,20 +474,22 @@
           "default": 6,
           "description": "Maximum number of active members in a parallel step group."
         },
-        "unlimitedMode": {
-          "type": "boolean",
-          "description": "Disable queue size and time limits.",
-          "default": false
-        },
         "notifyOnExtension": {
           "type": "boolean",
-          "description": "Show a notification when the queue is extended.",
+          "description": "Currently has no effect; queue extension notifications are not implemented.",
           "default": true
         },
         "maxWorkflowExecutionTimeSec": {
-          "type": "integer",
-          "minimum": -1,
-          "description": "Maximum total execution time in seconds for a workflow. Use -1 for unlimited.",
+          "oneOf": [
+            {
+              "$ref": "workflow.json#/$defs/unlimitedValue"
+            },
+            {
+              "type": "integer",
+              "minimum": 1
+            }
+          ],
+          "description": "Maximum total execution time in seconds for a workflow. `-1` means unlimited.",
           "default": -1
         }
       }
@@ -491,9 +500,16 @@
       "additionalProperties": false,
       "properties": {
         "maxRuns": {
-          "type": "integer",
-          "minimum": -1,
-          "description": "Deletes entire runs—definition and output—oldest first. -1 keeps all runs.",
+          "oneOf": [
+            {
+              "$ref": "workflow.json#/$defs/unlimitedValue"
+            },
+            {
+              "type": "integer",
+              "minimum": 1
+            }
+          ],
+          "description": "Deletes entire runs—definition and output—oldest first. `-1` means unlimited.",
           "default": -1
         },
         "historySearchCacheMb": {
@@ -678,9 +694,16 @@
           "default": false
         },
         "outputVirtualizationRowThreshold": {
-          "type": "integer",
-          "minimum": -1,
-          "description": "Minimum projected output row count before the Output panel uses virtualization. Use 0 to always virtualize, -1 to never virtualize.",
+          "oneOf": [
+            {
+              "$ref": "workflow.json#/$defs/unlimitedValue"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ],
+          "description": "Minimum projected output row count before the Output panel uses virtualization. 0 means always virtualize. `-1` means never.",
           "default": 200
         },
         "collapsedToolOutputLineCount": {

@@ -72,6 +72,8 @@ const STRUCTURAL_WORKFLOW_DEFINITIONS = new Set([
   "agent",
   "errorBehaviorDefault",
   "endConditionDefault",
+  "maxStepsValue",
+  "unlimitedValue",
   "mcpServerEntry",
   "preConditionDefault",
   "priorContext",

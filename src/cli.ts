@@ -1814,6 +1814,7 @@ async function executeAddressedCliOperation(
       runRef,
       tail,
       target.definitionRevision,
+      ConfigurationUtils.getGlobalMaxSteps(),
       lineageRepository,
       target.allowInterruptedRun
     );

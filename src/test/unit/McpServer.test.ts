@@ -10,7 +10,7 @@ import {
   parseMcpToolCliArgs,
   type McpToolCallingContext,
 } from "../../mcp-server";
-import { getMaxQueueSize } from "../../utils/QueueLimitUtils";
+import { getGlobalMaxSteps } from "../../utils/QueueLimitUtils";
 import { ensureMcpStorageInitialized } from "../helpers/mcpStorage";
 import {
   MCP_APPEND_STEP_TOOL_NAME,
@@ -38,7 +38,7 @@ import type {
   WorkingFileWorktreeRuntime,
 } from "../../types/CtrlYokeTypes";
 import {
-  DEFAULT_MAX_QUEUE_SIZE,
+  DEFAULT_MAX_STEPS,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
   PARALLEL_GROUP_ADMISSION,
@@ -105,6 +105,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
   let priorPromptIndex: string | undefined;
   let priorParallelGroupId: string | undefined;
   let priorMaxParallelSteps: string | undefined;
+  let priorMaxSteps: string | undefined;
 
   afterEach(async () => {
     if (priorPinnedFile === undefined) {
@@ -147,6 +148,11 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     } else {
       process.env.CTRLYOKE_MAX_PARALLEL_STEPS = priorMaxParallelSteps;
     }
+    if (priorMaxSteps === undefined) {
+      delete process.env.CTRLYOKE_MAX_STEPS;
+    } else {
+      process.env.CTRLYOKE_MAX_STEPS = priorMaxSteps;
+    }
     if (workspaceRoot) {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
@@ -164,6 +170,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       parallelGroups?: WorkingFile["parallelGroups"];
       draftOnly?: boolean;
       executionState?: ExecutionState;
+      maxSteps?: number;
     } = {}
   ): Promise<RunFixture> {
     const workflowKey = `mcp-${suffix}-2026-01-01T00-00-00` as WorkflowKey;
@@ -200,6 +207,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       startedAt: 1,
       definitionRevision: 4,
       steps,
+      ...(options.maxSteps === undefined ? {} : { maxSteps: options.maxSteps }),
       ...(options.parallelGroups
         ? { parallelGroups: options.parallelGroups }
         : {}),
@@ -335,6 +343,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     priorPromptIndex = process.env.CTRLYOKE_PROMPT_INDEX;
     priorParallelGroupId = process.env.CTRLYOKE_PARALLEL_GROUP_ID;
     priorMaxParallelSteps = process.env.CTRLYOKE_MAX_PARALLEL_STEPS;
+    priorMaxSteps = process.env.CTRLYOKE_MAX_STEPS;
     delete process.env.CTRLYOKE_WORKING_FILE;
     delete process.env.CTRLYOKE_COMMIT_OUTPUT;
     delete process.env.CTRLYOKE_EXECUTION_ROOT;
@@ -343,6 +352,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     delete process.env.CTRLYOKE_PROMPT_INDEX;
     delete process.env.CTRLYOKE_PARALLEL_GROUP_ID;
     delete process.env.CTRLYOKE_MAX_PARALLEL_STEPS;
+    delete process.env.CTRLYOKE_MAX_STEPS;
     process.env.CTRLYOKE_EXECUTION_ROOT = workspaceRoot;
     return new CtrlYokeMCPServer({ workspaceRoot });
   }
@@ -674,16 +684,16 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
   });
 
-  test("uses the shared queue default when no max-size environment value is set", () => {
-    const priorMaxQueueSize = process.env.CTRLYOKE_MAX_QUEUE_SIZE;
+  test("uses the shared steps default when no max-steps environment value is set", () => {
+    const priorMaxSteps = process.env.CTRLYOKE_MAX_STEPS;
     try {
-      delete process.env.CTRLYOKE_MAX_QUEUE_SIZE;
-      assert.strictEqual(getMaxQueueSize(), DEFAULT_MAX_QUEUE_SIZE);
+      delete process.env.CTRLYOKE_MAX_STEPS;
+      assert.strictEqual(getGlobalMaxSteps(), DEFAULT_MAX_STEPS);
     } finally {
-      if (priorMaxQueueSize === undefined) {
-        delete process.env.CTRLYOKE_MAX_QUEUE_SIZE;
+      if (priorMaxSteps === undefined) {
+        delete process.env.CTRLYOKE_MAX_STEPS;
       } else {
-        process.env.CTRLYOKE_MAX_QUEUE_SIZE = priorMaxQueueSize;
+        process.env.CTRLYOKE_MAX_STEPS = priorMaxSteps;
       }
     }
   });
@@ -1560,9 +1570,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
   test("refuses edits that clear required prompt or script content", async () => {
     const server = await setup();
-    const { run, ownerToken } = await prepareActiveRun(
-      "edit-required-content"
-    );
+    const { run, ownerToken } = await prepareActiveRun("edit-required-content");
     try {
       const file = JSON.parse(
         await fs.readFile(run.runFilePath, "utf8")
@@ -1998,6 +2006,55 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       "session-append"
     );
     assert.ok(persisted.steps?.[1]._runtime?.stepId);
+  });
+
+  test("workflow maxSteps rejects an MCP append even when the global limit is unlimited", async () => {
+    const server = await setup();
+    process.env.CTRLYOKE_MAX_STEPS = "-1";
+    const run = await createRun(
+      "workflow-step-cap",
+      "2026-01-01T00-00-00-000Z",
+      { maxSteps: 1, executionState: EXECUTION_STATES.RUNNING }
+    );
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+    const before = await fs.readFile(run.runFilePath, "utf8");
+
+    await assert.rejects(
+      () =>
+        server.invokeTool("append_step", {
+          position: "end",
+          steps: [{ prompt: "over cap" }],
+        }),
+      /Step limit reached: this run has 1\/1 steps \(workflow maxSteps: 1\)\. Do not retry; finish without appending\./
+    );
+    assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
+  });
+
+  test("workflow maxSteps=-1 overrides the global MCP cap and status", async () => {
+    const server = await setup();
+    process.env.CTRLYOKE_MAX_STEPS = "1";
+    const run = await createRun(
+      "workflow-unlimited-step-cap",
+      "2026-01-01T00-00-00-000Z",
+      { maxSteps: -1, executionState: EXECUTION_STATES.RUNNING }
+    );
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const result = responseJson(
+      await server.invokeTool("append_step", {
+        position: "end",
+        steps: [{ prompt: "past global cap" }],
+      })
+    );
+    const status = responseJson(await server.invokeTool("workflow_status", {}));
+    const persisted = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+
+    assert.strictEqual(result.stepsAdded, 1);
+    assert.strictEqual(persisted.steps?.length, 2);
+    assert.strictEqual(status.metadata.maxSteps, "unlimited");
+    assert.strictEqual(status.metadata.remainingSteps, "unlimited");
   });
 
   test("accepts an append whose prompt matches a completed step", async () => {
@@ -2690,11 +2747,15 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
   test("reports terminal failures instead of completed", async () => {
     const server = await setup();
-    const run = await createRun("failed-step-status", "2026-01-01T00-00-00-000Z", {
-      stepCount: 2,
-      currentIndex: 1,
-      executionState: EXECUTION_STATES.ERROR,
-    });
+    const run = await createRun(
+      "failed-step-status",
+      "2026-01-01T00-00-00-000Z",
+      {
+        stepCount: 2,
+        currentIndex: 1,
+        executionState: EXECUTION_STATES.ERROR,
+      }
+    );
     const workingFile = JSON.parse(
       await fs.readFile(run.runFilePath, "utf8")
     ) as WorkingFile;

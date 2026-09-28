@@ -16,7 +16,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "_runtime.endCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
   "_runtime.endCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.",
   "_runtime.endCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.",
-  "_runtime.endCondition.maxRetries": "Maximum number of retry attempts. Use -1 for unlimited retries (with caution), 0 for no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.",
+  "_runtime.endCondition.maxRetries": "Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.",
   "_runtime.endCondition.onFail": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times). 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default).",
   "_runtime.endCondition.onPass": "What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately.",
   "_runtime.endCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag.",
@@ -153,7 +153,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "defaults.endCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
   "defaults.endCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.",
   "defaults.endCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.",
-  "defaults.endCondition.maxRetries": "Maximum number of retry attempts. Use -1 for unlimited retries (with caution), 0 for no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.",
+  "defaults.endCondition.maxRetries": "Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.",
   "defaults.endCondition.onFail": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times). 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default).",
   "defaults.endCondition.onPass": "What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately.",
   "defaults.endCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag.",
@@ -225,7 +225,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "endCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
   "endCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.",
   "endCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.",
-  "endCondition.maxRetries": "Maximum number of retry attempts. Use -1 for unlimited retries (with caution), 0 for no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.",
+  "endCondition.maxRetries": "Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.",
   "endCondition.onFail": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times). 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default).",
   "endCondition.onPass": "What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately.",
   "endCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag.",
@@ -247,7 +247,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "execution.contextResolutionFailure": "How to handle a declared reference that fails to resolve: a missing/invalid secret (!NAME), an unknown skill (/skill:) or MCP server (/mcp:), an unresolved @file/#selection/#sym reference, or an unresolved ~diff/~staged/~stash/~<hash> git reference. 'warn' (default) reports a diagnostic and lets the step run anyway. 'fail' stops the step before the harness spawns, naming the unresolved reference.",
   "execution.ctrlyokeMcpMode": "Whether ctrlyoke's own MCP server is attached natively or replaced with the built-in MCP tools skill. Only affects ctrlyoke's server, not other MCP servers configured in a workflow.",
   "execution.injectMode": "When true, keeps the TUI alive between prompts and writes follow-up prompts directly into the PTY. Faster than restarting and avoids the Claude Code resume cache bug.",
-  "execution.maxPromptTimeoutSec": "Maximum time in seconds to wait for a prompt to complete. Use -1 for unlimited.",
+  "execution.maxPromptTimeoutSec": "Maximum time in seconds to wait for a prompt to complete. `-1` means unlimited.",
   "execution.scriptTimeoutSec": "Maximum time in seconds for pre-condition, end-condition, and script-step scripts to run. A script's own `timeoutSec` (in seconds) overrides it.",
   "executionMode": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default.",
   "expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.",
@@ -264,7 +264,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "finalStep._runtime.endCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
   "finalStep._runtime.endCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.",
   "finalStep._runtime.endCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.",
-  "finalStep._runtime.endCondition.maxRetries": "Maximum number of retry attempts. Use -1 for unlimited retries (with caution), 0 for no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.",
+  "finalStep._runtime.endCondition.maxRetries": "Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.",
   "finalStep._runtime.endCondition.onFail": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times). 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default).",
   "finalStep._runtime.endCondition.onPass": "What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately.",
   "finalStep._runtime.endCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag.",
@@ -340,7 +340,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "finalStep.endCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
   "finalStep.endCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.",
   "finalStep.endCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.",
-  "finalStep.endCondition.maxRetries": "Maximum number of retry attempts. Use -1 for unlimited retries (with caution), 0 for no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.",
+  "finalStep.endCondition.maxRetries": "Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.",
   "finalStep.endCondition.onFail": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times). 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default).",
   "finalStep.endCondition.onPass": "What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately.",
   "finalStep.endCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag.",
@@ -425,6 +425,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "hooks[].event": "Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), agentStop (Copilot), notify (Codex). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.",
   "hooks[].timeoutSec": "Timeout in seconds. Only respected by CLIs that support per-hook timeouts.",
   "ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.",
+  "maxSteps": "Maximum number of entries in the run's `steps` array, regardless of who queued them, including parallel members and disabled steps. `finalStep` iterations and retries are not counted. Omit to inherit `queue.maxSteps`. `-1` means unlimited.",
   "mcpServers": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to enable dynamic queue extension via ctrlyoke's MCP server. Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers.",
   "mcpServers[]": "A well-known MCP server ID, a user-defined server configuration, or the built-in `ctrlyoke` server with optional deniedTools. For the built-in server, deniedTools lists bare tool names to disable (for example, [\"append_step\"]).",
   "mcpServers[].args": "Arguments to pass to the command (stdio servers only)",
@@ -490,15 +491,14 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "prompt": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #selection:path:line-line or #sym.<kind>:path:symbol:line-line for file excerpts and symbols. ctrlyoke inserts the kinded #sym.<kind>: form; hand-authored #sym:path:symbol:line-line remains valid and generic. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .ctrlyoke directory. Absolute paths are also supported.",
   "queue": "Queue management settings.",
   "queue.maxParallelSteps": "Maximum number of active members in a parallel step group.",
-  "queue.maxSize": "Maximum number of prompts allowed in the queue.",
-  "queue.maxWorkflowExecutionTimeSec": "Maximum total execution time in seconds for a workflow. Use -1 for unlimited.",
-  "queue.notifyOnExtension": "Show a notification when the queue is extended.",
-  "queue.unlimitedMode": "Disable queue size and time limits.",
+  "queue.maxSteps": "Maximum number of entries allowed in the run's steps array. `-1` means unlimited.",
+  "queue.maxWorkflowExecutionTimeSec": "Maximum total execution time in seconds for a workflow. `-1` means unlimited.",
+  "queue.notifyOnExtension": "Currently has no effect; queue extension notifications are not implemented.",
   "resumeSession": "Whether to resume the existing chat session for this prompt. When omitted, defaults to the `defaults.resumeSession` setting (default: false). Set to true to continue in the existing session for context continuity. Retries continue in the same session by default; set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry.",
   "returns": "Removed — renamed to `expected`, and 'true'/'false' are no longer mapped onto exit codes. Omit it entirely to pass on exit code 0.",
   "runs": "Execution run retention settings. History is always on.",
   "runs.historySearchCacheMb": "Approximate working-set budget in MB for caching parsed history-search documents from the most recent runs, evicted oldest-first when exceeded. Bounds real extension-host process memory (RSS), not a literal byte count — actual RSS runs above this number due to V8 overhead the estimate can't see, so the default is calibrated from measured RSS on a real index rather than the byte math alone. 0 disables the cache.",
-  "runs.maxRuns": "Deletes entire runs—definition and output—oldest first. -1 keeps all runs.",
+  "runs.maxRuns": "Deletes entire runs—definition and output—oldest first. `-1` means unlimited.",
   "schemaVersion": "Settings format version. Absent means format 1. ctrlyoke stamps this field when it writes settings; an older host reads newer settings best-effort but refuses to write them.",
   "script": "Shell command or path to script. Resolved relative to workspace root or .ctrlyoke/.",
   "secrets": "Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets replace workflow-level secrets (no merging). Use null to explicitly disable an inherited grant array; inline !NAME references in prompt text remain authoritative grants.",
@@ -557,7 +557,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[]._runtime.endCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
   "steps[]._runtime.endCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.",
   "steps[]._runtime.endCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.",
-  "steps[]._runtime.endCondition.maxRetries": "Maximum number of retry attempts. Use -1 for unlimited retries (with caution), 0 for no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.",
+  "steps[]._runtime.endCondition.maxRetries": "Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.",
   "steps[]._runtime.endCondition.onFail": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times). 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default).",
   "steps[]._runtime.endCondition.onPass": "What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately.",
   "steps[]._runtime.endCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag.",
@@ -633,7 +633,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[].endCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
   "steps[].endCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.",
   "steps[].endCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.",
-  "steps[].endCondition.maxRetries": "Maximum number of retry attempts. Use -1 for unlimited retries (with caution), 0 for no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.",
+  "steps[].endCondition.maxRetries": "Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.",
   "steps[].endCondition.onFail": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times). 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default).",
   "steps[].endCondition.onPass": "What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately.",
   "steps[].endCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag.",
@@ -690,7 +690,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[].parallel[]._runtime.endCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
   "steps[].parallel[]._runtime.endCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.",
   "steps[].parallel[]._runtime.endCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.",
-  "steps[].parallel[]._runtime.endCondition.maxRetries": "Maximum number of retry attempts. Use -1 for unlimited retries (with caution), 0 for no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.",
+  "steps[].parallel[]._runtime.endCondition.maxRetries": "Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.",
   "steps[].parallel[]._runtime.endCondition.onFail": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times). 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default).",
   "steps[].parallel[]._runtime.endCondition.onPass": "What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately.",
   "steps[].parallel[]._runtime.endCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag.",
@@ -766,7 +766,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[].parallel[].endCondition.env": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values.",
   "steps[].parallel[].endCondition.expected": "Value the compare source is compared against. Omit it to pass when the script exits 0 — there is no boolean form, and 'true'/'false' are not accepted as exit-code values. Omitting it while `compareSource` or `operator` states a comparison is allowed but ignores that comparison and still falls back to exit code 0; the dashboard flags this as a warning rather than refusing the workflow.",
   "steps[].parallel[].endCondition.ignoreCase": "Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Default: false.",
-  "steps[].parallel[].endCondition.maxRetries": "Maximum number of retry attempts. Use -1 for unlimited retries (with caution), 0 for no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.",
+  "steps[].parallel[].endCondition.maxRetries": "Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.",
   "steps[].parallel[].endCondition.onFail": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times). 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default).",
   "steps[].parallel[].endCondition.onPass": "What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately.",
   "steps[].parallel[].endCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only: `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag.",
@@ -904,7 +904,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "ui.hideGitIgnoredFiles": "Hide files and directories ignored by .gitignore in the workspace file explorer and workflow file picker.",
   "ui.offerTrustForUntrustedFileLinks": "Allow AI-generated file links outside trusted roots to offer a Trust Parent Folder action. Untrusted paths are always blocked unless their parent is explicitly trusted; this only controls whether the trust offer appears.",
   "ui.openPromptsInSecondGroup": "Open prompt files in a second editor group.",
-  "ui.outputVirtualizationRowThreshold": "Minimum projected output row count before the Output panel uses virtualization. Use 0 to always virtualize, -1 to never virtualize.",
+  "ui.outputVirtualizationRowThreshold": "Minimum projected output row count before the Output panel uses virtualization. 0 means always virtualize. `-1` means never.",
   "ui.respectGitignoreForCompletions": "Filter file completions using .gitignore rules.",
   "ui.showCliCommand": "Show the CLI command being executed.",
   "ui.showCostEstimates": "Show token cost estimates in dashboard and CLI statistics.",
@@ -940,6 +940,9 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "stdout",
     "stderr",
     "exitCode"
+  ],
+  "_runtime.endCondition.maxRetries": [
+    -1
   ],
   "_runtime.endCondition.onFail": [
     "continue",
@@ -1224,6 +1227,9 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "stderr",
     "exitCode"
   ],
+  "defaults.endCondition.maxRetries": [
+    -1
+  ],
   "defaults.endCondition.onFail": [
     "continue",
     "retry",
@@ -1335,6 +1341,9 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "stderr",
     "exitCode"
   ],
+  "endCondition.maxRetries": [
+    -1
+  ],
   "endCondition.onFail": [
     "continue",
     "retry",
@@ -1371,6 +1380,9 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "native",
     "skill"
   ],
+  "execution.maxPromptTimeoutSec": [
+    -1
+  ],
   "executionMode": [
     "interactive",
     "headless"
@@ -1382,6 +1394,9 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "stdout",
     "stderr",
     "exitCode"
+  ],
+  "finalStep._runtime.endCondition.maxRetries": [
+    -1
   ],
   "finalStep._runtime.endCondition.onFail": [
     "continue",
@@ -1506,6 +1521,9 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "stdout",
     "stderr",
     "exitCode"
+  ],
+  "finalStep.endCondition.maxRetries": [
+    -1
   ],
   "finalStep.endCondition.onFail": [
     "continue",
@@ -1652,6 +1670,9 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "notification",
     "error"
   ],
+  "maxSteps": [
+    -1
+  ],
   "mcpServers[].id": [
     "ctrlyoke"
   ],
@@ -1745,6 +1766,15 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "none",
     "finalStepAll",
     "finalStepPrevious"
+  ],
+  "queue.maxSteps": [
+    -1
+  ],
+  "queue.maxWorkflowExecutionTimeSec": [
+    -1
+  ],
+  "runs.maxRuns": [
+    -1
   ],
   "server.theme": [
     "auto",
@@ -1904,6 +1934,9 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "stderr",
     "exitCode"
   ],
+  "steps[]._runtime.endCondition.maxRetries": [
+    -1
+  ],
   "steps[]._runtime.endCondition.onFail": [
     "continue",
     "retry",
@@ -2028,6 +2061,9 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "stderr",
     "exitCode"
   ],
+  "steps[].endCondition.maxRetries": [
+    -1
+  ],
   "steps[].endCondition.onFail": [
     "continue",
     "retry",
@@ -2113,6 +2149,9 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "stdout",
     "stderr",
     "exitCode"
+  ],
+  "steps[].parallel[]._runtime.endCondition.maxRetries": [
+    -1
   ],
   "steps[].parallel[]._runtime.endCondition.onFail": [
     "continue",
@@ -2237,6 +2276,9 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "stdout",
     "stderr",
     "exitCode"
+  ],
+  "steps[].parallel[].endCondition.maxRetries": [
+    -1
   ],
   "steps[].parallel[].endCondition.onFail": [
     "continue",
@@ -2429,6 +2471,9 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
   "type": [
     "prompt",
     "script"
+  ],
+  "ui.outputVirtualizationRowThreshold": [
+    -1
   ],
   "ui.stepColorMode": [
     "none",

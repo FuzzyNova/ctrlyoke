@@ -712,6 +712,8 @@ export class WebviewSettingsSync {
       await ConfigurationUtils.setDefaultPreCondition(value ?? null);
     } else if (property === PROMPT_PROPERTIES.ERROR_BEHAVIOR) {
       await ConfigurationUtils.setDefaultErrorBehavior(value ?? null);
+    } else if (property === PROMPT_PROPERTIES.MAX_STEPS) {
+      await ConfigurationUtils.setMaxSteps(value as number);
     } else if (property === PROMPT_PROPERTIES.TOOL_PERMISSIONS) {
       const override = value as ToolPermissionsOverride | null;
       await ConfigurationUtils.updateSetting(
@@ -894,6 +896,7 @@ export class WebviewSettingsSync {
       hooks: ConfigurationUtils.getDefaultHooks(),
       defaultErrorBehavior:
         ConfigurationUtils.getDefaultErrorBehavior() ?? null,
+      maxSteps: ConfigurationUtils.getGlobalMaxSteps(),
       autoFocusOutputOnExecution:
         ConfigurationUtils.shouldAutoFocusOutputOnExecution(),
       terminal: ConfigurationUtils.getTerminalSettings(),

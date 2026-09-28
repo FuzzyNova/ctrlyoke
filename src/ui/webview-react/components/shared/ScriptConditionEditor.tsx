@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { DrawerRow } from "./DrawerRow";
 import { CustomSelect } from "./CustomSelect";
+import { LimitSelect } from "./LimitSelect";
 import { ActionButton } from "./ActionButton";
 import {
   CONDITION_ACTIONS,
@@ -35,6 +36,7 @@ import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   CUSTOM_SHELL_OPTION,
   INHERIT_DEFAULT_OPTION,
+  LIMIT_SELECTION_VALUES,
   KEYBOARD_KEYS,
   EXECUTION_MODE_HELP_TEXT,
   PROMPT_PROPERTIES,
@@ -52,6 +54,7 @@ import {
   toSelectOptions,
 } from "@root/types/SchemaUiMetadata";
 import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
+import { isUnlimited } from "@root/utils/LimitUtils";
 import {
   resolveShellKind,
   getShellInvocationError,
@@ -219,9 +222,6 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   const [timeoutInput, setTimeoutInput] = useState(
     v.timeoutSec !== undefined ? String(v.timeoutSec) : ""
   );
-  const [maxRetriesInput, setMaxRetriesInput] = useState(
-    String(v.maxRetries ?? 1)
-  );
   const [passRetryPromptInput, setPassRetryPromptInput] = useState(
     v.passRetryPrompt ?? ""
   );
@@ -250,10 +250,6 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   useEffect(() => {
     setTimeoutInput(v.timeoutSec !== undefined ? String(v.timeoutSec) : "");
   }, [v.timeoutSec]);
-
-  useEffect(() => {
-    setMaxRetriesInput(String(v.maxRetries ?? 1));
-  }, [v.maxRetries]);
 
   useEffect(() => {
     setPassRetryPromptInput(v.passRetryPrompt ?? "");
@@ -434,6 +430,13 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   const resolvedExecutionMode = useSettingsStore(
     (s) => s.workflowProperties.executionMode ?? s.globalSettings.executionMode
   );
+  const resolvedMaxRetries = useSettingsStore(
+    (s) => s.globalSettings.defaultEndCondition?.maxRetries ?? 1
+  );
+  const inheritMaxRetriesLabel = isUnlimited(resolvedMaxRetries)
+    ? "Unlimited"
+    : String(resolvedMaxRetries);
+  const allowMaxRetriesInherit = !schemaPath.startsWith("defaults.");
   const defaultExecutionModeLabel = `Inherit (${
     EXECUTION_MODE_OPTIONS_META[resolvedExecutionMode]?.label ??
     resolvedExecutionMode
@@ -769,37 +772,32 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
       {variant === PROMPT_PROPERTIES.END_CONDITION && hasRetry ? (
         <DrawerRow narrow={narrow}>
           <div className="flex flex-col gap-1">
-            <label
-              htmlFor={`${idPrefix}-max-retries`}
-              className="text-xs font-medium text-foreground"
-              title={schemaTitle(`${schemaPath}.maxRetries`)}
-            >
+            <span className="text-xs font-medium text-foreground">
               Max Retries
-            </label>
-            <input
-              type="number"
-              id={`${idPrefix}-max-retries`}
-              aria-label={schemaAriaLabel(
-                "Max Retries",
-                `${schemaPath}.maxRetries`
-              )}
-              title={schemaTitle(`${schemaPath}.maxRetries`)}
-              value={maxRetriesInput}
-              onChange={(e) => setMaxRetriesInput(e.target.value)}
-              onBlur={() => {
-                const parsed = parseInt(maxRetriesInput);
-                const val = isNaN(parsed) ? 1 : parsed;
-                setMaxRetriesInput(String(val));
-                update({ maxRetries: val });
-              }}
-              min={-1}
-              max={100}
-              disabled={disabled}
-              className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
-            />
-            <span className="text-xxs text-description-fg">
-              Use -1 for unlimited retries
             </span>
+            <LimitSelect
+              id={`${idPrefix}-max-retries`}
+              label="Max Retries"
+              path={`${schemaPath}.maxRetries`}
+              value={v.maxRetries}
+              onChange={(maxRetries) => update({ maxRetries })}
+              mode={LIMIT_SELECTION_VALUES.UNLIMITED}
+              min={0}
+              max={100}
+              customFallback={
+                v.maxRetries === undefined
+                  ? isUnlimited(resolvedMaxRetries)
+                    ? 100
+                    : resolvedMaxRetries
+                  : isUnlimited(v.maxRetries)
+                    ? 100
+                    : v.maxRetries
+              }
+              inheritLabel={
+                allowMaxRetriesInherit ? inheritMaxRetriesLabel : undefined
+              }
+              disabled={disabled}
+            />
           </div>
         </DrawerRow>
       ) : variant === SCRIPT_CONDITION_VARIANTS.SCRIPT_STEP ? (

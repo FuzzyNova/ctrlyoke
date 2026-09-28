@@ -63,3 +63,40 @@ describe("GeneralSection script step color control", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("GeneralSection limit controls", () => {
+  it("uses Never for the output virtualization threshold", () => {
+    renderGeneralSection(STEP_COLOR_MODES.UNIQUE);
+
+    expect(
+      screen.getByRole("button", {
+        name: "Custom, property ui.outputVirtualizationRowThreshold",
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("spinbutton", {
+        name: "Output virtualization row threshold Custom, property ui.outputVirtualizationRowThreshold",
+      })
+    ).toHaveAttribute("min", "0");
+  });
+
+  it("uses Unlimited for max runs without showing the stored -1", () => {
+    const current = settings(STEP_COLOR_MODES.UNIQUE);
+    current.settings.runs.maxRuns = -1;
+    render(
+      <GeneralSection
+        settings={current}
+        activeScope="user"
+        onUpdate={() => undefined}
+        onReset={() => undefined}
+        onReload={() => undefined}
+      />
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "Unlimited, property runs.maxRuns",
+      })
+    ).toBeInTheDocument();
+  });
+});

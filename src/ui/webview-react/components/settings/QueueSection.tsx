@@ -4,6 +4,7 @@ import type {
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
 import { LocalNumberInput } from "../shared/LocalInputs";
+import { LimitSelect } from "../shared/LimitSelect";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 
@@ -31,18 +32,18 @@ export function QueueSection({
         Queue
       </h3>
       <SettingInputRow
-        label="Max queue size"
-        id="queue-max-size"
-        path="queue.maxSize"
+        label="Max steps"
+        id="queue-max-steps"
+        path="queue.maxSteps"
         {...rowProps}
       >
-        <LocalNumberInput
-          id="queue-max-size"
-          min={1}
-          value={queue.maxSize}
-          onCommit={(v) => onUpdate("queue.maxSize", v)}
-          parse={(v) => parseInt(v, 10) || 10}
-          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+        <LimitSelect
+          id="queue-max-steps"
+          label="Max steps"
+          path="queue.maxSteps"
+          value={queue.maxSteps}
+          onChange={(v) => onUpdate("queue.maxSteps", v)}
+          customFallback={100}
         />
       </SettingInputRow>
       <SettingInputRow
@@ -61,31 +62,23 @@ export function QueueSection({
         />
       </SettingInputRow>
       <SettingInputRow
-        label="Max workflow execution time (seconds, -1 = unlimited)"
+        label="Max workflow execution time (seconds)"
         id="queue-max-execution-time"
         path="queue.maxWorkflowExecutionTimeSec"
         {...rowProps}
       >
-        <LocalNumberInput
+        <LimitSelect
           id="queue-max-execution-time"
-          min={-1}
+          label="Max workflow execution time (seconds)"
+          path="queue.maxWorkflowExecutionTimeSec"
           value={queue.maxWorkflowExecutionTimeSec}
-          onCommit={(v) => onUpdate("queue.maxWorkflowExecutionTimeSec", v)}
-          parse={(v) => parseInt(v, 10) || -1}
-          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+          onChange={(v) => onUpdate("queue.maxWorkflowExecutionTimeSec", v)}
+          customFallback={3600}
         />
       </SettingInputRow>
       <SettingToggleRow
-        label="Unlimited mode"
-        description="Disable all queue size and time limits."
-        checked={queue.unlimitedMode}
-        onChange={(v) => onUpdate("queue.unlimitedMode", v)}
-        path="queue.unlimitedMode"
-        {...rowProps}
-      />
-      <SettingToggleRow
         label="Notify on queue extension"
-        description="Show a notification when the queue is extended beyond the limit."
+        description="Currently has no effect; queue extension notifications are not implemented."
         checked={queue.notifyOnExtension}
         onChange={(v) => onUpdate("queue.notifyOnExtension", v)}
         path="queue.notifyOnExtension"

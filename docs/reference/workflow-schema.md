@@ -77,6 +77,12 @@ The ordered step queue. Each item is a prompt step, a script step, or a parallel
 
 A step that always runs after all queued prompts complete. Can be an AI prompt or a script step. If mcpServers includes "ctrlyoke" and the finalStep appends prompts, those prompts run before finalStep executes again. Working files store resolved harness/model/session metadata on finalStep.\_runtime; workflow phase/status remains in the root \_runtime.finalStep block.
 
+### `maxSteps` {#workflow-file-maxsteps}
+
+- **Type:** `-1` or `integer`
+
+Maximum number of entries in the run's `steps` array, regardless of who queued them, including parallel members and disabled steps. `finalStep` iterations and retries are not counted. Omit to inherit `queue.maxSteps`. `-1` means unlimited.
+
 ### `worktree` {#workflow-file-worktree}
 
 - **Type:** [Worktree](#worktree)
@@ -609,10 +615,9 @@ Compare text case-insensitively. Applies only to eq/ne/contains/notContains. Def
 
 ### `maxRetries` {#end-condition-maxretries}
 
-- **Type:** `integer`
-- **Constraints:** minimum -1 · maximum 100
+- **Type:** `-1` or `integer`
 
-Maximum number of retry attempts. Use -1 for unlimited retries (with caution), 0 for no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.
+Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.
 
 ### `retryPrompt` {#end-condition-retryprompt}
 

@@ -42,7 +42,7 @@ import {
   BOOLEAN_STRING_VALUES,
   CAPABILITIES_FILE,
   CTRLYOKE_DIR,
-  DEFAULT_MAX_QUEUE_SIZE,
+  DEFAULT_MAX_STEPS,
   ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
   LOGS_DIR,
@@ -52,11 +52,11 @@ import {
 import type { CapabilitiesFile } from "./types/CapabilitiesTypes";
 import * as WorkflowPaths from "./utils/WorkflowPaths";
 import {
-  getMaxQueueSize,
+  getGlobalMaxSteps,
   getMaxParallelSteps,
-  isUnlimitedMode,
-  resolveQueueLimitPolicy,
+  resolveEffectiveMaxSteps,
 } from "./utils/QueueLimitUtils";
+import { isUnlimited } from "./utils/LimitUtils";
 import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
 import { deriveStepStatusesFromRuntime } from "./utils/StepStatusDerivation";
 import { stripLegacyWorkingFileLineageMetadata } from "./utils/WorkingFileMetadata";
@@ -381,11 +381,9 @@ export class CtrlYokeMCPServer {
       CTRLYOKE_HOME: process.env.CTRLYOKE_HOME || "(default)",
       CTRLYOKE_RUN_HISTORY_LOCATION:
         process.env.CTRLYOKE_RUN_HISTORY_LOCATION || "(default: user)",
-      CTRLYOKE_MAX_QUEUE_SIZE:
-        process.env.CTRLYOKE_MAX_QUEUE_SIZE ||
-        `(not set — default ${DEFAULT_MAX_QUEUE_SIZE})`,
-      CTRLYOKE_UNLIMITED_MODE:
-        process.env.CTRLYOKE_UNLIMITED_MODE || "(not set — default false)",
+      CTRLYOKE_MAX_STEPS:
+        process.env.CTRLYOKE_MAX_STEPS ||
+        `(not set — default ${DEFAULT_MAX_STEPS})`,
       NODE_ENV: process.env.NODE_ENV,
     });
 
@@ -1034,8 +1032,10 @@ export class CtrlYokeMCPServer {
       (p) => p._runtime?.completedAt !== undefined
     ).length;
 
-    const unlimited = isUnlimitedMode();
-    const maxSize = getMaxQueueSize();
+    const maxSteps = resolveEffectiveMaxSteps(
+      queueData.maxSteps,
+      getGlobalMaxSteps()
+    );
 
     const response = {
       workflowKey: selected.workflowKey,
@@ -1053,8 +1053,10 @@ export class CtrlYokeMCPServer {
         totalSteps: allSteps.length,
         completedSteps: completedCount,
         executionState: runtime.executionState,
-        maxQueueSize: unlimited ? "unlimited" : maxSize,
-        remainingSlots: unlimited ? "unlimited" : maxSize - allSteps.length,
+        maxSteps: isUnlimited(maxSteps) ? "unlimited" : maxSteps,
+        remainingSteps: isUnlimited(maxSteps)
+          ? "unlimited"
+          : maxSteps - allSteps.length,
         workingFile,
         runDirectory: WorkflowPaths.runDirectoryForWorkingFile(workingFile),
         definitionRevision: queueData.definitionRevision ?? 1,
@@ -1142,7 +1144,7 @@ export class CtrlYokeMCPServer {
 
     let response: McpAppendStepResult | null = null;
 
-    const queueLimit = resolveQueueLimitPolicy();
+    const globalMaxSteps = getGlobalMaxSteps();
     if (position === QUEUE_POSITION.PARALLEL_WITH_CURRENT) {
       const joined =
         await RunContinuationService.appendStepsToActiveParallelGroup(
@@ -1151,9 +1153,9 @@ export class CtrlYokeMCPServer {
           selected.runRef,
           flattened.topology.steps,
           target.definitionRevision,
+          globalMaxSteps,
           lineageRepository,
           position,
-          queueLimit,
           getMaxParallelSteps()
         );
       response = {
@@ -1184,10 +1186,10 @@ export class CtrlYokeMCPServer {
         selected.runRef,
         flattened.topology,
         target.definitionRevision,
+        globalMaxSteps,
         lineageRepository,
         target.allowInterruptedRun,
-        position,
-        queueLimit
+        position
       );
 
       response = {

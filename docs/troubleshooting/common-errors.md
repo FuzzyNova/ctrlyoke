@@ -92,8 +92,16 @@ mcpServers:
 ```
 
 Without the built-in server, the harness cannot call the queue tools. The built-in server is
-allowed on parallel-group members. If the harness tried to append and was refused with "Queue
-size limit exceeded", raise the `queue.maxSize` setting.
+allowed on parallel-group members.
+
+## Step limit reached
+
+An append can be refused with a message such as `Step limit reached: this run has 30/30 steps
+(workflow maxSteps: 30). Do not retry; finish without appending.` The effective cap is the
+workflow's `maxSteps` when set, otherwise the global `queue.maxSteps` setting. Raise the
+effective cap if the run needs more queued steps, or set workflow `maxSteps: -1` to remove the
+cap for that workflow. The count includes appended steps, parallel members, and disabled steps;
+it does not include `finalStep` iterations or end-condition retries.
 
 ## The CLI finished, but I wanted an interactive session
 

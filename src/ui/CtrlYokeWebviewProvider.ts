@@ -914,14 +914,11 @@ export class CtrlYokeWebviewProvider
   }
 
   /** @keep The webview warning receiver is a future protocol endpoint; no sender route exists for the checker to trace. */
-  public notifyQueueSizeLimitReached(
-    currentSize: number,
-    maxSize: number
-  ): void {
+  public notifyStepLimitReached(currentSteps: number, maxSteps: number): void {
     this.postMessage({
-      type: MESSAGE_TYPES.QUEUE_SIZE_LIMIT_REACHED,
-      currentSize,
-      maxSize,
+      type: MESSAGE_TYPES.STEP_LIMIT_REACHED,
+      currentSteps,
+      maxSteps,
     });
   }
 

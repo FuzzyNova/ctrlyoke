@@ -34,6 +34,13 @@ validation means the step should keep working. Pass retries use
 the step's own prompt when no template is configured. They reuse the same
 `maxRetries` budget as failure retries and the same session by default.
 
+`maxSteps` is a separate run-wide cap on entries in the workflow's `steps`
+array. It counts queued steps regardless of whether the workflow author, an
+agent, or the dashboard added them, but it does not count `finalStep`
+iterations or end-condition retries. A workflow can set `maxSteps: -1` to
+override a numeric global `queue.maxSteps` cap. See [Dynamic queue](/workflows/dynamic-queue)
+for the cap and append behavior.
+
 When a pass-retry budget is exhausted while validation still passes, the step
 succeeds and the workflow advances. If a re-evaluation inside the pass-retry
 loop fails, the normal `onFail` action handles that result.

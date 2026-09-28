@@ -78,10 +78,9 @@ function createExecutionContext(
     currentPromptFilePath: "mixed-mode.ctrlyoke.yaml",
     shouldShowCliCommand: false,
     dynamicQueueConfig: {
-      maxQueueSize: 100,
+      maxSteps: 100,
       maxParallelSteps: 6,
       maxWorkflowExecutionTime: 3600,
-      unlimitedMode: false,
       notifyOnExtension: false,
     },
     getIntegrationForPrompt: () => integration,
