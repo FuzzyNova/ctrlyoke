@@ -703,16 +703,6 @@ export class WorkflowInstance
     );
   }
 
-  /** Exposes the injected feedback port to the future caller migrations. */
-  getUserFeedbackSink(): UserFeedbackSink | undefined {
-    return this.userFeedbackSink;
-  }
-
-  /** Resolved worktree selection for the current execution attempt. */
-  getWorktreeResolution(): WorkspaceWorktreeResolution {
-    return this.worktreeResolution;
-  }
-
   private async analyzeWorkflowCompatibility(
     workflow: PromptFile
   ): Promise<CompatibilityDiagnostic[]> {
@@ -1386,13 +1376,6 @@ export class WorkflowInstance
         })),
       },
     };
-  }
-
-  /**
-   * Set up a file watcher for the given file path (for WorkflowOrchestrator draft prompt setup).
-   */
-  initializeFileWatcher(filePath: string): void {
-    this.setupPromptFileWatcher(filePath);
   }
 
   async readWorkingFile(workingFilePath: string): Promise<WorkingFile> {
@@ -2520,31 +2503,6 @@ export class WorkflowInstance
   }
 
   /**
-   * Clear current workflow state.
-   */
-  clearWorkflow(): void {
-    const executionState = this.getAuthoritativeExecutionState();
-    if (
-      executionState === EXECUTION_STATES.RUNNING ||
-      executionState === EXECUTION_STATES.PAUSING ||
-      executionState === EXECUTION_STATES.PAUSED
-    ) {
-      Log.warn(
-        `[WorkflowInstance] clearWorkflow called on active instance inst:${this.id.slice(0, 8)} (${executionState}) — ignoring`
-      );
-      return;
-    }
-
-    this.activeHistoryFilePath = "";
-    this.currentPromptFile = undefined;
-    this.promptQueue.clearQueue();
-    this.lastKnownStepCount = 0;
-    this.pendingRunAfterCancel = null;
-    this.propagateWorkflowNameToIntegrations();
-    Log.debug("[WorkflowInstance] Workflow state cleared");
-  }
-
-  /**
    * Clear only the stale working file path without wiping prompts or currentPromptFile.
    * Used when the working file is deleted externally (removed from history) so that
    * ensureEphemeralWorkingFile() will create a fresh one on the next property write or run.
@@ -3596,30 +3554,6 @@ export class WorkflowInstance
       workflow,
       modeOverride,
       restartFromBeginning
-    );
-  }
-
-  /**
-   * Build the WorkflowExecutionContext passed to WorkflowExecutor.execute().
-   * Captures all per-run closure state (integration reference, buffer callbacks,
-   * lazy dashboard getter) so startWorkflowExecution stays focused on
-   * lock/lifecycle/cleanup concerns.
-   */
-  public buildWorkflowExecutionContext(
-    activeIntegration: HarnessIntegration,
-    historyFilePath: string,
-    workingFilePath: string | undefined,
-    targetRunIndices?: Map<string, number>,
-    targetKeyedExecution: boolean = false
-  ): WorkflowExecutionContext {
-    return new WorkflowStartupPipeline(
-      this.createWorkflowStartupPipelinePort()
-    ).buildWorkflowExecutionContext(
-      activeIntegration,
-      historyFilePath,
-      workingFilePath,
-      targetRunIndices,
-      targetKeyedExecution
     );
   }
 

@@ -239,7 +239,7 @@ export class RunContinuationService {
         `Cannot ${action} while run is in state ${executionState}`
       );
     }
-    // Mirrors `WorkflowOrchestrator.validateExplicitContinuationTarget`: an
+    // Mirrors `RunLifecycleService.validateExplicitContinuationTarget`: an
     // orphaned run (no live lock naming it) can be adopted by a fresh execution
     // owner from its own persisted position, whether it was left RUNNING by a
     // dead process or PAUSED by one. Keep the two in step — this is the same

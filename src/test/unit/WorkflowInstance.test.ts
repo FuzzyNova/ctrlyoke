@@ -12,6 +12,7 @@ import {
 } from "../../core/HarnessIntegration";
 import { IntegrationFactory } from "../../core/IntegrationFactory";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
+import { WorkflowStartupPipeline } from "../../core/orchestration/WorkflowStartupPipeline";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
 import {
   ACTION_TYPES,
@@ -334,7 +335,9 @@ suite("WorkflowInstance target resources", () => {
       process.cwd()
     );
     const initial = new MockHarnessIntegration(undefined, false);
-    const context = (instance as any).buildWorkflowExecutionContext(
+    const context = new WorkflowStartupPipeline(
+      (instance as any).createWorkflowStartupPipelinePort()
+    ).buildWorkflowExecutionContext(
       initial,
       "",
       undefined
@@ -427,7 +430,9 @@ suite("WorkflowInstance target resources", () => {
       process.cwd()
     );
     const initial = new MockHarnessIntegration(undefined, false);
-    const context = (instance as any).buildWorkflowExecutionContext(
+    const context = new WorkflowStartupPipeline(
+      (instance as any).createWorkflowStartupPipelinePort()
+    ).buildWorkflowExecutionContext(
       initial,
       "",
       undefined
@@ -482,7 +487,9 @@ suite("WorkflowInstance target resources", () => {
       process.cwd()
     );
     const initial = new MockHarnessIntegration(undefined, false);
-    const context = (instance as any).buildWorkflowExecutionContext(
+    const context = new WorkflowStartupPipeline(
+      (instance as any).createWorkflowStartupPipelinePort()
+    ).buildWorkflowExecutionContext(
       initial,
       "",
       undefined
@@ -500,7 +507,7 @@ suite("WorkflowInstance target resources", () => {
       holder.holdAiSession("ai-session-1", "pty-1");
       taker.holdAiSession("ai-session-2", "pty-2");
 
-      await context.releaseConflictingAiSession("ai-session-1", taker);
+      await context.releaseConflictingAiSession!("ai-session-1", taker);
 
       assert.deepStrictEqual(holder.releasedAiSessions, ["ai-session-1"]);
       assert.deepStrictEqual(
@@ -517,7 +524,7 @@ suite("WorkflowInstance target resources", () => {
       ]);
 
       posted.length = 0;
-      await context.releaseConflictingAiSession("ai-session-unrelated", taker);
+      await context.releaseConflictingAiSession!("ai-session-unrelated", taker);
       assert.deepStrictEqual(
         posted,
         [],
@@ -3020,7 +3027,9 @@ suite("WorkflowInstance append-and-continue", () => {
       () => {},
       process.cwd()
     );
-    const context = (instance as any).buildWorkflowExecutionContext(
+    const context = new WorkflowStartupPipeline(
+      (instance as any).createWorkflowStartupPipelinePort()
+    ).buildWorkflowExecutionContext(
       initialIntegration,
       "",
       undefined
