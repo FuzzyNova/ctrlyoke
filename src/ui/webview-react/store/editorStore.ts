@@ -26,7 +26,7 @@ import type {
   ScriptStep,
 } from "@root/types/WebviewMessageTypes";
 import { useUiStore } from "./uiStore";
-import type { WorkflowStep } from "./workflowStore";
+import { isStepContentEqual, type WorkflowStep } from "./workflowStore";
 
 /** Type guard for script steps (webview-local version) */
 function isScriptStep(step: WorkflowStep): step is ScriptStep {
@@ -278,6 +278,11 @@ interface EditorActions {
 
   // Pending edit cache
   clearAllPendingEdits: () => void;
+  /** Remap active editor targets and cached drafts after the queue topology changes. */
+  remapStepTargets: (
+    previousSteps: WorkflowStep[],
+    nextSteps: WorkflowStep[]
+  ) => void;
 
   // Dirty state
   setDirty: (dirty: boolean) => void;
@@ -1087,6 +1092,86 @@ export const useEditorStore = create<
   // ============================================================================
 
   clearAllPendingEdits: () => set({ pendingEdits: {} }),
+
+  remapStepTargets: (previousSteps, nextSteps) => {
+    const state = get();
+    const oldToNew = new Map<number, number>();
+    const matchedNewIndexes = new Set<number>();
+
+    // Preserve positional identity where possible, then match moved steps by
+    // their authored content. This handles inserts, deletes, and reorderings
+    // without relying on step indexes as identity.
+    for (let index = 0; index < previousSteps.length; index++) {
+      if (
+        index < nextSteps.length &&
+        isStepContentEqual(previousSteps[index], nextSteps[index])
+      ) {
+        oldToNew.set(index, index);
+        matchedNewIndexes.add(index);
+      }
+    }
+    for (let nextIndex = 0; nextIndex < nextSteps.length; nextIndex++) {
+      if (matchedNewIndexes.has(nextIndex)) continue;
+      let bestOldIndex: number | undefined;
+      let bestDistance = Number.POSITIVE_INFINITY;
+      for (let oldIndex = 0; oldIndex < previousSteps.length; oldIndex++) {
+        if (oldToNew.has(oldIndex)) continue;
+        if (!isStepContentEqual(previousSteps[oldIndex], nextSteps[nextIndex])) {
+          continue;
+        }
+        const distance = Math.abs(oldIndex - nextIndex);
+        if (distance < bestDistance) {
+          bestOldIndex = oldIndex;
+          bestDistance = distance;
+        }
+      }
+      if (bestOldIndex !== undefined) {
+        oldToNew.set(bestOldIndex, nextIndex);
+        matchedNewIndexes.add(nextIndex);
+      }
+    }
+
+    // A same-length definition update can replace a step in place. Keep its
+    // target at that position; count-changing unmatched positions are inserts
+    // or removals and must not inherit another step's draft.
+    if (previousSteps.length === nextSteps.length) {
+      for (let index = 0; index < previousSteps.length; index++) {
+        if (!oldToNew.has(index)) oldToNew.set(index, index);
+      }
+    }
+
+    const pendingEdits: Record<string, SavedNewStepState> = {};
+    for (const [key, draft] of Object.entries(state.pendingEdits)) {
+      const match = /^queue:(\d+)$/.exec(key);
+      if (!match) {
+        pendingEdits[key] = draft;
+        continue;
+      }
+      const nextIndex = oldToNew.get(Number(match[1]));
+      if (nextIndex !== undefined) pendingEdits[`queue:${nextIndex}`] = draft;
+    }
+
+    if (state.selectionTarget.kind !== FINAL_STEP_PHASES.QUEUE) {
+      set({ pendingEdits });
+      return;
+    }
+
+    const nextIndex = oldToNew.get(state.selectionTarget.index);
+    if (nextIndex === undefined) {
+      // The selected step was removed; cancel its edit while retaining the
+      // user's saved new-step draft, just as an explicit editor cancel does.
+      state.cancelEdit();
+      set({ pendingEdits });
+      return;
+    }
+
+    set({
+      pendingEdits,
+      selectionTarget: { kind: FINAL_STEP_PHASES.QUEUE, index: nextIndex },
+      selectedPromptIndex: nextIndex,
+      originalPromptData: nextSteps[nextIndex] ?? state.originalPromptData,
+    });
+  },
 
   // ============================================================================
   // DIRTY STATE

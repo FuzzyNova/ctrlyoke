@@ -3770,6 +3770,176 @@ describe("PROMPT_DELETED", () => {
   });
 });
 
+describe("editor targets when the step list changes", () => {
+  const initialSteps = ["first", "second", "third", "fourth"].map((prompt) =>
+    makePrompt(prompt)
+  );
+
+  function loadInitialSteps(): void {
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "wf.yaml",
+        steps: initialSteps,
+      });
+    });
+  }
+
+  it.each([
+    { deletedIndex: 0, expectedIndex: 1 },
+    { deletedIndex: 2, expectedIndex: null },
+    { deletedIndex: 3, expectedIndex: 2 },
+  ])(
+    "keeps or cancels the selected draft when deleting index $deletedIndex",
+    ({ deletedIndex, expectedIndex }) => {
+      renderHook(() => useMessageHandler());
+      loadInitialSteps();
+      useEditorStore.getState().enterEditMode(2, initialSteps[2]);
+      useEditorStore.getState().setPromptText("unsaved third-step draft");
+
+      act(() => {
+        dispatch(MESSAGE_TYPES.PROMPT_DELETED, {
+          fileName: "wf.yaml",
+          steps: initialSteps.filter((_, index) => index !== deletedIndex),
+        });
+      });
+
+      if (expectedIndex === null) {
+        expect(useEditorStore.getState().selectionTarget.kind).toBe(
+          "newPrompt"
+        );
+        expect(useEditorStore.getState().pendingEdits).toEqual({});
+      } else {
+        expect(useEditorStore.getState().selectionTarget).toEqual({
+          kind: FINAL_STEP_PHASES.QUEUE,
+          index: expectedIndex,
+        });
+        expect(useEditorStore.getState().promptText).toBe(
+          "unsaved third-step draft"
+        );
+      }
+    }
+  );
+
+  it("remaps active and cached drafts when a step is inserted", () => {
+    renderHook(() => useMessageHandler());
+    loadInitialSteps();
+    const editor = useEditorStore.getState();
+    editor.enterEditMode(1, initialSteps[1]);
+    editor.setPromptText("unsaved second-step draft");
+    editor.enterEditMode(2, initialSteps[2]);
+    editor.setPromptText("unsaved third-step draft");
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.STEPS_EXTENDED, {
+        steps: [
+          initialSteps[0],
+          makePrompt("inserted"),
+          initialSteps[1],
+          initialSteps[2],
+          initialSteps[3],
+        ],
+      });
+    });
+
+    expect(useEditorStore.getState().selectionTarget).toEqual({
+      kind: FINAL_STEP_PHASES.QUEUE,
+      index: 3,
+    });
+    expect(useEditorStore.getState().promptText).toBe(
+      "unsaved third-step draft"
+    );
+    expect(useEditorStore.getState().pendingEdits["queue:2"]?.promptText).toBe(
+      "unsaved second-step draft"
+    );
+    useEditorStore.getState().enterEditMode(2, initialSteps[1]);
+    expect(useEditorStore.getState().promptText).toBe(
+      "unsaved second-step draft"
+    );
+  });
+
+  it("follows step identities and cached drafts through a reorder", () => {
+    renderHook(() => useMessageHandler());
+    loadInitialSteps();
+    const editor = useEditorStore.getState();
+    editor.enterEditMode(1, initialSteps[1]);
+    editor.setPromptText("unsaved second-step draft");
+    editor.enterEditMode(2, initialSteps[2]);
+    editor.setPromptText("unsaved third-step draft");
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.REORDER_PROMPTS_CONFIRMED, {
+        steps: [
+          initialSteps[2],
+          initialSteps[0],
+          initialSteps[1],
+          initialSteps[3],
+        ],
+      });
+    });
+
+    expect(useEditorStore.getState().selectionTarget).toEqual({
+      kind: FINAL_STEP_PHASES.QUEUE,
+      index: 0,
+    });
+    expect(useEditorStore.getState().promptText).toBe(
+      "unsaved third-step draft"
+    );
+    expect(useEditorStore.getState().pendingEdits["queue:2"]?.promptText).toBe(
+      "unsaved second-step draft"
+    );
+  });
+});
+
+describe("workflow-scoped definition pushes", () => {
+  it("ignores UPDATE_FINAL_PROMPT for a background workflow", () => {
+    renderHook(() => useMessageHandler());
+    const activeFinalStep = makePrompt("active final");
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "active.yaml",
+        steps: [],
+        finalStep: activeFinalStep,
+      });
+    });
+    useUiStore.setState({
+      activeWorkflowId: "wf-active",
+      displayedDefinitionRevision: 3,
+      appliedDefinitionRevision: 3,
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, {
+        workflowId: "wf-background",
+        finalStep: makePrompt("background final"),
+        definitionRevision: 42,
+      });
+    });
+
+    expect(useWorkflowStore.getState().finalStep).toEqual(activeFinalStep);
+    expect(useUiStore.getState().displayedDefinitionRevision).toBe(3);
+    expect(useUiStore.getState().appliedDefinitionRevision).toBe(3);
+  });
+});
+
+describe("STEP_UNDO_DATA_UPDATED", () => {
+  it("ignores undo snapshots from a background workflow", () => {
+    renderHook(() => useMessageHandler());
+    useUiStore.setState({ activeWorkflowId: "wf-active" });
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const snapshot = { capturedAt: 1 } as any;
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.STEP_UNDO_DATA_UPDATED, {
+        workflowId: "wf-background",
+        target,
+        workspaceSnapshot: snapshot,
+      });
+    });
+
+    expect(useWorkflowStore.getState().workspaceSnapshots[0]).toBeUndefined();
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Definition-revision adoption across every narrow content push
 // ---------------------------------------------------------------------------
@@ -4154,6 +4324,35 @@ describe("EXECUTION_STARTED", () => {
 // ---------------------------------------------------------------------------
 
 describe("TERMINAL_STARTED", () => {
+  it("marks the workflow terminal inactive after its last running session ends", () => {
+    renderHook(() => useMessageHandler());
+    const setTerminalSessionActive = vi.spyOn(
+      useUiStore.getState(),
+      "setTerminalSessionActive"
+    );
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
+        workflowId: "workflow-1",
+        sessionId: "session-1",
+        stepName: "Step 1",
+        kind: SESSION_KINDS.AI_CLI,
+        controllerClientId: "controller-1",
+      });
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.TERMINAL_ENDED, {
+        workflowId: "workflow-1",
+        sessionId: "session-1",
+        kind: SESSION_KINDS.AI_CLI,
+        status: TERMINAL_SESSION_STATUS.COMPLETED,
+      });
+    });
+
+    expect(setTerminalSessionActive).toHaveBeenCalledWith("workflow-1", false);
+  });
+
   it("keeps terminal lifecycle messages live while viewing a historical run", () => {
     renderHook(() => useMessageHandler());
 

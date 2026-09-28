@@ -428,7 +428,11 @@ export class WorkflowTaggedSink implements IDashboardSink {
     target: UndoExecutionTarget,
     workspaceSnapshot?: WorkspaceSnapshot
   ): void {
-    this.inner.sendStepUndoDataUpdated(target, workspaceSnapshot);
+    this.inner.sendStepUndoDataUpdated(
+      target,
+      workspaceSnapshot,
+      this.workflowId
+    );
   }
 
   notifyNotificationEvent(event: CtrlYokeNotificationEvent): void {

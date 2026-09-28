@@ -334,6 +334,17 @@ function applyWorkflowPropertiesFromMessage(message: {
   useWorkflowStore.getState().syncIncomingWorkflowProperties(normalized);
 }
 
+/** Whether a workflow-tagged push targets a workflow other than this view. */
+function isForInactiveWorkflow(
+  message: { workflowId?: string },
+  requireWorkflowId = false
+): boolean {
+  const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+  return requireWorkflowId
+    ? message.workflowId !== activeWorkflowId
+    : Boolean(message.workflowId && message.workflowId !== activeWorkflowId);
+}
+
 /**
  * Return whether a requestless definition snapshot would move the client
  * backwards. Equal revisions must also retain a longer step list because an
@@ -844,12 +855,7 @@ export function createMessageHandlers(
   // FILE_SELECTED - New workflow file loaded
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.FILE_SELECTED] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
+    if (isForInactiveWorkflow(message)) return;
     useWorkflowStore.getState().loadWorkflow({
       fileName: message.fileName,
       workflowName: message.workflowName,
@@ -870,12 +876,7 @@ export function createMessageHandlers(
   // SESSION_RESTORED - Restore previous session with runtime state
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.SESSION_RESTORED] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
+    if (isForInactiveWorkflow(message)) return;
     const incomingDefinitionRevision =
       typeof message.definitionRevision === "number"
         ? message.definitionRevision
@@ -945,15 +946,10 @@ export function createMessageHandlers(
   // STEPS_EXTENDED - Queue was extended with new steps
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.STEPS_EXTENDED] = (message) => {
-    // If workflowId is present (CLI watch mode), only apply to the active workflow
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        WebviewLog.debug(
-          `[STEPS_EXTENDED] ignoring — workflowId=${message.workflowId?.slice(0, 8)} !== activeWorkflowId=${activeWorkflowId?.slice(0, 8)}`
-        );
-        return;
-      }
+    // If workflowId is present (CLI watch mode), only apply to the active workflow.
+    if (isForInactiveWorkflow(message)) {
+      WebviewLog.debug("[STEPS_EXTENDED] ignoring push for inactive workflow");
+      return;
     }
 
     // Queue growth is a definition mutation. Adopt its revision together with
@@ -977,6 +973,7 @@ export function createMessageHandlers(
         status: existingStep?.status || STEP_STATUS.PENDING,
       };
     });
+    useEditorStore.getState().remapStepTargets(currentSteps, newSteps);
 
     WebviewLog.debug(
       `[STEPS_EXTENDED] ${currentSteps.length} ${newSteps.length} steps${message.workflowId ? ` (CLI workflowId=${message.workflowId.slice(0, 8)})` : ""}`
@@ -1036,10 +1033,7 @@ export function createMessageHandlers(
   // STEP_COLOR_UPDATED - A run-addressed cosmetic step edit was persisted
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.STEP_COLOR_UPDATED] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) return;
-    }
+    if (isForInactiveWorkflow(message)) return;
 
     if (message.definitionRevision !== undefined) {
       adoptPushedDefinitionRevision(message.definitionRevision);
@@ -1054,12 +1048,7 @@ export function createMessageHandlers(
   // REORDER_PROMPTS_CONFIRMED - Extension confirms pending prompts were reordered
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.REORDER_PROMPTS_CONFIRMED] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
+    if (isForInactiveWorkflow(message)) return;
     // A reorder is a definition mutation whose new steps arrive here rather
     // than in a snapshot, so the applied head has to move with them — without
     // this the invalidation snapshot that follows the write is read as a view
@@ -1069,6 +1058,9 @@ export function createMessageHandlers(
       adoptPushedDefinitionRevision(message.definitionRevision);
     }
     const workflowStore = useWorkflowStore.getState();
+    useEditorStore
+      .getState()
+      .remapStepTargets(workflowStore.steps, message.steps || []);
     // One `set`, so one undo entry covers the whole gesture — and so a drag
     // that only moved a step in or out of a parallel group (leaving the step
     // order untouched) still records one.
@@ -1082,12 +1074,7 @@ export function createMessageHandlers(
   // PROMPT_DELETED - Prompt was deleted from queue
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.PROMPT_DELETED] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
+    if (isForInactiveWorkflow(message)) return;
     // The delete's new steps arrive here rather than in a snapshot, so the
     // applied head moves with them — see `adoptPushedDefinitionRevision`.
     // Without it the invalidation snapshot that follows the write is read as a
@@ -1100,6 +1087,9 @@ export function createMessageHandlers(
     const workflowStore = useWorkflowStore.getState();
 
     rememberUndoRedoRuntime(workflowStore.steps);
+    useEditorStore
+      .getState()
+      .remapStepTargets(workflowStore.steps, message.steps || []);
     workflowStore.setFileName(message.fileName);
     workflowStore.setPrompts(message.steps || []);
     useWorkflowStore.temporal.getState().pause();
@@ -1121,12 +1111,7 @@ export function createMessageHandlers(
   // EXECUTION_STARTED - Workflow execution has started
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.EXECUTION_STARTED] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
+    if (isForInactiveWorkflow(message)) return;
     const workflowStore = useWorkflowStore.getState();
     const editorStore = useEditorStore.getState();
     const uiStore = useUiStore.getState();
@@ -1283,12 +1268,7 @@ export function createMessageHandlers(
   // EXECUTION_STATE_CHANGED - Execution state changed (running/paused/stopped)
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.EXECUTION_STATE_CHANGED] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
+    if (isForInactiveWorkflow(message)) return;
     applyExecutionState(message.state as ExecutionState);
     if (message.activeStepIndices !== undefined) {
       useWorkflowStore
@@ -1298,12 +1278,7 @@ export function createMessageHandlers(
   };
 
   handlers[MESSAGE_TYPES.ACTIVE_STEP_INDICES_CHANGED] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
+    if (isForInactiveWorkflow(message)) return;
     useWorkflowStore.getState().setActiveStepIndices(message.activeStepIndices);
   };
 
@@ -1311,12 +1286,7 @@ export function createMessageHandlers(
   // PROGRESS_UPDATE - Current step/total steps updated
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.PROGRESS_UPDATE] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
+    if (isForInactiveWorkflow(message)) return;
     const workflowStore = useWorkflowStore.getState();
     workflowStore.setCurrentStep(message.current);
     workflowStore.setTotalSteps(message.total);
@@ -1329,12 +1299,7 @@ export function createMessageHandlers(
   // STEP_STATUS_CHANGED - Individual step status changed
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.STEP_STATUS_CHANGED] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
+    if (isForInactiveWorkflow(message)) return;
     const workflowStore = useWorkflowStore.getState();
     const { stepIndex, status, details } = message;
     if (message.activeStepIndices !== undefined) {
@@ -1379,12 +1344,7 @@ export function createMessageHandlers(
   // RETRY_ATTEMPT_CHANGED - Retry count updated for a step
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.RETRY_ATTEMPT_CHANGED] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
+    if (isForInactiveWorkflow(message)) return;
     const workflowStore = useWorkflowStore.getState();
     workflowStore.setRetryState(
       message.stepIndex,
@@ -1397,12 +1357,7 @@ export function createMessageHandlers(
   // EXECUTION_COMPLETED - Workflow execution finished
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.EXECUTION_COMPLETED] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
+    if (isForInactiveWorkflow(message)) return;
     const workflowStore = useWorkflowStore.getState();
     const steps = workflowStore.steps;
     if (steps.length > 0) {
@@ -1458,6 +1413,7 @@ export function createMessageHandlers(
   // UPDATE_FINAL_PROMPT - Workflow-level finalStep updated
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.UPDATE_FINAL_PROMPT] = (message) => {
+    if (isForInactiveWorkflow(message)) return;
     // See `adoptPushedDefinitionRevision` — the final step is definition
     // content delivered without a snapshot, and the run-addressed write that
     // produced it publishes an invalidation right behind this message.
@@ -1471,12 +1427,7 @@ export function createMessageHandlers(
   // FINAL_PROMPT_STATUS_CHANGED - Runtime status updates for finalStep phase
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.FINAL_PROMPT_STATUS_CHANGED] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
+    if (isForInactiveWorkflow(message)) return;
     useWorkflowStore
       .getState()
       .setFinalStepStatus(
@@ -1490,12 +1441,7 @@ export function createMessageHandlers(
   // FINAL_PROMPT_OUTPUT - CLI output for finalStep loop
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.FINAL_PROMPT_OUTPUT] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
+    if (isForInactiveWorkflow(message)) return;
     const store = useWorkflowStore.getState();
     const phase = getExecutionPhaseForScriptOutputSource(message.output.source);
     if (!message.output.isStreaming) {
@@ -1526,12 +1472,7 @@ export function createMessageHandlers(
   // FINAL_PROMPT_STREAMING_CHUNK - Incremental streaming text chunk for finalStep
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.FINAL_PROMPT_STREAMING_CHUNK] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
+    if (isForInactiveWorkflow(message)) return;
     useWorkflowStore
       .getState()
       .appendFinalStepStreamingChunk(
@@ -1549,12 +1490,7 @@ export function createMessageHandlers(
   // FINAL_PROMPT_STREAMING_EVENTS - Structured streaming events for finalStep
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.FINAL_PROMPT_STREAMING_EVENTS] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
+    if (isForInactiveWorkflow(message)) return;
     useWorkflowStore
       .getState()
       .appendFinalStepStreamingEvents(
@@ -1572,12 +1508,7 @@ export function createMessageHandlers(
   // CLI_OUTPUT - Complete CLI output for a step
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.CLI_OUTPUT] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
+    if (isForInactiveWorkflow(message)) return;
     const store = useWorkflowStore.getState();
     const phase = getExecutionPhaseForScriptOutputSource(message.output.source);
     if (!message.output.isStreaming) {
@@ -1629,12 +1560,7 @@ export function createMessageHandlers(
   // CLI_STREAMING_CHUNK - Incremental streaming text chunk
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.CLI_STREAMING_CHUNK] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
+    if (isForInactiveWorkflow(message)) return;
     const workflowStore = useWorkflowStore.getState();
     workflowStore.appendStreamingChunk(
       message.stepIndex,
@@ -1651,12 +1577,7 @@ export function createMessageHandlers(
   // CLI_STREAMING_EVENTS - Structured events for Claude/Codex CLI
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.CLI_STREAMING_EVENTS] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
+    if (isForInactiveWorkflow(message)) return;
     const workflowStore = useWorkflowStore.getState();
     const events = message.events || [];
 
@@ -1677,12 +1598,7 @@ export function createMessageHandlers(
   // CONTEXT_WINDOW_UPDATE - Live context window usage update for a running step
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.CONTEXT_WINDOW_UPDATE] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
+    if (isForInactiveWorkflow(message)) return;
     const workflowStore = useWorkflowStore.getState();
     const step = workflowStore.steps[message.stepIndex];
     const stepStatus = step ? (step as { status?: StepStatus }).status : null;
@@ -1710,10 +1626,7 @@ export function createMessageHandlers(
   // outputs from background CLI sessions are not mixed into the live view.
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.CLI_WATCH_OUTPUT] = (message) => {
-    const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-    if (message.workflowId !== activeWorkflowId) {
-      return;
-    }
+    if (isForInactiveWorkflow(message, true)) return;
     const store = useWorkflowStore.getState();
     const entry: OrderedCliHistoryEntry = {
       kind: OUTPUT_HISTORY_KINDS.CLI,
@@ -1761,12 +1674,7 @@ export function createMessageHandlers(
   // STATUS_MESSAGE - Status message for a step (info/warning/error)
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.STATUS_MESSAGE] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
+    if (isForInactiveWorkflow(message)) return;
     const store = useWorkflowStore.getState();
     const stepIndex = Number(message.stepIndex);
     const target: OutputExecutionTarget =
@@ -1803,12 +1711,7 @@ export function createMessageHandlers(
   // WORKFLOW_NAME_UPDATED - Workflow name changed
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_NAME_UPDATED] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
+    if (isForInactiveWorkflow(message)) return;
     // The name is zundo-covered definition content (`describeChange` renders
     // "Renamed to X"), delivered without a snapshot — see
     // `adoptPushedDefinitionRevision`.
@@ -2307,12 +2210,7 @@ export function createMessageHandlers(
   // OUTPUT_HISTORY_LOADED - Load a historical run for display
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.OUTPUT_HISTORY_LOADED] = (message) => {
-    if (message.workflowId) {
-      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-      if (message.workflowId !== activeWorkflowId) {
-        return;
-      }
-    }
+    if (isForInactiveWorkflow(message)) return;
     const { history, availableRuns, currentRunIndex } = message;
     if (!history || availableRuns === 0) {
       // History was cleared — reset to live view
@@ -3156,6 +3054,7 @@ export function createMessageHandlers(
   // STEP_UNDO_DATA_UPDATED - Live snapshot metadata after prompt completes
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.STEP_UNDO_DATA_UPDATED] = (message) => {
+    if (isForInactiveWorkflow(message)) return;
     const workspaceSnapshot = message.workspaceSnapshot;
     const target = message.target;
     if (!target) return;

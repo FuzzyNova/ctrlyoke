@@ -2318,6 +2318,7 @@ export interface StepUndoDataUpdatedMessage {
   type: typeof MESSAGE_TYPES.STEP_UNDO_DATA_UPDATED;
   target: UndoExecutionTarget;
   workspaceSnapshot?: WorkspaceSnapshot;
+  workflowId?: string;
 }
 
 /**

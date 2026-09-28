@@ -498,12 +498,14 @@ export class PostMessageDashboardSink implements IDashboardSink {
 
   sendStepUndoDataUpdated(
     target: UndoExecutionTarget,
-    workspaceSnapshot?: WorkspaceSnapshot
+    workspaceSnapshot?: WorkspaceSnapshot,
+    workflowId?: string
   ): void {
     this.send({
       type: MESSAGE_TYPES.STEP_UNDO_DATA_UPDATED,
       target,
       workspaceSnapshot,
+      ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
 

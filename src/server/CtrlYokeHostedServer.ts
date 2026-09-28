@@ -786,9 +786,10 @@ export class CtrlYokeHostedServer
   }
   sendStepUndoDataUpdated(
     target: UndoExecutionTarget,
-    workspaceSnapshot?: WorkspaceSnapshot
+    workspaceSnapshot?: WorkspaceSnapshot,
+    workflowId?: string
   ): void {
-    this.sink.sendStepUndoDataUpdated(target, workspaceSnapshot);
+    this.sink.sendStepUndoDataUpdated(target, workspaceSnapshot, workflowId);
   }
 
   notifyNotificationEvent(event: CtrlYokeNotificationEvent): void {

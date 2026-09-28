@@ -1019,9 +1019,10 @@ export class CtrlYokeWebviewProvider
   /** Send workspace snapshot data for a completed prompt step to the webview. */
   public sendStepUndoDataUpdated(
     target: UndoExecutionTarget,
-    workspaceSnapshot?: WorkspaceSnapshot
+    workspaceSnapshot?: WorkspaceSnapshot,
+    workflowId?: string
   ): void {
-    this.sink.sendStepUndoDataUpdated(target, workspaceSnapshot);
+    this.sink.sendStepUndoDataUpdated(target, workspaceSnapshot, workflowId);
   }
 
   // ============================================================================
