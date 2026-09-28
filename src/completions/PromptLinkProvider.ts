@@ -15,8 +15,10 @@ import {
   type FileAccessDecision,
 } from "../utils/FileAccessPolicy";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
-import { NOT_AFTER_BOUNDARY } from "../utils/ReferenceBoundary";
-import { createReferencePatterns } from "../utils/ReferencePatterns";
+import {
+  createGitChangeReferencePattern,
+  createReferencePatterns,
+} from "../utils/ReferencePatterns";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import type { FileOpenTarget } from "../ui/ExternalFileTrustPrompt";
 import { PromptFileResolver } from "../core/PromptFileResolver";
@@ -579,19 +581,8 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     const links: vscode.DocumentLink[] = [];
 
     const gitPatterns = [
-      // ~diff and ~staged (fixed keywords)
       {
-        pattern: new RegExp(`${NOT_AFTER_BOUNDARY}~(diff|staged)`, "g"),
-        getRef: (m: RegExpExecArray) => m[1],
-      },
-      // ~stash:N
-      {
-        pattern: new RegExp(`${NOT_AFTER_BOUNDARY}~(stash:\\d+)`, "g"),
-        getRef: (m: RegExpExecArray) => m[1],
-      },
-      // ~<7-40 hex chars> (commit hash)
-      {
-        pattern: new RegExp(`${NOT_AFTER_BOUNDARY}~([0-9a-f]{7,40})`, "gi"),
+        pattern: createGitChangeReferencePattern(),
         getRef: (m: RegExpExecArray) => m[1],
       },
     ];

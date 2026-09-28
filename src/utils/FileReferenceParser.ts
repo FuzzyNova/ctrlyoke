@@ -26,6 +26,7 @@ import {
 } from "../types/DashboardConstants";
 import { parseRangeNotation } from "./RangeNotationParser";
 import { NOT_AFTER_BOUNDARY } from "./ReferenceBoundary";
+import { createGitChangeReferencePattern } from "./ReferencePatterns";
 
 /**
  * Mask every prompt-reference and variable trigger character inside
@@ -534,10 +535,7 @@ export function parseGitChangeReferences(text: string): GitChangeReference[] {
   // characters immediately before ~, not just alphanumerics (e.g. a word
   // ending in a hex-looking suffix like "abc123~stale" or a filename like
   // "data_file~@backup!.csv" shouldn't be mistaken for a commit-hash ref).
-  const regex = new RegExp(
-    `${NOT_AFTER_BOUNDARY}~(diff|staged|stash:(\\d+)|([0-9a-f]{7,40}))`,
-    "gi"
-  );
+  const regex = createGitChangeReferencePattern();
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(maskedText)) !== null) {

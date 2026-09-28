@@ -24,7 +24,11 @@ import {
 } from "../../../types/DashboardConstants";
 import { parseSecretReferences } from "../../../utils/SecretReferenceParser";
 import { NOT_AFTER_BOUNDARY } from "../../../utils/ReferenceBoundary";
-import { createReferencePatterns } from "../../../utils/ReferencePatterns";
+import {
+  createGitChangeReferencePattern,
+  createReferencePatterns,
+} from "../../../utils/ReferencePatterns";
+import { parseRangeNotation } from "../../../utils/RangeNotationParser";
 
 export { SYMBOL_KIND_ICONS } from "../../../types/SymbolKindConstants";
 
@@ -811,17 +815,8 @@ export function findContextReferenceMatches(
       }
     }
   };
-  collectGitMatches(
-    new RegExp(`${NOT_AFTER_BOUNDARY}~(diff|staged)`, "g"),
-    (m) => m[1]
-  );
-  collectGitMatches(
-    new RegExp(`${NOT_AFTER_BOUNDARY}~(stash:\\d+)`, "g"),
-    (m) => m[1]
-  );
-  collectGitMatches(
-    new RegExp(`${NOT_AFTER_BOUNDARY}~([0-9a-f]{7,40})`, "gi"),
-    (m) => m[1].toLowerCase()
+  collectGitMatches(createGitChangeReferencePattern(), (m) =>
+    m[1].toLowerCase()
   );
   return [
     ...fileMatches,
@@ -850,22 +845,6 @@ export function isInFencedBlock(
   fencedRanges: Array<{ from: number; to: number }>
 ): boolean {
   return fencedRanges.some((r) => from >= r.from && to <= r.to);
-}
-
-function parsePriorContextStepRange(rangeText: string): number[] | null {
-  if (!rangeText) return null;
-  const indices: number[] = [];
-  for (const part of rangeText.split(",")) {
-    const rangeMatch = part.match(/^(\d+)-(\d+)$/);
-    if (rangeMatch) {
-      const start = parseInt(rangeMatch[1], 10);
-      const end = parseInt(rangeMatch[2], 10);
-      if (start > end) return null;
-      for (let i = start; i <= end; i++) indices.push(i);
-    } else if (/^\d+$/.test(part)) indices.push(parseInt(part, 10));
-    else return null;
-  }
-  return indices.length > 0 ? indices : null;
 }
 
 export function findInlinePriorContextRefs(
@@ -922,7 +901,7 @@ export function findInlinePriorContextRefs(
       const rawRangeText = body.slice(stepPrefix.length);
       const rangeText = rawRangeText.replace(/,+$/, "");
       const trimmedLength = rawRangeText.length - rangeText.length;
-      const indices = parsePriorContextStepRange(rangeText);
+      const indices = parseRangeNotation(rangeText);
       if (indices !== null)
         results.push({
           from,

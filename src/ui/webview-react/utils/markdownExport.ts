@@ -48,6 +48,7 @@ import {
 import { formatCliCommandDisplay } from "./outputCommandDisplay";
 import { isScriptOutput } from "./outputRenderUtils";
 import { formatTokenCount } from "@root/utils/TokenFormatting";
+import { fenceLiteral } from "@root/utils/FileReferenceParser";
 
 // ── Private helpers ────────────────────────────────────────────────────────────
 
@@ -180,17 +181,13 @@ function renderStructuredEventsToMarkdown(
           if (data.output) {
             lines.push("");
             lines.push("  ⎿  Output:");
-            lines.push("```");
-            lines.push(data.output.trim());
-            lines.push("```");
+            lines.push(fenceLiteral(data.output.trim()));
           }
 
           if (data.error) {
             lines.push("");
             lines.push("  ⎿  Error:");
-            lines.push("```");
-            lines.push(data.error.trim());
-            lines.push("```");
+            lines.push(fenceLiteral(data.error.trim()));
           }
 
           if (
@@ -224,14 +221,12 @@ function renderStructuredEventsToMarkdown(
             (data.structuredPatch || (data.oldContent && data.newContent))
           ) {
             lines.push("");
-            lines.push("```diff");
             const dl = formatDiffForMarkdown(
               data.oldContent || "",
               data.newContent || "",
               data.structuredPatch
             );
-            dl.forEach((l) => lines.push(l));
-            lines.push("```");
+            lines.push(fenceLiteral(dl.join("\n"), "diff"));
           }
           lines.push("");
         }
@@ -473,24 +468,23 @@ export function generateMarkdownExport(
       if (output.prompt && !isScriptOutput(output)) {
         if (includeMetadata) lines.push("### Prompt");
         lines.push("");
-        lines.push("```");
-        lines.push(output.prompt);
-        lines.push("```");
+        lines.push(fenceLiteral(output.prompt));
         lines.push("");
       }
 
       if ((includeCommand || isScriptOutput(output)) && output.cliCommand) {
         if (includeMetadata) lines.push("### CLI Command");
         lines.push("");
-        lines.push(output.cliCommandWasInjected ? "```" : "```bash");
         lines.push(
-          formatCliCommandDisplay(
-            output.cliCommand,
-            output.workingDirectory,
-            output.cliCommandWasInjected
+          fenceLiteral(
+            formatCliCommandDisplay(
+              output.cliCommand,
+              output.workingDirectory,
+              output.cliCommandWasInjected
+            ),
+            output.cliCommandWasInjected ? "" : "bash"
           )
         );
-        lines.push("```");
         lines.push("");
       }
 
@@ -504,9 +498,7 @@ export function generateMarkdownExport(
       } else if (output.response) {
         if (includeMetadata) lines.push("### Response");
         lines.push("");
-        lines.push("```");
-        lines.push(output.response);
-        lines.push("```");
+        lines.push(fenceLiteral(output.response));
         lines.push("");
       }
 

@@ -536,6 +536,15 @@ suite("FileReferenceParser", () => {
       );
     });
 
+    test("requires a boundary after each git-change reference", () => {
+      const text =
+        "~differently ~1500000x ~staged_files ~stash:1a ~diff. (~staged) ~stash:2, ~0123456.";
+      assert.deepStrictEqual(
+        parseGitChangeReferences(text).map((ref) => ref.raw),
+        ["~diff", "~staged", "~stash:2", "~0123456"]
+      );
+    });
+
     test("does not parse $previous/$step refs inside fenced blocks", () => {
       const text = "```\n$previous\n```\nUse $step:1 instead.";
       assert.deepStrictEqual(

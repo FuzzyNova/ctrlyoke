@@ -93,4 +93,21 @@ suite("PromptLinkProvider slash-token links", () => {
     assert.strictEqual(links[0].target?.path, "ctrlyoke.openSecretsSettings");
     assert.strictEqual(links[0].tooltip, "Open ctrlyoke Secrets settings");
   });
+
+  test("does not link partial git-change references inside longer tokens", async () => {
+    const text = "~differently ~1500000x ~staged_files ~stash:1a";
+    const document = {
+      fileName: path.join(workspaceRoot, "prompt.prompt.md"),
+      languageId: "markdown",
+      getText: () => text,
+      positionAt: (offset: number) => new vscode.Position(0, offset),
+    } as unknown as vscode.TextDocument;
+
+    const links = await new PromptLinkProvider().provideDocumentLinks(
+      document,
+      {} as vscode.CancellationToken
+    );
+
+    assert.deepStrictEqual(links, []);
+  });
 });

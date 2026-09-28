@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude)
 - **Area:** `src/utils/FileReferenceParser.ts`, `src/completions/PromptLinkProvider.ts`, `src/ui/webview-react/utils/atomicReferences.ts`, `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
