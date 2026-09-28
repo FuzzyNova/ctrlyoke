@@ -20,6 +20,7 @@ export function parseArgString(input: string): string[] {
 
   const tokens: string[] = [];
   let current = "";
+  let tokenStarted = false;
   let i = 0;
   const len = input.length;
 
@@ -28,6 +29,7 @@ export function parseArgString(input: string): string[] {
 
     if (ch === '"') {
       // Double-quoted string — supports \" escapes inside
+      tokenStarted = true;
       i++;
       while (i < len && input[i] !== '"') {
         if (input[i] === "\\" && i + 1 < len && input[i + 1] === '"') {
@@ -40,24 +42,27 @@ export function parseArgString(input: string): string[] {
       i++; // consume closing "
     } else if (ch === "'") {
       // Single-quoted string — no escape processing inside
+      tokenStarted = true;
       i++;
       while (i < len && input[i] !== "'") {
         current += input[i++];
       }
       i++; // consume closing '
     } else if (/\s/.test(ch)) {
-      if (current.length > 0) {
+      if (tokenStarted) {
         tokens.push(current);
         current = "";
+        tokenStarted = false;
       }
       i++;
     } else {
       current += ch;
+      tokenStarted = true;
       i++;
     }
   }
 
-  if (current.length > 0) {
+  if (tokenStarted) {
     tokens.push(current);
   }
 

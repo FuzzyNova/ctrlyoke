@@ -54,13 +54,15 @@ suite("CliArgParser", () => {
       ]);
     });
 
-    test("handles empty double-quoted string (skipped as empty token)", () => {
-      // Parser produces no token for empty quotes since current stays ""
-      assert.deepStrictEqual(parseArgString('--arg ""'), ["--arg"]);
+    test("preserves an empty double-quoted argument", () => {
+      assert.deepStrictEqual(
+        parseArgString('--system-prompt "" --model x'),
+        ["--system-prompt", "", "--model", "x"]
+      );
     });
 
-    test("handles empty single-quoted string (skipped as empty token)", () => {
-      assert.deepStrictEqual(parseArgString("--arg ''"), ["--arg"]);
+    test("preserves an empty single-quoted argument", () => {
+      assert.deepStrictEqual(parseArgString("--arg ''"), ["--arg", ""]);
     });
 
     test("handles mixed quoted and unquoted args", () => {
