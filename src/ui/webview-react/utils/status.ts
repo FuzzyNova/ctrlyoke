@@ -10,9 +10,11 @@ import {
   type ExecutionState,
 } from "../types/messages";
 import {
+  FINAL_STEP_PHASES,
   STEP_TYPES,
   WORKFLOW_EXECUTION_CONTROL_ACTIONS,
   WORKFLOW_VIEW_ADDRESS_KIND,
+  type FinalStepPhase,
   type StepType,
   type WorkflowExecutionControlAction,
 } from "@root/types/DashboardConstants";
@@ -228,6 +230,22 @@ export function isExecutionBusy(state: ExecutionState): boolean {
 }
 
 /**
+ * Whether execution owns the queue step at `currentStep`, which pins it in
+ * place and locks it against move/delete. Not during the final-step phase:
+ * `currentStep` then sits past the last queue step, and a step the final step
+ * appends there has not started, so it stays as editable as any pending step.
+ * Mirrors `PromptQueue.hasInFlightStep` on the backend.
+ */
+export function executionOwnsCurrentStep(
+  state: ExecutionState,
+  finalStepPhase: FinalStepPhase | null
+): boolean {
+  return (
+    isExecutionBusy(state) && finalStepPhase !== FINAL_STEP_PHASES.FINAL_STEP
+  );
+}
+
+/**
  * Check if a workflow step is actively being executed by the AI.
  * Returns true for RUNNING or PAUSING (AI is processing right now).
  * Use for: step display, editor lock, animation, timer ticking.
@@ -249,14 +267,21 @@ export function isWorkflowRunning(state: ExecutionState): boolean {
  * affordance — step rows, a group's member rows, the collapsed chip rail —
  * must share it. When they disagreed, the step wearing the running outline was
  * the one showing a completed check.
+ *
+ * While the final step runs, no queue step is executing. At that point
+ * `currentStep` sits one past the last queue step, so a step that the final
+ * step appends (e.g. via `append_step`) lands on exactly that index. Without
+ * the phase check, that step would look like it was running before it started.
  */
 export function isStepExecuting(
   state: ExecutionState,
   index: number,
   currentStep: number,
-  activeStepIndices: readonly number[]
+  activeStepIndices: readonly number[],
+  finalStepPhase: FinalStepPhase | null
 ): boolean {
   if (!isWorkflowRunning(state)) return false;
+  if (finalStepPhase === FINAL_STEP_PHASES.FINAL_STEP) return false;
   return activeStepIndices.length > 0
     ? activeStepIndices.includes(index)
     : index === currentStep;

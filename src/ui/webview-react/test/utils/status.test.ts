@@ -10,6 +10,7 @@ import {
   getExecutionStateBadgeClass,
   getWorkflowExecutionControls,
   isExecutionBusy,
+  executionOwnsCurrentStep,
   canStartExecution,
   canPauseExecution,
   canResumeExecution,
@@ -22,6 +23,7 @@ import {
 } from "@utils/status";
 import { STEP_STATUS, EXECUTION_STATES } from "@/types/messages";
 import {
+  FINAL_STEP_PHASES,
   STEP_TYPES,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
@@ -475,5 +477,31 @@ describe("getWorkflowExecutionControls", () => {
     expect(controls.isPaused).toBe(true);
     expect(controls.slot2).toMatchObject({ action: "resume", enabled: true });
     expect(controls.slot2.title).toContain("run 4");
+  });
+});
+
+describe("executionOwnsCurrentStep", () => {
+  it("pins the current step while a queue step is in flight", () => {
+    expect(
+      executionOwnsCurrentStep(
+        EXECUTION_STATES.RUNNING,
+        FINAL_STEP_PHASES.QUEUE
+      )
+    ).toBe(true);
+    expect(executionOwnsCurrentStep(EXECUTION_STATES.CANCELLING, null)).toBe(
+      true
+    );
+    expect(executionOwnsCurrentStep(EXECUTION_STATES.PAUSED, null)).toBe(false);
+  });
+
+  // currentStep sits past the last queue step during the final step, so a step
+  // the final step appends lands there without having started.
+  it("releases the current step while the final step runs", () => {
+    expect(
+      executionOwnsCurrentStep(
+        EXECUTION_STATES.RUNNING,
+        FINAL_STEP_PHASES.FINAL_STEP
+      )
+    ).toBe(false);
   });
 });

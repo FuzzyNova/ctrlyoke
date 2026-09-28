@@ -4,10 +4,10 @@ import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import type { ReorderPromptsMessage } from "@root/types/WebviewMessageTypes";
 import {
-  EXECUTION_STATES,
   type ExecutionState,
+  type FinalStepPhase,
 } from "@root/types/DashboardConstants";
-import { isExecutionBusy } from "./status";
+import { executionOwnsCurrentStep } from "./status";
 import { getTargetKey, toOutputMessageTarget } from "./outputProjection";
 import {
   getWorkflowStepRawText,
@@ -148,6 +148,7 @@ export interface StepGroupingMenuItemsInput {
   steps: readonly WorkflowStep[];
   parallelGroups: readonly ParallelGroupDefinition[];
   executionState: ExecutionState;
+  finalStepPhase: FinalStepPhase | null;
   disabled: boolean;
   disabledTitle?: string;
   onReorder: (
@@ -160,16 +161,15 @@ export function isParallelGroupTopologyLocked(
   group: ParallelGroupDefinition,
   steps: readonly WorkflowStep[],
   currentStep: number,
-  executionState: ExecutionState
+  executionState: ExecutionState,
+  finalStepPhase: FinalStepPhase | null
 ): boolean {
   return (
     group.startIndex < currentStep ||
     steps
       .slice(group.startIndex, group.endIndex + 1)
       .some((step) => step._runtime?.completedAt !== undefined) ||
-    ((executionState === EXECUTION_STATES.RUNNING ||
-      executionState === EXECUTION_STATES.PAUSING ||
-      executionState === EXECUTION_STATES.CANCELLING) &&
+    (executionOwnsCurrentStep(executionState, finalStepPhase) &&
       currentStep >= group.startIndex &&
       currentStep <= group.endIndex)
   );
@@ -254,6 +254,7 @@ export function buildStepGroupingMenuItems({
   steps,
   parallelGroups,
   executionState,
+  finalStepPhase,
   disabled,
   disabledTitle,
   onReorder,
@@ -290,7 +291,8 @@ export function buildStepGroupingMenuItems({
   // itself, needs its own lock check or the server rejects a merge the menu
   // never disabled.
   const isBoundaryBusy = (index: number) =>
-    index === currentStep && isExecutionBusy(executionState);
+    index === currentStep &&
+    executionOwnsCurrentStep(executionState, finalStepPhase);
   const isNeighborLocked = (neighborIndex: number): boolean => {
     const neighborGroup = parallelGroups.find(
       (group) =>
@@ -301,7 +303,8 @@ export function buildStepGroupingMenuItems({
           neighborGroup,
           steps,
           currentStep,
-          executionState
+          executionState,
+          finalStepPhase
         )
       : false;
   };

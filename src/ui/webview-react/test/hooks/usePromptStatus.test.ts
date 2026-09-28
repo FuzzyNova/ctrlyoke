@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { usePromptStatus } from "@hooks/usePromptStatus";
 import { useWorkflowStore } from "@store/workflowStore";
 import { EXECUTION_STATES, STEP_STATUS } from "@/types/messages";
+import { FINAL_STEP_PHASES } from "@root/types/DashboardConstants";
+import { isStepExecuting } from "@utils/status";
 
 beforeEach(() => {
   useWorkflowStore.getState().resetWorkflow();
@@ -119,5 +121,68 @@ describe("usePromptStatus", () => {
     expect(getStatus(useWorkflowStore.getState().steps[1], 1)).toBe(
       STEP_STATUS.FAILED
     );
+  });
+
+  // While the final step runs, currentStep sits one past the last queue step,
+  // so a step the final step appends (append_step) lands on exactly that
+  // index. It used to show the running play icon and highlight before the
+  // queue had picked it up.
+  it("keeps a step appended by a running final step pending", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "appended.ctrlyoke.yaml",
+      steps: [{ prompt: "first" }, { prompt: "appended" }],
+      executionState: EXECUTION_STATES.RUNNING,
+      currentStep: 1,
+      finalStep: { prompt: "final" },
+      finalStepStatus: STEP_STATUS.RUNNING,
+      finalStepPhase: FINAL_STEP_PHASES.FINAL_STEP,
+    });
+    useWorkflowStore.getState().setStepStatus(0, STEP_STATUS.COMPLETED);
+
+    const { result } = renderHook(() => usePromptStatus());
+    const getStatus = result.current;
+
+    expect(getStatus(useWorkflowStore.getState().steps[0], 0)).toBe(
+      STEP_STATUS.COMPLETED
+    );
+    expect(getStatus(useWorkflowStore.getState().steps[1], 1)).toBe(
+      STEP_STATUS.PENDING
+    );
+    expect(
+      isStepExecuting(
+        EXECUTION_STATES.RUNNING,
+        1,
+        1,
+        [],
+        FINAL_STEP_PHASES.FINAL_STEP
+      )
+    ).toBe(false);
+  });
+
+  it("shows the appended step running once the queue picks it up", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "appended.ctrlyoke.yaml",
+      steps: [{ prompt: "first" }, { prompt: "appended" }],
+      executionState: EXECUTION_STATES.RUNNING,
+      currentStep: 1,
+      finalStep: { prompt: "final" },
+      finalStepStatus: STEP_STATUS.COMPLETED,
+      finalStepPhase: FINAL_STEP_PHASES.QUEUE,
+    });
+
+    const { result } = renderHook(() => usePromptStatus());
+
+    expect(result.current(useWorkflowStore.getState().steps[1], 1)).toBe(
+      STEP_STATUS.RUNNING
+    );
+    expect(
+      isStepExecuting(
+        EXECUTION_STATES.RUNNING,
+        1,
+        1,
+        [],
+        FINAL_STEP_PHASES.QUEUE
+      )
+    ).toBe(true);
   });
 });

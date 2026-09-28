@@ -3,6 +3,7 @@ import { SortableContext, useSortable } from "@dnd-kit/sortable";
 import {
   STEP_STATUS,
   type ExecutionState,
+  type FinalStepPhase,
   type StepStatus,
   type StepColorMode,
 } from "@root/types/DashboardConstants";
@@ -128,6 +129,7 @@ type ParallelGroupPanelProps = {
   currentStep: number;
   activeStepIndices?: readonly number[];
   executionState: ExecutionState;
+  finalStepPhase: FinalStepPhase | null;
   statuses: StepStatus[];
   retryStates: Record<number, WorkflowStepComponentProps["retryState"]>;
   liveContextWindow: Record<
@@ -174,6 +176,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
   currentStep,
   activeStepIndices = [],
   executionState,
+  finalStepPhase,
   statuses,
   retryStates,
   liveContextWindow,
@@ -254,7 +257,13 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
     }))
   );
   const isStepActive = (index: number): boolean =>
-    isStepExecuting(executionState, index, currentStep, activeStepIndices);
+    isStepExecuting(
+      executionState,
+      index,
+      currentStep,
+      activeStepIndices,
+      finalStepPhase
+    );
 
   return (
     <section

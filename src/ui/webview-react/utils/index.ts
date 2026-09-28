@@ -49,6 +49,7 @@ export {
   getExecutionStateColorClass,
   getExecutionStateLabel,
   isExecutionBusy,
+  executionOwnsCurrentStep,
   canStartExecution,
   canPauseExecution,
   canResumeExecution,

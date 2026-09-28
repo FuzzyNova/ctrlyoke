@@ -4,6 +4,7 @@ import {
   EXECUTION_STATES,
   type StepStatus,
 } from "../types/messages";
+import { FINAL_STEP_PHASES } from "@root/types/DashboardConstants";
 import { isWorkflowRunning } from "../utils/status";
 
 /**
@@ -16,7 +17,13 @@ export function usePromptStatus() {
   const { currentStep, executionState, steps, activeStepIndices } =
     useWorkflowStore();
   const parallelGroups = useWorkflowStore((state) => state.parallelGroups);
-  const isRunning = isWorkflowRunning(executionState);
+  const finalStepPhase = useWorkflowStore((state) => state.finalStepPhase);
+  // While the final step runs, `currentStep` points one past the last queue
+  // step, so a step appended by the final step lands on it. That step must stay
+  // PENDING until the queue actually picks it up (see `isStepExecuting`).
+  const isRunning =
+    isWorkflowRunning(executionState) &&
+    finalStepPhase !== FINAL_STEP_PHASES.FINAL_STEP;
 
   return function getPromptStatus(
     prompt: WorkflowStep | { status?: StepStatus },

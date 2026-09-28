@@ -47,7 +47,7 @@ import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import {
   getStepAccentClass,
   getStepKindIconClass,
-  isExecutionBusy,
+  executionOwnsCurrentStep,
   isStepExecuting,
   isWorkflowRunning,
 } from "../../utils/status";
@@ -516,13 +516,15 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
       executionState,
       index,
       currentStep,
-      activeStepIndices
+      activeStepIndices,
+      finalStepPhase
     );
     // Only an in-flight step is locked; PAUSED stops at a step boundary, so
     // the current chip is the next PENDING step.
     const isExecutionTargetLocked =
       isStepExecutionLocked(prompt, index, currentStep, executionState) ||
-      (isExecutionBusy(executionState) && isCurrentStep);
+      (executionOwnsCurrentStep(executionState, finalStepPhase) &&
+        isCurrentStep);
     return (
       <ChipContent
         key={index}

@@ -78,7 +78,7 @@ import { WebviewLog } from "@utils/logger";
 import { schemaTitle } from "@utils/schemaPropertyLabels";
 import { ExitButton } from "../shared";
 import {
-  isExecutionBusy,
+  executionOwnsCurrentStep,
   isStepExecuting,
   isWorkflowRunning,
 } from "../../utils/status";
@@ -1175,8 +1175,10 @@ const WorkflowStepsPanelInner: React.FC<{
   ]);
 
   const sensors = useSortableDndSensors();
-  const executionOwnsCurrentStep = isExecutionBusy(executionState);
-  const reorderableStepCount = executionOwnsCurrentStep
+  const reorderableStepCount = executionOwnsCurrentStep(
+    executionState,
+    finalStepPhase
+  )
     ? steps.length - currentStep - 1
     : steps.length - currentStep;
   // A reorder payload is slice-relative to `currentStep` and has to cover every
@@ -1355,7 +1357,13 @@ const WorkflowStepsPanelInner: React.FC<{
   const handleFailFastChange = useCallback(
     (group: (typeof parallelGroups)[number], failFast: boolean) => {
       if (
-        isParallelGroupTopologyLocked(group, steps, currentStep, executionState)
+        isParallelGroupTopologyLocked(
+          group,
+          steps,
+          currentStep,
+          executionState,
+          finalStepPhase
+        )
       ) {
         return;
       }
@@ -1369,7 +1377,7 @@ const WorkflowStepsPanelInner: React.FC<{
         ),
       });
     },
-    [currentStep, executionState, pendingGroupRanges, steps]
+    [currentStep, executionState, finalStepPhase, pendingGroupRanges, steps]
   );
 
   const renderParallelGroup = useCallback(
@@ -1380,6 +1388,7 @@ const WorkflowStepsPanelInner: React.FC<{
         steps={steps}
         currentStep={currentStep}
         activeStepIndices={activeStepIndices}
+        finalStepPhase={finalStepPhase}
         executionState={executionState}
         statuses={steps
           .slice(group.startIndex, group.endIndex + 1)
@@ -1416,7 +1425,8 @@ const WorkflowStepsPanelInner: React.FC<{
             group,
             steps,
             currentStep,
-            executionState
+            executionState,
+            finalStepPhase
           )
         }
       />
@@ -1425,6 +1435,7 @@ const WorkflowStepsPanelInner: React.FC<{
       canChangeStartPosition,
       currentStep,
       activeStepIndices,
+      finalStepPhase,
       executionState,
       getLatestOutput,
       getPromptStatus,
@@ -2056,7 +2067,8 @@ const WorkflowStepsPanelInner: React.FC<{
                     currentStep,
                     executionState
                   ) ||
-                  (isExecutionBusy(executionState) && index === currentStep);
+                  (executionOwnsCurrentStep(executionState, finalStepPhase) &&
+                    index === currentStep);
                 // No group context to resolve: every grouped step, settled or
                 // not, is rendered by `ParallelGroupPanel` above.
                 const stepColor = resolveStepColor({
@@ -2077,7 +2089,8 @@ const WorkflowStepsPanelInner: React.FC<{
                       executionState,
                       index,
                       currentStep,
-                      activeStepIndices
+                      activeStepIndices,
+                      finalStepPhase
                     )}
                   >
                     <WorkflowStepRow
@@ -2096,7 +2109,8 @@ const WorkflowStepsPanelInner: React.FC<{
                         executionState,
                         index,
                         currentStep,
-                        activeStepIndices
+                        activeStepIndices,
+                        finalStepPhase
                       )}
                       isSelected={isSelected}
                       canSetStartPosition={canChangeStartPosition}
@@ -2159,7 +2173,8 @@ const WorkflowStepsPanelInner: React.FC<{
                         executionState,
                         index,
                         currentStep,
-                        activeStepIndices
+                        activeStepIndices,
+                        finalStepPhase
                       );
                       const isSelected =
                         selectionTarget.kind === FINAL_STEP_PHASES.QUEUE &&
@@ -2177,7 +2192,11 @@ const WorkflowStepsPanelInner: React.FC<{
                           currentStep,
                           executionState
                         ) ||
-                        (isExecutionBusy(executionState) && isCurrentStep);
+                        (executionOwnsCurrentStep(
+                          executionState,
+                          finalStepPhase
+                        ) &&
+                          isCurrentStep);
                       return (
                         <SortableWorkflowStepWrapper
                           key={id}

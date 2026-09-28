@@ -14,7 +14,7 @@ import {
 } from "../types/messages";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import { useEditorStore } from "@store/editorStore";
-import { isExecutionBusy } from "@utils/status";
+import { executionOwnsCurrentStep } from "@utils/status";
 import {
   buildWorkflowStepEnabledUpdate,
   readWorkflowStepFromClipboard,
@@ -129,6 +129,7 @@ export function useStepContextMenu({
   const isViewingHistory = useUiStore((s) => s.isViewingHistory);
   const liveOrderedEntries = useWorkflowStore((s) => s.liveOrderedEntries);
   const historyOutputs = useWorkflowStore((s) => s.historyOutputs);
+  const finalStepPhase = useWorkflowStore((s) => s.finalStepPhase);
   const outputEntries = isViewingHistory
     ? (historyOutputs?.orderedEntries ?? EMPTY_ORDERED_ENTRIES)
     : liveOrderedEntries;
@@ -233,9 +234,9 @@ export function useStepContextMenu({
       // A running step stays pinned at pending position 0 (mirrors the drag
       // pinning in WorkflowStepsPanel/PromptChipRail): it can't move, and
       // nothing else can move into its slot.
-      const executionOwnsCurrentStep = isExecutionBusy(executionState);
       const moveUpBlockedByPin =
-        executionOwnsCurrentStep && pendingIndex - 1 === 0;
+        executionOwnsCurrentStep(executionState, finalStepPhase) &&
+        pendingIndex - 1 === 0;
       const moveUpDisabled =
         queueLocked ||
         isExecutionTargetLocked ||
@@ -280,7 +281,8 @@ export function useStepContextMenu({
               containingGroup,
               useWorkflowStore.getState().steps,
               currentStep,
-              executionState
+              executionState,
+              finalStepPhase
             )
           : false);
       const groupingItems = buildStepGroupingMenuItems({
@@ -289,6 +291,7 @@ export function useStepContextMenu({
         steps: useWorkflowStore.getState().steps,
         parallelGroups,
         executionState,
+        finalStepPhase,
         disabled: groupingDisabled,
         disabledTitle: isExternallyManaged
           ? (externalReadOnlyLabel ?? "Read-only — external workflow")
@@ -444,6 +447,7 @@ export function useStepContextMenu({
       canPasteStep,
       currentStep,
       executionState,
+      finalStepPhase,
       handleDeleteStep,
       handleSetStartPosition,
       isExternallyManaged,

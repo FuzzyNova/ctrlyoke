@@ -3158,13 +3158,19 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    * after `completeCurrentAndMoveNext()`), so a paused run's `currentIndex`
    * names the next PENDING step — nothing is executing. Treating PAUSED as
    * in-flight is what made "pause, then edit the next step" fail.
+   *
+   * The final-step phase is excluded for the same reason: while the final step
+   * runs, `currentIndex` sits past the last queue step, so a step the final
+   * step appends lands there without having started. It stays editable until
+   * the executor flips the phase back to QUEUE and claims it.
    */
   private get hasInFlightStep(): boolean {
     const status = this.stateMachine.status;
     return (
-      status === EXECUTION_STATES.RUNNING ||
-      status === EXECUTION_STATES.PAUSING ||
-      status === EXECUTION_STATES.CANCELLING
+      (status === EXECUTION_STATES.RUNNING ||
+        status === EXECUTION_STATES.PAUSING ||
+        status === EXECUTION_STATES.CANCELLING) &&
+      this.finalStepRuntime?.phase !== FINAL_STEP_PHASES.FINAL_STEP
     );
   }
 

@@ -7,6 +7,7 @@ import { PromptQueue } from "../core/PromptQueue";
 import {
   CONDITION_ACTIONS,
   EXECUTION_STATES,
+  FINAL_STEP_PHASES,
   PARALLEL_GROUP_ADMISSION,
   STEP_TYPES,
   STEP_STATUS,
@@ -2068,6 +2069,38 @@ suite("PromptQueue State Machine Tests", () => {
       assert.deepStrictEqual(
         steps.map((s) => s.prompt),
         ["s0", "s1", "inserted", "s2", "s3", "s4"]
+      );
+    });
+
+    // While the final step runs, `currentIndex` sits past the last queue step,
+    // so the first step it appends (append_step) lands on that index without
+    // having started. It must stay as editable as the rest of the appended
+    // steps until the executor flips the phase back to QUEUE and claims it.
+    test("steps appended by a running final step are all editable", async () => {
+      await runningAtStepOne(queue);
+      await queue.setFinalStepRuntime({
+        phase: FINAL_STEP_PHASES.FINAL_STEP,
+        loopCount: 0,
+        status: STEP_STATUS.RUNNING,
+      });
+
+      await queue.updatePrompt(1, { prompt: "edited s1" });
+      await queue.reorderPendingPrompts([1, 0, 2, 3]);
+      await queue.insertStepAfterIndex(0, { prompt: "inserted" });
+      await queue.deletePrompt(1);
+      assert.deepStrictEqual(
+        (queue.getState().steps as PromptStep[]).map((s) => s.prompt),
+        ["s0", "s2", "edited s1", "s3", "s4"]
+      );
+
+      await queue.setFinalStepRuntime({
+        phase: FINAL_STEP_PHASES.QUEUE,
+        loopCount: 1,
+        status: STEP_STATUS.COMPLETED,
+      });
+      await assert.rejects(
+        () => queue.deletePrompt(1),
+        /currently executing step/i
       );
     });
 
