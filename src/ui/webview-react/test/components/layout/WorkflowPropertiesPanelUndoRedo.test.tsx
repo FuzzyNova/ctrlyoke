@@ -594,8 +594,11 @@ const VALIDATION_CASES: UndoCase[] = [
     name: "end-condition max retries input",
     tab: "Validation",
     setup: seedEndConditionOnly({ onFail: CONDITION_ACTIONS.RETRY }),
+    entries: 2,
     run: () => {
-      commitInput(requireElement("settings-end-max-retries"), "4");
+      openSelect("settings-end-max-retries");
+      chooseOption("Custom");
+      commitInput(requireElement("settings-end-max-retries-custom"), "4");
     },
   },
   {

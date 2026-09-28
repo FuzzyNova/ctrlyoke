@@ -388,6 +388,26 @@ describe("ScriptConditionEditor", () => {
     );
   });
 
+  it("uses LimitSelect for retries and shows the inherited default", () => {
+    render(
+      <ScriptConditionEditor
+        variant="endCondition"
+        value={{
+          script: "npm test",
+          onFail: CONDITION_ACTIONS.RETRY,
+        }}
+        onChange={() => undefined}
+        idPrefix="test-condition"
+      />
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "Inherit (1), property endCondition.maxRetries",
+      })
+    ).toBeInTheDocument();
+  });
+
   it("edits retryPrompt through the end condition CodeMirror mode", () => {
     const onChange = vi.fn();
 

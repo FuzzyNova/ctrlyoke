@@ -5,6 +5,7 @@ import type {
 } from "@root/types/WebviewMessageTypes";
 import { SETTING_PATHS } from "@root/types/DashboardConstants";
 import { LocalNumberInput } from "../shared/LocalInputs";
+import { LimitSelect } from "../shared/LimitSelect";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 import { CustomSelect } from "../shared/CustomSelect";
@@ -57,18 +58,18 @@ export function ExecutionSection({
         />
       </SettingInputRow>
       <SettingInputRow
-        label="Max prompt timeout (seconds, -1 = unlimited)"
+        label="Max prompt timeout (seconds)"
         id="exec-max-prompt-timeout"
         path="execution.maxPromptTimeoutSec"
         {...rowProps}
       >
-        <LocalNumberInput
+        <LimitSelect
           id="exec-max-prompt-timeout"
-          min={-1}
+          label="Max prompt timeout (seconds)"
+          path="execution.maxPromptTimeoutSec"
           value={exec.maxPromptTimeoutSec}
-          onCommit={(v) => onUpdate("execution.maxPromptTimeoutSec", v)}
-          parse={(v) => parseInt(v, 10) || -1}
-          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+          onChange={(v) => onUpdate("execution.maxPromptTimeoutSec", v)}
+          customFallback={30}
         />
       </SettingInputRow>
       <SettingInputRow

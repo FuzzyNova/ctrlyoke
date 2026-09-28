@@ -476,7 +476,7 @@
         },
         "notifyOnExtension": {
           "type": "boolean",
-          "description": "Show a notification when the queue is extended.",
+          "description": "Currently has no effect; queue extension notifications are not implemented.",
           "default": true
         },
         "maxWorkflowExecutionTimeSec": {

@@ -686,7 +686,7 @@ Maximum number of active members in a parallel step group.
 - **Type:** `boolean`
 - **Default:** `true`
 
-Show a notification when the queue is extended.
+Currently has no effect; queue extension notifications are not implemented.
 
 ### `queue.maxWorkflowExecutionTimeSec` {#queue-maxworkflowexecutiontimesec}
 

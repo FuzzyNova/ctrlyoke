@@ -176,6 +176,13 @@ export const CAPABILITIES_FILE = "capabilities.json";
 /** Limit value shared by workflow and settings schemas to mean no bound. */
 export const UNLIMITED_LIMIT = -1;
 
+/** Option values used by the shared limit picker; these are UI sentinels. */
+export const LIMIT_SELECTION_VALUES = {
+  UNLIMITED: "unlimited",
+  NEVER: "never",
+  CUSTOM: "custom",
+} as const;
+
 /** Default workflow step limit shared by settings and the standalone MCP server. */
 export const DEFAULT_MAX_STEPS = 100;
 

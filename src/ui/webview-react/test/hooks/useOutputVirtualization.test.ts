@@ -19,7 +19,8 @@ function makeRows(count: number): OutputRenderRow[] {
 function renderVirtualization(
   rows: OutputRenderRow[],
   rowRenderIdentity = "identity",
-  initialOutputContentWidth = 360
+  initialOutputContentWidth = 360,
+  outputVirtualizationRowThreshold = 0
 ) {
   const scrollElement = document.createElement("div");
   Object.defineProperties(scrollElement, {
@@ -50,7 +51,7 @@ function renderVirtualization(
         outputOverscan: 2,
         outputOverscanRef: { current: 2 },
         outputRef: { current: scrollElement },
-        outputVirtualizationRowThreshold: 0,
+        outputVirtualizationRowThreshold,
         rowRenderIdentity: identity,
         rows,
         scrollSeekPlaceholderActive: false,
@@ -74,6 +75,12 @@ function renderVirtualization(
 // slide that the lock only undoes once the (450-650ms on a phone) commit
 // lands. That round trip is the "jumps ~40px then jumps back" symptom.
 describe("useOutputVirtualization scroll compensation", () => {
+  it("does not virtualize when the threshold is Never (-1)", () => {
+    const { result } = renderVirtualization(makeRows(60), "identity", 360, -1);
+
+    expect(result.current.isOutputVirtualized).toBe(false);
+  });
+
   it.each([
     ["a row above the anchor", 10],
     ["the anchored row itself", 20],

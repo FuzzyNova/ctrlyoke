@@ -11,6 +11,9 @@ import {
   DEFAULT_FORMAT_OPTIONS_META,
   EXECUTION_MODE_OPTIONS_META,
   HARNESS_OPTIONS_META,
+  MAX_STEPS_SELECTION_OPTIONS_META,
+  NEVER_OPTION_META,
+  UNLIMITED_OPTION_META,
   HOOK_EVENT_OPTIONS_META,
   NOTIFICATION_EVENT_MODE_OPTIONS_META,
   PERMISSION_MODE_OPTIONS_META,
@@ -53,6 +56,7 @@ import {
   WORKTREE_MODES,
   WORKTREE_SETUP_OUTCOMES,
   WORKFLOW_FILE_FORMATS,
+  LIMIT_SELECTION_VALUES,
 } from "../../types/DashboardConstants";
 import { SCHEMA_ENUMS } from "../../types/generated/SchemaDescriptions";
 
@@ -309,7 +313,30 @@ const CONSTANT_BINDINGS: Array<{
   },
 ];
 
-const META_TABLES = META_BINDINGS.map(({ rows }) => rows);
+const LIMIT_LABEL_BINDINGS = [
+  {
+    rows: Object.values(MAX_STEPS_SELECTION_OPTIONS_META),
+    paths: ["queue.maxSteps"],
+  },
+  {
+    rows: [UNLIMITED_OPTION_META],
+    paths: [
+      "queue.maxSteps",
+      "queue.maxWorkflowExecutionTimeSec",
+      "runs.maxRuns",
+      "execution.maxPromptTimeoutSec",
+    ],
+  },
+  {
+    rows: [NEVER_OPTION_META],
+    paths: ["ui.outputVirtualizationRowThreshold"],
+  },
+];
+
+const META_TABLES: readonly (readonly MetaRow[])[] = [
+  ...META_BINDINGS.map(({ rows }) => rows),
+  ...LIMIT_LABEL_BINDINGS.map(({ rows }) => rows),
+];
 
 function schemaValues(paths: string[]): unknown[] {
   return paths.flatMap((path) => SCHEMA_ENUMS[path] ?? []);
@@ -453,13 +480,22 @@ suite("Schema UI metadata", () => {
 
   test("labels follow the nothing vocabulary and stay consistent for shared values", () => {
     const labelsByValue = new Map<string, string>();
-    const timingValues = new Set([
+    const neverValues = new Set([
       "terminal.mobileControlBar",
       "notifications.browser.mode",
       "permissions.codexApprovalPolicy",
+      "ui.outputVirtualizationRowThreshold",
     ]);
-    for (const { rows, paths } of META_BINDINGS) {
-      const timingTable = paths.some((path) => timingValues.has(path));
+    const limitValues = new Set([
+      "maxSteps",
+      "queue.maxSteps",
+      "queue.maxWorkflowExecutionTimeSec",
+      "runs.maxRuns",
+      "execution.maxPromptTimeoutSec",
+    ]);
+    for (const { rows, paths } of [...META_BINDINGS, ...LIMIT_LABEL_BINDINGS]) {
+      const neverTable = paths.some((path) => neverValues.has(path));
+      const limitTable = paths.some((path) => limitValues.has(path));
       for (const row of rows) {
         assert.ok(
           !/^(off|yes|no)$/i.test(row.label),
@@ -469,10 +505,15 @@ suite("Schema UI metadata", () => {
           !/^default\s*\(/i.test(row.label),
           `forbidden default label: ${row.label}`
         );
-        if (row.value === "never")
+        if (row.value === LIMIT_SELECTION_VALUES.NEVER)
           assert.ok(
-            timingTable,
-            `never is outside the timing allowlist: ${paths.join(", ")}`
+            neverTable,
+            `never is outside the allowlist: ${paths.join(", ")}`
+          );
+        if (row.value === LIMIT_SELECTION_VALUES.UNLIMITED)
+          assert.ok(
+            limitTable,
+            `unlimited is outside the limit allowlist: ${paths.join(", ")}`
           );
         const prior = labelsByValue.get(row.value);
         assert.ok(

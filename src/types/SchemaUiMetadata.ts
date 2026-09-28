@@ -16,6 +16,7 @@ import {
   PRIOR_CONTEXT_KEYWORDS,
   PRIOR_CONTEXT_SELECTION_MODES,
   INHERIT_DEFAULT_OPTION,
+  LIMIT_SELECTION_VALUES,
   NONE_OPTION,
   PROPERTY_EDITOR_MODES,
   RESUME_SESSION_SELECTIONS,
@@ -345,6 +346,38 @@ export const TRUSTED_ROOTS_SELECTION_OPTIONS_META = {
     label: "Custom",
     pseudo: { writes: "trustedExternalRoots: [<paths>]" },
   },
+} as const;
+
+export const UNLIMITED_OPTION_META = {
+  value: LIMIT_SELECTION_VALUES.UNLIMITED,
+  label: "Unlimited",
+  pseudo: { writes: "{path}: -1" },
+} as const satisfies SchemaOptionMeta<string>;
+
+export const NEVER_OPTION_META = {
+  value: LIMIT_SELECTION_VALUES.NEVER,
+  label: "Never",
+  pseudo: { writes: "{path}: -1" },
+} as const satisfies SchemaOptionMeta<string>;
+
+export const LIMIT_CUSTOM_OPTION_META = {
+  value: LIMIT_SELECTION_VALUES.CUSTOM,
+  label: "Custom",
+  pseudo: { writes: "{path}: <number>" },
+} as const satisfies SchemaOptionMeta<string>;
+
+export const MAX_STEPS_SELECTION_OPTIONS_META = {
+  [INHERIT_DEFAULT_OPTION]: {
+    value: INHERIT_DEFAULT_OPTION,
+    label: "Inherit",
+    alias: {
+      reason:
+        "Represents omitting the property so its configured default applies.",
+    },
+    pseudo: { omit: true },
+  },
+  [UNLIMITED_OPTION_META.value]: UNLIMITED_OPTION_META,
+  [LIMIT_CUSTOM_OPTION_META.value]: LIMIT_CUSTOM_OPTION_META,
 } as const;
 
 export const EXECUTION_MODE_OPTIONS_META: Record<

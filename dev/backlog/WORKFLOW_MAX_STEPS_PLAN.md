@@ -411,7 +411,7 @@ split is:
 | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
 | 1    | Phase 1: schemas (`unlimitedValue`, `maxStepsValue`, `maxSteps`, `oneOf` conversions), types and constants, the full rename and `unlimitedMode` removal across backend and UI (the Queue toggle is simply deleted), regenerated artifacts, `schemas/archive/v1/` mirror, `EXECUTION_GUARDRAILS_PLAN.md` edit, schema tests | Done    |
 | 2    | Phase 2: `LimitUtils`, `resolveEffectiveMaxSteps`, every enforcement site, required `RunContinuationService` limit, MCP `workflow_status`, dry-run, tests                                                                                                                                                                  | Done    |
-| 3    | Phase 3 items 1–2, 5–6: `LimitSelect`, option metadata, vocabulary test, and every settings page and `ScriptConditionEditor` switched to it                                                                                                                                                                                | Pending |
+| 3    | Phase 3 items 1–2, 5–6: `LimitSelect`, option metadata, vocabulary test, and every settings page and `ScriptConditionEditor` switched to it                                                                                                                                                                                | Done    |
 | 4    | Phase 3 items 3–4: the Max Steps control on the Validation page, Set as default, round-trip tests                                                                                                                                                                                                                          | Pending |
 | 5    | Phase 4 docs, the §1.1 vocabulary row, and the acceptance-criteria sweep                                                                                                                                                                                                                                                   | Pending |
 
@@ -433,6 +433,18 @@ The full `npm test` run also reported unrelated `HostedWorkspaceViewerService`,
 `WorkingFileManager`, and CLI dry-run failures, plus the schema-to-UI gate
 deferred from Step 1. Repository-wide `format:check` reports 36 format
 violations outside the changed files; every changed file passes Prettier.
+
+Step 3 note: `queue.notifyOnExtension` is copied into configuration but has no
+notification firing path in the codebase. Its UI and schema descriptions now
+state that the setting currently has no effect; implementing queue extension
+notifications remains outside this step. The settings schema docs, YAML, UI
+descriptions, and `schemas/archive/v1/` copies were regenerated.
+
+Verification note: the full `npm test` run reported the known deferred `maxSteps`
+workflow-control parity failure, unrelated schema-round-trip, CLI dry-run,
+`HostedWorkspaceViewerService`, and `WorkingFileManager` failures, plus Step 3
+retry UI, metadata, and repeated-string failures. The Step 3 failures were
+fixed; the metadata, string-scan, and affected UI suites pass in focused runs.
 
 ## Non-goals
 

@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { LocalNumberInput, LocalTextInput } from "../shared/LocalInputs";
+import { LimitSelect } from "../shared/LimitSelect";
 import { CustomSelect } from "../shared/CustomSelect";
 import { DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT } from "@root/types/CtrlYokeSettings";
 import {
@@ -257,21 +258,20 @@ export function GeneralSection({
         </SettingInputRow>
         <SettingInputRow
           label="Output virtualization row threshold"
-          description="Minimum output rows before virtualization is enabled. Use 0 to always virtualize, -1 to never virtualize."
+          description="Minimum output rows before virtualization is enabled. Use 0 to always virtualize, or choose Never to disable virtualization."
           id="ui-output-virtualization-row-threshold"
           path="ui.outputVirtualizationRowThreshold"
           {...rowProps}
         >
-          <LocalNumberInput
+          <LimitSelect
             id="ui-output-virtualization-row-threshold"
-            min={-1}
+            label="Output virtualization row threshold"
+            path="ui.outputVirtualizationRowThreshold"
             value={ui.outputVirtualizationRowThreshold}
-            onCommit={(v) => onUpdate("ui.outputVirtualizationRowThreshold", v)}
-            parse={(v) => {
-              const parsed = parseInt(v, 10);
-              return Number.isFinite(parsed) ? Math.max(-1, parsed) : 200;
-            }}
-            className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+            onChange={(v) => onUpdate("ui.outputVirtualizationRowThreshold", v)}
+            mode="never"
+            min={0}
+            customFallback={200}
           />
         </SettingInputRow>
         <SettingToggleRow
@@ -342,19 +342,19 @@ export function GeneralSection({
           Runs
         </h3>
         <SettingInputRow
-          label="Max runs to keep (-1 = unlimited)"
+          label="Max runs to keep"
           description="Deletes entire runs—definition and output—oldest first."
           id="runs-max-runs"
           path="runs.maxRuns"
           {...rowProps}
         >
-          <LocalNumberInput
+          <LimitSelect
             id="runs-max-runs"
-            min={-1}
+            label="Max runs to keep"
+            path="runs.maxRuns"
             value={runs.maxRuns}
-            onCommit={(v) => onUpdate("runs.maxRuns", v)}
-            parse={(v) => parseInt(v, 10) || -1}
-            className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+            onChange={(v) => onUpdate("runs.maxRuns", v)}
+            customFallback={100}
           />
         </SettingInputRow>
         <SettingInputRow
