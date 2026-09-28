@@ -198,6 +198,7 @@ The `"ctrlyoke"` shorthand injects the built-in ctrlyoke MCP server, giving the 
 steps:
   - prompt: "Implement the feature"
 
+maxSteps: 30
 finalStep:
   prompt: "Review the work and append follow-up tasks if needed."
   mcpServers:
@@ -377,6 +378,12 @@ not determine workflow field support.
 | `mcpServers`             | `[]`    | Default MCP servers for workflow prompts. Include `"ctrlyoke"` to enable dynamic queue extension by default |
 | `maxSteps`               | `100`   | Maximum workflow steps (`-1` means unlimited)                                                               |
 | `notifyOnQueueExtension` | `true`  | Show a notification when the AI appends prompts to the queue                                                |
+
+Workflow `maxSteps` overrides this global setting for one run. It counts every
+entry in the run's `steps` array, including appended steps, parallel members,
+and disabled steps; it does not count `finalStep` iterations or retries. Set
+workflow `maxSteps: -1` to run without a step cap, even when the global setting
+is numeric.
 
 ### Hooks
 

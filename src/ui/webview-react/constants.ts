@@ -57,7 +57,7 @@ export const DEFAULT_MOBILE_SIZES = {
 };
 
 /** Shared timing and capacity contract for the transient toast viewport. */
-export const TOAST_MAX_QUEUE_SIZE = 10;
+export const TOAST_QUEUE_LIMIT = 10;
 export const TOAST_MAX_VISIBLE_COUNT = 3;
 export const TOAST_INFO_SUCCESS_TIMEOUT_MS = 5_000;
 export const TOAST_WARNING_ERROR_TIMEOUT_MS = 12_000;

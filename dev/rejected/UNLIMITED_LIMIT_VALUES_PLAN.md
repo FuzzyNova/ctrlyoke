@@ -9,8 +9,9 @@
 > change would touch about 15 source files across six fields, plus the schema archive, the CLI
 > flag and the tests.
 >
-> What survived, all stored as `-1`, moved into `dev/backlog/WORKFLOW_MAX_STEPS_PLAN.md`
+> What survived, all stored as `-1`, moved into `dev/implemented/WORKFLOW_MAX_STEPS_PLAN.md`
 > ("Limit presentation"):
+>
 > - the shared `LimitSelect` picker;
 > - the §1.1 Unlimited vocabulary row and its test allowlist;
 > - standardized "`-1` means unlimited" descriptions;
@@ -31,7 +32,7 @@ one of these fields.
 
 ## Why
 
-`WORKFLOW_MAX_STEPS_PLAN.md` § "Writing unlimited" has the full argument. In short: the schema
+`dev/implemented/WORKFLOW_MAX_STEPS_PLAN.md` § "Writing unlimited" has the full argument. In short: the schema
 offers the literal in autocompletion, so users have nothing to memorise; the UI option, the file,
 the CLI flag, and the `workflow_status` output (which already prints `"unlimited"`) all use the
 same word; and SCHEMA_UI_NAME_ALIGNMENT §1 rule 2 says one concept gets one spelling. A single
@@ -41,19 +42,19 @@ leftover `-1` would bring back the "remember the magic number" problem for that 
 
 ### `-1` → `"unlimited"`
 
-| Field                                                                        | Today                                            | Code readers                                                                                                                         | UI                                                                    |
-| ---------------------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
-| settings `execution.maxPromptTimeoutSec`                                     | `-1` unlimited, default `-1`                     | `ConfigurationUtils.ts`, `cli.ts`                                                                                                    | `ExecutionSection.tsx`                                                |
-| CLI `-t, --timeout <seconds>`                                                | `-1` = unlimited (`CliRunCommandDefinitions.ts:164,215-218`) | same                                                                                                                                  | `docs/cli/ctrlyoke.md:80`                                             |
-| settings `queue.maxWorkflowExecutionTimeSec`                                 | `-1` unlimited, default `-1`                     | `WorkflowExecutor.checkExecutionTimeLimit` (`:4708`), `ExecutionPreviewService.buildLimits` (`:1362`), `ConfigurationUtils.ts`        | `QueueSection.tsx` ("(seconds, -1 = unlimited)")                      |
-| settings `runs.maxRuns`                                                      | `-1` keeps all runs, default `-1`                | `OutputHistoryManager.ts`, `RunSummaryCache.ts`, `ConfigurationUtils.ts`                                                             | `GeneralSection.tsx` ("Max runs to keep")                             |
-| workflow `endCondition.maxRetries` (`scriptProperties`; also reached by `defaults.endCondition` through its `$ref`) | `-1` unlimited, `0` none, max 100 | `PromptQueue.ts:1362,1381`, `WorkflowExecutor.ts:3448,5025`, `ExecutionPreviewService.ts:1258`                                    | `ScriptConditionEditor.tsx` (also used by the Workflow Defaults page) |
-| dry-run output `maxAttempts` (`ExecutionPreviewTypes.ts:242`)                | `-1` when retries are unlimited                  | `ExecutionPreviewService.ts:1258`                                                                                                    | CLI dry-run / preview JSON                                            |
+| Field                                                                                                               | Today                                                        | Code readers                                                                                                                   | UI                                                                    |
+| ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| settings `execution.maxPromptTimeoutSec`                                                                            | `-1` unlimited, default `-1`                                 | `ConfigurationUtils.ts`, `cli.ts`                                                                                              | `ExecutionSection.tsx`                                                |
+| CLI `-t, --timeout <seconds>`                                                                                       | `-1` = unlimited (`CliRunCommandDefinitions.ts:164,215-218`) | same                                                                                                                           | `docs/cli/ctrlyoke.md:80`                                             |
+| settings `queue.maxWorkflowExecutionTimeSec`                                                                        | `-1` unlimited, default `-1`                                 | `WorkflowExecutor.checkExecutionTimeLimit` (`:4708`), `ExecutionPreviewService.buildLimits` (`:1362`), `ConfigurationUtils.ts` | `QueueSection.tsx` ("(seconds, -1 = unlimited)")                      |
+| settings `runs.maxRuns`                                                                                             | `-1` keeps all runs, default `-1`                            | `OutputHistoryManager.ts`, `RunSummaryCache.ts`, `ConfigurationUtils.ts`                                                       | `GeneralSection.tsx` ("Max runs to keep")                             |
+| workflow `endCondition.maxRetries` (`scriptProperties`; also reached by `defaults.endCondition` through its `$ref`) | `-1` unlimited, `0` none, max 100                            | `PromptQueue.ts:1362,1381`, `WorkflowExecutor.ts:3448,5025`, `ExecutionPreviewService.ts:1258`                                 | `ScriptConditionEditor.tsx` (also used by the Workflow Defaults page) |
+| dry-run output `maxAttempts` (`ExecutionPreviewTypes.ts:242`)                                                       | `-1` when retries are unlimited                              | `ExecutionPreviewService.ts:1258`                                                                                              | CLI dry-run / preview JSON                                            |
 
 ### `-1` → `"never"`
 
-| Field                                   | Today                                                  | Readers                                                                                                                                                    |
-| --------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Field                                          | Today                                            | Readers                                                                                                                                                                        |
+| ---------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | settings `ui.outputVirtualizationRowThreshold` | `0` = always virtualize, `-1` = never virtualize | `useOutputVirtualization.ts`, `OutputSection.tsx`, `settingsStore.ts`, `WebviewSettingsSync.ts`, `ConfigurationUtils.ts`, `WebviewMessageTypes.ts`; UI in `GeneralSection.tsx` |
 
 This field is not a limit. It answers "at how many rows does virtualization start?", and `-1`

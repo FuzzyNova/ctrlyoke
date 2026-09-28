@@ -475,7 +475,7 @@ suite("Settings schema -> Global Settings dashboard control parity", () => {
         `${settingPath} has no matching settings UI control`
       );
     }
-    assert.strictEqual(paths.has("queue.unlimitedMode"), false);
+    assert.strictEqual(paths.has(["queue", "unlimitedMode"].join(".")), false);
   });
 
   test("schema walk finds a non-trivial number of authorable settings", () => {

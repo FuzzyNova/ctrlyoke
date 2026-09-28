@@ -87,7 +87,7 @@ This plan is an enforcement and consistency audit, not a new schema feature.
 
 - `limits` in `schemas/workflow-schema.json`.
 - Step → workflow → settings limit resolution.
-- Other workflow queue overrides; see `dev/backlog/WORKFLOW_MAX_STEPS_PLAN.md`.
+- Other workflow queue overrides; see `dev/implemented/WORKFLOW_MAX_STEPS_PLAN.md`.
 - `maxDurationMs`; it duplicates the existing prompt/workflow/script timeout
   settings.
 - `maxTotalAttempts`; focused retry caps plus workflow time already bound retry

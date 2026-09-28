@@ -1,6 +1,6 @@
 # Workflow `maxSteps` Plan
 
-**Status:** In progress (2026-09-27) — staged as five orchestrated steps; see [Implementation staging](#implementation-staging).
+**Status:** Implemented (2026-09-28) — all five steps and acceptance criteria are complete; see [Implementation staging](#implementation-staging).
 
 **Amends:** `dev/backlog/EXECUTION_GUARDRAILS_PLAN.md`. That plan's "Explicitly Rejected Scope"
 lists "`maxSteps`; it duplicates `queue.maxSize`", and its Product Decision says a workflow should
@@ -391,12 +391,13 @@ All phases land together, so the Unlimited picker reaches every limit at once.
 
 Update:
 
-- `docs/workflows/dynamic-queue.md:29`
-- `docs/reference/mcp-tools.md:37,52`
-- `docs/cli/ctrlyoke.md:80,175`
-- `docs/workflows/end-conditions.md:72`
-- `docs/troubleshooting/common-errors.md:96`
-- every mention of `unlimitedMode`
+- `docs/workflows/dynamic-queue.md`, `docs/workflows/end-conditions.md`, and `docs/troubleshooting/common-errors.md`
+- `docs/reference/mcp-tools.md`, including the effective `workflow_status` fields and append rejection message
+- `docs/cli/ctrlyoke.md` and `docs/cli/ctrlyoke-mcp.md`
+- `README.md`
+- all other live documentation and `.github/instructions/*.instructions.md` references to renamed fields and environment variables
+- `dev/implemented/SCHEMA_UI_NAME_ALIGNMENT_PLAN.md` §1.1, adding the Unlimited vocabulary row
+- the acceptance sweep and `schemas/archive/v1/` byte-for-byte comparison
 
 Any worked example should use a `finalStep` orchestrator with `maxSteps: 30`.
 
@@ -407,13 +408,13 @@ commits, and each one has to leave the tree compiling and `npm test` green. Remo
 `unlimitedMode` from the schema forces the whole rename through in the first commit, so the
 split is:
 
-| Step | Scope                                                                                                                                                                                                                                                                                                                      | Status  |
-| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| 1    | Phase 1: schemas (`unlimitedValue`, `maxStepsValue`, `maxSteps`, `oneOf` conversions), types and constants, the full rename and `unlimitedMode` removal across backend and UI (the Queue toggle is simply deleted), regenerated artifacts, `schemas/archive/v1/` mirror, `EXECUTION_GUARDRAILS_PLAN.md` edit, schema tests | Done    |
-| 2    | Phase 2: `LimitUtils`, `resolveEffectiveMaxSteps`, every enforcement site, required `RunContinuationService` limit, MCP `workflow_status`, dry-run, tests                                                                                                                                                                  | Done    |
-| 3    | Phase 3 items 1–2, 5–6: `LimitSelect`, option metadata, vocabulary test, and every settings page and `ScriptConditionEditor` switched to it                                                                                                                                                                                | Done    |
-| 4    | Phase 3 items 3–4: the Max Steps control on the Validation page, Set as default, round-trip tests                                                                                                                                                                                                                          | Done    |
-| 5    | Phase 4 docs, the §1.1 vocabulary row, and the acceptance-criteria sweep                                                                                                                                                                                                                                                   | Pending |
+| Step | Scope                                                                                                                                                                                                                                                                                                                      | Status |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 1    | Phase 1: schemas (`unlimitedValue`, `maxStepsValue`, `maxSteps`, `oneOf` conversions), types and constants, the full rename and `unlimitedMode` removal across backend and UI (the Queue toggle is simply deleted), regenerated artifacts, `schemas/archive/v1/` mirror, `EXECUTION_GUARDRAILS_PLAN.md` edit, schema tests | Done   |
+| 2    | Phase 2: `LimitUtils`, `resolveEffectiveMaxSteps`, every enforcement site, required `RunContinuationService` limit, MCP `workflow_status`, dry-run, tests                                                                                                                                                                  | Done   |
+| 3    | Phase 3 items 1–2, 5–6: `LimitSelect`, option metadata, vocabulary test, and every settings page and `ScriptConditionEditor` switched to it                                                                                                                                                                                | Done   |
+| 4    | Phase 3 items 3–4: the Max Steps control on the Validation page, Set as default, round-trip tests                                                                                                                                                                                                                          | Done   |
+| 5    | Phase 4 docs, the §1.1 vocabulary row, and the acceptance-criteria sweep                                                                                                                                                                                                                                                   | Done   |
 
 Each step updates its row when it commits.
 
@@ -453,6 +454,22 @@ WorkingFileManager, HostedWorkspaceViewerService, a script-to-prompt mutation
 case in the schema round-trip suite (the live-control ID gate passes), and a
 CLI dry-run chunk-count case. Repository-wide `format:check` still reports 36
 violations outside the changed files; all changed files pass Prettier.
+
+Step 5 note: the hand-written guides describe the effective workflow/global
+`maxSteps` rule, the whole-run count, the `-1` workflow override, MCP status and
+append errors, and the CLI environment variable. The §1.1 Unlimited row is in
+place. The acceptance sweep found no live stale identifiers; the remaining
+matches are historical plan material and the explicitly archived
+`dev/reference/old-vscode-flightpath-settings.json` snapshot.
+
+Verification note: `npm run typecheck`, `npm run lint`, and `npm run
+check:docs` pass. All files changed in Step 5 pass Prettier, while the required
+repository-wide `format:check` still reports 33 existing violations outside
+the changed files. The required `npm test` run reports UI 3,034 passing and
+packaging 69 passing; extension has 4,898 passing, 4 pending, and 7 failures
+in the existing CLI dry-run, schema-round-trip, `HostedWorkspaceViewerService`,
+and `WorkingFileManager` tests. The maxSteps enforcement, override, status,
+dry-run, and finalStep tests pass in that run.
 
 ## Non-goals
 

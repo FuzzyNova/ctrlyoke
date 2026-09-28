@@ -6,14 +6,14 @@
 
 When a workflow or step includes `mcpServers: ["ctrlyoke"]`, ctrlyoke launches a server for each harness launch and pins it to the executing run. It runs as `node <path>/out/mcp-server.js` with this environment:
 
-| Variable                                                                            | Meaning                                                                |
-| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `CTRLYOKE_WORKING_FILE`                                                             | The run's `workflow.ctrlyoke.json`. The only thing that attaches a run |
-| `CTRLYOKE_WORKSPACE`                                                                | Workspace (state) root used to find run history and `.ctrlyoke/`       |
-| `CTRLYOKE_EXECUTION_ROOT`                                                           | Checkout the step runs in (the worktree, when the run uses one)        |
-| `CTRLYOKE_MAX_QUEUE_SIZE`, `CTRLYOKE_MAX_PARALLEL_STEPS`, `CTRLYOKE_UNLIMITED_MODE` | Queue limits from the `queue` settings                                 |
-| `CTRLYOKE_HOME`, `CTRLYOKE_RUN_HISTORY_LOCATION`                                    | Where run history lives                                                |
-| `CTRLYOKE_DIAGNOSTIC_LOGS`                                                          | `true` writes `ctrlyoke-mcp-<timestamp>.log` under `.ctrlyoke/logs/`   |
+| Variable                                            | Meaning                                                                |
+| --------------------------------------------------- | ---------------------------------------------------------------------- |
+| `CTRLYOKE_WORKING_FILE`                             | The run's `workflow.ctrlyoke.json`. The only thing that attaches a run |
+| `CTRLYOKE_WORKSPACE`                                | Workspace (state) root used to find run history and `.ctrlyoke/`       |
+| `CTRLYOKE_EXECUTION_ROOT`                           | Checkout the step runs in (the worktree, when the run uses one)        |
+| `CTRLYOKE_MAX_STEPS`, `CTRLYOKE_MAX_PARALLEL_STEPS` | Step-count and parallelism limits from the `queue` settings            |
+| `CTRLYOKE_HOME`, `CTRLYOKE_RUN_HISTORY_LOCATION`    | Where run history lives                                                |
+| `CTRLYOKE_DIAGNOSTIC_LOGS`                          | `true` writes `ctrlyoke-mcp-<timestamp>.log` under `.ctrlyoke/logs/`   |
 
 Each harness receives the server in its own configuration format:
 
