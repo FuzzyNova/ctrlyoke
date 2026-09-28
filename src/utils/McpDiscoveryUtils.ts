@@ -8,6 +8,7 @@
  */
 
 import * as fs from "fs/promises";
+import { parse, type ParseError } from "jsonc-parser";
 import type {
   LocalMcpServerEntry,
   RegistryMcpEntry,
@@ -24,7 +25,6 @@ import {
   SPECIAL_TARGET_IDS,
   type McpTransport,
 } from "../types/DashboardConstants";
-import { stripJsonComments } from "./JsoncUtils";
 import {
   getClaudeUserConfigPath,
   getClaudeWorkspaceMcpConfigPath,
@@ -85,12 +85,14 @@ function toStringRecord(value: unknown): Record<string, string> | undefined {
 
 /**
  * Reads a JSON/JSONC file and returns its parsed content, or null on any error.
- * Strips comments before parsing — VS Code config files use JSONC format.
+ * VS Code config files use JSONC format, including trailing commas.
  */
 async function readJsonFile(filePath: string): Promise<unknown> {
   try {
     const content = await fs.readFile(filePath, "utf-8");
-    return JSON.parse(stripJsonComments(content));
+    const errors: ParseError[] = [];
+    const parsed = parse(content, errors, { allowTrailingComma: true });
+    return errors.length === 0 ? parsed : null;
   } catch {
     return null;
   }
@@ -344,12 +346,29 @@ function unquoteTomlString(value: string): string {
     return inner;
   }
 
-  return inner
-    .replace(/\\\\/g, "\\")
-    .replace(/\\"/g, `"`)
-    .replace(/\\n/g, "\n")
-    .replace(/\\r/g, "\r")
-    .replace(/\\t/g, "\t");
+  return inner.replace(
+    /\\(["\\bfnrt]|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})/g,
+    (_match, escape: string) => {
+      if (escape.startsWith("u") || escape.startsWith("U")) {
+        return String.fromCodePoint(Number.parseInt(escape.slice(1), 16));
+      }
+
+      switch (escape) {
+        case "b":
+          return "\b";
+        case "n":
+          return "\n";
+        case "r":
+          return "\r";
+        case "t":
+          return "\t";
+        case "f":
+          return "\f";
+        default:
+          return escape;
+      }
+    }
+  );
 }
 
 function splitTomlList(text: string): string[] {
@@ -468,21 +487,32 @@ function parseTomlSectionName(line: string): string | null {
   return trimmed.slice(1, -1).trim();
 }
 
-function parseTomlMcpServerKey(sectionName: string): string | null {
+function parseTomlMcpServerKey(
+  sectionName: string
+): { id: string; table: "server" | "env" | "headers" } | null {
   if (!sectionName.startsWith("mcp_servers.")) {
     return null;
   }
 
-  const remainder = sectionName.slice("mcp_servers.".length).trim();
+  let remainder = sectionName.slice("mcp_servers.".length).trim();
   if (!remainder) {
     return null;
   }
 
-  if (remainder.startsWith(`"`) || remainder.startsWith(`'`)) {
-    return unquoteTomlString(remainder);
+  let table: "server" | "env" | "headers" = "server";
+  if (remainder.endsWith(".env")) {
+    table = "env";
+    remainder = remainder.slice(0, -".env".length);
+  } else if (remainder.endsWith(".headers")) {
+    table = "headers";
+    remainder = remainder.slice(0, -".headers".length);
   }
 
-  return remainder;
+  const id =
+    remainder.startsWith(`"`) || remainder.startsWith(`'`)
+      ? unquoteTomlString(remainder)
+      : remainder;
+  return id ? { id, table } : null;
 }
 
 function normalizeCodexToml(
@@ -493,6 +523,7 @@ function normalizeCodexToml(
   const results = new Map<string, LocalMcpServerEntry>();
   const lines = text.split(/\r?\n/);
   let currentId: string | null = null;
+  let currentTable: "server" | "env" | "headers" = "server";
   let currentConfig: {
     command?: string;
     args?: string[];
@@ -515,10 +546,13 @@ function normalizeCodexToml(
   for (const rawLine of lines) {
     const sectionName = parseTomlSectionName(rawLine);
     if (sectionName) {
-      flushCurrent();
-      const nextId = parseTomlMcpServerKey(sectionName);
-      currentId = nextId;
-      currentConfig = nextId ? {} : null;
+      const nextSection = parseTomlMcpServerKey(sectionName);
+      if (!nextSection || nextSection.id !== currentId) {
+        flushCurrent();
+        currentId = nextSection?.id ?? null;
+        currentConfig = nextSection ? {} : null;
+      }
+      currentTable = nextSection?.table ?? "server";
       continue;
     }
 
@@ -538,6 +572,15 @@ function normalizeCodexToml(
 
     const key = line.slice(0, eqIndex).trim();
     const value = line.slice(eqIndex + 1).trim();
+
+    if (currentTable === "env" || currentTable === "headers") {
+      if (value.startsWith(`"`) || value.startsWith(`'`)) {
+        const target = currentTable === "env" ? "env" : "headers";
+        currentConfig[target] = currentConfig[target] ?? {};
+        currentConfig[target]![key] = unquoteTomlString(value);
+      }
+      continue;
+    }
 
     if (
       key === MCP_CONFIG_KEYS.COMMAND &&
