@@ -29,12 +29,23 @@ function runCli(args: string[], cwd: string): Promise<CliResult> {
 suite("ctrlyoke validate compatibility command", () => {
   teardown(async () => {
     for (const root of temporaryRoots.splice(0)) {
-      await fs.rm(root, { recursive: true, force: true });
+      // A CLI child killed by a timeout can still hold the directory on
+      // Windows; residual cleanup must never fail an otherwise green run.
+      await fs
+        .rm(root, {
+          recursive: true,
+          force: true,
+          maxRetries: 5,
+          retryDelay: 200,
+        })
+        .catch(() => {});
     }
   });
 
   test("preserves parse-only output and emits clean JSON when requested", async function () {
-    this.timeout(30000);
+    // Above the suite default: the first test in this file pays the cold start
+    // of two spawned CLI processes, which timed out under a full npm test load.
+    this.timeout(60000);
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-validate-"));
     temporaryRoots.push(root);
     const workflow = path.join(root, "workflow.ctrlyoke.yaml");
@@ -129,7 +140,6 @@ suite("ctrlyoke validate compatibility command", () => {
   });
 
   test("rejects conflicting targets and invalid strict values as usage errors", async function () {
-    this.timeout(30000);
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-validate-"));
     temporaryRoots.push(root);
     const workflow = path.join(root, "workflow.ctrlyoke.yaml");
@@ -223,7 +233,6 @@ suite("ctrlyoke validate compatibility command", () => {
   });
 
   test("reports a half-configured comparison as a warning without failing", async function () {
-    this.timeout(30000);
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-validate-"));
     temporaryRoots.push(root);
     const workflow = path.join(root, "incomplete.ctrlyoke.yaml");
@@ -269,7 +278,6 @@ suite("ctrlyoke validate compatibility command", () => {
   });
 
   test("reports unknown fields with exact paths and fails them in strict mode", async function () {
-    this.timeout(30000);
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-validate-"));
     temporaryRoots.push(root);
     const workflow = path.join(root, "typo.ctrlyoke.yaml");
@@ -316,7 +324,6 @@ suite("ctrlyoke validate compatibility command", () => {
   });
 
   test("fails on a semantic error the schema cannot catch", async function () {
-    this.timeout(30000);
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-validate-"));
     temporaryRoots.push(root);
     const workflow = path.join(root, "empty-prompt.ctrlyoke.yaml");
