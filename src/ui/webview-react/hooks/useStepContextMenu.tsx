@@ -125,7 +125,7 @@ export function useStepContextMenu({
   const toggleHiddenOutputTarget = useUiStore(
     (s) => s.toggleHiddenOutputTarget
   );
-  const soloOutputTarget = useUiStore((s) => s.soloOutputTarget);
+  const soloOutputTargets = useUiStore((s) => s.soloOutputTargets);
   const isViewingHistory = useUiStore((s) => s.isViewingHistory);
   const liveOrderedEntries = useWorkflowStore((s) => s.liveOrderedEntries);
   const historyOutputs = useWorkflowStore((s) => s.historyOutputs);
@@ -320,11 +320,14 @@ export function useStepContextMenu({
           { type: "divider" },
           ...buildStepOutputFilterMenuItems({
             hidden: hiddenOutputKeys.includes(targetKey),
-            allPresentTargetKeys,
             onToggle: () =>
               toggleHiddenOutputTarget(outputFilterWorkflowKey, targetKey),
-            onSolo: (keys) =>
-              soloOutputTarget(outputFilterWorkflowKey, targetKey, keys),
+            onSolo: () =>
+              soloOutputTargets(
+                outputFilterWorkflowKey,
+                [targetKey],
+                allPresentTargetKeys
+              ),
           }),
           {
             label: "Dry Run Step",
@@ -457,7 +460,7 @@ export function useStepContextMenu({
       outputFilterWorkflowKey,
       presentOutputTargetKeys,
       pendingRewind?.fromStepIndex,
-      soloOutputTarget,
+      soloOutputTargets,
       totalSteps,
       toggleHiddenOutputTarget,
       parallelGroups,

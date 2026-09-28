@@ -2,7 +2,48 @@ import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useFinalStepContextMenu } from "@hooks/useFinalStepContextMenu";
 import type { WorkflowStep, CliOutput } from "@store/workflowStore";
+import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
+import { FINAL_STEP_PHASES, OUTPUT_HISTORY_KINDS } from "@/types/messages";
+import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
+
+type OutputTarget = Extract<OrderedHistoryEntry, { target: unknown }>["target"];
+
+function cliEntry(target: OutputTarget, sequence: number): OrderedHistoryEntry {
+  return {
+    kind: OUTPUT_HISTORY_KINDS.CLI,
+    target,
+    attemptIndex: 0,
+    cliOutput: {
+      prompt: "p",
+      response: "r",
+      elapsed: 1,
+      timestampMs: sequence,
+      attemptIndex: 0,
+      isStreaming: false,
+    },
+    timestampMs: sequence,
+    sequence,
+  };
+}
+
+/** Two queue steps, then two final-step loops; the engine is back in the queue. */
+function seedLoopedFinalStepOutput() {
+  useWorkflowStore.setState({
+    liveOrderedEntries: [
+      cliEntry({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 }, 1),
+      cliEntry({ kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 }, 2),
+      cliEntry({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 }, 3),
+      cliEntry({ kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 1 }, 4),
+    ],
+    // After a loop appends queue work, loopCount names the *next* loop.
+    finalStepLoopCount: 2,
+  });
+}
+
+function hiddenKeys(): readonly string[] {
+  return useUiStore.getState().hiddenOutputTargets._shell?.keys ?? [];
+}
 
 function TestHarness({
   finalStep,
@@ -41,6 +82,7 @@ describe("useFinalStepContextMenu", () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
 
   beforeEach(() => {
+    useWorkflowStore.getState().resetWorkflow();
     useUiStore.getState().resetUi();
     writeText.mockClear();
     Object.defineProperty(navigator, "clipboard", {
@@ -68,7 +110,7 @@ describe("useFinalStepContextMenu", () => {
       "Copy Output",
       "Copy Metadata",
       "Hide output",
-      "Show only this step's output",
+      "Show only final step output",
       "Disable final step",
     ]);
     expect(screen.getAllByRole("separator")).toHaveLength(2);
@@ -97,8 +139,47 @@ describe("useFinalStepContextMenu", () => {
       screen.getByRole("button", { name: "Show output" })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Show only this step's output" })
+      screen.getByRole("button", { name: "Show only final step output" })
     ).toBeInTheDocument();
+  });
+
+  it("shows every final-step loop and hides everything else when soloed", () => {
+    seedLoopedFinalStepOutput();
+
+    render(<TestHarness finalStep={{ prompt: "Final prompt" }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show only final step output" })
+    );
+
+    expect(hiddenKeys()).toEqual(["queue:0", "queue:1"]);
+  });
+
+  it("clears the filter when the final step is soloed a second time", () => {
+    seedLoopedFinalStepOutput();
+
+    render(<TestHarness finalStep={{ prompt: "Final prompt" }} />);
+    for (let i = 0; i < 2; i++) {
+      fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+      fireEvent.click(
+        screen.getByRole("button", { name: "Show only final step output" })
+      );
+    }
+
+    expect(hiddenKeys()).toEqual([]);
+  });
+
+  it("hides and re-shows every final-step loop together", () => {
+    seedLoopedFinalStepOutput();
+
+    render(<TestHarness finalStep={{ prompt: "Final prompt" }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hide output" }));
+    expect(hiddenKeys()).toEqual(["finalStep:0", "finalStep:1"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show output" }));
+    expect(hiddenKeys()).toEqual([]);
   });
 
   it("switches the content label for a script final step", () => {

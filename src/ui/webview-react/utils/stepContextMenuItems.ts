@@ -4,11 +4,16 @@ import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import type { ReorderPromptsMessage } from "@root/types/WebviewMessageTypes";
 import {
+  FINAL_STEP_PHASES,
   type ExecutionState,
   type FinalStepPhase,
 } from "@root/types/DashboardConstants";
 import { executionOwnsCurrentStep } from "./status";
-import { getTargetKey, toOutputMessageTarget } from "./outputProjection";
+import {
+  getTargetKey,
+  toOutputMessageTarget,
+  type OutputMessageTarget,
+} from "./outputProjection";
 import {
   getWorkflowStepRawText,
   isScriptWorkflowStep,
@@ -99,17 +104,18 @@ export function buildStepCopyMenuItems({
 
 export interface StepOutputFilterMenuItemsInput {
   hidden: boolean;
-  allPresentTargetKeys: readonly string[];
   onToggle: () => void;
-  onSolo: (allPresentTargetKeys: readonly string[]) => void;
+  onSolo: () => void;
+  /** Defaults to "Show only this step's output". */
+  soloLabel?: string;
 }
 
 /** Output visibility actions shared by queue-step and final-step menus. */
 export function buildStepOutputFilterMenuItems({
   hidden,
-  allPresentTargetKeys,
   onToggle,
   onSolo,
+  soloLabel = "Show only this step's output",
 }: StepOutputFilterMenuItemsInput): StepContextMenuItem[] {
   return [
     {
@@ -119,10 +125,10 @@ export function buildStepOutputFilterMenuItems({
       onClick: onToggle,
     },
     {
-      label: "Show only this step's output",
+      label: soloLabel,
       icon: "codicon-target",
       disabled: false,
-      onClick: () => onSolo(allPresentTargetKeys),
+      onClick: onSolo,
     },
   ];
 }
@@ -131,10 +137,28 @@ export function buildStepOutputFilterMenuItems({
 export function getPresentOutputTargetKeys(
   entries: readonly OrderedHistoryEntry[]
 ): string[] {
+  return collectOutputTargetKeys(entries, () => true);
+}
+
+/** Collect the target key of every final-step loop present in an entry list. */
+export function getPresentFinalStepTargetKeys(
+  entries: readonly OrderedHistoryEntry[]
+): string[] {
+  return collectOutputTargetKeys(
+    entries,
+    (target) => target.kind === FINAL_STEP_PHASES.FINAL_STEP
+  );
+}
+
+function collectOutputTargetKeys(
+  entries: readonly OrderedHistoryEntry[],
+  include: (target: OutputMessageTarget) => boolean
+): string[] {
   const keys = new Set<string>();
   for (const entry of entries) {
     if ("target" in entry) {
-      keys.add(getTargetKey(toOutputMessageTarget(entry.target)));
+      const target = toOutputMessageTarget(entry.target);
+      if (include(target)) keys.add(getTargetKey(target));
     }
   }
   return [...keys];

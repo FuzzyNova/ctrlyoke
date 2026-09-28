@@ -324,6 +324,32 @@ export interface HiddenOutputTargetsEntry {
   hiddenAtMs: Readonly<Record<string, number>>;
 }
 
+/**
+ * Replace a view address's hidden-target set with `nextKeys`, keeping the
+ * original hide timestamp of any key that stays hidden and stamping newly
+ * hidden keys with now. Writing drops every other address's entry.
+ */
+function withHiddenOutputKeys(
+  state: Pick<UiState, "hiddenOutputTargets" | "outputStepFilterVersion">,
+  workflowKey: string,
+  nextKeys: readonly string[]
+): Pick<UiState, "hiddenOutputTargets" | "outputStepFilterVersion"> {
+  const current = state.hiddenOutputTargets[workflowKey];
+  const now = Date.now();
+  const hiddenAtMs: Record<string, number> = {};
+  for (const key of nextKeys) {
+    hiddenAtMs[key] = current?.hiddenAtMs[key] ?? now;
+  }
+
+  return {
+    hiddenOutputTargets:
+      nextKeys.length > 0
+        ? { [workflowKey]: { keys: nextKeys, hiddenAtMs } }
+        : {},
+    outputStepFilterVersion: state.outputStepFilterVersion + 1,
+  };
+}
+
 export interface PendingOutputFindRequest {
   query: string;
   preferredTarget?: OutputExecutionTarget;
@@ -812,9 +838,19 @@ interface UiActions {
     target: OutputScrollTarget
   ) => void;
   toggleHiddenOutputTarget: (workflowKey: string, targetKey: string) => void;
-  soloOutputTarget: (
+  /** Hide or show every key in `targetKeys` together (e.g. all final-step loops). */
+  setOutputTargetsHidden: (
     workflowKey: string,
-    targetKey: string,
+    targetKeys: readonly string[],
+    hidden: boolean
+  ) => void;
+  /**
+   * Hide every present target except `soloTargetKeys`; soloing the same set
+   * again clears the filter.
+   */
+  soloOutputTargets: (
+    workflowKey: string,
+    soloTargetKeys: readonly string[],
     allPresentTargetKeys: readonly string[]
   ) => void;
   clearHiddenOutputTargets: (workflowKey: string) => void;
@@ -1336,66 +1372,40 @@ export const useUiStore = create<UiState & UiActions>()(
 
       toggleHiddenOutputTarget: (workflowKey, targetKey) =>
         set((state) => {
-          const current = state.hiddenOutputTargets[workflowKey];
-          const isHidden = current?.keys.includes(targetKey) ?? false;
-          const nextKeys = isHidden
-            ? (current?.keys ?? []).filter((key) => key !== targetKey)
-            : [...(current?.keys ?? []), targetKey];
-          const nextHiddenAtMs: Record<string, number> = {};
-
-          for (const key of nextKeys) {
-            if (key === targetKey && !isHidden) {
-              nextHiddenAtMs[key] = Date.now();
-            } else if (current?.hiddenAtMs[key] !== undefined) {
-              nextHiddenAtMs[key] = current.hiddenAtMs[key];
-            }
-          }
-
-          return {
-            hiddenOutputTargets:
-              nextKeys.length > 0
-                ? {
-                    [workflowKey]: {
-                      keys: nextKeys,
-                      hiddenAtMs: nextHiddenAtMs,
-                    },
-                  }
-                : {},
-            outputStepFilterVersion: state.outputStepFilterVersion + 1,
-          };
+          const currentKeys =
+            state.hiddenOutputTargets[workflowKey]?.keys ?? [];
+          const nextKeys = currentKeys.includes(targetKey)
+            ? currentKeys.filter((key) => key !== targetKey)
+            : [...currentKeys, targetKey];
+          return withHiddenOutputKeys(state, workflowKey, nextKeys);
         }),
 
-      soloOutputTarget: (workflowKey, targetKey, allPresentTargetKeys) =>
+      setOutputTargetsHidden: (workflowKey, targetKeys, hidden) =>
         set((state) => {
-          const current = state.hiddenOutputTargets[workflowKey];
-          const currentKeys = current?.keys ?? [];
-          const targetKeys = [...new Set(allPresentTargetKeys)];
-          const nextKeys = targetKeys.filter((key) => key !== targetKey);
+          const currentKeys =
+            state.hiddenOutputTargets[workflowKey]?.keys ?? [];
+          const nextKeys = hidden
+            ? [...new Set([...currentKeys, ...targetKeys])]
+            : currentKeys.filter((key) => !targetKeys.includes(key));
+          return withHiddenOutputKeys(state, workflowKey, nextKeys);
+        }),
+
+      soloOutputTargets: (workflowKey, soloTargetKeys, allPresentTargetKeys) =>
+        set((state) => {
+          const currentKeys =
+            state.hiddenOutputTargets[workflowKey]?.keys ?? [];
+          const nextKeys = [...new Set(allPresentTargetKeys)].filter(
+            (key) => !soloTargetKeys.includes(key)
+          );
           const isAlreadySoloed =
             currentKeys.length === nextKeys.length &&
             nextKeys.every((key) => currentKeys.includes(key));
 
-          if (isAlreadySoloed || nextKeys.length === 0) {
-            return {
-              hiddenOutputTargets: {},
-              outputStepFilterVersion: state.outputStepFilterVersion + 1,
-            };
-          }
-
-          const now = Date.now();
-          const hiddenAtMs: Record<string, number> = {};
-          for (const key of nextKeys) {
-            const previousHiddenAtMs = current?.hiddenAtMs[key];
-            hiddenAtMs[key] =
-              previousHiddenAtMs === undefined ? now : previousHiddenAtMs;
-          }
-
-          return {
-            hiddenOutputTargets: {
-              [workflowKey]: { keys: nextKeys, hiddenAtMs },
-            },
-            outputStepFilterVersion: state.outputStepFilterVersion + 1,
-          };
+          return withHiddenOutputKeys(
+            state,
+            workflowKey,
+            isAlreadySoloed ? [] : nextKeys
+          );
         }),
 
       clearHiddenOutputTargets: (_workflowKey) =>
