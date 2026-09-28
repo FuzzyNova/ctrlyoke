@@ -108,6 +108,11 @@ export function GlobalSettingsDrawer() {
         ?.focus();
     });
   }, [closeSearch]);
+  const noSearchMatchesNotice = hasNoSearchMatches && (
+    <div role="status" className="px-4 pt-3 text-sm text-description-fg">
+      No settings match “{settingsSearch.query}”
+    </div>
+  );
   const isFullWidthSettingsTab =
     effectiveActiveTab === GLOBAL_SETTINGS_TABS.MCP_MANAGER;
 
@@ -413,14 +418,7 @@ export function GlobalSettingsDrawer() {
             {fullSettings &&
             effectiveActiveTab === GLOBAL_SETTINGS_TABS.WORKFLOW ? (
               <div className="flex-1 flex flex-col min-h-0">
-                {hasNoSearchMatches && (
-                  <div
-                    role="status"
-                    className="px-4 pt-3 text-sm text-description-fg"
-                  >
-                    No settings match “{settingsSearch.query}”
-                  </div>
-                )}
+                {noSearchMatchesNotice}
                 <WorkflowDefaultsSection
                   settings={fullSettings}
                   activePage={activePage}
@@ -435,14 +433,7 @@ export function GlobalSettingsDrawer() {
                 data-settings-content-scroll
                 className="flex-1 overflow-y-auto overflow-x-hidden"
               >
-                {hasNoSearchMatches && (
-                  <div
-                    role="status"
-                    className="px-4 pt-3 text-sm text-description-fg"
-                  >
-                    No settings match “{settingsSearch.query}”
-                  </div>
-                )}
+                {noSearchMatchesNotice}
                 <div
                   className={`p-4 ${
                     isFullWidthSettingsTab ? "max-w-none" : "max-w-2xl"
