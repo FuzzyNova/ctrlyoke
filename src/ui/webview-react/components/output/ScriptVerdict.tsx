@@ -1,5 +1,8 @@
 import { memo, useEffect } from "react";
-import type { ScriptVerdict as ScriptVerdictData } from "@root/types/CtrlYokeTypes";
+import {
+  DEFAULT_SCRIPT_VERDICT_EXPECTED_TEXT,
+  type ScriptVerdict as ScriptVerdictData,
+} from "@root/types/CtrlYokeTypes";
 import {
   COMPARE_SOURCES,
   SCRIPT_VERDICT_OUTCOMES,
@@ -30,7 +33,7 @@ function getCompareLabel(verdict: ScriptVerdictData): string {
 }
 
 function getExpectedLabel(verdict: ScriptVerdictData): string {
-  return verdict.expected ?? "exit code 0 (no `expected` set)";
+  return verdict.expected ?? DEFAULT_SCRIPT_VERDICT_EXPECTED_TEXT;
 }
 
 function getOutcomePresentation(outcome: ScriptVerdictData["outcome"]): {

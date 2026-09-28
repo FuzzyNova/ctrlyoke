@@ -124,31 +124,6 @@ function normalizePromptErrorBehavior(
 }
 
 /**
- * Saved new step state for restoring when switching from edit to new mode
- */
-export interface SavedNewStepState {
-  promptText: string;
-  promptName: string;
-  stepEnabled: boolean;
-  properties: PropertyValues;
-  stepType?: typeof STEP_TYPES.PROMPT | typeof STEP_TYPES.SCRIPT;
-  scriptCommand?: string;
-  scriptTimeoutSec?: number;
-  scriptOnPass?: string;
-  scriptOnFail?: string;
-  scriptCompareSource?: string;
-  scriptOperator?: string;
-  scriptExpected?: string;
-  scriptIgnoreCase?: boolean;
-  scriptEnv?: Record<string, string>;
-  scriptExecutionMode?: ExecutionMode;
-  scriptShell?: string;
-}
-
-/** @deprecated Use SavedNewStepState */
-export type SavedNewPromptState = SavedNewStepState;
-
-/**
  * Returns a stable string key for a selection target, used to index pendingEdits.
  * Only valid for edit-mode targets (queue / finalStep).
  */
@@ -211,6 +186,60 @@ interface EditorState {
   // Validation state
   validationErrors: Record<string, string>;
   pendingPromptEditorInserts: PromptEditorInsertRequest[];
+}
+
+/** The single source for draft capture, persistence, and restoration. */
+const NEW_STEP_DRAFT_FIELDS = [
+  "promptText",
+  "promptName",
+  "stepEnabled",
+  "properties",
+  "stepType",
+  "scriptCommand",
+  "scriptTimeoutSec",
+  "scriptOnPass",
+  "scriptOnFail",
+  "scriptCompareSource",
+  "scriptOperator",
+  "scriptExpected",
+  "scriptIgnoreCase",
+  "scriptEnv",
+  "scriptExecutionMode",
+  "scriptShell",
+] as const satisfies readonly (keyof EditorState)[];
+
+type NewStepDraftField = (typeof NEW_STEP_DRAFT_FIELDS)[number];
+type NewStepDraftFields = Pick<EditorState, NewStepDraftField>;
+
+/** Saved new-step state for edit-mode switching and VS Code persistence. */
+export type SavedNewStepState = NewStepDraftFields;
+
+/** @deprecated Use SavedNewStepState */
+export type SavedNewPromptState = SavedNewStepState;
+
+function captureNewStepDraft(state: EditorState): SavedNewStepState {
+  return Object.fromEntries(
+    NEW_STEP_DRAFT_FIELDS.map((field) => [field, state[field]])
+  ) as SavedNewStepState;
+}
+
+function restoreNewStepDraft(
+  saved: Partial<SavedNewStepState>
+): NewStepDraftFields {
+  const restored = Object.fromEntries(
+    NEW_STEP_DRAFT_FIELDS.map((field) => [
+      field,
+      saved[field] ?? initialState[field],
+    ])
+  );
+  return {
+    ...restored,
+    properties: { ...PROPERTY_DEFAULTS, ...saved.properties },
+  } as NewStepDraftFields;
+}
+
+function isNewStepDraftDirty(draft: SavedNewStepState): boolean {
+  return draft.promptText.length > 0 || draft.scriptCommand.length > 0;
 }
 
 /**
@@ -409,30 +438,9 @@ export const useEditorStore = create<
         selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
         selectedPromptIndex: null,
         originalPromptData: null,
-        stepType: savedNewPromptState.stepType ?? STEP_TYPES.PROMPT,
-        stepEnabled: savedNewPromptState.stepEnabled,
-        promptText: savedNewPromptState.promptText,
-        promptName: savedNewPromptState.promptName,
-        scriptCommand: savedNewPromptState.scriptCommand ?? "",
-        scriptTimeoutSec: savedNewPromptState.scriptTimeoutSec,
-        scriptOnPass:
-          savedNewPromptState.scriptOnPass ?? CONDITION_ACTIONS.CONTINUE,
-        scriptOnFail:
-          savedNewPromptState.scriptOnFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
-        scriptCompareSource:
-          savedNewPromptState.scriptCompareSource ?? DEFAULT_COMPARE_SOURCE,
-        scriptOperator:
-          savedNewPromptState.scriptOperator ?? DEFAULT_SCRIPT_OPERATOR,
-        scriptExpected: savedNewPromptState.scriptExpected ?? "",
-        scriptIgnoreCase: savedNewPromptState.scriptIgnoreCase ?? false,
-        scriptEnv: savedNewPromptState.scriptEnv,
-        scriptExecutionMode: savedNewPromptState.scriptExecutionMode,
-        scriptShell: savedNewPromptState.scriptShell,
-        properties: savedNewPromptState.properties,
+        ...restoreNewStepDraft(savedNewPromptState),
         savedNewPromptState: null,
-        isDirty:
-          savedNewPromptState.promptText.length > 0 ||
-          (savedNewPromptState.scriptCommand ?? "").length > 0,
+        isDirty: isNewStepDraftDirty(savedNewPromptState),
       });
     } else {
       // Try to restore from VS Code persistent state
@@ -498,24 +506,7 @@ export const useEditorStore = create<
     // state so the user can return to it without losing unsaved changes.
     if (state.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
       const key = selectionTargetKey(state.selectionTarget);
-      newPendingEdits[key] = {
-        promptText: state.promptText,
-        promptName: state.promptName,
-        stepEnabled: state.stepEnabled,
-        properties: state.properties,
-        stepType: state.stepType,
-        scriptCommand: state.scriptCommand,
-        scriptTimeoutSec: state.scriptTimeoutSec,
-        scriptOnPass: state.scriptOnPass,
-        scriptOnFail: state.scriptOnFail,
-        scriptCompareSource: state.scriptCompareSource,
-        scriptOperator: state.scriptOperator,
-        scriptExpected: state.scriptExpected,
-        scriptIgnoreCase: state.scriptIgnoreCase,
-        scriptEnv: state.scriptEnv,
-        scriptExecutionMode: state.scriptExecutionMode,
-        scriptShell: state.scriptShell,
-      };
+      newPendingEdits[key] = captureNewStepDraft(state);
     }
 
     // Save current new-prompt state when first entering edit mode.
@@ -523,24 +514,7 @@ export const useEditorStore = create<
     // so the user's new-prompt draft survives multiple prompt switches.
     const savedNewPromptState: SavedNewStepState | null =
       state.selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT
-        ? {
-            promptText: state.promptText,
-            promptName: state.promptName,
-            stepEnabled: state.stepEnabled,
-            properties: state.properties,
-            stepType: state.stepType,
-            scriptCommand: state.scriptCommand,
-            scriptTimeoutSec: state.scriptTimeoutSec,
-            scriptOnPass: state.scriptOnPass,
-            scriptOnFail: state.scriptOnFail,
-            scriptCompareSource: state.scriptCompareSource,
-            scriptOperator: state.scriptOperator,
-            scriptExpected: state.scriptExpected,
-            scriptIgnoreCase: state.scriptIgnoreCase,
-            scriptEnv: state.scriptEnv,
-            scriptExecutionMode: state.scriptExecutionMode,
-            scriptShell: state.scriptShell,
-          }
+        ? captureNewStepDraft(state)
         : state.savedNewPromptState;
 
     const isFinalStepTarget = index < 0;
@@ -687,30 +661,9 @@ export const useEditorStore = create<
         selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
         selectedPromptIndex: null,
         originalPromptData: null,
-        stepType: savedNewPromptState.stepType ?? STEP_TYPES.PROMPT,
-        stepEnabled: savedNewPromptState.stepEnabled,
-        promptText: savedNewPromptState.promptText,
-        promptName: savedNewPromptState.promptName,
-        scriptCommand: savedNewPromptState.scriptCommand ?? "",
-        scriptTimeoutSec: savedNewPromptState.scriptTimeoutSec,
-        scriptOnPass:
-          savedNewPromptState.scriptOnPass ?? CONDITION_ACTIONS.CONTINUE,
-        scriptOnFail:
-          savedNewPromptState.scriptOnFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
-        scriptCompareSource:
-          savedNewPromptState.scriptCompareSource ?? DEFAULT_COMPARE_SOURCE,
-        scriptOperator:
-          savedNewPromptState.scriptOperator ?? DEFAULT_SCRIPT_OPERATOR,
-        scriptExpected: savedNewPromptState.scriptExpected ?? "",
-        scriptIgnoreCase: savedNewPromptState.scriptIgnoreCase ?? false,
-        scriptEnv: savedNewPromptState.scriptEnv,
-        scriptExecutionMode: savedNewPromptState.scriptExecutionMode,
-        scriptShell: savedNewPromptState.scriptShell,
-        properties: savedNewPromptState.properties,
+        ...restoreNewStepDraft(savedNewPromptState),
         savedNewPromptState: null,
-        isDirty:
-          savedNewPromptState.promptText.length > 0 ||
-          (savedNewPromptState.scriptCommand ?? "").length > 0,
+        isDirty: isNewStepDraftDirty(savedNewPromptState),
         validationErrors: {},
         pendingEdits: newPendingEdits,
       });
@@ -752,19 +705,6 @@ export const useEditorStore = create<
           selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
-          stepType: STEP_TYPES.PROMPT,
-          stepEnabled: true,
-          scriptCommand: "",
-          scriptTimeoutSec: undefined,
-          scriptOnPass: CONDITION_ACTIONS.CONTINUE,
-          scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
-          scriptCompareSource: DEFAULT_COMPARE_SOURCE,
-          scriptOperator: DEFAULT_SCRIPT_OPERATOR,
-          scriptExpected: "",
-          scriptIgnoreCase: false,
-          scriptEnv: undefined,
-          scriptExecutionMode: undefined,
-          scriptShell: undefined,
           savedNewPromptState: null,
           validationErrors: {},
           pendingEdits: newPendingEdits,
@@ -780,24 +720,7 @@ export const useEditorStore = create<
     // Save current edit state into pendingEdits so the user can return later.
     const newPendingEdits = { ...state.pendingEdits };
     const key = selectionTargetKey(state.selectionTarget);
-    newPendingEdits[key] = {
-      promptText: state.promptText,
-      promptName: state.promptName,
-      stepEnabled: state.stepEnabled,
-      properties: state.properties,
-      stepType: state.stepType,
-      scriptCommand: state.scriptCommand,
-      scriptTimeoutSec: state.scriptTimeoutSec,
-      scriptOnPass: state.scriptOnPass,
-      scriptOnFail: state.scriptOnFail,
-      scriptCompareSource: state.scriptCompareSource,
-      scriptOperator: state.scriptOperator,
-      scriptExpected: state.scriptExpected,
-      scriptIgnoreCase: state.scriptIgnoreCase,
-      scriptEnv: state.scriptEnv,
-      scriptExecutionMode: state.scriptExecutionMode,
-      scriptShell: state.scriptShell,
-    };
+    newPendingEdits[key] = captureNewStepDraft(state);
 
     const { savedNewPromptState } = state;
     if (savedNewPromptState) {
@@ -805,30 +728,9 @@ export const useEditorStore = create<
         selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
         selectedPromptIndex: null,
         originalPromptData: null,
-        stepType: savedNewPromptState.stepType ?? STEP_TYPES.PROMPT,
-        stepEnabled: savedNewPromptState.stepEnabled,
-        promptText: savedNewPromptState.promptText,
-        promptName: savedNewPromptState.promptName,
-        scriptCommand: savedNewPromptState.scriptCommand ?? "",
-        scriptTimeoutSec: savedNewPromptState.scriptTimeoutSec,
-        scriptOnPass:
-          savedNewPromptState.scriptOnPass ?? CONDITION_ACTIONS.CONTINUE,
-        scriptOnFail:
-          savedNewPromptState.scriptOnFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
-        scriptCompareSource:
-          savedNewPromptState.scriptCompareSource ?? DEFAULT_COMPARE_SOURCE,
-        scriptOperator:
-          savedNewPromptState.scriptOperator ?? DEFAULT_SCRIPT_OPERATOR,
-        scriptExpected: savedNewPromptState.scriptExpected ?? "",
-        scriptIgnoreCase: savedNewPromptState.scriptIgnoreCase ?? false,
-        scriptEnv: savedNewPromptState.scriptEnv,
-        scriptExecutionMode: savedNewPromptState.scriptExecutionMode,
-        scriptShell: savedNewPromptState.scriptShell,
-        properties: savedNewPromptState.properties,
+        ...restoreNewStepDraft(savedNewPromptState),
         savedNewPromptState: null,
-        isDirty:
-          savedNewPromptState.promptText.length > 0 ||
-          (savedNewPromptState.scriptCommand ?? "").length > 0,
+        isDirty: isNewStepDraftDirty(savedNewPromptState),
         validationErrors: {},
         pendingEdits: newPendingEdits,
       });
@@ -1228,13 +1130,13 @@ export const useEditorStore = create<
       return;
     }
 
+    const draft = captureNewStepDraft(state);
     const editorState = {
-      editorText: state.promptText,
-      promptName: state.promptName,
-      stepEnabled: state.stepEnabled,
+      ...draft,
+      // Keep the legacy key for panels restored by versions that read editorText.
+      editorText: draft.promptText,
       selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
       selectedPromptIndex: null, // Always null for new prompt state
-      properties: state.properties,
     };
 
     // Merge under "editorState" key to coexist with other vscode state consumers
@@ -1267,16 +1169,15 @@ export const useEditorStore = create<
       return false;
     }
 
+    const draft = restoreNewStepDraft({
+      ...persistedState,
+      promptText: persistedState.promptText ?? persistedState.editorText ?? "",
+    });
+
     set({
       selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
-      promptText: persistedState.editorText ?? "",
-      promptName: persistedState.promptName ?? "",
-      stepEnabled: persistedState.stepEnabled !== false,
-      properties: {
-        ...PROPERTY_DEFAULTS,
-        ...(persistedState.properties ?? {}),
-      },
-      isDirty: (persistedState.editorText ?? "").length > 0,
+      ...draft,
+      isDirty: isNewStepDraftDirty(draft),
     });
 
     return true;

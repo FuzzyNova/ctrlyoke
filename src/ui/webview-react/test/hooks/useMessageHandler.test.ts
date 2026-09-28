@@ -53,6 +53,7 @@ import { useEditorStore } from "@store/editorStore";
 import { useTerminalStore } from "@store/terminalStore";
 import { useWorkspaceStatsStore } from "@store/workspaceStatsStore";
 import { useCompatibilityStore } from "@store/compatibilityStore";
+import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { getWorkflowDefinitionMutation } from "@utils/workflowMutation";
 import {
   MESSAGE_TYPES,
@@ -67,6 +68,7 @@ import {
 } from "@/types/messages";
 import type { PromptStep } from "@/types/messages";
 import {
+  EXECUTION_MODES,
   EXECUTION_PHASES,
   SCRIPT_OUTPUT_SOURCES,
   STEP_TYPES,
@@ -156,6 +158,69 @@ describe("WORKSPACE_STATS_UPDATED", () => {
     });
 
     expect(useWorkspaceStatsStore.getState().snapshot).toBe(snapshot);
+  });
+});
+
+describe("WORKFLOW_UNLOADED new-step draft", () => {
+  it("persists and restores script fields and disabled state", () => {
+    const vscodeState: { current: Record<string, unknown> | null } = {
+      current: null,
+    };
+    const vscodeApi = {
+      postMessage: vi.fn(),
+      getState: () => vscodeState.current,
+      setState: (state: Record<string, unknown>) => {
+        vscodeState.current = state;
+      },
+    };
+    window.vscodeApi = vscodeApi;
+    expect(getVsCodeApi()).toBe(vscodeApi);
+
+    renderHook(() => useMessageHandler());
+    useEditorStore.getState().setStepType(STEP_TYPES.SCRIPT);
+    useEditorStore.getState().setStepEnabled(false);
+    useEditorStore.getState().setScriptCommand("npm test");
+    useEditorStore.getState().setScriptTimeoutSec(125);
+    useEditorStore.getState().setScriptOnPass("continue");
+    useEditorStore.getState().setScriptOnFail("stopWorkflow");
+    useEditorStore.getState().setScriptCompareSource("stdout");
+    useEditorStore.getState().setScriptOperator("eq");
+    useEditorStore.getState().setScriptExpected("passed");
+    useEditorStore.getState().setScriptIgnoreCase(true);
+    useEditorStore.getState().setScriptEnv({ CI: "true" });
+    useEditorStore
+      .getState()
+      .setScriptExecutionMode(EXECUTION_MODES.HEADLESS);
+    useEditorStore.getState().setScriptShell("pwsh");
+
+    act(() => dispatch(MESSAGE_TYPES.WORKFLOW_UNLOADED));
+
+    expect(vscodeState.current?.editorState).toMatchObject({
+      stepType: STEP_TYPES.SCRIPT,
+      scriptCommand: "npm test",
+      stepEnabled: false,
+    });
+
+    expect(useEditorStore.getState().stepType).toBe(STEP_TYPES.SCRIPT);
+    useEditorStore.getState().resetEditor();
+    expect(
+      useEditorStore.getState().restoreFromVsCodeState(vscodeApi)
+    ).toBe(true);
+
+    const editor = useEditorStore.getState();
+    expect(editor.stepType).toBe(STEP_TYPES.SCRIPT);
+    expect(editor.stepEnabled).toBe(false);
+    expect(editor.scriptCommand).toBe("npm test");
+    expect(editor.scriptTimeoutSec).toBe(125);
+    expect(editor.scriptOnPass).toBe("continue");
+    expect(editor.scriptOnFail).toBe("stopWorkflow");
+    expect(editor.scriptCompareSource).toBe("stdout");
+    expect(editor.scriptOperator).toBe("eq");
+    expect(editor.scriptExpected).toBe("passed");
+    expect(editor.scriptIgnoreCase).toBe(true);
+    expect(editor.scriptEnv).toEqual({ CI: "true" });
+    expect(editor.scriptExecutionMode).toBe(EXECUTION_MODES.HEADLESS);
+    expect(editor.scriptShell).toBe("pwsh");
   });
 });
 

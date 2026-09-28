@@ -31,8 +31,8 @@ cancelling). A harness session left open after its workflow finished cannot add 
 never run; the tool refuses instead. The run is capped by the effective `maxSteps` value: the
 workflow's `maxSteps` when present, otherwise `queue.maxSteps` (100 by default). A workflow
 value of `-1` means Unlimited and overrides a numeric global cap. The count covers every entry
-in the run's `steps` array, whoever queued it, including parallel members and disabled steps; it
-does not count `finalStep` iterations or retries.
+in the run's `steps` array, whether authored or queued later, including parallel members and
+disabled steps; it does not count `finalStep` iterations or retries.
 
 ## Typical pattern
 

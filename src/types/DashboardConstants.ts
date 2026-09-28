@@ -2955,6 +2955,8 @@ export const WORKFLOW_VALIDATION_WARNING_CODES = {
    * back to "the script exited 0".
    */
   SCRIPT_COMPARISON_INCOMPLETE: "script-comparison-incomplete",
+  /** The authored queue already exceeds its workflow-level `maxSteps`. */
+  STEP_LIMIT_EXCEEDED: "step-limit-exceeded",
 } as const;
 
 // ============================================================================

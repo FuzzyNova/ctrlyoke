@@ -4,7 +4,7 @@ import type { CliOutput } from "@/types/cliEvents";
 import { CLI_EVENT_TYPES } from "@/types/cliEvents";
 import { FINAL_STEP_PHASES } from "@/types/messages";
 import { findOutputMatches, highlightText } from "@utils/outputFind";
-import type { OutputRenderRow } from "@utils/outputRows";
+import type { OutputRenderRow, ScriptVerdictRow } from "@utils/outputRows";
 import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
 
 const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
@@ -102,7 +102,7 @@ function makeStatsRow(key = "stats-1"): OutputRenderRow {
   };
 }
 
-function makeVerdictRow(): OutputRenderRow {
+function makeVerdictRow(): ScriptVerdictRow {
   return {
     key: "verdict-1",
     rowKind: OUTPUT_ROW_KINDS.SCRIPT_VERDICT,
@@ -184,6 +184,16 @@ describe("outputFind", () => {
       );
       expect(actionMatches).toHaveLength(1);
       expect(actionMatches[0]).toMatchObject({ field: "action" });
+    });
+
+    it("searches the exact default expected text rendered for a script verdict", () => {
+      const row = makeVerdictRow();
+      row.verdict.expected = undefined;
+
+      expect(findOutputMatches([row], "no `expected` set", false)).toHaveLength(
+        1
+      );
+      expect(findOutputMatches([row], "returns", false)).toHaveLength(0);
     });
 
     it("finds matches in structured bash command rows", () => {

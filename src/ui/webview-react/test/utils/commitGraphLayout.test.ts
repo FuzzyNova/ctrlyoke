@@ -121,6 +121,24 @@ describe("computeCommitGraphLayout", () => {
     expect(rows[5].outputLanes).toEqual([]);
   });
 
+  it("keeps rotating side branches out of the trunk color", () => {
+    const commits = [];
+    for (let index = 1; index <= 5; index++) {
+      commits.push(commit(`M${index}`, `M${index + 1}`, `S${index}`));
+      commits.push(commit(`S${index}`, `M${index + 1}`));
+    }
+    commits.push(commit("M6"));
+
+    const rows = computeCommitGraphLayout(commits);
+    const sideBranchColors = rows
+      .filter((_, index) => index % 2 === 0 && index < 10)
+      .map((row) => row.outputLanes.find((lane) => lane.id.startsWith("S")))
+      .map((lane) => lane?.colorIndex);
+
+    expect(sideBranchColors).toEqual([1, 2, 3, 4, 5]);
+    expect(sideBranchColors).not.toContain(0);
+  });
+
   it("lets an unloaded parent continue off the bottom of the window", () => {
     const rows = computeCommitGraphLayout([commit("tip", "unloaded-parent")]);
 

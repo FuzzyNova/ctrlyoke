@@ -24,8 +24,8 @@ quietly. Check which before you act on the outcome:
   to stderr. Nothing was changed. The message names the tool and says why, so
   read it rather than retrying the same call.
 - **Success**: the process exits zero and writes a JSON object to stdout. For
-  the queue-mutating tools (`append_step`, `edit_step`, `remove_step`,
-  `reorder_steps`) that object carries `changed`. `changed: false` means the
+  `edit_step`, `remove_step`, and `reorder_steps`, that object carries
+  `changed`. `changed: false` means the
   call was accepted but wrote nothing because the step list already matched
   what you asked for — treat it as "already done", not as a change you made.
   Some responses also carry a `note` field explaining a partial or empty

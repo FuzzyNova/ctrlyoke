@@ -28,7 +28,15 @@ function cloneLanes(lanes: readonly CommitGraphLane[]): CommitGraphLane[] {
 }
 
 function rotateColor(colorIndex: number, offset: number): number {
-  return (colorIndex + offset) % COMMIT_GRAPH_COLOR_COUNT;
+  if (colorIndex < TRUNK_COLOR_INDEX) {
+    return TRUNK_COLOR_INDEX;
+  }
+
+  return (
+    ((colorIndex - TRUNK_COLOR_INDEX - 1 + offset) %
+      COMMIT_GRAPH_COLOR_COUNT) +
+    1
+  );
 }
 
 /**

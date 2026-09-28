@@ -38,7 +38,10 @@ import {
   STATUS_MESSAGE_SEVERITY,
   type HarnessId,
 } from "../types/DashboardConstants";
-import type { ScriptVerdict } from "../types/CtrlYokeTypes";
+import {
+  DEFAULT_SCRIPT_VERDICT_EXPECTED_TEXT,
+  type ScriptVerdict,
+} from "../types/CtrlYokeTypes";
 import type { CliOutput } from "../types/WebviewMessageTypes";
 import { formatVerdictSummary } from "../core/orchestration/ScriptExecutionReporter";
 import { formatComparison } from "../utils/ScriptComparison";
@@ -447,6 +450,16 @@ export class CliTerminalFormatter {
       writeLine("");
     }
 
+    const limitViolations =
+      preview.steps[0]?.resolvedProperties.limits.violations ?? [];
+    if (limitViolations.length > 0) {
+      writeLine(chalk.bold("Limit violations"));
+      for (const violation of limitViolations) {
+        writeLine(chalk.yellow(`⚠ ${violation}`));
+      }
+      writeLine("");
+    }
+
     writeLine(chalk.bold("Steps"));
     const renderedGroups = new Set<string>();
     for (const step of preview.steps) {
@@ -722,7 +735,7 @@ export class CliTerminalFormatter {
     console.log(`${border}   Compare: ${scriptCompareLabel(verdict)}`);
     CliTerminalFormatter.writeBoundedScriptField(
       "Expected",
-      verdict.expected ?? "exit code 0 (no `returns` set)",
+      verdict.expected ?? DEFAULT_SCRIPT_VERDICT_EXPECTED_TEXT,
       border
     );
     CliTerminalFormatter.writeBoundedScriptField(

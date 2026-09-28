@@ -76,7 +76,11 @@ import {
 } from "../utils/PropertyResolver";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { exceedsLimit, isUnlimited } from "../utils/LimitUtils";
-import { resolveEffectiveMaxSteps } from "../utils/QueueLimitUtils";
+import {
+  buildStepLimitError,
+  getEffectiveMaxStepsSource,
+  resolveEffectiveMaxSteps,
+} from "../utils/QueueLimitUtils";
 import { resolveReportedScriptProperties } from "../utils/ScriptComparison";
 import { sanitizeTerminalOutput } from "../utils/TerminalOutputSanitizer";
 import { VarSubstitutor } from "../utils/VarSubstitutor";
@@ -541,6 +545,15 @@ export class WorkflowExecutor {
     }
 
     await this.showDashboard();
+
+    if (
+      await this.checkStepLimit(
+        this.promptQueue.getWorkflowFile().maxSteps,
+        this.promptQueue.getState().steps.length
+      )
+    ) {
+      return;
+    }
 
     this.logWorkflowStart(context, this.promptQueue.getProgress().total);
 
@@ -4831,7 +4844,11 @@ export class WorkflowExecutor {
       return false;
     }
 
-    const message = `Workflow stopped - Maximum step limit reached (${totalSteps}/${effectiveMaxSteps}).`;
+    const message = buildStepLimitError(
+      totalSteps,
+      effectiveMaxSteps,
+      getEffectiveMaxStepsSource(workflowMaxSteps)
+    );
     notifyUserFeedback(this.userFeedbackSink, "warning", message);
     Log.trace(`[WorkflowExecutor] ${message}`);
     this.promptQueue.getRuntimeStateMachine().fail();

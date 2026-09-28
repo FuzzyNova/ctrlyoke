@@ -40,6 +40,8 @@ import {
   describeIncompleteComparison,
   isComparisonIncomplete,
 } from "../utils/ScriptComparison";
+import { exceedsLimit } from "../utils/LimitUtils";
+import { buildStepLimitError } from "../utils/QueueLimitUtils";
 import { PromptFileResolver } from "./PromptFileResolver";
 import {
   flattenParallelItems,
@@ -58,8 +60,8 @@ import {
 import { migrateToCurrent } from "../utils/FormatMigrations";
 
 type ParallelValidationProperties = Pick<
-  ExecutionProperties,
-  "priorContext" | "sessionId"
+  PromptFile,
+  "priorContext" | "sessionId" | "maxSteps"
 >;
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -1184,6 +1186,22 @@ export class PromptFileParser {
 
     if (!hasExecutableSteps({ steps: items, finalStep: options?.finalStep })) {
       errors.push("No steps found");
+    }
+
+    const authoredMaxSteps = options?.workflowProperties?.maxSteps;
+    if (
+      authoredMaxSteps !== undefined &&
+      exceedsLimit(items.length, authoredMaxSteps)
+    ) {
+      warnings.push({
+        code: WORKFLOW_VALIDATION_WARNING_CODES.STEP_LIMIT_EXCEEDED,
+        message: buildStepLimitError(
+          items.length,
+          authoredMaxSteps,
+          "workflow maxSteps"
+        ),
+        propertyPointer: "/maxSteps",
+      });
     }
 
     if (options?.parallelGroups !== undefined) {
