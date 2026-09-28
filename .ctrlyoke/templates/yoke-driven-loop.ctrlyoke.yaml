@@ -13,7 +13,7 @@ _templateMeta:
 resumeSession: false
 priorContext: none
 harness: codex-cli
-model: gpt-5.6-luna
+model: gpt-6-luna
 executionMode: headless
 agent: null
 skills:
