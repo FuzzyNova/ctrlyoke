@@ -251,6 +251,36 @@ suite("CLI dry-run process", () => {
   });
 });
 
+suite("CLI Commander exit codes", () => {
+  teardown(async () => {
+    for (const root of temporaryRoots.splice(0)) {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("uses exit code 2 for unknown options and missing required options", async function () {
+    this.timeout(30000);
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-cli-parse-"));
+    temporaryRoots.push(root);
+
+    const unknownOption = await runCli(["run", "--not-a-real-option"], root);
+    assert.strictEqual(unknownOption.code, 2, unknownOption.stderr);
+
+    const missingRequiredOption = await runCli(["history", "runs"], root);
+    assert.strictEqual(missingRequiredOption.code, 2, missingRequiredOption.stderr);
+  });
+
+  test("keeps help at exit code 0", async function () {
+    this.timeout(30000);
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-cli-help-"));
+    temporaryRoots.push(root);
+
+    const result = await runCli(["--help"], root);
+    assert.strictEqual(result.code, 0, result.stderr);
+    assert.match(result.stdout, /Usage: ctrlyoke/);
+  });
+});
+
 suite("CLI run process harness reporting", () => {
   teardown(async () => {
     for (const root of temporaryRoots.splice(0)) {
@@ -320,6 +350,48 @@ suite("CLI run process harness reporting", () => {
     );
     assert.strictEqual(result.code, 0, result.stderr);
     assert.match(result.stdout, /Harness: claude-cli/);
+  });
+
+  test("--model overrides the workflow model while step-level models still win", async function () {
+    this.timeout(60000);
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-run-model-"));
+    temporaryRoots.push(root);
+    const workflow = path.join(root, "model-override.ctrlyoke.json");
+    await fs.writeFile(
+      workflow,
+      JSON.stringify({
+        harness: "copilot-cli",
+        model: "workflow-model",
+        steps: [
+          { prompt: "Use the workflow model" },
+          { prompt: "Keep the explicit step model", model: "step-model" },
+        ],
+      }),
+      "utf8"
+    );
+
+    const result = await runCli(
+      [
+        "run",
+        workflow,
+        "--dry-run",
+        "--json",
+        "--harness",
+        "copilot-cli",
+        "--model",
+        "flag-model",
+        "--cwd",
+        root,
+      ],
+      root
+    );
+
+    assert.strictEqual(result.code, 0, result.stderr);
+    const preview = JSON.parse(result.stdout) as {
+      steps: Array<{ resolvedProperties: { model?: string } }>;
+    };
+    assert.strictEqual(preview.steps[0].resolvedProperties.model, "flag-model");
+    assert.strictEqual(preview.steps[1].resolvedProperties.model, "step-model");
   });
 
   test("persists --var overrides and uses them when continuing a run", async function () {

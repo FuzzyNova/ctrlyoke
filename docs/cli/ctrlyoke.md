@@ -64,7 +64,7 @@ Pass either a file or `--prompt`, not both.
 | Option                       | Meaning                                                                                                                                                                              |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `-H, --harness <harness>`    | Harness override: `copilot-cli`, `claude-cli`, `codex-cli`, `opencode-cli`, `qwen-cli`, or `antigravity-cli`. Default: the workflow's `harness`, then the `defaults.harness` setting |
-| `-m, --model <model>`        | Model for the harness selected by `--harness` (Copilot CLI when `--harness` is omitted). Pass both when you override a model                                                         |
+| `-m, --model <model>`        | Override the workflow model for this run (step-level `model` values still take precedence)                                                                                             |
 | `-p, --prompt <text>`        | Run an inline prompt instead of a file                                                                                                                                               |
 | `--var <key=value>`          | Set a workflow variable (repeatable). CLI values override the workflow's own `vars`                                                                                                  |
 | `--session-id <id>`          | Resume this harness session in the first step (implies `--resume-session`)                                                                                                           |

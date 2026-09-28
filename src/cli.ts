@@ -54,7 +54,10 @@ import {
   CliTerminalFormatter,
   type CliOutputTarget,
 } from "./cli/CliTerminalFormatter";
-import { getExitCode as getTypedExitCode } from "./cli/CliExitCode";
+import {
+  CLI_USAGE_EXIT_CODE,
+  getExitCode as getTypedExitCode,
+} from "./cli/CliExitCode";
 import {
   buildCliJsonResult,
   buildCliPreviewJsonResult,
@@ -191,6 +194,9 @@ declare const VERSION: string;
 const version = typeof VERSION !== "undefined" ? VERSION : "0.0.0-dev";
 
 const program = new Command();
+program.exitOverride((error) => {
+  process.exit(error.exitCode === 0 ? 0 : CLI_USAGE_EXIT_CODE);
+});
 
 const CLI_RUN_OPERATION_KINDS = {
   RUN: "run",
@@ -1187,6 +1193,11 @@ async function runCommand(
         );
       }
 
+      if (config.model) {
+        instance.promptQueue.updateWorkflowProperty("model", config.model);
+        await instance.promptQueue.updateWorkingFile(true);
+      }
+
       printRunHeader();
       warnAboutClampedInteractiveSteps(
         instance.promptQueue.getWorkflowFile(),
@@ -1485,7 +1496,7 @@ async function dryRunCommand(
   try {
     assertHarnessId(harness);
     const parser = new PromptFileParser(platform, userFeedbackSink);
-    const workflow = options.prompt
+    const workflow: PromptFile | null = options.prompt
       ? { steps: [{ prompt: options.prompt }] }
       : await parser.parsePromptFile(resolvedFile!);
     if (!workflow) {
@@ -1493,6 +1504,10 @@ async function dryRunCommand(
         parser.lastNewerSchemaError?.message ??
           `Failed to load workflow file: ${resolvedFile}`
       );
+    }
+
+    if (config.model) {
+      workflow.model = config.model;
     }
 
     if (resolvedFile) {
