@@ -196,6 +196,52 @@ class FixedEvaluationEvaluator extends EndConditionEvaluator {
   }
 }
 
+class RecordingShellEvaluator extends EndConditionEvaluator {
+  readonly shells: Array<string | undefined> = [];
+
+  constructor(
+    platform: MockPlatform,
+    private readonly results: EvaluationResult[]
+  ) {
+    super(platform);
+  }
+
+  override async evaluateCondition(
+    condition: ScriptProperties
+  ): Promise<EvaluationResult> {
+    this.shells.push(condition.shell);
+    const result = this.results.shift();
+    if (!result) {
+      throw new Error("Unexpected condition evaluation");
+    }
+    return result;
+  }
+}
+
+class RecordingScriptTimeoutEvaluator extends EndConditionEvaluator {
+  result: EvaluationResult | undefined;
+
+  override async evaluateCondition(
+    ...args: Parameters<EndConditionEvaluator["evaluateCondition"]>
+  ): Promise<EvaluationResult> {
+    this.result = await super.evaluateCondition(...args);
+    return this.result;
+  }
+}
+
+function shellEvaluationResult(passed: boolean): EvaluationResult {
+  return {
+    passed,
+    actual: passed ? "0" : "1",
+    errored: false,
+    stdout: "",
+    stderr: "",
+    result: "",
+    duration: 1,
+    exitCode: passed ? 0 : 1,
+  };
+}
+
 class RecordingSnapshotService extends WorkspaceSnapshotService {
   captureCount = 0;
 
@@ -362,6 +408,263 @@ suite("WorkflowExecutor token totals", () => {
     assert.strictEqual(tokens?.cached, usage.cachedInputTokens);
     assert.strictEqual(tokens?.cacheCreated, usage.cacheCreatedTokens);
     assert.strictEqual(tokens?.total, 200);
+  });
+});
+
+suite("WorkflowExecutor condition shell reporting", () => {
+  test("passes a pre-condition shell override to the evaluator", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+      shellEvaluationResult(true),
+    ]);
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "run after gate",
+          preCondition: { script: "check-gate", shell: "pwsh" },
+        },
+      ],
+    });
+
+    await makeExecutor(queue, evaluator).execute(
+      integration,
+      makeContext(integration)
+    );
+
+    assert.deepStrictEqual(evaluator.shells, ["pwsh"]);
+  });
+
+  test("passes the initial end-condition shell override to the evaluator", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+      shellEvaluationResult(true),
+    ]);
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "check result",
+          endCondition: { script: "check-result", shell: "pwsh" },
+        },
+      ],
+    });
+
+    await makeExecutor(queue, evaluator).execute(
+      integration,
+      makeContext(integration)
+    );
+
+    assert.deepStrictEqual(evaluator.shells, ["pwsh"]);
+  });
+
+  test("passes the end-condition shell override during retry re-evaluation", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+      shellEvaluationResult(false),
+      shellEvaluationResult(true),
+    ]);
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "check result",
+          endCondition: {
+            script: "check-result",
+            shell: "pwsh",
+            onFail: CONDITION_ACTIONS.RETRY,
+            maxRetries: 1,
+            retryPrompt: "try again",
+          },
+        },
+      ],
+    });
+
+    await makeExecutor(queue, evaluator).execute(
+      integration,
+      makeContext(integration)
+    );
+
+    assert.deepStrictEqual(evaluator.shells, ["pwsh", "pwsh"]);
+  });
+
+  test("uses resumeSessionOnRetry false for a fresh-session retry", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const sentResumeValues: Array<boolean | undefined> = [];
+    integration.onSend = async (_prompt, workflowContext) => {
+      sentResumeValues.push(workflowContext?.resolvedProperties?.resumeSession);
+      return { responseText: "ok" };
+    };
+    const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+      shellEvaluationResult(false),
+      shellEvaluationResult(true),
+    ]);
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "initial",
+          resumeSession: true,
+          endCondition: {
+            script: "check-result",
+            onFail: CONDITION_ACTIONS.RETRY,
+            maxRetries: 1,
+            retryPrompt: "retry",
+            resumeSessionOnRetry: false,
+          },
+        },
+      ],
+    });
+
+    await makeExecutor(queue, evaluator).execute(
+      integration,
+      makeContext(integration)
+    );
+
+    assert.deepStrictEqual(integration.sentPrompts, ["initial", "retry"]);
+    assert.deepStrictEqual(sentResumeValues, [true, false]);
+  });
+
+  test("resumes the session on end-condition retries when true or omitted", async () => {
+    for (const resumeSessionOnRetry of [true, undefined]) {
+      const queue = new PromptQueue();
+      const integration = new MockHarnessIntegration(undefined, false);
+      const sentResumeValues: Array<boolean | undefined> = [];
+      integration.onSend = async (_prompt, workflowContext) => {
+        sentResumeValues.push(
+          workflowContext?.resolvedProperties?.resumeSession
+        );
+        return { responseText: "ok" };
+      };
+      const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+        shellEvaluationResult(false),
+        shellEvaluationResult(true),
+      ]);
+      queue.loadPrompts({
+        steps: [
+          {
+            prompt: "initial",
+            endCondition: {
+              script: "check-result",
+              onFail: CONDITION_ACTIONS.RETRY,
+              maxRetries: 1,
+              retryPrompt: "retry",
+              ...(resumeSessionOnRetry === undefined
+                ? {}
+                : { resumeSessionOnRetry }),
+            },
+          },
+        ],
+      });
+
+      await makeExecutor(queue, evaluator).execute(
+        integration,
+        makeContext(integration)
+      );
+
+      assert.deepStrictEqual(sentResumeValues, [false, true]);
+    }
+  });
+
+  test("preserves step args and tool permissions on an end-condition retry", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const retryResolvedProperties: Array<{
+      additionalArgs?: string;
+      toolPermissions?: PromptStep["toolPermissions"];
+    }> = [];
+    integration.onSend = async (prompt, workflowContext) => {
+      if (prompt.prompt === "retry") {
+        retryResolvedProperties.push({
+          additionalArgs: workflowContext?.resolvedProperties?.additionalArgs,
+          toolPermissions: workflowContext?.resolvedProperties?.toolPermissions,
+        });
+      }
+      return { responseText: "ok" };
+    };
+    const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+      shellEvaluationResult(false),
+      shellEvaluationResult(true),
+    ]);
+    const toolPermissions: NonNullable<PromptStep["toolPermissions"]> = {
+      mode: "custom",
+      allowedTools: ["Read"],
+      deniedTools: ["Write"],
+    };
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "initial",
+          additionalArgs: "--effort high",
+          toolPermissions,
+          endCondition: {
+            script: "check-result",
+            onFail: CONDITION_ACTIONS.RETRY,
+            maxRetries: 1,
+            retryPrompt: "retry",
+          },
+        },
+      ],
+    });
+
+    await makeExecutor(queue, evaluator).execute(
+      integration,
+      makeContext(integration)
+    );
+
+    assert.deepStrictEqual(retryResolvedProperties, [
+      {
+        additionalArgs: "--effort high",
+        toolPermissions,
+      },
+    ]);
+  });
+
+  test("re-sends an end-condition retry after a retry harness failure", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    let sendCount = 0;
+    integration.onSend = async () => {
+      sendCount += 1;
+      if (sendCount === 2) {
+        integration.harnessErrorFailure = true;
+        return { success: false };
+      }
+      integration.harnessErrorFailure = false;
+      return { responseText: "ok" };
+    };
+    const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+      shellEvaluationResult(false),
+      shellEvaluationResult(true),
+    ]);
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "initial",
+          errorBehavior: {
+            onError: CONDITION_ACTIONS.RETRY,
+            maxRetries: 2,
+          },
+          endCondition: {
+            script: "check-result",
+            onFail: CONDITION_ACTIONS.RETRY,
+            maxRetries: 1,
+            retryPrompt: "retry",
+          },
+        },
+      ],
+    });
+
+    await makeExecutor(queue, evaluator).execute(
+      integration,
+      makeContext(integration)
+    );
+
+    assert.deepStrictEqual(integration.sentPrompts, [
+      "initial",
+      "retry",
+      "retry",
+    ]);
   });
 });
 
@@ -2011,6 +2314,35 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       queue.getState().results[0].status,
       STEP_STATUS.COMPLETED
     );
+  });
+
+  test("honours a script step timeoutSec below the global script timeout", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new RecordingScriptTimeoutEvaluator(new MockPlatform());
+    const executor = makeExecutor(queue, evaluator);
+    queue.loadPrompts({
+      steps: [
+        {
+          type: "script",
+          script: `node -e "setTimeout(() => {}, 10000)"`,
+          timeoutSec: 1,
+          errorBehavior: { onError: "continue" },
+        },
+      ],
+    });
+
+    configService.setCliOverlay({
+      execution: { scriptTimeoutSec: 30 },
+    });
+    try {
+      await executor.execute(integration, makeContext(integration));
+    } finally {
+      configService.setCliOverlay({});
+    }
+
+    assert.strictEqual(evaluator.result?.timeout, true);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
   });
 
   test("fails before sending missing or empty prompt-file references", async () => {

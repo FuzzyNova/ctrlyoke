@@ -76,6 +76,42 @@ suite("Condition output references", () => {
     assert.deepStrictEqual(result.unresolved, []);
   });
 
+  for (const { phase, summary } of [
+    { phase: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION, summary: preCondition },
+    { phase: SCRIPT_OUTPUT_SOURCES.END_CONDITION, summary: endCondition },
+  ]) {
+    for (const { field, punctuation, value } of [
+      {
+        field: RETRY_PROMPT_PLACEHOLDERS.EXIT_CODE,
+        punctuation: ",",
+        value: String(summary.exitCode),
+      },
+      {
+        field: RETRY_PROMPT_PLACEHOLDERS.STDERR,
+        punctuation: "-",
+        value: summary.stderr.trim(),
+      },
+      {
+        field: RETRY_PROMPT_PLACEHOLDERS.STDOUT,
+        punctuation: ".",
+        value: summary.stdout.trim(),
+      },
+    ]) {
+      test(`substitutes $${phase}:${field} before ${punctuation}`, () => {
+        const result = substituteConditionOutputRefs(
+          `$${phase}:${field}${punctuation} continue`,
+          { [phase]: summary }
+        );
+
+        assert.strictEqual(
+          result.text,
+          `${value}${punctuation} continue`
+        );
+        assert.deepStrictEqual(result.unresolved, []);
+      });
+    }
+  }
+
   test("leaves references unresolved when a phase summary is missing", () => {
     const token = "$endCondition:stdout";
     const result = substituteConditionOutputRefs(token, { preCondition });

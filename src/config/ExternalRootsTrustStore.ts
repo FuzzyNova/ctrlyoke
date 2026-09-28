@@ -8,6 +8,7 @@ import {
   type TrustDecisionFile,
 } from "./TrustDecisionFile";
 import { PERSISTED_STORES } from "../utils/PersistedSchemaGuard";
+import { foldPathForCompare } from "../utils/PathCasing";
 
 /**
  * A user's one-time decision about a workspace-configured external root.
@@ -41,17 +42,30 @@ export class ExternalRootsTrustStore {
   constructor(private readonly storePath: string) {}
 
   /**
-   * Resolve a root to its canonical form for comparison/storage: the real
-   * path when the directory exists (so symlinks and case differences
-   * collapse to one identity), otherwise the resolved lexical path (the
-   * directory may not exist yet, e.g. a log dir created on first harness run).
+   * Resolve a root to its canonical form for comparison/storage. Resolving the
+   * nearest existing ancestor keeps paths stable while a not-yet-created
+   * directory is created; folding then accounts for Windows filesystem
+   * case-insensitivity.
    */
   static canonicalizeRoot(root: string): string {
     const resolved = path.resolve(root);
-    try {
-      return fs.realpathSync.native(resolved);
-    } catch {
-      return resolved;
+    let existingAncestor = resolved;
+    const missingSegments: string[] = [];
+
+    while (true) {
+      try {
+        const canonicalAncestor = fs.realpathSync.native(existingAncestor);
+        return foldPathForCompare(
+          path.join(canonicalAncestor, ...missingSegments.reverse())
+        );
+      } catch {
+        const parent = path.dirname(existingAncestor);
+        if (parent === existingAncestor) {
+          return foldPathForCompare(resolved);
+        }
+        missingSegments.push(path.basename(existingAncestor));
+        existingAncestor = parent;
+      }
     }
   }
 

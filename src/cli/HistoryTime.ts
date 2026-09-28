@@ -10,13 +10,16 @@ const HISTORY_TIME_UNIT_MS = {
   [HISTORY_TIME_UNITS.DAYS]: 86_400_000,
 } as const;
 
+const ISO_HISTORY_TIME_PATTERN =
+  /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})?)?$/;
+
 /** Parses an ISO timestamp or a duration ago such as `7d`, `24h`, or `30m`. */
 export function parseHistoryTime(
   value: string,
   now: number = Date.now()
 ): number {
   const normalized = value.trim();
-  const relativeMatch = /^(\d+)([dhm])$/i.exec(normalized);
+  const relativeMatch = /^(\d+)([dhm])$/.exec(normalized);
   if (relativeMatch) {
     const amount = Number(relativeMatch[1]);
     const unit =
@@ -26,9 +29,11 @@ export function parseHistoryTime(
     }
   }
 
-  const timestamp = Date.parse(normalized);
-  if (Number.isFinite(timestamp)) {
-    return timestamp;
+  if (ISO_HISTORY_TIME_PATTERN.test(normalized)) {
+    const timestamp = Date.parse(normalized);
+    if (Number.isFinite(timestamp)) {
+      return timestamp;
+    }
   }
 
   throw new Error(

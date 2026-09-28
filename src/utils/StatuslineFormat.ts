@@ -1,3 +1,6 @@
+// Keep this standalone statusline module dependent only on import-free leaves.
+import { formatCompactTokenMagnitude } from "./CompactMagnitude";
+
 /**
  * Version of the snapshot file the statusline scripts write for ctrlyoke's
  * sidecars (`_ctrlyoke.protocolVersion`). The scripts run from the shared
@@ -374,11 +377,9 @@ function compactTokenCount(value: unknown): string {
   const number = finiteNumber(value) ?? 0;
   const absolute = Math.abs(number);
   const sign = number < 0 ? "-" : "";
-  if (absolute >= 1_000_000_000)
-    return `${sign}${(absolute / 1_000_000_000).toFixed(1)}B`;
-  if (absolute >= 1_000_000)
-    return `${sign}${(absolute / 1_000_000).toFixed(1)}M`;
-  if (absolute >= 1_000) return `${sign}${(absolute / 1_000).toFixed(1)}k`;
+  if (absolute >= 1_000) {
+    return `${sign}${formatCompactTokenMagnitude(absolute)}`;
+  }
   return `${Math.round(number)}`;
 }
 

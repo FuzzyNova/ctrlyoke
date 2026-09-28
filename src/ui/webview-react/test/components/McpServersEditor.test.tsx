@@ -1,6 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import Ajv from "ajv/dist/2020";
+import addFormats from "ajv-formats";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import workflowSchema from "../../../../../schemas/workflow-schema.json";
 import {
   CTRLYOKE_TOOL_GROUPS,
+  McpServersEditor,
   CTRLYOKE_USER_TOOLS,
 } from "@components/shared/McpServersEditor";
 import {
@@ -8,7 +14,36 @@ import {
   MCP_WORKFLOW_TOOL_NAMES,
 } from "@root/utils/McpToolDefinitions";
 
+afterEach(cleanup);
+
 describe("CTRLYOKE_USER_TOOLS", () => {
+  it("emits a built-in denied-tools entry accepted by the workflow schema", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <McpServersEditor
+        value={["ctrlyoke"]}
+        onChange={onChange}
+        showDefault={false}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: /append step/i }));
+
+    const [mcpServers] = onChange.mock.lastCall as [unknown[]];
+    const ajv = new Ajv({ allErrors: true, allowUnionTypes: true });
+    addFormats(ajv);
+    const validate = ajv.compile(workflowSchema);
+    const workflow = {
+      mcpServers,
+      steps: [{ prompt: "Read the queue." }],
+    };
+    expect(validate(workflow), JSON.stringify(validate.errors)).toBe(true);
+    expect(mcpServers).toEqual([
+      { id: "ctrlyoke", deniedTools: ["append_step"] },
+    ]);
+  });
+
   it("covers every workflow and coordination tool the built-in server exposes", () => {
     // The per-tool checkboxes are the only way to deny an individual ctrlyoke
     // tool, and the header renders "N of CTRLYOKE_USER_TOOLS.length enabled".

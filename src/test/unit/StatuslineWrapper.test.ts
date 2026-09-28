@@ -456,6 +456,31 @@ suite("Shared statusline wrappers", function () {
     assert.doesNotMatch(qwenLine, /\(7\.8%\)/);
   });
 
+  test("promotes statusline context counts when rounding reaches the next unit", () => {
+    const context = [{ type: "field", field: "context" }];
+    const expected = new Map([
+      [999_949, "999.9k"],
+      [999_950, "1.0M"],
+      [999_999, "1.0M"],
+      [1_000_000, "1.0M"],
+      [999_999_999, "1.0B"],
+    ]);
+
+    for (const [used, formatted] of expected) {
+      const line = shared.formatBrandedStatusLine(
+        "qwen",
+        {
+          context_window: {
+            current_usage: used,
+            context_window_size: 1_000_000_000,
+          },
+        },
+        context
+      );
+      assert.match(line, new RegExp(`${formatted}/`));
+    }
+  });
+
   test("uses the cwd fallback for directory rendering and branch lookup", async () => {
     tempDirectory = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-statusline-cwd-fallback-")

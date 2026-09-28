@@ -10,6 +10,7 @@ import {
 } from "../types/DashboardConstants";
 import type { AttemptCostEstimate } from "../types/CtrlYokeTypes";
 import { HARNESS_TOKEN_SEMANTICS } from "./TokenSemantics";
+import { formatCompactTokenMagnitude } from "./CompactMagnitude";
 
 /** Explains why the context-window snapshot and attempt total are not additive. */
 export const TOKEN_USAGE_SCOPE_NOTE =
@@ -43,10 +44,6 @@ function normalizeTokenCount(tokens: number | undefined): number | undefined {
   return Math.round(tokens);
 }
 
-function formatUnitValue(value: number): string {
-  return value.toFixed(1).replace(/\.0$/, "");
-}
-
 /** Format a known token count compactly for visual labels. */
 export function formatTokenCount(tokens: number | undefined): string {
   const normalized = normalizeTokenCount(tokens);
@@ -54,15 +51,7 @@ export function formatTokenCount(tokens: number | undefined): string {
     return "";
   }
 
-  if (normalized >= 1_000_000) {
-    return `${formatUnitValue(normalized / 1_000_000)}M`;
-  }
-
-  if (normalized >= 1_000) {
-    return `${formatUnitValue(normalized / 1_000)}k`;
-  }
-
-  return String(normalized);
+  return formatCompactTokenMagnitude(normalized, { trimTrailingZero: true });
 }
 
 /** Resolve an attempt total without discarding a provider-reported value. */

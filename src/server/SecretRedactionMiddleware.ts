@@ -6,14 +6,14 @@ import { secretRedactionService } from "../utils/SecretRedactionService";
  * dev/implemented/SECRETS_AND_REDACTION_PLAN.md: every JSON/text response
  * passes through `secretRedactionService` before it reaches the client.
  *
- * Routes that serve ctrlyoke's own generated script sources (the standalone
- * shim, the service worker) must set `res.locals.skipSecretRedaction = true`
- * before calling `res.send`/`res.json` to opt out. That escape hatch exists
- * because those responses are pure application code, never user data, and
+ * Routes that serve ctrlyoke-generated output containing credentials (the
+ * standalone shim, service worker, manifest, and patched HTML) must set
+ * `res.locals.skipSecretRedaction = true` before calling `res.send`/`res.json`
+ * to opt out. Those responses are application output, never user data, and
  * the heuristic `credential-assignment` rule in `PreviewRedactor.ts` matches
- * ordinary JS like `token=${encodeURIComponent(token)}` — redacting it
- * truncated the shim's WebSocket URL builder to `token=[REDACTED]}`,
- * corrupting the auth query string every browser client sent on connect.
+ * generated token query strings as well as ordinary JS like
+ * `token=${encodeURIComponent(token)}`. Redacting them corrupts the auth URLs
+ * clients need to connect to the hosted server.
  */
 export function installSecretRedactionMiddleware(app: express.Express): void {
   app.use((_req, res, next) => {

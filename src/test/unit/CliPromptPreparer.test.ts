@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { suite, test } from "mocha";
 import { CliPromptPreparer } from "../../core/harness/shared/CliPromptPreparer";
+import { ContextExpander } from "../../utils/ContextExpander";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import type { PromptSections } from "../../core/HarnessIntegration";
 import type { PromptStep } from "../../types/CtrlYokeTypes";
@@ -305,9 +306,94 @@ suite("CliPromptPreparer", () => {
 
     assert.strictEqual(
       result.promptWithInstruction,
-      "Use pre=${pre} pre-output and end=$end end-error"
+      "Use pre=${pre} ```\npre-output\n``` and end=$end " +
+        "```\nend-error\n```"
     );
     assert.deepStrictEqual(result.diagnostics, []);
+  });
+
+  test("keeps condition output inert while resolving authored prompt references", async () => {
+    const workspaceRoot = makeTempDir("cy-condition-output-refs-");
+    const authoredFilePath = path.join(workspaceRoot, "src", "config.ts");
+    fs.mkdirSync(path.dirname(authoredFilePath), { recursive: true });
+    fs.writeFileSync(authoredFilePath, "export const config = true;\n");
+    const expander = new ContextExpander({ workspaceRoot });
+    let priorContextResolutionCount = 0;
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async (prompt) => {
+        const split = await expander.expandContextSplit(prompt.prompt);
+        return createSections({
+          directFileRefs: split.directFileRefs,
+          imageFileRefs: split.imageFileRefs,
+          sourceRuntimeCopies: split.sourceRuntimeCopies,
+          sourceRuntimeReadReferences: split.sourceRuntimeReadReferences,
+          excerptContent: split.excerptBlocks || null,
+          skippedReferences: split.skippedReferences,
+          userPromptText: await expander.sanitizeReferences(
+            prompt.prompt,
+            (quotedPath) => `@${quotedPath}`
+          ),
+        });
+      },
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "prior context",
+      getWorkspaceRoot: () => workspaceRoot,
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+    });
+    const stdout = [
+      "> @acme/web@1.0.0 test",
+      "> vitest run",
+      "FAIL test.ts: expected !CTRLYOKE_CONDITION_OUTPUT_SECRET; see @missing-from-output.ts",
+      "Previous output: $previous",
+      "Unavailable skill: /skill:not-installed",
+    ].join("\n");
+
+    try {
+      const plan = await preparer.planPrompt(
+        {
+          prompt: "Inspect @src/config.ts. Test output:\n$endCondition:stdout",
+        } as PromptStep,
+        {
+          promptIndex: 1,
+          allPrompts: [],
+          endConditionResult: {
+            passed: false,
+            script: "test.js",
+            actual: "failed",
+            stdout,
+            stderr: "",
+            durationMs: 1,
+          },
+          resolvePriorContextItems: async () => {
+            priorContextResolutionCount++;
+            return [];
+          },
+        } as unknown as WorkflowContext,
+        undefined,
+        undefined
+      );
+
+      assert.deepStrictEqual(plan.diagnostics, []);
+      assert.deepStrictEqual(
+        plan.promptPreview.sections
+          .filter(
+            (section) =>
+              section.category === PREVIEW_PROMPT_CATEGORIES.FILE_REFERENCE
+          )
+          .map((section) => section.path),
+        [authoredFilePath]
+      );
+      assert.strictEqual(priorContextResolutionCount, 0);
+      assert.ok(plan.promptWithInstruction.includes(stdout));
+      assert.ok(plan.promptWithInstruction.includes("@src/config.ts"));
+    } finally {
+      removeTempDir(workspaceRoot);
+    }
   });
 
   test("should warn for unavailable condition output and avoid double substitution", async () => {
@@ -371,7 +457,7 @@ suite("CliPromptPreparer", () => {
     );
     assert.strictEqual(
       literalContent.promptWithInstruction,
-      "The output was $preCondition:stdout"
+      "The output was ```\n$preCondition:stdout\n```"
     );
   });
 

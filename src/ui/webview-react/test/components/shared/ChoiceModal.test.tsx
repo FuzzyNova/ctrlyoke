@@ -13,7 +13,7 @@ vi.mock("@hooks/useMessageHandler", () => ({ sendMessage }));
 
 beforeEach(() => {
   sendMessage.mockClear();
-  useChoiceStore.setState({ pendingRequest: null });
+  useChoiceStore.setState({ requests: [] });
 });
 
 describe("ChoiceModal", () => {
@@ -49,7 +49,53 @@ describe("ChoiceModal", () => {
       id: "choice-1",
       value: EXTERNAL_FILE_TRUST_SCOPES.WORKFLOW,
     });
-    expect(useChoiceStore.getState().pendingRequest).toBeNull();
+    expect(useChoiceStore.getState().requests).toEqual([]);
+  });
+
+  it("answers queued requests in order", async () => {
+    const user = userEvent.setup();
+    const firstRequest = {
+      id: "choice-first",
+      title: "First choice",
+      detail: "Choose the first scope",
+      choices: [{ value: "first", label: "First scope" }],
+    };
+    const secondRequest = {
+      id: "choice-second",
+      title: "Second choice",
+      detail: "Choose the second scope",
+      choices: [{ value: "second", label: "Second scope" }],
+    };
+    useChoiceStore.getState().setPendingRequest(firstRequest);
+    useChoiceStore.getState().setPendingRequest(secondRequest);
+
+    render(<ChoiceModal />);
+    expect(
+      screen.getByRole("heading", { name: "First choice" })
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(sendMessage).toHaveBeenLastCalledWith(
+      MESSAGE_TYPES.CHOICE_RESPONSE,
+      {
+        id: "choice-first",
+        value: "first",
+      }
+    );
+    expect(
+      screen.getByRole("heading", { name: "Second choice" })
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(sendMessage).toHaveBeenLastCalledWith(
+      MESSAGE_TYPES.CHOICE_RESPONSE,
+      {
+        id: "choice-second",
+        value: "second",
+      }
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(useChoiceStore.getState().requests).toEqual([]);
   });
 
   it("dismisses without selecting a scope", async () => {

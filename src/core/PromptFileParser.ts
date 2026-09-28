@@ -24,6 +24,7 @@ import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { stripLegacyWorkingFileLineageMetadata } from "../utils/WorkingFileMetadata";
 import { Log } from "../utils/Log";
+import { stripLeadingBom } from "../utils/TextUtils";
 import { getVariableKeyErrors } from "../utils/KeyValueKeyKinds";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
@@ -85,6 +86,11 @@ export class PromptFileParser {
   private strictValidator?: ValidateFunction;
   private relaxedValidator?: ValidateFunction;
   private ajv = new Ajv({ allErrors: true, allowUnionTypes: true });
+
+  private async readWorkflowFileContent(filePath: string): Promise<string> {
+    const content = await fs.readFile(filePath, "utf8");
+    return stripLeadingBom(content);
+  }
 
   constructor(
     private readonly platform?: PlatformAdapter,
@@ -150,7 +156,7 @@ export class PromptFileParser {
         return this.parseMarkdownPromptFile(filePath);
       }
 
-      const content = await fs.readFile(filePath, "utf8");
+      const content = await this.readWorkflowFileContent(filePath);
       let parsed: any;
 
       // Parse based on file extension
@@ -541,7 +547,7 @@ export class PromptFileParser {
     filePath: string
   ): Promise<ParsedPromptFile | null> {
     try {
-      const content = await fs.readFile(filePath, "utf8");
+      const content = await this.readWorkflowFileContent(filePath);
 
       const frontmatterMatch = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u.exec(
         content

@@ -37,6 +37,7 @@ import type {
   CoordinationParticipant,
 } from "./types/CtrlYokeTypes";
 import { isScriptStep } from "./types/CtrlYokeTypes";
+import { mergeWorkflowStepUpdate } from "./core/WorkflowStepSanitizer";
 import {
   BOOLEAN_STRING_VALUES,
   CAPABILITIES_FILE,
@@ -1119,39 +1120,9 @@ export class CtrlYokeMCPServer {
     }
     const flattened = flattenParallelItems(resolvedItems);
 
-    // Validate harness/model against capabilities.json (best-effort: skip if file absent)
-    const capabilities = await this.readCapabilities();
-    if (capabilities) {
-      for (const p of flattened.topology.steps) {
-        if (isScriptStep(p)) {
-          continue;
-        }
-        const promptHarness = p.harness;
-        const promptModel = p.model;
-        if (promptHarness) {
-          const harnessEntry = capabilities.harnesses.find(
-            (h) => h.id === promptHarness
-          );
-          if (!harnessEntry) {
-            const available = capabilities.harnesses
-              .filter((h) => h.available)
-              .map((h) => h.id)
-              .join(", ");
-            throw new Error(
-              `Invalid harness '${promptHarness}'. Available harnesses: ${available || "(none)"}`
-            );
-          }
-          if (promptModel && harnessEntry.models.length > 0) {
-            const modelValues = harnessEntry.models.map((m) => m.value);
-            if (!modelValues.includes(promptModel)) {
-              throw new Error(
-                `Invalid model '${promptModel}' for harness '${promptHarness}'. Valid models: ${modelValues.join(", ")}`
-              );
-            }
-          }
-        }
-      }
-    }
+    await this.validateStepHarnessAndModelCapabilities(
+      flattened.topology.steps
+    );
 
     let response: McpAppendStepResult | null = null;
 
@@ -1258,6 +1229,19 @@ export class CtrlYokeMCPServer {
       "edit",
       true
     );
+    const workingFile = await this.readAttachedRun(
+      MCP_EDIT_STEP_TOOL_NAME,
+      selected.filePath
+    );
+    const existingStep = workingFile.steps?.[index];
+    if (existingStep) {
+      const effectiveStep = mergeWorkflowStepUpdate(
+        existingStep,
+        toWorkflowStepUpdates(updates),
+        clearProperties
+      );
+      await this.validateStepHarnessAndModelCapabilities([effectiveStep]);
+    }
     const edited = await RunContinuationService.editStepAtRun(
       this.workspaceRoot,
       selected.workflowKey,
@@ -1423,6 +1407,41 @@ export class CtrlYokeMCPServer {
       return JSON.parse(content) as CapabilitiesFile;
     } catch {
       return null;
+    }
+  }
+
+  /** Validate prompt-step harness/model values against detected capabilities. */
+  private async validateStepHarnessAndModelCapabilities(
+    steps: readonly WorkflowStep[]
+  ): Promise<void> {
+    const capabilities = await this.readCapabilities();
+    if (!capabilities) return;
+
+    for (const step of steps) {
+      if (isScriptStep(step) || !step.harness) continue;
+
+      const harnessEntry = capabilities.harnesses.find(
+        (harness) => harness.id === step.harness
+      );
+      if (!harnessEntry) {
+        const available = capabilities.harnesses
+          .filter((harness) => harness.available)
+          .map((harness) => harness.id)
+          .join(", ");
+        throw new Error(
+          `Invalid harness '${step.harness}'. Available harnesses: ${available || "(none)"}`
+        );
+      }
+      if (
+        step.model &&
+        harnessEntry.models.length > 0 &&
+        !harnessEntry.models.some((model) => model.value === step.model)
+      ) {
+        const modelValues = harnessEntry.models.map((model) => model.value);
+        throw new Error(
+          `Invalid model '${step.model}' for harness '${step.harness}'. Valid models: ${modelValues.join(", ")}`
+        );
+      }
     }
   }
 

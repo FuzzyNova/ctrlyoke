@@ -402,7 +402,8 @@ export class DashboardBroadcastHub
     steps: any[],
     finalStep?: WorkflowStep | null,
     parallelGroups?: ParallelGroupDefinition[],
-    definitionRevision?: number
+    definitionRevision?: number,
+    workflowId?: string
   ): void {
     for (const client of this.clients) {
       client.updatePromptDeleted?.(
@@ -410,7 +411,8 @@ export class DashboardBroadcastHub
         steps,
         finalStep,
         parallelGroups,
-        definitionRevision
+        definitionRevision,
+        workflowId
       );
     }
   }

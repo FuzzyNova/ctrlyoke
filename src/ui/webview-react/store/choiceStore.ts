@@ -2,38 +2,40 @@ import { create } from "zustand";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import type { ShowChoiceRequestMessage } from "@root/types/WebviewMessageTypes";
 import { sendMessage } from "@hooks/useMessageHandler";
+import { dequeueRequest, enqueueRequest } from "./requestQueue";
 
 export type PendingChoiceRequest = ShowChoiceRequestMessage["request"];
 
 interface ChoiceState {
-  pendingRequest: PendingChoiceRequest | null;
+  requests: PendingChoiceRequest[];
   setPendingRequest: (request: PendingChoiceRequest) => void;
   respond: (value: string) => void;
   dismiss: () => void;
 }
 
 export const useChoiceStore = create<ChoiceState>((set, get) => ({
-  pendingRequest: null,
+  requests: [],
 
-  setPendingRequest: (request) => set({ pendingRequest: request }),
+  setPendingRequest: (request) =>
+    set((state) => ({ requests: enqueueRequest(state.requests, request) })),
 
   respond: (value) => {
-    const request = get().pendingRequest;
+    const request = get().requests[0];
     if (!request) return;
     sendMessage(MESSAGE_TYPES.CHOICE_RESPONSE, {
       id: request.id,
       value,
     });
-    set({ pendingRequest: null });
+    set((state) => ({ requests: dequeueRequest(state.requests) }));
   },
 
   dismiss: () => {
-    const request = get().pendingRequest;
+    const request = get().requests[0];
     if (!request) return;
     sendMessage(MESSAGE_TYPES.CHOICE_RESPONSE, {
       id: request.id,
       value: null,
     });
-    set({ pendingRequest: null });
+    set((state) => ({ requests: dequeueRequest(state.requests) }));
   },
 }));

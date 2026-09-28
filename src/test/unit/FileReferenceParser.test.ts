@@ -10,6 +10,7 @@ import {
   parseInlinePriorContextRefs,
   encodePriorContextTokenRef,
   decodePriorContextTokenRef,
+  maskFencedCodeBlocks,
 } from "../../utils/FileReferenceParser";
 import {
   buildFileReference,
@@ -18,6 +19,26 @@ import {
 } from "../../completions/ContextReferenceBuilder";
 
 suite("FileReferenceParser", () => {
+  suite("maskFencedCodeBlocks", () => {
+    test("keeps a three-backtick block inside a four-backtick fence masked", () => {
+      const prompt =
+        "````markdown\n```html\n@src/x.ts $previous\n```\n````";
+      const masked = maskFencedCodeBlocks(prompt);
+
+      assert.ok(masked.includes("\x00src\x00x.ts \x00previous"));
+      assert.strictEqual(masked.match(/`+/g)?.length, 4);
+    });
+
+    test("preserves triple-backtick masking behavior", () => {
+      const prompt = "```text\n@src/x.ts\n``` then @src/y.ts";
+
+      assert.strictEqual(
+        maskFencedCodeBlocks(prompt),
+        "```text\n\x00src\x00x.ts\n``` then @src/y.ts"
+      );
+    });
+  });
+
   // ──────────────────────────────────────────────────────────────────────────
   suite("parseAtReferences", () => {
     test("returns empty array for prompt with no references", () => {

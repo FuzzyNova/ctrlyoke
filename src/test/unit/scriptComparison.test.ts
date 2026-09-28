@@ -121,6 +121,45 @@ suite("ScriptComparison", () => {
       assert.strictEqual(stdout("ok", SCRIPT_OPERATORS.NE)("nope"), true);
     });
 
+    test("eq and ne compare exit codes numerically", () => {
+      for (const expected of ["00", "0.0"]) {
+        assert.strictEqual(
+          compareScriptOutput(
+            {
+              compareSource: COMPARE_SOURCES.EXIT_CODE,
+              operator: SCRIPT_OPERATORS.EQ,
+              expected,
+            },
+            { exitCode: 0 }
+          ).passed,
+          true,
+          `exit code 0 should equal ${expected}`
+        );
+      }
+      assert.strictEqual(
+        compareScriptOutput(
+          {
+            compareSource: COMPARE_SOURCES.EXIT_CODE,
+            operator: SCRIPT_OPERATORS.EQ,
+            expected: "+1",
+          },
+          { exitCode: 1 }
+        ).passed,
+        true
+      );
+      assert.strictEqual(
+        compareScriptOutput(
+          {
+            compareSource: COMPARE_SOURCES.EXIT_CODE,
+            operator: SCRIPT_OPERATORS.NE,
+            expected: "01",
+          },
+          { exitCode: 1 }
+        ).passed,
+        false
+      );
+    });
+
     test("contains and notContains test substrings", () => {
       assert.strictEqual(
         stdout("PASS", SCRIPT_OPERATORS.CONTAINS)("3 PASSED"),

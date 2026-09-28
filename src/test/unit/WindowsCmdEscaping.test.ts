@@ -35,6 +35,34 @@ suite("WindowsCmdEscaping", () => {
     assert.ok(escaped.includes('\\^"'));
   });
 
+  test("doubles the entire backslash run before embedded quotes", () => {
+    for (const backslashCount of [2, 3]) {
+      const escaped = escapeCmdArgument(
+        `a${"\\".repeat(backslashCount)}"b`,
+        false
+      );
+
+      assert.ok(
+        escaped.includes(`${"\\".repeat(backslashCount * 2 + 1)}^"b`),
+        `expected ${backslashCount} input backslashes to be doubled: ${escaped}`
+      );
+    }
+  });
+
+  test("doubles the entire trailing backslash run before the closing quote", () => {
+    for (const backslashCount of [2, 3]) {
+      const escaped = escapeCmdArgument(
+        `C:\\foo${"\\".repeat(backslashCount)}`,
+        false
+      );
+
+      assert.ok(
+        escaped.endsWith(`${"\\".repeat(backslashCount * 2)}^"`),
+        `expected ${backslashCount} trailing input backslashes to be doubled: ${escaped}`
+      );
+    }
+  });
+
   test("doubles caret-escaping for shims under node_modules/.bin", () => {
     const shimPath = "C:\\repo\\node_modules\\.bin\\tool.cmd";
     const args = buildCmdExeVerbatimArgs(shimPath, ["<x>"]);

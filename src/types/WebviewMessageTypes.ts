@@ -894,6 +894,7 @@ export interface StepColorUpdatedMessage {
  */
 export interface PromptDeletedMessage {
   type: typeof MESSAGE_TYPES.PROMPT_DELETED;
+  workflowId?: string;
   fileName: string;
   steps: WorkflowStep[];
   parallelGroups?: ParallelGroupDefinition[];

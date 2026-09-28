@@ -115,7 +115,8 @@ export async function getRecentCommits(
   workspaceRoot: string,
   limit: number | undefined,
   skip: number = 0,
-  ref?: string
+  ref?: string,
+  fullRefNames: boolean = false
 ): Promise<CommitInfo[]> {
   const args = [
     "-C",
@@ -124,6 +125,7 @@ export async function getRecentCommits(
     // Trailing %P (parents) and %D (decorate) enable merge detection and ref pills.
     `--format=%H%x00%h%x00%s%x00%an%x00%ar%x00%P%x00%D`,
   ];
+  if (fullRefNames) args.push("--decorate=full");
   if (limit !== undefined) {
     args.push("-n", String(limit));
   }
@@ -193,7 +195,8 @@ export async function getFileHistoryCommits(
   gitPath: string,
   limit: number | undefined = 30,
   skip: number = 0,
-  ref?: string
+  ref?: string,
+  fullRefNames: boolean = false
 ): Promise<FileHistoryCommitInfo[]> {
   const args = [
     "-C",
@@ -204,6 +207,7 @@ export async function getFileHistoryCommits(
     "--name-status",
     "--format=%x00%H%x00%h%x00%s%x00%an%x00%ar%x00%P%x00%D%x00",
   ];
+  if (fullRefNames) args.push("--decorate=full");
   if (skip > 0) args.push(`--skip=${skip}`);
   if (limit !== undefined) {
     args.push("-n", String(limit));

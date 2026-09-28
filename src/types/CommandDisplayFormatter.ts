@@ -46,10 +46,10 @@ export function escapeCmdArgument(
 
   // Sequence of backslashes followed by a double quote: double up all the
   // backslashes and escape the double quote.
-  arg = arg.replace(/(?=(\\+?)?)\1"/g, '$1$1\\"');
+  arg = arg.replace(/(\\*)"/g, '$1$1\\"');
   // Sequence of backslashes at the end of the string (which will become a
   // double quote next): double up all the backslashes.
-  arg = arg.replace(/(?=(\\+?)?)\1$/, "$1$1");
+  arg = arg.replace(/(\\*)$/, "$1$1");
   // Quote the whole thing.
   arg = `"${arg}"`;
   // Escape cmd.exe metacharacters.

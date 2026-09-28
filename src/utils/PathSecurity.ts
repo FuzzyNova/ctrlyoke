@@ -22,9 +22,12 @@ export function isPathWithinDirectory(
 ): boolean {
   const foldedCandidate = foldPathForCompare(candidate);
   const foldedDirectory = foldPathForCompare(directory);
+  const directoryPrefix = foldedDirectory.endsWith(path.sep)
+    ? foldedDirectory
+    : foldedDirectory + path.sep;
   return (
     foldedCandidate === foldedDirectory ||
-    foldedCandidate.startsWith(foldedDirectory + path.sep)
+    foldedCandidate.startsWith(directoryPrefix)
   );
 }
 

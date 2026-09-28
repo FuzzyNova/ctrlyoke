@@ -1,9 +1,22 @@
 import * as assert from "assert";
+import { execFile } from "child_process";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
 import { suite, test } from "mocha";
+import { promisify } from "util";
 import {
+  buildCommitMessagePrompt,
   buildCommitWorkflowOverrides,
+  CommitMessageGenerator,
   CommitMessageGenerationError,
+  MAX_DIFF_BYTES,
 } from "../../git/CommitMessageGenerator";
+import { parseSecretReferences } from "../../utils/SecretReferenceParser";
+import {
+  parseAtReferences,
+  parseInlinePriorContextRefs,
+} from "../../utils/FileReferenceParser";
 import {
   EXECUTION_MODES,
   HARNESS_IDS,
@@ -17,7 +30,51 @@ import type {
   WorkflowKey,
 } from "../../types/CtrlYokeTypes";
 
+const execFileAsync = promisify(execFile);
+
 suite("CommitMessageGenerator", () => {
+  test("keeps references inside a staged Markdown code block inert in the prompt", async () => {
+    const cwd = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-commit-prompt-fence-")
+    );
+    try {
+      const runGit = async (args: string[]): Promise<void> => {
+        await execFileAsync("git", args, { cwd, encoding: "utf8" });
+      };
+
+      await runGit(["init"]);
+      await runGit(["config", "user.email", "test@example.com"]);
+      await runGit(["config", "user.name", "CtrlYoke Test"]);
+      await runGit(["config", "commit.gpgsign", "false"]);
+      const markdown = [
+        "# Added example",
+        "",
+        "```html",
+        `<${"!DOCTYPE"} html>`,
+        "<p>See @src/x.ts and $previous.</p>",
+        "```",
+        "",
+      ].join("\n");
+      await fs.writeFile(path.join(cwd, "README.md"), markdown);
+      await runGit(["add", "README.md"]);
+
+      const stagedDiff = await new CommitMessageGenerator().getDiff(cwd);
+      assert.ok(stagedDiff?.staged);
+      const prompt = buildCommitMessagePrompt(
+        stagedDiff.diff,
+        "Write a concise commit message."
+      );
+
+      assert.deepStrictEqual(parseSecretReferences(prompt), []);
+      assert.deepStrictEqual(parseAtReferences(prompt), []);
+      assert.deepStrictEqual(parseInlinePriorContextRefs(prompt), []);
+    } finally {
+      await fs.rm(cwd, { recursive: true, force: true, maxRetries: 5 }).catch(
+        () => {}
+      );
+    }
+  });
+
   test("carries the persisted run address on generation errors", () => {
     const workflowKey =
       "commit-message-generation-20260824-120000" as WorkflowKey;
@@ -87,5 +144,64 @@ suite("CommitMessageGenerator", () => {
     assert.strictEqual(overrides.executionMode, EXECUTION_MODES.HEADLESS);
     assert.strictEqual(overrides.worktree, false);
     assert.strictEqual(overrides.mcpServers, null);
+  });
+
+  test("returns a truncated staged diff larger than the exec buffer", async () => {
+    const cwd = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-large-staged-diff-")
+    );
+    try {
+      const runGit = async (args: string[]): Promise<void> => {
+        await execFileAsync("git", args, { cwd, encoding: "utf8" });
+      };
+
+      await runGit(["init"]);
+      await runGit(["config", "user.email", "test@example.com"]);
+      await runGit(["config", "user.name", "CtrlYoke Test"]);
+      await runGit(["config", "commit.gpgsign", "false"]);
+      await fs.writeFile(path.join(cwd, "large.txt"), "initial\n");
+      await fs.writeFile(path.join(cwd, "unrelated.txt"), "original\n");
+      await runGit(["add", "."]);
+      await runGit(["commit", "-m", "initial"]);
+
+      await fs.writeFile(
+        path.join(cwd, "large.txt"),
+        "staged line with enough content to exceed one mebibyte\n".repeat(
+          30_000
+        )
+      );
+      await runGit(["add", "large.txt"]);
+      await fs.writeFile(
+        path.join(cwd, "unrelated.txt"),
+        "small unstaged edit\n"
+      );
+
+      const { stdout: stagedDiff } = await execFileAsync(
+        "git",
+        ["diff", "--cached"],
+        { cwd, encoding: "utf8", maxBuffer: 10 * 1024 * 1024 }
+      );
+      assert.ok(Buffer.byteLength(stagedDiff, "utf8") > 1024 * 1024);
+
+      const result = await new CommitMessageGenerator().getDiff(cwd);
+
+      assert.ok(result);
+      assert.strictEqual(result.staged, true);
+      assert.strictEqual(result.truncated, true);
+      assert.strictEqual(result.includesUntrackedFiles, false);
+      assert.ok(Buffer.byteLength(result.diff, "utf8") >= MAX_DIFF_BYTES - 1);
+      assert.ok(result.diff.includes("staged line"));
+      assert.ok(!result.diff.includes("small unstaged edit"));
+    } finally {
+      await fs.rm(cwd, { recursive: true, force: true, maxRetries: 5 }).catch(
+        () => {}
+      );
+    }
+  });
+
+  test("does not treat git execution failures as an empty staged diff", async () => {
+    const cwd = path.join(os.tmpdir(), `ctrlyoke-missing-git-dir-${Date.now()}`);
+
+    await assert.rejects(new CommitMessageGenerator().getDiff(cwd));
   });
 });

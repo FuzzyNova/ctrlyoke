@@ -577,11 +577,14 @@ export function buildClearUpdates(
  */
 export function mergeWorkflowStepUpdate(
   existingStep: WorkflowStep,
-  incomingStep: WorkflowStep,
+  incomingStep: Partial<WorkflowStep>,
   clearProperties?: string[]
 ): WorkflowStep {
-  if (isScriptStep(existingStep) !== isScriptStep(incomingStep)) {
-    return incomingStep;
+  if (
+    incomingStep.type !== undefined &&
+    isScriptStep(existingStep) !== (incomingStep.type === STEP_TYPES.SCRIPT)
+  ) {
+    return incomingStep as WorkflowStep;
   }
 
   return {

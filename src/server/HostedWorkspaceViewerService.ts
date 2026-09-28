@@ -109,6 +109,10 @@ import {
 import { pathsEqual } from "../utils/PathCasing";
 import { streamFileLines } from "../utils/TextLines";
 import {
+  REDACTION_MARKER,
+  secretRedactionService,
+} from "../utils/SecretRedactionService";
+import {
   WorkspaceListingSnapshotCache,
   type WorkspaceEntryMetadata,
 } from "./WorkspaceListingSnapshotCache";
@@ -123,7 +127,7 @@ import {
 
 const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 10_000;
-const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
+export const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
 const BINARY_CHECK_BYTES = 8192;
 const WORKSPACE_TREE_STAT_CONCURRENCY = 8;
 const SEARCH_MAX_DURATION_MS = 3000;
@@ -146,6 +150,13 @@ const GIT_REF_DIFF_REFS = {
 } as const;
 
 type GitRefDiffKind = "workingTree" | "staged" | "stash" | "commit";
+
+export class RedactionMarkerSaveError extends Error {
+  constructor() {
+    super("Cannot save content containing the redaction marker");
+    this.name = "RedactionMarkerSaveError";
+  }
+}
 const SEARCH_FALLBACK_SKIP_DIRECTORIES = new Set([
   ".git",
   "node_modules",
@@ -308,9 +319,8 @@ function normalizeScmPath(p: string): string {
 }
 
 /**
- * Classifies raw `git log` decoration ref names (from `%D`) into typed labels
- * used by the commit-history git-graph pills. Examples of inputs:
- *   "HEAD -> main", "origin/main", "tag: v1.0", "HEAD", "upstream/feature"
+ * Classifies full `git log` decoration ref names (from `%D`) into typed labels
+ * used by the commit-history git-graph pills.
  */
 function classifyRefNames(refNames: string[]): GitRefLabel[] {
   const labels: GitRefLabel[] = [];
@@ -326,18 +336,29 @@ function classifyRefNames(refNames: string[]): GitRefLabel[] {
 
     if (name === "HEAD") {
       labels.push({ name, type: "head" });
-    } else if (name.startsWith("tag: ")) {
-      labels.push({ name: name.slice("tag: ".length).trim(), type: "tag" });
-    } else if (/^[^/]+\/HEAD$/.test(name)) {
-      // "<remote>/HEAD" (e.g. origin/HEAD) is a symbolic alias for the
-      // remote's default branch, not a real branch — skip it so it doesn't
+    } else if (name.startsWith("tag: refs/tags/")) {
+      labels.push({ name: name.slice("tag: refs/tags/".length), type: "tag" });
+    } else if (name.startsWith("refs/tags/")) {
+      labels.push({ name: name.slice("refs/tags/".length), type: "tag" });
+    } else if (/^refs\/remotes\/[^/]+\/HEAD$/.test(name)) {
+      // "refs/remotes/<remote>/HEAD" (e.g. origin/HEAD) is a symbolic alias
+      // for the remote's default branch, not a real branch — skip it so it doesn't
       // render as a second, redundant remote-branch pill alongside the
       // branch it points to (e.g. origin/main).
       continue;
-    } else if (name.includes("/")) {
-      // Anything with a slash is a remote-tracking ref (e.g. origin/main).
-      labels.push({ name, type: GIT_REF_LABEL_TYPES.REMOTE_BRANCH });
+    } else if (name.startsWith("refs/remotes/")) {
+      labels.push({
+        name: name.slice("refs/remotes/".length),
+        type: GIT_REF_LABEL_TYPES.REMOTE_BRANCH,
+      });
+    } else if (name.startsWith("refs/heads/")) {
+      labels.push({
+        name: name.slice("refs/heads/".length),
+        type: GIT_REF_LABEL_TYPES.LOCAL_BRANCH,
+      });
     } else {
+      // Keep bare or otherwise unrecognized decoration names visible as local
+      // labels, matching git's non-remote behavior.
       labels.push({ name, type: GIT_REF_LABEL_TYPES.LOCAL_BRANCH });
     }
   }
@@ -1280,13 +1301,23 @@ export class HostedWorkspaceViewerService {
     const eol = raw.includes("\r\n") ? LINE_ENDINGS.CRLF : LINE_ENDINGS.LF;
     const relPath = this.relativePath(resolved);
 
+    const redactedContent = secretRedactionService.redactText(raw);
+    const wasRedacted = redactedContent !== raw;
+
     return {
       path: relPath,
       name: path.basename(resolved),
       language: languageFromPath(resolved),
       size: stat.size,
       eol,
-      content: raw,
+      content: redactedContent,
+      ...(wasRedacted
+        ? {
+            readOnly: true,
+            reason:
+              "File contains secrets and cannot be edited in the hosted viewer",
+          }
+        : {}),
     };
   }
 
@@ -1333,11 +1364,13 @@ export class HostedWorkspaceViewerService {
     // Check if existing file is binary — refuse to overwrite
     let originalEol: (typeof LINE_ENDINGS)[keyof typeof LINE_ENDINGS] =
       LINE_ENDINGS.LF;
+    let existingContent: string | undefined;
     try {
       if (await this.isBinaryFile(resolved)) {
         throw new Error("Cannot overwrite binary file");
       }
       const existing = await fs.promises.readFile(resolved, "utf8");
+      existingContent = existing;
       originalEol = existing.includes("\r\n")
         ? LINE_ENDINGS.CRLF
         : LINE_ENDINGS.LF;
@@ -1349,6 +1382,13 @@ export class HostedWorkspaceViewerService {
         throw err;
       }
       // File doesn't exist yet — new file, keep LF
+    }
+
+    if (
+      req.content.includes(REDACTION_MARKER) &&
+      !existingContent?.includes(REDACTION_MARKER)
+    ) {
+      throw new RedactionMarkerSaveError();
     }
 
     // Normalize incoming content to the original EOL
@@ -1495,9 +1535,11 @@ export class HostedWorkspaceViewerService {
     repoRoot: string
   ): Promise<WorkspaceScmStatusResponse> {
     const [statusResult, syncCountsResult] = await Promise.allSettled([
-      execFileAsync("git", ["-C", repoRoot, "status", "--porcelain=v1"], {
-        timeout: GIT_TIMEOUT_MS,
-      }),
+      execFileAsync(
+        "git",
+        ["-C", repoRoot, "status", "--porcelain=v1", "-z"],
+        { timeout: GIT_TIMEOUT_MS }
+      ),
       this.getSyncCounts(repoRoot),
     ]);
 
@@ -1563,7 +1605,7 @@ export class HostedWorkspaceViewerService {
   }
 
   /**
-   * Parse `git status --porcelain=v1` output for a repo rooted at `repoRoot`.
+   * Parse `git status --porcelain=v1 -z` output for a repo rooted at `repoRoot`.
    * Git reports repo-relative paths; each is mapped back to a viewer path via
    * `relativePath()` (plain in single-root, folder-name-prefixed in multi-root)
    * so status entries match the same convention as the tree/file/diff APIs and
@@ -1578,18 +1620,20 @@ export class HostedWorkspaceViewerService {
     const trustedRoots = this.trustedRoots;
     const files: WorkspaceScmFile[] = [];
 
-    for (const line of output.split("\n")) {
-      if (line.length < 3) {
+    const records = output.split("\0");
+    for (let index = 0; index < records.length; index++) {
+      const record = records[index];
+      if (!record || record.length < 4) {
         continue;
       }
-      const x = line[0] ?? " ";
-      const y = line[1] ?? " ";
-      let filePath = line.slice(3);
+      const x = record[0] ?? " ";
+      const y = record[1] ?? " ";
+      const filePath = record.slice(3);
 
-      // Renamed files: "old-path -> new-path"
-      const arrowIdx = filePath.indexOf(" -> ");
-      if (arrowIdx !== -1) {
-        filePath = filePath.slice(arrowIdx + 4);
+      // In -z mode rename/copy records list the new path first and the
+      // original path in the following NUL-terminated field.
+      if (x === "R" || y === "R" || x === "C" || y === "C") {
+        index++;
       }
 
       const normalized = normalizeScmPath(filePath);
@@ -2019,7 +2063,7 @@ export class HostedWorkspaceViewerService {
     const [historyRows, unpushedHashes] = await Promise.all([
       // Omitting max-count is intentional: the complete result is the frozen
       // snapshot from which all later pages are served.
-      getFileHistoryCommits(repoRoot, gitPath, undefined, 0, headHash),
+      getFileHistoryCommits(repoRoot, gitPath, undefined, 0, headHash, true),
       this.getUnpushedHistoryHashes(repoRoot, headHash),
     ]);
     const entries = historyRows
@@ -2354,7 +2398,13 @@ export class HostedWorkspaceViewerService {
     const metadata = await this.getCommitLogMetadata(repoRoot);
     // Omitting max-count is intentional: the complete result is the frozen
     // snapshot from which all later pages are served.
-    const rows = await getRecentCommits(repoRoot, undefined, 0, safeBranch);
+    const rows = await getRecentCommits(
+      repoRoot,
+      undefined,
+      0,
+      safeBranch,
+      true
+    );
     const commits: WorkspaceCommitLogEntry[] = rows.map((c) => ({
       hash: c.hash,
       shortHash: c.shortHash,

@@ -61,8 +61,9 @@ export class IntegrationFactory {
       case HARNESS_IDS.ANTIGRAVITY_CLI:
         return new AntigravityCliProvider();
       case HARNESS_IDS.COPILOT_CLI:
-      default:
         return new CopilotCliProvider();
+      default:
+        throw new Error(`Unknown harness: ${harness}`);
     }
   }
 
@@ -183,8 +184,9 @@ export class IntegrationFactory {
           executionWorkspace
         );
       case HARNESS_IDS.COPILOT_CLI:
-      default:
         return this.createCopilotCli(registerWithContext, executionWorkspace);
+      default:
+        throw new Error(`Unknown harness: ${harness}`);
     }
   }
 

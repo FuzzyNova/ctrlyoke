@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { suite, test, setup, teardown } from "mocha";
 import { ExternalRootsTrustStore } from "../../config/ExternalRootsTrustStore";
+import { foldPathForCompare } from "../../utils/PathCasing";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 suite("ExternalRootsTrustStore", () => {
@@ -114,9 +115,54 @@ suite("ExternalRootsTrustStore", () => {
     assert.strictEqual(store.getDecision(workspaceA, root), undefined);
   });
 
-  test("canonicalizeRoot resolves a nonexistent path lexically without throwing", () => {
+  test("canonicalizeRoot uses the nearest existing ancestor for a missing path", () => {
     const nonexistent = path.join(tempDir, "does-not-exist-yet");
     const canonical = ExternalRootsTrustStore.canonicalizeRoot(nonexistent);
-    assert.strictEqual(canonical, path.resolve(nonexistent));
+    assert.strictEqual(
+      canonical,
+      foldPathForCompare(
+        path.join(fs.realpathSync.native(tempDir), path.basename(nonexistent))
+      )
+    );
+  });
+
+  test("a decision recorded before a root is created remains approved", async () => {
+    const root = path.join(tempDir, "created-later");
+    await store.setDecisions(workspaceA, [root], "allow");
+    assert.deepStrictEqual(store.getApprovedRoots(workspaceA, [root]), [root]);
+
+    fs.mkdirSync(root);
+
+    assert.deepStrictEqual(store.getApprovedRoots(workspaceA, [root]), [root]);
+    assert.deepStrictEqual(store.getPendingRoots(workspaceA, [root]), []);
+  });
+
+  test("differently-cased roots match on Windows", async () => {
+    const root = rootDir();
+    const differentlyCasedRoot = root.replace(/[a-z]/gi, (letter) =>
+      letter === letter.toLowerCase()
+        ? letter.toUpperCase()
+        : letter.toLowerCase()
+    );
+    const originalPlatform = Object.getOwnPropertyDescriptor(
+      process,
+      "platform"
+    );
+
+    try {
+      Object.defineProperty(process, "platform", {
+        configurable: true,
+        value: "win32",
+      });
+      await store.setDecisions(workspaceA, [root], "allow");
+      assert.strictEqual(
+        store.getDecision(workspaceA, differentlyCasedRoot),
+        "allow"
+      );
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, "platform", originalPlatform);
+      }
+    }
   });
 });

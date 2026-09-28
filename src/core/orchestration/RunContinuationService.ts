@@ -15,6 +15,7 @@ import {
   getEffectiveParallelGroupWidth,
   PARALLEL_GROUP_ADMISSION,
   QUEUE_POSITION,
+  STEP_TYPES,
   STEP_CLAIM_OUTCOMES,
   resolveQueueInsertIndex,
   WORKFLOW_LOCK_LIVENESS,
@@ -784,14 +785,16 @@ export class RunContinuationService {
               : (change.updates as WorkflowStep),
           ])[0]
         );
+        const mergedStep = mergeWorkflowStepUpdate(
+          topology.steps[index],
+          incomingStep,
+          change.clearProperties
+        );
+        assertStepHasRequiredContent(mergedStep);
         const nextTopology = replaceParallelGroupStep(
           topology,
           index,
-          mergeWorkflowStepUpdate(
-            topology.steps[index],
-            incomingStep,
-            change.clearProperties
-          )
+          mergedStep
         );
         assertStartedStepPositionsPreserved(
           topology.steps,
@@ -975,18 +978,48 @@ export class RunContinuationService {
       workflowKey,
       runRef,
       expectedDefinitionRevision,
-      (_source, _topology, currentIndex) => {
+      (source, topology, currentIndex) => {
         if (absoluteOrder.some((index) => !Number.isInteger(index))) {
           throw new Error("Reorder indices must be integers");
         }
-        return absoluteOrder.map((index) => {
-          if (index < currentIndex) {
-            throw new Error(
-              "Cannot reorder a completed step while the workflow is running"
-            );
+        const executionIsInFlight = isInFlightExecutionState(
+          source._runtime?.executionState
+        );
+        const fixedIndices = new Set<number>();
+        const movableIndices: number[] = [];
+        for (let index = currentIndex; index < topology.steps.length; index++) {
+          const isRunningHead = executionIsInFlight && index === currentIndex;
+          if (isRunningHead || hasStarted(topology.steps[index])) {
+            fixedIndices.add(index);
+          } else {
+            movableIndices.push(index);
           }
-          return index - currentIndex;
-        });
+        }
+
+        if (
+          absoluteOrder.length !== movableIndices.length ||
+          absoluteOrder.some(
+            (index) =>
+              !Number.isInteger(index) || !movableIndices.includes(index)
+          ) ||
+          new Set(absoluteOrder).size !== absoluteOrder.length
+        ) {
+          throw new Error(
+            `Reorder indices must contain exactly ${movableIndices.length} not-yet-started step indices (${movableIndices.join(", ")})`
+          );
+        }
+
+        let nextMovable = 0;
+        return Array.from(
+          { length: topology.steps.length - currentIndex },
+          (_, offset) => {
+            const absoluteIndex = currentIndex + offset;
+            const sourceIndex = fixedIndices.has(absoluteIndex)
+              ? absoluteIndex
+              : absoluteOrder[nextMovable++];
+            return sourceIndex - currentIndex;
+          }
+        );
       },
       lineageRepository,
       pendingGroups,
@@ -1025,13 +1058,11 @@ export class RunContinuationService {
           currentIndex
         );
         assertPendingReorderIsSafe(source, topology.steps, newPendingOrder);
-        const effectivePendingGroups =
-          pendingGroups ?? buildPendingGroupRanges(topology, currentIndex);
         const nextTopology = reorderParallelGroupPendingSteps(
           topology,
           currentIndex,
           newPendingOrder,
-          effectivePendingGroups,
+          pendingGroups,
           isInFlightExecutionState(source._runtime?.executionState)
         );
         assertStartedStepPositionsPreserved(
@@ -1229,7 +1260,12 @@ function assertEditableDuringExecution(
  * queue's disk merge uses stepId directly; this floor is not a second merge
  * identity rule.
  */
-const NON_CLEARABLE_STEP_PROPERTIES = ["_runtime", "status", "details"];
+const NON_CLEARABLE_STEP_PROPERTIES = [
+  "_runtime",
+  "status",
+  "details",
+  "type",
+];
 
 function assertClearablePropertiesAreEditable(
   clearProperties: string[] | undefined
@@ -1241,6 +1277,18 @@ function assertClearablePropertiesAreEditable(
     throw new Error(
       `Cannot clear internal step ${rejected.length === 1 ? "property" : "properties"}: ${rejected.join(", ")}`
     );
+  }
+}
+
+function assertStepHasRequiredContent(step: WorkflowStep): void {
+  if (step.type === STEP_TYPES.SCRIPT) {
+    if (typeof step.script !== "string" || step.script.trim().length === 0) {
+      throw new Error("A script step must keep a non-empty script");
+    }
+    return;
+  }
+  if (typeof step.prompt !== "string" || step.prompt.trim().length === 0) {
+    throw new Error("A prompt step must keep a non-empty prompt");
   }
 }
 
@@ -1272,24 +1320,11 @@ function assertPendingReorderIsSafe(
   if (
     isInFlightExecutionState(source._runtime?.executionState) &&
     newPendingOrder.length > 0 &&
-    !hasStarted(steps[currentIndex])
+    !hasStarted(steps[currentIndex]) &&
+    newPendingOrder[0] !== 0
   ) {
     throw new Error("Cannot reorder the currently executing step");
   }
-}
-
-function buildPendingGroupRanges(
-  topology: ReturnType<typeof normalizeParallelGroupTopology>,
-  currentIndex: number
-): PendingParallelGroupRange[] {
-  return topology.parallelGroups
-    .filter((group) => group.endIndex >= currentIndex)
-    .map((group) => ({
-      id: group.id,
-      start: Math.max(group.startIndex, currentIndex) - currentIndex,
-      end: group.endIndex - currentIndex,
-      failFast: group.failFast,
-    }));
 }
 
 /**

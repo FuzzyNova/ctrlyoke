@@ -480,6 +480,58 @@ suite("FileConfigBackend", () => {
     assert.deepStrictEqual(backend.getAll(), {});
   });
 
+  test("set() preserves settings in a BOM-prefixed file", async () => {
+    const configPath = path.join(tmpDir, "settings.json");
+    fs.writeFileSync(
+      configPath,
+      `\uFEFF${JSON.stringify({
+        worktrees: { root: "D:/worktrees" },
+        execution: { injectMode: "append" },
+      })}`,
+      "utf-8"
+    );
+    const backend = new FileConfigBackend(configPath);
+
+    await backend.set("ui.showCostEstimates", false);
+
+    const content = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    assert.deepStrictEqual(content.worktrees, { root: "D:/worktrees" });
+    assert.deepStrictEqual(content.execution, { injectMode: "append" });
+    assert.strictEqual(content.ui.showCostEstimates, false);
+  });
+
+  test("set() accepts JSONC comments and trailing commas", async () => {
+    const configPath = path.join(tmpDir, "settings.json");
+    fs.writeFileSync(
+      configPath,
+      '{\n  // Keep hand-edited settings.\n  "worktrees": {"root": "D:/worktrees",},\n}\n',
+      "utf-8"
+    );
+    const backend = new FileConfigBackend(configPath);
+
+    await backend.set("ui.showCostEstimates", false);
+
+    const content = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    assert.deepStrictEqual(content.worktrees, { root: "D:/worktrees" });
+    assert.strictEqual(content.ui.showCostEstimates, false);
+  });
+
+  test("set() rejects invalid existing files without changing their bytes", async () => {
+    const configPath = path.join(tmpDir, "settings.json");
+    const original = Buffer.from('{ "worktrees": { "root": , } }\r\n', "utf-8");
+    fs.writeFileSync(configPath, original);
+    const backend = new FileConfigBackend(configPath);
+
+    assert.deepStrictEqual(backend.getAll(), {});
+    await assert.rejects(
+      backend.set("ui.showCostEstimates", false),
+      (error: Error) =>
+        error.message.includes("invalid JSON") &&
+        error.message.includes(configPath)
+    );
+    assert.deepStrictEqual(fs.readFileSync(configPath), original);
+  });
+
   test("set() creates file and directory if they do not exist", async () => {
     const configPath = path.join(tmpDir, "sub", "settings.json");
     const backend = new FileConfigBackend(configPath);

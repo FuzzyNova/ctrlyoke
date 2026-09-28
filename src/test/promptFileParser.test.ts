@@ -506,6 +506,78 @@ suite("PromptFileParser Tests", () => {
     }
   });
 
+  suite("BOM-prefixed workflow files", () => {
+    test("strips a leading BOM before parsing JSON workflows", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-parser-json-bom-")
+      );
+      const filePath = path.join(tempDir, "workflow.ctrlyoke.json");
+
+      try {
+        await fs.writeFile(
+          filePath,
+          `\uFEFF${JSON.stringify({ prompt: "JSON workflow" })}`,
+          "utf8"
+        );
+
+        const result = await parser.parsePromptFile(filePath);
+
+        assertValidResult(result);
+        assert.strictEqual(result.steps[0].prompt, "JSON workflow");
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("strips a leading BOM before parsing YAML workflows", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-parser-yaml-bom-")
+      );
+      const filePath = path.join(tempDir, "workflow.ctrlyoke.yaml");
+
+      try {
+        await fs.writeFile(
+          filePath,
+          "\uFEFFsteps:\n  - prompt: YAML workflow\n",
+          "utf8"
+        );
+
+        const result = await parser.parsePromptFile(filePath);
+
+        assertValidResult(result);
+        assert.strictEqual(result.steps[0].prompt, "YAML workflow");
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("strips a leading BOM before applying Markdown frontmatter", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-parser-markdown-bom-")
+      );
+      const filePath = path.join(tempDir, "workflow.prompt.md");
+
+      try {
+        await fs.writeFile(
+          filePath,
+          "\uFEFF---\r\nschemaVersion: 1\r\n---\r\nMarkdown workflow\r\n",
+          "utf8"
+        );
+
+        const result = await parser.parsePromptFile(filePath);
+
+        assertValidResult(result);
+        assert.strictEqual(result.schemaVersion, 1);
+        assert.strictEqual(
+          (result.steps[0] as PromptStep).prompt,
+          "Markdown workflow"
+        );
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+  });
+
   suite("parseMarkdownPromptFile", () => {
     test("should parse .prompt.md file as single prompt", async () => {
       const filePath = path.join(fixturesPath, "simple.prompt.md");

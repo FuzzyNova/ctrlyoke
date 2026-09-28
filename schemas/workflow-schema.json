@@ -1699,7 +1699,7 @@
     },
     "mcpServerConfig": {
       "type": "object",
-      "description": "User-defined MCP server configuration. Exactly one of `command` (stdio) or `url` (remote) must be set.",
+      "description": "User-defined MCP server configuration. Exactly one of `command` (stdio) or `url` (remote) must be set. The built-in `ctrlyoke` server is configured by its ID and can use `deniedTools` to disable selected built-in tools.",
       "properties": {
         "id": {
           "type": "string",
@@ -1769,6 +1769,12 @@
         { "required": ["command"], "not": { "required": ["url"] } },
         { "required": ["url"], "not": { "required": ["command"] } }
       ],
+      "not": {
+        "properties": {
+          "id": { "const": "ctrlyoke" }
+        },
+        "required": ["id"]
+      },
       "required": ["id"],
       "additionalProperties": false
     },
@@ -1879,10 +1885,24 @@
       ]
     },
     "mcpServerEntry": {
+      "description": "A well-known MCP server ID, a user-defined server configuration, or the built-in `ctrlyoke` server with optional deniedTools. For the built-in server, deniedTools lists bare tool names to disable (for example, [\"append_step\"]).",
       "oneOf": [
         {
           "type": "string",
           "description": "A well-known MCP server ID (e.g., \"ctrlyoke\" to enable dynamic queue extension)."
+        },
+        {
+          "type": "object",
+          "description": "Configure the built-in ctrlyoke server. Omit deniedTools to enable all tools, or list bare tool names to disable selected tools.",
+          "properties": {
+            "id": { "const": "ctrlyoke" },
+            "deniedTools": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          },
+          "required": ["id"],
+          "additionalProperties": false
         },
         {
           "$ref": "#/$defs/mcpServerConfig"

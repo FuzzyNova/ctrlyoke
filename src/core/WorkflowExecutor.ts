@@ -17,6 +17,7 @@ import {
   type StepExecutionOutcome,
   type ParallelGroupOutcome,
   type ParallelGroupDefinition,
+  type ScriptProperties,
 } from "../types/CtrlYokeTypes";
 import {
   WorkflowContext,
@@ -370,6 +371,20 @@ function getExecutionTargetRunKey(target: ExecutionTarget): string {
 
 function isStepEnabled(step: WorkflowStep | undefined | null): boolean {
   return step != null && step.enabled !== false;
+}
+
+/** Map condition-authored script fields through the shared comparison resolver. */
+function toReportedConditionProperties(condition: ScriptProperties) {
+  return resolveReportedScriptProperties({
+    script: condition.script,
+    env: condition.env,
+    compareSource: condition.compareSource,
+    operator: condition.operator,
+    expected: condition.expected,
+    ignoreCase: condition.ignoreCase,
+    timeoutSec: condition.timeoutSec,
+    shell: condition.shell,
+  });
 }
 
 type PromptFailureDisposition =
@@ -1943,15 +1958,7 @@ export class WorkflowExecutor {
         const preReport = await this.scriptExecutionReporter.report({
           context,
           source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
-          properties: resolveReportedScriptProperties({
-            script: resolvedPreCondition.script,
-            env: resolvedPreCondition.env,
-            compareSource: resolvedPreCondition.compareSource,
-            operator: resolvedPreCondition.operator,
-            expected: resolvedPreCondition.expected,
-            ignoreCase: resolvedPreCondition.ignoreCase,
-            timeoutSec: resolvedPreCondition.timeoutSec,
-          }),
+          properties: toReportedConditionProperties(resolvedPreCondition),
           phase: EXECUTION_PHASES.PRE_CONDITION,
           target: this.toOutputExecutionTarget(target),
           signedStepIndex: this.getSignedStepIndex(target),
@@ -2536,7 +2543,7 @@ export class WorkflowExecutor {
         operator: step.operator,
         expected: step.expected,
         ignoreCase: step.ignoreCase,
-        timeout,
+        timeoutSec: step.timeoutSec,
         shell: effectiveStep.shell,
       });
       const outputChunks: string[] = [];
@@ -3706,15 +3713,7 @@ export class WorkflowExecutor {
     const endReport = await this.scriptExecutionReporter.report({
       context,
       source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
-      properties: resolveReportedScriptProperties({
-        script: endCondition.script,
-        env: endCondition.env,
-        compareSource: endCondition.compareSource,
-        operator: endCondition.operator,
-        expected: endCondition.expected,
-        ignoreCase: endCondition.ignoreCase,
-        timeoutSec: endCondition.timeoutSec,
-      }),
+      properties: toReportedConditionProperties(endCondition),
       phase: EXECUTION_PHASES.END_CONDITION,
       target: this.toOutputExecutionTarget(target),
       signedStepIndex: signedStepIndex ?? this.getSignedStepIndex(target),
@@ -3782,15 +3781,7 @@ export class WorkflowExecutor {
         this.scriptExecutionReporter.report({
           context,
           source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
-          properties: resolveReportedScriptProperties({
-            script: condition.script,
-            env: condition.env,
-            compareSource: condition.compareSource,
-            operator: condition.operator,
-            expected: condition.expected,
-            ignoreCase: condition.ignoreCase,
-            timeoutSec: condition.timeoutSec,
-          }),
+          properties: toReportedConditionProperties(condition),
           phase: EXECUTION_PHASES.END_CONDITION,
           target: this.toOutputExecutionTarget(target),
           signedStepIndex: signedStepIndex ?? this.getSignedStepIndex(target),
@@ -4291,69 +4282,87 @@ export class WorkflowExecutor {
         );
       }
 
-      const result = await this.executeWithStreaming(
-        effectiveRetryPrompt,
-        integration,
-        context,
-        target,
-        target.kind === FINAL_STEP_PHASES.QUEUE ? signedStepIndex : undefined,
-        runIndex,
-        retryAttemptIndex,
-        {
-          promptIndex: currentIndex,
-          // A final-step retry's `currentIndex` is `results.length` — positive,
-          // like any queue index — so without this the terminal would fall back
-          // to it and disagree with the single signed notation
-          // `getActiveStepIndices()` now reports, leaving a running final step's
-          // terminal ungated mid-retry.
-          terminalStepIndex: signedStepIndex,
-          allPrompts: state.steps,
-          filePath: context.currentPromptFilePath,
-          workflowName: this.promptQueue.getState().workflowName,
-          instanceId: context.instanceId,
-          workingFilePath: context.workingFilePath,
-          mcpToolSkillContext: this.getMcpToolSkillContext(
-            context,
-            currentIndex,
-            workflowFile
-          ),
-          resolvedProperties: { ...resolvedProperties, resumeSession: true },
-          workflowFile,
-          workingFilePersistence: this.promptQueue,
-          preConditionResult: this.promptQueue.getPreConditionSummary(target),
-          endConditionResult: this.promptQueue.getEndConditionSummary(target),
-          reportCompatibilityDiagnostics:
-            context.reportCompatibilityDiagnostics,
-          analyzeCompatibilityForPrompt: context.analyzeCompatibilityForPrompt,
-          resolvePriorContextItems: context.resolvePriorContextItems,
-          releaseConflictingAiSession: context.releaseConflictingAiSession,
-          ...(target.kind === FINAL_STEP_PHASES.QUEUE
-            ? {
-                groupStartBoundary: this.getParallelGroupStartBoundary(
-                  target.stepIndex
-                ),
-              }
-            : {}),
-          secretEnvironment: retrySecretValues,
-          finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
-            string | undefined,
-        },
-        undefined,
-        TIMELINE_ATTEMPT_START_REASONS.RETRY
-      );
+      let sendAttemptIndex = retryAttemptIndex;
+      let result: { responseText: string; duration: number } | null;
+      while (true) {
+        const retryAttemptProperties =
+          sendAttemptIndex === retryAttemptIndex
+            ? resolvedProperties
+            : {
+                ...resolvedProperties,
+                resumeSession: false,
+                sessionId: undefined,
+              };
+        result = await this.executeWithStreaming(
+          effectiveRetryPrompt,
+          integration,
+          context,
+          target,
+          target.kind === FINAL_STEP_PHASES.QUEUE ? signedStepIndex : undefined,
+          runIndex,
+          sendAttemptIndex,
+          {
+            promptIndex: currentIndex,
+            // A final-step retry's `currentIndex` is `results.length` — positive,
+            // like any queue index — so without this the terminal would fall back
+            // to it and disagree with the single signed notation
+            // `getActiveStepIndices()` now reports, leaving a running final step's
+            // terminal ungated mid-retry.
+            terminalStepIndex: signedStepIndex,
+            allPrompts: state.steps,
+            filePath: context.currentPromptFilePath,
+            workflowName: this.promptQueue.getState().workflowName,
+            instanceId: context.instanceId,
+            workingFilePath: context.workingFilePath,
+            mcpToolSkillContext: this.getMcpToolSkillContext(
+              context,
+              currentIndex,
+              workflowFile
+            ),
+            resolvedProperties: retryAttemptProperties,
+            workflowFile,
+            workingFilePersistence: this.promptQueue,
+            preConditionResult: this.promptQueue.getPreConditionSummary(target),
+            endConditionResult: this.promptQueue.getEndConditionSummary(target),
+            reportCompatibilityDiagnostics:
+              context.reportCompatibilityDiagnostics,
+            analyzeCompatibilityForPrompt:
+              context.analyzeCompatibilityForPrompt,
+            resolvePriorContextItems: context.resolvePriorContextItems,
+            releaseConflictingAiSession: context.releaseConflictingAiSession,
+            ...(target.kind === FINAL_STEP_PHASES.QUEUE
+              ? {
+                  groupStartBoundary: this.getParallelGroupStartBoundary(
+                    target.stepIndex
+                  ),
+                }
+              : {}),
+            secretEnvironment: retrySecretValues,
+            finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
+              string | undefined,
+          },
+          undefined,
+          TIMELINE_ATTEMPT_START_REASONS.RETRY
+        );
 
-      if (!result) {
-        await this.handlePromptSendFailure(
+        if (result) {
+          break;
+        }
+
+        const failureDisposition = await this.handlePromptSendFailure(
           integration,
           context,
           target,
           effectiveRetryPrompt,
           signedStepIndex ?? this.getSignedStepIndex(target),
           runIndex,
-          retryAttemptIndex,
-          resolvedProperties
+          sendAttemptIndex,
+          retryAttemptProperties
         );
-        return null;
+        if (failureDisposition.outcome !== WORKFLOW_EXECUTION_OUTCOMES.RETRY) {
+          return null;
+        }
+        sendAttemptIndex += 1;
       }
 
       await this.updateDashboardWithResponse(
@@ -4365,7 +4374,7 @@ export class WorkflowExecutor {
         result.responseText,
         result.duration,
         runIndex,
-        retryAttemptIndex,
+        sendAttemptIndex,
         resolvedProperties.harness
       );
 

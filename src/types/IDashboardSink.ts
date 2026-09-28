@@ -182,7 +182,8 @@ export interface IDashboardSink {
     steps: any[],
     finalStep?: WorkflowStep | null,
     parallelGroups?: ParallelGroupDefinition[],
-    definitionRevision?: number
+    definitionRevision?: number,
+    workflowId?: string
   ): void;
 
   updateFinalStep(

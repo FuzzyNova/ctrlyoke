@@ -363,7 +363,8 @@ export class PostMessageDashboardSink implements IDashboardSink {
     steps: any[],
     finalStep?: WorkflowStep | null,
     parallelGroups?: ParallelGroupDefinition[],
-    definitionRevision?: number
+    definitionRevision?: number,
+    workflowId?: string
   ): void {
     this.send({
       type: MESSAGE_TYPES.PROMPT_DELETED,
@@ -372,6 +373,7 @@ export class PostMessageDashboardSink implements IDashboardSink {
       finalStep: finalStep ?? null,
       ...(parallelGroups !== undefined ? { parallelGroups } : {}),
       ...(definitionRevision !== undefined ? { definitionRevision } : {}),
+      ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
 

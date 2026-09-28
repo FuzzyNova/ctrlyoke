@@ -112,6 +112,40 @@ suite("HistorySearchShardScanner", () => {
     disposeHistorySearchMatcher(matcher);
   });
 
+  test("keeps quantified regex literals from rejecting matching documents", async () => {
+    const cases = [
+      { pattern: "xa+y", text: "xaay" },
+      { pattern: "ab{1,3}c", text: "abbc" },
+      { pattern: "err{2}or", text: "errror" },
+      { pattern: "(ab)+c", text: "ababc" },
+    ];
+
+    for (const [index, { pattern, text }] of cases.entries()) {
+      const matcher = createHistorySearchMatcher(pattern, true);
+      const document = createDocument(text);
+      const line = JSON.stringify(document);
+      assert.ok(matcher.find(text), `${pattern} should match ${text}`);
+      assert.strictEqual(
+        createHistorySearchLinePrefilter(matcher, INDEXED_KEY_OPTIONS)(line),
+        true,
+        `prefilter rejected matching text ${JSON.stringify(text)} for ${pattern}`
+      );
+
+      const shardName = `quantified-${index}.jsonl`;
+      await writeShard(shardName, [document]);
+      const scanned: string[] = [];
+      for await (const candidate of streamHistorySearchDocuments(
+        documentsDirectory,
+        matcher,
+        { ...INDEXED_KEY_OPTIONS, resolvedShardOrder: [shardName] }
+      )) {
+        scanned.push(candidate.text);
+      }
+      assert.deepStrictEqual(scanned, [text]);
+      disposeHistorySearchMatcher(matcher);
+    }
+  });
+
   test("degrades permissively for a non-ASCII query", async () => {
     const documents = [
       createDocument("A bright Éclair"),

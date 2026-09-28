@@ -23,6 +23,40 @@ suite("PathSecurity", () => {
       assert.strictEqual(isPathWithinDirectory(sibling, dir), false);
     });
 
+    test(
+      "accepts descendants of a drive root on win32, case-insensitively",
+      function () {
+        if (path.sep !== "\\") {
+          this.skip();
+        }
+
+        const originalPlatform = process.platform;
+        Object.defineProperty(process, "platform", {
+          value: "win32",
+          configurable: true,
+        });
+        try {
+          assert.strictEqual(
+            isPathWithinDirectory("c:\\foo\\bar.txt", "C:\\"),
+            true
+          );
+        } finally {
+          Object.defineProperty(process, "platform", {
+            value: originalPlatform,
+            configurable: true,
+          });
+        }
+      }
+    );
+
+    test("accepts descendants of the POSIX root when path.sep is '/'", function () {
+      if (path.sep !== "/") {
+        this.skip();
+      }
+
+      assert.strictEqual(isPathWithinDirectory("/foo/bar.txt", "/"), true);
+    });
+
     test("rejects the parent directory", () => {
       const dir = path.join("C:", "dev", "ctrlyoke");
       assert.strictEqual(

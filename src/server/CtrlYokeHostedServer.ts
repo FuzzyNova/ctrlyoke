@@ -79,7 +79,11 @@ import {
   type WebPushSubscriptionPayload,
 } from "./WebPushService";
 import { pngIconService } from "./PngIconService";
-import { HostedWorkspaceViewerService } from "./HostedWorkspaceViewerService";
+import {
+  HostedWorkspaceViewerService,
+  MAX_FILE_SIZE,
+  RedactionMarkerSaveError,
+} from "./HostedWorkspaceViewerService";
 import { parseWorkspaceTreeQuery } from "./WorkspaceTreeRoute";
 import { WorkspaceTreeHttpError } from "./WorkspaceTreeErrors";
 import type {
@@ -102,6 +106,13 @@ import { isLoopbackBindAddress } from "../utils/NetworkUtils";
 
 const THEME_VAR_KEY_PATTERN = /^--[A-Za-z0-9_-]+$/;
 const SIBLING_SERVER_PROBE_TIMEOUT_MS = 1000;
+const DEFAULT_JSON_BODY_LIMIT = "64kb";
+const JSON_STRING_MAX_BYTE_EXPANSION_FACTOR = 6;
+const WORKSPACE_FILE_JSON_METADATA_HEADROOM_BYTES = 4 * 1024;
+const WORKSPACE_FILE_JSON_BODY_LIMIT_BYTES =
+  MAX_FILE_SIZE * JSON_STRING_MAX_BYTE_EXPANSION_FACTOR +
+  WORKSPACE_FILE_JSON_METADATA_HEADROOM_BYTES;
+const WORKSPACE_FILE_ROUTE_PATH = "/api/workspace-viewer/file";
 
 function redactHostedTransportMessage(message: unknown): unknown {
   return secretRedactionService.redactValue(message);
@@ -250,7 +261,17 @@ export class CtrlYokeHostedServer
         `[CtrlYokeHostedServer] ctrlyoke WebSocket server error: ${err.message}`
       );
     });
-    this.app.use(express.json({ limit: "64kb" }));
+    const defaultJsonParser = express.json({ limit: DEFAULT_JSON_BODY_LIMIT });
+    const workspaceFileJsonParser = express.json({
+      limit: WORKSPACE_FILE_JSON_BODY_LIMIT_BYTES,
+    });
+    this.app.use((req, res, next) => {
+      const parser =
+        req.method === "PUT" && req.path === WORKSPACE_FILE_ROUTE_PATH
+          ? workspaceFileJsonParser
+          : defaultJsonParser;
+      parser(req, res, next);
+    });
     installSecretRedactionMiddleware(this.app);
     this.setupRoutes();
     this.setupWebSocket();
@@ -658,14 +679,16 @@ export class CtrlYokeHostedServer
     steps: any[],
     finalStep?: WorkflowStep | null,
     parallelGroups?: ParallelGroupDefinition[],
-    definitionRevision?: number
+    definitionRevision?: number,
+    workflowId?: string
   ): void {
     this.sink.updatePromptDeleted(
       fileName,
       steps,
       finalStep,
       parallelGroups,
-      definitionRevision
+      definitionRevision,
+      workflowId
     );
   }
   updateFinalStep(
@@ -861,8 +884,6 @@ export class CtrlYokeHostedServer
       const svgPath = path.join(webviewDist, HOSTED_ICON_FILES.APP_ICON_SVG);
       void this.serveColorizedPng(svgPath, "large", res);
     });
-    this.app.use(express.static(webviewDist, { index: false }));
-
     // Token is required for the HTML entry point and all API routes.
     const requireToken: express.RequestHandler = (req, res, next) => {
       if (this.requestHasValidToken(req)) return next();
@@ -877,6 +898,7 @@ export class CtrlYokeHostedServer
     };
     this.app.get("/manifest.webmanifest", requireToken, (_req, res) => {
       this.setNoStore(res);
+      res.locals.skipSecretRedaction = true;
       res
         .type("application/manifest+json")
         .send(JSON.stringify(this.buildManifest()));
@@ -942,8 +964,12 @@ export class CtrlYokeHostedServer
     // Serve index.html through buildHtml so all placeholders are patched first.
     this.app.get(["/", "/index.html"], requireTokenForPage, (req, res) => {
       this.setNoStore(res);
+      res.locals.skipSecretRedaction = true;
       res.send(this.buildHtml(webviewDist, req.get("host")));
     });
+    // Register static files after the explicit HTML entry route so /index.html
+    // receives the same token check and hosted-page patching as /.
+    this.app.use(express.static(webviewDist, { index: false }));
     this.app.get("/api/workflow-files", requireToken, async (_req, res) => {
       const files = findWorkflowFilesInWorkspace(this.workspaceRoot);
       const trackedFiles = await getGitTrackedFiles(this.workspaceRoot).catch(
@@ -1039,7 +1065,7 @@ export class CtrlYokeHostedServer
     );
 
     this.app.get(
-      "/api/workspace-viewer/file",
+      WORKSPACE_FILE_ROUTE_PATH,
       requireToken,
       async (req, res) => {
         const filePath =
@@ -1049,7 +1075,9 @@ export class CtrlYokeHostedServer
           return;
         }
         try {
-          res.json(await this.viewerService.readFile(filePath));
+          const file = await this.viewerService.readFile(filePath);
+          res.locals.skipSecretRedaction = true;
+          res.json(file);
         } catch (err) {
           Log.error(
             `[CtrlYokeHostedServer] workspace-viewer GET /file error: ${String(err)}`
@@ -1060,9 +1088,8 @@ export class CtrlYokeHostedServer
     );
 
     this.app.put(
-      "/api/workspace-viewer/file",
+      WORKSPACE_FILE_ROUTE_PATH,
       requireToken,
-      express.json({ limit: "5mb" }),
       async (req, res) => {
         const body = req.body as { path?: unknown; content?: unknown };
         if (typeof body.path !== "string" || typeof body.content !== "string") {
@@ -1079,6 +1106,8 @@ export class CtrlYokeHostedServer
           const message = err instanceof Error ? err.message : String(err);
           if (message === "Path not allowed") {
             res.status(403).json({ error: message });
+          } else if (err instanceof RedactionMarkerSaveError) {
+            res.status(400).json({ error: message });
           } else {
             Log.error(
               `[CtrlYokeHostedServer] workspace-viewer PUT /file error: ${message}`
@@ -1708,6 +1737,7 @@ export class CtrlYokeHostedServer
     // SPA fallback: any unmatched route gets the patched index.html (token required).
     this.app.use(requireTokenForPage, (req, res) => {
       this.setNoStore(res);
+      res.locals.skipSecretRedaction = true;
       res.send(this.buildHtml(webviewDist, req.get("host")));
     });
   }
@@ -2593,8 +2623,11 @@ export class CtrlYokeHostedServer
 
   private resolveWebviewDist(): string {
     // Vite outputs to out/ui/webview-react/ relative to the extension root.
-    // __dirname at runtime = out/ (esbuild resolves __dirname to the output file's directory).
-    return path.join(__dirname, "ui", "webview-react");
+    // Bundled entrypoints resolve __dirname to out/, while plain tsc output
+    // (including extension-host tests) resolves it to out/server/.
+    const bundledDist = path.join(__dirname, "ui", "webview-react");
+    if (fs.existsSync(path.join(bundledDist, "index.html"))) return bundledDist;
+    return path.join(__dirname, "..", "ui", "webview-react");
   }
 }
 

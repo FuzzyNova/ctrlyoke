@@ -375,6 +375,87 @@ suite("TemplateManager variable metadata", () => {
   });
 
   suite("workflow instantiation", () => {
+    test("preserves multiline feature descriptions in simple-feature prompts", async () => {
+      const tm = makeManager();
+      const workspaceDir = makeTempDir();
+      const featureDescription =
+        "Add login page.\nIt should support OAuth.";
+      tm.getWorkspaceFolder = () => ({ uri: { fsPath: workspaceDir } });
+      tm.getTemplateContent = async (templateId: string) =>
+        fs.promises.readFile(
+          path.resolve(
+            __dirname,
+            "../../templates/workflows",
+            `${templateId}.ctrlyoke.yaml`
+          ),
+          "utf-8"
+        );
+
+      const workflow = await tm.createWorkflow("simple-feature", {
+        featureDescription,
+      });
+
+      assert.strictEqual(
+        workflow.steps![0].prompt,
+        `${featureDescription}\n\nCreate an implementation plan for this feature. Identify all files that need changes and outline the approach.\n`
+      );
+    });
+
+    test("preserves Windows paths and quotes in fix-tests commands", async () => {
+      const tm = makeManager();
+      const workspaceDir = makeTempDir();
+      tm.getWorkspaceFolder = () => ({ uri: { fsPath: workspaceDir } });
+      tm.getTemplateContent = async (templateId: string) =>
+        fs.promises.readFile(
+          path.resolve(
+            __dirname,
+            "../../templates/workflows",
+            `${templateId}.ctrlyoke.yaml`
+          ),
+          "utf-8"
+        );
+
+      for (const testCommand of [
+        ".\\tools\\run.cmd",
+        ".\\scripts\\test.ps1",
+        'npm test -- --grep "auth"',
+      ]) {
+        const workflow = await tm.createWorkflow("fix-tests", {
+          testCommand,
+        });
+        const step = workflow.steps![0];
+
+        assert.strictEqual(step.endCondition?.script, testCommand);
+        assert.ok(step.prompt.includes(testCommand));
+      }
+    });
+
+    test("keeps dollar replacement tokens literal in prompt and script values", async () => {
+      const tm = makeManager();
+      const workspaceDir = makeTempDir();
+      const input = "echo $& and $$5";
+      tm.getWorkspaceFolder = () => ({ uri: { fsPath: workspaceDir } });
+      tm.getTemplateContent = async () =>
+        [
+          "_templateMeta:",
+          "  variables:",
+          "    testCommand:",
+          "      type: text",
+          "steps:",
+          '  - prompt: "{testCommand}"',
+          "    endCondition:",
+          '      script: "{testCommand}"',
+          "      expected: pass",
+        ].join("\n");
+
+      const workflow = await tm.createWorkflow("dollar-values", {
+        testCommand: input,
+      });
+
+      assert.strictEqual(workflow.steps![0].prompt, input);
+      assert.strictEqual(workflow.steps![0].endCondition?.script, input);
+    });
+
     test("keeps the shared execution-property list aligned with the schema", () => {
       const schema = JSON.parse(
         fs.readFileSync(

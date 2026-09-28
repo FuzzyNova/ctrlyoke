@@ -372,7 +372,7 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
     await harness.instance.executeLoadedPromptFile();
 
     assert.deepStrictEqual(harness.integration.sentPrompts, [
-      "Fix the failures reported here: gate-output",
+      "Fix the failures reported here: ```\ngate-output\n```",
     ]);
   });
 

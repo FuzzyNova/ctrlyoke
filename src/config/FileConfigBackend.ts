@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import { parse, type ParseError } from "jsonc-parser";
 import type { ConfigBackend } from "./CtrlYokeConfigService";
 import type { PartialCtrlYokeSettings } from "../types/CtrlYokeSettings";
 import {
@@ -12,6 +13,7 @@ import {
 } from "../utils/PersistedSchemaGuard";
 import { Log } from "../utils/Log";
 import { migrateToCurrent } from "../utils/FormatMigrations";
+import { stripLeadingBom } from "../utils/TextUtils";
 
 const warnedNewerSettingsPaths = new Set<string>();
 
@@ -25,6 +27,7 @@ export class FileConfigBackend implements ConfigBackend {
   // first call's save() lands, so the second write clobbers the first.
   private writeQueue: Promise<void> = Promise.resolve();
   private newerSchemaVersion?: number;
+  private hasInvalidContent = false;
 
   constructor(private readonly configPath: string) {}
 
@@ -57,6 +60,11 @@ export class FileConfigBackend implements ConfigBackend {
           this.configPath
         );
       }
+      if (this.hasInvalidContent) {
+        throw new Error(
+          `Cannot update settings file because it contains invalid JSON: ${this.configPath}`
+        );
+      }
       this.setNestedValue(
         current as Record<string, unknown>,
         settingPath.split("."),
@@ -72,6 +80,7 @@ export class FileConfigBackend implements ConfigBackend {
   }
 
   private load(): PartialCtrlYokeSettings {
+    this.hasInvalidContent = false;
     let content: string;
     try {
       content = fs.readFileSync(this.configPath, "utf-8");
@@ -80,7 +89,13 @@ export class FileConfigBackend implements ConfigBackend {
       return {};
     }
     try {
-      const parsed = JSON.parse(content) as PartialCtrlYokeSettings;
+      const errors: ParseError[] = [];
+      const parsed = parse(stripLeadingBom(content), errors, {
+        allowTrailingComma: true,
+      }) as PartialCtrlYokeSettings;
+      if (errors.length > 0) {
+        throw new Error("Invalid JSONC syntax");
+      }
       const version = readSchemaVersion(parsed);
       if (isNewerSchemaVersion(PERSISTED_STORES.SETTINGS, version)) {
         this.newerSchemaVersion = version;
@@ -97,7 +112,9 @@ export class FileConfigBackend implements ConfigBackend {
       }
       return parsed;
     } catch {
-      // File exists but contains invalid JSON (e.g. interrupted prior write).
+      // File exists but contains invalid JSONC. Reads remain best-effort, but
+      // set() must not overwrite the user's only copy of the settings.
+      this.hasInvalidContent = true;
       // Log to stderr so the user/developer can diagnose the issue.
       console.warn(
         `[ctrlyoke] Settings file has invalid JSON and will be treated as empty: ${this.configPath}`

@@ -592,6 +592,16 @@ async function runCommand(
   options: RunOptions | RerunOptions | AppendOptions | ContinueOptions,
   operation: CliRunOperation = { kind: CLI_RUN_OPERATION_KINDS.RUN }
 ): Promise<void> {
+  if (options.harness !== undefined) {
+    try {
+      assertHarnessId(options.harness);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(chalk.red(`Error: ${message}`));
+      process.exit(2);
+    }
+  }
+
   CliTerminalFormatter.setColorEnabled(options.color !== false);
 
   if (
@@ -2508,8 +2518,11 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
     configService.setCliOverlay(overlay);
   }
 
-  const { CommitMessageGenerationError, CommitMessageGenerator } =
-    await import("./git/CommitMessageGenerator");
+  const {
+    CommitMessageGenerationError,
+    CommitMessageGenerator,
+    getMaxDiffSizeLabel,
+  } = await import("./git/CommitMessageGenerator");
   const generator = new CommitMessageGenerator(
     undefined,
     cliRunnerHostIdentity
@@ -2525,7 +2538,7 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
   if (diffResult.truncated) {
     console.error(
       chalk.yellow(
-        "Warning: Diff exceeded 8 KB and was truncated. Commit message may be incomplete."
+        `Warning: Diff exceeded ${getMaxDiffSizeLabel()} and was truncated. Commit message may be incomplete.`
       )
     );
   }

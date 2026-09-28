@@ -29,7 +29,7 @@ import { NOT_AFTER_BOUNDARY } from "./ReferenceBoundary";
 
 /**
  * Mask every prompt-reference and variable trigger character inside
- * triple-backtick fenced blocks.
+ * backtick-fenced blocks.
  *
  * This is the single point that decides "is this inside a fence" for every
  * reference parser in the file (plus `SecretReferenceParser.parseSecretReferences`
@@ -45,9 +45,47 @@ import { NOT_AFTER_BOUNDARY } from "./ReferenceBoundary";
  * prompt-reference system, it must be added here too.
  */
 export function maskFencedCodeBlocks(text: string): string {
-  return text.replace(/```[\s\S]*?```/g, (block) =>
-    block.replace(/[@#~!$/{}]/g, "\x00")
-  );
+  const fenceRuns = /`{3,}/g;
+  let masked = text;
+
+  while (fenceRuns.lastIndex < text.length) {
+    const opening = fenceRuns.exec(text);
+    if (!opening) {
+      break;
+    }
+    const openingLength = opening[0].length;
+    let closing: RegExpExecArray | null;
+    let contentEnd = -1;
+
+    while ((closing = fenceRuns.exec(text)) !== null) {
+      if (closing[0].length >= openingLength) {
+        contentEnd = closing.index + closing[0].length;
+        break;
+      }
+    }
+
+    if (contentEnd < 0) {
+      break;
+    }
+
+    const blockStart = opening.index;
+    const block = text.slice(blockStart, contentEnd);
+    const maskedBlock = block.replace(/[@#~!$/{}]/g, "\x00");
+    masked = masked.slice(0, blockStart) + maskedBlock + masked.slice(contentEnd);
+    fenceRuns.lastIndex = contentEnd;
+  }
+
+  return masked;
+}
+
+/** Fence literal text with a backtick run longer than any run in the text. */
+export function fenceLiteral(text: string, info = ""): string {
+  let longestRun = 0;
+  for (const match of text.matchAll(/`+/g)) {
+    longestRun = Math.max(longestRun, match[0].length);
+  }
+  const fence = "`".repeat(Math.max(3, longestRun + 1));
+  return `${fence}${info ? ` ${info}` : ""}\n${text}\n${fence}`;
 }
 
 export interface FileReference {
@@ -385,15 +423,13 @@ export function parseConditionOutputRefs(text: string): ConditionOutputMatch[] {
   const matches: ConditionOutputMatch[] = [];
   const maskedText = maskFencedCodeBlocks(text);
   const regex = new RegExp(
-    `${NOT_AFTER_BOUNDARY}\\$([A-Za-z][A-Za-z0-9]*(?::[A-Za-z0-9,\\-]*)?)`,
+    `${NOT_AFTER_BOUNDARY}\\$([A-Za-z]+)(?::([A-Za-z]+))?`,
     "g"
   );
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(maskedText)) !== null) {
-    const body = match[1];
-    const separatorIndex = body.indexOf(":");
-    const phase = separatorIndex === -1 ? body : body.slice(0, separatorIndex);
+    const phase = match[1];
     if (
       phase !== SCRIPT_OUTPUT_SOURCES.PRE_CONDITION &&
       phase !== SCRIPT_OUTPUT_SOURCES.END_CONDITION
@@ -401,7 +437,7 @@ export function parseConditionOutputRefs(text: string): ConditionOutputMatch[] {
       continue;
     }
 
-    const field = separatorIndex === -1 ? "" : body.slice(separatorIndex + 1);
+    const field = match[2] ?? "";
     matches.push({
       phase,
       field,

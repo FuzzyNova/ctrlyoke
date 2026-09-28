@@ -60,7 +60,8 @@ function getSummary(
 
 export function substituteConditionOutputRefs(
   text: string,
-  context: ConditionOutputContext
+  context: ConditionOutputContext,
+  formatValue: (value: string) => string = (value) => value
 ): ConditionOutputSubstitutionResult {
   // parseConditionOutputRefs masks fenced blocks itself, and masking is a
   // 1:1 character substitution — so its offsets index the original text.
@@ -86,7 +87,7 @@ export function substituteConditionOutputRefs(
         token: match.token,
       });
     } else {
-      substitutedText += replacement(summary);
+      substitutedText += formatValue(replacement(summary));
     }
     cursor = match.endOffset;
   }

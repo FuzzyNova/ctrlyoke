@@ -3716,6 +3716,7 @@ describe("PROMPT_DELETED", () => {
       });
     });
     useUiStore.setState({
+      activeWorkflowId: "wf-delete",
       displayedViewAddress: {
         workflowKey: "wf-delete" as never,
         kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
@@ -3727,6 +3728,7 @@ describe("PROMPT_DELETED", () => {
 
     act(() => {
       dispatch(MESSAGE_TYPES.PROMPT_DELETED, {
+        workflowId: "wf-delete",
         fileName: "wf.yaml",
         steps: [makePrompt("first")],
         definitionRevision: 8,
@@ -3735,6 +3737,36 @@ describe("PROMPT_DELETED", () => {
 
     expect(useWorkflowStore.getState().steps).toHaveLength(1);
     expect(useUiStore.getState().appliedDefinitionRevision).toBe(8);
+  });
+
+  it("ignores a delete for another workflow without adopting its revision", () => {
+    renderHook(() => useMessageHandler());
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "active.yaml",
+        steps: [makePrompt("active-1"), makePrompt("active-2")],
+      });
+    });
+    useUiStore.setState({
+      activeWorkflowId: "wf-active",
+      appliedDefinitionRevision: 3,
+      displayedDefinitionRevision: 3,
+    });
+    const priorSteps = useWorkflowStore.getState().steps;
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.PROMPT_DELETED, {
+        workflowId: "wf-other",
+        fileName: "other.yaml",
+        steps: [makePrompt("other")],
+        definitionRevision: 99,
+      });
+    });
+
+    expect(useWorkflowStore.getState().steps).toEqual(priorSteps);
+    expect(useWorkflowStore.getState().fileName).toBe("active.yaml");
+    expect(useUiStore.getState().appliedDefinitionRevision).toBe(3);
+    expect(useUiStore.getState().displayedDefinitionRevision).toBe(3);
   });
 });
 

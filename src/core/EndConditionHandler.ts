@@ -433,11 +433,13 @@ export class EndConditionHandler {
     }
 
     const retryPromptStep: PromptStep = {
+      ...prompt,
       prompt: retryPromptText,
-      model: prompt.model,
-      endCondition: prompt.endCondition,
       resumeSession: prompt.endCondition?.resumeSessionOnRetry ?? true,
     };
+    delete retryPromptStep._runtime;
+    delete retryPromptStep.sessionId;
+    delete retryPromptStep.preCondition;
 
     retryContext.integration.setWorkflowProgress(
       currentIndex + 1,

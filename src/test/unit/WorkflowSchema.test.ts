@@ -219,6 +219,44 @@ suite("Workflow template schema", () => {
       false
     );
     assert.strictEqual(validate(workflow({})), false);
+    assert.strictEqual(
+      validate({
+        mcpServers: [{ id: "ctrlyoke", command: "node" }],
+        steps: [{ prompt: "hi" }],
+      }),
+      false,
+      "the built-in server entry must not also match a user-defined config"
+    );
+  });
+
+  test("parses the documented built-in ctrlyoke denied-tools entry at workflow and step level", async () => {
+    const deniedTools = [
+      "append_step",
+      "edit_step",
+      "remove_step",
+      "reorder_steps",
+    ];
+    const mcpServers = [{ id: "ctrlyoke", deniedTools }];
+    const parser = new PromptFileParser();
+
+    for (const workflow of [
+      { mcpServers, steps: [{ prompt: "Read the queue." }] },
+      {
+        steps: [{ prompt: "Read the queue.", mcpServers }],
+      },
+    ]) {
+      const parsed = await parser.validateAndNormalize(
+        workflow,
+        "workflow.ctrlyoke.yaml"
+      );
+      const firstStep = parsed.steps?.[0];
+      const parsedServers = "mcpServers" in workflow
+        ? parsed.mcpServers
+        : firstStep && "mcpServers" in firstStep
+          ? firstStep.mcpServers
+          : undefined;
+      assert.deepStrictEqual(parsedServers, mcpServers);
+    }
   });
 
   test("tightens integer fields, ports, and workflow run addresses", () => {

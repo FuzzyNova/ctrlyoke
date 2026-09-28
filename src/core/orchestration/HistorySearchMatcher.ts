@@ -427,7 +427,13 @@ function analyzeSequence(
       }
       continue;
     }
-    if (node.analysis.required.length === 1) {
+    if (!quantifier.exactlyOne) {
+      if (adjacentLiteral !== undefined) {
+        required.push(adjacentLiteral);
+        adjacentLiteral = undefined;
+      }
+      required.push(...node.analysis.required);
+    } else if (node.analysis.required.length === 1) {
       const literal = node.analysis.required[0];
       adjacentLiteral = `${adjacentLiteral ?? ""}${literal}`;
     } else {
@@ -563,17 +569,25 @@ function readQuantifier(
   source: string,
   start: number,
   end: number
-): { minimum: number; index: number } {
+): { minimum: number; exactlyOne: boolean; index: number } {
   if (source[start] === "*" || source[start] === "?")
-    return { minimum: 0, index: start + 1 };
-  if (source[start] === "+") return { minimum: 1, index: start + 1 };
-  if (source[start] !== "{") return { minimum: 1, index: start };
+    return { minimum: 0, exactlyOne: false, index: start + 1 };
+  if (source[start] === "+")
+    return { minimum: 1, exactlyOne: false, index: start + 1 };
+  if (source[start] !== "{")
+    return { minimum: 1, exactlyOne: true, index: start };
   const close = source.indexOf("}", start + 1);
-  if (close === -1 || close >= end) return { minimum: 1, index: start };
+  if (close === -1 || close >= end)
+    return { minimum: 1, exactlyOne: true, index: start };
   const match = /^\{(\d+)(?:,(\d*)?)?\}/.exec(source.slice(start, close + 1));
-  return match
-    ? { minimum: Number(match[1]), index: close + 1 }
-    : { minimum: 1, index: start };
+  if (!match) return { minimum: 1, exactlyOne: true, index: start };
+  const minimum = Number(match[1]);
+  const maximum = match[2] === undefined ? minimum : Number(match[2]);
+  return {
+    minimum,
+    exactlyOne: minimum === 1 && maximum === 1,
+    index: close + 1,
+  };
 }
 
 function skipCharacterClass(

@@ -19,6 +19,7 @@ import {
   MCP_COMMIT_MESSAGE_DENIED_TOOL_NAMES,
   MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
 } from "../utils/McpToolDefinitions";
+import { fenceLiteral } from "../utils/FileReferenceParser";
 import {
   CLI_EVENT_TYPES,
   EXECUTION_MODES,
@@ -43,7 +44,8 @@ const execFileAsync = promisify(execFile);
 // ~200k tokens at ~4 bytes/token; leaves room for system prompt and instructions.
 // The harness handles actual context-window limits natively — this is just a safeguard
 // against truly pathological diffs (e.g. generated files, minified bundles).
-const MAX_DIFF_BYTES = 750 * 1024;
+export const MAX_DIFF_BYTES = 750 * 1024;
+const GIT_DIFF_MAX_BUFFER = 100 * 1024 * 1024;
 const COMMIT_MESSAGE_MCP_TOOL = MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME;
 const COMMIT_MESSAGE_LINEAGE_POINTER = ".commit-message-lineage.json";
 const COMMIT_MESSAGE_WORKFLOW_NAME = "commit-message-generation";
@@ -95,6 +97,30 @@ export interface DiffResult {
   truncated: boolean;
   commands: string[];
   includesUntrackedFiles: boolean;
+}
+
+export function getMaxDiffSizeLabel(): string {
+  return `${Math.floor(MAX_DIFF_BYTES / 1024)} KB`;
+}
+
+export function buildCommitMessagePrompt(
+  diff: string,
+  commitPrompt: string,
+  instructionsSection = "",
+  mcpInstruction = ""
+): string {
+  const fencedDiff = fenceLiteral(diff, "diff");
+  return `${commitPrompt}\n\n${fencedDiff}${instructionsSection}${mcpInstruction}`;
+}
+
+function isNotGitRepositoryError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "stderr" in error &&
+    typeof error.stderr === "string" &&
+    /fatal: not a git repository/i.test(error.stderr)
+  );
 }
 
 export interface CommitResult {
@@ -166,7 +192,7 @@ export class CommitMessageGenerator {
       const { stdout: stagedDiff } = await execFileAsync(
         "git",
         ["diff", "--cached"],
-        { cwd, encoding: "utf8" }
+        { cwd, encoding: "utf8", maxBuffer: GIT_DIFF_MAX_BUFFER }
       );
       if (stagedDiff.trim()) {
         const truncated = stagedDiff.length > MAX_DIFF_BYTES;
@@ -178,8 +204,10 @@ export class CommitMessageGenerator {
           includesUntrackedFiles: false,
         };
       }
-    } catch {
-      // git not available or not a repo — fall through
+    } catch (error) {
+      if (!isNotGitRepositoryError(error)) {
+        throw error;
+      }
     }
 
     // Fallback: unstaged tracked + untracked files
@@ -190,12 +218,15 @@ export class CommitMessageGenerator {
       const { stdout: trackedDiff } = await execFileAsync("git", ["diff"], {
         cwd,
         encoding: "utf8",
+        maxBuffer: GIT_DIFF_MAX_BUFFER,
       });
       if (trackedDiff.trim()) {
         parts.push(trackedDiff);
       }
-    } catch {
-      // ignore
+    } catch (error) {
+      if (!isNotGitRepositoryError(error)) {
+        throw error;
+      }
     }
 
     try {
@@ -203,7 +234,7 @@ export class CommitMessageGenerator {
       const { stdout: untrackedOut } = await execFileAsync(
         "git",
         ["ls-files", "--others", "--exclude-standard"],
-        { cwd, encoding: "utf8" }
+        { cwd, encoding: "utf8", maxBuffer: GIT_DIFF_MAX_BUFFER }
       );
       const untrackedFiles = untrackedOut.trim().split("\n").filter(Boolean);
       includesUntrackedFiles = untrackedFiles.length > 0;
@@ -223,8 +254,10 @@ export class CommitMessageGenerator {
           // skip unreadable files
         }
       }
-    } catch {
-      // ignore
+    } catch (error) {
+      if (!isNotGitRepositoryError(error)) {
+        throw error;
+      }
     }
 
     const combined = parts.join("\n");
@@ -317,14 +350,14 @@ export class CommitMessageGenerator {
     const mcpInstruction = useMcpCapture
       ? `\n\nSubmit the commit message using the \`${COMMIT_MESSAGE_MCP_TOOL}\` tool. Do not output it as text.`
       : "";
-    // Fence the diff so its literal content (e.g. an added file's leading
-    // `<!DOCTYPE html>`) is never mistaken for a ctrlyoke reference trigger
-    // (`@`/`#`/`~`/`!`) by the context-expansion or secret-grant parsers,
-    // which both treat fenced blocks as suppressed. An unfenced diff line
-    // like `+<!DOCTYPE html>` previously parsed as an inline `!DOCTYPE`
-    // secret grant and hard-failed the run at preflight.
-    const fencedDiff = "```diff\n" + diff + "\n```";
-    const fullPrompt = `${commitPrompt}\n\n${fencedDiff}${instructionsSection}${mcpInstruction}`;
+    // Keep diff content inert for every prompt-reference parser, even when
+    // added Markdown contains its own fenced code blocks.
+    const fullPrompt = buildCommitMessagePrompt(
+      diff,
+      commitPrompt,
+      instructionsSection,
+      mcpInstruction
+    );
 
     const mcpServerConfig: McpServerConfig | undefined = useMcpCapture
       ? {

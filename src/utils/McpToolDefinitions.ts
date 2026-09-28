@@ -418,7 +418,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: MCP_REORDER_STEPS_TOOL_NAME,
     description:
-      "Reorder the pending steps when their execution order should change. Provide every pending step's zero-based index in the desired order.",
+      "Reorder steps that have not started when their execution order should change. Provide every not-yet-started step's zero-based index in the desired order.",
     inputSchema: {
       type: "object",
       properties: {
@@ -426,7 +426,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
           type: "array",
           items: { type: "number", minimum: 0 },
           description:
-            "All pending step indices, in the order they should run; use absolute zero-based workflow indices.",
+            "All not-yet-started step indices, in the order they should run; use absolute zero-based workflow indices.",
         },
       },
       required: ["indices"],

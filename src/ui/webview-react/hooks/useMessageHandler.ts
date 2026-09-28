@@ -1082,6 +1082,12 @@ export function createMessageHandlers(
   // PROMPT_DELETED - Prompt was deleted from queue
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.PROMPT_DELETED] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
     // The delete's new steps arrive here rather than in a snapshot, so the
     // applied head moves with them — see `adoptPushedDefinitionRevision`.
     // Without it the invalidation snapshot that follows the write is read as a
