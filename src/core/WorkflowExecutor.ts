@@ -4567,9 +4567,7 @@ export class WorkflowExecutor {
     );
   }
 
-  private getPromptFileResolutionOptions(
-    context: WorkflowExecutionContext
-  ): {
+  private getPromptFileResolutionOptions(context: WorkflowExecutionContext): {
     promptFileResolver: PromptFileResolver;
     sourceDefinitionPath?: string;
   } {
@@ -4728,7 +4726,7 @@ export class WorkflowExecutor {
     totalSteps: number
   ): Promise<boolean> {
     const maxTimeSec = dynamicConfig.maxWorkflowExecutionTime;
-    const unlimitedWorkflow = dynamicConfig.unlimitedMode || maxTimeSec === -1;
+    const unlimitedWorkflow = maxTimeSec === -1;
 
     if (unlimitedWorkflow) {
       return false;
@@ -4758,15 +4756,15 @@ export class WorkflowExecutor {
     dynamicConfig: DynamicQueueConfig,
     totalSteps: number
   ): Promise<boolean> {
-    if (dynamicConfig.unlimitedMode || dynamicConfig.maxQueueSize <= 0) {
+    if (dynamicConfig.maxSteps === -1) {
       return false;
     }
 
-    if (totalSteps <= dynamicConfig.maxQueueSize) {
+    if (totalSteps <= dynamicConfig.maxSteps) {
       return false;
     }
 
-    const message = `Workflow stopped - Maximum queue size reached (${totalSteps}/${dynamicConfig.maxQueueSize}).`;
+    const message = `Workflow stopped - Maximum step limit reached (${totalSteps}/${dynamicConfig.maxSteps}).`;
     notifyUserFeedback(this.userFeedbackSink, "warning", message);
     Log.trace(`[WorkflowExecutor] ${message}`);
     this.promptQueue.getRuntimeStateMachine().fail();

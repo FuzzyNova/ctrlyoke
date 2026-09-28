@@ -173,6 +173,21 @@
     }
   ],
   "$defs": {
+    "unlimitedValue": {
+      "const": -1,
+      "description": "Unlimited."
+    },
+    "maxStepsValue": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/unlimitedValue"
+        },
+        {
+          "type": "integer",
+          "minimum": 1
+        }
+      ]
+    },
     "harnessId": {
       "type": "string",
       "enum": [
@@ -344,6 +359,10 @@
       "type": "object",
       "description": "Properties authored only at the workflow root.",
       "properties": {
+        "maxSteps": {
+          "$ref": "#/$defs/maxStepsValue",
+          "description": "Maximum number of entries in the run's `steps` array, regardless of who queued them, including parallel members and disabled steps. `finalStep` iterations and retries are not counted. Omit to inherit `queue.maxSteps`. `-1` means unlimited."
+        },
         "worktree": {
           "description": "Run the workflow in the working checkout or in a Git worktree. When omitted, the `defaults.worktree` setting applies.",
           "$ref": "#/$defs/worktreeConfig"
@@ -495,6 +514,9 @@
         },
         "trustedExternalRoots": {
           "$ref": "#/$defs/workflowOnlyProperties/properties/trustedExternalRoots"
+        },
+        "maxSteps": {
+          "$ref": "#/$defs/workflowOnlyProperties/properties/maxSteps"
         },
         "_templateMeta": {
           "$ref": "#/properties/_templateMeta"
@@ -734,6 +756,12 @@
           "not": {
             "type": "object",
             "required": ["trustedExternalRoots"]
+          }
+        },
+        {
+          "not": {
+            "type": "object",
+            "required": ["maxSteps"]
           }
         }
       ],
@@ -976,10 +1004,17 @@
           "$ref": "#/$defs/scriptProperties/properties/ignoreCase"
         },
         "maxRetries": {
-          "type": "integer",
-          "description": "Maximum number of retry attempts. Use -1 for unlimited retries (with caution), 0 for no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed.",
-          "minimum": -1,
-          "maximum": 100
+          "oneOf": [
+            {
+              "$ref": "#/$defs/unlimitedValue"
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            }
+          ],
+          "description": "Maximum number of retry attempts. `-1` means unlimited. 0 means no retries by default, or 1-100 for a specific limit. When onPass or onFail is 'retry' and this field is omitted, one retry is allowed."
         },
         "retryPrompt": {
           "type": "string",

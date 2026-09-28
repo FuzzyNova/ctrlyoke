@@ -1343,23 +1343,16 @@ export class ExecutionPreviewService {
   private buildLimits(stepCount: number): ExecutionLimitsPreview {
     const config = this.options.dynamicQueueConfig;
     const violations: string[] = [];
-    if (
-      config &&
-      !config.unlimitedMode &&
-      config.maxQueueSize > 0 &&
-      stepCount > config.maxQueueSize
-    ) {
+    if (config && config.maxSteps !== -1 && stepCount > config.maxSteps) {
       violations.push(
-        `Queue size ${stepCount} exceeds limit ${config.maxQueueSize}`
+        `Step count ${stepCount} exceeds limit ${config.maxSteps}`
       );
     }
     return {
-      ...(config && !config.unlimitedMode && config.maxQueueSize > 0
-        ? { maxQueueSteps: config.maxQueueSize }
+      ...(config && config.maxSteps !== -1
+        ? { maxQueueSteps: config.maxSteps }
         : {}),
-      ...(config &&
-      !config.unlimitedMode &&
-      config.maxWorkflowExecutionTime !== -1
+      ...(config && config.maxWorkflowExecutionTime !== -1
         ? { maxExecutionSeconds: config.maxWorkflowExecutionTime }
         : {}),
       violations,

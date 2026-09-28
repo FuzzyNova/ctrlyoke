@@ -2603,16 +2603,15 @@ export class WorkflowInstance {
       }
 
       const queueConfig = ConfigurationUtils.getDynamicQueueConfig();
-      const maxQueueSize = queueConfig.maxQueueSize;
-      const unlimitedMode = queueConfig.unlimitedMode;
+      const maxSteps = queueConfig.maxSteps;
       const newSize = currentSize + parsed.steps.length;
 
-      if (!unlimitedMode && newSize > maxQueueSize) {
+      if (maxSteps !== -1 && newSize > maxSteps) {
         notifyUserFeedback(
           this.userFeedbackSink,
           "warning",
-          `Queue size limit exceeded: ${newSize}/${maxQueueSize} prompts. ` +
-            `Enable unlimitedMode or increase maxQueueSize to proceed.`
+          `Step limit exceeded: ${newSize}/${maxSteps} steps. ` +
+            `Set queue.maxSteps to -1 or increase it to proceed.`
         );
         return;
       }
@@ -4231,8 +4230,7 @@ export class WorkflowInstance {
                 argv: invocation.argv,
                 vars: args.vars,
                 onOutput,
-                windowsVerbatimArguments:
-                  invocation.windowsVerbatimArguments,
+                windowsVerbatimArguments: invocation.windowsVerbatimArguments,
               });
               const comparison = this.endConditionEvaluator.evaluateResult(
                 {

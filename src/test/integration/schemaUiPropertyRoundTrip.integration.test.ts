@@ -144,6 +144,7 @@ function authorableProperties(node: SchemaObject): string[] {
 const SAMPLES: Record<string, unknown> = {
   color: "#123456",
   additionalArgs: "--effort high",
+  maxSteps: 30,
   agent: "seeded-agent",
   compareSource: "stdout",
   operator: "contains",

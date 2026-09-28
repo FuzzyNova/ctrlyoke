@@ -360,7 +360,7 @@ suite("RunContinuationService topology append transaction", () => {
         new WorkflowLineageRepository(),
         false,
         QUEUE_POSITION.END,
-        { maxQueueSize: 3, unlimited: false }
+        { maxSteps: 3 }
       ),
       /Current: 2, Adding: 2, Max: 3/
     );
@@ -378,7 +378,7 @@ suite("RunContinuationService topology append transaction", () => {
   // The dashboard and CLI append paths own no capacity policy, and the
   // environment the MCP server reads its limit from is unset in their
   // processes. Enforcing unconditionally here would cap them at the default
-  // while ignoring the user's configured `queue.maxSize`.
+  // while ignoring the user's configured `queue.maxSteps`.
   test("leaves capacity unenforced for a caller that supplies no policy", async () => {
     workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-topology-nopolicy-")
@@ -402,7 +402,6 @@ suite("RunContinuationService topology append transaction", () => {
     workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-topology-concurrent-")
     );
-    process.env.CTRLYOKE_UNLIMITED_MODE = "true";
     await seedRun([]);
 
     async function appendWithRetry(

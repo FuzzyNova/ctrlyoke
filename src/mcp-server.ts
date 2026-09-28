@@ -42,7 +42,7 @@ import {
   BOOLEAN_STRING_VALUES,
   CAPABILITIES_FILE,
   CTRLYOKE_DIR,
-  DEFAULT_MAX_QUEUE_SIZE,
+  DEFAULT_MAX_STEPS,
   ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
   LOGS_DIR,
@@ -52,9 +52,8 @@ import {
 import type { CapabilitiesFile } from "./types/CapabilitiesTypes";
 import * as WorkflowPaths from "./utils/WorkflowPaths";
 import {
-  getMaxQueueSize,
+  getGlobalMaxSteps,
   getMaxParallelSteps,
-  isUnlimitedMode,
   resolveQueueLimitPolicy,
 } from "./utils/QueueLimitUtils";
 import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
@@ -381,11 +380,9 @@ export class CtrlYokeMCPServer {
       CTRLYOKE_HOME: process.env.CTRLYOKE_HOME || "(default)",
       CTRLYOKE_RUN_HISTORY_LOCATION:
         process.env.CTRLYOKE_RUN_HISTORY_LOCATION || "(default: user)",
-      CTRLYOKE_MAX_QUEUE_SIZE:
-        process.env.CTRLYOKE_MAX_QUEUE_SIZE ||
-        `(not set — default ${DEFAULT_MAX_QUEUE_SIZE})`,
-      CTRLYOKE_UNLIMITED_MODE:
-        process.env.CTRLYOKE_UNLIMITED_MODE || "(not set — default false)",
+      CTRLYOKE_MAX_STEPS:
+        process.env.CTRLYOKE_MAX_STEPS ||
+        `(not set — default ${DEFAULT_MAX_STEPS})`,
       NODE_ENV: process.env.NODE_ENV,
     });
 
@@ -1034,8 +1031,7 @@ export class CtrlYokeMCPServer {
       (p) => p._runtime?.completedAt !== undefined
     ).length;
 
-    const unlimited = isUnlimitedMode();
-    const maxSize = getMaxQueueSize();
+    const maxSteps = getGlobalMaxSteps();
 
     const response = {
       workflowKey: selected.workflowKey,
@@ -1053,8 +1049,9 @@ export class CtrlYokeMCPServer {
         totalSteps: allSteps.length,
         completedSteps: completedCount,
         executionState: runtime.executionState,
-        maxQueueSize: unlimited ? "unlimited" : maxSize,
-        remainingSlots: unlimited ? "unlimited" : maxSize - allSteps.length,
+        maxSteps: maxSteps === -1 ? "unlimited" : maxSteps,
+        remainingSteps:
+          maxSteps === -1 ? "unlimited" : maxSteps - allSteps.length,
         workingFile,
         runDirectory: WorkflowPaths.runDirectoryForWorkingFile(workingFile),
         definitionRevision: queueData.definitionRevision ?? 1,

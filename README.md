@@ -375,8 +375,7 @@ not determine workflow field support.
 | Setting                  | Default | Description                                                                                                 |
 | ------------------------ | ------- | ----------------------------------------------------------------------------------------------------------- |
 | `mcpServers`             | `[]`    | Default MCP servers for workflow prompts. Include `"ctrlyoke"` to enable dynamic queue extension by default |
-| `maxQueueSize`           | `100`   | Maximum prompts allowed in the dynamic queue (range: 1–1000)                                                |
-| `unlimitedMode`          | `false` | Remove queue size and execution time limits                                                                 |
+| `maxSteps`               | `100`   | Maximum workflow steps (`-1` means unlimited)                                                               |
 | `notifyOnQueueExtension` | `true`  | Show a notification when the AI appends prompts to the queue                                                |
 
 ### Hooks

@@ -10,7 +10,7 @@ import {
   parseMcpToolCliArgs,
   type McpToolCallingContext,
 } from "../../mcp-server";
-import { getMaxQueueSize } from "../../utils/QueueLimitUtils";
+import { getGlobalMaxSteps } from "../../utils/QueueLimitUtils";
 import { ensureMcpStorageInitialized } from "../helpers/mcpStorage";
 import {
   MCP_APPEND_STEP_TOOL_NAME,
@@ -38,7 +38,7 @@ import type {
   WorkingFileWorktreeRuntime,
 } from "../../types/CtrlYokeTypes";
 import {
-  DEFAULT_MAX_QUEUE_SIZE,
+  DEFAULT_MAX_STEPS,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
   PARALLEL_GROUP_ADMISSION,
@@ -674,16 +674,16 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
   });
 
-  test("uses the shared queue default when no max-size environment value is set", () => {
-    const priorMaxQueueSize = process.env.CTRLYOKE_MAX_QUEUE_SIZE;
+  test("uses the shared steps default when no max-steps environment value is set", () => {
+    const priorMaxSteps = process.env.CTRLYOKE_MAX_STEPS;
     try {
-      delete process.env.CTRLYOKE_MAX_QUEUE_SIZE;
-      assert.strictEqual(getMaxQueueSize(), DEFAULT_MAX_QUEUE_SIZE);
+      delete process.env.CTRLYOKE_MAX_STEPS;
+      assert.strictEqual(getGlobalMaxSteps(), DEFAULT_MAX_STEPS);
     } finally {
-      if (priorMaxQueueSize === undefined) {
-        delete process.env.CTRLYOKE_MAX_QUEUE_SIZE;
+      if (priorMaxSteps === undefined) {
+        delete process.env.CTRLYOKE_MAX_STEPS;
       } else {
-        process.env.CTRLYOKE_MAX_QUEUE_SIZE = priorMaxQueueSize;
+        process.env.CTRLYOKE_MAX_STEPS = priorMaxSteps;
       }
     }
   });
@@ -1560,9 +1560,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
   test("refuses edits that clear required prompt or script content", async () => {
     const server = await setup();
-    const { run, ownerToken } = await prepareActiveRun(
-      "edit-required-content"
-    );
+    const { run, ownerToken } = await prepareActiveRun("edit-required-content");
     try {
       const file = JSON.parse(
         await fs.readFile(run.runFilePath, "utf8")
@@ -2690,11 +2688,15 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
 
   test("reports terminal failures instead of completed", async () => {
     const server = await setup();
-    const run = await createRun("failed-step-status", "2026-01-01T00-00-00-000Z", {
-      stepCount: 2,
-      currentIndex: 1,
-      executionState: EXECUTION_STATES.ERROR,
-    });
+    const run = await createRun(
+      "failed-step-status",
+      "2026-01-01T00-00-00-000Z",
+      {
+        stepCount: 2,
+        currentIndex: 1,
+        executionState: EXECUTION_STATES.ERROR,
+      }
+    );
     const workingFile = JSON.parse(
       await fs.readFile(run.runFilePath, "utf8")
     ) as WorkingFile;

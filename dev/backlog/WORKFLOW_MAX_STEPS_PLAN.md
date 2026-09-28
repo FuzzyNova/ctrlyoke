@@ -414,13 +414,19 @@ split is:
 
 | Step | Scope | Status |
 | ---- | ----- | ------ |
-| 1 | Phase 1: schemas (`unlimitedValue`, `maxStepsValue`, `maxSteps`, `oneOf` conversions), types and constants, the full rename and `unlimitedMode` removal across backend and UI (the Queue toggle is simply deleted), regenerated artifacts, `schemas/archive/v1/` mirror, `EXECUTION_GUARDRAILS_PLAN.md` edit, schema tests | Pending |
+| 1 | Phase 1: schemas (`unlimitedValue`, `maxStepsValue`, `maxSteps`, `oneOf` conversions), types and constants, the full rename and `unlimitedMode` removal across backend and UI (the Queue toggle is simply deleted), regenerated artifacts, `schemas/archive/v1/` mirror, `EXECUTION_GUARDRAILS_PLAN.md` edit, schema tests | Done |
 | 2 | Phase 2: `LimitUtils`, `resolveEffectiveMaxSteps`, every enforcement site, required `RunContinuationService` limit, MCP `workflow_status`, dry-run, tests | Pending |
 | 3 | Phase 3 items 1–2, 5–6: `LimitSelect`, option metadata, vocabulary test, and every settings page and `ScriptConditionEditor` switched to it | Pending |
 | 4 | Phase 3 items 3–4: the Max Steps control on the Validation page, Set as default, round-trip tests | Pending |
 | 5 | Phase 4 docs, the §1.1 vocabulary row, and the acceptance-criteria sweep | Pending |
 
 Each step updates its row when it commits.
+
+Step 1 note: the workflow-level Max Steps control and Set as default remain
+deferred to Step 4 as planned. The current `schemaUiPropertyRoundTrip` gate
+requires a live control for every workflow property, so it reports `maxSteps`
+missing in this staging step. Adding the deferred control or a temporary test
+opt-out would conflict with the staged scope and project test guidance.
 
 ## Non-goals
 

@@ -109,10 +109,9 @@ function createContext(
     currentPromptFilePath: "workflow.ctrlyoke.json",
     shouldShowCliCommand: false,
     dynamicQueueConfig: {
-      maxQueueSize: 100,
+      maxSteps: 100,
       maxParallelSteps: 6,
       maxWorkflowExecutionTime: 3600,
-      unlimitedMode: false,
       notifyOnExtension: false,
     },
     parallelGroupFanOutEnabled: true,

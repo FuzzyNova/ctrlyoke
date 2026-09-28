@@ -31,16 +31,16 @@ export function QueueSection({
         Queue
       </h3>
       <SettingInputRow
-        label="Max queue size"
-        id="queue-max-size"
-        path="queue.maxSize"
+        label="Max steps"
+        id="queue-max-steps"
+        path="queue.maxSteps"
         {...rowProps}
       >
         <LocalNumberInput
-          id="queue-max-size"
+          id="queue-max-steps"
           min={1}
-          value={queue.maxSize}
-          onCommit={(v) => onUpdate("queue.maxSize", v)}
+          value={queue.maxSteps}
+          onCommit={(v) => onUpdate("queue.maxSteps", v)}
           parse={(v) => parseInt(v, 10) || 10}
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
@@ -75,14 +75,6 @@ export function QueueSection({
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
       </SettingInputRow>
-      <SettingToggleRow
-        label="Unlimited mode"
-        description="Disable all queue size and time limits."
-        checked={queue.unlimitedMode}
-        onChange={(v) => onUpdate("queue.unlimitedMode", v)}
-        path="queue.unlimitedMode"
-        {...rowProps}
-      />
       <SettingToggleRow
         label="Notify on queue extension"
         description="Show a notification when the queue is extended beyond the limit."

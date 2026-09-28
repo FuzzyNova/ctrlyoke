@@ -346,12 +346,16 @@ export const ConfigurationUtils = {
   getDynamicQueueConfig(): DynamicQueueConfig {
     const queue = configService.get(CONFIG_KEYS.QUEUE);
     return {
-      maxQueueSize: queue.maxSize,
+      maxSteps: queue.maxSteps,
       maxParallelSteps: queue.maxParallelSteps,
       maxWorkflowExecutionTime: queue.maxWorkflowExecutionTimeSec,
-      unlimitedMode: queue.unlimitedMode,
       notifyOnExtension: queue.notifyOnExtension,
     };
+  },
+
+  /** Get the global maximum number of workflow steps, or -1 for unlimited. */
+  getGlobalMaxSteps(): number {
+    return configService.get(CONFIG_KEYS.QUEUE).maxSteps;
   },
 
   /**

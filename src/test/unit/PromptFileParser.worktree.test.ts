@@ -81,6 +81,16 @@ suite("PromptFileParser worktree authoring", function () {
     assert.strictEqual(parsed.worktree, undefined);
   });
 
+  test("rejects maxSteps on a workflow step", async () => {
+    await assert.rejects(
+      parser.validateAndNormalize(
+        { steps: [{ prompt: "prompt", maxSteps: 10 }] },
+        "workflow.ctrlyoke.json"
+      ),
+      /Validation failed/
+    );
+  });
+
   test("rejects worktree on nested steps, finalStep, and prompt runtime", async () => {
     const invalid = [
       { steps: [{ prompt: "prompt", worktree: false }] },
@@ -103,7 +113,8 @@ suite("PromptFileParser worktree authoring", function () {
     for (const authored of invalid) {
       await assert.rejects(
         parser.validateAndNormalize(authored, "workflow.ctrlyoke.json"),
-        /Validation failed/
+        /Validation failed/,
+        JSON.stringify(authored)
       );
     }
   });

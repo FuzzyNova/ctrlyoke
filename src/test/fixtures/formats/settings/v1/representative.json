@@ -113,10 +113,9 @@
     "contextResolutionFailure": "warn"
   },
   "queue": {
-    "maxSize": 100,
+    "maxSteps": 100,
     "maxParallelSteps": 6,
     "maxWorkflowExecutionTimeSec": -1,
-    "unlimitedMode": false,
     "notifyOnExtension": true
   },
   "runs": {

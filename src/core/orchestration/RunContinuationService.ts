@@ -343,11 +343,11 @@ export class RunContinuationService {
         // passes one -- see `QueueLimitPolicy`.
         if (
           queueLimit &&
-          !queueLimit.unlimited &&
-          currentQueueSize + stepsToAdd > queueLimit.maxQueueSize
+          queueLimit.maxSteps !== -1 &&
+          currentQueueSize + stepsToAdd > queueLimit.maxSteps
         ) {
           throw new Error(
-            `Queue size limit exceeded. Current: ${currentQueueSize}, Adding: ${stepsToAdd}, Max: ${queueLimit.maxQueueSize}`
+            `Step limit exceeded. Current: ${currentQueueSize}, Adding: ${stepsToAdd}, Max: ${queueLimit.maxSteps}`
           );
         }
         // Resolve the splice point from the run file read under this same
@@ -559,11 +559,11 @@ export class RunContinuationService {
         const currentQueueSize = sourceTopology.steps.length;
         if (
           queueLimit &&
-          !queueLimit.unlimited &&
-          currentQueueSize + steps.length > queueLimit.maxQueueSize
+          queueLimit.maxSteps !== -1 &&
+          currentQueueSize + steps.length > queueLimit.maxSteps
         ) {
           throw new Error(
-            `Queue size limit exceeded. Current: ${currentQueueSize}, Adding: ${steps.length}, Max: ${queueLimit.maxQueueSize}`
+            `Step limit exceeded. Current: ${currentQueueSize}, Adding: ${steps.length}, Max: ${queueLimit.maxSteps}`
           );
         }
 
@@ -1264,12 +1264,7 @@ function assertEditableDuringExecution(
  * queue's disk merge uses stepId directly; this floor is not a second merge
  * identity rule.
  */
-const NON_CLEARABLE_STEP_PROPERTIES = [
-  "_runtime",
-  "status",
-  "details",
-  "type",
-];
+const NON_CLEARABLE_STEP_PROPERTIES = ["_runtime", "status", "details", "type"];
 
 function assertClearablePropertiesAreEditable(
   clearProperties: string[] | undefined

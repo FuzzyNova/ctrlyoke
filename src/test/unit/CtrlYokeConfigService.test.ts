@@ -44,8 +44,8 @@ suite("CtrlYokeConfigService", () => {
       CTRLYOKE_SETTINGS_DEFAULTS.defaults.executionMode
     );
     assert.strictEqual(
-      all.queue.maxSize,
-      CTRLYOKE_SETTINGS_DEFAULTS.queue.maxSize
+      all.queue.maxSteps,
+      CTRLYOKE_SETTINGS_DEFAULTS.queue.maxSteps
     );
     assert.strictEqual(
       all.queue.maxParallelSteps,

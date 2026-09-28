@@ -130,7 +130,7 @@ suite("QwenCliProvider", () => {
         workspaceRoot,
         workingFilePath,
         {
-          CTRLYOKE_MAX_QUEUE_SIZE: "10",
+          CTRLYOKE_MAX_STEPS: "10",
           CTRLYOKE_DIAGNOSTIC_LOGS: "true",
           CTRLYOKE_API_KEY: "dynamic-secret",
         },
@@ -146,7 +146,7 @@ suite("QwenCliProvider", () => {
             env: {
               CTRLYOKE_WORKSPACE: "C:/workspace/project",
               CTRLYOKE_WORKING_FILE: "C:/workspace/workflow.yaml",
-              CTRLYOKE_MAX_QUEUE_SIZE: "10",
+              CTRLYOKE_MAX_STEPS: "10",
               CTRLYOKE_DIAGNOSTIC_LOGS: "true",
               CTRLYOKE_API_KEY: "dynamic-secret",
               CTRLYOKE_EXECUTION_ROOT: "C:/workspace/project",

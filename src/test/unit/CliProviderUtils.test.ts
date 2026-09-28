@@ -314,7 +314,7 @@ suite("CliProviderUtils", () => {
     const stateRoot = String.raw`C:\workspace\state`;
     const workingFilePath = String.raw`C:\workspace\state\workflow.json`;
     const additionalEnv = {
-      CTRLYOKE_MAX_QUEUE_SIZE: "25",
+      CTRLYOKE_MAX_STEPS: "25",
       CTRLYOKE_CUSTOM_FLAG: "enabled",
     };
 

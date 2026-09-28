@@ -156,6 +156,7 @@ export interface GlobalSettings {
  * Workflow properties (from working file, can override global settings)
  */
 export interface WorkflowProperties {
+  maxSteps?: number;
   harness?: string;
   model?: string;
   executionMode?: ExecutionMode;

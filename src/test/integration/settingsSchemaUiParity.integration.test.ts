@@ -453,6 +453,7 @@ suite("Settings schema -> Global Settings dashboard control parity", () => {
     const expectedPaths = [
       "ui.showCostEstimates",
       "execution.contextResolutionFailure",
+      "queue.maxSteps",
       "permissions.trustedExternalRoots",
       "server.autoStart",
       "commit.systemPrompt",
@@ -474,6 +475,7 @@ suite("Settings schema -> Global Settings dashboard control parity", () => {
         `${settingPath} has no matching settings UI control`
       );
     }
+    assert.strictEqual(paths.has("queue.unlimitedMode"), false);
   });
 
   test("schema walk finds a non-trivial number of authorable settings", () => {

@@ -1652,7 +1652,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    * Reload prompt file and merge new prompts into queue
    * @param filePath Path to the .ctrlyoke.json file
    * @param parser PromptFileParser instance for reloading
-   * @param maxQueueSize Maximum allowed queue size (0 = unlimited)
+   * @param maxSteps Maximum allowed step count (-1 = unlimited)
    * @returns Number of new prompts added, or -1 if reload failed
    */
   /**
