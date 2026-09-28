@@ -41,17 +41,17 @@ suite("AntigravityStreamJsonUsage", () => {
       '{"event":"result","result":{"conversation_id":"73b9d054-1234-5678-9abc-0123456789ab","status":"SUCCESS","response":"pong","duration_seconds":0.9,"num_turns":1,"usage":{"input_tokens":17930,"output_tokens":1,"thinking_tokens":4,"cache_read_tokens":0,"total_tokens":17935}}}';
 
     accumulator.ingest(`${checkpoint}\n${result.slice(0, 37)}`);
-    assert.deepStrictEqual(accumulator.getLatestStepUsage(), {
+    assert.deepStrictEqual(accumulator.getSnapshot().latestStepUsage, {
       inputTokens: 99,
       outputTokens: 3,
       reasoningOutputTokens: 0,
       cachedInputTokens: 0,
       totalTokens: 102,
     });
-    assert.strictEqual(accumulator.getTerminalUsage(), undefined);
+    assert.strictEqual(accumulator.getSnapshot().terminalUsage, undefined);
 
     accumulator.ingest(`${result.slice(37)}\n`);
-    assert.deepStrictEqual(accumulator.getTerminalUsage(), {
+    assert.deepStrictEqual(accumulator.getSnapshot().terminalUsage, {
       inputTokens: 17930,
       outputTokens: 1,
       reasoningOutputTokens: 4,
@@ -69,8 +69,9 @@ suite("AntigravityStreamJsonUsage", () => {
     accumulator.ingest(`${checkpoint}\r`);
     accumulator.ingest(`${result}\n`);
 
-    assert.strictEqual(accumulator.getLatestStepUsage()?.inputTokens, 1);
-    assert.strictEqual(accumulator.getTerminalUsage()?.outputTokens, 2);
+    const snapshot = accumulator.getSnapshot();
+    assert.strictEqual(snapshot.latestStepUsage?.inputTokens, 1);
+    assert.strictEqual(snapshot.terminalUsage?.outputTokens, 2);
   });
 
   test("reads terminal usage from the nested result payload", () => {

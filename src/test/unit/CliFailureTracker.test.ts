@@ -105,7 +105,7 @@ suite("CliFailureTracker", () => {
     const tracker = new CliFailureTracker();
 
     tracker.capturePtyExit(1, ["error: boom\n"]);
-    tracker.markCompletionDetectionProcessExit(1);
+    tracker.markProcessExit(1, "CLI process exited unexpectedly (exit code 1)");
     tracker.reset();
 
     assert.strictEqual(tracker.getInteractiveAbortState(false), null);

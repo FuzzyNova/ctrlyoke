@@ -49,13 +49,6 @@ export class AntigravityTranscriptReader {
   private readonly states = new Map<string, TranscriptReadState>();
   private readonly inFlight = new Map<string, Promise<void>>();
 
-  async readEntries(
-    transcriptPath: string
-  ): Promise<AntigravityTranscriptEntry[]> {
-    const records = await this.readRecords(transcriptPath);
-    return records.map((record) => record.entry);
-  }
-
   /**
    * Watch whichever transcript path is currently authoritative. The resolver
    * is evaluated on every poll so a transcript created after monitor startup,

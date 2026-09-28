@@ -610,8 +610,8 @@ suite("AntigravityLogParser", () => {
           "utf8"
         );
         assert.deepStrictEqual(
-          (await reader.readEntries(transcriptPath)).map(
-            (item) => item.content
+          (await reader.readRecords(transcriptPath)).map(
+            (record) => record.entry.content
           ),
           ["first"]
         );
@@ -621,12 +621,12 @@ suite("AntigravityLogParser", () => {
           "utf8"
         );
         assert.deepStrictEqual(
-          (await reader.readEntries(transcriptPath)).map(
-            (item) => item.content
+          (await reader.readRecords(transcriptPath)).map(
+            (record) => record.entry.content
           ),
           ["second"]
         );
-        assert.deepStrictEqual(await reader.readEntries(transcriptPath), []);
+        assert.deepStrictEqual(await reader.readRecords(transcriptPath), []);
       } finally {
         removeTempDir(tempDir);
       }
@@ -670,11 +670,11 @@ suite("AntigravityLogParser", () => {
           "utf8"
         );
         const appended = await Promise.all([
-          reader.readEntries(transcriptPath),
-          reader.readEntries(transcriptPath),
+          reader.readRecords(transcriptPath),
+          reader.readRecords(transcriptPath),
         ]);
         assert.deepStrictEqual(
-          appended.flat().map((item) => item.content),
+          appended.flat().map((record) => record.entry.content),
           ["third"]
         );
       } finally {
@@ -695,9 +695,9 @@ suite("AntigravityLogParser", () => {
           JSON.stringify(entry(utf8Content, 1)) + "\n",
           "utf8"
         );
-        const firstBatch = await reader.readEntries(transcriptPath);
+        const firstBatch = await reader.readRecords(transcriptPath);
         assert.strictEqual(firstBatch.length, 1);
-        assert.strictEqual(firstBatch[0].content, utf8Content);
+        assert.strictEqual(firstBatch[0].entry.content, utf8Content);
 
         // Appending must not look like a rewrite to the prefix check.
         fs.appendFileSync(
@@ -705,11 +705,11 @@ suite("AntigravityLogParser", () => {
           JSON.stringify(entry("second entry", 2)) + "\n",
           "utf8"
         );
-        const secondBatch = await reader.readEntries(transcriptPath);
+        const secondBatch = await reader.readRecords(transcriptPath);
         assert.strictEqual(secondBatch.length, 1);
-        assert.strictEqual(secondBatch[0].content, "second entry");
+        assert.strictEqual(secondBatch[0].entry.content, "second entry");
 
-        assert.deepStrictEqual(await reader.readEntries(transcriptPath), []);
+        assert.deepStrictEqual(await reader.readRecords(transcriptPath), []);
       } finally {
         removeTempDir(tempDir);
       }
@@ -722,11 +722,11 @@ suite("AntigravityLogParser", () => {
       const serialized = JSON.stringify(entry("partial", 1));
       try {
         fs.writeFileSync(transcriptPath, serialized.slice(0, -4), "utf8");
-        assert.deepStrictEqual(await reader.readEntries(transcriptPath), []);
+        assert.deepStrictEqual(await reader.readRecords(transcriptPath), []);
         fs.appendFileSync(transcriptPath, serialized.slice(-4) + "\n", "utf8");
-        const entries = await reader.readEntries(transcriptPath);
+        const entries = await reader.readRecords(transcriptPath);
         assert.strictEqual(entries.length, 1);
-        assert.strictEqual(entries[0].content, "partial");
+        assert.strictEqual(entries[0].entry.content, "partial");
       } finally {
         removeTempDir(tempDir);
       }
@@ -743,7 +743,7 @@ suite("AntigravityLogParser", () => {
           "utf8"
         );
         assert.strictEqual(
-          (await reader.readEntries(transcriptPath)).length,
+          (await reader.readRecords(transcriptPath)).length,
           1
         );
         fs.writeFileSync(
@@ -751,9 +751,9 @@ suite("AntigravityLogParser", () => {
           JSON.stringify(entry("replacement", 1)) + "\n",
           "utf8"
         );
-        const replacement = await reader.readEntries(transcriptPath);
+        const replacement = await reader.readRecords(transcriptPath);
         assert.strictEqual(replacement.length, 1);
-        assert.strictEqual(replacement[0].content, "replacement");
+        assert.strictEqual(replacement[0].entry.content, "replacement");
       } finally {
         removeTempDir(tempDir);
       }
@@ -773,9 +773,9 @@ suite("AntigravityLogParser", () => {
           ].join("\n") + "\n",
           "utf8"
         );
-        const entries = await reader.readEntries(transcriptPath);
+        const entries = await reader.readRecords(transcriptPath);
         assert.strictEqual(entries.length, 1);
-        assert.strictEqual(entries[0].content, "valid");
+        assert.strictEqual(entries[0].entry.content, "valid");
       } finally {
         removeTempDir(tempDir);
       }

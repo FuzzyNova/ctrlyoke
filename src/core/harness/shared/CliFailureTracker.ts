@@ -71,13 +71,6 @@ export class CliFailureTracker {
     );
   }
 
-  markCompletionDetectionProcessExit(exitCode: number): string {
-    return this.markProcessExit(
-      exitCode,
-      `CLI process exited unexpectedly (exit code ${exitCode})`
-    );
-  }
-
   markProcessExit(exitCode: number, reason: string): string {
     this.processExitTermination = exitCode;
     this.lastFailureKind = FAILURE_KINDS.PROCESS_EXIT;

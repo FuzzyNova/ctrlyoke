@@ -255,19 +255,4 @@ export class CliEventMapper {
       this.WEB_SEARCH_TOOLS.has(lowerName)
     );
   }
-
-  /**
-   * Check if a classification is an MCP tool call
-   *
-   * Type guard for narrowing ToolClassification to MCP variant.
-   */
-  static isMcpToolCall(
-    classification: ToolClassification
-  ): classification is ToolClassification & {
-    type: typeof CLI_EVENT_TYPES.MCP_TOOL_CALL;
-    server: string;
-    tool: string;
-  } {
-    return classification.type === CLI_EVENT_TYPES.MCP_TOOL_CALL;
-  }
 }

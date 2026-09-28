@@ -1,9 +1,6 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import {
-  CliParseUtils,
-  CliUsage,
-} from "../../core/harness/shared/CliParseUtils";
+import { CliParseUtils } from "../../core/harness/shared/CliParseUtils";
 
 suite("CliParseUtils", () => {
   suite("extractJsonObjectsFromStream", () => {
@@ -121,102 +118,6 @@ suite("CliParseUtils", () => {
     test("returns empty array for whitespace-only input", () => {
       const objects = CliParseUtils.parseJsonLines("   \n   \n");
       assert.strictEqual(objects.length, 0);
-    });
-  });
-
-  suite("extractUsageStats", () => {
-    test("returns undefined when no usage field", () => {
-      const result = CliParseUtils.extractUsageStats({ type: "result" });
-      assert.strictEqual(result, undefined);
-    });
-
-    test("extracts input_tokens and output_tokens", () => {
-      const json = { usage: { input_tokens: 100, output_tokens: 50 } };
-      const result = CliParseUtils.extractUsageStats(json);
-      assert.ok(result);
-      assert.strictEqual(result!.input_tokens, 100);
-      assert.strictEqual(result!.output_tokens, 50);
-    });
-
-    test("uses provided total_tokens when present", () => {
-      const json = {
-        usage: { input_tokens: 100, output_tokens: 50, total_tokens: 200 },
-      };
-      const result = CliParseUtils.extractUsageStats(json);
-      assert.ok(result);
-      assert.strictEqual(result!.total_tokens, 200);
-    });
-
-    test("computes total_tokens as sum when not provided", () => {
-      const json = { usage: { input_tokens: 100, output_tokens: 50 } };
-      const result = CliParseUtils.extractUsageStats(json);
-      assert.ok(result);
-      assert.strictEqual(result!.total_tokens, 150);
-    });
-  });
-
-  suite("extractSessionId", () => {
-    test("extracts session_id field (Claude format)", () => {
-      const json = { session_id: "session-abc-123" };
-      const result = CliParseUtils.extractSessionId(json);
-      assert.strictEqual(result, "session-abc-123");
-    });
-
-    test("extracts thread_id field (Codex format)", () => {
-      const json = { thread_id: "thread-xyz-456" };
-      const result = CliParseUtils.extractSessionId(json);
-      assert.strictEqual(result, "thread-xyz-456");
-    });
-
-    test("returns session_id when both fields present (session_id takes precedence)", () => {
-      const json = { session_id: "session-first", thread_id: "thread-second" };
-      const result = CliParseUtils.extractSessionId(json);
-      assert.strictEqual(result, "session-first");
-    });
-
-    test("returns undefined when neither field present", () => {
-      const json = { type: "result", content: "text" };
-      const result = CliParseUtils.extractSessionId(json);
-      assert.strictEqual(result, undefined);
-    });
-  });
-
-  suite("formatStatistics", () => {
-    test("returns empty string for undefined usage", () => {
-      const result = CliParseUtils.formatStatistics(undefined);
-      assert.strictEqual(result, "");
-    });
-
-    test("formats usage without model", () => {
-      const usage: CliUsage = {
-        input_tokens: 1234,
-        output_tokens: 5678,
-        total_tokens: 6912,
-      };
-      const result = CliParseUtils.formatStatistics(usage);
-      assert.strictEqual(
-        result,
-        "Usage: 1234 input + 5678 output = 6912 tokens"
-      );
-    });
-
-    test("includes model name when provided", () => {
-      const usage: CliUsage = {
-        input_tokens: 100,
-        output_tokens: 200,
-        total_tokens: 300,
-      };
-      const result = CliParseUtils.formatStatistics(usage, "claude-sonnet-4.5");
-      assert.strictEqual(
-        result,
-        "Usage: 100 input + 200 output = 300 tokens | Model: claude-sonnet-4.5"
-      );
-    });
-
-    test("computes total from sum when total_tokens not provided", () => {
-      const usage: CliUsage = { input_tokens: 400, output_tokens: 600 };
-      const result = CliParseUtils.formatStatistics(usage);
-      assert.ok(result.includes("= 1000 tokens"));
     });
   });
 });

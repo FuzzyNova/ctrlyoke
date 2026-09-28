@@ -1,9 +1,6 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import {
-  CliEventMapper,
-  ToolClassification,
-} from "../../core/harness/shared/CliEventMapper";
+import { CliEventMapper } from "../../core/harness/shared/CliEventMapper";
 import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
 
 suite("CliEventMapper", () => {
@@ -227,50 +224,6 @@ suite("CliEventMapper", () => {
     test("totally_unknown → TOOL_CALL (fallback)", () => {
       const result = CliEventMapper.classifyTool("totally_unknown");
       assert.strictEqual(result.type, CLI_EVENT_TYPES.TOOL_CALL);
-    });
-  });
-
-  suite("isMcpToolCall", () => {
-    test("returns true for MCP_TOOL_CALL classification", () => {
-      const classification: ToolClassification = {
-        type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
-        server: "github",
-        tool: "search",
-      };
-      assert.strictEqual(CliEventMapper.isMcpToolCall(classification), true);
-    });
-
-    test("returns false for BASH_COMMAND classification", () => {
-      const classification: ToolClassification = {
-        type: CLI_EVENT_TYPES.BASH_COMMAND,
-      };
-      assert.strictEqual(CliEventMapper.isMcpToolCall(classification), false);
-    });
-
-    test("returns false for FILE_READ classification", () => {
-      const classification: ToolClassification = {
-        type: CLI_EVENT_TYPES.FILE_READ,
-      };
-      assert.strictEqual(CliEventMapper.isMcpToolCall(classification), false);
-    });
-
-    test("returns false for TOOL_CALL (generic) classification", () => {
-      const classification: ToolClassification = {
-        type: CLI_EVENT_TYPES.TOOL_CALL,
-      };
-      assert.strictEqual(CliEventMapper.isMcpToolCall(classification), false);
-    });
-
-    test("classifyTool + isMcpToolCall integration: MCP format", () => {
-      const classification = CliEventMapper.classifyTool(
-        "github(search_repos)"
-      );
-      assert.strictEqual(CliEventMapper.isMcpToolCall(classification), true);
-    });
-
-    test("classifyTool + isMcpToolCall integration: non-MCP format", () => {
-      const classification = CliEventMapper.classifyTool("bash");
-      assert.strictEqual(CliEventMapper.isMcpToolCall(classification), false);
     });
   });
 });

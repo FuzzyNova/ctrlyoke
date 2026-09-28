@@ -1,12 +1,10 @@
 import * as path from "path";
 import * as os from "os";
 import * as fs from "fs/promises";
-import { randomUUID } from "crypto";
 import { Log } from "../../../utils/Log";
 import { writeFileAtomic } from "../../../utils/AtomicFileUtils";
 import { withFileLock } from "../../../utils/FileLockUtils";
 import { AsyncMutex } from "./AsyncMutex";
-import { HARNESS_CONFIG_KEYS } from "../../../types/DashboardConstants";
 
 /**
  * Options for customizing where a tracker reads/writes its MCP config.
@@ -39,7 +37,6 @@ export type SettingsJsonPermissionPolicy = Record<
   | Record<string, SettingsJsonPermissionDecision>
 >;
 
-/** The persistent single-value API is intentionally limited to statusLine. */
 export const STATUS_LINE_SETTING_KEY = "statusLine" as const;
 export type SettingsJsonPersistentValueKey = string;
 
@@ -83,29 +80,6 @@ export type SettingsJsonPersistentValueAlreadyInstalled = (
   currentValue: unknown,
   hadKey: boolean
 ) => boolean;
-
-interface ValueLease {
-  normalizedRequestedValue: string;
-  owners: Map<string, LeaseOwnerState>;
-  baselineHadKey: boolean;
-  baselineValue: unknown;
-  appliedValue: unknown;
-}
-
-interface LeaseOwnerState {
-  pid: number;
-  token: string;
-  workflowKey: string;
-  ts: number;
-}
-
-interface LeaseSidecar {
-  baseline: unknown;
-  baselineHadKey: boolean;
-  owners: LeaseOwnerState[];
-  normalizedRequestedValue?: string;
-  appliedValue?: unknown;
-}
 
 interface BaselineState {
   settingsFileExisted: boolean;
@@ -188,8 +162,8 @@ function deleteAtPath(
 
 /**
  * Tracks MCP server lifecycle in a JSON config file for Qwen, Antigravity,
- * and Antigravity CLIs. It also owns generic single-value leases used by
- * config-driven state such as Antigravity's statusline registration.
+ * and Antigravity CLIs. It also manages persistent config values such as
+ * Antigravity's statusline registration.
  *
  * These CLIs auto-discover MCP servers from a JSON file's `mcpServers` key
  * (`.{tool}/settings.json` for Qwen, `.agents/mcp_config.json` for
@@ -273,9 +247,6 @@ export class SettingsJsonMcpTracker {
   /** Baseline snapshots keyed by the resolved config file path. */
   private readonly baselines = new Map<string, BaselineState>();
 
-  /** Random identity component shared by every lease owned by this process. */
-  private readonly processOwnerToken: string = randomUUID();
-
   /** Path to the temporary .gitignore written for a newly-created config file. */
   private gitignorePath: string | undefined;
 
@@ -287,9 +258,6 @@ export class SettingsJsonMcpTracker {
 
   /** Values ctrlyoke inserted, used to avoid deleting user edits during cleanup. */
   private managedServerValues = new Map<string, unknown>();
-
-  /** Active single-value leases keyed by settings path and top-level key. */
-  private valueLeases = new Map<string, ValueLease>();
 
   private constructor(
     private readonly toolName: string,
@@ -604,7 +572,6 @@ export class SettingsJsonMcpTracker {
 
     if (
       this.refCounts.size === 0 &&
-      !this.hasValueLeaseForWorkspace(workspaceRoot) &&
       !this.getBaseline(this.getProjectConfigPath(workspaceRoot))
         .settingsFileExisted
     ) {
@@ -613,11 +580,11 @@ export class SettingsJsonMcpTracker {
   }
 
   // ============================================================
-  // SINGLE-VALUE LEASE
+  // PERSISTENT CONFIG VALUE
   // ============================================================
 
   /**
-   * Install the persistent statusLine value without creating a lease owner.
+   * Install the persistent statusLine value.
    *
    * The callback is part of the locked read/check/capture/write sequence. This
    * ordering lets a caller persist a captured user value before replacing the
@@ -633,7 +600,6 @@ export class SettingsJsonMcpTracker {
     const settingsPath = this.getProjectConfigPath(workspaceRoot);
 
     return this.withMutationLock(settingsPath, async () => {
-      await this.deleteLeaseSidecar(settingsPath, key);
       const settings = await this.readProjectConfig(settingsPath);
       const existing = getAtPath(settings, key);
       const hadKey = existing.hadKey;
@@ -686,9 +652,8 @@ export class SettingsJsonMcpTracker {
   }
 
   /**
-   * Restore or delete the persistent statusLine value without creating a lease
-   * owner. The legacy statusLine lease sidecar is removed while holding the
-   * same settings-file mutation lock.
+   * Restore or delete the persistent statusLine value while holding the
+   * settings-file mutation lock.
    */
   async uninstallPersistentValue(
     workspaceRoot: string,
@@ -698,7 +663,6 @@ export class SettingsJsonMcpTracker {
     const settingsPath = this.getProjectConfigPath(workspaceRoot);
 
     await this.withMutationLock(settingsPath, async () => {
-      await this.deleteLeaseSidecar(settingsPath, key);
       const settings = await this.readProjectConfig(settingsPath);
       const existing = getAtPath(settings, key);
       const hadKey = existing.hadKey;
@@ -718,412 +682,6 @@ export class SettingsJsonMcpTracker {
       await fs.mkdir(path.dirname(settingsPath), { recursive: true });
       await writeFileAtomic(settingsPath, JSON.stringify(settings, null, 2));
     });
-  }
-
-  /**
-   * Apply an ownership-aware value to the same project config used for MCP
-   * servers. Identical values share one lease; conflicting values are rejected
-   * without replacing another workflow's active controls.
-   */
-  async registerValueLease(
-    workflowKey: string,
-    workspaceRoot: string,
-    key: string,
-    value: unknown,
-    merge: (existing: unknown, requested: unknown) => unknown = (
-      _existing,
-      requested
-    ) => requested
-  ): Promise<"acquired" | "shared"> {
-    await this.captureBaseline(workspaceRoot);
-
-    const settingsPath = this.getProjectConfigPath(workspaceRoot);
-    return this.withMutationLock(settingsPath, async () => {
-      const leaseKey = this.getLeaseKey(settingsPath, key);
-      await this.pruneLeaseOwnersLocked(settingsPath, key);
-      const normalizedRequestedValue = JSON.stringify(value);
-      const ownerId = this.getOwnerId(workflowKey);
-      let activeLease = this.valueLeases.get(leaseKey);
-
-      if (activeLease) {
-        if (activeLease.normalizedRequestedValue !== normalizedRequestedValue) {
-          const otherOwners = [...activeLease.owners.entries()]
-            .filter(([activeOwnerId]) => activeOwnerId !== ownerId)
-            .map(([, owner]) => owner.workflowKey);
-          if (otherOwners.length > 0) {
-            const conflictDescription =
-              key === HARNESS_CONFIG_KEYS.PERMISSION
-                ? "permission policy conflict"
-                : `${key} value conflict`;
-            throw new Error(
-              `${this.toolName} ${conflictDescription} in ${settingsPath}; active owner: ${otherOwners[0]}`
-            );
-          }
-
-          this.valueLeases.delete(leaseKey);
-          await this.deleteLeaseSidecar(settingsPath, key);
-          await this.restoreValueLease(settingsPath, key, activeLease);
-          activeLease = undefined;
-        } else {
-          const wasShared = !activeLease.owners.has(ownerId);
-          activeLease.owners.set(ownerId, {
-            pid: process.pid,
-            token: this.processOwnerToken,
-            workflowKey,
-            ts: Date.now(),
-          });
-          await this.writeLeaseSidecar(settingsPath, key, activeLease);
-          return wasShared ? "shared" : "acquired";
-        }
-      }
-
-      const settings = await this.readProjectConfig(settingsPath);
-      const sidecar = await this.readLeaseSidecar(settingsPath, key);
-      if (sidecar?.owners.length) {
-        if (sidecar.normalizedRequestedValue !== normalizedRequestedValue) {
-          const activeOwner = sidecar.owners[0].workflowKey;
-          throw new Error(
-            `${this.toolName} ${
-              key === HARNESS_CONFIG_KEYS.PERMISSION
-                ? "permission policy conflict"
-                : `${key} value conflict`
-            } in ${settingsPath}; active owner: ${activeOwner}`
-          );
-        }
-
-        const sharedLease: ValueLease = {
-          normalizedRequestedValue,
-          owners: new Map(
-            sidecar.owners.map((owner) => [
-              this.getOwnerId(owner.workflowKey, owner.pid, owner.token),
-              owner,
-            ])
-          ),
-          baselineHadKey: sidecar.baselineHadKey,
-          baselineValue: this.cloneJson(sidecar.baseline),
-          appliedValue: this.cloneJson(sidecar.appliedValue),
-        };
-        const wasShared = sharedLease.owners.has(ownerId);
-        sharedLease.owners.set(ownerId, {
-          pid: process.pid,
-          token: this.processOwnerToken,
-          workflowKey,
-          ts: Date.now(),
-        });
-        this.valueLeases.set(leaseKey, sharedLease);
-        await this.writeLeaseSidecar(settingsPath, key, sharedLease);
-        return wasShared ? "acquired" : "shared";
-      }
-      const baselineHadKey = sidecar?.baselineHadKey ?? key in settings;
-      const baselineValue = sidecar
-        ? this.cloneJson(sidecar.baseline)
-        : this.cloneJson(settings[key]);
-      const appliedValue = merge(settings[key], value);
-
-      settings[key] = appliedValue;
-      this.addOwnedSchema(settings);
-      await fs.mkdir(path.dirname(settingsPath), { recursive: true });
-      await writeFileAtomic(settingsPath, JSON.stringify(settings, null, 2));
-      if (!this.getBaseline(settingsPath).settingsFileExisted) {
-        await this.writeGitignore(settingsPath);
-      }
-
-      const lease: ValueLease = {
-        normalizedRequestedValue,
-        owners: new Map(
-          (sidecar?.owners ?? []).map((owner) => [
-            this.getOwnerId(owner.workflowKey, owner.pid, owner.token),
-            owner,
-          ])
-        ),
-        baselineHadKey,
-        baselineValue,
-        appliedValue: this.cloneJson(appliedValue),
-      };
-      lease.owners.set(ownerId, {
-        pid: process.pid,
-        token: this.processOwnerToken,
-        workflowKey,
-        ts: Date.now(),
-      });
-      this.valueLeases.set(leaseKey, lease);
-      Log.debug(
-        `[SettingsJsonMcpTracker] ${this.toolName} ${key} value lease applied to ${settingsPath}`
-      );
-      await this.writeLeaseSidecar(settingsPath, key, lease);
-      return "acquired";
-    });
-  }
-
-  /**
-   * Release one workflow's value lease and restore the original value after the
-   * final owner exits. User edits made while the workflow was running are
-   * preserved instead of being overwritten.
-   */
-  async unregisterValueLease(
-    workflowKey: string,
-    workspaceRoot: string,
-    key: string
-  ): Promise<void> {
-    const settingsPath = this.getProjectConfigPath(workspaceRoot);
-
-    try {
-      await this.withMutationLock(settingsPath, async () => {
-        await this.pruneLeaseOwnersLocked(settingsPath, key);
-        const leaseKey = this.getLeaseKey(settingsPath, key);
-        const lease = this.valueLeases.get(leaseKey);
-        if (!lease) {
-          const sidecar = await this.readLeaseSidecar(settingsPath, key);
-          if (!sidecar) {
-            return;
-          }
-          const remainingOwners = sidecar.owners.filter(
-            (owner) =>
-              this.getOwnerId(owner.workflowKey, owner.pid, owner.token) !==
-              this.getOwnerId(workflowKey)
-          );
-          if (remainingOwners.length > 0) {
-            await writeFileAtomic(
-              this.getLeaseSidecarPath(settingsPath, key),
-              JSON.stringify({ ...sidecar, owners: remainingOwners }, null, 2)
-            );
-            return;
-          }
-
-          const settings = await this.readProjectConfig(settingsPath);
-          if (sidecar.baselineHadKey) {
-            settings[key] = this.cloneJson(sidecar.baseline);
-          } else {
-            delete settings[key];
-          }
-          await this.writeOrRemoveManagedConfig(settingsPath, settings);
-          await this.deleteLeaseSidecar(settingsPath, key);
-          return;
-        }
-
-        lease.owners.delete(this.getOwnerId(workflowKey));
-        if (lease.owners.size > 0) {
-          await this.writeLeaseSidecar(settingsPath, key, lease);
-          return;
-        }
-
-        this.valueLeases.delete(leaseKey);
-        await this.deleteLeaseSidecar(settingsPath, key);
-        await this.restoreValueLease(settingsPath, key, lease);
-      });
-    } catch (error) {
-      Log.warn(
-        `[SettingsJsonMcpTracker] ${this.toolName} ${key} lease cleanup failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-    }
-
-    if (
-      this.refCounts.size === 0 &&
-      !this.hasValueLeaseForWorkspace(workspaceRoot) &&
-      !this.getBaseline(settingsPath).settingsFileExisted
-    ) {
-      await this.deleteCtrlYokeGitignore();
-    }
-  }
-
-  /** Prune dead owners and restore the baseline when the lease is orphaned. */
-  async pruneDeadOwners(workspaceRoot: string, key: string): Promise<void> {
-    const settingsPath = this.getProjectConfigPath(workspaceRoot);
-    try {
-      await this.withMutationLock(settingsPath, async () => {
-        await this.pruneLeaseOwnersLocked(settingsPath, key);
-      });
-    } catch (error) {
-      Log.warn(
-        `[SettingsJsonMcpTracker] ${this.toolName} ${key} dead-owner cleanup failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-    }
-  }
-
-  private getLeaseKey(settingsPath: string, key: string): string {
-    return `${settingsPath}::${key}`;
-  }
-
-  private getOwnerId(
-    workflowKey: string,
-    pid = process.pid,
-    token = this.processOwnerToken
-  ): string {
-    return `${pid}:${token}:${workflowKey}`;
-  }
-
-  private getLeaseSidecarPath(settingsPath: string, key: string): string {
-    const sanitizedKey = key.replace(/[^a-zA-Z0-9._-]/g, "_");
-    return path.join(
-      path.dirname(settingsPath),
-      `.ctrlyoke-lease-${sanitizedKey}.json`
-    );
-  }
-
-  private isProcessAlive(pid: number): boolean {
-    if (pid === process.pid) {
-      return true;
-    }
-    try {
-      process.kill(pid, 0);
-      return true;
-    } catch (error) {
-      return (error as NodeJS.ErrnoException).code === "EPERM";
-    }
-  }
-
-  private async readLeaseSidecar(
-    settingsPath: string,
-    key: string
-  ): Promise<LeaseSidecar | undefined> {
-    try {
-      const parsed = JSON.parse(
-        await fs.readFile(this.getLeaseSidecarPath(settingsPath, key), "utf-8")
-      ) as Partial<LeaseSidecar>;
-      if (
-        typeof parsed.baselineHadKey !== "boolean" ||
-        !Array.isArray(parsed.owners)
-      ) {
-        throw new Error("invalid lease sidecar shape");
-      }
-      return {
-        baseline: parsed.baseline,
-        baselineHadKey: parsed.baselineHadKey,
-        owners: parsed.owners.filter(
-          (owner): owner is LeaseOwnerState =>
-            !!owner &&
-            typeof owner === "object" &&
-            typeof owner.pid === "number" &&
-            typeof owner.token === "string" &&
-            typeof owner.workflowKey === "string" &&
-            typeof owner.ts === "number"
-        ),
-      };
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        return undefined;
-      }
-      throw new Error(
-        `Cannot safely read lease state for ${settingsPath}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-    }
-  }
-
-  private async writeLeaseSidecar(
-    settingsPath: string,
-    key: string,
-    lease: ValueLease
-  ): Promise<void> {
-    const sidecar: LeaseSidecar = {
-      baseline: lease.baselineHadKey
-        ? this.cloneJson(lease.baselineValue)
-        : null,
-      baselineHadKey: lease.baselineHadKey,
-      owners: [...lease.owners.values()],
-      normalizedRequestedValue: lease.normalizedRequestedValue,
-      appliedValue: this.cloneJson(lease.appliedValue),
-    };
-    const sidecarPath = this.getLeaseSidecarPath(settingsPath, key);
-    await fs.mkdir(path.dirname(sidecarPath), { recursive: true });
-    await writeFileAtomic(sidecarPath, JSON.stringify(sidecar, null, 2));
-  }
-
-  private async deleteLeaseSidecar(
-    settingsPath: string,
-    key: string
-  ): Promise<void> {
-    await fs
-      .unlink(this.getLeaseSidecarPath(settingsPath, key))
-      .catch(() => {});
-  }
-
-  private async pruneLeaseOwnersLocked(
-    settingsPath: string,
-    key: string
-  ): Promise<void> {
-    const sidecar = await this.readLeaseSidecar(settingsPath, key);
-    if (!sidecar) {
-      return;
-    }
-
-    const liveOwners = sidecar.owners.filter(
-      (owner) =>
-        this.isProcessAlive(owner.pid) &&
-        (owner.pid !== process.pid || owner.token === this.processOwnerToken)
-    );
-    if (liveOwners.length > 0) {
-      const lease = this.valueLeases.get(this.getLeaseKey(settingsPath, key));
-      if (lease) {
-        lease.owners = new Map(
-          liveOwners.map((owner) => [
-            this.getOwnerId(owner.workflowKey, owner.pid, owner.token),
-            owner,
-          ])
-        );
-        await this.writeLeaseSidecar(settingsPath, key, lease);
-      } else if (liveOwners.length !== sidecar.owners.length) {
-        await writeFileAtomic(
-          this.getLeaseSidecarPath(settingsPath, key),
-          JSON.stringify({ ...sidecar, owners: liveOwners }, null, 2)
-        );
-      }
-      return;
-    }
-
-    const leaseKey = this.getLeaseKey(settingsPath, key);
-    const activeLease = this.valueLeases.get(leaseKey);
-    if (activeLease) {
-      this.valueLeases.delete(leaseKey);
-      await this.restoreValueLease(settingsPath, key, activeLease);
-    } else {
-      const settings = await this.readProjectConfig(settingsPath);
-      if (sidecar.baselineHadKey) {
-        settings[key] = this.cloneJson(sidecar.baseline);
-      } else {
-        delete settings[key];
-      }
-      await this.writeOrRemoveManagedConfig(settingsPath, settings);
-    }
-    await this.deleteLeaseSidecar(settingsPath, key);
-  }
-
-  private async restoreValueLease(
-    settingsPath: string,
-    key: string,
-    lease: ValueLease
-  ): Promise<void> {
-    const settings = await this.readProjectConfig(settingsPath);
-    if (!this.jsonEquals(settings[key], lease.appliedValue)) {
-      Log.warn(
-        key === HARNESS_CONFIG_KEYS.PERMISSION
-          ? `${this.toolName} permission cleanup preserved user-modified permission rules in ${settingsPath}`
-          : `${this.toolName} ${key} cleanup preserved user-modified value in ${settingsPath}`
-      );
-      return;
-    }
-
-    if (lease.baselineHadKey) {
-      settings[key] = this.cloneJson(lease.baselineValue);
-    } else {
-      delete settings[key];
-    }
-    await this.writeOrRemoveManagedConfig(settingsPath, settings);
-    Log.debug(
-      `[SettingsJsonMcpTracker] ${this.toolName} ${key} value restored in ${settingsPath}`
-    );
-  }
-
-  private hasValueLeaseForWorkspace(workspaceRoot: string): boolean {
-    const settingsPath = this.getProjectConfigPath(workspaceRoot);
-    return [...this.valueLeases.keys()].some((leaseKey) =>
-      leaseKey.startsWith(`${settingsPath}::`)
-    );
   }
 
   private async readProjectConfig(
@@ -1156,11 +714,7 @@ export class SettingsJsonMcpTracker {
     settingsPath: string,
     settings: Record<string, unknown>
   ): Promise<void> {
-    const hasManagedState =
-      this.refCounts.size > 0 ||
-      [...this.valueLeases.keys()].some((leaseKey) =>
-        leaseKey.startsWith(`${settingsPath}::`)
-      );
+    const hasManagedState = this.refCounts.size > 0;
     if (
       !hasManagedState &&
       this.schemaUrl &&

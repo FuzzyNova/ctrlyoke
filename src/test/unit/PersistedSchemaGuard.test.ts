@@ -196,7 +196,6 @@ suite("PersistedSchemaGuard", () => {
       await assertRefusesNewer(PERSISTED_STORES.LIFETIME_USAGE, () =>
         store.read()
       );
-      await assert.rejects(store.fullRebuild());
       assert.strictEqual(
         store.getLastErrorCode(),
         LIFETIME_USAGE_ERROR_CODES.NEWER_DATA

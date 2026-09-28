@@ -8,6 +8,7 @@ import {
   HARNESS_QUOTA_SOURCES,
 } from "../../types/DashboardConstants";
 import type { HarnessQuotaSnapshot } from "../../types/UsageTypes";
+import { isHarnessQuotaStale } from "../../types/UsageTypes";
 import {
   HARNESS_USAGE_ERROR_CODES,
   HarnessUsageService,
@@ -145,10 +146,16 @@ suite("HarnessUsageService", () => {
     );
 
     await service.refreshHarnessUsage(HARNESS_IDS.CLAUDE_CLI);
-    assert.strictEqual(service.isQuotaStale(HARNESS_IDS.CLAUDE_CLI), false);
     assert.strictEqual(
-      service.isQuotaStale(
-        HARNESS_IDS.CLAUDE_CLI,
+      isHarnessQuotaStale(
+        service.getHarnessUsage(HARNESS_IDS.CLAUDE_CLI).quota,
+        1_000
+      ),
+      false
+    );
+    assert.strictEqual(
+      isHarnessQuotaStale(
+        service.getHarnessUsage(HARNESS_IDS.CLAUDE_CLI).quota,
         1_000_000_000_000 + 5 * 60 * 1000
       ),
       true
