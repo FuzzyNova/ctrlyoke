@@ -29,7 +29,7 @@ import {
   ANTIGRAVITY_CLI_MODELS,
 } from "./ModelConstants";
 import { Log } from "./Log";
-import { retryWithBackoff } from "./RetryUtils";
+import { retryWithBackoff, stopRetrying } from "./RetryUtils";
 import { attachStreamTextDecoder } from "./StreamTextDecoder";
 import { CLI_VERSION_CHECK_TIMEOUT_MS } from "../core/harness/shared/interfaces/ICliProvider";
 
@@ -123,7 +123,7 @@ async function queryCopilotCliModels(): Promise<void> {
           if (msg.includes("being used by another process")) {
             return null; // trigger retry
           }
-          throw error; // permanent failure - stop retrying
+          stopRetrying(error);
         }
       },
       { maxAttempts: 4, delays: [200, 500, 1000] }

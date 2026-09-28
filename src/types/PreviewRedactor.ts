@@ -87,7 +87,10 @@ export function redactPreviewText(
   }
 
   for (const rule of applyHeuristics ? REDACTION_RULES : []) {
-    const matches = [...currentText.matchAll(rule.pattern)];
+    const pattern = rule.valueGroup
+      ? new RegExp(rule.pattern.source, `${rule.pattern.flags}d`)
+      : rule.pattern;
+    const matches = [...currentText.matchAll(pattern)];
     if (matches.length === 0) {
       continue;
     }
@@ -102,9 +105,18 @@ export function redactPreviewText(
       if (!value || protectedSet.has(value)) {
         continue;
       }
-      const valueOffset = rule.valueGroup ? matchText.indexOf(value) : 0;
-      const valueStart = matchStart + Math.max(valueOffset, 0);
-      const valueEnd = valueStart + value.length;
+      const valueIndices = rule.valueGroup
+        ? (
+            match as RegExpMatchArray & {
+              indices?: Array<[number, number] | undefined>;
+            }
+          ).indices?.[rule.valueGroup]
+        : undefined;
+      if (rule.valueGroup && !valueIndices) {
+        continue;
+      }
+      const valueStart = valueIndices?.[0] ?? matchStart;
+      const valueEnd = valueIndices?.[1] ?? valueStart + value.length;
       if (valueStart < cursor) {
         continue;
       }

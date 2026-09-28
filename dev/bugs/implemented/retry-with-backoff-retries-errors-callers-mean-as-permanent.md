@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude)
 - **Area:** `src/utils/RetryUtils.ts`, `src/core/harness/shared/CliProviderUtils.ts`, `src/utils/ModelRegistry.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
