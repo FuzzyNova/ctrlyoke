@@ -213,8 +213,7 @@ export function DeveloperSection() {
           a phone where there are no browser dev tools.
         </p>
         <SettingToggleRow
-          label="Show UX snapshot button"
-          description="Dev-only floating button that saves a UX snapshot on tap."
+          settingKey="developer.showUXSnapshotButton"
           checked={uxSnapshotButtonVisible}
           onChange={setUxSnapshotButtonVisible}
         />
@@ -230,7 +229,7 @@ export function DeveloperSection() {
           <span className="font-mono">[cy-perf]</span>.
         </p>
         <SettingToggleRow
-          label="Enable performance profiling"
+          settingKey="developer.enablePerformanceProfiling"
           description={`Logs slow phases at ${profilerState.slowThresholdMs}ms or slower.`}
           checked={profilerState.enabled}
           onChange={updateProfilerEnabled}
@@ -242,8 +241,7 @@ export function DeveloperSection() {
                 General (whole UI)
               </h4>
               <SettingToggleRow
-                label="Log long frames"
-                description="Captures requestAnimationFrame gaps and browser long-task entries across the entire webview — use to find render hotspots anywhere in the UI."
+                settingKey="developer.logLongFrames"
                 checked={profilerState.logLongFrames}
                 onChange={(checked) =>
                   updateProfilerOptions({ logLongFrames: checked })
@@ -255,32 +253,28 @@ export function DeveloperSection() {
                 Output section
               </h4>
               <SettingToggleRow
-                label="Log row measurements"
-                description="Includes mounted row measurement cost and measured-vs-estimated height deltas."
+                settingKey="developer.logRowMeasurements"
                 checked={profilerState.logMeasurements}
                 onChange={(checked) =>
                   updateProfilerOptions({ logMeasurements: checked })
                 }
               />
               <SettingToggleRow
-                label="Log virtual ranges"
-                description="Logs TanStack Virtual window changes while scrolling."
+                settingKey="developer.logVirtualRanges"
                 checked={profilerState.logVirtualRanges}
                 onChange={(checked) =>
                   updateProfilerOptions({ logVirtualRanges: checked })
                 }
               />
               <SettingToggleRow
-                label="Log every scroll frame"
-                description="Verbose; use only for short reproductions."
+                settingKey="developer.logEveryScrollFrame"
                 checked={profilerState.logAllScrollFrames}
                 onChange={(checked) =>
                   updateProfilerOptions({ logAllScrollFrames: checked })
                 }
               />
               <SettingToggleRow
-                label="Log every scroll attribution event"
-                description="Verbose; logs the routine 'user-scroll' verdict for every scroll event. Settle-window verdicts (suppressed/programmatic/echo) always log while profiling is on."
+                settingKey="developer.logEveryScrollAttributionEvent"
                 checked={profilerState.logScrollAttribution}
                 onChange={(checked) =>
                   updateProfilerOptions({ logScrollAttribution: checked })

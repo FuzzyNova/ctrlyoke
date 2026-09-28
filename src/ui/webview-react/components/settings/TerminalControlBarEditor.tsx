@@ -732,8 +732,7 @@ export function TerminalControlBarEditor({
 
   return (
     <SettingInputRow
-      label="Custom shortcuts"
-      path={CUSTOM_SHORTCUTS_PATH}
+      settingKey="terminal.mobileCustomShortcuts"
       sources={sources}
       onReset={onReset}
       activeScope={activeScope}

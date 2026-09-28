@@ -7,12 +7,18 @@ import type {
 import { SettingSourceBadge } from "./SettingSourceBadge";
 import { Icon } from "./Icon";
 import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
+import {
+  SETTINGS_CATALOG,
+  type SettingsCatalogEntry,
+  type SettingsCatalogKey,
+} from "@components/settings/settingsCatalog";
 
 interface Props {
-  label: string;
+  label?: string;
   description?: string;
   id?: string;
   path?: string;
+  settingKey?: SettingsCatalogKey;
   sources?: Record<string, SettingSource>;
   onReset?: (path: string) => void;
   activeScope?: SettingWriteScope;
@@ -24,41 +30,50 @@ export function SettingInputRow({
   description,
   id,
   path,
+  settingKey,
   sources,
   onReset,
   activeScope,
   children,
 }: Props) {
-  const source = path && sources ? sources[path] : undefined;
+  const entry: SettingsCatalogEntry | undefined = settingKey
+    ? SETTINGS_CATALOG[settingKey]
+    : undefined;
+  const resolvedLabel = entry?.label ?? label ?? "";
+  const resolvedDescription = description ?? entry?.description;
+  const resolvedPath = entry?.path ?? (settingKey ? undefined : path);
+  const source = resolvedPath && sources ? sources[resolvedPath] : undefined;
   const canReset =
     source !== undefined &&
     source !== INHERIT_DEFAULT_OPTION &&
     source === activeScope;
 
   return (
-    <div className="group">
+    <div className="group" data-settings-search-id={entry?.id}>
       <div className="flex items-center gap-1.5 mb-1">
         <label
           htmlFor={id}
-          title={path ? schemaTitle(path) : description}
+          title={resolvedPath ? schemaTitle(resolvedPath) : resolvedDescription}
           className="text-xs text-description-fg"
         >
-          {label}
-          {path && (
+          {resolvedLabel}
+          {resolvedPath && (
             <span className="sr-only">
-              {schemaAriaLabel(label, path).slice(label.length)}
+              {schemaAriaLabel(resolvedLabel, resolvedPath).slice(
+                resolvedLabel.length
+              )}
             </span>
           )}
         </label>
         {source && source !== INHERIT_DEFAULT_OPTION && (
           <SettingSourceBadge source={source} />
         )}
-        {onReset && path && (
+        {onReset && resolvedPath && (
           <button
             type="button"
-            aria-label={`Reset ${label}`}
+            aria-label={`Reset ${resolvedLabel}`}
             onClick={() => {
-              if (canReset) onReset(path);
+              if (canReset) onReset(resolvedPath);
             }}
             disabled={!canReset}
             title={
@@ -79,8 +94,10 @@ export function SettingInputRow({
         )}
       </div>
       {children}
-      {description && (
-        <p className="text-xs text-description-fg mt-1">{description}</p>
+      {resolvedDescription && (
+        <p className="text-xs text-description-fg mt-1">
+          {resolvedDescription}
+        </p>
       )}
     </div>
   );

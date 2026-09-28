@@ -49,14 +49,12 @@ const WINDOWS_SHELL_OPTIONS = [
 function FontStepper({
   value,
   onChange,
-  path,
   sources,
   onReset,
   activeScope,
 }: {
   value: number;
   onChange: (value: number) => void;
-  path?: string;
   sources?: Record<string, SettingSource>;
   onReset?: (path: string) => void;
   activeScope?: SettingWriteScope;
@@ -67,8 +65,7 @@ function FontStepper({
 
   return (
     <SettingInputRow
-      label="Font size"
-      path={path}
+      settingKey="terminal.fontSize"
       sources={sources}
       onReset={onReset}
       activeScope={activeScope}
@@ -139,7 +136,6 @@ export function TerminalSection({
         <FontStepper
           value={terminal.fontSize}
           onChange={(v) => onUpdate("terminal.fontSize", v)}
-          path="terminal.fontSize"
           {...rowProps}
         />
 
@@ -169,9 +165,8 @@ export function TerminalSection({
         />
 
         <SettingInputRow
-          label="Cursor style"
+          settingKey="terminal.cursorStyle"
           id="terminal-cursor-style"
-          path="terminal.cursorStyle"
           {...rowProps}
         >
           <CustomSelect
@@ -189,11 +184,9 @@ export function TerminalSection({
         </SettingInputRow>
 
         <SettingToggleRow
-          label="Cursor blink"
-          description="Blink the terminal cursor."
+          settingKey="terminal.cursorBlink"
           checked={terminal.cursorBlink}
           onChange={(v) => onUpdate("terminal.cursorBlink", v)}
-          path="terminal.cursorBlink"
           {...rowProps}
         />
       </section>
@@ -204,18 +197,15 @@ export function TerminalSection({
         </h3>
 
         <SettingToggleRow
-          label="macOS: Option key as Meta"
-          description="Treat Option as Meta for Emacs and Vim alt-key shortcuts."
+          settingKey="terminal.macOptionIsMeta"
           checked={terminal.macOptionIsMeta}
           onChange={(v) => onUpdate("terminal.macOptionIsMeta", v)}
-          path="terminal.macOptionIsMeta"
           {...rowProps}
         />
 
         <SettingInputRow
-          label="Double-click word separators"
+          settingKey="terminal.wordSeparators"
           id="terminal-word-separators"
-          path="terminal.wordSeparators"
           {...rowProps}
         >
           <LocalTextInput
@@ -248,9 +238,8 @@ export function TerminalSection({
         {platform === UI_PLATFORMS.WINDOWS ? (
           <>
             <SettingInputRow
-              label="Shell executable"
+              settingKey="terminal.shellExecutable.windows"
               id="terminal-shell"
-              path="terminal.shellExecutable"
               {...rowProps}
             >
               <CustomSelect
@@ -275,8 +264,7 @@ export function TerminalSection({
 
             {showCustomShell && (
               <SettingInputRow
-                label="Custom shell path"
-                path="terminal.shellExecutable"
+                settingKey="terminal.shellExecutable.custom"
                 {...rowProps}
               >
                 <LocalTextInput
@@ -303,9 +291,8 @@ export function TerminalSection({
         ) : (
           <>
             <SettingInputRow
-              label="Shell executable override"
+              settingKey="terminal.shellExecutable.other"
               id="terminal-shell"
-              path="terminal.shellExecutable"
               {...rowProps}
             >
               <LocalTextInput
@@ -343,9 +330,8 @@ export function TerminalSection({
         </h3>
 
         <SettingInputRow
-          label="Mobile control bar"
+          settingKey="terminal.mobileControlBar"
           id="terminal-mobile-control-bar"
-          path="terminal.mobileControlBar"
           {...rowProps}
         >
           <CustomSelect

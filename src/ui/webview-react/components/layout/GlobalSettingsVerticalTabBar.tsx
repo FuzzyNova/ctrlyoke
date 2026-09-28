@@ -1,8 +1,6 @@
 import { Icon } from "../shared/Icon";
-interface Tab {
-  id: string;
-  label: string;
-  icon: string;
+import type { SettingsTab } from "../settings/settingsTabs";
+interface Tab extends SettingsTab {
   indicator?: boolean;
 }
 

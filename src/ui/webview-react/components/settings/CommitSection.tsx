@@ -119,10 +119,8 @@ export function CommitSection({
       </p>
 
       <SettingInputRow
-        label="Harness"
+        settingKey="commit.harness"
         id="commit-harness"
-        path="commit.harness"
-        description="AI harness for commit message generation. Leave empty to use the active global harness."
         {...rowProps}
       >
         <HarnessDropdown
@@ -151,10 +149,8 @@ export function CommitSection({
       </SettingInputRow>
 
       <SettingInputRow
-        label="Model"
+        settingKey="commit.model"
         id="commit-model"
-        path="commit.model"
-        description="Model override for commit message generation. Leave empty to use the harness default."
         {...rowProps}
       >
         {discoveredModels.length > 0 ? (
@@ -177,10 +173,8 @@ export function CommitSection({
       </SettingInputRow>
 
       <SettingInputRow
-        label="System prompt"
+        settingKey="commit.systemPrompt"
         id="commit-prompt"
-        path={SETTING_PATHS.COMMIT_SYSTEM_PROMPT}
-        description="Prompt sent to the AI along with the git diff. The AI should return only the commit message text."
         {...rowProps}
       >
         <LocalTextarea

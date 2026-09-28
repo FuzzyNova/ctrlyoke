@@ -10,7 +10,6 @@ import {
   BROWSER_NOTIFICATION_MODE_OPTIONS_META,
   NOTIFICATION_EVENT_MODE_OPTIONS_META,
   TOAST_LEVEL_OPTIONS_META,
-  HOOK_EVENT_OPTIONS_META,
   toSelectOptions,
 } from "@root/types/SchemaUiMetadata";
 import type {
@@ -169,18 +168,15 @@ export function NotificationsSection({
         </h4>
 
         <SettingToggleRow
-          label="VS Code notifications"
-          description="Show notification popups in the VS Code window when workflows complete."
+          settingKey="notifications.vscode.enabled"
           checked={notif.vscode.enabled}
           onChange={(value) => onUpdate("notifications.vscode.enabled", value)}
-          path="notifications.vscode.enabled"
           {...rowProps}
         />
 
         <SettingInputRow
-          label="Browser notifications"
+          settingKey="notifications.browser.mode"
           id="notif-browser-mode"
-          path="notifications.browser.mode"
           {...rowProps}
         >
           <CustomSelect
@@ -330,9 +326,8 @@ export function NotificationsSection({
         </h4>
 
         <SettingInputRow
-          label="Workflow complete"
+          settingKey="notifications.events.workflowComplete"
           id="notif-workflow-complete"
-          path="notifications.events.workflowComplete"
           {...rowProps}
         >
           <CustomSelect
@@ -350,9 +345,8 @@ export function NotificationsSection({
         </SettingInputRow>
 
         <SettingInputRow
-          label="Prompt complete"
+          settingKey="notifications.events.promptComplete"
           id="notif-prompt-complete"
-          path="notifications.events.promptComplete"
           {...rowProps}
         >
           <CustomSelect
@@ -386,14 +380,12 @@ export function NotificationsSection({
             false;
           return (
             <SettingToggleRow
+              settingKey={`notifications.events.hookEvents.${event}`}
               key={event}
-              label={HOOK_EVENT_OPTIONS_META[event].label}
-              description={meta.description}
               checked={checked}
               onChange={(value) =>
                 onUpdate(`notifications.events.hookEvents.${event}`, value)
               }
-              path={`notifications.events.hookEvents.${event}`}
               {...rowProps}
             />
           );
@@ -405,21 +397,19 @@ export function NotificationsSection({
           Content
         </h4>
         <SettingToggleRow
-          label="Include workflow name"
+          settingKey="notifications.includeWorkflowName"
           checked={notif.includeWorkflowName}
           onChange={(value) =>
             onUpdate("notifications.includeWorkflowName", value)
           }
-          path="notifications.includeWorkflowName"
           {...rowProps}
         />
         <SettingToggleRow
-          label="Include prompt name"
+          settingKey="notifications.includePromptName"
           checked={notif.includePromptName}
           onChange={(value) =>
             onUpdate("notifications.includePromptName", value)
           }
-          path="notifications.includePromptName"
           {...rowProps}
         />
       </div>
@@ -429,9 +419,8 @@ export function NotificationsSection({
           Noise control
         </h4>
         <SettingInputRow
-          label="Toast notifications"
+          settingKey="notifications.toastLevel"
           id="notif-toast-level"
-          path="notifications.toastLevel"
           {...rowProps}
         >
           <CustomSelect
@@ -451,13 +440,11 @@ export function NotificationsSection({
           </p>
         </SettingInputRow>
         <SettingToggleRow
-          label="Only notify when ctrlyoke is not focused"
-          description="Suppress notifications while the VS Code window or hosted dashboard is focused."
+          settingKey="notifications.onlyWhenWindowUnfocused"
           checked={notif.onlyWhenWindowUnfocused}
           onChange={(value) =>
             onUpdate("notifications.onlyWhenWindowUnfocused", value)
           }
-          path="notifications.onlyWhenWindowUnfocused"
           {...rowProps}
         />
       </div>

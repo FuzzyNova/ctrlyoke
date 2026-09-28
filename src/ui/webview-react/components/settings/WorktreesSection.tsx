@@ -435,10 +435,8 @@ export function WorktreesSection({
       </div>
 
       <SettingInputRow
-        label="Worktree root"
-        description="Absolute or ~-prefixed directory where named worktrees are placed."
+        settingKey="worktrees.root"
         id="worktrees-root"
-        path="worktrees.root"
         sources={sources}
         onReset={onReset}
         activeScope={activeScope}

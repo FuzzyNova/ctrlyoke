@@ -14,6 +14,7 @@ import {
 } from "@/types/messages";
 import { openSettingsFile } from "@utils/contextReferenceActions";
 import { GlobalSettingsVerticalTabBar } from "./GlobalSettingsVerticalTabBar";
+import { ALL_TABS, type SettingsTab } from "../settings/settingsTabs";
 import {
   GeneralSection,
   WorkflowDefaultsSection,
@@ -37,97 +38,6 @@ import { StatsUsageSection } from "../settings/stats/StatsUsageSection";
 import { ExitButton, ScopeToggle } from "../shared";
 import { Icon } from "../shared/Icon";
 
-const ALL_TABS = [
-  // Core
-  {
-    id: GLOBAL_SETTINGS_TABS.GENERAL,
-    label: "General",
-    icon: "codicon-settings",
-  },
-  {
-    id: GLOBAL_SETTINGS_TABS.WORKFLOW,
-    label: "Workflow Defaults",
-    icon: "codicon-globe",
-  },
-  // Execution
-  {
-    id: GLOBAL_SETTINGS_TABS.EXECUTION,
-    label: "Execution",
-    icon: "codicon-play",
-  },
-  {
-    id: GLOBAL_SETTINGS_TABS.QUEUE,
-    label: "Queue",
-    icon: "codicon-list-ordered",
-  },
-  {
-    id: GLOBAL_SETTINGS_TABS.WORKTREES,
-    label: "Worktrees",
-    icon: "codicon-source-control",
-  },
-  {
-    id: GLOBAL_SETTINGS_TABS.COORDINATION,
-    label: "Coordination",
-    icon: "codicon-person-voice",
-  },
-  // Output
-  {
-    id: GLOBAL_SETTINGS_TABS.TERMINAL,
-    label: "Terminal",
-    icon: "codicon-terminal",
-  },
-  {
-    id: GLOBAL_SETTINGS_TABS.STATUS_LINE,
-    label: "Status Line",
-    icon: "codicon-list-flat",
-  },
-  {
-    id: GLOBAL_SETTINGS_TABS.COMMIT,
-    label: "Commit Message",
-    icon: "codicon-git-commit",
-  },
-  // Security
-  {
-    id: GLOBAL_SETTINGS_TABS.PERMISSIONS,
-    label: "Advanced Permissions",
-    icon: "codicon-shield",
-  },
-  { id: GLOBAL_SETTINGS_TABS.SECRETS, label: "Secrets", icon: "codicon-lock" },
-  // Integrations
-  { id: GLOBAL_SETTINGS_TABS.SERVER, label: "Server", icon: "codicon-server" },
-  {
-    id: GLOBAL_SETTINGS_TABS.AGENT_SKILLS_MANAGER,
-    label: "Agent & Skills Manager",
-    icon: "codicon-agent",
-  },
-  {
-    id: GLOBAL_SETTINGS_TABS.MCP_MANAGER,
-    label: "MCP Manager",
-    icon: "codicon-mcp",
-  },
-  // Insights
-  {
-    id: GLOBAL_SETTINGS_TABS.NOTIFICATIONS,
-    label: "Notifications",
-    icon: "codicon-bell",
-  },
-  {
-    id: GLOBAL_SETTINGS_TABS.STATS,
-    label: "Stats & Usage",
-    icon: "codicon-graph",
-  },
-  // Account
-  { id: GLOBAL_SETTINGS_TABS.LICENSE, label: "License", icon: "codicon-key" },
-  // Developer (dev builds only)
-  {
-    id: GLOBAL_SETTINGS_TABS.DEVELOPER,
-    label: "Developer",
-    icon: "codicon-tools",
-  },
-];
-
-const TABS = ALL_TABS;
-
 export function GlobalSettingsDrawer() {
   const vscode = useVsCodeApi();
   const globalSettingsOpen = useUiStore((s) => s.globalSettingsOpen);
@@ -148,8 +58,8 @@ export function GlobalSettingsDrawer() {
   // Drives the slide transform separately from `globalSettingsOpen` so a fresh
   // mount first paints off-screen (translate-y-full) and only then slides in.
   const [isSlidIn, setIsSlidIn] = useState(false);
-  const visibleTabs = TABS.filter(
-    (t) => t.id !== GLOBAL_SETTINGS_TABS.DEVELOPER || dev?.enabled
+  const visibleTabs = ALL_TABS.filter(
+    (t: SettingsTab) => !t.devOnly || dev?.enabled
   );
   const effectiveActiveTab = visibleTabs.some((t) => t.id === activeTab)
     ? activeTab

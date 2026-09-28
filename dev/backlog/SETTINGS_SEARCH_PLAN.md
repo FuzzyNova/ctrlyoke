@@ -3,6 +3,15 @@
 **Status: ready to implement.** Revised 2026-09-28 against the code as it stands
 after `dev/implemented/SCHEMA_UI_NAME_ALIGNMENT_PLAN.md` landed.
 
+## Progress
+
+Phase 1A adds the shared tab list, typed settings catalog/search, row `settingKey`
+support, search unit coverage, and catalog-backed copy for the first settings
+sections. The terminal shell row needs three catalog IDs for one setting path
+because its visible label changes by platform; the runtime-only descriptions
+for profiler threshold, multi-root paths, diagnostics, and inject mode remain
+overrides so their displayed text stays byte-identical.
+
 ## Goal
 
 Make the global settings drawer searchable by plain string query. The drawer
