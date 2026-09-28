@@ -8,6 +8,7 @@ import { type StepRuntimeMetaSnapshot } from "@utils/stepMetadataClipboard";
 import {
   buildStepCopyMenuItems,
   buildStepOutputFilterMenuItems,
+  getPresentFinalStepTargetKeys,
   getPresentOutputTargetKeys,
 } from "@utils/stepContextMenuItems";
 import { useUiStore } from "@store/uiStore";
@@ -45,10 +46,8 @@ export function useFinalStepContextMenu({
 }: UseFinalStepContextMenuOptions) {
   const displayedViewAddress = useUiStore((s) => s.displayedViewAddress);
   const hiddenOutputTargets = useUiStore((s) => s.hiddenOutputTargets);
-  const toggleHiddenOutputTarget = useUiStore(
-    (s) => s.toggleHiddenOutputTarget
-  );
-  const soloOutputTarget = useUiStore((s) => s.soloOutputTarget);
+  const setOutputTargetsHidden = useUiStore((s) => s.setOutputTargetsHidden);
+  const soloOutputTargets = useUiStore((s) => s.soloOutputTargets);
   const isViewingHistory = useUiStore((s) => s.isViewingHistory);
   const finalStepLoopCount = useWorkflowStore((s) => s.finalStepLoopCount);
   const liveOrderedEntries = useWorkflowStore((s) => s.liveOrderedEntries);
@@ -58,6 +57,10 @@ export function useFinalStepContextMenu({
     : liveOrderedEntries;
   const presentOutputTargetKeys = useMemo(
     () => getPresentOutputTargetKeys(outputEntries),
+    [outputEntries]
+  );
+  const presentFinalStepTargetKeys = useMemo(
+    () => getPresentFinalStepTargetKeys(outputEntries),
     [outputEntries]
   );
   const outputFilterWorkflowKey = displayedViewAddress
@@ -81,21 +84,42 @@ export function useFinalStepContextMenu({
             runtimeMeta,
           })
         : [];
-      const targetKey = getTargetKey({
-        kind: FINAL_STEP_PHASES.FINAL_STEP,
-        index: finalStepLoopCount,
-      });
-      const allPresentTargetKeys = presentOutputTargetKeys.includes(targetKey)
-        ? presentOutputTargetKeys
-        : [...presentOutputTargetKeys, targetKey];
+      // The final step card stands for the final step as a whole, so its
+      // filter actions cover every loop it has run. Per-loop control lives on
+      // the minimap, where each loop is its own marker. `finalStepLoopCount`
+      // is only a fallback for a final step with no output yet: once a loop
+      // appends queue work it names the *next* loop, which has no output.
+      const finalStepTargetKeys =
+        presentFinalStepTargetKeys.length > 0
+          ? presentFinalStepTargetKeys
+          : [
+              getTargetKey({
+                kind: FINAL_STEP_PHASES.FINAL_STEP,
+                index: finalStepLoopCount,
+              }),
+            ];
+      const allPresentTargetKeys = [
+        ...new Set([...presentOutputTargetKeys, ...finalStepTargetKeys]),
+      ];
+      const hidden = finalStepTargetKeys.every((key) =>
+        hiddenOutputKeys.includes(key)
+      );
       const filterItems = finalStep
         ? buildStepOutputFilterMenuItems({
-            hidden: hiddenOutputKeys.includes(targetKey),
-            allPresentTargetKeys,
+            hidden,
+            soloLabel: "Show only final step output",
             onToggle: () =>
-              toggleHiddenOutputTarget(outputFilterWorkflowKey, targetKey),
-            onSolo: (keys) =>
-              soloOutputTarget(outputFilterWorkflowKey, targetKey, keys),
+              setOutputTargetsHidden(
+                outputFilterWorkflowKey,
+                finalStepTargetKeys,
+                !hidden
+              ),
+            onSolo: () =>
+              soloOutputTargets(
+                outputFilterWorkflowKey,
+                finalStepTargetKeys,
+                allPresentTargetKeys
+              ),
           })
         : [];
 
@@ -130,9 +154,10 @@ export function useFinalStepContextMenu({
       finalStepLoopCount,
       hiddenOutputKeys,
       outputFilterWorkflowKey,
+      presentFinalStepTargetKeys,
       presentOutputTargetKeys,
-      soloOutputTarget,
-      toggleHiddenOutputTarget,
+      setOutputTargetsHidden,
+      soloOutputTargets,
     ]
   );
 

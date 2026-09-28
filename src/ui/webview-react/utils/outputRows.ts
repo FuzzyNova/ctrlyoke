@@ -2147,7 +2147,7 @@ function buildParallelGroupHeaderRow(
     members: members.map((member) => ({
       ...member,
       // Soloed = every other member filtered out, which is exactly what
-      // `soloOutputTarget` writes when the chip is pressed.
+      // `soloOutputTargets` writes when the chip is pressed.
       isSoloed:
         hiddenCount === members.length - 1 &&
         input.hiddenTargetKeys?.has(member.targetKey) !== true,

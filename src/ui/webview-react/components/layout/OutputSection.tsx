@@ -162,7 +162,7 @@ const OutputSectionInner: React.FC = () => {
   const toggleHiddenOutputTarget = useUiStore(
     (s) => s.toggleHiddenOutputTarget
   );
-  const soloOutputTarget = useUiStore((s) => s.soloOutputTarget);
+  const soloOutputTargets = useUiStore((s) => s.soloOutputTargets);
   const clearHiddenOutputTargets = useUiStore(
     (s) => s.clearHiddenOutputTargets
   );
@@ -1323,13 +1323,13 @@ const OutputSectionInner: React.FC = () => {
   );
   const handleMinimapStepSolo = useCallback(
     (step: MinimapStep) => {
-      soloOutputTarget(
+      soloOutputTargets(
         outputFilterAddressKey,
-        step.key,
+        [step.key],
         minimapSteps.map((minimapStep) => minimapStep.key)
       );
     },
-    [minimapSteps, outputFilterAddressKey, soloOutputTarget]
+    [minimapSteps, outputFilterAddressKey, soloOutputTargets]
   );
   const handleClearHiddenOutputTargets = useCallback(() => {
     clearHiddenOutputTargets(outputFilterAddressKey);

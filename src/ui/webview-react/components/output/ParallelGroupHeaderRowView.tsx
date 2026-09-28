@@ -49,7 +49,7 @@ export const ParallelGroupHeaderRowView: React.FC<
   const displayedViewAddress = useUiStore(
     (state) => state.displayedViewAddress
   );
-  const soloOutputTarget = useUiStore((state) => state.soloOutputTarget);
+  const soloOutputTargets = useUiStore((state) => state.soloOutputTargets);
   const clearHiddenOutputTargets = useUiStore(
     (state) => state.clearHiddenOutputTargets
   );
@@ -63,12 +63,12 @@ export const ParallelGroupHeaderRowView: React.FC<
   );
   const handleSolo = useCallback(
     (targetKey: string) =>
-      soloOutputTarget(
+      soloOutputTargets(
         workflowKey,
-        targetKey,
+        [targetKey],
         row.members.map((member) => member.targetKey)
       ),
-    [row.members, soloOutputTarget, workflowKey]
+    [row.members, soloOutputTargets, workflowKey]
   );
 
   return (

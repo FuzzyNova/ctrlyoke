@@ -212,16 +212,56 @@ describe("hidden output targets", () => {
   it("solos a target, then clears when that target is soloed again", () => {
     const allTargets = ["queue:0", "queue:1", "finalStep:0"];
 
-    store().soloOutputTarget(runKey, "queue:1", allTargets);
+    store().soloOutputTargets(runKey, ["queue:1"], allTargets);
     expect(store().hiddenOutputTargets[runKey]?.keys).toEqual([
       "queue:0",
       "finalStep:0",
     ]);
     expect(store().outputStepFilterVersion).toBe(1);
 
-    store().soloOutputTarget(runKey, "queue:1", allTargets);
+    store().soloOutputTargets(runKey, ["queue:1"], allTargets);
     expect(store().hiddenOutputTargets).toEqual({});
     expect(store().outputStepFilterVersion).toBe(2);
+  });
+
+  it("solos several targets together, hiding only the rest", () => {
+    const allTargets = ["queue:0", "finalStep:0", "queue:1", "finalStep:1"];
+    const finalLoops = ["finalStep:0", "finalStep:1"];
+
+    store().soloOutputTargets(runKey, finalLoops, allTargets);
+    expect(store().hiddenOutputTargets[runKey]?.keys).toEqual([
+      "queue:0",
+      "queue:1",
+    ]);
+
+    store().soloOutputTargets(runKey, finalLoops, allTargets);
+    expect(store().hiddenOutputTargets).toEqual({});
+  });
+
+  it("hides and shows a set of targets together, keeping earlier hide times", () => {
+    store().toggleHiddenOutputTarget(runKey, "finalStep:0");
+    const firstHiddenAt =
+      store().hiddenOutputTargets[runKey]?.hiddenAtMs["finalStep:0"];
+
+    store().setOutputTargetsHidden(
+      runKey,
+      ["finalStep:0", "finalStep:1"],
+      true
+    );
+    expect(store().hiddenOutputTargets[runKey]?.keys).toEqual([
+      "finalStep:0",
+      "finalStep:1",
+    ]);
+    expect(store().hiddenOutputTargets[runKey]?.hiddenAtMs["finalStep:0"]).toBe(
+      firstHiddenAt
+    );
+
+    store().setOutputTargetsHidden(
+      runKey,
+      ["finalStep:0", "finalStep:1"],
+      false
+    );
+    expect(store().hiddenOutputTargets).toEqual({});
   });
 
   it("does not expose one view address's filter under another address", () => {
