@@ -3141,6 +3141,25 @@ export const PROMPT_PROPERTIES = {
   ERROR_BEHAVIOR: "errorBehavior",
 } as const;
 
+/** Script-step fields copied from authored workflow files into normalized steps. */
+export const SCRIPT_STEP_COPY_FIELDS = [
+  PROMPT_PROPERTIES.EXECUTION_MODE,
+  PROMPT_PROPERTIES.SECRETS,
+  PROMPT_PROPERTIES.ENV,
+  PROMPT_PROPERTIES.TIMEOUT,
+  PROMPT_PROPERTIES.COMPARE_SOURCE,
+  PROMPT_PROPERTIES.OPERATOR,
+  PROMPT_PROPERTIES.EXPECTED,
+  PROMPT_PROPERTIES.IGNORE_CASE,
+  PROMPT_PROPERTIES.SHELL,
+  PROMPT_PROPERTIES.ERROR_BEHAVIOR,
+  PROMPT_PROPERTIES.ON_PASS,
+  PROMPT_PROPERTIES.ON_FAIL,
+] as const;
+
+/** Retry attempts allowed when an error policy selects retry without a limit. */
+export const DEFAULT_ERROR_BEHAVIOR_RETRIES = 1;
+
 /** Rendering variants supported by the shared script condition editor. */
 export const SCRIPT_CONDITION_VARIANTS = {
   END_CONDITION: PROMPT_PROPERTIES.END_CONDITION,

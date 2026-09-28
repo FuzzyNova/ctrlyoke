@@ -32,7 +32,12 @@ import {
   CONDITION_ACTIONS,
   TOKEN_TOTAL_CONFIDENCE,
   FAILURE_KINDS,
+  WORKFLOW_ATTEMPT_STATUS,
 } from "../../types/DashboardConstants";
+import {
+  TIMELINE_ATTEMPT_START_REASONS,
+  TIMELINE_ATTEMPT_TERMINAL_STATES,
+} from "../../types/WorkflowTimelineTypes";
 import { getExitCode } from "../../cli/CliExitCode";
 import { configService } from "../../config/CtrlYokeConfigService";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
@@ -228,6 +233,22 @@ class RecordingScriptTimeoutEvaluator extends EndConditionEvaluator {
     this.result = await super.evaluateCondition(...args);
     return this.result;
   }
+}
+
+function makeEvaluationResult(
+  overrides: Partial<EvaluationResult> = {}
+): EvaluationResult {
+  return {
+    passed: true,
+    actual: "0",
+    errored: false,
+    stdout: "",
+    stderr: "",
+    result: "",
+    duration: 1,
+    exitCode: 0,
+    ...overrides,
+  };
 }
 
 function shellEvaluationResult(passed: boolean): EvaluationResult {
@@ -3655,6 +3676,92 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.strictEqual(
       queue.getState().results[0].status,
       STEP_STATUS.COMPLETED
+    );
+  });
+
+  test("retries an errored script once by default and closes both attempts", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+      makeEvaluationResult({
+        passed: false,
+        errored: true,
+        actual: "",
+        error: "script type is unsupported",
+        exitCode: undefined,
+      }),
+      makeEvaluationResult(),
+    ]);
+    const executor = makeExecutor(queue, evaluator);
+    const attemptTerminals: Array<{
+      attemptIndex: number;
+      terminalState: string;
+      reason?: string;
+    }> = [];
+    const attemptStarts: Array<{ startReason: string }> = [];
+    const outputHistoryManager = new Proxy(
+      {
+        startStreamingExecutionOutput: async (...args: unknown[]) => {
+          attemptStarts.push(args[4] as { startReason: string });
+        },
+        recordAttemptTerminal: async (...args: unknown[]) => {
+          attemptTerminals.push({
+            attemptIndex: args[3] as number,
+            terminalState: args[4] as string,
+            reason: args[6] as string | undefined,
+          });
+        },
+      },
+      {
+        get: (target, property) =>
+          Reflect.get(target, property) ?? (async () => undefined),
+      }
+    );
+
+    queue.loadPrompts({
+      steps: [
+        {
+          type: "script",
+          script: "retry-script",
+          errorBehavior: { onError: "retry" },
+        },
+      ],
+    });
+
+    const context = makeContext(integration);
+    context.historyFilePath = "history.json";
+    context.outputHistoryManager = outputHistoryManager as any;
+    await executor.execute(integration, context);
+
+    assert.deepStrictEqual(
+      attemptTerminals.map(({ attemptIndex, terminalState }) => ({
+        attemptIndex,
+        terminalState,
+      })),
+      [
+        {
+          attemptIndex: 0,
+          terminalState: TIMELINE_ATTEMPT_TERMINAL_STATES.FAILED,
+        },
+        {
+          attemptIndex: 1,
+          terminalState: TIMELINE_ATTEMPT_TERMINAL_STATES.COMPLETED,
+        },
+      ]
+    );
+    assert.match(attemptTerminals[0].reason ?? "", /unsupported/);
+    assert.deepStrictEqual(
+      attemptStarts.map(({ startReason }) => startReason),
+      [
+        TIMELINE_ATTEMPT_START_REASONS.INITIAL,
+        TIMELINE_ATTEMPT_START_REASONS.RETRY,
+      ]
+    );
+    assert.strictEqual(
+      queue
+        .getRuntimeStateMachine()
+        .getAttempt({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 })?.status,
+      WORKFLOW_ATTEMPT_STATUS.COMPLETED
     );
   });
 

@@ -278,7 +278,7 @@ Default policy for internal errors in any step phase. `null` (the default) stops
 Fields:
 
 - `onError` · `"stopWorkflow" | "retry" | "continue"` · required — What to do when a step phase cannot run or otherwise encounters an internal error.
-- `maxRetries` · `integer` — Maximum retry attempts when onError is retry.
+- `maxRetries` · `integer` — Maximum retry attempts when onError is retry. When omitted, one retry is allowed.
 - `retryDelaySec` · `number` — Delay before retrying, in seconds.
 
 ### `defaults.toolPermissions` {#defaults-toolpermissions}

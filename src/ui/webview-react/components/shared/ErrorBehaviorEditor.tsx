@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { CustomSelect } from "./CustomSelect";
 import type { ErrorBehavior } from "@root/types/CtrlYokeTypes";
-import { CONDITION_ACTIONS } from "@root/types/DashboardConstants";
+import {
+  CONDITION_ACTIONS,
+  DEFAULT_ERROR_BEHAVIOR_RETRIES,
+} from "@root/types/DashboardConstants";
 import {
   ERROR_BEHAVIOR_ACTION_OPTIONS_META,
   toSelectOptions,
@@ -26,7 +29,7 @@ function applyActionDefaults(
 
   return {
     onError,
-    maxRetries: current.maxRetries ?? 1,
+    maxRetries: current.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES,
     ...(current.retryDelaySec !== undefined && {
       retryDelaySec: current.retryDelaySec,
     }),
@@ -50,14 +53,16 @@ export function ErrorBehaviorEditor({
 }: ErrorBehaviorEditorProps) {
   const resolvedValue = useMemo(() => normalizeErrorBehavior(value), [value]);
   const [maxRetriesInput, setMaxRetriesInput] = useState(
-    String(resolvedValue.maxRetries ?? 1)
+    String(resolvedValue.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES)
   );
   const [retryDelayInput, setRetryDelayInput] = useState(
     String(resolvedValue.retryDelaySec ?? "")
   );
 
   useEffect(() => {
-    setMaxRetriesInput(String(resolvedValue.maxRetries ?? 1));
+    setMaxRetriesInput(
+      String(resolvedValue.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES)
+    );
   }, [resolvedValue.maxRetries]);
 
   useEffect(() => {
@@ -118,7 +123,7 @@ export function ErrorBehaviorEditor({
               )}
               title={schemaTitle(`${schemaPath}.maxRetries`)}
               type="number"
-              min={1}
+              min={DEFAULT_ERROR_BEHAVIOR_RETRIES}
               step={1}
               inputMode="numeric"
               value={maxRetriesInput}
@@ -126,8 +131,8 @@ export function ErrorBehaviorEditor({
               onBlur={() => {
                 const parsed = parseInt(maxRetriesInput, 10);
                 const nextValue = Number.isNaN(parsed)
-                  ? 1
-                  : Math.max(1, parsed);
+                  ? DEFAULT_ERROR_BEHAVIOR_RETRIES
+                  : Math.max(DEFAULT_ERROR_BEHAVIOR_RETRIES, parsed);
                 setMaxRetriesInput(String(nextValue));
                 onChange({
                   ...resolvedValue,
@@ -173,7 +178,8 @@ export function ErrorBehaviorEditor({
                 onChange({
                   ...withoutRetryDelay,
                   onError: CONDITION_ACTIONS.RETRY,
-                  maxRetries: resolvedValue.maxRetries ?? 1,
+                  maxRetries:
+                    resolvedValue.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES,
                   ...(nextValue !== undefined && { retryDelaySec: nextValue }),
                 });
               }}

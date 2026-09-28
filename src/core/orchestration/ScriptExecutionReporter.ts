@@ -19,8 +19,12 @@ import {
 } from "../../types/DashboardConstants";
 import type { CliOutput } from "../../types/WebviewMessageTypes";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
+import type { TimelineAttemptStartReason } from "../../types/WorkflowTimelineTypes";
 import type { ExecutionWorkspace } from "../../types/WorkflowContextTypes";
-import { TIMELINE_ATTEMPT_KINDS } from "../../types/WorkflowTimelineTypes";
+import {
+  TIMELINE_ATTEMPT_KINDS,
+  TIMELINE_ATTEMPT_START_REASONS,
+} from "../../types/WorkflowTimelineTypes";
 import type {
   EvaluationResult,
   EndConditionEvaluator,
@@ -98,6 +102,7 @@ export interface ScriptExecutionReportRequest {
   signedStepIndex: number;
   runIndex: number;
   attemptIndex: number;
+  startReason?: TimelineAttemptStartReason;
   timestampMs: number;
   onPass: ConditionAction;
   onFail: ConditionAction;
@@ -209,6 +214,7 @@ export class ScriptExecutionReporter {
       signedStepIndex,
       runIndex,
       attemptIndex,
+      startReason = TIMELINE_ATTEMPT_START_REASONS.INITIAL,
       timestampMs,
     } = request;
     const history = context.outputHistoryManager;
@@ -237,7 +243,7 @@ export class ScriptExecutionReporter {
         context.getDefinitionRevisionContext?.(),
         {
           kind: this.getAttemptKind(source),
-          startReason: "initial",
+          startReason,
           prompt: properties.script,
           phase,
         }

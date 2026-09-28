@@ -1170,7 +1170,7 @@
         "maxRetries": {
           "type": "integer",
           "minimum": 1,
-          "description": "Maximum retry attempts when onError is retry."
+          "description": "Maximum retry attempts when onError is retry. When omitted, one retry is allowed."
         },
         "retryDelaySec": {
           "type": "number",

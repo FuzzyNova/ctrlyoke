@@ -726,7 +726,7 @@ What to do when a step phase cannot run or otherwise encounters an internal erro
 - **Type:** `integer`
 - **Constraints:** minimum 1
 
-Maximum retry attempts when onError is retry.
+Maximum retry attempts when onError is retry. When omitted, one retry is allowed.
 
 ### `retryDelaySec` {#error-behavior-retrydelaysec}
 

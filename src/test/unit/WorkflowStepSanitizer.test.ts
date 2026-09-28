@@ -11,6 +11,32 @@ import {
 } from "../../core/WorkflowStepSanitizer";
 
 suite("WorkflowStepSanitizer clipboard helpers", () => {
+  test("preserves shell overrides on script steps and their conditions", () => {
+    const scriptStep = sanitizeClipboardWorkflowStep({
+      type: STEP_TYPES.SCRIPT,
+      script: "echo script",
+      shell: "bash",
+    });
+    const promptStep = sanitizeClipboardWorkflowStep({
+      type: STEP_TYPES.PROMPT,
+      prompt: "prompt",
+      preCondition: { script: "echo pre", shell: "cmd" },
+      endCondition: { script: "echo end", shell: "pwsh" },
+    });
+
+    assert.deepStrictEqual(scriptStep, {
+      type: STEP_TYPES.SCRIPT,
+      script: "echo script",
+      shell: "bash",
+    });
+    assert.deepStrictEqual(promptStep, {
+      type: STEP_TYPES.PROMPT,
+      prompt: "prompt",
+      preCondition: { script: "echo pre", shell: "cmd" },
+      endCondition: { script: "echo end", shell: "pwsh" },
+    });
+  });
+
   test("normalizes the empty agent sentinel to schema-valid null", () => {
     assert.strictEqual(normalizeAgentSelection(""), null);
     assert.strictEqual(normalizeAgentSelection("reviewer"), "reviewer");

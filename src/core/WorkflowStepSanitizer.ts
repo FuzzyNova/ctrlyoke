@@ -296,6 +296,10 @@ function clonePriorContext(value: unknown): PriorContext | undefined {
   return undefined;
 }
 
+function cloneScriptShell(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
 function cloneEndCondition(value: unknown): EndCondition | null | undefined {
   if (value === null) {
     return null;
@@ -305,9 +309,11 @@ function cloneEndCondition(value: unknown): EndCondition | null | undefined {
   }
 
   const env = cloneStringRecord(value.env);
+  const shell = cloneScriptShell(value.shell);
   return {
     script: value.script,
     ...(env && { env }),
+    ...(shell !== undefined && { shell }),
     ...(typeof value.compareSource === "string" && {
       compareSource: value.compareSource as EndCondition["compareSource"],
     }),
@@ -352,9 +358,11 @@ function clonePreCondition(value: unknown): PreCondition | null | undefined {
   }
 
   const env = cloneStringRecord(value.env);
+  const shell = cloneScriptShell(value.shell);
   return {
     script: value.script,
     ...(env && { env }),
+    ...(shell !== undefined && { shell }),
     ...(typeof value.compareSource === "string" && {
       compareSource: value.compareSource as PreCondition["compareSource"],
     }),
@@ -475,6 +483,7 @@ export function sanitizeClipboardWorkflowStep(step: unknown): WorkflowStep {
       throw new Error("Clipboard script step is missing a script string");
     }
 
+    const shell = cloneScriptShell(step.shell);
     const scriptStep: ScriptStep = {
       type: STEP_TYPES.SCRIPT,
       script: step.script,
@@ -493,6 +502,7 @@ export function sanitizeClipboardWorkflowStep(step: unknown): WorkflowStep {
       ...(typeof step.timeoutSec === "number" && {
         timeoutSec: step.timeoutSec,
       }),
+      ...(shell !== undefined && { shell }),
       ...(typeof step.compareSource === "string" && {
         compareSource: step.compareSource as ScriptStep["compareSource"],
       }),

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude)
 - **Area:** `src/core/PromptFileParser.ts`, `src/core/WorkflowStepSanitizer.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

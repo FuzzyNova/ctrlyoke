@@ -10,6 +10,7 @@ import {
   CONDITION_ACTIONS,
   FINAL_STEP_PHASES,
   RETRY_KINDS,
+  DEFAULT_ERROR_BEHAVIOR_RETRIES,
   type RetryKind,
 } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
@@ -161,7 +162,10 @@ export class EndConditionHandler {
     ) {
       prompt = {
         ...prompt,
-        endCondition: { ...prompt.endCondition, maxRetries: 1 },
+        endCondition: {
+          ...prompt.endCondition,
+          maxRetries: DEFAULT_ERROR_BEHAVIOR_RETRIES,
+        },
       };
     }
 

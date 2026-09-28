@@ -46,6 +46,7 @@ import {
   SCRIPT_OUTPUT_SOURCES,
   SCRIPT_SOURCE_LABELS,
   FAILURE_KINDS,
+  DEFAULT_ERROR_BEHAVIOR_RETRIES,
   ATTEMPT_COST_UNAVAILABLE_REASONS,
   ATTEMPT_COST_CACHE_RELATIONSHIPS,
   TOKEN_TOTAL_CONFIDENCE,
@@ -120,6 +121,8 @@ import { calculateAttemptCost } from "../utils/ModelPricing";
 import { HARNESS_TOKEN_SEMANTICS } from "../utils/TokenSemantics";
 import {
   TIMELINE_ATTEMPT_START_REASONS,
+  TIMELINE_ATTEMPT_TERMINAL_STATES,
+  type TimelineAttemptTerminalState,
   type TimelineAttemptStartReason,
 } from "../types/WorkflowTimelineTypes";
 import {
@@ -406,8 +409,17 @@ function canRetryErrorBehavior(
 ): boolean {
   return (
     errorBehavior.onError === CONDITION_ACTIONS.RETRY &&
-    attemptIndex < (errorBehavior.maxRetries ?? 0)
+    attemptIndex <
+      (errorBehavior.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES)
   );
+}
+
+function getAttemptStartReason(
+  attemptIndex: number
+): TimelineAttemptStartReason {
+  return attemptIndex > 0
+    ? TIMELINE_ATTEMPT_START_REASONS.RETRY
+    : TIMELINE_ATTEMPT_START_REASONS.INITIAL;
 }
 
 /**
@@ -1965,6 +1977,7 @@ export class WorkflowExecutor {
           signedStepIndex: this.getSignedStepIndex(target),
           runIndex: this.getRunIndexForTarget(context, target),
           attemptIndex,
+          startReason: getAttemptStartReason(attemptIndex),
           timestampMs: Date.now(),
           onPass: resolvedPreCondition.onPass ?? CONDITION_ACTIONS.CONTINUE,
           onFail: resolvedPreCondition.onFail ?? CONDITION_ACTIONS.SKIP_PROMPT,
@@ -2634,6 +2647,7 @@ export class WorkflowExecutor {
         signedStepIndex,
         runIndex,
         attemptIndex,
+        startReason: getAttemptStartReason(attemptIndex),
         timestampMs,
         onPass: step.onPass ?? CONDITION_ACTIONS.CONTINUE,
         onFail: step.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
@@ -2743,19 +2757,17 @@ export class WorkflowExecutor {
           `Script exited with code ${evalResult.exitCode}`
         );
       }
-      if (context.historyFilePath && context.outputHistoryManager) {
-        await context.outputHistoryManager.recordAttemptTerminal(
-          context.historyFilePath,
-          this.toOutputExecutionTarget(target),
-          runIndex,
-          attemptIndex,
-          shouldContinue ? "completed" : "failed",
-          context.getDefinitionRevisionContext?.(),
-          shouldContinue
-            ? undefined
-            : `Script exited with code ${evalResult.exitCode}`
-        );
-      }
+      await this.recordAttemptTerminal(
+        context,
+        target,
+        attemptIndex,
+        shouldContinue
+          ? TIMELINE_ATTEMPT_TERMINAL_STATES.COMPLETED
+          : TIMELINE_ATTEMPT_TERMINAL_STATES.FAILED,
+        shouldContinue
+          ? undefined
+          : `Script exited with code ${evalResult.exitCode}`
+      );
 
       // Update dashboard step status
       if (context.dashboardProvider && stepIndex >= 0) {
@@ -2849,6 +2861,30 @@ export class WorkflowExecutor {
     target: ExecutionTarget
   ): OutputExecutionTarget {
     return toWorkflowOutputExecutionTarget(target);
+  }
+
+  private async recordAttemptTerminal(
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget,
+    attemptIndex: number,
+    terminalState: TimelineAttemptTerminalState,
+    reason?: string,
+    harnessId?: HarnessId
+  ): Promise<void> {
+    if (!context.historyFilePath || !context.outputHistoryManager) {
+      return;
+    }
+
+    await context.outputHistoryManager.recordAttemptTerminal(
+      context.historyFilePath,
+      this.toOutputExecutionTarget(target),
+      this.getRunIndexForTarget(context, target),
+      attemptIndex,
+      terminalState,
+      context.getDefinitionRevisionContext?.(),
+      reason,
+      harnessId
+    );
   }
 
   /**
@@ -3465,7 +3501,8 @@ export class WorkflowExecutor {
     const policy = errorBehavior ?? {
       onError: CONDITION_ACTIONS.STOP_WORKFLOW,
     };
-    const maxRetries = policy.maxRetries ?? 0;
+    const maxRetries =
+      policy.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES;
     const canRetry = canRetryErrorBehavior(policy, attemptIndex);
     const actionText = canRetry
       ? `retry ${attemptIndex + 1} of ${isUnlimited(maxRetries) ? "unlimited" : maxRetries}`
@@ -3489,6 +3526,13 @@ export class WorkflowExecutor {
       const nextAttemptIndex = attemptIndex + 1;
       const runtime = this.getRuntime();
       runtime.failAttempt(target, attemptIndex, reason);
+      await this.recordAttemptTerminal(
+        context,
+        target,
+        attemptIndex,
+        TIMELINE_ATTEMPT_TERMINAL_STATES.FAILED,
+        reason
+      );
       runtime.scheduleRetry(
         target,
         nextAttemptIndex,
@@ -3533,6 +3577,13 @@ export class WorkflowExecutor {
   ): Promise<void> {
     const runtime = this.getRuntime();
     runtime.failAttempt(target, attemptIndex, reason);
+    await this.recordAttemptTerminal(
+      context,
+      target,
+      attemptIndex,
+      TIMELINE_ATTEMPT_TERMINAL_STATES.FAILED,
+      reason
+    );
 
     if (target.kind === FINAL_STEP_PHASES.QUEUE) {
       if (context.dashboardProvider && signedStepIndex >= 0) {
@@ -3737,6 +3788,7 @@ export class WorkflowExecutor {
       signedStepIndex: signedStepIndex ?? this.getSignedStepIndex(target),
       runIndex,
       attemptIndex,
+      startReason: getAttemptStartReason(attemptIndex),
       timestampMs: Date.now(),
       onPass: endCondition.onPass ?? CONDITION_ACTIONS.CONTINUE,
       onFail: endCondition.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
@@ -3805,6 +3857,7 @@ export class WorkflowExecutor {
           signedStepIndex: signedStepIndex ?? this.getSignedStepIndex(target),
           runIndex,
           attemptIndex: retryAttemptIndex,
+          startReason: getAttemptStartReason(retryAttemptIndex),
           timestampMs: Date.now(),
           onPass: endCondition.onPass ?? CONDITION_ACTIONS.CONTINUE,
           onFail: endCondition.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
@@ -5064,7 +5117,8 @@ export class WorkflowExecutor {
     if (canRetryErrorBehavior(errorBehavior, attemptIndex)) {
       const nextAttemptIndex = attemptIndex + 1;
       const retryCount = nextAttemptIndex;
-      const maxRetries = errorBehavior.maxRetries ?? 0;
+      const maxRetries =
+        errorBehavior.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES;
       const retryLimit = isUnlimited(maxRetries) ? "unlimited" : maxRetries;
 
       runtime.failAttempt(target, attemptIndex, failureReason);
