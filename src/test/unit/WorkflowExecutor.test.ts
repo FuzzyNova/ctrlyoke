@@ -2257,6 +2257,49 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     }
   });
 
+  test("substitutes variables inside prompt files and reports unresolved variables", async () => {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-executor-prompt-file-content-vars-")
+    );
+    try {
+      const sourceDefinitionPath = path.join(root, "workflow.ctrlyoke.json");
+      await fs.writeFile(
+        path.join(root, "review.prompt.md"),
+        "Review {{target}} and {{unknownFromFile}} carefully.",
+        "utf8"
+      );
+      const integration = new MockHarnessIntegration(undefined, false);
+      const queue = new PromptQueue();
+      const diagnostics: CompatibilityDiagnostic[] = [];
+      queue.loadPrompts({
+        vars: { target: "lib" },
+        steps: [{ prompt: "./review.prompt.md" }],
+      });
+
+      await makeExecutor(queue).execute(integration, {
+        ...makeContext(integration),
+        workspaceFolderPath: root,
+        sourceDefinitionPath,
+        reportCompatibilityDiagnostics: (reported) =>
+          diagnostics.push(...reported),
+      });
+
+      assert.deepStrictEqual(integration.sentPrompts, [
+        "Review lib and {{unknownFromFile}} carefully.",
+      ]);
+      assert.ok(
+        diagnostics.some(
+          (diagnostic) =>
+            diagnostic.code ===
+              PROMPT_DIAGNOSTIC_CODES.VARIABLE_SUBSTITUTION_IGNORED &&
+            diagnostic.message.includes("{{unknownFromFile}} in prompt text")
+        )
+      );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("substitutes {{var}} in a preCondition's script and env before running it", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-27 by the long-running bug-fix workflow final step (claude-cli, helper agent)
 - **Area:** `src/core/WorkflowExecutor.ts` (`resolveEffectivePrompt`), `src/core/ExecutionPreviewService.ts` (`substituteStep`), `src/core/ParallelGroupPreflight.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

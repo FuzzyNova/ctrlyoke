@@ -90,6 +90,7 @@ import {
 import { getEffectiveSecretGrants } from "../utils/SecretReferenceParser";
 import { McpServerNormalizer } from "../utils/McpServerNormalizer";
 import { PromptFileResolver } from "./PromptFileResolver";
+import { resolvePromptTextWithVariables } from "./PromptTextResolver";
 import {
   CliOutputFormatter,
   DashboardOutput,
@@ -834,8 +835,7 @@ export class WorkflowExecutor {
       configuredWidth: context.dynamicQueueConfig.maxParallelSteps,
       fanOutEnabled: context.parallelGroupFanOutEnabled,
       excludeTerminalMembers: true,
-      resolvePromptText: (promptText, variables) =>
-        this.resolveEffectivePrompt(promptText, context, { ...variables }),
+      ...this.getPromptFileResolutionOptions(context),
       normalizeProperties: async (
         properties,
         memberStep,
@@ -4555,10 +4555,22 @@ export class WorkflowExecutor {
     context: WorkflowExecutionContext,
     variables: Record<string, string> | undefined
   ): Promise<string> {
-    const substituted = VarSubstitutor.applyToPromptText(
+    const { promptFileResolver, sourceDefinitionPath } =
+      this.getPromptFileResolutionOptions(context);
+    return resolvePromptTextWithVariables(
       promptText,
-      variables ?? {}
+      variables ?? {},
+      promptFileResolver,
+      sourceDefinitionPath
     );
+  }
+
+  private getPromptFileResolutionOptions(
+    context: WorkflowExecutionContext
+  ): {
+    promptFileResolver: PromptFileResolver;
+    sourceDefinitionPath?: string;
+  } {
     const executionWorkspace = context.executionWorkspace;
     const usesLegacyNoWorktreeContext =
       !executionWorkspace.sourceCheckoutRoot &&
@@ -4591,10 +4603,10 @@ export class WorkflowExecutor {
       allowWorkflowRelativeReferences:
         definitionPath.allowWorkflowRelativeReferences,
     });
-    return resolver.resolvePromptValue(
-      substituted,
-      definitionPath.executionPath
-    );
+    return {
+      promptFileResolver: resolver,
+      sourceDefinitionPath: definitionPath.executionPath,
+    };
   }
 
   private getParallelGroupStartBoundary(stepIndex: number): number {

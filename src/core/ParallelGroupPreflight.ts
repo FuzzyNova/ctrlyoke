@@ -25,6 +25,11 @@ import { resolveExecutionProperties } from "../types/ExecutionPropertyResolver";
 import type { ResolvedProperties } from "../types/ExecutionPropertyTypes";
 import { SessionResolver } from "../utils/SessionResolver";
 import { VarSubstitutor } from "../utils/VarSubstitutor";
+import {
+  PASSTHROUGH_PROMPT_FILE_RESOLVER,
+  resolvePromptTextWithVariables,
+  type PromptTextFileResolver,
+} from "./PromptTextResolver";
 
 export interface ParallelGroupPreflightIssue {
   readonly code: ParallelGroupPreflightDiagnosticCode;
@@ -70,10 +75,8 @@ export interface ParallelGroupPreflightOptions {
   readonly fanOutEnabled?: boolean;
   /** Recovery execution omits members whose terminal runtime is already durable. */
   readonly excludeTerminalMembers?: boolean;
-  readonly resolvePromptText?: (
-    promptText: string,
-    variables: Readonly<Record<string, string>>
-  ) => Promise<string>;
+  readonly promptFileResolver?: PromptTextFileResolver;
+  readonly sourceDefinitionPath?: string;
   readonly normalizeProperties?: (
     properties: ResolvedProperties,
     step: WorkflowStep,
@@ -168,9 +171,12 @@ export async function preflightParallelGroupMember(
   );
   const effectivePromptText = isScriptStep(step)
     ? undefined
-    : options.resolvePromptText
-      ? await options.resolvePromptText(step.prompt, variables)
-      : VarSubstitutor.applyToPromptText(step.prompt, variables);
+    : await resolvePromptTextWithVariables(
+        step.prompt,
+        variables,
+        options.promptFileResolver ?? PASSTHROUGH_PROMPT_FILE_RESOLVER,
+        options.sourceDefinitionPath
+      );
   if (options.normalizeProperties) {
     resolvedProperties = await options.normalizeProperties(
       resolvedProperties,

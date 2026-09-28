@@ -486,7 +486,7 @@ suite("ExecutionPreviewService", () => {
     temporaryRoots.push(workspaceRoot);
     const promptPath = path.join(workspaceRoot, "current.prompt.md");
     const sourcePath = path.join(workspaceRoot, "workflow.ctrlyoke.json");
-    await fsPromises.writeFile(promptPath, "preview contents", "utf8");
+    await fsPromises.writeFile(promptPath, "preview {{name}} contents", "utf8");
 
     const workflow: PromptFile = {
       vars: { name: "current" },
@@ -500,7 +500,7 @@ suite("ExecutionPreviewService", () => {
 
     assert.ok(
       preview.steps[0].prompt?.sections.some((section) =>
-        section.body?.includes("preview contents")
+        section.body?.includes("preview current contents")
       )
     );
     assert.ok(
