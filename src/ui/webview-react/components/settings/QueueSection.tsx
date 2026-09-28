@@ -7,6 +7,7 @@ import { LocalNumberInput } from "../shared/LocalInputs";
 import { LimitSelect } from "../shared/LimitSelect";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
+import { settingLabel } from "./settingsCatalog";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -32,14 +33,13 @@ export function QueueSection({
         Queue
       </h3>
       <SettingInputRow
-        label="Max steps"
+        settingKey="queue.maxSteps"
         id="queue-max-steps"
-        path="queue.maxSteps"
         {...rowProps}
       >
         <LimitSelect
           id="queue-max-steps"
-          label="Max steps"
+          label={settingLabel("queue.maxSteps")}
           path="queue.maxSteps"
           value={queue.maxSteps}
           onChange={(v) => onUpdate("queue.maxSteps", v)}
@@ -47,9 +47,8 @@ export function QueueSection({
         />
       </SettingInputRow>
       <SettingInputRow
-        label="Max parallel steps"
+        settingKey="queue.maxParallelSteps"
         id="queue-max-parallel-steps"
-        path="queue.maxParallelSteps"
         {...rowProps}
       >
         <LocalNumberInput
@@ -62,14 +61,13 @@ export function QueueSection({
         />
       </SettingInputRow>
       <SettingInputRow
-        label="Max workflow execution time (seconds)"
+        settingKey="queue.maxWorkflowExecutionTimeSec"
         id="queue-max-execution-time"
-        path="queue.maxWorkflowExecutionTimeSec"
         {...rowProps}
       >
         <LimitSelect
           id="queue-max-execution-time"
-          label="Max workflow execution time (seconds)"
+          label={settingLabel("queue.maxWorkflowExecutionTimeSec")}
           path="queue.maxWorkflowExecutionTimeSec"
           value={queue.maxWorkflowExecutionTimeSec}
           onChange={(v) => onUpdate("queue.maxWorkflowExecutionTimeSec", v)}
@@ -77,11 +75,9 @@ export function QueueSection({
         />
       </SettingInputRow>
       <SettingToggleRow
-        label="Notify on queue extension"
-        description="Currently has no effect; queue extension notifications are not implemented."
+        settingKey="queue.notifyOnExtension"
         checked={queue.notifyOnExtension}
         onChange={(v) => onUpdate("queue.notifyOnExtension", v)}
-        path="queue.notifyOnExtension"
         {...rowProps}
       />
     </div>

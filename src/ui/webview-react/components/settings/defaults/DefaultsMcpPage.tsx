@@ -28,12 +28,7 @@ export function DefaultsMcpPage({
 
   return (
     <div className="space-y-4">
-      <SettingInputRow
-        label="Default MCP servers"
-        description="MCP servers added here are available to all workflows by default."
-        path="defaults.mcpServers"
-        {...rowProps}
-      >
+      <SettingInputRow settingKey="defaults.mcpServers" {...rowProps}>
         <McpServersEditor
           value={mcpServers}
           onChange={(value) => onUpdate("defaults.mcpServers", value ?? [])}

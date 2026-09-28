@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore, type OutputScrollTarget } from "@store/uiStore";
+import { isFindShortcut } from "@utils/findShortcut";
 import { useSettingsStore } from "@store/settingsStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import {
@@ -1121,17 +1122,12 @@ const OutputSectionInner: React.FC = () => {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (
-        !(event.ctrlKey || event.metaKey) ||
-        event.altKey ||
-        event.key.toLowerCase() !== "f"
-      ) {
-        return;
-      }
+      if (!isFindShortcut(event)) return;
+      if (useUiStore.getState().globalSettingsOpen) return;
       // Let CodeMirror handle its own find when a prompt editor is focused —
       // its capture-phase handler runs first and opens the search panel.
-      const target = event.target as HTMLElement | null;
-      if (target?.closest(".cm-editor")) return;
+      const target = event.target;
+      if (target instanceof Element && target.closest(".cm-editor")) return;
 
       event.preventDefault();
       event.stopPropagation();

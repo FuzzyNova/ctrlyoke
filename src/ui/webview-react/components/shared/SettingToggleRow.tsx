@@ -6,15 +6,23 @@ import type {
 import { SettingSourceBadge } from "./SettingSourceBadge";
 import { Icon } from "./Icon";
 import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
+import {
+  SETTINGS_CATALOG,
+  type SettingsCatalogEntry,
+  type SettingsCatalogKey,
+} from "@components/settings/settingsCatalog";
+import { useSettingMatch } from "@components/settings/SettingsSearchContext";
+import { HighlightedText } from "./HighlightedText";
 
 interface Props {
-  label: string;
+  label?: string;
   description?: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
   disabled?: boolean;
   // Optional badge + reset
   path?: string;
+  settingKey?: SettingsCatalogKey;
   sources?: Record<string, SettingSource>;
   onReset?: (path: string) => void;
   activeScope?: SettingWriteScope;
@@ -27,11 +35,19 @@ export function SettingToggleRow({
   onChange,
   disabled,
   path,
+  settingKey,
   sources,
   onReset,
   activeScope,
 }: Props) {
-  const source = path && sources ? sources[path] : undefined;
+  const entry: SettingsCatalogEntry | undefined = settingKey
+    ? SETTINGS_CATALOG[settingKey]
+    : undefined;
+  const resolvedLabel = entry?.label ?? label ?? "";
+  const resolvedDescription = description ?? entry?.description;
+  const resolvedPath = entry?.path ?? (settingKey ? undefined : path);
+  const { isMatch, isActive, tokens } = useSettingMatch(settingKey);
+  const source = resolvedPath && sources ? sources[resolvedPath] : undefined;
   const canReset =
     source !== undefined &&
     source !== INHERIT_DEFAULT_OPTION &&
@@ -39,38 +55,45 @@ export function SettingToggleRow({
 
   return (
     <label
-      title={path ? schemaTitle(path) : description}
-      className={`flex items-start gap-3 py-2 group ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+      data-settings-search-id={entry?.id}
+      title={resolvedPath ? schemaTitle(resolvedPath) : resolvedDescription}
+      className={`flex items-start gap-3 py-2 group ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}${isMatch ? " rounded-sm bg-list-hover-bg/50" : ""}${isActive ? " outline outline-1 outline-focus-border" : ""}`}
     >
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
         disabled={disabled}
-        aria-label={path ? schemaAriaLabel(label, path) : undefined}
-        title={path ? schemaTitle(path) : undefined}
+        aria-label={
+          resolvedPath
+            ? schemaAriaLabel(resolvedLabel, resolvedPath)
+            : undefined
+        }
+        title={resolvedPath ? schemaTitle(resolvedPath) : undefined}
         className={`mt-0.5 w-4 h-4 accent-focus-border shrink-0 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}
       />
       <span className="flex flex-col flex-1 min-w-0">
         <span className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-sm text-foreground">{label}</span>
+          <span className="text-sm text-foreground">
+            <HighlightedText text={resolvedLabel} tokens={tokens} />
+          </span>
           {source && source !== INHERIT_DEFAULT_OPTION && (
             <SettingSourceBadge source={source} />
           )}
         </span>
-        {description && (
+        {resolvedDescription && (
           <span className="text-xs text-description-fg mt-0.5">
-            {description}
+            <HighlightedText text={resolvedDescription} tokens={tokens} />
           </span>
         )}
       </span>
-      {onReset && path && (
+      {onReset && resolvedPath && (
         <button
           type="button"
-          aria-label={`Reset ${label}`}
+          aria-label={`Reset ${resolvedLabel}`}
           onClick={(e) => {
             e.preventDefault();
-            if (canReset) onReset(path);
+            if (canReset) onReset(resolvedPath);
           }}
           disabled={!canReset}
           title={

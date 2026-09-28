@@ -1,4 +1,3 @@
-import { useState } from "react";
 import type {
   FullGlobalSettings,
   SettingSource,
@@ -6,7 +5,11 @@ import type {
 } from "@root/types/WebviewMessageTypes";
 import { useSettingsDrawerTabOverrides } from "../../hooks/useSettingsDrawerTabOverrides";
 import { DrawerTabBar } from "../shared/DrawerTabBar";
-import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
+import {
+  DRAWER_PAGES,
+  DRAWER_TABS,
+  type DrawerPage,
+} from "../../types/drawerPages";
 import { DefaultsHarnessPage } from "./defaults/DefaultsHarnessPage";
 import { DefaultsContextPage } from "./defaults/DefaultsContextPage";
 import { DefaultsValidationPage } from "./defaults/DefaultsValidationPage";
@@ -19,6 +22,10 @@ interface Props {
   activeScope: SettingWriteScope;
   onUpdate: (path: string, value: unknown) => void;
   onReset: (path: string) => void;
+  countsByPage?: ReadonlyMap<DrawerPage, number>;
+  searchActive?: boolean;
+  activePage: DrawerPage;
+  onPageChange: (page: DrawerPage) => void;
 }
 
 export function WorkflowDefaultsSection({
@@ -26,10 +33,11 @@ export function WorkflowDefaultsSection({
   activeScope,
   onUpdate,
   onReset,
+  countsByPage,
+  searchActive = false,
+  activePage,
+  onPageChange,
 }: Props) {
-  const [activePage, setActivePage] = useState<DrawerPage>(
-    DRAWER_PAGES.HARNESS
-  );
   const sources = settings.sources as Record<string, SettingSource>;
   const tabOverrides = useSettingsDrawerTabOverrides(
     sources,
@@ -40,7 +48,10 @@ export function WorkflowDefaultsSection({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto px-4 py-3">
+      <div
+        data-settings-content-scroll
+        className="flex-1 overflow-y-auto px-4 py-3"
+      >
         {activePage === DRAWER_PAGES.HARNESS && (
           <DefaultsHarnessPage {...pageProps} />
         )}
@@ -60,10 +71,20 @@ export function WorkflowDefaultsSection({
       </div>
       <DrawerTabBar
         activeTab={activePage}
-        onTabChange={setActivePage}
+        onTabChange={onPageChange}
         ariaLabel="Workflow defaults"
         isNarrow={false}
         tabOverrides={tabOverrides}
+        matchCount={
+          searchActive
+            ? (Object.fromEntries(
+                DRAWER_TABS.map((tab) => [
+                  tab.id,
+                  countsByPage?.get(tab.id) ?? 0,
+                ])
+              ) as Partial<Record<DrawerPage, number>>)
+            : undefined
+        }
       />
     </div>
   );

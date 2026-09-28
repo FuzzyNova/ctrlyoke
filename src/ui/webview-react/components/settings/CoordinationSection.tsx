@@ -31,10 +31,8 @@ export function CoordinationSection({
         Coordination
       </h3>
       <SettingInputRow
-        label="Read notes page size"
-        description="Maximum entries returned by one read_notes call. Reads are always paged."
+        settingKey="coordination.readNotesPageSize"
         id="coordination-read-notes-page-size"
-        path="coordination.readNotesPageSize"
         {...rowProps}
       >
         <LocalNumberInput
@@ -49,10 +47,8 @@ export function CoordinationSection({
         />
       </SettingInputRow>
       <SettingInputRow
-        label="Maximum note length"
-        description="Notes longer than this are rejected instead of being silently truncated."
+        settingKey="coordination.maxNoteLength"
         id="coordination-max-note-length"
-        path="coordination.maxNoteLength"
         {...rowProps}
       >
         <LocalNumberInput
@@ -65,10 +61,8 @@ export function CoordinationSection({
         />
       </SettingInputRow>
       <SettingInputRow
-        label="Maximum board entries"
-        description="Target entry count after compaction. Held claims are protected."
+        settingKey="coordination.maxEntries"
         id="coordination-max-entries"
-        path="coordination.maxEntries"
         {...rowProps}
       >
         <LocalNumberInput
@@ -81,10 +75,8 @@ export function CoordinationSection({
         />
       </SettingInputRow>
       <SettingInputRow
-        label="Maximum board size (bytes)"
-        description="Hygiene ceiling for the persisted board."
+        settingKey="coordination.maxBoardBytes"
         id="coordination-max-board-bytes"
-        path="coordination.maxBoardBytes"
         {...rowProps}
       >
         <LocalNumberInput
@@ -97,10 +89,8 @@ export function CoordinationSection({
         />
       </SettingInputRow>
       <SettingInputRow
-        label="Note retention (days)"
-        description="Notes older than this are removed during compaction."
+        settingKey="coordination.maxEntryAgeDays"
         id="coordination-max-entry-age-days"
-        path="coordination.maxEntryAgeDays"
         {...rowProps}
       >
         <LocalNumberInput
@@ -113,10 +103,8 @@ export function CoordinationSection({
         />
       </SettingInputRow>
       <SettingInputRow
-        label="CLI participant TTL (minutes)"
-        description="Lease lifetime for CLI and built-in skill participants."
+        settingKey="coordination.cliParticipantTtlMinutes"
         id="coordination-cli-participant-ttl-minutes"
-        path="coordination.cliParticipantTtlMinutes"
         {...rowProps}
       >
         <LocalNumberInput
@@ -131,13 +119,11 @@ export function CoordinationSection({
         />
       </SettingInputRow>
       <SettingToggleRow
-        label="Allow external participants"
-        description="Allow agents not launched by ctrlyoke to join this execution-root board."
+        settingKey="coordination.allowExternalParticipants"
         checked={coordination.allowExternalParticipants}
         onChange={(value) =>
           onUpdate("coordination.allowExternalParticipants", value)
         }
-        path="coordination.allowExternalParticipants"
         {...rowProps}
       />
       <CoordinationActivityPanel />

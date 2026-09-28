@@ -458,7 +458,10 @@ export function SecretsSection({
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-description-fg">
+            <h3
+              data-settings-search-id="landmark:secrets:grants"
+              className="text-xs font-semibold uppercase tracking-wide text-description-fg"
+            >
               Secrets
             </h3>
             <p className="mt-1 text-xs text-description-fg">
@@ -530,15 +533,13 @@ export function SecretsSection({
             Secret Redaction
           </h3>
           <SettingToggleRow
-            label="Heuristic secret redaction"
-            description="The exact values of the secrets listed above are always redacted from logs, transports, exports, and history — this cannot be turned off. This setting adds broader pattern-based redaction (e.g. token=..., Bearer ..., private-key blocks) that also catches credentials ctrlyoke was never told about. Turn it off if those patterns are over-matching and corrupting legitimate output, such as code samples or public identifiers that merely look like credentials."
+            settingKey="permissions.heuristicSecretRedactionEnabled"
             checked={
               settings.settings.permissions.heuristicSecretRedactionEnabled
             }
             onChange={(v) =>
               onUpdate("permissions.heuristicSecretRedactionEnabled", v)
             }
-            path="permissions.heuristicSecretRedactionEnabled"
             sources={sources}
             onReset={onReset}
             activeScope={activeScope}

@@ -26,12 +26,7 @@ export function DefaultsHooksPage({
 
   return (
     <div className="space-y-4">
-      <SettingInputRow
-        label="Default hooks"
-        description="Hooks defined here run for all workflows by default."
-        path="defaults.hooks"
-        {...rowProps}
-      >
+      <SettingInputRow settingKey="defaults.hooks" {...rowProps}>
         <HooksEditor
           schemaPath="defaults.hooks"
           value={hooks.length > 0 ? hooks : null}

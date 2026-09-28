@@ -206,12 +206,10 @@ export function StatsUsageSection({
           </div>
           <div className="space-y-3">
             <SettingToggleRow
-              label="Track harness usage"
-              description="Watch ctrlyoke-started harness sessions and record their token, cost, and quota usage. Applies machine-wide, across all your workspaces."
+              settingKey="usageTracking.enabled"
               checked={usageTracking.enabled}
               onChange={(value) => onUpdate?.("usageTracking.enabled", value)}
               disabled={userScopeOnly}
-              path="usageTracking.enabled"
               sources={sources}
               onReset={onReset}
               activeScope={activeScope}
@@ -223,27 +221,23 @@ export function StatsUsageSection({
               </p>
             )}
             <SettingToggleRow
-              label="Refresh quota from provider"
-              description="Actively check each harness's CLI for your current quota and rate-limit usage, so the numbers on this page stay up to date."
+              settingKey="usageTracking.providerRefreshEnabled"
               checked={usageTracking.providerRefreshEnabled}
               onChange={(value) =>
                 onUpdate?.("usageTracking.providerRefreshEnabled", value)
               }
               disabled={!usageTracking.enabled}
-              path="usageTracking.providerRefreshEnabled"
               sources={sources}
               onReset={onReset}
               activeScope={activeScope}
             />
             <SettingToggleRow
-              label="Save usage history"
-              description="Keep a running record of usage in this workspace so totals and stats survive restarts. Off keeps usage in memory for this session only."
+              settingKey="usageTracking.persistObservedUsage"
               checked={usageTracking.persistObservedUsage}
               onChange={(value) =>
                 onUpdate?.("usageTracking.persistObservedUsage", value)
               }
               disabled={!usageTracking.enabled}
-              path="usageTracking.persistObservedUsage"
               sources={sources}
               onReset={onReset}
               activeScope={activeScope}
@@ -364,6 +358,7 @@ export function StatsUsageSection({
           <div>
             <h3
               id="model-pricing-heading"
+              data-settings-search-id="landmark:stats:model-pricing"
               className="text-xs font-semibold uppercase text-description-fg tracking-wide"
             >
               Model pricing overrides
@@ -375,8 +370,7 @@ export function StatsUsageSection({
             </p>
           </div>
           <SettingInputRow
-            label="Rates"
-            path="modelPricing"
+            settingKey="modelPricing"
             sources={sources}
             onReset={onReset}
             activeScope={activeScope}

@@ -18,6 +18,8 @@ interface DrawerTabBarProps {
   isNarrow: boolean;
   /** Per-tab icon/color overrides driven by resolved property state */
   tabOverrides?: Partial<Record<DrawerPage, TabIconOverride>>;
+  /** Per-page settings search match counts. */
+  matchCount?: Partial<Record<DrawerPage, number>>;
   /** Override the wrapper div className (default includes border-t and bg-sidebar-bg) */
   className?: string;
 }
@@ -28,6 +30,7 @@ export const DrawerTabBar: React.FC<DrawerTabBarProps> = ({
   ariaLabel,
   harnessId,
   tabOverrides,
+  matchCount,
   className,
 }) => {
   return (
@@ -38,6 +41,7 @@ export const DrawerTabBar: React.FC<DrawerTabBarProps> = ({
       ariaLabel={ariaLabel}
       harnessId={harnessId}
       tabOverrides={tabOverrides}
+      matchCount={matchCount}
       className={className}
     />
   );

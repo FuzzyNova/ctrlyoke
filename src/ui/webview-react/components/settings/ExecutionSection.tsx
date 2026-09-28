@@ -13,6 +13,7 @@ import {
   CONTEXT_RESOLUTION_FAILURE_OPTIONS_META,
   toSelectOptions,
 } from "@root/types/SchemaUiMetadata";
+import { settingLabel } from "./settingsCatalog";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -38,10 +39,8 @@ export function ExecutionSection({
         Execution
       </h3>
       <SettingInputRow
-        label="Context resolution failures"
-        description="How to handle a declared reference that fails to resolve: a missing/invalid secret (!NAME), an unknown skill (/skill:) or MCP server (/mcp:), an unresolved @file/#selection/#sym reference, or an unresolved ~diff/~staged/~stash/~<hash> git reference. 'warn' (default) reports a diagnostic and lets the step run anyway. 'fail' stops the step before the harness spawns, naming the unresolved reference."
+        settingKey="execution.contextResolutionFailure"
         id="exec-strict-context-resolution"
-        path={SETTING_PATHS.EXECUTION_CONTEXT_RESOLUTION_FAILURE}
         {...rowProps}
       >
         <CustomSelect
@@ -58,14 +57,13 @@ export function ExecutionSection({
         />
       </SettingInputRow>
       <SettingInputRow
-        label="Max prompt timeout (seconds)"
+        settingKey="execution.maxPromptTimeoutSec"
         id="exec-max-prompt-timeout"
-        path="execution.maxPromptTimeoutSec"
         {...rowProps}
       >
         <LimitSelect
           id="exec-max-prompt-timeout"
-          label="Max prompt timeout (seconds)"
+          label={settingLabel("execution.maxPromptTimeoutSec")}
           path="execution.maxPromptTimeoutSec"
           value={exec.maxPromptTimeoutSec}
           onChange={(v) => onUpdate("execution.maxPromptTimeoutSec", v)}
@@ -73,9 +71,8 @@ export function ExecutionSection({
         />
       </SettingInputRow>
       <SettingInputRow
-        label="Script timeout (seconds)"
+        settingKey="execution.scriptTimeoutSec"
         id="exec-script-timeout"
-        path="execution.scriptTimeoutSec"
         {...rowProps}
       >
         <LocalNumberInput
@@ -88,24 +85,21 @@ export function ExecutionSection({
         />
       </SettingInputRow>
       <SettingToggleRow
-        label="Close terminal on completion"
-        description="Automatically close the terminal when a workflow completes."
+        settingKey="execution.closeTerminalOnComplete"
         checked={exec.closeTerminalOnComplete}
         onChange={(v) => onUpdate("execution.closeTerminalOnComplete", v)}
-        path="execution.closeTerminalOnComplete"
         {...rowProps}
       />
       <SettingToggleRow
-        label="Inject mode (interactive)"
-        description={
-          exec.closeTerminalOnComplete
+        settingKey="execution.injectMode"
+        {...{
+          description: exec.closeTerminalOnComplete
             ? "Unavailable — inject mode requires keeping the terminal open. Disable 'Close terminal on completion' to enable this."
-            : "Keep the TUI alive between prompts — faster and avoids the Claude Code resume cache bug."
-        }
+            : "Keep the TUI alive between prompts — faster and avoids the Claude Code resume cache bug.",
+        }}
         checked={exec.injectMode ?? false}
         onChange={(v) => onUpdate("execution.injectMode", v)}
         disabled={exec.closeTerminalOnComplete}
-        path="execution.injectMode"
         {...rowProps}
       />
     </div>

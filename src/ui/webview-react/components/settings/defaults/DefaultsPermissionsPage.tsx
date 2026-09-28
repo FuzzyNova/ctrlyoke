@@ -45,9 +45,8 @@ export function DefaultsPermissionsPage({
   return (
     <div className="space-y-4">
       <SettingInputRow
-        label="Permission mode"
+        settingKey="defaults.toolPermissions.mode"
         id="defaults-permission-mode"
-        path="defaults.toolPermissions.mode"
         {...rowProps}
       >
         <CustomSelect
@@ -62,9 +61,8 @@ export function DefaultsPermissionsPage({
         />
       </SettingInputRow>
       <SettingInputRow
-        label="Allowed tools (one per line)"
+        settingKey="defaults.toolPermissions.allowedTools"
         id="defaults-allowed-tools"
-        path="defaults.toolPermissions.allowedTools"
         {...rowProps}
       >
         <PermissionListEditor
@@ -85,9 +83,8 @@ export function DefaultsPermissionsPage({
         />
       </SettingInputRow>
       <SettingInputRow
-        label="Denied tools (one per line)"
+        settingKey="defaults.toolPermissions.deniedTools"
         id="defaults-denied-tools"
-        path="defaults.toolPermissions.deniedTools"
         {...rowProps}
       >
         <PermissionListEditor

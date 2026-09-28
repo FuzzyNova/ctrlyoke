@@ -16,11 +16,9 @@ import {
   CTRLYOKE_MCP_MODE_OPTIONS_META,
   toSelectOptions,
 } from "@root/types/SchemaUiMetadata";
-import {
-  SETTING_PATHS,
-  STEP_COLOR_MODES,
-} from "@root/types/DashboardConstants";
+import { STEP_COLOR_MODES } from "@root/types/DashboardConstants";
 import { RunHistorySection } from "./RunHistorySection";
+import { settingLabel } from "./settingsCatalog";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -60,10 +58,8 @@ export function GeneralSection({
         Workflow File Defaults
       </h3>
       <SettingInputRow
-        label="Default format"
-        description="Default file format used when creating new workflows."
+        settingKey="general.defaultFormat"
         id="general-default-format"
-        path="general.defaultFormat"
         {...rowProps}
       >
         <CustomSelect
@@ -78,10 +74,8 @@ export function GeneralSection({
         />
       </SettingInputRow>
       <SettingInputRow
-        label="Default template"
-        description="Template ID used when creating new workflows. Use 'blank' for a minimal starter."
+        settingKey="general.defaultTemplate"
         id="general-default-template"
-        path="general.defaultTemplate"
         {...rowProps}
       >
         <LocalTextInput
@@ -97,21 +91,17 @@ export function GeneralSection({
           Session Behavior
         </h3>
         <SettingToggleRow
-          label="Auto-load recent session"
-          description="Automatically load the most recently used workflow when the extension starts."
+          settingKey="general.autoLoadRecentSession"
           checked={general.autoLoadRecentSession}
           onChange={(v) => onUpdate("general.autoLoadRecentSession", v)}
-          path="general.autoLoadRecentSession"
           {...rowProps}
         />
         <SettingToggleRow
-          label="Omit already attached agents & skills on resume"
-          description="When resuming a session, only attach agents and skills that are not already present in that session's context."
+          settingKey="general.omitPreviouslyAttachedAgentsSkillsOnResume"
           checked={general.omitPreviouslyAttachedAgentsSkillsOnResume}
           onChange={(v) =>
             onUpdate("general.omitPreviouslyAttachedAgentsSkillsOnResume", v)
           }
-          path="general.omitPreviouslyAttachedAgentsSkillsOnResume"
           {...rowProps}
         />
       </div>
@@ -120,18 +110,14 @@ export function GeneralSection({
           UI Preferences
         </h3>
         <SettingToggleRow
-          label="Show CLI command"
-          description="Show the CLI command used to start the AI harness."
+          settingKey="ui.showCliCommand"
           checked={ui.showCliCommand}
           onChange={(v) => onUpdate("ui.showCliCommand", v)}
-          path="ui.showCliCommand"
           {...rowProps}
         />
         <SettingInputRow
-          label="Step identity colors"
-          description="Choose how workflow step identity colors are rendered across the dashboard."
+          settingKey="ui.stepColorMode"
           id="ui-step-color-mode"
-          path="ui.stepColorMode"
           {...rowProps}
         >
           <CustomSelect
@@ -147,10 +133,8 @@ export function GeneralSection({
         </SettingInputRow>
         {ui.stepColorMode === STEP_COLOR_MODES.HARNESS && (
           <SettingInputRow
-            label="Script step color"
-            description="Identity color used for script steps in harness mode."
+            settingKey="ui.harnessColors.script"
             id="ui-step-colors-script"
-            path="ui.harnessColors.script"
             {...rowProps}
           >
             <input
@@ -167,79 +151,62 @@ export function GeneralSection({
           </SettingInputRow>
         )}
         <SettingToggleRow
-          label="Show token cost estimates"
-          description="Show source-labelled token cost estimates. These are not incremental subscription spend."
+          settingKey="ui.showCostEstimates"
           checked={ui.showCostEstimates}
           onChange={(v) => onUpdate("ui.showCostEstimates", v)}
-          path={SETTING_PATHS.UI_SHOW_COST_ESTIMATES}
           {...rowProps}
         />
         <SettingToggleRow
-          label="Headless permission warning"
-          description="Warn when headless execution uses limited tool permissions."
+          settingKey="ui.showHeadlessPermissionWarning"
           checked={ui.showHeadlessPermissionWarning}
           onChange={(v) => onUpdate("ui.showHeadlessPermissionWarning", v)}
-          path="ui.showHeadlessPermissionWarning"
           {...rowProps}
         />
         <SettingToggleRow
-          label="Auto-focus output on execution"
-          description="Automatically expand the output section when a prompt starts. Headless runs show Output; interactive and inject-mode runs show Terminal."
+          settingKey="ui.autoFocusOutputOnExecution"
           checked={ui.autoFocusOutputOnExecution}
           onChange={(v) => onUpdate("ui.autoFocusOutputOnExecution", v)}
-          path="ui.autoFocusOutputOnExecution"
           {...rowProps}
         />
         <SettingToggleRow
-          label="Open prompts in second group"
-          description="Open prompt files in the second editor group."
+          settingKey="ui.openPromptsInSecondGroup"
           checked={ui.openPromptsInSecondGroup}
           onChange={(v) => onUpdate("ui.openPromptsInSecondGroup", v)}
-          path="ui.openPromptsInSecondGroup"
           {...rowProps}
         />
         <SettingToggleRow
-          label="Respect .gitignore for completions"
-          description="Filter file completions using .gitignore rules."
+          settingKey="ui.respectGitignoreForCompletions"
           checked={ui.respectGitignoreForCompletions}
           onChange={(v) => onUpdate("ui.respectGitignoreForCompletions", v)}
-          path="ui.respectGitignoreForCompletions"
           {...rowProps}
         />
         <SettingToggleRow
-          label="Auto-expand editor when typing"
-          description="Automatically grow the editor panel as you type past its current height, up to 60% of the available area. Shrinks back when text is deleted or the prompt is submitted."
+          settingKey="ui.autoExpandEditorWhenTyping"
           checked={ui.autoExpandEditorWhenTyping}
           onChange={(v) => onUpdate("ui.autoExpandEditorWhenTyping", v)}
-          path="ui.autoExpandEditorWhenTyping"
           {...rowProps}
         />
         <SettingToggleRow
-          label="Atomic context references"
-          description="In the prompt editor, treat @file, #symbol, ~git, and $context references as single units: arrow keys skip over them and Backspace/Delete removes the whole reference at once. In output, format clickable local references as compact chips. Clicking or long-pressing a reference still opens it; when off, editor references edit character by character and output uses ordinary text links."
+          settingKey="ui.atomicContextReferences"
           checked={ui.atomicContextReferences}
           onChange={(v) => onUpdate("ui.atomicContextReferences", v)}
-          path="ui.atomicContextReferences"
           {...rowProps}
         />
         <SettingToggleRow
-          label="Use absolute file paths"
-          description={
-            isMultiRoot
+          settingKey="ui.useAbsolutePathReferences"
+          {...{
+            description: isMultiRoot
               ? "Forced on — multiple workspace folders are open."
-              : "Send absolute file paths to the harness/model instead of relative paths. Stored workflow text always stays relative."
-          }
+              : "Send absolute file paths to the harness/model instead of relative paths. Stored workflow text always stays relative.",
+          }}
           checked={isMultiRoot ? true : ui.useAbsolutePathReferences}
           onChange={(v) => onUpdate("ui.useAbsolutePathReferences", v)}
           disabled={isMultiRoot}
-          path="ui.useAbsolutePathReferences"
           {...rowProps}
         />
         <SettingInputRow
-          label="Collapsed tool output lines"
-          description="Approximate number of wrapped lines shown for Bash and generic tool results before they collapse."
+          settingKey="ui.collapsedToolOutputLineCount"
           id="ui-collapsed-tool-output-line-count"
-          path="ui.collapsedToolOutputLineCount"
           {...rowProps}
         >
           <LocalNumberInput
@@ -257,15 +224,13 @@ export function GeneralSection({
           />
         </SettingInputRow>
         <SettingInputRow
-          label="Output virtualization row threshold"
-          description="Minimum output rows before virtualization is enabled. Use 0 to always virtualize, or choose Never to disable virtualization."
+          settingKey="ui.outputVirtualizationRowThreshold"
           id="ui-output-virtualization-row-threshold"
-          path="ui.outputVirtualizationRowThreshold"
           {...rowProps}
         >
           <LimitSelect
             id="ui-output-virtualization-row-threshold"
-            label="Output virtualization row threshold"
+            label={settingLabel("ui.outputVirtualizationRowThreshold")}
             path="ui.outputVirtualizationRowThreshold"
             value={ui.outputVirtualizationRowThreshold}
             onChange={(v) => onUpdate("ui.outputVirtualizationRowThreshold", v)}
@@ -275,37 +240,29 @@ export function GeneralSection({
           />
         </SettingInputRow>
         <SettingToggleRow
-          label="Confirm delete operations"
-          description="Show a confirmation dialog before delete operations like removing prompts, deleting workflow history, or discarding untracked files."
+          settingKey="ui.confirmDeleteOperations"
           checked={ui.confirmDeleteOperations}
           onChange={(v) => onUpdate("ui.confirmDeleteOperations", v)}
-          path="ui.confirmDeleteOperations"
           {...rowProps}
         />
         <SettingToggleRow
-          label="Confirm reset operations"
-          description="Show a confirmation dialog before resetting the workflow."
+          settingKey="ui.confirmResetOperations"
           checked={ui.confirmResetOperations}
           onChange={(v) => onUpdate("ui.confirmResetOperations", v)}
-          path="ui.confirmResetOperations"
           {...rowProps}
         />
         <SettingToggleRow
-          label="Confirm continuation discard operations"
-          description="Show a confirmation dialog before discarding a continuation's edited suffix (Discard Continuation, Start New Run Instead)."
+          settingKey="ui.confirmContinuationDiscardOperations"
           checked={ui.confirmContinuationDiscardOperations}
           onChange={(v) =>
             onUpdate("ui.confirmContinuationDiscardOperations", v)
           }
-          path="ui.confirmContinuationDiscardOperations"
           {...rowProps}
         />
         <SettingToggleRow
-          label="Hide git-ignored files"
-          description="Hide files and directories ignored by .gitignore in the workspace file explorer and workflow file picker."
+          settingKey="ui.hideGitIgnoredFiles"
           checked={ui.hideGitIgnoredFiles}
           onChange={(v) => onUpdate("ui.hideGitIgnoredFiles", v)}
-          path="ui.hideGitIgnoredFiles"
           {...rowProps}
         />
       </div>
@@ -314,13 +271,11 @@ export function GeneralSection({
           Prior Context
         </h3>
         <SettingToggleRow
-          label="Include full file diffs"
-          description="Include actual file changes in captured responses used by later prior-context attachments. Disable for smaller response-only context."
+          settingKey="general.includeFullDiffsInPriorContext"
           checked={general.includeFullDiffsInPriorContext}
           onChange={(v) =>
             onUpdate("general.includeFullDiffsInPriorContext", v)
           }
-          path="general.includeFullDiffsInPriorContext"
           {...rowProps}
         />
       </div>
@@ -329,11 +284,9 @@ export function GeneralSection({
           File Management
         </h3>
         <SettingToggleRow
-          label="Auto-delete temp files"
-          description="Automatically delete prompt temp files after execution. Disable to retain files in .ctrlyoke/temp/ for debugging."
+          settingKey="execution.autoDeleteTempFiles"
           checked={exec.autoDeleteTempFiles}
           onChange={(v) => onUpdate("execution.autoDeleteTempFiles", v)}
-          path="execution.autoDeleteTempFiles"
           {...rowProps}
         />
       </div>
@@ -342,15 +295,13 @@ export function GeneralSection({
           Runs
         </h3>
         <SettingInputRow
-          label="Max runs to keep"
-          description="Deletes entire runs—definition and output—oldest first."
+          settingKey="runs.maxRuns"
           id="runs-max-runs"
-          path="runs.maxRuns"
           {...rowProps}
         >
           <LimitSelect
             id="runs-max-runs"
-            label="Max runs to keep"
+            label={settingLabel("runs.maxRuns")}
             path="runs.maxRuns"
             value={runs.maxRuns}
             onChange={(v) => onUpdate("runs.maxRuns", v)}
@@ -358,10 +309,8 @@ export function GeneralSection({
           />
         </SettingInputRow>
         <SettingInputRow
-          label="History search cache (MB, 0 = disabled)"
-          description="Approximate working-set budget for caching parsed history-search documents from the most recently run workflows, evicted oldest-first once exceeded. Bounds real process memory, not a literal byte count — raising it does not scale memory use 1:1."
+          settingKey="runs.historySearchCacheMb"
           id="runs-history-search-cache-mb"
-          path="runs.historySearchCacheMb"
           {...rowProps}
         >
           <LocalNumberInput
@@ -379,10 +328,8 @@ export function GeneralSection({
           ctrlyoke MCP server
         </h3>
         <SettingInputRow
-          label="MCP mode"
-          description="Controls only ctrlyoke's own MCP server (queue/coordination/commit tools) — never any other MCP servers a workflow configures. Native attaches ctrlyoke's real MCP server. Skill replaces it with the built-in MCP-tools skill instead, for environments where MCP configuration itself is unavailable (e.g. blocked by policy)."
+          settingKey="execution.ctrlyokeMcpMode"
           id="settings-ctrlyoke-mcp-mode"
-          path="execution.ctrlyokeMcpMode"
           {...rowProps}
         >
           <CustomSelect
@@ -402,24 +349,21 @@ export function GeneralSection({
           Diagnostics
         </h3>
         <SettingToggleRow
-          label="Enable diagnostic logs"
-          description="Write detailed diagnostic logs to help troubleshoot issues."
+          settingKey="diagnostics.verboseLogging"
           checked={settings.settings.diagnostics.verboseLogging}
           onChange={(v) => onUpdate("diagnostics.verboseLogging", v)}
-          path="diagnostics.verboseLogging"
           {...rowProps}
         />
         <SettingToggleRow
-          label="Log raw CLI output"
-          description={
-            !settings.settings.diagnostics.verboseLogging
+          settingKey="diagnostics.logRawCliOutput"
+          {...{
+            description: !settings.settings.diagnostics.verboseLogging
               ? "Unavailable — requires diagnostic logs to be enabled."
-              : "Write raw CLI output to a log file for debugging."
-          }
+              : "Write raw CLI output to a log file for debugging.",
+          }}
           checked={settings.settings.diagnostics.logRawCliOutput}
           onChange={(v) => onUpdate("diagnostics.logRawCliOutput", v)}
           disabled={!settings.settings.diagnostics.verboseLogging}
-          path="diagnostics.logRawCliOutput"
           {...rowProps}
         />
       </div>

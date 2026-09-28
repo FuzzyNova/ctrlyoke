@@ -86,9 +86,8 @@ export function HarnessesSection({
         Harness Defaults
       </h3>
       <SettingInputRow
-        label="Default harness"
+        settingKey="defaults.harness"
         id="harness-active"
-        path="defaults.harness"
         {...rowProps}
       >
         <HarnessDropdown
@@ -133,9 +132,8 @@ export function HarnessesSection({
                 {info.name}
               </div>
               <SettingInputRow
-                label="Model"
+                settingKey={`defaults.models.${harnessId}`}
                 id={`model-${harnessId}`}
-                path={`defaults.models.${harnessId}`}
                 {...rowProps}
               >
                 {discoveredModels.length > 0 ? (
@@ -161,9 +159,8 @@ export function HarnessesSection({
                 )}
               </SettingInputRow>
               <SettingInputRow
-                label="Additional args"
+                settingKey={`defaults.additionalArgs.${harnessId}`}
                 id={`extra-args-${harnessId}`}
-                path={`defaults.additionalArgs.${harnessId}`}
                 {...rowProps}
               >
                 <AdditionalArgsEditor
@@ -184,10 +181,8 @@ export function HarnessesSection({
                 />
               </SettingInputRow>
               <SettingInputRow
-                label="Harness color"
-                description="Identity color used for this harness in the harness share bar in every mode and for steps in harness mode. Reset to follow the built-in theme-aware chart color."
+                settingKey={`ui.harnessColors.byHarness.${harnessId}`}
                 id={`step-color-${harnessId}`}
-                path={`ui.harnessColors.byHarness.${harnessId}`}
                 {...rowProps}
               >
                 <input

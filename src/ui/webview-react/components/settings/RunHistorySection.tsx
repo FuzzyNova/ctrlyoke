@@ -48,10 +48,8 @@ export function RunHistorySection({
         Run History
       </h3>
       <SettingInputRow
-        label="Run history location"
-        description="Choose where ctrlyoke keeps run history. Workspace mode keeps it beside the repo, still ignores .runs/, and does not make runs shareable."
+        settingKey="storage.runHistoryLocation"
         id="storage-run-history-location"
-        path="storage.runHistoryLocation"
         sources={sources}
         activeScope={activeScope}
         onReset={onReset}

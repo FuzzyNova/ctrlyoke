@@ -32,18 +32,14 @@ export function DefaultsContextPage({
   return (
     <div className="space-y-1">
       <SettingToggleRow
-        label="Resume existing session"
-        description="Attempt to resume the most recent AI session."
+        settingKey="defaults.resumeSession"
         checked={wf.resumeSession}
         onChange={(v) => onUpdate("defaults.resumeSession", v)}
-        path="defaults.resumeSession"
         {...rowProps}
       />
       <SettingInputRow
-        label="Prior Context"
-        description="How to handle prior context between prompts."
+        settingKey="defaults.priorContext"
         id="defaults-prior-context"
-        path="defaults.priorContext"
         {...rowProps}
       >
         <CustomSelect

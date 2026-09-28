@@ -36,10 +36,10 @@ import {
  * suite is pure static analysis (schema walk + source-text search) — it does
  * not exercise persistence, so it needs no temp workspace or orchestrator.
  *
- * Every settings section consistently threads a `path="dot.notation.path"`
- * prop (matching the schema's own dot path) into `SettingInputRow` /
- * `SettingToggleRow` for `sources[path]` lookup and the per-row reset button —
- * see `SettingInputRow.tsx`. That convention is what this suite searches for.
+ * Every settings section consistently threads a `settingKey="dot.notation.path"`
+ * into `SettingInputRow` / `SettingToggleRow`; the catalog entry supplies the
+ * schema path used for `sources[path]` and the per-row reset button. This suite
+ * excludes the catalog itself and searches the section source for those keys.
  * A handful of controls reference `SETTING_PATHS.SOME_KEY` (a shared constant
  * in `DashboardConstants.ts`) instead of writing the literal path inline
  * (e.g. `StatusLineTrackingControls.tsx`); those are matched indirectly via
@@ -144,6 +144,7 @@ const DYNAMIC_TEMPLATE_PARENTS = new Set([
   "defaults.models",
   "defaults.additionalArgs",
   "ui.harnessColors.byHarness",
+  "statusLine.byHarness",
   "notifications.events.hookEvents",
 ]);
 
@@ -270,6 +271,7 @@ function webviewSourceFiles(directory: string): string[] {
 
 function webviewSource(): string {
   return webviewSourceFiles(WEBVIEW_SOURCE_ROOT)
+    .filter((filePath) => path.basename(filePath) !== "settingsCatalog.ts")
     .map((filePath) => readFileSync(filePath, "utf8"))
     .join("\n");
 }

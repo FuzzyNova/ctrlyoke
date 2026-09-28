@@ -3622,6 +3622,7 @@ export type RunSummaryCacheStatus =
 export const KEYBOARD_KEYS = {
   ENTER: "Enter",
   ESCAPE: "Escape",
+  F3: "F3",
   ARROW_UP: "ArrowUp",
   ARROW_DOWN: "ArrowDown",
   TAB: "Tab",
