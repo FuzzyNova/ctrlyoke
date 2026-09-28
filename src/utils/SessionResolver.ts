@@ -9,15 +9,6 @@ import { PropertyResolver } from "./PropertyResolver";
 import { Log } from "./Log";
 
 /**
- * Validation result for session references
- */
-export interface SessionValidationResult {
-  valid: boolean;
-  error?: string;
-  warning?: string;
-}
-
-/**
  * Session resolution and validation utilities.
  *
  * Enables per-prompt session tracking so different prompts in a workflow can
@@ -28,28 +19,6 @@ export interface SessionValidationResult {
  * 3. **Auto-Resume**: No sessionId specified - Automatically resume previous prompt's session
  *
  * Resolution respects workflow-level properties and validates cross-harness compatibility.
- *
- * @example
- * ```typescript
- * // Resolve session ID for current prompt
- * const sessionId = SessionResolver.resolve(
- *   prompt,
- *   promptIndex,
- *   allPrompts,
- *   workflow
- * );
- *
- * // Validate session reference before execution
- * const validation = SessionResolver.validate(
- *   prompt,
- *   promptIndex,
- *   allPrompts,
- *   workflow
- * );
- * if (!validation.valid) {
- *   throw new Error(validation.error);
- * }
- * ```
  */
 export class SessionResolver {
   /**
@@ -364,71 +333,5 @@ export class SessionResolver {
 
     // Default to new session when no workflow or prompt setting exists
     return false;
-  }
-
-  /**
-   * Validate session reference before execution.
-   *
-   * Checks for:
-   * - Conflicting settings (resumeSession=false + sessionId set)
-   * - Invalid numeric references (out of bounds, future prompts)
-   * - Other validation issues
-   *
-   * @param prompt The prompt to validate
-   * @param promptIndex Current prompt's index (0-based)
-   * @param allPrompts All prompts in queue
-   * @param workflow Workflow file for workflow-level defaults (optional)
-   * @returns Validation result with valid flag and optional error/warning messages
-   */
-  static validate(
-    prompt: PromptStep,
-    promptIndex: number,
-    allPrompts: PromptStep[],
-    workflow?: PromptFile,
-    groupStartBoundary: number = promptIndex
-  ): SessionValidationResult {
-    // Resolve sessionId (check prompt first, then workflow if available)
-    const sessionId = workflow
-      ? PropertyResolver.resolve(prompt, workflow).sessionId
-      : prompt.sessionId;
-
-    // Check for conflicting settings (ONLY if both explicitly set on prompt)
-    // Note: We check prompt.resumeSession directly, not resolved value,
-    // because this validation is about conflicting prompt-level settings.
-    if (prompt.resumeSession === false && sessionId !== undefined) {
-      return {
-        valid: true,
-        warning:
-          "Prompt has sessionId set but resumeSession=false. " +
-          "Session ID will be ignored.",
-      };
-    }
-
-    // Validate numeric reference
-    if (typeof sessionId === "number") {
-      const refIndex = sessionId - 1;
-
-      // Check if reference is out of bounds (beyond available prompts)
-      if (refIndex < 0 || refIndex >= allPrompts.length) {
-        return {
-          valid: false,
-          error:
-            `Invalid sessionId reference: ${sessionId}. ` +
-            `Must reference a prompt between 1-${allPrompts.length}.`,
-        };
-      }
-
-      // Check if reference points to future prompt (not yet executed)
-      if (refIndex >= groupStartBoundary) {
-        return {
-          valid: false,
-          error:
-            `Invalid sessionId reference: ${sessionId}. ` +
-            `Cannot reference a prompt at or after the execution boundary (${groupStartBoundary + 1}).`,
-        };
-      }
-    }
-
-    return { valid: true };
   }
 }

@@ -267,10 +267,6 @@ suite("SessionResolver Tests", () => {
         ),
         "before-session"
       );
-      assert.strictEqual(
-        SessionResolver.validate(prompts[2], 2, prompts, workflow, 1).valid,
-        false
-      );
     });
 
     test("should auto-resume from previous prompt when resumeSession=true", () => {
@@ -469,87 +465,6 @@ suite("SessionResolver Tests", () => {
 
       const result = SessionResolver.shouldResumeSession(prompt);
       assert.strictEqual(result, false);
-    });
-  });
-
-  suite("validate", () => {
-    test("should return valid for exact session ID", () => {
-      const prompt: PromptStep = {
-        prompt: "test",
-        sessionId: "550e8400-e29b-41d4-a716-446655440000",
-      };
-
-      const result = SessionResolver.validate(prompt, 0, [prompt]);
-      assert.strictEqual(result.valid, true);
-      assert.strictEqual(result.error, undefined);
-    });
-
-    test("should warn when both resumeSession=false and sessionId set", () => {
-      const prompt: PromptStep = {
-        prompt: "test",
-        sessionId: "my-session",
-        resumeSession: false,
-      };
-
-      const result = SessionResolver.validate(prompt, 0, [prompt]);
-      assert.strictEqual(result.valid, true);
-      assert.ok(result.warning);
-      assert.ok(result.warning!.includes("resumeSession=false"));
-    });
-
-    test("should return error for out-of-range numeric reference", () => {
-      const prompts: PromptStep[] = [
-        { prompt: "first" },
-        { prompt: "second" },
-        { prompt: "third", sessionId: 5 }, // Out of range
-      ];
-
-      const result = SessionResolver.validate(prompts[2], 2, prompts);
-      assert.strictEqual(
-        result.valid,
-        false,
-        "Should be invalid for out-of-range reference"
-      );
-      assert.ok(result.error, "Should have an error message");
-      assert.ok(
-        result.error!.includes("reference a prompt between 1-3"),
-        "Error should mention valid range"
-      );
-    });
-
-    test("should return error for backward-looking numeric reference", () => {
-      const prompts: PromptStep[] = [
-        { prompt: "first", sessionId: 2 }, // Can't reference prompt 2 from prompt 1
-        { prompt: "second" },
-      ];
-
-      const result = SessionResolver.validate(prompts[0], 0, prompts);
-      assert.strictEqual(
-        result.valid,
-        false,
-        "Should be invalid for forward reference"
-      );
-      assert.ok(result.error, "Should have an error message");
-    });
-
-    test("should return valid for proper numeric reference", () => {
-      const prompts: PromptStep[] = [
-        {
-          prompt: "first",
-          _runtime: {
-            harness: HARNESS_IDS.COPILOT_CLI,
-            model: "claude-sonnet-4.5",
-            sessionId: "session-1",
-            startedAt: Date.now(),
-            completedAt: Date.now(),
-          },
-        },
-        { prompt: "second", sessionId: 1 },
-      ];
-
-      const result = SessionResolver.validate(prompts[1], 1, prompts);
-      assert.strictEqual(result.valid, true);
-      assert.strictEqual(result.error, undefined);
     });
   });
 

@@ -3023,13 +3023,6 @@ export class HostedWorkspaceViewerService {
     this.commitLogSnapshots.clear();
     this.gitRefDiffSnapshots.clear();
   }
-
-  clear(): void {
-    this.listingSnapshotCache.clear();
-    this.fileHistorySnapshots.clear();
-    this.commitLogSnapshots.clear();
-    this.gitRefDiffSnapshots.clear();
-  }
 }
 
 function normalizeViewerPath(value: string): string {

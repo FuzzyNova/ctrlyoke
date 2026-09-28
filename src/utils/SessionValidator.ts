@@ -160,16 +160,4 @@ export class SessionValidator {
     }
     return true;
   }
-
-  /**
-   * Check if a session ID looks like a UUID (for diagnostics)
-   *
-   * Useful for debugging when harnesses receive unexpected formats.
-   *
-   * @param sessionId Session ID to check
-   * @returns True if appears to be UUID format
-   */
-  static isUuidFormat(sessionId: string): boolean {
-    return this.UUID_REGEX.test(sessionId);
-  }
 }

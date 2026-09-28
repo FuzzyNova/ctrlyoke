@@ -609,29 +609,6 @@ suite("HostedWorkspaceViewerService", function () {
       assert.strictEqual(first.totalEntries, 2);
       assert.strictEqual(second.entries[0]?.path, "secondary");
     });
-
-    test("clears listing snapshots on request and disposal", async () => {
-      const root = createWorkspace();
-      const svc = new HostedWorkspaceViewerService(root);
-      const listing = await svc.listDirectory({
-        path: "",
-        includeGitIgnored: true,
-      });
-      svc.clear();
-      await assert.rejects(
-        svc.listDirectory({ listingId: listing.listingId, offset: 0 }),
-        (error: unknown) => error instanceof WorkspaceTreeExpiredError
-      );
-      const fresh = await svc.listDirectory({
-        path: "",
-        includeGitIgnored: true,
-      });
-      svc.dispose();
-      await assert.rejects(
-        svc.listDirectory({ listingId: fresh.listingId, offset: 0 }),
-        (error: unknown) => error instanceof WorkspaceTreeExpiredError
-      );
-    });
   });
 
   // ── getFileHistory ────────────────────────────────────────────────────────

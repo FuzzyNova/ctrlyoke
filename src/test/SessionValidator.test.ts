@@ -127,26 +127,4 @@ suite("SessionValidator Tests", () => {
       });
     });
   });
-
-  suite("isUuidFormat Utility", () => {
-    test("Should correctly identify UUID format", () => {
-      assert.strictEqual(
-        SessionValidator.isUuidFormat("550e8400-e29b-41d4-a716-446655440000"),
-        true,
-        "Valid UUID should be identified"
-      );
-
-      assert.strictEqual(
-        SessionValidator.isUuidFormat("thread_abc123"),
-        false,
-        "Thread ID should not be identified as UUID"
-      );
-
-      assert.strictEqual(
-        SessionValidator.isUuidFormat("not-a-uuid"),
-        false,
-        "Invalid format should not be identified as UUID"
-      );
-    });
-  });
 });

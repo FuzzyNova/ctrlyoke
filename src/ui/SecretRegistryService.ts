@@ -318,19 +318,6 @@ export class SecretRegistryService {
     return entries;
   }
 
-  async getUsedBy(
-    name: string,
-    scope: SettingWriteScope
-  ): Promise<SecretRegistryUsage> {
-    assertWriteScope(scope);
-    if (!isValidSecretName(name)) return { mcpServers: [], workflows: [] };
-    const [workflows, mcpServers] = await Promise.all([
-      this.getWorkflowReferences(),
-      this.getMcpReferences(scope),
-    ]);
-    return usageForName(name, workflows, mcpServers);
-  }
-
   async set(
     name: string,
     scope: SettingWriteScope,

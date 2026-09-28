@@ -126,13 +126,6 @@ suite("SecretRegistryService", () => {
       workspaceEntries.find((entry) => entry.name === "SHARED_TOKEN")?.state,
       SECRET_REGISTRY_STATES.MANAGED_AND_SET
     );
-    assert.deepStrictEqual(
-      await service.getUsedBy("SHARED_TOKEN", SETTING_SCOPES.WORKSPACE),
-      {
-        mcpServers: ["build-server"],
-        workflows: ["build.ctrlyoke.json"],
-      }
-    );
   });
 
   test("additionalKnownNames surfaces a name's real resolvable state even when nothing has declared it yet", async () => {

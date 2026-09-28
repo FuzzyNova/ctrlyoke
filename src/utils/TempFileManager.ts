@@ -25,7 +25,6 @@ import {
 export class TempFileManager {
   private readonly TEMP_DIR_NAME = PATH_CONSTANTS.CTRLYOKE_DIR;
   private readonly TEMP_SUBDIR_NAME = PATH_CONSTANTS.TEMP_DIR;
-  private readonly PROMPT_EXTENSION = ".prompt.md";
   private readonly MCP_CONFIG_PREFIX = "mcp-config";
   private readonly AGY_STATUSLINE_PREFIX = "agy-statusline-";
   private readonly CLAUDE_STATUSLINE_PREFIX = "claude-statusline-";
@@ -87,116 +86,6 @@ export class TempFileManager {
     } catch (err) {
       Log.error(`[TempFileManager] Failed to create temp directory: ${err}`);
       throw new Error(`Cannot create temp directory: ${this.tempDir}`);
-    }
-  }
-
-  /**
-   * Create a temporary prompt file with useful name for debugging
-   * Returns absolute path to the created file
-   *
-   * Format:
-   * - Single prompt: <timestamp>-<original-filename>.prompt.md
-   * - Multi-step workflow: <timestamp>-<original-filename>-<step>.prompt.md
-   *
-   * @param promptText The full prompt text (with expanded context)
-   * @param originalFilePath Optional path to original .ctrlyoke.json or .prompt.md file
-   * @param stepNumber Optional step number for multi-step workflows (1-indexed)
-   * @returns Absolute path to temp file
-   */
-  async createPromptFile(
-    promptText: string,
-    originalFilePath?: string,
-    stepNumber?: number
-  ): Promise<string> {
-    // Ensure directory exists
-    await this.ensureTempDir();
-
-    // Build useful filename
-    const timestamp = Math.floor(Date.now() / 1000); // Unix timestamp in seconds
-    const basename = originalFilePath
-      ? this.sanitizeBasename(originalFilePath)
-      : "prompt";
-
-    // Add step number if this is a multi-step workflow
-    const stepSuffix = stepNumber ? `-${stepNumber}` : "";
-    const filename = `${timestamp}-${basename}${stepSuffix}${this.PROMPT_EXTENSION}`;
-    const filePath = path.join(this.tempDir, filename);
-
-    // Write file
-    try {
-      await fs.promises.writeFile(filePath, promptText, "utf-8");
-      return filePath;
-    } catch (err) {
-      Log.error(`[TempFileManager] Failed to write temp prompt file: ${err}`);
-      throw new Error(`Cannot write temp file: ${filePath}`);
-    }
-  }
-
-  /**
-   * Create multiple prompt files for a split prompt
-   * Returns array of absolute paths in order
-   *
-   * Format:
-   * - Single chunk: <timestamp>-<basename>-<step>.prompt.md
-   * - Split files: <timestamp>-<basename>-<step>.1.prompt.md
-   *               <timestamp>-<basename>-<step>.2.prompt.md
-   *               <timestamp>-<basename>-<step>.3.prompt.md
-   *
-   * @param chunks Array of prompt text chunks
-   * @param originalFilePath Optional path to original .ctrlyoke file
-   * @param stepNumber Optional step number for multi-step workflows (1-indexed)
-   * @returns Array of absolute file paths
-   */
-  async createSplitPromptFiles(
-    chunks: string[],
-    originalFilePath?: string,
-    stepNumber?: number
-  ): Promise<string[]> {
-    // Validate input
-    if (!chunks || chunks.length === 0) {
-      throw new Error("Cannot create split files: no chunks provided");
-    }
-
-    // Filter out empty chunks
-    const validChunks = chunks.filter((chunk) => chunk.trim().length > 0);
-    if (validChunks.length === 0) {
-      throw new Error("Cannot create split files: all chunks are empty");
-    }
-
-    // Ensure directory exists
-    await this.ensureTempDir();
-
-    // Build base filename
-    const timestamp = Math.floor(Date.now() / 1000);
-    const basename = originalFilePath
-      ? this.sanitizeBasename(originalFilePath)
-      : "prompt";
-
-    const stepSuffix = stepNumber ? `-${stepNumber}` : "";
-    const filePaths: string[] = [];
-
-    // Create files with cleanup on partial failure
-    try {
-      for (let i = 0; i < validChunks.length; i++) {
-        // Add split index only if there are multiple chunks
-        const splitIndex = validChunks.length > 1 ? `.${i + 1}` : "";
-        const filename = `${timestamp}-${basename}${stepSuffix}${splitIndex}${this.PROMPT_EXTENSION}`;
-        const filePath = path.join(this.tempDir, filename);
-
-        await fs.promises.writeFile(filePath, validChunks[i], "utf-8");
-        filePaths.push(filePath);
-      }
-
-      return filePaths;
-    } catch (err) {
-      // Clean up any files created before the error
-      Log.error(
-        `[TempFileManager] Failed to create split prompt files: ${err}`
-      );
-      await this.deleteFiles(filePaths); // Clean up partial files
-      throw new Error(
-        `Cannot create split temp files: ${err instanceof Error ? err.message : String(err)}`
-      );
     }
   }
 
