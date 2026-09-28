@@ -201,7 +201,7 @@ export function useOutputFind(
         return;
       }
 
-      if (event.key === "F3") {
+      if (event.key === KEYBOARD_KEYS.F3) {
         event.preventDefault();
         navigate(event.shiftKey ? -1 : 1);
       }

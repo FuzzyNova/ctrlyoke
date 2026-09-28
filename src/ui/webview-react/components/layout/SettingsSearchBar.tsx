@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
 import { ExitButton } from "@components/shared";
 import { Icon } from "@components/shared/Icon";
@@ -11,6 +11,7 @@ interface SettingsSearchBarProps {
   onQueryChange: (query: string) => void;
   onNavigate: (direction: 1 | -1) => void;
   onClose: () => void;
+  inputRef?: RefObject<HTMLInputElement | null>;
 }
 
 export function SettingsSearchBar({
@@ -21,12 +22,14 @@ export function SettingsSearchBar({
   onQueryChange,
   onNavigate,
   onClose,
+  inputRef: providedInputRef,
 }: SettingsSearchBarProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const localInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = providedInputRef ?? localInputRef;
   useEffect(() => {
     inputRef.current?.focus();
     inputRef.current?.select();
-  }, []);
+  }, [inputRef]);
 
   const counter = query.trim()
     ? matchCount > 0
@@ -52,6 +55,12 @@ export function SettingsSearchBar({
             event.preventDefault();
             event.stopPropagation();
             onClose();
+          } else if (
+            event.key === KEYBOARD_KEYS.ENTER ||
+            event.key === KEYBOARD_KEYS.F3
+          ) {
+            event.preventDefault();
+            onNavigate(event.shiftKey ? -1 : 1);
           }
         }}
         placeholder="Search settings"

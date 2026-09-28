@@ -1,6 +1,6 @@
 # Settings Search Plan
 
-**Status: ready to implement.** Revised 2026-09-28 against the code as it stands
+**Status: implemented.** Completed 2026-09-28 against the code as it stands
 after `dev/implemented/SCHEMA_UI_NAME_ALIGNMENT_PLAN.md` landed.
 
 ## Progress
@@ -26,8 +26,15 @@ template keys just like the other map-valued settings.
 Phase 2 is complete. The drawer now owns transient search state, shows an
 in-flow search row, highlights and tints matching settings rows, reports match
 counts on settings tabs and Workflow Defaults pages, and displays an empty
-result notice. Search navigation, cross-tab/page jumping, keyboard shortcuts,
-and reveal/scroll behavior remain for Phase 3.
+result notice.
+
+Phase 3 is complete. Search now cycles forward and backward through matches
+across tabs and Workflow Defaults pages, preserves the active match when a query
+still contains it, keeps matching tabs selected while typing, and jumps to the
+next tab when the current location has no matches. The drawer reveals each match
+after its tab/page mounts, handles the documented Escape and Ctrl/Cmd+F flows,
+and yields the output find shortcut while open. The keyboard shortcut inventory
+is updated.
 
 ## Goal
 

@@ -488,6 +488,14 @@ describe("OutputSection", () => {
     expect(closeFindSpy).toHaveBeenCalledOnce();
   });
 
+  it("routes Ctrl+F to output find while global settings are closed", () => {
+    render(<OutputSection />);
+
+    fireEvent.keyDown(window, { key: "f", ctrlKey: true });
+
+    expect(openFindSpy).toHaveBeenCalledOnce();
+  });
+
   it("exits fullscreen when Escape is pressed", () => {
     render(<OutputSection />);
 

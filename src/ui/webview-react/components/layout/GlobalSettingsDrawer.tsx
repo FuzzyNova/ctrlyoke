@@ -2,7 +2,7 @@ import {
   GLOBAL_SETTINGS_TABS,
   KEYBOARD_KEYS,
 } from "@root/types/DashboardConstants";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { isStandalone, useVsCodeApi } from "@hooks/useVsCodeApi";
@@ -17,7 +17,11 @@ import { GlobalSettingsVerticalTabBar } from "./GlobalSettingsVerticalTabBar";
 import { SettingsSearchBar } from "./SettingsSearchBar";
 import { useSettingsSearch } from "@hooks/useSettingsSearch";
 import { SettingsSearchContext } from "../settings/SettingsSearchContext";
-import { ALL_TABS, type SettingsTab } from "../settings/settingsTabs";
+import {
+  ALL_TABS,
+  type GlobalSettingsTab,
+  type SettingsTab,
+} from "../settings/settingsTabs";
 import {
   GeneralSection,
   WorkflowDefaultsSection,
@@ -41,6 +45,9 @@ import { StatsUsageSection } from "../settings/stats/StatsUsageSection";
 import { ExitButton, ScopeToggle } from "../shared";
 import { IconToggleButton } from "../shared/IconToggleButton";
 import { Icon } from "../shared/Icon";
+import { DRAWER_PAGES, type DrawerPage } from "@/types/drawerPages";
+import { isFindShortcut } from "@utils/findShortcut";
+import { SETTINGS_CATALOG_ENTRIES } from "../settings/settingsCatalog";
 
 export function GlobalSettingsDrawer() {
   const vscode = useVsCodeApi();
@@ -54,9 +61,19 @@ export function GlobalSettingsDrawer() {
   );
   const serverRunning = useSettingsStore((s) => s.serverRunning);
   const dev = useSettingsStore((s) => s.dev);
-  const settingsSearch = useSettingsSearch(dev?.enabled ?? false);
-  const { close: closeSearch } = settingsSearch;
+  const [activePage, setActivePage] = useState<DrawerPage>(
+    DRAWER_PAGES.HARNESS
+  );
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [drawerRef, isNarrow] = useElementNarrow(580);
+  const drawerElementRef = useRef<HTMLDivElement | null>(null);
+  const mergedDrawerRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      drawerElementRef.current = node;
+      drawerRef(node);
+    },
+    [drawerRef]
+  );
   const [activeScope, setActiveScope] = useState<SettingWriteScope>(
     SETTING_SCOPES.USER
   );
@@ -64,6 +81,21 @@ export function GlobalSettingsDrawer() {
   // Drives the slide transform separately from `globalSettingsOpen` so a fresh
   // mount first paints off-screen (translate-y-full) and only then slides in.
   const [isSlidIn, setIsSlidIn] = useState(false);
+  const visibleTabs = ALL_TABS.filter(
+    (t: SettingsTab) => !t.devOnly || dev?.enabled
+  );
+  const effectiveActiveTab = visibleTabs.some((t) => t.id === activeTab)
+    ? (activeTab as GlobalSettingsTab)
+    : GLOBAL_SETTINGS_TABS.GENERAL;
+  const settingsSearch = useSettingsSearch({
+    devEnabled: dev?.enabled ?? false,
+    activeTab: effectiveActiveTab,
+    activePage,
+    onTabChange: setActiveTab,
+    onPageChange: setActivePage,
+  });
+  const { close: closeSearch } = settingsSearch;
+  const { isOpen: searchIsOpen, open: openSearch } = settingsSearch;
   const hasSearchQuery = settingsSearch.query.trim().length > 0;
   const hasNoSearchMatches =
     hasSearchQuery && settingsSearch.result.matches.length === 0;
@@ -76,18 +108,35 @@ export function GlobalSettingsDrawer() {
         ?.focus();
     });
   }, [closeSearch]);
-  const visibleTabs = ALL_TABS.filter(
-    (t: SettingsTab) => !t.devOnly || dev?.enabled
-  );
-  const effectiveActiveTab = visibleTabs.some((t) => t.id === activeTab)
-    ? activeTab
-    : GLOBAL_SETTINGS_TABS.GENERAL;
   const isFullWidthSettingsTab =
     effectiveActiveTab === GLOBAL_SETTINGS_TABS.MCP_MANAGER;
 
   useEffect(() => {
     if (!globalSettingsOpen) closeSearch();
   }, [globalSettingsOpen, closeSearch]);
+
+  useEffect(() => {
+    if (!globalSettingsOpen) return;
+    const handleFindShortcut = (event: KeyboardEvent) => {
+      if (!isFindShortcut(event)) return;
+      const target = event.target;
+      if (target instanceof Element && target.closest(".cm-editor")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      if (searchIsOpen) {
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      } else {
+        openSearch();
+      }
+    };
+    window.addEventListener("keydown", handleFindShortcut, { capture: true });
+    return () =>
+      window.removeEventListener("keydown", handleFindShortcut, {
+        capture: true,
+      });
+  }, [globalSettingsOpen, searchIsOpen, openSearch]);
 
   useEffect(() => {
     if (!globalSettingsOpen) {
@@ -129,11 +178,56 @@ export function GlobalSettingsDrawer() {
   useEffect(() => {
     if (!globalSettingsOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === KEYBOARD_KEYS.ESCAPE) closeGlobalSettings();
+      if (e.defaultPrevented || e.key !== KEYBOARD_KEYS.ESCAPE) return;
+      e.preventDefault();
+      if (settingsSearch.isOpen) closeSettingsSearch();
+      else closeGlobalSettings();
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [globalSettingsOpen, closeGlobalSettings]);
+  }, [
+    globalSettingsOpen,
+    closeGlobalSettings,
+    closeSettingsSearch,
+    settingsSearch.isOpen,
+  ]);
+
+  useEffect(() => {
+    if (!globalSettingsOpen || !settingsSearch.isOpen || !fullSettings) return;
+    if (!settingsSearch.activeMatchId) return;
+    const frame = window.requestAnimationFrame(() => {
+      const root = drawerElementRef.current;
+      if (!root) return;
+      const activeMatchId = settingsSearch.activeMatchId;
+      if (!activeMatchId) return;
+      const findById = (id: string): HTMLElement | undefined =>
+        Array.from(
+          root.querySelectorAll<HTMLElement>("[data-settings-search-id]")
+        ).find((element) => element.dataset.settingsSearchId === id);
+      const entry = SETTINGS_CATALOG_ENTRIES.find(
+        (candidate) => candidate.id === activeMatchId
+      );
+      const target =
+        findById(activeMatchId) ??
+        (entry?.revealedBy ? findById(entry.revealedBy) : undefined);
+      if (target) {
+        target.scrollIntoView({ block: "nearest" });
+        return;
+      }
+      const contentScroller = root.querySelector<HTMLElement>(
+        "[data-settings-content-scroll]"
+      );
+      if (contentScroller) contentScroller.scrollTop = 0;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [
+    settingsSearch.activeMatchId,
+    effectiveActiveTab,
+    activePage,
+    fullSettings,
+    globalSettingsOpen,
+    settingsSearch.isOpen,
+  ]);
 
   if (!shouldRender) {
     return null;
@@ -175,7 +269,7 @@ export function GlobalSettingsDrawer() {
 
   return (
     <div
-      ref={drawerRef}
+      ref={mergedDrawerRef}
       className={`absolute inset-0 flex flex-col z-drawer bg-panel-bg border-t border-panel-border
         transition-transform duration-200 ease-out
         ${isSlidIn ? "translate-y-0" : "translate-y-full pointer-events-none"}`}
@@ -265,8 +359,9 @@ export function GlobalSettingsDrawer() {
           }
           isNarrow={isNarrow}
           onQueryChange={settingsSearch.setQuery}
-          onNavigate={() => {}}
+          onNavigate={settingsSearch.navigate}
           onClose={closeSettingsSearch}
+          inputRef={searchInputRef}
         />
       )}
 
@@ -328,13 +423,18 @@ export function GlobalSettingsDrawer() {
                 )}
                 <WorkflowDefaultsSection
                   settings={fullSettings}
+                  activePage={activePage}
+                  onPageChange={setActivePage}
                   countsByPage={settingsSearch.result.countsByPage}
                   searchActive={hasSearchQuery}
                   {...sectionProps}
                 />
               </div>
             ) : (
-              <div className="flex-1 overflow-y-auto overflow-x-hidden">
+              <div
+                data-settings-content-scroll
+                className="flex-1 overflow-y-auto overflow-x-hidden"
+              >
                 {hasNoSearchMatches && (
                   <div
                     role="status"
