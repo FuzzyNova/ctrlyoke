@@ -23,6 +23,8 @@ export interface HeadlessLogTailOptions {
   extractSessionIdFromStdout?: (chunk: string) => string | undefined;
   /** Provider-specific enrichment observer; never affects source selection. */
   onStdoutChunkObserved?: (chunk: string) => void;
+  /** Called once stdout has ended, so the observer can flush a partial record. */
+  onStdoutEnded?: () => void;
   extractSessionIdFromLogs?: (
     promptText: string,
     startTime: Date,
@@ -250,6 +252,13 @@ export class HeadlessLogTail {
       const remainder = this.stdoutRemainder;
       this.stdoutRemainder = "";
       this.captureSessionId(remainder);
+    }
+    try {
+      this.options.onStdoutEnded?.();
+    } catch (error) {
+      Log.trace(
+        `[HeadlessLogTail] stdout end observer failed: ${String(error)}`
+      );
     }
 
     // The post-exit read gets a fresh budget: the log is now written, so

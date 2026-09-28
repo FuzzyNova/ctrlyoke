@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by Codex during dead-method review
 - **Area:** `src/core/harness/antigravity/AntigravityStreamJsonUsage.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by the follow-up-divider fix session (`npm test`)
 - **Area:** `src/test/unit/McpServer.test.ts` (`resolves execution scope from env, run metadata, then cwd`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

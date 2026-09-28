@@ -12,6 +12,7 @@ import {
 } from "../../mcp-server";
 import { getGlobalMaxSteps } from "../../utils/QueueLimitUtils";
 import { ensureMcpStorageInitialized } from "../helpers/mcpStorage";
+import { removeTempDir } from "../helpers/tempWorkspace";
 import {
   MCP_APPEND_STEP_TOOL_NAME,
   type McpAppendStepArguments,
@@ -616,8 +617,9 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       );
     } finally {
       process.chdir(previousCwd);
-      await fs.rm(cwdRoot, { recursive: true, force: true });
-      await fs.rm(runRoot, { recursive: true, force: true });
+      // The just-left cwd can stay briefly locked on Windows.
+      removeTempDir(cwdRoot);
+      removeTempDir(runRoot);
     }
   });
 

@@ -563,6 +563,28 @@ suite("AntigravityCliProvider", () => {
     );
   });
 
+  test("flushes an unterminated final stream-json record when stdout ends", () => {
+    const provider = new AntigravityCliProvider();
+    const streamEvent =
+      '{"event":"step_update","step_update":{"step_type":"agent_response","usage":{"input_tokens":1,"output_tokens":2,"thinking_tokens":3,"total_tokens":3}}}';
+
+    provider.observeHeadlessStdout(streamEvent);
+    assert.strictEqual(
+      provider.logParser.extractResponse([
+        { type: "response.text", line: "answer" },
+      ]).metadata.usage,
+      undefined
+    );
+
+    provider.finishHeadlessStdout();
+    assert.strictEqual(
+      provider.logParser.extractResponse([
+        { type: "response.text", line: "answer" },
+      ]).metadata.usage?.reasoningOutputTokens,
+      3
+    );
+  });
+
   test("resets stream-json usage for each prompt", async () => {
     const provider = new AntigravityCliProvider();
     const streamEvent =

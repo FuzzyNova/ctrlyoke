@@ -370,6 +370,12 @@ export class AntigravityCliProvider implements ICliProvider {
     this.logParser.setStreamJsonUsage(this.streamJsonUsage.getSnapshot());
   }
 
+  /** Parse a terminal stream-json record that arrived without a newline. */
+  finishHeadlessStdout(): void {
+    this.streamJsonUsage.flush();
+    this.logParser.setStreamJsonUsage(this.streamJsonUsage.getSnapshot());
+  }
+
   buildInteractiveArgs(baseArgs: string[], promptText: string): string[] {
     return ["--prompt-interactive", promptText, ...baseArgs];
   }

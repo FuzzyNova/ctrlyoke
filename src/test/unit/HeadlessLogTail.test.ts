@@ -624,4 +624,28 @@ suite("HeadlessLogTail", () => {
 
     assert.deepStrictEqual(observed, ["init event", "terminal result event"]);
   });
+
+  test("signals stdout end once, after observed chunks", async () => {
+    const fake = createParser({ discoveries: ["session.log"] });
+    const calls: string[] = [];
+    const tail = new HeadlessLogTail({
+      parser: fake.parser,
+      promptText: "prompt",
+      startTime: new Date(),
+      extractSessionIdFromStdout: () => "thread-from-stdout",
+      onStdoutChunkObserved: (chunk) => calls.push(chunk),
+      onStdoutEnded: () => calls.push("ended"),
+      onStreamingEvents: () => {},
+      idlePollIntervalMs: 1000,
+      drainDeadlineMs: 2,
+      drainPollIntervalMs: 1,
+    });
+
+    await tail.start();
+    tail.onStdoutChunk("unterminated result");
+    await tail.finish();
+    await tail.finish();
+
+    assert.deepStrictEqual(calls, ["unterminated result", "ended"]);
+  });
 });

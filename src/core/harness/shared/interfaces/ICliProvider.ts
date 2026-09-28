@@ -172,6 +172,13 @@ export interface ICliProvider {
   observeHeadlessStdout?(chunk: string): void;
 
   /**
+   * Headless stdout has ended. Providers implementing
+   * observeHeadlessStdout() use this to flush an unterminated final record
+   * before the post-exit log read produces final output.
+   */
+  finishHeadlessStdout?(): void;
+
+  /**
    * Classify a process-spawn error that should trigger a retry without the
    * resume flag. Providers that do not implement this method default to
    * false; this belongs on the provider because it classifies transport
