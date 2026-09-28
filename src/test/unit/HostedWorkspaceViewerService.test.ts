@@ -1337,8 +1337,11 @@ suite("HostedWorkspaceViewerService", function () {
       }
 
       assert.deepStrictEqual(
-        runGit(root, "diff", "--cached", "--name-only")
-          .split("\n")
+        // -z keeps non-ASCII paths unquoted; --no-renames lists both sides of
+        // the staged rename regardless of the user's diff.renames config.
+        runGit(root, "diff", "--cached", "--name-only", "--no-renames", "-z")
+          .split("\0")
+          .filter(Boolean)
           .sort(),
         ["a b.txt", "café.txt", "new name.txt", "old name.txt"].sort()
       );
