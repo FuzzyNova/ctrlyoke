@@ -3501,7 +3501,8 @@ export class WorkflowExecutor {
       target,
       signedStepIndex,
       attemptIndex,
-      `${phase}: ${reason}`
+      `${phase}: ${reason}`,
+      result.timeout ? FAILURE_KINDS.TIMEOUT : undefined
     );
     return { outcome: WORKFLOW_EXECUTION_OUTCOMES.STOP };
   }
@@ -3511,7 +3512,8 @@ export class WorkflowExecutor {
     target: ExecutionTarget,
     signedStepIndex: number,
     attemptIndex: number,
-    reason: string
+    reason: string,
+    failureKind?: typeof FAILURE_KINDS.TIMEOUT
   ): Promise<void> {
     const runtime = this.getRuntime();
     runtime.failAttempt(target, attemptIndex, reason);
@@ -3523,7 +3525,7 @@ export class WorkflowExecutor {
           message: reason,
         });
       }
-      await this.promptQueue.failStep(target.stepIndex, reason);
+      await this.promptQueue.failStep(target.stepIndex, reason, failureKind);
     } else {
       await this.setFinalStepRuntime(context, {
         phase: FINAL_STEP_PHASES.FINAL_STEP,
