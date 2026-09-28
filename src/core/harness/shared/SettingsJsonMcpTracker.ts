@@ -944,22 +944,6 @@ export class SettingsJsonMcpTracker {
     }
   }
 
-  /**
-   * Return the value captured before the active lease was applied.
-   *
-   * Providers use this to forward a user's pre-existing configuration while
-   * ctrlyoke temporarily owns the setting. Callers should only use the value
-   * after successfully registering a lease.
-   */
-  getValueLeaseBaseline(workspaceRoot: string, key: string): unknown {
-    const settingsPath = this.getProjectConfigPath(workspaceRoot);
-    const lease = this.valueLeases.get(this.getLeaseKey(settingsPath, key));
-    if (!lease || !lease.baselineHadKey) {
-      return undefined;
-    }
-    return this.cloneJson(lease.baselineValue);
-  }
-
   private getLeaseKey(settingsPath: string, key: string): string {
     return `${settingsPath}::${key}`;
   }
@@ -1255,39 +1239,4 @@ export class SettingsJsonMcpTracker {
   // ============================================================
   // QUERY
   // ============================================================
-
-  /**
-   * Get the `--allowed-mcp-server-names` values for a prompt.
-   *
-   * Returns `undefined` when no ctrlyoke-managed servers are active (no
-   * restriction needed). Otherwise returns baseline servers plus the prompt's
-   * explicitly configured server names.
-   *
-   * @param workspaceRoot Workspace root used to resolve the project config
-   * @param promptServerNames MCP server names configured for this prompt
-   * @returns Array of allowed names, or undefined to skip the flag entirely
-   */
-  getAllowedServerNames(
-    workspaceRoot: string,
-    promptServerNames: string[]
-  ): string[] | undefined {
-    // If no ctrlyoke-managed servers are active, don't restrict
-    if (this.refCounts.size === 0) {
-      return undefined;
-    }
-
-    const projectSettings = this.getProjectConfigPath(workspaceRoot);
-    const userSettings = this.getUserConfigPath();
-    const baselineServers = new Set<string>();
-    for (const baseline of [
-      this.getBaseline(projectSettings),
-      this.getBaseline(userSettings),
-    ]) {
-      for (const name of baseline.servers) {
-        baselineServers.add(name);
-      }
-    }
-    const allowed = new Set([...baselineServers, ...promptServerNames]);
-    return [...allowed];
-  }
 }

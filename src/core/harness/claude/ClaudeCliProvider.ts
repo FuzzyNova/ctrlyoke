@@ -460,10 +460,6 @@ export class ClaudeCliProvider implements ICliProvider {
     return this.statusLineSidecar;
   }
 
-  getLatestStatuslineSnapshot() {
-    return this.statusLineSidecar?.getLatestSnapshot();
-  }
-
   /**
    * Validate model is supported by Claude CLI, fallback to default if not
    */

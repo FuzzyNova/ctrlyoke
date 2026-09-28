@@ -30,14 +30,6 @@ export class ClaudeStatuslineSidecar implements CliExecutionSidecar {
     });
   }
 
-  getLatestSnapshot(): ClaudeStatuslineSnapshot | undefined {
-    return this.watcher.getLatestSnapshot();
-  }
-
-  async readLatestSnapshot(): Promise<ClaudeStatuslineSnapshot | undefined> {
-    return this.watcher.readLatestSnapshot();
-  }
-
   stop(): void {
     this.watcher.stop();
   }
