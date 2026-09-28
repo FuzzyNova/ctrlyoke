@@ -1213,8 +1213,8 @@ function assertStepIndex(
 
 /**
  * Keep addressed Node-only mutations aligned with PromptQueue's execution
- * boundary. A pending rewind owns its own suffix policy, so it deliberately
- * bypasses this execution-head check.
+ * boundary. The persisted executed prefix and terminal step states remain
+ * immutable after execution stops; only the in-flight head check is transient.
  */
 function assertEditableDuringExecution(
   source: WorkingFile,
@@ -1222,20 +1222,24 @@ function assertEditableDuringExecution(
   index: number,
   operation: string
 ): void {
-  if (source._runtime?.pendingRewind) return;
-  if (!isExecutionActiveState(source._runtime?.executionState)) return;
-
   const currentIndex = source._runtime?.currentIndex ?? 0;
   const step = steps[index];
-  assertStepMutable(
-    step,
-    operation,
-    index < currentIndex ? "completedPrefix" : undefined
-  );
+  const isExecutedPrefix = index < currentIndex;
+  const hasTerminalStatus = step?._runtime?.terminalStatus !== undefined;
+  if (isExecutedPrefix || hasTerminalStatus) {
+    assertStepMutable(step, operation, "completedPrefix");
+    if (!hasStarted(step)) {
+      // Older or partial working files may carry the run boundary or terminal
+      // status without the timestamps assertStepMutable normally uses as proof.
+      throw new Error(`Cannot ${operation} a completed step`);
+    }
+  }
+
+  if (!isExecutionActiveState(source._runtime?.executionState)) return;
+  assertStepMutable(step, operation);
   if (
-    index < currentIndex ||
-    (index === currentIndex &&
-      isInFlightExecutionState(source._runtime?.executionState))
+    index === currentIndex &&
+    isInFlightExecutionState(source._runtime?.executionState)
   ) {
     // Legacy working files may predate per-step claim metadata. Keep the
     // execution-head boundary as a compatibility backstop until they claim.

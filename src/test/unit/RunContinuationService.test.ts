@@ -875,6 +875,113 @@ suite("RunContinuationService addressed step mutations", () => {
     );
   });
 
+  test("protects executed steps in finished runs and allows an unexecuted tail", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-step-finished-mutation-")
+    );
+    const repository = new WorkflowLineageRepository();
+
+    await seedRun(EXECUTION_STATES.COMPLETED, 2, [
+      {
+        type: "script",
+        script: "exit 0",
+        _runtime: { completedAt: 10, terminalStatus: "completed" },
+      },
+      {
+        type: "script",
+        script: "exit 0",
+        _runtime: { completedAt: 20, terminalStatus: "completed" },
+      },
+    ]);
+    await assert.rejects(
+      RunContinuationService.editStepAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        0,
+        { updates: { script: "exit 1" } },
+        1,
+        repository
+      ),
+      /completed step/i
+    );
+    await assert.rejects(
+      RunContinuationService.removeStepAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        0,
+        1,
+        repository
+      ),
+      /completed step/i
+    );
+
+    await seedRun(EXECUTION_STATES.ERROR, 1, [
+      {
+        type: "script",
+        script: "exit 1",
+        // Terminal status alone must protect this step in a stopped run.
+        _runtime: { terminalStatus: "failed" },
+      },
+      { type: "script", script: "exit 0" },
+    ]);
+    await assert.rejects(
+      RunContinuationService.editStepAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        0,
+        { updates: { script: "exit 0" } },
+        1,
+        repository
+      ),
+      /completed step/i
+    );
+    await assert.rejects(
+      RunContinuationService.removeStepAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        0,
+        1,
+        repository
+      ),
+      /completed step/i
+    );
+
+    await seedRun(EXECUTION_STATES.STOPPED, 1, [
+      {
+        type: "script",
+        script: "exit 0",
+        _runtime: { completedAt: 10, terminalStatus: "completed" },
+      },
+      { type: "script", script: "exit 0" },
+    ]);
+    const edited = await RunContinuationService.editStepAtRun(
+      workspace,
+      workflowKey,
+      runRef,
+      1,
+      { updates: { script: "exit 2" } },
+      1,
+      repository
+    );
+    assert.strictEqual(
+      (edited.workingFile.steps![1] as { script: string }).script,
+      "exit 2"
+    );
+    const removed = await RunContinuationService.removeStepAtRun(
+      workspace,
+      workflowKey,
+      runRef,
+      1,
+      2,
+      repository
+    );
+    assert.strictEqual(removed.workingFile.steps?.length, 1);
+  });
+
   test("returns placement relocation when next lands inside a parallel group", async () => {
     workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-step-placement-")

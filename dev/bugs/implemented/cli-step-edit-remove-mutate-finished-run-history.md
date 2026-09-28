@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-27 by the long-running bug-fix workflow final step (claude-cli, helper agent)
 - **Area:** `src/core/orchestration/RunContinuationService.ts` (`assertEditableDuringExecution`, edit ~778, remove ~912, reorder ~990)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
