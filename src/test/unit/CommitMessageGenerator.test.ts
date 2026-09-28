@@ -69,9 +69,9 @@ suite("CommitMessageGenerator", () => {
       assert.deepStrictEqual(parseAtReferences(prompt), []);
       assert.deepStrictEqual(parseInlinePriorContextRefs(prompt), []);
     } finally {
-      await fs.rm(cwd, { recursive: true, force: true, maxRetries: 5 }).catch(
-        () => {}
-      );
+      await fs
+        .rm(cwd, { recursive: true, force: true, maxRetries: 5 })
+        .catch(() => {});
     }
   });
 
@@ -193,15 +193,44 @@ suite("CommitMessageGenerator", () => {
       assert.ok(result.diff.includes("staged line"));
       assert.ok(!result.diff.includes("small unstaged edit"));
     } finally {
-      await fs.rm(cwd, { recursive: true, force: true, maxRetries: 5 }).catch(
-        () => {}
-      );
+      await fs
+        .rm(cwd, { recursive: true, force: true, maxRetries: 5 })
+        .catch(() => {});
     }
   });
 
   test("does not treat git execution failures as an empty staged diff", async () => {
-    const cwd = path.join(os.tmpdir(), `ctrlyoke-missing-git-dir-${Date.now()}`);
+    const cwd = path.join(
+      os.tmpdir(),
+      `ctrlyoke-missing-git-dir-${Date.now()}`
+    );
 
     await assert.rejects(new CommitMessageGenerator().getDiff(cwd));
+  });
+
+  test("includes an untracked non-ASCII filename in the generated diff", async () => {
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "cy-commit-cafe-"));
+    try {
+      await execFileAsync("git", ["init"], { cwd });
+      await execFileAsync("git", ["config", "user.name", "CtrlYoke Test"], {
+        cwd,
+      });
+      await execFileAsync("git", ["config", "user.email", "test@example.com"], {
+        cwd,
+      });
+      await fs.writeFile(path.join(cwd, "café.txt"), "hello\n", "utf8");
+
+      const diff = await new CommitMessageGenerator().getDiff(cwd);
+
+      assert.ok(diff);
+      assert.strictEqual(diff.staged, false);
+      assert.strictEqual(diff.includesUntrackedFiles, true);
+      assert.ok(diff.diff.includes("café.txt"));
+      assert.ok(diff.diff.includes("+hello"));
+    } finally {
+      await fs
+        .rm(cwd, { recursive: true, force: true, maxRetries: 5 })
+        .catch(() => {});
+    }
   });
 });

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude)
 - **Area:** `src/git/CommitMessageGenerator.ts`, `src/utils/GitUtils.ts`, `src/extension.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

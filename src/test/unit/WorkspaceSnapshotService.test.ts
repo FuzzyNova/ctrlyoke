@@ -36,7 +36,10 @@ suite("WorkspaceSnapshotService", function () {
     runGit(["config", "user.name", "ctrlyoke Tests"]);
     runGit(["config", "user.email", "ctrlyoke-tests@example.com"]);
     await writeWorkspaceFile("tracked.txt", "base\n");
+    await writeWorkspaceFile("old.txt", "rename source\n");
+    await writeWorkspaceFile("café.txt", "coffee\n");
     runGit(["add", "tracked.txt"]);
+    runGit(["add", "old.txt", "café.txt"]);
     runGit(["commit", "-m", "Initial commit"]);
   }
 
@@ -80,6 +83,132 @@ suite("WorkspaceSnapshotService", function () {
 
     assert.strictEqual(afterState.segments[0].files.size, 0);
     assert.deepStrictEqual(changes, []);
+  });
+
+  test("records a deleted tracked file and its HEAD content for undo", async () => {
+    const before = await snapshotService.captureWorkspaceState(
+      workspaceRoot,
+      SNAPSHOT_STRATEGIES.GIT
+    );
+    await fs.rm(path.join(workspaceRoot, "tracked.txt"));
+
+    const after = await snapshotService.captureWorkspaceState(
+      workspaceRoot,
+      SNAPSHOT_STRATEGIES.GIT
+    );
+    const changes = await snapshotService.computeSnapshotChanges(
+      before,
+      after,
+      workspaceRoot
+    );
+
+    assert.strictEqual(changes.length, 1);
+    assert.strictEqual(changes[0]?.changeType, "deleted");
+    assert.strictEqual(changes[0]?.contentToRestore, "base\n");
+  });
+
+  test("captures files inside a newly created untracked directory", async () => {
+    const before = await snapshotService.captureWorkspaceState(
+      workspaceRoot,
+      SNAPSHOT_STRATEGIES.GIT
+    );
+    await writeWorkspaceFile("newdir/a.ts", "export const value = 1;\n");
+
+    const after = await snapshotService.captureWorkspaceState(
+      workspaceRoot,
+      SNAPSHOT_STRATEGIES.GIT
+    );
+    const changes = await snapshotService.computeSnapshotChanges(
+      before,
+      after,
+      workspaceRoot
+    );
+
+    assert.deepStrictEqual(
+      changes.map(({ path: filePath, changeType }) => ({
+        filePath,
+        changeType,
+      })),
+      [{ filePath: "newdir/a.ts", changeType: "created" }]
+    );
+  });
+
+  test("records staged renames as a deletion and creation", async () => {
+    const before = await snapshotService.captureWorkspaceState(
+      workspaceRoot,
+      SNAPSHOT_STRATEGIES.GIT
+    );
+    runGit(["mv", "old.txt", "new.txt"]);
+
+    const after = await snapshotService.captureWorkspaceState(
+      workspaceRoot,
+      SNAPSHOT_STRATEGIES.GIT
+    );
+    const changes = await snapshotService.computeSnapshotChanges(
+      before,
+      after,
+      workspaceRoot
+    );
+
+    assert.deepStrictEqual(
+      changes
+        .map(({ path: filePath, changeType }) => ({ filePath, changeType }))
+        .sort((a, b) => a.filePath.localeCompare(b.filePath)),
+      [
+        { filePath: "new.txt", changeType: "created" },
+        { filePath: "old.txt", changeType: "deleted" },
+      ]
+    );
+    assert.strictEqual(
+      changes.find(({ path: filePath }) => filePath === "old.txt")
+        ?.contentToRestore,
+      "rename source\n"
+    );
+  });
+
+  test("preserves non-ASCII paths in dirty snapshots", async () => {
+    const before = await snapshotService.captureWorkspaceState(
+      workspaceRoot,
+      SNAPSHOT_STRATEGIES.GIT
+    );
+    await writeWorkspaceFile("café.txt", "espresso\n");
+
+    const after = await snapshotService.captureWorkspaceState(
+      workspaceRoot,
+      SNAPSHOT_STRATEGIES.GIT
+    );
+    const changes = await snapshotService.computeSnapshotChanges(
+      before,
+      after,
+      workspaceRoot
+    );
+
+    assert.strictEqual(changes[0]?.path, "café.txt");
+    assert.strictEqual(changes[0]?.changeType, "modified");
+  });
+
+  test("preserves non-ASCII paths in committed changes", async () => {
+    const before = await snapshotService.captureWorkspaceState(
+      workspaceRoot,
+      SNAPSHOT_STRATEGIES.GIT
+    );
+    await writeWorkspaceFile("naïve.txt", "committed during prompt\n");
+    runGit(["add", "naïve.txt"]);
+    runGit(["commit", "-m", "Add naïve file"]);
+
+    const after = await snapshotService.captureWorkspaceState(
+      workspaceRoot,
+      SNAPSHOT_STRATEGIES.GIT
+    );
+    const changes = await snapshotService.computeSnapshotChanges(
+      before,
+      after,
+      workspaceRoot
+    );
+
+    assert.strictEqual(changes.length, 1);
+    assert.strictEqual(changes[0]?.path, "naïve.txt");
+    assert.strictEqual(changes[0]?.changeType, "created");
   });
 
   test("keeps committed tracked files as modified when the prompt changed their content before cleaning the tree", async () => {

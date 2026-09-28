@@ -25,6 +25,8 @@ import {
   isCommitAncestor,
   getBlobBytes,
   getFileHistoryCommits,
+  getStashFiles,
+  getWorkingTreeDiff,
   getRecentCommits,
   getChangedFilesWithBinaryStatus,
   GitLocationMemo,
@@ -133,6 +135,26 @@ suite("GitUtils.gitRefExists", function () {
       exists: false,
       message: "git context not found",
     });
+  });
+
+  test("lists untracked non-ASCII paths in working-tree context", async () => {
+    await writeWorkspaceFile("café.txt", "hello\n");
+    await writeWorkspaceFile("nested folder/naïve.txt", "nested\n");
+
+    const diff = await getWorkingTreeDiff(workspaceRoot);
+
+    assert.ok(diff.includes("café.txt"));
+    assert.ok(diff.includes("nested folder/naïve.txt"));
+  });
+
+  test("lists non-ASCII tracked paths in a stash", async () => {
+    await writeWorkspaceFile("café.txt", "base\n");
+    runGit(["add", "café.txt"]);
+    runGit(["commit", "-m", "Add café"]);
+    await writeWorkspaceFile("café.txt", "stashed change\n");
+    runGit(["stash", "push", "-m", "café stash"]);
+
+    assert.deepStrictEqual(await getStashFiles(workspaceRoot, 0), ["café.txt"]);
   });
 
   test("swallows git failures and reports the ref as missing", async () => {

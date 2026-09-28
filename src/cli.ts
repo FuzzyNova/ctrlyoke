@@ -74,6 +74,7 @@ import {
   resolvePackageRootFromEntry,
 } from "./utils/CtrlyokeCliPath";
 import { aboutCommand } from "./cli/CliAboutCommand";
+import { commitGeneratedChanges } from "./cli/CommitCommand";
 import { noteCliInstallation } from "./cli/CliInstallationNotice";
 import {
   applyRunStateRefusal,
@@ -421,6 +422,10 @@ program
   .option(
     "--print-only",
     "Print the generated message to stdout without committing"
+  )
+  .option(
+    "--all",
+    "Stage all changes before committing (including unstaged and untracked files)"
   )
   .option("-y, --yes", "Skip confirmation prompt and commit automatically")
   .action(async (options: CommitCommandOptions) => {
@@ -2521,6 +2526,7 @@ interface CommitCommandOptions {
   cwd?: string;
   hint?: string;
   printOnly?: boolean;
+  all?: boolean;
   yes?: boolean;
 }
 
@@ -2606,30 +2612,42 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
   console.error(chalk.dim("─".repeat(52)));
   console.error();
 
-  if (!diffResult.staged) {
+  if (!diffResult.staged && !options.all) {
     console.error(
       chalk.yellow(
-        "Note: Generated from unstaged changes. Stage files before committing."
+        "Nothing is staged. Stage files and re-run, or use --all to stage all changes."
       )
     );
-    console.error();
-  }
-
-  if (!options.yes) {
-    const confirmed = await promptYesNo("Commit with this message? [y/N] ");
-    if (!confirmed) {
-      console.error("Aborted.");
-      process.exit(0);
-    }
+    process.exit(CLI_USAGE_EXIT_CODE);
   }
 
   const { GitCommitter } = await import("./git/GitCommitter");
   const committer = new GitCommitter();
   try {
-    await committer.commit(message, workingDir);
+    const result = await commitGeneratedChanges(
+      diffResult,
+      message,
+      workingDir,
+      options,
+      committer,
+      () => promptYesNo("Commit with this message? [y/N] ")
+    );
+    if (result === "aborted") {
+      console.error("Aborted.");
+      process.exit(0);
+    }
     console.error(chalk.green("✓ Committed successfully"));
   } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err);
+    const execError = err as NodeJS.ErrnoException & {
+      stdout?: string | Buffer;
+      stderr?: string | Buffer;
+    };
+    const errorDetails = [
+      err instanceof Error ? err.message : String(err),
+      execError.stdout?.toString().trim(),
+      execError.stderr?.toString().trim(),
+    ].filter(Boolean);
+    const errMsg = errorDetails.join("\n");
     console.error(chalk.red(`Error: ${errMsg}`));
     process.exit(1);
   }

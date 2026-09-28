@@ -86,6 +86,7 @@ import {
   getRecentCommits,
   getFileHistoryCommits,
   resolveCommit,
+  parseGitPorcelainV1Z,
   getWorkingTreeDiff,
   getStagedDiff,
   getStashDiff,
@@ -1678,32 +1679,11 @@ export class HostedWorkspaceViewerService {
     const trustedRoots = this.trustedRoots;
     const files: WorkspaceScmFile[] = [];
 
-    const nulDelimited = output.includes("\0");
-    const records = nulDelimited ? output.split("\0") : output.split(/\r?\n/);
-    for (let index = 0; index < records.length; index++) {
-      const record = records[index];
-      if (!record || record.length < 4) {
-        continue;
-      }
-      const x = record[0] ?? " ";
-      const y = record[1] ?? " ";
-      let filePath = record.slice(3);
-
-      // In -z mode rename/copy records list the new path first and the
-      // original path in the following NUL-terminated field.
-      let renamedFrom: string | undefined;
-      if (x === "R" || y === "R" || x === "C" || y === "C") {
-        if (nulDelimited) {
-          renamedFrom = records[index + 1];
-          index++;
-        } else {
-          const separatorIndex = filePath.indexOf(" -> ");
-          if (separatorIndex >= 0) {
-            renamedFrom = filePath.slice(0, separatorIndex);
-            filePath = filePath.slice(separatorIndex + 4);
-          }
-        }
-      }
+    const entries = parseGitPorcelainV1Z(output);
+    for (const entry of entries) {
+      const { x, y } = entry;
+      const filePath = entry.path;
+      const renamedFrom = entry.originalPath;
 
       const normalized = normalizeScmPath(decodeGitPath(filePath));
       if (!normalized) {
