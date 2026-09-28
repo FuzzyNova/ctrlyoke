@@ -120,11 +120,6 @@ export class RuntimeTrustedRootRegistry {
     if (grant.owners.size === 0) this.grants.delete(key);
   }
 
-  /** Test/host-lifecycle escape hatch; no filesystem state is touched. */
-  clear(): void {
-    this.grants.clear();
-  }
-
   private async requireDirectory(value: string): Promise<string> {
     const resolved = path.resolve(value);
     const stat = await fs.promises.stat(resolved);

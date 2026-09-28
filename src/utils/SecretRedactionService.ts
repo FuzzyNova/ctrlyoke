@@ -15,10 +15,6 @@ export class RunSecretRedactor {
     }
   }
 
-  redactText(text: string): string {
-    return redactPreviewText(text, [], [...this.exactSecrets]).text;
-  }
-
   clear(): void {
     this.exactSecrets.clear();
   }

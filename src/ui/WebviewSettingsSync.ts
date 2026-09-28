@@ -526,13 +526,6 @@ export class WebviewSettingsSync {
   }
 
   /**
-   * Return the current harness status map (for in-process callers).
-   */
-  getHarnessStatus(): Record<string, HarnessStatus> {
-    return this.harnessStatus;
-  }
-
-  /**
    * Update a single harness availability status and push the change to the UI.
    */
   notifyHarnessAvailability(

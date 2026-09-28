@@ -344,24 +344,6 @@ export class EndConditionHandler {
     }
   }
 
-  /**
-   * Backward-compatible entry point for callers that start with a validation
-   * failure. The implementation is shared with pass-retry handling.
-   */
-  async handleValidationFailureIterative(
-    prompt: PromptStep,
-    initialEvaluationResult: EvaluationResult,
-    retryContext: RetryContext,
-    sendRetryPrompt: SendRetryPromptCallback
-  ): Promise<EndConditionHandlerResult> {
-    return this.handleEndConditionIterative(
-      prompt,
-      initialEvaluationResult,
-      retryContext,
-      sendRetryPrompt
-    );
-  }
-
   private async sendRetryPromptAndEvaluate(
     prompt: PromptStep,
     evaluationResult: EvaluationResult,

@@ -1774,16 +1774,6 @@ export class WorktreeManager {
     });
   }
 
-  /** Read-only activation discovery. Returned infos do not own a lease/trust. */
-  public async discoverRecoverableManagedWorktrees(
-    options: Omit<RecoverManagedWorktreeOptions, "branchName" | "acquireLease">
-  ): Promise<WorktreeInfo[]> {
-    return this.discoverRecoverableManagedWorktreesIn(
-      await this.resolveRepositoryContext(options.sourceCheckoutRoot),
-      options
-    );
-  }
-
   private async discoverRecoverableManagedWorktreesIn(
     { repositoryRoot: sourceCheckoutRoot, commonDirectory }: RepositoryContext,
     options: Omit<RecoverManagedWorktreeOptions, "branchName" | "acquireLease">
@@ -2720,11 +2710,6 @@ export class WorktreeManager {
       ...(setupOutcome ? { setupOutcome } : {}),
     });
     return info;
-  }
-
-  /** Release the lease held by a resolved worktree. No Git cleanup is performed. */
-  public async releaseWorktree(info: WorktreeInfo): Promise<void> {
-    await info.lease?.release();
   }
 
   /** Release process-session trust after the run/session is no longer loaded. */

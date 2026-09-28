@@ -236,14 +236,6 @@ export class ExecutionRootLeaseManager {
     return ExecutionRootLeaseManager.acquireLease(request, git);
   }
 
-  async acquireLease(
-    request = this.defaultRequest,
-    git?: GitLocationLookup
-  ): Promise<ExecutionLeaseHandle> {
-    if (!request) throw new Error("An execution lease request is required");
-    return ExecutionRootLeaseManager.acquireLease(request, git);
-  }
-
   static async acquire(
     request: ExecutionLeaseRequest,
     git?: GitLocationLookup
@@ -395,11 +387,6 @@ export class ExecutionRootLeaseManager {
   static isLeaseStale(
     lease: Pick<ExecutionLease, "pid" | "lastHeartbeat">
   ): boolean {
-    return isOwnerStale(lease.pid, lease.lastHeartbeat);
-  }
-
-  /** Expose the process check without creating another staleness model. */
-  static isProcessAlive(pid: number): boolean {
-    return isProcessAlive(pid);
+    return isOwnerStale(lease.pid, lease.lastHeartbeat, Date.now(), isProcessAlive);
   }
 }

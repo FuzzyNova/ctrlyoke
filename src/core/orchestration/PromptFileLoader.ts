@@ -39,7 +39,6 @@ import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
  */
 export class PromptFileLoader {
   private readonly lineageRepository = new WorkflowLineageRepository();
-  private lastCompatibilityDiagnostics: CompatibilityDiagnostic[] = [];
   private lastMissingAssetDirectories: string[] = [];
   private lastSchemaWarnings: WorkflowValidationWarning[] = [];
 
@@ -59,10 +58,6 @@ export class PromptFileLoader {
       () => undefined
     )
   ) {}
-
-  getLastCompatibilityDiagnostics(): readonly CompatibilityDiagnostic[] {
-    return this.lastCompatibilityDiagnostics;
-  }
 
   getLastMissingAssetDirectories(): readonly string[] {
     return this.lastMissingAssetDirectories;
@@ -506,13 +501,11 @@ export class PromptFileLoader {
     workflow: PromptFile
   ): Promise<void> {
     if (!this.validateCompatibility) {
-      this.lastCompatibilityDiagnostics = [];
       this.lastMissingAssetDirectories = [];
       return;
     }
-    this.lastCompatibilityDiagnostics =
-      await this.validateCompatibility(workflow);
-    this.onCompatibilityDiagnostics?.(this.lastCompatibilityDiagnostics);
+    const diagnostics = await this.validateCompatibility(workflow);
+    this.onCompatibilityDiagnostics?.(diagnostics);
   }
 
   /**

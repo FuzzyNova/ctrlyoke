@@ -172,10 +172,6 @@ export class ParallelGroupRun<TContext extends object> {
     } as TContext;
   }
 
-  public get isFailFastTriggered(): boolean {
-    return this.failFastTriggered;
-  }
-
   /** Whether this run can still accept a late member. */
   public get isAdmissionOpen(): boolean {
     return this.admissionOpen;

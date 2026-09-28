@@ -339,22 +339,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     });
   }
 
-  /** Clear a joined group's durable admission projection. */
-  public async clearActiveParallelGroup(groupId?: string): Promise<void> {
-    await this.workingFileManager.runInQueue(async () => {
-      if (
-        !this.activeParallelGroupRuntime ||
-        (groupId !== undefined &&
-          this.activeParallelGroupRuntime.groupId !== groupId)
-      ) {
-        return;
-      }
-      this.activeParallelGroupRuntime = undefined;
-      this.emitStateChange();
-      await this.workingFileManager.updateWorkingFileDirect();
-    });
-  }
-
   public markInFlightPromptCancelled(): void {
     const currentIndex = this.state.currentIndex;
     this.state.results.forEach((result, index) => {
@@ -1057,23 +1041,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
     this.completeStepState(stepIndex, metadata);
     this.emitStateChange();
-  }
-
-  /**
-   * Mark current prompt as skipped and move to next.
-   * Persists SKIPPED in _runtime so reload/restore preserves the terminal state.
-   */
-  async skipCurrentAndMoveNext(): Promise<void> {
-    if (!this.hasNext()) {
-      return;
-    }
-
-    const index = this.state.currentIndex;
-    await this.skipStep(index);
-    this.state.currentIndex++;
-    this.emitStateChange();
-
-    await this.updateWorkingFile();
   }
 
   async skipStep(

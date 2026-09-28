@@ -1172,13 +1172,6 @@ export class CtrlYokeWebviewProvider
   }
 
   /**
-   * Expose the settings sync instance for in-process callers (e.g. LM Tools).
-   */
-  public getSettingsSync(): WebviewSettingsSync {
-    return this.settingsSync;
-  }
-
-  /**
    * Track the running server URL so READY reconnects the webview when it reloads
    * while the server is up. Pass undefined when the server stops.
    */

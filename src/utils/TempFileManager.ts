@@ -201,43 +201,6 @@ export class TempFileManager {
   }
 
   /**
-   * Create a single categorized temp file with a typed filename.
-   *
-   * File naming: `<ts>-<sanitized-name>[-<step>].<category>[.<part>].prompt.md`
-   *
-   * Examples:
-   *   createCategoryFile(content, 'agent', 'path/to/my-flow.ctrlyoke.yaml', 1, 2)
-   *   → "1234567890-my-flow-1.agent.2.prompt.md"
-   *
-   *   createCategoryFile(content, 'skills', 'path/to/my-flow.ctrlyoke.yaml', 1)
-   *   → "1234567890-my-flow-1.skills.prompt.md"
-   *
-   * @param content File content to write
-   * @param category Content category ('agent' | 'secrets' | 'skills' | 'excerpts' | 'prompt')
-   * @param originalFilePath Optional path to original workflow file (for meaningful names)
-   * @param stepNumber Optional 1-based step number
-   * @param partNumber Optional 1-based part number for split files
-   * @returns Absolute path to created file
-   */
-  async createCategoryFile(
-    content: string,
-    category: TempFileCategory,
-    originalFilePath?: string,
-    stepNumber?: number,
-    partNumber?: number
-  ): Promise<string> {
-    await this.ensureTempDir();
-    const filePath = this.getCategoryFilePath(
-      category,
-      originalFilePath,
-      stepNumber,
-      partNumber
-    );
-    await this.writeCategoryFile(filePath, content);
-    return filePath;
-  }
-
-  /**
    * Return the path a categorized file would use without touching the file
    * system. The caller can pass the result to writeCategoryFile later.
    */
@@ -265,62 +228,6 @@ export class TempFileManager {
     } catch (err) {
       Log.error(`[TempFileManager] Failed to write category temp file: ${err}`);
       throw new Error(`Cannot write category temp file: ${filePath}`);
-    }
-  }
-
-  /**
-   * Create multiple categorized temp files for a split content section.
-   * Returns array of absolute paths in order.
-   *
-   * File naming for split files uses 1-based part numbers:
-   *   "1234-my-flow-1.agent.1.md"
-   *   "1234-my-flow-1.agent.2.md"
-   *
-   * @param chunks Array of content chunks
-   * @param category Content category ('agent' | 'excerpts')
-   * @param originalFilePath Optional path to original workflow file
-   * @param stepNumber Optional 1-based step number
-   * @returns Array of absolute file paths
-   */
-  async createCategorySplitFiles(
-    chunks: string[],
-    category: TempFileCategory,
-    originalFilePath?: string,
-    stepNumber?: number
-  ): Promise<string[]> {
-    if (!chunks || chunks.length === 0) {
-      throw new Error("Cannot create category split files: no chunks provided");
-    }
-    const validChunks = chunks.filter((c) => c.trim().length > 0);
-    if (validChunks.length === 0) {
-      throw new Error(
-        "Cannot create category split files: all chunks are empty"
-      );
-    }
-
-    const filePaths: string[] = [];
-    try {
-      for (let i = 0; i < validChunks.length; i++) {
-        // Single chunk omits the part number (same as createSplitPromptFiles behaviour)
-        const partNumber = validChunks.length > 1 ? i + 1 : undefined;
-        const filePath = await this.createCategoryFile(
-          validChunks[i],
-          category,
-          originalFilePath,
-          stepNumber,
-          partNumber
-        );
-        filePaths.push(filePath);
-      }
-      return filePaths;
-    } catch (err) {
-      Log.error(
-        `[TempFileManager] Failed to create category split files: ${err}`
-      );
-      await this.deleteFiles(filePaths);
-      throw new Error(
-        `Cannot create category split temp files: ${err instanceof Error ? err.message : String(err)}`
-      );
     }
   }
 
