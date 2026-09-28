@@ -1338,7 +1338,12 @@ suite("HostedWorkspaceViewerService", function () {
 
       const svc = new HostedWorkspaceViewerService(root);
       const result = await svc.getStatus();
-      const expectedPaths = ["a b.txt", "café.txt", "new name.txt"];
+      const expectedPaths = [
+        "a b.txt",
+        "café.txt",
+        "new name.txt",
+        "old name.txt",
+      ];
       assert.deepStrictEqual(
         result.files.map((file) => file.path).sort(),
         expectedPaths.sort()
@@ -1808,7 +1813,7 @@ suite("HostedWorkspaceViewerService", function () {
       const branch = runGit(root, "branch", "--show-current");
       // git log --decorate then reports both the remote branch and "origin/HEAD"
       // on the same commit.
-      runGit(root, "remote", "set-head", "origin", "-a");
+      runGit(root, "remote", "set-head", "origin", branch);
 
       const svc = new HostedWorkspaceViewerService(root);
       const result = await svc.getCommitLog();

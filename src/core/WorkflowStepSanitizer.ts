@@ -580,9 +580,18 @@ export function mergeWorkflowStepUpdate(
   incomingStep: Partial<WorkflowStep>,
   clearProperties?: string[]
 ): WorkflowStep {
+  const incomingIsScript =
+    incomingStep.type !== undefined
+      ? incomingStep.type === STEP_TYPES.SCRIPT
+      : Object.prototype.hasOwnProperty.call(incomingStep, "script")
+        ? true
+        : Object.prototype.hasOwnProperty.call(incomingStep, "prompt")
+          ? false
+          : undefined;
+
   if (
-    incomingStep.type !== undefined &&
-    isScriptStep(existingStep) !== (incomingStep.type === STEP_TYPES.SCRIPT)
+    incomingIsScript !== undefined &&
+    isScriptStep(existingStep) !== incomingIsScript
   ) {
     return incomingStep as WorkflowStep;
   }

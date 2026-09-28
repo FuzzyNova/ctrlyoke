@@ -500,9 +500,9 @@ function parseTomlMcpServerKey(
   }
 
   let table: "server" | "env" | "headers" = "server";
-  if (remainder.endsWith(".env")) {
-    table = "env";
-    remainder = remainder.slice(0, -".env".length);
+  if (remainder.endsWith(`.${MCP_CONFIG_KEYS.ENV}`)) {
+    table = MCP_CONFIG_KEYS.ENV;
+    remainder = remainder.slice(0, -`.${MCP_CONFIG_KEYS.ENV}`.length);
   } else if (remainder.endsWith(".headers")) {
     table = "headers";
     remainder = remainder.slice(0, -".headers".length);
@@ -573,9 +573,15 @@ function normalizeCodexToml(
     const key = line.slice(0, eqIndex).trim();
     const value = line.slice(eqIndex + 1).trim();
 
-    if (currentTable === "env" || currentTable === "headers") {
+    if (
+      currentTable === MCP_CONFIG_KEYS.ENV ||
+      currentTable === MCP_CONFIG_KEYS.HEADERS
+    ) {
       if (value.startsWith(`"`) || value.startsWith(`'`)) {
-        const target = currentTable === "env" ? "env" : "headers";
+        const target =
+          currentTable === MCP_CONFIG_KEYS.ENV
+            ? MCP_CONFIG_KEYS.ENV
+            : MCP_CONFIG_KEYS.HEADERS;
         currentConfig[target] = currentConfig[target] ?? {};
         currentConfig[target]![key] = unquoteTomlString(value);
       }
