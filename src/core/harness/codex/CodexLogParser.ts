@@ -224,6 +224,15 @@ export class CodexLogParser extends BaseLogParser {
     let cachedInputTokens = 0;
     let reasoningOutputTokens = 0;
     let providerTotalTokens: number | undefined;
+    let startingTokenUsage:
+      | {
+          inputTokens: number;
+          outputTokens: number;
+          cachedInputTokens: number;
+          reasoningOutputTokens: number;
+          totalTokens?: number;
+        }
+      | undefined;
     // Per-turn (last) usage — used for context window (not cumulative billing total)
     let lastTurnContextWindowUsed: number | undefined;
     let modelContextWindow: number | undefined;
@@ -270,6 +279,36 @@ export class CodexLogParser extends BaseLogParser {
           reasoningOutputTokens = total.reasoning_output_tokens || 0;
           if (typeof total.total_tokens === "number") {
             providerTotalTokens = total.total_tokens;
+          }
+          // A resumed rollout may replay the session's prior cumulative total
+          // before producing this step's first token_count. Recognize that
+          // snapshot when the cumulative total is larger than the last-turn
+          // total (or no last-turn usage is present). A fresh session's first
+          // total matches its first turn, so its step baseline stays zero.
+          const cumulativeTotal =
+            typeof total.total_tokens === "number"
+              ? total.total_tokens
+              : totalInputTokens + totalOutputTokens;
+          const lastTurnTotal = info.last_token_usage
+            ? typeof info.last_token_usage.total_tokens === "number"
+              ? info.last_token_usage.total_tokens
+              : (info.last_token_usage.input_tokens || 0) +
+                (info.last_token_usage.output_tokens || 0)
+            : undefined;
+          if (
+            !startingTokenUsage &&
+            (lastTurnTotal === undefined || cumulativeTotal > lastTurnTotal)
+          ) {
+            startingTokenUsage = {
+              inputTokens: totalInputTokens,
+              outputTokens: totalOutputTokens,
+              cachedInputTokens,
+              reasoningOutputTokens,
+              totalTokens:
+                typeof total.total_tokens === "number"
+                  ? total.total_tokens
+                  : undefined,
+            };
           }
         }
         if (info?.last_token_usage) {
@@ -575,13 +614,35 @@ export class CodexLogParser extends BaseLogParser {
       totalOutputTokens > 0 ||
       providerTotalTokens !== undefined
     ) {
+      const stepInputTokens = Math.max(
+        0,
+        totalInputTokens - (startingTokenUsage?.inputTokens ?? 0)
+      );
+      const stepOutputTokens = Math.max(
+        0,
+        totalOutputTokens - (startingTokenUsage?.outputTokens ?? 0)
+      );
+      const stepCachedInputTokens = Math.max(
+        0,
+        cachedInputTokens - (startingTokenUsage?.cachedInputTokens ?? 0)
+      );
+      const stepReasoningOutputTokens = Math.max(
+        0,
+        reasoningOutputTokens - (startingTokenUsage?.reasoningOutputTokens ?? 0)
+      );
+      const stepTotalTokens =
+        providerTotalTokens === undefined
+          ? undefined
+          : Math.max(
+              0,
+              providerTotalTokens - (startingTokenUsage?.totalTokens ?? 0)
+            );
       metadata.usage = {
-        inputTokens: totalInputTokens,
-        outputTokens: totalOutputTokens,
-        totalTokens:
-          providerTotalTokens ?? totalInputTokens + totalOutputTokens,
-        cachedInputTokens,
-        reasoningOutputTokens,
+        inputTokens: stepInputTokens,
+        outputTokens: stepOutputTokens,
+        totalTokens: stepTotalTokens ?? stepInputTokens + stepOutputTokens,
+        cachedInputTokens: stepCachedInputTokens,
+        reasoningOutputTokens: stepReasoningOutputTokens,
         totalConfidence:
           providerTotalTokens !== undefined
             ? TOKEN_TOTAL_CONFIDENCE.PROVIDER

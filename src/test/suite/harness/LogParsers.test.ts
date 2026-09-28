@@ -140,6 +140,35 @@ suite("ClaudeLogParser", () => {
     parser = new ClaudeLogParser();
   });
 
+  test("counts assistant usage once when content blocks share a message id", () => {
+    const fixturePath = path.resolve(
+      __dirname,
+      "../../../../src/test/fixtures/claude/multi-block-usage.session.jsonl"
+    );
+    const events = fs
+      .readFileSync(fixturePath, "utf8")
+      .trim()
+      .split(/\r?\n/)
+      .map((line) => JSON.parse(line) as BaseCliEvent);
+
+    const output = parser.extractResponse(events);
+
+    assert.deepStrictEqual(
+      {
+        inputTokens: output.metadata.usage?.inputTokens,
+        outputTokens: output.metadata.usage?.outputTokens,
+        cachedInputTokens: output.metadata.usage?.cachedInputTokens,
+        cacheCreatedTokens: output.metadata.usage?.cacheCreatedTokens,
+      },
+      {
+        inputTokens: 2,
+        outputTokens: 224,
+        cachedInputTokens: 31621,
+        cacheCreatedTokens: 500,
+      }
+    );
+  });
+
   suite("headless golden output", () => {
     test("maps Claude stdout and session-log events to equivalent universal output", () => {
       const fixtureRoot = path.resolve(
@@ -3598,6 +3627,65 @@ suite("CodexLogParser", () => {
 
   setup(() => {
     parser = new CodexLogParser();
+  });
+
+  suite("fixture-based per-step usage", () => {
+    function readUsageFixture(name: string): BaseCliEvent[] {
+      const fixturePath = path.resolve(
+        __dirname,
+        `../../../../src/test/fixtures/codex/${name}`
+      );
+      return fs
+        .readFileSync(fixturePath, "utf8")
+        .trim()
+        .split(/\r?\n/)
+        .map((line) => JSON.parse(line) as BaseCliEvent);
+    }
+
+    test("reports the fresh session totals as this step's usage", () => {
+      const output = parser.extractResponse(
+        readUsageFixture("fresh-session-usage.jsonl")
+      );
+
+      assert.deepStrictEqual(
+        {
+          inputTokens: output.metadata.usage?.inputTokens,
+          outputTokens: output.metadata.usage?.outputTokens,
+          cachedInputTokens: output.metadata.usage?.cachedInputTokens,
+          totalTokens: output.metadata.usage?.totalTokens,
+        },
+        {
+          inputTokens: 240,
+          outputTokens: 30,
+          cachedInputTokens: 40,
+          totalTokens: 270,
+        }
+      );
+    });
+
+    test("subtracts the replayed prior session total from resumed usage", () => {
+      const output = parser.extractResponse(
+        readUsageFixture("resumed-session-usage.jsonl")
+      );
+
+      assert.deepStrictEqual(
+        {
+          inputTokens: output.metadata.usage?.inputTokens,
+          outputTokens: output.metadata.usage?.outputTokens,
+          cachedInputTokens: output.metadata.usage?.cachedInputTokens,
+          reasoningOutputTokens:
+            output.metadata.usage?.reasoningOutputTokens,
+          totalTokens: output.metadata.usage?.totalTokens,
+        },
+        {
+          inputTokens: 300,
+          outputTokens: 40,
+          cachedInputTokens: 250,
+          reasoningOutputTokens: 8,
+          totalTokens: 340,
+        }
+      );
+    });
   });
 
   suite("headless golden output", () => {
