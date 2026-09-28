@@ -707,7 +707,7 @@ describe("HistorySearchDrawer filters", () => {
       });
     });
     fireEvent.click(
-      screen.getByRole("button", { name: "History search filters (8 active)" })
+      screen.getByRole("button", { name: "History search filters (6 active)" })
     );
 
     fireEvent.click(

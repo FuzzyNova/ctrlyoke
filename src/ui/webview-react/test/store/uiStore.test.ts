@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { useUiStore } from "@store/uiStore";
+import {
+  DEFAULT_HISTORY_SEARCH_FILTERS,
+  getHistorySearchActiveFilterCount,
+  useUiStore,
+} from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { EXECUTION_STATES } from "@/types/messages";
@@ -18,6 +22,7 @@ import {
   WORKSPACE_ENTRY_SORT_KEYS,
 } from "@root/types/HostedWorkspaceViewerTypes";
 import { nextWorkspaceEntrySort } from "@utils/workspaceEntrySort";
+import { getDatePresetRange } from "@utils/dateRangeFilter";
 import { workflowViewAddressKey } from "@utils/viewAddress";
 import { TOAST_MAX_QUEUE_SIZE } from "@/constants";
 
@@ -314,6 +319,23 @@ describe("setPendingFindRequest", () => {
 });
 
 describe("history search state", () => {
+  it("counts a date range as one active filter", () => {
+    const presetFilters = {
+      ...DEFAULT_HISTORY_SEARCH_FILTERS,
+      dateRange: { preset: "last7" as const, ...getDatePresetRange("last7") },
+    };
+    expect(
+      getHistorySearchActiveFilterCount(presetFilters)
+    ).toBe(1);
+
+    expect(
+      getHistorySearchActiveFilterCount({
+        ...DEFAULT_HISTORY_SEARCH_FILTERS,
+        dateRange: { preset: "custom", from: "2026-01-01", to: "" },
+      })
+    ).toBe(1);
+  });
+
   it("defaults search modes off and resets them with history search state", () => {
     expect(store().historySearchDeep).toBe(false);
     expect(store().historySearchRegex).toBe(false);
