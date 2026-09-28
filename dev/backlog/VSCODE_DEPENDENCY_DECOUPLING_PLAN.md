@@ -9,6 +9,8 @@ instead of depending on the CLI esbuild `vscode-shim`.
 
 - [`BROWSER_USER_FEEDBACK_PLAN.md`](../implemented/BROWSER_USER_FEEDBACK_PLAN.md)
 - [`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md)
+- [`VISUAL_STUDIO_EXTENSION_PLAN.md`](./VISUAL_STUDIO_EXTENSION_PLAN.md) — a
+  third `DashboardHostActions` host built on the standalone server
 
 ## Decision
 
