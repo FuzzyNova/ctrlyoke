@@ -83,7 +83,9 @@ import {
   RESUME_SESSION_SELECTIONS,
   SETTING_SCOPES,
   TRUSTED_ROOTS_MODES,
+  DEFAULT_MAX_STEPS,
 } from "../../../../types/DashboardConstants";
+import { isUnlimited } from "../../../../utils/LimitUtils";
 import {
   EXECUTION_MODE_OPTIONS_META,
   PERMISSION_MODE_OPTIONS_META,
@@ -2351,13 +2353,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   value={workflowProperties.maxSteps}
                   onChange={handleMaxStepsChange}
                   inheritLabel={
-                    globalSettings.maxSteps === -1
+                    isUnlimited(globalSettings.maxSteps)
                       ? "Unlimited"
                       : String(globalSettings.maxSteps)
                   }
                   customFallback={
-                    globalSettings.maxSteps === -1
-                      ? 100
+                    isUnlimited(globalSettings.maxSteps)
+                      ? DEFAULT_MAX_STEPS
                       : globalSettings.maxSteps
                   }
                 />
