@@ -2936,6 +2936,47 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.strictEqual(runtime?.phase, FINAL_STEP_PHASES.FINAL_STEP);
   });
 
+  test("stops a finalStep loop at the workflow maxSteps cap", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+    integration.onSend = async (prompt) => {
+      if (prompt.prompt === "final-loop-cap") {
+        await queue.appendSteps([{ prompt: "over-cap" }], "test");
+      }
+      return { success: true, responseText: "ok" };
+    };
+    queue.loadPrompts({
+      steps: [{ prompt: "queue-1" }],
+      maxSteps: 1,
+      finalStep: { prompt: "final-loop-cap", mcpServers: ["ctrlyoke"] },
+    });
+
+    await executor.execute(integration, makeContext(integration));
+
+    assert.deepStrictEqual(integration.sentPrompts, [
+      "queue-1",
+      "final-loop-cap",
+    ]);
+    assert.strictEqual(queue.getState().steps.length, 2);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.ERROR);
+  });
+
+  test("still enforces the configured execution time limit", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+    const context = makeContext(integration);
+    context.dynamicQueueConfig.maxWorkflowExecutionTime = 1;
+    queue.getRuntimeStateMachine().getActiveExecutionTime = () => 2_000;
+    queue.loadPrompts({ steps: [{ prompt: "must-not-run" }] });
+
+    await executor.execute(integration, context);
+
+    assert.deepStrictEqual(integration.sentPrompts, []);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.ERROR);
+  });
+
   test("does not loop when queue does not grow", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);

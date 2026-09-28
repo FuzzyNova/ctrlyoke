@@ -314,6 +314,7 @@ suite("RunContinuationService topology append transaction", () => {
       runRef,
       incoming,
       1,
+      100,
       new WorkflowLineageRepository(),
       false,
       2
@@ -357,12 +358,12 @@ suite("RunContinuationService topology append transaction", () => {
           ],
         },
         1,
+        3,
         new WorkflowLineageRepository(),
         false,
-        QUEUE_POSITION.END,
-        { maxSteps: 3 }
+        QUEUE_POSITION.END
       ),
-      /Current: 2, Adding: 2, Max: 3/
+      /Step limit reached: this run has 2\/3 steps \(setting queue\.maxSteps: 3\)/
     );
 
     const run = JSON.parse(
@@ -375,11 +376,7 @@ suite("RunContinuationService topology append transaction", () => {
     assert.strictEqual(run.steps?.length, 2);
   });
 
-  // The dashboard and CLI append paths own no capacity policy, and the
-  // environment the MCP server reads its limit from is unset in their
-  // processes. Enforcing unconditionally here would cap them at the default
-  // while ignoring the user's configured `queue.maxSteps`.
-  test("leaves capacity unenforced for a caller that supplies no policy", async () => {
+  test("uses the required global limit supplied by in-process callers", async () => {
     workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-topology-nopolicy-")
     );
@@ -391,11 +388,51 @@ suite("RunContinuationService topology append transaction", () => {
       runRef,
       [{ prompt: "tail-a" }, { prompt: "tail-b" }],
       1,
+      100,
       new WorkflowLineageRepository()
     );
 
     assert.strictEqual(appended.workingFile.steps?.length, 4);
     assert.strictEqual(appended.stepsAdded, 2);
+  });
+
+  test("reads a changed workflow maxSteps value on the next locked append", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-topology-live-limit-")
+    );
+    await seedRun([{ prompt: "existing" }]);
+    const runPath = WorkflowPaths.runFilePath(workspace, workflowKey, runRef);
+    const source = JSON.parse(
+      await fs.readFile(runPath, "utf8")
+    ) as WorkingFile;
+    source.maxSteps = 2;
+    await fs.writeFile(runPath, JSON.stringify(source), "utf8");
+
+    const first = await RunContinuationService.appendStepsToRun(
+      workspace,
+      workflowKey,
+      runRef,
+      [{ prompt: "fits current cap" }],
+      1,
+      10,
+      new WorkflowLineageRepository()
+    );
+    const edited = first.workingFile;
+    edited.maxSteps = 1;
+    await fs.writeFile(runPath, JSON.stringify(edited), "utf8");
+
+    await assert.rejects(
+      RunContinuationService.appendStepsToRun(
+        workspace,
+        workflowKey,
+        runRef,
+        [{ prompt: "over edited cap" }],
+        first.definitionRevision,
+        10,
+        new WorkflowLineageRepository()
+      ),
+      /this run has 2\/1 steps \(workflow maxSteps: 1\)/
+    );
   });
 
   test("serializes concurrent appends as whole batches", async () => {
@@ -421,6 +458,7 @@ suite("RunContinuationService topology append transaction", () => {
             runRef,
             steps,
             run.definitionRevision ?? 1,
+            100,
             new WorkflowLineageRepository()
           );
           return;
@@ -497,9 +535,9 @@ suite("RunContinuationService topology append transaction", () => {
         runRef,
         [{ prompt: "late-a" }, { prompt: "late-b" }],
         1,
+        100,
         new WorkflowLineageRepository(),
         QUEUE_POSITION.PARALLEL_WITH_CURRENT,
-        undefined,
         6
       );
     assert.deepStrictEqual(joined.joinedParallelGroup, {
@@ -537,9 +575,9 @@ suite("RunContinuationService topology append transaction", () => {
         runRef,
         [{ prompt: "too late" }],
         2,
+        100,
         new WorkflowLineageRepository(),
         QUEUE_POSITION.PARALLEL_WITH_CURRENT,
-        undefined,
         6
       ),
       /accepting/i
@@ -574,9 +612,9 @@ suite("RunContinuationService topology append transaction", () => {
         runRef,
         [{ prompt: "sibling-a" }, { prompt: "sibling-b" }],
         1,
+        100,
         new WorkflowLineageRepository(),
         QUEUE_POSITION.PARALLEL_WITH_CURRENT,
-        undefined,
         6
       );
     assert.strictEqual(joined.joinedParallelGroup.promoted, true);
@@ -841,6 +879,7 @@ suite("RunContinuationService addressed step mutations", () => {
         runRef,
         [{ prompt: "must not shift in flight" }],
         1,
+        100,
         repository,
         true,
         1
@@ -1010,6 +1049,7 @@ suite("RunContinuationService addressed step mutations", () => {
       runRef,
       [{ prompt: "after group" }],
       1,
+      100,
       new WorkflowLineageRepository(),
       true,
       QUEUE_POSITION.NEXT
@@ -1027,6 +1067,7 @@ suite("RunContinuationService addressed step mutations", () => {
       runRef,
       [{ prompt: "numeric after group" }],
       2,
+      100,
       new WorkflowLineageRepository(),
       true,
       2

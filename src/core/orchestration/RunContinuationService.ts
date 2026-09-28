@@ -28,7 +28,12 @@ import { withFileLock } from "../../utils/FileLockUtils";
 import { writeFileAtomic } from "../../utils/AtomicFileUtils";
 import { runStateWriteOptions } from "../../utils/RunStateWrites";
 import { invalidateRunSummaryFor } from "./RunSummaryCache";
-import type { QueueLimitPolicy } from "../../utils/QueueLimitUtils";
+import {
+  buildStepLimitError,
+  getEffectiveMaxStepsSource,
+  resolveEffectiveMaxSteps,
+} from "../../utils/QueueLimitUtils";
+import { exceedsLimit } from "../../utils/LimitUtils";
 import { readWorkflowLockOwnershipInspection } from "../../utils/WorkflowLockInspector";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
@@ -278,10 +283,10 @@ export class RunContinuationService {
     runRef: RunRef,
     tail: WorkflowStep[] | ParallelGroupTopology,
     expectedDefinitionRevision: number,
+    globalMaxSteps: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
     allowInterruptedRun: boolean = false,
-    position: QueuePosition | number = QUEUE_POSITION.END,
-    queueLimit?: QueueLimitPolicy
+    position: QueuePosition | number = QUEUE_POSITION.END
   ): Promise<{
     workingFile: WorkingFile;
     definitionRevision: number;
@@ -337,17 +342,21 @@ export class RunContinuationService {
         }
         const currentQueueSize = source.steps?.length ?? 0;
         const stepsToAdd = incomingTopology.steps.length;
-        // Counted here, under the run-file lock, rather than from a pre-lock
-        // read: two concurrent appends would each pass an unlocked check and
-        // together cross the limit. Only a caller that owns a capacity policy
-        // passes one -- see `QueueLimitPolicy`.
-        if (
-          queueLimit &&
-          queueLimit.maxSteps !== -1 &&
-          currentQueueSize + stepsToAdd > queueLimit.maxSteps
-        ) {
+        // Resolve against the run file read under this lock, so workflow edits
+        // take effect at the next append and concurrent appends cannot pass
+        // against stale counts.
+        const workflowMaxSteps = source.maxSteps;
+        const effectiveMaxSteps = resolveEffectiveMaxSteps(
+          workflowMaxSteps,
+          globalMaxSteps
+        );
+        if (exceedsLimit(currentQueueSize + stepsToAdd, effectiveMaxSteps)) {
           throw new Error(
-            `Step limit exceeded. Current: ${currentQueueSize}, Adding: ${stepsToAdd}, Max: ${queueLimit.maxSteps}`
+            buildStepLimitError(
+              currentQueueSize,
+              effectiveMaxSteps,
+              getEffectiveMaxStepsSource(workflowMaxSteps)
+            )
           );
         }
         // Resolve the splice point from the run file read under this same
@@ -445,9 +454,9 @@ export class RunContinuationService {
     runRef: RunRef,
     steps: WorkflowStep[],
     expectedDefinitionRevision: number,
+    globalMaxSteps: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
     position: QueuePosition = QUEUE_POSITION.PARALLEL_WITH_CURRENT,
-    queueLimit?: QueueLimitPolicy,
     configuredParallelWidth = CTRLYOKE_SETTINGS_DEFAULTS.queue.maxParallelSteps
   ): Promise<RunParallelJoinMutationResult> {
     if (position !== QUEUE_POSITION.PARALLEL_WITH_CURRENT) {
@@ -557,13 +566,18 @@ export class RunContinuationService {
         }
 
         const currentQueueSize = sourceTopology.steps.length;
-        if (
-          queueLimit &&
-          queueLimit.maxSteps !== -1 &&
-          currentQueueSize + steps.length > queueLimit.maxSteps
-        ) {
+        const workflowMaxSteps = source.maxSteps;
+        const effectiveMaxSteps = resolveEffectiveMaxSteps(
+          workflowMaxSteps,
+          globalMaxSteps
+        );
+        if (exceedsLimit(currentQueueSize + steps.length, effectiveMaxSteps)) {
           throw new Error(
-            `Step limit exceeded. Current: ${currentQueueSize}, Adding: ${steps.length}, Max: ${queueLimit.maxSteps}`
+            buildStepLimitError(
+              currentQueueSize,
+              effectiveMaxSteps,
+              getEffectiveMaxStepsSource(workflowMaxSteps)
+            )
           );
         }
 

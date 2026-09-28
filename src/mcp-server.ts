@@ -54,8 +54,9 @@ import * as WorkflowPaths from "./utils/WorkflowPaths";
 import {
   getGlobalMaxSteps,
   getMaxParallelSteps,
-  resolveQueueLimitPolicy,
+  resolveEffectiveMaxSteps,
 } from "./utils/QueueLimitUtils";
+import { isUnlimited } from "./utils/LimitUtils";
 import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
 import { deriveStepStatusesFromRuntime } from "./utils/StepStatusDerivation";
 import { stripLegacyWorkingFileLineageMetadata } from "./utils/WorkingFileMetadata";
@@ -1031,7 +1032,10 @@ export class CtrlYokeMCPServer {
       (p) => p._runtime?.completedAt !== undefined
     ).length;
 
-    const maxSteps = getGlobalMaxSteps();
+    const maxSteps = resolveEffectiveMaxSteps(
+      queueData.maxSteps,
+      getGlobalMaxSteps()
+    );
 
     const response = {
       workflowKey: selected.workflowKey,
@@ -1049,9 +1053,10 @@ export class CtrlYokeMCPServer {
         totalSteps: allSteps.length,
         completedSteps: completedCount,
         executionState: runtime.executionState,
-        maxSteps: maxSteps === -1 ? "unlimited" : maxSteps,
-        remainingSteps:
-          maxSteps === -1 ? "unlimited" : maxSteps - allSteps.length,
+        maxSteps: isUnlimited(maxSteps) ? "unlimited" : maxSteps,
+        remainingSteps: isUnlimited(maxSteps)
+          ? "unlimited"
+          : maxSteps - allSteps.length,
         workingFile,
         runDirectory: WorkflowPaths.runDirectoryForWorkingFile(workingFile),
         definitionRevision: queueData.definitionRevision ?? 1,
@@ -1139,7 +1144,7 @@ export class CtrlYokeMCPServer {
 
     let response: McpAppendStepResult | null = null;
 
-    const queueLimit = resolveQueueLimitPolicy();
+    const globalMaxSteps = getGlobalMaxSteps();
     if (position === QUEUE_POSITION.PARALLEL_WITH_CURRENT) {
       const joined =
         await RunContinuationService.appendStepsToActiveParallelGroup(
@@ -1148,9 +1153,9 @@ export class CtrlYokeMCPServer {
           selected.runRef,
           flattened.topology.steps,
           target.definitionRevision,
+          globalMaxSteps,
           lineageRepository,
           position,
-          queueLimit,
           getMaxParallelSteps()
         );
       response = {
@@ -1181,10 +1186,10 @@ export class CtrlYokeMCPServer {
         selected.runRef,
         flattened.topology,
         target.definitionRevision,
+        globalMaxSteps,
         lineageRepository,
         target.allowInterruptedRun,
-        position,
-        queueLimit
+        position
       );
 
       response = {

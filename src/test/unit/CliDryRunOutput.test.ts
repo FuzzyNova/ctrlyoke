@@ -53,7 +53,7 @@ function previewFixture(): WorkflowExecutionPreview {
           mcpServerIds: ["private"],
           hooks: [],
           permissions: { allowedRules: [], deniedRules: [] },
-          limits: { violations: [] },
+          limits: { violations: [], maxStepsSource: "setting queue.maxSteps" },
           conditions: { pre: [], end: [], retry: { maxAttempts: 1 } },
           propertySources: {},
         },

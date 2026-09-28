@@ -4609,6 +4609,7 @@ export class WorkflowOrchestrator {
           runAddress.runRef,
           [step],
           mutation.expectedDefinitionRevision,
+          ConfigurationUtils.getGlobalMaxSteps(),
           this.lineageRepository
         ).then((written) => written.definitionRevision)
     );

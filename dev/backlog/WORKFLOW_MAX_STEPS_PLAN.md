@@ -43,7 +43,7 @@ stored `"unlimited"` instead of `-1`. What survived from it is in
 conversations that grow to hundreds of turns. His orchestrator workflows are different.
 `long-running-bug-fix`, for example, has a `finalStep` that files bugs and uses `append_step` to
 queue fix steps. That loop can run forever; it had appended 22 steps when this plan was written.
-Today the only way to cap that loop is to turn limits back on for *every* workflow.
+Today the only way to cap that loop is to turn limits back on for _every_ workflow.
 
 **Step count is part of a workflow's design; time and parallelism are properties of the
 machine.** A "fix bugs until done" loop capped at 30 means the same thing on any machine.
@@ -52,13 +52,13 @@ machine.** A "fix bugs until done" loop capped at 30 means the same thing on any
 
 **Answers to the guardrails plan's objections:**
 
-| Objection                                                         | Answer                                                                                                                                                                                                                                                                                                     |
-| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| It duplicates `queue.maxSize`.                                    | It is the same concept at a narrower scope, like every other workflow property (`harness` ↔ `defaults.harness`). After the rename, both scopes share one name and one value shape.                                                                                                                         |
+| Objection                                                         | Answer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| It duplicates `queue.maxSize`.                                    | It is the same concept at a narrower scope, like every other workflow property (`harness` ↔ `defaults.harness`). After the rename, both scopes share one name and one value shape.                                                                                                                                                                                                                                                                                                                                                                                       |
 | A workflow could weaken a user's safety preference.               | The step cap guards against cost and runaway loops. It is **not a security boundary**: a step runs with the same permissions no matter how many came before it. Workflows already control far stronger policy (`toolPermissions.mode: dangerouslyAllowAll`, shell `hooks`, `mcpServers`) and other guardrails (`endCondition.maxRetries`, `errorBehavior.maxRetries`). The remaining risk is that a shared workflow sets a cap that is too loose (cost) or too tight (it stops early). Either is visible in the file and in the panel, like any other authored property. |
-| Copied workflows would carry machine-specific operational policy. | That is true of time and concurrency, which is why those stay global. A step count is not machine-specific.                                                                                                                                                                                                |
-| Mixed limits make the effective envelope harder to explain.       | There is one number with two scopes. The panel shows the resolved value (`Inherit (100)`), and dry-run and `workflow_status` report the effective cap and where it came from.                                                                                                                             |
-| Avoid building another inheritance system.                        | There is nothing new to build. This uses the workflow → settings inheritance that every execution property already has. It is not the step → workflow → settings `limits` hierarchy the guardrails plan rejected.                                                                                         |
+| Copied workflows would carry machine-specific operational policy. | That is true of time and concurrency, which is why those stay global. A step count is not machine-specific.                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Mixed limits make the effective envelope harder to explain.       | There is one number with two scopes. The panel shows the resolved value (`Inherit (100)`), and dry-run and `workflow_status` report the effective cap and where it came from.                                                                                                                                                                                                                                                                                                                                                                                            |
+| Avoid building another inheritance system.                        | There is nothing new to build. This uses the workflow → settings inheritance that every execution property already has. It is not the step → workflow → settings `limits` hierarchy the guardrails plan rejected.                                                                                                                                                                                                                                                                                                                                                        |
 
 ## Naming decision
 
@@ -80,11 +80,11 @@ Queue settings row changes from "Max queue size" to "Max steps".
 
 ### Values (the same shape at both scopes)
 
-| Value       | Workflow `maxSteps`                                  | Settings `queue.maxSteps` |
-| ----------- | ---------------------------------------------------- | ------------------------- |
-| omitted     | Inherits the settings value                          | Default `100`             |
-| integer ≥ 1 | Caps the run at that number                          | Caps at that number       |
-| `-1`        | No cap for this workflow, whatever the setting says  | No global cap             |
+| Value       | Workflow `maxSteps`                                 | Settings `queue.maxSteps` |
+| ----------- | --------------------------------------------------- | ------------------------- |
+| omitted     | Inherits the settings value                         | Default `100`             |
+| integer ≥ 1 | Caps the run at that number                         | Caps at that number       |
+| `-1`        | No cap for this workflow, whatever the setting says | No global cap             |
 
 Effective cap = the workflow value if the key is present, otherwise the setting. That is the
 whole rule. There is no third input now that `unlimitedMode` is gone.
@@ -123,7 +123,7 @@ check. Every check reads `maxSteps` from the run's current workflow file:
 ### New workflows and the default
 
 - **New workflows omit `maxSteps`**, so they inherit `queue.maxSteps`. There is **no new
-  `defaults.maxSteps` setting**. `queue.maxSteps` already *is* the default for workflows that do
+  `defaults.maxSteps` setting**. `queue.maxSteps` already _is_ the default for workflows that do
   not set one. A second "default for new workflows" setting would be the real duplicate the
   guardrails plan warned about, and it would split one meaning into two: one number for "what I
   get when I don't say" and another for "what gets written into new files".
@@ -135,11 +135,11 @@ check. Every check reads `maxSteps` from the run's current workflow file:
 `LimitSelect` (see [Limit presentation](#limit-presentation)) with an Inherit option, following
 the three-mode pattern of `trustedExternalRoots` (`TRUSTED_ROOTS_SELECTION_OPTIONS_META`):
 
-| Option                                        | Writes           | Shown when selected                                                                               |
-| --------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------- |
-| **Inherit (100)** / **Inherit (Unlimited)**   | `omit maxSteps`  | nothing else; the label shows the resolved setting                                                |
-| **Unlimited**                                 | `maxSteps: -1`   | nothing else                                                                                      |
-| **Custom**                                    | `maxSteps: <n>`  | a number input (min 1), prefilled with the resolved setting, or 100 when the setting is unlimited |
+| Option                                      | Writes          | Shown when selected                                                                               |
+| ------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------- |
+| **Inherit (100)** / **Inherit (Unlimited)** | `omit maxSteps` | nothing else; the label shows the resolved setting                                                |
+| **Unlimited**                               | `maxSteps: -1`  | nothing else                                                                                      |
+| **Custom**                                  | `maxSteps: <n>` | a number input (min 1), prefilled with the resolved setting, or 100 when the setting is unlimited |
 
 The UI never shows `-1`. Users pick **Unlimited**, and the file gets `-1`.
 
@@ -174,14 +174,14 @@ existing limit gets the Unlimited picker at the same time as the new one.
 
 ### Inventory of `-1` fields (verified 2026-09-27)
 
-| Field                                                                              | `-1` means     | UI site                                                                      |
-| ---------------------------------------------------------------------------------- | -------------- | ---------------------------------------------------------------------------- |
-| workflow `maxSteps`, settings `queue.maxSteps` (new)                               | unlimited      | `WorkflowPropertiesPanel.tsx`, `QueueSection.tsx`                            |
-| settings `execution.maxPromptTimeoutSec` (and CLI `--timeout`)                     | unlimited      | `ExecutionSection.tsx`                                                       |
-| settings `queue.maxWorkflowExecutionTimeSec`                                       | unlimited      | `QueueSection.tsx` ("(seconds, -1 = unlimited)")                             |
-| settings `runs.maxRuns`                                                            | keep all runs  | `GeneralSection.tsx`                                                         |
-| workflow `endCondition.maxRetries` (also `defaults.endCondition` via its `$ref`)   | unlimited      | `ScriptConditionEditor.tsx` (also rendered on the Workflow Defaults page)    |
-| settings `ui.outputVirtualizationRowThreshold`                                     | never virtualize | `GeneralSection.tsx`                                                       |
+| Field                                                                            | `-1` means       | UI site                                                                   |
+| -------------------------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------- |
+| workflow `maxSteps`, settings `queue.maxSteps` (new)                             | unlimited        | `WorkflowPropertiesPanel.tsx`, `QueueSection.tsx`                         |
+| settings `execution.maxPromptTimeoutSec` (and CLI `--timeout`)                   | unlimited        | `ExecutionSection.tsx`                                                    |
+| settings `queue.maxWorkflowExecutionTimeSec`                                     | unlimited        | `QueueSection.tsx` ("(seconds, -1 = unlimited)")                          |
+| settings `runs.maxRuns`                                                          | keep all runs    | `GeneralSection.tsx`                                                      |
+| workflow `endCondition.maxRetries` (also `defaults.endCondition` via its `$ref`) | unlimited        | `ScriptConditionEditor.tsx` (also rendered on the Workflow Defaults page) |
+| settings `ui.outputVirtualizationRowThreshold`                                   | never virtualize | `GeneralSection.tsx`                                                      |
 
 ### Schema
 
@@ -222,13 +222,13 @@ existing limit gets the Unlimited picker at the same time as the new one.
 
 SCHEMA_UI_NAME_ALIGNMENT §1.1 reserves **None** for "none of this thing", and already assigns
 **Never** to a different concept: a "when?" question answered with no time. A limit's "nothing"
-is a third concept, *no bound*. "Max Steps: None" could just as easily be read as "a maximum of
+is a third concept, _no bound_. "Max Steps: None" could just as easily be read as "a maximum of
 zero steps", the opposite of what it means. Using a different word for a different concept is
 rule 2, the same rule that produced **Never**:
 
-| Word          | Means                                                            | Writes | Used for                                                    |
-| ------------- | ---------------------------------------------------------------- | ------ | ----------------------------------------------------------- |
-| **Unlimited** | A limit answered with no bound. It overrides anything inherited. | `-1`   | every "unlimited" row in the inventory                      |
+| Word          | Means                                                            | Writes | Used for                               |
+| ------------- | ---------------------------------------------------------------- | ------ | -------------------------------------- |
+| **Unlimited** | A limit answered with no bound. It overrides anything inherited. | `-1`   | every "unlimited" row in the inventory |
 
 - Add this row to the §1.1 table in `dev/implemented/SCHEMA_UI_NAME_ALIGNMENT_PLAN.md`, which is
   still where that policy is written down.
@@ -241,29 +241,24 @@ rule 2, the same rule that produced **Never**:
 - `workflow_status` keeps reporting `"unlimited"` in its output. That is a display surface, like
   the UI label.
 
-## Current enforcement (verified 2026-09-27)
+## Current enforcement (verified 2026-09-28)
 
-| Site                                                                 | What it does                                                                                           | Global source                                 |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------- |
-| `WorkflowExecutor.checkQueueSizeLimit` (`WorkflowExecutor.ts:4734`)  | After a `finalStep` iteration grows the queue, fails the run if `steps.length > max`                   | `context.dynamicQueueConfig`                  |
-| `WorkflowInstance` file append (`WorkflowInstance.ts:2604`)          | Rejects appending a workflow file past the cap                                                         | `ConfigurationUtils`                          |
-| `RunContinuationService.appendStepsToRun` / `…ToActiveParallelGroup` | Rejects under the run-file lock, **only when the caller passes a `QueueLimitPolicy`**                  | caller                                        |
-| `mcp-server.ts:1158` (`append_step`)                                 | Passes `resolveQueueLimitPolicy()` (env `CTRLYOKE_MAX_QUEUE_SIZE` / `CTRLYOKE_UNLIMITED_MODE`)         | env set by `CliProviderUtils.ts:536` at spawn |
-| `mcp-server.ts:1021` (`workflow_status`)                             | Reports `maxQueueSize` / `remainingSlots`                                                              | env                                           |
-| `ExecutionPreviewService.buildLimits` (`:1343`)                      | Dry-run limit and violation                                                                            | `options.dynamicQueueConfig`                  |
+| Site                                                                                                       | What it does                                                                                      | Global source                                   |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `WorkflowExecutor.checkStepLimit` (`WorkflowExecutor.ts:4754`)                                             | After a `finalStep` iteration grows the queue, fails the run if the effective cap is exceeded     | `ConfigurationUtils.getGlobalMaxSteps()`        |
+| `WorkflowInstance.appendFromFile` (`WorkflowInstance.ts:2564`)                                             | Rejects appending a workflow file past the effective cap                                          | `ConfigurationUtils.getGlobalMaxSteps()`        |
+| Dashboard editor (`WorkflowInstance.ts:3274`)                                                              | Rejects prompt and parallel-member appends past the effective cap                                 | `ConfigurationUtils.getGlobalMaxSteps()`        |
+| `RunContinuationService.appendStepsToRun` / `…ToActiveParallelGroup` (`RunContinuationService.ts:280,451`) | Checks under the run-file lock against `source.maxSteps` and a required global limit              | caller                                          |
+| CLI `append` (`cli.ts:1811`)                                                                               | Passes the in-process global limit into the locked append transaction                             | `ConfigurationUtils.getGlobalMaxSteps()`        |
+| Lifecycle and orchestrator (`RunLifecycleService.ts:741`, `WorkflowOrchestrator.ts:4606`)                  | Pass the in-process limit through the shared append service                                       | `ConfigurationUtils.getGlobalMaxSteps()`        |
+| `mcp-server.ts:1150` (`append_step`)                                                                       | Passes the global value from `CTRLYOKE_MAX_STEPS`                                                 | env set by `CliProviderUtils.ts:538` at spawn   |
+| `mcp-server.ts:982` (`workflow_status`)                                                                    | Reports effective `maxSteps` / `remainingSteps` from `queueData.maxSteps` and the MCP environment | env                                             |
+| `ExecutionPreviewService.buildLimits` (`:1352`)                                                            | Reports the effective cap, source, and any violation                                              | workflow value and `options.dynamicQueueConfig` |
 
-Gaps found:
-
-- **CLI `append` is unchecked.** `cli.ts:1794` passes no `queueLimit`, but
-  `docs/cli/ctrlyoke.md:175` says the limit applies.
-- Other in-process appends pass no policy either: the dashboard editor (`WorkflowInstance.ts:3263`),
-  `RunLifecycleService.ts:740`, and `WorkflowOrchestrator.ts:4606` via
-  `WorkingFileManager.appendStepsToRun` (`src/core/WorkingFileManager.ts`).
-
-The MCP server gets its global limit from environment variables set when the harness is spawned,
-so a per-workflow value cannot reach it that way without re-spawning the harness. But
-`RunContinuationService` already reads the run file under the lock, so the workflow's value is
-resolved there.
+The initial audit found unchecked CLI, dashboard, lifecycle, and orchestrator append paths. Step 2
+now routes them through the same locked resolver; workflow `maxSteps` is read from the current run
+file under the lock, so edits apply on the next append. MCP gets its global value from the
+environment supplied to its subprocess, while in-process callers read `ConfigurationUtils`.
 
 ## Design
 
@@ -290,7 +285,7 @@ export function resolveEffectiveMaxSteps(
   parameter is how the CLI and dashboard gaps happened.
 - The error text names the property and tells an agent what to do:
   `Step limit reached: this run has 30/30 steps (workflow maxSteps: 30). Do not retry; finish
-  without appending.` The source is named as either `workflow maxSteps` or
+without appending.` The source is named as either `workflow maxSteps` or
   `setting queue.maxSteps`.
 - `WorkflowExecutor.checkQueueSizeLimit` becomes `checkStepLimit` and keeps its current stop
   behaviour. Reason codes belong to EXECUTION_GUARDRAILS_PLAN Phase 2.
@@ -298,18 +293,18 @@ export function resolveEffectiveMaxSteps(
 
 ### Renames and removals (one pass, no shims)
 
-| From                                                                   | To                                            |
-| ---------------------------------------------------------------------- | --------------------------------------------- |
-| settings `queue.maxSize`                                               | `queue.maxSteps` (`$ref` `maxStepsValue`)     |
-| settings `queue.unlimitedMode`                                         | **removed**                                   |
-| `CtrlYokeSettings.queue.maxSize` / `.unlimitedMode`                    | `queue.maxSteps` / removed                    |
-| `DynamicQueueConfig.maxQueueSize` / `.unlimitedMode`                   | `maxSteps` / removed                          |
-| `DEFAULT_MAX_QUEUE_SIZE`                                               | `DEFAULT_MAX_STEPS`                           |
-| env `CTRLYOKE_MAX_QUEUE_SIZE` + `CTRLYOKE_UNLIMITED_MODE`              | `CTRLYOKE_MAX_STEPS`                          |
-| `getMaxQueueSize()` / `isUnlimitedMode()`                              | `getGlobalMaxSteps()`                         |
-| MCP `workflow_status` `maxQueueSize` / `remainingSlots`                | `maxSteps` / `remainingSteps`. These still report `"unlimited"` when there is no cap, and now give the *effective* value, read from the run file. |
-| webview "queue size limit reached" message (`CtrlYokeWebviewProvider.ts:917`, `useMessageHandler.ts:2867`) | step-limit wording and field names |
-| `QueueSection.tsx` "Unlimited mode" toggle                             | removed; the Max steps row has its own Unlimited option |
+| From                                                                                                       | To                                                                                                                                                |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| settings `queue.maxSize`                                                                                   | `queue.maxSteps` (`$ref` `maxStepsValue`)                                                                                                         |
+| settings `queue.unlimitedMode`                                                                             | **removed**                                                                                                                                       |
+| `CtrlYokeSettings.queue.maxSize` / `.unlimitedMode`                                                        | `queue.maxSteps` / removed                                                                                                                        |
+| `DynamicQueueConfig.maxQueueSize` / `.unlimitedMode`                                                       | `maxSteps` / removed                                                                                                                              |
+| `DEFAULT_MAX_QUEUE_SIZE`                                                                                   | `DEFAULT_MAX_STEPS`                                                                                                                               |
+| env `CTRLYOKE_MAX_QUEUE_SIZE` + `CTRLYOKE_UNLIMITED_MODE`                                                  | `CTRLYOKE_MAX_STEPS`                                                                                                                              |
+| `getMaxQueueSize()` / `isUnlimitedMode()`                                                                  | `getGlobalMaxSteps()`                                                                                                                             |
+| MCP `workflow_status` `maxQueueSize` / `remainingSlots`                                                    | `maxSteps` / `remainingSteps`. These still report `"unlimited"` when there is no cap, and now give the _effective_ value, read from the run file. |
+| webview "queue size limit reached" message (`CtrlYokeWebviewProvider.ts:917`, `useMessageHandler.ts:2867`) | step-limit wording and field names                                                                                                                |
+| `QueueSection.tsx` "Unlimited mode" toggle                                                                 | removed; the Max steps row has its own Unlimited option                                                                                           |
 
 ## Phases
 
@@ -412,13 +407,13 @@ commits, and each one has to leave the tree compiling and `npm test` green. Remo
 `unlimitedMode` from the schema forces the whole rename through in the first commit, so the
 split is:
 
-| Step | Scope | Status |
-| ---- | ----- | ------ |
-| 1 | Phase 1: schemas (`unlimitedValue`, `maxStepsValue`, `maxSteps`, `oneOf` conversions), types and constants, the full rename and `unlimitedMode` removal across backend and UI (the Queue toggle is simply deleted), regenerated artifacts, `schemas/archive/v1/` mirror, `EXECUTION_GUARDRAILS_PLAN.md` edit, schema tests | Done |
-| 2 | Phase 2: `LimitUtils`, `resolveEffectiveMaxSteps`, every enforcement site, required `RunContinuationService` limit, MCP `workflow_status`, dry-run, tests | Pending |
-| 3 | Phase 3 items 1–2, 5–6: `LimitSelect`, option metadata, vocabulary test, and every settings page and `ScriptConditionEditor` switched to it | Pending |
-| 4 | Phase 3 items 3–4: the Max Steps control on the Validation page, Set as default, round-trip tests | Pending |
-| 5 | Phase 4 docs, the §1.1 vocabulary row, and the acceptance-criteria sweep | Pending |
+| Step | Scope                                                                                                                                                                                                                                                                                                                      | Status  |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| 1    | Phase 1: schemas (`unlimitedValue`, `maxStepsValue`, `maxSteps`, `oneOf` conversions), types and constants, the full rename and `unlimitedMode` removal across backend and UI (the Queue toggle is simply deleted), regenerated artifacts, `schemas/archive/v1/` mirror, `EXECUTION_GUARDRAILS_PLAN.md` edit, schema tests | Done    |
+| 2    | Phase 2: `LimitUtils`, `resolveEffectiveMaxSteps`, every enforcement site, required `RunContinuationService` limit, MCP `workflow_status`, dry-run, tests                                                                                                                                                                  | Done    |
+| 3    | Phase 3 items 1–2, 5–6: `LimitSelect`, option metadata, vocabulary test, and every settings page and `ScriptConditionEditor` switched to it                                                                                                                                                                                | Pending |
+| 4    | Phase 3 items 3–4: the Max Steps control on the Validation page, Set as default, round-trip tests                                                                                                                                                                                                                          | Pending |
+| 5    | Phase 4 docs, the §1.1 vocabulary row, and the acceptance-criteria sweep                                                                                                                                                                                                                                                   | Pending |
 
 Each step updates its row when it commits.
 
@@ -427,6 +422,17 @@ deferred to Step 4 as planned. The current `schemaUiPropertyRoundTrip` gate
 requires a live control for every workflow property, so it reports `maxSteps`
 missing in this staging step. Adding the deferred control or a temporary test
 opt-out would conflict with the staged scope and project test guidance.
+
+Step 2 note: the dry-run preview includes `maxStepsSource`; it is optional in the
+preview type so existing consumers and fixtures can omit it, while generated
+previews always report the source. The legacy `maxQueueSteps` output field stays
+for the existing preview contract and now contains the effective cap.
+
+Verification note: the Step 2 focused extension tests and packaging suite pass.
+The full `npm test` run also reported unrelated `HostedWorkspaceViewerService`,
+`WorkingFileManager`, and CLI dry-run failures, plus the schema-to-UI gate
+deferred from Step 1. Repository-wide `format:check` reports 36 format
+violations outside the changed files; every changed file passes Prettier.
 
 ## Non-goals
 

@@ -3040,6 +3040,37 @@ suite("WorkflowInstance append-and-continue", () => {
 
     assert.strictEqual(claudeIntegration.closeTerminalCalls, 0);
   });
+
+  test("rejects a dashboard editor append at workflow maxSteps", async () => {
+    const tempWorkspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "cy-editor-step-cap-")
+    );
+    try {
+      const platform = new MockPlatform();
+      const instance = new WorkflowInstance(
+        platform,
+        undefined,
+        new MockIntegrationFactory(platform),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        tempWorkspace
+      );
+      const steps: PromptStep[] = [{ prompt: "existing" }];
+      const workingFilePath = await instance.promptQueue.createWorkingFile(
+        "editor-step-cap",
+        steps,
+        tempWorkspace
+      );
+      instance.promptQueue.loadPrompts({ steps, maxSteps: 1 }, workingFilePath);
+
+      await instance.executeEphemeralPrompt("over cap", {}, ACTION_TYPES.QUEUE);
+
+      assert.strictEqual(instance.promptQueue.getState().steps.length, 1);
+    } finally {
+      await fs.rm(tempWorkspace, { recursive: true, force: true });
+    }
+  });
 });
 
 suite("WorkflowInstance secret-grant approval callback", () => {

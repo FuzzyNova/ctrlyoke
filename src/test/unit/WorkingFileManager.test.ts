@@ -1516,7 +1516,8 @@ suite("WorkingFileManager", () => {
             _runtime: { sessionId: "must-not-copy", startedAt: 1 },
           },
         ],
-        1
+        1,
+        100
       );
 
       const after = JSON.parse(
@@ -1538,7 +1539,8 @@ suite("WorkingFileManager", () => {
             workflowKey,
             promoted.runRef,
             [{ prompt: "conflict" }],
-            1
+            1,
+            100
           ),
         /Definition revision conflict/
       );
@@ -1692,7 +1694,8 @@ suite("WorkingFileManager", () => {
         grouped.workflowKey,
         grouped.runRef,
         [{ prompt: "tail" }],
-        1
+        1,
+        100
       );
       assert.strictEqual(appended.insertIndex, 5);
       assert.deepStrictEqual(appended.workingFile.parallelGroups, [

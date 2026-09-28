@@ -575,7 +575,7 @@ function normalizeCodexToml(
 
     if (currentTable === "env" || currentTable === "headers") {
       if (value.startsWith(`"`) || value.startsWith(`'`)) {
-        const target = currentTable === "env" ? "env" : "headers";
+        const target = currentTable;
         currentConfig[target] = currentConfig[target] ?? {};
         currentConfig[target]![key] = unquoteTomlString(value);
       }

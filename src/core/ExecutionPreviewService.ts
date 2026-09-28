@@ -112,6 +112,11 @@ import {
   getProcessMapSecretNames,
 } from "../utils/SecretResolver";
 import { getEffectiveSecretGrants } from "../utils/SecretReferenceParser";
+import { exceedsLimit, isUnlimited } from "../utils/LimitUtils";
+import {
+  getEffectiveMaxStepsSource,
+  resolveEffectiveMaxSteps,
+} from "../utils/QueueLimitUtils";
 import {
   parallelGroupConsumer,
   parallelGroupIssueSeverity,
@@ -411,7 +416,7 @@ export class ExecutionPreviewService {
       );
     }
 
-    const limits = this.buildLimits(steps.length);
+    const limits = this.buildLimits(steps.length, workflow);
     const diagnostics = [
       ...compatibilityDiagnostics,
       ...steps.flatMap((step) => step.diagnostics),
@@ -542,7 +547,8 @@ export class ExecutionPreviewService {
       targetResolution,
       conditionPreview,
       Boolean(resolvedSessionId),
-      secretNames
+      secretNames,
+      workflow
     );
     const variablesPreview = this.buildVariablesPreview(variables, request);
     const diagnostics = [
@@ -819,7 +825,8 @@ export class ExecutionPreviewService {
     target: ResolvedExecutionTarget,
     conditions: ConditionPreview,
     sessionPresent: boolean,
-    secretNames: readonly string[]
+    secretNames: readonly string[],
+    workflow: PromptFile
   ) {
     const version =
       this.options.capabilities.harnesses[properties.harness]?.version;
@@ -853,7 +860,7 @@ export class ExecutionPreviewService {
         allowedRules: [...(permission?.allowedTools ?? [])],
         deniedRules: [...(permission?.deniedTools ?? [])],
       },
-      limits: this.buildLimits(0),
+      limits: this.buildLimits(0, workflow),
       conditions,
       propertySources: Object.fromEntries(
         Object.entries(target.sources).map(([key, source]) => [
@@ -1255,7 +1262,9 @@ export class ExecutionPreviewService {
     errorBehavior: ErrorBehavior | undefined
   ): ConditionPreview {
     const retry: RetryPreview = {
-      maxAttempts: end?.maxRetries === -1 ? -1 : (end?.maxRetries ?? 0) + 1,
+      maxAttempts: isUnlimited(end?.maxRetries ?? 0)
+        ? -1
+        : (end?.maxRetries ?? 0) + 1,
       ...(end?.timeoutSec !== undefined ? { backoffSeconds: 0 } : {}),
     };
     return {
@@ -1340,22 +1349,31 @@ export class ExecutionPreviewService {
     };
   }
 
-  private buildLimits(stepCount: number): ExecutionLimitsPreview {
+  private buildLimits(
+    stepCount: number,
+    workflow: PromptFile
+  ): ExecutionLimitsPreview {
     const config = this.options.dynamicQueueConfig;
     const violations: string[] = [];
-    if (config && config.maxSteps !== -1 && stepCount > config.maxSteps) {
+    const workflowMaxSteps = workflow.maxSteps;
+    const effectiveMaxSteps = resolveEffectiveMaxSteps(
+      workflowMaxSteps,
+      config?.maxSteps ?? ConfigurationUtils.getGlobalMaxSteps()
+    );
+    if (exceedsLimit(stepCount, effectiveMaxSteps)) {
       violations.push(
-        `Step count ${stepCount} exceeds limit ${config.maxSteps}`
+        `Step count ${stepCount} exceeds limit ${effectiveMaxSteps}`
       );
     }
     return {
-      ...(config && config.maxSteps !== -1
-        ? { maxQueueSteps: config.maxSteps }
+      ...(!isUnlimited(effectiveMaxSteps)
+        ? { maxQueueSteps: effectiveMaxSteps }
         : {}),
-      ...(config && config.maxWorkflowExecutionTime !== -1
+      ...(config && !isUnlimited(config.maxWorkflowExecutionTime)
         ? { maxExecutionSeconds: config.maxWorkflowExecutionTime }
         : {}),
       violations,
+      maxStepsSource: getEffectiveMaxStepsSource(workflowMaxSteps),
     };
   }
 

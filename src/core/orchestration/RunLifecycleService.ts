@@ -36,6 +36,7 @@ import { Log } from "../../utils/Log";
 import { readWorkflowLockOwnershipInspection } from "../../utils/WorkflowLockInspector";
 import { getPtyProcessManager } from "../harness/PtyProcessManager";
 import { isExecutionOwnerState } from "./WorkflowInstanceRegistry";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
 export interface RunLifecycleRegistryPort {
   getInstances(): Map<string, RunLifecycleInstancePort>;
@@ -743,6 +744,7 @@ export class RunLifecycleService {
       address.runRef,
       tail,
       expectedDefinitionRevision,
+      ConfigurationUtils.getGlobalMaxSteps(),
       this.host.getLineageRepository(),
       allowInterruptedRun
     );

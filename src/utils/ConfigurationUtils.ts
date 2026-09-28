@@ -34,6 +34,7 @@ import {
   type StepColorMode,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
+import { isUnlimited } from "./LimitUtils";
 import {
   ExternalRootsTrustStore,
   externalRootsTrustStore,
@@ -822,7 +823,9 @@ export const ConfigurationUtils = {
     const timeoutSeconds = configService.get(
       CONFIG_KEYS.EXECUTION
     ).maxPromptTimeoutSec;
-    return timeoutSeconds === -1 ? undefined : secondsToMs(timeoutSeconds);
+    return isUnlimited(timeoutSeconds)
+      ? undefined
+      : secondsToMs(timeoutSeconds);
   },
 
   // ============================================================

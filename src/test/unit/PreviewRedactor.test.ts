@@ -31,7 +31,7 @@ function createPreview(variableValue: string): WorkflowExecutionPreview {
           mcpServerIds: [],
           hooks: [],
           permissions: { allowedRules: [], deniedRules: [] },
-          limits: { violations: [] },
+          limits: { violations: [], maxStepsSource: "setting queue.maxSteps" },
           conditions: {
             pre: [],
             end: [],
