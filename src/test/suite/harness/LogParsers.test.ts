@@ -2962,6 +2962,37 @@ suite("CopilotLogParser", () => {
       }
     });
 
+    test("normalizes Copilot input by subtracting cache read and write", async () => {
+      const filePath = createTempJsonlFile([
+        {
+          type: "span",
+          name: "chat gpt-5.6-luna",
+          attributes: {
+            "gen_ai.usage.input_tokens": 63_754,
+            "gen_ai.usage.output_tokens": 484,
+            "gen_ai.usage.cache_read.input_tokens": 31_232,
+            "gen_ai.usage.cache_write.input_tokens": 32_516,
+          },
+          events: [usageInfoEvent(63_754, 128_000)],
+        },
+      ]);
+
+      try {
+        parser.setOtelFilePath(filePath);
+        await parser.pollOtelContextWindow();
+
+        const usage = parser.getFinalOtelUsage();
+        assert.strictEqual(usage?.inputTokens, 6);
+        assert.strictEqual(usage?.cachedInputTokens, 31_232);
+        assert.strictEqual(usage?.cacheCreatedTokens, 32_516);
+        assert.strictEqual(usage?.totalTokens, 490);
+        // Runtime context occupancy remains the provider's exact signal.
+        assert.strictEqual(usage?.contextWindowUsedTokens, 63_754);
+      } finally {
+        cleanupTempFile(filePath);
+      }
+    });
+
     test("should separate cumulative input/output from last-turn context", async () => {
       const otelLines = [
         {
@@ -5486,7 +5517,7 @@ suite("OpenCodeLogParser", () => {
       );
       assert.strictEqual(response.metadata.usage?.inputTokens, 300);
       assert.strictEqual(response.metadata.usage?.outputTokens, 30);
-      assert.strictEqual(response.metadata.usage?.totalTokens, 330);
+      assert.strictEqual(response.metadata.usage?.totalTokens, 340);
       assert.strictEqual(response.metadata.usage?.reasoningOutputTokens, 10);
       assert.strictEqual(response.metadata.usage?.cachedInputTokens, 80);
       assert.strictEqual(response.metadata.usage?.cacheCreatedTokens, 10);
@@ -5496,6 +5527,29 @@ suite("OpenCodeLogParser", () => {
         TOKEN_TOTAL_CONFIDENCE.ACCUMULATED
       );
       assert.strictEqual(response.metadata.harnessReportedCostUsd, 0.2);
+    });
+
+    test("includes disjoint reasoning in output usage totals", () => {
+      const response = parser.extractResponse([
+        {
+          type: "step_finish",
+          sessionID: "ses_open_code",
+          part: {
+            model: "opencode/big-pickle",
+            tokens: {
+              input: 24_073,
+              output: 207,
+              reasoning: 749,
+              total: 25_029,
+            },
+          },
+        },
+      ] as unknown as BaseCliEvent[]);
+
+      assert.strictEqual(response.metadata.usage?.inputTokens, 24_073);
+      assert.strictEqual(response.metadata.usage?.outputTokens, 207);
+      assert.strictEqual(response.metadata.usage?.reasoningOutputTokens, 749);
+      assert.strictEqual(response.metadata.usage?.totalTokens, 25_029);
     });
   });
 

@@ -38,8 +38,12 @@ export function accumulateOpenCodeStepTokens(
   tokenUsage.inputTokens = (tokenUsage.inputTokens ?? 0) + (tokens.input ?? 0);
   tokenUsage.outputTokens =
     (tokenUsage.outputTokens ?? 0) + (tokens.output ?? 0);
+  const reasoning = typeof tokens.reasoning === "number" ? tokens.reasoning : 0;
   tokenUsage.totalTokens =
-    (tokenUsage.totalTokens ?? 0) + (tokens.input ?? 0) + (tokens.output ?? 0);
+    (tokenUsage.totalTokens ?? 0) +
+    (tokens.input ?? 0) +
+    (tokens.output ?? 0) +
+    reasoning;
   tokenUsage.totalConfidence = TOKEN_TOTAL_CONFIDENCE.ACCUMULATED;
   if (typeof tokens.cache?.read === "number") {
     tokenUsage.cachedInputTokens =

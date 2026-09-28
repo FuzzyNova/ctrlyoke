@@ -149,7 +149,7 @@ export function calculateTokenCost(
   const outputUsd = perMillion(completion, pricingData.outputPerMTok);
   const reasoningUsd = perMillion(
     separatelyPricedReasoning,
-    pricingData.reasoningPerMTok ?? 0
+    pricingData.reasoningPerMTok ?? pricingData.outputPerMTok
   );
 
   return {

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude)
 - **Area:** `src/utils/TokenSemantics.ts`, `src/core/harness/opencode/OpenCodeEventMapper.ts`, `src/utils/ModelPricing.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

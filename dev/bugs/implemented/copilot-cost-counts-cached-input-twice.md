@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude)
 - **Area:** `src/utils/TokenSemantics.ts`, `src/utils/ModelPricing.ts`, `src/core/harness/copilot/CopilotLogParser.ts`, `src/core/harness/copilot/CopilotCliProvider.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
