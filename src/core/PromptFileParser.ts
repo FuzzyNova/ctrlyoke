@@ -333,6 +333,7 @@ export class PromptFileParser {
 
     let scratch = structuredClone(parsed);
     const warnings: WorkflowValidationWarning[] = [];
+    const validRootKeys = this.getValidKeysAtPointer(parsed, "");
     while (!this.strictValidator(scratch)) {
       const errors = [...(this.strictValidator.errors ?? [])];
       const candidates = new Map<string, ErrorObject>();
@@ -347,6 +348,12 @@ export class PromptFileParser {
           error.instancePath,
           error.params.unevaluatedProperty
         );
+        if (
+          error.instancePath === "" &&
+          validRootKeys.includes(error.params.unevaluatedProperty)
+        ) {
+          continue;
+        }
         candidates.set(propertyPath, error);
       }
 
@@ -397,7 +404,10 @@ export class PromptFileParser {
       propertyPointer.lastIndexOf("/")
     );
     const validKeys = this.getValidKeysAtPointer(original, parentPointer);
-    const suggestion = PromptFileParser.nearestKey(propertyName, validKeys);
+    const suggestion = PromptFileParser.nearestKey(
+      propertyName,
+      validKeys.filter((key) => key !== propertyName)
+    );
     const suggestionText = suggestion ? ` Did you mean '${suggestion}'?` : "";
     return {
       code: WORKFLOW_VALIDATION_WARNING_CODES.UNKNOWN_PROPERTY,
@@ -414,12 +424,13 @@ export class PromptFileParser {
     const defs = this.promptSchema?.$defs ?? {};
     let schemas: unknown[];
     if (instancePointer === "") {
-      schemas = [
-        defs.singleStepRoot,
-        defs.executionProperties,
-        defs.workflowOnlyProperties,
-        this.promptSchema?.oneOf?.[1]?.allOf?.[2],
-      ];
+      schemas = isObject(target) && hasOwn(target, "steps")
+        ? [
+            defs.executionProperties,
+            defs.workflowOnlyProperties,
+            this.promptSchema?.oneOf?.[1]?.allOf?.[2],
+          ]
+        : [defs.singleStepRoot];
     } else if (instancePointer.endsWith("/_runtime")) {
       schemas = [defs.promptRuntimeMetadata];
     } else if (instancePointer.endsWith("/endCondition")) {

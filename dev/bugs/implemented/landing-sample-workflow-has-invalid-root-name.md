@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-27 by the long-running bug-fix workflow final step (claude-cli, helper agent)
 - **Area:** `landing/src/pages/index.astro` (the "This is the file underneath" example)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

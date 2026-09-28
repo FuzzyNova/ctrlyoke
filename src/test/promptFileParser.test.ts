@@ -37,6 +37,48 @@ suite("PromptFileParser Tests", () => {
     parser = new PromptFileParser();
   });
 
+  suite("unknown root property warnings", () => {
+    const workflow = {
+      harness: "claude-cli",
+      steps: [{ type: "script", script: "echo 1" }],
+    };
+
+    test("does not flag valid workflow keys beside an unknown root key", () => {
+      const warnings = parser.getSchemaWarnings({ ...workflow, name: "k" });
+
+      assert.deepStrictEqual(
+        warnings.map((warning) => warning.propertyPointer),
+        ["/name"]
+      );
+      assert.ok(!warnings[0].message.includes("Did you mean 'name'?"));
+    });
+
+    test("flags only color when it is the only unknown root key", () => {
+      const warnings = parser.getSchemaWarnings({
+        ...workflow,
+        color: "#ff0000",
+      });
+
+      assert.deepStrictEqual(
+        warnings.map((warning) => warning.propertyPointer),
+        ["/color"]
+      );
+    });
+
+    test("reports only truly unknown root keys", () => {
+      const warnings = parser.getSchemaWarnings({
+        ...workflow,
+        name: "k",
+        color: "#ff0000",
+      });
+
+      assert.deepStrictEqual(
+        warnings.map((warning) => warning.propertyPointer).sort(),
+        ["/color", "/name"]
+      );
+    });
+  });
+
   suite("parsePromptFile - JSON Format", () => {
     test("round-trips authored colors for prompt and script steps", async () => {
       const tempDir = await fs.mkdtemp(
