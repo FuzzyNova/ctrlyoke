@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude)
 - **Area:** `src/server/HostedWorkspaceViewerService.ts`, `src/server/CtrlYokeHostedServer.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

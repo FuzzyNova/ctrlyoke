@@ -497,7 +497,20 @@ export class HostedWorkspaceViewerService {
 
   private isExactRoot(absolutePath: string): boolean {
     const resolved = path.resolve(absolutePath);
-    return this.trustedRoots.some((root) => pathsEqual(root, resolved));
+    const trustedRoots = this.trustedRoots;
+    if (trustedRoots.some((root) => pathsEqual(root, resolved))) {
+      return true;
+    }
+
+    let realResolved = resolved;
+    try {
+      realResolved = fs.realpathSync(resolved);
+    } catch {
+      // The lexical comparison above still protects roots that do not exist.
+    }
+    return this.realpathsOf(trustedRoots).some((root) =>
+      pathsEqual(root, realResolved)
+    );
   }
 
   // ── Repo discovery ───────────────────────────────────────────────────────
@@ -625,7 +638,10 @@ export class HostedWorkspaceViewerService {
       : null;
   }
 
-  private safeResolve(requestedPath: string): string | null {
+  private safeResolve(
+    requestedPath: string,
+    options: { preserveLexicalPath?: boolean } = {}
+  ): string | null {
     const ownedUserSettingsPath =
       this.resolveOwnedUserSettingsFile(requestedPath);
     if (ownedUserSettingsPath) return ownedUserSettingsPath;
@@ -646,7 +662,7 @@ export class HostedWorkspaceViewerService {
       ) {
         return null;
       }
-      return realResolved;
+      return options.preserveLexicalPath ? resolved : realResolved;
     } catch {
       // Path doesn't exist yet (e.g. new file write) — fall back to parent check
       const parent = path.dirname(resolved);
@@ -1456,7 +1472,9 @@ export class HostedWorkspaceViewerService {
   // ── File operations ──────────────────────────────────────────────────────
 
   async deleteEntry(requestedPath: string): Promise<void> {
-    const resolved = this.safeResolve(requestedPath);
+    const resolved = this.safeResolve(requestedPath, {
+      preserveLexicalPath: true,
+    });
     if (!resolved || this.isExactRoot(resolved)) {
       throw new Error("Path not allowed");
     }
@@ -1489,7 +1507,9 @@ export class HostedWorkspaceViewerService {
     requestedDestDir: string,
     newName?: string
   ): Promise<{ resolvedSource: string; destPath: string }> {
-    const resolvedSource = this.safeResolve(sourcePath);
+    const resolvedSource = this.safeResolve(sourcePath, {
+      preserveLexicalPath: true,
+    });
     if (!resolvedSource || this.isExactRoot(resolvedSource)) {
       throw new Error("Path not allowed");
     }
@@ -1937,7 +1957,11 @@ export class HostedWorkspaceViewerService {
     );
 
     if (fileStatus?.kind === SCM_FILE_KINDS.UNTRACKED) {
-      await fs.promises.rm(resolved, { recursive: true, force: true });
+      const lexicalPath = this.safeResolve(filePath, {
+        preserveLexicalPath: true,
+      });
+      if (!lexicalPath) throw new Error("Path not allowed");
+      await fs.promises.rm(lexicalPath, { recursive: true, force: true });
       return;
     }
 
