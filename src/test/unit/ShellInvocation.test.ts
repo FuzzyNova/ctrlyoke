@@ -7,6 +7,7 @@ import {
   shellNeedsVerbatimArguments,
   toPtySpawnArgs,
 } from "../../core/harness/PtyProcessManager";
+import { resolveScriptInvocation } from "../../core/orchestration/ScriptProcessRunner";
 import { SHELL_KINDS } from "../../types/DashboardConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
@@ -49,6 +50,26 @@ suite("Shell invocation", () => {
       assert.strictEqual(invocation.executable, "cmd.exe");
       assert.strictEqual(invocation.shellKind, SHELL_KINDS.CMD);
       assert.strictEqual(invocation.windowsVerbatimArguments, true);
+    });
+
+    test("uses the script-step shell argv for worktree setup", () => {
+      const script = "Write-Output setup";
+      const [setupInvocation, scriptStepInvocation] = withTerminalShell(
+        "bash",
+        () => [
+          resolveScriptInvocation(script),
+          resolveShellInvocation(script),
+        ]
+      );
+
+      assert.deepStrictEqual(setupInvocation.argv, [
+        scriptStepInvocation.executable,
+        ...scriptStepInvocation.args,
+      ]);
+      assert.strictEqual(
+        setupInvocation.windowsVerbatimArguments,
+        scriptStepInvocation.windowsVerbatimArguments
+      );
     });
 
     test("falls through to platform auto-detection when neither override is set", () => {
