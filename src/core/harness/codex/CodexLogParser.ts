@@ -224,6 +224,7 @@ export class CodexLogParser extends BaseLogParser {
     let cachedInputTokens = 0;
     let reasoningOutputTokens = 0;
     let providerTotalTokens: number | undefined;
+    let hasSeenModelOutput = false;
     let startingTokenUsage:
       | {
           inputTokens: number;
@@ -236,11 +237,31 @@ export class CodexLogParser extends BaseLogParser {
     // Per-turn (last) usage — used for context window (not cumulative billing total)
     let lastTurnContextWindowUsed: number | undefined;
     let modelContextWindow: number | undefined;
+    const isModelOutputEvent = (event: BaseCliEvent): boolean => {
+      const codexEvent = event as CodexProviderEvent;
+      return (
+        codexEvent.type === CODEX_EVENT_TYPES.RESPONSE_ITEM &&
+        (codexEvent.payload?.role === CODEX_MESSAGE_ROLES.ASSISTANT ||
+          codexEvent.payload?.type === CODEX_PAYLOAD_TYPES.REASONING ||
+          codexEvent.payload?.type === CODEX_PAYLOAD_TYPES.FUNCTION_CALL ||
+          codexEvent.payload?.type ===
+            CODEX_PAYLOAD_TYPES.FUNCTION_CALL_OUTPUT ||
+          codexEvent.payload?.type === CODEX_PAYLOAD_TYPES.CUSTOM_TOOL_CALL ||
+          codexEvent.payload?.type ===
+            CODEX_PAYLOAD_TYPES.CUSTOM_TOOL_CALL_OUTPUT ||
+          codexEvent.payload?.type === CODEX_PAYLOAD_TYPES.TODO_LIST)
+      );
+    };
+    const hasModelOutputEvents = events.some(isModelOutputEvent);
 
     for (const event of events as CodexProviderEvent[]) {
       const timestamp = event.timestamp
         ? new Date(event.timestamp).getTime()
         : Date.now();
+
+      if (isModelOutputEvent(event)) {
+        hasSeenModelOutput = true;
+      }
 
       // Track session metadata (session_meta)
       if (event.type === CODEX_EVENT_TYPES.SESSION_META && event.payload) {
@@ -280,24 +301,14 @@ export class CodexLogParser extends BaseLogParser {
           if (typeof total.total_tokens === "number") {
             providerTotalTokens = total.total_tokens;
           }
-          // A resumed rollout may replay the session's prior cumulative total
-          // before producing this step's first token_count. Recognize that
-          // snapshot when the cumulative total is larger than the last-turn
-          // total (or no last-turn usage is present). A fresh session's first
-          // total matches its first turn, so its step baseline stays zero.
-          const cumulativeTotal =
-            typeof total.total_tokens === "number"
-              ? total.total_tokens
-              : totalInputTokens + totalOutputTokens;
-          const lastTurnTotal = info.last_token_usage
-            ? typeof info.last_token_usage.total_tokens === "number"
-              ? info.last_token_usage.total_tokens
-              : (info.last_token_usage.input_tokens || 0) +
-                (info.last_token_usage.output_tokens || 0)
-            : undefined;
+          // A resumed rollout replays its prior cumulative total before this
+          // step emits any model output. Fresh-session cumulative totals can
+          // exceed the last-turn total when a turn makes several model calls,
+          // so event order is the reliable discriminator.
           if (
             !startingTokenUsage &&
-            (lastTurnTotal === undefined || cumulativeTotal > lastTurnTotal)
+            !hasSeenModelOutput &&
+            hasModelOutputEvents
           ) {
             startingTokenUsage = {
               inputTokens: totalInputTokens,

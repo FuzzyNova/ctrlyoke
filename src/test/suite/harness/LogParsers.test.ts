@@ -3663,6 +3663,30 @@ suite("CodexLogParser", () => {
       );
     });
 
+    test("keeps cumulative totals when the first turn uses multiple model calls", () => {
+      const output = parser.extractResponse(
+        readUsageFixture("fresh-multi-request-session-usage.jsonl")
+      );
+
+      assert.deepStrictEqual(
+        {
+          inputTokens: output.metadata.usage?.inputTokens,
+          outputTokens: output.metadata.usage?.outputTokens,
+          cachedInputTokens: output.metadata.usage?.cachedInputTokens,
+          reasoningOutputTokens:
+            output.metadata.usage?.reasoningOutputTokens,
+          totalTokens: output.metadata.usage?.totalTokens,
+        },
+        {
+          inputTokens: 1300,
+          outputTokens: 140,
+          cachedInputTokens: 1050,
+          reasoningOutputTokens: 28,
+          totalTokens: 1440,
+        }
+      );
+    });
+
     test("subtracts the replayed prior session total from resumed usage", () => {
       const output = parser.extractResponse(
         readUsageFixture("resumed-session-usage.jsonl")
