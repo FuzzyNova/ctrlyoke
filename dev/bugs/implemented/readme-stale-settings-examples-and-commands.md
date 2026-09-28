@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude)
 - **Area:** `README.md`
-- **Severity:** medium
+- **Resolution:** fixed in 1834a326
 
 ## Symptom
 

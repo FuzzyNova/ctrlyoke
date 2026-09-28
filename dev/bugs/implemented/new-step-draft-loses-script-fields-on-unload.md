@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude)
 - **Area:** `src/ui/webview-react/store/editorStore.ts`, `src/ui/webview-react/hooks/useMessageHandler.ts`
-- **Severity:** medium
+- **Resolution:** fixed in 1834a326
 
 ## Symptom
 

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude)
 - **Area:** `src/ui/webview-react/utils/commitGraphLayout.ts`, `src/ui/webview-react/components/workspace-viewer/WorkspaceCommitHistoryPane.tsx`
-- **Severity:** low
+- **Resolution:** fixed in 1834a326
 
 ## Symptom
 

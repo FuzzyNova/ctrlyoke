@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude)
 - **Area:** `src/core/WorkflowExecutor.ts`, `src/core/WorkflowInstance.ts`, `src/core/ExecutionPreviewService.ts`, `src/cli.ts`
-- **Severity:** medium
+- **Resolution:** fixed in 1834a326
 
 ## Symptom
 
