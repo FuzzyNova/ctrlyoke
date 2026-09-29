@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by bug-hunt final step (claude-cli)
 - **Area:** `src/ui/webview-react/components/output/ctrlyoke-tools/claimPathsModel.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

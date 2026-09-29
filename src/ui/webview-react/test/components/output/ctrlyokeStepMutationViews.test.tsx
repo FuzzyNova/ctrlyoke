@@ -200,13 +200,49 @@ describe("step mutation ctrlyoke tool views", () => {
     expect(beforeContainer.textContent).toContain("model: gpt-4 → gpt-5");
   });
 
+  it("shows edit_step no-op results as warnings without rendering the requested diff", () => {
+    const note = "edit_step wrote nothing: values were already current";
+    const rawResult = {
+      success: true,
+      operation: "edit_step",
+      changed: false,
+      note,
+      index: 2,
+      updates: { prompt: "unchanged prompt" },
+      before: { prompt: "unchanged prompt" },
+      clearProperties: [],
+    };
+    const result = parseEditStepResultText(JSON.stringify(rawResult))!;
+    expect(result).toMatchObject({ changed: false, note });
+    expect(
+      resolveCtrlYokeToolView(
+        data(MCP_EDIT_STEP_TOOL_NAME, rawResult, {
+          index: 2,
+          updates: { prompt: "unchanged prompt" },
+        })
+      )
+    ).toMatchObject({ summary: "No change", warning: true });
+    const { container } = render(
+      <EditStepBody
+        {...bodyProps(MCP_EDIT_STEP_TOOL_NAME, result, {
+          index: 2,
+          updates: { prompt: "unchanged prompt" },
+        })}
+      />
+    );
+    expect(container.textContent).toContain("No change");
+    expect(container.textContent).toContain(note);
+    expect(container.textContent).not.toContain("Prompt change");
+    expect(container.querySelector(".text-warning-fg")).toBeInTheDocument();
+  });
+
   it("renders remove_step as one line and resolves names only when available", () => {
     const params = { index: 3, name: "Fix CLI exit code" };
     expect(parseRemoveStepParams(params)).toEqual(params);
     expect(parseRemoveStepParams({ index: -2 })).toBeUndefined();
-    expect(parseRemoveStepResultText(JSON.stringify(removeResult))).toEqual({
-      index: 3,
-    });
+    expect(
+      parseRemoveStepResultText(JSON.stringify(removeResult))
+    ).toMatchObject({ changed: true, index: 3 });
     expect(parseRemoveStepResultText("bad json")).toBeUndefined();
     expect(
       resolveCtrlYokeToolView(
@@ -253,6 +289,28 @@ describe("step mutation ctrlyoke tool views", () => {
         data(MCP_REMOVE_STEP_TOOL_NAME, removeResult, params)
       )!.summary,
     ]);
+  });
+
+  it("shows remove_step no-op notes and warning summaries", () => {
+    const rawResult = {
+      success: true,
+      operation: "remove_step",
+      changed: false,
+      note: "The step was already absent",
+      index: 3,
+    };
+    const result = parseRemoveStepResultText(JSON.stringify(rawResult))!;
+    expect(result).toMatchObject({ changed: false, note: rawResult.note });
+    expect(
+      resolveCtrlYokeToolView(data(MCP_REMOVE_STEP_TOOL_NAME, rawResult))
+    ).toMatchObject({ summary: "No change", warning: true });
+    const { container } = render(
+      <RemoveStepBody
+        {...bodyProps(MCP_REMOVE_STEP_TOOL_NAME, result, undefined)}
+      />
+    );
+    expect(container.textContent).toContain("No change");
+    expect(container.textContent).toContain(rawResult.note);
   });
 
   it("renders reorder_steps with before-to-after absolute index pairs", () => {
@@ -313,6 +371,54 @@ describe("step mutation ctrlyoke tool views", () => {
         data(MCP_REORDER_STEPS_TOOL_NAME, reorderResult, params)
       )!.searchText,
     ]);
+  });
+
+  it("maps reorder destinations to movable slots after already-started steps", () => {
+    const params = { indices: [5, 3, 4] };
+    const result = parseReorderStepsResultText(
+      JSON.stringify({
+        success: true,
+        operation: "reorder_steps",
+        changed: true,
+        indices: [5, 3, 4],
+      })
+    )!;
+    render(
+      <ReorderStepsBody
+        {...bodyProps(MCP_REORDER_STEPS_TOOL_NAME, result, params)}
+      />
+    );
+    expect(screen.getByText("#6 → #4")).toBeInTheDocument();
+    expect(screen.getByText("#4 → #5")).toBeInTheDocument();
+    expect(screen.getByText("#5 → #6")).toBeInTheDocument();
+    expect(screen.queryByText("#6 → #1")).toBeNull();
+  });
+
+  it("shows reorder_steps no-op notes without rendering stale movement pairs", () => {
+    const rawResult = {
+      success: true,
+      operation: "reorder_steps",
+      changed: false,
+      note: "Order was already current",
+      indices: [2, 0, 1],
+    };
+    const result = parseReorderStepsResultText(JSON.stringify(rawResult))!;
+    expect(result).toMatchObject({ changed: false, note: rawResult.note });
+    expect(
+      resolveCtrlYokeToolView(
+        data(MCP_REORDER_STEPS_TOOL_NAME, rawResult, { indices: [2, 0, 1] })
+      )
+    ).toMatchObject({ summary: "No change", warning: true });
+    const { container } = render(
+      <ReorderStepsBody
+        {...bodyProps(MCP_REORDER_STEPS_TOOL_NAME, result, {
+          indices: [2, 0, 1],
+        })}
+      />
+    );
+    expect(container.textContent).toContain("No change");
+    expect(container.textContent).toContain(rawResult.note);
+    expect(screen.queryByText("#3 → #1")).toBeNull();
   });
 
   it("renders submit_commit_message on both server ids", () => {

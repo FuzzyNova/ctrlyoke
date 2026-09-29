@@ -16,6 +16,8 @@ export interface EditStepParams {
 }
 
 export interface EditStepResult {
+  changed?: boolean;
+  note?: string;
   index?: number;
   updates?: Record<string, unknown>;
   clearProperties: string[];
@@ -29,6 +31,8 @@ export interface RemoveStepParams {
 }
 
 export interface RemoveStepResult {
+  changed?: boolean;
+  note?: string;
   index?: number;
   name?: string;
 }
@@ -38,6 +42,8 @@ export interface ReorderStepsParams {
 }
 
 export interface ReorderStepsResult {
+  changed?: boolean;
+  note?: string;
   indices: number[];
   newQueueSize?: number;
 }
@@ -95,6 +101,8 @@ export function parseEditStepResultText(
     )
       return undefined;
     return {
+      ...(typeof raw.changed === "boolean" ? { changed: raw.changed } : {}),
+      ...(typeof raw.note === "string" ? { note: raw.note } : {}),
       ...(parseIndex(raw.index) !== undefined
         ? { index: raw.index as number }
         : {}),
@@ -132,6 +140,8 @@ export function parseRemoveStepResultText(
       return undefined;
     const step = isRecord(raw.removedStep) ? raw.removedStep : undefined;
     return {
+      ...(typeof raw.changed === "boolean" ? { changed: raw.changed } : {}),
+      ...(typeof raw.note === "string" ? { note: raw.note } : {}),
       ...(parseIndex(raw.index) !== undefined
         ? { index: raw.index as number }
         : {}),
@@ -177,6 +187,8 @@ export function parseReorderStepsResultText(
     )
       return undefined;
     return {
+      ...(typeof raw.changed === "boolean" ? { changed: raw.changed } : {}),
+      ...(typeof raw.note === "string" ? { note: raw.note } : {}),
       indices: (raw.indices as number[] | undefined) ?? [],
       ...(parseIndex(raw.newQueueSize) !== undefined
         ? { newQueueSize: raw.newQueueSize as number }
@@ -227,6 +239,7 @@ export function editStepChangedFields(
   params: EditStepParams | undefined,
   result: EditStepResult
 ): string[] {
+  if (result.changed === false) return [];
   const updates = params?.updates ?? result.updates ?? {};
   return [
     ...Object.keys(updates),
@@ -241,6 +254,7 @@ export function editStepSummary(
   params: EditStepParams | undefined,
   result: EditStepResult
 ): string {
+  if (result.changed === false) return "No change";
   const index = stepIndex(params, result);
   const fields = editStepChangedFields(params, result);
   return `Edited step${index === undefined ? "" : ` ${displayIndex(index)}`}${fields.length ? ` — ${fields.join(", ")}` : ""}`;
@@ -250,6 +264,7 @@ export function removeStepSummary(
   params: RemoveStepParams | undefined,
   result: RemoveStepResult
 ): string {
+  if (result.changed === false) return "No change";
   const index = stepIndex(params, result);
   const name = params?.name ?? result.name;
   return `Removed step${index === undefined ? "" : ` ${displayIndex(index)}`}${name ? ` '${name}'` : ""}`;
@@ -260,8 +275,11 @@ export function reorderStepPairs(
   result: ReorderStepsResult
 ): string[] {
   const indices = params?.indices.length ? params.indices : result.indices;
+  if (result.changed === false) return [];
+  const slots = [...indices].sort((left, right) => left - right);
   return indices.map(
-    (from, to) => `${displayIndex(from)} → ${displayIndex(to)}`
+    (from, position) =>
+      `${displayIndex(from)} → ${displayIndex(slots[position])}`
   );
 }
 
@@ -269,6 +287,7 @@ export function reorderStepsSummary(
   params: ReorderStepsParams | undefined,
   result: ReorderStepsResult
 ): string {
+  if (result.changed === false) return "No change";
   const count =
     params?.indices.length || result.indices.length || result.newQueueSize;
   return `Reordered ${count ?? 0} ${count === 1 ? "step" : "steps"}`;
@@ -294,6 +313,8 @@ export function stepMutationSearchText(
     | ReorderStepsResult
     | SubmitCommitMessageResult
 ): string[] {
+  if ("changed" in result && result.changed === false)
+    return ["No change", ...(result.note ? [result.note] : [])];
   if ("clearProperties" in result) {
     const editParams = params && "updates" in params ? params : undefined;
     const updates = editParams?.updates ?? result.updates ?? {};

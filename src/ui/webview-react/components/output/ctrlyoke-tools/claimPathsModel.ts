@@ -1,16 +1,14 @@
 import { isRecord, tryParseJson } from "./shared";
+import type { CoordinationParticipant } from "@root/types/CtrlYokeTypes";
 import { coordinationParticipantAttribution } from "@utils/coordinationPresentation";
-import { COORDINATION_PARTICIPANT_KINDS } from "@root/types/DashboardConstants";
-
-type ClaimOwnerKind =
-  | (typeof COORDINATION_PARTICIPANT_KINDS)["CTRL_YOKE_STEP"]
-  | (typeof COORDINATION_PARTICIPANT_KINDS)["EXTERNAL"];
+import { resolveCoordinationParticipantKind } from "@root/utils/CoordinationAttribution";
+import { parseCoordinationParticipant } from "./coordinationParticipantParser";
 
 export interface ClaimPathsOwner {
   participantId: string;
   label: string;
   attested: boolean;
-  kind: ClaimOwnerKind;
+  kind: CoordinationParticipant["kind"];
 }
 
 export interface ClaimPathsDenied {
@@ -29,20 +27,13 @@ export interface ClaimPathsParams {
 }
 
 function parseOwner(value: unknown): ClaimPathsOwner | undefined {
-  if (
-    !isRecord(value) ||
-    typeof value.participantId !== "string" ||
-    typeof value.label !== "string" ||
-    typeof value.attested !== "boolean" ||
-    (value.kind !== COORDINATION_PARTICIPANT_KINDS.CTRL_YOKE_STEP &&
-      value.kind !== COORDINATION_PARTICIPANT_KINDS.EXTERNAL)
-  )
-    return undefined;
+  const participant = parseCoordinationParticipant(value);
+  if (!participant) return undefined;
   return {
-    participantId: value.participantId,
-    label: value.label,
-    attested: value.attested,
-    kind: value.kind,
+    participantId: participant.participantId,
+    label: participant.label,
+    attested: participant.attested,
+    kind: resolveCoordinationParticipantKind(participant.kind),
   };
 }
 
