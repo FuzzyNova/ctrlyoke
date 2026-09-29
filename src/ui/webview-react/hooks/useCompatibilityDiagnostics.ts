@@ -1,9 +1,6 @@
 import { useMemo } from "react";
 import { useCompatibilityStore } from "@store/compatibilityStore";
-import {
-  useSettingsStore,
-  type WorkflowProperties,
-} from "@store/settingsStore";
+import { useSettingsStore } from "@store/settingsStore";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import type { PropertyValues, EditorSelectionTarget } from "@store/editorStore";
 import {
@@ -24,12 +21,16 @@ import type {
   PromptFile,
   PromptStep as CorePromptStep,
   ScriptStep as CoreScriptStep,
-  WorkflowStep as CoreWorkflowStep,
 } from "@root/types/CtrlYokeTypes";
 import type { CompatibilityDiagnostic } from "@root/types/CompatibilityTypes";
 import type { CompatibilityExecutionTarget } from "@root/types/CompatibilityAnalyzer";
 import { parseAllFileReferences } from "@root/utils/FileReferenceParser";
 import { isImageRefPath } from "@root/types/DashboardConstants";
+import {
+  createDefaults,
+  toCorePromptStep,
+  toCoreWorkflow,
+} from "@utils/coreWorkflowAdapter";
 
 export interface UseCompatibilityDiagnosticsResult {
   diagnostics: CompatibilityDiagnostic[];
@@ -48,38 +49,6 @@ export interface UseCompatibilityDiagnosticsOptions {
   promptTarget?: EditorSelectionTarget;
   /** Build the workflow-level projection only for the report surface. */
   includePortabilityReport?: boolean;
-}
-
-function toCorePromptStep(
-  step: Exclude<WorkflowStep, CoreScriptStep>
-): CorePromptStep {
-  return {
-    type: step.type,
-    name: step.name,
-    enabled: step.enabled,
-    prompt: step.prompt,
-    harness: step.harness as HarnessId | undefined,
-    model: step.model,
-    executionMode: step.executionMode,
-    agent: step.agent,
-    skills: step.skills,
-    resumeSession: step.resumeSession,
-    sessionId: step.sessionId,
-    mcpServers: step.mcpServers as CorePromptStep["mcpServers"],
-    hooks: step.hooks,
-    endCondition: step.endCondition as CorePromptStep["endCondition"],
-    preCondition: step.preCondition,
-    priorContext: step.priorContext,
-    additionalArgs: step.additionalArgs,
-    toolPermissions: step.toolPermissions,
-    errorBehavior: step.errorBehavior,
-  };
-}
-
-function toCoreStep(step: WorkflowStep): CoreWorkflowStep {
-  return step.type === STEP_TYPES.SCRIPT
-    ? (step as CoreScriptStep)
-    : toCorePromptStep(step);
 }
 
 function authoredImageRefs(prompt: string): readonly string[] {
@@ -118,54 +87,6 @@ function applyPromptProperties(
     priorContext: properties.priorContext,
     additionalArgs: properties.additionalArgs,
     toolPermissions: properties.toolPermissions,
-  };
-}
-
-function toCoreWorkflow(
-  steps: WorkflowStep[],
-  finalStep: WorkflowStep | null,
-  properties: WorkflowProperties
-): PromptFile {
-  return {
-    harness: properties.harness as HarnessId | undefined,
-    model: properties.model,
-    executionMode: properties.executionMode,
-    agent: properties.agent,
-    skills: properties.skills,
-    resumeSession: properties.resumeSession,
-    sessionId: properties.sessionId,
-    mcpServers: properties.mcpServers as PromptFile["mcpServers"],
-    hooks: properties.hooks as PromptFile["hooks"],
-    endCondition: properties.endCondition as PromptFile["endCondition"],
-    preCondition: properties.preCondition,
-    priorContext: properties.priorContext,
-    additionalArgs: properties.additionalArgs,
-    toolPermissions: properties.toolPermissions,
-    errorBehavior: properties.errorBehavior,
-    steps: steps.map(toCoreStep),
-    ...(finalStep ? { finalStep: toCoreStep(finalStep) } : {}),
-  };
-}
-
-function createDefaults(
-  globalSettings: ReturnType<typeof useSettingsStore.getState>["globalSettings"]
-) {
-  return {
-    harness: globalSettings.harness,
-    modelsByHarness: globalSettings.harnessDefaultModels,
-    additionalArgsByHarness: globalSettings.harnessDefaultAdditionalArgs,
-    executionMode: globalSettings.executionMode,
-    agent: globalSettings.agent,
-    skills: globalSettings.skills,
-    resumeSession: globalSettings.resumeSession,
-    mcpServers: globalSettings.mcpServers as PromptFile["mcpServers"],
-    hooks: globalSettings.hooks as PromptFile["hooks"],
-    priorContext: globalSettings.priorContext as PromptFile["priorContext"],
-    toolPermissions:
-      globalSettings.toolPermissions as PromptFile["toolPermissions"],
-    endCondition: globalSettings.defaultEndCondition,
-    preCondition: globalSettings.defaultPreCondition,
-    errorBehavior: globalSettings.defaultErrorBehavior,
   };
 }
 

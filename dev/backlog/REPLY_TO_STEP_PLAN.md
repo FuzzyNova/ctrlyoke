@@ -268,12 +268,21 @@ the end of the queue, outside any group.
 Each implementation session ticks its items here in the commit that lands them, and
 records any deviation from the design above in that section of this doc.
 
-- [ ] Foundations: shared core-workflow adapter (impl step 1), widened webview
+- [x] Foundations: shared core-workflow adapter (impl step 1), widened webview
       `_runtime` type (2), `getStepSessionId()` (3)
 - [ ] `buildReplyPropertyValues()` in `utils/replyToStep.ts` (4)
 - [ ] Editor store `replyContext`, `startReplyToStep()` / `cancelReplyToStep()` (5)
 - [ ] `StatusBanner` extraction (6) and reply banner in `EditorSection` (7)
 - [ ] Context menu item wired into both step menus (8), full gate green (9)
+
+Foundation implementation note: `getStepSessionId()` lives in
+`utils/stepMetadataClipboard.ts` beside `StepRuntimeMetaSnapshot`. The dashboard
+run-view path passes `workingFile.steps` and `workingFile.finalStep` directly
+through `RunViewPublisher`/`useMessageHandler` into `workflowStore`, retaining
+step `_runtime`. The queue snapshot path likewise forwards prompt steps without
+stripping `_runtime`. `WorkflowSerializer.buildCleanWorkflow()` strips runtime
+metadata only for authored save/template-export output; it is not the dashboard
+run-view serializer. No forwarding change was needed.
 
 ## Tests (`src/ui/webview-react/test/**`)
 

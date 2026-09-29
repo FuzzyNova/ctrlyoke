@@ -11,6 +11,23 @@ export interface StepRuntimeMetaSnapshot {
   contextWindowSize?: number;
 }
 
+/** Resolve the concrete session this step used, preferring its latest output. */
+export function getStepSessionId(
+  step: WorkflowStep,
+  latestOutput: CliOutput | null | undefined,
+  runtimeMeta: StepRuntimeMetaSnapshot | null | undefined
+): string | undefined {
+  const candidates = [
+    latestOutput?.structured?.metadata?.sessionId,
+    runtimeMeta?.sessionId,
+    step._runtime?.sessionId,
+  ];
+  return candidates.find(
+    (sessionId): sessionId is string =>
+      typeof sessionId === "string" && sessionId.length > 0
+  );
+}
+
 export interface StepMetadataClipboardInput {
   step: WorkflowStep;
   /** 1-based display position, used only for the header line (ignored when `isFinalStep`). */
@@ -239,8 +256,7 @@ export function buildStepMetadataClipboardText({
     )
   );
 
-  const sessionId =
-    latestOutput?.structured?.metadata?.sessionId ?? runtimeMeta?.sessionId;
+  const sessionId = getStepSessionId(step, latestOutput, runtimeMeta);
   const elapsed = latestOutput?.elapsed ?? runtimeMeta?.elapsed;
   const runtimeLines: string[] = [];
   if (sessionId) runtimeLines.push(`Session ID: ${sessionId}`);
