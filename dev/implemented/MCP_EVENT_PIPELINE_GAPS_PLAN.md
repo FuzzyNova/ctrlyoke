@@ -1,7 +1,7 @@
 # MCP Event Pipeline Gaps — reliable detection and pairing of MCP tool calls on every harness
 
 > **Status:** Implemented — items 1–5 done. Prerequisite for
-> [`CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md`](../backlog/CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md): purpose-built
+> [`CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md`](CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md): purpose-built
 > views are only as good as the `MCP_TOOL_CALL` events underneath them. Skill-mode calls are
 > rewritten at the shared parsed-event streaming boundary.
 
