@@ -168,6 +168,17 @@ export class OpenCodeCliProvider implements ICliProvider {
   readonly logParser = new OpenCodeLogParser(() =>
     getOpenCodeContextWindowSize(this.resolvedCurrentModel)
   );
+  /** MCP server ids prepared for the current execution. */
+  private attachedMcpServerIds: ReadonlySet<string> = new Set();
+
+  getAttachedMcpServerIds(): ReadonlySet<string> {
+    return this.attachedMcpServerIds;
+  }
+
+  private setAttachedMcpServerIds(serverIds: Iterable<string>): void {
+    this.attachedMcpServerIds = new Set(serverIds);
+    this.logParser.setAttachedMcpServerIds(this.attachedMcpServerIds);
+  }
 
   /** Inline config accumulated while preparing the current prompt. */
   private pendingInlineConfig: OpenCodeInlineConfig = { plugin: [] };
@@ -395,6 +406,7 @@ export class OpenCodeCliProvider implements ICliProvider {
           description: "Prepare OpenCode inline execution state",
           apply: async () => {
             this.pendingInlineConfig = { plugin: inlinePlugin };
+            this.setAttachedMcpServerIds([]);
             this.pendingUserHooksEnv = this.serializeUserHooks(userHooks);
             if (model) {
               this.resolvedCurrentModel = model;
@@ -564,6 +576,7 @@ export class OpenCodeCliProvider implements ICliProvider {
             description: "Clear OpenCode inline MCP configuration",
             apply: async () => {
               delete this.pendingInlineConfig.mcp;
+              this.setAttachedMcpServerIds([]);
             },
           },
         ],
@@ -589,6 +602,7 @@ export class OpenCodeCliProvider implements ICliProvider {
           description: "Set OpenCode inline MCP configuration",
           apply: async () => {
             this.pendingInlineConfig.mcp = mcpEntries;
+            this.setAttachedMcpServerIds(Object.keys(mcpEntries));
           },
         },
       ],

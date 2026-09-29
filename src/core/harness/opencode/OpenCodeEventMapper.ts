@@ -18,6 +18,7 @@ import {
   TOKEN_TOTAL_CONFIDENCE,
 } from "../../../types/DashboardConstants";
 import { CliParseUtils } from "../shared/CliParseUtils";
+import { CliEventMapper, type McpToolHint } from "../shared/CliEventMapper";
 import { OPENCODE_TOOL_NAMES } from "./OpenCodeProtocolConstants";
 
 const OPEN_CODE_QUESTION_TOOL = "question";
@@ -71,7 +72,8 @@ export function accumulateOpenCodeStepTokens(
  */
 export function mapOpenCodeToolPartToCliEvent(
   timestamp: number | undefined,
-  part: Record<string, any>
+  part: Record<string, any>,
+  attachedMcpServerIds: ReadonlySet<string> = new Set()
 ): CliEvent | undefined {
   const toolName = part.tool as string | undefined;
   if (!toolName) return undefined;
@@ -142,7 +144,32 @@ export function mapOpenCodeToolPartToCliEvent(
         },
       };
 
-    default:
+    default: {
+      const mcpHint = findOpenCodeMcpToolHint(
+        toolName,
+        attachedMcpServerIds
+      );
+      const classification = CliEventMapper.classifyTool(toolName, mcpHint);
+      if (classification.type === CLI_EVENT_TYPES.MCP_TOOL_CALL) {
+        return {
+          type: classification.type,
+          timestamp,
+          data: {
+            server: classification.server,
+            tool: classification.tool,
+            toolCallId: part.callID,
+            parameters: input as Record<string, unknown>,
+            result: isCompleted
+              ? {
+                  success: true,
+                  output:
+                    typeof output === "string" ? output : JSON.stringify(output),
+                }
+              : undefined,
+          },
+        };
+      }
+
       return {
         type: CLI_EVENT_TYPES.TOOL_CALL,
         timestamp,
@@ -159,7 +186,24 @@ export function mapOpenCodeToolPartToCliEvent(
             : undefined,
         },
       };
+    }
   }
+}
+
+/** Resolve OpenCode's `<server>_<tool>` name using only execution-attached ids. */
+function findOpenCodeMcpToolHint(
+  toolName: string,
+  attachedMcpServerIds: ReadonlySet<string>
+): McpToolHint | undefined {
+  const serverId = [...attachedMcpServerIds]
+    .filter((id) => toolName.startsWith(`${id}_`))
+    .sort((left, right) => right.length - left.length)[0];
+  if (!serverId) return undefined;
+
+  return {
+    server: serverId,
+    tool: toolName.slice(serverId.length + 1),
+  };
 }
 
 /**

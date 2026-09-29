@@ -1,6 +1,6 @@
 # MCP Event Pipeline Gaps — reliable detection and pairing of MCP tool calls on every harness
 
-> **Status:** In progress — implementation-order item 1 complete. Prerequisite for
+> **Status:** In progress — implementation-order items 1–3 complete. Prerequisite for
 > [`CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md`](CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md): purpose-built
 > views are only as good as the `MCP_TOOL_CALL` events underneath them, and on two of the six
 > harnesses today those events never exist.
@@ -96,6 +96,14 @@ to a generic `TOOL_CALL` (one row, with params and result, so there's no duplica
 naive split can't recover server and tool, because both ctrlyoke tool names (`claim_paths`)
 and server ids (`ctrlyoke-commit`) contain separators. Also, OpenCode's tool output arrived as
 pretty-printed JSON while Copilot's was compact, so result parsing must not assume either.
+
+**Hyphen capture (verified 2026-09-28):** OpenCode CLI 1.18.32 preserved the hyphen in the
+server prefix. A scratch project config attached the compiled MCP server as
+`ctrlyoke-commit`; `opencode export ses_f151550e8ffeqUgB90vCwiwXe6` recorded the tool part name
+`ctrlyoke-commit_global_status` with call id `call_function_3ne426q3g8qm_1`. The requested
+`workflow_status` tool was not available in the current server build, so the second and final
+capture called its current `global_status` tool instead. The MCP capture fixture preserves the
+tool name and event shape while replacing the local workspace path and generated identifiers.
 
 ### 5. Skill mode produces bash, not MCP
 
@@ -201,6 +209,8 @@ parser unit-test fixtures, so vendor renames show up in `npm test` rather than i
    capture above. The parser continues to use `tool.execution_start` as its tool-call
    source; `assistant.message.toolRequests` are not independently mapped. No design
    deviations.
-3. **A (OpenCode):** attached-server-set resolution, after the hyphenated-server capture.
+3. [x] **A (OpenCode):** attached-server-set resolution. The 2026-09-28 capture confirmed raw
+   hyphenated prefixes; the parser uses longest-prefix matching against ids attached to the
+   execution and retains unmatched names as generic tool calls.
 4. **E:** the probe and the fixtures for the four unverified harnesses. Fix whatever it finds.
 5. **D:** skill-mode mapping.

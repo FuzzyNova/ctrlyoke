@@ -120,6 +120,8 @@ interface OpenCodeExportPart {
 export class OpenCodeLogParser extends BaseLogParser {
   /** Part IDs already emitted — prevents re-emitting on re-poll */
   private readonly seenPartIds = new Set<string>();
+  /** MCP server ids attached to the execution whose output is being parsed. */
+  private attachedMcpServerIds: ReadonlySet<string> = new Set();
 
   /**
    * Returns the context window size (in tokens) for the current model.
@@ -133,6 +135,11 @@ export class OpenCodeLogParser extends BaseLogParser {
   ) {
     super();
     this.contextWindowSizeFn = contextWindowSizeFn;
+  }
+
+  /** Set the exact MCP server ids attached to the current execution. */
+  setAttachedMcpServerIds(serverIds: ReadonlySet<string>): void {
+    this.attachedMcpServerIds = new Set(serverIds);
   }
 
   // ──────────────────────────────────────────────────────────────────
@@ -340,7 +347,11 @@ export class OpenCodeLogParser extends BaseLogParser {
       case OPENCODE_EVENT_TYPES.TOOL_USE: {
         const part = e.part as Record<string, any> | undefined;
         if (part) {
-          const toolEvent = mapOpenCodeToolPartToCliEvent(timestamp, part);
+          const toolEvent = mapOpenCodeToolPartToCliEvent(
+            timestamp,
+            part,
+            this.attachedMcpServerIds
+          );
           if (toolEvent) {
             cliEvents.push(toolEvent);
           }
@@ -458,7 +469,8 @@ export class OpenCodeLogParser extends BaseLogParser {
           if (part) {
             const toolEvent = mapOpenCodeToolPartToCliEvent(
               e.timestamp as number | undefined,
-              part
+              part,
+              this.attachedMcpServerIds
             );
             if (toolEvent) {
               cliEvents.push(toolEvent);

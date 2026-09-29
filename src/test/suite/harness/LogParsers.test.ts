@@ -22,6 +22,7 @@ import {
   FileReadData,
   AskUserQuestionData,
   BashCommandData,
+  McpToolCallData,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -5601,6 +5602,30 @@ suite("OpenCodeLogParser", () => {
 
   setup(() => {
     parser = new OpenCodeLogParser();
+  });
+
+  test("parses the captured hyphenated MCP server name as one normalized row", () => {
+    const fixturePath = path.join(
+      __dirname,
+      "../../../../src/test/fixtures/opencode/hyphenated-mcp-server.stdout.jsonl"
+    );
+    const fixtureLine = fs.readFileSync(fixturePath, "utf8").trim();
+    const event = JSON.parse(fixtureLine) as BaseCliEvent;
+    parser.setAttachedMcpServerIds(new Set(["ctrlyoke", "ctrlyoke-commit"]));
+
+    const response = parser.extractResponse([event]);
+    const normalized = normalizeCliEvents(response.events);
+    const mcpRows = normalized.filter(
+      (row) => row.type === CLI_EVENT_TYPES.MCP_TOOL_CALL
+    );
+
+    assert.strictEqual(mcpRows.length, 1);
+    const data = mcpRows[0].data as McpToolCallData;
+    assert.strictEqual(data.server, "ctrlyoke-commit");
+    assert.strictEqual(data.tool, "global_status");
+    assert.strictEqual(data.toolCallId, "call_opencode_global_status_1");
+    assert.strictEqual(data.result?.success, true);
+    assert.ok(data.result?.output?.includes('"workspaceRoot": "<workspace>"'));
   });
 
   suite("extractResponse token attribution", () => {
