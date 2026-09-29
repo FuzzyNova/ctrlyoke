@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude, helper agent)
 - **Area:** `src/ui/webview-react/hooks/useAttachmentTokenCount.ts` (`extractRawReferences` ~L85-105)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

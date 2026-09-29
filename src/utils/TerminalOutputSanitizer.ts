@@ -95,3 +95,69 @@ export function sanitizeTerminalOutput(text: string): string {
   }
   return sanitized;
 }
+
+/**
+ * Incrementally sanitize a terminal stream without losing escape sequences
+ * that are split across chunk boundaries.
+ */
+export class TerminalOutputSanitizer {
+  private pendingEscape = "";
+
+  /** Sanitize the complete prefix of a chunk, retaining a partial escape. */
+  push(chunk: string): string {
+    if (typeof chunk !== "string" || chunk.length === 0) {
+      return "";
+    }
+
+    const input = this.pendingEscape + chunk;
+    this.pendingEscape = "";
+    const incompleteStart = findTrailingIncompleteEscape(input);
+    const completePrefix =
+      incompleteStart >= 0 ? input.slice(0, incompleteStart) : input;
+    if (incompleteStart >= 0) {
+      this.pendingEscape = input.slice(incompleteStart);
+    }
+    return sanitizeTerminalOutput(completePrefix);
+  }
+
+  /** Discard any incomplete trailing sequence when the stream ends. */
+  flush(): string {
+    this.pendingEscape = "";
+    // The retained suffix is known to be an unfinished terminal control
+    // sequence; exposing its printable-looking payload (for example `[39m`)
+    // would recreate the corruption this incremental path avoids.
+    return "";
+  }
+}
+
+function findTrailingIncompleteEscape(text: string): number {
+  let escapeIndex = text.indexOf("\x1B");
+  while (escapeIndex >= 0) {
+    const suffix = text.slice(escapeIndex);
+    if (isIncompleteEscape(suffix)) {
+      return escapeIndex;
+    }
+    escapeIndex = text.indexOf("\x1B", escapeIndex + 1);
+  }
+  return -1;
+}
+
+function isIncompleteEscape(suffix: string): boolean {
+  if (suffix.length === 1) {
+    return true;
+  }
+
+  if (suffix.startsWith("\x1B[")) {
+    const body = suffix.slice(2);
+    if (/^[0-?]*[ -/]*$/.test(body)) {
+      return true;
+    }
+    return false;
+  }
+
+  if (suffix.startsWith("\x1B]")) {
+    return !/(?:\x07|\x1B\\)/.test(suffix.slice(2));
+  }
+
+  return false;
+}

@@ -53,22 +53,22 @@ export function createReferencePatterns(): ReferencePatterns {
   return {
     // @"path with spaces/file.ts"
     fullFileQuoted: new RegExp(
-      `${NOT_AFTER_BOUNDARY}@"([^"]+\\.[a-zA-Z0-9]+)"(?!\\/)`,
-      "g"
+      `${NOT_AFTER_BOUNDARY}@"([^"]+\\.[\\p{L}\\p{N}]+)"(?!\\/)`,
+      "gu"
     ),
     // @path/to/file.ts
     //
-    // The trailing `(?![a-zA-Z0-9/])` is load-bearing and must not be relaxed
-    // to `(?!\/)`. Blocking only `/` lets the `[a-zA-Z0-9]+` quantifier
+    // The trailing Unicode-aware lookahead is load-bearing and must not be
+    // relaxed to `(?!\/)`. Blocking only `/` lets the extension quantifier
     // backtrack: on `@dir/file.ts/` it gives back the `s`, sees `s` rather
     // than `/` ahead, and matches the truncated path `dir/file.t`. Blocking
-    // alphanumerics too means every backtrack still leaves an alphanumeric
+    // letters and numbers too means every backtrack still leaves one
     // ahead, so no partial match survives and the whole token correctly falls
     // through to `directory`. The bug only hides on one-character extensions
     // (`@dir.d/`), where there is nothing to give back.
     fullFile: new RegExp(
-      `${NOT_AFTER_BOUNDARY}@([^\\s#"]+\\.[a-zA-Z0-9]+)(?![a-zA-Z0-9/])`,
-      "g"
+      `${NOT_AFTER_BOUNDARY}@([^\\s#"]+\\.[\\p{L}\\p{N}]+)(?![\\p{L}\\p{N}/])`,
+      "gu"
     ),
     // @"path with spaces/dir/"
     directoryQuoted: new RegExp(

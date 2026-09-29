@@ -2,6 +2,7 @@ import * as assert from "assert";
 import { suite, test, setup } from "mocha";
 import {
   sanitizeTerminalOutput,
+  TerminalOutputSanitizer,
   stripAnsiCodes,
   clearSanitizeTerminalOutputCacheForTests,
 } from "../../utils/TerminalOutputSanitizer";
@@ -84,6 +85,32 @@ suite("TerminalOutputSanitizer", () => {
         sanitizeTerminalOutput(largeInput),
         `${"a".repeat(60_000)}\nb`
       );
+    });
+  });
+
+  suite("TerminalOutputSanitizer", () => {
+    for (const sequence of [
+      "\x1B[38;5;196mred\x1B[39m",
+      "\x1B]0;terminal title\x07text",
+      "\x1B]8;;https://example.com\x1B\\link\x1B]8;;\x1B\\",
+    ]) {
+      test(`preserves an escape sequence split at every offset: ${JSON.stringify(sequence)}`, () => {
+        const expected = sanitizeTerminalOutput(sequence);
+        for (let offset = 1; offset < sequence.length; offset++) {
+          const sanitizer = new TerminalOutputSanitizer();
+          const output =
+            sanitizer.push(sequence.slice(0, offset)) +
+            sanitizer.push(sequence.slice(offset)) +
+            sanitizer.flush();
+          assert.strictEqual(output, expected, `split at ${offset}`);
+        }
+      });
+    }
+
+    test("discards a trailing incomplete escape sequence", () => {
+      const sanitizer = new TerminalOutputSanitizer();
+      assert.strictEqual(sanitizer.push("PASS\x1B[3"), "PASS");
+      assert.strictEqual(sanitizer.flush(), "");
     });
   });
 });

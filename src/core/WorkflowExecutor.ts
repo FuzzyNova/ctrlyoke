@@ -2604,7 +2604,7 @@ export class WorkflowExecutor {
               context
             ),
             onOutput: (chunk) => {
-              outputChunks.push(sanitizeTerminalOutput(chunk));
+              outputChunks.push(chunk);
               onOutput(chunk);
             },
             timeout,

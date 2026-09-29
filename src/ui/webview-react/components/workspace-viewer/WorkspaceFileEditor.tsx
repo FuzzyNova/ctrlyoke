@@ -382,7 +382,7 @@ function findWorkspaceReferenceMatches(
     type: WorkspaceFileTreeEntryKind,
     target: WorkspaceReferenceMatch[]
   ) => {
-    const regex = new RegExp(pattern.source, "g");
+    const regex = new RegExp(pattern.source, pattern.flags);
     while ((match = regex.exec(text)) !== null) {
       target.push({
         from: offset + match.index,
@@ -415,7 +415,7 @@ function findWorkspaceReferenceMatches(
   );
 
   const collectLineRangeMatches = (pattern: RegExp) => {
-    const regex = new RegExp(pattern.source, "g");
+    const regex = new RegExp(pattern.source, pattern.flags);
     while ((match = regex.exec(text)) !== null) {
       lineRangeMatches.push({
         from: offset + match.index,
@@ -432,7 +432,7 @@ function findWorkspaceReferenceMatches(
   collectLineRangeMatches(patterns.lineRange);
 
   const collectSymbolMatches = (pattern: RegExp) => {
-    const regex = new RegExp(pattern.source, "g");
+    const regex = new RegExp(pattern.source, pattern.flags);
     while ((match = regex.exec(text)) !== null) {
       symbolMatches.push({
         from: offset + match.index,

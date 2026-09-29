@@ -67,6 +67,13 @@ suite("ReferencePatterns", () => {
         "myimage@512x512.png",
       ]);
     });
+
+    test("matches Unicode letters in file extensions", () => {
+      const { fullFile } = createReferencePatterns();
+      assert.deepStrictEqual(paths(fullFile, "see @docs/résumé.日本語 now"), [
+        "docs/résumé.日本語",
+      ]);
+    });
   });
 
   suite("directory", () => {

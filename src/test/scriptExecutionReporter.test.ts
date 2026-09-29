@@ -96,6 +96,57 @@ function makeReporter(result: EvaluationResult, events: string[]) {
 }
 
 suite("ScriptExecutionReporter", () => {
+  test("keeps split ANSI sequences out of streamed output", async () => {
+    const streamed: string[] = [];
+    const evaluator = {
+      evaluateCondition: async (
+        _condition: unknown,
+        _workingDirectory: string | undefined,
+        _vars: Record<string, string> | undefined,
+        onOutput: (chunk: string) => void
+      ) => {
+        onOutput("\x1B[32mPASS\x1B[3");
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        onOutput("9m\r\n");
+        return makeResult({ stdout: "\x1B[32mPASS\x1B[39m\r\n" });
+      },
+    } as unknown as EndConditionEvaluator;
+    const reporter = new ScriptExecutionReporter(evaluator);
+    const context: ScriptExecutionReporterContext = {
+      workspaceFolderPath: process.cwd(),
+      statusReporter: new StatusMessageReporter(
+        () => undefined,
+        () => undefined
+      ),
+      onScriptOutput: (_target, output) => {
+        if (output.isStreaming && output.response) streamed.push(output.response);
+      },
+    };
+
+    const report = await reporter.report({
+      context,
+      source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
+      properties: resolveReportedScriptProperties({
+        script: "check.sh",
+        compareSource: "stdout",
+        operator: "eq",
+        expected: "PASS",
+      }),
+      phase: EXECUTION_PHASES.END_CONDITION,
+      target: { kind: "queue", stepIndex: 0 },
+      signedStepIndex: 0,
+      runIndex: 0,
+      attemptIndex: 0,
+      timestampMs: 100,
+      onPass: "continue",
+      onFail: "stopWorkflow",
+      actionForErrored: "stopWorkflow",
+    });
+
+    assert.strictEqual(streamed.join(""), "PASS\n");
+    assert.strictEqual(report.verdict.outcome, "passed");
+  });
+
   test("emits placeholder, chunks, and final output for all four sources", async () => {
     const cases = [
       {

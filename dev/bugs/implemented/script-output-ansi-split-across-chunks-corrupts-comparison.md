@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude)
 - **Area:** `src/core/WorkflowExecutor.ts` (`executeScriptStep`, `interactive: true` PTY path ~L2606-2633), `src/core/orchestration/ScriptExecutionReporter.ts` (`publishChunk` ~L256)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

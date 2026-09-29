@@ -34,7 +34,10 @@ import type {
   OutputHistoryManager,
   TimelineAttemptStartContext,
 } from "./OutputHistoryManager";
-import { sanitizeTerminalOutput } from "../../utils/TerminalOutputSanitizer";
+import {
+  sanitizeTerminalOutput,
+  TerminalOutputSanitizer,
+} from "../../utils/TerminalOutputSanitizer";
 import {
   formatComparison,
   normalizeExpected,
@@ -253,8 +256,9 @@ export class ScriptExecutionReporter {
       );
     }
 
-    const publishChunk = (chunk: string): void => {
-      const sanitizedChunk = sanitizeTerminalOutput(chunk);
+    const outputSanitizer = new TerminalOutputSanitizer();
+    const publishSanitizedChunk = (sanitizedChunk: string): void => {
+      if (!sanitizedChunk) return;
       if (context.historyFilePath && history) {
         void history.appendStreamingChunk(
           context.historyFilePath,
@@ -290,12 +294,15 @@ export class ScriptExecutionReporter {
       });
     };
 
+    const publishChunk = (chunk: string): void => {
+      publishSanitizedChunk(outputSanitizer.push(chunk));
+    };
+
     // stdout arrives one packet at a time; the dashboard renders a script's
     // whole accumulated output as a single row, so each delivery costs a full
     // rebuild of it. Coalescing decouples render frequency from how the process
-    // flushes. Sanitizing the joined buffer is also strictly better than
-    // sanitizing pieces — an escape sequence split across a packet boundary now
-    // survives as one sequence.
+    // flushes. The stateful sanitizer below also carries an escape sequence
+    // across coalescer flushes, which can still divide one ANSI sequence.
     const coalescer = new StreamChunkCoalescer(publishChunk);
     const onOutput = (chunk: string): void => coalescer.append(chunk);
 
@@ -322,6 +329,7 @@ export class ScriptExecutionReporter {
       // the live activity push, so without this await the final CLI output
       // below can reach the dashboard before the trailing chunk does.
       coalescer.flush();
+      publishSanitizedChunk(outputSanitizer.flush());
       if (context.historyFilePath && history) {
         await history.flushPendingWrites(context.historyFilePath);
       }
