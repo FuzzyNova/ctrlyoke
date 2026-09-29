@@ -16,6 +16,10 @@ import {
   MCP_CLAIM_PATHS_TOOL_NAME,
   MCP_RELEASE_PATHS_TOOL_NAME,
   MCP_READ_NOTES_TOOL_NAME,
+  MCP_WORKFLOW_STATUS_TOOL_NAME,
+  MCP_GLOBAL_STATUS_TOOL_NAME,
+  MCP_READ_OUTPUT_TOOL_NAME,
+  MCP_LIST_HARNESSES_TOOL_NAME,
 } from "@root/utils/McpToolDefinitions";
 import { ClaimPathsBody } from "./ClaimPathsView";
 import type { ClaimPathsParams, ClaimPathsResult } from "./claimPathsModel";
@@ -26,6 +30,10 @@ import type {
 } from "./releasePathsModel";
 import { ReadNotesBody } from "./ReadNotesView";
 import type { ReadNotesParams, ReadNotesResult } from "./readNotesModel";
+import { WorkflowStatusBody } from "./WorkflowStatusView";
+import { GlobalStatusBody } from "./GlobalStatusView";
+import { ReadOutputBody } from "./ReadOutputView";
+import { ListHarnessesBody } from "./ListHarnessesView";
 
 export interface CtrlYokeToolBodyProps {
   params: unknown;
@@ -143,4 +151,8 @@ export const CTRLYOKE_TOOL_VIEW_BODIES: Partial<
   [MCP_CLAIM_PATHS_TOOL_NAME]: ClaimPathsBodyAdapter,
   [MCP_RELEASE_PATHS_TOOL_NAME]: ReleasePathsBodyAdapter,
   [MCP_READ_NOTES_TOOL_NAME]: ReadNotesBodyAdapter,
+  [MCP_WORKFLOW_STATUS_TOOL_NAME]: WorkflowStatusBody,
+  [MCP_GLOBAL_STATUS_TOOL_NAME]: GlobalStatusBody,
+  [MCP_READ_OUTPUT_TOOL_NAME]: ReadOutputBody,
+  [MCP_LIST_HARNESSES_TOOL_NAME]: ListHarnessesBody,
 };

@@ -3595,10 +3595,19 @@ export const TOOL_CALL_EXPANSION_SECTIONS = {
   ERROR: "error",
   RAW: "raw",
   APPEND_STEP_PROMPTS: "appendStepPrompts",
+  LIST_HARNESS_MODELS: "listHarnessModels",
 } as const;
 
 export type ToolCallExpansionSection =
-  (typeof TOOL_CALL_EXPANSION_SECTIONS)[keyof typeof TOOL_CALL_EXPANSION_SECTIONS];
+  | (typeof TOOL_CALL_EXPANSION_SECTIONS)[keyof typeof TOOL_CALL_EXPANSION_SECTIONS]
+  | `readOutputStep:${number}`;
+
+export const READ_OUTPUT_EXPANSION_SECTION_PREFIX = "readOutputStep:" as const;
+export function readOutputExpansionSection(
+  stepIndex: number
+): ToolCallExpansionSection {
+  return `${READ_OUTPUT_EXPANSION_SECTION_PREFIX}${stepIndex}`;
+}
 
 // ============================================================================
 // BASH OUTPUT EXPANSION SECTIONS - Expandable shell command content

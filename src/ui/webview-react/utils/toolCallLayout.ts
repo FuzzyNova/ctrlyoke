@@ -18,6 +18,8 @@ export interface ToolCallExpansionState {
   errorExpanded: boolean;
   rawExpanded?: boolean;
   appendStepPromptsExpanded?: boolean;
+  readOutputExpanded?: Readonly<Record<string, boolean>>;
+  listHarnessModelsExpanded?: boolean;
 }
 
 export type ToolCallExpansionSection = SharedToolCallExpansionSection;
@@ -29,6 +31,8 @@ export const DEFAULT_TOOL_CALL_EXPANSION_STATE: Readonly<ToolCallExpansionState>
     errorExpanded: false,
     rawExpanded: false,
     appendStepPromptsExpanded: false,
+    readOutputExpanded: {},
+    listHarnessModelsExpanded: false,
   });
 
 export const GENERIC_TOOL_CALL_MAX_RESULT_LINES =

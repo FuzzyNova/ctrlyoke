@@ -4,6 +4,10 @@ import {
   MCP_CLAIM_PATHS_TOOL_NAME,
   MCP_RELEASE_PATHS_TOOL_NAME,
   MCP_READ_NOTES_TOOL_NAME,
+  MCP_WORKFLOW_STATUS_TOOL_NAME,
+  MCP_GLOBAL_STATUS_TOOL_NAME,
+  MCP_READ_OUTPUT_TOOL_NAME,
+  MCP_LIST_HARNESSES_TOOL_NAME,
   type McpToolName,
 } from "@root/utils/McpToolDefinitions";
 import { MCP_SERVER_IDS } from "@root/types/DashboardConstants";
@@ -58,6 +62,42 @@ import {
   type ReadNotesParams,
   type ReadNotesResult,
 } from "./readNotesModel";
+import {
+  estimateWorkflowStatusHeight,
+  parseWorkflowStatusParams,
+  parseWorkflowStatusResultText,
+  workflowStatusSearchText,
+  workflowStatusSummary,
+  type WorkflowStatusParams,
+  type WorkflowStatusResult,
+} from "./workflowStatusModel";
+import {
+  estimateGlobalStatusHeight,
+  parseGlobalStatusParams,
+  parseGlobalStatusResultText,
+  globalStatusSearchText,
+  globalStatusSummary,
+  type GlobalStatusParams,
+  type GlobalStatusResult,
+} from "./globalStatusModel";
+import {
+  estimateReadOutputHeight,
+  parseReadOutputParams,
+  parseReadOutputResultText,
+  readOutputSearchText,
+  readOutputSummary,
+  type ReadOutputParams,
+  type ReadOutputResult,
+} from "./readOutputModel";
+import {
+  estimateListHarnessesHeight,
+  parseListHarnessesParams,
+  parseListHarnessesResultText,
+  listHarnessesSearchText,
+  listHarnessesSummary,
+  type ListHarnessesParams,
+  type ListHarnessesResult,
+} from "./listHarnessesModel";
 
 export interface CtrlYokeToolView<TParams, TResult> {
   parseParams(raw: unknown): TParams | undefined;
@@ -195,6 +235,106 @@ const readNotesView: CtrlYokeToolView<ReadNotesParams, ReadNotesResult> = {
     ),
 };
 
+const workflowStatusView: CtrlYokeToolView<
+  WorkflowStatusParams,
+  WorkflowStatusResult
+> = {
+  parseParams: parseWorkflowStatusParams,
+  parseResult: parseWorkflowStatusResultText,
+  summary: workflowStatusSummary,
+  searchText: workflowStatusSearchText,
+  estimateHeight: (params, result, data, expansion, width, fontSize) =>
+    estimateWorkflowStatusHeight(
+      params,
+      result,
+      width,
+      fontSize,
+      expansion.rawExpanded
+        ? estimateGenericToolCallHeight(
+            data.parameters,
+            data.result,
+            expansion,
+            fontSize,
+            width
+          )
+        : 0
+    ),
+};
+const globalStatusView: CtrlYokeToolView<
+  GlobalStatusParams,
+  GlobalStatusResult
+> = {
+  parseParams: parseGlobalStatusParams,
+  parseResult: parseGlobalStatusResultText,
+  summary: globalStatusSummary,
+  searchText: globalStatusSearchText,
+  estimateHeight: (params, result, data, expansion, width, fontSize) =>
+    estimateGlobalStatusHeight(
+      params,
+      result,
+      width,
+      fontSize,
+      expansion.rawExpanded
+        ? estimateGenericToolCallHeight(
+            data.parameters,
+            data.result,
+            expansion,
+            fontSize,
+            width
+          )
+        : 0
+    ),
+};
+const readOutputView: CtrlYokeToolView<ReadOutputParams, ReadOutputResult> = {
+  parseParams: parseReadOutputParams,
+  parseResult: parseReadOutputResultText,
+  summary: readOutputSummary,
+  searchText: readOutputSearchText,
+  estimateHeight: (params, result, data, expansion, width, fontSize) =>
+    estimateReadOutputHeight(
+      params,
+      result,
+      width,
+      fontSize,
+      expansion.readOutputExpanded,
+      expansion.rawExpanded
+        ? estimateGenericToolCallHeight(
+            data.parameters,
+            data.result,
+            expansion,
+            fontSize,
+            width
+          )
+        : 0
+    ),
+};
+const listHarnessesView: CtrlYokeToolView<
+  ListHarnessesParams,
+  ListHarnessesResult
+> = {
+  parseParams: parseListHarnessesParams,
+  parseResult: parseListHarnessesResultText,
+  summary: listHarnessesSummary,
+  searchText: listHarnessesSearchText,
+  estimateHeight: (params, result, data, expansion, width, fontSize) =>
+    estimateListHarnessesHeight(
+      params,
+      result,
+      width,
+      fontSize,
+      expansion.listHarnessModelsExpanded,
+      expansion.rawExpanded
+        ? estimateGenericToolCallHeight(
+            data.parameters,
+            data.result,
+            expansion,
+            fontSize,
+            width
+          )
+        : 0
+    ),
+};
+
 /** Partial registry grows by tool family as later plan stages land. */
 export const CTRLYOKE_TOOL_VIEWS: Partial<
   Record<McpToolName, CtrlYokeToolView<unknown, unknown>>
@@ -213,6 +353,22 @@ export const CTRLYOKE_TOOL_VIEWS: Partial<
     unknown
   >,
   [MCP_READ_NOTES_TOOL_NAME]: readNotesView as CtrlYokeToolView<
+    unknown,
+    unknown
+  >,
+  [MCP_WORKFLOW_STATUS_TOOL_NAME]: workflowStatusView as CtrlYokeToolView<
+    unknown,
+    unknown
+  >,
+  [MCP_GLOBAL_STATUS_TOOL_NAME]: globalStatusView as CtrlYokeToolView<
+    unknown,
+    unknown
+  >,
+  [MCP_READ_OUTPUT_TOOL_NAME]: readOutputView as CtrlYokeToolView<
+    unknown,
+    unknown
+  >,
+  [MCP_LIST_HARNESSES_TOOL_NAME]: listHarnessesView as CtrlYokeToolView<
     unknown,
     unknown
   >,

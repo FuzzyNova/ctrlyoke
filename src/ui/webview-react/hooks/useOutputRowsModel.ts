@@ -34,6 +34,7 @@ import { workflowViewAddressKey } from "@utils/viewAddress";
 import {
   BASH_OUTPUT_EXPANSION_SECTIONS,
   OUTPUT_ROW_KINDS,
+  READ_OUTPUT_EXPANSION_SECTION_PREFIX,
   TOOL_CALL_EXPANSION_SECTIONS,
 } from "@root/types/DashboardConstants";
 import type {
@@ -521,6 +522,11 @@ export function useOutputRowsModel({
       setToolCallExpansionState((previous) => {
         const currentState =
           previous.get(rowKey) ?? DEFAULT_TOOL_CALL_EXPANSION_STATE;
+        const readOutputIndex = section.startsWith(
+          READ_OUTPUT_EXPANSION_SECTION_PREFIX
+        )
+          ? section.slice(READ_OUTPUT_EXPANSION_SECTION_PREFIX.length)
+          : undefined;
         const nextState: ToolCallExpansionState = {
           ...currentState,
           paramsExpanded:
@@ -543,6 +549,17 @@ export function useOutputRowsModel({
             section === TOOL_CALL_EXPANSION_SECTIONS.APPEND_STEP_PROMPTS
               ? expanded
               : currentState.appendStepPromptsExpanded,
+          readOutputExpanded:
+            readOutputIndex !== undefined
+              ? {
+                  ...currentState.readOutputExpanded,
+                  [readOutputIndex]: expanded,
+                }
+              : currentState.readOutputExpanded,
+          listHarnessModelsExpanded:
+            section === TOOL_CALL_EXPANSION_SECTIONS.LIST_HARNESS_MODELS
+              ? expanded
+              : currentState.listHarnessModelsExpanded,
         };
 
         const isDefaultState =
@@ -552,7 +569,9 @@ export function useOutputRowsModel({
         const isDefaultExpansionState =
           isDefaultState &&
           !nextState.rawExpanded &&
-          !nextState.appendStepPromptsExpanded;
+          !nextState.appendStepPromptsExpanded &&
+          !nextState.listHarnessModelsExpanded &&
+          !Object.values(nextState.readOutputExpanded ?? {}).some(Boolean);
 
         if (
           currentState.paramsExpanded === nextState.paramsExpanded &&
@@ -560,7 +579,10 @@ export function useOutputRowsModel({
           currentState.errorExpanded === nextState.errorExpanded &&
           currentState.rawExpanded === nextState.rawExpanded &&
           currentState.appendStepPromptsExpanded ===
-            nextState.appendStepPromptsExpanded
+            nextState.appendStepPromptsExpanded &&
+          currentState.listHarnessModelsExpanded ===
+            nextState.listHarnessModelsExpanded &&
+          currentState.readOutputExpanded === nextState.readOutputExpanded
         ) {
           return previous;
         }
