@@ -3990,6 +3990,11 @@ export const MCP_SERVER_IDS = {
   CTRLYOKE: "ctrlyoke",
 } as const;
 
+export const MCP_CALL_VIA = {
+  SKILL: "skill",
+} as const;
+export type McpCallVia = (typeof MCP_CALL_VIA)[keyof typeof MCP_CALL_VIA];
+
 // Built-in skill identifiers. Keep these stable because workflows may refer
 // to them by name before a future settings-driven registry exists.
 export const MCP_SKILL_NAMES = {

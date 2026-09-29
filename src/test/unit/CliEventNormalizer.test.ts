@@ -10,6 +10,7 @@ import type {
 } from "../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
+  MCP_CALL_VIA,
   OPERATION_STATUS,
 } from "../../types/DashboardConstants";
 import { normalizeCliEvents } from "../../utils/CliEventNormalizer";
@@ -310,6 +311,51 @@ suite("CliEventNormalizer", () => {
         },
       ]
     );
+  });
+
+  test("normalizes a skill-mode bash start, completion, and result into one MCP row", () => {
+    const command =
+      `node "C:\\repo\\out\\mcp-server.js" --tool post_note --args '{"text":"hello"}' --workspace "C:\\repo"`;
+    const normalized = normalizeCliEvents([
+      {
+        type: CLI_EVENT_TYPES.BASH_COMMAND,
+        timestamp: 1,
+        data: {
+          command,
+          status: OPERATION_STATUS.INITIATED,
+          toolCallId: "skill_call_1",
+        } as BashCommandData,
+      },
+      {
+        type: CLI_EVENT_TYPES.BASH_COMMAND,
+        timestamp: 2,
+        data: {
+          command,
+          output: '{"success":true}',
+          exitCode: 0,
+          status: OPERATION_STATUS.COMPLETED,
+          toolCallId: "skill_call_1",
+        } as BashCommandData,
+      },
+      {
+        type: CLI_EVENT_TYPES.TOOL_RESULT,
+        timestamp: 3,
+        data: {
+          toolCallId: "skill_call_1",
+          result: { success: true, output: '{"success":true}' },
+        },
+      },
+    ]);
+
+    assert.strictEqual(normalized.length, 1);
+    assert.strictEqual(normalized[0].type, CLI_EVENT_TYPES.MCP_TOOL_CALL);
+    const data = normalized[0].data as McpToolCallData;
+    assert.strictEqual(data.server, "ctrlyoke");
+    assert.strictEqual(data.tool, "post_note");
+    assert.deepStrictEqual(data.parameters, { text: "hello" });
+    assert.strictEqual(data.toolCallId, "skill_call_1");
+    assert.strictEqual(data.via, MCP_CALL_VIA.SKILL);
+    assert.strictEqual(data.result?.output, '{"success":true}');
   });
 
   test("keeps a result-bearing tool call with an unknown id as its own row", () => {

@@ -1,7 +1,7 @@
 # MCP Event Pipeline Gaps — reliable detection and pairing of MCP tool calls on every harness
 
-> **Status:** In progress — implementation-order items 1–4 complete. Prerequisite for
-> [`CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md`](CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md): purpose-built
+> **Status:** Implemented. Prerequisite for
+> [`CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md`](../backlog/CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md): purpose-built
 > views are only as good as the `MCP_TOOL_CALL` events underneath them, and on two of the six
 > harnesses today those events never exist.
 
@@ -240,4 +240,4 @@ parser unit-test fixtures, so vendor renames show up in `npm test` rather than i
    unverified harnesses. Claude and Qwen passed the four-call contract; fix Qwen's wrapper
    parsing. Codex and Antigravity captures preserve the incomplete live behavior described in
    Finding 6; their strict live probes fail until all four calls are actually recorded.
-5. **D:** skill-mode mapping.
+5. [x] **D:** skill-mode mapping through the shared event normalizer.
