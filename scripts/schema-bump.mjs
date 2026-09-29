@@ -25,7 +25,11 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { createRequire } from "node:module";
 import { readPublishedSchema } from "./publish-schemas-to-landing.mjs";
+
+const require = createRequire(import.meta.url);
+const { rewriteCrossSchemaRefs } = require("./schema-ref-utils.cjs");
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const GUARD_PATH = join("src", "utils", "PersistedSchemaGuard.ts");
@@ -80,16 +84,11 @@ function syncCrossSchemaRefs(schemasDir) {
   );
   for (const { schemaPath, versionNumber } of current) {
     const text = readFileSync(schemaPath, "utf8");
-    const updated = text.replace(
-      /("\$ref":\s*")(?:\.\.\/v\d+\/)?([\w.-]+\.json)#/g,
-      (whole, prefix, fileName) => {
-        const target = versionByFile.get(fileName);
-        if (target === undefined) return whole;
-        const path =
-          target === versionNumber ? fileName : `../v${target}/${fileName}`;
-        return `${prefix}${path}#`;
-      }
-    );
+    const updated = rewriteCrossSchemaRefs(text, (fileName) => {
+      const target = versionByFile.get(fileName);
+      if (target === undefined) return undefined;
+      return target === versionNumber ? fileName : `../v${target}/${fileName}`;
+    });
     if (updated !== text) writeFileSync(schemaPath, updated);
   }
 }

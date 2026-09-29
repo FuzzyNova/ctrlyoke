@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by bug-hunt final step (claude-cli)
 - **Area:** `scripts/schema-bump.mjs`, `esbuild.js`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
