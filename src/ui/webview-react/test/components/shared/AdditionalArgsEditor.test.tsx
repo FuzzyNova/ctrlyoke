@@ -4,7 +4,7 @@ import type { ComponentProps } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { AdditionalArgsEditor } from "@components/shared/AdditionalArgsEditor";
 import { HARNESS_IDS, MESSAGE_TYPES } from "@root/types/DashboardConstants";
-import { latestPostedMessage } from "../../fixtures/completionRequests";
+import { answerLatestRequestUntil } from "../../fixtures/completionRequests";
 
 function renderEditor(
   props: Partial<ComponentProps<typeof AdditionalArgsEditor>> = {}
@@ -21,6 +21,12 @@ function renderEditor(
   const content = result.container.querySelector<HTMLElement>(".cm-content");
   if (!content) throw new Error("CodeMirror content element was not rendered");
   return { ...result, content };
+}
+
+interface FlagCompletionsRequest {
+  type: string;
+  text: string;
+  seq: number;
 }
 
 describe("AdditionalArgsEditor", () => {
@@ -65,45 +71,26 @@ describe("AdditionalArgsEditor", () => {
 
     await user.click(content);
     await user.type(content, "--r");
-    await waitFor(() => {
-      expect(
-        postMessage.mock.calls.some(
-          ([message]) =>
-            message.type === MESSAGE_TYPES.HARNESS_FLAG_COMPLETIONS_REQUEST &&
-            message.text === "--r"
-        )
-      ).toBe(true);
-    });
-    const request = latestPostedMessage<{
-      type: string;
-      text: string;
-      seq: number;
-    }>(
+
+    await answerLatestRequestUntil<FlagCompletionsRequest>({
       postMessage,
-      (message) =>
+      isRequest: (message) =>
         message.type === MESSAGE_TYPES.HARNESS_FLAG_COMPLETIONS_REQUEST &&
-        message.text === "--r"
-    );
-
-    fireEvent(
-      window,
-      new MessageEvent("message", {
-        data: {
-          type: MESSAGE_TYPES.HARNESS_FLAG_COMPLETIONS_RESPONSE,
-          items: [
-            {
-              flag: "--reasoning-effort",
-              detail: "Reasoning effort to use",
-            },
-          ],
-          from: 0,
-          seq: request.seq,
-        },
-      })
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText("--reasoning-effort")).toBeInTheDocument();
+        message.text === "--r",
+      respond: (request) => ({
+        type: MESSAGE_TYPES.HARNESS_FLAG_COMPLETIONS_RESPONSE,
+        items: [
+          {
+            flag: "--reasoning-effort",
+            detail: "Reasoning effort to use",
+          },
+        ],
+        from: 0,
+        seq: request.seq,
+      }),
+      until: () => {
+        expect(screen.getByText("--reasoning-effort")).toBeInTheDocument();
+      },
     });
   });
 
@@ -156,49 +143,31 @@ describe("AdditionalArgsEditor", () => {
 
   it("offers value hints after a flag token", async () => {
     const user = userEvent.setup();
+    const flag = "--reasoning-effort";
     const { content } = renderEditor();
 
+    // Paste the flag and type only the separating space: one keystroke is
+    // enough to activate completion, and typing the whole flag cost nineteen
+    // keystroke round-trips that under full `npm test` load could outlast the
+    // test timeout on their own.
     await user.click(content);
-    await user.type(content, "--reasoning-effort ");
-    await waitFor(() => {
-      expect(
-        postMessage.mock.calls.some(
-          ([message]) =>
-            message.type === MESSAGE_TYPES.HARNESS_FLAG_COMPLETIONS_REQUEST &&
-            message.text === "--reasoning-effort "
-        )
-      ).toBe(true);
-    });
-    const request = latestPostedMessage<{
-      type: string;
-      text: string;
-      seq: number;
-    }>(
+    fireEvent.paste(content, { clipboardData: { getData: () => flag } });
+    await user.type(content, " ", { skipClick: true });
+
+    await answerLatestRequestUntil<FlagCompletionsRequest>({
       postMessage,
-      (message) =>
+      isRequest: (message) =>
         message.type === MESSAGE_TYPES.HARNESS_FLAG_COMPLETIONS_REQUEST &&
-        message.text === "--reasoning-effort "
-    );
-
-    fireEvent(
-      window,
-      new MessageEvent("message", {
-        data: {
-          type: MESSAGE_TYPES.HARNESS_FLAG_COMPLETIONS_RESPONSE,
-          items: [
-            {
-              flag: "--reasoning-effort",
-              valueHints: ["low", "medium", "high"],
-            },
-          ],
-          from: "--reasoning-effort ".length,
-          seq: request.seq,
-        },
-      })
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText("high")).toBeInTheDocument();
+        message.text === `${flag} `,
+      respond: (request) => ({
+        type: MESSAGE_TYPES.HARNESS_FLAG_COMPLETIONS_RESPONSE,
+        items: [{ flag, valueHints: ["low", "medium", "high"] }],
+        from: `${flag} `.length,
+        seq: request.seq,
+      }),
+      until: () => {
+        expect(screen.getByText("high")).toBeInTheDocument();
+      },
     });
   });
 });

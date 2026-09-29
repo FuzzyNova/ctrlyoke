@@ -1,3 +1,4 @@
+import { waitFor } from "@testing-library/react";
 import type { Mock } from "vitest";
 
 /**
@@ -26,4 +27,48 @@ export function latestPostedMessage<T = Record<string, unknown>>(
     }
   }
   throw new Error("No posted message matched the predicate");
+}
+
+interface AnswerLatestRequestOptions<TRequest extends { seq: number }> {
+  postMessage: Mock;
+  /** Selects the completion requests this answer is for. */
+  isRequest: (message: TRequest) => boolean;
+  /** The response message for `request`; it must echo `request.seq`. */
+  respond: (request: TRequest) => unknown;
+  /** Throws until the answered completions are visible. */
+  until: () => void;
+}
+
+/**
+ * Answer the newest matching completion request, and keep answering whichever
+ * request is newest until `until` passes.
+ *
+ * Answering once is not enough under load: CodeMirror can query the source
+ * again *after* the test has answered (a late activation tick for the last
+ * keystroke), which discards the answered request before its result renders
+ * (see `latestPostedMessage`). Re-answering on every `waitFor` poll tracks the
+ * component instead of racing its scheduler. Each request is answered once, so
+ * a component that ignores its own current `seq` still fails.
+ */
+export async function answerLatestRequestUntil<
+  TRequest extends { seq: number },
+>({
+  postMessage,
+  isRequest,
+  respond,
+  until,
+}: AnswerLatestRequestOptions<TRequest>): Promise<void> {
+  const answered = new Set<number>();
+  await waitFor(() => {
+    const request = latestPostedMessage<TRequest>(postMessage, isRequest);
+    if (!answered.has(request.seq)) {
+      answered.add(request.seq);
+      // A plain dispatch, not fireEvent: fireEvent wraps the event in act(),
+      // which React rejects while waitFor is polling.
+      window.dispatchEvent(
+        new MessageEvent("message", { data: respond(request) })
+      );
+    }
+    until();
+  });
 }

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by the MCP event pipeline orchestrator review (`npm run test:harness`, copilot-cli / gpt-6-luna)
 - **Area:** `src/test/harness/conditions.harness.test.ts`, `src/core/harness/shared/CliPromptPreparer.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -33,3 +33,10 @@ and the test compares the file content exactly.
 Make the test robust to the fenced expansion: tell the agent to write only the value inside the
 fence, and/or strip surrounding backticks and whitespace before comparing. Keep the fencing in
 production; it is what prevents reference parsing of condition output.
+
+## Fix
+
+The reference step now uses `writeFencedValuePrompt`, which places the fenced
+expansion on its own lines and asks for only the text inside the fence, instead
+of splicing it into a quoted `node -e` literal; the file content is compared
+after `stripFenceResidue`. Production fencing is unchanged.

@@ -4,6 +4,7 @@ import type { ComponentProps } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { BranchNameEditor } from "@components/shared/BranchNameEditor";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
+import { answerLatestRequestUntil } from "../../fixtures/completionRequests";
 
 function renderEditor(
   props: Partial<ComponentProps<typeof BranchNameEditor>> = {}
@@ -83,43 +84,30 @@ describe("BranchNameEditor", () => {
     await user.click(content);
     await user.type(content, "feat/");
 
-    await waitFor(() => {
-      expect(
-        postMessage.mock.calls.some(
-          ([message]) => message.type === MESSAGE_TYPES.BRANCH_LIST_REQUEST
-        )
-      ).toBe(true);
-    });
-
-    const request = [...postMessage.mock.calls]
-      .reverse()
-      .find(
-        ([message]) => message.type === MESSAGE_TYPES.BRANCH_LIST_REQUEST
-      )?.[0];
-    if (!request || typeof request.seq !== "number") {
-      throw new Error("Branch list request was not posted");
-    }
-
-    fireEvent(
-      window,
-      new MessageEvent("message", {
-        data: {
-          type: MESSAGE_TYPES.BRANCH_LIST_RESPONSE,
-          items: [
-            {
-              label: "feat/new",
-              insertText: "feat/new",
-              detail: "Existing branch",
-            },
-          ],
-          seq: request.seq,
-        },
-      })
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText("feat/new")).toBeInTheDocument();
-      expect(screen.getByText("Existing branch")).toBeInTheDocument();
+    await answerLatestRequestUntil<{
+      type: string;
+      filterText: string;
+      seq: number;
+    }>({
+      postMessage,
+      isRequest: (message) =>
+        message.type === MESSAGE_TYPES.BRANCH_LIST_REQUEST &&
+        message.filterText === "feat/",
+      respond: (request) => ({
+        type: MESSAGE_TYPES.BRANCH_LIST_RESPONSE,
+        items: [
+          {
+            label: "feat/new",
+            insertText: "feat/new",
+            detail: "Existing branch",
+          },
+        ],
+        seq: request.seq,
+      }),
+      until: () => {
+        expect(screen.getByText("feat/new")).toBeInTheDocument();
+        expect(screen.getByText("Existing branch")).toBeInTheDocument();
+      },
     });
   });
 

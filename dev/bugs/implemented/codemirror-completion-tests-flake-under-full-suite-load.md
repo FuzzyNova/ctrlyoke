@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by the settings-search orchestrator review pass (claude-cli)
 - **Area:** `src/ui/webview-react/test/components/shared/{AdditionalArgsEditor,BranchNameEditor}.test.tsx`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -37,3 +37,15 @@ debounce under load (not a single synchronous `getByText` after the triggering
 keystroke), and check whether either test awaits a real timer that could be
 driven with fake timers instead. If it still won't reproduce, add assertion
 messages that capture the editor state and completion status at failure time.
+
+## Fix
+
+Not reproduced under three concurrent `test:ui` runs, so fixed by removing both
+races rather than confirming one. `answerLatestRequestUntil`
+(`test/fixtures/completionRequests.ts`) answers the newest matching request on
+every `waitFor` poll until the popup renders, so a CodeMirror re-query that
+lands after the test answered no longer discards the answer; BranchNameEditor
+also now matches the request for the final `feat/` text, not any request. The
+value-hint test pastes the flag and types only the separating space instead of
+nineteen keystrokes. ScriptCommandEditor's matching-response step uses the same
+helper.

@@ -394,6 +394,30 @@ function writeFilePrompt(filePath: string, content: string): string {
   ].join(" ");
 }
 
+/**
+ * A prompt that makes the AI write a condition-output reference to `filePath`.
+ *
+ * Condition output expands inside a Markdown code fence (`fenceLiteral`, so it
+ * is never parsed for `@` references), which means it cannot be spliced into a
+ * quoted shell literal the way `writeFilePrompt` does: the model copies fence
+ * residue into the file. The reference gets its own lines instead, and the
+ * model is told to write only what the fence contains.
+ */
+function writeFencedValuePrompt(filePath: string, reference: string): string {
+  return [
+    `Write the value shown in the code block below to the file ${normalizedPath(filePath)}.`,
+    "Write only the text inside the code block: no backticks, no quotes, no newlines.",
+    "Use one shell command (for example node -e with fs.writeFileSync) and do nothing else.",
+    "",
+    reference,
+  ].join("\n");
+}
+
+/** The value inside any Markdown fence residue a model copied into a file. */
+function stripFenceResidue(text: string): string {
+  return text.replace(/^[\s`'"]+|[\s`'"]+$/g, "");
+}
+
 function describeRun(result: JsonRunResult): string {
   return `exit ${result.exitCode}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`;
 }
@@ -480,7 +504,7 @@ suite("Script Condition Harness Tests", function () {
         expected: "something-else",
         onFail: CONDITION_ACTIONS.CONTINUE,
       },
-      prompt: writeFilePrompt(refFile, "$preCondition:stdout"),
+      prompt: writeFencedValuePrompt(refFile, "$preCondition:stdout"),
       endCondition: {
         script: `node "${readFileScript}" "${normalizedPath(refFile)}"`,
         compareSource: COMPARE_SOURCES.STDOUT,
@@ -542,7 +566,7 @@ suite("Script Condition Harness Tests", function () {
       "advisory preCondition did not let the prompt run"
     );
     assert.strictEqual(
-      fs.readFileSync(refFile, "utf8").trim(),
+      stripFenceResidue(fs.readFileSync(refFile, "utf8")),
       magic,
       "$preCondition:stdout was not expanded into the prompt"
     );

@@ -4,7 +4,10 @@ import type { ComponentProps } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { ScriptCommandEditor } from "@components/shared/ScriptCommandEditor";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
-import { latestPostedMessage } from "../../fixtures/completionRequests";
+import {
+  answerLatestRequestUntil,
+  latestPostedMessage,
+} from "../../fixtures/completionRequests";
 
 function renderEditor(
   props: Partial<ComponentProps<typeof ScriptCommandEditor>> = {}
@@ -114,26 +117,25 @@ describe("ScriptCommandEditor", () => {
 
     expect(screen.queryByText("stale suggestion")).not.toBeInTheDocument();
 
-    fireEvent(
-      window,
-      new MessageEvent("message", {
-        data: {
-          type: MESSAGE_TYPES.SCRIPT_COMPLETIONS_RESPONSE,
-          items: [
-            {
-              label: "git status",
-              insertText: "git status",
-              detail: "Show the working tree status",
-            },
-          ],
-          from: 0,
-          seq: request.seq,
-        },
-      })
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText("git status")).toBeInTheDocument();
+    await answerLatestRequestUntil<{ type: string; seq: number }>({
+      postMessage,
+      isRequest: (message) =>
+        message.type === MESSAGE_TYPES.SCRIPT_COMPLETIONS_REQUEST,
+      respond: (latest) => ({
+        type: MESSAGE_TYPES.SCRIPT_COMPLETIONS_RESPONSE,
+        items: [
+          {
+            label: "git status",
+            insertText: "git status",
+            detail: "Show the working tree status",
+          },
+        ],
+        from: 0,
+        seq: latest.seq,
+      }),
+      until: () => {
+        expect(screen.getByText("git status")).toBeInTheDocument();
+      },
     });
   });
 
