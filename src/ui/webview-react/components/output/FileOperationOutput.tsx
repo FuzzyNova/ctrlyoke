@@ -25,6 +25,10 @@ import { buildSelectionReferenceText } from "@root/completions/ContextReferenceB
 import type { RowFindDecoration } from "@utils/outputFind";
 import { hasRenderableDiff } from "@utils/diffUtils";
 import {
+  FILE_OPERATION_PATH_MIN_CH,
+  fileWriteActionLabel,
+} from "@utils/outputLineMetrics";
+import {
   TOOL_RESULT_STATUSES,
   UNDO_REDO_DIRECTIONS,
   type ToolResultStatus,
@@ -93,6 +97,10 @@ interface FileOperationBlockProps {
   className?: string;
 }
 
+const PATH_FLEX_STYLE: React.CSSProperties = {
+  flexBasis: `${FILE_OPERATION_PATH_MIN_CH}ch`,
+};
+
 /** Shared `● <action> <path>` frame for all four file operations. */
 const FileOperationBlock: React.FC<FileOperationBlockProps> = ({
   dotStatus,
@@ -151,7 +159,13 @@ const FileOperationBlock: React.FC<FileOperationBlockProps> = ({
       header={
         <>
           <span className="shrink-0 leading-relaxed">{actionLabel}</span>
-          <span className="min-w-0 flex-1 leading-relaxed">
+          {/* A real flex basis (not flex-1's 0%) is what lets the wrapping
+              header row move the path onto its own line when it would
+              otherwise be squeezed between the label and trailing Undo. */}
+          <span
+            className="min-w-0 grow shrink leading-relaxed"
+            style={PATH_FLEX_STYLE}
+          >
             {descriptor ? (
               <AtomicReferenceChip
                 descriptor={descriptor}
@@ -408,8 +422,7 @@ export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
   const getActionLabel = (): string => {
     if (status === OPERATION_STATUS.INITIATED) return "Writing";
     if (status === OPERATION_STATUS.FAILED) return "Write failed:";
-    const sizeInfo = content ? ` (${content.length} bytes)` : "";
-    return `Wrote${sizeInfo}`;
+    return fileWriteActionLabel(content);
   };
 
   return (

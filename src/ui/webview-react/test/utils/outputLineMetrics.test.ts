@@ -10,6 +10,9 @@ import {
   diffGapDecorationHeight,
   diffHorizontalChrome,
   diffLineHeight,
+  estimateFileOperationHeaderLines,
+  FILE_OPERATION_PATH_MIN_CH,
+  fileWriteActionLabel,
 } from "@utils/outputLineMetrics";
 
 // These are CSS values read off the rendered diff table, not fitted constants,
@@ -111,5 +114,41 @@ describe("diff geometry", () => {
     it("never collapses to an absurdly narrow glyph", () => {
       expect(diffCharWidth(6)).toBeGreaterThanOrEqual(5.5);
     });
+  });
+});
+
+describe("file-operation header", () => {
+  const fontSize = 13;
+  const charWidth = fontSize * 0.6;
+  const label = "Wrote (1.5 KB)";
+  const besideLabel = (width: number) =>
+    width -
+    OUTPUT_ROW_HORIZONTAL_PADDING -
+    (label.length * charWidth + Math.max(4, fontSize * 0.35));
+
+  it("labels completed writes with a formatted size", () => {
+    expect(fileWriteActionLabel("x".repeat(1_556))).toBe(label);
+    expect(fileWriteActionLabel(undefined)).toBe("Wrote");
+  });
+
+  it("keeps a short path beside the label on a wide row", () => {
+    expect(estimateFileOperationHeaderLines(label, "a.md", 800, fontSize)).toBe(
+      1
+    );
+  });
+
+  // Mirrors the path span's `flex-basis: FILE_OPERATION_PATH_MIN_CH ch`: once
+  // that many columns no longer fit beside the label, the path wraps below it.
+  it("moves the path onto its own line when the row is too narrow", () => {
+    let width = 800;
+    while (besideLabel(width) >= FILE_OPERATION_PATH_MIN_CH * charWidth) {
+      width -= 1;
+    }
+    expect(
+      estimateFileOperationHeaderLines(label, "a.md", width + 1, fontSize)
+    ).toBe(1);
+    expect(
+      estimateFileOperationHeaderLines(label, "a.md", width, fontSize)
+    ).toBe(2);
   });
 });

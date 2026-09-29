@@ -85,6 +85,7 @@ import {
   TOOL_CALL_BLOCK_VERTICAL_CHROME,
   DEFAULT_OUTPUT_FONT_SIZE,
   estimateFileOperationHeaderLines,
+  fileWriteActionLabel,
   outputRowActivityChrome,
   outputRowGroupPadding,
   resolveOutputContentWidth,
@@ -1515,9 +1516,8 @@ function estimateStructuredTextHeight(
         content?: string;
         error?: string;
       };
-      const sizeInfo = data.content ? ` (${data.content.length} bytes)` : "";
       return estimateFileOperationHeaderHeight(
-        `Wrote${sizeInfo}`,
+        fileWriteActionLabel(data.content),
         data.path ?? "file",
         outputContentWidth,
         outputFontSize,

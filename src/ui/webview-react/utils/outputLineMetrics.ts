@@ -2,6 +2,7 @@ import {
   DIFF_VIEW_TYPES,
   type DiffViewType,
 } from "@root/types/DashboardConstants";
+import { formatBytes } from "./number";
 
 /**
  * Measured DOM geometry of the output pane's rows.
@@ -229,6 +230,19 @@ export function toolResultPrefixWidth(outputFontSize: number): number {
  */
 export const FILE_EDIT_ACTION_LABEL = "Edited";
 
+/** `Wrote (1.5 KB)` — the completed file-write header label, shared with its estimator. */
+export function fileWriteActionLabel(content?: string): string {
+  return content ? `Wrote (${formatBytes(content.length)})` : "Wrote";
+}
+
+/**
+ * Flex basis, in `ch`, of a file-operation header's path. The header is a
+ * wrapping flex row, so when fewer than this many columns remain beside the
+ * action label the path drops onto its own line instead of being squeezed
+ * into a sliver between the label and a trailing Undo button.
+ */
+export const FILE_OPERATION_PATH_MIN_CH = 20;
+
 /**
  * Wrapped line count of a `● <action> <path>` header, e.g. `● Edited src/…`.
  *
@@ -251,13 +265,18 @@ export function estimateFileOperationHeaderLines(
   const gapWidth = Math.max(4, outputFontSize * 0.35);
   // The ● is not inline — it lives in ToolCallBlock's gutter, which the caller
   // has already subtracted from outputContentWidth. Only the action label
-  // ("Edited", "Wrote (N bytes)", …) still shares the path's first line.
-  const pathWidth = Math.max(
-    64,
-    availableWidth - (actionLabel.length * charWidth + gapWidth)
-  );
+  // ("Edited", "Wrote (1.5 KB)", …) can share the path's first line — and
+  // only while at least FILE_OPERATION_PATH_MIN_CH columns remain beside it.
+  const besideLabelWidth =
+    availableWidth - (actionLabel.length * charWidth + gapWidth);
+  const pathOnOwnLine =
+    besideLabelWidth < FILE_OPERATION_PATH_MIN_CH * charWidth;
+  const pathWidth = pathOnOwnLine ? availableWidth : besideLabelWidth;
   const pathCharsPerLine = Math.max(8, Math.floor(pathWidth / charWidth));
-  return Math.max(1, Math.ceil(path.length / pathCharsPerLine));
+  return (
+    (pathOnOwnLine ? 1 : 0) +
+    Math.max(1, Math.ceil(path.length / pathCharsPerLine))
+  );
 }
 
 /**
