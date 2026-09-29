@@ -447,10 +447,7 @@ suite("Secret command handlers", () => {
       );
 
       assert.strictEqual(result, 0);
-      assert.strictEqual(
-        trustStore.getDecision(tempRoot, "CI_TOKEN"),
-        "allow"
-      );
+      assert.strictEqual(trustStore.getDecision(tempRoot, "CI_TOKEN"), "allow");
     } finally {
       await fs.rm(tempRoot, { recursive: true, force: true });
     }

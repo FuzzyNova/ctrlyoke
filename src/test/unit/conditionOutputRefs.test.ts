@@ -103,10 +103,7 @@ suite("Condition output references", () => {
           { [phase]: summary }
         );
 
-        assert.strictEqual(
-          result.text,
-          `${value}${punctuation} continue`
-        );
+        assert.strictEqual(result.text, `${value}${punctuation} continue`);
         assert.deepStrictEqual(result.unresolved, []);
       });
     }

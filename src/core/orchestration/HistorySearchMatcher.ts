@@ -273,7 +273,7 @@ export class SubstringHistorySearchMatcher implements HistorySearchMatcher {
 
     const originalStarts: number[] = [];
     const originalEnds: number[] = [];
-    for (let originalIndex = 0; originalIndex < text.length; ) {
+    for (let originalIndex = 0; originalIndex < text.length;) {
       const codePoint = text.codePointAt(originalIndex);
       if (codePoint === undefined) break;
       const originalCharacter = String.fromCodePoint(codePoint);
@@ -471,10 +471,7 @@ function analyzeSequence(
         adjacentLiteral = undefined;
       }
       required.push(...node.analysis.required);
-    } else if (
-      node.isExactLiteral &&
-      node.analysis.required.length === 1
-    ) {
+    } else if (node.isExactLiteral && node.analysis.required.length === 1) {
       const literal = node.analysis.required[0];
       adjacentLiteral = `${adjacentLiteral ?? ""}${literal}`;
     } else {

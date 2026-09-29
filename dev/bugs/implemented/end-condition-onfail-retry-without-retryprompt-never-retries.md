@@ -11,6 +11,7 @@
 retries." No retry is sent. `onFail: retry, maxRetries: 3` also sends 0 retries.
 
 That contradicts:
+
 - the schema `description`s (`docs/reference/workflow-schema.md`, `maxRetries` around line 620:
   "When onPass or onFail is 'retry' and this field is omitted, one retry is allowed"; `onFail`
   around line 652: "'retry': re-run the AI prompt (up to maxRetries times)");
@@ -28,10 +29,10 @@ current behaviour ("always pair `onFail: retry` with a `retryPrompt`").
 Drive `EndConditionHandler.handleEndConditionResult` with a stub evaluator that always fails and
 default settings:
 
-| endCondition | Retries sent | Documented |
-|---|---|---|
-| `{onFail: retry}` | 0 | 1 |
-| `{onFail: retry, maxRetries: 3}` | 0 | 3 |
+| endCondition                     | Retries sent | Documented |
+| -------------------------------- | ------------ | ---------- |
+| `{onFail: retry}`                | 0            | 1          |
+| `{onFail: retry, maxRetries: 3}` | 0            | 3          |
 
 ## Root Cause
 

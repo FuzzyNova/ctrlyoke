@@ -72,7 +72,8 @@ export function maskFencedCodeBlocks(text: string): string {
     const blockStart = opening.index;
     const block = text.slice(blockStart, contentEnd);
     const maskedBlock = block.replace(/[@#~!$/{}]/g, "\x00");
-    masked = masked.slice(0, blockStart) + maskedBlock + masked.slice(contentEnd);
+    masked =
+      masked.slice(0, blockStart) + maskedBlock + masked.slice(contentEnd);
     fenceRuns.lastIndex = contentEnd;
   }
 

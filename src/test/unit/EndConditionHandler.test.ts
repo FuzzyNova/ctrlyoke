@@ -617,16 +617,17 @@ suite("EndConditionHandler", () => {
         retryPrompt: undefined,
       });
       const retryLimit = maxRetries ?? 1;
-      const evaluator = new TestEndConditionEvaluator(
-        platform,
-        [
-          ...Array.from({ length: retryLimit - 1 }, (_, index) =>
-            validationFailure(`failure-${index + 1}`)
-          ),
-          successResult(),
-        ]
+      const evaluator = new TestEndConditionEvaluator(platform, [
+        ...Array.from({ length: retryLimit - 1 }, (_, index) =>
+          validationFailure(`failure-${index + 1}`)
+        ),
+        successResult(),
+      ]);
+      const handler = new EndConditionHandler(
+        evaluator,
+        queue,
+        createReporter()
       );
-      const handler = new EndConditionHandler(evaluator, queue, createReporter());
       const retryPrompts: string[] = [];
 
       queue.loadPrompts({ steps: [prompt] });

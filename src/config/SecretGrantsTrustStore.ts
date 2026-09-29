@@ -89,7 +89,7 @@ export class SecretGrantsTrustStore {
     return candidateNames.filter(
       (name) =>
         decisions[SecretGrantsTrustStore.keyFor(identity, name)] !==
-          TRUST_DECISIONS.ALLOW
+        TRUST_DECISIONS.ALLOW
     );
   }
 

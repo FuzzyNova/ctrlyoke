@@ -55,10 +55,12 @@ suite("CliArgParser", () => {
     });
 
     test("preserves an empty double-quoted argument", () => {
-      assert.deepStrictEqual(
-        parseArgString('--system-prompt "" --model x'),
-        ["--system-prompt", "", "--model", "x"]
-      );
+      assert.deepStrictEqual(parseArgString('--system-prompt "" --model x'), [
+        "--system-prompt",
+        "",
+        "--model",
+        "x",
+      ]);
     });
 
     test("preserves an empty single-quoted argument", () => {

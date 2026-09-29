@@ -414,8 +414,7 @@ function canRetryErrorBehavior(
 ): boolean {
   return (
     errorBehavior.onError === CONDITION_ACTIONS.RETRY &&
-    attemptIndex <
-      (errorBehavior.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES)
+    attemptIndex < (errorBehavior.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES)
   );
 }
 
@@ -3525,8 +3524,7 @@ export class WorkflowExecutor {
     const policy = errorBehavior ?? {
       onError: CONDITION_ACTIONS.STOP_WORKFLOW,
     };
-    const maxRetries =
-      policy.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES;
+    const maxRetries = policy.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES;
     const canRetry = canRetryErrorBehavior(policy, attemptIndex);
     const actionText = canRetry
       ? `retry ${attemptIndex + 1} of ${isUnlimited(maxRetries) ? "unlimited" : maxRetries}`

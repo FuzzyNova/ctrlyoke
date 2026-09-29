@@ -346,14 +346,20 @@ suite("CLI Commander exit codes", () => {
 
   test("uses exit code 2 for unknown options and missing required options", async function () {
     this.timeout(30000);
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-cli-parse-"));
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-cli-parse-")
+    );
     temporaryRoots.push(root);
 
     const unknownOption = await runCli(["run", "--not-a-real-option"], root);
     assert.strictEqual(unknownOption.code, 2, unknownOption.stderr);
 
     const missingRequiredOption = await runCli(["history", "runs"], root);
-    assert.strictEqual(missingRequiredOption.code, 2, missingRequiredOption.stderr);
+    assert.strictEqual(
+      missingRequiredOption.code,
+      2,
+      missingRequiredOption.stderr
+    );
   });
 
   test("keeps help at exit code 0", async function () {
@@ -484,7 +490,9 @@ suite("CLI run process harness reporting", () => {
 
   test("--model overrides the workflow model while step-level models still win", async function () {
     this.timeout(60000);
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-run-model-"));
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-run-model-")
+    );
     temporaryRoots.push(root);
     const workflow = path.join(root, "model-override.ctrlyoke.json");
     await fs.writeFile(
@@ -540,13 +548,13 @@ suite("CLI run process harness reporting", () => {
           {
             type: "script",
             script:
-              'node -e "process.exit(require(\'fs\').existsSync(\'continue.flag\') ? 0 : 1)"',
+              "node -e \"process.exit(require('fs').existsSync('continue.flag') ? 0 : 1)\"",
             onFail: "stopWorkflow",
           },
           {
             type: "script",
             script:
-              'node -e "require(\'fs\').writeFileSync(\'continued.txt\', \'{{who}}\')"',
+              "node -e \"require('fs').writeFileSync('continued.txt', '{{who}}')\"",
           },
         ],
       }),
@@ -574,11 +582,7 @@ suite("CLI run process harness reporting", () => {
       workflowKey: string;
       runRef: string;
     };
-    const projectStateRoot = path.join(
-      stateHome,
-      "projects",
-      projectKey(root)
-    );
+    const projectStateRoot = path.join(stateHome, "projects", projectKey(root));
     const workingFilePath = path.join(
       WorkflowPaths.runsRootForProjectState(projectStateRoot),
       run.workflowKey,

@@ -149,10 +149,11 @@ function loadCombinedProjectConfig() {
   const webview = parseTsconfig(WEBVIEW_TSCONFIG_PATH, WEBVIEW_ROOT);
 
   const fileNames = [...new Set([...root.fileNames, ...webview.fileNames])];
-  const scriptFileNames = ts.sys.readDirectory(
-    path.join(ROOT, "scripts"),
-    [".mjs", ".js", ".ts"]
-  );
+  const scriptFileNames = ts.sys.readDirectory(path.join(ROOT, "scripts"), [
+    ".mjs",
+    ".js",
+    ".ts",
+  ]);
   fileNames.push(
     ...scriptFileNames.filter((fileName) => !fileNames.includes(fileName))
   );

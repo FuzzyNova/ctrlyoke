@@ -1018,7 +1018,9 @@ export const useEditorStore = create<
       let bestDistance = Number.POSITIVE_INFINITY;
       for (let oldIndex = 0; oldIndex < previousSteps.length; oldIndex++) {
         if (oldToNew.has(oldIndex)) continue;
-        if (!isStepContentEqual(previousSteps[oldIndex], nextSteps[nextIndex])) {
+        if (
+          !isStepContentEqual(previousSteps[oldIndex], nextSteps[nextIndex])
+        ) {
           continue;
         }
         const distance = Math.abs(oldIndex - nextIndex);

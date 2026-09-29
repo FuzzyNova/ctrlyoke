@@ -19,8 +19,7 @@ import { normalizeCliEvents } from "../../utils/CliEventNormalizer";
 
 suite("CliLogEventPump", () => {
   test("rewrites a skill-mode bash triple before raw streaming consumers", () => {
-    const command =
-      `node "/repo/out/mcp-server.js" --tool submit_commit_message --args '{"message":"fix: event mapping"}'`;
+    const command = `node "/repo/out/mcp-server.js" --tool submit_commit_message --args '{"message":"fix: event mapping"}'`;
     const parsedEvents: CliEvent[] = [
       {
         type: CLI_EVENT_TYPES.BASH_COMMAND,

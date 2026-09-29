@@ -11,10 +11,10 @@ its type. A BOM is common on Windows: VS Code's "UTF-8 with BOM" encoding, and
 PowerShell 5.1 `Set-Content -Encoding UTF8`. Reproduced by calling `parsePromptFile` on
 files starting with `﻿`:
 
-| File | Result | Expected |
-| --- | --- | --- |
-| `x.ctrlyoke.yaml` | loads (js-yaml strips the BOM) | loads |
-| `x.ctrlyoke.json` | returns `null`; logs `Unexpected token '﻿' … is not valid JSON` | loads |
+| File                                                                | Result                                                                             | Expected              |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | --------------------- |
+| `x.ctrlyoke.yaml`                                                   | loads (js-yaml strips the BOM)                                                     | loads                 |
+| `x.ctrlyoke.json`                                                   | returns `null`; logs `Unexpected token '﻿' … is not valid JSON`                    | loads                 |
 | `x.prompt.md` with `---\r\nschemaVersion: 1\r\n---\r\nDo the thing` | frontmatter not recognised; the prompt is the whole file including the `---` block | prompt `Do the thing` |
 
 The same files without a BOM parse correctly, including CRLF frontmatter.

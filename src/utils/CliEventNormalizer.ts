@@ -12,10 +12,7 @@ import type {
   ToolResultData,
   WebSearchData,
 } from "../types/CliOutputTypes";
-import {
-  CLI_EVENT_TYPES,
-  OPERATION_STATUS,
-} from "../types/DashboardConstants";
+import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../types/DashboardConstants";
 import { McpSkillEventRewriter } from "./McpSkillCommandRecognizer";
 
 const PENDING_KINDS = {

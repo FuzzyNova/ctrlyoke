@@ -492,7 +492,10 @@ suite("EndConditionEvaluator Tests", () => {
       const workspaceFile = path.join(workspaceRoot, "shared-candidate");
       fs.writeFileSync(workspaceFile, "script", "utf8");
       assert.strictEqual(
-        await evaluator.resolvePathForTest("shared-candidate", workingDirectory),
+        await evaluator.resolvePathForTest(
+          "shared-candidate",
+          workingDirectory
+        ),
         await fs.promises.realpath(workspaceFile)
       );
 

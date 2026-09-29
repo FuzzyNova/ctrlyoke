@@ -442,7 +442,10 @@ suite("WorkflowExecutor condition shell reporting", () => {
     ): Promise<string[]> => {
       const queue = new PromptQueue();
       const integration = new MockHarnessIntegration(undefined, false);
-      const evaluator = new RecordingShellEvaluator(new MockPlatform(), results);
+      const evaluator = new RecordingShellEvaluator(
+        new MockPlatform(),
+        results
+      );
       const messages: string[] = [];
       const context = makeContext(integration);
       context.onStatusMessage = (_stepIndex, message) => messages.push(message);
@@ -451,10 +454,9 @@ suite("WorkflowExecutor condition shell reporting", () => {
       return messages.filter((message) => message.startsWith("End condition"));
     };
 
-    const defaultFailure = await run(
-      { script: "check-result" },
-      [shellEvaluationResult(false)]
-    );
+    const defaultFailure = await run({ script: "check-result" }, [
+      shellEvaluationResult(false),
+    ]);
     assert.ok(
       defaultFailure.some((message) => message.includes("→ stopWorkflow"))
     );
@@ -468,11 +470,17 @@ suite("WorkflowExecutor condition shell reporting", () => {
       },
       [shellEvaluationResult(false)]
     );
-    assert.ok(continuedFailure.some((message) => message.includes("→ continue")));
+    assert.ok(
+      continuedFailure.some((message) => message.includes("→ continue"))
+    );
     assert.ok(continuedFailure.every((message) => !message.includes("retry ")));
 
     const erroredEvaluation = await run(
-      { script: "check-result", onFail: CONDITION_ACTIONS.RETRY, maxRetries: 1 },
+      {
+        script: "check-result",
+        onFail: CONDITION_ACTIONS.RETRY,
+        maxRetries: 1,
+      },
       [
         {
           ...shellEvaluationResult(false),
@@ -508,9 +516,7 @@ suite("WorkflowExecutor condition shell reporting", () => {
       [shellEvaluationResult(false), shellEvaluationResult(false)]
     );
     assert.ok(
-      retryAfterExhaustion.some((message) =>
-        message.includes("→ retry 1 of 1")
-      )
+      retryAfterExhaustion.some((message) => message.includes("→ retry 1 of 1"))
     );
     assert.ok(
       retryAfterExhaustion.some((message) => message.includes("→ stopWorkflow"))

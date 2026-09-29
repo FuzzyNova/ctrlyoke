@@ -28,7 +28,7 @@ Also:
 
 - **`docs/reference/commands.md:74`:** says "Add Output Channel to ctrlyoke" is also on "the
   Output panel title bar". `package.json` registers it only under `editor/context` (`inOutput &&
-  !editorHasSelection`), with no `view/title` entry.
+!editorHasSelection`), with no `view/title` entry.
 - **`schemas/workflow-schema.json` `skills` description:** says ctrlyoke "attaches each selected
   skill's content to the prompt". `SkillExpander` attaches only name, path and description for
   skills inside trusted roots (the harness reads `SKILL.md` itself). The full body is embedded

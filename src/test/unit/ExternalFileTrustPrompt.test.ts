@@ -40,9 +40,10 @@ class FakeInteractionPort implements UserInteractionPort {
   lastRequest: ChoiceRequest | undefined;
 }
 
-class RecordingTrustStore
-  implements Pick<ExternalRootsTrustStore, "setDecisions">
-{
+class RecordingTrustStore implements Pick<
+  ExternalRootsTrustStore,
+  "setDecisions"
+> {
   readonly decisions: Array<{
     scopeIdentity: string;
     roots: readonly string[];

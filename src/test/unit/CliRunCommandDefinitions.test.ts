@@ -27,9 +27,8 @@ suite("CLI run command definitions", () => {
     };
     const executionProperties = settingsSchema.properties.execution.properties;
     const executionSettingNames = new Set(
-      runCommand
-        .helpInformation()
-        .match(/execution\.[A-Za-z][A-Za-z0-9]*/gu) ?? []
+      runCommand.helpInformation().match(/execution\.[A-Za-z][A-Za-z0-9]*/gu) ??
+        []
     );
 
     assert.ok(

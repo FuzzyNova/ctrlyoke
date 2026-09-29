@@ -133,10 +133,7 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
       const unauthorized = await sendGetRequest(port, "/index.html");
       assert.strictEqual(unauthorized.statusCode, 401);
 
-      const response = await sendGetRequest(
-        port,
-        `/index.html?token=${token}`
-      );
+      const response = await sendGetRequest(port, `/index.html?token=${token}`);
       assert.strictEqual(response.statusCode, 200);
       const rootPage = await sendGetRequest(port, `/?token=${token}`);
       assert.strictEqual(response.body, rootPage.body);

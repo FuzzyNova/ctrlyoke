@@ -20,11 +20,11 @@ differently depending on `executionMode`.
 Confirmed by bundling the real `EndConditionEvaluator` with esbuild and running it in a temp
 workspace containing `check.js` (`console.log("argv=" + JSON.stringify(process.argv.slice(2)))`):
 
-| `script` | Observed | Expected |
-|---|---|---|
-| `check.js && echo SECOND` | stdout `argv=["&&","echo","SECOND"]`, exit 0, **passed**; `echo` never ran | both run |
-| `check.js \| findstr argv` | argv `["\|","findstr","argv"]`, no pipe | piped |
-| `node check.js && echo SECOND` | both run (correct) | both run |
+| `script`                       | Observed                                                                   | Expected |
+| ------------------------------ | -------------------------------------------------------------------------- | -------- |
+| `check.js && echo SECOND`      | stdout `argv=["&&","echo","SECOND"]`, exit 0, **passed**; `echo` never ran | both run |
+| `check.js \| findstr argv`     | argv `["\|","findstr","argv"]`, no pipe                                    | piped    |
+| `node check.js && echo SECOND` | both run (correct)                                                         | both run |
 
 The last row is correct only because `node` isn't a workspace file, so the shell fallback is used.
 
@@ -46,6 +46,7 @@ metacharacter check in a helper (check whether one exists already, e.g. near
 evaluator code so it is fixed too.
 
 Regression tests in the `EndConditionEvaluator` unit tests, using a real temp workspace:
+
 - workspace script plus `&& <second command>` runs both;
 - a failing second command (`check.js && node -e "process.exit(3)"`) fails the condition;
 - `check.js arg1 "a b"` still passes argv directly (`["arg1","a b"]`);

@@ -15,12 +15,12 @@ Reproduced with the real store under `npx tsx`:
 
 ```ts
 const store = new ExternalRootsTrustStore("C:/tmp/cyk-cfg/trust.json");
-const root = "c:/tmp/cyk-cfg/later-logs";          // does not exist yet
+const root = "c:/tmp/cyk-cfg/later-logs"; // does not exist yet
 await store.setDecisions("ws", [root], "allow");
-store.getApprovedRoots("ws", [root]);               // [ 'c:/tmp/cyk-cfg/later-logs' ]
+store.getApprovedRoots("ws", [root]); // [ 'c:/tmp/cyk-cfg/later-logs' ]
 fs.mkdirSync("C:/tmp/cyk-cfg/later-logs");
-store.getApprovedRoots("ws", [root]);               // []
-store.getPendingRoots("ws", [root]);                // [ 'c:/tmp/cyk-cfg/later-logs' ]
+store.getApprovedRoots("ws", [root]); // []
+store.getPendingRoots("ws", [root]); // [ 'c:/tmp/cyk-cfg/later-logs' ]
 // stored key: "ws␟c:\\tmp\\cyk-cfg\\later-logs"
 ```
 

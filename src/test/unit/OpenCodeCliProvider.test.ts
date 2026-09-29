@@ -193,10 +193,10 @@ suite("OpenCodeCliProvider", () => {
       await mutation.apply();
     }
 
-    assert.deepStrictEqual(
-      [...provider.getAttachedMcpServerIds()].sort(),
-      ["ctrlyoke", "ctrlyoke-commit"]
-    );
+    assert.deepStrictEqual([...provider.getAttachedMcpServerIds()].sort(), [
+      "ctrlyoke",
+      "ctrlyoke-commit",
+    ]);
     const events = provider.logParser.extractStructuredEventsFromEvent({
       type: "tool_use",
       part: {

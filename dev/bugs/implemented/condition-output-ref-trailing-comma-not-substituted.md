@@ -12,11 +12,11 @@ replaced. The harness receives the literal token, and no diagnostic is raised.
 Reproduced with `npx tsx` against the real `substituteConditionOutputRefs` and the condition output
 `{ stdout: "3 failing", stderr: "boom", actual: "1", expected: "0", exitCode: 1, compareSource: "exitCode" }`:
 
-| Input | Observed | Expected |
-| --- | --- | --- |
+| Input                                                                      | Observed                    | Expected                         |
+| -------------------------------------------------------------------------- | --------------------------- | -------------------------------- |
 | `Got exit $endCondition:exitCode, expected $endCondition:expected, fix it` | unchanged, `unresolved: []` | `Got exit 1, expected 0, fix it` |
-| `stderr was $endCondition:stderr-please fix` | unchanged | `stderr was boom-please fix` |
-| `Tests failed: $endCondition:stdout. Fix them.` | substituted | substituted (control) |
+| `stderr was $endCondition:stderr-please fix`                               | unchanged                   | `stderr was boom-please fix`     |
+| `Tests failed: $endCondition:stdout. Fix them.`                            | substituted                 | substituted (control)            |
 
 ## Steps to Reproduce
 

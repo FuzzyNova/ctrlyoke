@@ -121,9 +121,7 @@ export interface ExternalRunWatchEntry {
   lastStepStatuses: StepStatus[];
 }
 
-export class ExternalRunWatchCoordinator
-  implements RunViewPublisherExternalRunWatchPort
-{
+export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunWatchPort {
   private readonly externalRunSessions = new Map<
     string,
     ExternalRunWatchEntry

@@ -6,10 +6,7 @@ import { ErrorBehaviorEditor } from "@components/shared/ErrorBehaviorEditor";
 describe("ErrorBehaviorEditor", () => {
   it("shows the shared retry default when maxRetries is omitted", () => {
     render(
-      <ErrorBehaviorEditor
-        value={{ onError: "retry" }}
-        onChange={vi.fn()}
-      />
+      <ErrorBehaviorEditor value={{ onError: "retry" }} onChange={vi.fn()} />
     );
 
     expect(screen.getByLabelText("Max Retries")).toHaveValue(1);

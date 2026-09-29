@@ -12,12 +12,12 @@ the argument, reaches the child process corrupted. The escaped closing quote swa
 next argument. Reproduced through a real `cmd.exe /d /s /c` with
 `windowsVerbatimArguments: true` and a shim that prints its argv:
 
-| Input args | argv received | Expected |
-| --- | --- | --- |
-| `a\"b`, `next` (1 backslash + quote) | `a\"b`, `next` | same (OK) |
-| `a\\"b`, `next` (2 backslashes + quote) | `a\\b next` (merged, quote lost) | `a\\"b`, `next` |
-| `C:\foo\`, `next` (1 trailing) | `C:\foo\`, `next` | same (OK) |
-| `C:\foo\\`, `next` (2 trailing) | `C:\foo\" next` (merged) | `C:\foo\\`, `next` |
+| Input args                              | argv received                    | Expected           |
+| --------------------------------------- | -------------------------------- | ------------------ |
+| `a\"b`, `next` (1 backslash + quote)    | `a\"b`, `next`                   | same (OK)          |
+| `a\\"b`, `next` (2 backslashes + quote) | `a\\b next` (merged, quote lost) | `a\\"b`, `next`    |
+| `C:\foo\`, `next` (1 trailing)          | `C:\foo\`, `next`                | same (OK)          |
+| `C:\foo\\`, `next` (2 trailing)         | `C:\foo\" next` (merged)         | `C:\foo\\`, `next` |
 
 The regexes on their own: for `a` + 2 backslashes + `"b`, the current code emits 4
 backslashes before `"`, where 5 are needed (2×2 + 1 escape). For `C:\foo` + 2

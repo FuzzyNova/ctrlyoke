@@ -15,11 +15,11 @@
 
 Verified by an agent with the real `parseHistoryTime` on a UTC-5 machine:
 
-| Input              | Parsed as           | Problem                          |
-| ------------------ | ------------------- | -------------------------------- |
-| `2026-02-30`       | `2026-03-02T00:00Z` | should be rejected               |
-| `2026-04-31`       | `2026-05-01T00:00Z` | should be rejected               |
-| `2026-09-20`       | `2026-09-20T00:00Z` | UTC                              |
+| Input              | Parsed as           | Problem                            |
+| ------------------ | ------------------- | ---------------------------------- |
+| `2026-02-30`       | `2026-03-02T00:00Z` | should be rejected                 |
+| `2026-04-31`       | `2026-05-01T00:00Z` | should be rejected                 |
+| `2026-09-20`       | `2026-09-20T00:00Z` | UTC                                |
 | `2026-09-20T00:00` | `2026-09-20T05:00Z` | local, 5 hours off from line above |
 
 ## Root Cause

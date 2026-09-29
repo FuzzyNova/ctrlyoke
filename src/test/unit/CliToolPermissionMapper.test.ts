@@ -1,8 +1,6 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import {
-  COPILOT_TO_CLAUDE_MAP,
-} from "../../core/harness/shared/CliToolPermissionMapper";
+import { COPILOT_TO_CLAUDE_MAP } from "../../core/harness/shared/CliToolPermissionMapper";
 import { CopilotToolPermissionMapper } from "../../core/harness/copilot/CopilotToolPermissionMapper";
 import { ClaudeToolPermissionMapper } from "../../core/harness/claude/ClaudeToolPermissionMapper";
 import { PERMISSION_MODES } from "../../types/DashboardConstants";

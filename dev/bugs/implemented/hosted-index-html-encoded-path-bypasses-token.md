@@ -15,13 +15,13 @@ without a token.
 
 Verified by an agent against the real server, without a token:
 
-| Request                        | Result                  |
-| ------------------------------ | ----------------------- |
-| `/index.html`                  | 401 (correct)           |
-| `/%69ndex.html`                | 200, raw HTML           |
-| `/index%2ehtml`                | 200, raw HTML           |
-| `/./index.html`                | 200, raw HTML           |
-| `/%66avicon.svg`               | 200, uncolorized icon   |
+| Request          | Result                |
+| ---------------- | --------------------- |
+| `/index.html`    | 401 (correct)         |
+| `/%69ndex.html`  | 200, raw HTML         |
+| `/index%2ehtml`  | 200, raw HTML         |
+| `/./index.html`  | 200, raw HTML         |
+| `/%66avicon.svg` | 200, uncolorized icon |
 
 ## Root Cause
 

@@ -387,6 +387,11 @@ export class ExecutionRootLeaseManager {
   static isLeaseStale(
     lease: Pick<ExecutionLease, "pid" | "lastHeartbeat">
   ): boolean {
-    return isOwnerStale(lease.pid, lease.lastHeartbeat, Date.now(), isProcessAlive);
+    return isOwnerStale(
+      lease.pid,
+      lease.lastHeartbeat,
+      Date.now(),
+      isProcessAlive
+    );
   }
 }

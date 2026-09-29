@@ -694,10 +694,7 @@ export class CliTerminalFormatter {
       0,
       MAX_SCRIPT_OUTPUT_LINES - state.shownLines
     );
-    if (
-      remainingChars === 0 ||
-      (remainingLines === 0 && endsWithNewline)
-    ) {
+    if (remainingChars === 0 || (remainingLines === 0 && endsWithNewline)) {
       return;
     }
 

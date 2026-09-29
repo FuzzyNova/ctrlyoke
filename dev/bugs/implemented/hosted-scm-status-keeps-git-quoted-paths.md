@@ -11,10 +11,10 @@ contains a space, a non-ASCII character or a quote shows a mangled path, can't b
 opened, and can't be staged. Reproduced with git 2.47 and untracked files `a b.txt`,
 `café.txt`, `q"t.txt`; `HostedWorkspaceViewerService.getStatus()` returned:
 
-| real file | reported path             |
-| --------- | ------------------------- |
-| `a b.txt` | `"a b.txt"` (with quotes) |
-| `café.txt`| `"caf/303/251.txt"`       |
+| real file  | reported path             |
+| ---------- | ------------------------- |
+| `a b.txt`  | `"a b.txt"` (with quotes) |
+| `café.txt` | `"caf/303/251.txt"`       |
 
 `readFile(status.path)` → "File not found"; `stageFile(status.path)` → `fatal:
 pathspec '"a b.txt"' did not match any files`. `readFile("a b.txt")` works.

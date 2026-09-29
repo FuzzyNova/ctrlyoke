@@ -188,9 +188,7 @@ describe("WORKFLOW_UNLOADED new-step draft", () => {
     useEditorStore.getState().setScriptExpected("passed");
     useEditorStore.getState().setScriptIgnoreCase(true);
     useEditorStore.getState().setScriptEnv({ CI: "true" });
-    useEditorStore
-      .getState()
-      .setScriptExecutionMode(EXECUTION_MODES.HEADLESS);
+    useEditorStore.getState().setScriptExecutionMode(EXECUTION_MODES.HEADLESS);
     useEditorStore.getState().setScriptShell("pwsh");
 
     act(() => dispatch(MESSAGE_TYPES.WORKFLOW_UNLOADED));
@@ -203,9 +201,9 @@ describe("WORKFLOW_UNLOADED new-step draft", () => {
 
     expect(useEditorStore.getState().stepType).toBe(STEP_TYPES.SCRIPT);
     useEditorStore.getState().resetEditor();
-    expect(
-      useEditorStore.getState().restoreFromVsCodeState(vscodeApi)
-    ).toBe(true);
+    expect(useEditorStore.getState().restoreFromVsCodeState(vscodeApi)).toBe(
+      true
+    );
 
     const editor = useEditorStore.getState();
     expect(editor.stepType).toBe(STEP_TYPES.SCRIPT);

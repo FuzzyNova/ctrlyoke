@@ -12,6 +12,7 @@ retries) fails and stops the workflow, but its verdict reads
 status line, and the CLI prints `Action: stopWorkflow (retry 0 of 0)`. Expected: `→ stopWorkflow`.
 
 The same wrong text appears for:
+
 - `onFail: continue` (the workflow advances, but the verdict says retry);
 - errored evaluations (timeout, unsupported script type), where the detail overrides the
   errored action;

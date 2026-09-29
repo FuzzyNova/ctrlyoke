@@ -18,9 +18,7 @@ import { withCtrlyokeBinOnPath } from "../../../utils/CtrlyokeCliPath";
 import { parseArgString } from "../../../utils/CliArgParser";
 import { resolveCliCommand } from "./CliLauncherResolver";
 import { CLI_VERSION_CHECK_TIMEOUT_MS } from "./interfaces/ICliProvider";
-import {
-  type CliProviderPreparation,
-} from "./interfaces/PreparedMutation";
+import { type CliProviderPreparation } from "./interfaces/PreparedMutation";
 import {
   CliMcpConfigGenerator,
   transformMcpSecretMap,

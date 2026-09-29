@@ -21,8 +21,7 @@ import {
 suite("FileReferenceParser", () => {
   suite("maskFencedCodeBlocks", () => {
     test("keeps a three-backtick block inside a four-backtick fence masked", () => {
-      const prompt =
-        "````markdown\n```html\n@src/x.ts $previous\n```\n````";
+      const prompt = "````markdown\n```html\n@src/x.ts $previous\n```\n````";
       const masked = maskFencedCodeBlocks(prompt);
 
       assert.ok(masked.includes("\x00src\x00x.ts \x00previous"));

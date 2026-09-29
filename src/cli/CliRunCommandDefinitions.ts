@@ -134,10 +134,7 @@ export function registerRunScopedCommands(
         "--run <ref|runId>",
         "Target run reference or numeric run ID"
       )
-      .option(
-        "-H, --harness <harness>",
-        "Override harness for appended steps"
-      )
+      .option("-H, --harness <harness>", "Override harness for appended steps")
       .option(
         "-p, --prompt <text>",
         "Inline prompt string (alternative to file)"

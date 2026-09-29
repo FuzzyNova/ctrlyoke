@@ -9,13 +9,13 @@
 The git-strategy snapshot taken before and after each prompt silently drops several kinds of
 change, so they never appear in the step's changed-files list, prompt history or undo:
 
-| Change during the prompt (clean repo before) | Recorded | Expected |
-|---|---|---|
-| Delete a tracked file `tracked.txt` | nothing | `deleted tracked.txt` |
-| Create `newdir/a.ts` in a new folder | nothing | `created newdir/a.ts` |
-| `git mv old.txt new.txt` | nothing | deleted plus created (or a rename) |
-| Modify committed `café.txt` | nothing | `modified café.txt` |
-| Create and commit `naïve.txt` | `created "na/303/257ve.txt"` | `created naïve.txt` |
+| Change during the prompt (clean repo before) | Recorded                     | Expected                           |
+| -------------------------------------------- | ---------------------------- | ---------------------------------- |
+| Delete a tracked file `tracked.txt`          | nothing                      | `deleted tracked.txt`              |
+| Create `newdir/a.ts` in a new folder         | nothing                      | `created newdir/a.ts`              |
+| `git mv old.txt new.txt`                     | nothing                      | deleted plus created (or a rename) |
+| Modify committed `café.txt`                  | nothing                      | `modified café.txt`                |
+| Create and commit `naïve.txt`                | `created "na/303/257ve.txt"` | `created naïve.txt`                |
 
 ## Steps to Reproduce
 

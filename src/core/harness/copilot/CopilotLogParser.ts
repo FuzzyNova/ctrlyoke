@@ -110,7 +110,8 @@ function getCopilotMcpHint(
 ): McpToolHint | undefined {
   const server = data.mcpServerName ?? data.mcpConfigServerName;
   const tool = data.mcpToolName;
-  return typeof server === "string" && server.length > 0 &&
+  return typeof server === "string" &&
+    server.length > 0 &&
     typeof tool === "string" &&
     tool.length > 0
     ? { server, tool }

@@ -344,8 +344,7 @@ suite("CliEventNormalizer", () => {
   });
 
   test("normalizes a skill-mode bash start, completion, and result into one MCP row", () => {
-    const command =
-      `node "C:\\repo\\out\\mcp-server.js" --tool post_note --args '{"text":"hello"}' --workspace "C:\\repo"`;
+    const command = `node "C:\\repo\\out\\mcp-server.js" --tool post_note --args '{"text":"hello"}' --workspace "C:\\repo"`;
     const normalized = normalizeCliEvents([
       {
         type: CLI_EVENT_TYPES.BASH_COMMAND,
@@ -408,13 +407,7 @@ suite("CliEventNormalizer", () => {
     const normalized = normalizeCliEvents([initiated, unknownCompletion]);
 
     assert.strictEqual(normalized.length, 2);
-    assert.strictEqual(
-      (normalized[0].data as ToolCall).result,
-      undefined
-    );
-    assert.strictEqual(
-      (normalized[1].data as ToolCall).result?.output,
-      "done"
-    );
+    assert.strictEqual((normalized[0].data as ToolCall).result, undefined);
+    assert.strictEqual((normalized[1].data as ToolCall).result?.output, "done");
   });
 });

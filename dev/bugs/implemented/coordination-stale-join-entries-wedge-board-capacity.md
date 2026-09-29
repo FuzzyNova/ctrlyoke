@@ -21,7 +21,7 @@ The error message misattributes the failure to an "unresolved claim", and becaus
 1. Initialize a coordination store with a small `maxEntries` limit (e.g. 5) to observe the boundary:
    ```javascript
    const store = new ExecutionRootCoordinationStore(tmpDir, {
-     retention: { maxEntries: 5 }
+     retention: { maxEntries: 5 },
    });
    ```
 2. Append 5 `join` entries from distinct external or unclosed participants:
@@ -29,8 +29,13 @@ The error message misattributes the failure to an "unresolved claim", and becaus
    for (let i = 0; i < 5; i++) {
      await store.append({
        kind: "join",
-       from: { participantId: `ext-${i}`, label: `ext-${i}`, kind: "external", attested: false },
-       via: "mcp"
+       from: {
+         participantId: `ext-${i}`,
+         label: `ext-${i}`,
+         kind: "external",
+         attested: false,
+       },
+       via: "mcp",
      });
    }
    ```
@@ -38,9 +43,14 @@ The error message misattributes the failure to an "unresolved claim", and becaus
    ```javascript
    await store.append({
      kind: "note",
-     from: { participantId: "ext-new", label: "ext-new", kind: "external", attested: false },
+     from: {
+       participantId: "ext-new",
+       label: "ext-new",
+       kind: "external",
+       attested: false,
+     },
      via: "mcp",
-     text: "hello"
+     text: "hello",
    });
    ```
 4. **Outcome:** Throws `Coordination board capacity exceeded: cannot append without dropping an unresolved claim`, even though 0 claims were ever made.
@@ -50,6 +60,7 @@ The error message misattributes the failure to an "unresolved claim", and becaus
 In `ExecutionRootCoordinationStore.ts`:
 
 1. `compactDepartedParticipants()` (lines 289–316) only marks `join` sequence numbers as settled when it encounters a corresponding `leave` entry for that `participantId`:
+
    ```typescript
    } else if (entry.kind === COORDINATION_ENTRY_KINDS.LEAVE) {
      for (const joinSequence of openJoins.get(participantId) ?? []) {
@@ -59,6 +70,7 @@ In `ExecutionRootCoordinationStore.ts`:
      settled.add(entry.seq);
    }
    ```
+
    External participants never emit `leave` entries when disconnected/exited; crashed processes never emit `leave`; and expired CLI participants never emit `leave`.
 
 2. `removeOldNotes()` (lines 339–350) only filters out entries where `entry.kind === COORDINATION_ENTRY_KINDS.NOTE`. Lifecycle entries (`join`) are ignored regardless of age.

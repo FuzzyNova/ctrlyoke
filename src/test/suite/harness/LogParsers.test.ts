@@ -2370,11 +2370,14 @@ suite("CopilotLogParser", () => {
     assert.deepStrictEqual(CliEventMapper.classifyTool("my-custom-tool"), {
       type: CLI_EVENT_TYPES.TOOL_CALL,
     });
-    assert.deepStrictEqual(CliEventMapper.classifyTool("ctrlyoke(claim_paths)"), {
-      type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
-      server: "ctrlyoke",
-      tool: "claim_paths",
-    });
+    assert.deepStrictEqual(
+      CliEventMapper.classifyTool("ctrlyoke(claim_paths)"),
+      {
+        type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+        server: "ctrlyoke",
+        tool: "claim_paths",
+      }
+    );
   });
 
   suite("headless golden output", () => {
@@ -3832,8 +3835,7 @@ suite("CodexLogParser", () => {
           inputTokens: output.metadata.usage?.inputTokens,
           outputTokens: output.metadata.usage?.outputTokens,
           cachedInputTokens: output.metadata.usage?.cachedInputTokens,
-          reasoningOutputTokens:
-            output.metadata.usage?.reasoningOutputTokens,
+          reasoningOutputTokens: output.metadata.usage?.reasoningOutputTokens,
           totalTokens: output.metadata.usage?.totalTokens,
         },
         {
@@ -3856,8 +3858,7 @@ suite("CodexLogParser", () => {
           inputTokens: output.metadata.usage?.inputTokens,
           outputTokens: output.metadata.usage?.outputTokens,
           cachedInputTokens: output.metadata.usage?.cachedInputTokens,
-          reasoningOutputTokens:
-            output.metadata.usage?.reasoningOutputTokens,
+          reasoningOutputTokens: output.metadata.usage?.reasoningOutputTokens,
           totalTokens: output.metadata.usage?.totalTokens,
         },
         {

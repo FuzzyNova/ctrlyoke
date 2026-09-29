@@ -33,8 +33,7 @@ function rotateColor(colorIndex: number, offset: number): number {
   }
 
   return (
-    ((colorIndex - TRUNK_COLOR_INDEX - 1 + offset) %
-      COMMIT_GRAPH_COLOR_COUNT) +
+    ((colorIndex - TRUNK_COLOR_INDEX - 1 + offset) % COMMIT_GRAPH_COLOR_COUNT) +
     1
   );
 }

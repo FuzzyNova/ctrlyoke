@@ -10,12 +10,12 @@ The schema's operator description says comparisons are numeric when `compareSour
 `exitCode`. For `eq`/`ne` they are string comparisons, so any non-canonical number text gives the
 wrong result. Reproduced with `npx tsx` against the real `compareScriptOutput`:
 
-| Config | Exit code | Observed | Expected |
-| --- | --- | --- | --- |
-| `compareSource: exitCode, operator: eq, expected: "00"` | 0 | `passed: false` | `true` |
-| `… eq, expected: "0.0"` | 0 | `passed: false` | `true` |
-| `… eq, expected: "+1"` | 1 | `passed: false` | `true` |
-| `… ne, expected: "01"` | 1 | `passed: true` | `false` |
+| Config                                                  | Exit code | Observed        | Expected |
+| ------------------------------------------------------- | --------- | --------------- | -------- |
+| `compareSource: exitCode, operator: eq, expected: "00"` | 0         | `passed: false` | `true`   |
+| `… eq, expected: "0.0"`                                 | 0         | `passed: false` | `true`   |
+| `… eq, expected: "+1"`                                  | 1         | `passed: false` | `true`   |
+| `… ne, expected: "01"`                                  | 1         | `passed: true`  | `false`  |
 
 A YAML number such as `expected: 1` works, because it normalizes to `"1"`.
 

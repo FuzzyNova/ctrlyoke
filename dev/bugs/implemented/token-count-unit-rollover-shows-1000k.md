@@ -35,7 +35,7 @@ branch but round to `1000.0`. The same happens at the M→B boundary in
 
 ## Suggested Fix
 
-Choose the unit from the *rounded* value: after scaling and rounding to one decimal,
+Choose the unit from the _rounded_ value: after scaling and rounding to one decimal,
 if the result is `>= 1000` promote to the next unit. Single-source the unit ladder
 (k/M/B) in `TokenFormatting.ts` and have `StatuslineFormat.compactTokenCount` reuse it
 (keeping the statusline's sign handling and its always-one-decimal style if that is
@@ -44,6 +44,6 @@ intentional, e.g. via an option) instead of maintaining a second copy. Add tests
 statusline's M→B boundary.
 
 Note: the webview's `formatMagnitude` (`src/ui/webview-react/utils/number.ts`) has the
-same shape, and its test currently *expects* `999_999 → "1000.0K"`. Treat that as the
+same shape, and its test currently _expects_ `999_999 → "1000.0K"`. Treat that as the
 same defect: reuse the shared ladder there too and update the test to `"1.0M"` (or the
 helper's equivalent) rather than keeping a third copy.

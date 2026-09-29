@@ -56,10 +56,7 @@ suite("Shell invocation", () => {
       const script = "Write-Output setup";
       const [setupInvocation, scriptStepInvocation] = withTerminalShell(
         "bash",
-        () => [
-          resolveScriptInvocation(script),
-          resolveShellInvocation(script),
-        ]
+        () => [resolveScriptInvocation(script), resolveShellInvocation(script)]
       );
 
       assert.deepStrictEqual(setupInvocation.argv, [

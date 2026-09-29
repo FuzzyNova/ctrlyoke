@@ -926,36 +926,30 @@ suite("HostedWorkspaceViewerService", function () {
 
   suite("discardFile", () => {
     for (const multiRoot of [false, true]) {
-      test(
-        `refuses to discard an untracked workspace root (${multiRoot ? "multi-root" : "single-root"})`,
-        async () => {
-          const repository = createWorkspace();
-          runGit(repository, "init");
-          configureGitIdentity(repository);
-          commitFile(repository, "tracked.txt", "tracked\n", "initial");
+      test(`refuses to discard an untracked workspace root (${multiRoot ? "multi-root" : "single-root"})`, async () => {
+        const repository = createWorkspace();
+        runGit(repository, "init");
+        configureGitIdentity(repository);
+        commitFile(repository, "tracked.txt", "tracked\n", "initial");
 
-          const root = path.join(repository, "sub");
-          fs.mkdirSync(root);
-          const preciousFile = path.join(root, "precious.txt");
-          fs.writeFileSync(preciousFile, "keep me\n");
-          const viewerRoots = multiRoot
-            ? [
-                { name: "sub-root", fsPath: root },
-                { name: "other-root", fsPath: createWorkspace() },
-              ]
-            : [];
-          const service = new HostedWorkspaceViewerService(
-            root,
-            viewerRoots
-          );
+        const root = path.join(repository, "sub");
+        fs.mkdirSync(root);
+        const preciousFile = path.join(root, "precious.txt");
+        fs.writeFileSync(preciousFile, "keep me\n");
+        const viewerRoots = multiRoot
+          ? [
+              { name: "sub-root", fsPath: root },
+              { name: "other-root", fsPath: createWorkspace() },
+            ]
+          : [];
+        const service = new HostedWorkspaceViewerService(root, viewerRoots);
 
-          await assert.rejects(
-            service.discardFile(multiRoot ? "sub-root" : ""),
-            /Path not allowed/
-          );
-          assert.strictEqual(fs.readFileSync(preciousFile, "utf8"), "keep me\n");
-        }
-      );
+        await assert.rejects(
+          service.discardFile(multiRoot ? "sub-root" : ""),
+          /Path not allowed/
+        );
+        assert.strictEqual(fs.readFileSync(preciousFile, "utf8"), "keep me\n");
+      });
     }
   });
 

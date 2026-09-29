@@ -12,9 +12,9 @@ it (`"returns": { "not": {} }`, "Removed — renamed to `expected`"). Still:
 - Every CLI script verdict without an `expected` value prints
   `Expected: exit code 0 (no \`returns\` set)`, pointing users at a field the validator rejects.
 - The dashboard renders `exit code 0 (no \`expected\` set)` (`ScriptVerdict.tsx`, line 33), but
-  output find (`outputFind.ts`, line 181) indexes its own copy of the text, which says
-  `returns`. Searching the output for `returns` highlights a match in a verdict that doesn't
-  contain the word, and searching for `no \`expected\` set` finds nothing.
+output find (`outputFind.ts`, line 181) indexes its own copy of the text, which says
+`returns`. Searching the output for `returns`highlights a match in a verdict that doesn't
+contain the word, and searching for`no \`expected\` set` finds nothing.
 
 ## Steps to Reproduce
 

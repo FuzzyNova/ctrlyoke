@@ -378,8 +378,7 @@ suite("TemplateManager variable metadata", () => {
     test("preserves multiline feature descriptions in simple-feature prompts", async () => {
       const tm = makeManager();
       const workspaceDir = makeTempDir();
-      const featureDescription =
-        "Add login page.\nIt should support OAuth.";
+      const featureDescription = "Add login page.\nIt should support OAuth.";
       tm.getWorkspaceFolder = () => ({ uri: { fsPath: workspaceDir } });
       tm.getTemplateContent = async (templateId: string) =>
         fs.promises.readFile(

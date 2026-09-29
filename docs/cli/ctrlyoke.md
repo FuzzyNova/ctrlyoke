@@ -64,7 +64,7 @@ Pass either a file or `--prompt`, not both.
 | Option                       | Meaning                                                                                                                                                                              |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `-H, --harness <harness>`    | Harness override: `copilot-cli`, `claude-cli`, `codex-cli`, `opencode-cli`, `qwen-cli`, or `antigravity-cli`. Default: the workflow's `harness`, then the `defaults.harness` setting |
-| `-m, --model <model>`        | Override the workflow model for this run (step-level `model` values still take precedence)                                                                                             |
+| `-m, --model <model>`        | Override the workflow model for this run (step-level `model` values still take precedence)                                                                                           |
 | `-p, --prompt <text>`        | Run an inline prompt instead of a file                                                                                                                                               |
 | `--var <key=value>`          | Set a workflow variable (repeatable). CLI values override the workflow's own `vars`                                                                                                  |
 | `--session-id <id>`          | Resume this harness session in the first step (implies `--resume-session`)                                                                                                           |
@@ -430,23 +430,23 @@ ctrlyoke history search "permission" --since 7d --json
 ctrlyoke history search "EP.*RM" --regex
 ```
 
-| Option                | Meaning                                                                                                 |
-| --------------------- | ------------------------------------------------------------------------------------------------------- |
-| `--workflow <key...>` | Restrict to workflow lineage keys                                                                       |
-| `--this-workflow`     | Restrict to the workflow named by `CTRLYOKE_WORKING_FILE` (set for harness and workflow-script processes) |
-| `--kind <kind...>`    | Restrict to event kinds, such as `prompt`, `response`, `thinking`, `bash`, `fileEdit`, `tool`, `script` |
-| `--harness <id...>`   | Restrict to harnesses                                                                                   |
-| `--state <state...>`  | Restrict to run outcomes (`completed`, `error`, `stopped`, `paused`)                                    |
-| `--path <substring>`  | Restrict to events touching a file path                                                                 |
+| Option                | Meaning                                                                                                              |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `--workflow <key...>` | Restrict to workflow lineage keys                                                                                    |
+| `--this-workflow`     | Restrict to the workflow named by `CTRLYOKE_WORKING_FILE` (set for harness and workflow-script processes)            |
+| `--kind <kind...>`    | Restrict to event kinds, such as `prompt`, `response`, `thinking`, `bash`, `fileEdit`, `tool`, `script`              |
+| `--harness <id...>`   | Restrict to harnesses                                                                                                |
+| `--state <state...>`  | Restrict to run outcomes (`completed`, `error`, `stopped`, `paused`)                                                 |
+| `--path <substring>`  | Restrict to events touching a file path                                                                              |
 | `--since` / `--until` | Runs started at or after / before an ISO-8601 time (offset-less date-times are UTC) or a relative `7d`, `24h`, `30m` |
-| `--deep`              | Re-read matching runs past the 2,000-character indexed text cap                                         |
-| `--regex`             | Treat the query as a case-insensitive regular expression                                                |
-| `--limit <n>`         | Maximum results (default 20, maximum 100)                                                               |
-| `--offset <n>`        | Absolute result offset                                                                                  |
-| `--snippet <chars>`   | Context characters around each match                                                                    |
-| `--exact-count`       | Scan the whole history for an exact total                                                               |
-| `--no-rebuild`        | Search the existing index without rebuilding it                                                         |
-| `--no-fallback`       | Fail rather than serve results from the unindexed disk scan                                             |
+| `--deep`              | Re-read matching runs past the 2,000-character indexed text cap                                                      |
+| `--regex`             | Treat the query as a case-insensitive regular expression                                                             |
+| `--limit <n>`         | Maximum results (default 20, maximum 100)                                                                            |
+| `--offset <n>`        | Absolute result offset                                                                                               |
+| `--snippet <chars>`   | Context characters around each match                                                                                 |
+| `--exact-count`       | Scan the whole history for an exact total                                                                            |
+| `--no-rebuild`        | Search the existing index without rebuilding it                                                                      |
+| `--no-fallback`       | Fail rather than serve results from the unindexed disk scan                                                          |
 
 `ctrlyoke history search --help` lists every valid `--kind`, `--harness`, and
 `--state` value.
@@ -518,6 +518,6 @@ versioned one-line result envelope; failures exit with code `2`.
 | Variable                | Effect                                                                                                                                        |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `CTRLYOKE_HOME`         | Moves the user state home (`<ctrlyokeStateHome>`, default `~/.ctrlyoke`) that holds run history. Settings stay in `~/.ctrlyoke/settings.json` |
-| `CTRLYOKE_WORKING_FILE` | Set by ctrlyoke for harness and workflow-script processes; names the run a step belongs to. Used by `history search --this-workflow`        |
+| `CTRLYOKE_WORKING_FILE` | Set by ctrlyoke for harness and workflow-script processes; names the run a step belongs to. Used by `history search --this-workflow`          |
 | `CTRLYOKE_MAX_STEPS`    | Set for the built-in MCP server process to the global `queue.maxSteps` value; a workflow's `maxSteps` can override it for that run            |
 | Declared secret names   | Resolve a workflow's declared secrets without a credential store (env passthrough)                                                            |

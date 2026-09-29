@@ -1086,59 +1086,50 @@ export class CtrlYokeHostedServer
       }
     );
 
-    this.app.get(
-      WORKSPACE_FILE_ROUTE_PATH,
-      requireToken,
-      async (req, res) => {
-        const filePath =
-          typeof req.query.path === "string" ? req.query.path : "";
-        if (!filePath) {
-          res.status(400).json({ error: "path is required" });
-          return;
-        }
-        try {
-          const file = await this.viewerService.readFile(filePath);
-          res.locals.skipSecretRedaction = true;
-          res.json(file);
-        } catch (err) {
+    this.app.get(WORKSPACE_FILE_ROUTE_PATH, requireToken, async (req, res) => {
+      const filePath = typeof req.query.path === "string" ? req.query.path : "";
+      if (!filePath) {
+        res.status(400).json({ error: "path is required" });
+        return;
+      }
+      try {
+        const file = await this.viewerService.readFile(filePath);
+        res.locals.skipSecretRedaction = true;
+        res.json(file);
+      } catch (err) {
+        Log.error(
+          `[CtrlYokeHostedServer] workspace-viewer GET /file error: ${String(err)}`
+        );
+        res.status(500).json({ error: "Internal server error" });
+      }
+    });
+
+    this.app.put(WORKSPACE_FILE_ROUTE_PATH, requireToken, async (req, res) => {
+      const body = req.body as { path?: unknown; content?: unknown };
+      if (typeof body.path !== "string" || typeof body.content !== "string") {
+        res.status(400).json({ error: "path and content are required" });
+        return;
+      }
+      try {
+        await this.viewerService.saveFile({
+          path: body.path,
+          content: body.content,
+        });
+        res.json({});
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (message === "Path not allowed") {
+          res.status(403).json({ error: message });
+        } else if (err instanceof RedactionMarkerSaveError) {
+          res.status(400).json({ error: message });
+        } else {
           Log.error(
-            `[CtrlYokeHostedServer] workspace-viewer GET /file error: ${String(err)}`
+            `[CtrlYokeHostedServer] workspace-viewer PUT /file error: ${message}`
           );
           res.status(500).json({ error: "Internal server error" });
         }
       }
-    );
-
-    this.app.put(
-      WORKSPACE_FILE_ROUTE_PATH,
-      requireToken,
-      async (req, res) => {
-        const body = req.body as { path?: unknown; content?: unknown };
-        if (typeof body.path !== "string" || typeof body.content !== "string") {
-          res.status(400).json({ error: "path and content are required" });
-          return;
-        }
-        try {
-          await this.viewerService.saveFile({
-            path: body.path,
-            content: body.content,
-          });
-          res.json({});
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          if (message === "Path not allowed") {
-            res.status(403).json({ error: message });
-          } else if (err instanceof RedactionMarkerSaveError) {
-            res.status(400).json({ error: message });
-          } else {
-            Log.error(
-              `[CtrlYokeHostedServer] workspace-viewer PUT /file error: ${message}`
-            );
-            res.status(500).json({ error: "Internal server error" });
-          }
-        }
-      }
-    );
+    });
 
     this.app.delete(
       "/api/workspace-viewer/entry",

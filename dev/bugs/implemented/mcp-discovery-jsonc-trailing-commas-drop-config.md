@@ -9,7 +9,7 @@
 `.vscode/mcp.json` is JSONC, and VS Code accepts trailing commas in it. With
 
 ```jsonc
-{ "servers": { "gh": { "command": "npx", "args": ["-y", "server-github"], }, }, }
+{ "servers": { "gh": { "command": "npx", "args": ["-y", "server-github"] } } }
 ```
 
 `safeDiscoverLocalMcpServers(ws)` returns no servers and reports no error. Removing the trailing

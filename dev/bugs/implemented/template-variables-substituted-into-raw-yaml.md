@@ -10,14 +10,14 @@ Creating a workflow from a built-in template (the Template modal) fails, or sile
 produces the wrong workflow, for ordinary input. Each case was reproduced by running the
 real `TemplateManager.createWorkflow` via `tsx` with a small `vscode` stub:
 
-| Template, variable = value | Result | Expected |
-| --- | --- | --- |
+| Template, variable = value                                                             | Result                                                                                  | Expected          |
+| -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ----------------- |
 | `simple-feature`, `featureDescription` = `"Add login page.\nIt should support OAuth."` | throws `can not read a block mapping entry; a multiline key may not be an implicit key` | a two-line prompt |
-| `fix-tests`, `testCommand` = `.\tools\run.cmd` | the script becomes `.<TAB>ools\run.cmd` (no error) | `.\tools\run.cmd` |
-| `fix-tests`, `testCommand` = `.\scripts\test.ps1` | throws `unknown escape sequence` | runs the script |
-| `fix-tests`, `testCommand` = `npm test -- --grep "auth"` | throws `bad indentation of a mapping entry` | runs the command |
-| `fix-tests`, `testCommand` = `echo $& done` | the prompt and script become `echo {testCommand} done` | the literal `$&` |
-| `simple-feature`, `featureDescription` = `Price is $$5 total` | `Price is $5 total` | `$$5` |
+| `fix-tests`, `testCommand` = `.\tools\run.cmd`                                         | the script becomes `.<TAB>ools\run.cmd` (no error)                                      | `.\tools\run.cmd` |
+| `fix-tests`, `testCommand` = `.\scripts\test.ps1`                                      | throws `unknown escape sequence`                                                        | runs the script   |
+| `fix-tests`, `testCommand` = `npm test -- --grep "auth"`                               | throws `bad indentation of a mapping entry`                                             | runs the command  |
+| `fix-tests`, `testCommand` = `echo $& done`                                            | the prompt and script become `echo {testCommand} done`                                  | the literal `$&`  |
+| `simple-feature`, `featureDescription` = `Price is $$5 total`                          | `Price is $5 total`                                                                     | `$$5`             |
 
 `featureDescription` is declared `multiline: true`, and `TemplateModal.tsx` shows a
 multi-line text box for it, so multi-line input is explicitly invited. Backslash paths

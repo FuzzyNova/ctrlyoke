@@ -29,7 +29,13 @@ resumeSession: false
 additionalArgs: ["--foo"]
 toolPermissions: { mode: custom, ... }
 errorBehavior: { onError: retry, maxRetries: 3 }
-endCondition: { onFail: retry, maxRetries: 1, retryPrompt: try again, resumeSessionOnRetry: false }
+endCondition:
+  {
+    onFail: retry,
+    maxRetries: 1,
+    retryPrompt: try again,
+    resumeSessionOnRetry: false,
+  }
 ```
 
 The sends the harness received:
@@ -67,7 +73,7 @@ SEND {"prompt":"try again","toolPermissions":null,"resumeSession":true}
 ## Suggested Fix
 
 - Build the retry step from the original: `{ ...prompt, prompt: retryPromptText,
-  resumeSession: prompt.endCondition?.resumeSessionOnRetry ?? true }`, stripping runtime
+resumeSession: prompt.endCondition?.resumeSessionOnRetry ?? true }`, stripping runtime
   and one-shot fields (`_runtime`, `sessionId`, `preCondition`, and anything else that
   must not re-run on a retry).
 - In `createSendRetryPromptCallback`, use the resolved `resumeSession` from that step

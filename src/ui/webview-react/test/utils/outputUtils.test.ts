@@ -410,7 +410,11 @@ describe("generateMarkdownExport", () => {
             events: [
               {
                 type: CLI_EVENT_TYPES.BASH_COMMAND,
-                data: { command: "cat output", status: "completed", output: bashOutput },
+                data: {
+                  command: "cat output",
+                  status: "completed",
+                  output: bashOutput,
+                },
               },
             ],
           },

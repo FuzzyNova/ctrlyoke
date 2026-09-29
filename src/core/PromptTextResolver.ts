@@ -23,10 +23,9 @@ export async function resolvePromptTextWithVariables(
   resolver: PromptTextFileResolver = PASSTHROUGH_PROMPT_FILE_RESOLVER,
   sourceDefinitionPath?: string
 ): Promise<string> {
-  const substitutedPath = VarSubstitutor.applyToPromptText(
-    promptText,
-    { ...variables }
-  );
+  const substitutedPath = VarSubstitutor.applyToPromptText(promptText, {
+    ...variables,
+  });
   const isPromptFile = resolver.looksLikePromptFilePath(substitutedPath);
   const resolvedText = await resolver.resolvePromptValue(
     substitutedPath,

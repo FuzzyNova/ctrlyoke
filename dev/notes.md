@@ -93,6 +93,6 @@ readAddressedRunView is slow on large histories — measured 4.1s for the summar
 
 ☑️ switching to a running workflow doesn't show the live context window until the next update.
 
-"Show only this step output" doesn't work with final step, should show all instances of final step.
+☑️ "Show only this step output" doesn't work with final step, should show all instances of final step.
 
-shared board notes are getting rendered in the output pane when steps are hidden.
+☑️ shared board notes are getting rendered in the output pane when steps are hidden.

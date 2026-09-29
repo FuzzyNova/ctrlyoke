@@ -19,14 +19,14 @@ Use this section when a workflow does not start, does not resume, or does not sa
 
 Logs are written to `.ctrlyoke/logs/` in the workspace:
 
-| File                                 | Contents                                                                                                             |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| `ctrlyoke-<timestamp>.log`           | Extension session log: state transitions, orchestration, session IDs. Start here                                     |
-| `ctrlyoke-cli-<timestamp>.log`       | One per `ctrlyoke` CLI invocation. `--verbose` adds debug detail                                                     |
+| File                                 | Contents                                                                                                                                                                   |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ctrlyoke-<timestamp>.log`           | Extension session log: state transitions, orchestration, session IDs. Start here                                                                                           |
+| `ctrlyoke-cli-<timestamp>.log`       | One per `ctrlyoke` CLI invocation. `--verbose` adds debug detail                                                                                                           |
 | `ctrlyoke-<harness>-hook-debug.log`  | Every hook invocation for Copilot CLI, Claude Code, Qwen Code, and Antigravity; written only when `diagnostics.verboseLogging` is on. Check it when a step never completes |
-| `ctrlyoke-codex-notify-debug.log`    | The Codex CLI equivalent of the hook log; written only when `diagnostics.verboseLogging` is on                       |
-| `ctrlyoke-opencode-plugin-debug.log` | The OpenCode equivalent of the hook log; written only when `diagnostics.verboseLogging` is on                        |
-| `ctrlyoke-mcp-<timestamp>.log`       | The ctrlyoke MCP server, written only when the `diagnostics.verboseLogging` setting is on                            |
+| `ctrlyoke-codex-notify-debug.log`    | The Codex CLI equivalent of the hook log; written only when `diagnostics.verboseLogging` is on                                                                             |
+| `ctrlyoke-opencode-plugin-debug.log` | The OpenCode equivalent of the hook log; written only when `diagnostics.verboseLogging` is on                                                                              |
+| `ctrlyoke-mcp-<timestamp>.log`       | The ctrlyoke MCP server, written only when the `diagnostics.verboseLogging` setting is on                                                                                  |
 
 `ctrlyoke: Show Output Panel` shows the extension's log in VS Code's Output panel.
 

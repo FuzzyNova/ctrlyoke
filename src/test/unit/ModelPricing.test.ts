@@ -275,9 +275,7 @@ suite("ModelPricing", () => {
     assert.ok(
       Math.abs((result.cost?.breakdown?.cachedInputUsd ?? 0) - 0.018) < 1e-12
     );
-    assert.ok(
-      Math.abs((result.cost?.breakdown?.inputUsd ?? 0) - 0.02) < 1e-12
-    );
+    assert.ok(Math.abs((result.cost?.breakdown?.inputUsd ?? 0) - 0.02) < 1e-12);
   });
 
   test("prices Copilot cache counts without charging them as input again", () => {
@@ -297,7 +295,9 @@ suite("ModelPricing", () => {
     });
 
     assert.ok(Math.abs((result.cost?.usd ?? 0) - 0.0493965) < 1e-12);
-    assert.ok(Math.abs((result.cost?.breakdown?.inputUsd ?? 0) - 0.0000075) < 1e-12);
+    assert.ok(
+      Math.abs((result.cost?.breakdown?.inputUsd ?? 0) - 0.0000075) < 1e-12
+    );
   });
 
   test("prices disjoint reasoning at the output rate when no reasoning rate exists", () => {

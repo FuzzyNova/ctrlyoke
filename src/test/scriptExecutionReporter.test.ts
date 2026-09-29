@@ -119,7 +119,8 @@ suite("ScriptExecutionReporter", () => {
         () => undefined
       ),
       onScriptOutput: (_target, output) => {
-        if (output.isStreaming && output.response) streamed.push(output.response);
+        if (output.isStreaming && output.response)
+          streamed.push(output.response);
       },
     };
 

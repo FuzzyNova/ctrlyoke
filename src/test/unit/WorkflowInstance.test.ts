@@ -74,9 +74,7 @@ async function loadPromptFileForTest(
   const parsePromptFile = parser.parsePromptFile.bind(parser);
   loader.loadPromptFile = async () => `${filePath}.working`;
   parser.parsePromptFile = async (requestedPath: string) =>
-    requestedPath === filePath
-      ? promptFile
-      : parsePromptFile(requestedPath);
+    requestedPath === filePath ? promptFile : parsePromptFile(requestedPath);
   (instance as any).setupPromptFileWatcher = () => {};
   const queue = instance.promptQueue;
   const clearQueue = queue.clearQueue.bind(queue);
@@ -3044,11 +3042,7 @@ suite("WorkflowInstance append-and-continue", () => {
     );
     const context = new WorkflowStartupPipeline(
       (instance as any).createWorkflowStartupPipelinePort()
-    ).buildWorkflowExecutionContext(
-      initialIntegration,
-      "",
-      undefined
-    );
+    ).buildWorkflowExecutionContext(initialIntegration, "", undefined);
 
     const claudeIntegration = context.getIntegrationForPrompt(
       { name: "Claude follow-up", prompt: "continue" },

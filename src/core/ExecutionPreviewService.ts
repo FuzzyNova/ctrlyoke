@@ -1264,9 +1264,7 @@ export class ExecutionPreviewService {
         ? 1
         : 0);
     const retry: RetryPreview = {
-      maxAttempts: isUnlimited(retries)
-        ? -1
-        : retries + 1,
+      maxAttempts: isUnlimited(retries) ? -1 : retries + 1,
       ...(end?.timeoutSec !== undefined ? { backoffSeconds: 0 } : {}),
     };
     return {

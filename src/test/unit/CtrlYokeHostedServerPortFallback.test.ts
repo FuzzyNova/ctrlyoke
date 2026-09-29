@@ -23,10 +23,7 @@ interface FakeHttpServerPort {
  * configured fallback ports); any other port — including the final `0`
  * retry — succeeds and reports `boundPort` from address().
  */
-class FakeHttpServer
-  extends EventEmitter
-  implements FakeHttpServerPort
-{
+class FakeHttpServer extends EventEmitter implements FakeHttpServerPort {
   listenCalls: number[] = [];
   private readonly failOnPorts: Set<number>;
 

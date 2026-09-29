@@ -145,10 +145,7 @@ export function mapOpenCodeToolPartToCliEvent(
       };
 
     default: {
-      const mcpHint = findOpenCodeMcpToolHint(
-        toolName,
-        attachedMcpServerIds
-      );
+      const mcpHint = findOpenCodeMcpToolHint(toolName, attachedMcpServerIds);
       const classification = CliEventMapper.classifyTool(toolName, mcpHint);
       if (classification.type === CLI_EVENT_TYPES.MCP_TOOL_CALL) {
         return {
@@ -163,7 +160,9 @@ export function mapOpenCodeToolPartToCliEvent(
               ? {
                   success: true,
                   output:
-                    typeof output === "string" ? output : JSON.stringify(output),
+                    typeof output === "string"
+                      ? output
+                      : JSON.stringify(output),
                 }
               : undefined,
           },

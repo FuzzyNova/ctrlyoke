@@ -6,7 +6,7 @@
 
 ## Symptom
 
-`CommitMessageGenerator` wraps the staged diff in a fixed ```` ```diff … ``` ```` fence.
+`CommitMessageGenerator` wraps the staged diff in a fixed ` ```diff … ``` ` fence.
 Its own comment explains why: to stop diff content from being read as ctrlyoke reference
 triggers. It gives the example of `+<!DOCTYPE html>`, which "parsed as an inline
 `!DOCTYPE` secret grant and hard-failed the run at preflight".
@@ -19,12 +19,12 @@ are **unmasked**.
 Reproduced by building the prompt exactly as `CommitMessageGenerator` does, for a staged
 `README.md` diff that adds an HTML code block, then running the real parsers (vitest):
 
-```
+````
 +```html
 +<!DOCTYPE html>
 +<p>see @src/secret.ts and $previous</p>
 +```
-```
+````
 
 - `parseSecretReferences(prompt)` → `[{ name: "DOCTYPE", ... }]` (the preflight hard-fail
   the fence exists to prevent)
@@ -54,7 +54,7 @@ Reproduced by building the prompt exactly as `CommitMessageGenerator` does, for 
 
 1. Make `maskFencedCodeBlocks` support CommonMark-style variable-length fences: an opening
    run of N ≥ 3 backticks closes only at a run of at least N backticks. Keep existing
-   ```` ``` ```` behaviour for ordinary prompts, and keep the trigger-character set. This
+   ` ``` ` behaviour for ordinary prompts, and keep the trigger-character set. This
    function is the single masking point for every reference parser, so the fix applies
    everywhere.
 2. In `CommitMessageGenerator`, fence the diff with a run one longer than the longest

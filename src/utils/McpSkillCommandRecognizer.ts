@@ -163,7 +163,12 @@ function tokenizeCommand(command: string): string[] | undefined {
 }
 
 function basename(path: string): string {
-  return path.slice(path.lastIndexOf("/") + 1).split("\\").pop() ?? path;
+  return (
+    path
+      .slice(path.lastIndexOf("/") + 1)
+      .split("\\")
+      .pop() ?? path
+  );
 }
 
 /** Recognize the command form documented by the ctrlyoke MCP skill. */
@@ -202,7 +207,11 @@ export function recognizeMcpSkillCommand(
 
   try {
     const parsed: unknown = JSON.parse(args);
-    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    if (
+      parsed === null ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
       return undefined;
     }
     return { tool, parameters: parsed as Record<string, unknown> };

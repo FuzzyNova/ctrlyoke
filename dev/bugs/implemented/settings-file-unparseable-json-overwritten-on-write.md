@@ -20,7 +20,9 @@ Reproduced by running the real `FileConfigBackend` under `npx tsx`. The file hel
 `\uFEFF` and once with a trailing comma, and then:
 
 ```ts
-const b = new FileConfigBackend(p); b.getAll(); await b.set("ui.showCostEstimates", false);
+const b = new FileConfigBackend(p);
+b.getAll();
+await b.set("ui.showCostEstimates", false);
 ```
 
 Output (the same for both files):

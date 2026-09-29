@@ -28,7 +28,6 @@ export interface DashboardOutput {
  * All methods are static for easy use without instantiation.
  */
 export class CliOutputFormatter {
-
   /**
    * Format output as structured data for dashboard webview.
    * Converts UniversalCliOutput to a format optimized for the ctrlyoke dashboard.

@@ -139,9 +139,9 @@ function resolveRetrySettings(
     ? endCondition.maxRetries!
     : hasRetryAction
       ? DEFAULT_ERROR_BEHAVIOR_RETRIES
-    : hasRetryPrompt
-      ? ConfigurationUtils.getDefaultMaxRetries()
-      : 0;
+      : hasRetryPrompt
+        ? ConfigurationUtils.getDefaultMaxRetries()
+        : 0;
 
   const retryPrompt = hasRetryPrompt
     ? endCondition.retryPrompt
@@ -1253,8 +1253,13 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     prompt: PromptStep,
     target: WorkflowAttemptTarget = this.getCurrentQueueTarget()
   ): boolean {
-    const { maxRetries, retryPrompt } = resolveRetrySettings(prompt.endCondition);
-    if (!retryPrompt && prompt.endCondition?.onFail !== CONDITION_ACTIONS.RETRY) {
+    const { maxRetries, retryPrompt } = resolveRetrySettings(
+      prompt.endCondition
+    );
+    if (
+      !retryPrompt &&
+      prompt.endCondition?.onFail !== CONDITION_ACTIONS.RETRY
+    ) {
       return false;
     }
 

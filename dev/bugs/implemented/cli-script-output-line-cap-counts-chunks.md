@@ -7,7 +7,7 @@
 ## Symptom
 
 When the CLI streams a script step / pre- or end-condition's output, the
-`MAX_SCRIPT_OUTPUT_LINES` (200) cap is applied to *chunks*, not lines. Output that
+`MAX_SCRIPT_OUTPUT_LINES` (200) cap is applied to _chunks_, not lines. Output that
 arrives without a newline in each chunk (progress dots, spinners, a long line split
 across several stdout `data` events) is cut off after 200 chunks, even though it is a
 single line well under the 20,000-char cap, and the truncation notice then reports the

@@ -47,7 +47,9 @@ export class CliLogEventPump {
 
     const structuredEvents = this.deps.parser
       .extractStructuredEventsFromEvent(event)
-      .map((structuredEvent) => this.skillEventRewriter.rewrite(structuredEvent));
+      .map((structuredEvent) =>
+        this.skillEventRewriter.rewrite(structuredEvent)
+      );
 
     const steerEvent = this.buildUserSteerEvent(event);
     const allEvents = steerEvent

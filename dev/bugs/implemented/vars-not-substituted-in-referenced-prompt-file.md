@@ -33,7 +33,7 @@ unresolved-variable diagnostic never sees the file content either.
 ## Root Cause
 
 `resolveEffectivePrompt` (`WorkflowExecutor.ts:~4552-4595`) runs
-`VarSubstitutor.applyToPromptText` on the prompt *value* (the path) and only afterwards loads the
+`VarSubstitutor.applyToPromptText` on the prompt _value_ (the path) and only afterwards loads the
 file through `PromptFileResolver.resolvePromptValue`. The preview (`ExecutionPreviewService.ts:~745-760`)
 and parallel preflight (`ParallelGroupPreflight.ts:~170-173`) use the same order. Before `084ea4e5`
 ("resolve prompt files at execution time") the parser inlined the file content first, so

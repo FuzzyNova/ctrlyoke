@@ -427,13 +427,14 @@ export class PromptFileParser {
     const defs = this.promptSchema?.$defs ?? {};
     let schemas: unknown[];
     if (instancePointer === "") {
-      schemas = isObject(target) && hasOwn(target, "steps")
-        ? [
-            defs.executionProperties,
-            defs.workflowOnlyProperties,
-            this.promptSchema?.oneOf?.[1]?.allOf?.[2],
-          ]
-        : [defs.singleStepRoot];
+      schemas =
+        isObject(target) && hasOwn(target, "steps")
+          ? [
+              defs.executionProperties,
+              defs.workflowOnlyProperties,
+              this.promptSchema?.oneOf?.[1]?.allOf?.[2],
+            ]
+          : [defs.singleStepRoot];
     } else if (instancePointer.endsWith("/_runtime")) {
       schemas = [defs.promptRuntimeMetadata];
     } else if (instancePointer.endsWith("/endCondition")) {

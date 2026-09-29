@@ -35,8 +35,8 @@ the current fold, and code reading suggests a related latent bug:
 
 - `foldCoordinationEntries()` (`ExecutionRootCoordination.ts:341`) evaluates
   liveness separately at **every** `join` against the current `now`, and processes
-  a `claim` only if the participant's record is live *at that point in the
-  sequence*. `claimPaths()` always refreshes (appends a `join`) right before its
+  a `claim` only if the participant's record is live _at that point in the
+  sequence_. `claimPaths()` always refreshes (appends a `join`) right before its
   `claim`, so each claim is governed by the join just before it.
 - **Confirmed latent bug:** for a CLI-delivered
   participant (lease-based liveness), once the lease on the join before a claim
