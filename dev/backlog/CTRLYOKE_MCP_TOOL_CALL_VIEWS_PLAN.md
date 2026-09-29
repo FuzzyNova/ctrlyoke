@@ -46,7 +46,7 @@ define.
   text from what those functions measure and search will break find highlighting and scroll
   anchoring.
 - **Constants already exist to single-source against:** `MCP_SERVER_IDS.CTRLYOKE`
-  (`DashboardConstants.ts:3963`); the `MCP_*_TOOL_NAME` constants and the
+  (`DashboardConstants.ts:3989`); the `McpToolName` union; the `MCP_*_TOOL_NAME` constants and the
   `MCP_WORKFLOW_MUTATION_TOOL_NAMES` / `MCP_COORDINATION_TOOL_NAMES` groups
   (`McpToolDefinitions.ts:607`, `:617`); per-tool labels in `CTRLYOKE_USER_TOOLS`
   (`components/shared/McpServersEditor.tsx`); and the coordination formatters in
@@ -65,7 +65,7 @@ Add `src/ui/webview-react/components/output/ctrlyoke-tools/` with one view modul
 family and a typed registry:
 
 ```ts
-type CtrlYokeToolViewKey = (typeof MCP_TOOL_NAMES)[number]; // derived from McpToolDefinitions
+type CtrlYokeToolViewKey = McpToolName; // existing union in McpToolDefinitions.ts
 
 interface CtrlYokeToolView<TParams, TResult> {
   parseParams(raw: unknown): TParams | undefined; // undefined → fall back
@@ -90,6 +90,20 @@ rather than three parallel switches. Views are keyed off the `MCP_*_TOOL_NAME` c
 string literals. Registry membership is a typed `Record`, not dynamic dispatch, per the
 nominal-typing rule.
 
+**Result text normalization.** Parse from `getToolResultText(result)` (the same text the generic
+row and find already use), then unwrap through one shared helper that tolerates the shapes
+harnesses record: the bare `JSON.stringify` text ctrlyoke emits, and an MCP content-array
+wrapper (`[{type:"text",text}]` or `{content:[...]}`) if a harness records one. Verify the real
+shapes against `src/test/fixtures/mcp-probe/*.jsonl` before relying on either.
+
+**Height and the Raw toggle.** `estimateToolCallStructuredEventHeight` has two paths — the
+row's prebuilt `toolCall.renderPlan.totalHeight` (built in `outputRows.ts` via
+`buildToolCallRenderPlan`) when content width is unknown, and `estimateGenericToolCallHeight`
+when it is known. A custom view must own **both** paths. Because the Raw toggle changes the
+row's height, its state must live in the row's store-managed `ToolCallExpansionState` (with a
+new `TOOL_CALL_EXPANSION_SECTIONS` member routed through `onToolCallExpansionChange`), not in
+component-local state the virtualizer cannot see.
+
 Result parsing is defensive by construction: payloads come from agents' tool results (and, in
 the history viewer, from older runs), so each `parseResult` validates shape and returns
 `undefined` on any mismatch rather than throwing. A "Raw" toggle on every custom view shows the
@@ -98,7 +112,7 @@ generic params/result, so nothing is ever hidden behind the pretty view.
 ### 2. Server identity
 
 Match the server with `MCP_SERVER_IDS.CTRLYOKE` and add a constant for the `ctrlyoke-commit`
-server id (currently a literal at `src/git/CommitMessageGenerator.ts:364`) so
+server id (currently a literal at `src/git/CommitMessageGenerator.ts:365`) so
 `submit_commit_message` can be matched too. Users can rename a server in `mcpServers`, so match
 on the server id ctrlyoke itself attaches, not on a display name.
 
@@ -116,7 +130,7 @@ on the server id ctrlyoke itself attaches, not on a display name.
 | `list_harnesses`        | "6 harnesses (4 available)"                   | Harness chips with availability; models collapsed.                                                                                                                                                                                                                                                       |
 | `post_note`             | "Note → all" / "Note → reviewer"              | Note `text` rendered as markdown via `MarkdownText`, marked untrusted (`data-untrusted-content`, `COORDINATION_UNTRUSTED_LABEL`) exactly as the settings panel does.                                                                                                                                     |
 | `read_notes`            | "Read 5 notes"                                | Entry list reusing `coordinationParticipantAttribution` / `coordinationEntrySummary`, note bodies as markdown, untrusted-marked.                                                                                                                                                                         |
-| `claim_paths`           | "Claimed 6 paths" / "Claimed 4, **2 denied**" | Granted paths as a file list (clickable via `openContextReference`); denied paths with their owner. A denial gives the row a warning status rather than success.                                                                                                                                         |
+| `claim_paths`           | "Claimed 6 paths" / "Claimed 4, **2 denied**" | Granted paths as a file list (clickable via `openContextReference`); denied paths with their owner. A denial gives the view header warning styling (tool rows have no separate status field; `result.success` stays as recorded).                                                                                                                                         |
 | `release_paths`         | "Released 6 paths"                            | File list; `notHeld` shown muted.                                                                                                                                                                                                                                                                        |
 | `submit_commit_message` | First line of the message                     | Full message in a monospace block.                                                                                                                                                                                                                                                                       |
 
@@ -147,13 +161,16 @@ degrades to "3 steps at #5–#7".
 
 ## Implementation order
 
-1. Registry, resolver, fallback plumbing, and the "Raw" toggle, wired through `OutputRow`,
-   `outputFind`, and height estimation. Ship with **`post_note`** and **`append_step`**, the two
-   highest-value views. Add tests that find-highlighting and `estimateOutputRowHeight` agree with
-   the rendered text for both.
-2. `claim_paths` / `release_paths` / `read_notes`, with the warning status for denials.
-3. `workflow_status`, `global_status`, `read_output`, `list_harnesses`, `edit_step`,
-   `remove_step`, `reorder_steps`, `submit_commit_message`.
+1. Registry, resolver, result-text unwrap helper, `MCP_SERVER_IDS` commit-server constant,
+   fallback plumbing, and the "Raw" toggle, wired through `OutputRow`, `outputFind`, and both
+   height-estimation paths. Ship with **`post_note`**. Add tests that find-highlighting and
+   `estimateOutputRowHeight` agree with the rendered text.
+2. **`append_step`** view (single steps and parallel batches).
+3. `claim_paths` / `release_paths` / `read_notes`, with the warning status for denials.
+4. `workflow_status`, `global_status`, `read_output`, `list_harnesses`.
+5. `edit_step`, `remove_step`, `reorder_steps`, `submit_commit_message`.
+
+Progress on these stages is recorded in the Status line at the top of this document.
 
 ## Tests
 
