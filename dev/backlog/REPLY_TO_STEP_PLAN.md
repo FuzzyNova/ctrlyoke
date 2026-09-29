@@ -263,6 +263,18 @@ the end of the queue, outside any group.
 9. Read `.github/instructions/webview-react*.instructions.md` before editing, then run
    `npm run typecheck`, `npm run lint`, `npm test`.
 
+## Progress
+
+Each implementation session ticks its items here in the commit that lands them, and
+records any deviation from the design above in that section of this doc.
+
+- [ ] Foundations: shared core-workflow adapter (impl step 1), widened webview
+      `_runtime` type (2), `getStepSessionId()` (3)
+- [ ] `buildReplyPropertyValues()` in `utils/replyToStep.ts` (4)
+- [ ] Editor store `replyContext`, `startReplyToStep()` / `cancelReplyToStep()` (5)
+- [ ] `StatusBanner` extraction (6) and reply banner in `EditorSection` (7)
+- [ ] Context menu item wired into both step menus (8), full gate green (9)
+
 ## Tests (`src/ui/webview-react/test/**`)
 
 - `utils/replyToStep.test.ts`:
