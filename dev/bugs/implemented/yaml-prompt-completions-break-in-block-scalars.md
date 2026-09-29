@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude)
 - **Area:** `src/completions/PromptCompletionProvider.ts` (`isInsideYamlPromptValue`, around lines 295-360), `src/completions/PromptPropertyCompletionProvider.ts` (around lines 292-298 and 360-376)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

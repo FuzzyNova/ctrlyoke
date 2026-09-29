@@ -161,7 +161,8 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         namedRoots,
         trustedRoots,
         approvedExternalRoots,
-        ownStateRoots
+        ownStateRoots,
+        sourceDefinitionDir
       )
     );
 

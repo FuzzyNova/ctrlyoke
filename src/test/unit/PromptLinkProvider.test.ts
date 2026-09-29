@@ -94,6 +94,27 @@ suite("PromptLinkProvider slash-token links", () => {
     assert.strictEqual(links[0].tooltip, "Open ctrlyoke Secrets settings");
   });
 
+  test("links symbol references with definition-relative paths", async () => {
+    const text = "#sym:./a.ts:foo:1-5";
+    const document = {
+      fileName: path.join(workspaceRoot, "workflow.ctrlyoke.yaml"),
+      languageId: "yaml",
+      getText: () => text,
+      positionAt: (offset: number) => new vscode.Position(0, offset),
+    } as unknown as vscode.TextDocument;
+
+    const links = await new PromptLinkProvider().provideDocumentLinks(
+      document,
+      {} as vscode.CancellationToken
+    );
+
+    assert.ok(links);
+    assert.strictEqual(links.length, 1);
+    assert.strictEqual(links[0].target?.scheme, "command");
+    assert.strictEqual(links[0].target?.path, "ctrlyoke.openFileWithSelection");
+    assert.ok(links[0].target?.query.includes("a.ts"));
+  });
+
   test("does not link partial git-change references inside longer tokens", async () => {
     const text = "~differently ~1500000x ~staged_files ~stash:1a";
     const document = {

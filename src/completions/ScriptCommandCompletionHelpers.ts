@@ -458,10 +458,7 @@ export function parseScriptCompletionContext(
   }
 
   const segment = text.slice(segmentStart, segmentEnd).trim();
-  const beforeCursor = text
-    .slice(segmentStart, cursor)
-    .replace(/^\s+/, "")
-    .replace(/\s+$/, "");
+  const beforeCursor = text.slice(segmentStart, cursor).replace(/^\s+/, "");
   const leadingWhitespace =
     text.slice(segmentStart, cursor).match(/^\s*/)?.[0].length ?? 0;
   const commandStart = segmentStart + leadingWhitespace;
