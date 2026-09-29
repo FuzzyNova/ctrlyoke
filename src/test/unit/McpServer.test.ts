@@ -686,6 +686,54 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
   });
 
+  test("claims the execution root with dot and releases that claim", async () => {
+    const firstServer = await setup();
+    const run = await createRun(
+      "coordination-root-claim",
+      "2026-01-01T00-00-00-000Z",
+      { executionState: EXECUTION_STATES.RUNNING }
+    );
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const rootClaim = responseJson(
+      await firstServer.invokeTool(MCP_CLAIM_PATHS_TOOL_NAME, {
+        paths: ["."],
+      })
+    );
+    assert.deepStrictEqual(rootClaim.granted, [""]);
+
+    const secondRun = await createRun(
+      "coordination-root-contender",
+      "2026-01-02T00-00-00-000Z",
+      { executionState: EXECUTION_STATES.RUNNING }
+    );
+    process.env.CTRLYOKE_WORKING_FILE = secondRun.runFilePath;
+    const secondServer = new CtrlYokeMCPServer({ workspaceRoot });
+    const denied = responseJson(
+      await secondServer.invokeTool(MCP_CLAIM_PATHS_TOOL_NAME, {
+        paths: ["src/a.ts"],
+      })
+    );
+    assert.deepStrictEqual(denied.granted, []);
+    assert.strictEqual(denied.denied[0].path, "src/a.ts");
+
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+    const released = responseJson(
+      await firstServer.invokeTool(MCP_RELEASE_PATHS_TOOL_NAME, {
+        paths: ["."],
+      })
+    );
+    assert.deepStrictEqual(released.released, [""]);
+
+    process.env.CTRLYOKE_WORKING_FILE = secondRun.runFilePath;
+    const grantedAfterRelease = responseJson(
+      await secondServer.invokeTool(MCP_CLAIM_PATHS_TOOL_NAME, {
+        paths: ["src/a.ts"],
+      })
+    );
+    assert.deepStrictEqual(grantedAfterRelease.granted, ["src/a.ts"]);
+  });
+
   test("uses the shared steps default when no max-steps environment value is set", () => {
     const priorMaxSteps = process.env.CTRLYOKE_MAX_STEPS;
     try {

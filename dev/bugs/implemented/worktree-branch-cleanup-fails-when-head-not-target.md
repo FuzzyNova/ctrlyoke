@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude)
 - **Area:** `src/core/orchestration/WorktreeManager.ts` (branch cleanup, around lines 2087-2102), `src/utils/GitUtils.ts` (`deleteLocalBranch`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -1999,6 +1999,93 @@ suite("WorktreeManager", function () {
     );
   });
 
+  test("force-deletes an eligible managed branch when HEAD is on a third branch", async () => {
+    const { parent, repository } = await makeRepository(
+      "cleanup-branch-third-head"
+    );
+    const targetBranch = execFileSync(
+      "git",
+      ["-C", repository, "branch", "--show-current"],
+      { encoding: "utf8" }
+    ).trim();
+    const thirdBranch = "unrelated-third-branch";
+    execFileSync("git", ["-C", repository, "branch", thirdBranch]);
+
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    await info.lease.release();
+    await fs.writeFile(
+      path.join(info.worktreePath, "managed-change.txt"),
+      "merged change\n"
+    );
+    execFileSync("git", ["-C", info.worktreePath, "add", "managed-change.txt"]);
+    execFileSync(
+      "git",
+      ["-C", info.worktreePath, "commit", "-m", "managed change"],
+      { stdio: "ignore" }
+    );
+    const verifiedTip = execFileSync(
+      "git",
+      ["-C", repository, "rev-parse", `refs/heads/${info.branchName}`],
+      { encoding: "utf8" }
+    ).trim();
+    const recordPath = await instance.managedWorktreeRecordPath(
+      repository,
+      info.branchName
+    );
+    const record = JSON.parse(await fs.readFile(recordPath, "utf8"));
+    await fs.writeFile(
+      recordPath,
+      JSON.stringify({ ...record, lastVerifiedBranchTip: verifiedTip })
+    );
+    execFileSync(
+      "git",
+      [
+        "-C",
+        repository,
+        "merge",
+        "--no-ff",
+        info.branchName,
+        "-m",
+        "merge managed branch",
+      ],
+      { stdio: "ignore" }
+    );
+    execFileSync("git", ["-C", repository, "switch", thirdBranch], {
+      stdio: "ignore",
+    });
+    execFileSync(
+      "git",
+      ["-C", repository, "worktree", "remove", info.worktreePath],
+      {
+        stdio: "ignore",
+      }
+    );
+    execFileSync("git", ["-C", repository, "worktree", "prune"], {
+      stdio: "ignore",
+    });
+    assert.strictEqual(
+      execFileSync("git", ["-C", repository, "branch", "--show-current"], {
+        encoding: "utf8",
+      }).trim(),
+      thirdBranch
+    );
+    assert.notStrictEqual(targetBranch, thirdBranch);
+    const state = await instance.getManagementState(repository);
+    const entry = state.entries.find(
+      (candidate) => candidate.branchName === info.branchName
+    );
+    assert.strictEqual(entry?.branchCleanupEligible, true);
+
+    await instance.applyManagementAction({
+      sourceCheckoutRoot: repository,
+      action: WORKTREE_MANAGEMENT_ACTIONS.CLEANUP_BRANCH,
+      branchName: info.branchName,
+    });
+
+    assert.strictEqual(localBranchExists(repository, info.branchName), false);
+  });
+
   test("syncs a named worktree with the source checkout in both directions", async () => {
     const { parent, repository } = await makeRepository("sync-basic");
     const instance = manager(parent);

@@ -2098,7 +2098,7 @@ export class WorktreeManager {
         await deleteLocalBranch(
           sourceRoot,
           record.branchName,
-          options.confirmed === true
+          eligible.eligible || options.confirmed === true
         );
         await this.writeRecord(
           this.recordPath(commonDirectory, record.branchName),

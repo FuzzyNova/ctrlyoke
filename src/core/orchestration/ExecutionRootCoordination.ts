@@ -136,8 +136,8 @@ function isParticipantLive(
 }
 
 function pathsOverlap(left: string, right: string): boolean {
-  const leftSegments = claimPathForCompare(left).split("/");
-  const rightSegments = claimPathForCompare(right).split("/");
+  const leftSegments = claimPathForCompare(left).split("/").filter(Boolean);
+  const rightSegments = claimPathForCompare(right).split("/").filter(Boolean);
   // A claim includes its exact path and every descendant. Appending a globstar
   // represents that coverage for both literal and patterned claims.
   leftSegments.push(COORDINATION_GLOB_TOKENS.GLOBSTAR_SEGMENT);
