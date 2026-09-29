@@ -2068,6 +2068,77 @@ suite("WorkflowInstance append-and-continue", () => {
     }
   });
 
+  test("runParallel appends to a live group after its anchor completes", async () => {
+    const tempWorkspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "cy-ephemeral-parallel-settled-anchor-")
+    );
+    try {
+      const instance = new WorkflowInstance(
+        new MockPlatform(),
+        undefined,
+        new MockIntegrationFactory(new MockPlatform()),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        tempWorkspace
+      );
+      const steps: PromptStep[] = [
+        { prompt: "anchor" },
+        { prompt: "running member" },
+      ];
+      const parallelGroups = [
+        { id: "group-1", startIndex: 0, endIndex: 1, failFast: false },
+      ];
+      const workingFilePath = await instance.promptQueue.createWorkingFile(
+        "parallel-settled-anchor",
+        steps,
+        tempWorkspace,
+        undefined,
+        undefined,
+        parallelGroups
+      );
+      instance.promptQueue.loadPrompts(
+        { steps, parallelGroups },
+        workingFilePath
+      );
+      await startQueueExecution(instance);
+      await instance.promptQueue.setActiveParallelGroupAdmission(
+        "group-1",
+        PARALLEL_GROUP_ADMISSION.ACCEPTING
+      );
+      const state = instance.promptQueue.getState();
+      state.steps[0]!._runtime = {
+        stepId: "anchor-id",
+        startedAt: Date.now() - 2,
+        completedAt: Date.now() - 1,
+      };
+      state.steps[1]!._runtime = {
+        stepId: "member-id",
+        startedAt: Date.now(),
+      };
+      const joined: number[] = [];
+      (instance as any).workflowExecutor.joinRunningParallelGroup = async (
+        stepIndex: number
+      ) => {
+        joined.push(stepIndex);
+        return { accepted: true };
+      };
+
+      await instance.executeEphemeralPrompt(
+        "parallel member",
+        {},
+        ACTION_TYPES.RUN_PARALLEL
+      );
+
+      const updatedState = instance.promptQueue.getState();
+      assert.deepStrictEqual(joined, [2]);
+      assert.strictEqual(updatedState.steps.length, 3);
+      assert.strictEqual(updatedState.parallelGroups[0]?.endIndex, 2);
+    } finally {
+      await fs.rm(tempWorkspace, { recursive: true, force: true });
+    }
+  });
+
   // Regression: an ad-hoc promotion groups a step whose TUI is already live, so
   // that PTY was announced with `parallelGroupId: undefined`. The webview keeps
   // same-harness terminals apart by that field alone, so without the back-fill

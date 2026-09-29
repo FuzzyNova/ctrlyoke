@@ -52,6 +52,7 @@ import {
   type ParallelGroupInsertPlacement,
   type ParallelGroupTopology,
 } from "../ParallelGroupTopology";
+import { isActiveQueueWorkRunning } from "../ParallelGroupRuntime";
 import {
   mergeWorkflowStepUpdate,
   stripStepRuntime,
@@ -519,26 +520,17 @@ export class RunContinuationService {
           parallelGroups: source.parallelGroups,
         });
         const currentIndex = source._runtime?.currentIndex ?? 0;
-        const currentStep = sourceTopology.steps[currentIndex];
         const activeRuntime = source._runtime?.activeParallelGroup;
         const containingGroup = sourceTopology.parallelGroups.find(
           (group) =>
             currentIndex >= group.startIndex && currentIndex <= group.endIndex
         );
-        const runningGroupMember = containingGroup
-          ? sourceTopology.steps
-              .slice(containingGroup.startIndex, containingGroup.endIndex + 1)
-              .some(
-                (step) =>
-                  hasStarted(step) && step._runtime?.completedAt === undefined
-              )
-          : false;
         if (
-          (!containingGroup &&
-            (!currentStep ||
-              !hasStarted(currentStep) ||
-              currentStep._runtime?.completedAt !== undefined)) ||
-          (containingGroup && !runningGroupMember)
+          !isActiveQueueWorkRunning(
+            sourceTopology.steps,
+            currentIndex,
+            containingGroup
+          )
         ) {
           throw new Error(
             "No queue step is currently running. parallelWithCurrent was rejected."

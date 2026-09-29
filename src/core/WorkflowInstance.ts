@@ -1,6 +1,7 @@
 import * as path from "path";
 import { PromptFileParser } from "./PromptFileParser";
 import { PromptQueue } from "./PromptQueue";
+import { isActiveQueueWorkRunning } from "./ParallelGroupRuntime";
 import { WorkingFileManager } from "./WorkingFileManager";
 import { assertDefinitionRevision } from "./orchestration/RevisionPrecondition";
 import {
@@ -3263,11 +3264,9 @@ export class WorkflowInstance
       );
     }
 
-    const currentStep = state.steps[state.currentIndex];
+    const currentGroup = this.promptQueue.getCurrentParallelGroup();
     if (
-      !currentStep ||
-      currentStep._runtime?.startedAt === undefined ||
-      currentStep._runtime.completedAt !== undefined
+      !isActiveQueueWorkRunning(state.steps, state.currentIndex, currentGroup)
     ) {
       throw new Error("No step is running. Run in Parallel was rejected.");
     }
@@ -3281,7 +3280,6 @@ export class WorkflowInstance
       );
     }
 
-    const currentGroup = this.promptQueue.getCurrentParallelGroup();
     const activeRuntime = this.promptQueue.getActiveParallelGroupRuntime();
     const previousParallelGroups = state.parallelGroups.map((group) => ({
       ...group,

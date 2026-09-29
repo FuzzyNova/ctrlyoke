@@ -288,6 +288,17 @@ export class ParallelGroupRun<TContext extends object> {
           );
         }
 
+        // A pause can be cancelled while closeAdmission() is persisting its
+        // CLOSING state. drainWorkers then returns with no active workers,
+        // but known members may still be pending. Resume dispatch before join.
+        if (
+          !stopped &&
+          !this.failFastTriggered &&
+          this.nextPending < this.pendingIds.length
+        ) {
+          continue;
+        }
+
         let joinGroup: ParallelGroupDefinition | undefined;
         if (
           !stopped &&
