@@ -69,8 +69,9 @@ Check:
 There are two different cases.
 
 **The condition failed.** The script ran, but its result did not match `expected`. An end
-condition's `onFail` defaults to `stopWorkflow`, so the run stops. Set `onFail: retry` (with
-`maxRetries`, which defaults to `1`) to send the step back to the harness instead. Check:
+condition's `onFail` defaults to `stopWorkflow`, so the run stops. Set `onFail: retry` to send
+the step back to the harness; when `maxRetries` is omitted, one retry is allowed, and no
+`retryPrompt` is required because ctrlyoke builds a fallback from the condition result. Check:
 
 - whether `compareSource`, `operator`, and `expected` describe the check you meant — a numeric
   operator (`gte`/`gt`/`lte`/`lt`) fails outright when either side is not a number, and `matches` is

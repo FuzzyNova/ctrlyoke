@@ -434,6 +434,103 @@ suite("WorkflowExecutor token totals", () => {
 });
 
 suite("WorkflowExecutor condition shell reporting", () => {
+  test("shows retry detail only when an end-condition retry will be scheduled", async () => {
+    const run = async (
+      endCondition: NonNullable<PromptStep["endCondition"]>,
+      results: EvaluationResult[]
+    ): Promise<string[]> => {
+      const queue = new PromptQueue();
+      const integration = new MockHarnessIntegration(undefined, false);
+      const evaluator = new RecordingShellEvaluator(new MockPlatform(), results);
+      const messages: string[] = [];
+      const context = makeContext(integration);
+      context.onStatusMessage = (_stepIndex, message) => messages.push(message);
+      queue.loadPrompts({ steps: [{ prompt: "check result", endCondition }] });
+      await makeExecutor(queue, evaluator).execute(integration, context);
+      return messages.filter((message) => message.startsWith("End condition"));
+    };
+
+    const defaultFailure = await run(
+      { script: "check-result" },
+      [shellEvaluationResult(false)]
+    );
+    assert.ok(
+      defaultFailure.some((message) => message.includes("→ stopWorkflow"))
+    );
+    assert.ok(defaultFailure.every((message) => !message.includes("retry ")));
+
+    const continuedFailure = await run(
+      {
+        script: "check-result",
+        onFail: CONDITION_ACTIONS.CONTINUE,
+        retryPrompt: "template that must not be sent",
+      },
+      [shellEvaluationResult(false)]
+    );
+    assert.ok(continuedFailure.some((message) => message.includes("→ continue")));
+    assert.ok(continuedFailure.every((message) => !message.includes("retry ")));
+
+    const erroredEvaluation = await run(
+      { script: "check-result", onFail: CONDITION_ACTIONS.RETRY, maxRetries: 1 },
+      [
+        {
+          ...shellEvaluationResult(false),
+          errored: true,
+          error: "evaluation failed",
+        },
+      ]
+    );
+    assert.ok(
+      erroredEvaluation.every((message) => !message.includes("retry "))
+    );
+
+    const retryBeforeExhaustion = await run(
+      {
+        script: "check-result",
+        onFail: CONDITION_ACTIONS.RETRY,
+        maxRetries: 2,
+      },
+      [shellEvaluationResult(false), shellEvaluationResult(true)]
+    );
+    assert.ok(
+      retryBeforeExhaustion.some((message) =>
+        message.includes("→ retry 1 of 2")
+      )
+    );
+
+    const retryAfterExhaustion = await run(
+      {
+        script: "check-result",
+        onFail: CONDITION_ACTIONS.RETRY,
+        maxRetries: 1,
+      },
+      [shellEvaluationResult(false), shellEvaluationResult(false)]
+    );
+    assert.ok(
+      retryAfterExhaustion.some((message) =>
+        message.includes("→ retry 1 of 1")
+      )
+    );
+    assert.ok(
+      retryAfterExhaustion.some((message) => message.includes("→ stopWorkflow"))
+    );
+    const exhaustedVerdict = retryAfterExhaustion.at(-1);
+    assert.ok(exhaustedVerdict?.includes("→ stopWorkflow"));
+    assert.ok(!exhaustedVerdict?.includes("retry "));
+
+    const passRetryAfterExhaustion = await run(
+      {
+        script: "check-result",
+        onPass: CONDITION_ACTIONS.RETRY,
+        maxRetries: 1,
+      },
+      [shellEvaluationResult(true), shellEvaluationResult(true)]
+    );
+    const exhaustedPassVerdict = passRetryAfterExhaustion.at(-1);
+    assert.ok(exhaustedPassVerdict?.includes("→ continue"));
+    assert.ok(!exhaustedPassVerdict?.includes("retry "));
+  });
+
   test("passes a pre-condition shell override to the evaluator", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);

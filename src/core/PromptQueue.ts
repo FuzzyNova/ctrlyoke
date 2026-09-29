@@ -30,6 +30,8 @@ import {
   PROMPT_TERMINAL_STATUS,
   PARALLEL_GROUP_ADMISSION,
   STEP_CLAIM_OUTCOMES,
+  CONDITION_ACTIONS,
+  DEFAULT_ERROR_BEHAVIOR_RETRIES,
   type ParallelGroupAdmission,
   type PromptTerminalStatus,
   STEP_STATUS,
@@ -129,9 +131,14 @@ function resolveRetrySettings(
   const hasRetryPrompt = !!endCondition.retryPrompt;
   const hasMaxRetries = endCondition.maxRetries !== undefined;
   const hasNonZeroMaxRetries = hasMaxRetries && endCondition.maxRetries !== 0;
+  const hasRetryAction =
+    endCondition.onFail === CONDITION_ACTIONS.RETRY ||
+    endCondition.onPass === CONDITION_ACTIONS.RETRY;
 
   const maxRetries = hasMaxRetries
     ? endCondition.maxRetries!
+    : hasRetryAction
+      ? DEFAULT_ERROR_BEHAVIOR_RETRIES
     : hasRetryPrompt
       ? ConfigurationUtils.getDefaultMaxRetries()
       : 0;
@@ -1246,10 +1253,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     prompt: PromptStep,
     target: WorkflowAttemptTarget = this.getCurrentQueueTarget()
   ): boolean {
-    const { maxRetries, retryPrompt } = resolveRetrySettings(
-      prompt.endCondition
-    );
-    if (!retryPrompt) {
+    const { maxRetries, retryPrompt } = resolveRetrySettings(prompt.endCondition);
+    if (!retryPrompt && prompt.endCondition?.onFail !== CONDITION_ACTIONS.RETRY) {
       return false;
     }
 

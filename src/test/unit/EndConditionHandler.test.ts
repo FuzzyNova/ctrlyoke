@@ -607,6 +607,54 @@ suite("EndConditionHandler", () => {
     assert.strictEqual(queue.getState().results[0].endCondition?.passed, false);
   });
 
+  test("retries onFail without a retry prompt using its fallback and budget", async () => {
+    for (const maxRetries of [undefined, 3]) {
+      const platform = new MockPlatform();
+      const runtime = new WorkflowStateMachine();
+      const queue = new PromptQueue(runtime);
+      const prompt = createPrompt(maxRetries, "continue", {
+        onFail: "retry",
+        retryPrompt: undefined,
+      });
+      const retryLimit = maxRetries ?? 1;
+      const evaluator = new TestEndConditionEvaluator(
+        platform,
+        [
+          ...Array.from({ length: retryLimit - 1 }, (_, index) =>
+            validationFailure(`failure-${index + 1}`)
+          ),
+          successResult(),
+        ]
+      );
+      const handler = new EndConditionHandler(evaluator, queue, createReporter());
+      const retryPrompts: string[] = [];
+
+      queue.loadPrompts({ steps: [prompt] });
+      const result = await handler.handleEndConditionResult(
+        prompt,
+        validationFailure("initial failure"),
+        {
+          integration: new MockHarnessIntegration(undefined, false),
+          totalSteps: 1,
+          workspaceFolderPath: process.cwd(),
+          currentPromptFilePath: "workflow.ctrlyoke.yaml",
+          runtime,
+          attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+          attemptIndex: 0,
+        },
+        async (retryPromptStep) => {
+          retryPrompts.push(retryPromptStep.prompt);
+          return "retry response";
+        }
+      );
+
+      assert.strictEqual(result.shouldContinue, true);
+      assert.strictEqual(retryPrompts.length, retryLimit);
+      assert.match(retryPrompts[0] ?? "", /Expected: exit code == ok/);
+      assert.match(retryPrompts[0] ?? "", /Script output:\ninitial failure/);
+    }
+  });
+
   test("continues the workflow when onFail is continue after exhaustion", async () => {
     const platform = new MockPlatform();
     const runtime = new WorkflowStateMachine();

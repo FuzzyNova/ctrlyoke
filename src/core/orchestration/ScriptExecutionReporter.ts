@@ -108,6 +108,8 @@ export interface ScriptExecutionReportRequest {
   onFail: ConditionAction;
   /** Action from errorBehavior to display/use when the evaluator itself could not run. */
   actionForErrored: ConditionAction;
+  /** Resolves the effective action after retry budget and condition policy are applied. */
+  actionForResult?: (result: EvaluationResult) => ConditionAction;
   actionDetail?: string | ((result: EvaluationResult) => string | undefined);
   statusLabel?: string;
   timeoutMs?: number;
@@ -397,11 +399,13 @@ export class ScriptExecutionReporter {
         : result.passed
           ? SCRIPT_VERDICT_OUTCOMES.PASSED
           : SCRIPT_VERDICT_OUTCOMES.FAILED,
-      action: result.errored
-        ? request.actionForErrored
-        : !result.passed
-          ? request.onFail
-          : request.onPass,
+      action:
+        request.actionForResult?.(result) ??
+        (result.errored
+          ? request.actionForErrored
+          : !result.passed
+            ? request.onFail
+            : request.onPass),
       actionDetail:
         typeof request.actionDetail === "function"
           ? request.actionDetail(result)

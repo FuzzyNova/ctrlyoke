@@ -3772,16 +3772,40 @@ export class WorkflowExecutor {
     }
 
     const endCondition = prompt.endCondition;
-    const endConditionActionDetail = (result: {
-      passed: boolean;
-    }): string | undefined => {
-      if (result.passed && endCondition.onPass !== CONDITION_ACTIONS.RETRY) {
+    const willRetryEndCondition = (result: EvaluationResult): boolean =>
+      !result.errored &&
+      (result.passed
+        ? endCondition.onPass === CONDITION_ACTIONS.RETRY &&
+          this.promptQueue.canPassRetry(prompt, target)
+        : endCondition.onFail !== CONDITION_ACTIONS.CONTINUE &&
+          this.promptQueue.canRetry(prompt, target));
+    const endConditionActionForResult = (
+      result: EvaluationResult
+    ): ConditionAction => {
+      if (result.errored) {
+        return this.getErrorConditionAction(errorBehavior);
+      }
+      if (willRetryEndCondition(result)) {
+        return CONDITION_ACTIONS.RETRY;
+      }
+      if (result.passed && endCondition.onPass === CONDITION_ACTIONS.RETRY) {
+        return CONDITION_ACTIONS.CONTINUE;
+      }
+      if (!result.passed && endCondition.onFail === CONDITION_ACTIONS.RETRY) {
+        return CONDITION_ACTIONS.STOP_WORKFLOW;
+      }
+      return result.passed
+        ? (endCondition.onPass ?? CONDITION_ACTIONS.CONTINUE)
+        : (endCondition.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW);
+    };
+    const endConditionActionDetail = (
+      result: EvaluationResult
+    ): string | undefined => {
+      if (!willRetryEndCondition(result)) {
         return undefined;
       }
 
-      return `retry ${this.promptQueue.getCurrentRetryCount(
-        target
-      )} of ${this.promptQueue.getEffectiveMaxRetries(prompt)}`;
+      return `retry ${this.promptQueue.getCurrentRetryCount(target) + 1} of ${this.promptQueue.getEffectiveMaxRetries(prompt)}`;
     };
 
     await this.trackStatusMessage(
@@ -3806,6 +3830,7 @@ export class WorkflowExecutor {
       onPass: endCondition.onPass ?? CONDITION_ACTIONS.CONTINUE,
       onFail: endCondition.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
       actionForErrored: this.getErrorConditionAction(errorBehavior),
+      actionForResult: endConditionActionForResult,
       statusLabel: SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.END_CONDITION],
       timeoutMs:
         ConfigurationUtils.secondsToMs(endCondition.timeoutSec) ??
@@ -3875,6 +3900,7 @@ export class WorkflowExecutor {
           onPass: endCondition.onPass ?? CONDITION_ACTIONS.CONTINUE,
           onFail: endCondition.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
           actionForErrored: this.getErrorConditionAction(errorBehavior),
+          actionForResult: endConditionActionForResult,
           statusLabel:
             SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.END_CONDITION],
           timeoutMs:

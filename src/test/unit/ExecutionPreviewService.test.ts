@@ -896,6 +896,24 @@ suite("ExecutionPreviewService", () => {
     assert.ok(preview.steps[0].conditions.pre[0].scriptPath);
   });
 
+  test("previews the implicit retry budget for onFail retry", async () => {
+    const preview = await createService().build({
+      workflow: {
+        steps: [
+          {
+            prompt: "retry without a template",
+            endCondition: {
+              script: "check-result",
+              onFail: "retry",
+            },
+          },
+        ],
+      },
+    });
+
+    assert.strictEqual(preview.steps[0].conditions.retry.maxAttempts, 2);
+  });
+
   test("classifies mutation scope, warnings, and owned keys", async () => {
     const workspaceRoot = await fsPromises.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-preview-workspace-")

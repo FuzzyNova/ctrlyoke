@@ -649,7 +649,7 @@ What to do when the end condition passes. 'continue': advance to the next step (
 - **Type:** `"continue" | "retry" | "stopWorkflow"`
 - **Default:** `"stopWorkflow"`
 
-What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times). 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default).
+What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times); if retryPrompt is omitted, a fallback prompt includes the expected and actual values and script output. When maxRetries is omitted, one retry is allowed. 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default); a configured retryPrompt also enables failure retries while budget remains.
 
 ## Shared script fields {#script-fields}
 

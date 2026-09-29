@@ -1257,10 +1257,16 @@ export class ExecutionPreviewService {
     end: EndCondition | undefined,
     errorBehavior: ErrorBehavior | undefined
   ): ConditionPreview {
+    const retries =
+      end?.maxRetries ??
+      (end?.onPass === CONDITION_ACTIONS.RETRY ||
+      end?.onFail === CONDITION_ACTIONS.RETRY
+        ? 1
+        : 0);
     const retry: RetryPreview = {
-      maxAttempts: isUnlimited(end?.maxRetries ?? 0)
+      maxAttempts: isUnlimited(retries)
         ? -1
-        : (end?.maxRetries ?? 0) + 1,
+        : retries + 1,
       ...(end?.timeoutSec !== undefined ? { backoffSeconds: 0 } : {}),
     };
     return {

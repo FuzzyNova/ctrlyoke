@@ -20,13 +20,14 @@ endCondition:
     $endCondition:stderr
 ```
 
-A failed validation is re-prompted with the retry prompt while retry budget
-remains. That happens with the default `onFail: stopWorkflow` as well as with
-`onFail: retry`, as long as a retry prompt is available — the step's
-`retryPrompt`, or the `defaults.endCondition.retryPrompt` setting. Without a retry
-prompt there are no failure retries, so always pair `onFail: retry` with a
-`retryPrompt`. When the budget runs out the step fails and the workflow stops.
-`onFail: continue` skips retries and advances immediately.
+A failed validation is re-prompted while retry budget remains. A configured
+`retryPrompt` (on the step or in `defaults.endCondition.retryPrompt`) also enables
+failure retries with the default `onFail: stopWorkflow`. With `onFail: retry`, no
+template is required: ctrlyoke sends a fallback prompt containing the expected
+and actual values and script output. The implicit retry limit is one when
+`onFail: retry` is set and `maxRetries` is omitted. When the budget runs out the
+step fails and the workflow stops. `onFail: continue` skips retries and advances
+immediately.
 
 `onPass: retry` works in the other direction: it re-prompts when a passing
 validation means the step should keep working. Pass retries use
@@ -77,7 +78,7 @@ recipe: keep working while the condition passes, and advance once it fails.
 | `expected`             | Value to compare against. Omit it to pass on exit code 0                                                                                                                                             |
 | `ignoreCase`           | Case-insensitive text compare (string operators only)                                                                                                                                                |
 | `maxRetries`           | Shared retry limit across pass and failure retries. `0` = none, `-1` = unlimited, max `100`. Unset: `1` when `onPass`/`onFail` is `retry`, else the `defaults.endCondition.maxRetries` setting (`0`) |
-| `retryPrompt`          | Template sent after validation failure                                                                                                                                                               |
+| `retryPrompt`          | Optional template sent after validation failure; `onFail: retry` uses a fallback prompt when no template is configured                                                                             |
 | `passRetryPrompt`      | Template sent after validation passes with `onPass: retry`                                                                                                                                           |
 | `resumeSessionOnRetry` | Whether retries stay in the same conversation (default `true`)                                                                                                                                       |
 | `onPass`               | `continue` (default), `retry`, or `stopWorkflow`                                                                                                                                                     |
