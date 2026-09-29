@@ -1,9 +1,9 @@
 # MCP Event Pipeline Gaps — reliable detection and pairing of MCP tool calls on every harness
 
-> **Status:** In progress — items 1–3 done; 4 and 5 reopened in review (see below). Prerequisite for
+> **Status:** In progress — items 1–4 done; 5 remains open. Prerequisite for
 > [`CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md`](CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md): purpose-built
-> views are only as good as the `MCP_TOOL_CALL` events underneath them, and on two of the six
-> harnesses today those events never exist.
+> views are only as good as the `MCP_TOOL_CALL` events underneath them. Skill-mode calls still
+> arrive as `BASH_COMMAND` until item 5 is complete.
 
 ## Findings (verified 2026-09-28 against real runs)
 
@@ -112,35 +112,34 @@ In `mcpMode: skill` the agent runs
 (`src/templates/skills/ctrlyoke-mcp-tools/SKILL.md:13`). That arrives as `BASH_COMMAND` on
 every harness, so neither the views plan nor coordination attribution can see it.
 
-### 6. Claude and Qwen pass the four-call probe; Codex and Antigravity do not
+### 6. All four probed harnesses emit all four MCP calls
 
-The checked-in `mcp-probe.harness.test.ts` was compiled and run as the only Mocha file against
-Claude CLI 2.1.284, Codex CLI 0.157.0, Qwen CLI 0.24.4 and Antigravity CLI 1.2.12, using the
-shared cheapest-model map. All four CLIs were installed; none skipped. Captures from the run's
-`events.jsonl` are sanitized in `src/test/fixtures/mcp-probe/` and covered by the normal parser
-contract suite. The existing Copilot structured-identity fixture and OpenCode hyphenated-server
-fixture continue to cover those two harnesses.
+The compiled single-file probe was run against Claude CLI 2.1.284, Codex CLI 0.157.0, Qwen CLI
+0.24.4, and Antigravity CLI 1.2.12 using the shared cheapest-model map. Raw vendor records are
+sanitized in `src/test/fixtures/mcp-probe/*.jsonl`; the ordinary parser contract test feeds each
+capture through its runtime parser and then `normalizeCliEvents`.
 
-- **Claude:** all four calls normalized once as `MCP_TOOL_CALL` rows with results and call ids;
-  `post_note` used its actual `text` argument. A generic `ToolSearch` row queried the tool list,
-  but did not name an MCP tool as its own tool identity.
-- **Codex:** the recorded run had one `workflow_status` MCP row, with a result that claimed all
-  four calls were complete. It also emitted an `exec` tool call to search `ALL_TOOLS` for
-  `ctrlyoke`. No `post_note`, `claim_paths` or `release_paths` call was recorded, so the remaining
-  three calls are unverified on this CLI/model combination.
-- **Qwen:** the run produced all four calls and paired results. Qwen's JSONL log wraps MCP calls
-  as `tool_call` with `name: "mcp__ctrlyoke__<tool>"` and nested `arguments`; before the parser
-  fix those appeared as generic calls. `QwenLogParser` now unwraps this vendor envelope, covered
-  by a regression test.
-- **Antigravity:** the run produced one `workflow_status` MCP row. Three generic `generic` rows
-  read tool-schema files for `workflow_status`, `post_note` and `claim_paths`; they were not
-  calls to those MCP tools. The only MCP row's result text described releasing `probe.txt`, so
-  result attribution also needs a better capture before claiming this harness passes.
+- **Claude:** emitted four direct `tool_use` blocks and four matching `tool_result` records.
+  `ToolSearch` queried the available tool names first; it was not an MCP call itself.
+- **Codex:** emitted one `exec` custom-tool call whose JavaScript awaited all four
+  `tools.mcp__ctrlyoke__…` calls and printed a JSON array of their four results. The parser's
+  previous first-match regex kept only `workflow_status` and attached the whole array to it.
+  In the final confirmation run Codex used indexed aliases (`tools[methods[i]](...)`) built from
+  `ALL_TOOLS` and printed only a completion summary. `CodexToolBuilder` now extracts both forms,
+  parses each argument object, assigns a derived call id, and pairs array results by order when
+  present; when Codex omits individual results, each call carries the enclosing successful exec
+  summary.
+- **Qwen:** emitted all four calls in its `tool_call` envelope, with
+  `name: "mcp__ctrlyoke__<tool>"`, nested arguments, and matching tool-result records.
+  `QwenLogParser` unwraps that vendor envelope.
+- **Antigravity:** emitted four separate `PLANNER_RESPONSE` transcript records and four
+  corresponding result records. The earlier single-row fixture was synthetic and did not reflect
+  the vendor transcript; no Antigravity parser change was needed. The fixture now exercises the
+  raw transcript reader and the same stateful transcript mapper used at runtime.
 
-Codex and Antigravity remain an observed live-run gap rather than a parser change in this item:
-their recorded events do not contain the requested calls to classify. The probe is intentionally
-strict, so its live tests currently fail for those two model runs and will expose whether a later
-CLI/model run or parser change closes the gap.
+The initial strict probe passed for Claude, Qwen, and Antigravity; Codex failed because the parser
+only unwrapped one nested call. The Codex raw-fixture regression and a final strict live probe now
+pass for both Codex and Antigravity.
 
 ## Design
 
@@ -225,36 +224,25 @@ parser unit-test fixtures, so vendor renames show up in `npm test` rather than i
 ## Implementation order
 
 1. [x] **C + B:** the duplicate-row fix and MCP call ids. This is a user-visible bug on every
-   Copilot run today, independent of MCP. The `ctrlyoke-claim_paths` Copilot name still maps
-   to generic `TOOL_CALL` in this step; structured MCP classification remains item 2. OpenCode's
-   current mapper also emits only generic `TOOL_CALL` events, so it now carries `part.callID`;
-   MCP classification remains item 3.
+       Copilot run today, independent of MCP. The `ctrlyoke-claim_paths` Copilot name still maps
+       to generic `TOOL_CALL` in this step; structured MCP classification remains item 2. OpenCode's
+       current mapper also emits only generic `TOOL_CALL` events, so it now carries `part.callID`;
+       MCP classification remains item 3.
 2. [x] **A (Copilot):** structured MCP identity, with a fixture test built from the
-   capture above. The parser continues to use `tool.execution_start` as its tool-call
-   source; `assistant.message.toolRequests` are not independently mapped. No design
-   deviations.
+       capture above. The parser continues to use `tool.execution_start` as its tool-call
+       source; `assistant.message.toolRequests` are not independently mapped. No design
+       deviations.
 3. [x] **A (OpenCode):** attached-server-set resolution. The 2026-09-28 capture confirmed raw
-   hyphenated prefixes; the parser uses longest-prefix matching against ids attached to the
-   execution and retains unmatched names as generic tool calls.
-4. [ ] **E:** (reopened — see Review notes) add the all-six-harness probe and sanitized captures for the four previously
-   unverified harnesses. Claude and Qwen passed the four-call contract; fix Qwen's wrapper
-   parsing. Codex and Antigravity captures preserve the incomplete live behavior described in
-   Finding 6; their strict live probes fail until all four calls are actually recorded.
+       hyphenated prefixes; the parser uses longest-prefix matching against ids attached to the
+       execution and retains unmatched names as generic tool calls.
+4. [x] **E:** add the all-six-harness probe and raw vendor fixtures for the four previously
+       unverified harnesses. The Codex parser now expands multiple MCP calls and pairs the captured
+       result array; Antigravity's four separate transcript calls are covered through its runtime
+       transcript mapper. The strict probe passes for Claude, Codex, Qwen, and Antigravity.
 5. [ ] **D:** skill-mode mapping (reopened — see Review notes).
 
 ## Review notes (2026-09-28)
 
-- **Probe fixtures are not vendor captures.** `src/test/fixtures/mcp-probe/*.json` hold
-  ctrlyoke's already-parsed `CliEvent`s with synthetic ids and `<sanitized result>` outputs, and
-  `McpProbeFixtures.test.ts` only runs them through `normalizeCliEvents`. No vendor parser is
-  exercised, so a vendor rename would not fail `npm test` — the point of section E. They must be
-  replaced with sanitized **raw vendor output** (the lines each provider's log parser consumes)
-  fed through that provider's real parser, then normalized.
-- **Codex and Antigravity "gaps" are probably parser bugs, not model behaviour.** In both runs the
-  single recorded `workflow_status` row's result text describes the later calls (Codex: "all four
-  complete"; Antigravity: releasing `probe.txt`), i.e. the calls happened but were dropped or
-  folded into one row. Codex's `exec` row suggests code-mode running several `tools.mcp__…(`
-  calls in one script with only the first unwrapped. Must be diagnosed from raw captures.
 - **Skill-mode rewrite lives in the display normalizer, not the event-production path.**
   `normalizeMcpSkillBashEvent` runs inside `normalizeCliEventsWithSource`, so raw-event consumers
   (`CommitMessageGenerator`'s streaming-events `submit_commit_message` detection,

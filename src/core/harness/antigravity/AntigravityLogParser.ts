@@ -538,11 +538,18 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       return [];
     }
     const records = await this.transcriptReader.readRecords(transcriptPath);
-    const events: AntigravityLogEvent[] = [];
-    for (const record of records) {
-      events.push(...this.mapTranscriptRecord(record, sessionId));
-    }
-    return events;
+    return this.parseTranscriptRecords(records, sessionId);
+  }
+
+  /** Parse vendor transcript records through the same stateful mapper used by runtime reads. */
+  parseTranscriptRecords(
+    records: readonly AntigravityTranscriptRecord[],
+    sessionId: string
+  ): AntigravityLogEvent[] {
+    this.resetProviderStateForSession(sessionId);
+    return records.flatMap((record) =>
+      this.mapTranscriptRecord(record, sessionId)
+    );
   }
 
   private resolveAuthoritativeTranscriptPath(): string | undefined {

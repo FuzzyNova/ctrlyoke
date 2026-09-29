@@ -233,6 +233,18 @@ export class CodexToolBuilder {
     callId: string | undefined,
     timestamp: number
   ): CliEvent[] {
+    const mcpCalls = this.parseExecMcpCalls(input);
+    if (mcpCalls.length > 0) {
+      return mcpCalls.flatMap((call, index) =>
+        this.buildLogToolInitiatedEvents(
+          call.toolName,
+          this.parseMcpCallArguments(call.argsText),
+          callId ? `${callId}:mcp:${index + 1}` : undefined,
+          timestamp
+        )
+      );
+    }
+
     const parsed = this.parseExecInput(input);
     if (!parsed) {
       Log.debug(
@@ -367,6 +379,73 @@ export class CodexToolBuilder {
     return null;
   }
 
+  private static parseExecMcpCalls(
+    input: string
+  ): Array<{ toolName: string; argsText: string }> {
+    const pattern = /\btools\.(mcp__[A-Za-z0-9_-]+)\s*\(/g;
+    const calls: Array<{ toolName: string; argsText: string }> = [];
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(input)) !== null) {
+      const argsStart = match.index + match[0].length;
+      const argsText = this.extractBalancedCallArguments(
+        input,
+        argsStart
+      ).trim();
+      calls.push({ toolName: match[1], argsText });
+      pattern.lastIndex = argsStart + argsText.length + 1;
+    }
+    return calls.length > 0 ? calls : this.parseExecMcpAliasCalls(input);
+  }
+
+  private static parseExecMcpAliasCalls(
+    input: string
+  ): Array<{ toolName: string; argsText: string }> {
+    const expectedMatch = /\bconst\s+expected\s*=\s*(\[[\s\S]*?\])\s*;/u.exec(
+      input
+    );
+    const serverMatch =
+      /ALL_TOOLS\.find\(\s*t\s*=>\s*t\.name\.includes\(\s*(["'])([^"']+)\1\s*\)/u.exec(
+        input
+      );
+    if (!expectedMatch || !serverMatch) {
+      return [];
+    }
+
+    let expectedTools: unknown;
+    try {
+      expectedTools = JSON.parse(expectedMatch[1]);
+    } catch {
+      return [];
+    }
+    if (
+      !Array.isArray(expectedTools) ||
+      !expectedTools.every((tool): tool is string => typeof tool === "string")
+    ) {
+      return [];
+    }
+
+    const calls: Array<{ toolName: string; argsText: string }> = [];
+    const pattern =
+      /results\.push\(\s*await\s+tools\[methods\[(\d+)\]\]\s*\(/gu;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(input)) !== null) {
+      const index = Number(match[1]);
+      const suffix = expectedTools[index];
+      if (!suffix) continue;
+      const argsStart = match.index + match[0].length;
+      const argsText = this.extractBalancedCallArguments(
+        input,
+        argsStart
+      ).trim();
+      calls.push({
+        toolName: `mcp__${serverMatch[2]}__${suffix}`,
+        argsText,
+      });
+      pattern.lastIndex = argsStart + argsText.length + 1;
+    }
+    return calls;
+  }
+
   /**
    * Parse the `plan: [{step, status}, ...]` array out of a Codex
    * `tools.update_plan({...})` exec snippet. Uses brace/bracket-balanced
@@ -455,7 +534,9 @@ export class CodexToolBuilder {
       return {};
     }
     try {
-      const parsed = JSON.parse(argsText) as unknown;
+      const parsed = JSON.parse(
+        this.normalizeJsObjectLiteral(argsText)
+      ) as unknown;
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
         return parsed as Record<string, unknown>;
       }
@@ -463,6 +544,14 @@ export class CodexToolBuilder {
       // Not valid JSON (bare keys, template literals, trailing commas, ...)
     }
     return { arguments: argsText };
+  }
+
+  private static normalizeJsObjectLiteral(source: string): string {
+    return source
+      .replace(/([{,]\s*)([A-Za-z_$][\w$]*)\s*:/g, '$1"$2":')
+      .replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_match, value: string) =>
+        JSON.stringify(value.replace(/\\'/g, "'"))
+      );
   }
 
   /**
@@ -804,15 +893,20 @@ export class CodexToolBuilder {
         ];
 
       case CLI_EVENT_TYPES.MCP_TOOL_CALL:
-        return [
-          this.buildMcpToolCallCompletedEvent(
-            primaryInitiatedData as McpToolCallData | undefined,
+        return (initiatedEvents ?? []).map((initiatedEvent, index) => {
+          const data = initiatedEvent.data as McpToolCallData;
+          const outputs = this.parseMcpToolResultOutputs(
             outputText,
+            initiatedEvents?.length ?? 1
+          );
+          return this.buildMcpToolCallCompletedEvent(
+            data,
+            outputs[index] ?? outputText,
             success,
             timestamp,
-            callId
-          ),
-        ];
+            data.toolCallId ?? callId
+          );
+        });
 
       default:
         return [
@@ -850,6 +944,31 @@ export class CodexToolBuilder {
         result: { success, output: outputText },
       } as McpToolCallData,
     };
+  }
+
+  private static parseMcpToolResultOutputs(
+    outputText: string,
+    expectedCount: number
+  ): string[] {
+    try {
+      const parsed = JSON.parse(outputText) as unknown;
+      if (Array.isArray(parsed) && parsed.length === expectedCount) {
+        return parsed.map((entry) => {
+          const content = (entry as { content?: unknown }).content;
+          if (Array.isArray(content)) {
+            const text = content
+              .map((part) => (part as { text?: unknown }).text)
+              .filter((part): part is string => typeof part === "string")
+              .join("\n");
+            if (text) return text;
+          }
+          return JSON.stringify(entry);
+        });
+      }
+    } catch {
+      // A single MCP call returns its output directly.
+    }
+    return [outputText];
   }
 
   /**
