@@ -266,15 +266,17 @@ function isNewStepDraftDirty(draft: SavedNewStepState): boolean {
   );
 }
 
-function replyContextMatchesProperties(
-  replyContext: ReplyContext,
+/** Drop the reply context once the draft no longer resumes that session. */
+function replyContextAfterPropertyChange(
+  replyContext: ReplyContext | null,
   properties: PropertyValues
-): boolean {
-  return (
+): ReplyContext | null {
+  return replyContext &&
     properties.harness === replyContext.harness &&
     properties.sessionId === replyContext.sessionId &&
     properties.resumeSession === true
-  );
+    ? replyContext
+    : null;
 }
 
 function expandPromptEditorIfCollapsed(): void {
@@ -569,12 +571,11 @@ export const useEditorStore = create<
   },
 
   cancelReplyToStep: () => {
-    const { replyContext, promptText } = get();
+    const { replyContext } = get();
     if (!replyContext) return;
     set({
       properties: { ...replyContext.previous.properties },
       stepType: replyContext.previous.stepType,
-      promptText,
       replyContext: null,
       isDirty: true,
     });
@@ -992,11 +993,10 @@ export const useEditorStore = create<
       };
       return {
         properties,
-        replyContext:
-          state.replyContext &&
-          !replyContextMatchesProperties(state.replyContext, properties)
-            ? null
-            : state.replyContext,
+        replyContext: replyContextAfterPropertyChange(
+          state.replyContext,
+          properties
+        ),
         isDirty: true,
       };
     }),
@@ -1006,11 +1006,10 @@ export const useEditorStore = create<
       const properties = { ...state.properties, ...propertyUpdates };
       return {
         properties,
-        replyContext:
-          state.replyContext &&
-          !replyContextMatchesProperties(state.replyContext, properties)
-            ? null
-            : state.replyContext,
+        replyContext: replyContextAfterPropertyChange(
+          state.replyContext,
+          properties
+        ),
         isDirty: true,
       };
     }),
@@ -1020,11 +1019,10 @@ export const useEditorStore = create<
       const properties = { ...PROPERTY_DEFAULTS };
       return {
         properties,
-        replyContext:
-          state.replyContext &&
-          !replyContextMatchesProperties(state.replyContext, properties)
-            ? null
-            : state.replyContext,
+        replyContext: replyContextAfterPropertyChange(
+          state.replyContext,
+          properties
+        ),
         isDirty: true,
       };
     }),

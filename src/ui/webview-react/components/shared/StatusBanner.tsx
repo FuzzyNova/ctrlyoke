@@ -10,6 +10,13 @@ export const STATUS_BANNER_TONES = {
 export type StatusBannerTone =
   (typeof STATUS_BANNER_TONES)[keyof typeof STATUS_BANNER_TONES];
 
+/**
+ * Text treatment for every tone. The backgrounds are theme-driven status
+ * colors (`--status-error`/`--status-warning`/`--status-info`), which range
+ * from pale to saturated depending on the active theme — no single themed
+ * foreground token stays legible against all of them. White text with a black
+ * outline reads clearly against any of these backgrounds regardless of theme.
+ */
 const BANNER_TEXT_CLASS =
   "font-bold text-white [text-shadow:_-1px_-1px_0_#000,_1px_-1px_0_#000,_-1px_1px_0_#000,_1px_1px_0_#000]";
 

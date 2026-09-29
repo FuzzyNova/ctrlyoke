@@ -6,10 +6,11 @@ import {
   type HarnessId,
 } from "@root/types/DashboardConstants";
 import type { PromptStep } from "@root/types/WebviewMessageTypes";
-import type { PropertyValues } from "@store/editorStore";
-import type {
-  GlobalSettings,
-  WorkflowProperties,
+import { useEditorStore, type PropertyValues } from "@store/editorStore";
+import {
+  useSettingsStore,
+  type GlobalSettings,
+  type WorkflowProperties,
 } from "@store/settingsStore";
 import {
   createDefaults,
@@ -90,4 +91,28 @@ export function buildReplyPropertyValues({
         }
       : null,
   };
+}
+
+/**
+ * Turn the new-prompt editor into a follow-up to `step`, resolving against the
+ * workflow and global settings current at click time.
+ */
+export function startReplyFromStep(
+  step: PromptStep,
+  sessionId: string,
+  sourceLabel: string
+): void {
+  const { workflowProperties, globalSettings } = useSettingsStore.getState();
+  const properties = buildReplyPropertyValues({
+    step,
+    sessionId,
+    workflowProperties,
+    globalSettings,
+  });
+  useEditorStore.getState().startReplyToStep({
+    properties,
+    sessionId,
+    harness: properties.harness,
+    sourceLabel,
+  });
 }

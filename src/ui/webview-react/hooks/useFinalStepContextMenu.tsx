@@ -8,10 +8,6 @@ import {
   getStepSessionId,
   type StepRuntimeMetaSnapshot,
 } from "@utils/stepMetadataClipboard";
-import { useEditorStore } from "@store/editorStore";
-import { useSettingsStore } from "@store/settingsStore";
-import { buildReplyPropertyValues } from "@utils/replyToStep";
-import { isScriptWorkflowStep } from "@utils/stepClipboard";
 import {
   buildReplyToStepMenuItem,
   buildStepCopyMenuItems,
@@ -92,9 +88,6 @@ export function useFinalStepContextMenu({
             runtimeMeta,
           })
         : [];
-      const sessionId = finalStep
-        ? getStepSessionId(finalStep, latestOutput, runtimeMeta)
-        : undefined;
       // The final step card stands for the final step as a whole, so its
       // filter actions cover every loop it has run. Per-loop control lives on
       // the minimap, where each loop is its own marker. `finalStepLoopCount`
@@ -144,24 +137,12 @@ export function useFinalStepContextMenu({
             ? [
                 buildReplyToStepMenuItem({
                   step: finalStep,
-                  sessionId,
-                  onClick: () => {
-                    if (!sessionId || isScriptWorkflowStep(finalStep)) return;
-                    const { workflowProperties, globalSettings } =
-                      useSettingsStore.getState();
-                    const properties = buildReplyPropertyValues({
-                      step: finalStep,
-                      sessionId,
-                      workflowProperties,
-                      globalSettings,
-                    });
-                    useEditorStore.getState().startReplyToStep({
-                      properties,
-                      sessionId,
-                      harness: properties.harness,
-                      sourceLabel: "Final step",
-                    });
-                  },
+                  sessionId: getStepSessionId(
+                    finalStep,
+                    latestOutput,
+                    runtimeMeta
+                  ),
+                  sourceLabel: "Final step",
                 }),
                 { type: "divider" as const },
               ]

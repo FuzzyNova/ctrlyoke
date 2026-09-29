@@ -305,6 +305,11 @@ running, and history views. The resolved harness stays typed as `HarnessId`;
 an invalid runtime harness falls back to the resolver's harness. Typecheck,
 lint, and the full test gate passed with no other deviations.
 
+Review note: the click handler lives once, in `startReplyFromStep()` in
+`utils/replyToStep.ts` (it reads the settings/editor stores at click time).
+`buildReplyToStepMenuItem()` takes a `sourceLabel` and calls it, so neither
+menu hook carries its own copy. `buildReplyPropertyValues()` stays pure.
+
 ## Tests (`src/ui/webview-react/test/**`)
 
 - `utils/replyToStep.test.ts`:

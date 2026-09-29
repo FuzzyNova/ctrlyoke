@@ -24,6 +24,7 @@ import {
   buildStepMetadataClipboardText,
   type StepRuntimeMetaSnapshot,
 } from "./stepMetadataClipboard";
+import { startReplyFromStep } from "./replyToStep";
 
 export interface StepCopyMenuItemsInput {
   step: WorkflowStep;
@@ -105,14 +106,15 @@ export function buildStepCopyMenuItems({
 export interface ReplyToStepMenuItemInput {
   step: WorkflowStep;
   sessionId?: string;
-  onClick: () => void;
+  /** Reply banner label for the step, e.g. `Step 3` or `Final step`. */
+  sourceLabel: string;
 }
 
 /** Build the action that starts a new prompt using this step's session. */
 export function buildReplyToStepMenuItem({
   step,
   sessionId,
-  onClick,
+  sourceLabel,
 }: ReplyToStepMenuItemInput): StepContextMenuItem {
   const isScriptStep = isScriptWorkflowStep(step);
   const hasSession = typeof sessionId === "string" && sessionId.length > 0;
@@ -127,8 +129,8 @@ export function buildReplyToStepMenuItem({
         ? "This step has no session to resume yet"
         : undefined,
     onClick: () => {
-      if (isScriptStep || !hasSession) return;
-      onClick();
+      if (isScriptWorkflowStep(step) || !sessionId) return;
+      startReplyFromStep(step, sessionId, sourceLabel);
     },
   };
 }
