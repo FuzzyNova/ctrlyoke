@@ -1,8 +1,9 @@
 # ctrlyoke MCP Tool-Call Views — purpose-built rows for our own MCP tools
 
-> **Status:** All five implementation stages are complete: all 13 ctrlyoke MCP tools have purpose-built views. Follows the 2026-09-28 removal of `CoordinationActivityRow`
+> **Status:** Implemented 2026-09-29. All 13 ctrlyoke MCP tools render through purpose-built
+> views in `src/ui/webview-react/components/output/ctrlyoke-tools/`. Follows the 2026-09-28 removal of `CoordinationActivityRow`
 > (see the addendum in
-> [`EXECUTION_ROOT_COORDINATION_PLAN.md`](../implemented/EXECUTION_ROOT_COORDINATION_PLAN.md)),
+> [`EXECUTION_ROOT_COORDINATION_PLAN.md`](EXECUTION_ROOT_COORDINATION_PLAN.md)),
 > which left the generic MCP tool-call row as the only place a step's coordination activity
 > appears in the output timeline.
 >
@@ -61,7 +62,7 @@ define.
 - **Harness coverage has gaps.** On current CLIs, Copilot and OpenCode ctrlyoke calls are not
   classified as `MCP_TOOL_CALL` at all. Copilot also renders every generic or MCP call twice,
   and skill-mode calls arrive as `BASH_COMMAND`. These pipeline fixes are tracked separately in
-  [`MCP_EVENT_PIPELINE_GAPS_PLAN.md`](../implemented/MCP_EVENT_PIPELINE_GAPS_PLAN.md), which this
+  [`MCP_EVENT_PIPELINE_GAPS_PLAN.md`](MCP_EVENT_PIPELINE_GAPS_PLAN.md), which this
   plan depends on. Views only ever see `MCP_TOOL_CALL` events.
 
 ## Design
@@ -83,9 +84,10 @@ interface CtrlYokeToolView<TParams, TResult> {
   Body: React.FC<{ params; result; findDecorations; ... }>;
 }
 
-export const CTRLYOKE_TOOL_VIEWS: Partial<
-  Record<CtrlYokeToolViewKey, CtrlYokeToolView<any, any>>
->;
+export const CTRLYOKE_TOOL_VIEWS: Record<
+  CtrlYokeToolViewKey,
+  CtrlYokeToolView<unknown, unknown>
+>; // full Record: a missing view is a compile error
 ```
 
 `OutputRow`'s `MCP_TOOL_CALL` case asks `resolveCtrlYokeToolView(server, tool)` first and falls
