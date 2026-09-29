@@ -52,6 +52,8 @@ export interface ScriptProcessResult {
   stderr?: string;
   exitCode?: number;
   errored?: boolean;
+  /** The process tree was terminated by ctrlyoke, rather than exiting itself. */
+  cancelled?: boolean;
 }
 
 /** Shared headless process transport for conditions and worktree setup. */
@@ -121,12 +123,14 @@ export class ScriptProcessRunner {
       });
 
       return {
-        success: result.exitCode === 0,
+        success: result.exitCode === 0 && !result.terminationSignal,
         result: result.stdout.trim(),
         stdout: result.stdout.trim(),
         stderr: result.stderr.trim(),
         error: result.stderr.trim() || undefined,
-        exitCode: result.exitCode,
+        ...(result.terminationSignal
+          ? { cancelled: true }
+          : { exitCode: result.exitCode }),
         errored: false,
       };
     } catch (error) {
@@ -146,5 +150,9 @@ export class ScriptProcessRunner {
 
   dispose(): void {
     this.processManager.dispose();
+  }
+
+  async cancel(): Promise<void> {
+    await this.processManager.cancel();
   }
 }

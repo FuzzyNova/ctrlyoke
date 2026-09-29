@@ -3,7 +3,10 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
-import { ScriptProcessRunner } from "../../core/orchestration/ScriptProcessRunner";
+import {
+  resolveScriptInvocation,
+  ScriptProcessRunner,
+} from "../../core/orchestration/ScriptProcessRunner";
 
 suite("ScriptProcessRunner", () => {
   test("isolates timeout and cancellation state between runners", async () => {
@@ -39,6 +42,43 @@ suite("ScriptProcessRunner", () => {
     } finally {
       timedOutRunner.dispose();
       completingRunner.dispose();
+      await fs.rm(root, {
+        recursive: true,
+        force: true,
+        maxRetries: 20,
+        retryDelay: 100,
+      });
+    }
+  });
+
+  test("dispose kills a shell command's child process tree promptly", async () => {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-script-runner-cancel-")
+    );
+    const runner = new ScriptProcessRunner(root);
+    const nodeExecutable = process.platform === "win32" ? "node.exe" : "node";
+    const invocation = resolveScriptInvocation(
+      `${nodeExecutable} -e "setTimeout(() => console.log('natural exit'), 10000)"`
+    );
+
+    try {
+      const startedAt = Date.now();
+      const resultPromise = runner.run({
+        cwd: root,
+        timeout: 15000,
+        argv: invocation.argv,
+        windowsVerbatimArguments: invocation.windowsVerbatimArguments,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      runner.dispose();
+      const result = await resultPromise;
+
+      assert.ok(Date.now() - startedAt < 4000);
+      assert.strictEqual(result.cancelled, true);
+      assert.strictEqual(result.exitCode, undefined);
+      assert.strictEqual(result.stdout, "");
+    } finally {
+      runner.dispose();
       await fs.rm(root, {
         recursive: true,
         force: true,

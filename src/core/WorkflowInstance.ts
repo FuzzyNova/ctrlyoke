@@ -893,7 +893,9 @@ export class WorkflowInstance
   private async cancelTarget(target: WorkflowAttemptTarget): Promise<void> {
     const targetKey = this.getExecutionTargetRunKey(target);
     const resource = this.activeTargetResources.get(targetKey);
-    resource?.processRunner?.dispose();
+    const processRunner =
+      resource?.processRunner ?? this.targetScriptProcessRunners.get(targetKey);
+    await processRunner?.cancel();
     if (resource?.ptySessionId) {
       getPtyProcessManager()?.killSession(
         resource.ptySessionId,
@@ -2396,7 +2398,7 @@ export class WorkflowInstance
       if (resource.integration) {
         integrations.add(resource.integration);
       }
-      resource.processRunner?.dispose();
+      void resource.processRunner?.cancel();
       if (resource.ptySessionId) {
         getPtyProcessManager()?.killSession(
           resource.ptySessionId,

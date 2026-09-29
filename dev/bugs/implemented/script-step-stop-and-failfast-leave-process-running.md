@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by bug-hunt final step (claude-cli)
 - **Area:** `src/utils/CliProcessManager.ts`, `src/core/orchestration/ScriptProcessRunner.ts`, `src/core/WorkflowInstance.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

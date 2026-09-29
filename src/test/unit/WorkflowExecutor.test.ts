@@ -47,6 +47,7 @@ import type { CliOutput } from "../../types/WebviewMessageTypes";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { createNoWorktreeExecutionWorkspace } from "../../platform/PlatformAdapter";
 import { Log } from "../../utils/Log";
+import { ScriptProcessRunner } from "../../core/orchestration/ScriptProcessRunner";
 import { calculateAttemptCost } from "../../utils/ModelPricing";
 import {
   WorkspaceSnapshotService,
@@ -1646,6 +1647,100 @@ suite("WorkflowExecutor finalStep phase 2", () => {
           admission.admission === PARALLEL_GROUP_ADMISSION.CLOSING
       )
     );
+  });
+
+  test("failFast cancels a running script process tree without an exit-code failure", async () => {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-script-fail-fast-")
+    );
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+    const runners = new Map<number, ScriptProcessRunner>();
+    const completedOutputs: Array<{ stepIndex: number; output: CliOutput }> =
+      [];
+    const context = makeContext(integration);
+    context.workspaceFolderPath = root;
+    context.executionWorkspace = createNoWorktreeExecutionWorkspace(
+      new MockPlatform(root)
+    );
+    context.parallelGroupFanOutEnabled = true;
+    context.dynamicQueueConfig.maxParallelSteps = 2;
+    context.getScriptProcessRunner = (target) => {
+      if (target.kind !== FINAL_STEP_PHASES.QUEUE) {
+        throw new Error("Expected queue script target");
+      }
+      let runner = runners.get(target.stepIndex);
+      if (!runner) {
+        runner = new ScriptProcessRunner(root);
+        runners.set(target.stepIndex, runner);
+      }
+      return runner;
+    };
+    context.cancelTarget = async (target) => {
+      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+        await runners.get(target.stepIndex)?.cancel();
+      }
+    };
+    context.releaseTargetResources = async (target) => {
+      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+        runners.get(target.stepIndex)?.dispose();
+      }
+    };
+    context.onScriptCompletedOutput = (target, output) => {
+      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+        completedOutputs.push({ stepIndex: target.stepIndex, output });
+      }
+    };
+
+    queue.loadPrompts({
+      steps: [
+        {
+          type: "script",
+          script: `node -e "setTimeout(() => process.exit(3), 300)"`,
+        },
+        {
+          type: "script",
+          script: `node -e "setTimeout(() => console.log('slow natural exit'), 10000)"`,
+        },
+      ],
+      parallelGroups: [
+        { id: "script-fail-fast", startIndex: 0, endIndex: 1, failFast: true },
+      ],
+    });
+
+    try {
+      const startedAt = Date.now();
+      await executor.execute(integration, context);
+
+      assert.ok(Date.now() - startedAt < 5000);
+      assert.deepStrictEqual(
+        queue.getState().results.map((result) => result.status),
+        [STEP_STATUS.FAILED, STEP_STATUS.CANCELLED]
+      );
+      const attempt = queue.getRuntimeStateMachine().getAttempt({
+        kind: FINAL_STEP_PHASES.QUEUE,
+        stepIndex: 1,
+      });
+      assert.strictEqual(attempt?.status, WORKFLOW_ATTEMPT_STATUS.CANCELLED);
+      assert.strictEqual(attempt?.failureReason, undefined);
+      assert.strictEqual(queue.getState().results[1].error, undefined);
+      assert.strictEqual(queue.getState().results[1].scriptOutput, undefined);
+      const cancelledOutput = completedOutputs.find(
+        ({ stepIndex }) => stepIndex === 1
+      )?.output;
+      assert.ok(cancelledOutput);
+      assert.strictEqual(cancelledOutput.exitCode, undefined);
+      assert.strictEqual(cancelledOutput.scriptVerdict, undefined);
+    } finally {
+      for (const runner of runners.values()) runner.dispose();
+      await fs.rm(root, {
+        recursive: true,
+        force: true,
+        maxRetries: 20,
+        retryDelay: 100,
+      });
+    }
   });
 
   test("fail-after-settle drains waiting members before failing the workflow", async () => {

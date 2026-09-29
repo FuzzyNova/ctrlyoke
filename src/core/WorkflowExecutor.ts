@@ -2683,6 +2683,21 @@ export class WorkflowExecutor {
       const evalResult = report.evaluationResult;
       const scriptRuntimeOutput = report.scriptRuntimeOutput;
       const outputText = report.outputText;
+
+      if (evalResult.cancelled) {
+        runtime.cancelAttempt(target, attemptIndex);
+        await this.recordAttemptTerminal(
+          context,
+          target,
+          attemptIndex,
+          TIMELINE_ATTEMPT_TERMINAL_STATES.CANCELLED
+        );
+        if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+          await this.promptQueue.cancelStep(target.stepIndex);
+        }
+        return false;
+      }
+
       const errorBehavior =
         step.errorBehavior === null
           ? undefined
