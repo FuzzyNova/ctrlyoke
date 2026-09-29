@@ -12,7 +12,6 @@ import type {
   TextData,
   ThinkingBlock,
   ToolCall,
-  ToolResult,
   ToolResultData,
   WebSearchData,
 } from "@/types/cliEvents";
@@ -25,8 +24,12 @@ import type { OutputRenderRow } from "./outputRows";
 import { formatCliCommandDisplay } from "./outputCommandDisplay";
 import { buildAskUserQuestionSearchSegments } from "./askUserQuestionLayout";
 import { getGenericToolCallParamsText } from "./toolCallLayout";
+import { resolveCtrlYokeToolView } from "../components/output/ctrlyoke-tools/registry";
 import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
 import { buildSelectionReferenceText } from "@root/completions/ContextReferenceBuilder";
+import { getToolResultText } from "./toolResultText";
+
+export { getToolResultText } from "./toolResultText";
 
 type OutputFindField =
   | "header"
@@ -41,6 +44,7 @@ type OutputFindField =
   | "filePath"
   | "toolLabel"
   | "params"
+  | "toolBody"
   | "toolContent"
   | "diff";
 
@@ -73,19 +77,7 @@ export interface OutputRowSearchSegment {
 
 export const OUTPUT_FIND_ACTIVE_ATTRIBUTE = "data-find-active";
 export const OUTPUT_FIND_ACTIVE_CLASS = "diff-code-mark-find-active";
-
-export function getToolResultText(result: ToolResult | undefined): string {
-  if (!result) {
-    return "";
-  }
-  if (!result.success && typeof result.error === "string") {
-    return result.error;
-  }
-  if (typeof result.output === "string") {
-    return result.output;
-  }
-  return result.success ? "Success" : "Failed";
-}
+export const OUTPUT_FIND_TOOL_CONTENT_FIELD = "toolContent";
 
 function getRenderedBashTexts(data: BashCommandData): {
   command: string;
@@ -250,6 +242,28 @@ export function getOutputRowSearchSegments(
         }
         case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
           const data = event.data as McpToolCallData;
+          const customView = resolveCtrlYokeToolView(data);
+          if (customView) {
+            return createSegments([
+              { field: "toolLabel", text: customView.summary },
+              ...customView.searchText.map((text) => ({
+                field: "toolBody" as const,
+                text,
+              })),
+              ...(row.toolCall?.expansion.rawExpanded
+                ? [
+                    {
+                      field: "params" as const,
+                      text: getGenericToolCallParamsText(data.parameters),
+                    },
+                    {
+                      field: "toolContent" as const,
+                      text: getToolResultText(data.result),
+                    },
+                  ]
+                : []),
+            ]);
+          }
           return createSegments([
             { field: "toolLabel", text: `MCP: ${data.server}.${data.tool}` },
             {

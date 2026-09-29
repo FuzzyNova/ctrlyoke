@@ -22,6 +22,7 @@ import {
   OUTPUT_DEFAULT_LABELS,
   OUTPUT_ROW_KINDS,
   TOOL_CALL_EXPANSION_SECTIONS,
+  TOOL_RESULT_STATUSES,
 } from "@root/types/DashboardConstants";
 import {
   AskUserQuestionOutput,
@@ -44,6 +45,11 @@ import {
 } from "./BashOutput";
 import { ScriptVerdict } from "./ScriptVerdict";
 import { BackgroundWorkHoldOutput } from "./BackgroundWorkHoldOutput";
+import { resolveCtrlYokeToolView } from "./ctrlyoke-tools/registry";
+import { CTRLYOKE_TOOL_VIEW_BODIES } from "./ctrlyoke-tools/viewComponents";
+import { ToolCallBlock } from "./ToolCallBlock";
+import { ToolDot } from "./FileOperationOutput";
+import type { McpToolName } from "@root/utils/McpToolDefinitions";
 import type {
   AskUserQuestionData,
   BackgroundWorkHoldData,
@@ -80,6 +86,7 @@ import {
   getToolResultText,
   highlightText,
   sliceDecorationMatches,
+  OUTPUT_FIND_TOOL_CONTENT_FIELD,
   type OutputFindMatch,
   type RowFindDecoration,
 } from "@utils/outputFind";
@@ -659,7 +666,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       ) {
         pendingToolCallExpand = TOOL_CALL_EXPANSION_SECTIONS.PARAMS;
       } else if (
-        activeFindMatch?.field === "toolContent" &&
+        activeFindMatch?.field === OUTPUT_FIND_TOOL_CONTENT_FIELD &&
         isActiveMatchHidden(
           getToolResultText(data.result),
           getFieldMatches("toolContent"),
@@ -930,6 +937,55 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
         const data = event.data as McpToolCallData;
         if (!data.server || !data.tool) return null;
+        const customView = resolveCtrlYokeToolView(data);
+        const Body = CTRLYOKE_TOOL_VIEW_BODIES[data.tool as McpToolName];
+        if (customView && Body && row.toolCall) {
+          return (
+            <ToolCallBlock
+              dot={
+                <ToolDot
+                  status={
+                    data.result?.success
+                      ? TOOL_RESULT_STATUSES.SUCCESS
+                      : TOOL_RESULT_STATUSES.ERROR
+                  }
+                />
+              }
+              header={
+                <span
+                  className={customView.warning ? "text-warning-fg" : undefined}
+                >
+                  {highlightText(
+                    customView.summary,
+                    getFieldMatches("toolLabel")
+                  )}
+                </span>
+              }
+            >
+              <Body
+                params={customView.params}
+                result={customView.result}
+                data={data}
+                paramsFindMatches={getFieldMatches("params")}
+                outputFindMatches={getFieldMatches("toolContent", 0)}
+                bodyFindMatches={getFieldMatches("toolBody", 0)}
+                bodyFindDecorations={customView.searchText.map((_, index) => ({
+                  matches: getFieldMatches("toolBody", index),
+                }))}
+                findQuery={findQuery}
+                findCaseSensitive={findCaseSensitive}
+                errorFindMatches={getFieldMatches("toolContent", 0)}
+                expansion={row.toolCall.expansion}
+                onExpansionChange={(section, expanded) =>
+                  onToolCallExpansionChange?.(row.key, section, expanded)
+                }
+                findDecorations={{
+                  matches: getFieldMatches("toolBody", 0),
+                }}
+              />
+            </ToolCallBlock>
+          );
+        }
         const toolContentMatches = getFieldMatches("toolContent");
         const toolContentIsError =
           !data.result?.success && typeof data.result?.error === "string";

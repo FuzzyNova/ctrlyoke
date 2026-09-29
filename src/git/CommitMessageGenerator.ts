@@ -25,6 +25,7 @@ import {
   CLI_EVENT_TYPES,
   EXECUTION_MODES,
   CTRLYOKE_MCP_MODES,
+  MCP_SERVER_IDS,
   PERMISSION_MODES,
 } from "../types/DashboardConstants";
 import {
@@ -362,7 +363,7 @@ export class CommitMessageGenerator {
 
     const mcpServerConfig: McpServerConfig | undefined = useMcpCapture
       ? {
-          id: "ctrlyoke-commit",
+          id: MCP_SERVER_IDS.CTRLYOKE_COMMIT,
           command: "node",
           args: [mcpServerPath.replace(/\\/g, "/")],
           env: {

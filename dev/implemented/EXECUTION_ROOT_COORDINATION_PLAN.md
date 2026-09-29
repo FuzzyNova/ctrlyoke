@@ -765,7 +765,7 @@ entries) between the placeholders of hidden steps. Per-run coordination activity
 is now visible only through those tool-call rows, which honour the step's
 visibility; the settings panel is the board's sole dashboard surface. Richer
 formatting of ctrlyoke's own MCP calls is tracked in
-`dev/backlog/CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md`.
+`dev/implemented/CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md`.
 
 Read the board file directly rather than adding a `TIMELINE_EVENT_TYPES` entry:
 the writer is a separate process, so a `TimelineRecorder` call is unavailable to
