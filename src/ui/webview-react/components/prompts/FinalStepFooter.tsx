@@ -2,6 +2,8 @@ import React from "react";
 import { useLongPress } from "../../hooks/useLongPress";
 import { StatusIcon } from "./StatusIcon";
 import { PromptStepDetails } from "./PromptStepDetails";
+import { ContextWindowBar } from "./ContextWindowBar";
+import { resolveEffectiveContextWindow } from "@utils/tokenUtils";
 import type { PromptOverride } from "./PromptStepDetails";
 import {
   FINAL_STEP_PHASES,
@@ -95,6 +97,14 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
     ? (status ?? "pending")
     : "pending";
   const longPressHandlers = useLongPress(onContextMenu);
+  // Live context telemetry is keyed by queue step index only, so the final
+  // step's bar comes from its latest CLI output, falling back to the
+  // persisted runtime metadata.
+  const contextWindow = resolveEffectiveContextWindow({
+    isCurrent: false,
+    latestOutputTokens: latestOutput?.tokens,
+    runtimeContextWindow: finalStep?._runtime,
+  });
   const showDisabledState = !hasFinalStep || isDisabled;
   const finalStepTooltip = hasFinalStep
     ? `Final Step — ${isDisabled ? "Disabled" : "Enabled"}${
@@ -145,42 +155,56 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
           }
           {...longPressHandlers}
         >
-          {/* Prompt name / text — pl-5 matches PromptStepDetails indent */}
-          <div className="text-xs leading-relaxed">
-            {truncate(getStepDisplayText(finalStep))}
+          {/* Layout: content column | (context bar) — matches WorkflowStep */}
+          <div className="flex items-start gap-2">
+            <div className="flex-1 min-w-0">
+              {/* Prompt name / text — pl-5 matches PromptStepDetails indent */}
+              <div className="text-xs leading-relaxed">
+                {truncate(getStepDisplayText(finalStep))}
+              </div>
+
+              {isDisabled && (
+                <div className="mt-1">
+                  <span className="inline-flex rounded bg-badge-bg px-1 py-px text-xxs text-badge-fg">
+                    Disabled
+                  </span>
+                </div>
+              )}
+
+              {/* Phase badge */}
+              {phase && (
+                <div className="mt-0.5 text-xxs opacity-75">
+                  {phase === FINAL_STEP_PHASES.FINAL_STEP
+                    ? "Final Step"
+                    : "Queue"}
+                </div>
+              )}
+
+              {/* Shared metadata rows: harness/model (prompt only), stats, end condition, overrides */}
+              <PromptStepDetails
+                status={effectiveStatus}
+                harnessId={isScriptStep(finalStep) ? undefined : harnessId}
+                harnessLabel={
+                  isScriptStep(finalStep) ? undefined : harnessLabel
+                }
+                harnessIsDefault={
+                  isScriptStep(finalStep) ? undefined : harnessIsDefault
+                }
+                modelLabel={isScriptStep(finalStep) ? undefined : modelLabel}
+                modelIsDefault={
+                  isScriptStep(finalStep) ? undefined : modelIsDefault
+                }
+                latestOutput={latestOutput}
+                isSelected={isSelected}
+                overrides={isScriptStep(finalStep) ? undefined : overrides}
+              />
+            </div>
+            <ContextWindowBar
+              contextWindow={contextWindow}
+              attemptTokens={latestOutput?.tokens}
+              harnessId={harnessId}
+            />
           </div>
-
-          {isDisabled && (
-            <div className="mt-1">
-              <span className="inline-flex rounded bg-badge-bg px-1 py-px text-xxs text-badge-fg">
-                Disabled
-              </span>
-            </div>
-          )}
-
-          {/* Phase badge */}
-          {phase && (
-            <div className="mt-0.5 text-xxs opacity-75">
-              {phase === FINAL_STEP_PHASES.FINAL_STEP ? "Final Step" : "Queue"}
-            </div>
-          )}
-
-          {/* Shared metadata rows: harness/model (prompt only), stats, end condition, overrides */}
-          <PromptStepDetails
-            status={effectiveStatus}
-            harnessId={isScriptStep(finalStep) ? undefined : harnessId}
-            harnessLabel={isScriptStep(finalStep) ? undefined : harnessLabel}
-            harnessIsDefault={
-              isScriptStep(finalStep) ? undefined : harnessIsDefault
-            }
-            modelLabel={isScriptStep(finalStep) ? undefined : modelLabel}
-            modelIsDefault={
-              isScriptStep(finalStep) ? undefined : modelIsDefault
-            }
-            latestOutput={latestOutput}
-            isSelected={isSelected}
-            overrides={isScriptStep(finalStep) ? undefined : overrides}
-          />
         </div>
       )}
 

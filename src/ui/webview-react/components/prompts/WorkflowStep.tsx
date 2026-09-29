@@ -6,6 +6,7 @@ import {
 import React from "react";
 import { useLongPress } from "../../hooks/useLongPress";
 import { StatusIcon } from "./StatusIcon";
+import { ContextWindowBar } from "./ContextWindowBar";
 import { PromptStepDetails } from "./PromptStepDetails";
 import type { PromptOverride } from "./PromptStepDetails";
 export type { PromptOverride };
@@ -14,11 +15,9 @@ import type { RetryState, CliOutput } from "../../store/workflowStore";
 import {
   formatTokenCount,
   resolveTokenTotal,
-  buildAttemptTokenTooltipLines,
   buildStepHoverTooltip,
 } from "@root/utils/TokenFormatting";
 import { useSettingsStore } from "@store/settingsStore";
-import { getUsageBarColorClass } from "@utils/usageBarColor";
 import { resolveEffectiveContextWindow } from "@utils/tokenUtils";
 import { getStepKindIconClass } from "@utils/status";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
@@ -178,9 +177,6 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
     latestOutputTokens: latestOutput?.tokens,
     runtimeContextWindow: runtimeMeta,
   });
-  const contextPct = ctx?.size
-    ? Math.round((ctx.used / ctx.size) * 100)
-    : undefined;
   const attemptTokens = latestOutput?.tokens;
   const attemptTotalLabel = formatTokenCount(
     resolveTokenTotal(
@@ -189,14 +185,6 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
       attemptTokens?.completion
     )
   );
-  const compactionCount = attemptTokens?.compactionCount;
-  const hasCompacted = compactionCount !== undefined && compactionCount > 0;
-  const tokenTooltip = buildAttemptTokenTooltipLines({
-    contextWindow: ctx,
-    harness: harnessId,
-    attemptTokens,
-    showCostEstimates,
-  }).join("\n");
   const hoverTooltip = buildStepHoverTooltip({
     primaryAction: onContextMenu
       ? "Click to edit — right-click for options"
@@ -374,44 +362,11 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
             </>
           )}
         </div>
-        {contextPct !== undefined && (
-          <div className="flex-shrink-0 flex flex-col items-center w-3 self-stretch ml-0.5">
-            {/* Compaction badge above the bar — only takes up space when present,
-                so the bar fills the row when this attempt didn't compact. */}
-            {hasCompacted && (
-              <span
-                className="flex-shrink-0 flex items-center justify-center"
-                title={`Compactions: ${compactionCount}`}
-              >
-                <Icon
-                  name="fold"
-                  className="text-xxs text-description-fg opacity-90"
-                  aria-label={`Compactions: ${compactionCount}`}
-                />
-              </span>
-            )}
-            <div
-              className="flex-1 min-h-0 w-full flex flex-col items-center"
-              title={tokenTooltip || undefined}
-            >
-              {/* Track */}
-              <div className="flex-1 w-1.5 rounded-full bg-ctx-bar-track overflow-hidden relative">
-                {/* Fill */}
-                <div
-                  key={contextPct}
-                  className={`absolute bottom-0 left-0 right-0 rounded-full animate-ctx-update ${getUsageBarColorClass(
-                    contextPct
-                  )}`}
-                  style={{ height: `${contextPct}%` }}
-                />
-              </div>
-              {/* Percentage label */}
-              <span className="text-xxs leading-none text-description-fg opacity-75 mt-0.5">
-                {contextPct}%
-              </span>
-            </div>
-          </div>
-        )}
+        <ContextWindowBar
+          contextWindow={ctx}
+          attemptTokens={attemptTokens}
+          harnessId={harnessId}
+        />
         {dragHandleProps && (
           <button
             type="button"

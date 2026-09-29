@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { FinalStepFooter } from "@components/prompts/FinalStepFooter";
 import { FINAL_STEP_PHASES } from "@/types/messages";
-import type { WorkflowStep } from "@store/workflowStore";
+import type { CliOutput, WorkflowStep } from "@store/workflowStore";
 
 function buildProps() {
   return {
@@ -63,5 +63,47 @@ describe("FinalStepFooter", () => {
     );
 
     expect(props.onSelect).toHaveBeenCalledOnce();
+  });
+
+  it("shows the context window bar in expanded details from the latest output", () => {
+    const props = { ...buildProps(), isExpanded: true };
+
+    render(
+      <FinalStepFooter
+        {...props}
+        latestOutput={
+          {
+            tokens: { contextWindowUsed: 50_000, contextWindowSize: 200_000 },
+          } as CliOutput
+        }
+      />
+    );
+
+    expect(screen.getByText("25%")).toBeInTheDocument();
+  });
+
+  it("falls back to runtime metadata for the context window bar", () => {
+    const props = {
+      ...buildProps(),
+      isExpanded: true,
+      finalStep: {
+        prompt: "Final prompt",
+        _runtime: { contextWindowUsed: 150_000, contextWindowSize: 200_000 },
+      } as WorkflowStep,
+    };
+
+    render(<FinalStepFooter {...props} />);
+
+    expect(screen.getByText("75%")).toBeInTheDocument();
+  });
+
+  it("omits the context window bar without context data", () => {
+    const { container } = render(
+      <FinalStepFooter {...buildProps()} isExpanded />
+    );
+
+    expect(
+      container.querySelector("[data-context-window-bar]")
+    ).not.toBeInTheDocument();
   });
 });
