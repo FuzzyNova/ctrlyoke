@@ -565,6 +565,8 @@ export class CopilotToolBuilder {
           data: {
             server: mcp.server,
             tool: mcp.tool,
+            toolCallId: completionData.toolCallId,
+            parameters: typeof args === "string" ? undefined : args,
             result: { success, output: resultContent, error: errorMsg },
           } as McpToolCallData,
         },
@@ -578,6 +580,8 @@ export class CopilotToolBuilder {
         timestamp: Date.now(),
         data: {
           name: toolName,
+          id: completionData.toolCallId,
+          parameters: typeof args === "string" ? undefined : args,
           result: { success, output: resultContent, error: errorMsg },
         } as ToolCall,
       },

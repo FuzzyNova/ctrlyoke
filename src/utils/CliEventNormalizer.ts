@@ -155,6 +155,9 @@ function getEventKey(event: CliEvent): string | undefined {
     }
     case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
       const data = event.data as McpToolCallData;
+      if (data.toolCallId) {
+        return `mcp:call:${data.toolCallId}`;
+      }
       return data.server && data.tool
         ? `mcp:${data.server}.${data.tool}`
         : undefined;
@@ -275,6 +278,7 @@ function createPendingEvent(
         kind: PENDING_KINDS.MCP,
         type: event.type,
         key: getEventKey(event),
+        toolCallId: data.toolCallId,
       };
     }
   }
@@ -448,6 +452,22 @@ function findOutputIndexByToolCallId(
   return undefined;
 }
 
+function findOutputIndexByToolCallIdAndType(
+  output: CliEvent[],
+  event: CliEvent,
+  toolCallId: string
+): number | undefined {
+  for (let i = output.length - 1; i >= 0; i--) {
+    if (
+      output[i].type === event.type &&
+      getToolCallId(output[i]) === toolCallId
+    ) {
+      return i;
+    }
+  }
+  return undefined;
+}
+
 function findOutputIndexForResultFallback(
   output: CliEvent[],
   result: ToolResultData
@@ -592,6 +612,34 @@ function mergeInitiatedWithCompleted(
   completed: CliEvent
 ): CliEvent {
   switch (completed.type) {
+    case CLI_EVENT_TYPES.TOOL_CALL: {
+      const initiatedData = initiated.data as ToolCall;
+      const completedData = completed.data as ToolCall;
+      return {
+        ...completed,
+        timestamp: initiated.timestamp ?? completed.timestamp,
+        data: {
+          ...completedData,
+          parameters: initiatedData.parameters,
+          id: initiatedData.id ?? completedData.id,
+          result: completedData.result,
+        } as ToolCall,
+      };
+    }
+    case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
+      const initiatedData = initiated.data as McpToolCallData;
+      const completedData = completed.data as McpToolCallData;
+      return {
+        ...completed,
+        timestamp: initiated.timestamp ?? completed.timestamp,
+        data: {
+          ...completedData,
+          parameters: initiatedData.parameters,
+          toolCallId: initiatedData.toolCallId ?? completedData.toolCallId,
+          result: completedData.result,
+        } as McpToolCallData,
+      };
+    }
     case CLI_EVENT_TYPES.BASH_COMMAND: {
       const initiatedData = initiated.data as BashCommandData;
       const completedData = completed.data as BashCommandData;
@@ -730,6 +778,36 @@ export function normalizeCliEventsWithSource(
 
   for (const [inputIndex, originalEvent] of events.entries()) {
     const event = normalizeEventToolResult(cloneEvent(originalEvent));
+
+    if (
+      (event.type === CLI_EVENT_TYPES.TOOL_CALL ||
+        event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL) &&
+      (event.data as ToolCall | McpToolCallData).result
+    ) {
+      const toolCallId = getToolCallId(event);
+      if (toolCallId) {
+        const pendingMatch = [...pending]
+          .reverse()
+          .find(
+            (candidate) =>
+              candidate.type === event.type &&
+              candidate.toolCallId === toolCallId
+          );
+        const outputIndex =
+          pendingMatch?.index ??
+          findOutputIndexByToolCallIdAndType(output, event, toolCallId);
+        if (outputIndex !== undefined) {
+          output[outputIndex] = mergeInitiatedWithCompleted(
+            output[outputIndex],
+            event
+          );
+          if (pendingMatch) {
+            removePending(pending, pendingMatch);
+          }
+          continue;
+        }
+      }
+    }
 
     if (event.type === CLI_EVENT_TYPES.TOOL_RESULT) {
       const resultData = event.data as ToolResultData;

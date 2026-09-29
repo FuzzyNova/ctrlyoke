@@ -4,6 +4,7 @@ import type {
   CliEvent,
   FileEditData,
   FileReadData,
+  McpToolCallData,
   ToolCall,
   WebSearchData,
 } from "../../types/CliOutputTypes";
@@ -252,6 +253,92 @@ suite("CliEventNormalizer", () => {
       normalized.every(
         (e) => (e.data as FileEditData).status === OPERATION_STATUS.COMPLETED
       )
+    );
+  });
+
+  test("pairs concurrent MCP completions by call id when results arrive in reverse order", () => {
+    const initiated = (toolCallId: string, timestamp: number): CliEvent => ({
+      type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+      timestamp,
+      data: {
+        server: "ctrlyoke",
+        tool: "claim_paths",
+        toolCallId,
+        parameters: { call: toolCallId },
+      } as McpToolCallData,
+    });
+    const completed = (
+      toolCallId: string,
+      output: string,
+      timestamp: number
+    ): CliEvent => ({
+      type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+      timestamp,
+      data: {
+        server: "ctrlyoke",
+        tool: "claim_paths",
+        toolCallId,
+        result: { success: true, output },
+      } as McpToolCallData,
+    });
+
+    const normalized = normalizeCliEvents([
+      initiated("call_a", 1),
+      initiated("call_b", 2),
+      completed("call_b", "result b", 3),
+      completed("call_a", "result a", 4),
+    ]);
+
+    assert.strictEqual(normalized.length, 2);
+    const rows = normalized.map((event) => event.data as McpToolCallData);
+    assert.deepStrictEqual(
+      rows.map(({ toolCallId, parameters, result }) => ({
+        toolCallId,
+        parameters,
+        result: result?.output,
+      })),
+      [
+        {
+          toolCallId: "call_a",
+          parameters: { call: "call_a" },
+          result: "result a",
+        },
+        {
+          toolCallId: "call_b",
+          parameters: { call: "call_b" },
+          result: "result b",
+        },
+      ]
+    );
+  });
+
+  test("keeps a result-bearing tool call with an unknown id as its own row", () => {
+    const initiated: CliEvent = {
+      type: CLI_EVENT_TYPES.TOOL_CALL,
+      timestamp: 1,
+      data: { name: "report_intent", id: "known", parameters: { a: 1 } },
+    };
+    const unknownCompletion: CliEvent = {
+      type: CLI_EVENT_TYPES.TOOL_CALL,
+      timestamp: 2,
+      data: {
+        name: "report_intent",
+        id: "unknown",
+        parameters: { a: 2 },
+        result: { success: true, output: "done" },
+      },
+    };
+
+    const normalized = normalizeCliEvents([initiated, unknownCompletion]);
+
+    assert.strictEqual(normalized.length, 2);
+    assert.strictEqual(
+      (normalized[0].data as ToolCall).result,
+      undefined
+    );
+    assert.strictEqual(
+      (normalized[1].data as ToolCall).result?.output,
+      "done"
     );
   });
 });

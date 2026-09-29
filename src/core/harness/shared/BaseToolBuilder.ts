@@ -213,6 +213,7 @@ export class BaseToolBuilder {
             data: {
               server: mcp.server,
               tool: mcp.tool,
+              toolCallId: toolId,
               parameters: input,
             } as McpToolCallData,
           },

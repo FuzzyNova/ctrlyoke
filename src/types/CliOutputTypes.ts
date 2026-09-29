@@ -461,6 +461,8 @@ export interface McpToolCallData {
   server: string;
   /** Tool name */
   tool: string;
+  /** Tool call ID used to correlate this call with its result */
+  toolCallId?: string;
   /** Tool parameters */
   parameters?: Record<string, unknown>;
   /** Tool result (optional) */

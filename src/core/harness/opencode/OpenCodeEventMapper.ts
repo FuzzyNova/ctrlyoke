@@ -148,6 +148,7 @@ export function mapOpenCodeToolPartToCliEvent(
         timestamp,
         data: {
           name: toolName,
+          id: part.callID,
           parameters: input as Record<string, unknown>,
           result: isCompleted
             ? {

@@ -1,6 +1,6 @@
 # MCP Event Pipeline Gaps — reliable detection and pairing of MCP tool calls on every harness
 
-> **Status:** Not implemented. Prerequisite for
+> **Status:** In progress — implementation-order item 1 complete. Prerequisite for
 > [`CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md`](CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md): purpose-built
 > views are only as good as the `MCP_TOOL_CALL` events underneath them, and on two of the six
 > harnesses today those events never exist.
@@ -192,8 +192,11 @@ parser unit-test fixtures, so vendor renames show up in `npm test` rather than i
 
 ## Implementation order
 
-1. **C + B:** the duplicate-row fix and MCP call ids. This is a user-visible bug on every
-   Copilot run today, independent of MCP.
+1. [x] **C + B:** the duplicate-row fix and MCP call ids. This is a user-visible bug on every
+   Copilot run today, independent of MCP. The `ctrlyoke-claim_paths` Copilot name still maps
+   to generic `TOOL_CALL` in this step; structured MCP classification remains item 2. OpenCode's
+   current mapper also emits only generic `TOOL_CALL` events, so it now carries `part.callID`;
+   MCP classification remains item 3.
 2. **A (Copilot):** structured MCP identity, with a fixture test built from the capture above.
 3. **A (OpenCode):** attached-server-set resolution, after the hyphenated-server capture.
 4. **E:** the probe and the fixtures for the four unverified harnesses. Fix whatever it finds.

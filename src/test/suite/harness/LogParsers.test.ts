@@ -14,6 +14,7 @@ import { QwenLogParser } from "../../../core/harness/qwen/QwenLogParser";
 import { AntigravityLogParser } from "../../../core/harness/antigravity/AntigravityLogParser";
 import {
   UniversalCliOutput,
+  CliEvent,
   ToolCall,
   ThinkingBlock,
   TextData,
@@ -2247,6 +2248,70 @@ suite("CopilotLogParser", () => {
 
   setup(() => {
     parser = new CopilotLogParser();
+  });
+
+  test("normalizes Copilot tool start, completion, and result triples into one row", () => {
+    const scenarios = [
+      {
+        toolCallId: "call_mcp_claim",
+        toolName: "ctrlyoke-claim_paths",
+        arguments: { paths: ["a.txt"], reason: "probe" },
+        output: "claimed",
+      },
+      {
+        toolCallId: "call_report_intent",
+        toolName: "report_intent",
+        arguments: { intent: "review" },
+        output: "reported",
+      },
+    ];
+
+    for (const scenario of scenarios) {
+      const copilotEvents: BaseCliEvent[] = [
+        {
+          type: "tool.execution_start",
+          data: {
+            toolCallId: scenario.toolCallId,
+            toolName: scenario.toolName,
+            arguments: scenario.arguments,
+            ...(scenario.toolName === "ctrlyoke-claim_paths" && {
+              toolTitle: "claim_paths",
+              mcpServerName: "ctrlyoke",
+              mcpConfigServerName: "ctrlyoke",
+              mcpTransport: "stdio",
+              mcpConfigSource: "user",
+              mcpToolName: "claim_paths",
+            }),
+          },
+          timestamp: 1,
+        },
+        {
+          type: "tool.execution_complete",
+          data: {
+            toolCallId: scenario.toolCallId,
+            success: true,
+            result: { content: scenario.output },
+          },
+          timestamp: 2,
+        },
+      ];
+      const streamingParser = new CopilotLogParser();
+      const mappedEvents: CliEvent[] = copilotEvents.flatMap((event) =>
+        streamingParser.extractStructuredEventsFromEvent(event)
+      );
+
+      const normalized = normalizeCliEvents(mappedEvents);
+
+      assert.strictEqual(normalized.length, 1, scenario.toolName);
+      const toolCall = normalized[0].data as ToolCall;
+      assert.deepStrictEqual(toolCall.parameters, scenario.arguments);
+      assert.deepStrictEqual(toolCall.result, {
+        success: true,
+        output: scenario.output,
+        error: undefined,
+      });
+      assert.strictEqual(toolCall.id, scenario.toolCallId);
+    }
   });
 
   suite("headless golden output", () => {

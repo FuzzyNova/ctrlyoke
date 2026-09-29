@@ -809,7 +809,8 @@ export class CodexToolBuilder {
             primaryInitiatedData as McpToolCallData | undefined,
             outputText,
             success,
-            timestamp
+            timestamp,
+            callId
           ),
         ];
 
@@ -835,7 +836,8 @@ export class CodexToolBuilder {
     initiatedData: McpToolCallData | undefined,
     outputText: string,
     success: boolean,
-    timestamp: number
+    timestamp: number,
+    toolCallId: string | undefined
   ): CliEvent {
     return {
       type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
@@ -843,6 +845,7 @@ export class CodexToolBuilder {
       data: {
         server: initiatedData?.server ?? "unknown",
         tool: initiatedData?.tool ?? "unknown",
+        toolCallId: initiatedData?.toolCallId ?? toolCallId,
         parameters: initiatedData?.parameters,
         result: { success, output: outputText },
       } as McpToolCallData,
@@ -885,7 +888,8 @@ export class CodexToolBuilder {
         initiatedEvent.data as McpToolCallData | undefined,
         rawOutput,
         true,
-        timestamp
+        timestamp,
+        callId
       );
     }
 
