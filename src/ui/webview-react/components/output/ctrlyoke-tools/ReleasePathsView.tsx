@@ -1,11 +1,9 @@
 import React from "react";
-import {
-  ATOMIC_REFERENCE_KINDS,
-  TOOL_CALL_EXPANSION_SECTIONS,
-} from "@root/types/DashboardConstants";
+import type { ToolResult } from "../../../types/cliEvents";
+import { ATOMIC_REFERENCE_KINDS } from "@root/types/DashboardConstants";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { openContextReference } from "@utils/contextReferenceActions";
-import { McpToolCallOutput } from "@components/output/ToolCallOutput";
+import { RawToolCallSection } from "./RawToolCallSection";
 import type {
   ToolCallExpansionSection,
   ToolCallExpansionState,
@@ -21,7 +19,7 @@ export const ReleasePathsBody: React.FC<{
   server: string;
   tool: string;
   parameters?: Record<string, unknown>;
-  genericResult?: import("../../../types/cliEvents").ToolResult;
+  genericResult?: ToolResult;
   expansion: ToolCallExpansionState;
   onExpansionChange: (
     section: ToolCallExpansionSection,
@@ -65,29 +63,14 @@ export const ReleasePathsBody: React.FC<{
           Not held: {result.notHeld.join(", ")}
         </div>
       )}
-      <button
-        type="button"
-        className="text-bash-expand-link no-underline text-[length:var(--cy-output-font-size-sm)] cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
-        aria-expanded={expansion.rawExpanded ?? false}
-        onClick={() => {
-          const isOpening = !(expansion.rawExpanded ?? false);
-          onExpansionChange(TOOL_CALL_EXPANSION_SECTIONS.RAW, isOpening);
-          if (isOpening)
-            onExpansionChange(TOOL_CALL_EXPANSION_SECTIONS.PARAMS, true);
-        }}
-      >
-        {expansion.rawExpanded ? "Hide raw" : "Raw"}
-      </button>
-      {expansion.rawExpanded && (
-        <McpToolCallOutput
-          server={server}
-          tool={tool}
-          parameters={parameters}
-          result={genericResult}
-          expansion={expansion}
-          onExpansionChange={onExpansionChange}
-        />
-      )}
+      <RawToolCallSection
+        server={server}
+        tool={tool}
+        parameters={parameters}
+        result={genericResult}
+        expansion={expansion}
+        onExpansionChange={onExpansionChange}
+      />
     </div>
   );
 };

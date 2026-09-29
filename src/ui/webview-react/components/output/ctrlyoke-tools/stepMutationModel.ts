@@ -1,3 +1,4 @@
+import { isRecord, tryParseJson, wrappedTextLines } from "./shared";
 import { toRdvFromContent, buildDiffRenderPlan } from "@utils/rdvAdapter";
 import { DIFF_VIEW_TYPES } from "@root/types/DashboardConstants";
 import {
@@ -50,10 +51,6 @@ export interface SubmitCommitMessageResult {
   outputPath?: string;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function parseIndex(value: unknown): number | undefined {
   return Number.isInteger(value) && (value as number) >= 0
     ? (value as number)
@@ -84,7 +81,7 @@ export function parseEditStepResultText(
   text: string
 ): EditStepResult | undefined {
   try {
-    const raw: unknown = JSON.parse(text);
+    const raw: unknown = tryParseJson(text);
     if (
       !isRecord(raw) ||
       raw.success !== true ||
@@ -125,7 +122,7 @@ export function parseRemoveStepResultText(
   text: string
 ): RemoveStepResult | undefined {
   try {
-    const raw: unknown = JSON.parse(text);
+    const raw: unknown = tryParseJson(text);
     if (
       !isRecord(raw) ||
       raw.success !== true ||
@@ -165,7 +162,7 @@ export function parseReorderStepsResultText(
   text: string
 ): ReorderStepsResult | undefined {
   try {
-    const raw: unknown = JSON.parse(text);
+    const raw: unknown = tryParseJson(text);
     if (
       !isRecord(raw) ||
       raw.success !== true ||
@@ -202,7 +199,7 @@ export function parseSubmitCommitMessageResultText(
   text: string
 ): SubmitCommitMessageResult | undefined {
   try {
-    const raw: unknown = JSON.parse(text);
+    const raw: unknown = tryParseJson(text);
     if (!isRecord(raw) || raw.success !== true) return undefined;
     return {
       success: true,
@@ -346,14 +343,7 @@ export function stepMutationSearchText(
 }
 
 function wrappedLines(text: string, width: number, fontSize: number): number {
-  const charsPerLine = Math.max(12, Math.floor(width / (fontSize * 0.58)));
-  return text
-    .split("\n")
-    .reduce(
-      (total, line) =>
-        total + Math.max(1, Math.ceil(line.length / charsPerLine)),
-      0
-    );
+  return wrappedTextLines(text, width, fontSize, 12);
 }
 
 export function estimateStepMutationHeight(

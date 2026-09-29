@@ -1,3 +1,4 @@
+import { isRecord, tryParseJson } from "./shared";
 import { coordinationParticipantAttribution } from "@utils/coordinationPresentation";
 import { COORDINATION_PARTICIPANT_KINDS } from "@root/types/DashboardConstants";
 
@@ -25,10 +26,6 @@ export interface ClaimPathsResult {
 export interface ClaimPathsParams {
   paths: string[];
   reason?: string;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function parseOwner(value: unknown): ClaimPathsOwner | undefined {
@@ -68,7 +65,7 @@ export function parseClaimPathsResultText(
   text: string
 ): ClaimPathsResult | undefined {
   try {
-    const parsed: unknown = JSON.parse(text);
+    const parsed: unknown = tryParseJson(text);
     if (
       !isRecord(parsed) ||
       !Array.isArray(parsed.granted) ||

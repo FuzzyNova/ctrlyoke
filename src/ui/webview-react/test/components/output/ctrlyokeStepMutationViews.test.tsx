@@ -178,10 +178,13 @@ describe("step mutation ctrlyoke tool views", () => {
       />
     );
     expect(resultOnlyEdit.container.textContent).toContain("Edited step #4");
-    expect(findSegments(MCP_EDIT_STEP_TOOL_NAME, editResult, params)).toEqual(
-      resolveCtrlYokeToolView(data(MCP_EDIT_STEP_TOOL_NAME, editResult, params))
-        ?.searchText
-    );
+    const resolvedEdit = resolveCtrlYokeToolView(
+      data(MCP_EDIT_STEP_TOOL_NAME, editResult, params)
+    )!;
+    expect(findSegments(MCP_EDIT_STEP_TOOL_NAME, editResult, params)).toEqual([
+      resolvedEdit.summary,
+      ...resolvedEdit.searchText,
+    ]);
 
     const withBefore = parseEditStepResultText(
       JSON.stringify({ ...editResult, before: { model: "gpt-4" } })
@@ -245,11 +248,11 @@ describe("step mutation ctrlyoke tool views", () => {
     expect(resultOnlyRemove.container.textContent).toContain("Raw");
     expect(
       findSegments(MCP_REMOVE_STEP_TOOL_NAME, removeResult, params)
-    ).toEqual(
+    ).toEqual([
       resolveCtrlYokeToolView(
         data(MCP_REMOVE_STEP_TOOL_NAME, removeResult, params)
-      )?.searchText
-    );
+      )!.summary,
+    ]);
   });
 
   it("renders reorder_steps with before-to-after absolute index pairs", () => {
@@ -302,11 +305,14 @@ describe("step mutation ctrlyoke tool views", () => {
     expect(resultOnlyReorder.container.textContent).toContain("#3 → #1");
     expect(
       findSegments(MCP_REORDER_STEPS_TOOL_NAME, reorderResult, params)
-    ).toEqual(
+    ).toEqual([
       resolveCtrlYokeToolView(
         data(MCP_REORDER_STEPS_TOOL_NAME, reorderResult, params)
-      )?.searchText
-    );
+      )!.summary,
+      ...resolveCtrlYokeToolView(
+        data(MCP_REORDER_STEPS_TOOL_NAME, reorderResult, params)
+      )!.searchText,
+    ]);
   });
 
   it("renders submit_commit_message on both server ids", () => {
@@ -335,7 +341,7 @@ describe("step mutation ctrlyoke tool views", () => {
           params,
           server
         )
-      ).toEqual(resolved?.searchText);
+      ).toEqual([resolved!.summary, ...resolved!.searchText]);
       const { container } = render(
         <SubmitCommitMessageBody
           {...bodyProps(
@@ -402,9 +408,12 @@ describe("step mutation ctrlyoke tool views", () => {
     ] as const;
     for (const [tool, value, params] of cases) {
       const resolved = resolveCtrlYokeToolView(data(tool, value, params))!;
-      expect(resolved.searchText.join("\n")).toContain(resolved.summary);
-      for (const visible of resolved.searchText.slice(1))
-        expect(visible.length).toBeGreaterThan(0);
+      expect(resolved.searchText).not.toContain(resolved.summary);
+      expect(resolved.searchText.every((visible) => visible.length > 0)).toBe(
+        true
+      );
+      if (tool === MCP_EDIT_STEP_TOOL_NAME)
+        expect(resolved.searchText.join("\n")).toContain("Investigate timeout");
       const widthHeights = [280, 900].map((width) =>
         resolved.view.estimateHeight(
           resolved.params,

@@ -44,6 +44,7 @@ type OutputFindField =
   | "filePath"
   | "toolLabel"
   | "params"
+  | "toolBody"
   | "toolContent"
   | "diff";
 
@@ -76,6 +77,7 @@ export interface OutputRowSearchSegment {
 
 export const OUTPUT_FIND_ACTIVE_ATTRIBUTE = "data-find-active";
 export const OUTPUT_FIND_ACTIVE_CLASS = "diff-code-mark-find-active";
+export const OUTPUT_FIND_TOOL_CONTENT_FIELD = "toolContent";
 
 function getRenderedBashTexts(data: BashCommandData): {
   command: string;
@@ -244,7 +246,10 @@ export function getOutputRowSearchSegments(
           if (customView) {
             return createSegments([
               { field: "toolLabel", text: customView.summary },
-              { field: "toolContent", text: customView.searchText[1] ?? "" },
+              ...customView.searchText.map((text) => ({
+                field: "toolBody" as const,
+                text,
+              })),
               ...(row.toolCall?.expansion.rawExpanded
                 ? [
                     {

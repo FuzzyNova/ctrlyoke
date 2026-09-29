@@ -4,9 +4,14 @@ import { resolveCtrlYokeToolView } from "@components/output/ctrlyoke-tools/regis
 import { PostNoteBody } from "@components/output/ctrlyoke-tools/PostNoteView";
 import {
   DEFAULT_TOOL_CALL_EXPANSION_STATE,
+  buildToolCallRenderPlan,
   type ToolCallExpansionState,
 } from "@utils/toolCallLayout";
-import { getOutputRowSearchSegments } from "@utils/outputFind";
+import {
+  getOutputRowSearchSegments,
+  OUTPUT_FIND_ACTIVE_ATTRIBUTE,
+  OUTPUT_FIND_TOOL_CONTENT_FIELD,
+} from "@utils/outputFind";
 import {
   CLI_EVENT_TYPES,
   MCP_SERVER_IDS,
@@ -15,7 +20,6 @@ import {
 } from "@root/types/DashboardConstants";
 import type { OutputRenderRow } from "@utils/outputRows";
 import { OutputRow } from "@components/output/OutputRow";
-import { buildToolCallRenderPlan } from "@utils/toolCallLayout";
 import { estimatePostNoteHeight } from "@components/output/ctrlyoke-tools/postNoteModel";
 import { AppendStepBody } from "@components/output/ctrlyoke-tools/AppendStepView";
 import { ClaimPathsBody } from "@components/output/ctrlyoke-tools/ClaimPathsView";
@@ -219,7 +223,7 @@ describe("ctrlyoke MCP tool views", () => {
     };
     expect(
       getOutputRowSearchSegments(row).map((segment) => segment.text)
-    ).toEqual(resolved.searchText);
+    ).toEqual([resolved.summary, ...resolved.searchText]);
     expect(
       estimateClaimPathsHeight(undefined, result, 280, 13)
     ).toBeGreaterThan(estimateClaimPathsHeight(undefined, result, 900, 13));
@@ -305,7 +309,10 @@ describe("ctrlyoke MCP tool views", () => {
     };
     expect(
       getOutputRowSearchSegments(row).map((segment) => segment.text)
-    ).toEqual(resolveCtrlYokeToolView(data)?.searchText);
+    ).toEqual([
+      resolveCtrlYokeToolView(data)!.summary,
+      ...resolveCtrlYokeToolView(data)!.searchText,
+    ]);
     expect(
       estimateReleasePathsHeight(undefined, result, 280, 13)
     ).toBeGreaterThan(estimateReleasePathsHeight(undefined, result, 900, 13));
@@ -386,11 +393,131 @@ describe("ctrlyoke MCP tool views", () => {
     };
     expect(
       getOutputRowSearchSegments(row).map((segment) => segment.text)
-    ).toEqual(resolveCtrlYokeToolView(data)?.searchText);
+    ).toEqual([
+      resolveCtrlYokeToolView(data)!.summary,
+      ...resolveCtrlYokeToolView(data)!.searchText,
+    ]);
     const result = parseReadNotesResultText(raw)!;
     expect(estimateReadNotesHeight(undefined, result, 280, 13)).toBeGreaterThan(
       estimateReadNotesHeight(undefined, result, 900, 13)
     );
+  });
+
+  it("highlights only the matching read_notes entry and preserves active state", () => {
+    const entries = [
+      { ...readNotesResult.entries[0], seq: 1, text: "first entry" },
+      { ...readNotesResult.entries[0], seq: 2, text: "second target entry" },
+    ];
+    const resolved = resolveCtrlYokeToolView({
+      server: MCP_SERVER_IDS.CTRLYOKE,
+      tool: "read_notes",
+      result: { success: true, output: JSON.stringify({ entries }) },
+    })!;
+    const pieces = resolved.searchText;
+    const target = "target";
+    const start = pieces[1].indexOf(target);
+    const { container } = render(
+      <ReadNotesBody
+        params={undefined}
+        result={resolved.result as { entries: typeof entries }}
+        server={MCP_SERVER_IDS.CTRLYOKE}
+        tool="read_notes"
+        expansion={{ ...DEFAULT_TOOL_CALL_EXPANSION_STATE }}
+        onExpansionChange={vi.fn()}
+        findQuery={target}
+        findCaseSensitive={false}
+        bodyFindDecorations={[
+          { matches: [] },
+          {
+            matches: [{ start, end: start + target.length, active: true }],
+          },
+        ]}
+      />
+    );
+    const marks = container.querySelectorAll("mark");
+    expect(marks).toHaveLength(1);
+    expect(marks[0].textContent).toBe(target);
+    expect(marks[0]).toHaveAttribute(OUTPUT_FIND_ACTIVE_ATTRIBUTE, "true");
+  });
+
+  it("maps append_step body matches to their rendered table cell", () => {
+    const params = { steps: [{ name: "CellTarget", prompt: "Do work" }] };
+    const result = parseAppendStepResultText(JSON.stringify(appendResult))!;
+    const bodyText = resolveCtrlYokeToolView({
+      server: MCP_SERVER_IDS.CTRLYOKE,
+      tool: "append_step",
+      parameters: params,
+      result: { success: true, output: JSON.stringify(appendResult) },
+    })!.searchText[0];
+    const target = "CellTarget";
+    const start = bodyText.indexOf(target);
+    const { container } = render(
+      <AppendStepBody
+        params={params}
+        result={result}
+        server={MCP_SERVER_IDS.CTRLYOKE}
+        tool="append_step"
+        expansion={{ ...DEFAULT_TOOL_CALL_EXPANSION_STATE }}
+        onExpansionChange={vi.fn()}
+        bodyFindMatches={[{ start, end: start + target.length, active: true }]}
+      />
+    );
+    const mark = container.querySelector("mark");
+    expect(mark?.textContent).toBe(target);
+    expect(mark).toHaveAttribute(OUTPUT_FIND_ACTIVE_ATTRIBUTE, "true");
+  });
+
+  it("keeps raw-result find matches separate and active when Raw is open", () => {
+    const parameters = { steps: [{ name: "Step", prompt: "Do work" }] };
+    const data = {
+      server: MCP_SERVER_IDS.CTRLYOKE,
+      tool: "append_step",
+      parameters,
+      result: { success: true, output: JSON.stringify(appendResult) },
+    };
+    const expansion = {
+      ...DEFAULT_TOOL_CALL_EXPANSION_STATE,
+      rawExpanded: true,
+    };
+    const row: OutputRenderRow = {
+      key: "raw-result-row",
+      rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
+      target: { kind: "queue", index: 0 },
+      event: { type: CLI_EVENT_TYPES.MCP_TOOL_CALL, data },
+      eventIndex: 0,
+      rawTextOutput: false,
+      attemptIndex: 0,
+      hideDiff: false,
+      estimateSize: 80,
+      toolCall: {
+        expansion,
+        renderPlan: buildToolCallRenderPlan({
+          parameters,
+          result: data.result,
+          expansion,
+        }),
+      },
+    };
+    const raw = data.result.output;
+    const target = "placement";
+    const start =
+      getOutputRowSearchSegments(row).find(
+        (segment) => segment.field === OUTPUT_FIND_TOOL_CONTENT_FIELD
+      )!.start + raw.indexOf(target);
+    const { container } = render(
+      <OutputRow
+        row={row}
+        isExecutionActive={false}
+        findDecorations={{
+          matches: [{ start, end: start + target.length, active: true }],
+        }}
+      />
+    );
+    const mark = [...container.querySelectorAll("mark")].find(
+      (element) => element.textContent === target
+    );
+    expect(mark).toBeDefined();
+    expect(mark).toHaveAttribute(OUTPUT_FIND_ACTIVE_ATTRIBUTE, "true");
   });
 
   it("parses append_step input and result shapes and falls back on malformed payloads", () => {
@@ -564,7 +691,7 @@ describe("ctrlyoke MCP tool views", () => {
           .join(" ")
       )
       .join("\n");
-    expect(renderedLine).toBe(resolved.searchText[1]);
+    expect(renderedLine).toBe(resolved.searchText.join("\n"));
     expect(
       getOutputRowSearchSegments(outputRow).map((segment) => segment.text)
     ).toEqual([resolved.summary, renderedLine]);
@@ -598,7 +725,7 @@ describe("ctrlyoke MCP tool views", () => {
             ],
           }),
         },
-      })?.searchText[1]
+      })?.searchText[0]
     ).toBe("wrapped MCP result");
     expect(
       resolveCtrlYokeToolView({ ...data, server: "other" })

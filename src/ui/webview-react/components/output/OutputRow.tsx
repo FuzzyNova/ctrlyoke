@@ -86,6 +86,7 @@ import {
   getToolResultText,
   highlightText,
   sliceDecorationMatches,
+  OUTPUT_FIND_TOOL_CONTENT_FIELD,
   type OutputFindMatch,
   type RowFindDecoration,
 } from "@utils/outputFind";
@@ -665,7 +666,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       ) {
         pendingToolCallExpand = TOOL_CALL_EXPANSION_SECTIONS.PARAMS;
       } else if (
-        activeFindMatch?.field === "toolContent" &&
+        activeFindMatch?.field === OUTPUT_FIND_TOOL_CONTENT_FIELD &&
         isActiveMatchHidden(
           getToolResultText(data.result),
           getFieldMatches("toolContent"),
@@ -965,23 +966,21 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
                 params={customView.params}
                 result={customView.result}
                 data={data}
-                paramsFindMatches={getFieldMatches("params").map(
-                  ({ start, end }) => ({ start, end, active: false })
-                )}
-                outputFindMatches={getFieldMatches("toolContent", 1).map(
-                  ({ start, end }) => ({ start, end, active: false })
-                )}
-                errorFindMatches={getFieldMatches("toolContent", 1).map(
-                  ({ start, end }) => ({ start, end, active: false })
-                )}
+                paramsFindMatches={getFieldMatches("params")}
+                outputFindMatches={getFieldMatches("toolContent", 0)}
+                bodyFindMatches={getFieldMatches("toolBody", 0)}
+                bodyFindDecorations={customView.searchText.map((_, index) => ({
+                  matches: getFieldMatches("toolBody", index),
+                }))}
+                findQuery={findQuery}
+                findCaseSensitive={findCaseSensitive}
+                errorFindMatches={getFieldMatches("toolContent", 0)}
                 expansion={row.toolCall.expansion}
                 onExpansionChange={(section, expanded) =>
                   onToolCallExpansionChange?.(row.key, section, expanded)
                 }
                 findDecorations={{
-                  matches: getFieldMatches("toolContent", 0).map(
-                    ({ start, end }) => ({ start, end, active: false })
-                  ),
+                  matches: getFieldMatches("toolBody", 0),
                 }}
               />
             </ToolCallBlock>

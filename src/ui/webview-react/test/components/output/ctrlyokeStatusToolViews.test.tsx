@@ -37,6 +37,7 @@ import {
   listHarnessesSearchText,
 } from "@components/output/ctrlyoke-tools/listHarnessesModel";
 import { DEFAULT_TOOL_CALL_EXPANSION_STATE } from "@utils/toolCallLayout";
+import { OUTPUT_FIND_ACTIVE_ATTRIBUTE } from "@utils/outputFind";
 import type { McpToolCallData } from "../../../types/cliEvents";
 
 vi.mock("@hooks/useVsCodeApi", () => ({
@@ -172,7 +173,7 @@ describe("status and output ctrlyoke tool views", () => {
     const resolved = resolveCtrlYokeToolView(
       data(MCP_WORKFLOW_STATUS_TOOL_NAME, workflow)
     );
-    expect(resolved?.searchText[1]).toContain("Write docs");
+    expect(resolved?.searchText[0]).toContain("Write docs");
     expect(
       resolveCtrlYokeToolView({
         ...data(MCP_WORKFLOW_STATUS_TOOL_NAME, workflow),
@@ -199,7 +200,7 @@ describe("status and output ctrlyoke tool views", () => {
       data(MCP_GLOBAL_STATUS_TOOL_NAME, global)
     );
     expect(resolved?.summary).toBe("2 workflows (1 running)");
-    expect(resolved?.searchText[1]).toContain("running · Build docs · build");
+    expect(resolved?.searchText[0]).toContain("running · Build docs · build");
     expect(
       resolveCtrlYokeToolView({
         ...data(MCP_GLOBAL_STATUS_TOOL_NAME, global),
@@ -213,6 +214,22 @@ describe("status and output ctrlyoke tool views", () => {
     expect(screen.getByText("Truncated · 1 omitted")).toBeInTheDocument();
   });
 
+  it("highlights the workflow name slice in global_status", () => {
+    const body = globalStatusSearchText(undefined, global)[1];
+    const start = body.indexOf("Build docs");
+    const { container } = render(
+      <GlobalStatusBody
+        {...props(MCP_GLOBAL_STATUS_TOOL_NAME, global)}
+        findDecorations={{
+          matches: [{ start, end: start + "Build docs".length, active: true }],
+        }}
+      />
+    );
+    const mark = container.querySelector("mark");
+    expect(mark?.textContent).toBe("Build docs");
+    expect(mark).toHaveAttribute(OUTPUT_FIND_ACTIVE_ATTRIBUTE, "true");
+  });
+
   it("validates and renders read_output collapsed with store-managed expansion", () => {
     expect(parseReadOutputParams(undefined)).toBeUndefined();
     expect(parseReadOutputParams({ indices: ["one"] })).toBeUndefined();
@@ -222,7 +239,7 @@ describe("status and output ctrlyoke tool views", () => {
       data(MCP_READ_OUTPUT_TOOL_NAME, readOutput)
     );
     expect(resolved?.summary).toBe("Read output of steps #1, #2");
-    expect(resolved?.searchText[1]).toContain("Found it");
+    expect(resolved?.searchText[0]).toContain("Found it");
     expect(
       resolveCtrlYokeToolView({
         ...data(MCP_READ_OUTPUT_TOOL_NAME, readOutput),
@@ -260,7 +277,7 @@ describe("status and output ctrlyoke tool views", () => {
       data(MCP_LIST_HARNESSES_TOOL_NAME, harnesses)
     );
     expect(resolved?.summary).toBe("6 harnesses (2 available)");
-    expect(resolved?.searchText[1]).toContain("Claude CLI · available");
+    expect(resolved?.searchText[0]).toContain("Claude CLI · available");
     expect(
       resolveCtrlYokeToolView({
         ...data(MCP_LIST_HARNESSES_TOOL_NAME, harnesses),

@@ -1,5 +1,4 @@
-import type { ToolResult } from "../../../types/cliEvents";
-import { getToolResultText } from "../../../utils/toolResultText";
+import { isRecord, tryParseJson } from "./shared";
 
 export interface PostNoteParams {
   text?: string;
@@ -10,43 +9,6 @@ export interface PostNoteResult {
   text: string;
   to?: string[];
   seq?: number;
-}
-
-const MCP_TEXT_CONTENT_TYPE = "text";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function unwrapContentText(value: unknown): string | undefined {
-  if (Array.isArray(value)) {
-    const texts = value.flatMap((item) =>
-      isRecord(item) &&
-      item.type === MCP_TEXT_CONTENT_TYPE &&
-      typeof item.text === "string"
-        ? [item.text]
-        : []
-    );
-    return texts.length > 0 ? texts.join("\n") : undefined;
-  }
-  if (isRecord(value) && Array.isArray(value.content)) {
-    return unwrapContentText(value.content);
-  }
-  return undefined;
-}
-
-/**
- * MCP clients normally record ctrlyoke's bare JSON text. Some record the
- * protocol content blocks instead, so unwrap that wrapper before parsing.
- */
-export function unwrapCtrlYokeToolResultText(result: ToolResult): string {
-  const text = getToolResultText(result);
-  try {
-    const parsed: unknown = JSON.parse(text);
-    return unwrapContentText(parsed) ?? text;
-  } catch {
-    return text;
-  }
 }
 
 export function parsePostNoteParams(raw: unknown): PostNoteParams | undefined {
@@ -64,7 +26,7 @@ export function parsePostNoteResultText(
   text: string
 ): PostNoteResult | undefined {
   try {
-    const parsed: unknown = JSON.parse(text);
+    const parsed: unknown = tryParseJson(text);
     if (!isRecord(parsed) || typeof parsed.text !== "string") return undefined;
     const to = Array.isArray(parsed.to)
       ? parsed.to.filter((value): value is string => typeof value === "string")

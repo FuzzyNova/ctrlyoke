@@ -1,6 +1,7 @@
 import React from "react";
+import type { ToolResult } from "../../../types/cliEvents";
 import { highlightText } from "@utils/outputFind";
-import { McpToolCallOutput } from "@components/output/ToolCallOutput";
+import { RawToolCallSection } from "./RawToolCallSection";
 import { TOOL_CALL_EXPANSION_SECTIONS } from "@root/types/DashboardConstants";
 import type {
   ToolCallExpansionSection,
@@ -8,6 +9,7 @@ import type {
 } from "@utils/toolCallLayout";
 import type { RowFindDecoration } from "@utils/outputFind";
 import type { AppendStepParams, AppendStepResult } from "./appendStepModel";
+import { sliceFindMatches } from "./shared";
 import {
   appendStepParallelGroupLine,
   appendStepPromptPreview,
@@ -22,38 +24,20 @@ export interface AppendStepBodyProps {
   server: string;
   tool: string;
   parameters?: Record<string, unknown>;
-  genericResult?: import("../../../types/cliEvents").ToolResult;
+  genericResult?: ToolResult;
   expansion: ToolCallExpansionState;
   onExpansionChange: (
     section: ToolCallExpansionSection,
     expanded: boolean
   ) => void;
   outputFindMatches?: RowFindDecoration["matches"];
+  bodyFindMatches?: RowFindDecoration["matches"];
   paramsFindMatches?: RowFindDecoration["matches"];
   errorFindMatches?: RowFindDecoration["matches"];
 }
 
 function displayIndex(index: number): string {
   return `#${index + 1}`;
-}
-
-function fieldMatches(
-  matches: RowFindDecoration["matches"] | undefined,
-  rowStart: number,
-  fieldStart: number,
-  fieldLength: number
-): RowFindDecoration["matches"] {
-  return (matches ?? [])
-    .filter(
-      (match) =>
-        match.start < rowStart + fieldStart + fieldLength &&
-        match.end > rowStart + fieldStart
-    )
-    .map((match) => ({
-      ...match,
-      start: Math.max(0, match.start - rowStart - fieldStart),
-      end: Math.min(fieldLength, match.end - rowStart - fieldStart),
-    }));
 }
 
 export const AppendStepBody: React.FC<AppendStepBodyProps> = ({
@@ -66,6 +50,7 @@ export const AppendStepBody: React.FC<AppendStepBodyProps> = ({
   expansion,
   onExpansionChange,
   outputFindMatches,
+  bodyFindMatches,
   paramsFindMatches,
   errorFindMatches,
 }) => {
@@ -136,10 +121,9 @@ export const AppendStepBody: React.FC<AppendStepBodyProps> = ({
                       <td className="p-1 text-muted-foreground">
                         {highlightText(
                           displayIndex(currentIndex),
-                          fieldMatches(
-                            outputFindMatches,
+                          sliceFindMatches(
+                            bodyFindMatches,
                             lineStart,
-                            0,
                             displayIndex(currentIndex).length
                           )
                         )}{" "}
@@ -148,10 +132,9 @@ export const AppendStepBody: React.FC<AppendStepBodyProps> = ({
                       <td className="break-words p-1">
                         {highlightText(
                           name,
-                          fieldMatches(
-                            outputFindMatches,
-                            lineStart,
-                            nameStart,
+                          sliceFindMatches(
+                            bodyFindMatches,
+                            lineStart + nameStart,
                             name.length
                           )
                         )}{" "}
@@ -160,10 +143,9 @@ export const AppendStepBody: React.FC<AppendStepBodyProps> = ({
                       <td className="break-words p-1">
                         {highlightText(
                           harnessModel,
-                          fieldMatches(
-                            outputFindMatches,
-                            lineStart,
-                            harnessStart,
+                          sliceFindMatches(
+                            bodyFindMatches,
+                            lineStart + harnessStart,
                             harnessModel.length
                           )
                         )}{" "}
@@ -172,10 +154,9 @@ export const AppendStepBody: React.FC<AppendStepBodyProps> = ({
                       <td className="break-words p-1">
                         {highlightText(
                           shownPrompt,
-                          fieldMatches(
-                            outputFindMatches,
-                            lineStart,
-                            promptStart,
+                          sliceFindMatches(
+                            bodyFindMatches,
+                            lineStart + promptStart,
                             promptLine.length
                           )
                         )}
@@ -236,32 +217,17 @@ export const AppendStepBody: React.FC<AppendStepBodyProps> = ({
           {displayIndex(result.insertedEndIndex)}
         </div>
       )}
-      <button
-        type="button"
-        className="text-bash-expand-link no-underline text-[length:var(--cy-output-font-size-sm)] cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
-        aria-expanded={expansion.rawExpanded ?? false}
-        onClick={() => {
-          const opening = !(expansion.rawExpanded ?? false);
-          onExpansionChange(TOOL_CALL_EXPANSION_SECTIONS.RAW, opening);
-          if (opening)
-            onExpansionChange(TOOL_CALL_EXPANSION_SECTIONS.PARAMS, true);
-        }}
-      >
-        {expansion.rawExpanded ? "Hide raw" : "Raw"}
-      </button>
-      {expansion.rawExpanded && (
-        <McpToolCallOutput
-          server={server}
-          tool={tool}
-          parameters={parameters}
-          result={genericResult}
-          paramsFindMatches={paramsFindMatches}
-          outputFindMatches={outputFindMatches}
-          errorFindMatches={errorFindMatches}
-          expansion={expansion}
-          onExpansionChange={onExpansionChange}
-        />
-      )}
+      <RawToolCallSection
+        server={server}
+        tool={tool}
+        parameters={parameters}
+        result={genericResult}
+        paramsFindMatches={paramsFindMatches}
+        outputFindMatches={outputFindMatches}
+        errorFindMatches={errorFindMatches}
+        expansion={expansion}
+        onExpansionChange={onExpansionChange}
+      />
     </div>
   );
 };

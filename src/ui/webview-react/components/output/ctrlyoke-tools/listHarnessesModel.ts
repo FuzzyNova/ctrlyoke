@@ -1,3 +1,4 @@
+import { isRecord, tryParseJson } from "./shared";
 import { HARNESS_IDS } from "@root/types/DashboardConstants";
 export interface HarnessModel {
   id: string;
@@ -9,9 +10,6 @@ export interface ListHarnessesParams {}
 export interface ListHarnessesResult {
   harnesses: HarnessModel[];
 }
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 export function parseListHarnessesParams(
   raw: unknown
 ): ListHarnessesParams | undefined {
@@ -21,7 +19,7 @@ export function parseListHarnessesResultText(
   text: string
 ): ListHarnessesResult | undefined {
   try {
-    const value: unknown = JSON.parse(text);
+    const value: unknown = tryParseJson(text);
     if (!isRecord(value) || !Array.isArray(value.harnesses)) return undefined;
     const valid = value.harnesses.every(
       (h) =>

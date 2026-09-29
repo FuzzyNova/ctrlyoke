@@ -1,3 +1,4 @@
+import { isRecord, tryParseJson } from "./shared";
 export interface ReleasePathsParams {
   paths?: string[];
 }
@@ -5,10 +6,6 @@ export interface ReleasePathsParams {
 export interface ReleasePathsResult {
   released: string[];
   notHeld: string[];
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function parsePaths(value: unknown): string[] | undefined {
@@ -30,7 +27,7 @@ export function parseReleasePathsResultText(
   text: string
 ): ReleasePathsResult | undefined {
   try {
-    const parsed: unknown = JSON.parse(text);
+    const parsed: unknown = tryParseJson(text);
     if (!isRecord(parsed)) return undefined;
     const released = parsePaths(parsed.released);
     const notHeld =

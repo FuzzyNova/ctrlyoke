@@ -1,7 +1,6 @@
 import React from "react";
 import { DiffView } from "@components/output/DiffView";
-import { McpToolCallOutput } from "@components/output/ToolCallOutput";
-import { TOOL_CALL_EXPANSION_SECTIONS } from "@root/types/DashboardConstants";
+import { RawToolCallSection } from "./RawToolCallSection";
 import type {
   ToolCallExpansionSection,
   ToolCallExpansionState,
@@ -43,34 +42,14 @@ function RawToggle({
   errorFindMatches?: RowFindDecoration["matches"];
 }) {
   return (
-    <>
-      <button
-        type="button"
-        className="text-bash-expand-link no-underline text-[length:var(--cy-output-font-size-sm)] cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
-        aria-expanded={expansion.rawExpanded ?? false}
-        onClick={() => {
-          const opening = !(expansion.rawExpanded ?? false);
-          onExpansionChange(TOOL_CALL_EXPANSION_SECTIONS.RAW, opening);
-          if (opening)
-            onExpansionChange(TOOL_CALL_EXPANSION_SECTIONS.PARAMS, true);
-        }}
-      >
-        {expansion.rawExpanded ? "Hide raw" : "Raw"}
-      </button>
-      {expansion.rawExpanded && (
-        <McpToolCallOutput
-          server={data.server}
-          tool={data.tool}
-          parameters={data.parameters}
-          result={data.result}
-          paramsFindMatches={paramsFindMatches}
-          outputFindMatches={outputFindMatches}
-          errorFindMatches={errorFindMatches}
-          expansion={expansion}
-          onExpansionChange={onExpansionChange}
-        />
-      )}
-    </>
+    <RawToolCallSection
+      data={data}
+      expansion={expansion}
+      onExpansionChange={onExpansionChange}
+      paramsFindMatches={paramsFindMatches}
+      outputFindMatches={outputFindMatches}
+      errorFindMatches={errorFindMatches}
+    />
   );
 }
 

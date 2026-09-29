@@ -1,3 +1,4 @@
+import { isRecord, tryParseJson } from "./shared";
 export interface ReadOutputParams {
   indices?: number[];
   cursor?: string;
@@ -16,10 +17,6 @@ export interface ReadOutputResult {
   runRef: string;
   outputs: ReadOutputItem[];
 }
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 export function parseReadOutputParams(
   raw: unknown
 ): ReadOutputParams | undefined {
@@ -46,7 +43,7 @@ export function parseReadOutputResultText(
   text: string
 ): ReadOutputResult | undefined {
   try {
-    const value: unknown = JSON.parse(text);
+    const value: unknown = tryParseJson(text);
     if (
       !isRecord(value) ||
       typeof value.workflowKey !== "string" ||

@@ -1,3 +1,4 @@
+import { isRecord, tryParseJson } from "./shared";
 import { EXECUTION_STATES } from "@root/types/DashboardConstants";
 
 export interface GlobalStatusWorkflow {
@@ -24,10 +25,6 @@ export interface GlobalStatusParams {
   workflowKey?: string;
   runRef?: string;
 }
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 export function parseGlobalStatusParams(
   raw: unknown
 ): GlobalStatusParams | undefined {
@@ -48,7 +45,7 @@ export function parseGlobalStatusResultText(
   text: string
 ): GlobalStatusResult | undefined {
   try {
-    const value: unknown = JSON.parse(text);
+    const value: unknown = tryParseJson(text);
     if (
       !isRecord(value) ||
       !Number.isInteger(value.workflowCount) ||

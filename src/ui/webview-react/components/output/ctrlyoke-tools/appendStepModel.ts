@@ -1,3 +1,4 @@
+import { isRecord, tryParseJson, wrappedTextLines } from "./shared";
 import type { ParallelGroupInsertPlacement } from "../../../../../core/ParallelGroupTopology";
 import { QUEUE_POSITION } from "@root/types/DashboardConstants";
 
@@ -46,10 +47,6 @@ export const APPEND_STEP_DEFAULT_HARNESS_LABEL = "Workflow default";
 type AppendStepDestination =
   (typeof APPEND_STEP_DESTINATIONS)[keyof typeof APPEND_STEP_DESTINATIONS];
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function parseStep(value: unknown): AppendStepInput | undefined {
   if (!isRecord(value) || typeof value.prompt !== "string") return undefined;
   return {
@@ -93,7 +90,7 @@ export function parseAppendStepResultText(
   text: string
 ): AppendStepResult | undefined {
   try {
-    const parsed: unknown = JSON.parse(text);
+    const parsed: unknown = tryParseJson(text);
     if (
       !isRecord(parsed) ||
       parsed.success !== true ||
@@ -207,14 +204,7 @@ export function appendStepSearchText(
 }
 
 function wrappedLines(text: string, width: number, fontSize: number): number {
-  const charsPerLine = Math.max(12, Math.floor(width / (fontSize * 0.58)));
-  return text
-    .split("\n")
-    .reduce(
-      (total, line) =>
-        total + Math.max(1, Math.ceil(line.length / charsPerLine)),
-      0
-    );
+  return wrappedTextLines(text, width, fontSize, 12);
 }
 
 export function estimateAppendStepHeight(

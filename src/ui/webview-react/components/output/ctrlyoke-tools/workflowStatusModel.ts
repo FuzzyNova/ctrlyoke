@@ -1,3 +1,4 @@
+import { isRecord, tryParseJson, wrappedTextLines } from "./shared";
 import { STEP_STATUS } from "@root/types/DashboardConstants";
 
 export interface WorkflowStatusStep {
@@ -24,10 +25,6 @@ export interface WorkflowStatusResult {
 
 export type WorkflowStatusParams = Record<string, never>;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 export function parseWorkflowStatusParams(
   raw: unknown
 ): WorkflowStatusParams | undefined {
@@ -38,7 +35,7 @@ export function parseWorkflowStatusResultText(
   text: string
 ): WorkflowStatusResult | undefined {
   try {
-    const value: unknown = JSON.parse(text);
+    const value: unknown = tryParseJson(text);
     if (
       !isRecord(value) ||
       typeof value.workflowKey !== "string" ||
@@ -112,13 +109,7 @@ export function workflowStatusSearchText(
 }
 
 function wrappedLines(text: string, width: number, fontSize: number): number {
-  const charsPerLine = Math.max(16, Math.floor(width / (fontSize * 0.58)));
-  return text
-    .split("\n")
-    .reduce(
-      (sum, line) => sum + Math.max(1, Math.ceil(line.length / charsPerLine)),
-      0
-    );
+  return wrappedTextLines(text, width, fontSize, 16);
 }
 
 export function estimateWorkflowStatusHeight(

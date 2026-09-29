@@ -1,7 +1,6 @@
 import React from "react";
 import { StatusIcon } from "@components/prompts/StatusIcon";
-import { McpToolCallOutput } from "@components/output/ToolCallOutput";
-import { TOOL_CALL_EXPANSION_SECTIONS } from "@root/types/DashboardConstants";
+import { RawToolCallSection } from "./RawToolCallSection";
 import type { ToolCallExpansionSection } from "@root/types/DashboardConstants";
 import type { ToolCallExpansionState } from "@utils/toolCallLayout";
 import type { RowFindDecoration } from "@utils/outputFind";
@@ -144,32 +143,15 @@ export const WorkflowStatusBody: React.FC<ToolViewBodyProps> = ({
           })}
         </ul>
       )}
-      <button
-        type="button"
-        className="text-bash-expand-link cursor-pointer bg-transparent p-0 text-[length:var(--cy-output-font-size-sm)] hover:underline"
-        aria-expanded={!!expansion.rawExpanded}
-        onClick={() => {
-          const opening = !expansion.rawExpanded;
-          onExpansionChange(TOOL_CALL_EXPANSION_SECTIONS.RAW, opening);
-          if (opening)
-            onExpansionChange(TOOL_CALL_EXPANSION_SECTIONS.PARAMS, true);
-        }}
-      >
-        {expansion.rawExpanded ? "Hide raw" : "Raw"}
-      </button>
-      {expansion.rawExpanded && (
-        <McpToolCallOutput
-          server={data.server}
-          tool={data.tool}
-          parameters={data.parameters}
-          result={data.result}
-          paramsFindMatches={paramsFindMatches}
-          outputFindMatches={outputFindMatches}
-          errorFindMatches={errorFindMatches}
-          expansion={expansion}
-          onExpansionChange={onExpansionChange}
-        />
-      )}
+      <RawToolCallSection
+        data={data}
+        paramsFindMatches={paramsFindMatches}
+        outputFindMatches={outputFindMatches}
+        errorFindMatches={errorFindMatches}
+        expansion={expansion}
+        onExpansionChange={onExpansionChange}
+        buttonClassName="text-bash-expand-link cursor-pointer bg-transparent p-0 text-[length:var(--cy-output-font-size-sm)] hover:underline"
+      />
     </div>
   );
 };

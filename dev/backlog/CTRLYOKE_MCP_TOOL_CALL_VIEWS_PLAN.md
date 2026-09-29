@@ -10,6 +10,8 @@
 > so history rows without recorded parameters could not render the note text. Its result now
 > also includes the note text and optional recipients; the custom row still omits the shared
 > `scope` object.
+>
+> **Find contract:** Custom tool summaries search as `toolLabel`; ordered body text pieces search as distinct `toolBody` segments; raw params/results keep their own fields. Each body piece uses only its own local match offsets.
 
 ## Problem
 

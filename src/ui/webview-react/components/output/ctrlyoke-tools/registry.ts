@@ -26,10 +26,10 @@ import {
   parsePostNoteResultText,
   postNoteSearchText,
   postNoteSummary,
-  unwrapCtrlYokeToolResultText,
   type PostNoteParams,
   type PostNoteResult,
 } from "./postNoteModel";
+import { unwrapCtrlYokeToolResultText } from "./shared";
 import {
   appendStepSearchText,
   appendStepSummary,
@@ -143,6 +143,23 @@ export interface CtrlYokeToolView<TParams, TResult> {
   warning?(params: TParams | undefined, result: TResult): boolean;
 }
 
+function getRawToolCallHeight(
+  data: McpToolCallData,
+  expansion: ToolCallExpansionState,
+  width: number | undefined,
+  fontSize: number
+): number {
+  return expansion.rawExpanded
+    ? estimateGenericToolCallHeight(
+        data.parameters,
+        data.result,
+        expansion,
+        fontSize,
+        width
+      )
+    : 0;
+}
+
 const postNoteView: CtrlYokeToolView<PostNoteParams, PostNoteResult> = {
   parseParams: parsePostNoteParams,
   parseResult: parsePostNoteResultText,
@@ -154,15 +171,7 @@ const postNoteView: CtrlYokeToolView<PostNoteParams, PostNoteResult> = {
       result,
       width,
       fontSize,
-      expansion.rawExpanded
-        ? estimateGenericToolCallHeight(
-            data.parameters,
-            data.result,
-            expansion,
-            fontSize,
-            width
-          )
-        : 0
+      getRawToolCallHeight(data, expansion, width, fontSize)
     ),
 };
 
@@ -178,15 +187,7 @@ const appendStepView: CtrlYokeToolView<AppendStepParams, AppendStepResult> = {
       width,
       fontSize,
       expansion.appendStepPromptsExpanded,
-      expansion.rawExpanded
-        ? estimateGenericToolCallHeight(
-            data.parameters,
-            data.result,
-            expansion,
-            fontSize,
-            width
-          )
-        : 0
+      getRawToolCallHeight(data, expansion, width, fontSize)
     ),
 };
 
@@ -202,15 +203,7 @@ const claimPathsView: CtrlYokeToolView<ClaimPathsParams, ClaimPathsResult> = {
       result,
       width,
       fontSize,
-      expansion.rawExpanded
-        ? estimateGenericToolCallHeight(
-            data.parameters,
-            data.result,
-            expansion,
-            fontSize,
-            width
-          )
-        : 0
+      getRawToolCallHeight(data, expansion, width, fontSize)
     ),
 };
 
@@ -228,15 +221,7 @@ const releasePathsView: CtrlYokeToolView<
       result,
       width,
       fontSize,
-      expansion.rawExpanded
-        ? estimateGenericToolCallHeight(
-            data.parameters,
-            data.result,
-            expansion,
-            fontSize,
-            width
-          )
-        : 0
+      getRawToolCallHeight(data, expansion, width, fontSize)
     ),
 };
 
@@ -251,15 +236,7 @@ const readNotesView: CtrlYokeToolView<ReadNotesParams, ReadNotesResult> = {
       result,
       width,
       fontSize,
-      expansion.rawExpanded
-        ? estimateGenericToolCallHeight(
-            data.parameters,
-            data.result,
-            expansion,
-            fontSize,
-            width
-          )
-        : 0
+      getRawToolCallHeight(data, expansion, width, fontSize)
     ),
 };
 
@@ -277,15 +254,7 @@ const workflowStatusView: CtrlYokeToolView<
       result,
       width,
       fontSize,
-      expansion.rawExpanded
-        ? estimateGenericToolCallHeight(
-            data.parameters,
-            data.result,
-            expansion,
-            fontSize,
-            width
-          )
-        : 0
+      getRawToolCallHeight(data, expansion, width, fontSize)
     ),
 };
 const globalStatusView: CtrlYokeToolView<
@@ -302,15 +271,7 @@ const globalStatusView: CtrlYokeToolView<
       result,
       width,
       fontSize,
-      expansion.rawExpanded
-        ? estimateGenericToolCallHeight(
-            data.parameters,
-            data.result,
-            expansion,
-            fontSize,
-            width
-          )
-        : 0
+      getRawToolCallHeight(data, expansion, width, fontSize)
     ),
 };
 const readOutputView: CtrlYokeToolView<ReadOutputParams, ReadOutputResult> = {
@@ -325,15 +286,7 @@ const readOutputView: CtrlYokeToolView<ReadOutputParams, ReadOutputResult> = {
       width,
       fontSize,
       expansion.readOutputExpanded,
-      expansion.rawExpanded
-        ? estimateGenericToolCallHeight(
-            data.parameters,
-            data.result,
-            expansion,
-            fontSize,
-            width
-          )
-        : 0
+      getRawToolCallHeight(data, expansion, width, fontSize)
     ),
 };
 const listHarnessesView: CtrlYokeToolView<
@@ -351,15 +304,7 @@ const listHarnessesView: CtrlYokeToolView<
       width,
       fontSize,
       expansion.listHarnessModelsExpanded,
-      expansion.rawExpanded
-        ? estimateGenericToolCallHeight(
-            data.parameters,
-            data.result,
-            expansion,
-            fontSize,
-            width
-          )
-        : 0
+      getRawToolCallHeight(data, expansion, width, fontSize)
     ),
 };
 
@@ -374,15 +319,7 @@ const editStepView: CtrlYokeToolView<EditStepParams, EditStepResult> = {
       result,
       width,
       fontSize,
-      expansion.rawExpanded
-        ? estimateGenericToolCallHeight(
-            data.parameters,
-            data.result,
-            expansion,
-            fontSize,
-            width
-          )
-        : 0
+      getRawToolCallHeight(data, expansion, width, fontSize)
     ),
 };
 const removeStepView: CtrlYokeToolView<RemoveStepParams, RemoveStepResult> = {
@@ -396,15 +333,7 @@ const removeStepView: CtrlYokeToolView<RemoveStepParams, RemoveStepResult> = {
       result,
       width,
       fontSize,
-      expansion.rawExpanded
-        ? estimateGenericToolCallHeight(
-            data.parameters,
-            data.result,
-            expansion,
-            fontSize,
-            width
-          )
-        : 0
+      getRawToolCallHeight(data, expansion, width, fontSize)
     ),
 };
 const reorderStepsView: CtrlYokeToolView<
@@ -421,15 +350,7 @@ const reorderStepsView: CtrlYokeToolView<
       result,
       width,
       fontSize,
-      expansion.rawExpanded
-        ? estimateGenericToolCallHeight(
-            data.parameters,
-            data.result,
-            expansion,
-            fontSize,
-            width
-          )
-        : 0
+      getRawToolCallHeight(data, expansion, width, fontSize)
     ),
 };
 const submitCommitMessageView: CtrlYokeToolView<
@@ -446,21 +367,13 @@ const submitCommitMessageView: CtrlYokeToolView<
       result,
       width,
       fontSize,
-      expansion.rawExpanded
-        ? estimateGenericToolCallHeight(
-            data.parameters,
-            data.result,
-            expansion,
-            fontSize,
-            width
-          )
-        : 0
+      getRawToolCallHeight(data, expansion, width, fontSize)
     ),
 };
 
-/** Partial registry grows by tool family as later plan stages land. */
-export const CTRLYOKE_TOOL_VIEWS: Partial<
-  Record<McpToolName, CtrlYokeToolView<unknown, unknown>>
+export const CTRLYOKE_TOOL_VIEWS: Record<
+  McpToolName,
+  CtrlYokeToolView<unknown, unknown>
 > = {
   [MCP_POST_NOTE_TOOL_NAME]: postNoteView as CtrlYokeToolView<unknown, unknown>,
   [MCP_APPEND_STEP_TOOL_NAME]: appendStepView as CtrlYokeToolView<
@@ -513,6 +426,7 @@ export interface ResolvedCtrlYokeToolView {
   params: unknown;
   result: unknown;
   summary: string;
+  /** Ordered body text pieces, excluding the separately searched summary. */
   searchText: string[];
   warning: boolean;
 }
@@ -537,7 +451,7 @@ export function resolveCtrlYokeToolView(
     params,
     result,
     summary: view.summary(params, result),
-    searchText: view.searchText(params, result),
+    searchText: view.searchText(params, result).slice(1),
     warning: view.warning?.(params, result) ?? false,
   };
 }

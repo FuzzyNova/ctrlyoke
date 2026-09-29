@@ -55,8 +55,12 @@ export interface CtrlYokeToolBodyProps {
     expanded: boolean
   ) => void;
   findDecorations?: RowFindDecoration;
+  findQuery?: string;
+  findCaseSensitive?: boolean;
   paramsFindMatches?: RowFindDecoration["matches"];
   outputFindMatches?: RowFindDecoration["matches"];
+  bodyFindMatches?: RowFindDecoration["matches"];
+  bodyFindDecorations?: RowFindDecoration[];
   errorFindMatches?: RowFindDecoration["matches"];
 }
 
@@ -67,6 +71,8 @@ const PostNoteBodyAdapter: React.FC<CtrlYokeToolBodyProps> = ({
   expansion,
   onExpansionChange,
   findDecorations,
+  findQuery,
+  findCaseSensitive,
   paramsFindMatches,
   outputFindMatches,
   errorFindMatches,
@@ -81,6 +87,8 @@ const PostNoteBodyAdapter: React.FC<CtrlYokeToolBodyProps> = ({
     expansion={expansion}
     onExpansionChange={onExpansionChange}
     noteFindDecorations={findDecorations}
+    findQuery={findQuery}
+    findCaseSensitive={findCaseSensitive}
     paramsFindMatches={paramsFindMatches}
     outputFindMatches={outputFindMatches}
     errorFindMatches={errorFindMatches}
@@ -95,6 +103,7 @@ const AppendStepBodyAdapter: React.FC<CtrlYokeToolBodyProps> = ({
   onExpansionChange,
   paramsFindMatches,
   outputFindMatches,
+  bodyFindMatches,
   errorFindMatches,
 }) => (
   <AppendStepBody
@@ -108,6 +117,7 @@ const AppendStepBodyAdapter: React.FC<CtrlYokeToolBodyProps> = ({
     onExpansionChange={onExpansionChange}
     paramsFindMatches={paramsFindMatches}
     outputFindMatches={outputFindMatches}
+    bodyFindMatches={bodyFindMatches}
     errorFindMatches={errorFindMatches}
   />
 );
@@ -148,13 +158,16 @@ const ReadNotesBodyAdapter: React.FC<CtrlYokeToolBodyProps> = (props) => (
     genericResult={props.data.result}
     expansion={props.expansion}
     onExpansionChange={props.onExpansionChange}
-    findDecorations={props.findDecorations}
+    bodyFindDecorations={props.bodyFindDecorations}
+    findQuery={props.findQuery}
+    findCaseSensitive={props.findCaseSensitive}
   />
 );
 
 /** React bodies stay separate from the pure parsing/search/height registry. */
-export const CTRLYOKE_TOOL_VIEW_BODIES: Partial<
-  Record<McpToolName, React.ComponentType<CtrlYokeToolBodyProps>>
+export const CTRLYOKE_TOOL_VIEW_BODIES: Record<
+  McpToolName,
+  React.ComponentType<CtrlYokeToolBodyProps>
 > = {
   [MCP_POST_NOTE_TOOL_NAME]: PostNoteBodyAdapter,
   [MCP_APPEND_STEP_TOOL_NAME]: AppendStepBodyAdapter,

@@ -1,6 +1,5 @@
 import React from "react";
-import { McpToolCallOutput } from "@components/output/ToolCallOutput";
-import { TOOL_CALL_EXPANSION_SECTIONS } from "@root/types/DashboardConstants";
+import { RawToolCallSection } from "./RawToolCallSection";
 import { highlightText } from "@utils/outputFind";
 import {
   globalStatusSearchText,
@@ -8,6 +7,7 @@ import {
   type GlobalStatusResult,
 } from "./globalStatusModel";
 import type { ToolViewBodyProps } from "./WorkflowStatusView";
+import { sliceFindMatches } from "./shared";
 export const GlobalStatusBody: React.FC<ToolViewBodyProps> = ({
   params,
   result,
@@ -20,12 +20,11 @@ export const GlobalStatusBody: React.FC<ToolViewBodyProps> = ({
   errorFindMatches,
 }) => {
   const status = result as GlobalStatusResult;
-  const lines = globalStatusSearchText(
+  const bodyText = globalStatusSearchText(
     params as GlobalStatusParams | undefined,
     status
-  )[1]
-    .split("\n")
-    .filter(Boolean);
+  )[1];
+  const lines = bodyText.split("\n").filter(Boolean);
   const workflowLines = lines.slice(0, status.workflows.length);
   let offset = 0;
   return (
@@ -35,7 +34,7 @@ export const GlobalStatusBody: React.FC<ToolViewBodyProps> = ({
           const text = workflowLines[i] ?? "";
           const start = offset;
           offset += text.length + 1;
-          const nameStart = start + `${workflow.executionState} · `.length;
+          const nameStart = start + text.indexOf(workflow.workflowName);
           return (
             <li
               key={`${workflow.workflowKey}-${workflow.runRef ?? "latest"}`}
@@ -48,20 +47,11 @@ export const GlobalStatusBody: React.FC<ToolViewBodyProps> = ({
                 ·{" "}
                 {highlightText(
                   workflow.workflowName,
-                  (findDecorations?.matches ?? [])
-                    .filter(
-                      (m) =>
-                        m.start < nameStart + workflow.workflowName.length &&
-                        m.end > nameStart
-                    )
-                    .map((m) => ({
-                      ...m,
-                      start: Math.max(0, m.start - nameStart),
-                      end: Math.min(
-                        workflow.workflowName.length,
-                        m.end - nameStart
-                      ),
-                    }))
+                  sliceFindMatches(
+                    findDecorations?.matches,
+                    nameStart,
+                    workflow.workflowName.length
+                  )
                 )}{" "}
                 <span className="text-muted-foreground">
                   · {workflow.workflowKey} · {workflow.currentStep}/
@@ -81,32 +71,15 @@ export const GlobalStatusBody: React.FC<ToolViewBodyProps> = ({
       {status.note && (
         <div className="text-muted-foreground">{status.note}</div>
       )}
-      <button
-        type="button"
-        className="text-bash-expand-link cursor-pointer bg-transparent p-0 text-[length:var(--cy-output-font-size-sm)] hover:underline"
-        aria-expanded={!!expansion.rawExpanded}
-        onClick={() => {
-          const opening = !expansion.rawExpanded;
-          onExpansionChange(TOOL_CALL_EXPANSION_SECTIONS.RAW, opening);
-          if (opening)
-            onExpansionChange(TOOL_CALL_EXPANSION_SECTIONS.PARAMS, true);
-        }}
-      >
-        {expansion.rawExpanded ? "Hide raw" : "Raw"}
-      </button>
-      {expansion.rawExpanded && (
-        <McpToolCallOutput
-          server={data.server}
-          tool={data.tool}
-          parameters={data.parameters}
-          result={data.result}
-          paramsFindMatches={paramsFindMatches}
-          outputFindMatches={outputFindMatches}
-          errorFindMatches={errorFindMatches}
-          expansion={expansion}
-          onExpansionChange={onExpansionChange}
-        />
-      )}
+      <RawToolCallSection
+        data={data}
+        paramsFindMatches={paramsFindMatches}
+        outputFindMatches={outputFindMatches}
+        errorFindMatches={errorFindMatches}
+        expansion={expansion}
+        onExpansionChange={onExpansionChange}
+        buttonClassName="text-bash-expand-link cursor-pointer bg-transparent p-0 text-[length:var(--cy-output-font-size-sm)] hover:underline"
+      />
     </div>
   );
 };
