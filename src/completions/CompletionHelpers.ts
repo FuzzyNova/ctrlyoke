@@ -8,6 +8,7 @@ import { configService } from "../config/CtrlYokeConfigService";
 import { isMultiRootWorkspace } from "../platform/VsCodeWorkspaceRoot";
 import {
   getRecentCommits,
+  getCommitByHash,
   getGitTrackedFiles,
   getStashList,
   searchCommitsBySubject,
@@ -1228,12 +1229,14 @@ export async function getHashCompletions(
 // ============================================================================
 
 interface GitCache {
+  workspaceRoot: string;
   commits: CommitInfo[];
   stashes: StashInfo[];
   timestamp: number;
 }
 
 interface GitSearchCache {
+  workspaceRoot: string;
   query: string;
   commits: CommitInfo[];
   timestamp: number;
@@ -1253,15 +1256,19 @@ export async function getGitChangeCompletions(
   const now = Date.now();
 
   // Always keep stashes + recent commits in the base cache
-  if (!gitCache || now - gitCache.timestamp >= GIT_CACHE_DURATION_MS) {
+  if (
+    !gitCache ||
+    gitCache.workspaceRoot !== workspaceRoot ||
+    now - gitCache.timestamp >= GIT_CACHE_DURATION_MS
+  ) {
     try {
       const [commits, stashes] = await Promise.all([
         getRecentCommits(workspaceRoot, 50),
         getStashList(workspaceRoot),
       ]);
-      gitCache = { commits, stashes, timestamp: now };
+      gitCache = { workspaceRoot, commits, stashes, timestamp: now };
     } catch {
-      gitCache = { commits: [], stashes: [], timestamp: now };
+      gitCache = { workspaceRoot, commits: [], stashes: [], timestamp: now };
     }
   }
 
@@ -1271,13 +1278,32 @@ export async function getGitChangeCompletions(
   if (filterText) {
     const searchStale =
       !gitSearchCache ||
+      gitSearchCache.workspaceRoot !== workspaceRoot ||
       gitSearchCache.query !== filterText ||
       now - gitSearchCache.timestamp >= GIT_CACHE_DURATION_MS;
 
     if (searchStale) {
       try {
-        commits = await searchCommitsBySubject(workspaceRoot, filterText, 200);
-        gitSearchCache = { query: filterText, commits, timestamp: now };
+        const [searchedCommits, hashCommit] = await Promise.all([
+          searchCommitsBySubject(workspaceRoot, filterText, 200),
+          getCommitByHash(workspaceRoot, filterText),
+        ]);
+        const seenHashes = new Set<string>();
+        commits = [
+          ...gitCache.commits,
+          ...searchedCommits,
+          ...(hashCommit ? [hashCommit] : []),
+        ].filter((commit) => {
+          if (seenHashes.has(commit.hash)) return false;
+          seenHashes.add(commit.hash);
+          return true;
+        });
+        gitSearchCache = {
+          workspaceRoot,
+          query: filterText,
+          commits,
+          timestamp: now,
+        };
       } catch {
         // Fall back to local filtering of base cache
         commits = gitCache.commits;

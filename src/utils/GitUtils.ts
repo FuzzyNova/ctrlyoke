@@ -702,6 +702,7 @@ export async function searchCommitsBySubject(
       "log",
       `--format=%H%x00%h%x00%s%x00%an%x00%ar`,
       `--grep=${query}`,
+      "--fixed-strings",
       "--regexp-ignore-case",
       `-n`,
       String(limit),
@@ -728,6 +729,64 @@ export async function searchCommitsBySubject(
         refNames: [],
       };
     });
+}
+
+/**
+ * Resolve a hexadecimal commit prefix and return its completion metadata.
+ * `--end-of-options` keeps user-entered prefixes from being treated as flags.
+ */
+export async function getCommitByHash(
+  workspaceRoot: string,
+  hashPrefix: string
+): Promise<CommitInfo | null> {
+  if (!/^[0-9a-f]{4,40}$/i.test(hashPrefix)) return null;
+
+  let hash: string;
+  try {
+    const resolved = await execFileAsync(
+      "git",
+      [
+        "-C",
+        workspaceRoot,
+        "rev-parse",
+        "--verify",
+        "--end-of-options",
+        `${hashPrefix}^{commit}`,
+      ],
+      { timeout: GIT_TIMEOUT_MS }
+    );
+    hash = resolved.stdout.trim();
+  } catch {
+    return null;
+  }
+
+  const { stdout } = await execFileAsync(
+    "git",
+    [
+      "-C",
+      workspaceRoot,
+      "show",
+      "-s",
+      "--format=%H%x00%h%x00%s%x00%an%x00%ar",
+      hash,
+    ],
+    { timeout: GIT_TIMEOUT_MS }
+  );
+  const [resolvedHash, shortHash, subject, author, relativeDate] = stdout
+    .trim()
+    .split("\0");
+  if (!resolvedHash || !shortHash || !subject || !author || !relativeDate) {
+    return null;
+  }
+  return {
+    hash: resolvedHash,
+    shortHash,
+    subject,
+    author,
+    relativeDate,
+    parentHashes: [],
+    refNames: [],
+  };
 }
 
 /**

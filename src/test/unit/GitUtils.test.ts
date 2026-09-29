@@ -28,6 +28,7 @@ import {
   getStashFiles,
   getWorkingTreeDiff,
   getRecentCommits,
+  searchCommitsBySubject,
   getChangedFilesWithBinaryStatus,
   GitLocationMemo,
   type GitLocationLookup,
@@ -244,6 +245,25 @@ suite("GitUtils.gitRefExists", function () {
     assert.deepStrictEqual(
       history.map((entry) => entry.subject),
       ["Third commit", "Second commit", "Initial commit"]
+    );
+  });
+
+  test("searches commit subjects with literal grep strings", async () => {
+    await writeWorkspaceFile("special.txt", "special\n");
+    runGit(["add", "special.txt"]);
+    runGit(["commit", "-m", "literal [bracket] and dot.file"]);
+
+    assert.deepStrictEqual(
+      (await searchCommitsBySubject(workspaceRoot, "[", 20)).map(
+        (commit) => commit.subject
+      ),
+      ["literal [bracket] and dot.file"]
+    );
+    assert.deepStrictEqual(
+      (await searchCommitsBySubject(workspaceRoot, ".", 20)).map(
+        (commit) => commit.subject
+      ),
+      ["literal [bracket] and dot.file"]
     );
   });
 });
