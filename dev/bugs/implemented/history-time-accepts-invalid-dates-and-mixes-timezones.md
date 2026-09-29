@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude)
 - **Area:** `src/cli/HistoryTime.ts` (`parseHistoryTime`, around lines 32-36), `src/cli/HistoryInspectionCommands.ts` (time display, around lines 823-831), `docs/cli/ctrlyoke.md`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

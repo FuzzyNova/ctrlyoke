@@ -163,11 +163,11 @@ export function registerHistoryCommands(
     .option("--path <substring>", "Restrict to events touching a file path")
     .option(
       "--since <when>",
-      "Runs started at or after ISO-8601 or relative 7d/24h/30m"
+      "Runs started at or after ISO-8601 (offset-less date-times are UTC) or relative 7d/24h/30m"
     )
     .option(
       "--until <when>",
-      "Runs started at or before ISO-8601 or relative 7d/24h/30m"
+      "Runs started at or before ISO-8601 (offset-less date-times are UTC) or relative 7d/24h/30m"
     )
     .option(
       "--deep",

@@ -127,6 +127,28 @@ suite("SecretGrantsTrustPrompt", () => {
     assert.strictEqual(port.requestCalls, 0);
   });
 
+  test("offers denied grants again while excluding grants already allowed", async () => {
+    await store.setDecisions(tempDir, ["FIRST_TOKEN"], "allow");
+    await store.setDecisions(tempDir, ["SECOND_TOKEN"], "deny");
+    const port = new FakeInteractionPort({
+      approvedValues: ["SECOND_TOKEN", "THIRD_TOKEN"],
+      deniedValues: [],
+    });
+
+    await promptBatchApprovalForPendingWorkspaceSecretGrants(
+      workflow,
+      tempDir,
+      port,
+      store
+    );
+
+    assert.deepStrictEqual(
+      port.lastRequest?.items.map((item) => item.value),
+      ["SECOND_TOKEN", "THIRD_TOKEN"]
+    );
+    assert.strictEqual(store.getDecision(tempDir, "SECOND_TOKEN"), "allow");
+  });
+
   test("throws a named error naming the pending grants when the port cannot prompt", async () => {
     const port = new NullUserInteractionPort();
 

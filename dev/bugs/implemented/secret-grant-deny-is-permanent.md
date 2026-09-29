@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude)
 - **Area:** `src/cli/SecretCommands.ts` (`trustSecretGrantsCommand`, around lines 250-285), `src/config/SecretGrantsTrustStore.ts` (`getPendingGrants`)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

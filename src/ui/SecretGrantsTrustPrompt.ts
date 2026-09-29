@@ -6,8 +6,8 @@ import { getWorkflowSecretGrants } from "../utils/SecretResolver";
 import type { UserInteractionPort } from "./UserInteractionPort";
 
 /**
- * A workflow declares one or more secret grants with no recorded trust
- * decision, and no interactive client is connected to ask. The caller
+ * A workflow declares one or more secret grants without an allow decision,
+ * and no interactive client is connected to ask. The caller
  * (`preflightWorkflowSecrets`) is what actually blocks the run either way —
  * this error exists so a run that couldn't even attempt to ask reports *why*,
  * distinctly from a prompt the user dismissed (which silently asks again
@@ -30,7 +30,7 @@ export class PendingSecretGrantsError extends Error {
 /**
  * One-time batch approval for a workspace's requested workflow secret grants.
  * Asks the given interaction port for a single reviewable batch decision
- * covering every grant that has no recorded decision yet for this workspace
+ * covering every grant that is not already allowed for this workspace
  * identity. Each item defaults checked ("Allow"); unchecking an item before
  * confirming records a "deny" for it instead. Dismissing the request (Escape
  * in the VS Code implementation) records no decision at all, so the user is
@@ -46,12 +46,12 @@ export async function promptBatchApprovalForPendingWorkspaceSecretGrants(
   port: UserInteractionPort,
   store: Pick<
     SecretGrantsTrustStore,
-    "getPendingGrants" | "setDecisions"
+    "getUnallowedGrants" | "setDecisions"
   > = secretGrantsTrustStore
 ): Promise<void> {
   const workspaceIdentity =
     ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
-  const pendingNames = store.getPendingGrants(
+  const pendingNames = store.getUnallowedGrants(
     workspaceIdentity,
     getWorkflowSecretGrants(workflow)
   );

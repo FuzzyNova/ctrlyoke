@@ -26,6 +26,7 @@ import {
   EXECUTION_MODES,
   HARNESS_IDS,
   SETTING_SCOPES,
+  TRUST_DECISIONS,
   type SettingWriteScope,
 } from "../types/DashboardConstants";
 import { SecretRegistryService } from "../ui/SecretRegistryService";
@@ -57,7 +58,7 @@ export interface SecretCommandDependencies {
   parseWorkflow?(filePath: string): Promise<PromptFile | null>;
   secretGrantsTrustStore?: Pick<
     SecretGrantsTrustStore,
-    "getPendingGrants" | "setDecisions"
+    "getUnallowedGrants" | "setDecisions"
   >;
 }
 
@@ -250,30 +251,48 @@ export async function trustSecretGrantsCommand(
     ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
   const trustStore =
     dependencies.secretGrantsTrustStore ?? secretGrantsTrustStore;
-  const pendingGrants = trustStore.getPendingGrants(
+  const requestedGrants = trustStore.getUnallowedGrants(
     workspaceIdentity,
     getWorkflowSecretGrants(workflow)
   );
-  if (pendingGrants.length === 0) {
+  if (requestedGrants.length === 0) {
     io.writeOut("No pending secret grants to approve for this workflow.");
     return 0;
   }
 
   io.writeOut(
-    `This workflow requests ${pendingGrants.length} secret grant(s):`
+    `This workflow requests ${requestedGrants.length} secret grant(s):`
   );
-  for (const name of pendingGrants) {
+  for (const name of requestedGrants) {
     io.writeOut(`  - ${name}`);
   }
   io.writeOut("");
 
+  if (!options.yes && !io.isInteractive) {
+    io.writeErr(
+      "Error: Cannot approve secret grants without an interactive terminal. Review the grants above, then rerun with --yes or approve them in the ctrlyoke panel. No decisions were recorded."
+    );
+    return 2;
+  }
+
   const approved = await confirmMutation(
     options.yes === true,
     io,
-    `Trust all ${pendingGrants.length} listed secret grant(s)? [y/N] `
+    `Trust all ${requestedGrants.length} listed secret grant(s)? [y/N] `
   );
-  const decision = approved ? "allow" : "deny";
-  await trustStore.setDecisions(workspaceIdentity, pendingGrants, decision);
+  if (approved) {
+    await trustStore.setDecisions(
+      workspaceIdentity,
+      requestedGrants,
+      TRUST_DECISIONS.ALLOW
+    );
+  } else if (io.isInteractive) {
+    await trustStore.setDecisions(
+      workspaceIdentity,
+      requestedGrants,
+      TRUST_DECISIONS.DENY
+    );
+  }
 
   if (!approved) {
     io.writeOut(
@@ -283,7 +302,7 @@ export async function trustSecretGrantsCommand(
   }
 
   io.writeOut(
-    `Approved ${pendingGrants.length} secret grant(s) for this workflow.`
+    `Approved ${requestedGrants.length} secret grant(s) for this workflow.`
   );
   return 0;
 }
