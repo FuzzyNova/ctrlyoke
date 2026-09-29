@@ -1,4 +1,5 @@
-import { DEFAULT_MAX_STEPS } from "../types/DashboardConstants";
+/** Sanity bound against accidental huge expansions; workflow limits are separate. */
+export const MAX_RANGE_NOTATION_INDICES = 10_000;
 
 /**
  * Parse range notation like "1,2,4-10" into a sorted, deduplicated number[].
@@ -10,8 +11,6 @@ export function parseRangeNotation(text: string): number[] | null {
 
   const parts = trimmed.split(",");
   const result = new Set<number>();
-  let expandedCount = 0;
-
   for (const part of parts) {
     const p = part.trim();
     if (!p) return null;
@@ -30,8 +29,7 @@ export function parseRangeNotation(text: string): number[] | null {
         return null;
       }
       const rangeCount = end - start + 1;
-      if (rangeCount > DEFAULT_MAX_STEPS - expandedCount) return null;
-      expandedCount += rangeCount;
+      if (rangeCount > MAX_RANGE_NOTATION_INDICES - result.size) return null;
       for (let i = start; i <= end; i++) result.add(i);
       continue;
     }
@@ -39,8 +37,8 @@ export function parseRangeNotation(text: string): number[] | null {
     if (/^\d+$/.test(p)) {
       const n = parseInt(p, 10);
       if (!Number.isSafeInteger(n) || n < 1) return null;
-      if (expandedCount >= DEFAULT_MAX_STEPS) return null;
-      expandedCount++;
+      if (!result.has(n) && result.size >= MAX_RANGE_NOTATION_INDICES)
+        return null;
       result.add(n);
       continue;
     }

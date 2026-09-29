@@ -769,7 +769,7 @@ suite("ExecutionPreviewService", () => {
     }
   });
 
-  test("defaults Windows command display to PowerShell and POSIX to sh-style quoting", () => {
+  test("renders pasteable shell commands with each shell's quoting rules", () => {
     assert.strictEqual(defaultCommandDisplayShell("win32"), "powershell");
     assert.strictEqual(defaultCommandDisplayShell("linux"), "posix");
 
@@ -778,14 +778,25 @@ suite("ExecutionPreviewService", () => {
       ["a path/file.ts", "x&y"],
       defaultCommandDisplayShell("win32")
     );
+    assert.ok(windows.startsWith("& 'node'"));
     assert.ok(windows.includes("'a path/file.ts'"));
     assert.ok(windows.includes("'x&y'"));
+
+    assert.strictEqual(
+      renderCommandForDisplay(
+        "node",
+        ["-e", "console.log('hi')"],
+        "powershell"
+      ),
+      "& 'node' '-e' 'console.log(''hi'')'"
+    );
 
     const cmd = renderCommandForDisplay(
       "node",
       ["a path/file.ts", "x&y"],
       "cmd"
     );
+    assert.strictEqual(cmd, '^"node^" ^"a^ path/file.ts^" ^"x^&y^"');
     assert.ok(cmd.includes("^&"));
     assert.ok(cmd.includes("a^ path/file.ts"));
 
@@ -793,6 +804,10 @@ suite("ExecutionPreviewService", () => {
       "/usr/bin/node",
       ["a path/file.ts", "it's ready"],
       defaultCommandDisplayShell("linux")
+    );
+    assert.strictEqual(
+      posix,
+      `'/usr/bin/node' 'a path/file.ts' 'it'"'"'s ready'`
     );
     assert.ok(posix.includes("'a path/file.ts'"));
     assert.ok(posix.includes(`'it'"'"'s ready'`));
