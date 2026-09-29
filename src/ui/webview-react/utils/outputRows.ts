@@ -77,11 +77,13 @@ import {
   takeTrailingLines,
 } from "./outputTruncation";
 import { formatCliCommandDisplay } from "./outputCommandDisplay";
+import { resolveCtrlYokeToolView } from "../components/output/ctrlyoke-tools/registry";
 import {
   OUTPUT_ROW_HORIZONTAL_PADDING,
   OUTPUT_SECTION_HEADER_NARROW_THRESHOLD,
   TOOL_CALL_BLOCK_HALF_VERTICAL_CHROME,
   TOOL_CALL_BLOCK_VERTICAL_CHROME,
+  DEFAULT_OUTPUT_FONT_SIZE,
   estimateFileOperationHeaderLines,
   outputRowActivityChrome,
   outputRowGroupPadding,
@@ -121,6 +123,7 @@ export interface OutputRowDiffMeta {
 export interface OutputRowToolCallMeta {
   expansion: ToolCallExpansionState;
   renderPlan: ToolCallRenderPlan;
+  customViewHeight?: number;
 }
 
 export interface OutputRowBashExpansionState {
@@ -1666,14 +1669,31 @@ function estimateToolCallStructuredEventHeight(
     return 64;
   }
 
+  const data = row.event.data as ToolCall | McpToolCallData;
+  if (row.event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL) {
+    const resolved = resolveCtrlYokeToolView(data as McpToolCallData);
+    if (resolved) {
+      if (outputContentWidth == null && row.toolCall.customViewHeight != null) {
+        return row.toolCall.customViewHeight;
+      }
+      return resolved.view.estimateHeight(
+        resolved.params,
+        resolved.result,
+        data as McpToolCallData,
+        row.toolCall.expansion,
+        outputContentWidth == null
+          ? undefined
+          : outputContentWidth - toolCallGutterWidth(outputFontSize),
+        outputFontSize
+      );
+    }
+  }
   // When content width is known, recompute with wrapping-aware estimation —
   // renderPlan.totalHeight was built without content width and underestimates
   // heavily for tool calls with long output lines (whitespace-pre-wrap).
   if (row.toolCall.renderPlan && outputContentWidth == null) {
     return row.toolCall.renderPlan.totalHeight;
   }
-
-  const data = row.event.data as ToolCall | McpToolCallData;
   return estimateGenericToolCallHeight(
     data.parameters,
     data.result,
@@ -2756,6 +2776,23 @@ export function buildOutputRows(
               maxResultLines: collapsedToolOutputLineCount,
             })
           : undefined;
+      const customToolCallHeight =
+        visibleEvent.event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL
+          ? (() => {
+              const data = visibleEvent.event.data as McpToolCallData;
+              const resolved = resolveCtrlYokeToolView(data);
+              return resolved
+                ? resolved.view.estimateHeight(
+                    resolved.params,
+                    resolved.result,
+                    data,
+                    toolCallExpansion ?? DEFAULT_TOOL_CALL_EXPANSION_STATE,
+                    undefined,
+                    input.outputFontSize ?? DEFAULT_OUTPUT_FONT_SIZE
+                  )
+                : undefined;
+            })()
+          : undefined;
 
       rows.push({
         key: rowKey,
@@ -2796,6 +2833,7 @@ export function buildOutputRows(
             ? {
                 expansion: toolCallExpansion,
                 renderPlan: toolCallRenderPlan,
+                customViewHeight: customToolCallHeight,
               }
             : undefined,
         estimateSize: 64,

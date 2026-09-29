@@ -3593,6 +3593,7 @@ export const TOOL_CALL_EXPANSION_SECTIONS = {
   PARAMS: "params",
   OUTPUT: "output",
   ERROR: "error",
+  RAW: "raw",
 } as const;
 
 export type ToolCallExpansionSection =
@@ -3988,6 +3989,7 @@ export const SPECIAL_TARGET_IDS = {
 // ============================================================================
 export const MCP_SERVER_IDS = {
   CTRLYOKE: "ctrlyoke",
+  CTRLYOKE_COMMIT: "ctrlyoke-commit",
 } as const;
 
 export const MCP_CALL_VIA = {

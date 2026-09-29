@@ -568,8 +568,7 @@ export class CtrlYokeMCPServer {
       return {
         attested: false,
         groupMember: false,
-        unattestedReason:
-          `no ctrlyoke workflow run is attached to this MCP server (${CTRLYOKE_ENV_VARS.WORKING_FILE} is not set)`,
+        unattestedReason: `no ctrlyoke workflow run is attached to this MCP server (${CTRLYOKE_ENV_VARS.WORKING_FILE} is not set)`,
         via: cliMode
           ? COORDINATION_PARTICIPANT_VIA.CLI
           : COORDINATION_PARTICIPANT_VIA.MCP,
@@ -852,6 +851,8 @@ export class CtrlYokeMCPServer {
           text: JSON.stringify(
             {
               seq: entry.seq,
+              text: entry.text,
+              ...(args.to?.length ? { to: args.to } : {}),
               scope: await this.coordinationScope(state, false),
             },
             null,

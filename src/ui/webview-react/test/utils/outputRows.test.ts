@@ -1003,6 +1003,85 @@ describe("outputRows", () => {
     );
   });
 
+  it("estimates custom post_note rows with wrapping at narrow and wide widths", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
+    const row = buildOutputRows({
+      allMessages: [
+        {
+          type: "cli",
+          target,
+          timestamp: 1000,
+          attemptIndex: 0,
+          runIndex: 0,
+          data: {
+            prompt: "Post a note",
+            response: "",
+            elapsed: 0,
+            isStreaming: false,
+            structured: {
+              events: [
+                {
+                  type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+                  data: {
+                    server: "ctrlyoke",
+                    tool: "post_note",
+                    result: {
+                      success: true,
+                      output: JSON.stringify({
+                        text: "A note with enough words to wrap at a narrow output width. ".repeat(
+                          4
+                        ),
+                        seq: 1,
+                      }),
+                    },
+                  },
+                },
+              ],
+              metadata: {},
+            },
+          },
+        },
+      ],
+      steps,
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+      outputFontSize: 13,
+    }).rows.find(
+      (candidate) => candidate.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT
+    );
+
+    if (!row || row.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT) {
+      throw new Error("Expected the custom post_note output row");
+    }
+    const narrowHeight = estimateOutputRowHeight(row, 13, 280);
+    const wideHeight = estimateOutputRowHeight(row, 13, 900);
+    const rawExpandedRow = {
+      ...row,
+      toolCall: {
+        ...row.toolCall!,
+        expansion: { ...row.toolCall!.expansion, rawExpanded: true },
+      },
+    };
+    expect(narrowHeight).toBeGreaterThan(wideHeight);
+    expect(narrowHeight).toBeLessThan(700);
+    expect(wideHeight).toBeGreaterThan(64);
+    expect(estimateOutputRowHeight(rawExpandedRow, 13, 280)).toBeGreaterThan(
+      narrowHeight
+    );
+  });
+
   it("adds a verdict between the response and stats rows", () => {
     const result = buildOutputRows({
       allMessages: [

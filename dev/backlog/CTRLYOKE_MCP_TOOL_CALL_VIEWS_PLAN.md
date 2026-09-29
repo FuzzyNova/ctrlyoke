@@ -1,10 +1,15 @@
 # ctrlyoke MCP Tool-Call Views — purpose-built rows for our own MCP tools
 
-> **Status:** Not implemented. Follows the 2026-09-28 removal of `CoordinationActivityRow`
+> **Status:** Stage 1 (`post_note`) implemented; stages 2–5 remain. Follows the 2026-09-28 removal of `CoordinationActivityRow`
 > (see the addendum in
 > [`EXECUTION_ROOT_COORDINATION_PLAN.md`](../implemented/EXECUTION_ROOT_COORDINATION_PLAN.md)),
 > which left the generic MCP tool-call row as the only place a step's coordination activity
 > appears in the output timeline.
+>
+> **Stage 1 deviation:** `post_note` originally returned only its sequence and shared scope,
+> so history rows without recorded parameters could not render the note text. Its result now
+> also includes the note text and optional recipients; the custom row still omits the shared
+> `scope` object.
 
 ## Problem
 
@@ -130,7 +135,7 @@ on the server id ctrlyoke itself attaches, not on a display name.
 | `list_harnesses`        | "6 harnesses (4 available)"                   | Harness chips with availability; models collapsed.                                                                                                                                                                                                                                                       |
 | `post_note`             | "Note → all" / "Note → reviewer"              | Note `text` rendered as markdown via `MarkdownText`, marked untrusted (`data-untrusted-content`, `COORDINATION_UNTRUSTED_LABEL`) exactly as the settings panel does.                                                                                                                                     |
 | `read_notes`            | "Read 5 notes"                                | Entry list reusing `coordinationParticipantAttribution` / `coordinationEntrySummary`, note bodies as markdown, untrusted-marked.                                                                                                                                                                         |
-| `claim_paths`           | "Claimed 6 paths" / "Claimed 4, **2 denied**" | Granted paths as a file list (clickable via `openContextReference`); denied paths with their owner. A denial gives the view header warning styling (tool rows have no separate status field; `result.success` stays as recorded).                                                                                                                                         |
+| `claim_paths`           | "Claimed 6 paths" / "Claimed 4, **2 denied**" | Granted paths as a file list (clickable via `openContextReference`); denied paths with their owner. A denial gives the view header warning styling (tool rows have no separate status field; `result.success` stays as recorded).                                                                        |
 | `release_paths`         | "Released 6 paths"                            | File list; `notHeld` shown muted.                                                                                                                                                                                                                                                                        |
 | `submit_commit_message` | First line of the message                     | Full message in a monospace block.                                                                                                                                                                                                                                                                       |
 

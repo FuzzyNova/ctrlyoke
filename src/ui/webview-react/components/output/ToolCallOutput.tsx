@@ -121,6 +121,8 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
             return { ...previous, outputExpanded: expanded };
           case TOOL_CALL_EXPANSION_SECTIONS.ERROR:
             return { ...previous, errorExpanded: expanded };
+          case TOOL_CALL_EXPANSION_SECTIONS.RAW:
+            return { ...previous, rawExpanded: expanded };
           default:
             return previous;
         }

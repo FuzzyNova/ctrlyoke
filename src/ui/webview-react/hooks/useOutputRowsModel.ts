@@ -535,23 +535,30 @@ export function useOutputRowsModel({
             section === TOOL_CALL_EXPANSION_SECTIONS.ERROR
               ? expanded
               : currentState.errorExpanded,
+          rawExpanded:
+            section === TOOL_CALL_EXPANSION_SECTIONS.RAW
+              ? expanded
+              : currentState.rawExpanded,
         };
 
         const isDefaultState =
           !nextState.paramsExpanded &&
           !nextState.outputExpanded &&
           !nextState.errorExpanded;
+        const isDefaultExpansionState =
+          isDefaultState && !nextState.rawExpanded;
 
         if (
           currentState.paramsExpanded === nextState.paramsExpanded &&
           currentState.outputExpanded === nextState.outputExpanded &&
-          currentState.errorExpanded === nextState.errorExpanded
+          currentState.errorExpanded === nextState.errorExpanded &&
+          currentState.rawExpanded === nextState.rawExpanded
         ) {
           return previous;
         }
 
         const next = new Map(previous);
-        if (isDefaultState) {
+        if (isDefaultExpansionState) {
           next.delete(rowKey);
         } else {
           next.set(rowKey, nextState);
