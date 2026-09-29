@@ -12,6 +12,7 @@ import {
   RUNNER_IDS,
   STEP_COLOR_MODES,
   STEP_TYPES,
+  HARNESS_IDS,
 } from "@root/types/DashboardConstants";
 
 const { attachmentTokenCount, promptFileAction, isElementNarrow } = vi.hoisted(
@@ -301,5 +302,81 @@ describe("EditorSection", () => {
     render(<EditorSection />);
 
     expect(screen.queryByLabelText("Step color")).not.toBeInTheDocument();
+  });
+
+  it("shows the reply banner with a truncated session ID and full ID title", () => {
+    const sessionId = "3f2a9c1e-1234-4567-89ab-cdef01234567";
+    useEditorStore.getState().startReplyToStep({
+      properties: { ...useEditorStore.getState().properties },
+      sessionId,
+      harness: HARNESS_IDS.CLAUDE_CLI,
+      sourceLabel: "Step 3",
+    });
+
+    render(<EditorSection />);
+
+    expect(
+      screen.getByRole("status", {
+        name: `Replying to Claude Code session ${sessionId} (Step 3)`,
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Replying to Claude Code session", { exact: false })
+    ).toBeInTheDocument();
+    expect(screen.getByText("3f2a9c1e…")).toHaveAttribute("title", sessionId);
+    expect(screen.getByText("(Step 3)")).toBeInTheDocument();
+  });
+
+  it("hides the reply banner without reply context and while editing", () => {
+    const sessionId = "3f2a9c1e-1234-4567-89ab-cdef01234567";
+    useEditorStore.getState().startReplyToStep({
+      properties: { ...useEditorStore.getState().properties },
+      sessionId,
+      harness: HARNESS_IDS.CLAUDE_CLI,
+      sourceLabel: "Step 3",
+    });
+    useEditorStore.getState().cancelReplyToStep();
+    const { unmount } = render(<EditorSection />);
+    expect(screen.queryByRole("status", { name: /Replying to/ })).toBeNull();
+    unmount();
+
+    useEditorStore.getState().startReplyToStep({
+      properties: { ...useEditorStore.getState().properties },
+      sessionId,
+      harness: HARNESS_IDS.CLAUDE_CLI,
+      sourceLabel: "Step 3",
+    });
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "Existing step" }],
+    });
+    const step = useWorkflowStore.getState().steps[0];
+    useEditorStore.getState().enterEditMode(0, step);
+
+    render(<EditorSection />);
+    expect(screen.queryByRole("status", { name: /Replying to/ })).toBeNull();
+  });
+
+  it("Cancel restores the draft properties and clears the reply banner", () => {
+    const store = useEditorStore.getState();
+    store.setProperty(PROMPT_PROPERTIES.MODEL, "draft-model");
+    store.startReplyToStep({
+      properties: {
+        ...store.properties,
+        model: "reply-model",
+        sessionId: "3f2a9c1e-1234-4567-89ab-cdef01234567",
+      },
+      sessionId: "3f2a9c1e-1234-4567-89ab-cdef01234567",
+      harness: HARNESS_IDS.CLAUDE_CLI,
+      sourceLabel: "Step 3",
+    });
+
+    render(<EditorSection />);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel reply" }));
+
+    expect(useEditorStore.getState().replyContext).toBeNull();
+    expect(useEditorStore.getState().properties.model).toBe("draft-model");
+    expect(useEditorStore.getState().properties.sessionId).toBe("");
+    expect(screen.queryByRole("status", { name: /Replying to/ })).toBeNull();
   });
 });

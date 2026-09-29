@@ -6,6 +6,8 @@ import type { WorkflowStep, CliOutput } from "@store/workflowStore";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
+import { useEditorStore } from "@store/editorStore";
+import { useSettingsStore } from "@store/settingsStore";
 
 function TestHarness({
   step,
@@ -18,6 +20,7 @@ function TestHarness({
   currentStep = 0,
   deleteIndex = 0,
   executionState = EXECUTION_STATES.IDLE,
+  isExternallyManaged = false,
 }: {
   step: WorkflowStep;
   pendingRewind?: { fromStepIndex: number };
@@ -34,9 +37,10 @@ function TestHarness({
   currentStep?: number;
   deleteIndex?: number;
   executionState?: (typeof EXECUTION_STATES)[keyof typeof EXECUTION_STATES];
+  isExternallyManaged?: boolean;
 }) {
   const { openContextMenu, contextMenuPortal } = useStepContextMenu({
-    isExternallyManaged: false,
+    isExternallyManaged,
     canChangeStartPosition: true,
     canPasteStep: true,
     executionState,
@@ -81,6 +85,8 @@ describe("useStepContextMenu", () => {
     useWorkflowStore.temporal.getState().clear();
     useUiStore.getState().resetUi();
     useExecutionPreviewStore.getState().reset();
+    useEditorStore.getState().resetEditor();
+    useSettingsStore.getState().resetSettings();
     readText.mockReset();
     writeText.mockClear();
     Object.defineProperty(navigator, "clipboard", {
@@ -114,6 +120,7 @@ describe("useStepContextMenu", () => {
       "Copy Prompt",
       "Copy Output",
       "Copy Metadata",
+      "Reply to Step",
       "Hide output",
       "Show only this step's output",
       "Dry Run Step",
@@ -124,7 +131,8 @@ describe("useStepContextMenu", () => {
       "Disable",
       "Delete",
     ]);
-    expect(screen.getAllByRole("separator")).toHaveLength(4);
+    expect(screen.getAllByRole("separator")).toHaveLength(5);
+    expect(screen.getByRole("button", { name: "Reply to Step" })).toBeDisabled();
   });
 
   it("switches the output action to Show output when the step is hidden", () => {
@@ -186,6 +194,55 @@ describe("useStepContextMenu", () => {
       screen.getByRole("button", { name: "Copy Script" })
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Enable" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reply to Step" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Reply to Step" })).toHaveAttribute(
+      "title",
+      "Script steps have no AI session to reply to"
+    );
+  });
+
+  it("disables Reply to Step when no session ID is available", () => {
+    render(<TestHarness step={{ prompt: "Original prompt" }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    expect(screen.getByRole("button", { name: "Reply to Step" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Reply to Step" })).toHaveAttribute(
+      "title",
+      "This step has no session to resume yet"
+    );
+  });
+
+  it("replies with the step session and resolved properties in read-only, running, and history views", () => {
+    useUiStore.getState().setHistoryView();
+    const sessionId = "queue-session-123";
+    const step: WorkflowStep = {
+      prompt: "Original prompt",
+      _runtime: { harness: "claude-cli", model: "sonnet", sessionId },
+    };
+    render(
+      <TestHarness
+        step={step}
+        runtimeMeta={{ sessionId }}
+        executionState={EXECUTION_STATES.RUNNING}
+        isExternallyManaged
+        deleteIndex={1}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    const replyItem = screen.getByRole("button", { name: "Reply to Step" });
+    expect(replyItem).toBeEnabled();
+    fireEvent.click(replyItem);
+
+    const editor = useEditorStore.getState();
+    expect(editor.properties.resumeSession).toBe(true);
+    expect(editor.properties.sessionId).toBe(sessionId);
+    expect(editor.properties.harness).toBe("claude-cli");
+    expect(editor.replyContext).toMatchObject({
+      sessionId,
+      harness: "claude-cli",
+      sourceLabel: "Step 2",
+    });
   });
 
   it("opens a step-scoped Dry Run from the step menu", () => {

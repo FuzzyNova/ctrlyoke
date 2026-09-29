@@ -11,6 +11,8 @@ import { PromptEditor, type PromptFileAction } from "../editor/PromptEditor";
 import { ExecutionModeQuickPicker } from "../editor/ExecutionModeQuickPicker";
 import { StepColorQuickPicker } from "../editor/StepColorQuickPicker";
 import { PanelBar, IconToggleButton } from "../shared";
+import { HARNESS_DISPLAY_NAMES } from "../shared/HarnessDropdown";
+import { StatusBanner, STATUS_BANNER_TONES } from "../shared/StatusBanner";
 import {
   FINAL_STEP_PHASES,
   EDITOR_TARGET_KINDS,
@@ -64,6 +66,8 @@ const EditorSectionInner: React.FC = () => {
     promptName,
     setPromptName,
     promptText,
+    replyContext,
+    cancelReplyToStep,
     stepType,
     stepEnabled,
     setStepType,
@@ -372,6 +376,35 @@ const EditorSectionInner: React.FC = () => {
           />
         )}
       </div>
+
+      {selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT &&
+        replyContext && (
+          <StatusBanner
+            tone={STATUS_BANNER_TONES.INFO}
+            icon="reply"
+            aria-label={`Replying to ${HARNESS_DISPLAY_NAMES[replyContext.harness]} session ${replyContext.sessionId} (${replyContext.sourceLabel})`}
+            action={
+              <button
+                type="button"
+                className="text-xs underline opacity-90 hover:opacity-100"
+                onClick={cancelReplyToStep}
+                aria-label="Cancel reply"
+              >
+                Cancel
+              </button>
+            }
+          >
+            Replying to {HARNESS_DISPLAY_NAMES[replyContext.harness]} session{" "}
+            <span title={replyContext.sessionId}>
+              {replyContext.sessionId.slice(0, 8)}…
+            </span>
+            {!isCompact && (
+              <span className="ml-1 font-normal opacity-70">
+                ({replyContext.sourceLabel})
+              </span>
+            )}
+          </StatusBanner>
+        )}
 
       {/* Content area */}
       <div className="prompt-editor-wrapper flex flex-1 min-h-0 overflow-hidden relative">

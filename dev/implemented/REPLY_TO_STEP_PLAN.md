@@ -263,6 +263,53 @@ the end of the queue, outside any group.
 9. Read `.github/instructions/webview-react*.instructions.md` before editing, then run
    `npm run typecheck`, `npm run lint`, `npm test`.
 
+## Progress
+
+Each implementation session ticks its items here in the commit that lands them, and
+records any deviation from the design above in that section of this doc.
+
+- [x] Foundations: shared core-workflow adapter (impl step 1), widened webview
+      `_runtime` type (2), `getStepSessionId()` (3)
+- [x] `buildReplyPropertyValues()` in `utils/replyToStep.ts` (4)
+- [x] Editor store `replyContext`, `startReplyToStep()` / `cancelReplyToStep()` (5)
+- [x] `StatusBanner` extraction (6) and reply banner in `EditorSection` (7)
+- [x] Context menu item wired into both step menus (8), full gate green (9)
+
+Foundation implementation note: `getStepSessionId()` lives in
+`utils/stepMetadataClipboard.ts` beside `StepRuntimeMetaSnapshot`. The dashboard
+run-view path passes `workingFile.steps` and `workingFile.finalStep` directly
+through `RunViewPublisher`/`useMessageHandler` into `workflowStore`, retaining
+step `_runtime`. The queue snapshot path likewise forwards prompt steps without
+stripping `_runtime`. `WorkflowSerializer.buildCleanWorkflow()` strips runtime
+metadata only for authored save/template-export output; it is not the dashboard
+run-view serializer. No forwarding change was needed.
+
+Builder implementation note: the shared core adapter now forwards `secrets`
+from prompt, workflow, and global settings projections. The extracted adapter
+had omitted these existing fields, which otherwise prevented the builder from
+resolving authored or inherited secrets.
+
+Editor-store implementation note: `replyContext` is part of the shared new-step
+draft capture/restore path, including pending edits and VS Code state. Returning
+to a saved reply draft counts as dirty even when its prompt text is empty. No
+deviation from §4/§5.
+
+Banner implementation note: `StatusBanner` now owns the shared tone colors,
+contrast text treatment, icon, status role, and right-aligned action slot. The
+reply banner uses the editor's compact tier to hide its source label. No
+deviation from §5.
+
+Context-menu implementation note: `Reply to Step` uses each menu target's
+resolved session and resolved harness, and remains available in read-only,
+running, and history views. The resolved harness stays typed as `HarnessId`;
+an invalid runtime harness falls back to the resolver's harness. Typecheck,
+lint, and the full test gate passed with no other deviations.
+
+Review note: the click handler lives once, in `startReplyFromStep()` in
+`utils/replyToStep.ts` (it reads the settings/editor stores at click time).
+`buildReplyToStepMenuItem()` takes a `sourceLabel` and calls it, so neither
+menu hook carries its own copy. `buildReplyPropertyValues()` stays pure.
+
 ## Tests (`src/ui/webview-react/test/**`)
 
 - `utils/replyToStep.test.ts`:

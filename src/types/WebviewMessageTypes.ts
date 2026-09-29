@@ -73,6 +73,7 @@ import type {
   StepDisplayProperties,
   CoordinationScopeSnapshot,
   WorkflowValidationWarning,
+  ExecutionProperties,
 } from "./CtrlYokeTypes";
 import type {
   CtrlYokeGlobalSettings,
@@ -390,11 +391,12 @@ export interface PromptStep extends StepDisplayProperties {
   additionalArgs?: string | null;
   toolPermissions?: ToolPermissionsOverride | null;
   errorBehavior?: ErrorBehavior | null;
-  _runtime?: {
+  _runtime?: Pick<
+    ExecutionProperties,
+    "harness" | "model" | "executionMode" | "agent" | "skills" | "secrets"
+  > & {
     /** Step identity — present on every persisted step, executed or not. */
     stepId?: string;
-    harness?: string;
-    model?: string;
     sessionId?: string;
     startedAt?: number;
     completedAt?: number;

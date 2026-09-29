@@ -8,19 +8,8 @@ import { useActiveWorkflowExternalOwner } from "@hooks/useActiveWorkflowExternal
 import { useIsSystemGeneratedWorkflow } from "@hooks/useIsSystemGeneratedWorkflow";
 import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 import { useUiStore } from "@store/uiStore";
+import { StatusBanner, STATUS_BANNER_TONES } from "../shared/StatusBanner";
 import { Icon } from "../shared/Icon";
-
-/**
- * Text treatment for every banner in this row. The banner backgrounds are
- * theme-driven severity colors (`--status-error`/`--status-warning`), which
- * range from pale to saturated depending on the active theme — no single
- * themed foreground token (e.g. `text-btn-fg`) stays legible against all of
- * them. White text with a black outline reads clearly against any of these
- * backgrounds regardless of theme, so it replaces per-banner foreground
- * choices instead of trying to pick a themed one for each severity color.
- */
-const BANNER_TEXT_CLASS =
-  "font-bold text-white [text-shadow:_-1px_-1px_0_#000,_1px_-1px_0_#000,_-1px_1px_0_#000,_1px_1px_0_#000]";
 
 export interface HeaderStatusBannerProps {
   isPausing: boolean;
@@ -66,80 +55,83 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
   return (
     <>
       {props.isViewingDeletedWorkflow && props.viewingDeletedWorkflow && (
-        <div
-          className={`flex items-center gap-2 px-3 py-1.5 text-xs bg-[var(--status-error)] ${BANNER_TEXT_CLASS} border-b border-btn-border`}
-          role="status"
+        <StatusBanner
+          tone={STATUS_BANNER_TONES.ERROR}
+          icon="trash"
           aria-label={`Workflow "${props.viewingDeletedWorkflow.workflowName}" has been deleted`}
+          action={
+            <button
+              className="text-xs underline opacity-90 hover:opacity-100"
+              onClick={props.handleCloseDeletedWorkflow}
+              title="Start a new workflow and drop this cached view"
+              aria-label="Close deleted workflow"
+            >
+              Close
+            </button>
+          }
         >
-          <Icon name="trash" />
-          <span>
-            &quot;{props.viewingDeletedWorkflow.workflowName}&quot; has been
-            deleted
-          </span>
-          <button
-            className="ml-auto text-xs underline opacity-90 hover:opacity-100"
-            onClick={props.handleCloseDeletedWorkflow}
-            title="Start a new workflow and drop this cached view"
-            aria-label="Close deleted workflow"
-          >
-            Close
-          </button>
-        </div>
+          &quot;{props.viewingDeletedWorkflow.workflowName}&quot; has been deleted
+        </StatusBanner>
       )}
       {!props.isViewingDeletedWorkflow && isLocked && (
-        <div
-          className={`flex items-center gap-2 px-3 py-1.5 text-xs bg-[var(--status-error)] ${BANNER_TEXT_CLASS} border-b border-btn-border`}
-          role="status"
+        <StatusBanner
+          tone={STATUS_BANNER_TONES.ERROR}
+          icon="lock"
           aria-label={lockedLabel}
         >
-          <Icon name="lock" />
-          <span>
-            {lockedLabel}
-            {isSystemGeneratedLocked && (
-              <>
-                .{" "}
-                <button
-                  type="button"
-                  className="underline opacity-90 hover:opacity-100"
-                  onClick={openCommitSettings}
-                >
-                  Edit in settings
-                </button>
-              </>
-            )}
-          </span>
-        </div>
+          {lockedLabel}
+          {isSystemGeneratedLocked && (
+            <>
+              .{" "}
+              <button
+                type="button"
+                className="underline opacity-90 hover:opacity-100"
+                onClick={openCommitSettings}
+              >
+                Edit in settings
+              </button>
+            </>
+          )}
+        </StatusBanner>
       )}
       {!props.isViewingDeletedWorkflow && !isLocked && props.isPausing && (
-        <div
-          className={`flex items-center gap-2 px-3 py-1.5 text-xs bg-[var(--status-warning)] ${BANNER_TEXT_CLASS} border-b border-btn-border`}
-          role="status"
+        <StatusBanner
+          tone={STATUS_BANNER_TONES.WARNING}
+          icon="debug-pause"
+          iconClassName="animate-pulse-cancelling"
           aria-label="Workflow will pause after the current step completes"
+          action={
+            <button
+              className="text-xs underline opacity-80 hover:opacity-100"
+              onClick={props.handleCancelPause}
+              aria-label="Cancel pause"
+            >
+              Cancel
+            </button>
+          }
         >
-          <Icon name="debug-pause" className="animate-pulse-cancelling" />
-          <span>Workflow will pause after the current step completes</span>
-          <button
-            className="ml-auto text-xs underline opacity-80 hover:opacity-100"
-            onClick={props.handleCancelPause}
-            aria-label="Cancel pause"
-          >
-            Cancel
-          </button>
-        </div>
+          Workflow will pause after the current step completes
+        </StatusBanner>
       )}
       {!props.isViewingDeletedWorkflow &&
         !isLocked &&
         props.pendingRewind &&
         props.displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN && (
-          <div
-            className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-xs bg-status-warning ${BANNER_TEXT_CLASS} border-b border-btn-border`}
-            role="status"
+          <StatusBanner
+            tone={STATUS_BANNER_TONES.WARNING}
+            icon="debug-continue"
+            className="flex-wrap gap-x-3 gap-y-1"
             aria-label={`Continuing run from step ${props.pendingRewind.fromStepIndex + 1}`}
+            action={
+              <button
+                className="text-xs underline opacity-90 hover:opacity-100 focus-visible:outline focus-visible:outline-1"
+                onClick={props.handleDiscardContinuation}
+              >
+                Discard Continuation
+              </button>
+            }
           >
-            <Icon name="debug-continue" />
-            <span>
-              Continuing run from step {props.pendingRewind.fromStepIndex + 1}
-            </span>
+            Continuing run from step {props.pendingRewind.fromStepIndex + 1}
             <span
               className="inline-flex items-center gap-1 opacity-90 cursor-help"
               title="Continuing crosses an undo-stack boundary — you won't be able to undo once you continue. All output history is preserved, but the working file's captured state for any re-run prompts will be overwritten."
@@ -147,15 +139,7 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
               <Icon name="info" />
               Can&apos;t be undone after continuing
             </span>
-            <div className="ml-auto flex items-center gap-3">
-              <button
-                className="text-xs underline opacity-90 hover:opacity-100 focus-visible:outline focus-visible:outline-1"
-                onClick={props.handleDiscardContinuation}
-              >
-                Discard Continuation
-              </button>
-            </div>
-          </div>
+          </StatusBanner>
         )}
     </>
   );

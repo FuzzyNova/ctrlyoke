@@ -19,8 +19,12 @@ import {
   buildWorkflowStepEnabledUpdate,
   readWorkflowStepFromClipboard,
 } from "@utils/stepClipboard";
-import { type StepRuntimeMetaSnapshot } from "@utils/stepMetadataClipboard";
 import {
+  getStepSessionId,
+  type StepRuntimeMetaSnapshot,
+} from "@utils/stepMetadataClipboard";
+import {
+  buildReplyToStepMenuItem,
   buildStepCopyMenuItems,
   buildStepOutputFilterMenuItems,
   buildStepGroupingMenuItems,
@@ -304,7 +308,6 @@ export function useStepContextMenu({
             pendingGroups: nextPendingGroups,
           }),
       });
-
       setContextMenu({
         x,
         y,
@@ -316,6 +319,12 @@ export function useStepContextMenu({
             latestOutput,
             runtimeMeta,
             liveContextWindow,
+          }),
+          { type: "divider" },
+          buildReplyToStepMenuItem({
+            step,
+            sessionId: getStepSessionId(step, latestOutput, runtimeMeta),
+            sourceLabel: `Step ${deleteIndex + 1}`,
           }),
           { type: "divider" },
           ...buildStepOutputFilterMenuItems({

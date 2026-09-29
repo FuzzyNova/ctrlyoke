@@ -4,6 +4,7 @@ import {
   PROPERTY_DEFAULTS,
   END_CONDITION_DEFAULTS,
 } from "@store/editorStore";
+import { useUiStore } from "@store/uiStore";
 import {
   FINAL_STEP_PHASES,
   PROMPT_EDITOR_INSERT_MODES,
@@ -44,6 +45,7 @@ function makeScriptStep(overrides: Partial<ScriptStep> = {}): ScriptStep {
 
 beforeEach(() => {
   store().resetEditor();
+  useUiStore.getState().setEditorCollapsed(false);
 });
 
 // ---------------------------------------------------------------------------
@@ -125,6 +127,157 @@ describe("resetProperties", () => {
     store().setProperty("model", "gpt-5");
     store().resetProperties();
     expect(store().properties).toEqual(PROPERTY_DEFAULTS);
+  });
+});
+
+describe("reply to step editor state", () => {
+  const replyProperties = {
+    ...PROPERTY_DEFAULTS,
+    harness: "claude-cli",
+    model: "claude-sonnet-4",
+    resumeSession: true,
+    sessionId: "session-123",
+  };
+
+  const reply = {
+    properties: replyProperties,
+    sessionId: "session-123",
+    harness: "claude-cli" as const,
+    sourceLabel: "Step 3",
+  };
+
+  it("preserves an in-progress edit in pendingEdits", () => {
+    store().enterEditMode(0, makePromptStep());
+    store().setPromptText("Unsaved edit");
+
+    store().startReplyToStep(reply);
+
+    expect(store().pendingEdits["queue:0"]?.promptText).toBe("Unsaved edit");
+    expect(store().isNewPromptMode()).toBe(true);
+  });
+
+  it("keeps promptText and replaces properties wholesale", () => {
+    store().setPromptText("Existing follow-up text");
+    store().setProperty("additionalArgs", "--stale");
+
+    store().startReplyToStep(reply);
+
+    expect(store().promptText).toBe("Existing follow-up text");
+    expect(store().properties).toEqual(replyProperties);
+    expect(store().properties.additionalArgs).toBeUndefined();
+    expect(store().replyContext?.sessionId).toBe("session-123");
+    expect(store().isDirty).toBe(true);
+  });
+
+  it("Cancel restores prior properties and step type but keeps promptText", () => {
+    store().setPromptText("Keep this question");
+    store().setStepType(STEP_TYPES.SCRIPT);
+    store().setProperty("model", "before-reply");
+    const previousProperties = { ...store().properties };
+
+    store().startReplyToStep(reply);
+    store().setPromptText("Edited after reply");
+    store().cancelReplyToStep();
+
+    expect(store().properties).toEqual(previousProperties);
+    expect(store().stepType).toBe(STEP_TYPES.SCRIPT);
+    expect(store().promptText).toBe("Edited after reply");
+    expect(store().replyContext).toBeNull();
+  });
+
+  it("keeps the first snapshot when a second reply is started", () => {
+    store().setProperty("model", "original-model");
+    const previousProperties = { ...store().properties };
+    store().startReplyToStep(reply);
+    store().startReplyToStep({
+      ...reply,
+      sessionId: "session-456",
+      properties: { ...replyProperties, sessionId: "session-456" },
+      sourceLabel: "Final step",
+    });
+
+    expect(store().replyContext?.previous.properties).toEqual(
+      previousProperties
+    );
+    expect(store().replyContext?.sessionId).toBe("session-456");
+    store().cancelReplyToStep();
+    expect(store().properties).toEqual(previousProperties);
+  });
+
+  it.each([
+    ["harness", "harness", "codex-cli"],
+    ["Session ID", "sessionId", "other-session"],
+    ["Resume Session", "resumeSession", false],
+  ] as const)(
+    "clears reply context when %s no longer matches",
+    (_label, key, value) => {
+      store().startReplyToStep(reply);
+      store().setProperty(key, value);
+      expect(store().replyContext).toBeNull();
+    }
+  );
+
+  it("clears reply context when setProperties breaks the match", () => {
+    store().startReplyToStep(reply);
+    store().setProperties({ sessionId: "other-session" });
+    expect(store().replyContext).toBeNull();
+  });
+
+  it("keeps reply context when another property changes", () => {
+    store().startReplyToStep(reply);
+    store().setProperty("model", "new-model");
+    expect(store().replyContext?.sessionId).toBe("session-123");
+  });
+
+  it("clears reply context when properties reset to inherit", () => {
+    store().startReplyToStep(reply);
+    store().resetProperties();
+    expect(store().replyContext).toBeNull();
+  });
+
+  it("clears reply context when the editor resets", () => {
+    store().startReplyToStep(reply);
+    store().resetEditor();
+    expect(store().replyContext).toBeNull();
+  });
+
+  it("preserves the reply draft across an edit-mode round trip", () => {
+    store().setPromptText("Follow-up");
+    store().startReplyToStep(reply);
+    store().enterEditMode(0, makePromptStep());
+
+    expect(store().replyContext).toBeNull();
+    expect(store().savedNewPromptState?.replyContext?.sessionId).toBe(
+      "session-123"
+    );
+    store().deselect();
+
+    expect(store().replyContext?.sessionId).toBe("session-123");
+    expect(store().promptText).toBe("Follow-up");
+  });
+
+  it("preserves reply context in VS Code state", () => {
+    let vscodeState: unknown;
+    const vscode = {
+      getState: () => vscodeState,
+      setState: (state: unknown) => {
+        vscodeState = state;
+      },
+      postMessage: () => undefined,
+    };
+    store().startReplyToStep(reply);
+    store().saveToVsCodeState(vscode);
+    store().resetEditor();
+
+    expect(store().restoreFromVsCodeState(vscode)).toBe(true);
+    expect(store().replyContext?.sessionId).toBe("session-123");
+    expect(store().properties).toEqual(replyProperties);
+  });
+
+  it("expands the editor when starting a reply while collapsed", () => {
+    useUiStore.getState().setEditorCollapsed(true);
+    store().startReplyToStep(reply);
+    expect(useUiStore.getState().editorCollapsed).toBe(false);
   });
 });
 

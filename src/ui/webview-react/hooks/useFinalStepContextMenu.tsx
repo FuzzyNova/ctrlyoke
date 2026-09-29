@@ -4,8 +4,12 @@ import {
   type StepContextMenuState,
 } from "../components/shared/StepContextMenu";
 import type { WorkflowStep, CliOutput } from "@store/workflowStore";
-import { type StepRuntimeMetaSnapshot } from "@utils/stepMetadataClipboard";
 import {
+  getStepSessionId,
+  type StepRuntimeMetaSnapshot,
+} from "@utils/stepMetadataClipboard";
+import {
+  buildReplyToStepMenuItem,
   buildStepCopyMenuItems,
   buildStepOutputFilterMenuItems,
   getPresentFinalStepTargetKeys,
@@ -129,6 +133,20 @@ export function useFinalStepContextMenu({
         items: [
           ...copyItems,
           ...(copyItems.length > 0 ? [{ type: "divider" as const }] : []),
+          ...(finalStep
+            ? [
+                buildReplyToStepMenuItem({
+                  step: finalStep,
+                  sessionId: getStepSessionId(
+                    finalStep,
+                    latestOutput,
+                    runtimeMeta
+                  ),
+                  sourceLabel: "Final step",
+                }),
+                { type: "divider" as const },
+              ]
+            : []),
           ...filterItems,
           ...(filterItems.length > 0 ? [{ type: "divider" as const }] : []),
           {
