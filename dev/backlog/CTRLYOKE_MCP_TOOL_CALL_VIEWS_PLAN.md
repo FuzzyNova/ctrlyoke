@@ -51,13 +51,11 @@ define.
   (`McpToolDefinitions.ts:607`, `:617`); per-tool labels in `CTRLYOKE_USER_TOOLS`
   (`components/shared/McpServersEditor.tsx`); and the coordination formatters in
   `utils/coordinationPresentation.ts`.
-- **Harness coverage is uneven:**
-  - Claude, Qwen, Codex (after unwrapping `tools.mcp__ctrlyoke__x(`) and Antigravity produce
-    `MCP_TOOL_CALL`.
-  - Copilot produces `MCP_TOOL_CALL` but sets **no `parameters`**.
-  - OpenCode has no MCP detection at all, so its calls arrive as a generic `TOOL_CALL`.
-  - In `mcpMode: skill` the agent runs `node "<mcp-server.js>" --tool <name> --args '<json>'`
-    (`src/templates/skills/ctrlyoke-mcp-tools/SKILL.md:13`), which arrives as a `BASH_COMMAND`.
+- **Harness coverage has gaps.** On current CLIs, Copilot and OpenCode ctrlyoke calls are not
+  classified as `MCP_TOOL_CALL` at all. Copilot also renders every generic or MCP call twice,
+  and skill-mode calls arrive as `BASH_COMMAND`. These pipeline fixes are tracked separately in
+  [`MCP_EVENT_PIPELINE_GAPS_PLAN.md`](MCP_EVENT_PIPELINE_GAPS_PLAN.md), which this plan depends
+  on. Views only ever see `MCP_TOOL_CALL` events.
 
 ## Design
 
@@ -126,21 +124,14 @@ The shared `scope` object that every coordination tool returns is **not** render
 is the same board state the settings panel shows, and repeating it on every row is exactly the
 noise `CoordinationActivityRow` was removed for.
 
-### 4. Parameters-less and non-MCP arrivals
+### 4. Missing parameters
 
-- **Copilot (no `parameters`):** every view must render from the result alone. The result
-  payloads already carry what the summaries need (`append_step` returns indices and counts, not
-  step content), so for Copilot the `append_step` table degrades to "3 steps at #5–#7" plus the
-  names read back from the result. Add the appended step names/indices to the `append_step`
-  result so this works without params, which also benefits agents reading the result.
-- **OpenCode:** add ctrlyoke MCP detection to `OpenCodeEventMapper` (which today maps unknown
-  tools to a generic `TOOL_CALL`). First confirm from a captured OpenCode log how it names MCP
-  tools, then add an OpenCode-side mapping rather than loosening the shared classifier.
-- **Skill mode:** recognise `mcp-server.js --tool <name> --args <json>` bash commands at parse
-  time (in the shared bash-command mapper, so every harness benefits) and emit a synthetic
-  `MCP_TOOL_CALL` with `server: ctrlyoke`, parsed args as `parameters`, and stdout as the
-  result. The row can carry a small "via skill" badge. This is the only path that gives
-  skill-mode users the same views.
+Every harness verified so far sends call parameters. That includes Copilot, whose apparently
+parameter-less rows were duplicates (see the pipeline gaps plan). Events can still arrive
+without `parameters`: history recorded before the pipeline fixes, and malformed skill-mode
+`--args`. So every view must still render from the result alone. The result payloads already
+carry what the summaries need (`append_step` returns indices and counts), and the table
+degrades to "3 steps at #5–#7".
 
 ### 5. Out of scope
 
@@ -163,16 +154,13 @@ noise `CoordinationActivityRow` was removed for.
 2. `claim_paths` / `release_paths` / `read_notes`, with the warning status for denials.
 3. `workflow_status`, `global_status`, `read_output`, `list_harnesses`, `edit_step`,
    `remove_step`, `reorder_steps`, `submit_commit_message`.
-4. OpenCode MCP detection.
-5. Skill-mode bash → synthetic `MCP_TOOL_CALL` mapping.
 
 ## Tests
 
 - Per view: parse success, parse failure → generic fallback, error result → generic error
-  section, Copilot-shaped event with no `parameters`.
+  section, event with no `parameters`.
 - `outputFind` segments for each view match the rendered text (find highlights land).
 - `estimateOutputRowHeight` for each view is within tolerance of measured height at two widths,
   following the existing tool-call estimate tests in `src/ui/webview-react/test/utils/`.
 - Untrusted note text is rendered as markdown but never as raw HTML, and it keeps the
   untrusted marker.
-- Parser tests for the OpenCode and skill-mode mappings in `src/test/**`.
