@@ -11,3 +11,8 @@ export const QWEN_CONTENT_PART_TYPES = {
   TOOL_USE: "tool_use",
   THINKING: "thinking",
 } as const;
+
+export const QWEN_TOOL_NAMES = {
+  MCP_CALL_WRAPPER: "tool_call",
+  MCP_TOOL_PREFIX: "mcp__",
+} as const;

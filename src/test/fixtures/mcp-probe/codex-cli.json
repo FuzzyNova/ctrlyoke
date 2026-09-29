@@ -1,0 +1,33 @@
+{
+  "harness": "codex-cli",
+  "source": "events.jsonl",
+  "events": [
+    {
+      "type": "mcpToolCall",
+      "data": {
+        "server": "ctrlyoke",
+        "tool": "workflow_status",
+        "toolCallId": "codex-cli-call-1",
+        "parameters": {}
+      }
+    },
+    {
+      "type": "mcpToolCall",
+      "data": {
+        "server": "ctrlyoke",
+        "tool": "workflow_status",
+        "toolCallId": "codex-cli-call-1",
+        "parameters": {},
+        "result": {
+          "success": true,
+          "output": "<sanitized result>"
+        }
+      }
+    }
+  ],
+  "genericToolCalls": [
+    {
+      "name": "exec"
+    }
+  ]
+}

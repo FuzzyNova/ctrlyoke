@@ -33,7 +33,7 @@ import {
 } from "../../../types/DashboardConstants";
 import { getQwenContextWindowSize } from "../../../utils/ModelConstants";
 import { BaseToolBuilder } from "../shared/BaseToolBuilder";
-import { QWEN_EVENT_TYPES } from "./QwenProtocolConstants";
+import { QWEN_EVENT_TYPES, QWEN_TOOL_NAMES } from "./QwenProtocolConstants";
 
 /**
  * Qwen Code CLI Log Parser
@@ -872,7 +872,26 @@ export class QwenLogParser extends BaseLogParser {
     askQuestionMap: Map<string, AskUserQuestionEntry[]>,
     callPathMap: Map<string, string>
   ): CliEvent[] {
-    const args = functionCall.args || {};
+    const functionArgs = functionCall.args || {};
+    // Qwen represents an MCP invocation as a generic `tool_call` function
+    // whose arguments carry the actual MCP name and arguments one level down.
+    // Classify the inner call so it is emitted as MCP_TOOL_CALL and its
+    // functionResponse can pair with the same call id.
+    const wrappedToolName = functionArgs.name;
+    const wrappedArguments = functionArgs.arguments;
+    const isWrappedMcpCall =
+      functionCall.name === QWEN_TOOL_NAMES.MCP_CALL_WRAPPER &&
+      typeof wrappedToolName === "string" &&
+      wrappedToolName.startsWith(QWEN_TOOL_NAMES.MCP_TOOL_PREFIX) &&
+      wrappedArguments !== null &&
+      typeof wrappedArguments === "object" &&
+      !Array.isArray(wrappedArguments);
+    const toolName = isWrappedMcpCall
+      ? (wrappedToolName as string)
+      : functionCall.name;
+    const args = isWrappedMcpCall
+      ? (wrappedArguments as Record<string, unknown>)
+      : functionArgs;
     // Track file path for later correlation with tool_result resultDisplay
     // (resultDisplay.fileName is basename-only).
     const fp = (args.absolute_path ?? args.file_path ?? args.path) as
@@ -882,8 +901,8 @@ export class QwenLogParser extends BaseLogParser {
     }
     if (!this.isAskUserQuestionTool(functionCall.name)) {
       return BaseToolBuilder.buildInitiatedEvents(
-        functionCall.name,
-        QwenLogParser.normalizeReadFileArgs(functionCall.name, args),
+        toolName,
+        QwenLogParser.normalizeReadFileArgs(toolName, args),
         functionCall.id,
         timestamp
       );

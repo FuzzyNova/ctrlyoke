@@ -1,0 +1,30 @@
+{
+  "harness": "antigravity-cli",
+  "source": "events.jsonl",
+  "events": [
+    {
+      "type": "mcpToolCall",
+      "data": {
+        "server": "ctrlyoke",
+        "tool": "workflow_status",
+        "toolCallId": "antigravity-cli-call-1",
+        "parameters": {},
+        "result": {
+          "success": true,
+          "output": "<sanitized result>"
+        }
+      }
+    }
+  ],
+  "genericToolCalls": [
+    {
+      "name": "generic"
+    },
+    {
+      "name": "generic"
+    },
+    {
+      "name": "generic"
+    }
+  ]
+}

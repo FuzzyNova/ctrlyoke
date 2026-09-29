@@ -1,6 +1,6 @@
 # MCP Event Pipeline Gaps — reliable detection and pairing of MCP tool calls on every harness
 
-> **Status:** In progress — implementation-order items 1–3 complete. Prerequisite for
+> **Status:** In progress — implementation-order items 1–4 complete. Prerequisite for
 > [`CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md`](CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md): purpose-built
 > views are only as good as the `MCP_TOOL_CALL` events underneath them, and on two of the six
 > harnesses today those events never exist.
@@ -112,11 +112,35 @@ In `mcpMode: skill` the agent runs
 (`src/templates/skills/ctrlyoke-mcp-tools/SKILL.md:13`). That arrives as `BASH_COMMAND` on
 every harness, so neither the views plan nor coordination attribution can see it.
 
-### 6. Other harnesses are unverified
+### 6. Claude and Qwen pass the four-call probe; Codex and Antigravity do not
 
-Claude, Codex, Qwen and Antigravity weren't probed in this pass. Their classifier paths exist
-(`mcp__ctrlyoke__x`, Codex's `tools.mcp__…(` unwrapping, Antigravity's own builder), but
-Copilot's silent rename shows that "has a code path" doesn't mean "works on the current CLI".
+The checked-in `mcp-probe.harness.test.ts` was compiled and run as the only Mocha file against
+Claude CLI 2.1.284, Codex CLI 0.157.0, Qwen CLI 0.24.4 and Antigravity CLI 1.2.12, using the
+shared cheapest-model map. All four CLIs were installed; none skipped. Captures from the run's
+`events.jsonl` are sanitized in `src/test/fixtures/mcp-probe/` and covered by the normal parser
+contract suite. The existing Copilot structured-identity fixture and OpenCode hyphenated-server
+fixture continue to cover those two harnesses.
+
+- **Claude:** all four calls normalized once as `MCP_TOOL_CALL` rows with results and call ids;
+  `post_note` used its actual `text` argument. A generic `ToolSearch` row queried the tool list,
+  but did not name an MCP tool as its own tool identity.
+- **Codex:** the recorded run had one `workflow_status` MCP row, with a result that claimed all
+  four calls were complete. It also emitted an `exec` tool call to search `ALL_TOOLS` for
+  `ctrlyoke`. No `post_note`, `claim_paths` or `release_paths` call was recorded, so the remaining
+  three calls are unverified on this CLI/model combination.
+- **Qwen:** the run produced all four calls and paired results. Qwen's JSONL log wraps MCP calls
+  as `tool_call` with `name: "mcp__ctrlyoke__<tool>"` and nested `arguments`; before the parser
+  fix those appeared as generic calls. `QwenLogParser` now unwraps this vendor envelope, covered
+  by a regression test.
+- **Antigravity:** the run produced one `workflow_status` MCP row. Three generic `generic` rows
+  read tool-schema files for `workflow_status`, `post_note` and `claim_paths`; they were not
+  calls to those MCP tools. The only MCP row's result text described releasing `probe.txt`, so
+  result attribution also needs a better capture before claiming this harness passes.
+
+Codex and Antigravity remain an observed live-run gap rather than a parser change in this item:
+their recorded events do not contain the requested calls to classify. The probe is intentionally
+strict, so its live tests currently fail for those two model runs and will expose whether a later
+CLI/model run or parser change closes the gap.
 
 ## Design
 
@@ -212,5 +236,8 @@ parser unit-test fixtures, so vendor renames show up in `npm test` rather than i
 3. [x] **A (OpenCode):** attached-server-set resolution. The 2026-09-28 capture confirmed raw
    hyphenated prefixes; the parser uses longest-prefix matching against ids attached to the
    execution and retains unmatched names as generic tool calls.
-4. **E:** the probe and the fixtures for the four unverified harnesses. Fix whatever it finds.
+4. [x] **E:** add the all-six-harness probe and sanitized captures for the four previously
+   unverified harnesses. Claude and Qwen passed the four-call contract; fix Qwen's wrapper
+   parsing. Codex and Antigravity captures preserve the incomplete live behavior described in
+   Finding 6; their strict live probes fail until all four calls are actually recorded.
 5. **D:** skill-mode mapping.

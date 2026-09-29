@@ -6171,6 +6171,67 @@ suite("OpenCodeLogParser", () => {
 // ============================================================================
 
 suite("QwenLogParser", () => {
+  test("unwraps Qwen's MCP tool_call envelope and pairs its result", () => {
+    const parser = new QwenLogParser();
+    const output = parser.extractResponse([
+      {
+        type: QWEN_EVENT_TYPES.ASSISTANT,
+        message: {
+          role: "assistant",
+          parts: [
+            {
+              functionCall: {
+                id: "qwen-mcp-call",
+                name: "tool_call",
+                args: {
+                  name: "mcp__ctrlyoke__claim_paths",
+                  arguments: { paths: ["probe.txt"], reason: "fixture" },
+                },
+              },
+            },
+          ],
+        },
+      } as BaseCliEvent,
+      {
+        type: QWEN_EVENT_TYPES.TOOL_RESULT,
+        message: {
+          role: "tool",
+          parts: [
+            {
+              functionResponse: {
+                id: "qwen-mcp-call",
+                name: "tool_call",
+                response: { output: "claimed probe.txt" },
+              },
+            },
+          ],
+        },
+      } as BaseCliEvent,
+    ]);
+
+    const normalized = normalizeCliEvents(output.events);
+    const mcpCalls = normalized.filter(
+      (event) => event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL
+    );
+    assert.strictEqual(mcpCalls.length, 1);
+    assert.deepStrictEqual(mcpCalls[0].data, {
+      server: "ctrlyoke",
+      tool: "claim_paths",
+      toolCallId: "qwen-mcp-call",
+      parameters: { paths: ["probe.txt"], reason: "fixture" },
+      result: {
+        success: true,
+        output: "claimed probe.txt",
+        error: undefined,
+      },
+    });
+    assert.strictEqual(
+      normalized.filter((event) => event.type === CLI_EVENT_TYPES.TOOL_CALL)
+        .length,
+      0
+    );
+  });
+
   suite("headless golden output", () => {
     test("maps the real stdout/log pair and preserves richer log semantics", () => {
       const fixtureRoot = path.resolve(
