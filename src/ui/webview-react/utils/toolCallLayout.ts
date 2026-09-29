@@ -17,6 +17,7 @@ export interface ToolCallExpansionState {
   outputExpanded: boolean;
   errorExpanded: boolean;
   rawExpanded?: boolean;
+  appendStepPromptsExpanded?: boolean;
 }
 
 export type ToolCallExpansionSection = SharedToolCallExpansionSection;
@@ -27,6 +28,7 @@ export const DEFAULT_TOOL_CALL_EXPANSION_STATE: Readonly<ToolCallExpansionState>
     outputExpanded: false,
     errorExpanded: false,
     rawExpanded: false,
+    appendStepPromptsExpanded: false,
   });
 
 export const GENERIC_TOOL_CALL_MAX_RESULT_LINES =

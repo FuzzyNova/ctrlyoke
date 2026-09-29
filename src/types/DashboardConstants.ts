@@ -3594,6 +3594,7 @@ export const TOOL_CALL_EXPANSION_SECTIONS = {
   OUTPUT: "output",
   ERROR: "error",
   RAW: "raw",
+  APPEND_STEP_PROMPTS: "appendStepPrompts",
 } as const;
 
 export type ToolCallExpansionSection =

@@ -539,6 +539,10 @@ export function useOutputRowsModel({
             section === TOOL_CALL_EXPANSION_SECTIONS.RAW
               ? expanded
               : currentState.rawExpanded,
+          appendStepPromptsExpanded:
+            section === TOOL_CALL_EXPANSION_SECTIONS.APPEND_STEP_PROMPTS
+              ? expanded
+              : currentState.appendStepPromptsExpanded,
         };
 
         const isDefaultState =
@@ -546,13 +550,17 @@ export function useOutputRowsModel({
           !nextState.outputExpanded &&
           !nextState.errorExpanded;
         const isDefaultExpansionState =
-          isDefaultState && !nextState.rawExpanded;
+          isDefaultState &&
+          !nextState.rawExpanded &&
+          !nextState.appendStepPromptsExpanded;
 
         if (
           currentState.paramsExpanded === nextState.paramsExpanded &&
           currentState.outputExpanded === nextState.outputExpanded &&
           currentState.errorExpanded === nextState.errorExpanded &&
-          currentState.rawExpanded === nextState.rawExpanded
+          currentState.rawExpanded === nextState.rawExpanded &&
+          currentState.appendStepPromptsExpanded ===
+            nextState.appendStepPromptsExpanded
         ) {
           return previous;
         }

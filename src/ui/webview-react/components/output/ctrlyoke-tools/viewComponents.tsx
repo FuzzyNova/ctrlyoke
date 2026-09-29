@@ -9,6 +9,9 @@ import type { RowFindDecoration } from "../../../utils/outputFind";
 import type { ToolCallExpansionState } from "../../../utils/toolCallLayout";
 import { PostNoteBody } from "./PostNoteView";
 import type { PostNoteParams, PostNoteResult } from "./postNoteModel";
+import { MCP_APPEND_STEP_TOOL_NAME } from "@root/utils/McpToolDefinitions";
+import { AppendStepBody } from "./AppendStepView";
+import type { AppendStepParams, AppendStepResult } from "./appendStepModel";
 
 export interface CtrlYokeToolBodyProps {
   params: unknown;
@@ -52,9 +55,35 @@ const PostNoteBodyAdapter: React.FC<CtrlYokeToolBodyProps> = ({
   />
 );
 
+const AppendStepBodyAdapter: React.FC<CtrlYokeToolBodyProps> = ({
+  params,
+  result,
+  data,
+  expansion,
+  onExpansionChange,
+  paramsFindMatches,
+  outputFindMatches,
+  errorFindMatches,
+}) => (
+  <AppendStepBody
+    params={params as AppendStepParams | undefined}
+    result={result as AppendStepResult}
+    server={data.server}
+    tool={data.tool}
+    parameters={data.parameters}
+    genericResult={data.result}
+    expansion={expansion}
+    onExpansionChange={onExpansionChange}
+    paramsFindMatches={paramsFindMatches}
+    outputFindMatches={outputFindMatches}
+    errorFindMatches={errorFindMatches}
+  />
+);
+
 /** React bodies stay separate from the pure parsing/search/height registry. */
 export const CTRLYOKE_TOOL_VIEW_BODIES: Partial<
   Record<McpToolName, React.ComponentType<CtrlYokeToolBodyProps>>
 > = {
   [MCP_POST_NOTE_TOOL_NAME]: PostNoteBodyAdapter,
+  [MCP_APPEND_STEP_TOOL_NAME]: AppendStepBodyAdapter,
 };
