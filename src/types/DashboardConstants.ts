@@ -1712,6 +1712,24 @@ export const HARNESS_INFO = {
   },
 } as const;
 
+function harnessInfoFor(
+  harnessId: string
+): (typeof HARNESS_INFO)[HarnessId] | undefined {
+  return Object.prototype.hasOwnProperty.call(HARNESS_INFO, harnessId)
+    ? HARNESS_INFO[harnessId as HarnessId]
+    : undefined;
+}
+
+/** User-facing harness name; unknown or future ids are returned unchanged. */
+export function getHarnessDisplayName(harnessId: string): string {
+  return harnessInfoFor(harnessId)?.name ?? harnessId;
+}
+
+/** Compact harness name for tight layouts; unknown ids are returned unchanged. */
+export function getHarnessShortName(harnessId: string): string {
+  return harnessInfoFor(harnessId)?.shortName ?? harnessId;
+}
+
 /** Theme-aware colors for the workspace harness-share bar. */
 export const HARNESS_CHART_COLORS: Record<HarnessId, string> = {
   [HARNESS_IDS.COPILOT_CLI]: "var(--vscode-charts-blue, #59a4f9)",

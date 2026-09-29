@@ -21,6 +21,22 @@ export function sliceFindMatches(
     }));
 }
 
+/** Longest prompt preview a ctrlyoke tool view shows before truncating. */
+export const TOOL_VIEW_PROMPT_PREVIEW_MAX_CHARS = 160;
+
+/** First line of a prompt, capped so one huge single-line prompt cannot dominate a view. */
+export function toolViewPromptPreview(prompt: string): string {
+  const firstLine = prompt.split(/\r?\n/, 1)[0] ?? "";
+  return firstLine.length > TOOL_VIEW_PROMPT_PREVIEW_MAX_CHARS
+    ? `${firstLine.slice(0, TOOL_VIEW_PROMPT_PREVIEW_MAX_CHARS).trimEnd()}…`
+    : firstLine;
+}
+
+/** True when the preview hides part of the prompt (extra lines or characters). */
+export function isToolViewPromptTruncated(prompt: string): boolean {
+  return toolViewPromptPreview(prompt) !== prompt;
+}
+
 export function tryParseJson(text: string): unknown | undefined {
   try {
     return JSON.parse(text) as unknown;

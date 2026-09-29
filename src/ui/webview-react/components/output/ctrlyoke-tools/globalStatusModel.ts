@@ -1,5 +1,8 @@
 import { isRecord, tryParseJson } from "./shared";
-import { EXECUTION_STATES } from "@root/types/DashboardConstants";
+import {
+  EXECUTION_STATES,
+  getHarnessDisplayName,
+} from "@root/types/DashboardConstants";
 
 export interface GlobalStatusWorkflow {
   workflowKey: string;
@@ -91,13 +94,21 @@ export function globalStatusSummary(
   return `${result.workflowCount} workflow${result.workflowCount === 1 ? "" : "s"} (${running} running)`;
 }
 
+export function globalStatusHarnessLabel(
+  workflow: GlobalStatusWorkflow
+): string {
+  return workflow.harness
+    ? getHarnessDisplayName(workflow.harness)
+    : "workflow harness";
+}
+
 export function globalStatusSearchText(
   params: GlobalStatusParams | undefined,
   result: GlobalStatusResult
 ): string[] {
   const lines = result.workflows.map(
     (w) =>
-      `${w.executionState} · ${w.workflowName} · ${w.workflowKey} · ${w.currentStep}/${w.totalSteps} · ${w.harness ?? "workflow harness"}`
+      `${w.executionState} · ${w.workflowName} · ${w.workflowKey} · ${w.currentStep}/${w.totalSteps} · ${globalStatusHarnessLabel(w)}`
   );
   if (result.truncated)
     lines.push(`Truncated · ${result.omittedCount} omitted`);

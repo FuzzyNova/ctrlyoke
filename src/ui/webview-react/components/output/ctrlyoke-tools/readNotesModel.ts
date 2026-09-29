@@ -22,7 +22,7 @@ function isParticipant(value: unknown): value is CoordinationEntry["from"] {
     isRecord(value) &&
     typeof value.participantId === "string" &&
     typeof value.label === "string" &&
-    typeof value.kind === "string" &&
+    (value.kind === undefined || typeof value.kind === "string") &&
     typeof value.attested === "boolean"
   );
 }

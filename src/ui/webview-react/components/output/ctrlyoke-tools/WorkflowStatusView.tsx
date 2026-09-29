@@ -8,12 +8,16 @@ import { highlightText } from "@utils/outputFind";
 import type { McpToolCallData } from "../../../types/cliEvents";
 import {
   estimateWorkflowStatusHeight,
+  workflowStatusHarnessLabel,
   workflowStatusProgress,
+  workflowStatusRowPrefix,
   workflowStatusSearchText,
+  workflowStatusStepName,
   workflowStepStatus,
   type WorkflowStatusParams,
   type WorkflowStatusResult,
 } from "./workflowStatusModel";
+import { isToolViewPromptTruncated, sliceFindMatches } from "./shared";
 
 export interface ToolViewBodyProps {
   params: unknown;
@@ -28,19 +32,6 @@ export interface ToolViewBodyProps {
   paramsFindMatches?: RowFindDecoration["matches"];
   errorFindMatches?: RowFindDecoration["matches"];
   findDecorations?: RowFindDecoration;
-}
-function matchesIn(
-  matches: RowFindDecoration["matches"] = [],
-  start: number,
-  length: number
-): RowFindDecoration["matches"] {
-  return matches
-    .filter((m) => m.start < start + length && m.end > start)
-    .map((m) => ({
-      ...m,
-      start: Math.max(0, m.start - start),
-      end: Math.min(length, m.end - start),
-    }));
 }
 export const WorkflowStatusBody: React.FC<ToolViewBodyProps> = ({
   params,
@@ -61,6 +52,7 @@ export const WorkflowStatusBody: React.FC<ToolViewBodyProps> = ({
     .split("\n")
     .filter(Boolean);
   const rows = bodyLines.slice(0, status.steps.length);
+  const harness = workflowStatusHarnessLabel(status);
   let offset = 0;
   return (
     <div className="space-y-2 text-[length:var(--cy-output-font-size-sm)]">
@@ -78,13 +70,15 @@ export const WorkflowStatusBody: React.FC<ToolViewBodyProps> = ({
         />
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full table-fixed text-left">
+        <table className="w-full text-left">
           <thead>
             <tr className="text-description-foreground">
-              <th className="w-8 p-1">#</th>
-              <th className="w-5 p-1">Status</th>
+              <th className="w-px whitespace-nowrap p-1">#</th>
+              <th className="w-px p-1">
+                <span className="sr-only">Status</span>
+              </th>
               <th className="p-1">Name</th>
-              <th className="p-1">Harness</th>
+              <th className="w-px whitespace-nowrap p-1">Harness</th>
             </tr>
           </thead>
           <tbody>
@@ -92,28 +86,33 @@ export const WorkflowStatusBody: React.FC<ToolViewBodyProps> = ({
               const line = rows[i] ?? "";
               const start = offset;
               offset += line.length + 1;
-              const name =
-                step.prompt.split(/\r?\n/, 1)[0] || `Step ${step.index + 1}`;
-              const harness = status.metadata.harness ?? "workflow harness";
+              const name = workflowStatusStepName(step);
               return (
                 <tr key={step.index} className="border-t border-border/50">
-                  <td className="p-1 text-muted-foreground">
+                  <td className="whitespace-nowrap p-1 text-muted-foreground">
                     {step.index + 1}
                   </td>
                   <td className="p-1">
                     <StatusIcon status={workflowStepStatus(step.status)} />
                   </td>
-                  <td className="break-words p-1">
+                  <td
+                    className="p-1 [overflow-wrap:anywhere]"
+                    title={
+                      isToolViewPromptTruncated(step.prompt)
+                        ? step.prompt
+                        : undefined
+                    }
+                  >
                     {highlightText(
                       name,
-                      matchesIn(
+                      sliceFindMatches(
                         findDecorations?.matches,
-                        start + `${step.index + 1} · ${step.status} · `.length,
+                        start + workflowStatusRowPrefix(step).length,
                         name.length
                       )
                     )}
                   </td>
-                  <td className="break-words p-1">{harness}</td>
+                  <td className="whitespace-nowrap p-1">{harness}</td>
                 </tr>
               );
             })}
@@ -132,7 +131,7 @@ export const WorkflowStatusBody: React.FC<ToolViewBodyProps> = ({
               <li key={`${warning.path ?? "warning"}-${i}`}>
                 {highlightText(
                   warning.message,
-                  matchesIn(
+                  sliceFindMatches(
                     findDecorations?.matches,
                     warningStart,
                     warning.message.length

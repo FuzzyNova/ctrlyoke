@@ -2,6 +2,7 @@ import React from "react";
 import { RawToolCallSection } from "./RawToolCallSection";
 import { highlightText } from "@utils/outputFind";
 import {
+  globalStatusHarnessLabel,
   globalStatusSearchText,
   type GlobalStatusParams,
   type GlobalStatusResult,
@@ -44,7 +45,6 @@ export const GlobalStatusBody: React.FC<ToolViewBodyProps> = ({
                 {workflow.executionState}
               </span>
               <span className="min-w-0 flex-1 break-words">
-                ·{" "}
                 {highlightText(
                   workflow.workflowName,
                   sliceFindMatches(
@@ -55,8 +55,7 @@ export const GlobalStatusBody: React.FC<ToolViewBodyProps> = ({
                 )}{" "}
                 <span className="text-muted-foreground">
                   · {workflow.workflowKey} · {workflow.currentStep}/
-                  {workflow.totalSteps} ·{" "}
-                  {workflow.harness ?? "workflow harness"}
+                  {workflow.totalSteps} · {globalStatusHarnessLabel(workflow)}
                 </span>
               </span>
             </li>

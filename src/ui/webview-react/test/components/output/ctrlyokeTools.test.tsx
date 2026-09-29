@@ -41,6 +41,8 @@ import {
   parseReadNotesResultText,
 } from "@components/output/ctrlyoke-tools/readNotesModel";
 import {
+  appendStepPromptPreview,
+  appendStepSearchText,
   estimateAppendStepHeight,
   parseAppendStepParams,
   parseAppendStepResultText,
@@ -373,6 +375,93 @@ describe("ctrlyoke MCP tool views", () => {
     expect(container.textContent).not.toContain("hidden");
   });
 
+  it("renders read_notes pages that mix legacy entries without from.kind", () => {
+    const { kind: _kind, ...legacyOwner } = owner;
+    const raw = JSON.stringify({
+      entries: [
+        { ...readNotesResult.entries[0], seq: 9, from: legacyOwner },
+        {
+          ...readNotesResult.entries[0],
+          seq: 125,
+          from: { ...owner, kind: "ctrlyoke-step" },
+        },
+      ],
+    });
+    expect(parseReadNotesResultText(raw)?.entries).toHaveLength(2);
+    expect(
+      resolveCtrlYokeToolView({
+        server: MCP_SERVER_IDS.CTRLYOKE,
+        tool: "read_notes",
+        result: { success: true, output: raw },
+      })?.summary
+    ).toBe("Read 2 notes");
+    expect(
+      parseReadNotesResultText(
+        JSON.stringify({
+          entries: [
+            { ...readNotesResult.entries[0], from: { ...owner, kind: 3 } },
+          ],
+        })
+      )
+    ).toBeUndefined();
+  });
+
+  it("caps a long single-line append_step prompt and offers Expand prompts", () => {
+    const longPrompt = `Investigate ${"the flaky retry loop ".repeat(70)}done`;
+    const params = parseAppendStepParams({
+      steps: [{ name: "Long", prompt: longPrompt }],
+    })!;
+    const result = parseAppendStepResultText(
+      JSON.stringify({
+        ...appendResult,
+        stepsAdded: 1,
+        insertIndex: 4,
+        insertedEndIndex: 4,
+        parallelGroupsAdded: [],
+      })
+    )!;
+    const onExpansionChange = vi.fn();
+    const { rerender } = render(
+      <AppendStepBody
+        params={params}
+        result={result}
+        server={MCP_SERVER_IDS.CTRLYOKE}
+        tool="append_step"
+        expansion={{ ...DEFAULT_TOOL_CALL_EXPANSION_STATE }}
+        onExpansionChange={onExpansionChange}
+      />
+    );
+    const preview = appendStepPromptPreview(
+      params.steps[0] as { prompt: string }
+    );
+    expect(preview.endsWith("…")).toBe(true);
+    expect(preview.length).toBeLessThan(longPrompt.length);
+    expect(screen.getByText(preview)).toBeInTheDocument();
+    expect(screen.getByText("Workflow default")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Expand prompts" }));
+    expect(onExpansionChange).toHaveBeenCalledWith(
+      TOOL_CALL_EXPANSION_SECTIONS.APPEND_STEP_PROMPTS,
+      true
+    );
+    rerender(
+      <AppendStepBody
+        params={params}
+        result={result}
+        server={MCP_SERVER_IDS.CTRLYOKE}
+        tool="append_step"
+        expansion={{
+          ...DEFAULT_TOOL_CALL_EXPANSION_STATE,
+          appendStepPromptsExpanded: true,
+        }}
+        onExpansionChange={onExpansionChange}
+      />
+    );
+    expect(screen.getByText(longPrompt)).toBeInTheDocument();
+    expect(appendStepSearchText(params, result)[1]?.endsWith(preview)).toBe(
+      true
+    );
+  });
+
   it("keeps read_notes find text aligned and estimates narrow and wide rows", () => {
     const raw = JSON.stringify(readNotesResult);
     const data = {
@@ -612,7 +701,12 @@ describe("ctrlyoke MCP tool views", () => {
         onExpansionChange={onExpansionChange}
       />
     );
-    expect(screen.getByText("Prepare")).toBeInTheDocument();
+    // Name cell and first-line prompt preview both read "Prepare".
+    expect(screen.getAllByText("Prepare")).toHaveLength(2);
+    expect(screen.getByText("Claude Code / sonnet")).toBeInTheDocument();
+    expect(screen.getByText("Codex")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "#" })).toBeVisible();
+    expect(screen.queryByText(/·$/)).toBeNull();
     expect(screen.getByText("Parallel group · #6–#7")).toBeInTheDocument();
     expect(screen.getByText("failFast off")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Expand prompts" }));
@@ -688,7 +782,7 @@ describe("ctrlyoke MCP tool views", () => {
         [...row.querySelectorAll("td")]
           .map((cell) => cell.textContent?.trim())
           .filter(Boolean)
-          .join(" ")
+          .join(" · ")
       )
       .join("\n");
     expect(renderedLine).toBe(resolved.searchText.join("\n"));

@@ -71,7 +71,8 @@ import type {
 } from "../../types/cliEvents";
 import {
   CLI_EVENT_TYPES,
-  HARNESS_INFO,
+  getHarnessDisplayName,
+  getHarnessShortName,
   SCRIPT_OUTPUT_SOURCES,
 } from "../../types/messages";
 import {
@@ -1203,8 +1204,7 @@ const CliHeaderRowView: React.FC<{
   const structuredMetadata = output.structured?.metadata;
   const harnessId = structuredMetadata?.harness;
   const harnessShortName = harnessId
-    ? (HARNESS_INFO[harnessId as keyof typeof HARNESS_INFO]?.shortName ??
-      harnessId)
+    ? getHarnessShortName(harnessId)
     : undefined;
   const modelId = structuredMetadata?.model;
   const modelLabel =
@@ -1337,9 +1337,7 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
   const structuredMetadata = output?.structured?.metadata;
   const sessionId = structuredMetadata?.sessionId;
   const harnessId = structuredMetadata?.harness;
-  const harnessName = harnessId
-    ? (HARNESS_INFO[harnessId as keyof typeof HARNESS_INFO]?.name ?? harnessId)
-    : undefined;
+  const harnessName = harnessId ? getHarnessDisplayName(harnessId) : undefined;
   const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
   const [copiedOutput, setCopiedOutput] = useState(false);
   const showCostEstimates = useSettingsStore(

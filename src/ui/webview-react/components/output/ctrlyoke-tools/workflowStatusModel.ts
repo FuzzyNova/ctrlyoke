@@ -1,5 +1,14 @@
-import { isRecord, tryParseJson, wrappedTextLines } from "./shared";
-import { STEP_STATUS } from "@root/types/DashboardConstants";
+import {
+  isRecord,
+  toolViewPromptPreview,
+  tryParseJson,
+  wrappedTextLines,
+} from "./shared";
+import {
+  getHarnessDisplayName,
+  getHarnessShortName,
+  STEP_STATUS,
+} from "@root/types/DashboardConstants";
 
 export interface WorkflowStatusStep {
   index: number;
@@ -89,7 +98,30 @@ export function workflowStatusSummary(
     Math.max(1, result.metadata.currentIndex + 1)
   );
   const harness = result.metadata.harness;
-  return `Step ${current}/${result.metadata.totalSteps} · ${state}${harness ? ` · ${harness}` : ""}`;
+  return `Step ${current}/${result.metadata.totalSteps} · ${state}${harness ? ` · ${getHarnessDisplayName(harness)}` : ""}`;
+}
+
+export function workflowStatusStepName(step: WorkflowStatusStep): string {
+  return toolViewPromptPreview(step.prompt) || `Step ${step.index + 1}`;
+}
+
+export function workflowStatusHarnessLabel(
+  result: WorkflowStatusResult
+): string {
+  const harness = result.metadata.harness;
+  return harness ? getHarnessShortName(harness) : "workflow harness";
+}
+
+/** Row prefix before the step name; the view offsets find matches past it. */
+export function workflowStatusRowPrefix(step: WorkflowStatusStep): string {
+  return `${step.index + 1} · ${step.status} · `;
+}
+
+function workflowStatusRowLine(
+  step: WorkflowStatusStep,
+  result: WorkflowStatusResult
+): string {
+  return `${workflowStatusRowPrefix(step)}${workflowStatusStepName(step)} · ${workflowStatusHarnessLabel(result)}`;
 }
 
 export function workflowStatusSearchText(
@@ -99,10 +131,7 @@ export function workflowStatusSearchText(
   return [
     workflowStatusSummary(undefined, result),
     result.steps
-      .map(
-        (step) =>
-          `${step.index + 1} · ${step.status} · ${step.prompt.split(/\r?\n/, 1)[0]} · ${result.metadata.harness ?? "workflow harness"}`
-      )
+      .map((step) => workflowStatusRowLine(step, result))
       .concat(result.schemaWarnings.map((warning) => warning.message))
       .join("\n"),
   ];
@@ -123,11 +152,7 @@ export function estimateWorkflowStatusHeight(
   const tableLines = result.steps.reduce(
     (sum, step) =>
       sum +
-      wrappedLines(
-        `${step.index + 1} · ${step.status} · ${step.prompt.split(/\r?\n/, 1)[0]} · ${result.metadata.harness ?? "workflow harness"}`,
-        available,
-        fontSize
-      ),
+      wrappedLines(workflowStatusRowLine(step, result), available, fontSize),
     0
   );
   const warnings = result.schemaWarnings.reduce(

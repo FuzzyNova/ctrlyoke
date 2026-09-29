@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by user, during the MCP tool-call display visual test
 - **Area:** `src/ui/webview-react/components/output/ctrlyoke-tools/AppendStepView.tsx`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -15,7 +15,7 @@ Each `append_step` row shows trailing dots in the Position, Name and Harness / m
 
 ## Root Cause
 
-`AppendStepView.tsx:121-153` hard-codes `{" "}·` after the highlighted text in three `<td>`s. It is a leftover from the single-line text form built by `appendStepRowLine` (`appendStepModel.ts:175`: `#N · name · harness · prompt`), which is used for find/search text. The offsets in `AppendStepView.tsx:112-115` (`nameStart`, `harnessStart`, `promptStart`) depend on that ` · ` separator, but the separator does not need to be rendered visibly.
+`AppendStepView.tsx:121-153` hard-codes `{" "}·` after the highlighted text in three `<td>`s. It is a leftover from the single-line text form built by `appendStepRowLine` (`appendStepModel.ts:175`: `#N · name · harness · prompt`), which is used for find/search text. The offsets in `AppendStepView.tsx:112-115` (`nameStart`, `harnessStart`, `promptStart`) depend on that `·` separator, but the separator does not need to be rendered visibly.
 
 ## Suggested Fix
 

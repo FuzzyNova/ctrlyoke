@@ -36,6 +36,10 @@ import {
   parseListHarnessesResultText,
   listHarnessesSearchText,
 } from "@components/output/ctrlyoke-tools/listHarnessesModel";
+import {
+  TOOL_VIEW_PROMPT_PREVIEW_MAX_CHARS,
+  toolViewPromptPreview,
+} from "@components/output/ctrlyoke-tools/shared";
 import { DEFAULT_TOOL_CALL_EXPANSION_STATE } from "@utils/toolCallLayout";
 import { OUTPUT_FIND_ACTIVE_ATTRIBUTE } from "@utils/outputFind";
 import type { McpToolCallData } from "../../../types/cliEvents";
@@ -169,7 +173,7 @@ describe("status and output ctrlyoke tool views", () => {
     expect(parseWorkflowStatusResultText("not json")).toBeUndefined();
     expect(
       resolveCtrlYokeToolView(data(MCP_WORKFLOW_STATUS_TOOL_NAME, workflow))
-    ).toMatchObject({ summary: "Step 3/8 · running · claude-cli" });
+    ).toMatchObject({ summary: "Step 3/8 · running · Claude Code" });
     const resolved = resolveCtrlYokeToolView(
       data(MCP_WORKFLOW_STATUS_TOOL_NAME, workflow)
     );
@@ -188,7 +192,39 @@ describe("status and output ctrlyoke tool views", () => {
       "25"
     );
     expect(screen.getByText("Write docs")).toBeInTheDocument();
+    expect(screen.getByText("Claude Code")).toBeInTheDocument();
+    expect(screen.queryByText("claude-cli")).toBeNull();
+    expect(screen.getByRole("columnheader", { name: "Status" })).toBeVisible();
     expect(screen.getByText("Deprecated field")).toBeInTheDocument();
+  });
+
+  it("caps a long single-line workflow_status prompt and keeps find offsets aligned", () => {
+    const longPrompt = `Refactor ${"the orchestration layer ".repeat(60)}end`;
+    const longWorkflow = {
+      ...workflow,
+      metadata: { ...workflow.metadata, harness: "future-cli" },
+      steps: [{ index: 0, prompt: longPrompt, status: "pending" }],
+    };
+    const preview = toolViewPromptPreview(longPrompt);
+    expect(preview.length).toBeLessThanOrEqual(
+      TOOL_VIEW_PROMPT_PREVIEW_MAX_CHARS + 1
+    );
+    expect(preview.endsWith("…")).toBe(true);
+    const body = workflowStatusSearchText(undefined, longWorkflow)[1];
+    expect(body).toContain(`${preview} · future-cli`);
+    const start = body.indexOf("Refactor");
+    const { container } = render(
+      <WorkflowStatusBody
+        {...props(MCP_WORKFLOW_STATUS_TOOL_NAME, longWorkflow)}
+        findDecorations={{
+          matches: [{ start, end: start + "Refactor".length, active: true }],
+        }}
+      />
+    );
+    expect(container.querySelector("mark")?.textContent).toBe("Refactor");
+    const nameCell = screen.getByTitle(longPrompt);
+    expect(nameCell.textContent).toBe(preview);
+    expect(screen.getByText("future-cli")).toBeInTheDocument();
   });
 
   it("validates and renders global_status state chips and truncation", () => {
@@ -211,6 +247,10 @@ describe("status and output ctrlyoke tool views", () => {
       <GlobalStatusBody {...props(MCP_GLOBAL_STATUS_TOOL_NAME, global)} />
     );
     expect(screen.getByText("running")).toBeInTheDocument();
+    expect(screen.getByText(/Claude Code/)).toBeInTheDocument();
+    expect(
+      screen.getByText("Build docs").parentElement?.textContent
+    ).not.toMatch(/^·/);
     expect(screen.getByText("Truncated · 1 omitted")).toBeInTheDocument();
   });
 
@@ -299,7 +339,7 @@ describe("status and output ctrlyoke tool views", () => {
         search: workflowStatusSearchText(undefined, workflow),
         estimate: (width: number) =>
           estimateWorkflowStatusHeight(undefined, workflow, width, 13),
-        rendered: "Write docs · claude-cli",
+        rendered: "Write docs · Claude Code",
       },
       {
         result: global,

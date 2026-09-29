@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by user, during the MCP tool-call display visual test
 - **Area:** `src/ui/webview-react/components/output/ctrlyoke-tools/AppendStepView.tsx`, `appendStepModel.ts`, `WorkflowStatusView.tsx`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

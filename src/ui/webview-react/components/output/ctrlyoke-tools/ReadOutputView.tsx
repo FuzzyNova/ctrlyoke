@@ -4,6 +4,7 @@ import { RawToolCallSection } from "./RawToolCallSection";
 import { highlightText } from "@utils/outputFind";
 import { readOutputExpansionSection } from "@root/types/DashboardConstants";
 import {
+  readOutputHeading,
   readOutputItemSearchText,
   type ReadOutputParams,
   type ReadOutputResult,
@@ -26,7 +27,7 @@ export const ReadOutputBody: React.FC<ToolViewBodyProps> = ({
   return (
     <div className="space-y-2 text-[length:var(--cy-output-font-size-sm)]">
       {output.outputs.map((item) => {
-        const heading = `#${item.index + 1} · ${item.prompt.split(/\r?\n/, 1)[0]} · ${item.status}`;
+        const heading = readOutputHeading(item);
         const start = offset;
         const searchableLine = readOutputItemSearchText(item, p);
         offset += searchableLine.length + 1;

@@ -1,4 +1,4 @@
-import { isRecord, tryParseJson } from "./shared";
+import { isRecord, toolViewPromptPreview, tryParseJson } from "./shared";
 export interface ReadOutputParams {
   indices?: number[];
   cursor?: string;
@@ -93,6 +93,10 @@ export function readOutputSearchText(
   ];
 }
 
+export function readOutputHeading(output: ReadOutputItem): string {
+  return `${formatIndex(output.index)} · ${toolViewPromptPreview(output.prompt)} · ${output.status}`;
+}
+
 export function readOutputItemSearchText(
   output: ReadOutputItem,
   params: ReadOutputParams | undefined
@@ -104,7 +108,7 @@ export function readOutputItemSearchText(
   ]
     .filter(Boolean)
     .join(" · ");
-  return `${formatIndex(output.index)} · ${output.prompt.split(/\r?\n/, 1)[0]} · ${output.status}${output.responseText ? `\n${output.responseText}` : ""}${footer ? `\n${footer}` : ""}`;
+  return `${readOutputHeading(output)}${output.responseText ? `\n${output.responseText}` : ""}${footer ? `\n${footer}` : ""}`;
 }
 function wrapped(text: string, width: number, fontSize: number): number {
   const chars = Math.max(20, Math.floor(width / (fontSize * 0.58)));
@@ -127,11 +131,7 @@ export function estimateReadOutputHeight(
   const body = result.outputs.reduce(
     (sum, output) =>
       sum +
-      wrapped(
-        `${formatIndex(output.index)} · ${output.prompt.split(/\r?\n/, 1)[0]} · ${output.status}`,
-        available,
-        fontSize
-      ) *
+      wrapped(readOutputHeading(output), available, fontSize) *
         fontSize *
         1.45 +
       (expanded[String(output.index)] && output.responseText

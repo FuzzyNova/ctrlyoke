@@ -23,7 +23,7 @@ import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   CLI_VALIDATE_TARGET_KINDS,
   CLI_VALIDATE_ERROR_CODES,
-  HARNESS_INFO,
+  getHarnessDisplayName,
   STATUS_MESSAGE_SEVERITY,
 } from "./types/DashboardConstants";
 import type {
@@ -2323,10 +2323,6 @@ function formatCompatibilityConsumer(
   }
   const step = workflow.steps?.[diagnostic.consumer.stepIndex];
   return step?.name?.trim() || `step ${diagnostic.consumer.stepIndex + 1}`;
-}
-
-function getHarnessDisplayName(harnessId: HarnessId): string {
-  return HARNESS_INFO[harnessId]?.name ?? harnessId;
 }
 
 /** Ask a y/N question on stderr (keeps stdout pipe-friendly). */

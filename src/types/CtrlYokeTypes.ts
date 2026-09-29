@@ -428,7 +428,8 @@ export interface CoordinationEntry {
   from: {
     participantId: string;
     label: string;
-    kind: CoordinationParticipant["kind"];
+    /** Absent on entries written before participant kinds existed; resolve with `resolveCoordinationParticipantKind`. */
+    kind?: CoordinationParticipant["kind"];
     attested: boolean;
     address?: CoordinationParticipant["address"];
   };

@@ -9,12 +9,12 @@ import type {
 } from "@utils/toolCallLayout";
 import type { RowFindDecoration } from "@utils/outputFind";
 import type { AppendStepParams, AppendStepResult } from "./appendStepModel";
-import { sliceFindMatches } from "./shared";
+import { isToolViewPromptTruncated, sliceFindMatches } from "./shared";
 import {
+  appendStepHarnessModelLabel,
   appendStepParallelGroupLine,
   appendStepPromptPreview,
   appendStepRowLine,
-  APPEND_STEP_DEFAULT_HARNESS_LABEL,
   appendStepSearchText,
 } from "./appendStepModel";
 
@@ -65,12 +65,14 @@ export const AppendStepBody: React.FC<AppendStepBodyProps> = ({
     <div className="space-y-2">
       {params ? (
         <div className="overflow-x-auto">
-          <table className="w-full table-fixed text-left text-[length:var(--cy-output-font-size-sm)]">
+          <table className="w-full text-left text-[length:var(--cy-output-font-size-sm)]">
             <thead>
               <tr className="text-description-foreground">
-                <th className="w-14 p-1 font-medium">Position</th>
-                <th className="w-1/5 p-1 font-medium">Name</th>
-                <th className="w-1/4 p-1 font-medium">Harness / model</th>
+                <th className="w-px whitespace-nowrap p-1 font-medium">#</th>
+                <th className="p-1 font-medium">Name</th>
+                <th className="w-px whitespace-nowrap p-1 font-medium">
+                  Harness / model
+                </th>
                 <th className="p-1 font-medium">Prompt</th>
               </tr>
             </thead>
@@ -97,9 +99,7 @@ export const AppendStepBody: React.FC<AppendStepBodyProps> = ({
                   const currentIndex = stepIndex++;
                   const promptLine = appendStepPromptPreview(step);
                   const name = step.name ?? "Step";
-                  const harnessModel =
-                    [step.harness, step.model].filter(Boolean).join(" / ") ||
-                    APPEND_STEP_DEFAULT_HARNESS_LABEL;
+                  const harnessModel = appendStepHarnessModelLabel(step);
                   const shownPrompt = promptsExpanded
                     ? step.prompt
                     : promptLine;
@@ -118,7 +118,7 @@ export const AppendStepBody: React.FC<AppendStepBodyProps> = ({
                       key={`${currentIndex}-${step.name ?? "step"}`}
                       className="border-t border-border/50 align-top"
                     >
-                      <td className="p-1 text-muted-foreground">
+                      <td className="whitespace-nowrap p-1 text-muted-foreground">
                         {highlightText(
                           displayIndex(currentIndex),
                           sliceFindMatches(
@@ -126,10 +126,9 @@ export const AppendStepBody: React.FC<AppendStepBodyProps> = ({
                             lineStart,
                             displayIndex(currentIndex).length
                           )
-                        )}{" "}
-                        ·
+                        )}
                       </td>
-                      <td className="break-words p-1">
+                      <td className="p-1 [overflow-wrap:anywhere]">
                         {highlightText(
                           name,
                           sliceFindMatches(
@@ -137,10 +136,9 @@ export const AppendStepBody: React.FC<AppendStepBodyProps> = ({
                             lineStart + nameStart,
                             name.length
                           )
-                        )}{" "}
-                        ·
+                        )}
                       </td>
-                      <td className="break-words p-1">
+                      <td className="whitespace-nowrap p-1">
                         {highlightText(
                           harnessModel,
                           sliceFindMatches(
@@ -148,10 +146,9 @@ export const AppendStepBody: React.FC<AppendStepBodyProps> = ({
                             lineStart + harnessStart,
                             harnessModel.length
                           )
-                        )}{" "}
-                        ·
+                        )}
                       </td>
-                      <td className="break-words p-1">
+                      <td className="p-1 [overflow-wrap:anywhere]">
                         {highlightText(
                           shownPrompt,
                           sliceFindMatches(
@@ -192,7 +189,7 @@ export const AppendStepBody: React.FC<AppendStepBodyProps> = ({
           </table>
           {params.steps.some((item) =>
             ("parallel" in item ? item.parallel : [item]).some((step) =>
-              step.prompt.includes("\n")
+              isToolViewPromptTruncated(step.prompt)
             )
           ) && (
             <button

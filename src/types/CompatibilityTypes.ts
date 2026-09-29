@@ -1,6 +1,6 @@
 import {
   CAPABILITY_DOMAINS,
-  HARNESS_INFO,
+  getHarnessDisplayName,
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
   CAPABILITY_VERIFICATION_BASES,
@@ -245,7 +245,7 @@ export function getCompatibilityDiagnosticMessage(
             ? "Image prompt inputs"
             : hookEventLabel(context.capability);
   // Render the display name here so no consumer has to rewrite the prose.
-  const harness = HARNESS_INFO[context.harnessId]?.name ?? context.harnessId;
+  const harness = getHarnessDisplayName(context.harnessId);
   const caveat = getCompatibilityCaveatMessage(context.caveatCode);
   // Fold the harness-owned "why" into the sentence instead of leaving a bare
   // fidelity fact — an unsupported capability is a known architectural

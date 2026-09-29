@@ -17,6 +17,8 @@ export {
   ACTION_TYPES,
   HARNESS_IDS,
   HARNESS_INFO,
+  getHarnessDisplayName,
+  getHarnessShortName,
   HARNESS_STATUS_STRINGS,
   CLI_EVENT_TYPES,
   OPERATION_STATUS,

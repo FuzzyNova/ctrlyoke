@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by user, during the MCP tool-call display visual test
 - **Area:** `src/ui/webview-react/components/output/ctrlyoke-tools/` (`WorkflowStatusView.tsx`, `workflowStatusModel.ts`, `GlobalStatusView.tsx`, `globalStatusModel.ts`, `AppendStepView.tsx`), `src/types/DashboardConstants.ts` (`HARNESS_INFO`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -35,7 +35,7 @@ import {
   useIsSystemGeneratedWorkflow,
   useActiveWorkflowExternalOwner,
 } from "@hooks/index";
-import { HARNESS_INFO } from "../../types/messages";
+import { getHarnessDisplayName } from "../../types/messages";
 import type { HarnessId } from "../../types/messages";
 import { type PromptOverride } from "../prompts/WorkflowStep";
 import { FinalStepFooter } from "../prompts/FinalStepFooter";
@@ -901,9 +901,7 @@ const WorkflowStepsPanelInner: React.FC<{
         const m = step._runtime?.model;
         return {
           harnessId: h as HarnessId | undefined,
-          harnessLabel: h
-            ? (HARNESS_INFO[h as keyof typeof HARNESS_INFO]?.name ?? h)
-            : undefined,
+          harnessLabel: h ? getHarnessDisplayName(h) : undefined,
           harnessIsDefault: false,
           modelLabel: m,
           modelIsDefault: false,
@@ -920,8 +918,7 @@ const WorkflowStepsPanelInner: React.FC<{
       return {
         harnessId: effectiveHarness as HarnessId | undefined,
         harnessLabel:
-          HARNESS_INFO[effectiveHarness as keyof typeof HARNESS_INFO]?.name ??
-          effectiveHarness,
+          effectiveHarness && getHarnessDisplayName(effectiveHarness),
         harnessIsDefault,
         modelLabel: effectiveModel,
         modelIsDefault,
@@ -1537,9 +1534,7 @@ const WorkflowStepsPanelInner: React.FC<{
       const m = finalStep._runtime!.model;
       return {
         harnessId: h as HarnessId | undefined,
-        harnessLabel: h
-          ? (HARNESS_INFO[h as keyof typeof HARNESS_INFO]?.name ?? h)
-          : undefined,
+        harnessLabel: h ? getHarnessDisplayName(h) : undefined,
         harnessIsDefault: false,
         modelLabel: m,
         modelIsDefault: false,
@@ -1553,9 +1548,7 @@ const WorkflowStepsPanelInner: React.FC<{
       finalStep.model ?? workflowProperties.model ?? globalSettings.model;
     return {
       harnessId: effectiveHarness as HarnessId | undefined,
-      harnessLabel:
-        HARNESS_INFO[effectiveHarness as keyof typeof HARNESS_INFO]?.name ??
-        effectiveHarness,
+      harnessLabel: effectiveHarness && getHarnessDisplayName(effectiveHarness),
       harnessIsDefault,
       modelLabel: effectiveModel,
       modelIsDefault,

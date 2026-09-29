@@ -1,6 +1,14 @@
-import { isRecord, tryParseJson, wrappedTextLines } from "./shared";
+import {
+  isRecord,
+  toolViewPromptPreview,
+  tryParseJson,
+  wrappedTextLines,
+} from "./shared";
 import type { ParallelGroupInsertPlacement } from "../../../../../core/ParallelGroupTopology";
-import { QUEUE_POSITION } from "@root/types/DashboardConstants";
+import {
+  getHarnessShortName,
+  QUEUE_POSITION,
+} from "@root/types/DashboardConstants";
 
 export interface AppendStepInput {
   prompt: string;
@@ -157,7 +165,15 @@ export function appendStepSummary(
 }
 
 export function appendStepPromptPreview(step: AppendStepInput): string {
-  return step.prompt.split(/\r?\n/, 1)[0] ?? "";
+  return toolViewPromptPreview(step.prompt);
+}
+
+export function appendStepHarnessModelLabel(step: AppendStepInput): string {
+  return (
+    [step.harness && getHarnessShortName(step.harness), step.model]
+      .filter(Boolean)
+      .join(" / ") || APPEND_STEP_DEFAULT_HARNESS_LABEL
+  );
 }
 
 export function appendStepParallelGroupLine(
@@ -172,7 +188,7 @@ export function appendStepRowLine(
   index: number,
   step: AppendStepInput
 ): string {
-  return `${formatIndex(index)} · ${step.name ?? "Step"} · ${[step.harness, step.model].filter(Boolean).join(" / ") || APPEND_STEP_DEFAULT_HARNESS_LABEL} · ${appendStepPromptPreview(step)}`;
+  return `${formatIndex(index)} · ${step.name ?? "Step"} · ${appendStepHarnessModelLabel(step)} · ${appendStepPromptPreview(step)}`;
 }
 
 export function appendStepSearchText(
@@ -226,7 +242,7 @@ export function estimateAppendStepHeight(
         const prompt = promptsExpanded
           ? step.prompt
           : appendStepPromptPreview(step);
-        const detail = `${formatIndex(result.insertIndex)} ${step.name ?? "Step"} ${step.harness ?? "workflow harness"}${step.model ? ` / ${step.model}` : ""}`;
+        const detail = `${formatIndex(result.insertIndex)} ${step.name ?? "Step"} ${appendStepHarnessModelLabel(step)}`;
         height +=
           Math.max(1, wrappedLines(detail, availableWidth, fontSize)) *
           fontSize *
