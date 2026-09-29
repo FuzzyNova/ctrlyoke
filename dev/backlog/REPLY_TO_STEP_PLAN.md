@@ -270,7 +270,7 @@ records any deviation from the design above in that section of this doc.
 
 - [x] Foundations: shared core-workflow adapter (impl step 1), widened webview
       `_runtime` type (2), `getStepSessionId()` (3)
-- [ ] `buildReplyPropertyValues()` in `utils/replyToStep.ts` (4)
+- [x] `buildReplyPropertyValues()` in `utils/replyToStep.ts` (4)
 - [ ] Editor store `replyContext`, `startReplyToStep()` / `cancelReplyToStep()` (5)
 - [ ] `StatusBanner` extraction (6) and reply banner in `EditorSection` (7)
 - [ ] Context menu item wired into both step menus (8), full gate green (9)
@@ -283,6 +283,11 @@ step `_runtime`. The queue snapshot path likewise forwards prompt steps without
 stripping `_runtime`. `WorkflowSerializer.buildCleanWorkflow()` strips runtime
 metadata only for authored save/template-export output; it is not the dashboard
 run-view serializer. No forwarding change was needed.
+
+Builder implementation note: the shared core adapter now forwards `secrets`
+from prompt, workflow, and global settings projections. The extracted adapter
+had omitted these existing fields, which otherwise prevented the builder from
+resolving authored or inherited secrets.
 
 ## Tests (`src/ui/webview-react/test/**`)
 
