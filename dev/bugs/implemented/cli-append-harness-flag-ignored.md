@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by bug-hunt final step (claude-cli)
 - **Area:** `src/cli.ts` (append branch / `parseAppendTail`, `resolveCliRunHarnessAndModel`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import { PromptFileParser } from "../core/PromptFileParser";
+import { parseCliPromptFile } from "./CliPromptFile";
 import { RunContinuationService } from "../core/orchestration/RunContinuationService";
 import { WorkflowLineageRepository } from "../core/orchestration/WorkflowLineageRepository";
 import { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
@@ -275,8 +275,8 @@ export function createStepCommandContext(
     lineageRepository: new WorkflowLineageRepository(),
     observer,
     parseStepFile: async (file) => {
-      const parsed = await new PromptFileParser().parsePromptFile(file);
-      return parsed?.steps ?? [];
+      const parsed = await parseCliPromptFile(file);
+      return parsed.steps ?? [];
     },
   };
 }

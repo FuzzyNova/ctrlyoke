@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by bug-hunt final step (claude-cli)
 - **Area:** `src/cli.ts` (`validateCommand`, `checkSecretsCommand`, `trustSecretGrantsCommand`), `src/utils/Log.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

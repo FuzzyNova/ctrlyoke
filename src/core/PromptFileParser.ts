@@ -85,6 +85,7 @@ export function getAuthoredSourcePath(
 
 export class PromptFileParser {
   lastNewerSchemaError?: NewerSchemaError;
+  lastParseError?: Error;
   private promptSchema: any;
   private strictValidator?: ValidateFunction;
   private relaxedValidator?: ValidateFunction;
@@ -151,6 +152,7 @@ export class PromptFileParser {
    */
   async parsePromptFile(filePath: string): Promise<ParsedPromptFile | null> {
     this.lastNewerSchemaError = undefined;
+    this.lastParseError = undefined;
     try {
       const ext = path.extname(filePath).toLowerCase();
 
@@ -209,6 +211,8 @@ export class PromptFileParser {
         }
         return null;
       }
+      this.lastParseError =
+        error instanceof Error ? error : new Error(String(error));
       Log.error(`[PromptFileParser] Failed to parse file ${filePath}:`, error);
       if (this.userFeedbackSink) {
         notifyUserFeedback(

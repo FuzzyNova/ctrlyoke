@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by bug-hunt final step (claude-cli)
 - **Area:** `src/cli/StepCommands.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
