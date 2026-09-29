@@ -10,17 +10,25 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-function schemaUrlPath(schemaPath) {
+/** Read a schema and the `/schema/v<N>/<file>` location its `$id` publishes to. */
+export function readPublishedSchema(schemaPath) {
   const schema = JSON.parse(readFileSync(schemaPath, "utf8"));
   if (typeof schema.$id !== "string") {
     throw new Error(`Schema is missing $id: ${schemaPath}`);
   }
   const url = new URL(schema.$id);
-  const match = url.pathname.match(/^\/schema\/(v\d+)\/([^/]+)$/);
+  const match = url.pathname.match(/^\/schema\/v(\d+)\/([^/]+)$/);
   if (!match) {
     throw new Error(`Schema $id must use /schema/v<N>/<file>: ${schema.$id}`);
   }
-  return { version: match[1], fileName: match[2] };
+  return {
+    schema,
+    schemaPath,
+    id: schema.$id,
+    version: `v${match[1]}`,
+    versionNumber: Number(match[1]),
+    fileName: match[2],
+  };
 }
 
 function collectFiles(directory) {
@@ -31,68 +39,74 @@ function collectFiles(directory) {
   });
 }
 
-function assertArchiveMatchesCurrent(schemasDir, archiveDir) {
-  const currentFiles = readdirSync(schemasDir).filter((name) =>
-    /\.(json|yaml)$/.test(name)
-  );
-  for (const fileName of currentFiles) {
-    const currentPath = join(schemasDir, fileName);
-    const archivedPath = join(archiveDir, fileName);
-    if (
-      !existsSync(archivedPath) ||
-      !readFileSync(currentPath).equals(readFileSync(archivedPath))
-    ) {
-      throw new Error(
-        `schemas/archive/v1/${fileName} must exactly match schemas/${fileName} while v1 is current.`
-      );
+function collectRefs(node, refs = []) {
+  if (Array.isArray(node)) {
+    for (const value of node) collectRefs(value, refs);
+  } else if (node && typeof node === "object") {
+    for (const [key, value] of Object.entries(node)) {
+      if (key === "$ref" && typeof value === "string") refs.push(value);
+      else collectRefs(value, refs);
+    }
+  }
+  return refs;
+}
+
+/** Every `$ref` into another schema must land on a URL this build publishes. */
+function assertCrossSchemaRefsResolve(root, published) {
+  const urls = new Set(published.map(({ id }) => id));
+  for (const { schema, schemaPath, id } of published) {
+    for (const ref of collectRefs(schema)) {
+      if (ref.startsWith("#")) continue;
+      const target = new URL(ref, id);
+      target.hash = "";
+      if (!urls.has(target.href)) {
+        throw new Error(
+          `${relative(root, schemaPath)} references ${ref}, which resolves to unpublished ${target.href}.`
+        );
+      }
     }
   }
 }
 
-/** Publish current and archived JSON schemas into a landing build directory. */
+/**
+ * Publish current and archived JSON schemas into a landing build directory.
+ * `schemas/*.json` is current; `schemas/archive/v<N>/` holds versions frozen
+ * by `npm run schema:bump` and is published unchanged forever.
+ */
 export function publishSchemas({ root = ROOT, outputDir } = {}) {
   if (!outputDir) throw new Error("outputDir is required");
   const schemasDir = join(root, "schemas");
   const archiveDir = join(schemasDir, "archive");
-  const currentSchemaPaths = readdirSync(schemasDir)
+  const current = readdirSync(schemasDir)
     .filter((name) => name.endsWith(".json"))
-    .map((name) => join(schemasDir, name));
-  const currentSchemas = currentSchemaPaths.map((schemaPath) => ({
-    schemaPath,
-    ...schemaUrlPath(schemaPath),
-  }));
-  const currentVersions = new Set(currentSchemas.map(({ version }) => version));
+    .map((name) => readPublishedSchema(join(schemasDir, name)));
+  const currentIds = new Set(current.map(({ id }) => id));
 
-  for (const version of currentVersions) {
-    const archiveVersionDir = join(archiveDir, version);
-    if (version === "v1" && existsSync(archiveVersionDir)) {
-      assertArchiveMatchesCurrent(schemasDir, archiveVersionDir);
-    }
-  }
+  const archived = collectFiles(archiveDir)
+    .filter((filePath) => filePath.endsWith(".json"))
+    .map((filePath) => {
+      const entry = readPublishedSchema(filePath);
+      const archiveVersion = relative(archiveDir, filePath).split(/[\\/]/)[0];
+      if (entry.version !== archiveVersion) {
+        throw new Error(
+          `Archived schema $id version ${entry.version} does not match its directory ${archiveVersion}: ${filePath}`
+        );
+      }
+      if (currentIds.has(entry.id)) {
+        throw new Error(
+          `${relative(root, filePath)} has the same $id as a current schema (${entry.id}). Only superseded versions belong in schemas/archive/; use npm run schema:bump.`
+        );
+      }
+      return entry;
+    });
 
-  const publishJson = (schemaPath, version, fileName) => {
+  const published = [...current, ...archived];
+  assertCrossSchemaRefsResolve(root, published);
+
+  for (const { schemaPath, version, fileName } of published) {
     const destination = join(outputDir, "schema", version, fileName);
     mkdirSync(dirname(destination), { recursive: true });
     cpSync(schemaPath, destination);
-  };
-
-  for (const { schemaPath, version, fileName } of currentSchemas) {
-    publishJson(schemaPath, version, fileName);
-  }
-
-  for (const archiveVersionDir of collectFiles(archiveDir)) {
-    if (!archiveVersionDir.endsWith(".json")) continue;
-    const { version, fileName } = schemaUrlPath(archiveVersionDir);
-    const archiveVersion = relative(archiveDir, archiveVersionDir).split(
-      /[\\/]/
-    )[0];
-    if (version !== archiveVersion) {
-      throw new Error(
-        `Archived schema $id version ${version} does not match its directory ${archiveVersion}: ${archiveVersionDir}`
-      );
-    }
-    if (currentVersions.has(version)) continue;
-    publishJson(archiveVersionDir, version, fileName);
   }
 }
 

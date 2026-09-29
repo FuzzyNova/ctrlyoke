@@ -58,44 +58,113 @@ test("publishes current schemas to the version and filenames in their $ids", () 
   }
 });
 
-test("uses the current v1 source and requires its release archive to match", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-schema-archive-"));
+function makeFixture(prefix) {
+  const root = mkdtempSync(path.join(os.tmpdir(), prefix));
+  const schemasDir = path.join(root, "schemas");
+  mkdirSync(schemasDir, { recursive: true });
+  return {
+    root,
+    schemasDir,
+    outputDir: path.join(root, "landing", "dist"),
+    write(relativePath, content) {
+      const filePath = path.join(schemasDir, relativePath);
+      mkdirSync(path.dirname(filePath), { recursive: true });
+      writeFileSync(filePath, content);
+    },
+    published(version, fileName) {
+      return readFileSync(
+        path.join(root, "landing", "dist", "schema", version, fileName),
+        "utf8"
+      );
+    },
+  };
+}
+
+test("publishes a superseded version from the archive beside the current one", () => {
+  const fixture = makeFixture("ctrlyoke-schema-archive-");
   try {
-    const schemasDir = path.join(root, "schemas");
-    const archiveDir = path.join(schemasDir, "archive", "v1");
-    const outputDir = path.join(root, "landing", "dist");
-    mkdirSync(archiveDir, { recursive: true });
+    const v1 = makeSchema("https://ctrlyoke.dev/schema/v1/workflow.json", "v1");
+    const v2 = makeSchema("https://ctrlyoke.dev/schema/v2/workflow.json", "v2");
+    fixture.write("workflow-schema.json", v2);
+    fixture.write("archive/v1/workflow-schema.json", v1);
+
+    publishSchemas({ root: fixture.root, outputDir: fixture.outputDir });
+
+    assert.equal(fixture.published("v1", "workflow.json"), v1);
+    assert.equal(fixture.published("v2", "workflow.json"), v2);
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("publishes an archived schema whose version is still current for a sibling", () => {
+  const fixture = makeFixture("ctrlyoke-schema-sibling-");
+  try {
     const workflow = makeSchema(
       "https://ctrlyoke.dev/schema/v1/workflow.json",
       "workflow"
     );
-    const settings = makeSchema(
+    const settingsV1 = makeSchema(
       "https://ctrlyoke.dev/schema/v1/settings.json",
-      "settings"
+      "settings v1"
     );
-    writeFileSync(path.join(schemasDir, "workflow-schema.json"), workflow);
-    writeFileSync(path.join(schemasDir, "settings-schema.json"), settings);
-    writeFileSync(path.join(archiveDir, "workflow-schema.json"), workflow);
-    writeFileSync(path.join(archiveDir, "settings-schema.json"), settings);
+    fixture.write("workflow-schema.json", workflow);
+    fixture.write(
+      "settings-schema.json",
+      makeSchema("https://ctrlyoke.dev/schema/v2/settings.json", "settings v2")
+    );
+    fixture.write("archive/v1/settings-schema.json", settingsV1);
 
-    publishSchemas({ root, outputDir });
-    assert.equal(
-      readFileSync(
-        path.join(outputDir, "schema", "v1", "workflow.json"),
-        "utf8"
-      ),
-      workflow
-    );
+    publishSchemas({ root: fixture.root, outputDir: fixture.outputDir });
 
-    writeFileSync(
-      path.join(archiveDir, "workflow-schema.json"),
-      `${workflow}\n`
+    assert.equal(fixture.published("v1", "settings.json"), settingsV1);
+    assert.equal(fixture.published("v1", "workflow.json"), workflow);
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("rejects an archive entry that duplicates a current schema's $id", () => {
+  const fixture = makeFixture("ctrlyoke-schema-duplicate-");
+  try {
+    const workflow = makeSchema(
+      "https://ctrlyoke.dev/schema/v1/workflow.json",
+      "workflow"
     );
+    fixture.write("workflow-schema.json", workflow);
+    fixture.write("archive/v1/workflow-schema.json", workflow);
+
     assert.throws(
-      () => publishSchemas({ root, outputDir }),
-      /schemas\/archive\/v1\/workflow-schema\.json must exactly match/
+      () =>
+        publishSchemas({ root: fixture.root, outputDir: fixture.outputDir }),
+      /same \$id as a current schema/
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("rejects a cross-schema $ref that resolves to an unpublished URL", () => {
+  const fixture = makeFixture("ctrlyoke-schema-ref-");
+  try {
+    fixture.write(
+      "workflow-schema.json",
+      makeSchema("https://ctrlyoke.dev/schema/v1/workflow.json", "workflow")
+    );
+    fixture.write(
+      "settings-schema.json",
+      JSON.stringify({
+        $id: "https://ctrlyoke.dev/schema/v2/settings.json",
+        properties: { harness: { $ref: "workflow.json#/$defs/harnessId" } },
+      })
+    );
+
+    assert.throws(
+      () =>
+        publishSchemas({ root: fixture.root, outputDir: fixture.outputDir }),
+      /unpublished https:\/\/ctrlyoke\.dev\/schema\/v2\/workflow\.json/
+    );
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
   }
 });

@@ -96,7 +96,9 @@ function resolveRef(
   if (!ref) return { node, document };
 
   const hashIndex = ref.indexOf("#");
-  const schemaFile = hashIndex === -1 ? ref : ref.slice(0, hashIndex);
+  const schemaFile = (hashIndex === -1 ? ref : ref.slice(0, hashIndex))
+    .split("/")
+    .pop();
   const pointer = hashIndex === -1 ? "" : ref.slice(hashIndex);
   const targetDocument = ref.startsWith("#")
     ? document

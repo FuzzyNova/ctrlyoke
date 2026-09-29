@@ -36,6 +36,15 @@ Plain [Conventional Commits](https://www.conventionalcommits.org/) style (`feat:
 
 Small, focused PRs are easier to review than large ones — if you're planning something big (a new harness, a major refactor), consider opening an issue first to discuss the approach.
 
+## Changing the schemas
+
+`schemas/workflow-schema.json` and `schemas/settings-schema.json` are published at the URL in their `$id` (`https://ctrlyoke.dev/schema/v<N>/…`) by `deploy.yml` whenever `schemas/**` changes on `main`. Each change is one of two kinds:
+
+- **No bump**: adding an optional field an older ctrlyoke can safely ignore, adding an enum value, or editing descriptions. Edit the schema, run `npm run schema:update` to regenerate the YAML schema, UI descriptions, and reference docs, and commit. `v<N>` is updated in place.
+- **Bump**: renaming or removing a field, narrowing a type, changing what a field or its default means, or adding a field an older host must not ignore. Before editing, run `npm run schema:bump -- workflow` (or `settings`) on the committed schema. It freezes the published version into `schemas/archive/v<N>/`, moves the `$id` to `v<N+1>`, re-points cross-schema `$ref`s, bumps `CURRENT_SCHEMA_VERSIONS`, and lists what's left: the breaking edit, the migration in `src/utils/FormatMigrations.ts`, a new fixture, and stale URL references.
+
+Files under `schemas/archive/` stay published forever so old `$schema` links keep resolving; never edit them. The full policy is in `dev/implemented/SCHEMA_RELEASE_READINESS_PLAN.md` §2.6–2.7. Until the first release there are no published users to break, so pre-release changes of either kind go in without a bump.
+
 ## Cutting a release (maintainers)
 
 Releases are tag-driven, not branch-driven — `main` stays trunk, and a `vX.Y.Z` tag is what actually ships:

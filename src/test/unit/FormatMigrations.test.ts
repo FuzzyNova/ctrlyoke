@@ -27,6 +27,26 @@ suite("FormatMigrations", () => {
     }
   });
 
+  test("each published schema's $id version matches its store's current format", async () => {
+    const schemaStores = {
+      "workflow-schema.json": PERSISTED_STORES.WORKFLOW_DEFINITION,
+      "settings-schema.json": PERSISTED_STORES.SETTINGS,
+    } as const;
+    for (const [fileName, store] of Object.entries(schemaStores)) {
+      const schema = JSON.parse(
+        await fs.readFile(
+          path.resolve(__dirname, "../../../schemas", fileName),
+          "utf8"
+        )
+      );
+      assert.match(
+        schema.$id,
+        new RegExp(`/schema/v${CURRENT_SCHEMA_VERSIONS[store]}/`),
+        `${fileName} $id must match CURRENT_SCHEMA_VERSIONS; bump both with npm run schema:bump`
+      );
+    }
+  });
+
   test("loads every current format fixture and preserves it through a write/read cycle", async () => {
     const fixtureRoot = path.resolve(
       __dirname,

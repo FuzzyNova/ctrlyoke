@@ -363,7 +363,9 @@ export function schemaForPointer(schema, pointer, siblingSchemas = {}) {
   if (pointer.startsWith("#")) return schema;
   const separator = pointer.indexOf("#");
   const schemaFile = separator === -1 ? pointer : pointer.slice(0, separator);
-  const pointerSchema = siblingSchemas[schemaFile];
+  // A sibling on another published version is referenced as `../v<N>/<file>`
+  // (see scripts/schema-bump.mjs); only the current sibling is loaded here.
+  const pointerSchema = siblingSchemas[schemaFile.split("/").pop()];
   if (!pointerSchema) {
     throw new Error(`Unknown sibling schema reference: ${pointer}`);
   }
