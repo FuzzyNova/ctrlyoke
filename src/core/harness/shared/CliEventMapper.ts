@@ -15,6 +15,12 @@ export type ToolClassification =
   | { type: typeof CLI_EVENT_TYPES.MCP_TOOL_CALL; server: string; tool: string }
   | { type: typeof CLI_EVENT_TYPES.TOOL_CALL };
 
+/** Structured MCP identity supplied by harnesses that expose server/tool fields. */
+export interface McpToolHint {
+  server: string;
+  tool: string;
+}
+
 /**
  * Shared CLI Event Mapper — single source of truth for tool name → semantic event classification
  *
@@ -120,9 +126,12 @@ export class CliEventMapper {
    *
    * This ensures MCP tools with names like "search" aren't misclassified as WEB_SEARCH.
    */
-  static classifyTool(toolName: string): ToolClassification {
+  static classifyTool(
+    toolName: string,
+    mcpHint?: McpToolHint
+  ): ToolClassification {
     // 1. Check MCP tool patterns FIRST (before lowercasing, preserves server/tool names)
-    const mcpResult = this.classifyMcpTool(toolName);
+    const mcpResult = this.classifyMcpTool(toolName, mcpHint);
     if (mcpResult) {
       return mcpResult;
     }
@@ -170,7 +179,18 @@ export class CliEventMapper {
    * @param toolName - Original tool name (case-sensitive for server/tool extraction)
    * @returns MCP classification with server and tool names, or null if not MCP
    */
-  private static classifyMcpTool(toolName: string): ToolClassification | null {
+  private static classifyMcpTool(
+    toolName: string,
+    mcpHint?: McpToolHint
+  ): ToolClassification | null {
+    if (mcpHint) {
+      return {
+        type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+        server: mcpHint.server,
+        tool: mcpHint.tool,
+      };
+    }
+
     // Copilot format: "server(tool)"
     const parenMatch = toolName.match(/^([^(]+)\(([^)]+)\)$/);
     if (parenMatch) {

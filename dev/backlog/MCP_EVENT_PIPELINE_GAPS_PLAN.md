@@ -197,7 +197,10 @@ parser unit-test fixtures, so vendor renames show up in `npm test` rather than i
    to generic `TOOL_CALL` in this step; structured MCP classification remains item 2. OpenCode's
    current mapper also emits only generic `TOOL_CALL` events, so it now carries `part.callID`;
    MCP classification remains item 3.
-2. **A (Copilot):** structured MCP identity, with a fixture test built from the capture above.
+2. [x] **A (Copilot):** structured MCP identity, with a fixture test built from the
+   capture above. The parser continues to use `tool.execution_start` as its tool-call
+   source; `assistant.message.toolRequests` are not independently mapped. No design
+   deviations.
 3. **A (OpenCode):** attached-server-set resolution, after the hyphenated-server capture.
 4. **E:** the probe and the fixtures for the four unverified harnesses. Fix whatever it finds.
 5. **D:** skill-mode mapping.

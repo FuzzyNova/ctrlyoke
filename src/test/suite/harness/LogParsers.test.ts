@@ -35,6 +35,7 @@ import {
   ILogParser,
 } from "../../../core/harness/shared/interfaces/ILogParser";
 import { CliParseUtils } from "../../../core/harness/shared/CliParseUtils";
+import { CliEventMapper } from "../../../core/harness/shared/CliEventMapper";
 import { normalizeCliEvents } from "../../../utils/CliEventNormalizer";
 import { OPENCODE_EVENT_TYPES } from "../../../core/harness/opencode/OpenCodeProtocolConstants";
 import {
@@ -2310,8 +2311,69 @@ suite("CopilotLogParser", () => {
         output: scenario.output,
         error: undefined,
       });
-      assert.strictEqual(toolCall.id, scenario.toolCallId);
+      assert.strictEqual(
+        normalized[0].type === CLI_EVENT_TYPES.MCP_TOOL_CALL
+          ? (normalized[0].data as { toolCallId?: string }).toolCallId
+          : toolCall.id,
+        scenario.toolCallId
+      );
     }
+  });
+
+  test("classifies Copilot MCP calls from the structured identity fixture", () => {
+    const fixturePath = path.resolve(
+      __dirname,
+      "../../../../src/test/fixtures/copilot/mcp-tool-call.jsonl"
+    );
+    const rawEvents = fs
+      .readFileSync(fixturePath, "utf8")
+      .trim()
+      .split(/\r?\n/)
+      .map((line) => JSON.parse(line) as BaseCliEvent);
+    const streamingParser = new CopilotLogParser();
+    const mappedEvents = rawEvents.flatMap((event) =>
+      streamingParser.extractStructuredEventsFromEvent(event)
+    );
+
+    const normalized = normalizeCliEvents(mappedEvents);
+    const mcpCalls = normalized.filter(
+      (event) => event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL
+    );
+    const genericCalls = normalized.filter(
+      (event) => event.type === CLI_EVENT_TYPES.TOOL_CALL
+    );
+
+    assert.strictEqual(mcpCalls.length, 1);
+    assert.deepStrictEqual(mcpCalls[0].data, {
+      server: "ctrlyoke",
+      tool: "claim_paths",
+      toolCallId: "call_qcLN4uT6",
+      parameters: { paths: ["a.txt"], reason: "probe" },
+      result: {
+        success: true,
+        output: "claimed paths: a.txt",
+        error: undefined,
+      },
+    });
+    assert.strictEqual(genericCalls.length, 0);
+    assert.ok(
+      !normalized.some(
+        (event) =>
+          event.type === CLI_EVENT_TYPES.TOOL_CALL &&
+          (event.data as ToolCall).name === "ctrlyoke-claim_paths"
+      )
+    );
+  });
+
+  test("keeps hyphenated generic tool names generic and legacy MCP names parsed", () => {
+    assert.deepStrictEqual(CliEventMapper.classifyTool("my-custom-tool"), {
+      type: CLI_EVENT_TYPES.TOOL_CALL,
+    });
+    assert.deepStrictEqual(CliEventMapper.classifyTool("ctrlyoke(claim_paths)"), {
+      type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+      server: "ctrlyoke",
+      tool: "claim_paths",
+    });
   });
 
   suite("headless golden output", () => {

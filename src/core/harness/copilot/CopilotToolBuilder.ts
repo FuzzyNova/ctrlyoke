@@ -18,6 +18,7 @@ import {
   OPERATION_STATUS,
 } from "../../../types/DashboardConstants";
 import { CliEventMapper } from "../shared/CliEventMapper";
+import type { McpToolHint } from "../shared/CliEventMapper";
 import { ApplyPatchParser } from "../shared/ApplyPatchParser";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import {
@@ -267,7 +268,8 @@ export class CopilotToolBuilder {
     toolName: string,
     args: CopilotToolArgs,
     toolCallId: string | undefined,
-    timestamp: number
+    timestamp: number,
+    mcpHint?: McpToolHint
   ): CliEvent[] {
     if (this.isAskUserQuestionTool(toolName)) {
       return [
@@ -311,7 +313,9 @@ export class CopilotToolBuilder {
       toolName,
       typeof args === "string" ? {} : args,
       toolCallId,
-      timestamp
+      timestamp,
+      undefined,
+      mcpHint
     ) as CliEvent[];
   }
 
@@ -326,7 +330,8 @@ export class CopilotToolBuilder {
   static buildCompletedEvents(
     toolName: string,
     args: CopilotToolArgs,
-    completionData: CopilotCompletionData
+    completionData: CopilotCompletionData,
+    mcpHint?: McpToolHint
   ): CliEvent[] {
     if (this.isAskUserQuestionTool(toolName)) {
       return [
@@ -338,7 +343,7 @@ export class CopilotToolBuilder {
       ];
     }
 
-    const classification = CliEventMapper.classifyTool(toolName);
+    const classification = CliEventMapper.classifyTool(toolName, mcpHint);
     const classifiedType = classification.type;
     const success = completionData?.success === true;
     const errorMsg: string | undefined = completionData?.error?.message;

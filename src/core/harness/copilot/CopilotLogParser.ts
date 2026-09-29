@@ -8,6 +8,7 @@ import {
   UserEventClassification,
 } from "../shared/interfaces/ILogParser";
 import { CopilotToolBuilder } from "./CopilotToolBuilder";
+import type { McpToolHint } from "../shared/CliEventMapper";
 import { Log } from "../../../utils/Log";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import {
@@ -30,6 +31,7 @@ import {
   COPILOT_EVENT_TYPES,
   COPILOT_SESSION_INFO_TYPES,
   COPILOT_USER_MESSAGE_DELIVERIES,
+  type CopilotMcpToolIdentity,
 } from "./CopilotProtocolConstants";
 
 // ============================================================================
@@ -100,7 +102,20 @@ type CopilotPendingTool = {
   toolName: string;
   args: Record<string, unknown> | string;
   timestamp: number;
+  mcpHint?: McpToolHint;
 };
+
+function getCopilotMcpHint(
+  data: CopilotMcpToolIdentity
+): McpToolHint | undefined {
+  const server = data.mcpServerName ?? data.mcpConfigServerName;
+  const tool = data.mcpToolName;
+  return typeof server === "string" && server.length > 0 &&
+    typeof tool === "string" &&
+    tool.length > 0
+    ? { server, tool }
+    : undefined;
+}
 
 interface CopilotCacheUsage {
   cacheReadTokens: number;
@@ -669,10 +684,12 @@ export class CopilotLogParser extends BaseLogParser {
 
       // Store tool execution start data for later association with completion
       if (event.type === "tool.execution_start" && event.data) {
+        const mcpHint = getCopilotMcpHint(event.data);
         pendingTools.set(event.data.toolCallId, {
           toolName: event.data.toolName,
           args: event.data.arguments || {},
           timestamp,
+          mcpHint,
         });
 
         // Emit semantic events for all tools immediately (for real-time feedback)
@@ -681,7 +698,8 @@ export class CopilotLogParser extends BaseLogParser {
             event.data.toolName,
             event.data.arguments || {},
             event.data.toolCallId,
-            timestamp
+            timestamp,
+            mcpHint
           )
         );
       }
@@ -695,7 +713,8 @@ export class CopilotLogParser extends BaseLogParser {
             ...CopilotToolBuilder.buildCompletedEvents(
               pendingTool.toolName,
               pendingTool.args,
-              event.data
+              event.data,
+              pendingTool.mcpHint
             )
           );
           pendingTools.delete(event.data.toolCallId);
@@ -1387,17 +1406,20 @@ export class CopilotLogParser extends BaseLogParser {
 
     // tool.execution_start: store pending state AND emit the semantic initiated event
     if (ev.type === "tool.execution_start") {
+      const mcpHint = getCopilotMcpHint(data);
       this.pendingStreamingTools.set(data.toolCallId, {
         toolName: data.toolName,
         args: data.arguments || {},
         timestamp,
+        mcpHint,
       });
       results.push(
         ...CopilotToolBuilder.buildInitiatedEvents(
           data.toolName,
           data.arguments || {},
           data.toolCallId,
-          timestamp
+          timestamp,
+          mcpHint
         )
       );
       return results;
@@ -1414,7 +1436,8 @@ export class CopilotLogParser extends BaseLogParser {
           ...CopilotToolBuilder.buildCompletedEvents(
             pending.toolName,
             pending.args,
-            data
+            data,
+            pending.mcpHint
           )
         );
         this.pendingStreamingTools.delete(data.toolCallId);

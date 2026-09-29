@@ -1,0 +1,2 @@
+{"type":"tool.execution_start","timestamp":"2026-09-28T12:00:00.000Z","data":{"toolCallId":"call_qcLN4uT6","toolName":"ctrlyoke-claim_paths","arguments":{"paths":["a.txt"],"reason":"probe"},"toolTitle":"claim_paths","mcpServerName":"ctrlyoke","mcpConfigServerName":"ctrlyoke","mcpTransport":"stdio","mcpConfigSource":"user","mcpToolName":"claim_paths"}}
+{"type":"tool.execution_complete","timestamp":"2026-09-28T12:00:01.000Z","data":{"toolCallId":"call_qcLN4uT6","success":true,"result":{"content":"claimed paths: a.txt"}}}
