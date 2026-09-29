@@ -509,7 +509,6 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "server.iconBgColor": "Background color for the workspace icon (hex, e.g. '#1076ba'). Applies to the SVG favicon and PWA homescreen icon.",
   "server.iconFgColor": "Foreground (path/stroke) color for the workspace icon (hex, e.g. '#ffffff'). Applies to the SVG favicon and PWA homescreen icon.",
   "server.port": "Port for the ctrlyoke hosted server.",
-  "server.standalonePort": "Port for the standalone (non-extension) ctrlyoke server.",
   "server.theme": "Color theme for the hosted server UI.",
   "server.tls": "TLS configuration for the hosted server.",
   "server.tls.certPath": "Path to the TLS certificate file.",

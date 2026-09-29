@@ -421,7 +421,6 @@ suite("Workflow template schema", () => {
       },
       server: {
         port: server.port,
-        standalonePort: server.standalonePort,
         fallbackPorts: server.fallbackPorts,
       },
     };

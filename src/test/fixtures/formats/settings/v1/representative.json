@@ -182,7 +182,6 @@
   "server": {
     "autoStart": false,
     "port": 4747,
-    "standalonePort": 4748,
     "fallbackPorts": [],
     "theme": "auto",
     "bindAddress": "127.0.0.1",

@@ -237,10 +237,9 @@ function settingPathConstants(): Map<string, string> {
 
 /**
  * Settings-schema properties intentionally excluded from the live-dashboard-
- * control check below, either because the UI work described in the plan
- * hasn't landed yet, or (for `server.standalonePort`) because the feature it
- * configures doesn't exist yet. See dev/implemented/SETTINGS_UI_PARITY_PLAN.md
- * for the disposition of each entry.
+ * control check below because the UI work described in the plan hasn't
+ * landed yet. See dev/implemented/SETTINGS_UI_PARITY_PLAN.md for the
+ * disposition of each entry.
  *
  * As each gap gets a dashboard control, remove its path from this list and
  * re-run the suite — a listed path that's no longer missing a control fails
@@ -248,7 +247,6 @@ function settingPathConstants(): Map<string, string> {
  * rather than silently masking future gaps in the same setting.
  */
 const PENDING_UI_PARITY: readonly string[] = [
-  "server.standalonePort",
   "server.theme",
   "terminal.mobileBarLayout.bar",
   "terminal.mobileBarLayout.hidden",

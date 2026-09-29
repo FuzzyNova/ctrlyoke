@@ -294,7 +294,6 @@ export interface CtrlYokeGlobalSettings {
   server: {
     autoStart: boolean;
     port: number;
-    standalonePort: number;
     /**
      * Ordered ports to try, in order, if `port` is already in use, before
      * falling back to an OS-assigned port. Lets a workspace pin a stable,
@@ -569,7 +568,6 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
   server: {
     autoStart: false,
     port: 4747,
-    standalonePort: 4748,
     fallbackPorts: [],
     theme: "auto",
     bindAddress: "127.0.0.1",

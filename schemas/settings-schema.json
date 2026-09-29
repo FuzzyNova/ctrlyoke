@@ -817,13 +817,6 @@
           "description": "Port for the ctrlyoke hosted server.",
           "default": 4747
         },
-        "standalonePort": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 65535,
-          "description": "Port for the standalone (non-extension) ctrlyoke server.",
-          "default": 4748
-        },
         "fallbackPorts": {
           "type": "array",
           "items": {
