@@ -2634,11 +2634,19 @@ export class HostedWorkspaceViewerService {
     branch: string,
     repoId?: string
   ): Promise<{ branch: string }> {
+    const name = branch.trim();
+    if (!name || name.startsWith("-")) {
+      throw new Error("Invalid branch name");
+    }
     const repoRoot = await this.resolveRepoRoot(repoId);
-    await execFileAsync("git", ["-C", repoRoot, "checkout", branch], {
+    const localBranch = await this.resolveBranchHint(name, repoRoot);
+    if (!localBranch) {
+      throw new Error("Branch does not exist");
+    }
+    await execFileAsync("git", ["-C", repoRoot, "checkout", localBranch], {
       timeout: GIT_TIMEOUT_MS,
     });
-    return { branch };
+    return { branch: localBranch };
   }
 
   // ── Git ref diff ──────────────────────────────────────────────────────────

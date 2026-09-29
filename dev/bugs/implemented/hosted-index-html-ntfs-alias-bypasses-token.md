@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by bug-hunt final step (claude-cli)
 - **Area:** `src/server/CtrlYokeHostedServer.ts` (static-file guard before `express.static`)
-- **Severity:** low (security; the raw page is the unpatched public Vite shell)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

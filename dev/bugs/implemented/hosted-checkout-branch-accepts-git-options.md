@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by bug-hunt final step (claude-cli)
 - **Area:** `src/server/HostedWorkspaceViewerService.ts` (`checkoutBranch`), `src/server/CtrlYokeHostedServer.ts` (`POST /api/workspace-viewer/checkout-branch`)
-- **Severity:** medium (security; requires the server token)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

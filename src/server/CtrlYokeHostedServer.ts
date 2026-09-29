@@ -985,7 +985,11 @@ export class CtrlYokeHostedServer
         }
         const normalizedPath = path.posix.normalize(`/${decodedPath}`);
         const staticPath = normalizedPath.toLowerCase();
-        if (staticPath === "/index.html" || staticPath === "/favicon.svg") {
+        const isProtectedHtmlPath =
+          /^\/index(?:~\d+)?\.html?(?::.*)?$/.test(staticPath);
+        const isProtectedFaviconPath =
+          /^\/(?:favicon|favico~\d+)\.svg(?::.*)?$/.test(staticPath);
+        if (isProtectedHtmlPath || isProtectedFaviconPath) {
           return res.sendStatus(404);
         }
         return next();

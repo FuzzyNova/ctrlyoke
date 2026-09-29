@@ -170,6 +170,22 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
     });
   });
 
+  test("static fallback blocks NTFS aliases for protected files without a token", async () => {
+    await withServer(async (_root, port) => {
+      for (const requestPath of [
+        "/index.html::$DATA",
+        "/INDEX~1.HTM",
+        "/favicon.svg::$DATA",
+        "/FAVICO~1.SVG",
+      ]) {
+        const response = await sendGetRequest(port, requestPath);
+        assert.strictEqual(response.statusCode, 404, requestPath);
+        assert.ok(!response.body.includes("{{cspSource}}"), requestPath);
+        assert.ok(!response.body.includes("<html"), requestPath);
+      }
+    });
+  });
+
   test("returns credential files read-only with redacted content", async () => {
     await withServer(async (root, port, token) => {
       fs.writeFileSync(
