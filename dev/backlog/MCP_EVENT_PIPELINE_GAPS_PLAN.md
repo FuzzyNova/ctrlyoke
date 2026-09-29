@@ -182,9 +182,11 @@ four-call ctrlyoke prompt and asserts:
   `tool`, non-empty `parameters` where the call had arguments, a `result`, and a `toolCallId`;
 - no generic `TOOL_CALL` row mentions a ctrlyoke tool name.
 
-Use the cheapest model each harness supports, as this investigation did. Running this probe
-(and only this probe file, never the whole `npm run test:harness` suite) is explicitly
-authorized by this plan for step 4; routine verification elsewhere still uses `npm test`. Run it first against
+Use the cheapest model each harness supports, as this investigation did. **Live-run policy for this
+plan's workflow (authorized by the user):** any implementation step may run targeted live
+harness probes — a single harness test file, or a one-off CLI run on the cheapest model — when
+real vendor output is needed to verify its work. The full `npm run test:harness` suite is
+reserved for the orchestrator's review pass. Routine verification still uses `npm test`. Run it first against
 Claude, Codex, Qwen and Antigravity to close gap 6, and save sanitized captures from each as
 parser unit-test fixtures, so vendor renames show up in `npm test` rather than in the dashboard.
 
