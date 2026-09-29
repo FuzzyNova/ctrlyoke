@@ -14,11 +14,9 @@ import type {
 } from "../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
-  MCP_CALL_VIA,
-  MCP_SERVER_IDS,
   OPERATION_STATUS,
 } from "../types/DashboardConstants";
-import { recognizeMcpSkillCommand } from "./McpSkillCommandRecognizer";
+import { McpSkillEventRewriter } from "./McpSkillCommandRecognizer";
 
 const PENDING_KINDS = {
   SEMANTIC: "semantic",
@@ -128,47 +126,6 @@ function normalizeEventToolResult(event: CliEvent): CliEvent {
     default:
       return event;
   }
-}
-
-function normalizeMcpSkillBashEvent(event: CliEvent): CliEvent {
-  if (event.type !== CLI_EVENT_TYPES.BASH_COMMAND) {
-    return event;
-  }
-
-  const data = event.data as BashCommandData;
-  const recognized = recognizeMcpSkillCommand(data.command);
-  if (!recognized) {
-    return event;
-  }
-
-  const completed =
-    data.status === OPERATION_STATUS.COMPLETED ||
-    data.status === OPERATION_STATUS.FAILED ||
-    data.output !== undefined ||
-    data.error !== undefined ||
-    data.exitCode !== undefined;
-  return {
-    ...event,
-    type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
-    data: {
-      server: MCP_SERVER_IDS.CTRLYOKE,
-      tool: recognized.tool,
-      parameters: recognized.parameters,
-      toolCallId: data.toolCallId,
-      via: MCP_CALL_VIA.SKILL,
-      ...(completed
-        ? {
-            result: {
-              success:
-                data.status !== OPERATION_STATUS.FAILED &&
-                (data.exitCode === undefined || data.exitCode === 0),
-              output: data.output,
-              error: data.error,
-            },
-          }
-        : {}),
-    } as McpToolCallData,
-  };
 }
 
 function normalizePath(pathValue: string | undefined): string | undefined {
@@ -822,10 +779,13 @@ export function normalizeCliEventsWithSource(
   const output: CliEvent[] = [];
   const sourceIndexes: number[] = [];
   const pending: PendingEvent[] = [];
+  const skillEventRewriter = new McpSkillEventRewriter();
 
   for (const [inputIndex, originalEvent] of events.entries()) {
     const event = normalizeEventToolResult(
-      normalizeMcpSkillBashEvent(cloneEvent(originalEvent))
+      // Keep support for histories recorded before skill events were rewritten
+      // at the shared parsed-event boundary; the rewriter is idempotent.
+      skillEventRewriter.rewrite(cloneEvent(originalEvent))
     );
 
     if (

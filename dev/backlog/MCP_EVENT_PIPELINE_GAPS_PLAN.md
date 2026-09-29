@@ -1,9 +1,9 @@
 # MCP Event Pipeline Gaps — reliable detection and pairing of MCP tool calls on every harness
 
-> **Status:** In progress — items 1–4 done; 5 remains open. Prerequisite for
+> **Status:** Complete — items 1–5 done. Prerequisite for
 > [`CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md`](CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md): purpose-built
-> views are only as good as the `MCP_TOOL_CALL` events underneath them. Skill-mode calls still
-> arrive as `BASH_COMMAND` until item 5 is complete.
+> views are only as good as the `MCP_TOOL_CALL` events underneath them. Skill-mode calls are
+> rewritten at the shared parsed-event streaming boundary.
 
 ## Findings (verified 2026-09-28 against real runs)
 
@@ -239,15 +239,11 @@ parser unit-test fixtures, so vendor renames show up in `npm test` rather than i
        unverified harnesses. The Codex parser now expands multiple MCP calls and pairs the captured
        result array; Antigravity's four separate transcript calls are covered through its runtime
        transcript mapper. The strict probe passes for Claude, Codex, Qwen, and Antigravity.
-5. [ ] **D:** skill-mode mapping (reopened — see Review notes).
+5. [x] **D:** skill-mode mapping. `CliLogEventPump` rewrites parsed events before raw consumers,
+       streaming, and timeline persistence; `McpSkillEventRewriter` is shared with the normalizer
+       for older histories.
 
 ## Review notes (2026-09-28)
 
-- **Skill-mode rewrite lives in the display normalizer, not the event-production path.**
-  `normalizeMcpSkillBashEvent` runs inside `normalizeCliEventsWithSource`, so raw-event consumers
-  (`CommitMessageGenerator`'s streaming-events `submit_commit_message` detection,
-  `TimelineRecorder`, `HistoryCandidateExtractor`, `CliTerminalFormatter`, persisted
-  `events.jsonl`) still see `BASH_COMMAND`. Section D requires the rewrite where events are
-  produced so every consumer benefits.
 - Fixed in review: `TOOL_CALL`/`MCP_TOOL_CALL` completion merge dropped completion-side
   `parameters` when the initiated half had none.

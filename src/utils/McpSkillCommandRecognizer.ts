@@ -1,6 +1,101 @@
+import type {
+  BashCommandData,
+  CliEvent,
+  McpToolCallData,
+  ToolResultData,
+} from "../types/CliOutputTypes";
+import {
+  CLI_EVENT_TYPES,
+  MCP_CALL_VIA,
+  MCP_SERVER_IDS,
+  OPERATION_STATUS,
+} from "../types/DashboardConstants";
+
 export interface RecognizedMcpSkillCommand {
   tool: string;
   parameters: Record<string, unknown>;
+}
+
+/**
+ * Rewrites the skill's bash call and any matching trailing tool result into
+ * MCP events. Keep one instance for a stream so result-only halves retain the
+ * identity established by the initiated bash event.
+ */
+export class McpSkillEventRewriter {
+  private readonly recognizedCalls = new Map<
+    string,
+    RecognizedMcpSkillCommand
+  >();
+
+  rewrite(event: CliEvent): CliEvent {
+    if (event.type === CLI_EVENT_TYPES.BASH_COMMAND) {
+      const data = event.data as BashCommandData;
+      const recognized = recognizeMcpSkillCommand(data.command);
+      if (!recognized) {
+        return event;
+      }
+
+      if (data.toolCallId) {
+        this.recognizedCalls.set(data.toolCallId, recognized);
+      }
+      const completed =
+        data.status === OPERATION_STATUS.COMPLETED ||
+        data.status === OPERATION_STATUS.FAILED ||
+        data.output !== undefined ||
+        data.error !== undefined ||
+        data.exitCode !== undefined;
+      return {
+        ...event,
+        type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+        data: {
+          ...this.buildCallData(recognized, data.toolCallId),
+          ...(completed
+            ? {
+                result: {
+                  success:
+                    data.status !== OPERATION_STATUS.FAILED &&
+                    (data.exitCode === undefined || data.exitCode === 0),
+                  output: data.output,
+                  error: data.error,
+                },
+              }
+            : {}),
+        } as McpToolCallData,
+      };
+    }
+
+    if (event.type === CLI_EVENT_TYPES.TOOL_RESULT) {
+      const data = event.data as ToolResultData;
+      const recognized = this.recognizedCalls.get(data.toolCallId);
+      if (recognized) {
+        return {
+          ...event,
+          type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+          data: {
+            ...this.buildCallData(recognized, data.toolCallId),
+            result: data.result,
+          } as McpToolCallData,
+        };
+      }
+    }
+
+    // Already rewritten events pass through unchanged, making this safe for
+    // legacy normalizer callers that can also receive current stream events.
+    return event;
+  }
+
+  private buildCallData(
+    recognized: RecognizedMcpSkillCommand,
+    toolCallId: string | undefined
+  ): McpToolCallData {
+    return {
+      server: MCP_SERVER_IDS.CTRLYOKE,
+      tool: recognized.tool,
+      parameters: recognized.parameters,
+      toolCallId,
+      via: MCP_CALL_VIA.SKILL,
+    };
+  }
 }
 
 function tokenizeCommand(command: string): string[] | undefined {
