@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude)
 - **Area:** `src/platform/WorkspaceRootResolver.ts`, `src/platform/CliAdapter.ts`, `src/platform/VsCodeWorkspaceRoot.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

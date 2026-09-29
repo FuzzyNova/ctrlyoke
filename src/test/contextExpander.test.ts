@@ -89,6 +89,25 @@ suite("ContextExpander.expandContextSplit", () => {
 
   // ──────────────────────────────────────────────────────────────────────────
   suite("full-file @path references", () => {
+    test("single-root basename prefix resolves to a same-named subdirectory", async () => {
+      const root = freshWorkspace();
+      const rootName = path.basename(root);
+      const filePath = path.join(root, rootName, "settings.py");
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      fs.writeFileSync(filePath, "DEBUG = True\n");
+
+      const expander = new ContextExpander({
+        workspaceRoot: root,
+        namedRoots: [{ name: rootName, fsPath: root }],
+      });
+      const result = await expander.expandContextSplit(
+        `Review @${rootName}/settings.py`
+      );
+
+      assert.deepStrictEqual(result.directFileRefs, [filePath]);
+      assert.deepStrictEqual(result.skippedReferences, []);
+    });
+
     test("puts full-file @path ref into directFileRefs as absolute path", async () => {
       const root = freshWorkspace();
       // Create an actual file to reference

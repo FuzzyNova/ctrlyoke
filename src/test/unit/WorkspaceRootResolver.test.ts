@@ -245,6 +245,60 @@ suite("WorkspaceRootResolver Tests", () => {
   suite("resolveReferencePath", () => {
     const workflowDir = path.resolve("/repo/workflows");
 
+    test("single-root basename prefix resolves as a workspace subdirectory", async () => {
+      const tempRoot = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-single-root-prefix-")
+      );
+      try {
+        const rootName = path.basename(tempRoot);
+        const nestedFile = path.join(tempRoot, rootName, "settings.py");
+        await fs.mkdir(path.dirname(nestedFile), { recursive: true });
+        await fs.writeFile(nestedFile, "DEBUG = True\n");
+
+        assert.deepStrictEqual(
+          resolveReferencePath(`${rootName}/settings.py`, {
+            primaryRoot: tempRoot,
+            namedRoots: [{ name: rootName, fsPath: tempRoot }],
+          }),
+          {
+            absolutePath: nestedFile,
+            base: "workspace",
+          }
+        );
+      } finally {
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
+    test("multi-root folder-name prefix still resolves against the named root", async () => {
+      const tempRoot = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-multi-root-prefix-")
+      );
+      try {
+        const root1 = path.join(tempRoot, "root1");
+        const root2 = path.join(tempRoot, "root2");
+        const nestedFile = path.join(root2, "src", "index.ts");
+        await fs.mkdir(path.dirname(nestedFile), { recursive: true });
+        await fs.writeFile(nestedFile, "export {};\n");
+
+        assert.deepStrictEqual(
+          resolveReferencePath("root2/src/index.ts", {
+            primaryRoot: root1,
+            namedRoots: [
+              { name: "root1", fsPath: root1 },
+              { name: "root2", fsPath: root2 },
+            ],
+          }),
+          {
+            absolutePath: nestedFile,
+            base: "namedRoot",
+          }
+        );
+      } finally {
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
     test("selects each lexical base deterministically", () => {
       const cases = [
         {

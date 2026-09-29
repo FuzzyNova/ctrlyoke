@@ -890,6 +890,66 @@ suite("EndConditionEvaluator Tests", () => {
       return evaluator.evaluateCondition(condition, workspaceRoot);
     }
 
+    test("workspace script shell operators run as shell syntax", async () => {
+      const isWindows = process.platform === "win32";
+      const scriptName = isWindows ? "check.cmd" : "check.sh";
+      const scriptPath = path.join(workspaceRoot, scriptName);
+      fs.writeFileSync(
+        scriptPath,
+        isWindows
+          ? "@echo off\r\necho CHECK\r\n"
+          : "#!/bin/sh\nprintf 'CHECK\\n'\n",
+        "utf8"
+      );
+      if (!isWindows) fs.chmodSync(scriptPath, 0o755);
+      const invocation = isWindows
+        ? `.${path.sep}${scriptName}`
+        : `./${scriptName}`;
+      const shell = isWindows ? "cmd" : "sh";
+      const command = (tail: string) => `${invocation} ${tail}`;
+
+      const passed = await evaluate({
+        script: command(isWindows ? "&& echo SECOND" : "&& printf SECOND"),
+        shell,
+        compareSource: "stdout",
+        expected: isWindows ? "CHECK\r\nSECOND" : "CHECK\nSECOND",
+      });
+      assert.strictEqual(passed.passed, true, passed.stderr || passed.stdout);
+
+      const failed = await evaluate({
+        script: command('&& node -e "process.exit(3)"'),
+        shell,
+        compareSource: "exitCode",
+      });
+      assert.strictEqual(failed.passed, false, failed.stderr || failed.stdout);
+      assert.strictEqual(failed.exitCode, 3);
+
+      const piped = await evaluate({
+        script: command(isWindows ? "| findstr CHECK" : "| grep CHECK"),
+        shell,
+        compareSource: "stdout",
+        expected: "CHECK",
+      });
+      assert.strictEqual(piped.passed, true, piped.stderr || piped.stdout);
+    });
+
+    test("plain workspace script arguments stay on direct argv dispatch", async () => {
+      const scriptPath = path.join(workspaceRoot, "argv-check.js");
+      fs.writeFileSync(
+        scriptPath,
+        "process.stdout.write(JSON.stringify(process.argv.slice(2)))",
+        "utf8"
+      );
+
+      const result = await evaluate({
+        script: 'argv-check.js arg1 "a b"',
+        compareSource: "stdout",
+        expected: '["arg1","a b"]',
+      });
+
+      assert.strictEqual(result.passed, true, result.stderr || result.stdout);
+    });
+
     test("compares the exit code with eq", async () => {
       const result = await evaluate({
         script: 'node -e "process.exit(3)"',

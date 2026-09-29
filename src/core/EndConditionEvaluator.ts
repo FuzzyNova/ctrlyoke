@@ -35,7 +35,10 @@ import {
   compareScriptOutput,
   type ScriptComparisonConfig,
 } from "../utils/ScriptComparison";
-import { resolveShellInvocation } from "./harness/PtyProcessManager";
+import {
+  containsShellSyntax,
+  resolveShellInvocation,
+} from "./harness/PtyProcessManager";
 import {
   getShellInvocationError,
   resolveShellKind,
@@ -219,8 +222,12 @@ export class EndConditionEvaluator {
         windowsVerbatimArguments?: boolean;
       };
 
-      if (resolvedScriptPath) {
-        // File found - determine script type and command
+      if (
+        resolvedScriptPath &&
+        !containsShellSyntax(additionalArgs.join(" "))
+      ) {
+        // A plain file command can use direct argv dispatch. If its arguments
+        // include shell syntax, the command below must retain shell semantics.
         const fileCommand = this.getScriptCommand(resolvedScriptPath);
         if (!fileCommand) {
           return {
@@ -251,7 +258,7 @@ export class EndConditionEvaluator {
         // interactive script steps — the same script text no longer runs
         // under a different, silently-chosen shell depending on execution mode.
         Log.info(
-          `[EndConditionEvaluator] Script file not found, treating as direct command: ${condition.script}`
+          `[EndConditionEvaluator] Using shell for command: ${condition.script}`
         );
         const shellInvocation = resolveShellInvocation(
           condition.script,
