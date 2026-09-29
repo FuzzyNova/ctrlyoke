@@ -950,10 +950,16 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
                   }
                 />
               }
-              header={highlightText(
-                customView.summary,
-                getFieldMatches("toolLabel")
-              )}
+              header={
+                <span
+                  className={customView.warning ? "text-warning-fg" : undefined}
+                >
+                  {highlightText(
+                    customView.summary,
+                    getFieldMatches("toolLabel")
+                  )}
+                </span>
+              }
             >
               <Body
                 params={customView.params}

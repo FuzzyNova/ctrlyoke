@@ -14,13 +14,38 @@ import {
   OUTPUT_ROW_KINDS,
 } from "@root/types/DashboardConstants";
 import type { OutputRenderRow } from "@utils/outputRows";
+import { OutputRow } from "@components/output/OutputRow";
+import { buildToolCallRenderPlan } from "@utils/toolCallLayout";
 import { estimatePostNoteHeight } from "@components/output/ctrlyoke-tools/postNoteModel";
 import { AppendStepBody } from "@components/output/ctrlyoke-tools/AppendStepView";
+import { ClaimPathsBody } from "@components/output/ctrlyoke-tools/ClaimPathsView";
+import { ReleasePathsBody } from "@components/output/ctrlyoke-tools/ReleasePathsView";
+import { ReadNotesBody } from "@components/output/ctrlyoke-tools/ReadNotesView";
+import {
+  estimateClaimPathsHeight,
+  parseClaimPathsParams,
+  parseClaimPathsResultText,
+} from "@components/output/ctrlyoke-tools/claimPathsModel";
+import {
+  estimateReleasePathsHeight,
+  parseReleasePathsParams,
+  parseReleasePathsResultText,
+} from "@components/output/ctrlyoke-tools/releasePathsModel";
+import {
+  estimateReadNotesHeight,
+  parseReadNotesParams,
+  parseReadNotesResultText,
+} from "@components/output/ctrlyoke-tools/readNotesModel";
 import {
   estimateAppendStepHeight,
   parseAppendStepParams,
   parseAppendStepResultText,
 } from "@components/output/ctrlyoke-tools/appendStepModel";
+
+vi.mock("@hooks/useVsCodeApi", () => ({
+  getVsCodeApi: () => ({ postMessage: vi.fn() }),
+  isStandalone: false,
+}));
 
 const noteResult = {
   success: true,
@@ -42,7 +67,332 @@ const appendResult = {
   ],
 };
 
+const owner = {
+  participantId: "participant-reviewer",
+  kind: "external" as const,
+  label: "reviewer",
+  attested: true,
+  via: "mcp" as const,
+};
+const readNotesResult = {
+  entries: [
+    {
+      seq: 7,
+      at: "2026-09-29T12:00:00.000Z",
+      kind: "note" as const,
+      from: owner,
+      text: "**Review carefully** <img src=x onerror=alert(1)>",
+      via: "mcp" as const,
+      untrusted: true,
+      attribution: "reviewer",
+    },
+  ],
+  nextCursor: 8,
+};
+
 describe("ctrlyoke MCP tool views", () => {
+  it("parses claim_paths results, falls back for invalid/error results, and warns on denials", () => {
+    const raw = JSON.stringify({
+      granted: ["src/a.ts", "src/b.ts"],
+      denied: [{ path: "src/c.ts", owner }],
+      scope: { should: "not render" },
+    });
+    expect(parseClaimPathsParams({ paths: ["src/a.ts"] })).toEqual({
+      paths: ["src/a.ts"],
+    });
+    expect(parseClaimPathsParams({ paths: [2] })).toBeUndefined();
+    expect(parseClaimPathsResultText(raw)?.denied[0].path).toBe("src/c.ts");
+    expect(parseClaimPathsResultText("invalid")).toBeUndefined();
+    expect(
+      resolveCtrlYokeToolView({
+        server: MCP_SERVER_IDS.CTRLYOKE,
+        tool: "claim_paths",
+        result: { success: true, output: raw },
+      })
+    ).toMatchObject({ summary: "Claimed 2, 1 denied", warning: true });
+    expect(
+      resolveCtrlYokeToolView({
+        server: MCP_SERVER_IDS.CTRLYOKE,
+        tool: "claim_paths",
+        result: { success: true, output: "invalid" },
+      })
+    ).toBeUndefined();
+    expect(
+      resolveCtrlYokeToolView({
+        server: MCP_SERVER_IDS.CTRLYOKE,
+        tool: "claim_paths",
+        result: { success: false, error: "failed" },
+      })
+    ).toBeUndefined();
+  });
+
+  it("renders claim_paths from result alone with clickable grants and denial warning styling", () => {
+    const result = parseClaimPathsResultText(
+      JSON.stringify({
+        granted: ["src/file.ts"],
+        denied: [{ path: "src/blocked.ts", owner }],
+      })
+    )!;
+    render(
+      <ClaimPathsBody
+        params={undefined}
+        result={result}
+        server={MCP_SERVER_IDS.CTRLYOKE}
+        tool="claim_paths"
+        expansion={{ ...DEFAULT_TOOL_CALL_EXPANSION_STATE }}
+        onExpansionChange={vi.fn()}
+      />
+    );
+    expect(
+      screen.getByRole("button", { name: "src/file.ts" })
+    ).toBeInTheDocument();
+    expect(screen.getByText(/src\/blocked.ts — denied to/)).toHaveClass(
+      "text-warning-fg"
+    );
+    expect(screen.queryByText(/should not render/)).toBeNull();
+
+    const data = {
+      server: MCP_SERVER_IDS.CTRLYOKE,
+      tool: "claim_paths",
+      result: {
+        success: true,
+        output: JSON.stringify({
+          granted: ["src/file.ts"],
+          denied: [{ path: "src/blocked.ts", owner }],
+        }),
+      },
+    };
+    const expansion = { ...DEFAULT_TOOL_CALL_EXPANSION_STATE };
+    const row: OutputRenderRow = {
+      key: "claim-warning",
+      rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
+      target: { kind: "queue", index: 0 },
+      event: { type: CLI_EVENT_TYPES.MCP_TOOL_CALL, data },
+      eventIndex: 0,
+      rawTextOutput: false,
+      attemptIndex: 0,
+      hideDiff: false,
+      estimateSize: 80,
+      toolCall: {
+        expansion,
+        renderPlan: buildToolCallRenderPlan({
+          parameters: undefined,
+          result: data.result,
+          expansion,
+        }),
+      },
+    };
+    const { container } = render(
+      <OutputRow row={row} isExecutionActive={false} />
+    );
+    expect(screen.getByText("Claimed 1, 1 denied")).toHaveClass(
+      "text-warning-fg"
+    );
+    expect(
+      container.querySelector(".text-indicator-success")
+    ).toBeInTheDocument();
+  });
+
+  it("keeps claim_paths find text aligned and estimates narrow and wide rows", () => {
+    const result = parseClaimPathsResultText(
+      JSON.stringify({
+        granted: ["src/a-long-filename.ts"],
+        denied: [{ path: "src/b.ts", owner }],
+      })
+    )!;
+    const data = {
+      server: MCP_SERVER_IDS.CTRLYOKE,
+      tool: "claim_paths",
+      result: { success: true, output: JSON.stringify(result) },
+    };
+    const resolved = resolveCtrlYokeToolView(data)!;
+    const row: OutputRenderRow = {
+      key: "claim",
+      rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
+      target: { kind: "queue", index: 0 },
+      event: { type: CLI_EVENT_TYPES.MCP_TOOL_CALL, data },
+      eventIndex: 0,
+      rawTextOutput: false,
+      attemptIndex: 0,
+      hideDiff: false,
+      estimateSize: 80,
+    };
+    expect(
+      getOutputRowSearchSegments(row).map((segment) => segment.text)
+    ).toEqual(resolved.searchText);
+    expect(
+      estimateClaimPathsHeight(undefined, result, 280, 13)
+    ).toBeGreaterThan(estimateClaimPathsHeight(undefined, result, 900, 13));
+  });
+
+  it("parses release_paths results, falls back for invalid/error results, and renders from result alone", () => {
+    const raw = JSON.stringify({
+      released: ["src/a.ts"],
+      notHeld: ["src/b.ts"],
+      scope: { hidden: true },
+    });
+    expect(parseReleasePathsParams({ paths: ["src/a.ts"] })).toEqual({
+      paths: ["src/a.ts"],
+    });
+    expect(parseReleasePathsParams({ paths: [false] })).toBeUndefined();
+    expect(parseReleasePathsResultText(raw)).toEqual({
+      released: ["src/a.ts"],
+      notHeld: ["src/b.ts"],
+    });
+    expect(parseReleasePathsResultText("invalid")).toBeUndefined();
+    expect(
+      resolveCtrlYokeToolView({
+        server: MCP_SERVER_IDS.CTRLYOKE,
+        tool: "release_paths",
+        result: { success: true, output: raw },
+      })?.summary
+    ).toBe("Released 1 path");
+    expect(
+      resolveCtrlYokeToolView({
+        server: MCP_SERVER_IDS.CTRLYOKE,
+        tool: "release_paths",
+        result: { success: true, output: "invalid" },
+      })
+    ).toBeUndefined();
+    expect(
+      resolveCtrlYokeToolView({
+        server: MCP_SERVER_IDS.CTRLYOKE,
+        tool: "release_paths",
+        result: { success: false, error: "failed" },
+      })
+    ).toBeUndefined();
+    render(
+      <ReleasePathsBody
+        params={undefined}
+        result={parseReleasePathsResultText(raw)!}
+        server={MCP_SERVER_IDS.CTRLYOKE}
+        tool="release_paths"
+        expansion={{ ...DEFAULT_TOOL_CALL_EXPANSION_STATE }}
+        onExpansionChange={vi.fn()}
+      />
+    );
+    expect(
+      screen.getByRole("button", { name: "src/a.ts" })
+    ).toBeInTheDocument();
+    expect(screen.getByText("Not held: src/b.ts")).toHaveClass(
+      "text-description-fg"
+    );
+    expect(screen.queryByText(/hidden/)).toBeNull();
+  });
+
+  it("keeps release_paths find text aligned and estimates narrow and wide rows", () => {
+    const result = parseReleasePathsResultText(
+      JSON.stringify({
+        released: ["src/a-long-filename.ts"],
+        notHeld: ["src/b.ts"],
+      })
+    )!;
+    const data = {
+      server: MCP_SERVER_IDS.CTRLYOKE,
+      tool: "release_paths",
+      result: { success: true, output: JSON.stringify(result) },
+    };
+    const row: OutputRenderRow = {
+      key: "release",
+      rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
+      target: { kind: "queue", index: 0 },
+      event: { type: CLI_EVENT_TYPES.MCP_TOOL_CALL, data },
+      eventIndex: 0,
+      rawTextOutput: false,
+      attemptIndex: 0,
+      hideDiff: false,
+      estimateSize: 80,
+    };
+    expect(
+      getOutputRowSearchSegments(row).map((segment) => segment.text)
+    ).toEqual(resolveCtrlYokeToolView(data)?.searchText);
+    expect(
+      estimateReleasePathsHeight(undefined, result, 280, 13)
+    ).toBeGreaterThan(estimateReleasePathsHeight(undefined, result, 900, 13));
+  });
+
+  it("parses read_notes results, falls back for invalid/error results, and safely renders untrusted markdown", () => {
+    const raw = JSON.stringify({ ...readNotesResult, scope: { hidden: true } });
+    expect(parseReadNotesParams({ since: 2, from: ["reviewer"] })).toEqual({
+      since: 2,
+      from: ["reviewer"],
+    });
+    expect(parseReadNotesParams({ from: [1] })).toBeUndefined();
+    expect(parseReadNotesResultText(raw)?.entries).toHaveLength(1);
+    expect(parseReadNotesResultText("invalid")).toBeUndefined();
+    expect(
+      resolveCtrlYokeToolView({
+        server: MCP_SERVER_IDS.CTRLYOKE,
+        tool: "read_notes",
+        result: { success: true, output: raw },
+      })?.summary
+    ).toBe("Read 1 note");
+    expect(
+      resolveCtrlYokeToolView({
+        server: MCP_SERVER_IDS.CTRLYOKE,
+        tool: "read_notes",
+        result: { success: true, output: "invalid" },
+      })
+    ).toBeUndefined();
+    expect(
+      resolveCtrlYokeToolView({
+        server: MCP_SERVER_IDS.CTRLYOKE,
+        tool: "read_notes",
+        result: { success: false, error: "failed" },
+      })
+    ).toBeUndefined();
+    const resolved = resolveCtrlYokeToolView({
+      server: MCP_SERVER_IDS.CTRLYOKE,
+      tool: "read_notes",
+      result: { success: true, output: raw },
+    })!;
+    const { container } = render(
+      <ReadNotesBody
+        params={undefined}
+        result={resolved.result as { entries: typeof readNotesResult.entries }}
+        server={MCP_SERVER_IDS.CTRLYOKE}
+        tool="read_notes"
+        expansion={{ ...DEFAULT_TOOL_CALL_EXPANSION_STATE }}
+        onExpansionChange={vi.fn()}
+      />
+    );
+    expect(screen.getByText("Review carefully").tagName.toLowerCase()).toBe(
+      "strong"
+    );
+    expect(container.querySelector("img")).toBeNull();
+    expect(
+      container.querySelector("[data-untrusted-content='true']")
+    ).not.toBeNull();
+    expect(container.textContent).not.toContain("hidden");
+  });
+
+  it("keeps read_notes find text aligned and estimates narrow and wide rows", () => {
+    const raw = JSON.stringify(readNotesResult);
+    const data = {
+      server: MCP_SERVER_IDS.CTRLYOKE,
+      tool: "read_notes",
+      result: { success: true, output: raw },
+    };
+    const row: OutputRenderRow = {
+      key: "notes",
+      rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
+      target: { kind: "queue", index: 0 },
+      event: { type: CLI_EVENT_TYPES.MCP_TOOL_CALL, data },
+      eventIndex: 0,
+      rawTextOutput: false,
+      attemptIndex: 0,
+      hideDiff: false,
+      estimateSize: 80,
+    };
+    expect(
+      getOutputRowSearchSegments(row).map((segment) => segment.text)
+    ).toEqual(resolveCtrlYokeToolView(data)?.searchText);
+    const result = parseReadNotesResultText(raw)!;
+    expect(estimateReadNotesHeight(undefined, result, 280, 13)).toBeGreaterThan(
+      estimateReadNotesHeight(undefined, result, 900, 13)
+    );
+  });
+
   it("parses append_step input and result shapes and falls back on malformed payloads", () => {
     expect(
       parseAppendStepParams({ steps: [{ prompt: "Do it" }], position: "next" })

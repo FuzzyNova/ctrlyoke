@@ -12,6 +12,20 @@ import type { PostNoteParams, PostNoteResult } from "./postNoteModel";
 import { MCP_APPEND_STEP_TOOL_NAME } from "@root/utils/McpToolDefinitions";
 import { AppendStepBody } from "./AppendStepView";
 import type { AppendStepParams, AppendStepResult } from "./appendStepModel";
+import {
+  MCP_CLAIM_PATHS_TOOL_NAME,
+  MCP_RELEASE_PATHS_TOOL_NAME,
+  MCP_READ_NOTES_TOOL_NAME,
+} from "@root/utils/McpToolDefinitions";
+import { ClaimPathsBody } from "./ClaimPathsView";
+import type { ClaimPathsParams, ClaimPathsResult } from "./claimPathsModel";
+import { ReleasePathsBody } from "./ReleasePathsView";
+import type {
+  ReleasePathsParams,
+  ReleasePathsResult,
+} from "./releasePathsModel";
+import { ReadNotesBody } from "./ReadNotesView";
+import type { ReadNotesParams, ReadNotesResult } from "./readNotesModel";
 
 export interface CtrlYokeToolBodyProps {
   params: unknown;
@@ -80,10 +94,53 @@ const AppendStepBodyAdapter: React.FC<CtrlYokeToolBodyProps> = ({
   />
 );
 
+const ClaimPathsBodyAdapter: React.FC<CtrlYokeToolBodyProps> = (props) => (
+  <ClaimPathsBody
+    params={props.params as ClaimPathsParams | undefined}
+    result={props.result as ClaimPathsResult}
+    server={props.data.server}
+    tool={props.data.tool}
+    parameters={props.data.parameters}
+    genericResult={props.data.result}
+    expansion={props.expansion}
+    onExpansionChange={props.onExpansionChange}
+  />
+);
+
+const ReleasePathsBodyAdapter: React.FC<CtrlYokeToolBodyProps> = (props) => (
+  <ReleasePathsBody
+    params={props.params as ReleasePathsParams | undefined}
+    result={props.result as ReleasePathsResult}
+    server={props.data.server}
+    tool={props.data.tool}
+    parameters={props.data.parameters}
+    genericResult={props.data.result}
+    expansion={props.expansion}
+    onExpansionChange={props.onExpansionChange}
+  />
+);
+
+const ReadNotesBodyAdapter: React.FC<CtrlYokeToolBodyProps> = (props) => (
+  <ReadNotesBody
+    params={props.params as ReadNotesParams | undefined}
+    result={props.result as ReadNotesResult}
+    server={props.data.server}
+    tool={props.data.tool}
+    parameters={props.data.parameters}
+    genericResult={props.data.result}
+    expansion={props.expansion}
+    onExpansionChange={props.onExpansionChange}
+    findDecorations={props.findDecorations}
+  />
+);
+
 /** React bodies stay separate from the pure parsing/search/height registry. */
 export const CTRLYOKE_TOOL_VIEW_BODIES: Partial<
   Record<McpToolName, React.ComponentType<CtrlYokeToolBodyProps>>
 > = {
   [MCP_POST_NOTE_TOOL_NAME]: PostNoteBodyAdapter,
   [MCP_APPEND_STEP_TOOL_NAME]: AppendStepBodyAdapter,
+  [MCP_CLAIM_PATHS_TOOL_NAME]: ClaimPathsBodyAdapter,
+  [MCP_RELEASE_PATHS_TOOL_NAME]: ReleasePathsBodyAdapter,
+  [MCP_READ_NOTES_TOOL_NAME]: ReadNotesBodyAdapter,
 };

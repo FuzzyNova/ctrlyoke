@@ -1,6 +1,6 @@
 # ctrlyoke MCP Tool-Call Views — purpose-built rows for our own MCP tools
 
-> **Status:** Stages 1 (`post_note`) and 2 (`append_step`) implemented; stages 3–5 remain. Follows the 2026-09-28 removal of `CoordinationActivityRow`
+> **Status:** Stages 1 (`post_note`), 2 (`append_step`), and 3 (`claim_paths`, `release_paths`, `read_notes`) implemented; stages 4–5 remain. Follows the 2026-09-28 removal of `CoordinationActivityRow`
 > (see the addendum in
 > [`EXECUTION_ROOT_COORDINATION_PLAN.md`](../implemented/EXECUTION_ROOT_COORDINATION_PLAN.md)),
 > which left the generic MCP tool-call row as the only place a step's coordination activity
