@@ -273,7 +273,7 @@ records any deviation from the design above in that section of this doc.
 - [x] `buildReplyPropertyValues()` in `utils/replyToStep.ts` (4)
 - [x] Editor store `replyContext`, `startReplyToStep()` / `cancelReplyToStep()` (5)
 - [x] `StatusBanner` extraction (6) and reply banner in `EditorSection` (7)
-- [ ] Context menu item wired into both step menus (8), full gate green (9)
+- [x] Context menu item wired into both step menus (8), full gate green (9)
 
 Foundation implementation note: `getStepSessionId()` lives in
 `utils/stepMetadataClipboard.ts` beside `StepRuntimeMetaSnapshot`. The dashboard
@@ -298,6 +298,12 @@ Banner implementation note: `StatusBanner` now owns the shared tone colors,
 contrast text treatment, icon, status role, and right-aligned action slot. The
 reply banner uses the editor's compact tier to hide its source label. No
 deviation from §5.
+
+Context-menu implementation note: `Reply to Step` uses each menu target's
+resolved session and resolved harness, and remains available in read-only,
+running, and history views. The resolved harness stays typed as `HarnessId`;
+an invalid runtime harness falls back to the resolver's harness. Typecheck,
+lint, and the full test gate passed with no other deviations.
 
 ## Tests (`src/ui/webview-react/test/**`)
 

@@ -14,6 +14,7 @@ import {
 } from "../types/messages";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import { useEditorStore } from "@store/editorStore";
+import { useSettingsStore } from "@store/settingsStore";
 import { executionOwnsCurrentStep } from "@utils/status";
 import {
   buildWorkflowStepEnabledUpdate,
@@ -21,12 +22,16 @@ import {
 } from "@utils/stepClipboard";
 import { type StepRuntimeMetaSnapshot } from "@utils/stepMetadataClipboard";
 import {
+  buildReplyToStepMenuItem,
   buildStepCopyMenuItems,
   buildStepOutputFilterMenuItems,
   buildStepGroupingMenuItems,
   isParallelGroupTopologyLocked,
   getPresentOutputTargetKeys,
 } from "@utils/stepContextMenuItems";
+import { getStepSessionId } from "@utils/stepMetadataClipboard";
+import { buildReplyPropertyValues } from "@utils/replyToStep";
+import { isScriptWorkflowStep } from "@utils/stepClipboard";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import type { ReorderPromptsMessage } from "@root/types/WebviewMessageTypes";
 import type { CliOutput } from "@store/workflowStore";
@@ -304,6 +309,7 @@ export function useStepContextMenu({
             pendingGroups: nextPendingGroups,
           }),
       });
+      const sessionId = getStepSessionId(step, latestOutput, runtimeMeta);
 
       setContextMenu({
         x,
@@ -316,6 +322,28 @@ export function useStepContextMenu({
             latestOutput,
             runtimeMeta,
             liveContextWindow,
+          }),
+          { type: "divider" },
+          buildReplyToStepMenuItem({
+            step,
+            sessionId,
+            onClick: () => {
+              if (!sessionId || isScriptWorkflowStep(step)) return;
+              const { workflowProperties, globalSettings } =
+                useSettingsStore.getState();
+              const properties = buildReplyPropertyValues({
+                step,
+                sessionId,
+                workflowProperties,
+                globalSettings,
+              });
+              useEditorStore.getState().startReplyToStep({
+                properties,
+                sessionId,
+                harness: properties.harness,
+                sourceLabel: `Step ${deleteIndex + 1}`,
+              });
+            },
           }),
           { type: "divider" },
           ...buildStepOutputFilterMenuItems({

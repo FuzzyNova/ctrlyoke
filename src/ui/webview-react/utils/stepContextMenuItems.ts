@@ -102,6 +102,37 @@ export function buildStepCopyMenuItems({
   ];
 }
 
+export interface ReplyToStepMenuItemInput {
+  step: WorkflowStep;
+  sessionId?: string;
+  onClick: () => void;
+}
+
+/** Build the action that starts a new prompt using this step's session. */
+export function buildReplyToStepMenuItem({
+  step,
+  sessionId,
+  onClick,
+}: ReplyToStepMenuItemInput): StepContextMenuItem {
+  const isScriptStep = isScriptWorkflowStep(step);
+  const hasSession = typeof sessionId === "string" && sessionId.length > 0;
+
+  return {
+    label: "Reply to Step",
+    icon: "codicon-reply",
+    disabled: isScriptStep || !hasSession,
+    disabledTitle: isScriptStep
+      ? "Script steps have no AI session to reply to"
+      : !hasSession
+        ? "This step has no session to resume yet"
+        : undefined,
+    onClick: () => {
+      if (isScriptStep || !hasSession) return;
+      onClick();
+    },
+  };
+}
+
 export interface StepOutputFilterMenuItemsInput {
   hidden: boolean;
   onToggle: () => void;

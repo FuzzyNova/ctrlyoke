@@ -1,7 +1,9 @@
 import { resolveExecutionProperties } from "@root/types/ExecutionPropertyResolver";
 import {
+  HARNESS_IDS,
   MCP_SKILL_NAMES,
   PRIOR_CONTEXT_KEYWORDS,
+  type HarnessId,
 } from "@root/types/DashboardConstants";
 import type { PromptStep } from "@root/types/WebviewMessageTypes";
 import type { PropertyValues } from "@store/editorStore";
@@ -16,6 +18,11 @@ import {
 } from "@utils/coreWorkflowAdapter";
 
 const MCP_SKILL_NAME_SET = new Set<string>(Object.values(MCP_SKILL_NAMES));
+const HARNESS_ID_SET = new Set<string>(Object.values(HARNESS_IDS));
+
+function isHarnessId(value: string): value is HarnessId {
+  return HARNESS_ID_SET.has(value);
+}
 
 export interface BuildReplyPropertyValuesInput {
   step: PromptStep;
@@ -30,13 +37,17 @@ export function buildReplyPropertyValues({
   sessionId,
   workflowProperties,
   globalSettings,
-}: BuildReplyPropertyValuesInput): PropertyValues {
+}: BuildReplyPropertyValuesInput): PropertyValues & { harness: HarnessId } {
   const { properties } = resolveExecutionProperties(
     toCorePromptStep(step),
     toCoreWorkflow([], null, workflowProperties),
     { defaults: createDefaults(globalSettings), hostCanProvidePty: true }
   );
   const runtime = step._runtime;
+  const harness =
+    runtime?.harness !== undefined && isHarnessId(runtime.harness)
+      ? runtime.harness
+      : properties.harness;
   const resolvedSkills =
     runtime?.skills !== undefined ? runtime.skills : properties.skills;
   const skills = (resolvedSkills ?? []).filter(
@@ -52,8 +63,7 @@ export function buildReplyPropertyValues({
   const toolPermissions = properties.toolPermissions;
 
   return {
-    harness:
-      runtime?.harness !== undefined ? runtime.harness : properties.harness,
+    harness,
     model: runtime?.model !== undefined ? runtime.model : properties.model,
     executionMode:
       runtime?.executionMode !== undefined

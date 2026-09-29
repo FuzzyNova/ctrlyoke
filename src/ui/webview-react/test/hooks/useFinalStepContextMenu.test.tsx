@@ -4,6 +4,8 @@ import { useFinalStepContextMenu } from "@hooks/useFinalStepContextMenu";
 import type { WorkflowStep, CliOutput } from "@store/workflowStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
+import { useEditorStore } from "@store/editorStore";
+import { useSettingsStore } from "@store/settingsStore";
 import { FINAL_STEP_PHASES, OUTPUT_HISTORY_KINDS } from "@/types/messages";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 
@@ -51,12 +53,14 @@ function TestHarness({
   isDisabled = false,
   outputText,
   latestOutput,
+  runtimeMeta,
 }: {
   finalStep: WorkflowStep | null | undefined;
   isReadOnly?: boolean;
   isDisabled?: boolean;
   outputText?: string;
   latestOutput?: CliOutput | null;
+  runtimeMeta?: { sessionId?: string; elapsed?: number };
 }) {
   const { openFinalStepContextMenu, finalStepContextMenuPortal } =
     useFinalStepContextMenu({
@@ -66,6 +70,7 @@ function TestHarness({
       onToggleEnabled: vi.fn(),
       outputText,
       latestOutput,
+      runtimeMeta,
     });
 
   return (
@@ -84,6 +89,8 @@ describe("useFinalStepContextMenu", () => {
   beforeEach(() => {
     useWorkflowStore.getState().resetWorkflow();
     useUiStore.getState().resetUi();
+    useEditorStore.getState().resetEditor();
+    useSettingsStore.getState().resetSettings();
     writeText.mockClear();
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -109,11 +116,13 @@ describe("useFinalStepContextMenu", () => {
       "Copy Prompt",
       "Copy Output",
       "Copy Metadata",
+      "Reply to Step",
       "Hide output",
       "Show only final step output",
       "Disable final step",
     ]);
-    expect(screen.getAllByRole("separator")).toHaveLength(2);
+    expect(screen.getAllByRole("separator")).toHaveLength(3);
+    expect(screen.getByRole("button", { name: "Reply to Step" })).toBeDisabled();
 
     for (const missing of [
       "Move Up",
@@ -193,6 +202,53 @@ describe("useFinalStepContextMenu", () => {
     expect(
       screen.getByRole("button", { name: "Copy Script" })
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reply to Step" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Reply to Step" })).toHaveAttribute(
+      "title",
+      "Script steps have no AI session to reply to"
+    );
+  });
+
+  it("disables Reply to Step when the final step has no session ID", () => {
+    render(<TestHarness finalStep={{ prompt: "Final prompt" }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    expect(screen.getByRole("button", { name: "Reply to Step" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Reply to Step" })).toHaveAttribute(
+      "title",
+      "This step has no session to resume yet"
+    );
+  });
+
+  it("replies with the final-step session in read-only, running, and history views", () => {
+    useUiStore.getState().setHistoryView();
+    const sessionId = "final-session-456";
+    render(
+      <TestHarness
+        finalStep={{
+          prompt: "Final prompt",
+          _runtime: { harness: "codex-cli", model: "gpt-5.4", sessionId },
+        }}
+        isReadOnly
+        isDisabled
+        runtimeMeta={{ sessionId }}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    const replyItem = screen.getByRole("button", { name: "Reply to Step" });
+    expect(replyItem).toBeEnabled();
+    fireEvent.click(replyItem);
+
+    const editor = useEditorStore.getState();
+    expect(editor.properties.resumeSession).toBe(true);
+    expect(editor.properties.sessionId).toBe(sessionId);
+    expect(editor.properties.harness).toBe("codex-cli");
+    expect(editor.replyContext).toMatchObject({
+      sessionId,
+      harness: "codex-cli",
+      sourceLabel: "Final step",
+    });
   });
 
   it("disables Copy Output when there is no output yet", () => {
