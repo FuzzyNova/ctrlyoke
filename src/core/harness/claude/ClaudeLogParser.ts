@@ -91,6 +91,7 @@ import {
  */
 interface ClaudeProviderEvent extends BaseCliEvent {
   message?: Record<string, any>;
+  requestId?: string;
   sessionId?: string;
   model?: string;
   subtype?: string;
@@ -251,6 +252,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           cache_read_input_tokens?: number;
         }
       | undefined;
+    const countedUsageIds = new Set<string>();
     let model: string | undefined;
     let elapsed: number | undefined;
     // tool_use id -> tool name, populated as assistant tool_use blocks are
@@ -364,10 +366,21 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         // Extract usage stats (including cache tokens)
         if (event.message.usage) {
           const usage = event.message.usage;
-          totalInputTokens += usage.input_tokens || 0;
-          totalOutputTokens += usage.output_tokens || 0;
-          cacheCreationTokens += usage.cache_creation_input_tokens || 0;
-          cacheReadTokens += usage.cache_read_input_tokens || 0;
+          const usageId =
+            typeof event.message.id === "string"
+              ? event.message.id
+              : typeof event.requestId === "string"
+                ? event.requestId
+                : undefined;
+          if (!usageId || !countedUsageIds.has(usageId)) {
+            totalInputTokens += usage.input_tokens || 0;
+            totalOutputTokens += usage.output_tokens || 0;
+            cacheCreationTokens += usage.cache_creation_input_tokens || 0;
+            cacheReadTokens += usage.cache_read_input_tokens || 0;
+            if (usageId) {
+              countedUsageIds.add(usageId);
+            }
+          }
           // Track last assistant turn's usage — this represents the current
           // context window state (not cumulative across turns like the totals above)
           lastAssistantUsage = usage;

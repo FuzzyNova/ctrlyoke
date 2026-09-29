@@ -14,6 +14,7 @@ import {
 import { Log } from "../utils/Log";
 import { migrateToCurrent } from "../utils/FormatMigrations";
 import { stripLeadingBom } from "../utils/TextUtils";
+import { AsyncWriteQueue } from "./AsyncWriteQueue";
 
 const warnedNewerSettingsPaths = new Set<string>();
 
@@ -25,7 +26,7 @@ export class FileConfigBackend implements ConfigBackend {
   // mobileCustomShortcuts then mobileBarLayout) reach here as two overlapping
   // calls; without this queue, the second call's load() can run before the
   // first call's save() lands, so the second write clobbers the first.
-  private writeQueue: Promise<void> = Promise.resolve();
+  private readonly writeQueue = new AsyncWriteQueue();
   private newerSchemaVersion?: number;
   private hasInvalidContent = false;
 
@@ -51,7 +52,7 @@ export class FileConfigBackend implements ConfigBackend {
 
   /** Write a setting using dot-notation path (e.g. "execution.injectMode") */
   set(settingPath: string, value: unknown): Promise<void> {
-    const write = this.writeQueue.then(async () => {
+    return this.writeQueue.enqueue(async () => {
       const current = this.load();
       if (this.newerSchemaVersion !== undefined) {
         refuseNewerSchema(
@@ -73,10 +74,6 @@ export class FileConfigBackend implements ConfigBackend {
       await this.save(current);
       this.cache = undefined;
     });
-    // Keep the queue alive even if this write rejects, but let the
-    // rejection still surface to this call's own caller via `write`.
-    this.writeQueue = write.catch(() => {});
-    return write;
   }
 
   private load(): PartialCtrlYokeSettings {

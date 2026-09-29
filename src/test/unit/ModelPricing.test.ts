@@ -83,7 +83,7 @@ suite("ModelPricing", () => {
     );
     assert.strictEqual(
       HARNESS_TOKEN_SEMANTICS[HARNESS_IDS.OPENCODE_CLI].reasoningRelationship,
-      ATTEMPT_COST_REASONING_RELATIONSHIPS.INCLUDED_IN_OUTPUT
+      ATTEMPT_COST_REASONING_RELATIONSHIPS.DISJOINT
     );
     assert.strictEqual(
       HARNESS_TOKEN_SEMANTICS[HARNESS_IDS.COPILOT_CLI].reasoningRelationship,
@@ -260,22 +260,64 @@ suite("ModelPricing", () => {
     assert.strictEqual(result.cost?.usd, 3 + 15);
   });
 
-  test("prices Copilot cache reads at the bundled cache rate", () => {
+  test("prices Copilot cache reads separately from normalized input", () => {
     const result = calculateAttemptCost({
       harnessId: HARNESS_IDS.COPILOT_CLI,
       modelId: "gpt-5.6-luna",
-      prompt: 1_000_000,
+      prompt: 100_000,
       cached: 900_000,
       completion: 1_000,
     });
 
-    // Copilot reports cache reads disjoint from prompt tokens. Its registry
-    // rates are $0.20/M input, $0.02/M cached input, and $1.20/M output.
-    assert.ok(Math.abs((result.cost?.usd ?? 0) - 0.2192) < 1e-12);
+    // Copilot input is normalized to exclude cache counts. Its registry rates
+    // are $0.20/M input, $0.02/M cached input, and $1.20/M output.
+    assert.ok(Math.abs((result.cost?.usd ?? 0) - 0.0392) < 1e-12);
     assert.ok(
       Math.abs((result.cost?.breakdown?.cachedInputUsd ?? 0) - 0.018) < 1e-12
     );
-    assert.ok((result.cost?.usd ?? Infinity) < 0.2 + 0.18 + 0.0012);
+    assert.ok(
+      Math.abs((result.cost?.breakdown?.inputUsd ?? 0) - 0.02) < 1e-12
+    );
+  });
+
+  test("prices Copilot cache counts without charging them as input again", () => {
+    const result = calculateAttemptCost({
+      harnessId: HARNESS_IDS.COPILOT_CLI,
+      modelId: "claude-sonnet-4.6",
+      prompt: 6,
+      cached: 31_232,
+      cacheCreated: 32_516,
+      completion: 484,
+      pricingOverride: {
+        inputPerMTok: 1.25,
+        outputPerMTok: 10,
+        cachedInputPerMTok: 0.125,
+        cacheWritePerMTok: 1.25,
+      },
+    });
+
+    assert.ok(Math.abs((result.cost?.usd ?? 0) - 0.0493965) < 1e-12);
+    assert.ok(Math.abs((result.cost?.breakdown?.inputUsd ?? 0) - 0.0000075) < 1e-12);
+  });
+
+  test("prices disjoint reasoning at the output rate when no reasoning rate exists", () => {
+    const pricing: ModelPricing = {
+      inputPerMTok: 2,
+      outputPerMTok: 7,
+      sourceUrl: "https://example.test/pricing",
+      verifiedOn: "2026-08-09",
+    };
+    const result = calculateTokenCost(
+      pricing,
+      HARNESS_TOKEN_SEMANTICS[HARNESS_IDS.OPENCODE_CLI],
+      { prompt: 24_073, completion: 207, reasoning: 749 }
+    );
+
+    assert.strictEqual(result?.breakdown?.reasoningUsd, (749 / 1_000_000) * 7);
+    assert.strictEqual(
+      result?.usd,
+      (24_073 / 1_000_000) * 2 + ((207 + 749) / 1_000_000) * 7
+    );
   });
 
   test("reports unknown model for a Copilot model absent from the bundled table", () => {

@@ -40,6 +40,7 @@ import {
   KEYBOARD_KEYS,
   EXECUTION_MODE_HELP_TEXT,
   PROMPT_PROPERTIES,
+  DEFAULT_ERROR_BEHAVIOR_RETRIES,
   SCRIPT_CONDITION_VARIANTS,
   MESSAGE_TYPES,
   USER_FEEDBACK_SEVERITY,
@@ -431,7 +432,9 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
     (s) => s.workflowProperties.executionMode ?? s.globalSettings.executionMode
   );
   const resolvedMaxRetries = useSettingsStore(
-    (s) => s.globalSettings.defaultEndCondition?.maxRetries ?? 1
+    (s) =>
+      s.globalSettings.defaultEndCondition?.maxRetries ??
+      DEFAULT_ERROR_BEHAVIOR_RETRIES
   );
   const inheritMaxRetriesLabel = isUnlimited(resolvedMaxRetries)
     ? "Unlimited"

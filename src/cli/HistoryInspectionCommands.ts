@@ -19,6 +19,7 @@ import { isScriptStep } from "../types/CtrlYokeTypes";
 import type { RunSummary } from "../types/WorkflowTimelineTypes";
 import {
   EXECUTION_STATES,
+  CTRLYOKE_ENV_VARS,
   FINAL_STEP_PHASES,
   HARNESS_IDS,
   HISTORY_EVENT_KINDS,
@@ -299,16 +300,16 @@ function buildHistorySearchQuery(
 
   const workflowKeys = [...(options.workflow ?? [])];
   if (options.thisWorkflow) {
-    const workingFile = process.env.CTRLYOKE_WORKING_FILE;
+    const workingFile = process.env[CTRLYOKE_ENV_VARS.WORKING_FILE];
     if (!workingFile) {
       throw new Error(
-        "--this-workflow requires CTRLYOKE_WORKING_FILE to be set."
+        `--this-workflow requires ${CTRLYOKE_ENV_VARS.WORKING_FILE} to be set.`
       );
     }
     const address = WorkflowPaths.parseWorkingFileAddressFromPath(workingFile);
     if (!address) {
       throw new Error(
-        `CTRLYOKE_WORKING_FILE does not identify a ctrlyoke workflow file: ${workingFile}`
+        `${CTRLYOKE_ENV_VARS.WORKING_FILE} does not identify a ctrlyoke workflow file: ${workingFile}`
       );
     }
     if (!workflowKeys.includes(address.workflowKey)) {

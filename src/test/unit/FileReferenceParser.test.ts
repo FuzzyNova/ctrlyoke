@@ -536,6 +536,15 @@ suite("FileReferenceParser", () => {
       );
     });
 
+    test("requires a boundary after each git-change reference", () => {
+      const text =
+        "~differently ~1500000x ~staged_files ~stash:1a ~diff. (~staged) ~stash:2, ~0123456.";
+      assert.deepStrictEqual(
+        parseGitChangeReferences(text).map((ref) => ref.raw),
+        ["~diff", "~staged", "~stash:2", "~0123456"]
+      );
+    });
+
     test("does not parse $previous/$step refs inside fenced blocks", () => {
       const text = "```\n$previous\n```\nUse $step:1 instead.";
       assert.deepStrictEqual(
@@ -591,6 +600,23 @@ suite("FileReferenceParser", () => {
         "@src/a.ts #selection:src/b.ts:1-5 #sym:src/c.ts:myFunc:10-20";
       const refs = parseAllFileReferences(prompt);
       assert.strictEqual(refs.length, 3);
+    });
+
+    test("orders mixed references by token appearance, not earlier prose paths", () => {
+      const prompt =
+        "src/a.ts is mentioned in prose first; then #sym:src/b.ts:Foo:1-5, " +
+        "@src/a.ts, and #selection:src/c.ts:3-4";
+
+      const refs = parseAllFileReferences(prompt);
+
+      assert.deepStrictEqual(
+        refs.map((ref) => [ref.path, ref.symbolName]),
+        [
+          ["src/b.ts", "Foo"],
+          ["src/a.ts", undefined],
+          ["src/c.ts", undefined],
+        ]
+      );
     });
 
     test("preserves ./ and ../ paths through parse and rewrite round trips", () => {

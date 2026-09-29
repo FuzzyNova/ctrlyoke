@@ -786,9 +786,10 @@ export class CtrlYokeHostedServer
   }
   sendStepUndoDataUpdated(
     target: UndoExecutionTarget,
-    workspaceSnapshot?: WorkspaceSnapshot
+    workspaceSnapshot?: WorkspaceSnapshot,
+    workflowId?: string
   ): void {
-    this.sink.sendStepUndoDataUpdated(target, workspaceSnapshot);
+    this.sink.sendStepUndoDataUpdated(target, workspaceSnapshot, workflowId);
   }
 
   notifyNotificationEvent(event: CtrlYokeNotificationEvent): void {
@@ -1122,8 +1123,12 @@ export class CtrlYokeHostedServer
       "/api/workspace-viewer/entry",
       requireToken,
       async (req, res) => {
+        if (typeof req.query["path"] !== "string" || req.query["path"] === "") {
+          res.status(400).json({ error: "path is required" });
+          return;
+        }
         const deleteRequest: WorkspaceDeleteRequest = {
-          path: typeof req.query["path"] === "string" ? req.query["path"] : "",
+          path: req.query["path"],
         };
         try {
           await this.viewerService.deleteEntry(deleteRequest.path);
@@ -1177,6 +1182,7 @@ export class CtrlYokeHostedServer
         const body = req.body as Partial<WorkspaceMoveRequest>;
         if (
           typeof body.sourcePath !== "string" ||
+          body.sourcePath === "" ||
           typeof body.destDir !== "string" ||
           (body.newName !== undefined && typeof body.newName !== "string")
         ) {

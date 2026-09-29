@@ -24,10 +24,21 @@
  * ```
  */
 export class PermanentFailureError extends Error {
-  constructor(message: string) {
+  readonly originalError: unknown;
+  readonly hasOriginalError: boolean;
+
+  constructor(message: string, originalError?: unknown) {
     super(message);
     this.name = "PermanentFailureError";
+    this.originalError = originalError;
+    this.hasOriginalError = arguments.length > 1;
   }
+}
+
+/** Stop retrying and propagate the original error after it reaches the retry loop. */
+export function stopRetrying(error: unknown): never {
+  const message = error instanceof Error ? error.message : String(error);
+  throw new PermanentFailureError(message, error);
 }
 
 /**
@@ -241,6 +252,9 @@ export async function retryWithBackoff<T>(
 
       // Check if this is a permanent failure (stop retrying immediately)
       if (error instanceof PermanentFailureError) {
+        if (error.hasOriginalError) {
+          throw error.originalError;
+        }
         return undefined;
       }
       // Other errors: continue to next retry

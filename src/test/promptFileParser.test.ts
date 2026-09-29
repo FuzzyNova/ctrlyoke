@@ -80,6 +80,32 @@ suite("PromptFileParser Tests", () => {
   });
 
   suite("parsePromptFile - JSON Format", () => {
+    test("preserves a script step shell override", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-parser-script-shell-")
+      );
+      const filePath = path.join(tempDir, "shell.ctrlyoke.json");
+
+      try {
+        await fs.writeFile(
+          filePath,
+          JSON.stringify({
+            steps: [{ type: "script", script: "echo shell", shell: "bash" }],
+          }),
+          "utf8"
+        );
+
+        const result = await parser.parsePromptFile(filePath);
+
+        assert.ok(result);
+        const scriptStep = result.steps?.[0];
+        assert.ok(scriptStep && "shell" in scriptStep);
+        assert.strictEqual(scriptStep.shell, "bash");
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
     test("round-trips authored colors for prompt and script steps", async () => {
       const tempDir = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-parser-step-color-")

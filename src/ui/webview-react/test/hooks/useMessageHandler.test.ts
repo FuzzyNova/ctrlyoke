@@ -53,6 +53,7 @@ import { useEditorStore } from "@store/editorStore";
 import { useTerminalStore } from "@store/terminalStore";
 import { useWorkspaceStatsStore } from "@store/workspaceStatsStore";
 import { useCompatibilityStore } from "@store/compatibilityStore";
+import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { getWorkflowDefinitionMutation } from "@utils/workflowMutation";
 import {
   MESSAGE_TYPES,
@@ -67,6 +68,7 @@ import {
 } from "@/types/messages";
 import type { PromptStep } from "@/types/messages";
 import {
+  EXECUTION_MODES,
   EXECUTION_PHASES,
   SCRIPT_OUTPUT_SOURCES,
   STEP_TYPES,
@@ -156,6 +158,69 @@ describe("WORKSPACE_STATS_UPDATED", () => {
     });
 
     expect(useWorkspaceStatsStore.getState().snapshot).toBe(snapshot);
+  });
+});
+
+describe("WORKFLOW_UNLOADED new-step draft", () => {
+  it("persists and restores script fields and disabled state", () => {
+    const vscodeState: { current: Record<string, unknown> | null } = {
+      current: null,
+    };
+    const vscodeApi = {
+      postMessage: vi.fn(),
+      getState: () => vscodeState.current,
+      setState: (state: Record<string, unknown>) => {
+        vscodeState.current = state;
+      },
+    };
+    window.vscodeApi = vscodeApi;
+    expect(getVsCodeApi()).toBe(vscodeApi);
+
+    renderHook(() => useMessageHandler());
+    useEditorStore.getState().setStepType(STEP_TYPES.SCRIPT);
+    useEditorStore.getState().setStepEnabled(false);
+    useEditorStore.getState().setScriptCommand("npm test");
+    useEditorStore.getState().setScriptTimeoutSec(125);
+    useEditorStore.getState().setScriptOnPass("continue");
+    useEditorStore.getState().setScriptOnFail("stopWorkflow");
+    useEditorStore.getState().setScriptCompareSource("stdout");
+    useEditorStore.getState().setScriptOperator("eq");
+    useEditorStore.getState().setScriptExpected("passed");
+    useEditorStore.getState().setScriptIgnoreCase(true);
+    useEditorStore.getState().setScriptEnv({ CI: "true" });
+    useEditorStore
+      .getState()
+      .setScriptExecutionMode(EXECUTION_MODES.HEADLESS);
+    useEditorStore.getState().setScriptShell("pwsh");
+
+    act(() => dispatch(MESSAGE_TYPES.WORKFLOW_UNLOADED));
+
+    expect(vscodeState.current?.editorState).toMatchObject({
+      stepType: STEP_TYPES.SCRIPT,
+      scriptCommand: "npm test",
+      stepEnabled: false,
+    });
+
+    expect(useEditorStore.getState().stepType).toBe(STEP_TYPES.SCRIPT);
+    useEditorStore.getState().resetEditor();
+    expect(
+      useEditorStore.getState().restoreFromVsCodeState(vscodeApi)
+    ).toBe(true);
+
+    const editor = useEditorStore.getState();
+    expect(editor.stepType).toBe(STEP_TYPES.SCRIPT);
+    expect(editor.stepEnabled).toBe(false);
+    expect(editor.scriptCommand).toBe("npm test");
+    expect(editor.scriptTimeoutSec).toBe(125);
+    expect(editor.scriptOnPass).toBe("continue");
+    expect(editor.scriptOnFail).toBe("stopWorkflow");
+    expect(editor.scriptCompareSource).toBe("stdout");
+    expect(editor.scriptOperator).toBe("eq");
+    expect(editor.scriptExpected).toBe("passed");
+    expect(editor.scriptIgnoreCase).toBe(true);
+    expect(editor.scriptEnv).toEqual({ CI: "true" });
+    expect(editor.scriptExecutionMode).toBe(EXECUTION_MODES.HEADLESS);
+    expect(editor.scriptShell).toBe("pwsh");
   });
 });
 
@@ -3047,6 +3112,100 @@ describe("history search messages", () => {
 });
 
 describe("active workflow summaries", () => {
+  it("updates recent rows but keeps an older displayed run isolated from live summaries", () => {
+    renderHook(() => useMessageHandler());
+    const olderRunRef = "run-2026-07-20T12-00-00-000Z" as never;
+    const executingRunRef = "run-2026-07-20T13-00-00-000Z" as never;
+    useUiStore.setState({
+      activeWorkflowId: "instance-1",
+      displayedViewAddress: {
+        workflowKey: "workflow-1" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: olderRunRef,
+      },
+      executionRunRef: executingRunRef,
+      recentWorkflows: [
+        {
+          address: {
+            workflowKey: "workflow-1" as never,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: olderRunRef,
+          },
+          workflowName: "Workflow",
+          executionState: EXECUTION_STATES.COMPLETED,
+          totalSteps: 2,
+        },
+      ],
+      runSummaries: [
+        {
+          workflowKey: "workflow-1",
+          runRef: olderRunRef,
+          runDirectory: "/runs/1",
+          runId: 1,
+          startedAt: 0,
+          executionState: EXECUTION_STATES.COMPLETED,
+          definitionRevision: 1,
+          stepCount: 2,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        } as never,
+      ],
+    });
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "wf.yaml",
+      steps: [makePrompt("Step 1"), makePrompt("Step 2")],
+      currentStep: 1,
+    });
+    useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.COMPLETED);
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, {
+        summary: {
+          id: "instance-1",
+          workflowKey: "workflow-1",
+          workflowName: "Workflow",
+          filePath: "wf.yaml",
+          executionState: EXECUTION_STATES.RUNNING,
+          currentStep: 0,
+          totalSteps: 5,
+        },
+      });
+    });
+
+    expect(useWorkflowStore.getState()).toMatchObject({
+      currentStep: 1,
+      totalSteps: 2,
+      executionState: EXECUTION_STATES.COMPLETED,
+    });
+    expect(useUiStore.getState().displayedViewAddress).toMatchObject({
+      runRef: olderRunRef,
+    });
+    expect(useUiStore.getState().executionRunRef).toBe(executingRunRef);
+    expect(useUiStore.getState().runSummaries[0]?.executionState).toBe(
+      EXECUTION_STATES.COMPLETED
+    );
+    expect(useUiStore.getState().recentWorkflows[0]?.executionState).toBe(
+      EXECUTION_STATES.RUNNING
+    );
+
+    useUiStore.getState().markExecutionRunStarted();
+    expect(useUiStore.getState().executionRunRef).toBe(executingRunRef);
+    expect(useUiStore.getState().runSummaries[0]?.executionState).toBe(
+      EXECUTION_STATES.COMPLETED
+    );
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.STEP_STATUS_CHANGED, {
+        workflowId: "instance-1",
+        stepIndex: 0,
+        status: { state: STEP_STATUS.RUNNING },
+      });
+    });
+    expect(useWorkflowStore.getState().steps[0]?.status).toBe(
+      STEP_STATUS.PENDING
+    );
+  });
+
   it("accepts a workflow binding while the displayed run's execution is unknown", () => {
     renderHook(() => useMessageHandler());
     useUiStore.setState({
@@ -3770,6 +3929,176 @@ describe("PROMPT_DELETED", () => {
   });
 });
 
+describe("editor targets when the step list changes", () => {
+  const initialSteps = ["first", "second", "third", "fourth"].map((prompt) =>
+    makePrompt(prompt)
+  );
+
+  function loadInitialSteps(): void {
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "wf.yaml",
+        steps: initialSteps,
+      });
+    });
+  }
+
+  it.each([
+    { deletedIndex: 0, expectedIndex: 1 },
+    { deletedIndex: 2, expectedIndex: null },
+    { deletedIndex: 3, expectedIndex: 2 },
+  ])(
+    "keeps or cancels the selected draft when deleting index $deletedIndex",
+    ({ deletedIndex, expectedIndex }) => {
+      renderHook(() => useMessageHandler());
+      loadInitialSteps();
+      useEditorStore.getState().enterEditMode(2, initialSteps[2]);
+      useEditorStore.getState().setPromptText("unsaved third-step draft");
+
+      act(() => {
+        dispatch(MESSAGE_TYPES.PROMPT_DELETED, {
+          fileName: "wf.yaml",
+          steps: initialSteps.filter((_, index) => index !== deletedIndex),
+        });
+      });
+
+      if (expectedIndex === null) {
+        expect(useEditorStore.getState().selectionTarget.kind).toBe(
+          "newPrompt"
+        );
+        expect(useEditorStore.getState().pendingEdits).toEqual({});
+      } else {
+        expect(useEditorStore.getState().selectionTarget).toEqual({
+          kind: FINAL_STEP_PHASES.QUEUE,
+          index: expectedIndex,
+        });
+        expect(useEditorStore.getState().promptText).toBe(
+          "unsaved third-step draft"
+        );
+      }
+    }
+  );
+
+  it("remaps active and cached drafts when a step is inserted", () => {
+    renderHook(() => useMessageHandler());
+    loadInitialSteps();
+    const editor = useEditorStore.getState();
+    editor.enterEditMode(1, initialSteps[1]);
+    editor.setPromptText("unsaved second-step draft");
+    editor.enterEditMode(2, initialSteps[2]);
+    editor.setPromptText("unsaved third-step draft");
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.STEPS_EXTENDED, {
+        steps: [
+          initialSteps[0],
+          makePrompt("inserted"),
+          initialSteps[1],
+          initialSteps[2],
+          initialSteps[3],
+        ],
+      });
+    });
+
+    expect(useEditorStore.getState().selectionTarget).toEqual({
+      kind: FINAL_STEP_PHASES.QUEUE,
+      index: 3,
+    });
+    expect(useEditorStore.getState().promptText).toBe(
+      "unsaved third-step draft"
+    );
+    expect(useEditorStore.getState().pendingEdits["queue:2"]?.promptText).toBe(
+      "unsaved second-step draft"
+    );
+    useEditorStore.getState().enterEditMode(2, initialSteps[1]);
+    expect(useEditorStore.getState().promptText).toBe(
+      "unsaved second-step draft"
+    );
+  });
+
+  it("follows step identities and cached drafts through a reorder", () => {
+    renderHook(() => useMessageHandler());
+    loadInitialSteps();
+    const editor = useEditorStore.getState();
+    editor.enterEditMode(1, initialSteps[1]);
+    editor.setPromptText("unsaved second-step draft");
+    editor.enterEditMode(2, initialSteps[2]);
+    editor.setPromptText("unsaved third-step draft");
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.REORDER_PROMPTS_CONFIRMED, {
+        steps: [
+          initialSteps[2],
+          initialSteps[0],
+          initialSteps[1],
+          initialSteps[3],
+        ],
+      });
+    });
+
+    expect(useEditorStore.getState().selectionTarget).toEqual({
+      kind: FINAL_STEP_PHASES.QUEUE,
+      index: 0,
+    });
+    expect(useEditorStore.getState().promptText).toBe(
+      "unsaved third-step draft"
+    );
+    expect(useEditorStore.getState().pendingEdits["queue:2"]?.promptText).toBe(
+      "unsaved second-step draft"
+    );
+  });
+});
+
+describe("workflow-scoped definition pushes", () => {
+  it("ignores UPDATE_FINAL_PROMPT for a background workflow", () => {
+    renderHook(() => useMessageHandler());
+    const activeFinalStep = makePrompt("active final");
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "active.yaml",
+        steps: [],
+        finalStep: activeFinalStep,
+      });
+    });
+    useUiStore.setState({
+      activeWorkflowId: "wf-active",
+      displayedDefinitionRevision: 3,
+      appliedDefinitionRevision: 3,
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, {
+        workflowId: "wf-background",
+        finalStep: makePrompt("background final"),
+        definitionRevision: 42,
+      });
+    });
+
+    expect(useWorkflowStore.getState().finalStep).toEqual(activeFinalStep);
+    expect(useUiStore.getState().displayedDefinitionRevision).toBe(3);
+    expect(useUiStore.getState().appliedDefinitionRevision).toBe(3);
+  });
+});
+
+describe("STEP_UNDO_DATA_UPDATED", () => {
+  it("ignores undo snapshots from a background workflow", () => {
+    renderHook(() => useMessageHandler());
+    useUiStore.setState({ activeWorkflowId: "wf-active" });
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const snapshot = { capturedAt: 1 } as any;
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.STEP_UNDO_DATA_UPDATED, {
+        workflowId: "wf-background",
+        target,
+        workspaceSnapshot: snapshot,
+      });
+    });
+
+    expect(useWorkflowStore.getState().workspaceSnapshots[0]).toBeUndefined();
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Definition-revision adoption across every narrow content push
 // ---------------------------------------------------------------------------
@@ -4154,6 +4483,35 @@ describe("EXECUTION_STARTED", () => {
 // ---------------------------------------------------------------------------
 
 describe("TERMINAL_STARTED", () => {
+  it("marks the workflow terminal inactive after its last running session ends", () => {
+    renderHook(() => useMessageHandler());
+    const setTerminalSessionActive = vi.spyOn(
+      useUiStore.getState(),
+      "setTerminalSessionActive"
+    );
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
+        workflowId: "workflow-1",
+        sessionId: "session-1",
+        stepName: "Step 1",
+        kind: SESSION_KINDS.AI_CLI,
+        controllerClientId: "controller-1",
+      });
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.TERMINAL_ENDED, {
+        workflowId: "workflow-1",
+        sessionId: "session-1",
+        kind: SESSION_KINDS.AI_CLI,
+        status: TERMINAL_SESSION_STATUS.COMPLETED,
+      });
+    });
+
+    expect(setTerminalSessionActive).toHaveBeenCalledWith("workflow-1", false);
+  });
+
   it("keeps terminal lifecycle messages live while viewing a historical run", () => {
     renderHook(() => useMessageHandler());
 

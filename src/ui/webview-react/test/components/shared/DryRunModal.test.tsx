@@ -93,7 +93,7 @@ const preview: WorkflowExecutionPreview = {
       command: {
         executable: "claude",
         args: ["--print"],
-        displayCommand: "claude --print [REDACTED]",
+        displayCommand: "& 'claude' '--print' [REDACTED]",
         displayShell: "powershell",
         requiresShellVerbatimArgs: false,
         cwd: "C:/workspace",
@@ -376,7 +376,9 @@ describe("DryRunModal", () => {
     expect(screen.getByText("Resolved execution")).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "Command" }));
-    expect(screen.getByText("claude --print [REDACTED]")).toBeInTheDocument();
+    expect(
+      screen.getByText("& 'claude' '--print' [REDACTED]")
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "Conditions" }));
     expect(
@@ -841,7 +843,7 @@ describe("DryRunModal", () => {
     expect(copyCommand).not.toBeDisabled();
     await user.click(copyCommand);
     expect(clipboardWriteText).toHaveBeenLastCalledWith(
-      "claude --print [REDACTED]"
+      "& 'claude' '--print' [REDACTED]"
     );
 
     await user.click(screen.getByRole("button", { name: "Copy payload" }));
@@ -924,13 +926,15 @@ describe("DryRunModal", () => {
     render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
 
     await user.click(screen.getByRole("tab", { name: "Command" }));
-    expect(screen.getByText("claude --print [REDACTED]")).toBeInTheDocument();
+    expect(
+      screen.getByText("& 'claude' '--print' [REDACTED]")
+    ).toBeInTheDocument();
     expect(screen.getByText("(PowerShell)")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Command Prompt" }));
     expect(screen.getByText("(Command Prompt)")).toBeInTheDocument();
     expect(
-      screen.queryByText("claude --print [REDACTED]")
+      screen.queryByText("& 'claude' '--print' [REDACTED]")
     ).not.toBeInTheDocument();
     expect(screen.getByText('^"claude^" ^"--print^"')).toBeInTheDocument();
 
@@ -939,6 +943,11 @@ describe("DryRunModal", () => {
     expect(clipboardWriteText).toHaveBeenLastCalledWith(
       '^"claude^" ^"--print^"'
     );
+
+    await user.click(screen.getByRole("button", { name: "PowerShell" }));
+    expect(
+      screen.getByText("& 'claude' '--print' [REDACTED]")
+    ).toBeInTheDocument();
   });
 
   it("summarizes multiline command previews while keeping the full text in the title", async () => {

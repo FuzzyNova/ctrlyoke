@@ -363,6 +363,28 @@ CliTerminalFormatter.renderScriptOutput({
     assert.ok(output.includes("Error: spawn failed"));
   });
 
+  test("uses the expected field name in the default script verdict text", () => {
+    const output = runFormatterScript(`
+CliTerminalFormatter.renderScriptOutput({
+  source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
+  response: "",
+  elapsed: 0,
+  isStreaming: false,
+  scriptVerdict: {
+    compareSource: "exitCode",
+    operator: "eq",
+    actual: "0",
+    exitCode: 0,
+    outcome: "passed",
+    action: "continue",
+    durationMs: 1,
+  },
+}, { stepIndex: 0, stepName: "script", key: "default-expected" });`);
+
+    assert.ok(output.includes("Expected: exit code 0 (no `expected` set)"));
+    assert.ok(!output.includes("returns"));
+  });
+
   test("bounds streamed script output with an explicit notice", () => {
     const output = runFormatterScript(`
 const chunk = Array.from({ length: 240 }, (_, index) => "line " + index + "\\n").join("");

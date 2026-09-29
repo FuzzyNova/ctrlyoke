@@ -1,0 +1,4 @@
+{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"First response"}]}}
+{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":1000,"cached_input_tokens":800,"output_tokens":100,"reasoning_output_tokens":20,"total_tokens":1100},"last_token_usage":{"input_tokens":100,"cached_input_tokens":80,"output_tokens":10,"reasoning_output_tokens":2,"total_tokens":110}}}}
+{"type":"response_item","payload":{"type":"reasoning","content":null}}
+{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":1300,"cached_input_tokens":1050,"output_tokens":140,"reasoning_output_tokens":28,"total_tokens":1440},"last_token_usage":{"input_tokens":300,"cached_input_tokens":250,"output_tokens":40,"reasoning_output_tokens":8,"total_tokens":340}}}}

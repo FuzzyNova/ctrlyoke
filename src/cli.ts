@@ -54,7 +54,10 @@ import {
   CliTerminalFormatter,
   type CliOutputTarget,
 } from "./cli/CliTerminalFormatter";
-import { getExitCode as getTypedExitCode } from "./cli/CliExitCode";
+import {
+  CLI_USAGE_EXIT_CODE,
+  getExitCode as getTypedExitCode,
+} from "./cli/CliExitCode";
 import {
   buildCliJsonResult,
   buildCliPreviewJsonResult,
@@ -71,6 +74,7 @@ import {
   resolvePackageRootFromEntry,
 } from "./utils/CtrlyokeCliPath";
 import { aboutCommand } from "./cli/CliAboutCommand";
+import { commitGeneratedChanges } from "./cli/CommitCommand";
 import { noteCliInstallation } from "./cli/CliInstallationNotice";
 import {
   applyRunStateRefusal,
@@ -191,6 +195,9 @@ declare const VERSION: string;
 const version = typeof VERSION !== "undefined" ? VERSION : "0.0.0-dev";
 
 const program = new Command();
+program.exitOverride((error) => {
+  process.exit(error.exitCode === 0 ? 0 : CLI_USAGE_EXIT_CODE);
+});
 
 const CLI_RUN_OPERATION_KINDS = {
   RUN: "run",
@@ -415,6 +422,10 @@ program
   .option(
     "--print-only",
     "Print the generated message to stdout without committing"
+  )
+  .option(
+    "--all",
+    "Stage all changes before committing (including unstaged and untracked files)"
   )
   .option("-y, --yes", "Skip confirmation prompt and commit automatically")
   .action(async (options: CommitCommandOptions) => {
@@ -1187,6 +1198,11 @@ async function runCommand(
         );
       }
 
+      if (config.model) {
+        instance.promptQueue.updateWorkflowProperty("model", config.model);
+        await instance.promptQueue.updateWorkingFile(true);
+      }
+
       printRunHeader();
       warnAboutClampedInteractiveSteps(
         instance.promptQueue.getWorkflowFile(),
@@ -1485,7 +1501,7 @@ async function dryRunCommand(
   try {
     assertHarnessId(harness);
     const parser = new PromptFileParser(platform, userFeedbackSink);
-    const workflow = options.prompt
+    const workflow: PromptFile | null = options.prompt
       ? { steps: [{ prompt: options.prompt }] }
       : await parser.parsePromptFile(resolvedFile!);
     if (!workflow) {
@@ -1493,6 +1509,10 @@ async function dryRunCommand(
         parser.lastNewerSchemaError?.message ??
           `Failed to load workflow file: ${resolvedFile}`
       );
+    }
+
+    if (config.model) {
+      workflow.model = config.model;
     }
 
     if (resolvedFile) {
@@ -2506,6 +2526,7 @@ interface CommitCommandOptions {
   cwd?: string;
   hint?: string;
   printOnly?: boolean;
+  all?: boolean;
   yes?: boolean;
 }
 
@@ -2591,30 +2612,42 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
   console.error(chalk.dim("─".repeat(52)));
   console.error();
 
-  if (!diffResult.staged) {
+  if (!diffResult.staged && !options.all) {
     console.error(
       chalk.yellow(
-        "Note: Generated from unstaged changes. Stage files before committing."
+        "Nothing is staged. Stage files and re-run, or use --all to stage all changes."
       )
     );
-    console.error();
-  }
-
-  if (!options.yes) {
-    const confirmed = await promptYesNo("Commit with this message? [y/N] ");
-    if (!confirmed) {
-      console.error("Aborted.");
-      process.exit(0);
-    }
+    process.exit(CLI_USAGE_EXIT_CODE);
   }
 
   const { GitCommitter } = await import("./git/GitCommitter");
   const committer = new GitCommitter();
   try {
-    await committer.commit(message, workingDir);
+    const result = await commitGeneratedChanges(
+      diffResult,
+      message,
+      workingDir,
+      options,
+      committer,
+      () => promptYesNo("Commit with this message? [y/N] ")
+    );
+    if (result === "aborted") {
+      console.error("Aborted.");
+      process.exit(0);
+    }
     console.error(chalk.green("✓ Committed successfully"));
   } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err);
+    const execError = err as NodeJS.ErrnoException & {
+      stdout?: string | Buffer;
+      stderr?: string | Buffer;
+    };
+    const errorDetails = [
+      err instanceof Error ? err.message : String(err),
+      execError.stdout?.toString().trim(),
+      execError.stderr?.toString().trim(),
+    ].filter(Boolean);
+    const errMsg = errorDetails.join("\n");
     console.error(chalk.red(`Error: ${errMsg}`));
     process.exit(1);
   }

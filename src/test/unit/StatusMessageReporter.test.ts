@@ -65,7 +65,11 @@ class DashboardSinkDouble implements IDashboardSink {
   notifyPromptsReordered(): void {}
   notifyUndoRedoSynced(): void {}
   updateWorkflowName(): void {}
-  sendStepUndoDataUpdated(): void {}
+  sendStepUndoDataUpdated(
+    _target: Parameters<IDashboardSink["sendStepUndoDataUpdated"]>[0],
+    _snapshot?: Parameters<IDashboardSink["sendStepUndoDataUpdated"]>[1],
+    _workflowId?: string
+  ): void {}
   updateHarnessUsage(): void {}
   updateWorktreeMerge(): void {}
 }

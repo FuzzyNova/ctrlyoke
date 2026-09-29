@@ -8,7 +8,7 @@ import {
 } from "../types/DashboardConstants";
 
 export interface HarnessTokenSemantics {
-  /** Whether cache-read tokens are included in the harness input count. */
+  /** Whether reported cache-read tokens are included in the input count. */
   cacheInputRelationship: AttemptCostCacheRelationship;
   /** Whether separately reported reasoning tokens are already in output. */
   reasoningRelationship: AttemptCostReasoningRelationship;
@@ -37,8 +37,7 @@ export const HARNESS_TOKEN_SEMANTICS: Record<HarnessId, HarnessTokenSemantics> =
     },
     [HARNESS_IDS.OPENCODE_CLI]: {
       cacheInputRelationship: ATTEMPT_COST_CACHE_RELATIONSHIPS.DISJOINT,
-      reasoningRelationship:
-        ATTEMPT_COST_REASONING_RELATIONSHIPS.INCLUDED_IN_OUTPUT,
+      reasoningRelationship: ATTEMPT_COST_REASONING_RELATIONSHIPS.DISJOINT,
     },
     [HARNESS_IDS.ANTIGRAVITY_CLI]: {
       cacheInputRelationship: ATTEMPT_COST_CACHE_RELATIONSHIPS.DISJOINT,

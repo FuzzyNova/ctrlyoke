@@ -278,7 +278,7 @@ Default policy for internal errors in any step phase. `null` (the default) stops
 Fields:
 
 - `onError` · `"stopWorkflow" | "retry" | "continue"` · required — What to do when a step phase cannot run or otherwise encounters an internal error.
-- `maxRetries` · `integer` — Maximum retry attempts when onError is retry.
+- `maxRetries` · `integer` — Maximum retry attempts when onError is retry. When omitted, one retry is allowed.
 - `retryDelaySec` · `number` — Delay before retrying, in seconds.
 
 ### `defaults.toolPermissions` {#defaults-toolpermissions}
@@ -363,7 +363,7 @@ Fields:
 - `passRetryPrompt` · `string` — Template for the prompt sent after the end condition passes and onPass is 'retry'. Supports $preCondition:&lt;field> and $endCondition:&lt;field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource); both prefixes are substituted on a pass retry. If omitted, the step's own prompt is re-sent.
 - `resumeSessionOnRetry` · `boolean` — Whether retries continue in the same session. Default: true (retries resume the existing session for context continuity). Set to false to start a fresh session for each retry.
 - `onPass` · `"continue" | "retry" | "stopWorkflow"` — What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately.
-- `onFail` · `"continue" | "retry" | "stopWorkflow"` — What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times). 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default).
+- `onFail` · `"continue" | "retry" | "stopWorkflow"` — What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times); if retryPrompt is omitted, a fallback prompt includes the expected and actual values and script output. When maxRetries is omitted, one retry is allowed. 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default); a configured retryPrompt also enables failure retries while budget remains.
 
 ### `defaults.preCondition` {#defaults-precondition}
 

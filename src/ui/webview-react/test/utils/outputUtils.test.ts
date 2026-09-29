@@ -394,6 +394,39 @@ describe("generateMarkdownExport", () => {
     expect(md).toContain("Here is my analysis...");
   });
 
+  it("uses fences longer than backtick runs in prompts, responses, and bash output", () => {
+    const response = "```js\nconsole.log('nested')\n```\n````txt\ninner\n````";
+    const bashOutput = "```sh\necho nested\n```";
+    const outputs = [
+      {
+        type: "cli" as const,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+        timestamp: 2000,
+        attemptIndex: 0,
+        data: {
+          prompt: response,
+          response,
+          structured: {
+            events: [
+              {
+                type: CLI_EVENT_TYPES.BASH_COMMAND,
+                data: { command: "cat output", status: "completed", output: bashOutput },
+              },
+            ],
+          },
+        },
+      },
+    ];
+
+    const md = generateMarkdownExport(outputs, metadata);
+    const responseFence = String.fromCharCode(96).repeat(5);
+    const bashFence = String.fromCharCode(96).repeat(4);
+    expect(md).toContain(
+      responseFence + "\n" + response + "\n" + responseFence
+    );
+    expect(md).toContain(bashFence + "\n" + bashOutput + "\n" + bashFence);
+  });
+
   it("labels retries correctly", () => {
     const outputs = [
       {
@@ -482,7 +515,7 @@ describe("generateMarkdownExport", () => {
       },
     ];
     const md = generateMarkdownExport(outputs, metadata);
-    expect(md).toContain("```bash");
+    expect(md).toContain("``` bash");
     expect(md).toContain("/workspace> claude --model sonnet");
   });
 

@@ -34,6 +34,7 @@ import {
 } from "../platform/WorkspaceViewerPath";
 import { discoverRepos } from "./WorkspaceRepoDiscovery";
 import { isPathWithinDirectory } from "./PathSecurity";
+import { parseGitNameStatusZ, parseGitPorcelainV1Z } from "./GitUtils";
 
 const execFileAsync = promisify(execFile);
 
@@ -75,6 +76,7 @@ interface RawFileState {
   contentHash: string; // SHA-256
   content?: string; // before-state content, under size limit
   isAtHead: boolean; // true only under git strategy
+  isDeleted?: boolean;
 }
 
 /**
@@ -461,8 +463,8 @@ export class WorkspaceSnapshotService {
     try {
       const diffArgs = [
         "diff",
+        "-z",
         "--name-status",
-        "--no-renames",
         `${beforeCommit}..${afterCommit}`,
       ];
       // Scope the commit-range diff to this root's subtree so a repo shared by
@@ -481,10 +483,10 @@ export class WorkspaceSnapshotService {
       return changes;
     }
 
-    for (const line of stdout.split("\n")) {
-      if (!line.trim()) continue;
-      const [status, ...pathParts] = line.split("\t");
-      const filePath = pathParts.join("\t").replace(/\\/g, "/");
+    for (const entry of parseGitNameStatusZ(stdout)) {
+      const status = entry.x;
+      const filePath = entry.path;
+      const oldPath = entry.originalPath;
       if (!filePath || skipPaths.has(filePath)) continue;
       // Defensive: keep only paths inside this segment's subtree.
       if (
@@ -570,6 +572,35 @@ export class WorkspaceSnapshotService {
           change.contentCaptureSkipped = true;
         }
         changes.push(change);
+      } else if ((status === "R" || status === "C") && oldPath) {
+        if (status === "R" && !skipPaths.has(oldPath)) {
+          const beforeContent = await this.readGitBlob(
+            workspacePath,
+            beforeCommit,
+            oldPath
+          );
+          const deleted: SnapshotFileChange = {
+            path: this.segmentViewerPath(segment, oldPath),
+            repo,
+            changeType: "deleted",
+          };
+          if (beforeContent !== undefined)
+            deleted.contentToRestore = beforeContent;
+          else deleted.contentCaptureSkipped = true;
+          changes.push(deleted);
+        }
+        const afterContent = await this.readGitBlob(
+          workspacePath,
+          afterCommit,
+          filePath
+        );
+        changes.push({
+          path: viewerPath,
+          repo,
+          changeType: "created",
+          afterHash:
+            afterContent !== undefined ? computeHash(afterContent) : undefined,
+        });
       }
       // Other statuses (copies, type changes outside M/T) are rare for AI-driven
       // edits and are intentionally left to the existing dirty-file diff, if any.
@@ -648,7 +679,12 @@ export class WorkspaceSnapshotService {
         git = await this.getGitSnapshotInfo(root);
         let stdout = "";
         try {
-          const args = ["status", "--porcelain"];
+          const args = [
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+            "-z",
+          ];
           if (pathspec) {
             args.push("--", pathspec);
           }
@@ -659,16 +695,9 @@ export class WorkspaceSnapshotService {
           return { git, files };
         }
 
-        const lines = stdout.split("\n").filter((l) => l.length >= 3);
-        for (const line of lines) {
-          // Format: XY<space><path> where XY are two status chars
-          const xy = line.slice(0, 2);
-          let filePath = line.slice(3);
-          // Git quotes paths containing special chars
-          if (filePath.startsWith('"') && filePath.endsWith('"')) {
-            filePath = filePath.slice(1, -1);
-          }
-          filePath = filePath.replace(/\\/g, "/");
+        const entries = parseGitPorcelainV1Z(stdout);
+        for (const entry of entries) {
+          const { x, y, path: filePath, originalPath } = entry;
           if (!filePath) {
             continue;
           }
@@ -685,18 +714,46 @@ export class WorkspaceSnapshotService {
 
           // isAtHead: true when the file exists in git HEAD (tracked, modified/deleted).
           // False for new/untracked (??) or newly staged (A) files.
-          const isAtHead = xy !== "??" && xy[0] !== "A";
+          const isDeleted = x === "D" || y === "D";
+          const isAtHead = !originalPath && x !== "?" && x !== "A" && y !== "?";
+
+          if (isDeleted) {
+            const headContent = git?.headCommit
+              ? await this.readGitBlob(root, git.headCommit, filePath)
+              : undefined;
+            files.set(filePath, {
+              contentHash:
+                headContent !== undefined ? computeHash(headContent) : "",
+              content: headContent,
+              isAtHead: true,
+              isDeleted: true,
+            });
+            continue;
+          }
 
           const absPath = path.join(root, filePath);
           const fileData = await readFileForSnapshot(absPath);
-          if (!fileData) {
-            continue;
+          if (fileData) {
+            files.set(filePath, {
+              contentHash: fileData.hash,
+              content: fileData.content,
+              isAtHead,
+            });
           }
-          files.set(filePath, {
-            contentHash: fileData.hash,
-            content: fileData.content,
-            isAtHead,
-          });
+
+          if (originalPath && (x === "R" || y === "R")) {
+            const oldPath = originalPath;
+            const oldHeadContent = git?.headCommit
+              ? await this.readGitBlob(root, git.headCommit, oldPath)
+              : undefined;
+            files.set(oldPath, {
+              contentHash:
+                oldHeadContent !== undefined ? computeHash(oldHeadContent) : "",
+              content: oldHeadContent,
+              isAtHead: true,
+              isDeleted: true,
+            });
+          }
         }
       } else {
         // filesystem strategy
@@ -850,6 +907,21 @@ export class WorkspaceSnapshotService {
     for (const [filePath, afterState] of after.files) {
       seenSegmentPaths.add(filePath);
       const beforeState = before.files.get(filePath);
+      if (afterState.isDeleted) {
+        const change: SnapshotFileChange = {
+          path: this.segmentViewerPath(afterSeg, filePath),
+          repo,
+          changeType: "deleted",
+        };
+        const contentToRestore = beforeState?.content ?? afterState.content;
+        if (contentToRestore !== undefined) {
+          change.contentToRestore = contentToRestore;
+        } else {
+          change.contentCaptureSkipped = true;
+        }
+        changes.push(change);
+        continue;
+      }
       if (!beforeState) {
         // File not in before snapshot. Under git strategy, the before snapshot only
         // captures dirty files (git status --porcelain), so absence means the file was

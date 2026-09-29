@@ -36,7 +36,7 @@ export function generateWorkflowNameFromPrompt(
     .trim()
     .split(/\s+/)
     .slice(0, WORKFLOW_NAME_WORD_COUNT)
-    .map((word) => word.replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, ""))
+    .map((word) => word.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ""))
     .filter((word) => word.length > 0);
 
   return cleanWords.length > 0

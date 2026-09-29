@@ -1,6 +1,8 @@
 import * as assert from "assert";
+import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
+import { execFileSync } from "child_process";
 import { suite, setup, teardown, test } from "mocha";
 import * as vscode from "vscode";
 import {
@@ -9,6 +11,7 @@ import {
 } from "../../types/DashboardConstants";
 import {
   clearFilesCache,
+  getGitChangeCompletions,
   getFileCompletions,
   getHashCompletions,
   getHashSelectionCompletions,
@@ -37,6 +40,75 @@ import type { McpServerConfig } from "../../types/CtrlYokeTypes";
 import { outputCaptureCache } from "../../completions/OutputCaptureCache";
 
 const COMMIT_SKILL_NAME = "commit";
+
+suite("CompletionHelpers git change completions", function () {
+  let workspaceRoot: string;
+
+  function runGit(args: string[]): string {
+    return execFileSync("git", args, {
+      cwd: workspaceRoot,
+      encoding: "utf8",
+      stdio: "pipe",
+    }).trim();
+  }
+
+  setup(async () => {
+    workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "cy-git-completions-")
+    );
+    runGit(["init"]);
+    runGit(["config", "user.name", "Completion Author"]);
+    runGit(["config", "user.email", "completion@example.com"]);
+    await fs.writeFile(path.join(workspaceRoot, "initial.txt"), "initial\n");
+    runGit(["add", "initial.txt"]);
+    runGit(["commit", "-m", "unrelated commit subject"]);
+  });
+
+  teardown(async () => {
+    await fs.rm(workspaceRoot, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 50,
+    });
+  });
+
+  test("keeps a recent commit available when filtering by its hash", async () => {
+    const hash = runGit(["rev-parse", "HEAD"]);
+    const items = await getGitChangeCompletions(
+      workspaceRoot,
+      hash.slice(0, 8)
+    );
+    const commitItems = items.filter((item) => item.insertText === hash);
+
+    assert.strictEqual(commitItems.length, 1);
+    assert.match(commitItems[0].filterText ?? "", new RegExp(hash.slice(0, 8)));
+  });
+
+  test("keeps recent commits available when filtering by author", async () => {
+    const hash = runGit(["rev-parse", "HEAD"]);
+    const items = await getGitChangeCompletions(
+      workspaceRoot,
+      "Completion Author"
+    );
+
+    assert.ok(items.some((item) => item.insertText === hash));
+  });
+
+  test("resolves a hash filter outside the recent-commit cache", async () => {
+    const olderHash = runGit(["rev-parse", "HEAD"]);
+    for (let index = 0; index < 50; index++) {
+      runGit(["commit", "--allow-empty", "-m", `later commit ${index}`]);
+    }
+
+    const items = await getGitChangeCompletions(
+      workspaceRoot,
+      olderHash.slice(0, 8)
+    );
+
+    assert.ok(items.some((item) => item.insertText === olderHash));
+  });
+});
 
 suite("CompletionHelpers", () => {
   const originalFindFiles = vscode.workspace.findFiles;

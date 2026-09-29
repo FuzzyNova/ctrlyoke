@@ -1,4 +1,12 @@
-import { NOT_AFTER_BOUNDARY } from "./ReferenceBoundary";
+import { NOT_AFTER_BOUNDARY, NOT_BEFORE_BOUNDARY } from "./ReferenceBoundary";
+
+/** Build a fresh regex for complete ~git-change references. */
+export function createGitChangeReferencePattern(): RegExp {
+  return new RegExp(
+    `${NOT_AFTER_BOUNDARY}~(diff|staged|stash:(\\d+)|([0-9a-f]{7,40}))${NOT_BEFORE_BOUNDARY}`,
+    "gi"
+  );
+}
 
 /**
  * Canonical regexes for decorating prompt references (`@file`, `@dir/`,

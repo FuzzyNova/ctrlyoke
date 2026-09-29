@@ -530,10 +530,11 @@ export class DashboardBroadcastHub
 
   sendStepUndoDataUpdated(
     target: UndoExecutionTarget,
-    workspaceSnapshot?: WorkspaceSnapshot
+    workspaceSnapshot?: WorkspaceSnapshot,
+    workflowId?: string
   ): void {
     for (const client of this.clients) {
-      client.sendStepUndoDataUpdated?.(target, workspaceSnapshot);
+      client.sendStepUndoDataUpdated?.(target, workspaceSnapshot, workflowId);
     }
   }
 

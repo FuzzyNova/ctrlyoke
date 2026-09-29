@@ -256,11 +256,42 @@ export class SubstringHistorySearchMatcher implements HistorySearchMatcher {
   }
 
   find(text: string): HistorySearchMatch | undefined {
-    const index = text.toLowerCase().indexOf(this.loweredQuery);
+    const loweredText = text.toLowerCase();
+    const index = loweredText.indexOf(this.loweredQuery);
     if (index === -1) {
       return undefined;
     }
-    return { index, length: this.requiredLiteral.length };
+    if (this.loweredQuery.length === 0) {
+      return { index: 0, length: 0 };
+    }
+    if (
+      loweredText.length === text.length &&
+      this.loweredQuery.length === this.requiredLiteral.length
+    ) {
+      return { index, length: this.requiredLiteral.length };
+    }
+
+    const originalStarts: number[] = [];
+    const originalEnds: number[] = [];
+    for (let originalIndex = 0; originalIndex < text.length; ) {
+      const codePoint = text.codePointAt(originalIndex);
+      if (codePoint === undefined) break;
+      const originalCharacter = String.fromCodePoint(codePoint);
+      const loweredLength = originalCharacter.toLowerCase().length;
+      const originalEnd = originalIndex + originalCharacter.length;
+      for (let offset = 0; offset < loweredLength; offset += 1) {
+        originalStarts.push(originalIndex);
+        originalEnds.push(originalEnd);
+      }
+      originalIndex = originalEnd;
+    }
+
+    const originalStart = originalStarts[index];
+    const originalEnd = originalEnds[index + this.loweredQuery.length - 1];
+    if (originalStart === undefined || originalEnd === undefined) {
+      return undefined;
+    }
+    return { index: originalStart, length: originalEnd - originalStart };
   }
 
   findAsync(
@@ -364,6 +395,13 @@ interface LiteralAnalysis {
   canBeEmpty: boolean;
 }
 
+interface RegexNodeAnalysis {
+  analysis: LiteralAnalysis;
+  index: number;
+  /** Whether the node consumes exactly its single required literal. */
+  isExactLiteral: boolean;
+}
+
 function extractRequiredLiteral(pattern: string): string | undefined {
   const analysis = analyzeAlternation(pattern, 0, pattern.length).analysis;
   return analysis.required
@@ -433,7 +471,10 @@ function analyzeSequence(
         adjacentLiteral = undefined;
       }
       required.push(...node.analysis.required);
-    } else if (node.analysis.required.length === 1) {
+    } else if (
+      node.isExactLiteral &&
+      node.analysis.required.length === 1
+    ) {
       const literal = node.analysis.required[0];
       adjacentLiteral = `${adjacentLiteral ?? ""}${literal}`;
     } else {
@@ -457,10 +498,14 @@ function analyzeNode(
   source: string,
   start: number,
   end: number
-): { analysis: LiteralAnalysis; index: number } {
+): RegexNodeAnalysis {
   const character = source[start];
   if (character === undefined) {
-    return { analysis: { required: [], canBeEmpty: true }, index: start };
+    return {
+      analysis: { required: [], canBeEmpty: true },
+      index: start,
+      isExactLiteral: false,
+    };
   }
   if (character === "\\") {
     const escaped = source[start + 1];
@@ -468,12 +513,14 @@ function analyzeNode(
     return {
       analysis: { required: literal ? [literal] : [], canBeEmpty: false },
       index: getEscapedEnd(source, start, end, escaped),
+      isExactLiteral: literal !== undefined,
     };
   }
   if (character === "[") {
     return {
       analysis: { required: [], canBeEmpty: false },
       index: skipCharacterClass(source, start, end),
+      isExactLiteral: false,
     };
   }
   if (character === "(") {
@@ -492,6 +539,10 @@ function analyzeNode(
         ? { required: [], canBeEmpty: true }
         : group.analysis,
       index: close,
+      // Group analysis can prove a required substring, but not that it is the
+      // whole consumed text. Keeping it separate avoids joining partial
+      // literals across alternations, wildcards, and zero-width assertions.
+      isExactLiteral: false,
     };
   }
   if (
@@ -503,11 +554,13 @@ function analyzeNode(
     return {
       analysis: { required: [], canBeEmpty: character === "?" },
       index: start + 1,
+      isExactLiteral: false,
     };
   }
   return {
     analysis: { required: [character], canBeEmpty: false },
     index: start + 1,
+    isExactLiteral: true,
   };
 }
 

@@ -206,6 +206,19 @@ export function resolveShellInvocation(
   };
 }
 
+/**
+ * Whether command text contains characters that can make a shell interpret
+ * later tokens as operators, substitutions, or expansions. Keep this beside
+ * shell resolution so headless and interactive script paths share the same
+ * definition of shell syntax.
+ *
+ * This is intentionally conservative: quoted metacharacters also select the
+ * shell path, which preserves the original command text and its quoting rules.
+ */
+export function containsShellSyntax(command: string): boolean {
+  return /[&|;<>$`*?()[\]{}~%!^]/.test(command);
+}
+
 let _nodePtyModule: NodePtyModule | null | undefined;
 let _nodePtyLoadError: unknown;
 

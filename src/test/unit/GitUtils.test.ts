@@ -25,7 +25,10 @@ import {
   isCommitAncestor,
   getBlobBytes,
   getFileHistoryCommits,
+  getStashFiles,
+  getWorkingTreeDiff,
   getRecentCommits,
+  searchCommitsBySubject,
   getChangedFilesWithBinaryStatus,
   GitLocationMemo,
   type GitLocationLookup,
@@ -135,6 +138,26 @@ suite("GitUtils.gitRefExists", function () {
     });
   });
 
+  test("lists untracked non-ASCII paths in working-tree context", async () => {
+    await writeWorkspaceFile("café.txt", "hello\n");
+    await writeWorkspaceFile("nested folder/naïve.txt", "nested\n");
+
+    const diff = await getWorkingTreeDiff(workspaceRoot);
+
+    assert.ok(diff.includes("café.txt"));
+    assert.ok(diff.includes("nested folder/naïve.txt"));
+  });
+
+  test("lists non-ASCII tracked paths in a stash", async () => {
+    await writeWorkspaceFile("café.txt", "base\n");
+    runGit(["add", "café.txt"]);
+    runGit(["commit", "-m", "Add café"]);
+    await writeWorkspaceFile("café.txt", "stashed change\n");
+    runGit(["stash", "push", "-m", "café stash"]);
+
+    assert.deepStrictEqual(await getStashFiles(workspaceRoot, 0), ["café.txt"]);
+  });
+
   test("swallows git failures and reports the ref as missing", async () => {
     const missingRoot = path.join(workspaceRoot, "does-not-exist");
 
@@ -222,6 +245,25 @@ suite("GitUtils.gitRefExists", function () {
     assert.deepStrictEqual(
       history.map((entry) => entry.subject),
       ["Third commit", "Second commit", "Initial commit"]
+    );
+  });
+
+  test("searches commit subjects with literal grep strings", async () => {
+    await writeWorkspaceFile("special.txt", "special\n");
+    runGit(["add", "special.txt"]);
+    runGit(["commit", "-m", "literal [bracket] and dot.file"]);
+
+    assert.deepStrictEqual(
+      (await searchCommitsBySubject(workspaceRoot, "[", 20)).map(
+        (commit) => commit.subject
+      ),
+      ["literal [bracket] and dot.file"]
+    );
+    assert.deepStrictEqual(
+      (await searchCommitsBySubject(workspaceRoot, ".", 20)).map(
+        (commit) => commit.subject
+      ),
+      ["literal [bracket] and dot.file"]
     );
   });
 });

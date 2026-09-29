@@ -89,6 +89,92 @@ suite("CLI dry-run process", () => {
     );
   });
 
+  test("reports authored step limit violations in dry-run output and JSON", async function () {
+    this.timeout(30000);
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-limit-preview-")
+    );
+    temporaryRoots.push(root);
+    const workflow = path.join(root, "over-limit.ctrlyoke.json");
+    await fs.writeFile(
+      workflow,
+      JSON.stringify({
+        maxSteps: 2,
+        steps: [
+          { type: "script", script: 'node -e "process.exit(0)"' },
+          { type: "script", script: 'node -e "process.exit(0)"' },
+          { type: "script", script: 'node -e "process.exit(0)"' },
+        ],
+      }),
+      "utf8"
+    );
+
+    const text = await runCli(
+      ["run", workflow, "--dry-run", "--cwd", root],
+      root
+    );
+    assert.strictEqual(text.code, 0, text.stderr);
+    assert.match(text.stdout, /Limit violations/u);
+    assert.match(text.stdout, /Step count 3 exceeds limit 2/u);
+
+    const json = await runCli(
+      ["run", workflow, "--dry-run", "--json", "--cwd", root],
+      root
+    );
+    assert.strictEqual(json.code, 0, json.stderr);
+    const preview = JSON.parse(json.stdout) as {
+      steps: Array<{
+        resolvedProperties: { limits: { violations: string[] } };
+      }>;
+    };
+    assert.deepStrictEqual(
+      preview.steps[0].resolvedProperties.limits.violations,
+      ["Step count 3 exceeds limit 2"]
+    );
+  });
+
+  test("validate warns when authored steps exceed workflow maxSteps", async function () {
+    this.timeout(30000);
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-limit-validate-")
+    );
+    temporaryRoots.push(root);
+    const workflow = path.join(root, "over-limit.ctrlyoke.json");
+    await fs.writeFile(
+      workflow,
+      JSON.stringify({
+        maxSteps: 2,
+        steps: [
+          { type: "script", script: "one" },
+          { type: "script", script: "two" },
+          { type: "script", script: "three" },
+        ],
+      }),
+      "utf8"
+    );
+
+    const result = await runCli(["validate", workflow, "--json"], root);
+
+    assert.strictEqual(result.code, 0, result.stderr);
+    const validation = JSON.parse(result.stdout) as {
+      success: boolean;
+      warnings: Array<{
+        code: string;
+        message: string;
+        propertyPointer: string;
+      }>;
+    };
+    assert.strictEqual(validation.success, true);
+    assert.ok(
+      validation.warnings.some(
+        (warning) =>
+          warning.code === "step-limit-exceeded" &&
+          warning.propertyPointer === "/maxSteps" &&
+          warning.message.includes("3/2 steps")
+      )
+    );
+  });
+
   test("exits nonzero for an invalid workflow/provider combination", async function () {
     this.timeout(30000);
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-dry-run-"));
@@ -251,6 +337,36 @@ suite("CLI dry-run process", () => {
   });
 });
 
+suite("CLI Commander exit codes", () => {
+  teardown(async () => {
+    for (const root of temporaryRoots.splice(0)) {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("uses exit code 2 for unknown options and missing required options", async function () {
+    this.timeout(30000);
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-cli-parse-"));
+    temporaryRoots.push(root);
+
+    const unknownOption = await runCli(["run", "--not-a-real-option"], root);
+    assert.strictEqual(unknownOption.code, 2, unknownOption.stderr);
+
+    const missingRequiredOption = await runCli(["history", "runs"], root);
+    assert.strictEqual(missingRequiredOption.code, 2, missingRequiredOption.stderr);
+  });
+
+  test("keeps help at exit code 0", async function () {
+    this.timeout(30000);
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-cli-help-"));
+    temporaryRoots.push(root);
+
+    const result = await runCli(["--help"], root);
+    assert.strictEqual(result.code, 0, result.stderr);
+    assert.match(result.stdout, /Usage: ctrlyoke/);
+  });
+});
+
 suite("CLI run process harness reporting", () => {
   teardown(async () => {
     for (const root of temporaryRoots.splice(0)) {
@@ -308,6 +424,50 @@ suite("CLI run process harness reporting", () => {
     assert.strictEqual(result.model, "opencode/big-pickle");
   });
 
+  test("fails before running authored script steps that exceed maxSteps", async function () {
+    this.timeout(60000);
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-run-limit-")
+    );
+    const stateHome = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-run-limit-state-")
+    );
+    temporaryRoots.push(root, stateHome);
+    const workflow = path.join(root, "over-limit.ctrlyoke.json");
+    await fs.writeFile(
+      workflow,
+      JSON.stringify({
+        maxSteps: 2,
+        steps: [
+          {
+            type: "script",
+            script:
+              "node -e \"require('fs').writeFileSync('step-ran.txt', 'yes')\"",
+          },
+          { type: "script", script: 'node -e "process.exit(0)"' },
+          { type: "script", script: 'node -e "process.exit(0)"' },
+        ],
+      }),
+      "utf8"
+    );
+
+    const result = await runCli(
+      ["run", workflow, "--headless", "--json", "--cwd", root],
+      root,
+      { CTRLYOKE_HOME: stateHome }
+    );
+
+    assert.strictEqual(result.code, 1, result.stderr);
+    assert.match(
+      `${result.stdout}\n${result.stderr}`,
+      /Step limit reached: this run has 3\/2 steps/u
+    );
+    assert.strictEqual(
+      await pathExists(path.join(root, "step-ran.txt")),
+      false
+    );
+  });
+
   test("an explicit --harness still overrides the workflow's harness", async function () {
     this.timeout(60000);
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-run-hdr-"));
@@ -320,6 +480,48 @@ suite("CLI run process harness reporting", () => {
     );
     assert.strictEqual(result.code, 0, result.stderr);
     assert.match(result.stdout, /Harness: claude-cli/);
+  });
+
+  test("--model overrides the workflow model while step-level models still win", async function () {
+    this.timeout(60000);
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-run-model-"));
+    temporaryRoots.push(root);
+    const workflow = path.join(root, "model-override.ctrlyoke.json");
+    await fs.writeFile(
+      workflow,
+      JSON.stringify({
+        harness: "copilot-cli",
+        model: "workflow-model",
+        steps: [
+          { prompt: "Use the workflow model" },
+          { prompt: "Keep the explicit step model", model: "step-model" },
+        ],
+      }),
+      "utf8"
+    );
+
+    const result = await runCli(
+      [
+        "run",
+        workflow,
+        "--dry-run",
+        "--json",
+        "--harness",
+        "copilot-cli",
+        "--model",
+        "flag-model",
+        "--cwd",
+        root,
+      ],
+      root
+    );
+
+    assert.strictEqual(result.code, 0, result.stderr);
+    const preview = JSON.parse(result.stdout) as {
+      steps: Array<{ resolvedProperties: { model?: string } }>;
+    };
+    assert.strictEqual(preview.steps[0].resolvedProperties.model, "flag-model");
+    assert.strictEqual(preview.steps[1].resolvedProperties.model, "step-model");
   });
 
   test("persists --var overrides and uses them when continuing a run", async function () {

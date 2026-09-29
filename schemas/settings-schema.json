@@ -447,6 +447,7 @@
         },
         "scriptTimeoutSec": {
           "type": "number",
+          "exclusiveMinimum": 0,
           "description": "Maximum time in seconds for pre-condition, end-condition, and script-step scripts to run. A script's own `timeoutSec` (in seconds) overrides it.",
           "default": 3600
         },

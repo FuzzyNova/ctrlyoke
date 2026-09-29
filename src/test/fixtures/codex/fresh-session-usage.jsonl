@@ -1,0 +1,2 @@
+{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Fresh response"}]}}
+{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":240,"cached_input_tokens":40,"output_tokens":30,"reasoning_output_tokens":5,"total_tokens":270},"last_token_usage":{"input_tokens":240,"cached_input_tokens":40,"output_tokens":30,"reasoning_output_tokens":5,"total_tokens":270}}}}

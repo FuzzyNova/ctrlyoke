@@ -1038,7 +1038,7 @@
           "type": "string",
           "enum": ["continue", "retry", "stopWorkflow"],
           "default": "stopWorkflow",
-          "description": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times). 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default)."
+          "description": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times); if retryPrompt is omitted, a fallback prompt includes the expected and actual values and script output. When maxRetries is omitted, one retry is allowed. 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default); a configured retryPrompt also enables failure retries while budget remains."
         }
       },
       "required": ["script"],
@@ -1170,7 +1170,7 @@
         "maxRetries": {
           "type": "integer",
           "minimum": 1,
-          "description": "Maximum retry attempts when onError is retry."
+          "description": "Maximum retry attempts when onError is retry. When omitted, one retry is allowed."
         },
         "retryDelaySec": {
           "type": "number",

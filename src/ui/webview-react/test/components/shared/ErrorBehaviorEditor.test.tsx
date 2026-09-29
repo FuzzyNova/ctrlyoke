@@ -4,6 +4,17 @@ import { describe, expect, it, vi } from "vitest";
 import { ErrorBehaviorEditor } from "@components/shared/ErrorBehaviorEditor";
 
 describe("ErrorBehaviorEditor", () => {
+  it("shows the shared retry default when maxRetries is omitted", () => {
+    render(
+      <ErrorBehaviorEditor
+        value={{ onError: "retry" }}
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText("Max Retries")).toHaveValue(1);
+  });
+
   it("switches to retry mode and exposes retry controls", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();

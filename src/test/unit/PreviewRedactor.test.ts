@@ -125,6 +125,19 @@ suite("PreviewRedactor", () => {
     assert.strictEqual(result.redactions[0].ruleId, "credential-assignment");
   });
 
+  test("redacts the value when credential text also appears in its key", () => {
+    const cases = [
+      ["password=password", `password=${REDACTION_MARKER}`],
+      ["token=token=token", `token=${REDACTION_MARKER}`],
+      [`"password": "password"`, `"password": "${REDACTION_MARKER}"`],
+      ["api_key=api_key_12345", `api_key=${REDACTION_MARKER}`],
+    ] as const;
+
+    for (const [input, expected] of cases) {
+      assert.strictEqual(redactPreviewText(input).text, expected, input);
+    }
+  });
+
   test("does not redact ctrlyoke's own ${secret:NAME} reference syntax", () => {
     const result = redactedVariable("${secret:TEST_SECRET}");
 

@@ -187,7 +187,7 @@ export class CodexCliProvider implements ICliProvider {
     harnessId: HARNESS_IDS.CODEX_CLI,
     displayName: "Codex CLI",
     terminalName: "Codex",
-    installHint: "Install via: npm install -g @openai/codex-cli",
+    installHint: "Install via: npm install -g @openai/codex",
     shouldStreamHeadlessOutput: true,
 
     // Codex uses hooks system for reliable completion detection in interactive mode

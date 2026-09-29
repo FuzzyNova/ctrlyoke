@@ -24,6 +24,7 @@ import {
   secretRedactionService,
 } from "../../utils/SecretRedactionService";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
+import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
 
 function sendJsonRequest(
   port: number,
@@ -452,12 +453,14 @@ suite("CtrlYokeHostedServer JSON body limits", () => {
 });
 
 suite("HostedServerMessageFactory", () => {
+  const codexInstallHint = new CodexCliProvider().config.installHint;
+
   test("creates harness updates in the webview message shape", () => {
     assert.deepStrictEqual(
       createHostedHarnessStatusUpdate(
         HARNESS_IDS.CODEX_CLI,
         true,
-        "Install via: npm install -g @openai/codex-cli"
+        codexInstallHint
       ),
       {
         type: MESSAGE_TYPES.HARNESS_STATUS_UPDATE,
@@ -466,7 +469,7 @@ suite("HostedServerMessageFactory", () => {
             [HARNESS_IDS.CODEX_CLI]: {
               available: true,
               status: HARNESS_STATUS_STRINGS.AVAILABLE,
-              installHint: "Install via: npm install -g @openai/codex-cli",
+              installHint: codexInstallHint,
             },
           },
         },

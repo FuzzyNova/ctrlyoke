@@ -372,7 +372,15 @@ export class CopilotLogParser extends BaseLogParser {
         const cacheRead = line.attributes[COPILOT_OTEL_CACHE_READ_ATTRIBUTE];
         const cacheWrite = line.attributes[COPILOT_OTEL_CACHE_WRITE_ATTRIBUTE];
         if (typeof input === "number") {
-          this.otelCumulativeInputTokens += input;
+          // Copilot's OTel input count includes both cache pools. Store the
+          // non-cached amount so all downstream usage consumers see disjoint
+          // input/cache counts.
+          this.otelCumulativeInputTokens += Math.max(
+            input -
+              (typeof cacheRead === "number" ? cacheRead : 0) -
+              (typeof cacheWrite === "number" ? cacheWrite : 0),
+            0
+          );
         }
         if (typeof output === "number") {
           this.otelCumulativeOutputTokens += output;

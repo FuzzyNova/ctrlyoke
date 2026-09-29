@@ -98,5 +98,6 @@ export function renderCommandForDisplay(
       : shell === COMMAND_DISPLAY_SHELLS.POWERSHELL
         ? escapePowerShellArgument
         : escapePosixArgument;
-  return [executable, ...args].map(escape).join(" ");
+  const command = [executable, ...args].map(escape).join(" ");
+  return shell === COMMAND_DISPLAY_SHELLS.POWERSHELL ? `& ${command}` : command;
 }

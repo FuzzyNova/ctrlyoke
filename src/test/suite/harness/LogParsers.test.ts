@@ -140,6 +140,35 @@ suite("ClaudeLogParser", () => {
     parser = new ClaudeLogParser();
   });
 
+  test("counts assistant usage once when content blocks share a message id", () => {
+    const fixturePath = path.resolve(
+      __dirname,
+      "../../../../src/test/fixtures/claude/multi-block-usage.session.jsonl"
+    );
+    const events = fs
+      .readFileSync(fixturePath, "utf8")
+      .trim()
+      .split(/\r?\n/)
+      .map((line) => JSON.parse(line) as BaseCliEvent);
+
+    const output = parser.extractResponse(events);
+
+    assert.deepStrictEqual(
+      {
+        inputTokens: output.metadata.usage?.inputTokens,
+        outputTokens: output.metadata.usage?.outputTokens,
+        cachedInputTokens: output.metadata.usage?.cachedInputTokens,
+        cacheCreatedTokens: output.metadata.usage?.cacheCreatedTokens,
+      },
+      {
+        inputTokens: 2,
+        outputTokens: 224,
+        cachedInputTokens: 31621,
+        cacheCreatedTokens: 500,
+      }
+    );
+  });
+
   suite("headless golden output", () => {
     test("maps Claude stdout and session-log events to equivalent universal output", () => {
       const fixtureRoot = path.resolve(
@@ -2933,6 +2962,37 @@ suite("CopilotLogParser", () => {
       }
     });
 
+    test("normalizes Copilot input by subtracting cache read and write", async () => {
+      const filePath = createTempJsonlFile([
+        {
+          type: "span",
+          name: "chat gpt-5.6-luna",
+          attributes: {
+            "gen_ai.usage.input_tokens": 63_754,
+            "gen_ai.usage.output_tokens": 484,
+            "gen_ai.usage.cache_read.input_tokens": 31_232,
+            "gen_ai.usage.cache_write.input_tokens": 32_516,
+          },
+          events: [usageInfoEvent(63_754, 128_000)],
+        },
+      ]);
+
+      try {
+        parser.setOtelFilePath(filePath);
+        await parser.pollOtelContextWindow();
+
+        const usage = parser.getFinalOtelUsage();
+        assert.strictEqual(usage?.inputTokens, 6);
+        assert.strictEqual(usage?.cachedInputTokens, 31_232);
+        assert.strictEqual(usage?.cacheCreatedTokens, 32_516);
+        assert.strictEqual(usage?.totalTokens, 490);
+        // Runtime context occupancy remains the provider's exact signal.
+        assert.strictEqual(usage?.contextWindowUsedTokens, 63_754);
+      } finally {
+        cleanupTempFile(filePath);
+      }
+    });
+
     test("should separate cumulative input/output from last-turn context", async () => {
       const otelLines = [
         {
@@ -3598,6 +3658,89 @@ suite("CodexLogParser", () => {
 
   setup(() => {
     parser = new CodexLogParser();
+  });
+
+  suite("fixture-based per-step usage", () => {
+    function readUsageFixture(name: string): BaseCliEvent[] {
+      const fixturePath = path.resolve(
+        __dirname,
+        `../../../../src/test/fixtures/codex/${name}`
+      );
+      return fs
+        .readFileSync(fixturePath, "utf8")
+        .trim()
+        .split(/\r?\n/)
+        .map((line) => JSON.parse(line) as BaseCliEvent);
+    }
+
+    test("reports the fresh session totals as this step's usage", () => {
+      const output = parser.extractResponse(
+        readUsageFixture("fresh-session-usage.jsonl")
+      );
+
+      assert.deepStrictEqual(
+        {
+          inputTokens: output.metadata.usage?.inputTokens,
+          outputTokens: output.metadata.usage?.outputTokens,
+          cachedInputTokens: output.metadata.usage?.cachedInputTokens,
+          totalTokens: output.metadata.usage?.totalTokens,
+        },
+        {
+          inputTokens: 240,
+          outputTokens: 30,
+          cachedInputTokens: 40,
+          totalTokens: 270,
+        }
+      );
+    });
+
+    test("keeps cumulative totals when the first turn uses multiple model calls", () => {
+      const output = parser.extractResponse(
+        readUsageFixture("fresh-multi-request-session-usage.jsonl")
+      );
+
+      assert.deepStrictEqual(
+        {
+          inputTokens: output.metadata.usage?.inputTokens,
+          outputTokens: output.metadata.usage?.outputTokens,
+          cachedInputTokens: output.metadata.usage?.cachedInputTokens,
+          reasoningOutputTokens:
+            output.metadata.usage?.reasoningOutputTokens,
+          totalTokens: output.metadata.usage?.totalTokens,
+        },
+        {
+          inputTokens: 1300,
+          outputTokens: 140,
+          cachedInputTokens: 1050,
+          reasoningOutputTokens: 28,
+          totalTokens: 1440,
+        }
+      );
+    });
+
+    test("subtracts the replayed prior session total from resumed usage", () => {
+      const output = parser.extractResponse(
+        readUsageFixture("resumed-session-usage.jsonl")
+      );
+
+      assert.deepStrictEqual(
+        {
+          inputTokens: output.metadata.usage?.inputTokens,
+          outputTokens: output.metadata.usage?.outputTokens,
+          cachedInputTokens: output.metadata.usage?.cachedInputTokens,
+          reasoningOutputTokens:
+            output.metadata.usage?.reasoningOutputTokens,
+          totalTokens: output.metadata.usage?.totalTokens,
+        },
+        {
+          inputTokens: 300,
+          outputTokens: 40,
+          cachedInputTokens: 250,
+          reasoningOutputTokens: 8,
+          totalTokens: 340,
+        }
+      );
+    });
   });
 
   suite("headless golden output", () => {
@@ -5374,7 +5517,7 @@ suite("OpenCodeLogParser", () => {
       );
       assert.strictEqual(response.metadata.usage?.inputTokens, 300);
       assert.strictEqual(response.metadata.usage?.outputTokens, 30);
-      assert.strictEqual(response.metadata.usage?.totalTokens, 330);
+      assert.strictEqual(response.metadata.usage?.totalTokens, 340);
       assert.strictEqual(response.metadata.usage?.reasoningOutputTokens, 10);
       assert.strictEqual(response.metadata.usage?.cachedInputTokens, 80);
       assert.strictEqual(response.metadata.usage?.cacheCreatedTokens, 10);
@@ -5384,6 +5527,29 @@ suite("OpenCodeLogParser", () => {
         TOKEN_TOTAL_CONFIDENCE.ACCUMULATED
       );
       assert.strictEqual(response.metadata.harnessReportedCostUsd, 0.2);
+    });
+
+    test("includes disjoint reasoning in output usage totals", () => {
+      const response = parser.extractResponse([
+        {
+          type: "step_finish",
+          sessionID: "ses_open_code",
+          part: {
+            model: "opencode/big-pickle",
+            tokens: {
+              input: 24_073,
+              output: 207,
+              reasoning: 749,
+              total: 25_029,
+            },
+          },
+        },
+      ] as unknown as BaseCliEvent[]);
+
+      assert.strictEqual(response.metadata.usage?.inputTokens, 24_073);
+      assert.strictEqual(response.metadata.usage?.outputTokens, 207);
+      assert.strictEqual(response.metadata.usage?.reasoningOutputTokens, 749);
+      assert.strictEqual(response.metadata.usage?.totalTokens, 25_029);
     });
   });
 

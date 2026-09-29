@@ -24,6 +24,11 @@ export const WORKFLOW_FILE_FORMATS = {
 export type WorkflowFileFormat =
   (typeof WORKFLOW_FILE_FORMATS)[keyof typeof WORKFLOW_FILE_FORMATS];
 
+/** Environment variable names shared by ctrlyoke-managed child processes. */
+export const CTRLYOKE_ENV_VARS = {
+  WORKING_FILE: "CTRLYOKE_WORKING_FILE",
+} as const;
+
 /** Completion trigger discriminants shared by the extension host and webview. */
 export const COMPLETION_TRIGGERS = {
   SLASH: "/",
@@ -2955,6 +2960,8 @@ export const WORKFLOW_VALIDATION_WARNING_CODES = {
    * back to "the script exited 0".
    */
   SCRIPT_COMPARISON_INCOMPLETE: "script-comparison-incomplete",
+  /** The authored queue already exceeds its workflow-level `maxSteps`. */
+  STEP_LIMIT_EXCEEDED: "step-limit-exceeded",
 } as const;
 
 // ============================================================================
@@ -3140,6 +3147,25 @@ export const PROMPT_PROPERTIES = {
   TOOL_PERMISSIONS: "toolPermissions",
   ERROR_BEHAVIOR: "errorBehavior",
 } as const;
+
+/** Script-step fields copied from authored workflow files into normalized steps. */
+export const SCRIPT_STEP_COPY_FIELDS = [
+  PROMPT_PROPERTIES.EXECUTION_MODE,
+  PROMPT_PROPERTIES.SECRETS,
+  PROMPT_PROPERTIES.ENV,
+  PROMPT_PROPERTIES.TIMEOUT,
+  PROMPT_PROPERTIES.COMPARE_SOURCE,
+  PROMPT_PROPERTIES.OPERATOR,
+  PROMPT_PROPERTIES.EXPECTED,
+  PROMPT_PROPERTIES.IGNORE_CASE,
+  PROMPT_PROPERTIES.SHELL,
+  PROMPT_PROPERTIES.ERROR_BEHAVIOR,
+  PROMPT_PROPERTIES.ON_PASS,
+  PROMPT_PROPERTIES.ON_FAIL,
+] as const;
+
+/** Retry attempts allowed when an error policy selects retry without a limit. */
+export const DEFAULT_ERROR_BEHAVIOR_RETRIES = 1;
 
 /** Rendering variants supported by the shared script condition editor. */
 export const SCRIPT_CONDITION_VARIANTS = {
@@ -4160,6 +4186,34 @@ export function getStreamingChunkKey(
     | typeof FINAL_STEP_PHASES.FINAL_STEP = FINAL_STEP_PHASES.QUEUE
 ): string {
   return `${targetKind}:${targetIndex}:run:${runIndex}:attempt:${attemptIndex}:${phase}:${kind}`;
+}
+
+export interface StreamingChunkKeyTarget {
+  targetKind: FinalStepPhase;
+  targetIndex: number;
+}
+
+/** Parse a streaming chunk key produced by getStreamingChunkKey. */
+export function parseStreamingChunkKey(
+  key: string
+): StreamingChunkKeyTarget | null {
+  const match = new RegExp(
+    `^(${FINAL_STEP_PHASES.QUEUE}|${FINAL_STEP_PHASES.FINAL_STEP}):(\\d+):run:\\d+:attempt:\\d+:[^:]+:[^:]+$`
+  ).exec(key);
+  if (!match) return null;
+
+  const targetKind = match[1];
+  if (
+    targetKind !== FINAL_STEP_PHASES.QUEUE &&
+    targetKind !== FINAL_STEP_PHASES.FINAL_STEP
+  ) {
+    return null;
+  }
+
+  return {
+    targetKind,
+    targetIndex: Number(match[2]),
+  };
 }
 
 /** Preserve legacy prompt keys while separating condition execution phases. */

@@ -5,6 +5,9 @@ import {
 } from "../types/DashboardConstants";
 import type { QueueState } from "../types/CtrlYokeTypes";
 
+/** Exit code for CLI usage, parsing, and unexpected errors. */
+export const CLI_USAGE_EXIT_CODE = 2;
+
 /** Determine the CLI process exit code from the final workflow state. */
 export function getExitCode(
   state: Pick<QueueState, "status" | "results">

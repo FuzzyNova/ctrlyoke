@@ -7,6 +7,7 @@ import {
   HistorySearchRegexTimeoutError,
   InvalidHistorySearchPatternError,
 } from "../../core/orchestration/HistorySearchMatcher";
+import { extractSnippet } from "../../core/orchestration/HistorySearchResultUtils";
 
 suite("HistorySearchMatcher", () => {
   test("returns a match at the start of the text", () => {
@@ -40,6 +41,18 @@ suite("HistorySearchMatcher", () => {
       index: 7,
       length: 6,
     });
+  });
+
+  test("maps case-insensitive matches back to original text positions", async () => {
+    const text = `${"İ".repeat(60)} ERROR here`;
+    const matcher = createHistorySearchMatcher("error", false);
+    const expected = { index: 61, length: 5 };
+
+    assert.deepStrictEqual(matcher.find(text), expected);
+    assert.ok(extractSnippet(text, expected).includes("ERROR here"));
+    const asyncMatch = await matcher.findAsync(text);
+    assert.deepStrictEqual(asyncMatch, expected);
+    assert.ok(extractSnippet(text, asyncMatch).includes("ERROR here"));
   });
 
   test("returns no match when the query is longer than the text", () => {
@@ -76,6 +89,27 @@ suite("HistorySearchMatcher", () => {
       createHistorySearchMatcher("(?!secret)public", true).requiredLiteral,
       "public"
     );
+  });
+
+  test("keeps prefilter literals required for grouped regex patterns", () => {
+    const cases = [
+      { pattern: "error (code|mode)", text: "error code" },
+      { pattern: "(error.)code", text: "errorXcode" },
+      { pattern: "x(ba|ca)", text: "xba" },
+      { pattern: "(a.)c", text: "abc" },
+      { pattern: "(?=abc)a", text: "abc" },
+    ];
+
+    for (const { pattern, text } of cases) {
+      const matcher = createHistorySearchMatcher(pattern, true);
+      assert.ok(matcher.find(text), `${pattern} should match ${text}`);
+      assert.ok(
+        matcher.requiredLiteral === undefined ||
+          text.toLowerCase().includes(matcher.requiredLiteral.toLowerCase()),
+        `required literal ${JSON.stringify(matcher.requiredLiteral)} is absent from ${JSON.stringify(text)} for ${pattern}`
+      );
+      disposeHistorySearchMatcher(matcher);
+    }
   });
 
   test("rejects an invalid regex as a typed error", () => {

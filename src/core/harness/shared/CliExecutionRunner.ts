@@ -4,6 +4,7 @@ import * as path from "path";
 import type { CliEvent } from "../../../types/CliOutputTypes";
 import {
   FAILURE_KINDS,
+  CTRLYOKE_ENV_VARS,
   HARNESS_IDS,
   HEADLESS_SOURCE_MODES,
 } from "../../../types/DashboardConstants";
@@ -523,6 +524,10 @@ export class CliExecutionRunner {
       ...this.buildHookEnvVars(session),
       ...this.buildHookProcessEnv(session),
     };
+    const workingFilePath = session.workflowContext?.workingFilePath;
+    if (workingFilePath) {
+      env[CTRLYOKE_ENV_VARS.WORKING_FILE] = workingFilePath.replace(/\\/g, "/");
+    }
     if (ConfigurationUtils.isDiagnosticLogsEnabled()) {
       env.CTRLYOKE_DIAGNOSTIC_LOGS = "true";
     }

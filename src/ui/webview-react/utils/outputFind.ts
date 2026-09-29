@@ -18,6 +18,7 @@ import type {
 } from "@/types/cliEvents";
 import { CLI_EVENT_TYPES } from "@/types/cliEvents";
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
+import { DEFAULT_SCRIPT_VERDICT_EXPECTED_TEXT } from "@root/types/CtrlYokeTypes";
 import { normalizeStructuredPatch } from "./diffUtils";
 import type { OutputMessageTarget } from "./outputProjection";
 import type { OutputRenderRow } from "./outputRows";
@@ -177,7 +178,7 @@ export function getOutputRowSearchSegments(
       return createSegments([
         {
           field: "expected",
-          text: row.verdict.expected ?? "exit code 0 (no `returns` set)",
+          text: row.verdict.expected ?? DEFAULT_SCRIPT_VERDICT_EXPECTED_TEXT,
         },
         { field: "actual", text: row.verdict.actual },
         {

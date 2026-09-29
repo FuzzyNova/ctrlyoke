@@ -10,6 +10,68 @@ const GIT_TIMEOUT_MS = 10_000;
 const GIT_MAX_BUFFER = 50 * 1024 * 1024;
 const execFilePromisified = promisify(execFile);
 
+export interface GitPorcelainV1Entry {
+  x: string;
+  y: string;
+  path: string;
+  originalPath?: string;
+}
+
+/** Split NUL-terminated git path output, dropping only its trailing empty record. */
+export function parseGitNulSeparatedPaths(output: string): string[] {
+  return output.split("\0").filter(Boolean);
+}
+
+/** Parse `git status --porcelain=v1 -z` records without decoding raw paths. */
+export function parseGitPorcelainV1Z(output: string): GitPorcelainV1Entry[] {
+  const nulDelimited = output.includes("\0");
+  const records = nulDelimited
+    ? parseGitNulSeparatedPaths(output)
+    : output.split(/\r?\n/).filter(Boolean);
+  const entries: GitPorcelainV1Entry[] = [];
+  for (let index = 0; index < records.length; index++) {
+    const record = records[index] ?? "";
+    if (record.length < 4) continue;
+    const x = record[0] ?? " ";
+    const y = record[1] ?? " ";
+    let filePath = record.slice(3);
+    let originalPath: string | undefined;
+    if (x === "R" || y === "R" || x === "C" || y === "C") {
+      if (nulDelimited) {
+        originalPath = records[++index];
+      } else {
+        const separatorIndex = filePath.indexOf(" -> ");
+        if (separatorIndex >= 0) {
+          originalPath = filePath.slice(0, separatorIndex);
+          filePath = filePath.slice(separatorIndex + 4);
+        }
+      }
+    }
+    entries.push({ x, y, path: filePath, originalPath });
+  }
+  return entries;
+}
+
+/** Parse `git diff --name-status -z`, including both paths for renames/copies. */
+export function parseGitNameStatusZ(output: string): GitPorcelainV1Entry[] {
+  const records = parseGitNulSeparatedPaths(output);
+  const entries: GitPorcelainV1Entry[] = [];
+  for (let index = 0; index < records.length;) {
+    const status = records[index++] ?? "";
+    const firstPath = records[index++];
+    if (!firstPath) continue;
+    const isRenameOrCopy = status.startsWith("R") || status.startsWith("C");
+    const secondPath = isRenameOrCopy ? records[index++] : undefined;
+    entries.push({
+      x: status[0] ?? " ",
+      y: " ",
+      path: secondPath ?? firstPath,
+      originalPath: isRenameOrCopy ? firstPath : undefined,
+    });
+  }
+  return entries;
+}
+
 /**
  * Run git without involving a shell. The shared limits are intentional: Git
  * output is often path-sized and must be bounded even when a repository has a
@@ -486,7 +548,7 @@ export async function getDiffFilesBetweenRefs(
     baseRef,
     targetRef,
   ]);
-  return stdout.split("\0").filter(Boolean);
+  return parseGitNulSeparatedPaths(stdout);
 }
 
 /** Return a unified diff between two commits/refs. */
@@ -524,14 +586,20 @@ export async function getWorkingTreeDiff(
   // Append untracked file list from git status --short
   const { stdout: statusOutput } = await execFileAsync(
     "git",
-    ["-C", workspaceRoot, "status", "--short"],
+    [
+      "-C",
+      workspaceRoot,
+      "status",
+      "--porcelain=v1",
+      "--untracked-files=all",
+      "-z",
+    ],
     { timeout: GIT_TIMEOUT_MS }
   );
 
-  const untrackedLines = statusOutput
-    .split("\n")
-    .filter((line) => line.startsWith("??"))
-    .map((line) => line.slice(3).trim());
+  const untrackedLines = parseGitPorcelainV1Z(statusOutput)
+    .filter(({ x, y }) => x === "?" && y === "?")
+    .map(({ path: filePath }) => filePath);
 
   if (untrackedLines.length > 0) {
     const untrackedSection = `\nUntracked files:\n${untrackedLines.map((f) => `  ${f}`).join("\n")}`;
@@ -603,13 +671,18 @@ export async function getStashFiles(
 ): Promise<string[]> {
   const { stdout } = await execFileAsync(
     "git",
-    ["-C", workspaceRoot, "stash", "show", "--name-only", `stash@{${index}}`],
+    [
+      "-C",
+      workspaceRoot,
+      "stash",
+      "show",
+      "--name-only",
+      "-z",
+      `stash@{${index}}`,
+    ],
     { timeout: GIT_TIMEOUT_MS }
   );
-  return stdout
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
+  return parseGitNulSeparatedPaths(stdout);
 }
 
 /**
@@ -629,6 +702,7 @@ export async function searchCommitsBySubject(
       "log",
       `--format=%H%x00%h%x00%s%x00%an%x00%ar`,
       `--grep=${query}`,
+      "--fixed-strings",
       "--regexp-ignore-case",
       `-n`,
       String(limit),
@@ -655,6 +729,64 @@ export async function searchCommitsBySubject(
         refNames: [],
       };
     });
+}
+
+/**
+ * Resolve a hexadecimal commit prefix and return its completion metadata.
+ * `--end-of-options` keeps user-entered prefixes from being treated as flags.
+ */
+export async function getCommitByHash(
+  workspaceRoot: string,
+  hashPrefix: string
+): Promise<CommitInfo | null> {
+  if (!/^[0-9a-f]{4,40}$/i.test(hashPrefix)) return null;
+
+  let hash: string;
+  try {
+    const resolved = await execFileAsync(
+      "git",
+      [
+        "-C",
+        workspaceRoot,
+        "rev-parse",
+        "--verify",
+        "--end-of-options",
+        `${hashPrefix}^{commit}`,
+      ],
+      { timeout: GIT_TIMEOUT_MS }
+    );
+    hash = resolved.stdout.trim();
+  } catch {
+    return null;
+  }
+
+  const { stdout } = await execFileAsync(
+    "git",
+    [
+      "-C",
+      workspaceRoot,
+      "show",
+      "-s",
+      "--format=%H%x00%h%x00%s%x00%an%x00%ar",
+      hash,
+    ],
+    { timeout: GIT_TIMEOUT_MS }
+  );
+  const [resolvedHash, shortHash, subject, author, relativeDate] = stdout
+    .trim()
+    .split("\0");
+  if (!resolvedHash || !shortHash || !subject || !author || !relativeDate) {
+    return null;
+  }
+  return {
+    hash: resolvedHash,
+    shortHash,
+    subject,
+    author,
+    relativeDate,
+    parentHashes: [],
+    refNames: [],
+  };
 }
 
 /**
@@ -739,7 +871,7 @@ export async function getGitTrackedFiles(repoRoot: string): Promise<string[]> {
       maxBuffer: 500 * 1024 * 1024, // 500 MB — large monorepos can exceed 100 MB
     }
   );
-  return stdout.split("\0").filter(Boolean);
+  return parseGitNulSeparatedPaths(stdout);
 }
 
 /** Return tracked and non-ignored untracked paths, preserving Git's NUL-safe output. */
@@ -758,7 +890,7 @@ export async function getGitTrackedAndUntrackedFiles(
     ],
     { maxBuffer: GIT_MAX_BUFFER }
   );
-  return stdout.split("\0").filter(Boolean);
+  return parseGitNulSeparatedPaths(stdout);
 }
 
 /** Return non-ignored untracked paths, preserving Git's NUL-safe output. */
@@ -769,7 +901,7 @@ export async function getGitUntrackedFiles(
     ["-C", repoRoot, "ls-files", "--others", "--exclude-standard", "-z"],
     { maxBuffer: GIT_MAX_BUFFER }
   );
-  return stdout.split("\0").filter(Boolean);
+  return parseGitNulSeparatedPaths(stdout);
 }
 
 /** Return ignored untracked paths recursively, preserving Git's NUL-safe output. */
@@ -786,7 +918,7 @@ export async function getGitIgnoredFiles(repoRoot: string): Promise<string[]> {
     ],
     { maxBuffer: GIT_MAX_BUFFER }
   );
-  return stdout.split("\0").filter(Boolean);
+  return parseGitNulSeparatedPaths(stdout);
 }
 
 /**
@@ -810,10 +942,7 @@ export async function getGitIgnoredPaths(
   try {
     const { stdout } = await execGitCheckIgnore(repoRoot, normalizedPaths);
     return new Set(
-      stdout
-        .split("\0")
-        .filter(Boolean)
-        .map((value) => path.resolve(value))
+      parseGitNulSeparatedPaths(stdout).map((value) => path.resolve(value))
     );
   } catch (error) {
     const gitError = error as NodeJS.ErrnoException & {
@@ -884,7 +1013,7 @@ export async function getIgnoredEntryNames(
         maxBuffer: 50 * 1024 * 1024,
       }
     );
-    return new Set(stdout.split("\0").filter(Boolean));
+    return new Set(parseGitNulSeparatedPaths(stdout));
   } catch {
     return null;
   }
@@ -1408,7 +1537,7 @@ export async function getUnmergedPaths(dir: string): Promise<string[]> {
     "--diff-filter=U",
     "-z",
   ]);
-  return stdout.split("\0").filter(Boolean);
+  return parseGitNulSeparatedPaths(stdout);
 }
 
 /** Abort an in-progress merge without invoking a shell or editor. */

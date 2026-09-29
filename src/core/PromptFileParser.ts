@@ -34,11 +34,14 @@ import {
   WORKFLOW_VALIDATION_WARNING_CODES,
   USER_FEEDBACK_ACTIONS,
   WORKTREE_MODES,
+  SCRIPT_STEP_COPY_FIELDS,
 } from "../types/DashboardConstants";
 import {
   describeIncompleteComparison,
   isComparisonIncomplete,
 } from "../utils/ScriptComparison";
+import { exceedsLimit } from "../utils/LimitUtils";
+import { buildStepLimitError } from "../utils/QueueLimitUtils";
 import { PromptFileResolver } from "./PromptFileResolver";
 import {
   flattenParallelItems,
@@ -57,8 +60,8 @@ import {
 import { migrateToCurrent } from "../utils/FormatMigrations";
 
 type ParallelValidationProperties = Pick<
-  ExecutionProperties,
-  "priorContext" | "sessionId"
+  PromptFile,
+  "priorContext" | "sessionId" | "maxSteps"
 >;
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -668,20 +671,11 @@ export class PromptFileParser {
   private buildScriptStep(source: any): ScriptStep {
     const step: ScriptStep = { type: STEP_TYPES.SCRIPT, script: source.script };
     this.copyStepDisplayProperties(source, step);
-    if (source.executionMode !== undefined)
-      step.executionMode = source.executionMode;
-    if (source.secrets !== undefined) step.secrets = source.secrets;
-    if (source.env !== undefined) step.env = source.env;
-    if (source.timeoutSec !== undefined) step.timeoutSec = source.timeoutSec;
-    if (source.compareSource !== undefined)
-      step.compareSource = source.compareSource;
-    if (source.operator !== undefined) step.operator = source.operator;
-    if (source.expected !== undefined) step.expected = source.expected;
-    if (source.ignoreCase !== undefined) step.ignoreCase = source.ignoreCase;
-    if (source.errorBehavior !== undefined)
-      step.errorBehavior = source.errorBehavior;
-    if (source.onPass !== undefined) step.onPass = source.onPass;
-    if (source.onFail !== undefined) step.onFail = source.onFail;
+    for (const field of SCRIPT_STEP_COPY_FIELDS) {
+      if (source[field] !== undefined) {
+        Object.assign(step, { [field]: source[field] });
+      }
+    }
     return step;
   }
 
@@ -1192,6 +1186,22 @@ export class PromptFileParser {
 
     if (!hasExecutableSteps({ steps: items, finalStep: options?.finalStep })) {
       errors.push("No steps found");
+    }
+
+    const authoredMaxSteps = options?.workflowProperties?.maxSteps;
+    if (
+      authoredMaxSteps !== undefined &&
+      exceedsLimit(items.length, authoredMaxSteps)
+    ) {
+      warnings.push({
+        code: WORKFLOW_VALIDATION_WARNING_CODES.STEP_LIMIT_EXCEEDED,
+        message: buildStepLimitError(
+          items.length,
+          authoredMaxSteps,
+          "workflow maxSteps"
+        ),
+        propertyPointer: "/maxSteps",
+      });
     }
 
     if (options?.parallelGroups !== undefined) {

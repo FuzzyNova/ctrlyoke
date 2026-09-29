@@ -20,6 +20,13 @@ class TestableEndConditionEvaluator extends EndConditionEvaluator {
   ): { executable: string; args: string[] } | null {
     return this.getScriptCommand(scriptPath);
   }
+
+  resolvePathForTest(
+    scriptPath: string,
+    workingDirectory?: string
+  ): Promise<string | null> {
+    return this.resolveScriptPath(scriptPath, workingDirectory);
+  }
 }
 
 suite("EndConditionEvaluator Tests", () => {
@@ -470,6 +477,65 @@ suite("EndConditionEvaluator Tests", () => {
   });
 
   suite("evaluateCondition - Integration", () => {
+    test("ignores directory candidates at every script lookup location", async () => {
+      const workingDirectory = path.join(workspaceRoot, "working-directory");
+      fs.mkdirSync(workingDirectory);
+
+      const absoluteDirectory = path.join(workspaceRoot, "absolute-candidate");
+      fs.mkdirSync(absoluteDirectory);
+      assert.strictEqual(
+        await evaluator.resolvePathForTest(absoluteDirectory),
+        null
+      );
+
+      fs.mkdirSync(path.join(workingDirectory, "shared-candidate"));
+      const workspaceFile = path.join(workspaceRoot, "shared-candidate");
+      fs.writeFileSync(workspaceFile, "script", "utf8");
+      assert.strictEqual(
+        await evaluator.resolvePathForTest("shared-candidate", workingDirectory),
+        await fs.promises.realpath(workspaceFile)
+      );
+
+      const ctrlyokeDirectory = path.join(workspaceRoot, ".ctrlyoke");
+      fs.mkdirSync(ctrlyokeDirectory);
+      fs.mkdirSync(path.join(workspaceRoot, "workspace-candidate"));
+      const ctrlyokeFile = path.join(ctrlyokeDirectory, "workspace-candidate");
+      fs.writeFileSync(ctrlyokeFile, "script", "utf8");
+      assert.strictEqual(
+        await evaluator.resolvePathForTest("workspace-candidate"),
+        await fs.promises.realpath(ctrlyokeFile)
+      );
+
+      fs.mkdirSync(path.join(ctrlyokeDirectory, "ctrlyoke-candidate"));
+      assert.strictEqual(
+        await evaluator.resolvePathForTest("ctrlyoke-candidate"),
+        null
+      );
+
+      const temporaryHome = fs.mkdtempSync(
+        path.join(os.tmpdir(), "ctrlyoke-evaluator-home-")
+      );
+      const priorHome = process.env.HOME;
+      const priorUserProfile = process.env.USERPROFILE;
+      try {
+        process.env.HOME = temporaryHome;
+        process.env.USERPROFILE = temporaryHome;
+        const homeScripts = EndConditionEvaluator.getUserHomeScriptsDir();
+        fs.mkdirSync(homeScripts, { recursive: true });
+        fs.mkdirSync(path.join(homeScripts, "home-candidate"));
+        assert.strictEqual(
+          await evaluator.resolvePathForTest("home-candidate"),
+          null
+        );
+      } finally {
+        if (priorHome === undefined) delete process.env.HOME;
+        else process.env.HOME = priorHome;
+        if (priorUserProfile === undefined) delete process.env.USERPROFILE;
+        else process.env.USERPROFILE = priorUserProfile;
+        fs.rmSync(temporaryHome, { recursive: true, force: true });
+      }
+    });
+
     // These tests require actual script execution, so they're more integration-style
     // but test core behavior
 
@@ -823,6 +889,66 @@ suite("EndConditionEvaluator Tests", () => {
     ): Promise<EvaluationResult> {
       return evaluator.evaluateCondition(condition, workspaceRoot);
     }
+
+    test("workspace script shell operators run as shell syntax", async () => {
+      const isWindows = process.platform === "win32";
+      const scriptName = isWindows ? "check.cmd" : "check.sh";
+      const scriptPath = path.join(workspaceRoot, scriptName);
+      fs.writeFileSync(
+        scriptPath,
+        isWindows
+          ? "@echo off\r\necho CHECK\r\n"
+          : "#!/bin/sh\nprintf 'CHECK\\n'\n",
+        "utf8"
+      );
+      if (!isWindows) fs.chmodSync(scriptPath, 0o755);
+      const invocation = isWindows
+        ? `.${path.sep}${scriptName}`
+        : `./${scriptName}`;
+      const shell = isWindows ? "cmd" : "sh";
+      const command = (tail: string) => `${invocation} ${tail}`;
+
+      const passed = await evaluate({
+        script: command(isWindows ? "&& echo SECOND" : "&& printf SECOND"),
+        shell,
+        compareSource: "stdout",
+        expected: isWindows ? "CHECK\r\nSECOND" : "CHECK\nSECOND",
+      });
+      assert.strictEqual(passed.passed, true, passed.stderr || passed.stdout);
+
+      const failed = await evaluate({
+        script: command('&& node -e "process.exit(3)"'),
+        shell,
+        compareSource: "exitCode",
+      });
+      assert.strictEqual(failed.passed, false, failed.stderr || failed.stdout);
+      assert.strictEqual(failed.exitCode, 3);
+
+      const piped = await evaluate({
+        script: command(isWindows ? "| findstr CHECK" : "| grep CHECK"),
+        shell,
+        compareSource: "stdout",
+        expected: "CHECK",
+      });
+      assert.strictEqual(piped.passed, true, piped.stderr || piped.stdout);
+    });
+
+    test("plain workspace script arguments stay on direct argv dispatch", async () => {
+      const scriptPath = path.join(workspaceRoot, "argv-check.js");
+      fs.writeFileSync(
+        scriptPath,
+        "process.stdout.write(JSON.stringify(process.argv.slice(2)))",
+        "utf8"
+      );
+
+      const result = await evaluate({
+        script: 'argv-check.js arg1 "a b"',
+        compareSource: "stdout",
+        expected: '["arg1","a b"]',
+      });
+
+      assert.strictEqual(result.passed, true, result.stderr || result.stdout);
+    });
 
     test("compares the exit code with eq", async () => {
       const result = await evaluate({

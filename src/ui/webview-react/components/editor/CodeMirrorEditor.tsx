@@ -82,6 +82,7 @@ import { WebviewLog } from "../../utils/logger";
 import { useSettingsStore } from "../../store/settingsStore";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 import { scanCtrlYokeSlashTokens } from "@root/utils/CtrlYokeSlashTokens";
+import { createGitChangeReferencePattern } from "@root/utils/ReferencePatterns";
 import {
   REFERENCE_BOUNDARY_CHAR_RE,
   findWordStartTriggerIndex,
@@ -2372,7 +2373,7 @@ function getCompletionRanges(
   const patterns = [
     /@"[^"]*"|@[^\s@#~]+/g,
     /#"[^"]*"|#[^\s@#~]+/g,
-    /~(?:diff|staged|stash:\d+|[0-9a-f]{7,40})/gi,
+    createGitChangeReferencePattern(),
   ];
 
   for (const pattern of patterns) {

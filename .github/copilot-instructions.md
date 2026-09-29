@@ -16,7 +16,7 @@ ctrlyoke automates AI coding harnesses through structured YAML/JSON/Markdown wor
 **Log files** (in `.ctrlyoke/logs/`):
 
 - `ctrlyoke-<timestamp>.log` — session log; state transitions, orchestration flow, session ID resolution. Start here for unexpected stops or state issues.
-- `ctrlyoke-<harness>-hook-debug.log` (e.g. `ctrlyoke-copilot-hook-debug.log`) — every hook/notify invocation and result. Start here when completion never fires or session IDs don't match.
+- `ctrlyoke-<harness>-hook-debug.log` (e.g. `ctrlyoke-copilot-hook-debug.log`) — every hook/notify invocation and result; written only when `diagnostics.verboseLogging` is on. Start here when completion never fires or session IDs don't match.
 
 **Run storage** is resolved by `WorkflowPaths.runsRoot(stateRoot)`. In the default user mode it
 is `<ctrlyokeStateHome>/projects/<slug>-<hash12>/.runs/<workflowKey>/`; in workspace mode it is

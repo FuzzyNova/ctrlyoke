@@ -245,7 +245,8 @@ export interface IDashboardSink {
 
   sendStepUndoDataUpdated(
     target: UndoExecutionTarget,
-    workspaceSnapshot?: WorkspaceSnapshot
+    workspaceSnapshot?: WorkspaceSnapshot,
+    workflowId?: string
   ): void;
 
   /** Deliver a ctrlyoke notification event (completion or hook) to the sink. */

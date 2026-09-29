@@ -26,6 +26,7 @@ import {
 } from "../types/DashboardConstants";
 import { parseRangeNotation } from "./RangeNotationParser";
 import { NOT_AFTER_BOUNDARY } from "./ReferenceBoundary";
+import { createGitChangeReferencePattern } from "./ReferencePatterns";
 
 /**
  * Mask every prompt-reference and variable trigger character inside
@@ -534,10 +535,7 @@ export function parseGitChangeReferences(text: string): GitChangeReference[] {
   // characters immediately before ~, not just alphanumerics (e.g. a word
   // ending in a hex-looking suffix like "abc123~stale" or a filename like
   // "data_file~@backup!.csv" shouldn't be mistaken for a commit-hash ref).
-  const regex = new RegExp(
-    `${NOT_AFTER_BOUNDARY}~(diff|staged|stash:(\\d+)|([0-9a-f]{7,40}))`,
-    "gi"
-  );
+  const regex = createGitChangeReferencePattern();
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(maskedText)) !== null) {
@@ -600,16 +598,8 @@ export function parseAllFileReferences(prompt: string): FileReference[] {
   // This ensures processing order matches user intent
   const allRefs = [...atRefs, ...fileRefs, ...symRefs];
 
-  // Sort by first occurrence in prompt
-  allRefs.sort((a, b) => {
-    // For symbol refs, search for the #sym: pattern
-    const aSearchStr = a.symbolName ? `#sym:${a.symbolName}` : a.path;
-    const bSearchStr = b.symbolName ? `#sym:${b.symbolName}` : b.path;
-
-    const aIndex = prompt.indexOf(aSearchStr);
-    const bIndex = prompt.indexOf(bSearchStr);
-    return aIndex - bIndex;
-  });
+  // Every parser records the matched token's position in the original prompt.
+  allRefs.sort((a, b) => (a.startOffset ?? 0) - (b.startOffset ?? 0));
 
   return allRefs;
 }

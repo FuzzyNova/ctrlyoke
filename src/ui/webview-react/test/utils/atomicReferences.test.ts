@@ -6,6 +6,7 @@ import {
   findConditionOutputRefs,
   findAtomicReferences,
   findContextReferenceMatches,
+  findInlinePriorContextRefs,
   projectAtomicReferenceFind,
   referenceBasename,
   SYMBOL_ICON_COLORS,
@@ -277,6 +278,14 @@ describe("atomic reference presentation", () => {
     });
   });
 
+  it("only decorates complete git-change references", () => {
+    expect(
+      findAtomicReferences(
+        "~differently ~1500000x ~staged_files ~stash:1a ~diff. (~staged)"
+      ).map((ref) => ref.attrs?.["data-git-ref"])
+    ).toEqual(["diff", "staged"]);
+  });
+
   it("labels a $ prior-context reference", () => {
     const chips = findAtomicReferences("Use $previous here");
     expect(chips).toEqual([
@@ -371,6 +380,11 @@ describe("atomic reference presentation", () => {
       label: "step 1,3,4",
       attrs: { "data-type": "priorContext", "data-ref": "step:1,3,4" },
     });
+  });
+
+  it("rejects invalid and oversized $step ranges without expanding them", () => {
+    expect(findInlinePriorContextRefs("see $step:1-5000000000")).toEqual([]);
+    expect(findInlinePriorContextRefs("see $step:0")).toEqual([]);
   });
 
   it("treats a trailing comma on $step: as sentence punctuation", () => {

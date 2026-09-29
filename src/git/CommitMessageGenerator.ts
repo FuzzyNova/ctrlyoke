@@ -20,6 +20,7 @@ import {
   MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
 } from "../utils/McpToolDefinitions";
 import { fenceLiteral } from "../utils/FileReferenceParser";
+import { parseGitNulSeparatedPaths } from "../utils/GitUtils";
 import {
   CLI_EVENT_TYPES,
   EXECUTION_MODES,
@@ -230,13 +231,13 @@ export class CommitMessageGenerator {
     }
 
     try {
-      commands.push("git ls-files --others --exclude-standard");
+      commands.push("git ls-files --others --exclude-standard -z");
       const { stdout: untrackedOut } = await execFileAsync(
         "git",
-        ["ls-files", "--others", "--exclude-standard"],
+        ["ls-files", "--others", "--exclude-standard", "-z"],
         { cwd, encoding: "utf8", maxBuffer: GIT_DIFF_MAX_BUFFER }
       );
-      const untrackedFiles = untrackedOut.trim().split("\n").filter(Boolean);
+      const untrackedFiles = parseGitNulSeparatedPaths(untrackedOut);
       includesUntrackedFiles = untrackedFiles.length > 0;
       for (const filePath of untrackedFiles) {
         try {

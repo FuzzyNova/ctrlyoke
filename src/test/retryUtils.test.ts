@@ -1,5 +1,9 @@
 import * as assert from "assert";
-import { retryWithBackoff, PermanentFailureError } from "../utils/RetryUtils";
+import {
+  retryWithBackoff,
+  PermanentFailureError,
+  stopRetrying,
+} from "../utils/RetryUtils";
 
 /**
  * Unit tests for RetryUtils
@@ -88,6 +92,48 @@ suite("RetryUtils", () => {
 
       assert.strictEqual(result, undefined);
       assert.strictEqual(attempts, 2); // Should stop at attempt 2
+    });
+
+    test("should stop and propagate the original non-retryable error", async () => {
+      let attempts = 0;
+      const originalError = new Error("CLI executable was not found");
+
+      await assert.rejects(
+        retryWithBackoff(
+          async () => {
+            attempts++;
+            stopRetrying(originalError);
+          },
+          { maxAttempts: 4, delays: [0, 10, 10] }
+        ),
+        (error: unknown) => error === originalError
+      );
+
+      assert.strictEqual(attempts, 1);
+    });
+
+    test("should keep retrying file-lock errors when the caller marks them transient", async () => {
+      let attempts = 0;
+      const result = await retryWithBackoff(
+        async () => {
+          attempts++;
+          try {
+            if (attempts === 1) {
+              throw new Error("being used by another process");
+            }
+            return "success";
+          } catch (error) {
+            if (String(error).includes("being used by another process")) {
+              return null;
+            }
+            stopRetrying(error);
+          }
+        },
+        { maxAttempts: 4, delays: [0, 0, 0] }
+      );
+
+      assert.strictEqual(result, "success");
+      assert.strictEqual(attempts, 2);
     });
 
     test("should use custom delays array", async () => {

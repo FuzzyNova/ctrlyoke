@@ -283,6 +283,31 @@ suite("ConfigurationUtils — allowed external file roots", () => {
   });
 });
 
+suite("ConfigurationUtils — script timeout", () => {
+  teardown(() => {
+    configService.setUserBackend(makeBackend({}));
+    configService.setWorkspaceBackend(makeBackend({}));
+  });
+
+  test("uses the default timeout for non-positive configured values", () => {
+    for (const scriptTimeoutSec of [-1, 0]) {
+      configService.setUserBackend(
+        makeBackend({ execution: { scriptTimeoutSec } })
+      );
+      configService.setWorkspaceBackend(makeBackend({}));
+      assert.strictEqual(ConfigurationUtils.getScriptTimeoutMs(), 3_600_000);
+    }
+  });
+
+  test("converts a positive configured timeout to milliseconds", () => {
+    configService.setUserBackend(
+      makeBackend({ execution: { scriptTimeoutSec: 15 } })
+    );
+    configService.setWorkspaceBackend(makeBackend({}));
+    assert.strictEqual(ConfigurationUtils.getScriptTimeoutMs(), 15_000);
+  });
+});
+
 suite("ConfigurationUtils — context resolution failure mode", () => {
   teardown(() => {
     configService.setUserBackend(makeBackend({}));

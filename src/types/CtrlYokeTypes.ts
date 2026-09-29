@@ -904,6 +904,10 @@ export interface ScriptVerdict {
   error?: string;
 }
 
+/** Default expectation shown when a script comparison omits `expected`. */
+export const DEFAULT_SCRIPT_VERDICT_EXPECTED_TEXT =
+  "exit code 0 (no `expected` set)";
+
 /**
  * The latest evaluation details retained for the automation result projection.
  * The action is populated for pre-conditions, where it explains a gate decision.

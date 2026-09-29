@@ -6,6 +6,7 @@ import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { type ScriptProperties } from "../types/CtrlYokeTypes";
 import {
+  CTRLYOKE_ENV_VARS,
   END_CONDITION_SCRIPT_TYPES,
   SCRIPT_FILE_INTERPRETER_KINDS,
   SCRIPT_FILE_INTERPRETERS,
@@ -35,7 +36,10 @@ import {
   compareScriptOutput,
   type ScriptComparisonConfig,
 } from "../utils/ScriptComparison";
-import { resolveShellInvocation } from "./harness/PtyProcessManager";
+import {
+  containsShellSyntax,
+  resolveShellInvocation,
+} from "./harness/PtyProcessManager";
 import {
   getShellInvocationError,
   resolveShellKind,
@@ -189,7 +193,8 @@ export class EndConditionEvaluator {
     vars?: Record<string, string>,
     onOutput?: (chunk: string) => void,
     secretNames: readonly string[] = [],
-    processRunner?: ScriptProcessRunner
+    processRunner?: ScriptProcessRunner,
+    workingFilePath?: string
   ): Promise<EvaluationResult> {
     const startTime = Date.now();
     const executionRoot =
@@ -219,8 +224,12 @@ export class EndConditionEvaluator {
         windowsVerbatimArguments?: boolean;
       };
 
-      if (resolvedScriptPath) {
-        // File found - determine script type and command
+      if (
+        resolvedScriptPath &&
+        !containsShellSyntax(additionalArgs.join(" "))
+      ) {
+        // A plain file command can use direct argv dispatch. If its arguments
+        // include shell syntax, the command below must retain shell semantics.
         const fileCommand = this.getScriptCommand(resolvedScriptPath);
         if (!fileCommand) {
           return {
@@ -251,7 +260,7 @@ export class EndConditionEvaluator {
         // interactive script steps — the same script text no longer runs
         // under a different, silently-chosen shell depending on execution mode.
         Log.info(
-          `[EndConditionEvaluator] Script file not found, treating as direct command: ${condition.script}`
+          `[EndConditionEvaluator] Using shell for command: ${condition.script}`
         );
         const shellInvocation = resolveShellInvocation(
           condition.script,
@@ -292,7 +301,8 @@ export class EndConditionEvaluator {
         secretNames,
         condition.env,
         processRunner,
-        command.windowsVerbatimArguments ?? false
+        command.windowsVerbatimArguments ?? false,
+        workingFilePath
       );
 
       if (result.errored) {
@@ -367,7 +377,7 @@ export class EndConditionEvaluator {
    * All resolved paths are canonicalized with realpath() to prevent sibling-prefix
    * and symlink-escape bypasses before the boundary check.
    */
-  private async resolveScriptPath(
+  protected async resolveScriptPath(
     scriptPath: string,
     workingDirectory?: string
   ): Promise<string | null> {
@@ -377,7 +387,7 @@ export class EndConditionEvaluator {
     // Try absolute path first
     if (path.isAbsolute(scriptPath)) {
       try {
-        await fs.promises.access(scriptPath);
+        if (!(await this.isRegularFile(scriptPath))) return null;
         const canonical =
           await EndConditionEvaluator.canonicalizePath(scriptPath);
         if (
@@ -403,20 +413,25 @@ export class EndConditionEvaluator {
     if (workingDirectory) {
       const fullPath = path.resolve(workingDirectory, scriptPath);
       try {
-        await fs.promises.access(fullPath);
-        const canonical =
-          await EndConditionEvaluator.canonicalizePath(fullPath);
-        if (
-          !(await this.isAllowedPath(canonical, workspaceRoot, homeScriptsDir))
-        ) {
-          Log.error(
-            `[EndConditionEvaluator] Security: Resolved script path "${fullPath}" is outside workspace root "${workspaceRoot}" and home scripts directory "${homeScriptsDir}"`
-          );
-          throw new Error(
-            `Security: Resolved script path "${fullPath}" is outside workspace root "${workspaceRoot}" and home scripts directory "${homeScriptsDir}"`
-          );
+        if (await this.isRegularFile(fullPath)) {
+          const canonical =
+            await EndConditionEvaluator.canonicalizePath(fullPath);
+          if (
+            !(await this.isAllowedPath(
+              canonical,
+              workspaceRoot,
+              homeScriptsDir
+            ))
+          ) {
+            Log.error(
+              `[EndConditionEvaluator] Security: Resolved script path "${fullPath}" is outside workspace root "${workspaceRoot}" and home scripts directory "${homeScriptsDir}"`
+            );
+            throw new Error(
+              `Security: Resolved script path "${fullPath}" is outside workspace root "${workspaceRoot}" and home scripts directory "${homeScriptsDir}"`
+            );
+          }
+          return canonical;
         }
-        return canonical;
       } catch (error) {
         if (error instanceof Error && error.message.startsWith("Security:")) {
           throw error;
@@ -429,22 +444,23 @@ export class EndConditionEvaluator {
     if (workspaceRoot) {
       const workspacePath = path.resolve(workspaceRoot, scriptPath);
       try {
-        await fs.promises.access(workspacePath);
-        const canonical =
-          await EndConditionEvaluator.canonicalizePath(workspacePath);
-        const canonicalRoot =
-          await EndConditionEvaluator.canonicalizePath(workspaceRoot);
-        if (
-          !EndConditionEvaluator.isWithinDirectory(canonical, canonicalRoot)
-        ) {
-          Log.error(
-            `[EndConditionEvaluator] Security: Script path traversal detected: "${workspacePath}" resolves outside workspace root "${workspaceRoot}"`
-          );
-          throw new Error(
-            `Security: Script path traversal detected: "${workspacePath}" resolves outside workspace root "${workspaceRoot}"`
-          );
+        if (await this.isRegularFile(workspacePath)) {
+          const canonical =
+            await EndConditionEvaluator.canonicalizePath(workspacePath);
+          const canonicalRoot =
+            await EndConditionEvaluator.canonicalizePath(workspaceRoot);
+          if (
+            !EndConditionEvaluator.isWithinDirectory(canonical, canonicalRoot)
+          ) {
+            Log.error(
+              `[EndConditionEvaluator] Security: Script path traversal detected: "${workspacePath}" resolves outside workspace root "${workspaceRoot}"`
+            );
+            throw new Error(
+              `Security: Script path traversal detected: "${workspacePath}" resolves outside workspace root "${workspaceRoot}"`
+            );
+          }
+          return canonical;
         }
-        return canonical;
       } catch (error) {
         if (error instanceof Error && error.message.startsWith("Security:")) {
           throw error;
@@ -459,22 +475,23 @@ export class EndConditionEvaluator {
         scriptPath
       );
       try {
-        await fs.promises.access(ctrlyokePath);
-        const canonical =
-          await EndConditionEvaluator.canonicalizePath(ctrlyokePath);
-        const canonicalRoot =
-          await EndConditionEvaluator.canonicalizePath(workspaceRoot);
-        if (
-          !EndConditionEvaluator.isWithinDirectory(canonical, canonicalRoot)
-        ) {
-          Log.error(
-            `[EndConditionEvaluator] Security: Script path traversal detected: "${ctrlyokePath}" resolves outside workspace root "${workspaceRoot}"`
-          );
-          throw new Error(
-            `Security: Script path traversal detected: "${ctrlyokePath}" resolves outside workspace root "${workspaceRoot}"`
-          );
+        if (await this.isRegularFile(ctrlyokePath)) {
+          const canonical =
+            await EndConditionEvaluator.canonicalizePath(ctrlyokePath);
+          const canonicalRoot =
+            await EndConditionEvaluator.canonicalizePath(workspaceRoot);
+          if (
+            !EndConditionEvaluator.isWithinDirectory(canonical, canonicalRoot)
+          ) {
+            Log.error(
+              `[EndConditionEvaluator] Security: Script path traversal detected: "${ctrlyokePath}" resolves outside workspace root "${workspaceRoot}"`
+            );
+            throw new Error(
+              `Security: Script path traversal detected: "${ctrlyokePath}" resolves outside workspace root "${workspaceRoot}"`
+            );
+          }
+          return canonical;
         }
-        return canonical;
       } catch (error) {
         if (error instanceof Error && error.message.startsWith("Security:")) {
           throw error;
@@ -486,7 +503,7 @@ export class EndConditionEvaluator {
     // Try in ~/.ctrlyoke/scripts (user shared scripts directory)
     const homeScriptPath = path.resolve(homeScriptsDir, scriptPath);
     try {
-      await fs.promises.access(homeScriptPath);
+      if (!(await this.isRegularFile(homeScriptPath))) return null;
       const canonical =
         await EndConditionEvaluator.canonicalizePath(homeScriptPath);
       const canonicalHomeScripts =
@@ -513,6 +530,14 @@ export class EndConditionEvaluator {
     }
 
     return null;
+  }
+
+  private async isRegularFile(candidatePath: string): Promise<boolean> {
+    try {
+      return (await fs.promises.stat(candidatePath)).isFile();
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -804,17 +829,23 @@ export class EndConditionEvaluator {
     secretNames: readonly string[] = [],
     processEnv?: Record<string, string>,
     processRunner?: ScriptProcessRunner,
-    windowsVerbatimArguments: boolean = false
+    windowsVerbatimArguments: boolean = false,
+    workingFilePath?: string
   ): Promise<ScriptProcessResult> {
     const resolvedSecrets = await resolveSecretEnvironment(secretNames, {
       workspaceRoot: this.platform.getWorkspaceRoot(),
       secretStore: this.platform.getSecretStore?.(),
     });
-    const env = buildSecretProcessEnvironment(
-      processEnv,
-      resolvedSecrets,
-      secretNames
-    );
+    const env = {
+      ...(buildSecretProcessEnvironment(
+        processEnv,
+        resolvedSecrets,
+        secretNames
+      ) ?? {}),
+    };
+    if (workingFilePath) {
+      env[CTRLYOKE_ENV_VARS.WORKING_FILE] = workingFilePath.replace(/\\/g, "/");
+    }
     const ownsRunner = !processRunner;
     const runner =
       processRunner ??

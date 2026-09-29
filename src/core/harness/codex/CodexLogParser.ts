@@ -224,14 +224,44 @@ export class CodexLogParser extends BaseLogParser {
     let cachedInputTokens = 0;
     let reasoningOutputTokens = 0;
     let providerTotalTokens: number | undefined;
+    let hasSeenModelOutput = false;
+    let startingTokenUsage:
+      | {
+          inputTokens: number;
+          outputTokens: number;
+          cachedInputTokens: number;
+          reasoningOutputTokens: number;
+          totalTokens?: number;
+        }
+      | undefined;
     // Per-turn (last) usage — used for context window (not cumulative billing total)
     let lastTurnContextWindowUsed: number | undefined;
     let modelContextWindow: number | undefined;
+    const isModelOutputEvent = (event: BaseCliEvent): boolean => {
+      const codexEvent = event as CodexProviderEvent;
+      return (
+        codexEvent.type === CODEX_EVENT_TYPES.RESPONSE_ITEM &&
+        (codexEvent.payload?.role === CODEX_MESSAGE_ROLES.ASSISTANT ||
+          codexEvent.payload?.type === CODEX_PAYLOAD_TYPES.REASONING ||
+          codexEvent.payload?.type === CODEX_PAYLOAD_TYPES.FUNCTION_CALL ||
+          codexEvent.payload?.type ===
+            CODEX_PAYLOAD_TYPES.FUNCTION_CALL_OUTPUT ||
+          codexEvent.payload?.type === CODEX_PAYLOAD_TYPES.CUSTOM_TOOL_CALL ||
+          codexEvent.payload?.type ===
+            CODEX_PAYLOAD_TYPES.CUSTOM_TOOL_CALL_OUTPUT ||
+          codexEvent.payload?.type === CODEX_PAYLOAD_TYPES.TODO_LIST)
+      );
+    };
+    const hasModelOutputEvents = events.some(isModelOutputEvent);
 
     for (const event of events as CodexProviderEvent[]) {
       const timestamp = event.timestamp
         ? new Date(event.timestamp).getTime()
         : Date.now();
+
+      if (isModelOutputEvent(event)) {
+        hasSeenModelOutput = true;
+      }
 
       // Track session metadata (session_meta)
       if (event.type === CODEX_EVENT_TYPES.SESSION_META && event.payload) {
@@ -270,6 +300,26 @@ export class CodexLogParser extends BaseLogParser {
           reasoningOutputTokens = total.reasoning_output_tokens || 0;
           if (typeof total.total_tokens === "number") {
             providerTotalTokens = total.total_tokens;
+          }
+          // A resumed rollout replays its prior cumulative total before this
+          // step emits any model output. Fresh-session cumulative totals can
+          // exceed the last-turn total when a turn makes several model calls,
+          // so event order is the reliable discriminator.
+          if (
+            !startingTokenUsage &&
+            !hasSeenModelOutput &&
+            hasModelOutputEvents
+          ) {
+            startingTokenUsage = {
+              inputTokens: totalInputTokens,
+              outputTokens: totalOutputTokens,
+              cachedInputTokens,
+              reasoningOutputTokens,
+              totalTokens:
+                typeof total.total_tokens === "number"
+                  ? total.total_tokens
+                  : undefined,
+            };
           }
         }
         if (info?.last_token_usage) {
@@ -575,13 +625,35 @@ export class CodexLogParser extends BaseLogParser {
       totalOutputTokens > 0 ||
       providerTotalTokens !== undefined
     ) {
+      const stepInputTokens = Math.max(
+        0,
+        totalInputTokens - (startingTokenUsage?.inputTokens ?? 0)
+      );
+      const stepOutputTokens = Math.max(
+        0,
+        totalOutputTokens - (startingTokenUsage?.outputTokens ?? 0)
+      );
+      const stepCachedInputTokens = Math.max(
+        0,
+        cachedInputTokens - (startingTokenUsage?.cachedInputTokens ?? 0)
+      );
+      const stepReasoningOutputTokens = Math.max(
+        0,
+        reasoningOutputTokens - (startingTokenUsage?.reasoningOutputTokens ?? 0)
+      );
+      const stepTotalTokens =
+        providerTotalTokens === undefined
+          ? undefined
+          : Math.max(
+              0,
+              providerTotalTokens - (startingTokenUsage?.totalTokens ?? 0)
+            );
       metadata.usage = {
-        inputTokens: totalInputTokens,
-        outputTokens: totalOutputTokens,
-        totalTokens:
-          providerTotalTokens ?? totalInputTokens + totalOutputTokens,
-        cachedInputTokens,
-        reasoningOutputTokens,
+        inputTokens: stepInputTokens,
+        outputTokens: stepOutputTokens,
+        totalTokens: stepTotalTokens ?? stepInputTokens + stepOutputTokens,
+        cachedInputTokens: stepCachedInputTokens,
+        reasoningOutputTokens: stepReasoningOutputTokens,
         totalConfidence:
           providerTotalTokens !== undefined
             ? TOKEN_TOTAL_CONFIDENCE.PROVIDER

@@ -13,7 +13,7 @@ import { ctrlyokeStateHome } from "../../../utils/ProjectStatePaths";
 import { canonicalizeDriveLetter } from "../../../utils/PathCasing";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { ctrlYokeToolFamilies } from "../../../types/ExecutionPropertyResolver";
-import { retryWithBackoff } from "../../../utils/RetryUtils";
+import { retryWithBackoff, stopRetrying } from "../../../utils/RetryUtils";
 import { withCtrlyokeBinOnPath } from "../../../utils/CtrlyokeCliPath";
 import { parseArgString } from "../../../utils/CliArgParser";
 import { resolveCliCommand } from "./CliLauncherResolver";
@@ -213,7 +213,7 @@ export class CliProviderUtils {
             if (String(error).includes(WINDOWS_FILE_LOCK_ERROR)) {
               return null;
             }
-            throw error;
+            stopRetrying(error);
           }
         },
         { maxAttempts: 4, delays: [200, 500, 1000] }

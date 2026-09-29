@@ -187,6 +187,27 @@ suite("HistorySearchShardScanner", () => {
         );
       }
     }
+
+    const regexCases = [
+      { pattern: "error (code|mode)", text: "error code" },
+      { pattern: "(error.)code", text: "errorXcode" },
+      { pattern: "x(ba|ca)", text: "xba" },
+      { pattern: "(a.)c", text: "abc" },
+      { pattern: "(?=abc)a", text: "abc" },
+    ];
+    for (const { pattern, text } of regexCases) {
+      const matcher = createHistorySearchMatcher(pattern, true);
+      const document = createDocument(text);
+      const line = JSON.stringify(document);
+
+      assert.ok(matcher.find(text), `${pattern} should match ${text}`);
+      assert.strictEqual(
+        createHistorySearchLinePrefilter(matcher, INDEXED_KEY_OPTIONS)(line),
+        true,
+        `prefilter rejected generated regex match ${JSON.stringify(text)} for ${pattern}`
+      );
+      disposeHistorySearchMatcher(matcher);
+    }
   });
 
   test("finds a mixed-case match in shards written before the lowercase key", async () => {

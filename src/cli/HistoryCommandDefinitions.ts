@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import {
+  CTRLYOKE_ENV_VARS,
   EXECUTION_STATES,
   HARNESS_IDS,
   HISTORY_EVENT_KINDS,
@@ -145,7 +146,7 @@ export function registerHistoryCommands(
     .option("--workflow <key...>", "Restrict to workflow lineage keys")
     .option(
       "--this-workflow",
-      "Restrict to the workflow named by CTRLYOKE_WORKING_FILE"
+      `Restrict to the workflow named by ${CTRLYOKE_ENV_VARS.WORKING_FILE}`
     )
     .option(
       "--kind <kind...>",

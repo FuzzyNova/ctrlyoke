@@ -396,7 +396,7 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
     }
 
     // Check if all sessions for this workflow have ended
-    const sessions = termStore.sessions[workflowId] ?? [];
+    const sessions = useTerminalStore.getState().sessions[workflowId] ?? [];
     const hasRunningSessions = sessions.some(
       (s) => s.status === TERMINAL_SESSION_STATUS.RUNNING
     );

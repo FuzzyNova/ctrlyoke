@@ -260,7 +260,7 @@ function resolveWorkspaceOrNamedPath(
 
   const normalized = referencePath.replace(/\\/g, "/");
   const firstSlash = normalized.indexOf("/");
-  if (firstSlash > 0) {
+  if (namedRoots.length > 1 && firstSlash > 0) {
     const firstSegment = normalized.slice(0, firstSlash);
     const rest = normalized.slice(firstSlash + 1);
     const match = namedRoots.find(

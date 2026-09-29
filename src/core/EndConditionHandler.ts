@@ -130,11 +130,6 @@ export class EndConditionHandler {
     retryContext: RetryContext,
     sendRetryPrompt: SendRetryPromptCallback
   ): Promise<EndConditionHandlerResult> {
-    const onPass: EndConditionAction =
-      prompt.endCondition?.onPass ?? CONDITION_ACTIONS.CONTINUE;
-    const onFail: EndConditionAction =
-      prompt.endCondition?.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW;
-
     // Evaluation errors are internal failures, not condition outcomes. The
     // executor owns their policy because retry must re-enter the whole step.
     if (evaluationResult.errored) {
@@ -148,20 +143,6 @@ export class EndConditionHandler {
         failureReason: evaluationResult.error ?? "End condition could not run",
         errorResult: evaluationResult,
         errorAttemptIndex: retryContext.attemptIndex,
-      };
-    }
-
-    // Apply maxRetries default of 1 when either retry direction is enabled and
-    // maxRetries is unset.
-    if (
-      (onFail === CONDITION_ACTIONS.RETRY ||
-        onPass === CONDITION_ACTIONS.RETRY) &&
-      prompt.endCondition &&
-      prompt.endCondition.maxRetries === undefined
-    ) {
-      prompt = {
-        ...prompt,
-        endCondition: { ...prompt.endCondition, maxRetries: 1 },
       };
     }
 

@@ -11,7 +11,7 @@ UI test, both of which assert on CodeMirror autocompletion suggestions:
 
 - `AdditionalArgsEditor > offers value hints after a flag token` — `Test timed out in 20000ms`.
 - `BranchNameEditor > turns a matching response into suggestions` — `Unable to find an
-  element with the text: feat/new` (the completion popup had not rendered yet).
+element with the text: feat/new` (the completion popup had not rendered yet).
 
 Both files pass consistently when run on their own (`npx vitest run <file>`), and
 neither component was touched by the commits under review.

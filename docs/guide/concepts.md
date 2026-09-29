@@ -116,10 +116,11 @@ Prompts can include structured references that the prompt editor understands:
 | `$previous`, `$all`, `$step:1`                 | Inject prior ctrlyoke output                                                                                        |
 
 For `@`, `#selection:`, and `#sym:` references, a leading `./` or `../` resolves from the
-workflow file's directory. A `prompt:` value that is only a path to a prompt file works
-differently: it must start with `./`, and ctrlyoke looks for the file next to the workflow file
-first, then relative to the workspace root. Saving a workflow inlines such a prompt file's body,
-while inline context references may be copied into the sibling assets directory.
+workflow file's directory. Standalone prompt-file paths follow the separate rules in
+[Prompt step fields](/workflows/yaml-format#prompt-step-fields-you-will-use-first), including
+which values count as paths and where ctrlyoke looks for them. Saving a workflow inlines such a
+prompt file's body, while inline context references may be copied into the sibling assets
+directory.
 
 ## End conditions and pre-conditions
 

@@ -9,6 +9,7 @@ import {
 } from "./TrustDecisionFile";
 import { PERSISTED_STORES } from "../utils/PersistedSchemaGuard";
 import { foldPathForCompare } from "../utils/PathCasing";
+import { AsyncWriteQueue } from "./AsyncWriteQueue";
 
 /**
  * A user's one-time decision about a workspace-configured external root.
@@ -39,6 +40,8 @@ const DECISION_KEY_SEPARATOR = "␟";
  * (2026-07-13)").
  */
 export class ExternalRootsTrustStore {
+  private readonly writeQueue = new AsyncWriteQueue();
+
   constructor(private readonly storePath: string) {}
 
   /**
@@ -152,14 +155,16 @@ export class ExternalRootsTrustStore {
     if (roots.length === 0) {
       return;
     }
-    const data = this.load();
-    for (const root of roots) {
-      const canonicalRoot = ExternalRootsTrustStore.canonicalizeRoot(root);
-      data.decisions[
-        ExternalRootsTrustStore.keyFor(scopeIdentity, canonicalRoot)
-      ] = decision;
-    }
-    await this.save(data);
+    await this.writeQueue.enqueue(async () => {
+      const data = this.load();
+      for (const root of roots) {
+        const canonicalRoot = ExternalRootsTrustStore.canonicalizeRoot(root);
+        data.decisions[
+          ExternalRootsTrustStore.keyFor(scopeIdentity, canonicalRoot)
+        ] = decision;
+      }
+      await this.save(data);
+    });
   }
 }
 

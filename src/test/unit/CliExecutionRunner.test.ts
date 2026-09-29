@@ -1,6 +1,9 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { FAILURE_KINDS } from "../../types/DashboardConstants";
+import {
+  CTRLYOKE_ENV_VARS,
+  FAILURE_KINDS,
+} from "../../types/DashboardConstants";
 import { CliLogMonitor } from "../../core/harness/CliLogMonitor";
 import { CliExecutionSession } from "../../core/harness/shared/CliExecutionSession";
 import {
@@ -433,6 +436,24 @@ suite("CliExecutionRunner", () => {
     assert.strictEqual(await runner.executeHeadless(session, []), true);
     assert.strictEqual(getHeadlessEnv()?.CTRLYOKE_PROMPT_INDEX, "1");
     assert.strictEqual(getHeadlessEnv()?.CTRLYOKE_PARALLEL_GROUP_ID, "group-1");
+  });
+
+  test("exports the active working file to the harness process", async () => {
+    const { runner, getHeadlessEnv } = createRunner();
+    const session = new CliExecutionSession({
+      prompt: { prompt: "working file env" },
+      workflowContext: {
+        promptIndex: 0,
+        allPrompts: [{ prompt: "working file env" }],
+        workingFilePath: "C:\\workspace\\run\\workflow.ctrlyoke.json",
+      },
+    });
+
+    assert.strictEqual(await runner.executeHeadless(session, []), true);
+    assert.strictEqual(
+      getHeadlessEnv()?.[CTRLYOKE_ENV_VARS.WORKING_FILE],
+      "C:/workspace/run/workflow.ctrlyoke.json"
+    );
   });
 
   // The OpenCode completion plugin reads its notification directory from the

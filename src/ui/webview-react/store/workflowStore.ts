@@ -16,6 +16,7 @@ import {
   type RetryState,
   type ExecutionPhase,
   getStreamingChunkKey,
+  parseStreamingChunkKey,
   isPromptExecutionPhase,
 } from "../types/messages";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
@@ -1670,7 +1671,11 @@ export const useWorkflowStore = create<
               }
             });
             Object.keys(newStreamingChunks).forEach((key) => {
-              if (Number(key.split(":", 1)[0]) >= startStep) {
+              const target = parseStreamingChunkKey(key);
+              if (
+                target?.targetKind === FINAL_STEP_PHASES.QUEUE &&
+                target.targetIndex >= startStep
+              ) {
                 delete newStreamingChunks[key];
               }
             });

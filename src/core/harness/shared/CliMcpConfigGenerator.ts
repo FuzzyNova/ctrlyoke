@@ -4,7 +4,10 @@ import type { McpServerConfig } from "../../../types/CtrlYokeTypes";
 import { isValidSecretName } from "../../../platform/SecretKey";
 import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
 import type { PreparedMutation } from "./interfaces/PreparedMutation";
-import { MCP_SECRET_CONFIG_MODES } from "../../../types/DashboardConstants";
+import {
+  CTRLYOKE_ENV_VARS,
+  MCP_SECRET_CONFIG_MODES,
+} from "../../../types/DashboardConstants";
 
 /**
  * MCP configuration format
@@ -354,7 +357,7 @@ export class CliMcpConfigGenerator {
       CTRLYOKE_EXECUTION_ROOT: workspaceRoot.replace(/\\/g, "/"),
     };
     if (workingFilePath) {
-      env.CTRLYOKE_WORKING_FILE = workingFilePath.replace(/\\/g, "/");
+      env[CTRLYOKE_ENV_VARS.WORKING_FILE] = workingFilePath.replace(/\\/g, "/");
     }
     if (additionalEnv) {
       Object.assign(env, additionalEnv);

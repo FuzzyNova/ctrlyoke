@@ -78,6 +78,7 @@ import {
   WORKFLOW_RUNTIME_COMMANDS,
   WORKFLOW_TELEMETRY_OUTCOMES,
   WORKTREE_MODES,
+  DEFAULT_ERROR_BEHAVIOR_RETRIES,
   type ActionType,
   type QueuePosition,
   type WorkflowTelemetryOutcome,
@@ -5201,7 +5202,7 @@ export class WorkflowInstance
         this.dashboardSink?.updateRetryAttempt(
           target.stepIndex,
           transition.current.retryCount ?? transition.current.attemptIndex,
-          transition.current.maxRetries ?? 0
+          transition.current.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES
         );
         break;
       case WORKFLOW_ATTEMPT_COMMANDS.CANCEL:

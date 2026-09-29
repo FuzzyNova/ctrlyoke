@@ -1983,6 +1983,90 @@ suite("HostedWorkspaceViewerService", function () {
       );
     });
 
+    test("deleteEntry rejects an empty path", async () => {
+      const root = createWorkspace();
+      const svc = new HostedWorkspaceViewerService(root);
+
+      await assert.rejects(() => svc.deleteEntry(""), /Path not allowed/);
+      assert.ok(fs.existsSync(root));
+    });
+
+    test("deleteEntry rejects a workspace root reached through a junction", async () => {
+      const target = createWorkspace();
+      fs.writeFileSync(path.join(target, "keep.txt"), "safe");
+      const parent = createWorkspace();
+      const junction = path.join(parent, "workspace-link");
+      fs.symlinkSync(target, junction, "junction");
+      const svc = new HostedWorkspaceViewerService(junction);
+
+      await assert.rejects(() => svc.deleteEntry(""), /Path not allowed/);
+      assert.strictEqual(
+        fs.readFileSync(path.join(target, "keep.txt"), "utf8"),
+        "safe"
+      );
+    });
+
+    test("deleteEntry removes a directory junction without deleting its target", async () => {
+      const root = createWorkspace();
+      const target = path.join(root, "target");
+      const link = path.join(root, "link");
+      fs.mkdirSync(target);
+      fs.writeFileSync(path.join(target, "keep.txt"), "safe");
+      fs.symlinkSync(target, link, "junction");
+      const svc = new HostedWorkspaceViewerService(root);
+
+      await svc.deleteEntry("link");
+
+      assert.strictEqual(
+        fs.readFileSync(path.join(target, "keep.txt"), "utf8"),
+        "safe"
+      );
+      assert.ok(!fs.existsSync(link));
+    });
+
+    test("deleteEntry removes a file symlink without deleting its target", async function () {
+      const root = createWorkspace();
+      const target = path.join(root, "target.txt");
+      const link = path.join(root, "link.txt");
+      fs.writeFileSync(target, "safe");
+      try {
+        fs.symlinkSync(target, link, "file");
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "EPERM") {
+          this.skip();
+        }
+        throw error;
+      }
+      const svc = new HostedWorkspaceViewerService(root);
+
+      await svc.deleteEntry("link.txt");
+
+      assert.strictEqual(fs.readFileSync(target, "utf8"), "safe");
+      assert.ok(!fs.existsSync(link));
+    });
+
+    test("moveEntry moves a directory junction without moving its target", async () => {
+      const root = createWorkspace();
+      const target = path.join(root, "target");
+      const link = path.join(root, "link");
+      const destination = path.join(root, "destination");
+      fs.mkdirSync(target);
+      fs.mkdirSync(destination);
+      fs.writeFileSync(path.join(target, "keep.txt"), "safe");
+      fs.symlinkSync(target, link, "junction");
+      const svc = new HostedWorkspaceViewerService(root);
+
+      await svc.moveEntry({ sourcePath: "link", destDir: "destination" });
+
+      const movedLink = path.join(destination, "link");
+      assert.strictEqual(
+        fs.readFileSync(path.join(target, "keep.txt"), "utf8"),
+        "safe"
+      );
+      assert.ok(!fs.existsSync(link));
+      assert.ok(fs.lstatSync(movedLink).isSymbolicLink());
+    });
+
     test("copyEntry copies a file from the primary root into the secondary root", async () => {
       const { svc, primary, secondary } = createMultiRootService();
       fs.writeFileSync(path.join(primary, "source.txt"), "copy me");

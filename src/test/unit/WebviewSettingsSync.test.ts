@@ -43,6 +43,7 @@ import {
   StatuslineManager,
   type StatuslineManagerLike,
 } from "../../core/harness/shared/StatuslineManager";
+import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -59,6 +60,7 @@ function makeOrchestrator(
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 suite("WebviewSettingsSync", () => {
+  const codexInstallHint = new CodexCliProvider().config.installHint;
   const tempPaths: string[] = [];
   const originalNavigatorDescriptor = Object.getOwnPropertyDescriptor(
     globalThis,
@@ -600,7 +602,7 @@ suite("WebviewSettingsSync", () => {
       sync.notifyHarnessAvailability(
         HARNESS_IDS.CODEX_CLI,
         false,
-        "Install via: npm install -g @openai/codex-cli"
+        codexInstallHint
       );
 
       const update = messages.find(
@@ -609,7 +611,7 @@ suite("WebviewSettingsSync", () => {
       assert.deepStrictEqual(update.data.harnessStatus[HARNESS_IDS.CODEX_CLI], {
         available: false,
         status: "unavailable",
-        installHint: "Install via: npm install -g @openai/codex-cli",
+        installHint: codexInstallHint,
       });
     });
 

@@ -19,8 +19,12 @@ import {
 } from "../../types/DashboardConstants";
 import type { CliOutput } from "../../types/WebviewMessageTypes";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
+import type { TimelineAttemptStartReason } from "../../types/WorkflowTimelineTypes";
 import type { ExecutionWorkspace } from "../../types/WorkflowContextTypes";
-import { TIMELINE_ATTEMPT_KINDS } from "../../types/WorkflowTimelineTypes";
+import {
+  TIMELINE_ATTEMPT_KINDS,
+  TIMELINE_ATTEMPT_START_REASONS,
+} from "../../types/WorkflowTimelineTypes";
 import type {
   EvaluationResult,
   EndConditionEvaluator,
@@ -42,6 +46,7 @@ import type { HarnessIntegration } from "../HarnessIntegration";
 
 export interface ScriptExecutionReporterContext {
   executionWorkspace?: ExecutionWorkspace;
+  workingFilePath?: string;
   workspaceFolderPath?: string;
   historyFilePath?: string;
   statusReporter: StatusMessageReporter;
@@ -98,11 +103,14 @@ export interface ScriptExecutionReportRequest {
   signedStepIndex: number;
   runIndex: number;
   attemptIndex: number;
+  startReason?: TimelineAttemptStartReason;
   timestampMs: number;
   onPass: ConditionAction;
   onFail: ConditionAction;
   /** Action from errorBehavior to display/use when the evaluator itself could not run. */
   actionForErrored: ConditionAction;
+  /** Resolves the effective action after retry budget and condition policy are applied. */
+  actionForResult?: (result: EvaluationResult) => ConditionAction;
   actionDetail?: string | ((result: EvaluationResult) => string | undefined);
   statusLabel?: string;
   timeoutMs?: number;
@@ -209,6 +217,7 @@ export class ScriptExecutionReporter {
       signedStepIndex,
       runIndex,
       attemptIndex,
+      startReason = TIMELINE_ATTEMPT_START_REASONS.INITIAL,
       timestampMs,
     } = request;
     const history = context.outputHistoryManager;
@@ -237,7 +246,7 @@ export class ScriptExecutionReporter {
         context.getDefinitionRevisionContext?.(),
         {
           kind: this.getAttemptKind(source),
-          startReason: "initial",
+          startReason,
           prompt: properties.script,
           phase,
         }
@@ -301,7 +310,8 @@ export class ScriptExecutionReporter {
             request.vars,
             onOutput,
             request.secretNames,
-            request.processRunner ?? context.getScriptProcessRunner?.(target)
+            request.processRunner ?? context.getScriptProcessRunner?.(target),
+            context.workingFilePath
           );
     } finally {
       // The buffered tail must land before the completed output replaces the
@@ -391,11 +401,13 @@ export class ScriptExecutionReporter {
         : result.passed
           ? SCRIPT_VERDICT_OUTCOMES.PASSED
           : SCRIPT_VERDICT_OUTCOMES.FAILED,
-      action: result.errored
-        ? request.actionForErrored
-        : !result.passed
-          ? request.onFail
-          : request.onPass,
+      action:
+        request.actionForResult?.(result) ??
+        (result.errored
+          ? request.actionForErrored
+          : !result.passed
+            ? request.onFail
+            : request.onPass),
       actionDetail:
         typeof request.actionDetail === "function"
           ? request.actionDetail(result)
