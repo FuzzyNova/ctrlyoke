@@ -146,7 +146,11 @@ Each provider fills it from structured data when the vendor provides it, and
 Fix both halves so no provider can cause this again:
 
 1. **Normalizer:** treat a `TOOL_CALL`/`MCP_TOOL_CALL` that carries a `result` **and** a call
-   id matching a pending entry as a completion. Merge it with new `TOOL_CALL`/`MCP_TOOL_CALL`
+   id matching an earlier row as a completion. Neither type is in `SEMANTIC_OPERATION_TYPES`,
+   so the initiated row is usually **not** in `pending`; match it by id through
+   `findOutputIndexByToolCallId` (which already reads `ToolCall.id` via `getToolCallId`) as
+   well as through `pending`. Never merge on name alone — a result-bearing call with no id,
+   or an id no earlier row has, stays its own row. Merge it with new `TOOL_CALL`/`MCP_TOOL_CALL`
    cases in `mergeInitiatedWithCompleted`, which keep the initiated `parameters` and take the
    completed `result`, mirroring the `ASK_USER_QUESTION` backfill.
 2. **Copilot:** set `id` on the generic `TOOL_CALL` completion and `toolCallId` on the
@@ -178,7 +182,9 @@ four-call ctrlyoke prompt and asserts:
   `tool`, non-empty `parameters` where the call had arguments, a `result`, and a `toolCallId`;
 - no generic `TOOL_CALL` row mentions a ctrlyoke tool name.
 
-Use the cheapest model each harness supports, as this investigation did. Run it first against
+Use the cheapest model each harness supports, as this investigation did. Running this probe
+(and only this probe file, never the whole `npm run test:harness` suite) is explicitly
+authorized by this plan for step 4; routine verification elsewhere still uses `npm test`. Run it first against
 Claude, Codex, Qwen and Antigravity to close gap 6, and save sanitized captures from each as
 parser unit-test fixtures, so vendor renames show up in `npm test` rather than in the dashboard.
 
