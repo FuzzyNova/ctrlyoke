@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude)
 - **Area:** `src/server/HostedWorkspaceViewerService.ts` (`isSearchFileWithinTrustedRoots`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

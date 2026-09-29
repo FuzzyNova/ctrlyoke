@@ -4,6 +4,10 @@ import express from "express";
 import { suite, test } from "mocha";
 import { installSecretRedactionMiddleware } from "../../server/SecretRedactionMiddleware";
 import { buildHostedStandaloneShimScript } from "../../server/HostedStandaloneShimScript";
+import {
+  RunSecretRedactor,
+  secretRedactionService,
+} from "../../utils/SecretRedactionService";
 
 /** Starts an ephemeral express app and returns its base URL plus a stopper. */
 async function startTestServer(
@@ -93,6 +97,33 @@ suite("installSecretRedactionMiddleware", () => {
         message: "token=[REDACTED]",
       });
     } finally {
+      await stop();
+    }
+  });
+
+  test("redacts JSON values once without corrupting serialized strings", async () => {
+    const secret = "resolved-json-secret-value";
+    const redactor = new RunSecretRedactor();
+    redactor.addResolvedValues({ TOKEN: secret });
+    const release = secretRedactionService.register(redactor);
+    const app = express();
+    installSecretRedactionMiddleware(app);
+    app.get("/json", (_req, res) => {
+      res.json({
+        ordinary: 'const password=abcdefg"; // short',
+        credential: `token=${secret}`,
+      });
+    });
+    const { baseUrl, stop } = await startTestServer(app);
+    try {
+      const response = await fetch(`${baseUrl}/json`);
+      assert.strictEqual(response.status, 200);
+      assert.deepStrictEqual(await response.json(), {
+        ordinary: 'const password=abcdefg"; // short',
+        credential: "token=[REDACTED]",
+      });
+    } finally {
+      release();
       await stop();
     }
   });

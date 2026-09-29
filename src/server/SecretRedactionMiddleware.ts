@@ -19,15 +19,23 @@ export function installSecretRedactionMiddleware(app: express.Express): void {
   app.use((_req, res, next) => {
     const originalJson = res.json.bind(res);
     const originalSend = res.send.bind(res);
-    res.json = ((body: unknown) =>
-      originalJson(
-        res.locals.skipSecretRedaction
-          ? body
-          : secretRedactionService.redactValue(body)
-      )) as typeof res.json;
+    let sendingRedactedJson = false;
+    res.json = ((body: unknown) => {
+      const safeBody = res.locals.skipSecretRedaction
+        ? body
+        : secretRedactionService.redactValue(body);
+      sendingRedactedJson = true;
+      try {
+        return originalJson(safeBody);
+      } finally {
+        sendingRedactedJson = false;
+      }
+    }) as typeof res.json;
     res.send = ((body: unknown) =>
       originalSend(
-        !res.locals.skipSecretRedaction && typeof body === "string"
+        !res.locals.skipSecretRedaction &&
+          !sendingRedactedJson &&
+          typeof body === "string"
           ? secretRedactionService.redactText(body)
           : body
       )) as typeof res.send;

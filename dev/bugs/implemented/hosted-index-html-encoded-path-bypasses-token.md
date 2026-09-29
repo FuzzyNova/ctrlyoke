@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude)
 - **Area:** `src/server/CtrlYokeHostedServer.ts` (page routes and `express.static(webviewDist)`, around lines 966-973)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
