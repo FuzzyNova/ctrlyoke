@@ -65,6 +65,43 @@ describe("FinalStepFooter", () => {
     expect(props.onSelect).toHaveBeenCalledOnce();
   });
 
+  it("leaves an enabled final step unlabeled with a check toggle", () => {
+    render(<FinalStepFooter {...buildProps()} isReadOnly={false} />);
+
+    expect(screen.queryByText("enabled")).not.toBeInTheDocument();
+    expect(screen.queryByText("disabled")).not.toBeInTheDocument();
+    const toggle = screen.getByRole("button", { name: "Disable final step" });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(toggle.querySelector(".codicon-check")).toBeInTheDocument();
+  });
+
+  it("shows the disabled state once, with a warning-colored toggle", () => {
+    render(
+      <FinalStepFooter
+        {...buildProps()}
+        isReadOnly={false}
+        isDisabled
+        isExpanded
+      />
+    );
+
+    expect(screen.getByText("disabled")).toHaveClass("text-warning-fg");
+    expect(screen.queryByText("Disabled")).not.toBeInTheDocument();
+    const toggle = screen.getByRole("button", { name: "Enable final step" });
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(toggle).toHaveClass("text-warning-fg");
+    expect(toggle.querySelector(".codicon-circle-slash")).toBeInTheDocument();
+  });
+
+  it("shows 'not set' without a status icon when there is no final step", () => {
+    render(<FinalStepFooter {...buildProps()} finalStep={null} />);
+
+    expect(screen.getByText("not set")).toBeInTheDocument();
+    expect(screen.queryByText("disabled")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("disabled")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("pending")).not.toBeInTheDocument();
+  });
+
   it("shows the context window bar in expanded details from the latest output", () => {
     const props = { ...buildProps(), isExpanded: true };
 

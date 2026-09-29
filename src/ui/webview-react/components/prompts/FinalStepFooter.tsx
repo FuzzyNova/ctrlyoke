@@ -105,15 +105,19 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
     latestOutputTokens: latestOutput?.tokens,
     runtimeContextWindow: finalStep?._runtime,
   });
-  const showDisabledState = !hasFinalStep || isDisabled;
+  // The details panel and the bar are one selectable unit, so hovering either
+  // highlights both (matching how selection already highlights both).
+  const rowStateClass = isSelected
+    ? "bg-list-active-bg text-list-active-fg"
+    : "group-hover/final-step:bg-list-hover-bg text-foreground";
   const finalStepTooltip = hasFinalStep
     ? `Final Step — ${isDisabled ? "Disabled" : "Enabled"}${
         loopCount > 0 ? ` — Loop ${loopCount + 1}` : ""
       }`
-    : "Final Step — Disabled";
+    : "Final Step — Not set";
 
   return (
-    <div className="relative border-t border-panel-border bg-sidebar-bg flex-shrink-0 cy-no-select">
+    <div className="group/final-step relative border-t border-panel-border bg-sidebar-bg flex-shrink-0 cy-no-select">
       <div
         data-final-step-identity-bar
         className={`absolute left-0 top-0 bottom-0 w-[2px] ${stepColor ? "" : "bg-transparent"}`}
@@ -122,11 +126,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
       />
       {hasFinalStep && isExpanded && finalStep && (
         <div
-          className={`px-3 py-2 border-b border-panel-border ${
-            isSelected
-              ? "bg-list-active-bg text-list-active-fg"
-              : "hover:bg-list-hover-bg text-foreground"
-          } ${isSelectionReadOnly ? "" : "cursor-pointer"} ${isDisabled && !isSelected ? "opacity-85" : ""}`}
+          className={`px-3 py-2 border-b border-panel-border ${rowStateClass} ${isSelectionReadOnly ? "" : "cursor-pointer"} ${isDisabled && !isSelected ? "opacity-85" : ""}`}
           role="button"
           tabIndex={0}
           aria-label="Final step"
@@ -162,14 +162,6 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
               <div className="text-xs leading-relaxed">
                 {truncate(getStepDisplayText(finalStep))}
               </div>
-
-              {isDisabled && (
-                <div className="mt-1">
-                  <span className="inline-flex rounded bg-badge-bg px-1 py-px text-xxs text-badge-fg">
-                    Disabled
-                  </span>
-                </div>
-              )}
 
               {/* Phase badge */}
               {phase && (
@@ -209,11 +201,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
       )}
 
       <div
-        className={`h-[39px] px-2 flex items-center gap-2 ${
-          isSelected
-            ? "bg-list-active-bg text-list-active-fg"
-            : "hover:bg-list-hover-bg text-foreground"
-        } ${isSelectionReadOnly ? "opacity-75" : "cursor-pointer"}`}
+        className={`h-[39px] px-2 flex items-center gap-2 ${rowStateClass} ${isSelectionReadOnly ? "opacity-75" : "cursor-pointer"}`}
         role="button"
         tabIndex={0}
         title={finalStepTooltip}
@@ -243,7 +231,13 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
         }
         {...longPressHandlers}
       >
-        <StatusIcon status={effectiveStatus} disabled={showDisabledState} />
+        {hasFinalStep ? (
+          <StatusIcon status={effectiveStatus} disabled={isDisabled} />
+        ) : (
+          // Nothing configured is not the same as configured-but-off, so the
+          // empty state shows no status icon (the spacer keeps label alignment).
+          <span className="w-4 flex-shrink-0" aria-hidden="true" />
+        )}
         <span className="text-xs font-semibold uppercase tracking-wide">
           {"Final Step"}
         </span>
@@ -255,17 +249,13 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
             script
           </span>
         )}
-        {hasFinalStep && finalStep ? (
-          <span
-            className={`text-xs font-bold flex-1 opacity-90 ${isDisabled ? "text-description-fg" : "text-terminal-ansiGreen"}`}
-          >
-            {isDisabled ? "disabled" : "enabled"}
-          </span>
-        ) : (
-          <span className="text-xs flex-1 italic opacity-80 text-foreground">
-            disabled
-          </span>
-        )}
+        {/* Enabled is the default and goes unlabeled, matching queue rows and
+            the editor header, which only call out the disabled state. */}
+        {!hasFinalStep ? (
+          <span className="text-xs italic text-description-fg">not set</span>
+        ) : isDisabled ? (
+          <span className="text-xs italic text-warning-fg">disabled</span>
+        ) : null}
         {loopCount > 0 && (
           <span className="ml-1 flex-shrink-0 whitespace-nowrap rounded bg-badge-bg px-1.5 py-px text-xxs text-badge-fg">
             {isNarrow ? loopCount + 1 : `Loop ${loopCount + 1}`}
@@ -275,18 +265,24 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
           {hasFinalStep && !isReadOnly && (
             <button
               type="button"
-              className="icon-btn py-0 px-1"
+              className={`icon-btn py-0 px-1 ${isDisabled ? "text-warning-fg hover:text-warning-fg" : ""}`}
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleEnabled();
               }}
-              title={isDisabled ? "Enable final step" : "Disable final step"}
+              // Shows the current state, like the editor header's toggle.
+              title={
+                isDisabled
+                  ? "Final step is disabled — click to enable"
+                  : "Final step is enabled — click to disable"
+              }
               aria-label={
                 isDisabled ? "Enable final step" : "Disable final step"
               }
+              aria-pressed={isDisabled}
             >
               <Icon
-                name={isDisabled ? "codicon-check" : "codicon-circle-slash"}
+                name={isDisabled ? "codicon-circle-slash" : "codicon-check"}
                 className="text-xs"
               />
             </button>

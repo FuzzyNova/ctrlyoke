@@ -160,7 +160,9 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
     render(<WorkflowStepsPanel />);
 
     expect(screen.getByText("Disabled step")).toBeInTheDocument();
-    expect(screen.getAllByText("Disabled").length).toBeGreaterThanOrEqual(2);
+    // Only the queue row carries a "Disabled" badge; the final step states it
+    // once, in its bar.
+    expect(screen.getAllByText("Disabled")).toHaveLength(1);
     expect(screen.getByText("disabled")).toBeInTheDocument();
     expect(screen.getAllByLabelText("disabled").length).toBeGreaterThanOrEqual(
       2
