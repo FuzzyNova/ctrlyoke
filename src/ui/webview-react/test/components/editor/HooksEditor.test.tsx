@@ -55,6 +55,12 @@ describe("HooksEditor compatibility diagnostics", () => {
       },
     });
 
+    // The command is buffered until blur, not committed per keystroke.
+    expect(onChange).toHaveBeenLastCalledWith([
+      { event: "notification", command: "" },
+    ]);
+    await user.keyboard("{Enter}");
+
     expect(onChange).toHaveBeenLastCalledWith([
       { event: "notification", command: "node ./notification-hook.js" },
     ]);
@@ -239,6 +245,39 @@ describe("HooksEditor compatibility diagnostics", () => {
     expect(command).toHaveTextContent("node ./hook.js");
     expect(command).not.toHaveTextContent("\n");
     expect(command).not.toHaveFocus();
+  });
+
+  it("keeps typed command text when a stale value arrives mid-edit", async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <HooksEditor
+        value={[{ event: "stop", command: "" }]}
+        onChange={onChange}
+      />
+    );
+
+    const command = screen.getByLabelText("hook-0-command");
+    await user.click(command);
+    fireEvent.paste(command, {
+      clipboardData: { getData: () => "node ./hook.js" },
+    });
+    // Simulates the host echoing an earlier keystroke after newer typing.
+    rerender(
+      <HooksEditor
+        value={[{ event: "stop", command: "no" }]}
+        onChange={onChange}
+      />
+    );
+
+    expect(command).toHaveTextContent("node ./hook.js");
+    expect(onChange).not.toHaveBeenCalled();
+
+    await user.keyboard("{Enter}");
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenLastCalledWith([
+      { event: "stop", command: "node ./hook.js" },
+    ]);
   });
 
   it("clears hook environment and timeout overrides", () => {

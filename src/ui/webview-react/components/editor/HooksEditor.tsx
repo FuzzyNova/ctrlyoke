@@ -17,6 +17,7 @@ import { KeyValueRowsEditor } from "../shared/KeyValueRowsEditor";
 import { ScriptCommandEditor } from "../shared/ScriptCommandEditor";
 import { Button } from "../shared/Button";
 import { Icon } from "../shared/Icon";
+import { useLocalValue } from "@hooks/useLocalInput";
 
 type HooksValue = UserHookConfig[] | null | undefined;
 
@@ -41,6 +42,39 @@ function getMode(value: HooksValue): EditorMode {
     return NONE_OPTION;
   return "custom";
 }
+
+interface HookCommandFieldProps {
+  index: number;
+  command: string;
+  onCommit: (command: string) => void;
+}
+
+/**
+ * Buffers the command locally and commits on blur. Committing per keystroke
+ * round-trips each edit through the host, and a late echo of an earlier
+ * keystroke would overwrite newer text and scramble fast typing.
+ */
+const HookCommandField: React.FC<HookCommandFieldProps> = ({
+  index,
+  command,
+  onCommit,
+}) => {
+  const local = useLocalValue(command, (next) => {
+    if (next !== command) onCommit(next);
+  });
+
+  return (
+    <ScriptCommandEditor
+      id={`hook-${index}-command`}
+      value={local.value}
+      onChange={local.onChange}
+      onBlur={local.onBlur}
+      placeholder="node ./scripts/my-hook.js"
+      aria-label={`hook-${index}-command`}
+      className="w-full min-w-0 rounded border border-input-border bg-input-bg text-xs font-mono text-input-fg"
+    />
+  );
+};
 
 export const HooksEditor: React.FC<HooksEditorProps> = ({
   value,
@@ -263,13 +297,10 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
                 <Icon name="trash" />
               </Button>
             </div>
-            <ScriptCommandEditor
-              id={`hook-${index}-command`}
-              value={hook.command}
-              onChange={(command) => handleUpdateHook(index, { command })}
-              placeholder="node ./scripts/my-hook.js"
-              aria-label={`hook-${index}-command`}
-              className="w-full min-w-0 rounded border border-input-border bg-input-bg text-xs font-mono text-input-fg"
+            <HookCommandField
+              index={index}
+              command={hook.command}
+              onCommit={(command) => handleUpdateHook(index, { command })}
             />
             <KeyValueRowsEditor
               id={`hook-${index}-env`}
