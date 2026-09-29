@@ -272,7 +272,7 @@ records any deviation from the design above in that section of this doc.
       `_runtime` type (2), `getStepSessionId()` (3)
 - [x] `buildReplyPropertyValues()` in `utils/replyToStep.ts` (4)
 - [x] Editor store `replyContext`, `startReplyToStep()` / `cancelReplyToStep()` (5)
-- [ ] `StatusBanner` extraction (6) and reply banner in `EditorSection` (7)
+- [x] `StatusBanner` extraction (6) and reply banner in `EditorSection` (7)
 - [ ] Context menu item wired into both step menus (8), full gate green (9)
 
 Foundation implementation note: `getStepSessionId()` lives in
@@ -293,6 +293,11 @@ Editor-store implementation note: `replyContext` is part of the shared new-step
 draft capture/restore path, including pending edits and VS Code state. Returning
 to a saved reply draft counts as dirty even when its prompt text is empty. No
 deviation from §4/§5.
+
+Banner implementation note: `StatusBanner` now owns the shared tone colors,
+contrast text treatment, icon, status role, and right-aligned action slot. The
+reply banner uses the editor's compact tier to hide its source label. No
+deviation from §5.
 
 ## Tests (`src/ui/webview-react/test/**`)
 
