@@ -45,6 +45,7 @@ import {
   type TimelineAttemptTerminalState,
 } from "../types/WorkflowTimelineTypes";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
+import { resolveLineageLastModifiedAt } from "../utils/WorkingFileMetadata";
 import type { CliOutput } from "../types/WebviewMessageTypes";
 import { SCRIPT_OUTPUT_SOURCES } from "../types/DashboardConstants";
 import { secretRedactionService } from "../utils/SecretRedactionService";
@@ -752,7 +753,13 @@ function createHistoryListRow(
     workflowName,
     isFavorite: descriptor?.isFavorite ?? false,
     createdAt: descriptor?.createdAt ?? null,
-    lastModifiedAt: descriptor?.lastModifiedAt ?? null,
+    lastModifiedAt: descriptor
+      ? resolveLineageLastModifiedAt(
+          descriptor.lastModifiedAt,
+          navigation.startedAt,
+          navigation.completedAt
+        )
+      : null,
     runCount: navigation.runCount,
     latestRun,
   };

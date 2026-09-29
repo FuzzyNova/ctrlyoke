@@ -60,7 +60,11 @@ import {
 import { isUnlimited } from "./utils/LimitUtils";
 import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
 import { deriveStepStatusesFromRuntime } from "./utils/StepStatusDerivation";
-import { stripLegacyWorkingFileLineageMetadata } from "./utils/WorkingFileMetadata";
+import {
+  getWorkingFileLastActivityAt,
+  resolveLineageLastModifiedAt,
+  stripLegacyWorkingFileLineageMetadata,
+} from "./utils/WorkingFileMetadata";
 import { RunContinuationService } from "./core/orchestration/RunContinuationService";
 import {
   flattenParallelItems,
@@ -1816,7 +1820,10 @@ export class CtrlYokeMCPServer {
               totalSteps: allSteps.length,
               completedSteps: completedCount,
               startedAt: data.startedAt ?? null,
-              lastModifiedAt: descriptor.lastModifiedAt ?? null,
+              lastModifiedAt: resolveLineageLastModifiedAt(
+                descriptor.lastModifiedAt,
+                getWorkingFileLastActivityAt(data)
+              ),
               workingFile: filePath,
               runDirectory: WorkflowPaths.runDirectoryForWorkingFile(filePath),
               ...(runtime.worktree

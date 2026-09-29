@@ -1533,6 +1533,80 @@ suite("WorkflowSerializer", () => {
       });
     });
 
+    test("a run extended after its promotion outranks a lineage whose descriptor changed more recently", async () => {
+      await withWorkspace(
+        "ctrlyoke-recent-extended-",
+        async (workspaceRoot) => {
+          const repository = new WorkflowLineageRepository();
+          const extended = await repository.createLineage(
+            workspaceRoot,
+            "wf-extended",
+            "Extended"
+          );
+          const { runRef } = await createPromotedRun(
+            repository,
+            workspaceRoot,
+            extended.workflowKey,
+            1_000
+          );
+          const untouched = await repository.createLineage(
+            workspaceRoot,
+            "wf-untouched",
+            "Untouched"
+          );
+          await writeDraftWorkingFile(
+            workspaceRoot,
+            untouched.workflowKey,
+            1_000
+          );
+          const untouchedDescriptor = await repository.readDescriptor(
+            workspaceRoot,
+            untouched.workflowKey
+          );
+
+          // Appending to and continuing a run writes only its working file —
+          // never the descriptor — so its activity must still count as recency.
+          const continuedAt = untouchedDescriptor.lastModifiedAt + 60_000;
+          const runFilePath = WorkflowPaths.runFilePath(
+            workspaceRoot,
+            extended.workflowKey,
+            runRef
+          );
+          const runFile = JSON.parse(await fs.readFile(runFilePath, "utf8"));
+          runFile.steps.push({
+            prompt: "appended",
+            _runtime: {
+              startedAt: continuedAt - 1_000,
+              completedAt: continuedAt,
+            },
+          });
+          runFile._runtime.executionEndTime = continuedAt;
+          await fs.writeFile(runFilePath, JSON.stringify(runFile));
+
+          const messages: any[] = [];
+          const serializer = new WorkflowSerializer(
+            (message) => messages.push(message),
+            {} as any,
+            () => undefined,
+            () => undefined,
+            fakeWorkspaceState()
+          );
+          await serializer.handleGetRecentWorkflows();
+
+          const workflows = messages.pop().workflows;
+          assert.deepStrictEqual(
+            workflows.map((workflow: any) => workflow.address.workflowKey),
+            [extended.workflowKey, untouched.workflowKey]
+          );
+          assert.strictEqual(workflows[0].lastModifiedAt, continuedAt);
+          assert.strictEqual(
+            workflows[1].lastModifiedAt,
+            untouchedDescriptor.lastModifiedAt
+          );
+        }
+      );
+    });
+
     test("a promoted run plus a seeded draft reports hasDraft alongside the run count", async () => {
       await withWorkspace(
         "ctrlyoke-recent-run-draft-",

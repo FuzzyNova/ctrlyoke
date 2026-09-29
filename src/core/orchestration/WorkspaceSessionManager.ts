@@ -7,7 +7,11 @@ import { EXECUTION_STATES } from "../../types/DashboardConstants";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
-import { stripLegacyWorkingFileLineageMetadata } from "../../utils/WorkingFileMetadata";
+import {
+  getWorkingFileLastActivityAt,
+  resolveLineageLastModifiedAt,
+  stripLegacyWorkingFileLineageMetadata,
+} from "../../utils/WorkingFileMetadata";
 
 /**
  * WorkspaceSessionManager
@@ -126,7 +130,7 @@ export class WorkspaceSessionManager {
   /**
    * Resolve each lineage's CURRENT definition file — the descriptor's
    * `latestRunRef` file if a run has ever executed, otherwise the draft — and
-   * sort them by recency (lastModifiedAt, falling back to startedAt).
+   * sort them by recency (`resolveLineageLastModifiedAt`).
    *
    * @param workspaceFolderPath Path to the workspace root
    */
@@ -165,8 +169,10 @@ export class WorkspaceSessionManager {
           const workingFile = stripLegacyWorkingFileLineageMetadata(
             JSON.parse(content) as WorkingFile
           );
-          const timestamp =
-            descriptor.lastModifiedAt || workingFile.startedAt || 0;
+          const timestamp = resolveLineageLastModifiedAt(
+            descriptor.lastModifiedAt,
+            getWorkingFileLastActivityAt(workingFile)
+          );
 
           return { filePath, workingFile, timestamp };
         } catch (error) {

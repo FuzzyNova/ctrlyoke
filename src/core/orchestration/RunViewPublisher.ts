@@ -23,7 +23,10 @@ import { OutputHistoryManager } from "./OutputHistoryManager";
 import { PostMessageDashboardSink } from "../../ui/PostMessageDashboardSink";
 import { WorkflowTaggedSink } from "../WorkflowTaggedSink";
 import type { IDashboardSink } from "../../types/IDashboardSink";
-import { stripLegacyWorkingFileLineageMetadata } from "../../utils/WorkingFileMetadata";
+import {
+  resolveLineageLastModifiedAt,
+  stripLegacyWorkingFileLineageMetadata,
+} from "../../utils/WorkingFileMetadata";
 import type { RunLifecycleViewPort } from "./RunLifecycleService";
 
 export interface DefinitionRollbackInvalidation {
@@ -527,7 +530,13 @@ export class RunViewPublisher implements RunLifecycleViewPort {
       requestId,
       workflowKey,
       descriptorRevision: descriptor.revision,
-      lastModifiedAt: descriptor.lastModifiedAt,
+      lastModifiedAt: resolveLineageLastModifiedAt(
+        descriptor.lastModifiedAt,
+        ...runSummaries.flatMap((summary) => [
+          summary.startedAt,
+          summary.completedAt,
+        ])
+      ),
       runSummaries,
       executionRunRef: this.host.findExecutionRunRef(workflowKey),
     };

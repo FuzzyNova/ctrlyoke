@@ -37,7 +37,11 @@ import type {
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
 import { WorkflowLineageRepository } from "../core/orchestration/WorkflowLineageRepository";
-import { stripLegacyWorkingFileLineageMetadata } from "../utils/WorkingFileMetadata";
+import {
+  getWorkingFileLastActivityAt,
+  resolveLineageLastModifiedAt,
+  stripLegacyWorkingFileLineageMetadata,
+} from "../utils/WorkingFileMetadata";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import type { PostMessageFn } from "./WebviewSettingsSync";
 import {
@@ -1305,8 +1309,10 @@ export class WorkflowSerializer {
                 : {}),
             };
 
-            const lastModified =
-              descriptor.lastModifiedAt || workingFile.startedAt || 0;
+            const lastModified = resolveLineageLastModifiedAt(
+              descriptor.lastModifiedAt,
+              getWorkingFileLastActivityAt(workingFile)
+            );
 
             let executionState: string =
               workingFile._runtime?.executionState || EXECUTION_STATES.IDLE;
