@@ -20,6 +20,7 @@ import {
   DEFAULT_SCRIPT_OPERATOR,
   STEP_TYPES,
   type ExecutionMode,
+  type HarnessId,
 } from "@root/types/DashboardConstants";
 import type {
   PromptEditorInsertRequest,
@@ -80,6 +81,23 @@ export interface PropertyValues {
   priorContext?: PriorContext; // undefined = inherit/default
   additionalArgs: Disableable<string>; // undefined = inherit, null = none, string = custom args
   toolPermissions?: ToolPermissionsOverride | null; // undefined = inherit workflow, null = none (omit flags), object = override
+}
+
+export interface ReplyContextInput {
+  properties: PropertyValues;
+  sessionId: string;
+  harness: HarnessId;
+  sourceLabel: string;
+}
+
+interface ReplyContext {
+  sessionId: string;
+  harness: HarnessId;
+  sourceLabel: string;
+  previous: {
+    properties: PropertyValues;
+    stepType: typeof STEP_TYPES.PROMPT | typeof STEP_TYPES.SCRIPT;
+  };
 }
 
 /**
@@ -154,6 +172,7 @@ interface EditorState {
    * Cleared when the user presses Update (via cancelEdit) or Cancel.
    */
   pendingEdits: Record<string, SavedNewStepState>;
+  replyContext: ReplyContext | null;
   hasActiveQueue: boolean; // Whether a workflow is currently loaded
 
   // Step type — determines editor mode
@@ -194,6 +213,7 @@ const NEW_STEP_DRAFT_FIELDS = [
   "promptName",
   "stepEnabled",
   "properties",
+  "replyContext",
   "stepType",
   "scriptCommand",
   "scriptTimeoutSec",
@@ -239,7 +259,27 @@ function restoreNewStepDraft(
 }
 
 function isNewStepDraftDirty(draft: SavedNewStepState): boolean {
-  return draft.promptText.length > 0 || draft.scriptCommand.length > 0;
+  return (
+    draft.promptText.length > 0 ||
+    draft.scriptCommand.length > 0 ||
+    draft.replyContext !== null
+  );
+}
+
+function replyContextMatchesProperties(
+  replyContext: ReplyContext,
+  properties: PropertyValues
+): boolean {
+  return (
+    properties.harness === replyContext.harness &&
+    properties.sessionId === replyContext.sessionId &&
+    properties.resumeSession === true
+  );
+}
+
+function expandPromptEditorIfCollapsed(): void {
+  const uiState = useUiStore.getState();
+  if (uiState.editorCollapsed) uiState.setEditorCollapsed(false);
 }
 
 /**
@@ -253,6 +293,8 @@ interface EditorActions {
   ) => void;
   selectFinalStep: (promptData: WorkflowStep) => void;
   enterNewPromptMode: () => void;
+  startReplyToStep: (reply: ReplyContextInput) => void;
+  cancelReplyToStep: () => void;
   enterEditMode: (index: number, promptData: WorkflowStep) => void;
   cancelEdit: () => void;
   /**
@@ -355,6 +397,7 @@ const initialState: EditorState = {
   originalPromptData: null,
   savedNewPromptState: null,
   pendingEdits: {},
+  replyContext: null,
   hasActiveQueue: false,
   stepType: STEP_TYPES.PROMPT,
   stepEnabled: true,
@@ -498,6 +541,45 @@ export const useEditorStore = create<
     }
   },
 
+  startReplyToStep: (reply) => {
+    if (get().selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
+      get().deselect();
+      if (get().selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
+        get().enterNewPromptMode();
+      }
+    }
+
+    const state = get();
+    const previous = state.replyContext?.previous ?? {
+      properties: { ...state.properties },
+      stepType: state.stepType,
+    };
+    set({
+      properties: { ...reply.properties },
+      stepType: STEP_TYPES.PROMPT,
+      replyContext: {
+        sessionId: reply.sessionId,
+        harness: reply.harness,
+        sourceLabel: reply.sourceLabel,
+        previous,
+      },
+      isDirty: true,
+    });
+    expandPromptEditorIfCollapsed();
+  },
+
+  cancelReplyToStep: () => {
+    const { replyContext, promptText } = get();
+    if (!replyContext) return;
+    set({
+      properties: { ...replyContext.previous.properties },
+      stepType: replyContext.previous.stepType,
+      promptText,
+      replyContext: null,
+      isDirty: true,
+    });
+  },
+
   enterEditMode: (index, promptData) => {
     const state = get();
     const newPendingEdits = { ...state.pendingEdits };
@@ -540,6 +622,7 @@ export const useEditorStore = create<
         selectedPromptIndex: isFinalStepTarget ? null : index,
         originalPromptData: promptData,
         savedNewPromptState,
+        replyContext: null,
         stepType: pendingEdit?.stepType ?? STEP_TYPES.SCRIPT,
         stepEnabled: pendingEdit?.stepEnabled ?? promptData.enabled !== false,
         promptText: pendingEdit?.promptText ?? "",
@@ -616,6 +699,7 @@ export const useEditorStore = create<
         selectedPromptIndex: isFinalStepTarget ? null : index,
         originalPromptData: promptData,
         savedNewPromptState,
+        replyContext: null,
         stepType: pendingEdit?.stepType ?? STEP_TYPES.PROMPT,
         stepEnabled: pendingEdit?.stepEnabled ?? promptData.enabled !== false,
         promptText: pendingEdit ? pendingEdit.promptText : promptData.prompt,
@@ -896,8 +980,8 @@ export const useEditorStore = create<
   // ============================================================================
 
   setProperty: (key, value) =>
-    set((state) => ({
-      properties: {
+    set((state) => {
+      const properties: PropertyValues = {
         ...state.properties,
         [key]:
           key === PROMPT_PROPERTIES.ERROR_BEHAVIOR
@@ -905,20 +989,44 @@ export const useEditorStore = create<
                 value as PropertyValues["errorBehavior"]
               )
             : value,
-      },
-      isDirty: true,
-    })),
+      };
+      return {
+        properties,
+        replyContext:
+          state.replyContext &&
+          !replyContextMatchesProperties(state.replyContext, properties)
+            ? null
+            : state.replyContext,
+        isDirty: true,
+      };
+    }),
 
-  setProperties: (properties) =>
-    set((state) => ({
-      properties: { ...state.properties, ...properties },
-      isDirty: true,
-    })),
+  setProperties: (propertyUpdates) =>
+    set((state) => {
+      const properties = { ...state.properties, ...propertyUpdates };
+      return {
+        properties,
+        replyContext:
+          state.replyContext &&
+          !replyContextMatchesProperties(state.replyContext, properties)
+            ? null
+            : state.replyContext,
+        isDirty: true,
+      };
+    }),
 
   resetProperties: () =>
-    set({
-      properties: { ...PROPERTY_DEFAULTS },
-      isDirty: true,
+    set((state) => {
+      const properties = { ...PROPERTY_DEFAULTS };
+      return {
+        properties,
+        replyContext:
+          state.replyContext &&
+          !replyContextMatchesProperties(state.replyContext, properties)
+            ? null
+            : state.replyContext,
+        isDirty: true,
+      };
     }),
 
   // ============================================================================
@@ -966,12 +1074,8 @@ export const useEditorStore = create<
       get().setStepType(STEP_TYPES.PROMPT);
     }
 
-    // Ensure the editor panel is expanded so CodeMirrorEditor is mounted and
-    // can receive the pending insert request.
-    const uiState = useUiStore.getState();
-    if (uiState.editorCollapsed) {
-      uiState.setEditorCollapsed(false);
-    }
+    // Ensure CodeMirrorEditor is mounted and can receive the pending insert.
+    expandPromptEditorIfCollapsed();
   },
 
   enqueuePromptEditorInsert: (request) =>
@@ -1196,6 +1300,7 @@ export const useEditorStore = create<
       originalPromptData: null,
       savedNewPromptState: null,
       pendingEdits: {},
+      replyContext: null,
       stepType: STEP_TYPES.PROMPT,
       stepEnabled: true,
       promptText: "",
@@ -1236,6 +1341,7 @@ export const useEditorStore = create<
       scriptExecutionMode: undefined,
       scriptShell: undefined,
       properties: { ...PROPERTY_DEFAULTS },
+      replyContext: null,
       isDirty: false,
       validationErrors: {},
       pendingPromptEditorInserts: [],

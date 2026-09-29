@@ -271,7 +271,7 @@ records any deviation from the design above in that section of this doc.
 - [x] Foundations: shared core-workflow adapter (impl step 1), widened webview
       `_runtime` type (2), `getStepSessionId()` (3)
 - [x] `buildReplyPropertyValues()` in `utils/replyToStep.ts` (4)
-- [ ] Editor store `replyContext`, `startReplyToStep()` / `cancelReplyToStep()` (5)
+- [x] Editor store `replyContext`, `startReplyToStep()` / `cancelReplyToStep()` (5)
 - [ ] `StatusBanner` extraction (6) and reply banner in `EditorSection` (7)
 - [ ] Context menu item wired into both step menus (8), full gate green (9)
 
@@ -288,6 +288,11 @@ Builder implementation note: the shared core adapter now forwards `secrets`
 from prompt, workflow, and global settings projections. The extracted adapter
 had omitted these existing fields, which otherwise prevented the builder from
 resolving authored or inherited secrets.
+
+Editor-store implementation note: `replyContext` is part of the shared new-step
+draft capture/restore path, including pending edits and VS Code state. Returning
+to a saved reply draft counts as dirty even when its prompt text is empty. No
+deviation from §4/§5.
 
 ## Tests (`src/ui/webview-react/test/**`)
 
