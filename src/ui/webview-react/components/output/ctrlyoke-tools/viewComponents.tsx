@@ -20,6 +20,10 @@ import {
   MCP_GLOBAL_STATUS_TOOL_NAME,
   MCP_READ_OUTPUT_TOOL_NAME,
   MCP_LIST_HARNESSES_TOOL_NAME,
+  MCP_EDIT_STEP_TOOL_NAME,
+  MCP_REMOVE_STEP_TOOL_NAME,
+  MCP_REORDER_STEPS_TOOL_NAME,
+  MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
 } from "@root/utils/McpToolDefinitions";
 import { ClaimPathsBody } from "./ClaimPathsView";
 import type { ClaimPathsParams, ClaimPathsResult } from "./claimPathsModel";
@@ -34,6 +38,12 @@ import { WorkflowStatusBody } from "./WorkflowStatusView";
 import { GlobalStatusBody } from "./GlobalStatusView";
 import { ReadOutputBody } from "./ReadOutputView";
 import { ListHarnessesBody } from "./ListHarnessesView";
+import {
+  EditStepBody,
+  RemoveStepBody,
+  ReorderStepsBody,
+  SubmitCommitMessageBody,
+} from "./StepMutationViews";
 
 export interface CtrlYokeToolBodyProps {
   params: unknown;
@@ -155,4 +165,8 @@ export const CTRLYOKE_TOOL_VIEW_BODIES: Partial<
   [MCP_GLOBAL_STATUS_TOOL_NAME]: GlobalStatusBody,
   [MCP_READ_OUTPUT_TOOL_NAME]: ReadOutputBody,
   [MCP_LIST_HARNESSES_TOOL_NAME]: ListHarnessesBody,
+  [MCP_EDIT_STEP_TOOL_NAME]: EditStepBody,
+  [MCP_REMOVE_STEP_TOOL_NAME]: RemoveStepBody,
+  [MCP_REORDER_STEPS_TOOL_NAME]: ReorderStepsBody,
+  [MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME]: SubmitCommitMessageBody,
 };

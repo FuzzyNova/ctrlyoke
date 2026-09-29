@@ -1,6 +1,6 @@
 # ctrlyoke MCP Tool-Call Views — purpose-built rows for our own MCP tools
 
-> **Status:** Stages 1 (`post_note`), 2 (`append_step`), 3 (`claim_paths`, `release_paths`, `read_notes`), and the first half of stage 4 (`workflow_status`, `global_status`, `read_output`, `list_harnesses`) implemented; the rest of stages 4–5 remains. Follows the 2026-09-28 removal of `CoordinationActivityRow`
+> **Status:** All five implementation stages are complete: all 13 ctrlyoke MCP tools have purpose-built views. Follows the 2026-09-28 removal of `CoordinationActivityRow`
 > (see the addendum in
 > [`EXECUTION_ROOT_COORDINATION_PLAN.md`](../implemented/EXECUTION_ROOT_COORDINATION_PLAN.md)),
 > which left the generic MCP tool-call row as the only place a step's coordination activity

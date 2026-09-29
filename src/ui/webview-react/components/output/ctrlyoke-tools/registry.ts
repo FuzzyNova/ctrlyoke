@@ -8,6 +8,10 @@ import {
   MCP_GLOBAL_STATUS_TOOL_NAME,
   MCP_READ_OUTPUT_TOOL_NAME,
   MCP_LIST_HARNESSES_TOOL_NAME,
+  MCP_EDIT_STEP_TOOL_NAME,
+  MCP_REMOVE_STEP_TOOL_NAME,
+  MCP_REORDER_STEPS_TOOL_NAME,
+  MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
   type McpToolName,
 } from "@root/utils/McpToolDefinitions";
 import { MCP_SERVER_IDS } from "@root/types/DashboardConstants";
@@ -98,6 +102,30 @@ import {
   type ListHarnessesParams,
   type ListHarnessesResult,
 } from "./listHarnessesModel";
+import {
+  editStepSummary,
+  estimateStepMutationHeight,
+  parseEditStepParams,
+  parseEditStepResultText,
+  parseRemoveStepParams,
+  parseRemoveStepResultText,
+  parseReorderStepsParams,
+  parseReorderStepsResultText,
+  parseSubmitCommitMessageParams,
+  parseSubmitCommitMessageResultText,
+  removeStepSummary,
+  reorderStepsSummary,
+  commitMessageSummary,
+  stepMutationSearchText,
+  type EditStepParams,
+  type EditStepResult,
+  type RemoveStepParams,
+  type RemoveStepResult,
+  type ReorderStepsParams,
+  type ReorderStepsResult,
+  type SubmitCommitMessageParams,
+  type SubmitCommitMessageResult,
+} from "./stepMutationModel";
 
 export interface CtrlYokeToolView<TParams, TResult> {
   parseParams(raw: unknown): TParams | undefined;
@@ -335,6 +363,101 @@ const listHarnessesView: CtrlYokeToolView<
     ),
 };
 
+const editStepView: CtrlYokeToolView<EditStepParams, EditStepResult> = {
+  parseParams: parseEditStepParams,
+  parseResult: parseEditStepResultText,
+  summary: editStepSummary,
+  searchText: stepMutationSearchText,
+  estimateHeight: (params, result, data, expansion, width, fontSize) =>
+    estimateStepMutationHeight(
+      params,
+      result,
+      width,
+      fontSize,
+      expansion.rawExpanded
+        ? estimateGenericToolCallHeight(
+            data.parameters,
+            data.result,
+            expansion,
+            fontSize,
+            width
+          )
+        : 0
+    ),
+};
+const removeStepView: CtrlYokeToolView<RemoveStepParams, RemoveStepResult> = {
+  parseParams: parseRemoveStepParams,
+  parseResult: parseRemoveStepResultText,
+  summary: removeStepSummary,
+  searchText: stepMutationSearchText,
+  estimateHeight: (params, result, data, expansion, width, fontSize) =>
+    estimateStepMutationHeight(
+      params,
+      result,
+      width,
+      fontSize,
+      expansion.rawExpanded
+        ? estimateGenericToolCallHeight(
+            data.parameters,
+            data.result,
+            expansion,
+            fontSize,
+            width
+          )
+        : 0
+    ),
+};
+const reorderStepsView: CtrlYokeToolView<
+  ReorderStepsParams,
+  ReorderStepsResult
+> = {
+  parseParams: parseReorderStepsParams,
+  parseResult: parseReorderStepsResultText,
+  summary: reorderStepsSummary,
+  searchText: stepMutationSearchText,
+  estimateHeight: (params, result, data, expansion, width, fontSize) =>
+    estimateStepMutationHeight(
+      params,
+      result,
+      width,
+      fontSize,
+      expansion.rawExpanded
+        ? estimateGenericToolCallHeight(
+            data.parameters,
+            data.result,
+            expansion,
+            fontSize,
+            width
+          )
+        : 0
+    ),
+};
+const submitCommitMessageView: CtrlYokeToolView<
+  SubmitCommitMessageParams,
+  SubmitCommitMessageResult
+> = {
+  parseParams: parseSubmitCommitMessageParams,
+  parseResult: parseSubmitCommitMessageResultText,
+  summary: (params) => commitMessageSummary(params),
+  searchText: stepMutationSearchText,
+  estimateHeight: (params, result, data, expansion, width, fontSize) =>
+    estimateStepMutationHeight(
+      params,
+      result,
+      width,
+      fontSize,
+      expansion.rawExpanded
+        ? estimateGenericToolCallHeight(
+            data.parameters,
+            data.result,
+            expansion,
+            fontSize,
+            width
+          )
+        : 0
+    ),
+};
+
 /** Partial registry grows by tool family as later plan stages land. */
 export const CTRLYOKE_TOOL_VIEWS: Partial<
   Record<McpToolName, CtrlYokeToolView<unknown, unknown>>
@@ -372,6 +495,17 @@ export const CTRLYOKE_TOOL_VIEWS: Partial<
     unknown,
     unknown
   >,
+  [MCP_EDIT_STEP_TOOL_NAME]: editStepView as CtrlYokeToolView<unknown, unknown>,
+  [MCP_REMOVE_STEP_TOOL_NAME]: removeStepView as CtrlYokeToolView<
+    unknown,
+    unknown
+  >,
+  [MCP_REORDER_STEPS_TOOL_NAME]: reorderStepsView as CtrlYokeToolView<
+    unknown,
+    unknown
+  >,
+  [MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME]:
+    submitCommitMessageView as CtrlYokeToolView<unknown, unknown>,
 };
 
 export interface ResolvedCtrlYokeToolView {
