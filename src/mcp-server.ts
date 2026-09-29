@@ -41,6 +41,7 @@ import { mergeWorkflowStepUpdate } from "./core/WorkflowStepSanitizer";
 import {
   BOOLEAN_STRING_VALUES,
   CAPABILITIES_FILE,
+  CTRLYOKE_ENV_VARS,
   CTRLYOKE_DIR,
   DEFAULT_MAX_STEPS,
   ACTIVE_EXECUTION_STATES,
@@ -375,8 +376,8 @@ export class CtrlYokeMCPServer {
       CTRLYOKE_WORKSPACE: process.env.CTRLYOKE_WORKSPACE,
       CTRLYOKE_WORKSPACE_ROOT: process.env.CTRLYOKE_WORKSPACE_ROOT,
       CTRLYOKE_EXECUTION_ROOT: process.env.CTRLYOKE_EXECUTION_ROOT,
-      CTRLYOKE_WORKING_FILE:
-        process.env.CTRLYOKE_WORKING_FILE ||
+      [CTRLYOKE_ENV_VARS.WORKING_FILE]:
+        process.env[CTRLYOKE_ENV_VARS.WORKING_FILE] ||
         "(not set — workflow tools will refuse to run)",
       CTRLYOKE_HOME: process.env.CTRLYOKE_HOME || "(default)",
       CTRLYOKE_RUN_HISTORY_LOCATION:
@@ -539,7 +540,7 @@ export class CtrlYokeMCPServer {
     const configuredRoot = process.env.CTRLYOKE_EXECUTION_ROOT?.trim();
     if (configuredRoot) return path.resolve(configuredRoot);
 
-    const workingFilePath = process.env.CTRLYOKE_WORKING_FILE;
+    const workingFilePath = process.env[CTRLYOKE_ENV_VARS.WORKING_FILE];
     if (workingFilePath) {
       try {
         const workingFile = JSON.parse(
@@ -558,7 +559,7 @@ export class CtrlYokeMCPServer {
   private async resolveCallingContext(
     operation?: string
   ): Promise<McpToolCallingContext> {
-    const pinnedPath = process.env.CTRLYOKE_WORKING_FILE;
+    const pinnedPath = process.env[CTRLYOKE_ENV_VARS.WORKING_FILE];
     const cliMode =
       process.env[MCP_CLI_MODE_ENV] === MCP_CLI_MODE_VALUE &&
       operation !== undefined &&
@@ -568,7 +569,7 @@ export class CtrlYokeMCPServer {
         attested: false,
         groupMember: false,
         unattestedReason:
-          "no ctrlyoke workflow run is attached to this MCP server (CTRLYOKE_WORKING_FILE is not set)",
+          `no ctrlyoke workflow run is attached to this MCP server (${CTRLYOKE_ENV_VARS.WORKING_FILE} is not set)`,
         via: cliMode
           ? COORDINATION_PARTICIPANT_VIA.CLI
           : COORDINATION_PARTICIPANT_VIA.MCP,
@@ -1982,7 +1983,7 @@ export class CtrlYokeMCPServer {
     workflowKey: WorkflowKey;
     runRef: RunRef;
   } {
-    const pinnedPath = process.env.CTRLYOKE_WORKING_FILE;
+    const pinnedPath = process.env[CTRLYOKE_ENV_VARS.WORKING_FILE];
     const address = pinnedPath
       ? WorkflowPaths.parseWorkingFileAddressFromPath(pinnedPath)
       : undefined;
@@ -2215,7 +2216,7 @@ async function runMcpToolCli(argv: readonly string[]): Promise<void> {
     process.env.CTRLYOKE_WORKSPACE = options.workspace;
   }
   if (options.workingFile !== undefined) {
-    process.env.CTRLYOKE_WORKING_FILE = options.workingFile;
+    process.env[CTRLYOKE_ENV_VARS.WORKING_FILE] = options.workingFile;
   }
   if (options.commitOutput !== undefined) {
     process.env.CTRLYOKE_COMMIT_OUTPUT = options.commitOutput;

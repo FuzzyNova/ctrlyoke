@@ -29,6 +29,7 @@ import {
   PROMPT_DIAGNOSTIC_CODES,
   isContextResolutionDiagnostic,
   STEP_STATUS,
+  CTRLYOKE_ENV_VARS,
   CONDITION_ACTIONS,
   TOKEN_TOTAL_CONFIDENCE,
   FAILURE_KINDS,
@@ -2473,6 +2474,36 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     });
 
     await executor.execute(integration, makeContext(integration));
+
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+    assert.strictEqual(
+      queue.getState().results[0].status,
+      STEP_STATUS.COMPLETED
+    );
+  });
+
+  test("passes the active working file to script-step processes", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+    const context = makeContext(integration);
+    context.workingFilePath = path.join(
+      os.tmpdir(),
+      "workflow-run",
+      "workflow.ctrlyoke.json"
+    );
+    queue.loadPrompts({
+      steps: [
+        {
+          type: "script",
+          script: `node -e "process.stdout.write(process.env.${CTRLYOKE_ENV_VARS.WORKING_FILE} || '')"`,
+          compareSource: "stdout",
+          expected: context.workingFilePath.replace(/\\/g, "/"),
+        },
+      ],
+    });
+
+    await executor.execute(integration, context);
 
     assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
     assert.strictEqual(

@@ -10,7 +10,10 @@ import {
   type McpSecretConfigOptions,
 } from "../shared/CliMcpConfigGenerator";
 import { Log } from "../../../utils/Log";
-import { MCP_SECRET_CONFIG_MODES } from "../../../types/DashboardConstants";
+import {
+  CTRLYOKE_ENV_VARS,
+  MCP_SECRET_CONFIG_MODES,
+} from "../../../types/DashboardConstants";
 
 export interface OpenCodeLocalMcpServer {
   type: "local";
@@ -240,7 +243,7 @@ export function buildOpenCodeMcpEntries(
       const env: Record<string, string> = {
         CTRLYOKE_WORKSPACE: workspaceValue,
         ...(workingFileValue
-          ? { CTRLYOKE_WORKING_FILE: workingFileValue }
+          ? { [CTRLYOKE_ENV_VARS.WORKING_FILE]: workingFileValue }
           : {}),
         ...(additionalEnv
           ? sanitizeMcpStringRecord(additionalEnv, "ctrlyoke MCP environment")

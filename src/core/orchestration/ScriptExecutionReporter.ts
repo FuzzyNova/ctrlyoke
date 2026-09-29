@@ -46,6 +46,7 @@ import type { HarnessIntegration } from "../HarnessIntegration";
 
 export interface ScriptExecutionReporterContext {
   executionWorkspace?: ExecutionWorkspace;
+  workingFilePath?: string;
   workspaceFolderPath?: string;
   historyFilePath?: string;
   statusReporter: StatusMessageReporter;
@@ -309,7 +310,8 @@ export class ScriptExecutionReporter {
             request.vars,
             onOutput,
             request.secretNames,
-            request.processRunner ?? context.getScriptProcessRunner?.(target)
+            request.processRunner ?? context.getScriptProcessRunner?.(target),
+            context.workingFilePath
           );
     } finally {
       // The buffered tail must land before the completed output replaces the

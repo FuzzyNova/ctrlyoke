@@ -25,6 +25,7 @@ import {
 } from "../types/WorkflowContextTypes";
 import {
   EXECUTION_MODES,
+  CTRLYOKE_ENV_VARS,
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
   CAPABILITY_VERIFICATION_STATUSES,
@@ -2623,7 +2624,8 @@ export class WorkflowExecutor {
             this.promptQueue.getWorkflowFile().vars,
             onOutput,
             secretNames,
-            context.getScriptProcessRunner?.(target)
+            context.getScriptProcessRunner?.(target),
+            context.workingFilePath
           );
         }
 
@@ -3366,11 +3368,20 @@ export class WorkflowExecutor {
       secretStore: this.platform.getSecretStore?.(),
     });
     context.secretRedactor?.addResolvedValues(resolvedSecrets);
-    return buildSecretProcessEnvironment(
-      processEnv,
-      resolvedSecrets,
-      secretNames
-    );
+    const env = {
+      ...(buildSecretProcessEnvironment(
+        processEnv,
+        resolvedSecrets,
+        secretNames
+      ) ?? {}),
+    };
+    if (context.workingFilePath) {
+      env[CTRLYOKE_ENV_VARS.WORKING_FILE] = context.workingFilePath.replace(
+        /\\/g,
+        "/"
+      );
+    }
+    return env;
   }
 
   private async registerResolvedSecrets(

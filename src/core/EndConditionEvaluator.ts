@@ -6,6 +6,7 @@ import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { type ScriptProperties } from "../types/CtrlYokeTypes";
 import {
+  CTRLYOKE_ENV_VARS,
   END_CONDITION_SCRIPT_TYPES,
   SCRIPT_FILE_INTERPRETER_KINDS,
   SCRIPT_FILE_INTERPRETERS,
@@ -192,7 +193,8 @@ export class EndConditionEvaluator {
     vars?: Record<string, string>,
     onOutput?: (chunk: string) => void,
     secretNames: readonly string[] = [],
-    processRunner?: ScriptProcessRunner
+    processRunner?: ScriptProcessRunner,
+    workingFilePath?: string
   ): Promise<EvaluationResult> {
     const startTime = Date.now();
     const executionRoot =
@@ -299,7 +301,8 @@ export class EndConditionEvaluator {
         secretNames,
         condition.env,
         processRunner,
-        command.windowsVerbatimArguments ?? false
+        command.windowsVerbatimArguments ?? false,
+        workingFilePath
       );
 
       if (result.errored) {
@@ -826,17 +829,23 @@ export class EndConditionEvaluator {
     secretNames: readonly string[] = [],
     processEnv?: Record<string, string>,
     processRunner?: ScriptProcessRunner,
-    windowsVerbatimArguments: boolean = false
+    windowsVerbatimArguments: boolean = false,
+    workingFilePath?: string
   ): Promise<ScriptProcessResult> {
     const resolvedSecrets = await resolveSecretEnvironment(secretNames, {
       workspaceRoot: this.platform.getWorkspaceRoot(),
       secretStore: this.platform.getSecretStore?.(),
     });
-    const env = buildSecretProcessEnvironment(
-      processEnv,
-      resolvedSecrets,
-      secretNames
-    );
+    const env = {
+      ...(buildSecretProcessEnvironment(
+        processEnv,
+        resolvedSecrets,
+        secretNames
+      ) ?? {}),
+    };
+    if (workingFilePath) {
+      env[CTRLYOKE_ENV_VARS.WORKING_FILE] = workingFilePath.replace(/\\/g, "/");
+    }
     const ownsRunner = !processRunner;
     const runner =
       processRunner ??

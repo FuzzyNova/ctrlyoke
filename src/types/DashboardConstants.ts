@@ -24,6 +24,11 @@ export const WORKFLOW_FILE_FORMATS = {
 export type WorkflowFileFormat =
   (typeof WORKFLOW_FILE_FORMATS)[keyof typeof WORKFLOW_FILE_FORMATS];
 
+/** Environment variable names shared by ctrlyoke-managed child processes. */
+export const CTRLYOKE_ENV_VARS = {
+  WORKING_FILE: "CTRLYOKE_WORKING_FILE",
+} as const;
+
 /** Completion trigger discriminants shared by the extension host and webview. */
 export const COMPLETION_TRIGGERS = {
   SLASH: "/",

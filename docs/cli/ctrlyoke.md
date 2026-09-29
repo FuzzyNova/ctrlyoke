@@ -9,7 +9,7 @@ ctrlyoke rerun --workflow <key> [--from <ref|runId>] [options]
 ctrlyoke append [file] --workflow <key> --run <ref|runId> [--prompt <text>] [options]
 ctrlyoke continue --workflow <key> --run <ref|runId> [options]
 ctrlyoke validate <file> [--harness <id> | --all-installed-harnesses] [--strict <policy>] [--json]
-ctrlyoke commit [--model <model>] [--hint <text>] [--print-only] [--yes] [--cwd <path>]
+ctrlyoke commit [--model <model>] [--hint <text>] [--print-only] [--all] [--yes] [--cwd <path>]
 ctrlyoke about [--json]
 ctrlyoke trust-external-roots [--yes] [--cwd <path>]
 ctrlyoke trust-workflow-external-roots <file> [--yes] [--cwd <path>]
@@ -187,7 +187,8 @@ ctrlyoke continue --workflow release --run 7
 
 A run left `running` or `paused` by a process that no longer holds its runner
 lock can be adopted this way. `continue` refuses while the lineage has an
-unsaved draft or pending edit, or while another process is executing the run.
+unsaved draft or pending edit, while any run in the lineage is executing, or
+while the target run is pausing or cancelling.
 
 ## `ctrlyoke validate`
 
@@ -258,9 +259,10 @@ ctrlyoke commit --hint "mention the migration" --yes
 git commit -m "$(ctrlyoke commit --print-only)"
 ```
 
-The message is generated from staged changes; when nothing is staged it falls
-back to unstaged and untracked changes and warns you to stage them before
-committing. The harness, model, and prompt come from the `commit` settings;
+The message is generated from staged changes. If nothing is staged, the CLI
+prints the generated message and exits with code `2` without committing, unless
+`--all` is given to stage all changes first. The harness, model, and prompt come
+from the `commit` settings;
 `--model` overrides the model. Without `--yes`, the CLI asks for confirmation.
 `--print-only` writes only the message to stdout and does not commit.
 
@@ -431,7 +433,7 @@ ctrlyoke history search "EP.*RM" --regex
 | Option                | Meaning                                                                                                 |
 | --------------------- | ------------------------------------------------------------------------------------------------------- |
 | `--workflow <key...>` | Restrict to workflow lineage keys                                                                       |
-| `--this-workflow`     | Restrict to the workflow named by `CTRLYOKE_WORKING_FILE` (set inside a running step)                   |
+| `--this-workflow`     | Restrict to the workflow named by `CTRLYOKE_WORKING_FILE` (set for harness and workflow-script processes) |
 | `--kind <kind...>`    | Restrict to event kinds, such as `prompt`, `response`, `thinking`, `bash`, `fileEdit`, `tool`, `script` |
 | `--harness <id...>`   | Restrict to harnesses                                                                                   |
 | `--state <state...>`  | Restrict to run outcomes (`completed`, `error`, `stopped`, `paused`)                                    |
@@ -516,6 +518,6 @@ versioned one-line result envelope; failures exit with code `2`.
 | Variable                | Effect                                                                                                                                        |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `CTRLYOKE_HOME`         | Moves the user state home (`<ctrlyokeStateHome>`, default `~/.ctrlyoke`) that holds run history. Settings stay in `~/.ctrlyoke/settings.json` |
-| `CTRLYOKE_WORKING_FILE` | Set by ctrlyoke for harness processes; names the run a step belongs to. Used by `history search --this-workflow`                              |
+| `CTRLYOKE_WORKING_FILE` | Set by ctrlyoke for harness and workflow-script processes; names the run a step belongs to. Used by `history search --this-workflow`        |
 | `CTRLYOKE_MAX_STEPS`    | Set for the built-in MCP server process to the global `queue.maxSteps` value; a workflow's `maxSteps` can override it for that run            |
 | Declared secret names   | Resolve a workflow's declared secrets without a credential store (env passthrough)                                                            |

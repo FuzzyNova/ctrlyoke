@@ -55,8 +55,8 @@ behind:
   about. The error says the state "was written by a newer version of ctrlyoke"
   and asks you to update; the CLI exits with code `2`, including when this
   stops a run partway through. Update the older copy and run the command again.
-- Each version keeps its own history-search index, so the two copies do not
-  rebuild each other's index on every search.
+- Each history-search index is keyed by its index schema version, so CLI copies
+  using the same schema can reuse the index.
 - Harness statuslines run from a shared copy of ctrlyoke's statusline scripts
   in `~/.ctrlyoke/bin/`, which the newest installed version keeps up to date.
   Updating or removing either copy does not break your statusline.
