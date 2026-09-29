@@ -1,7 +1,7 @@
 # MCP Event Pipeline Gaps — reliable detection and pairing of MCP tool calls on every harness
 
-> **Status:** Complete — items 1–5 done. Prerequisite for
-> [`CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md`](CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md): purpose-built
+> **Status:** Implemented — items 1–5 done. Prerequisite for
+> [`CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md`](../backlog/CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md): purpose-built
 > views are only as good as the `MCP_TOOL_CALL` events underneath them. Skill-mode calls are
 > rewritten at the shared parsed-event streaming boundary.
 
@@ -247,3 +247,8 @@ parser unit-test fixtures, so vendor renames show up in `npm test` rather than i
 
 - Fixed in review: `TOOL_CALL`/`MCP_TOOL_CALL` completion merge dropped completion-side
   `parameters` when the initiated half had none.
+- Final gate: `npm test` passed (extension 4884, ui 3083, packaging 69). The full
+  `npm run test:harness` run passed the MCP probe on all six harnesses. Its three failures were
+  unrelated: the hook test hit this workflow's own worktree lease, the pinned OpenCode 1.18.10
+  binary was missing (`spawn opencode ENOENT`), and a condition-expansion test tripped on fenced
+  output (filed as `dev/bugs/backlog/harness-precondition-stdout-fenced-expansion.md`).
