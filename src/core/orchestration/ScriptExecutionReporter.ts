@@ -346,8 +346,13 @@ export class ScriptExecutionReporter {
       response: outputText,
       elapsed: evaluationResult.duration / 1000,
       isStreaming: false,
-      exitCode: evaluationResult.exitCode ?? (evaluationResult.passed ? 0 : 1),
-      scriptVerdict: verdict,
+      ...(!evaluationResult.cancelled
+        ? {
+            exitCode:
+              evaluationResult.exitCode ?? (evaluationResult.passed ? 0 : 1),
+          }
+        : {}),
+      ...(!evaluationResult.cancelled ? { scriptVerdict: verdict } : {}),
     };
 
     this.dispatchCompletedOutput(context, target, signedStepIndex, finalOutput);
@@ -387,7 +392,9 @@ export class ScriptExecutionReporter {
         command: properties.script,
         stdout: evaluationResult.stdout,
         stderr: evaluationResult.stderr,
-        exitCode: evaluationResult.exitCode,
+        ...(evaluationResult.cancelled
+          ? {}
+          : { exitCode: evaluationResult.exitCode }),
       },
       verdict,
       outputText,
@@ -403,7 +410,7 @@ export class ScriptExecutionReporter {
       operator: request.properties.operator,
       expected: request.properties.expected,
       actual: result.actual,
-      exitCode: result.exitCode,
+      ...(result.cancelled ? {} : { exitCode: result.exitCode }),
       outcome: result.errored
         ? SCRIPT_VERDICT_OUTCOMES.ERRORED
         : result.passed

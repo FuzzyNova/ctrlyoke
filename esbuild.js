@@ -1,6 +1,7 @@
 const esbuild = require("esbuild");
 const fs = require("fs");
 const path = require("path");
+const { rewriteCrossSchemaRefs } = require("./scripts/schema-ref-utils.cjs");
 
 const production = process.argv.includes("--production");
 const watch = process.argv.includes("--watch");
@@ -211,7 +212,17 @@ const copySchemasPlugin = {
             console.log(`[copy] ${entry.name}/ -> out/schemas/${entry.name}/`);
             return;
           }
-          fs.copyFileSync(srcPath, outPath);
+          if (entry.name === "settings-schema.json") {
+            const settingsSchema = fs.readFileSync(srcPath, "utf8");
+            const bundledSettingsSchema = rewriteCrossSchemaRefs(
+              settingsSchema,
+              (fileName) =>
+                fileName === "workflow.json" ? fileName : undefined
+            );
+            fs.writeFileSync(outPath, bundledSettingsSchema);
+          } else {
+            fs.copyFileSync(srcPath, outPath);
+          }
           console.log(`[copy] ${entry.name} -> out/schemas/${entry.name}`);
         });
         // Draft 2020-12 settings refs use workflow.json, matching the

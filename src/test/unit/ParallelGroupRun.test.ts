@@ -70,6 +70,7 @@ function makeRun(options: {
     readonly group?: ParallelGroupDefinition;
   }>;
   readonly onCancel?: () => void;
+  readonly persistAdmission?: () => Promise<void>;
 }) {
   const steps = new Map(options.ids.map((id) => [id, step(id)]));
   const indices = new Map(options.ids.map((id, index) => [id, index]));
@@ -154,6 +155,7 @@ function makeRun(options: {
       joinCount += 1;
       void outcomes;
     },
+    persistAdmission: options.persistAdmission,
     reconcileAndClose: options.reconcileAndClose,
   });
 
@@ -382,6 +384,48 @@ suite("ParallelGroupRun", () => {
     const outcome = await completion;
     assert.strictEqual(outcome.paused, true);
     assert.strictEqual(harness.run.isAdmissionOpen, false);
+  });
+
+  test("dispatches known pending members when pause is cancelled during admission close", async () => {
+    const firstStarted = deferred();
+    const firstRelease = deferred();
+    const secondStarted = deferred();
+    const admissionCloseStarted = deferred();
+    const admissionCloseRelease = deferred();
+    const executed: string[] = [];
+    let harness!: ReturnType<typeof makeRun>;
+    harness = makeRun({
+      ids: ["first", "second"],
+      width: 1,
+      execute: async (stepId, target) => {
+        executed.push(stepId);
+        if (stepId === "first") {
+          firstStarted.resolve();
+          await firstRelease.promise;
+        } else {
+          secondStarted.resolve();
+        }
+        return { target, status: PROMPT_TERMINAL_STATUS.COMPLETED };
+      },
+      persistAdmission: async () => {
+        admissionCloseStarted.resolve();
+        await admissionCloseRelease.promise;
+      },
+    });
+
+    const completion = harness.run.run();
+    await firstStarted.promise;
+    harness.setStatus(EXECUTION_STATES.PAUSING);
+    firstRelease.resolve();
+    await admissionCloseStarted.promise;
+    harness.setStatus(EXECUTION_STATES.RUNNING);
+    admissionCloseRelease.resolve();
+
+    await secondStarted.promise;
+    const outcome = await completion;
+    assert.deepStrictEqual(executed, ["first", "second"]);
+    assert.strictEqual(outcome.settledCount, 2);
+    assert.strictEqual(harness.joinCount, 1);
   });
 
   test("rejects admission after fail-fast and settles the remaining member", async () => {

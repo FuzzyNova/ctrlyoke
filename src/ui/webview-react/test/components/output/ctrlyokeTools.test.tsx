@@ -132,6 +132,35 @@ describe("ctrlyoke MCP tool views", () => {
     ).toBeUndefined();
   });
 
+  it("parses claim_paths owners that predate participant kinds", () => {
+    const raw = JSON.stringify({
+      granted: [],
+      denied: [
+        {
+          path: "src/a.ts",
+          owner: {
+            participantId: "legacy-participant",
+            label: "legacy owner",
+            attested: true,
+            attribution: "legacy owner",
+          },
+        },
+      ],
+      claims: [],
+    });
+    expect(parseClaimPathsResultText(raw)?.denied[0].owner).toMatchObject({
+      participantId: "legacy-participant",
+      kind: "external",
+    });
+    expect(
+      resolveCtrlYokeToolView({
+        server: MCP_SERVER_IDS.CTRLYOKE,
+        tool: "claim_paths",
+        result: { success: true, output: raw },
+      })
+    ).toMatchObject({ summary: "Claimed 0, 1 denied", warning: true });
+  });
+
   it("renders claim_paths from result alone with clickable grants and denial warning styling", () => {
     const result = parseClaimPathsResultText(
       JSON.stringify({
@@ -387,7 +416,9 @@ describe("ctrlyoke MCP tool views", () => {
         },
       ],
     });
-    expect(parseReadNotesResultText(raw)?.entries).toHaveLength(2);
+    const parsed = parseReadNotesResultText(raw);
+    expect(parsed?.entries).toHaveLength(2);
+    expect(parsed?.entries[0].from.kind).toBeUndefined();
     expect(
       resolveCtrlYokeToolView({
         server: MCP_SERVER_IDS.CTRLYOKE,

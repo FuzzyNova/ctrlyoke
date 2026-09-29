@@ -18,6 +18,7 @@ import {
 import type {
   EditStepParams,
   EditStepResult,
+  RemoveStepResult,
   ReorderStepsParams,
   ReorderStepsResult,
   SubmitCommitMessageParams,
@@ -53,6 +54,22 @@ function RawToggle({
   );
 }
 
+function NoChangeNotice({
+  changed,
+  note,
+}: {
+  changed: boolean | undefined;
+  note: string | undefined;
+}) {
+  if (changed !== false) return null;
+  return (
+    <div className="text-[length:var(--cy-output-font-size-sm)] text-warning-fg">
+      <div className="font-medium">No change</div>
+      {note && <div className="break-words">{note}</div>}
+    </div>
+  );
+}
+
 export const EditStepBody: React.FC<CtrlYokeToolBodyProps> = (props) => {
   const params = props.params as EditStepParams | undefined;
   const result = props.result as EditStepResult;
@@ -62,12 +79,15 @@ export const EditStepBody: React.FC<CtrlYokeToolBodyProps> = (props) => {
     : result.clearProperties;
   const fields = editStepChangedFields(params, result);
   const prompt =
-    typeof updates.prompt === "string" ? updates.prompt : undefined;
+    result.changed !== false && typeof updates.prompt === "string"
+      ? updates.prompt
+      : undefined;
   const oldPrompt =
     typeof result.before?.prompt === "string" ? result.before.prompt : "";
   const summary = editStepSummary(params, result);
   return (
     <div className="space-y-1">
+      <NoChangeNotice changed={result.changed} note={result.note} />
       {fields.length > 0 && (
         <ul className="m-0 list-none space-y-0.5 p-0 text-[length:var(--cy-output-font-size-sm)]">
           {fields.map((field) => {
@@ -108,7 +128,7 @@ export const EditStepBody: React.FC<CtrlYokeToolBodyProps> = (props) => {
           />
         </div>
       )}
-      {fields.length === 0 && !prompt && (
+      {result.changed !== false && fields.length === 0 && !prompt && (
         <div className="text-[length:var(--cy-output-font-size-sm)] text-muted-foreground">
           {summary}
         </div>
@@ -126,8 +146,10 @@ export const EditStepBody: React.FC<CtrlYokeToolBodyProps> = (props) => {
 };
 
 export const RemoveStepBody: React.FC<CtrlYokeToolBodyProps> = (props) => {
+  const result = props.result as RemoveStepResult;
   return (
     <div className="space-y-1">
+      <NoChangeNotice changed={result.changed} note={result.note} />
       <RawToggle
         data={props.data}
         expansion={props.expansion}
@@ -142,9 +164,12 @@ export const ReorderStepsBody: React.FC<CtrlYokeToolBodyProps> = (props) => {
   const result = props.result as ReorderStepsResult;
   return (
     <div className="space-y-1">
-      <div className="text-[length:var(--cy-output-font-size-sm)] font-medium">
-        {reorderStepsSummary(params, result)}
-      </div>
+      <NoChangeNotice changed={result.changed} note={result.note} />
+      {result.changed !== false && (
+        <div className="text-[length:var(--cy-output-font-size-sm)] font-medium">
+          {reorderStepsSummary(params, result)}
+        </div>
+      )}
       <ol className="m-0 list-none space-y-0.5 p-0 text-[length:var(--cy-output-font-size-sm)]">
         {reorderStepPairs(params, result).map((pair) => (
           <li key={pair}>{pair}</li>

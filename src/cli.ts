@@ -99,6 +99,10 @@ import { readWorkflowLockInspection } from "./utils/WorkflowLockInspector";
 import * as WorkflowPaths from "./utils/WorkflowPaths";
 import { resolveCliRunRefAtLineage } from "./cli/CliRunSelector";
 import {
+  applyCliAppendOverrides,
+  parseCliPromptFile,
+} from "./cli/CliPromptFile";
+import {
   registerRunCommand,
   registerRunScopedCommands,
   type AppendOptions,
@@ -333,25 +337,31 @@ registerSecretCommands(program, {
     ),
   check: (file, options) =>
     handleSecretCommand(
-      checkSecretsCommand(
-        file,
-        options,
-        createCliSecretCommandDependencies(
-          path.resolve(options.cwd ?? process.cwd())
-        ),
-        createSecretCommandIo()
-      )
+      (async () => {
+        Log.initializeCli(path.resolve(options.cwd ?? process.cwd()), false);
+        return checkSecretsCommand(
+          file,
+          options,
+          createCliSecretCommandDependencies(
+            path.resolve(options.cwd ?? process.cwd())
+          ),
+          createSecretCommandIo()
+        );
+      })()
     ),
   trustSecretGrants: (file, options) =>
     handleSecretCommand(
-      trustSecretGrantsCommand(
-        file,
-        options,
-        createCliSecretCommandDependencies(
-          path.resolve(options.cwd ?? process.cwd())
-        ),
-        createSecretCommandIo()
-      )
+      (async () => {
+        Log.initializeCli(path.resolve(options.cwd ?? process.cwd()), false);
+        return trustSecretGrantsCommand(
+          file,
+          options,
+          createCliSecretCommandDependencies(
+            path.resolve(options.cwd ?? process.cwd())
+          ),
+          createSecretCommandIo()
+        );
+      })()
     ),
 });
 
@@ -1861,21 +1871,29 @@ async function parseAppendTail(
   platform: CliAdapter,
   userFeedbackSink: ConsoleUserFeedbackSink
 ): Promise<WorkflowStep[]> {
+  let steps: WorkflowStep[];
   if (options.prompt) {
-    return [{ prompt: options.prompt }];
-  }
-  if (!operation.file) {
-    throw new Error("Append source was not provided");
-  }
-  const parser = new PromptFileParser(platform, userFeedbackSink);
-  const parsed = await parser.parsePromptFile(path.resolve(operation.file));
-  if (!parsed?.steps?.length) {
-    throw new Error(
-      parser.lastNewerSchemaError?.message ??
-        "Append source must contain at least one workflow step"
+    steps = [{ prompt: options.prompt }];
+  } else {
+    if (!operation.file) {
+      throw new Error("Append source was not provided");
+    }
+    const parsed = await parseCliPromptFile(
+      operation.file,
+      platform,
+      userFeedbackSink
     );
+    if (!parsed.steps?.length) {
+      throw new Error("Append source must contain at least one workflow step");
+    }
+    steps = parsed.steps;
   }
-  return parsed.steps;
+
+  return applyCliAppendOverrides(
+    steps,
+    options.harness as HarnessId | undefined,
+    options.model
+  );
 }
 
 async function assertLineageAvailableForCli(
@@ -1935,6 +1953,7 @@ async function validateCommand(
   file: string,
   options: ValidateCommandOptions = {}
 ): Promise<void> {
+  Log.initializeCli(process.cwd(), false);
   const resolvedFile = path.resolve(file);
   const compatibilityRequested =
     options.harness !== undefined || options.allInstalledHarnesses === true;
@@ -2031,7 +2050,9 @@ async function validateCommand(
         process.exit(2);
         return;
       }
-      const message = `${path.basename(resolvedFile)} failed validation`;
+      const message =
+        parser.lastParseError?.message ??
+        `${path.basename(resolvedFile)} failed validation`;
       if (options.json) {
         process.stdout.write(
           JSON.stringify(

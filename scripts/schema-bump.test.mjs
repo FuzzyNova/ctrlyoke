@@ -9,9 +9,14 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { createRequire } from "node:module";
 import { test } from "node:test";
 import { bumpSchema } from "./schema-bump.mjs";
 import { publishSchemas } from "./publish-schemas-to-landing.mjs";
+
+const require = createRequire(import.meta.url);
+const { rewriteCrossSchemaRefs } = require("./schema-ref-utils.cjs");
 
 const GUARD = `export const CURRENT_SCHEMA_VERSIONS = {
   [PERSISTED_STORES.WORKFLOW_DEFINITION]: 1,
@@ -112,6 +117,67 @@ test("keeps cross-schema refs resolvable when the siblings bump separately", () 
     repo.publish();
   } finally {
     rmSync(repo.root, { recursive: true, force: true });
+  }
+});
+
+test("bundled schemas resolve every relative ref after a schema bump", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-bundled-schemas-"));
+  try {
+    const outSchemas = path.join(root, "out", "schemas");
+    mkdirSync(outSchemas, { recursive: true });
+    const workflowPath = path.join(outSchemas, "workflow.json");
+    const settingsPath = path.join(outSchemas, "settings-schema.json");
+    writeFileSync(
+      workflowPath,
+      json({ $id: "https://ctrlyoke.dev/schema/v2/workflow.json" })
+    );
+
+    const bumpedSettings = json({
+      properties: {
+        harnessId: { $ref: "../v2/workflow.json#/$defs/harnessId" },
+        anotherRef: { $ref: "../v2/workflow.json#/$defs/agent" },
+      },
+    });
+    writeFileSync(
+      settingsPath,
+      rewriteCrossSchemaRefs(bumpedSettings, (fileName) =>
+        fileName === "workflow.json" ? fileName : undefined
+      )
+    );
+
+    for (const schemaPath of [workflowPath, settingsPath]) {
+      const schema = JSON.parse(readFileSync(schemaPath, "utf8"));
+      const refs = [];
+      const visit = (value) => {
+        if (Array.isArray(value)) {
+          value.forEach(visit);
+        } else if (value && typeof value === "object") {
+          if (typeof value.$ref === "string") refs.push(value.$ref);
+          Object.values(value).forEach(visit);
+        }
+      };
+      visit(schema);
+
+      for (const ref of refs) {
+        if (/^[a-z][a-z\d+.-]*:/i.test(ref)) continue;
+        const target = fileURLToPath(new URL(ref, pathToFileURL(schemaPath)));
+        assert.equal(
+          existsSync(target),
+          true,
+          `${path.relative(outSchemas, schemaPath)} has unresolved $ref ${ref}`
+        );
+      }
+    }
+
+    assert.deepEqual(
+      JSON.parse(readFileSync(settingsPath, "utf8")).properties,
+      {
+        harnessId: { $ref: "workflow.json#/$defs/harnessId" },
+        anotherRef: { $ref: "workflow.json#/$defs/agent" },
+      }
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
 

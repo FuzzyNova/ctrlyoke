@@ -1,6 +1,7 @@
 import * as path from "path";
 import { PromptFileParser } from "./PromptFileParser";
 import { PromptQueue } from "./PromptQueue";
+import { isActiveQueueWorkRunning } from "./ParallelGroupRuntime";
 import { WorkingFileManager } from "./WorkingFileManager";
 import { assertDefinitionRevision } from "./orchestration/RevisionPrecondition";
 import {
@@ -893,7 +894,9 @@ export class WorkflowInstance
   private async cancelTarget(target: WorkflowAttemptTarget): Promise<void> {
     const targetKey = this.getExecutionTargetRunKey(target);
     const resource = this.activeTargetResources.get(targetKey);
-    resource?.processRunner?.dispose();
+    const processRunner =
+      resource?.processRunner ?? this.targetScriptProcessRunners.get(targetKey);
+    await processRunner?.cancel();
     if (resource?.ptySessionId) {
       getPtyProcessManager()?.killSession(
         resource.ptySessionId,
@@ -2396,7 +2399,7 @@ export class WorkflowInstance
       if (resource.integration) {
         integrations.add(resource.integration);
       }
-      resource.processRunner?.dispose();
+      void resource.processRunner?.cancel();
       if (resource.ptySessionId) {
         getPtyProcessManager()?.killSession(
           resource.ptySessionId,
@@ -3261,11 +3264,9 @@ export class WorkflowInstance
       );
     }
 
-    const currentStep = state.steps[state.currentIndex];
+    const currentGroup = this.promptQueue.getCurrentParallelGroup();
     if (
-      !currentStep ||
-      currentStep._runtime?.startedAt === undefined ||
-      currentStep._runtime.completedAt !== undefined
+      !isActiveQueueWorkRunning(state.steps, state.currentIndex, currentGroup)
     ) {
       throw new Error("No step is running. Run in Parallel was rejected.");
     }
@@ -3279,7 +3280,6 @@ export class WorkflowInstance
       );
     }
 
-    const currentGroup = this.promptQueue.getCurrentParallelGroup();
     const activeRuntime = this.promptQueue.getActiveParallelGroupRuntime();
     const previousParallelGroups = state.parallelGroups.map((group) => ({
       ...group,

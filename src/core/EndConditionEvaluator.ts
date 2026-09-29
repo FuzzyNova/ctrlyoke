@@ -69,6 +69,7 @@ export interface EvaluationResult {
   result: string; // Same as stdout. Not the compared value — that is `actual`, which $endCondition:actual reads.
   error?: string;
   timeout?: boolean;
+  cancelled?: boolean;
   duration: number;
   exitCode?: number; // Capture exit code for better error handling
 }
@@ -330,6 +331,7 @@ export class EndConditionEvaluator {
         result: result.result,
         error: result.error,
         timeout: result.timeout,
+        cancelled: result.cancelled,
         duration: Date.now() - startTime,
         exitCode: result.exitCode,
       };

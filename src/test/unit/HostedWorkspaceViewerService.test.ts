@@ -68,6 +68,26 @@ suite("HostedWorkspaceViewerService", function () {
     runGit(cwd, "commit", "-m", message);
   }
 
+  suite("checkoutBranch", () => {
+    test("rejects option-shaped branch names before git can interpret them", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "baseline.txt", "baseline\n", "Baseline");
+      const branchBefore = runGit(root, "branch", "--show-current");
+
+      await assert.rejects(
+        new HostedWorkspaceViewerService(root).checkoutBranch(
+          "--orphan=attacker"
+        ),
+        /invalid branch name/i
+      );
+
+      assert.strictEqual(runGit(root, "branch", "--show-current"), branchBefore);
+      assert.strictEqual(runGit(root, "branch", "--list", "attacker"), "");
+    });
+  });
+
   teardown(() => {
     for (const workspaceRoot of tempRoots.splice(0)) {
       removeTempDir(workspaceRoot);

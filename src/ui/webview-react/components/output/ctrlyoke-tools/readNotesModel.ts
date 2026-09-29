@@ -1,4 +1,5 @@
 import { isRecord, tryParseJson } from "./shared";
+import { parseCoordinationParticipant } from "./coordinationParticipantParser";
 import type { CoordinationEntry } from "@root/types/CtrlYokeTypes";
 import { COORDINATION_ENTRY_KINDS } from "@root/types/DashboardConstants";
 import {
@@ -17,20 +18,10 @@ export interface ReadNotesResult {
   nextCursor?: number;
 }
 
-function isParticipant(value: unknown): value is CoordinationEntry["from"] {
-  return (
-    isRecord(value) &&
-    typeof value.participantId === "string" &&
-    typeof value.label === "string" &&
-    (value.kind === undefined || typeof value.kind === "string") &&
-    typeof value.attested === "boolean"
-  );
-}
-
 function isEntry(value: unknown): value is CoordinationEntry {
   if (
     !isRecord(value) ||
-    !isParticipant(value.from) ||
+    !parseCoordinationParticipant(value.from) ||
     !Number.isInteger(value.seq) ||
     typeof value.at !== "string" ||
     typeof value.via !== "string"

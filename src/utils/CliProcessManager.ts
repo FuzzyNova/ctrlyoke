@@ -350,8 +350,7 @@ export class CliProcessManager {
    */
   disposeProcess(): void {
     if (this.currentProcess) {
-      this.requestedKills.set(this.currentProcess, "SIGTERM");
-      this.currentProcess.kill();
+      this.killImmediately(this.currentProcess);
       this.currentProcess = undefined;
     }
     this.clearKillTimeout();

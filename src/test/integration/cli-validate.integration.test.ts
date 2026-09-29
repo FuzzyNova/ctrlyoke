@@ -348,4 +348,31 @@ suite("ctrlyoke validate compatibility command", () => {
     assert.strictEqual(result.parsed, true);
     assert.match(result.error, /Empty prompt text/u);
   });
+
+  test("keeps parser diagnostics out of JSON stdout across validation and secret gates", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-cli-parse-"));
+    temporaryRoots.push(root);
+    const workflow = path.join(root, "invalid.ctrlyoke.yaml");
+    await fs.writeFile(workflow, "steps:\n  - bogus: 1\n", "utf8");
+
+    const validation = await runCli(["validate", workflow, "--json"], root);
+    assert.strictEqual(validation.code, 2);
+    assert.strictEqual(validation.stderr, "");
+    assert.strictEqual(validation.stdout.trim().split(/\r?\n/u).length, 1);
+    const result = JSON.parse(validation.stdout) as {
+      success: boolean;
+      error: string;
+    };
+    assert.strictEqual(result.success, false);
+    assert.match(result.error, /Validation failed:/u);
+    assert.match(result.error, /steps/u);
+
+    const secretCheck = await runCli(["secret", "check", workflow], root);
+    assert.strictEqual(secretCheck.code, 2);
+    assert.strictEqual(secretCheck.stdout, "");
+
+    const trustGrants = await runCli(["trust-secret-grants", workflow], root);
+    assert.strictEqual(trustGrants.code, 2);
+    assert.strictEqual(trustGrants.stdout, "");
+  });
 });

@@ -22,6 +22,7 @@ import {
   editStepCommand,
   removeStepCommand,
   reorderStepsCommand,
+  createStepCommandContext,
   type StepCommandContext,
   type StepCommandIo,
 } from "../../cli/StepCommands";
@@ -138,6 +139,27 @@ suite("CLI step command handlers", () => {
     } else {
       process.env.CTRLYOKE_HOME = originalStateHome;
     }
+  });
+
+  test("preserves parser errors from a missing or invalid edit source", async () => {
+    workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-cli-step-parse-")
+    );
+    const commandContext = createStepCommandContext(workspaceRoot);
+    await assert.rejects(
+      () =>
+        commandContext.parseStepFile(
+          path.join(workspaceRoot, "missing.yaml")
+        ),
+      /ENOENT/u
+    );
+
+    const invalidFile = path.join(workspaceRoot, "invalid.ctrlyoke.yaml");
+    await fs.writeFile(invalidFile, "steps:\n  - bogus: 1\n", "utf8");
+    await assert.rejects(
+      () => commandContext.parseStepFile(invalidFile),
+      /Validation failed:.*steps/u
+    );
   });
 
   test("edits a pending step of an idle run", async () => {

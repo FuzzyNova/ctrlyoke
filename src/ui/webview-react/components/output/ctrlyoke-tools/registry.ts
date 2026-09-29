@@ -312,6 +312,7 @@ const editStepView: CtrlYokeToolView<EditStepParams, EditStepResult> = {
   parseParams: parseEditStepParams,
   parseResult: parseEditStepResultText,
   summary: editStepSummary,
+  warning: (_params, result) => result.changed === false,
   searchText: stepMutationSearchText,
   estimateHeight: (params, result, data, expansion, width, fontSize) =>
     estimateStepMutationHeight(
@@ -326,6 +327,7 @@ const removeStepView: CtrlYokeToolView<RemoveStepParams, RemoveStepResult> = {
   parseParams: parseRemoveStepParams,
   parseResult: parseRemoveStepResultText,
   summary: removeStepSummary,
+  warning: (_params, result) => result.changed === false,
   searchText: stepMutationSearchText,
   estimateHeight: (params, result, data, expansion, width, fontSize) =>
     estimateStepMutationHeight(
@@ -343,6 +345,7 @@ const reorderStepsView: CtrlYokeToolView<
   parseParams: parseReorderStepsParams,
   parseResult: parseReorderStepsResultText,
   summary: reorderStepsSummary,
+  warning: (_params, result) => result.changed === false,
   searchText: stepMutationSearchText,
   estimateHeight: (params, result, data, expansion, width, fontSize) =>
     estimateStepMutationHeight(
