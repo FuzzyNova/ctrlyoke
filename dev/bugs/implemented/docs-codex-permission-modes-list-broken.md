@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude)
 - **Area:** `docs/harnesses/codex-cli.md`, `schemas/settings-schema.json`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

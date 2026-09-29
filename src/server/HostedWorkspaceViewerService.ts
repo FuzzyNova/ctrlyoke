@@ -946,7 +946,10 @@ export class HostedWorkspaceViewerService {
   ): Promise<string | null> {
     try {
       const realPath = await fs.promises.realpath(filePath);
-      return isPathWithinAnyDirectory(realPath, this.trustedRoots)
+      return isPathWithinAnyDirectory(
+        realPath,
+        this.realpathsOf(this.trustedRoots)
+      )
         ? realPath
         : null;
     } catch {
@@ -1946,7 +1949,9 @@ export class HostedWorkspaceViewerService {
 
   async discardFile(filePath: string): Promise<void> {
     const resolved = this.safeResolve(filePath);
-    if (!resolved) throw new Error("Path not allowed");
+    if (!resolved || this.isExactRoot(resolved)) {
+      throw new Error("Path not allowed");
+    }
     const repoRoot = await this.requireRepoRootForPath(resolved);
 
     const relPath = this.relativePath(resolved);

@@ -164,6 +164,8 @@ suite("ExecutionRootCoordination", function () {
       ["[ab]x", "bx"],
       ["dev/bugs", "dev/*/README.md"],
       ["./dir//", "dir/child.ts"],
+      ["", "src/a.ts"],
+      ["", "**/*.md"],
     ];
     const disjointPairs: Array<[string, string]> = [
       ["a*/f", "b*/f"],

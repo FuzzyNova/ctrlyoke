@@ -16,7 +16,9 @@ capability details and version-scoped evidence.
 - Codex uses sandbox and approval modes rather than individual tool patterns, so `allowedTools` / `deniedTools` are **not enforced** on this harness. The permission `mode` maps to Codex flags:
   - `dangerouslyAllowAll` → `--dangerously-bypass-approvals-and-sandbox`
   - `allowAll` → `--sandbox workspace-write --ask-for-approval on-request`
-  - `custom` → `-s <permissions.codexSandboxMode> -a <permissions.codexApprovalPolicy>`- `permissions.codexSandboxMode` (`read-only`, `workspace-write`, `danger-full-access`; default `workspace-write`) and `permissions.codexApprovalPolicy` (`untrusted`, `on-request`, `never`; default `on-request`) are only read in `custom` mode.
+  - `custom` → `-s <permissions.codexSandboxMode> -a <permissions.codexApprovalPolicy>`
+  - `none` → no permission flags (Codex's own defaults)
+- `permissions.codexSandboxMode` (`read-only`, `workspace-write`, `danger-full-access`; default `workspace-write`) and `permissions.codexApprovalPolicy` (`untrusted`, `on-request`, `never`; default `on-request`) are only read in `custom` mode.
 - Headless runs use `codex exec`, which does not accept an approval flag, so only the sandbox flag is passed there.
 - Directories in `permissions.trustedExternalRoots` are passed to Codex as `--add-dir`.
 

@@ -102,6 +102,15 @@ suite("FileReferenceParser", () => {
       );
     });
 
+    test("preserves trailing accented and CJK letters while stripping punctuation", () => {
+      assert.deepStrictEqual(
+        parseAtReferences("See @docs/résumé, then @notes/日本語.").map(
+          (ref) => ref.path
+        ),
+        ["docs/résumé", "notes/日本語"]
+      );
+    });
+
     test("strips trailing backticks from inline-code @path references", () => {
       const refs = parseAtReferences("Check `@src/file.ts` in the prompt");
       assert.strictEqual(refs.length, 1);

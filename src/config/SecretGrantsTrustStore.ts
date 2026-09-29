@@ -78,6 +78,21 @@ export class SecretGrantsTrustStore {
     );
   }
 
+  /** Filter candidate names down to those without an explicit allow decision. */
+  getUnallowedGrants(
+    workspaceIdentity: string,
+    candidateNames: readonly string[]
+  ): string[] {
+    const identity =
+      SecretGrantsTrustStore.canonicalWorkspaceIdentity(workspaceIdentity);
+    const decisions = this.load().decisions;
+    return candidateNames.filter(
+      (name) =>
+        decisions[SecretGrantsTrustStore.keyFor(identity, name)] !==
+          TRUST_DECISIONS.ALLOW
+    );
+  }
+
   /** Record the same decision for a batch of grants in one write. */
   async setDecisions(
     workspaceIdentity: string,

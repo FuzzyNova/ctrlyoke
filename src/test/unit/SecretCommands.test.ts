@@ -377,7 +377,7 @@ suite("Secret command handlers", () => {
     }
   });
 
-  test("lists pending workflow grants and persists an injected decision store", async () => {
+  test("does not record denials for non-interactive trust grant requests", async () => {
     const tempRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-secret-grants-test-")
     );
@@ -386,7 +386,7 @@ suite("Secret command handlers", () => {
         path.join(tempRoot, "trust.json")
       );
       const io = new TestIo();
-      await trustSecretGrantsCommand(
+      const result = await trustSecretGrantsCommand(
         "workflow.ctrlyoke.yaml",
         {},
         {
@@ -407,13 +407,49 @@ suite("Secret command handlers", () => {
 
       assert.match(io.output.join("\n"), /FIRST_TOKEN/);
       assert.match(io.output.join("\n"), /SECOND_TOKEN/);
+      assert.strictEqual(result, 2);
       assert.strictEqual(
         trustStore.getDecision(tempRoot, "FIRST_TOKEN"),
-        "deny"
+        undefined
       );
       assert.strictEqual(
         trustStore.getDecision(tempRoot, "SECOND_TOKEN"),
-        "deny"
+        undefined
+      );
+      assert.match(io.errors.join("\n"), /No decisions were recorded/);
+    } finally {
+      await fs.rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("re-approves a previously denied grant with --yes", async () => {
+    const tempRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-secret-grants-test-")
+    );
+    try {
+      const trustStore = new SecretGrantsTrustStore(
+        path.join(tempRoot, "trust.json")
+      );
+      await trustStore.setDecisions(tempRoot, ["CI_TOKEN"], "deny");
+      const result = await trustSecretGrantsCommand(
+        "workflow.ctrlyoke.yaml",
+        { yes: true },
+        {
+          ...workflowDependencies(new InMemorySecretStore(), {
+            steps: [
+              { name: "deploy", secrets: ["CI_TOKEN"], prompt: "deploy" },
+            ],
+          }),
+          workspaceRoot: tempRoot,
+          secretGrantsTrustStore: trustStore,
+        },
+        new TestIo()
+      );
+
+      assert.strictEqual(result, 0);
+      assert.strictEqual(
+        trustStore.getDecision(tempRoot, "CI_TOKEN"),
+        "allow"
       );
     } finally {
       await fs.rm(tempRoot, { recursive: true, force: true });

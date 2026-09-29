@@ -2,7 +2,11 @@ import * as path from "path";
 import * as fs from "fs";
 import * as jsYaml from "js-yaml";
 import { Log } from "./Log";
-import { formatDisplayName, isAccessibleDirectory } from "./DiscoveryUtils";
+import {
+  formatDisplayName,
+  isAccessibleDirectory,
+  splitMarkdownFrontmatter,
+} from "./DiscoveryUtils";
 import {
   getHarnessAgentDirs,
   getCtrlYokeAgentDir,
@@ -41,17 +45,13 @@ interface AgentFrontmatter {
 
 /** Parse the supported display metadata from an agent's YAML frontmatter. */
 export function parseAgentFrontmatter(content: string): AgentFrontmatter {
-  if (!content.startsWith("---")) {
-    return {};
-  }
-
-  const closingIdx = content.indexOf("---", 3);
-  if (closingIdx === -1) {
+  const split = splitMarkdownFrontmatter(content);
+  if (!split) {
     return {};
   }
 
   try {
-    const parsed = jsYaml.load(content.slice(3, closingIdx));
+    const parsed = jsYaml.load(split.frontmatter);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return {};
     }

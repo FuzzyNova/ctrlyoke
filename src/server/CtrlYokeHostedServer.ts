@@ -73,6 +73,7 @@ import {
 } from "../ui/notifications/CompletionNotificationFactory";
 import { buildHostedServiceWorkerScript } from "./HostedServiceWorkerScript";
 import { buildHostedStandaloneShimScript } from "./HostedStandaloneShimScript";
+import { colorizeSvg } from "./IconColorizer";
 import {
   WebPushService,
   PushAccessDeniedError,
@@ -970,7 +971,27 @@ export class CtrlYokeHostedServer
     });
     // Register static files after the explicit HTML entry route so /index.html
     // receives the same token check and hosted-page patching as /.
-    this.app.use(express.static(webviewDist, { index: false }));
+    this.app.use(
+      (req, res, next) => {
+        let decodedPath = req.path;
+        try {
+          while (true) {
+            const nextPath = decodeURIComponent(decodedPath);
+            if (nextPath === decodedPath) break;
+            decodedPath = nextPath;
+          }
+        } catch {
+          return next();
+        }
+        const normalizedPath = path.posix.normalize(`/${decodedPath}`);
+        const staticPath = normalizedPath.toLowerCase();
+        if (staticPath === "/index.html" || staticPath === "/favicon.svg") {
+          return res.sendStatus(404);
+        }
+        return next();
+      },
+      express.static(webviewDist, { index: false })
+    );
     this.app.get("/api/workflow-files", requireToken, async (_req, res) => {
       const files = findWorkflowFilesInWorkspace(this.workspaceRoot);
       const trackedFiles = await getGitTrackedFiles(this.workspaceRoot).catch(
@@ -1912,10 +1933,11 @@ export class CtrlYokeHostedServer
         iconBgColor = ICON_BG_COLOR_DEFAULT,
         iconFgColor = ICON_FG_COLOR_DEFAULT,
       } = configService.getAll().server;
-      const svg = fs
-        .readFileSync(svgPath, "utf8")
-        .replace(new RegExp(ICON_BG_COLOR_DEFAULT, "gi"), iconBgColor)
-        .replace(new RegExp(ICON_FG_COLOR_DEFAULT, "gi"), iconFgColor);
+      const svg = colorizeSvg(
+        fs.readFileSync(svgPath, "utf8"),
+        iconBgColor,
+        iconFgColor
+      );
       this.setNoStore(res);
       res.type("image/svg+xml").send(svg);
     } catch {

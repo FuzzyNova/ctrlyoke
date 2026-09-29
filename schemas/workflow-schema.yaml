@@ -602,12 +602,14 @@ $defs:
           actual session ID used during execution.
       skills:
         description: >-
-          Portable ctrlyoke prompt attachments. ctrlyoke attaches each selected skill's content to
-          the prompt, so skills work the same on every harness. The Agents & Skills settings page
-          separately manages optional harness-native discovery directories whose behavior varies by
-          harness; native discovery does not determine workflow skills support. Prompt-level skills
-          replace workflow-level skills (no merging). Use null to explicitly disable inherited
-          skills.
+          Portable ctrlyoke prompt attachments. For skills found inside a trusted root, ctrlyoke
+          adds the skill name, path, and description to the prompt so the harness can read the
+          SKILL.md file when it uses the skill; skill files outside trusted roots are read and
+          embedded. This makes workflow skills available on every harness. The Agents & Skills
+          settings page separately manages optional harness-native discovery directories whose
+          behavior varies by harness; native discovery does not determine workflow skills support.
+          Prompt-level skills replace workflow-level skills (no merging). Use null to explicitly
+          disable inherited skills.
         $ref: '#/$defs/skills'
       secrets:
         description: >-

@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { isPositionInsideYamlBlockScalar } from "./YamlBlockScalarContext";
 import * as fs from "fs";
 import * as path from "path";
 import {
@@ -284,6 +285,17 @@ export class PromptPropertyCompletionProvider
 
     const line = document.lineAt(position.line).text;
     const textBeforeCursor = line.substring(0, position.character);
+
+    if (
+      isPositionInsideYamlBlockScalar(
+        (lineNumber) => document.lineAt(lineNumber).text,
+        position.line,
+        position.character,
+        "prompt"
+      )
+    ) {
+      return undefined;
+    }
 
     // Only provide completions when typing a property key.
     // A property key position looks like: "  keyName" (no colon yet, or cursor is before the colon)

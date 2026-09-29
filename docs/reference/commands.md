@@ -71,7 +71,7 @@ These menu items insert a reference into the dashboard's prompt editor. They are
 | Add Selection to ctrlyoke        | Editor and line-number context menus when text is selected                        |
 | Add Symbol to ctrlyoke           | Editor and line-number context menus when nothing is selected                     |
 | Add Output Selection to ctrlyoke | Output panel context menu when text is selected                                   |
-| Add Output Channel to ctrlyoke   | Output panel context menu with no selection, and the Output panel title bar       |
+| Add Output Channel to ctrlyoke   | Output panel context menu when no text is selected                                |
 | Add Commit to ctrlyoke           | Timeline view context menu on a Git commit                                        |
 
 ## Source Control

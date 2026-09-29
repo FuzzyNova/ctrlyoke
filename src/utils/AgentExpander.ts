@@ -2,6 +2,7 @@ import * as fs from "fs";
 import { AgentDiscovery, AgentInfo } from "./AgentDiscovery";
 import { Log } from "./Log";
 import { TtlCache } from "./TtlCache";
+import { splitMarkdownFrontmatter } from "./DiscoveryUtils";
 
 /**
  * AgentExpander
@@ -81,19 +82,13 @@ export class AgentExpander {
    * These fields are silently dropped and a warning is logged when present.
    */
   static stripFrontmatter(content: string, agentName: string): string {
-    if (!content.startsWith("---")) {
-      return content;
-    }
-
-    // Find the closing --- (must be at index > 3 to skip the opening ---)
-    const closingIdx = content.indexOf("---", 3);
-    if (closingIdx === -1) {
+    const split = splitMarkdownFrontmatter(content);
+    if (!split) {
       // Malformed frontmatter — return content as-is
       return content;
     }
 
-    const frontmatter = content.substring(3, closingIdx);
-    const body = content.substring(closingIdx + 3).trimStart();
+    const { frontmatter, body } = split;
 
     if (/^\s*model\s*:/m.test(frontmatter)) {
       Log.warn(
@@ -106,6 +101,6 @@ export class AgentExpander {
       );
     }
 
-    return body;
+    return body.trimStart();
   }
 }

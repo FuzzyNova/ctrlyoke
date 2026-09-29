@@ -161,7 +161,8 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         namedRoots,
         trustedRoots,
         approvedExternalRoots,
-        ownStateRoots
+        ownStateRoots,
+        sourceDefinitionDir
       )
     );
 
@@ -414,14 +415,20 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     };
 
     // Match quoted paths first (@"path with spaces/file.ext")
-    const quotedPattern = new RegExp(this.patterns.fullFileQuoted.source, "g");
+    const quotedPattern = new RegExp(
+      this.patterns.fullFileQuoted.source,
+      this.patterns.fullFileQuoted.flags
+    );
     let match: RegExpExecArray | null;
     while ((match = quotedPattern.exec(text)) !== null) {
       addFileLink(match);
     }
 
     // Match plain unquoted paths (@file.ext)
-    const plainPattern = new RegExp(this.patterns.fullFile.source, "g");
+    const plainPattern = new RegExp(
+      this.patterns.fullFile.source,
+      this.patterns.fullFile.flags
+    );
     while ((match = plainPattern.exec(text)) !== null) {
       addFileLink(match);
     }

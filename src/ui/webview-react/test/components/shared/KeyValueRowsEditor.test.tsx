@@ -246,12 +246,12 @@ describe("KeyValueRowsEditor", () => {
     ).toBeInTheDocument();
   });
 
-  it("surfaces variable case collisions", () => {
+  it("surfaces variable case collisions as errors", () => {
     renderEditor({ region: "one", REGION: "two" }, vi.fn(), {
       keyKind: KEY_VALUE_KEY_KINDS.VARIABLE,
     });
     expect(
-      screen.getAllByText("Another variable name differs only by case.")
+      screen.getAllByText(/Variable names must not differ only by case/)
     ).toHaveLength(2);
   });
 

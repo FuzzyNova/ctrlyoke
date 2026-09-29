@@ -30,7 +30,29 @@ export function parseHistoryTime(
   }
 
   if (ISO_HISTORY_TIME_PATTERN.test(normalized)) {
-    const timestamp = Date.parse(normalized);
+    const [, yearText, monthText, dayText] =
+      /^(\d{4})-(\d{2})-(\d{2})/.exec(normalized) ?? [];
+    const year = Number(yearText);
+    const month = Number(monthText);
+    const day = Number(dayText);
+    const daysInMonth =
+      month === 2
+        ? year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
+          ? 29
+          : 28
+        : [4, 6, 9, 11].includes(month)
+          ? 30
+          : 31;
+    if (month < 1 || month > 12 || day < 1 || day > daysInMonth) {
+      throw new Error(
+        `Invalid history time "${value}"; use an ISO-8601 timestamp or a relative value such as 7d, 24h, or 30m`
+      );
+    }
+    const utcDateTime =
+      normalized.includes("T") && !/(?:Z|[+-]\d{2}:\d{2})$/.test(normalized)
+        ? `${normalized}Z`
+        : normalized;
+    const timestamp = Date.parse(utcDateTime);
     if (Number.isFinite(timestamp)) {
       return timestamp;
     }

@@ -924,6 +924,41 @@ suite("HostedWorkspaceViewerService", function () {
 
   // ── searchWorkspace ──────────────────────────────────────────────────────
 
+  suite("discardFile", () => {
+    for (const multiRoot of [false, true]) {
+      test(
+        `refuses to discard an untracked workspace root (${multiRoot ? "multi-root" : "single-root"})`,
+        async () => {
+          const repository = createWorkspace();
+          runGit(repository, "init");
+          configureGitIdentity(repository);
+          commitFile(repository, "tracked.txt", "tracked\n", "initial");
+
+          const root = path.join(repository, "sub");
+          fs.mkdirSync(root);
+          const preciousFile = path.join(root, "precious.txt");
+          fs.writeFileSync(preciousFile, "keep me\n");
+          const viewerRoots = multiRoot
+            ? [
+                { name: "sub-root", fsPath: root },
+                { name: "other-root", fsPath: createWorkspace() },
+              ]
+            : [];
+          const service = new HostedWorkspaceViewerService(
+            root,
+            viewerRoots
+          );
+
+          await assert.rejects(
+            service.discardFile(multiRoot ? "sub-root" : ""),
+            /Path not allowed/
+          );
+          assert.strictEqual(fs.readFileSync(preciousFile, "utf8"), "keep me\n");
+        }
+      );
+    }
+  });
+
   suite("searchWorkspace", () => {
     test("returns filename and content matches with 1-based line numbers", async () => {
       const root = createWorkspace();
@@ -991,6 +1026,26 @@ suite("HostedWorkspaceViewerService", function () {
       ).searchWorkspace({ query: "needle", scope: "content" });
 
       assert.deepStrictEqual(result.results, []);
+    });
+
+    test("searches content when the trusted root is a directory junction", async () => {
+      const container = createWorkspace();
+      const target = path.join(container, "real");
+      const link = path.join(container, "linked");
+      fs.mkdirSync(target);
+      fs.writeFileSync(path.join(target, "notes.txt"), "junction needle\n");
+      fs.symlinkSync(target, link, "junction");
+
+      const result = await new HostedWorkspaceViewerService(
+        link
+      ).searchWorkspace({ query: "needle", scope: "content" });
+
+      assert.deepStrictEqual(
+        result.results.map((match) =>
+          match.kind === WORKSPACE_ENTRY_KINDS.CONTENT ? match.path : ""
+        ),
+        ["notes.txt"]
+      );
     });
 
     test("excludes ignored files unless explicitly requested", async () => {

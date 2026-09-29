@@ -149,6 +149,30 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
     });
   });
 
+  test("static fallback cannot serve encoded entry HTML or raw favicon", async () => {
+    await withServer(async (_root, port, token) => {
+      for (const requestPath of [
+        "/%69ndex.html",
+        "/index%2ehtml",
+        "/./index.html",
+      ]) {
+        const response = await sendGetRequest(port, requestPath);
+        assert.notStrictEqual(response.statusCode, 200, requestPath);
+        assert.ok(!response.body.includes("{{cspSource}}"), requestPath);
+      }
+
+      const encodedFavicon = await sendGetRequest(port, "/%66avicon.svg");
+      assert.notStrictEqual(encodedFavicon.statusCode, 200);
+
+      const authorizedEntry = await sendGetRequest(
+        port,
+        `/index.html?token=${token}`
+      );
+      assert.strictEqual(authorizedEntry.statusCode, 200);
+      assert.ok(!authorizedEntry.body.includes("{{cspSource}}"));
+    });
+  });
+
   test("returns credential files read-only with redacted content", async () => {
     await withServer(async (root, port, token) => {
       fs.writeFileSync(

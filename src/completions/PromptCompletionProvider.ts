@@ -3,7 +3,6 @@ import {
   COPILOT_CLI_MODEL_IDS,
   COPILOT_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
-import { Log } from "../utils/Log";
 import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
 import { findWordStartTriggerIndex } from "../utils/ReferenceBoundary";
 import {
@@ -16,6 +15,7 @@ import {
 } from "./CompletionHelpers";
 import type { SecretRegistryService } from "../ui/SecretRegistryService";
 import { PROMPT_FILE_LANGUAGE_IDS } from "../types/DashboardConstants";
+import { isPositionInsideYamlBlockScalar } from "./YamlBlockScalarContext";
 
 /**
  * Trigger character types for context-aware completions
@@ -280,91 +280,51 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     document: vscode.TextDocument,
     position: vscode.Position
   ): boolean {
-    const currentLine = position.line;
-    const currentLineText = document.lineAt(currentLine).text;
-
-    // Get current line indentation (handle empty/whitespace-only lines)
-    const currentIndent = currentLineText.search(/\S/);
-    const currentIndentActual =
-      currentIndent === -1 ? currentLineText.length : currentIndent;
-
-    Log.trace(
-      `[isInsideYamlPromptValue] Checking line ${currentLine}: "${currentLineText}" (indent=${currentIndentActual})`
-    );
-
-    // Search backwards for "prompt:" key (up to 50 lines)
-    for (let i = currentLine; i >= Math.max(0, currentLine - 50); i--) {
-      const lineText = document.lineAt(i).text;
-
-      // Check for "prompt:" (with optional leading spaces/dashes for list items)
-      const promptMatch = lineText.match(/^\s*-?\s*prompt:\s*(.*)$/);
-
-      if (promptMatch) {
-        const afterColon = promptMatch[1].trim();
-        const promptIndent = lineText.search(/\S/);
-
-        // Case 1: prompt: | or prompt: > (multi-line block scalar)
-        if (afterColon === "|" || afterColon === ">") {
-          if (i < currentLine) {
-            // We're on a line after the prompt: line
-            // For block scalars, content must be indented more than the key
-            // Empty lines are OK (stay in block)
-            if (currentLineText.trim() === "") {
-              return true;
-            }
-            // Non-empty lines must be indented more than prompt key
-            if (currentIndentActual > promptIndent) {
-              return true;
-            }
-            // Equal/less indentation = out of block
-            return false;
-          }
-          // We're on the prompt: line itself, after the | or >
-          // Allow completions here too (user typing on same line)
-          return (
-            position.character >
-            lineText.indexOf(afterColon) + afterColon.length
-          );
-        }
-
-        // Case 2: prompt: "inline string" or prompt: 'inline string'
-        if (afterColon.startsWith('"') || afterColon.startsWith("'")) {
-          return i === currentLine;
-        }
-
-        // Case 3: prompt: inline text without quotes
-        if (afterColon !== "") {
-          return i === currentLine;
-        }
-
-        // prompt: with nothing after (value on next line)
-        if (i < currentLine) {
-          // Check indentation - must be more indented
-          if (
-            currentLineText.trim() === "" ||
-            currentIndentActual > promptIndent
-          ) {
-            return true;
-          }
-        }
-
-        return false;
-      }
-
-      // Stop if we hit another YAML key at same/less indentation
-      // (we've moved out of the prompt block into another field)
-      if (i < currentLine && lineText.match(/^\s*-?\s*\w+:\s*/)) {
-        const lineIndent = lineText.search(/\S/);
-        if (lineIndent !== -1 && lineIndent <= currentIndentActual) {
-          return false;
-        }
-      }
+    const currentLineText = document.lineAt(position.line).text;
+    if (
+      isPositionInsideYamlBlockScalar(
+        (line) => document.lineAt(line).text,
+        position.line,
+        position.character,
+        "prompt"
+      )
+    ) {
+      return true;
     }
 
-    Log.trace(`[isInsideYamlPromptValue] No prompt: found, returning false`);
+    const currentPromptHeader = /^\s*(?:-\s+)?prompt:\s*(.*)$/.exec(
+      currentLineText
+    );
+    if (currentPromptHeader) {
+      return currentPromptHeader[1].trim() !== "";
+    }
+
+    for (
+      let line = position.line - 1;
+      line >= Math.max(0, position.line - 50);
+      line--
+    ) {
+      const text = document.lineAt(line).text;
+      const promptHeader = /^\s*(?:-\s+)?prompt:\s*(.*)$/.exec(text);
+      if (!promptHeader) continue;
+      if (promptHeader[1].trim() !== "") return false;
+
+      const promptIndent = text.indexOf("prompt");
+      for (
+        let contentLine = line + 1;
+        contentLine <= position.line;
+        contentLine++
+      ) {
+        const content = document.lineAt(contentLine).text;
+        if (content.trim() === "") continue;
+        const indent = content.search(/\S/);
+        if (indent <= promptIndent) return false;
+      }
+      return true;
+    }
+
     return false;
   }
-
   /**
    * Check if cursor position is inside a "prompt" string value (JSON files only)
    */

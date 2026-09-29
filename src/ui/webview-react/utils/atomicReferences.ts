@@ -731,7 +731,7 @@ export function findContextReferenceMatches(
     type: AtomicReferenceKind,
     target: ContextReferenceMatch[]
   ) => {
-    const regex = new RegExp(pattern.source, "g");
+    const regex = new RegExp(pattern.source, pattern.flags);
     while ((match = regex.exec(text)) !== null) {
       target.push({
         from: offset + match.index,
@@ -762,7 +762,7 @@ export function findContextReferenceMatches(
     directoryMatches
   );
   const collectLineRangeMatches = (pattern: RegExp) => {
-    const regex = new RegExp(pattern.source, "g");
+    const regex = new RegExp(pattern.source, pattern.flags);
     while ((match = regex.exec(text)) !== null) {
       lineRangeMatches.push({
         from: offset + match.index,
@@ -776,7 +776,7 @@ export function findContextReferenceMatches(
   };
   collectLineRangeMatches(patterns.lineRange);
   const collectSymbolMatches = (pattern: RegExp) => {
-    const regex = new RegExp(pattern.source, "g");
+    const regex = new RegExp(pattern.source, pattern.flags);
     while ((match = regex.exec(text)) !== null) {
       symbolMatches.push({
         from: offset + match.index,

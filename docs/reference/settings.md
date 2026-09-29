@@ -1018,14 +1018,6 @@ Automatically start the hosted dashboard server when the VS Code extension activ
 
 Port for the ctrlyoke hosted server.
 
-### `server.standalonePort` {#server-standaloneport}
-
-- **Type:** `integer`
-- **Default:** `4748`
-- **Constraints:** minimum 1 · maximum 65535
-
-Port for the standalone (non-extension) ctrlyoke server.
-
 ### `server.fallbackPorts` {#server-fallbackports}
 
 - **Type:** `integer[]`

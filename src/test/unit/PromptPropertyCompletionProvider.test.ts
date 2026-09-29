@@ -106,4 +106,28 @@ suite("PromptPropertyCompletionProvider", () => {
       schemaPropertyKeys("scriptStep")
     );
   });
+
+  test("does not offer step keys inside a prompt block scalar", async () => {
+    const document = await vscode.workspace.openTextDocument({
+      language: "yaml",
+      content: "steps:\n  - prompt: |\n      Summarize the diff and\n      mo",
+    });
+    const provider = new PromptPropertyCompletionProvider();
+    const tokenSource = new vscode.CancellationTokenSource();
+    try {
+      const line = document.lineAt(document.lineCount - 1);
+      const result = await provider.provideCompletionItems(
+        document,
+        new vscode.Position(document.lineCount - 1, line.text.length),
+        tokenSource.token,
+        {
+          triggerKind: vscode.CompletionTriggerKind.Invoke,
+          triggerCharacter: undefined,
+        }
+      );
+      assert.strictEqual(result, undefined);
+    } finally {
+      tokenSource.dispose();
+    }
+  });
 });

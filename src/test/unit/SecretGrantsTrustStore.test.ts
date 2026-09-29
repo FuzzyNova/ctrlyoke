@@ -50,6 +50,20 @@ suite("SecretGrantsTrustStore", () => {
     );
   });
 
+  test("getUnallowedGrants includes pending and denied names only", async () => {
+    await store.setDecisions(workspaceA, ["ALLOWED_TOKEN"], "allow");
+    await store.setDecisions(workspaceA, ["DENIED_TOKEN"], "deny");
+
+    assert.deepStrictEqual(
+      store.getUnallowedGrants(workspaceA, [
+        "ALLOWED_TOKEN",
+        "DENIED_TOKEN",
+        "PENDING_TOKEN",
+      ]),
+      ["DENIED_TOKEN", "PENDING_TOKEN"]
+    );
+  });
+
   test("decisions are isolated per workspace identity", async () => {
     await store.setDecisions(workspaceA, ["API_TOKEN"], "allow");
 

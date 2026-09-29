@@ -1,12 +1,15 @@
 import * as assert from "assert";
+import * as fs from "fs";
 import * as path from "path";
 import { suite, test } from "mocha";
+import { AgentExpander } from "../../utils/AgentExpander";
 import {
   AgentDiscovery,
   getBuiltInAgentsDirectoryCandidates,
   parseAgentFrontmatter,
 } from "../../utils/AgentDiscovery";
 import { DISCOVERY_SOURCES } from "../../types/DashboardConstants";
+import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 suite("AgentDiscovery", () => {
   test("reads agent name and folded description from YAML frontmatter", () => {
@@ -23,6 +26,37 @@ Agent instructions`);
       frontmatter.description,
       "Reviews a focused change and reports actionable findings without modifying files.\n"
     );
+  });
+
+  test("parses line-anchored frontmatter with inline fences and a BOM", async () => {
+    const content =
+      "\uFEFF---\nname: Reviewer\ndescription: Reviews diffs --- strictly\nmodel: gpt-5\n---\nAgent body";
+    const frontmatter = parseAgentFrontmatter(content);
+
+    assert.strictEqual(frontmatter.name, "Reviewer");
+    assert.strictEqual(frontmatter.description, "Reviews diffs --- strictly");
+    assert.strictEqual(
+      AgentExpander.stripFrontmatter(content, "reviewer"),
+      "Agent body"
+    );
+
+    const workspaceRoot = makeTempDir("ctrlyoke-bom-agent-");
+    const agentDirectory = path.join(workspaceRoot, ".github", "agents");
+    const agentPath = path.join(agentDirectory, "bom-agent.md");
+    try {
+      fs.mkdirSync(agentDirectory, { recursive: true });
+      fs.writeFileSync(agentPath, content);
+      const agents = await AgentDiscovery.discoverAgents(workspaceRoot);
+      const discovered = agents.find((agent) => agent.name === "bom-agent");
+
+      assert.ok(
+        discovered,
+        "BOM-prefixed plain Markdown agents are discovered"
+      );
+      assert.strictEqual(discovered?.description, "Reviews diffs --- strictly");
+    } finally {
+      removeTempDir(workspaceRoot);
+    }
   });
 
   test("resolves the esbuild extension bundle template location", () => {

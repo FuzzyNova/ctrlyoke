@@ -19,6 +19,13 @@ suite("HistoryTime", () => {
       );
     });
 
+    test("parses offset-less date-times as UTC", () => {
+      assert.strictEqual(
+        parseHistoryTime("2024-06-15T12:30", now),
+        Date.parse("2024-06-15T12:30:00Z")
+      );
+    });
+
     test("parses ISO date-times with Z and an offset", () => {
       assert.strictEqual(
         parseHistoryTime("2024-06-15T12:30:45Z", now),
@@ -37,6 +44,15 @@ suite("HistoryTime", () => {
           (error: Error) =>
             error.message ===
             `Invalid history time "${value}"; use an ISO-8601 timestamp or a relative value such as 7d, 24h, or 30m`
+        );
+      });
+    }
+
+    for (const value of ["2026-02-30", "2026-04-31", "2024-02-30T12:00Z"]) {
+      test(`rejects impossible calendar date ${JSON.stringify(value)}`, () => {
+        assert.throws(
+          () => parseHistoryTime(value, now),
+          /Invalid history time/
         );
       });
     }

@@ -1,9 +1,6 @@
 import * as fs from "fs";
 import { Log } from "../utils/Log";
-import {
-  ICON_BG_COLOR_DEFAULT,
-  ICON_FG_COLOR_DEFAULT,
-} from "../types/IconColorDefaults";
+import { colorizeSvg } from "./IconColorizer";
 import {
   requireRuntimePackage,
   resolveRuntimePackageFile,
@@ -76,10 +73,11 @@ class PngIconService {
   ): Promise<void> {
     await this.initWasmOnce();
     const { Resvg } = getResvgRuntimeModule();
-    const svgSource = fs
-      .readFileSync(svgPath, "utf8")
-      .replace(new RegExp(ICON_BG_COLOR_DEFAULT, "gi"), bgColor)
-      .replace(new RegExp(ICON_FG_COLOR_DEFAULT, "gi"), fgColor);
+    const svgSource = colorizeSvg(
+      fs.readFileSync(svgPath, "utf8"),
+      bgColor,
+      fgColor
+    );
 
     // 180×180 — apple-touch-icon (iOS homescreen)
     const resvgSmall = new Resvg(svgSource, {

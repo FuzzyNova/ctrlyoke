@@ -173,7 +173,7 @@ export function parseAtReferences(prompt: string): FileReference[] {
     // or / or \ (directory). Everything else is prose punctuation.
     // Handles mixed sequences like `).` that the old two-step approach missed.
     if (!quotedPath && filePath) {
-      filePath = filePath.replace(/[^a-zA-Z0-9/\\]+$/, "");
+      filePath = filePath.replace(/[^\p{L}\p{N}/\\]+$/u, "");
     }
 
     // Skip if path is empty or looks like a mention (@workspace, @user, etc.)

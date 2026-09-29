@@ -39,6 +39,10 @@ suite("ScriptCommandCompletionHelpers", () => {
   test("finds the replacement range for every documented segment shape", () => {
     const cases = [
       { text: "npm run te", expected: 8 },
+      { text: "npm run ", expected: 8 },
+      { text: "pnpm run ", expected: 9 },
+      { text: "yarn run ", expected: 9 },
+      { text: "npm run b", expected: 8 },
       { text: "npm te", expected: 0 },
       { text: "git st", expected: 0 },
       { text: "echo ok && npm r", expected: 11 },
@@ -76,6 +80,24 @@ suite("ScriptCommandCompletionHelpers", () => {
     assert.ok(
       npmRun.every((item) => item.detail?.startsWith("package.json script:"))
     );
+
+    for (const [command, position] of [
+      ["npm run ", 8],
+      ["pnpm run ", 9],
+      ["yarn run ", 9],
+    ] as const) {
+      const context = parseScriptCompletionContext(command, position);
+      const suggestions = await getScriptCommandCompletions(
+        root,
+        command,
+        position
+      );
+      assert.strictEqual(context.replacementStart, position, command);
+      assert.ok(
+        suggestions.some((item) => item.insertText === "build"),
+        `${command} should offer package script names`
+      );
+    }
 
     const npm = await getScriptCommandCompletions(root, "npm ", 4);
     assert.ok(npm.some((item) => item.insertText === "npm test"));

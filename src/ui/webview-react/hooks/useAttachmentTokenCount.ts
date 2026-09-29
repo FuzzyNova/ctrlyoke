@@ -77,8 +77,8 @@ function ensureGlobalListener(): void {
 
 /**
  * Extract all raw reference strings from prompt text.
- * Delegates to FileReferenceParser (single source of truth) and reconstructs
- * the original reference string from the parsed fields.
+ * Delegates to FileReferenceParser (single source of truth) and slices the
+ * original token so quoting and optional qualifiers remain intact.
  *
  * `stepCount` (steps preceding the edited prompt) is folded into prior-context
  * refs so `$previous` at different positions counts different prior output.
@@ -87,19 +87,23 @@ function extractRawReferences(promptText: string, stepCount: number): string[] {
   const refs: string[] = [];
 
   for (const ref of parseAtReferences(promptText)) {
-    refs.push(`@${ref.path}`);
+    if (ref.startOffset !== undefined && ref.endOffset !== undefined) {
+      refs.push(promptText.slice(ref.startOffset, ref.endOffset));
+    }
   }
 
   for (const ref of parseSelectionReferences(promptText)) {
-    refs.push(`#selection:${ref.path}:${ref.startLine}-${ref.endLine}`);
+    if (ref.startOffset !== undefined && ref.endOffset !== undefined) {
+      refs.push(promptText.slice(ref.startOffset, ref.endOffset));
+    }
   }
 
   for (const ref of parseSymbolReferences(promptText)) {
     // The line range is required — the extension-host counter re-parses this
     // string with parseSymbolReferences, whose regex needs `start-end`.
-    refs.push(
-      `#sym:${ref.path}:${ref.symbolName}:${ref.startLine}-${ref.endLine}`
-    );
+    if (ref.startOffset !== undefined && ref.endOffset !== undefined) {
+      refs.push(promptText.slice(ref.startOffset, ref.endOffset));
+    }
   }
 
   for (const ref of parseGitChangeReferences(promptText)) {

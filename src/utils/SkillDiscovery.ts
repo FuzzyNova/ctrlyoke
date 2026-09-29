@@ -3,7 +3,11 @@ import * as fs from "fs";
 import * as os from "os";
 import * as yaml from "js-yaml";
 import { Log } from "./Log";
-import { formatDisplayName, isAccessibleDirectory } from "./DiscoveryUtils";
+import {
+  formatDisplayName,
+  isAccessibleDirectory,
+  splitMarkdownFrontmatter,
+} from "./DiscoveryUtils";
 import {
   getHarnessSkillDirs,
   getCtrlYokeSkillDir,
@@ -245,7 +249,7 @@ export class SkillDiscovery {
       });
 
       for (const entry of entries) {
-        if (!entry.isDirectory()) {
+        if (!entry.isDirectory() && !entry.isSymbolicLink()) {
           continue;
         }
 
@@ -322,17 +326,15 @@ export class SkillDiscovery {
     try {
       const content = await fs.promises.readFile(skillFilePath, "utf-8");
 
-      if (!content.startsWith("---")) {
+      const split = splitMarkdownFrontmatter(content);
+      if (!split) {
         return "";
       }
 
-      const closingIdx = content.indexOf("---", 3);
-      if (closingIdx === -1) {
-        return "";
-      }
-
-      const frontmatterText = content.substring(3, closingIdx);
-      const frontmatter = yaml.load(frontmatterText) as Record<string, unknown>;
+      const frontmatter = yaml.load(split.frontmatter) as Record<
+        string,
+        unknown
+      >;
 
       return typeof frontmatter?.description === "string"
         ? frontmatter.description
