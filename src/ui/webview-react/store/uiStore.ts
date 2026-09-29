@@ -2066,6 +2066,11 @@ export const useUiStore = create<UiState & UiActions>()(
           )
             return state;
           const runRef = state.displayedViewAddress.runRef;
+          if (
+            state.executionRunRef !== null &&
+            state.executionRunRef !== runRef
+          )
+            return state;
           if (state.executionRunRef === runRef) return state;
           return {
             executionRunRef: runRef,

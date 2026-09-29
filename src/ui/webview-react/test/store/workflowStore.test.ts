@@ -14,6 +14,7 @@ import {
   EXECUTION_PHASES,
   OUTPUT_ACTIVITY_KINDS,
   getStreamingChunkKey,
+  parseStreamingChunkKey,
 } from "@/types/messages";
 import type { PromptStep, CliOutput } from "@/types/messages";
 import type {
@@ -317,6 +318,27 @@ describe("clearStreamingChunk", () => {
     expect(getStreamingChunkKey(0, undefined, 0, 0)).not.toBe(
       getStreamingChunkKey(0, undefined, 0, 1)
     );
+  });
+});
+
+describe("clearRuntimeStateFromStep", () => {
+  it("clears queue streaming chunks from the requested step onward", () => {
+    store().appendStreamingChunk(0, "keep");
+    store().appendStreamingChunk(3, "stale");
+
+    store().clearRuntimeStateFromStep(2);
+
+    expect(store().streamingChunks).toEqual({
+      [getStreamingChunkKey(0)]: "keep",
+    });
+  });
+
+  it("parses target kind and index from generated streaming chunk keys", () => {
+    expect(parseStreamingChunkKey(getStreamingChunkKey(3))).toEqual({
+      targetKind: FINAL_STEP_PHASES.QUEUE,
+      targetIndex: 3,
+    });
+    expect(parseStreamingChunkKey("not-a-streaming-key")).toBeNull();
   });
 });
 

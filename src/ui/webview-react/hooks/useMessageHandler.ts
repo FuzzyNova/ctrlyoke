@@ -499,6 +499,19 @@ function applyTerminalSetting(path: string, value: unknown): void {
   applyTerminalSettings(nextSettings);
 }
 
+function isDisplayingNonExecutingRun(
+  view: Pick<
+    ReturnType<typeof useUiStore.getState>,
+    "displayedViewAddress" | "executionRunRef"
+  >
+): boolean {
+  return (
+    view.displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
+    view.executionRunRef !== null &&
+    view.executionRunRef !== view.displayedViewAddress.runRef
+  );
+}
+
 /**
  * Single funnel for live execution-state transitions.
  *
@@ -2986,7 +2999,10 @@ export function createMessageHandlers(
     // If this is the currently active workflow, sync workflowStore so the
     // WorkflowStepsPanel stays in sync during CLI watch mode step advances.
     // WorkflowSummary.currentStep is 0-indexed (matches workflowStore.currentStep).
-    if (summary.id === uiStore.activeWorkflowId) {
+    if (
+      summary.id === uiStore.activeWorkflowId &&
+      !isDisplayingNonExecutingRun(uiStore)
+    ) {
       const workflowStore = useWorkflowStore.getState();
       workflowStore.setCurrentStep(summary.currentStep);
       workflowStore.setTotalSteps(summary.totalSteps);
@@ -3209,9 +3225,7 @@ export function useMessageHandler(): UseMessageHandlerReturn {
       // must remain usable while the editor browses history.
       if (
         message.workflowId &&
-        view.displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
-        view.executionRunRef !== null &&
-        view.executionRunRef !== view.displayedViewAddress.runRef &&
+        isDisplayingNonExecutingRun(view) &&
         message.type !== MESSAGE_TYPES.RUN_VIEW_LOADED &&
         !RUN_VIEW_INDEPENDENT_MESSAGE_TYPES.has(message.type)
       ) {

@@ -3112,6 +3112,100 @@ describe("history search messages", () => {
 });
 
 describe("active workflow summaries", () => {
+  it("updates recent rows but keeps an older displayed run isolated from live summaries", () => {
+    renderHook(() => useMessageHandler());
+    const olderRunRef = "run-2026-07-20T12-00-00-000Z" as never;
+    const executingRunRef = "run-2026-07-20T13-00-00-000Z" as never;
+    useUiStore.setState({
+      activeWorkflowId: "instance-1",
+      displayedViewAddress: {
+        workflowKey: "workflow-1" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: olderRunRef,
+      },
+      executionRunRef: executingRunRef,
+      recentWorkflows: [
+        {
+          address: {
+            workflowKey: "workflow-1" as never,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: olderRunRef,
+          },
+          workflowName: "Workflow",
+          executionState: EXECUTION_STATES.COMPLETED,
+          totalSteps: 2,
+        },
+      ],
+      runSummaries: [
+        {
+          workflowKey: "workflow-1",
+          runRef: olderRunRef,
+          runDirectory: "/runs/1",
+          runId: 1,
+          startedAt: 0,
+          executionState: EXECUTION_STATES.COMPLETED,
+          definitionRevision: 1,
+          stepCount: 2,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        } as never,
+      ],
+    });
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "wf.yaml",
+      steps: [makePrompt("Step 1"), makePrompt("Step 2")],
+      currentStep: 1,
+    });
+    useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.COMPLETED);
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, {
+        summary: {
+          id: "instance-1",
+          workflowKey: "workflow-1",
+          workflowName: "Workflow",
+          filePath: "wf.yaml",
+          executionState: EXECUTION_STATES.RUNNING,
+          currentStep: 0,
+          totalSteps: 5,
+        },
+      });
+    });
+
+    expect(useWorkflowStore.getState()).toMatchObject({
+      currentStep: 1,
+      totalSteps: 2,
+      executionState: EXECUTION_STATES.COMPLETED,
+    });
+    expect(useUiStore.getState().displayedViewAddress).toMatchObject({
+      runRef: olderRunRef,
+    });
+    expect(useUiStore.getState().executionRunRef).toBe(executingRunRef);
+    expect(useUiStore.getState().runSummaries[0]?.executionState).toBe(
+      EXECUTION_STATES.COMPLETED
+    );
+    expect(useUiStore.getState().recentWorkflows[0]?.executionState).toBe(
+      EXECUTION_STATES.RUNNING
+    );
+
+    useUiStore.getState().markExecutionRunStarted();
+    expect(useUiStore.getState().executionRunRef).toBe(executingRunRef);
+    expect(useUiStore.getState().runSummaries[0]?.executionState).toBe(
+      EXECUTION_STATES.COMPLETED
+    );
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.STEP_STATUS_CHANGED, {
+        workflowId: "instance-1",
+        stepIndex: 0,
+        status: { state: STEP_STATUS.RUNNING },
+      });
+    });
+    expect(useWorkflowStore.getState().steps[0]?.status).toBe(
+      STEP_STATUS.PENDING
+    );
+  });
+
   it("accepts a workflow binding while the displayed run's execution is unknown", () => {
     renderHook(() => useMessageHandler());
     useUiStore.setState({

@@ -4189,6 +4189,34 @@ export function getStreamingChunkKey(
   return `${targetKind}:${targetIndex}:run:${runIndex}:attempt:${attemptIndex}:${phase}:${kind}`;
 }
 
+export interface StreamingChunkKeyTarget {
+  targetKind: FinalStepPhase;
+  targetIndex: number;
+}
+
+/** Parse a streaming chunk key produced by getStreamingChunkKey. */
+export function parseStreamingChunkKey(
+  key: string
+): StreamingChunkKeyTarget | null {
+  const match = new RegExp(
+    `^(${FINAL_STEP_PHASES.QUEUE}|${FINAL_STEP_PHASES.FINAL_STEP}):(\\d+):run:\\d+:attempt:\\d+:[^:]+:[^:]+$`
+  ).exec(key);
+  if (!match) return null;
+
+  const targetKind = match[1];
+  if (
+    targetKind !== FINAL_STEP_PHASES.QUEUE &&
+    targetKind !== FINAL_STEP_PHASES.FINAL_STEP
+  ) {
+    return null;
+  }
+
+  return {
+    targetKind,
+    targetIndex: Number(match[2]),
+  };
+}
+
 /** Preserve legacy prompt keys while separating condition execution phases. */
 export function getExecutionPhaseKeySuffix(phase?: ExecutionPhase): string {
   return phase && phase !== EXECUTION_PHASES.PROMPT ? `:phase:${phase}` : "";
