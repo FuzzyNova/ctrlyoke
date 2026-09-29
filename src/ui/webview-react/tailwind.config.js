@@ -15,6 +15,8 @@ module.exports = {
     path.join(srcDir, "hooks/**/*.{ts,tsx}"),
     path.join(srcDir, "store/**/*.{ts,tsx}"),
     path.join(srcDir, "utils/**/*.{ts,tsx}"),
+    // Permission-mode visuals carry Tailwind color classes outside the webview tree
+    path.join(srcDir, "../../types/SchemaUiMetadata.ts"),
     // Scan Streamdown bundled classes for Tailwind to include them
     path.join(srcDir, "../../../node_modules/streamdown/dist/*.js"),
   ],

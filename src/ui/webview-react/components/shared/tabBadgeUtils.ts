@@ -15,6 +15,13 @@ export interface TabIconOverride {
   hoverColor?: string;
   /** Tailwind text-color class to apply when the tab is active; defaults to text-foreground */
   activeColor?: string;
+  /**
+   * Tailwind text-color class kept in every tab state, taking precedence over
+   * `color`/`hoverColor`/`activeColor`. Like the Harness tab's icon, the icon is
+   * dimmed while the tab is inactive and restored to full opacity on hover or
+   * selection, so a status color (e.g. yolo red) never drops out when selected.
+   */
+  statusColor?: string;
   /** Small secondary icon rendered in the lower-right corner of the tab's main icon. */
   badgeCodicon?: string;
   /** Tailwind text-color class for the badge icon. */
@@ -27,37 +34,29 @@ export const FOCUS_TAB_OVERRIDE: TabIconOverride = {
   activeColor: "text-focus-highlight",
 };
 
-type PermissionModeVisual = Required<
-  Pick<TabIconOverride, "codicon" | "color" | "hoverColor" | "activeColor">
->;
+type PermissionModeVisual = { codicon: string; color: string };
 
 /**
- * Full icon/color visual for every permission mode, including "none" — the
- * single source of truth for how permission state is drawn, shared by the
- * Permissions tab (DrawerTabBar/SegmentedTabBar) and PermissionsQuickPicker.
- */
-/**
- * Resolves the icon/color visual for a permission mode, always falling back
- * to the "none" look for an unrecognized mode. Unlike `getPermissionTabOverride`,
- * this never returns undefined — callers that need their own dimmed/inherited
- * treatment (e.g. PermissionsQuickPicker) can rely on getting a real color back
- * for every mode, including "none".
+ * Resolves the icon/color visual for a permission mode — the single source of
+ * truth for how permission state is drawn, shared by the Permissions tab
+ * (DrawerTabBar/SegmentedTabBar) and PermissionsQuickPicker. Always falls back
+ * to the "none" look for an unrecognized mode, so unlike
+ * `getPermissionTabOverride` this never returns undefined — callers that need
+ * their own dimmed/inherited treatment (e.g. PermissionsQuickPicker) get a
+ * real color back for every mode, including "none".
  */
 export function getPermissionModeVisual(mode: string): PermissionModeVisual {
   const visual =
     PERMISSION_MODE_OPTIONS_META[
       mode as keyof typeof PERMISSION_MODE_OPTIONS_META
     ]?.visual ?? PERMISSION_MODE_OPTIONS_META[PERMISSION_MODES.NONE].visual!;
-  return {
-    codicon: visual.codicon,
-    color: visual.color,
-    hoverColor: visual.hoverColor ?? "hover:text-foreground",
-    activeColor: visual.activeColor ?? "text-foreground",
-  };
+  return { codicon: visual.codicon, color: visual.color };
 }
 
-/** Per-mode icon shape/color for the Permissions tab. None returns undefined. */
-function permissionModeIconOverride(mode: string): TabIconOverride | undefined {
+/** Per-mode visual for the Permissions tab. None returns undefined. */
+function permissionModeVisualOrNone(
+  mode: string
+): PermissionModeVisual | undefined {
   if (mode === PERMISSION_MODES.NONE) {
     return undefined;
   }
@@ -74,7 +73,11 @@ export function getPermissionTabOverride(
   mode: string,
   hasCompatibilityWarning = false
 ): TabIconOverride | undefined {
-  const modeOverride = permissionModeIconOverride(mode);
+  const visual = permissionModeVisualOrNone(mode);
+  const modeOverride: TabIconOverride | undefined = visual && {
+    codicon: visual.codicon,
+    statusColor: visual.color,
+  };
   if (!hasCompatibilityWarning) {
     return modeOverride;
   }
@@ -95,14 +98,14 @@ export function getPermissionTabOverride(
 export function getPermissionModeBadge(
   mode: string
 ): Pick<TabIconOverride, "badgeCodicon" | "badgeColor"> | undefined {
-  const modeOverride = permissionModeIconOverride(mode);
-  if (!modeOverride?.color) {
+  const visual = permissionModeVisualOrNone(mode);
+  if (!visual) {
     return undefined;
   }
 
   return {
     badgeCodicon: "shield",
-    badgeColor: modeOverride.color,
+    badgeColor: visual.color,
   };
 }
 

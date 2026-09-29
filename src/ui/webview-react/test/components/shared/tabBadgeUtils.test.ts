@@ -45,9 +45,7 @@ describe("permission tab badges", () => {
 
     expect(override).toEqual({
       codicon: "workspace-untrusted",
-      color: "text-error-fg",
-      hoverColor: "hover:text-terminal-ansiBrightRed",
-      activeColor: "text-terminal-ansiBrightRed",
+      statusColor: "text-error-fg",
       badgeCodicon: "warning",
       badgeColor: "text-warning-fg",
     });
@@ -76,8 +74,6 @@ describe("permission tab badges", () => {
     expect(getPermissionModeVisual(PERMISSION_MODES.NONE)).toEqual({
       codicon: "workspace-trusted",
       color: "text-description-fg",
-      hoverColor: "hover:text-foreground",
-      activeColor: "text-foreground",
     });
   });
 

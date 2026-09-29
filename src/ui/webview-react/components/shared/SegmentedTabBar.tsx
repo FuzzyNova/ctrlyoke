@@ -55,13 +55,23 @@ export function SegmentedTabBar<Id extends string>({
         const accessibleLabel =
           count === undefined ? tab.label : `${tab.label}, ${count} matches`;
         const codicon = override?.codicon ?? tab.codicon;
-        const overrideColor = !isActive ? override?.color : undefined;
-        const inactiveColor = overrideColor ?? "text-description-fg";
-        const activeColor = override?.activeColor ?? "text-foreground";
+        const statusColor = override?.statusColor;
+        const inactiveColor =
+          statusColor ?? override?.color ?? "text-description-fg";
+        const activeColor =
+          statusColor ?? override?.activeColor ?? "text-foreground";
+        const hoverColor = statusColor
+          ? ""
+          : (override?.hoverColor ?? "hover:text-foreground");
         const hoverClass = !isActive
-          ? (override?.hoverColor ?? "hover:text-foreground") +
-            " hover:border-b-panel-border"
+          ? `${hoverColor} hover:border-b-panel-border`
           : "";
+        // A status color stays on in every state; like the Harness tab's
+        // icon, it is only dimmed while the tab is neither selected nor hovered.
+        const iconOpacity =
+          statusColor && !isActive
+            ? "opacity-80 group-hover:opacity-100 transition-opacity"
+            : "";
 
         return (
           <button
@@ -71,7 +81,7 @@ export function SegmentedTabBar<Id extends string>({
             aria-label={accessibleLabel}
             role="tab"
             aria-selected={isActive}
-            className={`cy-tab-hc${isActive ? " cy-tab-hc-selected" : ""} relative flex-1 flex items-center justify-center py-2 transition-colors cursor-pointer border-b-2 ${
+            className={`cy-tab-hc${isActive ? " cy-tab-hc-selected" : ""} group relative flex-1 flex items-center justify-center py-2 transition-colors cursor-pointer border-b-2 ${
               isActive
                 ? `border-b-focus-border ${activeColor}`
                 : `border-b-transparent ${inactiveColor} ${hoverClass}${tab.placeholder ? " opacity-60" : ""}`
@@ -80,7 +90,11 @@ export function SegmentedTabBar<Id extends string>({
           >
             {codicon ? (
               <span className="relative inline-flex">
-                <Icon name={codicon} style={{ fontSize: 20 }} />
+                <Icon
+                  name={codicon}
+                  className={iconOpacity}
+                  style={{ fontSize: 20 }}
+                />
                 {override?.badgeCodicon ? (
                   <span
                     aria-hidden="true"

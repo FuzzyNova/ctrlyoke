@@ -66,9 +66,8 @@ export interface SchemaOptionMeta<V extends string> {
   alias?: { reason: string };
   visual?: {
     codicon: string;
+    /** Tailwind text-color class; see the tailwind.config.js content globs. */
     color: string;
-    hoverColor?: string;
-    activeColor?: string;
   };
   short?: string;
   pseudo?: { writes: string } | { omit: true };
@@ -107,8 +106,6 @@ export const PERMISSION_MODE_OPTIONS_META: Record<
     visual: {
       codicon: "workspace-untrusted",
       color: "text-error-fg",
-      hoverColor: "hover:text-terminal-ansiBrightRed",
-      activeColor: "text-terminal-ansiBrightRed",
     },
   },
   [PERMISSION_MODES.ALLOW_ALL]: {
@@ -118,8 +115,6 @@ export const PERMISSION_MODE_OPTIONS_META: Record<
     visual: {
       codicon: "workspace-trusted",
       color: "text-warning-fg",
-      hoverColor: "hover:text-terminal-ansiBrightYellow",
-      activeColor: "text-terminal-ansiBrightYellow",
     },
   },
   [PERMISSION_MODES.CUSTOM]: {
@@ -129,8 +124,6 @@ export const PERMISSION_MODE_OPTIONS_META: Record<
     visual: {
       codicon: "workspace-trusted",
       color: "text-terminal-ansiGreen",
-      hoverColor: "hover:text-terminal-ansiBrightGreen",
-      activeColor: "text-terminal-ansiBrightGreen",
     },
   },
   [PERMISSION_MODES.NONE]: {
@@ -140,8 +133,6 @@ export const PERMISSION_MODE_OPTIONS_META: Record<
     visual: {
       codicon: "workspace-trusted",
       color: "text-description-fg",
-      hoverColor: "hover:text-foreground",
-      activeColor: "text-foreground",
     },
   },
 };

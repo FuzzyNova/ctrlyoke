@@ -78,6 +78,51 @@ describe("SegmentedTabBar", () => {
     expect(details.querySelector(".codicon")).toHaveClass("codicon-warning");
   });
 
+  it("keeps a status color in every state, dimming the icon only while inactive", () => {
+    const { rerender } = render(
+      <SegmentedTabBar
+        tabs={tabs}
+        activeTab="summary"
+        onTabChange={vi.fn()}
+        ariaLabel="Test properties"
+        tabOverrides={{
+          details: {
+            codicon: "workspace-untrusted",
+            statusColor: "text-error-fg",
+          },
+        }}
+      />
+    );
+
+    let details = screen.getByRole("tab", { name: "Details" });
+    expect(details).toHaveClass("text-error-fg", "group");
+    expect(details).not.toHaveClass("hover:text-foreground");
+    expect(details.querySelector(".codicon")).toHaveClass(
+      "opacity-80",
+      "group-hover:opacity-100"
+    );
+
+    rerender(
+      <SegmentedTabBar
+        tabs={tabs}
+        activeTab="details"
+        onTabChange={vi.fn()}
+        ariaLabel="Test properties"
+        tabOverrides={{
+          details: {
+            codicon: "workspace-untrusted",
+            statusColor: "text-error-fg",
+          },
+        }}
+      />
+    );
+
+    details = screen.getByRole("tab", { name: "Details" });
+    expect(details).toHaveClass("text-error-fg");
+    expect(details).not.toHaveClass("text-foreground");
+    expect(details.querySelector(".codicon")).not.toHaveClass("opacity-80");
+  });
+
   it("marks the active tab with the active underline and color", () => {
     render(
       <SegmentedTabBar
