@@ -14,6 +14,7 @@ import { QwenLogParser } from "../../../core/harness/qwen/QwenLogParser";
 import { AntigravityLogParser } from "../../../core/harness/antigravity/AntigravityLogParser";
 import {
   UniversalCliOutput,
+  CliEvent,
   ToolCall,
   ThinkingBlock,
   TextData,
@@ -21,6 +22,7 @@ import {
   FileReadData,
   AskUserQuestionData,
   BashCommandData,
+  McpToolCallData,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -34,6 +36,7 @@ import {
   ILogParser,
 } from "../../../core/harness/shared/interfaces/ILogParser";
 import { CliParseUtils } from "../../../core/harness/shared/CliParseUtils";
+import { CliEventMapper } from "../../../core/harness/shared/CliEventMapper";
 import { normalizeCliEvents } from "../../../utils/CliEventNormalizer";
 import { OPENCODE_EVENT_TYPES } from "../../../core/harness/opencode/OpenCodeProtocolConstants";
 import {
@@ -2247,6 +2250,131 @@ suite("CopilotLogParser", () => {
 
   setup(() => {
     parser = new CopilotLogParser();
+  });
+
+  test("normalizes Copilot tool start, completion, and result triples into one row", () => {
+    const scenarios = [
+      {
+        toolCallId: "call_mcp_claim",
+        toolName: "ctrlyoke-claim_paths",
+        arguments: { paths: ["a.txt"], reason: "probe" },
+        output: "claimed",
+      },
+      {
+        toolCallId: "call_report_intent",
+        toolName: "report_intent",
+        arguments: { intent: "review" },
+        output: "reported",
+      },
+    ];
+
+    for (const scenario of scenarios) {
+      const copilotEvents: BaseCliEvent[] = [
+        {
+          type: "tool.execution_start",
+          data: {
+            toolCallId: scenario.toolCallId,
+            toolName: scenario.toolName,
+            arguments: scenario.arguments,
+            ...(scenario.toolName === "ctrlyoke-claim_paths" && {
+              toolTitle: "claim_paths",
+              mcpServerName: "ctrlyoke",
+              mcpConfigServerName: "ctrlyoke",
+              mcpTransport: "stdio",
+              mcpConfigSource: "user",
+              mcpToolName: "claim_paths",
+            }),
+          },
+          timestamp: 1,
+        },
+        {
+          type: "tool.execution_complete",
+          data: {
+            toolCallId: scenario.toolCallId,
+            success: true,
+            result: { content: scenario.output },
+          },
+          timestamp: 2,
+        },
+      ];
+      const streamingParser = new CopilotLogParser();
+      const mappedEvents: CliEvent[] = copilotEvents.flatMap((event) =>
+        streamingParser.extractStructuredEventsFromEvent(event)
+      );
+
+      const normalized = normalizeCliEvents(mappedEvents);
+
+      assert.strictEqual(normalized.length, 1, scenario.toolName);
+      const toolCall = normalized[0].data as ToolCall;
+      assert.deepStrictEqual(toolCall.parameters, scenario.arguments);
+      assert.deepStrictEqual(toolCall.result, {
+        success: true,
+        output: scenario.output,
+        error: undefined,
+      });
+      assert.strictEqual(
+        normalized[0].type === CLI_EVENT_TYPES.MCP_TOOL_CALL
+          ? (normalized[0].data as { toolCallId?: string }).toolCallId
+          : toolCall.id,
+        scenario.toolCallId
+      );
+    }
+  });
+
+  test("classifies Copilot MCP calls from the structured identity fixture", () => {
+    const fixturePath = path.resolve(
+      __dirname,
+      "../../../../src/test/fixtures/copilot/mcp-tool-call.jsonl"
+    );
+    const rawEvents = fs
+      .readFileSync(fixturePath, "utf8")
+      .trim()
+      .split(/\r?\n/)
+      .map((line) => JSON.parse(line) as BaseCliEvent);
+    const streamingParser = new CopilotLogParser();
+    const mappedEvents = rawEvents.flatMap((event) =>
+      streamingParser.extractStructuredEventsFromEvent(event)
+    );
+
+    const normalized = normalizeCliEvents(mappedEvents);
+    const mcpCalls = normalized.filter(
+      (event) => event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL
+    );
+    const genericCalls = normalized.filter(
+      (event) => event.type === CLI_EVENT_TYPES.TOOL_CALL
+    );
+
+    assert.strictEqual(mcpCalls.length, 1);
+    assert.deepStrictEqual(mcpCalls[0].data, {
+      server: "ctrlyoke",
+      tool: "claim_paths",
+      toolCallId: "call_qcLN4uT6",
+      parameters: { paths: ["a.txt"], reason: "probe" },
+      result: {
+        success: true,
+        output: "claimed paths: a.txt",
+        error: undefined,
+      },
+    });
+    assert.strictEqual(genericCalls.length, 0);
+    assert.ok(
+      !normalized.some(
+        (event) =>
+          event.type === CLI_EVENT_TYPES.TOOL_CALL &&
+          (event.data as ToolCall).name === "ctrlyoke-claim_paths"
+      )
+    );
+  });
+
+  test("keeps hyphenated generic tool names generic and legacy MCP names parsed", () => {
+    assert.deepStrictEqual(CliEventMapper.classifyTool("my-custom-tool"), {
+      type: CLI_EVENT_TYPES.TOOL_CALL,
+    });
+    assert.deepStrictEqual(CliEventMapper.classifyTool("ctrlyoke(claim_paths)"), {
+      type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+      server: "ctrlyoke",
+      tool: "claim_paths",
+    });
   });
 
   suite("headless golden output", () => {
@@ -5476,6 +5604,30 @@ suite("OpenCodeLogParser", () => {
     parser = new OpenCodeLogParser();
   });
 
+  test("parses the captured hyphenated MCP server name as one normalized row", () => {
+    const fixturePath = path.join(
+      __dirname,
+      "../../../../src/test/fixtures/opencode/hyphenated-mcp-server.stdout.jsonl"
+    );
+    const fixtureLine = fs.readFileSync(fixturePath, "utf8").trim();
+    const event = JSON.parse(fixtureLine) as BaseCliEvent;
+    parser.setAttachedMcpServerIds(new Set(["ctrlyoke", "ctrlyoke-commit"]));
+
+    const response = parser.extractResponse([event]);
+    const normalized = normalizeCliEvents(response.events);
+    const mcpRows = normalized.filter(
+      (row) => row.type === CLI_EVENT_TYPES.MCP_TOOL_CALL
+    );
+
+    assert.strictEqual(mcpRows.length, 1);
+    const data = mcpRows[0].data as McpToolCallData;
+    assert.strictEqual(data.server, "ctrlyoke-commit");
+    assert.strictEqual(data.tool, "global_status");
+    assert.strictEqual(data.toolCallId, "call_opencode_global_status_1");
+    assert.strictEqual(data.result?.success, true);
+    assert.ok(data.result?.output?.includes('"workspaceRoot": "<workspace>"'));
+  });
+
   suite("extractResponse token attribution", () => {
     test("captures reasoning and cache writes while preserving last-step context", () => {
       const response = parser.extractResponse([
@@ -6019,6 +6171,67 @@ suite("OpenCodeLogParser", () => {
 // ============================================================================
 
 suite("QwenLogParser", () => {
+  test("unwraps Qwen's MCP tool_call envelope and pairs its result", () => {
+    const parser = new QwenLogParser();
+    const output = parser.extractResponse([
+      {
+        type: QWEN_EVENT_TYPES.ASSISTANT,
+        message: {
+          role: "assistant",
+          parts: [
+            {
+              functionCall: {
+                id: "qwen-mcp-call",
+                name: "tool_call",
+                args: {
+                  name: "mcp__ctrlyoke__claim_paths",
+                  arguments: { paths: ["probe.txt"], reason: "fixture" },
+                },
+              },
+            },
+          ],
+        },
+      } as BaseCliEvent,
+      {
+        type: QWEN_EVENT_TYPES.TOOL_RESULT,
+        message: {
+          role: "tool",
+          parts: [
+            {
+              functionResponse: {
+                id: "qwen-mcp-call",
+                name: "tool_call",
+                response: { output: "claimed probe.txt" },
+              },
+            },
+          ],
+        },
+      } as BaseCliEvent,
+    ]);
+
+    const normalized = normalizeCliEvents(output.events);
+    const mcpCalls = normalized.filter(
+      (event) => event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL
+    );
+    assert.strictEqual(mcpCalls.length, 1);
+    assert.deepStrictEqual(mcpCalls[0].data, {
+      server: "ctrlyoke",
+      tool: "claim_paths",
+      toolCallId: "qwen-mcp-call",
+      parameters: { paths: ["probe.txt"], reason: "fixture" },
+      result: {
+        success: true,
+        output: "claimed probe.txt",
+        error: undefined,
+      },
+    });
+    assert.strictEqual(
+      normalized.filter((event) => event.type === CLI_EVENT_TYPES.TOOL_CALL)
+        .length,
+      0
+    );
+  });
+
   suite("headless golden output", () => {
     test("maps the real stdout/log pair and preserves richer log semantics", () => {
       const fixtureRoot = path.resolve(

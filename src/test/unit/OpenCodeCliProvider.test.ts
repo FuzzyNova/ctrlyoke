@@ -14,12 +14,16 @@ import {
   OPENCODE_RESUME_PROMPT_ENV,
 } from "../../core/harness/opencode/OpenCodeProtocolConstants";
 import { CliResponseCollector } from "../../core/harness/shared/CliResponseCollector";
+import type { BaseCliEvent } from "../../core/harness/shared/interfaces/ILogParser";
 import { Log } from "../../utils/Log";
 import {
   RunSecretRedactor,
   secretRedactionService,
 } from "../../utils/SecretRedactionService";
-import { PERMISSION_MODES } from "../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  PERMISSION_MODES,
+} from "../../types/DashboardConstants";
 
 suite("OpenCodeCliProvider", () => {
   function collisionContext(
@@ -174,6 +178,43 @@ suite("OpenCodeCliProvider", () => {
       environment: { SAFE: "value" },
     });
     assert.strictEqual(config.mcp?.unsafe, undefined);
+  });
+
+  test("passes prepared MCP server ids to the execution log parser", async () => {
+    const provider = new OpenCodeCliProvider();
+    const preparation = await provider.planMcpConfigArgs(
+      "mcp-server.js",
+      "workspace",
+      undefined,
+      undefined,
+      [{ id: "ctrlyoke-commit", command: "node", args: ["server.js"] }]
+    );
+    for (const mutation of preparation.mutations) {
+      await mutation.apply();
+    }
+
+    assert.deepStrictEqual(
+      [...provider.getAttachedMcpServerIds()].sort(),
+      ["ctrlyoke", "ctrlyoke-commit"]
+    );
+    const events = provider.logParser.extractStructuredEventsFromEvent({
+      type: "tool_use",
+      part: {
+        tool: "ctrlyoke-commit_claim_paths",
+        callID: "call_provider_mcp",
+        state: { status: "completed", input: {}, output: "ok" },
+      },
+    } as unknown as BaseCliEvent);
+
+    assert.strictEqual(events.length, 1);
+    assert.strictEqual(events[0].type, CLI_EVENT_TYPES.MCP_TOOL_CALL);
+    assert.deepStrictEqual(events[0].data, {
+      server: "ctrlyoke-commit",
+      tool: "claim_paths",
+      toolCallId: "call_provider_mcp",
+      parameters: {},
+      result: { success: true, output: "ok" },
+    });
   });
 
   test("refuses to expose an oversized inline config", async () => {

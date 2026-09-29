@@ -10,6 +10,7 @@ import type {
   CompactionTrigger,
   CallerType,
   HarnessId,
+  McpCallVia,
   TokenTotalConfidence,
 } from "./DashboardConstants";
 
@@ -461,6 +462,10 @@ export interface McpToolCallData {
   server: string;
   /** Tool name */
   tool: string;
+  /** How the tool call was issued, when known */
+  via?: McpCallVia;
+  /** Tool call ID used to correlate this call with its result */
+  toolCallId?: string;
   /** Tool parameters */
   parameters?: Record<string, unknown>;
   /** Tool result (optional) */

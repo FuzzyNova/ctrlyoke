@@ -1,4 +1,10 @@
 /** Wire-level values from Copilot CLI's JSONL event protocol. */
+export interface CopilotMcpToolIdentity {
+  mcpServerName?: string;
+  mcpConfigServerName?: string;
+  mcpToolName?: string;
+}
+
 export const COPILOT_EVENT_TYPES = {
   RESULT: "result",
   SESSION_INFO: "session.info",

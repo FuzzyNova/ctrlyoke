@@ -4,11 +4,13 @@ import type {
   CliEvent,
   FileEditData,
   FileReadData,
+  McpToolCallData,
   ToolCall,
   WebSearchData,
 } from "../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
+  MCP_CALL_VIA,
   OPERATION_STATUS,
 } from "../../types/DashboardConstants";
 import { normalizeCliEvents } from "../../utils/CliEventNormalizer";
@@ -252,6 +254,167 @@ suite("CliEventNormalizer", () => {
       normalized.every(
         (e) => (e.data as FileEditData).status === OPERATION_STATUS.COMPLETED
       )
+    );
+  });
+
+  test("pairs concurrent MCP completions by call id when results arrive in reverse order", () => {
+    const initiated = (toolCallId: string, timestamp: number): CliEvent => ({
+      type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+      timestamp,
+      data: {
+        server: "ctrlyoke",
+        tool: "claim_paths",
+        toolCallId,
+        parameters: { call: toolCallId },
+      } as McpToolCallData,
+    });
+    const completed = (
+      toolCallId: string,
+      output: string,
+      timestamp: number
+    ): CliEvent => ({
+      type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+      timestamp,
+      data: {
+        server: "ctrlyoke",
+        tool: "claim_paths",
+        toolCallId,
+        result: { success: true, output },
+      } as McpToolCallData,
+    });
+
+    const normalized = normalizeCliEvents([
+      initiated("call_a", 1),
+      initiated("call_b", 2),
+      completed("call_b", "result b", 3),
+      completed("call_a", "result a", 4),
+    ]);
+
+    assert.strictEqual(normalized.length, 2);
+    const rows = normalized.map((event) => event.data as McpToolCallData);
+    assert.deepStrictEqual(
+      rows.map(({ toolCallId, parameters, result }) => ({
+        toolCallId,
+        parameters,
+        result: result?.output,
+      })),
+      [
+        {
+          toolCallId: "call_a",
+          parameters: { call: "call_a" },
+          result: "result a",
+        },
+        {
+          toolCallId: "call_b",
+          parameters: { call: "call_b" },
+          result: "result b",
+        },
+      ]
+    );
+  });
+
+  test("keeps completion parameters when the initiated MCP call carried none", () => {
+    const normalized = normalizeCliEvents([
+      {
+        type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+        timestamp: 1,
+        data: {
+          server: "ctrlyoke",
+          tool: "claim_paths",
+          toolCallId: "call_c",
+        } as McpToolCallData,
+      },
+      {
+        type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+        timestamp: 2,
+        data: {
+          server: "ctrlyoke",
+          tool: "claim_paths",
+          toolCallId: "call_c",
+          parameters: { paths: ["a.txt"] },
+          result: { success: true, output: "ok" },
+        } as McpToolCallData,
+      },
+    ]);
+
+    assert.strictEqual(normalized.length, 1);
+    const data = normalized[0].data as McpToolCallData;
+    assert.deepStrictEqual(data.parameters, { paths: ["a.txt"] });
+    assert.strictEqual(data.result?.output, "ok");
+  });
+
+  test("normalizes a skill-mode bash start, completion, and result into one MCP row", () => {
+    const command =
+      `node "C:\\repo\\out\\mcp-server.js" --tool post_note --args '{"text":"hello"}' --workspace "C:\\repo"`;
+    const normalized = normalizeCliEvents([
+      {
+        type: CLI_EVENT_TYPES.BASH_COMMAND,
+        timestamp: 1,
+        data: {
+          command,
+          status: OPERATION_STATUS.INITIATED,
+          toolCallId: "skill_call_1",
+        } as BashCommandData,
+      },
+      {
+        type: CLI_EVENT_TYPES.BASH_COMMAND,
+        timestamp: 2,
+        data: {
+          command,
+          output: '{"success":true}',
+          exitCode: 0,
+          status: OPERATION_STATUS.COMPLETED,
+          toolCallId: "skill_call_1",
+        } as BashCommandData,
+      },
+      {
+        type: CLI_EVENT_TYPES.TOOL_RESULT,
+        timestamp: 3,
+        data: {
+          toolCallId: "skill_call_1",
+          result: { success: true, output: '{"success":true}' },
+        },
+      },
+    ]);
+
+    assert.strictEqual(normalized.length, 1);
+    assert.strictEqual(normalized[0].type, CLI_EVENT_TYPES.MCP_TOOL_CALL);
+    const data = normalized[0].data as McpToolCallData;
+    assert.strictEqual(data.server, "ctrlyoke");
+    assert.strictEqual(data.tool, "post_note");
+    assert.deepStrictEqual(data.parameters, { text: "hello" });
+    assert.strictEqual(data.toolCallId, "skill_call_1");
+    assert.strictEqual(data.via, MCP_CALL_VIA.SKILL);
+    assert.strictEqual(data.result?.output, '{"success":true}');
+  });
+
+  test("keeps a result-bearing tool call with an unknown id as its own row", () => {
+    const initiated: CliEvent = {
+      type: CLI_EVENT_TYPES.TOOL_CALL,
+      timestamp: 1,
+      data: { name: "report_intent", id: "known", parameters: { a: 1 } },
+    };
+    const unknownCompletion: CliEvent = {
+      type: CLI_EVENT_TYPES.TOOL_CALL,
+      timestamp: 2,
+      data: {
+        name: "report_intent",
+        id: "unknown",
+        parameters: { a: 2 },
+        result: { success: true, output: "done" },
+      },
+    };
+
+    const normalized = normalizeCliEvents([initiated, unknownCompletion]);
+
+    assert.strictEqual(normalized.length, 2);
+    assert.strictEqual(
+      (normalized[0].data as ToolCall).result,
+      undefined
+    );
+    assert.strictEqual(
+      (normalized[1].data as ToolCall).result?.output,
+      "done"
     );
   });
 });

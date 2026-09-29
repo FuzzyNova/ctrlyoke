@@ -162,6 +162,7 @@ export class AntigravityToolEventBuilder {
           data: {
             server: target.server,
             tool: target.tool,
+            toolCallId: mapping.toolCallId,
             parameters: this.mcpParameters(args),
             result: {
               success,

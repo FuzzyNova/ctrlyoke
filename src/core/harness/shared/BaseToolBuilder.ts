@@ -14,6 +14,7 @@ import {
   OPERATION_STATUS,
 } from "../../../types/DashboardConstants";
 import { CliEventMapper } from "./CliEventMapper";
+import type { McpToolHint } from "./CliEventMapper";
 
 export interface FileReadRange {
   lineStart?: number;
@@ -87,9 +88,10 @@ export class BaseToolBuilder {
     input: Record<string, unknown>,
     toolId: string | undefined,
     timestamp: number,
-    extras?: { callerType?: string }
+    extras?: { callerType?: string },
+    mcpHint?: McpToolHint
   ): CliEvent[] {
-    const classification = CliEventMapper.classifyTool(toolName);
+    const classification = CliEventMapper.classifyTool(toolName, mcpHint);
     const path = (input.absolute_path ??
       input.file_path ??
       input.path ??
@@ -213,6 +215,7 @@ export class BaseToolBuilder {
             data: {
               server: mcp.server,
               tool: mcp.tool,
+              toolCallId: toolId,
               parameters: input,
             } as McpToolCallData,
           },

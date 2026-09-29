@@ -2,6 +2,7 @@ import type * as fs from "fs";
 import type { CliEvent, UserSteerData } from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
 import type { BaseCliEvent, ILogParser } from "./interfaces/ILogParser";
+import { McpSkillEventRewriter } from "../../../utils/McpSkillCommandRecognizer";
 
 export interface CliLogEventPumpDeps {
   /** Harness-specific log parser. */
@@ -32,6 +33,8 @@ export interface CliLogEventPumpDeps {
  * draining deadlines, or event history — those stay caller-specific.
  */
 export class CliLogEventPump {
+  private readonly skillEventRewriter = new McpSkillEventRewriter();
+
   constructor(private readonly deps: CliLogEventPumpDeps) {}
 
   /**
@@ -42,8 +45,9 @@ export class CliLogEventPump {
   processEvent(event: BaseCliEvent): void {
     this.deps.parser.trackBackgroundWorkState?.(event);
 
-    const structuredEvents =
-      this.deps.parser.extractStructuredEventsFromEvent(event);
+    const structuredEvents = this.deps.parser
+      .extractStructuredEventsFromEvent(event)
+      .map((structuredEvent) => this.skillEventRewriter.rewrite(structuredEvent));
 
     const steerEvent = this.buildUserSteerEvent(event);
     const allEvents = steerEvent
