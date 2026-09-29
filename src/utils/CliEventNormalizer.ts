@@ -667,9 +667,9 @@ function mergeInitiatedWithCompleted(
         timestamp: initiated.timestamp ?? completed.timestamp,
         data: {
           ...completedData,
-          parameters: initiatedData.parameters,
+          parameters: initiatedData.parameters ?? completedData.parameters,
           id: initiatedData.id ?? completedData.id,
-          result: completedData.result,
+          result: completedData.result ?? initiatedData.result,
         } as ToolCall,
       };
     }
@@ -681,9 +681,9 @@ function mergeInitiatedWithCompleted(
         timestamp: initiated.timestamp ?? completed.timestamp,
         data: {
           ...completedData,
-          parameters: initiatedData.parameters,
+          parameters: initiatedData.parameters ?? completedData.parameters,
           toolCallId: initiatedData.toolCallId ?? completedData.toolCallId,
-          result: completedData.result,
+          result: completedData.result ?? initiatedData.result,
         } as McpToolCallData,
       };
     }

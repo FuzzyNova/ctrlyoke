@@ -1,7 +1,7 @@
 # MCP Event Pipeline Gaps — reliable detection and pairing of MCP tool calls on every harness
 
-> **Status:** Implemented. Prerequisite for
-> [`CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md`](../backlog/CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md): purpose-built
+> **Status:** In progress — items 1–3 done; 4 and 5 reopened in review (see below). Prerequisite for
+> [`CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md`](CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md): purpose-built
 > views are only as good as the `MCP_TOOL_CALL` events underneath them, and on two of the six
 > harnesses today those events never exist.
 
@@ -236,8 +236,30 @@ parser unit-test fixtures, so vendor renames show up in `npm test` rather than i
 3. [x] **A (OpenCode):** attached-server-set resolution. The 2026-09-28 capture confirmed raw
    hyphenated prefixes; the parser uses longest-prefix matching against ids attached to the
    execution and retains unmatched names as generic tool calls.
-4. [x] **E:** add the all-six-harness probe and sanitized captures for the four previously
+4. [ ] **E:** (reopened — see Review notes) add the all-six-harness probe and sanitized captures for the four previously
    unverified harnesses. Claude and Qwen passed the four-call contract; fix Qwen's wrapper
    parsing. Codex and Antigravity captures preserve the incomplete live behavior described in
    Finding 6; their strict live probes fail until all four calls are actually recorded.
-5. [x] **D:** skill-mode mapping through the shared event normalizer.
+5. [ ] **D:** skill-mode mapping (reopened — see Review notes).
+
+## Review notes (2026-09-28)
+
+- **Probe fixtures are not vendor captures.** `src/test/fixtures/mcp-probe/*.json` hold
+  ctrlyoke's already-parsed `CliEvent`s with synthetic ids and `<sanitized result>` outputs, and
+  `McpProbeFixtures.test.ts` only runs them through `normalizeCliEvents`. No vendor parser is
+  exercised, so a vendor rename would not fail `npm test` — the point of section E. They must be
+  replaced with sanitized **raw vendor output** (the lines each provider's log parser consumes)
+  fed through that provider's real parser, then normalized.
+- **Codex and Antigravity "gaps" are probably parser bugs, not model behaviour.** In both runs the
+  single recorded `workflow_status` row's result text describes the later calls (Codex: "all four
+  complete"; Antigravity: releasing `probe.txt`), i.e. the calls happened but were dropped or
+  folded into one row. Codex's `exec` row suggests code-mode running several `tools.mcp__…(`
+  calls in one script with only the first unwrapped. Must be diagnosed from raw captures.
+- **Skill-mode rewrite lives in the display normalizer, not the event-production path.**
+  `normalizeMcpSkillBashEvent` runs inside `normalizeCliEventsWithSource`, so raw-event consumers
+  (`CommitMessageGenerator`'s streaming-events `submit_commit_message` detection,
+  `TimelineRecorder`, `HistoryCandidateExtractor`, `CliTerminalFormatter`, persisted
+  `events.jsonl`) still see `BASH_COMMAND`. Section D requires the rewrite where events are
+  produced so every consumer benefits.
+- Fixed in review: `TOOL_CALL`/`MCP_TOOL_CALL` completion merge dropped completion-side
+  `parameters` when the initiated half had none.

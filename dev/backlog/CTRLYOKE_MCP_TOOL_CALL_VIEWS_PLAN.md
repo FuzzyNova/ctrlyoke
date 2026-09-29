@@ -54,7 +54,7 @@ define.
 - **Harness coverage has gaps.** On current CLIs, Copilot and OpenCode ctrlyoke calls are not
   classified as `MCP_TOOL_CALL` at all. Copilot also renders every generic or MCP call twice,
   and skill-mode calls arrive as `BASH_COMMAND`. These pipeline fixes are tracked separately in
-  [`MCP_EVENT_PIPELINE_GAPS_PLAN.md`](../implemented/MCP_EVENT_PIPELINE_GAPS_PLAN.md), which this
+  [`MCP_EVENT_PIPELINE_GAPS_PLAN.md`](MCP_EVENT_PIPELINE_GAPS_PLAN.md), which this
   plan depends on. Views only ever see `MCP_TOOL_CALL` events.
 
 ## Design

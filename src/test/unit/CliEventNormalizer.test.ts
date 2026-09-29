@@ -313,6 +313,36 @@ suite("CliEventNormalizer", () => {
     );
   });
 
+  test("keeps completion parameters when the initiated MCP call carried none", () => {
+    const normalized = normalizeCliEvents([
+      {
+        type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+        timestamp: 1,
+        data: {
+          server: "ctrlyoke",
+          tool: "claim_paths",
+          toolCallId: "call_c",
+        } as McpToolCallData,
+      },
+      {
+        type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+        timestamp: 2,
+        data: {
+          server: "ctrlyoke",
+          tool: "claim_paths",
+          toolCallId: "call_c",
+          parameters: { paths: ["a.txt"] },
+          result: { success: true, output: "ok" },
+        } as McpToolCallData,
+      },
+    ]);
+
+    assert.strictEqual(normalized.length, 1);
+    const data = normalized[0].data as McpToolCallData;
+    assert.deepStrictEqual(data.parameters, { paths: ["a.txt"] });
+    assert.strictEqual(data.result?.output, "ok");
+  });
+
   test("normalizes a skill-mode bash start, completion, and result into one MCP row", () => {
     const command =
       `node "C:\\repo\\out\\mcp-server.js" --tool post_note --args '{"text":"hello"}' --workspace "C:\\repo"`;
