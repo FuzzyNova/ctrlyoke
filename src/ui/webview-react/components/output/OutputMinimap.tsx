@@ -218,32 +218,6 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
   stepsRef.current = steps;
   contentHeightRef.current = contentHeight;
 
-  // Whether the viewport thumb should expand to cover both tracks (pills +
-  // diff) instead of resting over just the diff track. True while actively
-  // scrolling or dragging; reverts a short debounce after the last scroll,
-  // producing the fade-back-to-diff-track behavior.
-  const [isTrackExpanded, setIsTrackExpanded] = useState(false);
-  const trackExpandResetTimeoutRef = useRef<number | null>(null);
-
-  const markScrollActive = useCallback(() => {
-    setIsTrackExpanded(true);
-    if (trackExpandResetTimeoutRef.current !== null) {
-      window.clearTimeout(trackExpandResetTimeoutRef.current);
-    }
-    trackExpandResetTimeoutRef.current = window.setTimeout(() => {
-      trackExpandResetTimeoutRef.current = null;
-      setIsTrackExpanded(false);
-    }, 400);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (trackExpandResetTimeoutRef.current !== null) {
-        window.clearTimeout(trackExpandResetTimeoutRef.current);
-      }
-    };
-  }, []);
-
   // Dismiss the pinned popup when clicking/tapping anywhere outside it.
   // Uses only 'click' (not 'touchend') to avoid a race where touchend fires
   // before click and incorrectly resets pinnedKey before the toggle runs.
@@ -371,16 +345,12 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
       }
     );
     observer.observe(el);
-    const handleScroll = () => {
-      update();
-      markScrollActive();
-    };
-    el.addEventListener("scroll", handleScroll, { passive: true });
+    el.addEventListener("scroll", update, { passive: true });
     return () => {
       disconnect();
-      el.removeEventListener("scroll", handleScroll);
+      el.removeEventListener("scroll", update);
     };
-  }, [getSharedContentHeight, markScrollActive, scrollContainerRef]);
+  }, [getSharedContentHeight, scrollContainerRef]);
 
   // ── Draggable thumb ────────────────────────────────────────────────────────
 
@@ -398,7 +368,6 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
       const railHeight = rail.clientHeight;
 
       setIsDragging(true);
-      markScrollActive();
 
       const onMouseMove = (moveEvent: MouseEvent) => {
         const delta = moveEvent.clientY - startY;
@@ -408,7 +377,6 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
           0,
           Math.min(maxScroll, startScrollTop + scrollDelta)
         );
-        markScrollActive();
       };
 
       const onTouchMove = (moveEvent: TouchEvent) => {
@@ -419,12 +387,10 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
           0,
           Math.min(maxScroll, startScrollTop + scrollDelta)
         );
-        markScrollActive();
       };
 
       const cleanup = () => {
         setIsDragging(false);
-        markScrollActive();
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", cleanup);
         document.removeEventListener("touchmove", onTouchMove);
@@ -436,7 +402,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
       document.addEventListener("touchmove", onTouchMove, { passive: true });
       document.addEventListener("touchend", cleanup);
     },
-    [getSharedContentHeight, markScrollActive, scrollContainerRef]
+    [getSharedContentHeight, scrollContainerRef]
   );
 
   const handleThumbMouseDown = useCallback(
@@ -611,16 +577,14 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
         })}
       </div>
 
-      {/* Draggable viewport thumb (replaces native scrollbar). Rests over
-          just the diff track; expands to cover the pills track too while
-          actively scrolling or dragging, then fades back once scrolling
-          settles (see markScrollActive/isTrackExpanded). */}
+      {/* Draggable viewport thumb (replaces native scrollbar). Spans both
+          tracks (pills + diff). */}
       <div
         role="slider"
         tabIndex={0}
         aria-label="Scroll viewport"
         aria-valuenow={Math.round(viewportPct.top * 100)}
-        className={`absolute right-0 rounded-sm z-raised ${
+        className={`absolute right-0 w-[var(--cy-output-minimap-width)] rounded-sm z-raised ${
           isDragging
             ? "bg-minimap-thumb-active"
             : isThumbHovered
@@ -630,16 +594,10 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
         style={{
           top: `${viewportPct.top}%`,
           height: `${viewportPct.height}%`,
-          width:
-            isDragging || isTrackExpanded
-              ? "var(--cy-output-minimap-width)"
-              : "var(--cy-output-minimap-diff-width)",
           boxShadow:
             "inset 0 0 0 1px var(--vscode-panel-border, rgba(128,128,128,0.45))",
           cursor: isDragging ? "grabbing" : canScroll ? "grab" : "default",
-          transition: isDragging
-            ? "none"
-            : "background 0.1s, width 0.25s ease-out",
+          transition: isDragging ? "none" : "background 0.1s",
         }}
         onMouseDown={handleThumbMouseDown}
         onTouchStart={handleThumbTouchStart}
