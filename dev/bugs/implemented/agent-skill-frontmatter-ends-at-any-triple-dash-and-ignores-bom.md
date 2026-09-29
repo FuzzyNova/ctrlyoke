@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude, helper agent)
 - **Area:** `src/utils/AgentExpander.ts` (`stripFrontmatter` ~L89), `src/utils/AgentDiscovery.ts` (`parseAgentFrontmatter` ~L48), `src/utils/SkillDiscovery.ts` (~L651)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

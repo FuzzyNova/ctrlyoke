@@ -367,4 +367,50 @@ suite("SkillDiscovery helpers", () => {
     assert.strictEqual(matches[0].path, overridePath);
     assert.strictEqual(matches[0].source, DISCOVERY_SOURCES.WORKSPACE);
   });
+
+  test("parses skill frontmatter with inline fences and a BOM", async () => {
+    const skillPath = path.join(
+      workspaceRoot,
+      ".ctrlyoke",
+      "skills",
+      "bom-skill",
+      "SKILL.md"
+    );
+    await fsp.mkdir(path.dirname(skillPath), { recursive: true });
+    await fsp.writeFile(
+      skillPath,
+      "\uFEFF---\ndescription: Split docs on --- markers\n---\n# Skill\n"
+    );
+
+    const discovered = await SkillDiscovery.discoverSkills(workspaceRoot);
+    assert.strictEqual(
+      discovered.find((candidate) => candidate.name === "bom-skill")
+        ?.description,
+      "Split docs on --- markers"
+    );
+  });
+
+  test("discovers skills installed through a directory symlink or junction", async () => {
+    const skillsDirectory = path.join(workspaceRoot, ".ctrlyoke", "skills");
+    const targetSkillDirectory = path.join(tempRoot, "shared", "linked-skill");
+    const linkedSkillDirectory = path.join(skillsDirectory, "linked-skill");
+    await fsp.mkdir(targetSkillDirectory, { recursive: true });
+    await fsp.writeFile(
+      path.join(targetSkillDirectory, "SKILL.md"),
+      "---\ndescription: linked skill\n---\n"
+    );
+    await fsp.mkdir(skillsDirectory, { recursive: true });
+    await fsp.symlink(
+      targetSkillDirectory,
+      linkedSkillDirectory,
+      process.platform === "win32" ? "junction" : "dir"
+    );
+
+    const discovered = await SkillDiscovery.discoverSkills(workspaceRoot);
+    assert.strictEqual(
+      discovered.find((candidate) => candidate.name === "linked-skill")
+        ?.description,
+      "linked skill"
+    );
+  });
 });

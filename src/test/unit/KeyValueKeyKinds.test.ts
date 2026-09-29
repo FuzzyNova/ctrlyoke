@@ -21,7 +21,7 @@ suite("KeyValueKeyKinds", () => {
     ]);
   });
 
-  test("warns when variable names differ only by case", () => {
+  test("rejects variable names that differ only by case with parser wording", () => {
     const diagnostics = validateKeyValueKey(
       KEY_VALUE_KEY_KINDS.VARIABLE,
       "region",
@@ -31,7 +31,11 @@ suite("KeyValueKeyKinds", () => {
     assert.strictEqual(diagnostics.length, 1);
     assert.strictEqual(
       diagnostics[0].severity,
-      COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+      COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
+    );
+    assert.strictEqual(
+      diagnostics[0].message,
+      'Variable names must not differ only by case ("region")'
     );
   });
 

@@ -27,13 +27,18 @@ export function getVariableKeyErrors(keys: readonly string[]): string[] {
     }
     const normalized = key.toLowerCase();
     if (seen.has(normalized)) {
-      errors.push(`Variable names must not differ only by case ("${key}")`);
+      errors.push(getVariableCaseCollisionError(key));
     } else {
       seen.add(normalized);
     }
   }
 
   return errors;
+}
+
+/** Return the parser/editor diagnostic for a case-insensitive variable collision. */
+export function getVariableCaseCollisionError(key: string): string {
+  return `Variable names must not differ only by case ("${key}")`;
 }
 
 const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -113,9 +118,7 @@ export function validateKeyValueKey(
         );
       }
       if (hasCaseCollision(key, allKeys)) {
-        diagnostics.push(
-          warning("Another variable name differs only by case.")
-        );
+        diagnostics.push(error(getVariableCaseCollisionError(key)));
       }
       break;
 

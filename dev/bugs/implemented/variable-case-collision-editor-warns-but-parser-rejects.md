@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude, helper agent)
 - **Area:** `src/utils/KeyValueKeyKinds.ts` (`validateKeyValueKey` VARIABLE case ~L115-119, compared with `getVariableKeyErrors` ~L28-30)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
