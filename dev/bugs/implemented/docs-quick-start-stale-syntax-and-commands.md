@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-28 by lots-of-bug-fixes final step (Claude, helper agent)
 - **Area:** `QUICK_START.md` (shipped in the VSIX via `.vscodeignore`), `docs/reference/commands.md:74`, `schemas/workflow-schema.json` (`skills` description)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -10,7 +10,7 @@ ctrlyoke drives whichever AI CLI tool you have installed. You need at least one:
 
 | Harness           | CLI Tool                           |
 | ----------------- | ---------------------------------- |
-| `copilot-cli`     | `gh` with GitHub Copilot extension |
+| `copilot-cli`     | `copilot` (`npm install -g @github/copilot`) |
 | `claude-cli`      | `claude` (Claude Code CLI)         |
 | `codex-cli`       | `codex` (OpenAI Codex CLI)         |
 | `opencode-cli`    | `opencode`                         |
@@ -37,8 +37,8 @@ Subdirectories appear only once something needs them:
 ```
 .ctrlyoke/
   prompts/       # single prompts produced by the editor's convert action
-  scripts/       # end condition validation scripts (ctrlyoke: Create End Condition Script)
-  templates/     # custom workflow templates (New Template… / Import Workflow Templates)
+  scripts/       # end condition validation scripts
+  templates/     # custom workflow templates
   agents/        # agents copied in from the Agents & Skills manager
   skills/        # skills copied in from the Agents & Skills manager
 ```
@@ -100,7 +100,7 @@ harness: copilot-cli
 steps:
   - name: analyze
     prompt: |
-      Analyze #file:src/app.ts and identify any issues with error handling.
+      Analyze @src/extension.ts and identify any issues with error handling.
 
   - name: fix
     prompt: |
@@ -111,7 +111,7 @@ steps:
 The simplest possible workflow is a single `.prompt.md` file:
 
 ```markdown
-Analyze #file:src/app.ts and suggest improvements.
+Analyze @src/extension.ts and suggest improvements.
 ```
 
 ---
@@ -146,10 +146,9 @@ model: sonnet
 
 steps:
   - name: step-1
-    prompt: Implement the feature described in #file:.ctrlyoke/prompts/spec.prompt.md
+    prompt: Implement the feature described in @README.md
     endCondition:
       script: npm test
-      returns: "true"
       maxRetries: 3
       retryPrompt: |
         Tests failed with: $endCondition:stderr
@@ -172,7 +171,7 @@ steps:
 **Markdown** (`.prompt.md`) — for a single prompt with no configuration:
 
 ```markdown
-Review #file:src/utils.ts for potential bugs and suggest fixes.
+Review @src/utils/SkillExpander.ts for potential bugs and suggest fixes.
 ```
 
 ---
@@ -223,17 +222,18 @@ steps:
   - prompt: Fix the failing tests.
     endCondition:
       script: npm test
-      returns: "true"
       maxRetries: 3
       retryPrompt: |
         Tests still failing: $endCondition:stderr
         Fix all failures before continuing.
 ```
 
-The script runs in an isolated child process. The `returns` value is compared against
-`stdout`. `$endCondition:stdout`, `$endCondition:stderr`, and
-`$endCondition:exitCode` are available in `retryPrompt`; `$preCondition:*`
-references are available in both the step and retry prompts.
+The script runs in an isolated child process. With no comparison configured, it passes when the
+script exits with code 0. To compare output explicitly, set `compareSource` to `stdout`, `stderr`,
+or `exitCode`, then set `operator` and `expected` (for example, `compareSource: stdout`,
+`operator: contains`, `expected: passed`). `$endCondition:stdout`, `$endCondition:stderr`, and
+`$endCondition:exitCode` are available in `retryPrompt`; `$preCondition:*` references are available
+in both the step and retry prompts.
 
 ---
 
@@ -272,7 +272,9 @@ Check `.ctrlyoke/logs/ctrlyoke-<harness>-hook-debug.log`. The Stop hook should f
 
 **Wrong harness or model used**
 
-Settings follow three-tier precedence: prompt-level overrides > workflow-level defaults > VS Code extension settings. Check that you have not accidentally set a harness at a level that is being overridden.
+Settings follow three-tier precedence: prompt-level overrides > workflow-level values > the
+`defaults.*` settings in `.ctrlyoke/settings.json`. Check that you have not accidentally set a
+harness at a level that is being overridden.
 
 **Workflow stuck after a crash**
 
@@ -293,7 +295,7 @@ unsupported: PIDs and file locks are machine-local and cannot coordinate across 
 
 ## Further Reading
 
-- `docs/ADDING_NEW_CLI_HARNESS.md` — adding support for a new AI CLI tool
-- `docs/SESSION_MANAGEMENT.md` — session ID resolution and cross-harness validation
-- `docs/QUEUE_APPEND_FEATURE.md` — dynamic queue extension details
-- `.ctrlyoke/scripts/` — end condition script examples, after you run `ctrlyoke: Create End Condition Script`
+- `docs/harnesses/index.md` — supported harnesses
+- `docs/workflows/session-management.md` — session ID resolution and reuse
+- `docs/workflows/dynamic-queue.md` — queue extension details
+- `docs/workflows/end-conditions.md` — end condition configuration and examples
