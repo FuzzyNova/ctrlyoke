@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli), reproduced with a directory junction on Windows
 - **Area:** `src/utils/WorkflowBundleAnalyzer.ts` (`finalizeCopyPlan` ~672, `validateExportDirectory` ~862-886, `resolveInlineReference` ~608, `analyzeLonePromptFile` ~368)
-- **Severity:** medium (save refused; no data loss)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

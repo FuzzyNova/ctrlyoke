@@ -114,6 +114,36 @@ suite("WorkflowBundleWriter", () => {
     }
   });
 
+  test("never prunes a destination published by the same save", async function () {
+    if (process.platform !== "win32") {
+      this.skip();
+      return;
+    }
+    const workspace = await makeWorkspace("ctrlyoke-bundle-writer-case-prune-");
+    try {
+      const assets = path.join(workspace, "fix-tests.assets");
+      const source = path.join(workspace, "source.txt");
+      await fs.mkdir(assets, { recursive: true });
+      await fs.writeFile(source, "published", "utf8");
+      await fs.writeFile(path.join(assets, "Notes.txt"), "old", "utf8");
+
+      await writeWorkflowBundle({
+        workflowPath: path.join(workspace, "fix-tests.ctrlyoke.yaml"),
+        serializedWorkflow: "prompt: no references\n",
+        plan: plan(assets, source, path.join(assets, "notes.txt"), {
+          pruneCandidates: ["Notes.txt"],
+        }),
+      });
+
+      assert.strictEqual(
+        await fs.readFile(path.join(assets, "Notes.txt"), "utf8"),
+        "published"
+      );
+    } finally {
+      await cleanup(workspace);
+    }
+  });
+
   test("removes an emptied managed assets directory", async () => {
     const workspace = await makeWorkspace("ctrlyoke-bundle-writer-empty-");
     try {

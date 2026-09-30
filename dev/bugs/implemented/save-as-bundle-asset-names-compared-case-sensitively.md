@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli), reproduced by bundling the real analyzer and writer against temp workspaces on Windows
 - **Area:** `src/utils/WorkflowBundleAnalyzer.ts` (`getExistingNames` ~1004, `chooseAssetName` ~827, `managedNames`/`pruneCandidates` in `finalizeCopyPlan` ~733), `src/utils/WorkflowBundleWriter.ts` (`isSerializedReference` ~205, prune `unlink` ~176)
-- **Severity:** high (data loss on Windows and default macOS; the saved workflow can point at a missing or wrong file with no warning)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -17,6 +17,7 @@ import {
   isPathWithinAnyDirectory,
   isPathWithinDirectory,
 } from "./PathSecurity";
+import { foldPathForCompare } from "./PathCasing";
 import {
   BUNDLE_MANIFEST_FILE_NAME,
   PROMPT_FILE_RESOLUTION_STATUSES,
@@ -358,15 +359,16 @@ async function analyzeLonePromptFile(
   }
 
   const canonicalPath = await realpathOrUndefined(resolution.path);
+  const realRoots = await realpathRoots(trustedRoots);
   const lexicalGeneratedStore = getGeneratedStore(
     resolution.path,
     trustedRoots
   );
   const generatedStore = canonicalPath
-    ? getGeneratedStore(canonicalPath, trustedRoots)
+    ? getGeneratedStore(canonicalPath, realRoots)
     : undefined;
   const outsideTrustedRoots = canonicalPath
-    ? !isPathWithinAnyDirectory(canonicalPath, trustedRoots)
+    ? !isPathWithinAnyDirectory(canonicalPath, realRoots)
     : true;
 
   if (outsideTrustedRoots) {
@@ -605,9 +607,10 @@ async function resolveInlineReference(
     };
   }
 
+  const realRoots = await realpathRoots(trustedRoots);
   const outsideTrustedRoots = !isPathWithinAnyDirectory(
     canonicalPath,
-    trustedRoots
+    realRoots
   );
   const lexicalEscape = lexicalGenerated && outsideTrustedRoots;
   return {
@@ -615,10 +618,10 @@ async function resolveInlineReference(
     token,
     candidatePath: candidate,
     canonicalPath,
-    generatedStore: getGeneratedStore(canonicalPath, trustedRoots),
+    generatedStore: getGeneratedStore(canonicalPath, realRoots),
     bundleAssetsDirectory: outsideTrustedRoots
       ? undefined
-      : await getManifestedAssetsDirectory(canonicalPath, trustedRoots),
+      : await getManifestedAssetsDirectory(canonicalPath, realRoots),
     missingGeneratedStore: lexicalEscape
       ? getGeneratedStore(lexicalGenerated, trustedRoots)
       : undefined,
@@ -671,13 +674,18 @@ async function finalizeCopyPlan(
     : path.resolve(workspaceRoot, options.destinationPath);
   const assetsDirectory = deriveAssetsDirectory(destinationPath);
   plan.assetsDirectory = assetsDirectory;
-  if (!(await validateExportDirectory(assetsDirectory, trustedRoots, plan))) {
-    return;
-  }
-
   const manifest = await readExistingManifest(assetsDirectory, plan);
   if (plan.copies.length === 0) {
     plan.pruneCandidates = manifest.valid ? [...manifest.files] : [];
+    if (
+      plan.pruneCandidates.length > 0 &&
+      !(await validateExportDirectory(assetsDirectory, trustedRoots, plan))
+    ) {
+      return;
+    }
+    return;
+  }
+  if (!(await validateExportDirectory(assetsDirectory, trustedRoots, plan))) {
     return;
   }
   const existingNames = await getExistingNames(assetsDirectory);
@@ -721,9 +729,9 @@ async function finalizeCopyPlan(
       copy.contentHash,
       usedNames,
       existingNames,
-      manifest.files
+      new Set([...manifest.files].map(foldPathForCompare))
     );
-    usedNames.add(name);
+    usedNames.add(foldPathForCompare(name));
     const destination = path.join(assetsDirectory, name);
     copy.destinationPath = destination;
     copy.relativePath = toWorkflowRelativePath(destination, destinationPath);
@@ -732,11 +740,15 @@ async function finalizeCopyPlan(
   plan.copies = [...sourceByContent.values()];
   const managedNames = new Set(
     plan.copies.map((copy) =>
-      path.relative(assetsDirectory, copy.destinationPath).replace(/\\/g, "/")
+      foldPathForCompare(
+        path.relative(assetsDirectory, copy.destinationPath).replace(/\\/g, "/")
+      )
     )
   );
   plan.pruneCandidates = manifest.valid
-    ? [...manifest.files].filter((file) => !managedNames.has(file))
+    ? [...manifest.files].filter(
+        (file) => !managedNames.has(foldPathForCompare(file))
+      )
     : [];
 
   // Names are now known; apply the complete-token edits to every field by
@@ -831,27 +843,30 @@ function chooseAssetName(
   existingNames: Set<string>,
   managedNames: Set<string>
 ): string {
+  const foldedBaseName = foldPathForCompare(baseName);
   const baseAvailable =
-    !usedNames.has(baseName) &&
-    (!existingNames.has(baseName) || managedNames.has(baseName));
+    !usedNames.has(foldedBaseName) &&
+    (!existingNames.has(foldedBaseName) || managedNames.has(foldedBaseName));
   if (baseAvailable) {
     return baseName;
   }
   const extension = path.extname(baseName);
   const stem = extension ? baseName.slice(0, -extension.length) : baseName;
   const hashed = `${stem}-${contentHash.slice(0, 8)}${extension}`;
+  const foldedHashed = foldPathForCompare(hashed);
   if (
-    !usedNames.has(hashed) &&
-    (!existingNames.has(hashed) || managedNames.has(hashed))
+    !usedNames.has(foldedHashed) &&
+    (!existingNames.has(foldedHashed) || managedNames.has(foldedHashed))
   ) {
     return hashed;
   }
   let counter = 2;
   while (true) {
     const candidate = `${stem}-${contentHash.slice(0, 8)}-${counter}${extension}`;
+    const foldedCandidate = foldPathForCompare(candidate);
     if (
-      !usedNames.has(candidate) &&
-      (!existingNames.has(candidate) || managedNames.has(candidate))
+      !usedNames.has(foldedCandidate) &&
+      (!existingNames.has(foldedCandidate) || managedNames.has(foldedCandidate))
     ) {
       return candidate;
     }
@@ -876,7 +891,10 @@ async function validateExportDirectory(
   while (true) {
     try {
       const stat = await fs.lstat(ancestor);
-      if (stat.isSymbolicLink()) {
+      if (
+        stat.isSymbolicLink() &&
+        path.resolve(ancestor) === path.resolve(assetsDirectory)
+      ) {
         addBlocker(
           plan,
           "assets-directory-symlink",
@@ -988,7 +1006,11 @@ async function getManifestedAssetsDirectory(
         return undefined;
       }
       const manifest = await loadExistingManifest(directory);
-      return manifest.valid && manifest.files.has(relativePath)
+      return manifest.valid &&
+        [...manifest.files].some(
+          (file) =>
+            foldPathForCompare(file) === foldPathForCompare(relativePath)
+        )
         ? directory
         : undefined;
     }
@@ -1004,7 +1026,7 @@ async function getManifestedAssetsDirectory(
 async function getExistingNames(assetsDirectory: string): Promise<Set<string>> {
   try {
     const entries = await fs.readdir(assetsDirectory, { withFileTypes: true });
-    return new Set(entries.map((entry) => entry.name));
+    return new Set(entries.map((entry) => foldPathForCompare(entry.name)));
   } catch {
     return new Set();
   }

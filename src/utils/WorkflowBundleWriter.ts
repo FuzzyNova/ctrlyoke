@@ -6,6 +6,7 @@ import {
   type BundlePlan,
 } from "./WorkflowBundleAnalyzer";
 import { renameWithTransientRetry, writeFileAtomic } from "./AtomicFileUtils";
+import { foldPathForCompare } from "./PathCasing";
 
 export interface WorkflowBundleWriteOptions {
   workflowPath: string;
@@ -111,6 +112,7 @@ export async function writeWorkflowBundle(
         assetsDirectory,
         plan.pruneCandidates,
         serializedWorkflow,
+        copies.map((copy) => copy.destinationPath),
         warnings
       );
 
@@ -171,6 +173,7 @@ async function pruneManagedAssets(
   assetsDirectory: string,
   candidates: readonly string[],
   serializedWorkflow: string,
+  publishedPaths: readonly string[],
   warnings: string[]
 ): Promise<void> {
   for (const relativePath of candidates) {
@@ -187,7 +190,10 @@ async function pruneManagedAssets(
     try {
       if (!(await hasSymlinkAncestor(target, assetsDirectory))) {
         const stats = await fs.lstat(target);
-        if (stats.isFile()) {
+        if (
+          stats.isFile() &&
+          !(await resolvesToPublishedFile(target, publishedPaths, stats))
+        ) {
           await fs.unlink(target);
         }
       }
@@ -209,11 +215,44 @@ function isSerializedReference(
   const normalized = relativePath.replace(/\\/g, "/");
   const windows = normalized.replace(/\//g, "\\");
   const fileName = path.basename(normalized);
+  const foldedWorkflow = foldPathForCompare(serializedWorkflow);
   return (
-    serializedWorkflow.includes(normalized) ||
-    serializedWorkflow.includes(windows) ||
-    serializedWorkflow.includes(fileName)
+    foldedWorkflow.includes(foldPathForCompare(normalized)) ||
+    foldedWorkflow.includes(foldPathForCompare(windows)) ||
+    foldedWorkflow.includes(foldPathForCompare(fileName))
   );
+}
+
+async function resolvesToPublishedFile(
+  target: string,
+  publishedPaths: readonly string[],
+  targetStats: Awaited<ReturnType<typeof fs.lstat>>
+): Promise<boolean> {
+  for (const publishedPath of publishedPaths) {
+    try {
+      const [targetRealPath, publishedRealPath, publishedStats] =
+        await Promise.all([
+          fs.realpath(target),
+          fs.realpath(publishedPath),
+          fs.stat(publishedPath),
+        ]);
+      if (
+        foldPathForCompare(targetRealPath) ===
+        foldPathForCompare(publishedRealPath)
+      ) {
+        return true;
+      }
+      if (
+        targetStats.dev === publishedStats.dev &&
+        targetStats.ino === publishedStats.ino
+      ) {
+        return true;
+      }
+    } catch {
+      // A destination that was not published cannot alias a prune target.
+    }
+  }
+  return false;
 }
 
 function isContainedPath(target: string, directory: string): boolean {
