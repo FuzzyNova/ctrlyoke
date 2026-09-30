@@ -998,11 +998,19 @@ export class CtrlYokeHostedServer
         const resolvedPath = path.resolve(webviewDist, `.${decodedPath}`);
         const comparisonPath = isWindows ? resolvedPath.toLowerCase() : resolvedPath;
         const protectsResolvedPath = protectedStaticPaths.has(comparisonPath);
-        const staticPath = decodedPath.toLowerCase();
+        const resolvedDirectory = path.dirname(resolvedPath);
+        const comparisonDirectory = isWindows
+          ? resolvedDirectory.toLowerCase()
+          : resolvedDirectory;
+        const comparisonWebviewDist = isWindows
+          ? webviewDist.toLowerCase()
+          : webviewDist;
+        const isWebviewRootFile = comparisonDirectory === comparisonWebviewDist;
+        const staticPath = path.basename(resolvedPath).toLowerCase();
         const isProtectedHtmlPath =
-          /^\/index(?:~\d+)?\.html?(?::.*)?$/.test(staticPath);
+          isWebviewRootFile && /^index(?:~\d+)?\.html?(?::.*)?$/.test(staticPath);
         const isProtectedFaviconPath =
-          /^\/(?:favicon|favico~\d+)\.svg(?::.*)?$/.test(staticPath);
+          isWebviewRootFile && /^(?:favicon|favico~\d+)\.svg(?::.*)?$/.test(staticPath);
         if (
           protectsResolvedPath ||
           isProtectedHtmlPath ||
