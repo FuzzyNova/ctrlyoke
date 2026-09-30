@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli)
 - **Area:** `docs/cli/ctrlyoke.md` (`ctrlyoke step reorder`, ~526–533), `docs/workflows/end-conditions.md` (~23–25)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
