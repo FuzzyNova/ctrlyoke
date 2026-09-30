@@ -4184,9 +4184,9 @@ export class WorkflowInstance
               return {
                 ...comparison,
                 errored: processResult.errored ?? false,
-                stdout: processResult.stdout ?? "",
-                stderr: processResult.stderr ?? "",
-                result: processResult.result,
+                stdout: comparison.stdout,
+                stderr: comparison.stderr,
+                result: comparison.result,
                 error: processResult.error,
                 timeout: processResult.timeout,
                 duration: Date.now() - startedAt,

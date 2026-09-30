@@ -36,6 +36,7 @@ import {
   compareScriptOutput,
   type ScriptComparisonConfig,
 } from "../utils/ScriptComparison";
+import { sanitizeTerminalOutput } from "../utils/TerminalOutputSanitizer";
 import {
   containsShellSyntax,
   resolveShellInvocation,
@@ -77,6 +78,9 @@ export interface EvaluationResult {
 export interface EvaluationComparison {
   passed: boolean;
   actual: string;
+  stdout: string;
+  stderr: string;
+  result: string;
 }
 
 export class EndConditionEvaluator {
@@ -306,14 +310,16 @@ export class EndConditionEvaluator {
         workingFilePath
       );
 
+      const normalizedResult = this.normalizeScriptOutput(result);
+
       if (result.errored) {
         return {
           passed: false,
           actual: "",
           errored: true,
-          stdout: result.stdout || "",
-          stderr: result.stderr || "",
-          result: result.result,
+          stdout: normalizedResult.stdout,
+          stderr: normalizedResult.stderr,
+          result: normalizedResult.result,
           error: result.error,
           timeout: result.timeout,
           duration: Date.now() - startTime,
@@ -321,14 +327,14 @@ export class EndConditionEvaluator {
         };
       }
 
-      const comparison = this.evaluateSuccess(result, condition);
+      const comparison = this.evaluateSuccess(normalizedResult, condition);
 
       return {
         ...comparison,
         errored: result.errored ?? false,
-        stdout: result.stdout || "",
-        stderr: result.stderr || "",
-        result: result.result,
+        stdout: comparison.stdout,
+        stderr: comparison.stderr,
+        result: comparison.result,
         error: result.error,
         timeout: result.timeout,
         cancelled: result.cancelled,
@@ -363,7 +369,15 @@ export class EndConditionEvaluator {
     },
     comparison: ScriptComparisonConfig
   ): EvaluationComparison {
-    return this.evaluateSuccess(result, comparison);
+    return this.evaluateSuccess(this.normalizeScriptOutput(result), comparison);
+  }
+
+  private normalizeScriptOutput<
+    T extends { result: string; stdout?: string; stderr?: string },
+  >(result: T): T & { result: string; stdout: string; stderr: string } {
+    const stdout = sanitizeTerminalOutput(result.stdout ?? result.result);
+    const stderr = sanitizeTerminalOutput(result.stderr ?? "");
+    return { ...result, stdout, stderr, result: stdout };
   }
 
   /**
@@ -956,11 +970,16 @@ export class EndConditionEvaluator {
     },
     comparison: ScriptComparisonConfig
   ): EvaluationComparison {
-    return compareScriptOutput(comparison, {
+    return {
+      ...compareScriptOutput(comparison, {
+        stdout: result.stdout ?? result.result,
+        stderr: result.stderr,
+        exitCode: result.exitCode,
+      }),
       stdout: result.stdout ?? result.result,
-      stderr: result.stderr,
-      exitCode: result.exitCode,
-    });
+      stderr: result.stderr ?? "",
+      result: result.result,
+    };
   }
 
   /**

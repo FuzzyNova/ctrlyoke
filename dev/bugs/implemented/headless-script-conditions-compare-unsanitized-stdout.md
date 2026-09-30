@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli); reproduced against compiled `out/` on Windows
 - **Area:** `src/core/EndConditionEvaluator.ts` (`evaluateSuccess` ~949-964), `src/core/orchestration/ScriptProcessRunner.ts` (only `.trim()`s), compared with `src/core/WorkflowExecutor.ts` (~2641, PTY path uses `sanitizeTerminalOutput`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -56,6 +56,40 @@ suite("EndConditionEvaluator Tests", () => {
     });
   });
 
+  suite("evaluateResult output normalization", () => {
+    const rawOutput = "\u001b[32mbuild ok\u001b[39m\r\ntests ok\r\n";
+    const cases = [
+      { operator: "eq", expected: "build ok\ntests ok" },
+      { operator: "contains", expected: "build ok\ntests" },
+      { operator: "matches", expected: "^build ok\\ntests ok$" },
+    ] as const;
+
+    for (const { operator, expected } of cases) {
+      test(`sanitizes CRLF and ANSI output for ${operator}`, () => {
+        const result = evaluator.evaluateResult(
+          {
+            result: rawOutput,
+            stdout: rawOutput,
+            stderr: "\u001b[31mwarning\u001b[39m\r\n",
+            exitCode: 0,
+            success: true,
+          },
+          {
+            compareSource: "stdout",
+            operator,
+            expected,
+          }
+        );
+
+        assert.strictEqual(result.passed, true);
+        assert.strictEqual(result.actual, "build ok\ntests ok");
+        assert.strictEqual(result.stdout, "build ok\ntests ok\n");
+        assert.strictEqual(result.stderr, "warning\n");
+        assert.strictEqual(result.result, "build ok\ntests ok\n");
+      });
+    }
+  });
+
   suite("parseScriptCommand - Tokenization", () => {
     test("splits simple space-separated command", () => {
       const { scriptPath, args } = EndConditionEvaluator.parseScriptCommand(
@@ -915,7 +949,7 @@ suite("EndConditionEvaluator Tests", () => {
         script: command(isWindows ? "&& echo SECOND" : "&& printf SECOND"),
         shell,
         compareSource: "stdout",
-        expected: isWindows ? "CHECK\r\nSECOND" : "CHECK\nSECOND",
+        expected: "CHECK\nSECOND",
       });
       assert.strictEqual(passed.passed, true, passed.stderr || passed.stdout);
 

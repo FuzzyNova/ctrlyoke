@@ -83,7 +83,6 @@ import {
   resolveEffectiveMaxSteps,
 } from "../utils/QueueLimitUtils";
 import { resolveReportedScriptProperties } from "../utils/ScriptComparison";
-import { sanitizeTerminalOutput } from "../utils/TerminalOutputSanitizer";
 import { VarSubstitutor } from "../utils/VarSubstitutor";
 import {
   findSecretInterpolationsInPrompt,
@@ -2639,11 +2638,10 @@ export class WorkflowExecutor {
         }
 
         const exitCode = ptyExitCode ?? 1;
-        const stdout = sanitizeTerminalOutput(outputChunks.join(""));
         const comparison = this.endConditionEvaluator.evaluateResult(
           {
-            result: stdout,
-            stdout,
+            result: outputChunks.join(""),
+            stdout: outputChunks.join(""),
             stderr: "",
             success: exitCode === 0,
             exitCode,
@@ -2653,9 +2651,9 @@ export class WorkflowExecutor {
         return {
           ...comparison,
           errored: ptyTimedOut,
-          stdout,
-          stderr: "",
-          result: "",
+          stdout: comparison.stdout,
+          stderr: comparison.stderr,
+          result: comparison.result,
           duration: Date.now() - timestampMs,
           exitCode,
           timeout: ptyTimedOut,
