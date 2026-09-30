@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli)
 - **Area:** `src/platform/OsCredentialStore.ts` (embedded PowerShell script, `runCommand`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

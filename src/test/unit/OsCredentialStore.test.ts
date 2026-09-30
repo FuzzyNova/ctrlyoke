@@ -33,15 +33,26 @@ class FakeWindowsCredentialVault {
   ): Promise<FakeCommandResult> => {
     this.commandCount += 1;
     assert.strictEqual(command, "powershell.exe");
-    const { operation, target } = decodeScript(args);
+    const { operation, target, script } = decodeScript(args);
+    assert.match(
+      script,
+      /UTF8\.GetString\(\[Convert\]::FromBase64String\(\$valueBase64\)\)/
+    );
+    assert.match(
+      script,
+      /ToBase64String\(\$utf8\)/,
+      "get should return a base64-encoded UTF-8 value"
+    );
 
     if (operation === "get") {
       const value = this.credentials.get(target);
-      return value === undefined ? result(44) : result(0, value);
+      return value === undefined
+        ? result(44)
+        : result(0, Buffer.from(value, "utf8").toString("base64"));
     }
 
     if (operation === "store") {
-      const value = input ?? "";
+      const value = Buffer.from(input ?? "", "base64").toString("utf8");
       const blobBytes = Buffer.byteLength(value, "utf16le");
       if (blobBytes > WINDOWS_MAX_BLOB_BYTES || target === this.failWriteFor) {
         return result(
@@ -72,6 +83,7 @@ class FakeWindowsCredentialVault {
 function decodeScript(args: readonly string[]): {
   operation: string;
   target: string;
+  script: string;
 } {
   const encoded = args[args.indexOf("-EncodedCommand") + 1];
   const script = Buffer.from(encoded, "base64").toString("utf16le");
@@ -79,7 +91,7 @@ function decodeScript(args: readonly string[]): {
     (match) => Buffer.from(match[1], "base64").toString("utf8")
   );
   assert.strictEqual(values.length, 2, "script should embed operation+target");
-  return { operation: values[0], target: values[1] };
+  return { operation: values[0], target: values[1], script };
 }
 
 function result(
@@ -120,6 +132,30 @@ suite("OsCredentialStore", () => {
     assert.deepStrictEqual(vault.secretTargets(), [
       "ctrlyoke.ctrlyoke.pro.license-key",
     ]);
+  });
+
+  test("transports non-ASCII and non-BMP values as UTF-8 base64", async () => {
+    const { store } = createWindowsStore();
+    const value = "license-€-秘密-🚀-𐐷";
+
+    await store.store("ctrlyoke.secret.user.API_KEY", value);
+
+    assert.strictEqual(
+      await store.get("ctrlyoke.secret.user.API_KEY"),
+      value
+    );
+  });
+
+  test("reads existing ASCII credentials through the base64 get path", async () => {
+    const { store, vault } = createWindowsStore();
+    // Existing values are UTF-16 CredMan blobs; their ASCII text is unchanged
+    // when the new script decodes and re-encodes it as UTF-8.
+    vault.credentials.set("ctrlyoke.ctrlyoke.pro.license-key", "old-ascii-key");
+
+    assert.strictEqual(
+      await store.get("ctrlyoke.pro.license-key"),
+      "old-ascii-key"
+    );
   });
 
   test("round-trips a value far larger than one credential blob", async () => {

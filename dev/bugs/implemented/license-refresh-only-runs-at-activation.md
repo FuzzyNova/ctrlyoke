@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli)
 - **Area:** `src/license/LicenseService.ts` (`refresh`), `src/extension.ts` (~251)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
