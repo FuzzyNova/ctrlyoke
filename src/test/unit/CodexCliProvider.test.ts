@@ -3,6 +3,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
+import { parse } from "smol-toml";
 import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -22,6 +23,28 @@ function makeWorkflowContext(resumeSession?: boolean): {
 // ============================================================================
 
 suite("CodexCliProvider", () => {
+  test("preserves backslashes in user MCP args and environment values", async () => {
+    const provider = new CodexCliProvider();
+    const args = ["server.js", String.raw`\\d+`];
+    const env = { DOMAIN_USER: String.raw`CORP\\alice` };
+    const preparation = await provider.planMcpConfigArgs(
+      undefined,
+      "/workspace",
+      undefined,
+      undefined,
+      [{ id: "user-server", command: "node", args, env }]
+    );
+    const configIndex = preparation.cliArgs.indexOf("-c") + 1;
+    const parsed = parse(preparation.cliArgs[configIndex]) as {
+      mcp_servers: {
+        "user-server": { args: string[]; env: Record<string, string> };
+      };
+    };
+
+    assert.deepStrictEqual(parsed.mcp_servers["user-server"].args, args);
+    assert.deepStrictEqual({ ...parsed.mcp_servers["user-server"].env }, env);
+  });
+
   suite("MCP capability declaration", () => {
     test("declares native per-server filtering for server-owned denials", () => {
       const filtering = new CodexCliProvider().capabilities.mcp

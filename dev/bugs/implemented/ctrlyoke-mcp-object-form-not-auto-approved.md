@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli)
 - **Area:** `src/core/harness/claude/ClaudeCliProvider.ts` (~305–311), `src/core/harness/copilot/CopilotCliProvider.ts` (~307–313)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

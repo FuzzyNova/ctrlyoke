@@ -8,6 +8,7 @@ import {
   CTRLYOKE_ENV_VARS,
   MCP_SECRET_CONFIG_MODES,
 } from "../../../types/DashboardConstants";
+import { quoteTomlBasicString } from "./InlineToml";
 
 /**
  * MCP configuration format
@@ -183,7 +184,7 @@ export class CliMcpConfigGenerator {
   }
 
   private static quoteInlineTomlString(value: string): string {
-    return `'${value.replace(/'/g, "''")}'`;
+    return quoteTomlBasicString(value);
   }
 
   private static formatInlineTomlStringArray(values: string[]): string {
@@ -534,9 +535,7 @@ export class CliMcpConfigGenerator {
    * Generate inline TOML configuration
    *
    * Used by harnesses that support inline TOML config (e.g., Codex).
-   * Format: mcp_servers.{serverName}={command='node',args=['path'],env={VAR='value'}}
-   *
-   * Note: Uses single quotes inside TOML to avoid PowerShell escaping issues
+   * Format: mcp_servers.{serverName}={command="node",args=["path"],env={VAR="value"}}
    *
    * @param serverName MCP server name (e.g., "ctrlyoke")
    * @param serverPath Path to MCP server script

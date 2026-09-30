@@ -16,6 +16,7 @@ import { CodexNotificationMonitor } from "./CodexNotificationMonitor";
 import { CodexToolPermissionMapper } from "./CodexToolPermissionMapper";
 import { CodexLogParser } from "./CodexLogParser";
 import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
+import { quoteTomlBasicString } from "../shared/InlineToml";
 import { createCodexCommandHookGroup } from "../shared/CodexHookUtils";
 import {
   buildCodexInlineHooks,
@@ -789,7 +790,7 @@ export class CodexCliProvider implements ICliProvider {
 
         configArgs.push(
           "-c",
-          "mcp_servers.ctrlyoke.default_tools_approval_mode='approve'"
+          `mcp_servers.${MCP_SERVER_IDS.CTRLYOKE}.default_tools_approval_mode=${quoteTomlBasicString("approve")}`
         );
       }
 
@@ -826,23 +827,15 @@ export class CodexCliProvider implements ICliProvider {
             )
           );
         } else {
-          const normalizedArgs = server.args?.map((arg) =>
-            arg.replace(/\\/g, "/")
-          );
           const codexEnvironment = splitCodexEnvironment(server.env);
-          const normalizedEnv = Object.fromEntries(
-            Object.entries(codexEnvironment.staticValues).map(
-              ([key, value]) => [key, value.replace(/\\/g, "/")]
-            )
-          );
 
           configArgs.push(
             "-c",
             CliMcpConfigGenerator.generateInlineTomlStdioServerConfig(
               server.id,
               server.command!,
-              normalizedArgs,
-              normalizedEnv,
+              server.args,
+              codexEnvironment.staticValues,
               {
                 defaultToolsApprovalMode:
                   server.autoApprove === true ? "approve" : undefined,

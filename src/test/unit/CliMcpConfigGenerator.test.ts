@@ -3,6 +3,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
+import { parse } from "smol-toml";
 import { CliMcpConfigGenerator } from "../../core/harness/shared/CliMcpConfigGenerator";
 import type { McpServerConfig } from "../../types/CtrlYokeTypes";
 
@@ -295,7 +296,7 @@ suite("CliMcpConfigGenerator", () => {
         "out/mcp-server.js",
         "/workspace"
       );
-      assert.ok(toml.includes("command='node'"));
+      assert.ok(toml.includes('command="node"'));
     });
 
     test("includes server path in args", () => {
@@ -304,7 +305,7 @@ suite("CliMcpConfigGenerator", () => {
         "out/mcp-server.js",
         "/workspace"
       );
-      assert.ok(toml.includes("args=['out/mcp-server.js']"));
+      assert.ok(toml.includes('args=["out/mcp-server.js"]'));
     });
 
     test("includes CTRLYOKE_WORKSPACE in env", () => {
@@ -313,7 +314,7 @@ suite("CliMcpConfigGenerator", () => {
         "out/mcp-server.js",
         "/workspace/root"
       );
-      assert.ok(toml.includes("CTRLYOKE_WORKSPACE='/workspace/root'"));
+      assert.ok(toml.includes('CTRLYOKE_WORKSPACE="/workspace/root"'));
     });
 
     test("normalizes Windows backslashes to forward slashes in serverPath", () => {
@@ -322,8 +323,8 @@ suite("CliMcpConfigGenerator", () => {
         "out\\mcp-server.js",
         "C:\\workspace\\root"
       );
-      assert.ok(toml.includes("args=['out/mcp-server.js']"));
-      assert.ok(toml.includes("CTRLYOKE_WORKSPACE='C:/workspace/root'"));
+      assert.ok(toml.includes('args=["out/mcp-server.js"]'));
+      assert.ok(toml.includes('CTRLYOKE_WORKSPACE="C:/workspace/root"'));
     });
 
     test("includes CTRLYOKE_WORKING_FILE in env when provided", () => {
@@ -335,7 +336,7 @@ suite("CliMcpConfigGenerator", () => {
       );
       assert.ok(
         toml.includes(
-          "CTRLYOKE_WORKING_FILE='/workspace/.ctrlyoke/.runs/active/run-2026-01-01T00-00-00-000Z/workflow.ctrlyoke.json'"
+          'CTRLYOKE_WORKING_FILE="/workspace/.ctrlyoke/.runs/active/run-2026-01-01T00-00-00-000Z/workflow.ctrlyoke.json"'
         )
       );
     });
@@ -358,7 +359,7 @@ suite("CliMcpConfigGenerator", () => {
       );
       assert.ok(
         toml.includes(
-          "CTRLYOKE_WORKING_FILE='C:/workspace/.ctrlyoke/active.yaml'"
+          'CTRLYOKE_WORKING_FILE="C:/workspace/.ctrlyoke/active.yaml"'
         )
       );
     });
@@ -380,7 +381,7 @@ suite("CliMcpConfigGenerator", () => {
         undefined,
         { MY_VAR: "my_value" }
       );
-      assert.ok(toml.includes("MY_VAR='my_value'"));
+      assert.ok(toml.includes('MY_VAR="my_value"'));
     });
 
     test("uses the state root for exported MCP variables", () => {
@@ -399,9 +400,59 @@ suite("CliMcpConfigGenerator", () => {
       const normalizedWorkingFile = path
         .join(stateRoot, "workflow.json")
         .replace(/\\/g, "/");
-      assert.ok(toml.includes(`CTRLYOKE_WORKSPACE='${normalizedStateRoot}'`));
+      assert.ok(toml.includes(`CTRLYOKE_WORKSPACE="${normalizedStateRoot}"`));
       assert.ok(
-        toml.includes(`CTRLYOKE_WORKING_FILE='${normalizedWorkingFile}'`)
+        toml.includes(`CTRLYOKE_WORKING_FILE="${normalizedWorkingFile}"`)
+      );
+    });
+
+    test("round-trips special strings in inline TOML basic strings", () => {
+      const workspaceRoot = String.raw`C:\Users\O'Brien\proj`;
+      const command = `worker's "cli"\\path\n雪`;
+      const args = [
+        `O'Brien`,
+        `say "hello"`,
+        String.raw`\\d+`,
+        "line\none",
+        "雪☃",
+      ];
+      const env = {
+        QUOTED: `it's a "value"`,
+        BACKSLASHES: String.raw`CORP\alice\d+`,
+        MULTILINE: "first\nsecond",
+        UNICODE: "café 雪",
+      };
+      const toml = CliMcpConfigGenerator.generateInlineTomlStdioServerConfig(
+        "worker",
+        command,
+        args,
+        env
+      );
+      const parsed = parse(toml) as {
+        mcp_servers: {
+          worker: {
+            command: string;
+            args: string[];
+            env: Record<string, string>;
+          };
+        };
+      };
+
+      assert.strictEqual(parsed.mcp_servers.worker.command, command);
+      assert.deepStrictEqual(parsed.mcp_servers.worker.args, args);
+      assert.deepStrictEqual({ ...parsed.mcp_servers.worker.env }, env);
+
+      const ctrlyokeToml = CliMcpConfigGenerator.generateInlineTomlConfig(
+        "ctrlyoke",
+        "out/mcp-server.js",
+        workspaceRoot
+      );
+      const ctrlyokeParsed = parse(ctrlyokeToml) as {
+        mcp_servers: { ctrlyoke: { env: Record<string, string> } };
+      };
+      assert.strictEqual(
+        ctrlyokeParsed.mcp_servers.ctrlyoke.env.CTRLYOKE_WORKSPACE,
+        "C:/Users/O'Brien/proj"
       );
     });
   });

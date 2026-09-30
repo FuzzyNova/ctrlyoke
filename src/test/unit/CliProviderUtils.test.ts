@@ -2,6 +2,7 @@ import * as assert from "assert";
 import * as os from "os";
 import * as path from "path";
 import { suite, test, setup, teardown } from "mocha";
+import { parse } from "smol-toml";
 import { configService } from "../../config/CtrlYokeConfigService";
 import { AntigravityCliProvider } from "../../core/harness/antigravity/AntigravityCliProvider";
 import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
@@ -16,49 +17,10 @@ import { canonicalizeDriveLetter } from "../../utils/PathCasing";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
 function parseInlineTomlEnv(toml: string): Record<string, string> {
-  const envStart = toml.indexOf("env=");
-  assert.ok(envStart >= 0, "TOML entry should contain an env table");
-
-  const tableStart = toml.indexOf("{", envStart);
-  assert.ok(tableStart >= 0, "TOML env should start with an inline table");
-
-  let depth = 0;
-  let tableEnd = -1;
-  let inString = false;
-  for (let index = tableStart; index < toml.length; index += 1) {
-    const character = toml[index];
-    if (character === "'") {
-      if (inString && toml[index + 1] === "'") {
-        index += 1;
-      } else {
-        inString = !inString;
-      }
-    } else if (!inString && character === "{") {
-      depth += 1;
-    } else if (!inString && character === "}") {
-      depth -= 1;
-      if (depth === 0) {
-        tableEnd = index;
-        break;
-      }
-    }
-  }
-  assert.ok(tableEnd > tableStart, "TOML env should close its inline table");
-
-  const entries: Record<string, string> = {};
-  const inner = toml.slice(tableStart + 1, tableEnd);
-  for (const pair of inner.split(",")) {
-    const separator = pair.indexOf("=");
-    assert.ok(separator > 0, "TOML env entries should contain an equals sign");
-    const key = pair.slice(0, separator).trim();
-    const value = pair.slice(separator + 1).trim();
-    assert.ok(
-      value.startsWith("'") && value.endsWith("'"),
-      "TOML env values should be quoted strings"
-    );
-    entries[key] = value.slice(1, -1).replace(/''/g, "'");
-  }
-  return entries;
+  const parsed = parse(toml) as {
+    mcp_servers: { ctrlyoke: { env: Record<string, string> } };
+  };
+  return { ...parsed.mcp_servers.ctrlyoke.env };
 }
 
 suite("CliProviderUtils", () => {

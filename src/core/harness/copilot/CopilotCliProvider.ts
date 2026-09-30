@@ -31,7 +31,10 @@ import {
 } from "../../../utils/ModelRegistry";
 import { MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
-import { CliProviderUtils } from "../shared/CliProviderUtils";
+import {
+  CliProviderUtils,
+  hasCtrlYokeServer,
+} from "../shared/CliProviderUtils";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import {
@@ -306,9 +309,10 @@ export class CopilotCliProvider implements ICliProvider {
     ) {
       args.push(...mcpPreparation.cliArgs);
       // Auto-approve ctrlyoke MCP tools only when the ctrlyoke server is included
-      const mcpServersResolved =
-        workflowContext?.resolvedProperties?.mcpServers ?? [];
-      if (mcpServersResolved.includes("ctrlyoke")) {
+      if (
+        workflowContext?.resolvedProperties &&
+        hasCtrlYokeServer(workflowContext.resolvedProperties)
+      ) {
         args.push("--allow-tool", "ctrlyoke");
         Log.debug("[CopilotCliProvider] ctrlyoke MCP tools auto-approved");
       }
