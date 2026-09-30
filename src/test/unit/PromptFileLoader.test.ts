@@ -168,6 +168,46 @@ suite("PromptFileLoader Tests", () => {
       assert.strictEqual(dashboardCalls[0][12], undefined);
     });
 
+    test("syncs the descriptor name into a queue with a pending continuation", async () => {
+      // Continuing a rewound run re-binds the resident instance's queue, whose
+      // in-memory state still carries `pendingRewind`. The reload's name sync
+      // mirrors the descriptor — it is not a user rename — so it must not trip
+      // the pending-continuation rename guard and abort the continuation.
+      const queue = new PromptQueue();
+      (queue as any).state.pendingRewind = {
+        fromStepIndex: 1,
+        baseDefinitionRevision: 3,
+      };
+      queue.readWorkingFile = async () =>
+        ({
+          steps: [],
+          workflowName: "stale",
+          startedAt: 0,
+          definitionRevision: 3,
+        }) as any;
+      queue.restoreFromWorkingFile = async () => undefined;
+      const loader = new PromptFileLoader(
+        { validateWorkflowSteps: () => ({ valid: true, errors: [] }) } as any,
+        queue
+      );
+      (loader as any).lineageRepository = {
+        tryReadDescriptor: async () => ({ workflowName: "history fix" }),
+      };
+
+      await loader.reloadFromWorkingFile(
+        path.join("runs", "history-fix-key", "draft", "workflow.ctrlyoke.json"),
+        PROMPT_FILE_RELOAD_MODES.REPLACE,
+        true,
+        "workspace-root"
+      );
+
+      assert.strictEqual(queue.getState().workflowName, "history fix");
+      await assert.rejects(
+        () => queue.updateWorkflowName("user rename"),
+        /continuation is pending/i
+      );
+    });
+
     test("forwards merged parallelGroups in the STEPS_EXTENDED push", async () => {
       const parallelGroups = [
         { id: "group-1", startIndex: 0, endIndex: 1, failFast: true },

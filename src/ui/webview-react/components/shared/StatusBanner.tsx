@@ -16,9 +16,11 @@ export type StatusBannerTone =
  * from pale to saturated depending on the active theme — no single themed
  * foreground token stays legible against all of them. White text with a black
  * outline reads clearly against any of these backgrounds regardless of theme.
+ * Keep the weight normal and the size/tracking generous: the outline already
+ * thickens every glyph, so bold small text fuses into unreadable blobs.
  */
 const BANNER_TEXT_CLASS =
-  "font-bold text-white [text-shadow:_-1px_-1px_0_#000,_1px_-1px_0_#000,_-1px_1px_0_#000,_1px_1px_0_#000]";
+  "text-sm font-normal tracking-wide text-white [text-shadow:_-1px_-1px_0_#000,_1px_-1px_0_#000,_-1px_1px_0_#000,_1px_1px_0_#000]";
 
 const TONE_BACKGROUND_CLASS: Record<StatusBannerTone, string> = {
   [STATUS_BANNER_TONES.ERROR]: "bg-[var(--status-error)]",
@@ -46,7 +48,7 @@ export const StatusBanner: React.FC<StatusBannerProps> = ({
   className = "",
 }) => (
   <div
-    className={`flex items-center gap-2 px-3 py-1.5 text-xs ${TONE_BACKGROUND_CLASS[tone]} ${BANNER_TEXT_CLASS} border-b border-btn-border ${className}`}
+    className={`flex items-center gap-2 px-3 py-1.5 ${TONE_BACKGROUND_CLASS[tone]} ${BANNER_TEXT_CLASS} border-b border-btn-border ${className}`}
     role="status"
     aria-label={ariaLabel}
   >

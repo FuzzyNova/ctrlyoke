@@ -61,7 +61,7 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
           aria-label={`Workflow "${props.viewingDeletedWorkflow.workflowName}" has been deleted`}
           action={
             <button
-              className="text-xs underline opacity-90 hover:opacity-100"
+              className="underline opacity-90 hover:opacity-100"
               onClick={props.handleCloseDeletedWorkflow}
               title="Start a new workflow and drop this cached view"
               aria-label="Close deleted workflow"
@@ -70,7 +70,8 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
             </button>
           }
         >
-          &quot;{props.viewingDeletedWorkflow.workflowName}&quot; has been deleted
+          &quot;{props.viewingDeletedWorkflow.workflowName}&quot; has been
+          deleted
         </StatusBanner>
       )}
       {!props.isViewingDeletedWorkflow && isLocked && (
@@ -102,7 +103,7 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
           aria-label="Workflow will pause after the current step completes"
           action={
             <button
-              className="text-xs underline opacity-80 hover:opacity-100"
+              className="underline opacity-80 hover:opacity-100"
               onClick={props.handleCancelPause}
               aria-label="Cancel pause"
             >
@@ -124,20 +125,24 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
             aria-label={`Continuing run from step ${props.pendingRewind.fromStepIndex + 1}`}
             action={
               <button
-                className="text-xs underline opacity-90 hover:opacity-100 focus-visible:outline focus-visible:outline-1"
+                className="underline opacity-90 hover:opacity-100 focus-visible:outline focus-visible:outline-1"
                 onClick={props.handleDiscardContinuation}
               >
                 Discard Continuation
               </button>
             }
           >
-            Continuing run from step {props.pendingRewind.fromStepIndex + 1}
-            <span
-              className="inline-flex items-center gap-1 opacity-90 cursor-help"
-              title="Continuing crosses an undo-stack boundary — you won't be able to undo once you continue. All output history is preserved, but the working file's captured state for any re-run prompts will be overwritten."
-            >
-              <Icon name="info" />
-              Can&apos;t be undone after continuing
+            <span className="inline-flex flex-wrap items-center gap-x-4 gap-y-1 align-middle">
+              <span>
+                Continuing run from step {props.pendingRewind.fromStepIndex + 1}
+              </span>
+              <span
+                className="inline-flex items-center gap-1 opacity-90 cursor-help"
+                title="Continuing crosses an undo-stack boundary — you won't be able to undo once you continue. All output history is preserved, but the working file's captured state for any re-run prompts will be overwritten."
+              >
+                <Icon name="info" />
+                Can&apos;t be undone after continuing
+              </span>
             </span>
           </StatusBanner>
         )}

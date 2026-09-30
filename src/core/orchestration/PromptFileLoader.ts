@@ -315,7 +315,7 @@ export class PromptFileLoader {
             )
           : undefined;
       if (descriptor) {
-        await this.promptQueue.updateWorkflowName(descriptor.workflowName);
+        this.promptQueue.syncWorkflowName(descriptor.workflowName);
       }
       const originalFilePath = descriptor?.originalFile;
 
@@ -363,7 +363,7 @@ export class PromptFileLoader {
           preventRunningAutoStart
         );
         if (descriptor) {
-          await this.promptQueue.updateWorkflowName(descriptor.workflowName);
+          this.promptQueue.syncWorkflowName(descriptor.workflowName);
         }
 
         const dashboard = this.getDashboard();

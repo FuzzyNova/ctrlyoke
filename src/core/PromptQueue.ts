@@ -2769,6 +2769,16 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    */
   public async updateWorkflowName(workflowName: string): Promise<void> {
     this.assertNoPendingRewindWorkflowMutation("rename the workflow");
+    this.syncWorkflowName(workflowName);
+  }
+
+  /**
+   * Mirror the lineage descriptor's authoritative name into memory. Unlike
+   * `updateWorkflowName` this is not a user rename, so it is not blocked by a
+   * pending continuation — a reload that binds (or re-binds) a run with a
+   * pending rewind must still be able to pick up the name it already has.
+   */
+  public syncWorkflowName(workflowName: string): void {
     this.state.workflowName = workflowName;
     this.emitStateChange();
     Log.debug(

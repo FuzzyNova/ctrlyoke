@@ -386,7 +386,7 @@ const EditorSectionInner: React.FC = () => {
             action={
               <button
                 type="button"
-                className="text-xs underline opacity-90 hover:opacity-100"
+                className="underline opacity-90 hover:opacity-100"
                 onClick={cancelReplyToStep}
                 aria-label="Cancel reply"
               >
