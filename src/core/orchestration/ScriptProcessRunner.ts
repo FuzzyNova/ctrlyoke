@@ -58,12 +58,20 @@ export interface ScriptProcessResult {
 
 /** Shared headless process transport for conditions and worktree setup. */
 export class ScriptProcessRunner {
-  private readonly processManager: CliProcessManager;
+  private readonly processManager: Pick<
+    CliProcessManager,
+    "spawn" | "cancel" | "dispose"
+  >;
 
-  constructor(processManagerRoot: string) {
-    this.processManager = new CliProcessManager(processManagerRoot, (msg) =>
-      Log.trace(`[ScriptProcessRunner] ${msg}`)
-    );
+  constructor(
+    processManagerRoot: string,
+    processManager?: Pick<CliProcessManager, "spawn" | "cancel" | "dispose">
+  ) {
+    this.processManager =
+      processManager ??
+      new CliProcessManager(processManagerRoot, (msg) =>
+        Log.trace(`[ScriptProcessRunner] ${msg}`)
+      );
   }
 
   async run(options: ScriptProcessRunnerOptions): Promise<ScriptProcessResult> {
@@ -127,8 +135,13 @@ export class ScriptProcessRunner {
         result: result.stdout.trim(),
         stdout: result.stdout.trim(),
         stderr: result.stderr.trim(),
-        error: result.stderr.trim() || undefined,
-        ...(result.terminationSignal
+        error:
+          (result.terminationSignal && !result.terminatedByManager
+            ? `Process terminated by ${result.terminationSignal}`
+            : undefined) ||
+          result.stderr.trim() ||
+          undefined,
+        ...(result.terminationSignal && result.terminatedByManager
           ? { cancelled: true }
           : { exitCode: result.exitCode }),
         errored: false,

@@ -85,3 +85,34 @@ suite("CliProcessManager working directory", () => {
     assert.strictEqual(result.stdout, canonicalizeDriveLetter(tmpDir));
   });
 });
+
+suite("CliProcessManager teardown", () => {
+  test("disposeProcess sends SIGTERM first", async () => {
+    const signals: NodeJS.Signals[] = [];
+    const manager = new CliProcessManager(
+      process.cwd(),
+      undefined,
+      (pid, signal, callback) => {
+        signals.push(signal as NodeJS.Signals);
+        try {
+          process.kill(pid, signal as NodeJS.Signals);
+          callback?.();
+        } catch (error) {
+          callback?.(error as Error);
+        }
+      }
+    );
+    const resultPromise = manager.spawn(process.execPath, [
+      "-e",
+      "setTimeout(() => {}, 10000)",
+    ]);
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    manager.disposeProcess();
+    const result = await resultPromise;
+
+    assert.deepStrictEqual(signals, ["SIGTERM"]);
+    assert.strictEqual(result.terminatedByManager, true);
+    assert.strictEqual(result.terminationSignal, "SIGTERM");
+  });
+});
