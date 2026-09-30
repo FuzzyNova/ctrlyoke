@@ -152,6 +152,10 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
         "/%69ndex.html",
         "/index%2ehtml",
         "/./index.html",
+        "/%5Cindex.html",
+        "/.%5Cindex.html",
+        "/a%5C..%5Cindex.html",
+        "/%5Cfavicon.svg",
       ]) {
         const response = await sendGetRequest(port, requestPath);
         assert.notStrictEqual(response.statusCode, 200, requestPath);

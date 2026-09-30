@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by bug-hunt final step (claude-cli)
 - **Area:** `src/server/CtrlYokeHostedServer.ts` (static-file guard before `express.static(webviewDist)`)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

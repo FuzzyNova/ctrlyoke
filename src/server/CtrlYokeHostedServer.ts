@@ -971,6 +971,15 @@ export class CtrlYokeHostedServer
     });
     // Register static files after the explicit HTML entry route so /index.html
     // receives the same token check and hosted-page patching as /.
+    const isWindows = process.platform === "win32";
+    const protectedStaticPaths = new Set(
+      [
+        path.resolve(webviewDist, "index.html"),
+        path.resolve(webviewDist, "favicon.svg"),
+      ].map((protectedPath) =>
+        isWindows ? protectedPath.toLowerCase() : protectedPath
+      )
+    );
     this.app.use(
       (req, res, next) => {
         let decodedPath = req.path;
@@ -983,13 +992,22 @@ export class CtrlYokeHostedServer
         } catch {
           return next();
         }
-        const normalizedPath = path.posix.normalize(`/${decodedPath}`);
-        const staticPath = normalizedPath.toLowerCase();
+        // express.static resolves the decoded request path with the platform
+        // path implementation. Mirror that resolution here so separators and
+        // dot segments cannot make a protected file look like another path.
+        const resolvedPath = path.resolve(webviewDist, `.${decodedPath}`);
+        const comparisonPath = isWindows ? resolvedPath.toLowerCase() : resolvedPath;
+        const protectsResolvedPath = protectedStaticPaths.has(comparisonPath);
+        const staticPath = decodedPath.toLowerCase();
         const isProtectedHtmlPath =
           /^\/index(?:~\d+)?\.html?(?::.*)?$/.test(staticPath);
         const isProtectedFaviconPath =
           /^\/(?:favicon|favico~\d+)\.svg(?::.*)?$/.test(staticPath);
-        if (isProtectedHtmlPath || isProtectedFaviconPath) {
+        if (
+          protectsResolvedPath ||
+          isProtectedHtmlPath ||
+          isProtectedFaviconPath
+        ) {
           return res.sendStatus(404);
         }
         return next();
