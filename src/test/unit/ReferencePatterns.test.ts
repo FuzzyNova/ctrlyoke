@@ -39,6 +39,13 @@ suite("ReferencePatterns", () => {
       ]);
     });
 
+    test("decorates paths containing a hash the same way runtime parses them", () => {
+      const { fullFile } = createReferencePatterns();
+      assert.deepStrictEqual(paths(fullFile, "@src/C#/a.cs"), [
+        "src/C#/a.cs",
+      ]);
+    });
+
     test("keeps a dotted directory segment in the path", () => {
       const { fullFile } = createReferencePatterns();
       assert.deepStrictEqual(paths(fullFile, "@src/my.dir/file.ts"), [

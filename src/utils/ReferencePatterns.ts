@@ -1,7 +1,7 @@
 import { NOT_AFTER_BOUNDARY, NOT_BEFORE_BOUNDARY } from "./ReferenceBoundary";
 
 /** Shared unquoted @ path body. A colon is valid only in the drive prefix. */
-export const UNQUOTED_AT_REFERENCE_PATH = String.raw`(?:[A-Za-z]:)?[^\s:#"]+`;
+export const UNQUOTED_AT_REFERENCE_PATH = String.raw`(?:[A-Za-z]:)?[^\s:"]+`;
 
 /** Build the shared inline prior-context pattern for parsing and decoration. */
 export function createInlinePriorContextReferencePattern(): RegExp {

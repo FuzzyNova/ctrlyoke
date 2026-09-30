@@ -53,47 +53,55 @@ export const LITERAL_FENCE_INFO = "text";
  */
 export function maskFencedCodeBlocks(text: string): string {
   const fenceRuns = /`{3,}/g;
-  let masked = text;
+  const blocks: Array<{ start: number; end: number }> = [];
+  let opening = fenceRuns.exec(text);
 
-  while (fenceRuns.lastIndex < text.length) {
-    const opening = fenceRuns.exec(text);
-    if (!opening) {
-      break;
-    }
+  while (opening) {
     const openingLength = opening[0].length;
-    let closing: RegExpExecArray | null;
-    let contentEnd = -1;
+    let next: RegExpExecArray | null;
+    let restartedAtGeneratedOpener = false;
 
-    while ((closing = fenceRuns.exec(text)) !== null) {
-      const afterFence = closing.index + closing[0].length;
+    while ((next = fenceRuns.exec(text)) !== null) {
+      if (next[0].length < openingLength) {
+        continue;
+      }
+
+      const afterFence = next.index + next[0].length;
       const lineEnd = text.indexOf("\n", afterFence);
       const lineRemainder = text.slice(
         afterFence,
         lineEnd < 0 ? text.length : lineEnd
       );
-      // fenceLiteral labels inserted openers as `text`. They must not close
-      // an earlier authored run; the generated bare closing fence will still
-      // mask the literal value together with any authored text before it.
       const isGeneratedOpener =
         lineRemainder.trim() === LITERAL_FENCE_INFO;
-      if (closing[0].length >= openingLength && !isGeneratedOpener) {
-        contentEnd = closing.index + closing[0].length;
+
+      if (isGeneratedOpener) {
+        // The generated fence is longer than every run in the authored text
+        // and substituted value. End the authored block here, then scan the
+        // generated literal as its own block so backticks in the value cannot
+        // close the authored fence.
+        blocks.push({ start: opening.index, end: afterFence });
+        opening = next;
+        restartedAtGeneratedOpener = true;
         break;
       }
-    }
 
-    if (contentEnd < 0) {
+      blocks.push({ start: opening.index, end: afterFence });
+      opening = fenceRuns.exec(text);
+      restartedAtGeneratedOpener = true;
       break;
     }
 
-    const blockStart = opening.index;
-    const block = text.slice(blockStart, contentEnd);
-    const maskedBlock = block.replace(/[@#~!$/{}]/g, "\x00");
-    masked =
-      masked.slice(0, blockStart) + maskedBlock + masked.slice(contentEnd);
-    fenceRuns.lastIndex = contentEnd;
+    if (!restartedAtGeneratedOpener) {
+      break;
+    }
   }
 
+  let masked = text;
+  for (const { start, end } of blocks) {
+    const block = text.slice(start, end).replace(/[@#~!$/{}]/g, "\x00");
+    masked = masked.slice(0, start) + block + masked.slice(end);
+  }
   return masked;
 }
 

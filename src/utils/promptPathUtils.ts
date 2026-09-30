@@ -31,10 +31,13 @@ export function looksLikeFilePath(
 ): boolean {
   const trimmed = promptValue.trim();
 
-  // Newlines and prose between path segments indicate inline prompt text,
-  // even if the final word has an extension. Spaces within one path segment
-  // remain supported.
-  if (/\r|\n/.test(trimmed) || /\s+[^/\\\s]+\s+/.test(trimmed)) {
+  // Reject shapes that identify prose, while allowing spaces anywhere in a
+  // path segment (including multiple words in a file or folder name).
+  if (
+    /\r|\n/.test(trimmed) ||
+    /^\/\w+\s/.test(trimmed) ||
+    /(?:,|;|\.)\s/.test(trimmed)
+  ) {
     return false;
   }
 

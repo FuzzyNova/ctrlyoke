@@ -75,6 +75,23 @@ suite("promptPathUtils", () => {
       assert.strictEqual(looksLikeFilePath("./config.yaml"), true);
     });
 
+    test("recognizes paths with multiple words in file and folder names", () => {
+      assert.strictEqual(
+        looksLikeFilePath("./My Documents/Fix It Now.prompt.md"),
+        true
+      );
+      assert.strictEqual(
+        looksLikeFilePath("prompts/fix the bug.prompt.md", {
+          allowWorkspaceFolderPrefix: true,
+        }),
+        true
+      );
+      assert.strictEqual(
+        looksLikeFilePath("C:\\Users\\Jane Doe\\My Prompts\\a b c.md"),
+        true
+      );
+    });
+
     // Inline prompts — should return false
     test("returns false for plain text prompt", () => {
       assert.strictEqual(
@@ -90,6 +107,14 @@ suite("promptPathUtils", () => {
       );
       assert.strictEqual(
         looksLikeFilePath("./fix the bug, then update README.md"),
+        false
+      );
+      assert.strictEqual(
+        looksLikeFilePath("Please fix this; then run tests.md"),
+        false
+      );
+      assert.strictEqual(
+        looksLikeFilePath("This is a sentence. Read README.md"),
         false
       );
     });

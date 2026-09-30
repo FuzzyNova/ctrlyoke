@@ -28,6 +28,11 @@ suite("ContextReferenceBuilder", () => {
     assert.strictEqual(quoteReferencePath("C:/dev/a.ts"), '"C:/dev/a.ts"');
   });
 
+  test("keeps hashes in unquoted paths because @ references support them", () => {
+    assert.strictEqual(quoteReferencePath("src/C#/a.cs"), "src/C#/a.cs");
+    assert.strictEqual(buildFileReference("src/C#/a.cs"), "@src/C#/a.cs");
+  });
+
   test("builds file references", () => {
     assert.strictEqual(buildFileReferenceValue("src/app.ts"), "src/app.ts");
     assert.strictEqual(buildFileReference("src/app.ts"), "@src/app.ts");

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the long-running bug-fix workflow final step (claude-cli, helper agent)
 - **Area:** `src/utils/FileReferenceParser.ts` (`maskFencedCodeBlocks` / `fenceLiteral`), `src/core/ConditionOutputRefs.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 Follow-up to `stray-backtick-fence-reactivates-condition-output.md` (fixed in 1b8097110). That fix
 only holds when the substituted value contains no backtick fence of its own.

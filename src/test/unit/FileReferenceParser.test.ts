@@ -66,6 +66,12 @@ suite("FileReferenceParser", () => {
       assert.strictEqual(refs[0].isDirectory, false);
     });
 
+    test("parses an at-reference path containing a hash", () => {
+      const refs = parseAtReferences("see @src/C#/a.cs");
+      assert.strictEqual(refs.length, 1);
+      assert.strictEqual(refs[0].path, "src/C#/a.cs");
+    });
+
     test("parses Windows-style file path", () => {
       const refs = parseAtReferences("See @src\\utils\\helper.ts");
       assert.strictEqual(refs.length, 1);

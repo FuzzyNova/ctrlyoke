@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the long-running bug-fix workflow final step (claude-cli, helper agent)
 - **Area:** `src/utils/promptPathUtils.ts` (`looksLikeFilePath`), `src/utils/ReferencePatterns.ts` (`UNQUOTED_AT_REFERENCE_PATH`), `src/completions/ContextReferenceBuilder.ts` (`quoteReferencePath`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 Both are regressions from 0e7477717 (`fix: correct prompt reference parsing`).
 
