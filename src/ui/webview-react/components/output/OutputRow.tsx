@@ -142,6 +142,7 @@ import {
   formatScriptOutputTailToggleLabel,
 } from "@utils/outputTruncation";
 import { Icon } from "../shared/Icon";
+import { ErrorBoundary } from "../shared/ErrorBoundary";
 
 export interface OutputRowFileUndoRequest {
   path: string;
@@ -2023,6 +2024,17 @@ function OutputRowComponent({
   );
 }
 
-export const OutputRow = memo(OutputRowComponent);
+const OutputRowContent = memo(OutputRowComponent);
 
+export const OutputRow: React.FC<OutputRowProps> = (props) => (
+  <ErrorBoundary
+    fallback={
+      <div className="my-1 px-[var(--spacing-md)] text-[length:var(--cy-output-font-size-xs)] text-description-fg">
+        could not render this event
+      </div>
+    }
+  >
+    <OutputRowContent {...props} />
+  </ErrorBoundary>
+);
 OutputRow.displayName = "OutputRow";

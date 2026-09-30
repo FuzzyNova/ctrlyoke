@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by user, after restoring run history from the search index
 - **Area:** `src/ui/webview-react/components/output/` (file-edit diff rendering)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

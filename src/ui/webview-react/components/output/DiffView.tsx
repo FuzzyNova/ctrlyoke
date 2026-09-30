@@ -36,8 +36,8 @@ import {
   locateActiveDiffMatch,
 } from "@utils/rdvAdapter";
 import {
-  normalizeStructuredPatch,
   countStructuredPatchDisplayLines,
+  normalizeStructuredPatch,
 } from "@utils/outputUtils";
 import {
   injectFindHighlightStyles,
@@ -70,6 +70,18 @@ const HIDDEN_CONTEXT_CHUNK_LINES = 25;
 const EMPTY_HUNKS: HunkData[] = [];
 const DEFER_DIFF_TOKENIZATION_LINE_THRESHOLD = 240;
 const DEFER_DIFF_TOKENIZATION_TIMEOUT_MS = 900;
+
+function getRawStructuredPatchText(
+  hunks: DiffViewProps["structuredPatch"]
+): string | undefined {
+  if (!hunks?.length) return undefined;
+  return hunks
+    .map(
+      (hunk) =>
+        `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@\n${Array.isArray(hunk.lines) ? hunk.lines.join("\n") : ""}`
+    )
+    .join("\n");
+}
 
 const DIFF_EXPANSION_MODES = {
   CHUNK: "chunk",
@@ -239,6 +251,36 @@ export const DiffView: React.FC<DiffViewProps> = ({
   const viewType =
     viewTypeProp ?? (isWide ? DIFF_VIEW_TYPES.SPLIT : DIFF_VIEW_TYPES.UNIFIED);
 
+  const structuredPatchRender = useMemo(() => {
+    const normalizedPatch = normalizeStructuredPatch(structuredPatch);
+    if (normalizedPatch.length === 0) {
+      return {
+        normalizedPatch,
+        hunks: [] as HunkData[],
+        fallbackText: getRawStructuredPatchText(structuredPatch),
+      };
+    }
+    try {
+      return {
+        normalizedPatch,
+        hunks: toRdvHunks(normalizedPatch),
+        fallbackText: undefined,
+      };
+    } catch (error) {
+      WebviewLog.warn(
+        "[DiffView] structured patch parsing failed; showing raw patch text",
+        error
+      );
+      return {
+        normalizedPatch,
+        hunks: [] as HunkData[],
+        fallbackText:
+          getRawStructuredPatchText(normalizedPatch) ??
+          getRawStructuredPatchText(structuredPatch),
+      };
+    }
+  }, [structuredPatch]);
+
   const wrapperRef = useRef<HTMLDivElement>(null);
   const setWrapperRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -257,9 +299,13 @@ export const DiffView: React.FC<DiffViewProps> = ({
     if (externalHunks !== undefined) {
       return externalHunks.reduce((sum, h) => sum + h.changes.length, 0);
     }
-    const normalizedPatch = normalizeStructuredPatch(structuredPatch);
-    if (normalizedPatch.length > 0) {
-      return countStructuredPatchDisplayLines(normalizedPatch);
+    if (structuredPatchRender.fallbackText !== undefined) {
+      return structuredPatchRender.fallbackText.split("\n").length;
+    }
+    if (structuredPatchRender.hunks.length > 0) {
+      return countStructuredPatchDisplayLines(
+        structuredPatchRender.normalizedPatch
+      );
     }
     if (oldContent !== undefined || newContent !== undefined) {
       const oldLines = oldContent ? oldContent.split("\n").length : 0;
@@ -267,7 +313,12 @@ export const DiffView: React.FC<DiffViewProps> = ({
       return Math.max(oldLines, newLines);
     }
     return 0;
-  }, [externalHunks, structuredPatch, oldContent, newContent]);
+  }, [
+    externalHunks,
+    structuredPatchRender,
+    oldContent,
+    newContent,
+  ]);
 
   const hasDiff = estimatedLineCount > 0;
 
@@ -276,6 +327,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
   const parsedDiff = useMemo((): {
     baseHunks: HunkData[];
     diffType: DiffType;
+    fallbackText?: string;
   } => {
     if (externalHunks !== undefined) {
       return {
@@ -283,9 +335,15 @@ export const DiffView: React.FC<DiffViewProps> = ({
         diffType: externalDiffType ?? "modify",
       };
     }
-    const normalizedPatch = normalizeStructuredPatch(structuredPatch);
-    if (normalizedPatch.length > 0) {
-      return { baseHunks: toRdvHunks(normalizedPatch), diffType: "modify" };
+    if (structuredPatchRender.fallbackText !== undefined) {
+      return {
+        baseHunks: EMPTY_HUNKS,
+        diffType: "modify",
+        fallbackText: structuredPatchRender.fallbackText,
+      };
+    }
+    if (structuredPatchRender.hunks.length > 0) {
+      return { baseHunks: structuredPatchRender.hunks, diffType: "modify" };
     }
     if (oldContent !== undefined && newContent !== undefined) {
       const result = toRdvFromContent(oldContent, newContent);
@@ -295,7 +353,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
   }, [
     externalHunks,
     externalDiffType,
-    structuredPatch,
+    structuredPatchRender,
     oldContent,
     newContent,
   ]);
@@ -622,6 +680,12 @@ export const DiffView: React.FC<DiffViewProps> = ({
       </div>
 
       {/* Diff — only mounted when expanded and there are hunks */}
+      {isExpanded && parsedDiff.fallbackText !== undefined && (
+        <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-[3px] border border-panel-border bg-editor-bg p-2 font-mono text-[length:var(--cy-output-font-size-xs)] text-description-fg">
+          {parsedDiff.fallbackText}
+        </pre>
+      )}
+
       {isExpanded && expandedHunks.length > 0 && (
         <div className="rounded-[3px] overflow-x-auto overflow-y-hidden border border-panel-border">
           <Diff

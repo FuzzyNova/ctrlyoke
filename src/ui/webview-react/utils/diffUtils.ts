@@ -83,11 +83,28 @@ export function normalizeStructuredPatch(
   const normalized: UnifiedDiffHunk[] = [];
 
   for (const hunk of hunks) {
-    if (!Array.isArray(hunk.lines) || hunk.lines.length === 0) continue;
-    const signature = getStructuredPatchSignature(hunk);
+    if (!hunk || typeof hunk !== "object" || !Array.isArray(hunk.lines)) {
+      continue;
+    }
+    const lines = hunk.lines.filter(
+      (line): line is string =>
+        typeof line === "string" && /^[ +\\-]/.test(line)
+    );
+    if (lines.length === 0) continue;
+
+    const oldLines = lines.reduce(
+      (count, line) => count + (line[0] === " " || line[0] === "-" ? 1 : 0),
+      0
+    );
+    const newLines = lines.reduce(
+      (count, line) => count + (line[0] === " " || line[0] === "+" ? 1 : 0),
+      0
+    );
+    const normalizedHunk = { ...hunk, oldLines, newLines, lines };
+    const signature = getStructuredPatchSignature(normalizedHunk);
     if (seen.has(signature)) continue;
     seen.add(signature);
-    normalized.push(hunk);
+    normalized.push(normalizedHunk);
   }
 
   return normalized;
