@@ -418,6 +418,29 @@ button .codicon {
 }
 
 /* ============================================================================
+   Status banners
+   ============================================================================
+   StatusBanner sets --cy-status-banner-bg to one of the --status-* colors.
+   Themes can set those to anything, so the text color is derived from the
+   resolved fill rather than the theme kind: convert it to linear sRGB, take
+   its WCAG relative luminance Y, and paint black when Y is above 0.1791 (the
+   point where black and white give equal contrast, sqrt(0.0525) - 0.05) and
+   white below it. The ×1e6 clamp turns that comparison into a hard 0/1 switch.
+   Engines without relative color syntax keep the plain black declaration. */
+@layer components {
+  .cy-status-banner {
+    background-color: var(--cy-status-banner-bg);
+    color: #000;
+    color: color(
+      from var(--cy-status-banner-bg) srgb-linear
+        clamp(0, (0.1791 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1e6, 1)
+        clamp(0, (0.1791 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1e6, 1)
+        clamp(0, (0.1791 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1e6, 1)
+    );
+  }
+}
+
+/* ============================================================================
    Atomic reference chips
    ============================================================================ */
 @layer components {

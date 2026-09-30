@@ -184,6 +184,12 @@ const EditorSectionInner: React.FC = () => {
     toggleEditorCollapse();
   }
 
+  const replySessionId = replyContext && (
+    <span title={replyContext.sessionId}>
+      {replyContext.sessionId.slice(0, 8)}…
+    </span>
+  );
+
   if (editorCollapsed) {
     return (
       <PanelBar
@@ -383,26 +389,23 @@ const EditorSectionInner: React.FC = () => {
             tone={STATUS_BANNER_TONES.INFO}
             icon="reply"
             aria-label={`Replying to ${HARNESS_DISPLAY_NAMES[replyContext.harness]} session ${replyContext.sessionId} (${replyContext.sourceLabel})`}
-            action={
-              <button
-                type="button"
-                className="underline opacity-90 hover:opacity-100"
-                onClick={cancelReplyToStep}
-                aria-label="Cancel reply"
-              >
-                Cancel
-              </button>
+            narrowChildren={
+              <>
+                Replying to {HARNESS_DISPLAY_NAMES[replyContext.harness]} ·{" "}
+                {replySessionId}
+              </>
             }
+            action={{
+              label: "Cancel",
+              onClick: cancelReplyToStep,
+              "aria-label": "Cancel reply",
+            }}
           >
             Replying to {HARNESS_DISPLAY_NAMES[replyContext.harness]} session{" "}
-            <span title={replyContext.sessionId}>
-              {replyContext.sessionId.slice(0, 8)}…
+            {replySessionId}
+            <span className="ml-1 opacity-70">
+              ({replyContext.sourceLabel})
             </span>
-            {!isCompact && (
-              <span className="ml-1 font-normal opacity-70">
-                ({replyContext.sourceLabel})
-              </span>
-            )}
           </StatusBanner>
         )}
 

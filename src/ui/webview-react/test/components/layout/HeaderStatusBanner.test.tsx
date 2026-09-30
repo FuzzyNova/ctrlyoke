@@ -243,4 +243,57 @@ describe("HeaderStatusBanner", () => {
       screen.queryByText("Continuing run from step 2")
     ).not.toBeInTheDocument();
   });
+
+  describe("at narrow widths", () => {
+    beforeEach(() => {
+      vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+        width: 360,
+      } as DOMRect);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("shortens the continuation banner and keeps the action's accessible name", () => {
+      const handleDiscardContinuation = vi.fn();
+      renderBanner({
+        pendingRewind: { fromStepIndex: 1, baseDefinitionRevision: 2 },
+        handleDiscardContinuation,
+      });
+
+      expect(
+        screen.getByText("Continuing from step 2", { exact: false })
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText("Can't be undone after continuing")
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("img", { name: "Can't be undone after continuing" })
+      ).toBeInTheDocument();
+      const discard = screen.getByRole("button", {
+        name: "Discard Continuation",
+      });
+      expect(discard).toHaveTextContent("Discard");
+      fireEvent.click(discard);
+      expect(handleDiscardContinuation).toHaveBeenCalledOnce();
+    });
+
+    it("shortens the pause and locked banners", () => {
+      renderBanner({ isPausing: true });
+      expect(screen.getByText("Pausing after this step")).toBeInTheDocument();
+      cleanup();
+
+      setLockedLineage({ isSystemGenerated: true });
+      renderBanner();
+      expect(
+        screen.getByText("Read-only — commit message workflow", {
+          exact: false,
+        })
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Edit in settings" })
+      ).toBeInTheDocument();
+    });
+  });
 });

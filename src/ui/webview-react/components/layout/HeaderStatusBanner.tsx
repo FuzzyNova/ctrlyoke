@@ -6,9 +6,16 @@ import type {
 import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 import { useActiveWorkflowExternalOwner } from "@hooks/useActiveWorkflowExternalOwner";
 import { useIsSystemGeneratedWorkflow } from "@hooks/useIsSystemGeneratedWorkflow";
-import { getExternalReadOnlyLabel } from "@utils/externalRunner";
+import {
+  getExternalReadOnlyLabel,
+  getExternalRunnerLabel,
+} from "@utils/externalRunner";
 import { useUiStore } from "@store/uiStore";
-import { StatusBanner, STATUS_BANNER_TONES } from "../shared/StatusBanner";
+import {
+  StatusBanner,
+  STATUS_BANNER_LINK_CLASS,
+  STATUS_BANNER_TONES,
+} from "../shared/StatusBanner";
 import { Icon } from "../shared/Icon";
 
 export interface HeaderStatusBannerProps {
@@ -37,6 +44,7 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
   const toggleGlobalSettings = useUiStore((s) => s.toggleGlobalSettings);
   const globalSettingsOpen = useUiStore((s) => s.globalSettingsOpen);
   const externalReadOnlyLabel = getExternalReadOnlyLabel(externalOwner);
+  const externalRunnerLabel = getExternalRunnerLabel(externalOwner);
   const isSystemGeneratedLocked =
     externalReadOnlyLabel === undefined && isSystemGeneratedWorkflow;
   const lockedLabel =
@@ -44,6 +52,9 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
     (isSystemGeneratedWorkflow
       ? "Read-only — managed automatically by commit message generation"
       : undefined);
+  const narrowLockedLabel = externalRunnerLabel
+    ? `Read-only — running via ${externalRunnerLabel}`
+    : "Read-only — commit message workflow";
   const isLocked = lockedLabel !== undefined;
   const openCommitSettings = () => {
     setGlobalSettingsTab("commit");
@@ -52,6 +63,19 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
     }
   };
 
+  const settingsLink = isSystemGeneratedLocked && (
+    <>
+      .{" "}
+      <button
+        type="button"
+        className={STATUS_BANNER_LINK_CLASS}
+        onClick={openCommitSettings}
+      >
+        Edit in settings
+      </button>
+    </>
+  );
+
   return (
     <>
       {props.isViewingDeletedWorkflow && props.viewingDeletedWorkflow && (
@@ -59,16 +83,12 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
           tone={STATUS_BANNER_TONES.ERROR}
           icon="trash"
           aria-label={`Workflow "${props.viewingDeletedWorkflow.workflowName}" has been deleted`}
-          action={
-            <button
-              className="underline opacity-90 hover:opacity-100"
-              onClick={props.handleCloseDeletedWorkflow}
-              title="Start a new workflow and drop this cached view"
-              aria-label="Close deleted workflow"
-            >
-              Close
-            </button>
-          }
+          action={{
+            label: "Close",
+            onClick: props.handleCloseDeletedWorkflow,
+            title: "Start a new workflow and drop this cached view",
+            "aria-label": "Close deleted workflow",
+          }}
         >
           &quot;{props.viewingDeletedWorkflow.workflowName}&quot; has been
           deleted
@@ -79,20 +99,15 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
           tone={STATUS_BANNER_TONES.ERROR}
           icon="lock"
           aria-label={lockedLabel}
+          narrowChildren={
+            <>
+              {narrowLockedLabel}
+              {settingsLink}
+            </>
+          }
         >
           {lockedLabel}
-          {isSystemGeneratedLocked && (
-            <>
-              .{" "}
-              <button
-                type="button"
-                className="underline opacity-90 hover:opacity-100"
-                onClick={openCommitSettings}
-              >
-                Edit in settings
-              </button>
-            </>
-          )}
+          {settingsLink}
         </StatusBanner>
       )}
       {!props.isViewingDeletedWorkflow && !isLocked && props.isPausing && (
@@ -101,15 +116,12 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
           icon="debug-pause"
           iconClassName="animate-pulse-cancelling"
           aria-label="Workflow will pause after the current step completes"
-          action={
-            <button
-              className="underline opacity-80 hover:opacity-100"
-              onClick={props.handleCancelPause}
-              aria-label="Cancel pause"
-            >
-              Cancel
-            </button>
-          }
+          narrowChildren="Pausing after this step"
+          action={{
+            label: "Cancel",
+            onClick: props.handleCancelPause,
+            "aria-label": "Cancel pause",
+          }}
         >
           Workflow will pause after the current step completes
         </StatusBanner>
@@ -118,34 +130,52 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
         !isLocked &&
         props.pendingRewind &&
         props.displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN && (
-          <StatusBanner
-            tone={STATUS_BANNER_TONES.WARNING}
-            icon="debug-continue"
-            className="flex-wrap gap-x-3 gap-y-1"
-            aria-label={`Continuing run from step ${props.pendingRewind.fromStepIndex + 1}`}
-            action={
-              <button
-                className="underline opacity-90 hover:opacity-100 focus-visible:outline focus-visible:outline-1"
-                onClick={props.handleDiscardContinuation}
-              >
-                Discard Continuation
-              </button>
-            }
-          >
-            <span className="inline-flex flex-wrap items-center gap-x-4 gap-y-1 align-middle">
-              <span>
-                Continuing run from step {props.pendingRewind.fromStepIndex + 1}
-              </span>
-              <span
-                className="inline-flex items-center gap-1 opacity-90 cursor-help"
-                title="Continuing crosses an undo-stack boundary — you won't be able to undo once you continue. All output history is preserved, but the working file's captured state for any re-run prompts will be overwritten."
-              >
-                <Icon name="info" />
-                Can&apos;t be undone after continuing
-              </span>
-            </span>
-          </StatusBanner>
+          <ContinuationBanner
+            stepNumber={props.pendingRewind.fromStepIndex + 1}
+            onDiscard={props.handleDiscardContinuation}
+          />
         )}
     </>
+  );
+};
+
+const CONTINUATION_UNDO_WARNING =
+  "Continuing crosses an undo-stack boundary — you won't be able to undo once you continue. All output history is preserved, but the working file's captured state for any re-run prompts will be overwritten.";
+
+const ContinuationBanner: React.FC<{
+  stepNumber: number;
+  onDiscard: () => void;
+}> = ({ stepNumber, onDiscard }) => {
+  const undoWarning = (label?: string) => (
+    <span
+      className="inline-flex items-center gap-1 opacity-90 cursor-help align-middle"
+      title={CONTINUATION_UNDO_WARNING}
+      role={label ? undefined : "img"}
+      aria-label={label ? undefined : "Can't be undone after continuing"}
+    >
+      <Icon name="info" />
+      {label}
+    </span>
+  );
+
+  return (
+    <StatusBanner
+      tone={STATUS_BANNER_TONES.WARNING}
+      icon="debug-continue"
+      aria-label={`Continuing run from step ${stepNumber}`}
+      narrowChildren={
+        <>
+          Continuing from step {stepNumber} {undoWarning()}
+        </>
+      }
+      action={{
+        label: "Discard Continuation",
+        narrowLabel: "Discard",
+        onClick: onDiscard,
+      }}
+    >
+      <span className="mr-4">Continuing run from step {stepNumber}</span>
+      {undoWarning("Can't be undone after continuing")}
+    </StatusBanner>
   );
 };
