@@ -28,6 +28,8 @@ function isHarnessId(value: string): value is HarnessId {
 export interface BuildReplyPropertyValuesInput {
   step: PromptStep;
   sessionId: string;
+  /** Harness paired with the selected session ID, when its source provides one. */
+  sessionHarness?: string;
   workflowProperties: WorkflowProperties;
   globalSettings: GlobalSettings;
 }
@@ -36,19 +38,26 @@ export interface BuildReplyPropertyValuesInput {
 export function buildReplyPropertyValues({
   step,
   sessionId,
+  sessionHarness,
   workflowProperties,
   globalSettings,
 }: BuildReplyPropertyValuesInput): PropertyValues & { harness: HarnessId } {
+  const runtime = step._runtime;
+  const harnessToResolve =
+    sessionHarness !== undefined && isHarnessId(sessionHarness)
+      ? sessionHarness
+      : runtime?.harness !== undefined && isHarnessId(runtime.harness)
+        ? runtime.harness
+        : undefined;
   const { properties } = resolveExecutionProperties(
-    toCorePromptStep(step),
+    {
+      ...toCorePromptStep(step),
+      ...(harnessToResolve ? { harness: harnessToResolve } : {}),
+    },
     toCoreWorkflow([], null, workflowProperties),
     { defaults: createDefaults(globalSettings), hostCanProvidePty: true }
   );
-  const runtime = step._runtime;
-  const harness =
-    runtime?.harness !== undefined && isHarnessId(runtime.harness)
-      ? runtime.harness
-      : properties.harness;
+  const harness = properties.harness;
   const resolvedSkills =
     runtime?.skills !== undefined ? runtime.skills : properties.skills;
   const skills = (resolvedSkills ?? []).filter(
@@ -100,12 +109,14 @@ export function buildReplyPropertyValues({
 export function startReplyFromStep(
   step: PromptStep,
   sessionId: string,
-  sourceLabel: string
+  sourceLabel: string,
+  sessionHarness?: string
 ): void {
   const { workflowProperties, globalSettings } = useSettingsStore.getState();
   const properties = buildReplyPropertyValues({
     step,
     sessionId,
+    sessionHarness,
     workflowProperties,
     globalSettings,
   });

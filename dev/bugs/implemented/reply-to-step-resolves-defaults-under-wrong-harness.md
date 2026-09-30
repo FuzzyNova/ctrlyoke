@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by bug-backlog final step (claude-cli, code review + scratch vitest)
 - **Area:** `src/ui/webview-react/utils/replyToStep.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -44,19 +44,18 @@ once with the step as authored, then replaces only the `harness` field with
 `_runtime.harness`. Every value the resolver chose *because of* the harness is left as it
 was.
 
-Related, medium confidence: the session ID comes from `getStepSessionId`
-(`utils/stepMetadataClipboard.ts`), which prefers the latest output's
-`structured.metadata.sessionId`. The harness always comes from `_runtime.harness`, never
-from that output's metadata. `_runtime` is only written when a step completes or is
-cancelled. If a step is rerun under a different harness and the user replies while the
-rerun is still going, the session ID can belong to one harness and the harness field to
-another.
+The related session/harness pairing concern is confirmed. `getStepSessionId`
+(`utils/stepMetadataClipboard.ts`) prefers the latest output's
+`structured.metadata.sessionId`, and `OutputMetadata` carries the harness alongside that
+session ID. `_runtime` is only written when a step completes or is cancelled, so during a
+rerun the latest output can identify a new session while `_runtime.harness` still names
+the prior run. Reply menu construction now takes the session ID and harness from the same
+latest-output metadata when available, falling back to runtime metadata as a pair.
 
 ## Suggested Fix
 
-When `_runtime.harness` is known, resolve with that harness forced in: for example, pass
-`{ ...toCorePromptStep(step), harness: runtime.harness }` to `resolveExecutionProperties`,
-so that per-harness defaults (additional args, default model) match the harness the reply
-will run under. Take the harness from the same source as the session ID, so the two always
-stay paired. Add `replyToStep.test.ts` cases for a harness that differs between runtime and
-the resolved settings.
+When the paired session harness is known, resolve with that harness forced in: for
+example, pass `{ ...toCorePromptStep(step), harness: sessionHarness }` to
+`resolveExecutionProperties`, so that per-harness defaults (additional args, default
+model) match the harness the reply will run under. Add `replyToStep.test.ts` cases where
+the runtime or paired session harness differs from the current resolved settings.

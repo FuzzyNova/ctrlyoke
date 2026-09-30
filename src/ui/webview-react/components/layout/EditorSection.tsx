@@ -378,6 +378,7 @@ const EditorSectionInner: React.FC = () => {
       </div>
 
       {selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT &&
+        !isScriptMode &&
         replyContext && (
           <StatusBanner
             tone={STATUS_BANNER_TONES.INFO}

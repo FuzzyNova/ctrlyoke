@@ -416,6 +416,34 @@ describe("PromptEditor — Run in New Workflow", () => {
     expect(useEditorStore.getState().scriptCommand).toBe("");
   });
 
+  it("omits reply session fields when submitting a script draft", async () => {
+    const editor = useEditorStore.getState();
+    editor.startReplyToStep({
+      properties: {
+        ...editor.properties,
+        harness: "claude-cli",
+        resumeSession: true,
+        sessionId: "reply-session",
+      },
+      sessionId: "reply-session",
+      harness: "claude-cli",
+      sourceLabel: "Step 2",
+    });
+    useEditorStore.getState().setStepType(STEP_TYPES.SCRIPT);
+    useEditorStore.getState().setScriptCommand("npm run deploy");
+
+    render(<PromptEditor />);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Run" }));
+
+    const properties = findExecutePromptMessage()?.properties as
+      | Record<string, unknown>
+      | undefined;
+    expect(properties).toMatchObject({ type: STEP_TYPES.SCRIPT });
+    expect(properties).not.toHaveProperty("harness");
+    expect(properties).not.toHaveProperty("resumeSession");
+    expect(properties).not.toHaveProperty("sessionId");
+  });
+
   it("shows a switch-back toast only after the new workflow becomes active", async () => {
     const user = userEvent.setup();
     useEditorStore.getState().setPromptText("spin off this prompt");

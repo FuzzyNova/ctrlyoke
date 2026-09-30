@@ -106,6 +106,7 @@ export function buildStepCopyMenuItems({
 export interface ReplyToStepMenuItemInput {
   step: WorkflowStep;
   sessionId?: string;
+  sessionHarness?: string;
   /** Reply banner label for the step, e.g. `Step 3` or `Final step`. */
   sourceLabel: string;
 }
@@ -114,6 +115,7 @@ export interface ReplyToStepMenuItemInput {
 export function buildReplyToStepMenuItem({
   step,
   sessionId,
+  sessionHarness,
   sourceLabel,
 }: ReplyToStepMenuItemInput): StepContextMenuItem {
   const isScriptStep = isScriptWorkflowStep(step);
@@ -130,7 +132,7 @@ export function buildReplyToStepMenuItem({
         : undefined,
     onClick: () => {
       if (isScriptWorkflowStep(step) || !sessionId) return;
-      startReplyFromStep(step, sessionId, sourceLabel);
+      startReplyFromStep(step, sessionId, sourceLabel, sessionHarness);
     },
   };
 }

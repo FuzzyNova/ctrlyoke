@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by bug-backlog final step (claude-cli, code review + scratch vitest)
 - **Area:** `src/ui/webview-react/store/editorStore.ts`, `src/ui/webview-react/components/layout/EditorSection.tsx`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
