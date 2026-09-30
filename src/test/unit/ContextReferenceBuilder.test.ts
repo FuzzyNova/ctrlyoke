@@ -24,6 +24,10 @@ suite("ContextReferenceBuilder", () => {
     );
   });
 
+  test("quotes paths containing colons", () => {
+    assert.strictEqual(quoteReferencePath("C:/dev/a.ts"), '"C:/dev/a.ts"');
+  });
+
   test("builds file references", () => {
     assert.strictEqual(buildFileReferenceValue("src/app.ts"), "src/app.ts");
     assert.strictEqual(buildFileReference("src/app.ts"), "@src/app.ts");

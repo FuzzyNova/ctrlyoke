@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by bug-hunt final step (claude-cli)
 - **Area:** `src/utils/promptPathUtils.ts` (`looksLikeFilePath`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

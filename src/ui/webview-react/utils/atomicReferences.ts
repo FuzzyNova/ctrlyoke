@@ -25,6 +25,7 @@ import {
 import { parseSecretReferences } from "../../../utils/SecretReferenceParser";
 import { NOT_AFTER_BOUNDARY } from "../../../utils/ReferenceBoundary";
 import {
+  createInlinePriorContextReferencePattern,
   createGitChangeReferencePattern,
   createReferencePatterns,
 } from "../../../utils/ReferencePatterns";
@@ -853,10 +854,7 @@ export function findInlinePriorContextRefs(
 ): InlinePriorContextRef[] {
   const results: InlinePriorContextRef[] = [];
   // Same word-boundary rationale as the @/#/~ patterns above.
-  const regex = new RegExp(
-    `${NOT_AFTER_BOUNDARY}\\$([A-Za-z][A-Za-z0-9]*(?::[A-Za-z0-9,\\-]*)?)`,
-    "g"
-  );
+  const regex = createInlinePriorContextReferencePattern();
   let match: RegExpExecArray | null;
   while ((match = regex.exec(text)) !== null) {
     const body = match[1];

@@ -201,8 +201,8 @@ suite("ContextMenuReferenceCommands", () => {
       assert.deepStrictEqual(
         sink.requests.map((request) => request.references[0]),
         [
-          `@${normalizedFilePath}`,
-          `@${normalizedDirectoryPath}`,
+          `@"${normalizedFilePath}"`,
+          `@"${normalizedDirectoryPath}"`,
           `#selection:"${normalizedFilePath}":1-1`,
           `#sym.function:"${normalizedFilePath}":externalSymbol:1-1`,
         ]
@@ -298,7 +298,7 @@ suite("ContextMenuReferenceCommands", () => {
       );
 
       assert.deepStrictEqual(sink.requests[0].references, [
-        `@${vscode.Uri.file(externalFilePath).fsPath.replace(/\\/g, "/")}`,
+        `@"${vscode.Uri.file(externalFilePath).fsPath.replace(/\\/g, "/")}"`,
       ]);
     } finally {
       Object.defineProperty(vscode.window, "showWarningMessage", {

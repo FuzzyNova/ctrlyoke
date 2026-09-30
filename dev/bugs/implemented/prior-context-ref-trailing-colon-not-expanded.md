@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by bug-hunt final step (claude-cli)
 - **Area:** `src/utils/FileReferenceParser.ts` (~358-361, prior-context reference regex)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

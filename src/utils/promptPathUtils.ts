@@ -31,6 +31,13 @@ export function looksLikeFilePath(
 ): boolean {
   const trimmed = promptValue.trim();
 
+  // Newlines and prose between path segments indicate inline prompt text,
+  // even if the final word has an extension. Spaces within one path segment
+  // remain supported.
+  if (/\r|\n/.test(trimmed) || /\s+[^/\\\s]+\s+/.test(trimmed)) {
+    return false;
+  }
+
   // Skip if it starts with @ or # — those are ctrlyoke references (context
   // reference / inline selection), not a standalone prompt file path. The
   // folder-qualified multi-root form below only differs from an @-reference

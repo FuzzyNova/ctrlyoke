@@ -83,6 +83,24 @@ suite("promptPathUtils", () => {
       );
     });
 
+    test("rejects prose that ends with a path-looking filename", () => {
+      assert.strictEqual(
+        looksLikeFilePath("/review Please look at src/app.ts"),
+        false
+      );
+      assert.strictEqual(
+        looksLikeFilePath("./fix the bug, then update README.md"),
+        false
+      );
+    });
+
+    test("rejects multiline prompt text that ends with a filename", () => {
+      assert.strictEqual(
+        looksLikeFilePath("/init\nThen summarise package.json"),
+        false
+      );
+    });
+
     test("returns false for empty string", () => {
       assert.strictEqual(looksLikeFilePath(""), false);
     });

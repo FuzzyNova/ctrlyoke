@@ -26,7 +26,11 @@ import {
 } from "../types/DashboardConstants";
 import { parseRangeNotation } from "./RangeNotationParser";
 import { NOT_AFTER_BOUNDARY } from "./ReferenceBoundary";
-import { createGitChangeReferencePattern } from "./ReferencePatterns";
+import {
+  createGitChangeReferencePattern,
+  createInlinePriorContextReferencePattern,
+  UNQUOTED_AT_REFERENCE_PATH,
+} from "./ReferencePatterns";
 
 /**
  * Mask every prompt-reference and variable trigger character inside
@@ -160,7 +164,7 @@ export function parseAtReferences(prompt: string): FileReference[] {
   // characters. The unquoted body still permits an embedded @ so a path like
   // src/myimage@512x512.png parses as one reference, not split at the inner @.
   const regex = new RegExp(
-    `${NOT_AFTER_BOUNDARY}@(?:"([^"]+)"|([^\\s:]+))`,
+    `${NOT_AFTER_BOUNDARY}@(?:"([^"]+)"|(${UNQUOTED_AT_REFERENCE_PATH}))`,
     "g"
   );
   let match;
@@ -355,10 +359,7 @@ export function parseInlinePriorContextRefs(
   // characters immediately before $, not just alphanumerics — e.g. a
   // shell/env-style "price$previous" or a filename containing "$" shouldn't
   // expand.
-  const regex = new RegExp(
-    `${NOT_AFTER_BOUNDARY}\\$([A-Za-z][A-Za-z0-9]*(?::[A-Za-z0-9,\\-]*)?)`,
-    "g"
-  );
+  const regex = createInlinePriorContextReferencePattern();
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(maskedText)) !== null) {
