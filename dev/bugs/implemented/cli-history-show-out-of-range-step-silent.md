@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by bug-hunt final step (claude-cli)
 - **Area:** `src/cli/HistoryInspectionCommands.ts` (`parseHistoryShowStep` / `matchesHistoryShowStep`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

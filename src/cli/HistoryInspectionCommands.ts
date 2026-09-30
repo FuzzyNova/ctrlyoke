@@ -50,6 +50,10 @@ import type { CliOutput } from "../types/WebviewMessageTypes";
 import { SCRIPT_OUTPUT_SOURCES } from "../types/DashboardConstants";
 import { secretRedactionService } from "../utils/SecretRedactionService";
 import { HistorySearchService } from "../core/orchestration/HistorySearchService";
+import {
+  assertStepIndex,
+  formatValidStepIndexRange,
+} from "../core/orchestration/StepIndexValidation";
 import type { HistorySearchOptions } from "../core/orchestration/HistorySearchService";
 import type {
   IndexRebuildProgressCallback,
@@ -203,6 +207,21 @@ export async function showHistoryCommand(
     "--run"
   );
   const targetFilter = parseHistoryShowStep(options.step);
+  if (targetFilter) {
+    const runSummary = (await historyManager.getRunSummaries(workflowKey)).find(
+      (summary) => summary.runRef === runRef
+    );
+    if (!runSummary) {
+      throw new Error(`Run "${runRef}" was not found in history.`);
+    }
+    if (targetFilter.kind === FINAL_STEP_PHASES.QUEUE) {
+      assertStepIndex(runSummary.stepCount, targetFilter.stepIndex, "--step");
+    } else if (runSummary.hasFinalStep === false) {
+      throw new Error(
+        `Invalid --step value "final". This run has no final step; ${formatValidStepIndexRange(runSummary.stepCount)}.`
+      );
+    }
+  }
   const manifestPath = WorkflowPaths.manifestPath(
     workspace.workspaceRoot,
     workflowKey,

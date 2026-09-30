@@ -675,6 +675,74 @@ suite("RunOutputResolver", () => {
     assert.strictEqual(settled[0].attempt.terminalState, undefined);
   });
 
+  test("preserves recorded response kinds and uses source only for legacy events", async () => {
+    const kinds = ["ai", "script", "condition", undefined] as const;
+    const targets = kinds.map((_, stepIndex) => ({
+      kind: FINAL_STEP_PHASES.QUEUE,
+      stepIndex,
+    } as const));
+    const drafts: WorkflowTimelineEventDraft[] = [];
+    for (const [stepIndex, responseKind] of kinds.entries()) {
+      const target = targets[stepIndex];
+      drafts.push(
+        {
+          eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+          timestampMs: stepIndex * 3 + 1,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          definitionRevision: 1,
+          payload: {
+            kind: "ai",
+            startReason: "initial",
+            prompt: `step ${stepIndex}`,
+          },
+        },
+        {
+          eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+          timestampMs: stepIndex * 3 + 2,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          ...(responseKind ? { responseKind } : {}),
+          payload: {
+            cliOutput: {
+              prompt: `step ${stepIndex}`,
+              response: `output ${stepIndex}`,
+              elapsed: 1,
+              isStreaming: false,
+              ...(stepIndex === 3 ? { source: "script" } : {}),
+            },
+          },
+        },
+        {
+          eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED,
+          timestampMs: stepIndex * 3 + 3,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          definitionRevision: 1,
+          payload: { terminalState: "completed" },
+        }
+      );
+    }
+    await recorder.appendEvents(manifestPath, drafts);
+
+    const settled = [];
+    for await (const event of new RunOutputResolver(recorder).streamAttempts(
+      manifestPath
+    )) {
+      if (event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED) {
+        settled.push(event.attempt);
+      }
+    }
+
+    assert.deepStrictEqual(
+      settled.map((attempt) => attempt.kind),
+      ["ai", "script", "condition", "script"]
+    );
+  });
+
   test("folds a follow-up recorded after run termination into the settled attempt", async () => {
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
     const identity = { target, runIndex: 0, attemptIndex: 0 } as const;

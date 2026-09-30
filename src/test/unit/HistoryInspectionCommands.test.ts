@@ -554,6 +554,7 @@ suite("CLI history inspection command handlers", () => {
               executionState: EXECUTION_STATES.COMPLETED,
               definitionRevision: 1,
               stepCount: 2,
+              hasFinalStep: true,
               hasMixedHarnesses: false,
               hasMixedModels: false,
             },
@@ -597,6 +598,45 @@ suite("CLI history inspection command handlers", () => {
     }
     assert.deepStrictEqual(promptHeaders, [0, 1]);
     assert.deepStrictEqual(finalLabels, [0, 1]);
+  });
+
+  test("rejects a queue step outside the resolved run's valid range", async () => {
+    const key = "release" as WorkflowKey;
+    await assert.rejects(
+      () =>
+        showHistoryCommand(
+          { workflow: key, run: "3", step: "2" },
+          new TestIo(),
+          dependencies(
+            new TestLineageRepository([key], new Map(), new Map()),
+            historyManagerForShow(key),
+            new TestRunOutputResolver([])
+          )
+        ),
+      /Invalid --step index: 2\. This run has 2 steps, so valid zero-based indices are 0 to 1\./
+    );
+  });
+
+  test("rejects final when the resolved run has no final step", async () => {
+    const key = "release" as WorkflowKey;
+    const manager = historyManagerForShow(key);
+    const summary = (await manager.getRunSummaries(key))[0];
+    assert.ok(summary);
+    summary.hasFinalStep = false;
+
+    await assert.rejects(
+      () =>
+        showHistoryCommand(
+          { workflow: key, run: "3", step: "final" },
+          new TestIo(),
+          dependencies(
+            new TestLineageRepository([key], new Map(), new Map()),
+            manager,
+            new TestRunOutputResolver([])
+          )
+        ),
+      /no final step; valid zero-based indices are 0 to 1/
+    );
   });
 
   test("renders a folded attempt response exactly once", async () => {
@@ -1158,6 +1198,7 @@ function historyManagerForShow(key: WorkflowKey): TestHistoryManager {
             executionState: EXECUTION_STATES.COMPLETED,
             definitionRevision: 1,
             stepCount: 2,
+            hasFinalStep: true,
             hasMixedHarnesses: false,
             hasMixedModels: false,
           },

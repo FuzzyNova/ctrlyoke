@@ -66,6 +66,7 @@ import {
 } from "../StepIdentity";
 import { hasStarted } from "../../utils/StepStatusDerivation";
 import { prepareRunFileForWrite } from "../../utils/PersistedSchemaGuard";
+import { assertStepIndex } from "./StepIndexValidation";
 
 const RUN_CONTINUATION_ACTIONS = {
   APPEND: "append",
@@ -779,7 +780,7 @@ export class RunContinuationService {
           steps: source.steps ?? [],
           parallelGroups: source.parallelGroups,
         });
-        assertStepIndex(topology.steps, index, "edit");
+        assertStepIndex(topology.steps.length, index, "edit");
         assertEditableDuringExecution(source, topology.steps, index, "edit");
         assertPendingRewindSuffix(source, index, "edit");
         assertClearablePropertiesAreEditable(change.clearProperties);
@@ -843,7 +844,7 @@ export class RunContinuationService {
           steps: source.steps ?? [],
           parallelGroups: source.parallelGroups,
         });
-        assertStepIndex(topology.steps, index, "remove");
+        assertStepIndex(topology.steps.length, index, "remove");
         assertEditableDuringExecution(source, topology.steps, index, "remove");
         const nextTopology = deleteParallelGroupStep(topology, index);
         if (isExecutionActiveState(source._runtime?.executionState)) {
@@ -1111,22 +1112,6 @@ function isInFlightExecutionState(state: ExecutionState | undefined): boolean {
 
 function isExecutionActiveState(state: ExecutionState | undefined): boolean {
   return isInFlightExecutionState(state) || state === EXECUTION_STATES.PAUSED;
-}
-
-function assertStepIndex(
-  steps: WorkflowStep[],
-  index: number,
-  operation: string
-): void {
-  if (!Number.isInteger(index) || index < 0 || index >= steps.length) {
-    // The bare index alone leaves an MCP caller guessing whether it was off by
-    // one or addressing the wrong run, so state the range that exists.
-    throw new Error(
-      `Invalid ${operation} index: ${index}. This run has ${steps.length} step${
-        steps.length === 1 ? "" : "s"
-      }${steps.length > 0 ? `, so valid zero-based indices are 0 to ${steps.length - 1}` : ""}.`
-    );
-  }
 }
 
 /**

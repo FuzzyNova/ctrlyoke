@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by Claude while validating recovered run history
 - **Area:** `src/core/orchestration/RunOutputResolver.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
