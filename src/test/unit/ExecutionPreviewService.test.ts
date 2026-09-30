@@ -829,7 +829,12 @@ suite("ExecutionPreviewService", () => {
       })
     );
     assert.strictEqual(pinned.steps[0].command?.executable, "cmd.exe");
-    assert.deepStrictEqual(pinned.steps[0].command?.args, ["/d", "/c", script]);
+    assert.deepStrictEqual(pinned.steps[0].command?.args, [
+      "/d",
+      "/s",
+      "/c",
+      `"${script}"`,
+    ]);
     assert.strictEqual(
       pinned.steps[0].command?.displayShell,
       COMMAND_DISPLAY_SHELLS.CMD

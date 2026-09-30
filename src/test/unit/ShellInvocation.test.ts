@@ -103,11 +103,13 @@ suite("Shell invocation", () => {
       ]);
     });
 
-    test("wraps cmd with /d /c and no epilogue", () => {
-      assert.deepStrictEqual(buildShellWrapArgs(SHELL_KINDS.CMD, "exit 7"), [
+    test("wraps cmd with /d /s /c and an outer quoted script", () => {
+      const script = '"node" -e "process.exit(7)"';
+      assert.deepStrictEqual(buildShellWrapArgs(SHELL_KINDS.CMD, script), [
         "/d",
+        "/s",
         "/c",
-        "exit 7",
+        `"${script}"`,
       ]);
     });
 
@@ -157,8 +159,11 @@ suite("Shell invocation", () => {
       // node-pty appends a string `args` after the command untouched; an array
       // would be re-quoted as \" and reach cmd.exe mangled.
       assert.strictEqual(
-        toPtySpawnArgs(["/d", "/c", 'node -e "process.exit(7)"'], true),
-        '/d /c node -e "process.exit(7)"'
+        toPtySpawnArgs(
+          ["/d", "/s", "/c", '""node" -e "process.exit(7)""'],
+          true
+        ),
+        '/d /s /c ""node" -e "process.exit(7)""'
       );
     });
 
@@ -260,10 +265,21 @@ suite("Shell invocation", () => {
       const code = await runWrapped(
         "cmd.exe",
         SHELL_KINDS.CMD,
-        'node -e "process.exit(7)"'
+        '"node" -e "process.exit(7)"'
       );
       if (code === "unavailable") return this.skip();
       assert.strictEqual(code, 7);
+    });
+
+    test("cmd preserves command separators in a non-quoted-start script", async function () {
+      if (process.platform !== "win32") return this.skip();
+      const code = await runWrapped(
+        "cmd.exe",
+        SHELL_KINDS.CMD,
+        'echo "a" & exit /b 3'
+      );
+      if (code === "unavailable") return this.skip();
+      assert.strictEqual(code, 3);
     });
   });
 });

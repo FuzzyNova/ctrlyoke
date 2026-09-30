@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli), reproduced with `ctrlyoke run`
 - **Area:** `src/core/harness/PtyProcessManager.ts` (`buildShellWrapArgs`, `SHELL_KINDS.CMD` case ~131)
-- **Severity:** medium (script steps, pre-conditions and end-conditions under cmd fail or run the wrong command)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

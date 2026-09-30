@@ -129,7 +129,7 @@ export function buildShellWrapArgs(
         `${script}\n${POWERSHELL_EXIT_CODE_EPILOGUE}`,
       ];
     case SHELL_KINDS.CMD:
-      return ["/d", "/c", script];
+      return ["/d", "/s", "/c", `"${script}"`];
     case SHELL_KINDS.WSL:
       return ["-e", "bash", "-lc", script];
     default:
@@ -142,8 +142,8 @@ export function buildShellWrapArgs(
  * Whether the resolved argv must be handed to Windows verbatim.
  *
  * `cmd.exe` does not understand the `\"` escaping Node applies when it builds a
- * command line from an args array, so a quoted inline script reaches it
- * mangled — `cmd /d /c 'node -e "process.exit(7)"'` silently exits 0. Node's
+ * command line from an args array. The `/s /c` wrapper keeps the entire script
+ * intact when cmd.exe strips the outer quote pair. Node's
  * own `shell: true` sets this flag for exactly this reason; resolving the shell
  * ourselves means setting it ourselves. Every other shell here accepts Node's
  * standard quoting, and WSL/POSIX argv would be corrupted by verbatim joining.
@@ -161,7 +161,7 @@ export function shellNeedsVerbatimArguments(shellKind: ShellKind): boolean {
  * way `CommandLineToArgvW` does and wrong for `cmd.exe`, which has no such
  * escape. A **string** is appended after the command untouched instead — see
  * `SpawnPtyOptions.args` and node-pty's `argsToCommandLine`. Use this wherever
- * a verbatim payload reaches a PTY, so an inline `cmd /c` script is not
+ * a verbatim payload reaches a PTY, so an inline `cmd /s /c` script is not
  * corrupted the way the headless path was.
  */
 export function toPtySpawnArgs(
