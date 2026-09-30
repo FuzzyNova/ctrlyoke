@@ -73,6 +73,100 @@ suite("WebPushService", () => {
     assert.strictEqual(typeof stored.privateJwk.y, "string");
   });
 
+  test("does not overwrite an existing corrupt VAPID keys file", async () => {
+    const service = new WebPushService();
+    const corruptContent = "{ invalid json";
+    await fs.promises.mkdir(notificationsDir, { recursive: true });
+    await fs.promises.writeFile(vapidKeysPath, corruptContent, "utf8");
+
+    await assert.rejects(
+      () => service.getPublicKey(),
+      new RegExp(
+        `VAPID keys file .*${escapeRegExp(path.basename(vapidKeysPath))}.*invalid JSON`
+      )
+    );
+    assert.strictEqual(
+      await fs.promises.readFile(vapidKeysPath, "utf8"),
+      corruptContent
+    );
+  });
+
+  test("strips a BOM before reading VAPID keys", async () => {
+    const service = new WebPushService();
+    const publicKey = await service.getPublicKey();
+    const stored = await fs.promises.readFile(vapidKeysPath, "utf8");
+    await fs.promises.writeFile(vapidKeysPath, `\uFEFF${stored}`, "utf8");
+
+    assert.strictEqual(await service.getPublicKey(), publicKey);
+    assert.ok(
+      (await fs.promises.readFile(vapidKeysPath, "utf8")).startsWith("\uFEFF")
+    );
+  });
+
+  test("does not wipe corrupt subscription data when upserting", async () => {
+    const service = new WebPushService();
+    const corruptContent = "{ invalid json";
+    await fs.promises.mkdir(notificationsDir, { recursive: true });
+    await fs.promises.writeFile(subscriptionsPath, corruptContent, "utf8");
+    const subscription = await createValidSubscription();
+
+    await assert.rejects(
+      () => service.upsertSubscription(subscription, {}),
+      /push subscriptions file .*invalid JSON/
+    );
+    assert.strictEqual(
+      await fs.promises.readFile(subscriptionsPath, "utf8"),
+      corruptContent
+    );
+  });
+
+  test("strips a BOM before reading subscriptions for an upsert", async () => {
+    const service = new WebPushService();
+    const existing = {
+      id: "existing-device",
+      endpointHash: "existing-hash",
+      endpoint: "https://example.com/push/existing",
+      keys: { p256dh: "public-key", auth: "auth-key" },
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    await fs.promises.mkdir(notificationsDir, { recursive: true });
+    await fs.promises.writeFile(
+      subscriptionsPath,
+      `\uFEFF${JSON.stringify({ subscriptions: [existing] })}`,
+      "utf8"
+    );
+
+    await service.upsertSubscription(await createValidSubscription(), {});
+    const stored = JSON.parse(
+      await fs.promises.readFile(subscriptionsPath, "utf8")
+    ) as { subscriptions: unknown[] };
+    assert.deepStrictEqual(stored.subscriptions[0], existing);
+    assert.strictEqual(stored.subscriptions.length, 2);
+  });
+
+  test("preserves invalid subscription entries through upsert and remove", async () => {
+    const service = new WebPushService();
+    const invalidEntry = { id: "invalid-device", unexpected: [1, "two"] };
+    await fs.promises.mkdir(notificationsDir, { recursive: true });
+    await fs.promises.writeFile(
+      subscriptionsPath,
+      JSON.stringify({ subscriptions: [invalidEntry] }),
+      "utf8"
+    );
+
+    const added = await service.upsertSubscription(
+      await createValidSubscription(),
+      {}
+    );
+    await service.removeSubscription(added.id);
+
+    const stored = JSON.parse(
+      await fs.promises.readFile(subscriptionsPath, "utf8")
+    ) as { subscriptions: unknown[] };
+    assert.deepStrictEqual(stored.subscriptions, [invalidEntry]);
+  });
+
   test("removes expired subscriptions when the push service returns 410", async () => {
     const service = new WebPushService();
     const subscription = await createValidSubscription();
@@ -125,6 +219,10 @@ suite("WebPushService", () => {
     assert.strictEqual(blocked, 1);
   });
 });
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 function encodeBase64Url(value: Buffer): string {
   return value

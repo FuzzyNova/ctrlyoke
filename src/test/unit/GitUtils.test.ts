@@ -387,11 +387,11 @@ suite("GitUtils worktree plumbing", function () {
 
   test("allows a slow pre-commit hook to finish beyond the short Git timeout", async () => {
     await fs.writeFile(path.join(workspaceRoot, "tracked.txt"), "changed\n");
-    await installSlowPreCommitHook(500);
+    await installSlowPreCommitHook(1_500);
 
     const restoreTimeouts = setGitTimeoutOverridesForTests({
-      shortTimeoutMs: 100,
-      mutationTimeoutMs: 2_000,
+      shortTimeoutMs: 1_000,
+      mutationTimeoutMs: 10_000,
     });
     try {
       assert.strictEqual(

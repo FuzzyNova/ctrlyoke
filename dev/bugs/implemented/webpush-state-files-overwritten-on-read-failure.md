@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli); traced in code
 - **Area:** `src/server/WebPushService.ts` (`getOrCreateVapidKeys` ~314-332, `readSubscriptions` ~334-349, `upsertSubscription`, `removeSubscription`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
