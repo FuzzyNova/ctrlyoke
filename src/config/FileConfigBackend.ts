@@ -15,8 +15,26 @@ import { Log } from "../utils/Log";
 import { migrateToCurrent } from "../utils/FormatMigrations";
 import { stripLeadingBom } from "../utils/TextUtils";
 import { AsyncWriteQueue } from "./AsyncWriteQueue";
+import { uniqueAtomicTempPath } from "./AtomicFileWrite";
+import { foldPathForCompare } from "../utils/PathCasing";
 
 const warnedNewerSettingsPaths = new Set<string>();
+const writeQueuesByPath = new Map<string, AsyncWriteQueue>();
+const FORBIDDEN_SETTING_PATH_SEGMENTS = new Set([
+  "__proto__",
+  "constructor",
+  "prototype",
+]);
+
+function getWriteQueue(configPath: string): AsyncWriteQueue {
+  const key = foldPathForCompare(path.resolve(configPath));
+  let queue = writeQueuesByPath.get(key);
+  if (!queue) {
+    queue = new AsyncWriteQueue();
+    writeQueuesByPath.set(key, queue);
+  }
+  return queue;
+}
 
 export class FileConfigBackend implements ConfigBackend {
   private cache?: PartialCtrlYokeSettings;
@@ -26,11 +44,13 @@ export class FileConfigBackend implements ConfigBackend {
   // mobileCustomShortcuts then mobileBarLayout) reach here as two overlapping
   // calls; without this queue, the second call's load() can run before the
   // first call's save() lands, so the second write clobbers the first.
-  private readonly writeQueue = new AsyncWriteQueue();
+  private readonly writeQueue: AsyncWriteQueue;
   private newerSchemaVersion?: number;
   private hasInvalidContent = false;
 
-  constructor(private readonly configPath: string) {}
+  constructor(private readonly configPath: string) {
+    this.writeQueue = getWriteQueue(configPath);
+  }
 
   /** Returns the path this backend reads from */
   get filePath(): string {
@@ -52,6 +72,15 @@ export class FileConfigBackend implements ConfigBackend {
 
   /** Write a setting using dot-notation path (e.g. "execution.injectMode") */
   set(settingPath: string, value: unknown): Promise<void> {
+    const pathParts = settingPath.split(".");
+    const forbiddenSegment = pathParts.find((part) =>
+      FORBIDDEN_SETTING_PATH_SEGMENTS.has(part)
+    );
+    if (forbiddenSegment !== undefined) {
+      throw new Error(
+        `Cannot update settings path "${settingPath}": path segment "${forbiddenSegment}" is not allowed.`
+      );
+    }
     return this.writeQueue.enqueue(async () => {
       const current = this.load();
       if (this.newerSchemaVersion !== undefined) {
@@ -68,7 +97,7 @@ export class FileConfigBackend implements ConfigBackend {
       }
       this.setNestedValue(
         current as Record<string, unknown>,
-        settingPath.split("."),
+        pathParts,
         value
       );
       await this.save(current);
@@ -145,7 +174,7 @@ export class FileConfigBackend implements ConfigBackend {
     // This prevents an interrupted write from leaving the settings file
     // empty/corrupt (which would cause the next set() call to silently
     // wipe all settings).
-    const tmpPath = `${this.configPath}.tmp`;
+    const tmpPath = uniqueAtomicTempPath(this.configPath);
     await fs.promises.writeFile(
       tmpPath,
       JSON.stringify(data, null, 2),
@@ -171,8 +200,9 @@ export class FileConfigBackend implements ConfigBackend {
     }
 
     const [head, ...rest] = pathParts;
+    const hasOwnHead = Object.prototype.hasOwnProperty.call(obj, head);
     if (
-      !(head in obj) ||
+      !hasOwnHead ||
       typeof obj[head] !== "object" ||
       obj[head] === null ||
       Array.isArray(obj[head])

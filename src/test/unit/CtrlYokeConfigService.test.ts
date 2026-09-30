@@ -7,6 +7,7 @@ import {
   type ConfigBackend,
 } from "../../config/CtrlYokeConfigService";
 import { FileConfigBackend } from "../../config/FileConfigBackend";
+import { uniqueAtomicTempPath } from "../../config/AtomicFileWrite";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
@@ -688,6 +689,40 @@ suite("FileConfigBackend", () => {
     );
   });
 
+  test("set() rejects prototype-sensitive path segments", async () => {
+    const configPath = path.join(tmpDir, "settings.json");
+    const original = Buffer.from('{"ui":{"showCostEstimates":true}}', "utf-8");
+    fs.writeFileSync(configPath, original);
+    const backend = new FileConfigBackend(configPath);
+
+    for (const settingPath of [
+      "__proto__.polluted",
+      "constructor.prototype.polluted",
+      "ui.prototype.polluted",
+    ]) {
+      await assert.rejects(
+        async () => backend.set(settingPath, "yes"),
+        /path segment .* is not allowed/
+      );
+    }
+
+    assert.strictEqual(({} as Record<string, unknown>).polluted, undefined);
+    assert.deepStrictEqual(fs.readFileSync(configPath), original);
+  });
+
+  test("uses unique process-scoped names for atomic temp files", () => {
+    const configPath = path.join(tmpDir, "settings.json");
+    const first = uniqueAtomicTempPath(configPath);
+    const second = uniqueAtomicTempPath(configPath);
+    const prefix = `${configPath}.${process.pid}.`;
+    const randomSuffix = first.slice(prefix.length, -".tmp".length);
+
+    assert.ok(first.startsWith(prefix));
+    assert.match(randomSuffix, /^[0-9a-f-]{36}$/);
+    assert.ok(first.endsWith(".tmp"));
+    assert.notStrictEqual(first, second);
+  });
+
   test("filePath getter returns the configured path", () => {
     const configPath = path.join(tmpDir, "settings.json");
     const backend = new FileConfigBackend(configPath);
@@ -742,6 +777,23 @@ suite("FileConfigBackend", () => {
       popup: ["abc-123"],
       hidden: [],
     });
+  });
+
+  test("serializes concurrent writes from backends for the same path", async () => {
+    const configPath = path.join(tmpDir, "settings.json");
+    const userBackend = new FileConfigBackend(configPath);
+    const workspaceBackend = new FileConfigBackend(
+      `${tmpDir}${path.sep}nested${path.sep}..${path.sep}settings.json`
+    );
+
+    await Promise.all([
+      userBackend.set("ui.showCliCommand", false),
+      workspaceBackend.set("execution.injectMode", false),
+    ]);
+
+    const content = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    assert.strictEqual(content.ui.showCliCommand, false);
+    assert.strictEqual(content.execution.injectMode, false);
   });
 
   test("round-trips step color mode and harness color settings", async () => {
