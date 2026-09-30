@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by bug-backlog final step (claude-cli, code review)
 - **Area:** `src/ui/WorkflowSerializer.ts` (`handleHistoryTrashAction`), `src/core/orchestration/RunLifecycleService.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

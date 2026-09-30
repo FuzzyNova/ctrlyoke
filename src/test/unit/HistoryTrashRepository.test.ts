@@ -140,6 +140,7 @@ suite("HistoryTrashRepository", () => {
     assert.deepStrictEqual(result, {
       restoredLineages: 0,
       restoredRuns: 1,
+      restoredWorkflowKeys: [workflowKey],
       conflicts: [],
     });
     assert.deepStrictEqual(await manager.getRunsForWorkflow(workflowKey), [
@@ -368,6 +369,60 @@ suite("HistoryTrashRepository", () => {
     assert.ok(entry, "the interrupted delete should be listed");
     assert.strictEqual(entry.items[0].workflowKey, workflowKey);
     assert.strictEqual(entry.items[0].wholeLineage, true);
+    await trash.restore(entry.id);
+    assert.deepStrictEqual(await lineages.listLineageKeys(workspace), [
+      workflowKey,
+    ]);
+  });
+
+  test("does not recover a backdated pending entry while its owner is alive", async () => {
+    const keyA = await createLineage("pending-a");
+    const keyB = await createLineage("pending-b");
+    await addRun(keyA, 1);
+    await addRun(keyB, 2);
+    const batch = trash.begin(HISTORY_TRASH_ENTRY_KINDS.ALL, REQUESTER);
+    await batch.moveLineageDir(keyA);
+    const pendingDir = WorkflowPaths.pendingTrashEntryDir(
+      workspace,
+      batch.entryId
+    );
+    const longAgo = new Date(Date.now() - DAY_MS);
+    await fs.utimes(pendingDir, longAgo, longAgo);
+
+    assert.deepStrictEqual(await trash.list(30), []);
+    await batch.moveLineageDir(keyB);
+    const entry = await batch.commit();
+
+    assert.ok(entry);
+    assert.deepStrictEqual(
+      entry.items.map((item) => item.workflowKey).sort(),
+      [keyA, keyB].sort()
+    );
+    assert.deepStrictEqual(await trash.list(30).then((items) => items.length), 1);
+    await trash.restore(entry.id);
+    assert.deepStrictEqual(
+      (await lineages.listLineageKeys(workspace)).sort(),
+      [keyA, keyB].sort()
+    );
+  });
+
+  test("publishes under a fresh id when the requested entry directory exists", async () => {
+    const workflowKey = await createLineage("publish-collision");
+    const batch = trash.begin(HISTORY_TRASH_ENTRY_KINDS.LINEAGE, REQUESTER);
+    await batch.moveLineageDir(workflowKey);
+    const occupied = WorkflowPaths.trashEntryDir(workspace, batch.entryId);
+    await fs.mkdir(occupied, { recursive: true });
+    await fs.writeFile(path.join(occupied, "keep.txt"), "existing entry");
+
+    const entry = await batch.commit();
+
+    assert.ok(entry);
+    assert.notStrictEqual(entry.id, batch.entryId);
+    assert.strictEqual(await exists(path.join(occupied, "keep.txt")), true);
+    assert.deepStrictEqual(
+      (await trash.list(30)).map((listed) => listed.id),
+      [entry.id]
+    );
     await trash.restore(entry.id);
     assert.deepStrictEqual(await lineages.listLineageKeys(workspace), [
       workflowKey,

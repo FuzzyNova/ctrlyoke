@@ -1081,25 +1081,15 @@ export class RunLifecycleService {
         currentAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
         currentAddress.runRef === address.runRef
     );
-    await Promise.all(
-      targets.map(async ([targetClientId, currentAddress]) => {
-        const targetAddress =
-          currentAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
-          currentAddress.runRef === address.runRef
-            ? fallback
-            : currentAddress;
-        if (!targetAddress) return;
-        const targetSend =
-          targetClientId === clientId
-            ? send
-            : this.host.registry.getViewMessageSinks().get(targetClientId);
-        if (!targetSend) return;
-        await this.host.views.loadRunViewForClient(
-          targetAddress,
-          targetSend,
-          targetClientId
-        );
-      })
+    await this.refreshRunViewsForLineages(
+      [address.workflowKey],
+      send,
+      clientId,
+      (currentAddress) =>
+        currentAddress.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
+        currentAddress.runRef === address.runRef
+          ? fallback
+          : currentAddress
     );
     if (displacedAViewer) {
       const fallbackLabel =
@@ -1112,12 +1102,6 @@ export class RunLifecycleService {
           : `That run was deleted — you're now viewing ${fallbackLabel}.`;
       this.notifyUserFeedback(message);
     }
-    await this.host.views.pushRunSummariesRefreshIfNotAlreadyViewing(
-      address.workflowKey,
-      send,
-      targets.map(([targetClientId]) => targetClientId),
-      clientId
-    );
   }
 
   async deleteAllRunsForLineage(
@@ -1154,35 +1138,63 @@ export class RunLifecycleService {
           runRef: remaining[0].runRef,
         }
       : { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT };
-    const targets = [
-      ...this.host.registry.getViewAddressRegistry().entries(),
-    ].filter(([, candidate]) => candidate?.workflowKey === workflowKey);
-    await Promise.all(
-      targets.map(async ([targetClientId, currentAddress]) => {
-        const targetAddress =
-          currentAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
-          currentAddress.runRef !== executionRunRef
-            ? fallback
-            : currentAddress;
-        if (!targetAddress) return;
-        const targetSend =
-          targetClientId === clientId
-            ? send
-            : this.host.registry.getViewMessageSinks().get(targetClientId);
-        if (!targetSend) return;
-        await this.host.views.loadRunViewForClient(
-          targetAddress,
-          targetSend,
-          targetClientId
-        );
-      })
-    );
-    await this.host.views.pushRunSummariesRefreshIfNotAlreadyViewing(
-      workflowKey,
+    await this.refreshRunViewsForLineages(
+      [workflowKey],
       send,
-      targets.map(([targetClientId]) => targetClientId),
-      clientId
+      clientId,
+      (currentAddress) =>
+        currentAddress.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
+        currentAddress.runRef !== executionRunRef
+          ? fallback
+          : currentAddress
     );
+  }
+
+  /** Reloads open views and drilled caches after a lineage's run set changes. */
+  async refreshRunViewsForLineages(
+    workflowKeys: readonly WorkflowKey[],
+    send: (message: unknown) => void,
+    clientId: string = this.host.panelClientId,
+    resolveAddress?: (
+      address: WorkflowViewAddress,
+      latestRunRef?: RunRef
+    ) => WorkflowViewAddress
+  ): Promise<void> {
+    const registry = this.host.registry.getViewAddressRegistry();
+    for (const workflowKey of new Set(workflowKeys)) {
+      const targets = [...registry.entries()].filter(
+        ([, address]) => address?.workflowKey === workflowKey
+      );
+      const latestRunRef = resolveAddress
+        ? (await new OutputHistoryManager(
+            this.requireWorkspaceRoot()
+          ).getRunSummaries(workflowKey))[0]?.runRef
+        : undefined;
+      await Promise.all(
+        targets.map(async ([targetClientId, currentAddress]) => {
+          if (!currentAddress) return;
+          const targetAddress = resolveAddress
+            ? resolveAddress(currentAddress, latestRunRef)
+            : currentAddress;
+          const targetSend =
+            targetClientId === clientId
+              ? send
+              : this.host.registry.getViewMessageSinks().get(targetClientId);
+          if (!targetSend) return;
+          await this.host.views.loadRunViewForClient(
+            targetAddress,
+            targetSend,
+            targetClientId
+          );
+        })
+      );
+      await this.host.views.pushRunSummariesRefreshIfNotAlreadyViewing(
+        workflowKey,
+        send,
+        targets.map(([targetClientId]) => targetClientId),
+        clientId
+      );
+    }
   }
 
   findExecutionRunRef(workflowKey: WorkflowKey): RunRef | undefined {

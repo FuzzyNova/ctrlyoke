@@ -4373,6 +4373,30 @@ export class WorkflowOrchestrator {
     return this.runLifecycleService.deleteRunAtAddress(address, send, clientId);
   }
 
+  /** Refreshes open run views and drilled run caches after history changes. */
+  async refreshRunViewsForLineages(
+    workflowKeys: readonly WorkflowKey[],
+    send: (message: unknown) => void,
+    clientId: string = this.PANEL_CLIENT_ID,
+    preferLatestRunForDraft = false
+  ): Promise<void> {
+    return this.runLifecycleService.refreshRunViewsForLineages(
+      workflowKeys,
+      send,
+      clientId,
+      preferLatestRunForDraft
+        ? (address, latestRunRef) =>
+            address.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT && latestRunRef
+              ? {
+                  workflowKey: address.workflowKey,
+                  kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+                  runRef: latestRunRef,
+                }
+              : address
+        : undefined
+    );
+  }
+
   /**
    * Deletes every non-executing run of a lineage — the run-navigation panel's
    * "Delete all runs" footer action. Targets an explicit `workflowKey` rather

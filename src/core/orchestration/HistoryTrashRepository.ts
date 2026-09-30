@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
+import * as os from "os";
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 import {
   HISTORY_TRASH_ENTRY_KINDS,
@@ -31,6 +32,7 @@ import {
   PERSISTED_STORES,
 } from "../../utils/PersistedSchemaGuard";
 import { readWorkflowLockInspection } from "../../utils/WorkflowLockInspector";
+import { isProcessAlive } from "../../utils/LockSafetyPrimitives";
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import { Log } from "../../utils/Log";
 import {
@@ -40,6 +42,7 @@ import {
 import { getSharedHistorySearchIndexService } from "./HistorySearchIndexServiceRegistry";
 
 const ENTRY_FILE_NAME = "entry.json";
+const OWNER_FILE_NAME = "owner.json";
 const PAYLOAD_DIR_NAME = "payload";
 const RUN_MANIFEST_FILE_NAME = "manifest.json";
 const ENTRY_SCHEMA_VERSION =
@@ -254,6 +257,10 @@ export class HistoryTrashBatch {
     await fs.promises.mkdir(path.join(this.pendingDir, PAYLOAD_DIR_NAME), {
       recursive: true,
     });
+    await writeFileAtomic(
+      path.join(this.pendingDir, OWNER_FILE_NAME),
+      JSON.stringify({ pid: process.pid, host: os.hostname() })
+    );
     this.created = true;
   }
 
@@ -497,6 +504,15 @@ export class HistoryTrashRepository {
     pendingDir: string,
     entry: HistoryTrashEntry
   ): Promise<void> {
+    let target = WorkflowPaths.trashEntryDir(this.stateRoot, entry.id);
+    if (await pathExists(target)) {
+      entry.id = newEntryId(Date.now());
+      target = WorkflowPaths.trashEntryDir(this.stateRoot, entry.id);
+      while (await pathExists(target)) {
+        entry.id = newEntryId(Date.now());
+        target = WorkflowPaths.trashEntryDir(this.stateRoot, entry.id);
+      }
+    }
     const entryPath = path.join(pendingDir, ENTRY_FILE_NAME);
     assertWritableSchema(
       PERSISTED_STORES.HISTORY_TRASH_ENTRY,
@@ -504,11 +520,10 @@ export class HistoryTrashRepository {
       entryPath
     );
     await writeFileAtomic(entryPath, JSON.stringify(entry, null, 2));
-    await renameWithTransientRetry(
-      pendingDir,
-      WorkflowPaths.trashEntryDir(this.stateRoot, entry.id),
-      { budgetMs: MOVE_RENAME_BUDGET_MS }
-    );
+    await renameWithTransientRetry(pendingDir, target, {
+      budgetMs: MOVE_RENAME_BUDGET_MS,
+    });
+    await fs.promises.rm(path.join(target, OWNER_FILE_NAME), { force: true });
   }
 
   private async readEntry(
@@ -552,7 +567,27 @@ export class HistoryTrashRepository {
       );
       try {
         const stats = await fs.promises.stat(pendingDir);
-        if (now - stats.mtimeMs < STALE_PENDING_ENTRY_MS) continue;
+        const ownerPath = path.join(pendingDir, OWNER_FILE_NAME);
+        if (await pathExists(ownerPath)) {
+          let owner: { pid?: unknown; host?: unknown };
+          try {
+            owner = JSON.parse(await fs.promises.readFile(ownerPath, "utf8"));
+          } catch {
+            // A marker we cannot read cannot establish that its owner is gone.
+            continue;
+          }
+          if (
+            typeof owner.pid !== "number" ||
+            typeof owner.host !== "string"
+          ) {
+            continue;
+          }
+          if (owner.host === os.hostname() && isProcessAlive(owner.pid)) {
+            continue;
+          }
+        } else if (now - stats.mtimeMs < STALE_PENDING_ENTRY_MS) {
+          continue;
+        }
         const items = await this.describePayload(
           path.join(pendingDir, PAYLOAD_DIR_NAME)
         );
@@ -666,6 +701,7 @@ export class HistoryTrashRepository {
     const result: HistoryTrashRestoreResult = {
       restoredLineages: 0,
       restoredRuns: 0,
+      restoredWorkflowKeys: [],
       conflicts: [],
     };
 
@@ -680,10 +716,12 @@ export class HistoryTrashRepository {
         await movePath(source, lineageDir);
         result.restoredLineages += 1;
         result.restoredRuns += item.runRefs.length;
+        result.restoredWorkflowKeys.push(item.workflowKey);
         continue;
       }
       // Either only some runs were deleted, or the lineage exists again:
       // merge the run directories back under the lineage lock.
+      const restoredRunsBeforeItem = result.restoredRuns;
       await this.lineageRepository.restoreRuns(
         this.stateRoot,
         item.workflowKey,
@@ -704,6 +742,14 @@ export class HistoryTrashRepository {
           return restoredRunIds;
         }
       );
+      // Include whole lineages whose descriptor was merged even if all runs
+      // conflicted; otherwise include only lineages with a restored run.
+      if (
+        item.wholeLineage ||
+        result.restoredRuns > restoredRunsBeforeItem
+      ) {
+        result.restoredWorkflowKeys.push(item.workflowKey);
+      }
       if (item.wholeLineage) result.restoredLineages += 1;
       // A whole lineage merged into an existing one leaves its own descriptor
       // and draft behind; the live lineage's are the ones that count.

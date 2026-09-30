@@ -1640,7 +1640,14 @@ export class WorkflowSerializer {
       switch (action) {
         case HISTORY_TRASH_ACTIONS.RESTORE: {
           if (!entryId) throw new Error(TRASH_ENTRY_GONE_MESSAGE);
-          reply(true, describeRestoreResult(await trash.restore(entryId)));
+          const restored = await trash.restore(entryId);
+          reply(true, describeRestoreResult(restored));
+          await this.getManager()?.refreshRunViewsForLineages?.(
+            restored.restoredWorkflowKeys,
+            postMessage,
+            clientId,
+            true
+          );
           await this.handleGetRecentWorkflows(postMessage);
           break;
         }
