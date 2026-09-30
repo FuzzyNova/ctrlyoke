@@ -64,9 +64,11 @@ describe("extractCliOutputText", () => {
     ).toBe("hello");
   });
 
-  it("appends post-divider follow-up TEXT to the response so copy includes resumed output", () => {
+  it("does not re-append follow-up TEXT that the response already carries", () => {
+    // Persisted and live `response` both include follow-up text already, so
+    // folding post-divider TEXT in again would duplicate it.
     const output = {
-      response: "before.",
+      response: "before. and after.",
       isStreaming: false,
       structured: {
         events: [
@@ -78,22 +80,6 @@ describe("extractCliOutputText", () => {
       },
     };
     expect(extractCliOutputText(output as any)).toBe("before. and after.");
-  });
-
-  it("ignores non-TEXT follow-up events (e.g. user steers) when appending", () => {
-    const output = {
-      response: "before.",
-      isStreaming: false,
-      structured: {
-        events: [
-          { type: CLI_EVENT_TYPES.TEXT, data: { text: "before." } },
-          { type: CLI_EVENT_TYPES.FOLLOW_UP_RESUMED, data: {} },
-          { type: CLI_EVENT_TYPES.USER_STEER, data: { text: "do this next" } },
-        ],
-        metadata: {},
-      },
-    };
-    expect(extractCliOutputText(output as any)).toBe("before.");
   });
 
   it("falls back to structured TEXT (already including follow-up) when response is empty", () => {

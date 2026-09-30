@@ -546,6 +546,33 @@ describe("appendStreamingEvents", () => {
     ]);
   });
 
+  it("appends post-completion follow-up TEXT to the response, matching what the extension persists", () => {
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
+    store().appendLiveEntry({
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      runIndex: 0,
+      attemptIndex: 0,
+      cliOutput: makeOutput({
+        response: "done.",
+        structured: {
+          events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "done." } }],
+          metadata: {},
+        },
+      }),
+      timestampMs: Date.now(),
+      sequence: 0,
+    });
+
+    store().appendStreamingEvents(0, [
+      { type: CLI_EVENT_TYPES.USER_STEER, data: { text: "commit it" } },
+      { type: CLI_EVENT_TYPES.TEXT, data: { text: "Committed." } },
+    ]);
+
+    const entry = store().liveOrderedEntries[0] as OrderedCliHistoryEntry;
+    expect(entry.cliOutput.response).toBe("done.Committed.");
+  });
+
   it("updates the rendered history snapshot when follow-up activity arrives for a retired run", () => {
     store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
 

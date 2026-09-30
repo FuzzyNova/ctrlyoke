@@ -104,7 +104,15 @@ export const ContentPreviewModal: React.FC = () => {
         </>
       }
     >
-      <pre className="font-mono text-xs leading-relaxed text-editor-fg whitespace-pre overflow-x-auto">
+      {/* Prose-heavy previews (prior-context XML) wrap so text joined onto the
+          end of a long line stays visible; diffs keep their column layout. */}
+      <pre
+        className={`font-mono text-xs leading-relaxed text-editor-fg overflow-x-auto ${
+          modal.language === CONTENT_PREVIEW_LANGUAGES.DIFF
+            ? "whitespace-pre"
+            : "whitespace-pre-wrap break-words"
+        }`}
+      >
         {modal.content}
       </pre>
     </Modal>

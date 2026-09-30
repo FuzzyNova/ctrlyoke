@@ -97,48 +97,35 @@ export function buildDiffAnchorPrefix(
   return `cy-diff-${kindSlug}-${stepIndex}-r${runIndex}-a${attemptIndex}`;
 }
 
+/** Concatenates the text of every TEXT event, in order. */
+export function joinCliTextEvents(
+  events: readonly { type: string; data?: unknown }[]
+): string {
+  return events
+    .filter((e) => e.type === CLI_EVENT_TYPES.TEXT)
+    .map((e) => (e.data as TextData | undefined)?.text)
+    .filter(Boolean)
+    .join("");
+}
+
 /**
  * Extracts the plain-text response from a CLI output — checks `response`
  * first, then falls back to concatenating TEXT events from structured output.
  * Returns undefined when there is no text content.
  *
- * Post-completion follow-up activity (a harness auto-resuming a backgrounded
- * task — see `mergeResumedActivityIntoOutput` / `handleSessionActivityResumed`)
- * only ever lands in `structured.events`, appended after a `FOLLOW_UP_RESUMED`
- * divider; the persisted `response` field is never updated. So when a divider is
- * present, fold the follow-up TEXT back onto `response` — otherwise copy would
- * silently drop everything the AI produced after resuming.
+ * `response` already carries post-completion follow-up text: the extension
+ * appends it when persisting (`SessionActivityRecorder.persistResumedSessionActivity`)
+ * and the store appends it live (`mergeResumedActivityIntoOutput`), so it must
+ * not be folded in again here.
  */
 export function extractCliOutputText(
   output: CliOutputType
 ): string | undefined {
-  const events = output.structured?.events;
-  const dividerIndex = events
-    ? events.findIndex((e) => e.type === CLI_EVENT_TYPES.FOLLOW_UP_RESUMED)
-    : -1;
-  const followUpText =
-    dividerIndex >= 0
-      ? events!
-          .slice(dividerIndex + 1)
-          .filter((e) => e.type === CLI_EVENT_TYPES.TEXT)
-          .map((e) => (e.data as TextData).text)
-          .filter(Boolean)
-          .join("")
-      : "";
-
   if (typeof output.response === "string" && output.response.trim()) {
-    return output.response + followUpText;
+    return output.response;
   }
-  // Fallback path already includes follow-up TEXT (all TEXT events, both before
-  // and after the divider), so no separate follow-up append is needed here.
-  if (events?.length) {
-    const parts = events
-      .filter((e) => e.type === CLI_EVENT_TYPES.TEXT)
-      .map((e) => (e.data as TextData).text)
-      .filter(Boolean);
-    if (parts.length > 0) return parts.join("");
-  }
-  return undefined;
+  const text = joinCliTextEvents(output.structured?.events ?? []);
+  return text || undefined;
 }
 
 /**
