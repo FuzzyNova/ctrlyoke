@@ -50,8 +50,7 @@ import {
   TRASH_ENTRY_GONE_MESSAGE,
 } from "../utils/HistoryTrashDescriptions";
 import {
-  getWorkingFileLastActivityAt,
-  resolveLineageLastModifiedAt,
+  getLineageLastModifiedAt,
   stripLegacyWorkingFileLineageMetadata,
 } from "../utils/WorkingFileMetadata";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
@@ -1323,9 +1322,10 @@ export class WorkflowSerializer {
                 : {}),
             };
 
-            const lastModified = resolveLineageLastModifiedAt(
-              descriptor.lastModifiedAt,
-              getWorkingFileLastActivityAt(workingFile)
+            const lastModified = await getLineageLastModifiedAt(
+              workspaceRoot,
+              workflowKey,
+              descriptor.lastModifiedAt
             );
 
             let executionState: string =

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by bug-hunt final step (claude-cli)
 - **Area:** `src/utils/WorkingFileMetadata.ts`, `src/cli/HistoryInspectionCommands.ts`, `src/core/orchestration/RunViewPublisher.ts`, `src/ui/webview-react/store/uiStore.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -45,7 +45,7 @@ import {
   type TimelineAttemptTerminalState,
 } from "../types/WorkflowTimelineTypes";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
-import { resolveLineageLastModifiedAt } from "../utils/WorkingFileMetadata";
+import { getLineageLastModifiedAt } from "../utils/WorkingFileMetadata";
 import type { CliOutput } from "../types/WebviewMessageTypes";
 import { SCRIPT_OUTPUT_SOURCES } from "../types/DashboardConstants";
 import { secretRedactionService } from "../utils/SecretRedactionService";
@@ -737,11 +737,19 @@ async function buildHistoryListRows(
         lineageRepository.readWorkflowDisplayName(workspaceRoot, workflowKey),
         historyManager.getRunNavigationSummary(workflowKey),
       ]);
+      const lastModifiedAt = descriptor
+        ? await getLineageLastModifiedAt(
+            workspaceRoot,
+            workflowKey,
+            descriptor.lastModifiedAt
+          )
+        : null;
       return createHistoryListRow(
         workflowKey,
         descriptor,
         workflowName,
-        navigation
+        navigation,
+        lastModifiedAt
       );
     })
   );
@@ -752,7 +760,8 @@ function createHistoryListRow(
   workflowKey: WorkflowKey,
   descriptor: WorkflowLineageDescriptor | undefined,
   workflowName: string,
-  navigation: RunNavigationSummary
+  navigation: RunNavigationSummary,
+  lastModifiedAt: number | null
 ): HistoryListRow {
   const latestRun =
     navigation.primaryRunId !== undefined &&
@@ -772,13 +781,7 @@ function createHistoryListRow(
     workflowName,
     isFavorite: descriptor?.isFavorite ?? false,
     createdAt: descriptor?.createdAt ?? null,
-    lastModifiedAt: descriptor
-      ? resolveLineageLastModifiedAt(
-          descriptor.lastModifiedAt,
-          navigation.startedAt,
-          navigation.completedAt
-        )
-      : null,
+    lastModifiedAt,
     runCount: navigation.runCount,
     latestRun,
   };

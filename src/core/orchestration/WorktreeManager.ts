@@ -3072,7 +3072,7 @@ export class WorktreeManager {
         : {}),
     };
     await this.persistRuntime({
-      schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.RUN_FILE],
+      schemaVersion: 1,
       mode: WORKTREE_MODES.MANAGED,
       origin: args.origin,
       branchName: args.record.branchName,
@@ -3322,7 +3322,7 @@ export class WorktreeManager {
     origin: WorktreeOrigin = "created"
   ): WorkingFileWorktreeRuntimePatch {
     return {
-      schemaVersion: CURRENT_SCHEMA_VERSIONS[PERSISTED_STORES.RUN_FILE],
+      schemaVersion: 1,
       mode: "named",
       origin,
       branchName,

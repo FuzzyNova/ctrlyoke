@@ -54,6 +54,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "_runtime.hooks[].env": "Environment map consumed by the hook process. Secret references are allowed only as ${secret:NAME} values.",
   "_runtime.hooks[].event": "Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), agentStop (Copilot), notify (Codex). 'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for Codex/Antigravity/OpenCode.",
   "_runtime.hooks[].timeoutSec": "Timeout in seconds. Only respected by CLIs that support per-hook timeouts.",
+  "_runtime.lastActivityAt": "Latest persisted activity for the run, including an appended step that has not started yet.",
   "_runtime.mcpServers": "MCP servers to attach to the harness for this prompt/workflow. Registry IDs resolve against ctrlyoke's managed MCP registry. Include \"ctrlyoke\" to enable dynamic queue extension via ctrlyoke's MCP server. Use /mcp:<server-id> in the prompt to force-attach a managed server; an inline reference wins over null, which otherwise explicitly disables inherited servers.",
   "_runtime.mcpServers[]": "A well-known MCP server ID, a user-defined server configuration, or the built-in `ctrlyoke` server with optional deniedTools. For the built-in server, deniedTools lists bare tool names to disable (for example, [\"append_step\"]).",
   "_runtime.mcpServers[].args": "Arguments to pass to the command (stdio servers only)",

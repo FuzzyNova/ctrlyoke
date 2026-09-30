@@ -1720,10 +1720,10 @@ export const useUiStore = create<UiState & UiActions>()(
               totalSteps: summary.totalSteps,
               tokenTotals: summary.tokenTotals ?? workflow.tokenTotals,
               worktree: summary.worktree ?? workflow.worktree,
-              lastModifiedAt:
-                summary.completedAt ??
-                summary.startedAt ??
-                workflow.lastModifiedAt,
+              lastModifiedAt: Math.max(
+                workflow.lastModifiedAt ?? 0,
+                summary.completedAt ?? summary.startedAt ?? 0
+              ),
             };
           });
           return changed ? { recentWorkflows } : state;

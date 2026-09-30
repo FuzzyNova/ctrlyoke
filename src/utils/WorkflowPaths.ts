@@ -429,6 +429,11 @@ export function isRunDirEntry(entry: fs.Dirent): boolean {
   );
 }
 
+/** Whether a lineage child directory is the mutable draft working-file directory. */
+export function isDraftDirEntry(entry: fs.Dirent): boolean {
+  return entry.isDirectory() && entry.name === DRAFT_DIR_NAME;
+}
+
 /** True for direct children of a lineage dir that are stale/interrupted staging leftovers. */
 export function isStagingDirEntry(entry: fs.Dirent): boolean {
   return entry.isDirectory() && entry.name.startsWith(CREATING_PREFIX);

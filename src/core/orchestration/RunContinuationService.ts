@@ -425,6 +425,13 @@ export class RunContinuationService {
           definitionRevision: sourceRevision + 1,
           steps: nextTopology.steps,
           parallelGroups: nextTopology.parallelGroups,
+          _runtime: {
+            currentIndex: source._runtime?.currentIndex ?? 0,
+            executionState:
+              source._runtime?.executionState ?? EXECUTION_STATES.IDLE,
+            ...source._runtime,
+            lastActivityAt: Date.now(),
+          },
         };
         await writeWorkingFileAtomic(runFilePath, workingFile);
         return {
@@ -639,6 +646,7 @@ export class RunContinuationService {
               groupId: joinedGroup.id,
               admission: PARALLEL_GROUP_ADMISSION.ACCEPTING,
             },
+            lastActivityAt: Date.now(),
           },
         };
         await writeWorkingFileAtomic(runFilePath, workingFile);

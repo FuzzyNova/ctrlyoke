@@ -383,6 +383,73 @@ suite("CLI history inspection command parser", () => {
 });
 
 suite("CLI history inspection command handlers", () => {
+  test("history list uses the activity time of an appended in-progress step", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-history-recency-")
+    );
+    try {
+      const key = "release-2026-09-20T12-00-00Z" as WorkflowKey;
+      const runRef = "run-2026-09-29T10-00-00-000Z" as RunRef;
+      const runFilePath = WorkflowPaths.runFilePath(
+        workspaceRoot,
+        key,
+        runRef
+      );
+      await fs.mkdir(path.dirname(runFilePath), { recursive: true });
+      await fs.writeFile(
+        runFilePath,
+        JSON.stringify({
+          startedAt: 1_700_000_000_000,
+          steps: [{ prompt: "appended and still running" }],
+          _runtime: {
+            currentIndex: 0,
+            executionState: EXECUTION_STATES.RUNNING,
+            lastActivityAt: Date.now(),
+          },
+        })
+      );
+      const manager = new TestHistoryManager(
+        new Map([
+          [
+            key,
+            {
+              ...navigation(runRef, EXECUTION_STATES.RUNNING),
+              startedAt: 1_700_000_000_000,
+              completedAt: undefined,
+            },
+          ],
+        ]),
+        new Map()
+      );
+      const io = new TestIo();
+
+      await listHistoryCommand(
+        { json: true },
+        io,
+        dependencies(
+          new TestLineageRepository(
+            [key],
+            new Map([[key, descriptor(key)]]),
+            new Map([[key, "Release"]])
+          ),
+          manager,
+          undefined,
+          undefined,
+          workspaceRoot
+        )
+      );
+
+      const [row] = JSON.parse(io.output[0]) as Array<{
+        lastModifiedAt: number;
+        latestRun: { completedAt: number | null };
+      }>;
+      assert.ok(row.lastModifiedAt > 1_700_000_000_000);
+      assert.strictEqual(row.latestRun.completedAt, null);
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("uses one navigation-manifest read per lineage instead of every run summary", async () => {
     const key = "release-2026-09-20T12-00-00Z" as WorkflowKey;
     const manager = new TestHistoryManager(

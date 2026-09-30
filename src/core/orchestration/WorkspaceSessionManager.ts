@@ -8,8 +8,7 @@ import type { PlatformAdapter } from "../../platform/PlatformAdapter";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import {
-  getWorkingFileLastActivityAt,
-  resolveLineageLastModifiedAt,
+  getLineageLastModifiedAt,
   stripLegacyWorkingFileLineageMetadata,
 } from "../../utils/WorkingFileMetadata";
 
@@ -169,9 +168,10 @@ export class WorkspaceSessionManager {
           const workingFile = stripLegacyWorkingFileLineageMetadata(
             JSON.parse(content) as WorkingFile
           );
-          const timestamp = resolveLineageLastModifiedAt(
-            descriptor.lastModifiedAt,
-            getWorkingFileLastActivityAt(workingFile)
+          const timestamp = await getLineageLastModifiedAt(
+            workspaceFolderPath,
+            workflowKey,
+            descriptor.lastModifiedAt
           );
 
           return { filePath, workingFile, timestamp };

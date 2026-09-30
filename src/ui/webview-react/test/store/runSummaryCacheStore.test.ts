@@ -72,6 +72,27 @@ describe("runSummaryCacheStore.ensureRunSummaries", () => {
     expect(postMessageSpy).not.toHaveBeenCalled();
   });
 
+  it("does not re-fetch on drill-in when both surfaces share the resolved lineage activity time", () => {
+    useRunSummaryCacheStore.getState().ensureRunSummaries(WORKFLOW_KEY);
+    const requestId =
+      useRunSummaryCacheStore.getState().entries[WORKFLOW_KEY]!.requestId;
+    const resolvedLineageActivityAt = 1_700_000_060_000;
+    useRunSummaryCacheStore.getState().resolveRunSummaries({
+      requestId,
+      workflowKey: WORKFLOW_KEY,
+      descriptorRevision: 1,
+      lastModifiedAt: resolvedLineageActivityAt,
+      runSummaries: [summary(1, "run-1")],
+    });
+    postMessageSpy.mockClear();
+
+    useRunSummaryCacheStore
+      .getState()
+      .ensureRunSummaries(WORKFLOW_KEY, resolvedLineageActivityAt);
+
+    expect(postMessageSpy).not.toHaveBeenCalled();
+  });
+
   it("re-fetches when the cached entry is older than knownLastModifiedAt", () => {
     useRunSummaryCacheStore.getState().ensureRunSummaries(WORKFLOW_KEY);
     const requestId =
