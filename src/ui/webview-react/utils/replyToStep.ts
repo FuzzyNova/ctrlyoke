@@ -30,6 +30,8 @@ export interface BuildReplyPropertyValuesInput {
   sessionId: string;
   /** Harness paired with the selected session ID, when its source provides one. */
   sessionHarness?: string;
+  /** Model paired with the selected session ID, when its source provides one. */
+  sessionModel?: string;
   workflowProperties: WorkflowProperties;
   globalSettings: GlobalSettings;
 }
@@ -39,6 +41,7 @@ export function buildReplyPropertyValues({
   step,
   sessionId,
   sessionHarness,
+  sessionModel,
   workflowProperties,
   globalSettings,
 }: BuildReplyPropertyValuesInput): PropertyValues & { harness: HarnessId } {
@@ -58,14 +61,22 @@ export function buildReplyPropertyValues({
     { defaults: createDefaults(globalSettings), hostCanProvidePty: true }
   );
   const harness = properties.harness;
+  const runtimeMatchesHarness = runtime?.harness === harness;
   const resolvedSkills =
-    runtime?.skills !== undefined ? runtime.skills : properties.skills;
+    runtimeMatchesHarness && runtime?.skills !== undefined
+      ? runtime.skills
+      : properties.skills;
   const skills = (resolvedSkills ?? []).filter(
     (skill) => !MCP_SKILL_NAME_SET.has(skill)
   );
-  const agent = runtime?.agent !== undefined ? runtime.agent : properties.agent;
+  const agent =
+    runtimeMatchesHarness && runtime?.agent !== undefined
+      ? runtime.agent
+      : properties.agent;
   const resolvedSecrets =
-    runtime?.secrets !== undefined ? runtime.secrets : properties.secrets;
+    runtimeMatchesHarness && runtime?.secrets !== undefined
+      ? runtime.secrets
+      : properties.secrets;
   const secrets = resolvedSecrets ?? [];
   const mcpServers = properties.mcpServers;
   const hooks = properties.hooks;
@@ -74,9 +85,13 @@ export function buildReplyPropertyValues({
 
   return {
     harness,
-    model: runtime?.model !== undefined ? runtime.model : properties.model,
+    model:
+      sessionModel ??
+      (runtimeMatchesHarness && runtime?.model !== undefined
+        ? runtime.model
+        : properties.model),
     executionMode:
-      runtime?.executionMode !== undefined
+      runtimeMatchesHarness && runtime?.executionMode !== undefined
         ? runtime.executionMode
         : properties.executionMode,
     color: step.color,
@@ -110,13 +125,15 @@ export function startReplyFromStep(
   step: PromptStep,
   sessionId: string,
   sourceLabel: string,
-  sessionHarness?: string
+  sessionHarness?: string,
+  sessionModel?: string
 ): void {
   const { workflowProperties, globalSettings } = useSettingsStore.getState();
   const properties = buildReplyPropertyValues({
     step,
     sessionId,
     sessionHarness,
+    sessionModel,
     workflowProperties,
     globalSettings,
   });

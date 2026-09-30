@@ -41,6 +41,7 @@ import {
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 import { useWorkflowDisplayName } from "@hooks/useWorkflowDisplayName";
+import { WebviewLog } from "@utils/logger";
 
 type OutputHistoryView = {
   orderedEntries: OrderedHistoryEntry[];
@@ -123,133 +124,140 @@ export function useOutputUndoActions({
     useState<WorkflowDialogState | null>(null);
 
   const workflowChangeData = useMemo(() => {
-    if (!allowUndoActions) {
-      return {
-        entries: [],
-        summary: createPromptChangeSummary(0, 0, 0, 0),
-      };
-    }
+    const emptyWorkflowChangeData = () => ({
+      entries: [] as WorkflowStepEntry[],
+      summary: createPromptChangeSummary(0, 0, 0, 0),
+    });
+    if (!allowUndoActions) return emptyWorkflowChangeData();
 
-    const entries: WorkflowStepEntry[] = [];
+    try {
+      const entries: WorkflowStepEntry[] = [];
 
-    for (const msgTarget of uniqueStepTargets) {
-      const key = getTargetKey(msgTarget);
-      const lastCliIdx = lastCliIndexPerStep.get(key);
-      if (lastCliIdx === undefined) continue;
+      for (const msgTarget of uniqueStepTargets) {
+        const key = getTargetKey(msgTarget);
+        const lastCliIdx = lastCliIndexPerStep.get(key);
+        if (lastCliIdx === undefined) continue;
 
-      const lastMsg = allMessages[lastCliIdx];
-      const lastOutput = lastMsg?.data as CliOutputType | undefined;
-      if (!lastOutput || lastOutput.isStreaming) continue;
+        const lastMsg = allMessages[lastCliIdx];
+        const lastOutput = lastMsg?.data as CliOutputType | undefined;
+        if (!lastOutput || lastOutput.isStreaming) continue;
 
-      const isFinalStep = msgTarget.kind === FINAL_STEP_PHASES.FINAL_STEP;
-      const stepIndex = msgTarget.index;
-      const parallelGroup = isFinalStep
-        ? undefined
-        : parallelGroups?.find(
-            (group) =>
-              stepIndex >= group.startIndex &&
-              stepIndex <= group.endIndex &&
-              group.startIndex !== group.endIndex
-          );
-      const groupSnapshot = parallelGroup
-        ? isViewingHistory && historyOutputs
-          ? historyOutputs.promptOutputs[parallelGroup.startIndex]
-              ?.workspaceSnapshot
-          : workspaceSnapshots[parallelGroup.startIndex]
-        : undefined;
-      const concurrentGroup =
-        parallelGroup?.id === groupSnapshot?.parallelGroupId
-          ? parallelGroup
+        const isFinalStep = msgTarget.kind === FINAL_STEP_PHASES.FINAL_STEP;
+        const stepIndex = msgTarget.index;
+        const parallelGroup = isFinalStep
+          ? undefined
+          : parallelGroups?.find(
+              (group) =>
+                stepIndex >= group.startIndex &&
+                stepIndex <= group.endIndex &&
+                group.startIndex !== group.endIndex
+            );
+        const groupSnapshot = parallelGroup
+          ? isViewingHistory && historyOutputs
+            ? historyOutputs.promptOutputs[parallelGroup.startIndex]
+                ?.workspaceSnapshot
+            : workspaceSnapshots[parallelGroup.startIndex]
           : undefined;
-      if (concurrentGroup && stepIndex !== concurrentGroup.startIndex) {
-        continue;
+        const concurrentGroup =
+          parallelGroup?.id === groupSnapshot?.parallelGroupId
+            ? parallelGroup
+            : undefined;
+        if (concurrentGroup && stepIndex !== concurrentGroup.startIndex) {
+          continue;
+        }
+
+        let effectiveSnapshot: WorkspaceSnapshot | undefined;
+        let effectiveUndoRecord: UndoRecord | undefined;
+
+        if (isViewingHistory && historyOutputs) {
+          effectiveSnapshot = isFinalStep
+            ? historyOutputs.finalStepOutputs?.[stepIndex]?.workspaceSnapshot
+            : historyOutputs.promptOutputs[stepIndex]?.workspaceSnapshot;
+          effectiveUndoRecord = isFinalStep
+            ? historyOutputs.finalStepOutputs?.[stepIndex]?.undoRecord
+            : historyOutputs.promptOutputs[stepIndex]?.undoRecord;
+        } else {
+          const targetKey = isFinalStep
+            ? `finalStep-${stepIndex}`
+            : `queue-${stepIndex}`;
+          effectiveSnapshot = isFinalStep
+            ? finalStepWorkspaceSnapshots[stepIndex]
+            : workspaceSnapshots[stepIndex];
+          effectiveUndoRecord = undoRecords[targetKey];
+        }
+
+        const stepOutputs = (stepOutputsMap.get(key) ?? []) as CliOutputType[];
+        if (concurrentGroup) {
+          effectiveSnapshot = groupSnapshot;
+        }
+        const undoTarget: UndoExecutionTarget = isFinalStep
+          ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: stepIndex }
+          : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex };
+        const label = isFinalStep
+          ? `Final Step Loop ${stepIndex + 1}`
+          : concurrentGroup
+            ? `Parallel steps ${concurrentGroup.startIndex + 1}–${concurrentGroup.endIndex + 1}`
+            : `Prompt ${stepIndex + 1}`;
+
+        const redoInstructions =
+          effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true
+            ? (effectiveUndoRecord.redoInstructions ?? [])
+            : [];
+
+        const allCandidates = buildUndoCandidatesForOutputs(
+          stepOutputs,
+          effectiveSnapshot
+        );
+        const candidates =
+          redoInstructions.length > 0
+            ? allCandidates.filter(
+                (candidate) =>
+                  !redoInstructions.some((instruction) =>
+                    sameFilePath(candidate.path, instruction.path)
+                  )
+              )
+            : allCandidates;
+        if (candidates.length > 0 || redoInstructions.length > 0) {
+          entries.push({
+            target: undoTarget,
+            label,
+            undoCandidates: candidates,
+            redoInstructions,
+          });
+        }
       }
 
-      let effectiveSnapshot: WorkspaceSnapshot | undefined;
-      let effectiveUndoRecord: UndoRecord | undefined;
+      const files = aggregateWorkflowUndoFiles(entries);
+      const blocked = files.filter(
+        (file) => file.steps[0]?.instruction === null
+      ).length;
+      const undoable = files.filter(
+        (file) =>
+          file.direction === UNDO_REDO_DIRECTIONS.UNDO &&
+          file.steps[0]?.instruction !== null
+      ).length;
+      const undone = files.filter(
+        (file) =>
+          file.direction === UNDO_REDO_DIRECTIONS.REDO &&
+          file.steps[0]?.instruction !== null
+      ).length;
 
-      if (isViewingHistory && historyOutputs) {
-        effectiveSnapshot = isFinalStep
-          ? historyOutputs.finalStepOutputs?.[stepIndex]?.workspaceSnapshot
-          : historyOutputs.promptOutputs[stepIndex]?.workspaceSnapshot;
-        effectiveUndoRecord = isFinalStep
-          ? historyOutputs.finalStepOutputs?.[stepIndex]?.undoRecord
-          : historyOutputs.promptOutputs[stepIndex]?.undoRecord;
-      } else {
-        const targetKey = isFinalStep
-          ? `finalStep-${stepIndex}`
-          : `queue-${stepIndex}`;
-        effectiveSnapshot = isFinalStep
-          ? finalStepWorkspaceSnapshots[stepIndex]
-          : workspaceSnapshots[stepIndex];
-        effectiveUndoRecord = undoRecords[targetKey];
-      }
-
-      const stepOutputs = (stepOutputsMap.get(key) ?? []) as CliOutputType[];
-      if (concurrentGroup) {
-        effectiveSnapshot = groupSnapshot;
-      }
-      const undoTarget: UndoExecutionTarget = isFinalStep
-        ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: stepIndex }
-        : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex };
-      const label = isFinalStep
-        ? `Final Step Loop ${stepIndex + 1}`
-        : concurrentGroup
-          ? `Parallel steps ${concurrentGroup.startIndex + 1}–${concurrentGroup.endIndex + 1}`
-          : `Prompt ${stepIndex + 1}`;
-
-      const redoInstructions =
-        effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true
-          ? (effectiveUndoRecord.redoInstructions ?? [])
-          : [];
-
-      const allCandidates = buildUndoCandidatesForOutputs(
-        stepOutputs,
-        effectiveSnapshot
+      return {
+        entries,
+        summary: createPromptChangeSummary(
+          files.length,
+          undoable,
+          undone,
+          blocked
+        ),
+      };
+    } catch (error) {
+      WebviewLog.error(
+        "[undo] Failed to build workflow change data; disabling workflow undo",
+        error instanceof Error ? error.message : String(error)
       );
-      const candidates =
-        redoInstructions.length > 0
-          ? allCandidates.filter(
-              (candidate) =>
-                !redoInstructions.some((instruction) =>
-                  sameFilePath(candidate.path, instruction.path)
-                )
-            )
-          : allCandidates;
-      if (candidates.length > 0 || redoInstructions.length > 0) {
-        entries.push({
-          target: undoTarget,
-          label,
-          undoCandidates: candidates,
-          redoInstructions,
-        });
-      }
+      return emptyWorkflowChangeData();
     }
-
-    const files = aggregateWorkflowUndoFiles(entries);
-    const blocked = files.filter(
-      (file) => file.steps[0]?.instruction === null
-    ).length;
-    const undoable = files.filter(
-      (file) =>
-        file.direction === UNDO_REDO_DIRECTIONS.UNDO &&
-        file.steps[0]?.instruction !== null
-    ).length;
-    const undone = files.filter(
-      (file) =>
-        file.direction === UNDO_REDO_DIRECTIONS.REDO &&
-        file.steps[0]?.instruction !== null
-    ).length;
-
-    return {
-      entries,
-      summary: createPromptChangeSummary(
-        files.length,
-        undoable,
-        undone,
-        blocked
-      ),
-    };
   }, [
     allowUndoActions,
     allMessages,

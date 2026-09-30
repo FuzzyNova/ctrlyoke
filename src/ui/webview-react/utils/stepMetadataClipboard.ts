@@ -15,6 +15,7 @@ export interface StepRuntimeMetaSnapshot {
 export interface StepSessionDetails {
   sessionId?: string;
   harness?: string;
+  model?: string;
 }
 
 /** Resolve the concrete session and the harness that owns that session. */
@@ -28,6 +29,7 @@ export function getStepSessionDetails(
     return {
       sessionId: outputSessionId,
       harness: latestOutput?.structured?.metadata?.harness,
+      model: latestOutput?.structured?.metadata?.model,
     };
   }
 

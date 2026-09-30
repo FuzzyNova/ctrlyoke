@@ -8,10 +8,7 @@ import {
   TOAST_LEVEL_MODES,
 } from "@root/types/DashboardConstants";
 import type { PromptStep } from "@root/types/WebviewMessageTypes";
-import type {
-  GlobalSettings,
-  WorkflowProperties,
-} from "@store/settingsStore";
+import type { GlobalSettings, WorkflowProperties } from "@store/settingsStore";
 import { buildReplyPropertyValues } from "@utils/replyToStep";
 
 const globalSettings: GlobalSettings = {
@@ -213,6 +210,71 @@ describe("buildReplyPropertyValues", () => {
 
     expect(result.harness).toBe(HARNESS_IDS.CLAUDE_CLI);
     expect(result.model).toBe("runtime-model");
+  });
+
+  it("overlays runtime fields when the session harness matches", () => {
+    const result = buildReplyPropertyValues({
+      step: {
+        prompt: "Continue this work",
+        _runtime: {
+          harness: HARNESS_IDS.CLAUDE_CLI,
+          model: "runtime-model",
+          agent: "runtime-agent",
+          skills: ["runtime-skill"],
+          secrets: ["RUNTIME_SECRET"],
+          executionMode: "interactive",
+        },
+      },
+      sessionId: "claude-session",
+      sessionHarness: HARNESS_IDS.CLAUDE_CLI,
+      workflowProperties,
+      globalSettings,
+    });
+
+    expect(result).toMatchObject({
+      harness: HARNESS_IDS.CLAUDE_CLI,
+      model: "runtime-model",
+      agent: "runtime-agent",
+      skills: ["runtime-skill"],
+      secrets: ["RUNTIME_SECRET"],
+      executionMode: "interactive",
+    });
+  });
+
+  it("uses resolved values when the session harness differs from runtime", () => {
+    const result = buildReplyPropertyValues({
+      step: {
+        prompt: "Continue this work",
+        _runtime: {
+          harness: HARNESS_IDS.CLAUDE_CLI,
+          model: "old-claude-model",
+          agent: "old-claude-agent",
+          skills: ["old-claude-skill"],
+          secrets: ["OLD_CLAUDE_SECRET"],
+          executionMode: "interactive",
+        },
+      },
+      sessionId: "codex-session",
+      sessionHarness: HARNESS_IDS.CODEX_CLI,
+      sessionModel: "output-session-model",
+      workflowProperties: {
+        ...workflowProperties,
+        agent: "resolved-agent",
+        skills: ["resolved-skill"],
+        secrets: ["RESOLVED_SECRET"],
+        executionMode: "headless",
+      },
+      globalSettings,
+    });
+
+    expect(result).toMatchObject({
+      harness: HARNESS_IDS.CODEX_CLI,
+      model: "output-session-model",
+      agent: "resolved-agent",
+      skills: ["resolved-skill"],
+      secrets: ["RESOLVED_SECRET"],
+      executionMode: "headless",
+    });
   });
 
   it("resolves harness defaults using the runtime harness", () => {

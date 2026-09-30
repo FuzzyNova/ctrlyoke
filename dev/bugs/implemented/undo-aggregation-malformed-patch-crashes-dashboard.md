@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the long-running bug-fix workflow final step (claude-cli, helper agent, scratch vitest)
 - **Area:** `src/ui/webview-react/utils/promptUndo.ts` (`applyStructuredPatch`, `formatStructuredPatch`)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 Follow-up to `malformed-persisted-patch-crashes-entire-dashboard.md` (fabf4eb4a). That fix
 normalized hunks in `DiffView` and added a per-`OutputRow` `ErrorBoundary`. However, `DiffView`

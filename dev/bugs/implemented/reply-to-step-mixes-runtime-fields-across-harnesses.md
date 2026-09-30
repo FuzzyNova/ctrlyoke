@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the long-running bug-fix workflow final step (claude-cli, helper agent, scratch vitest)
 - **Area:** `src/ui/webview-react/utils/replyToStep.ts` (`buildReplyPropertyValues`, ~l.37-85)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 Follow-up to `reply-to-step-resolves-defaults-under-wrong-harness.md` (c17a679ed). That fix pairs
 the harness with the session ID from the latest output metadata. It still overlays every other

@@ -939,6 +939,44 @@ function makeWorkflowEntry(stepIndex: number, candidate: UndoFileCandidate) {
 }
 
 describe("aggregateWorkflowUndoFiles", () => {
+  it("contains malformed FILE_EDIT patches after a FILE_WRITE to the same file", () => {
+    const writeOutput = makeCliOutput([
+      makeFileWriteEvent("src/new.ts", { content: "a\n" }),
+    ]);
+    const editOutput = makeCliOutput([
+      makeFileEditEvent("src/new.ts", {
+        oldContent: "a\n",
+        newContent: "a\nb\n",
+        structuredPatch: [
+          {
+            oldStart: 1,
+            oldLines: 1,
+            newStart: 1,
+            newLines: 2,
+            lines: [" a", "not a patch line", "+b"],
+          },
+        ],
+      }),
+    ]);
+
+    expect(() =>
+      aggregateWorkflowUndoFiles([
+        {
+          ...makeWorkflowEntry(
+            0,
+            buildUndoCandidatesForOutputs([writeOutput], undefined)[0]!
+          ),
+        },
+        {
+          ...makeWorkflowEntry(
+            1,
+            buildUndoCandidatesForOutputs([editOutput], undefined)[0]!
+          ),
+        },
+      ])
+    ).not.toThrow();
+  });
+
   it("merges a create followed by an edit into one created diff", () => {
     const created = "created\n";
     const edited = "created\nsecond line\n";
