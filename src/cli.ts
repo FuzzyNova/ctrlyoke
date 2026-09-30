@@ -75,7 +75,10 @@ import {
   resolvePackageRootFromEntry,
 } from "./utils/CtrlyokeCliPath";
 import { aboutCommand } from "./cli/CliAboutCommand";
-import { commitGeneratedChanges } from "./cli/CommitCommand";
+import {
+  commitGeneratedChanges,
+  generateCommitMessageForChanges,
+} from "./cli/CommitCommand";
 import { noteCliInstallation } from "./cli/CliInstallationNotice";
 import {
   applyRunStateRefusal,
@@ -2589,29 +2592,22 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
   );
 
   console.error(chalk.dim("Checking for changes..."));
-  const diffResult = await generator.getDiff(workingDir);
-  if (!diffResult) {
-    console.error("No changes detected. Stage or modify files first.");
-    process.exit(0);
-  }
-
-  if (diffResult.truncated) {
-    console.error(
-      chalk.yellow(
-        `Warning: Diff exceeded ${getMaxDiffSizeLabel()} and was truncated. Commit message may be incomplete.`
-      )
-    );
-  }
-
   console.error(chalk.dim("Generating commit message..."));
+  let diffResult;
   let message: string;
   try {
-    ({ message } = await generator.generateMessage(
-      diffResult.diff,
+    const generated = await generateCommitMessageForChanges(
+      generator,
       workingDir,
-      undefined,
+      options,
       options.hint
-    ));
+    );
+    if (!generated.diffResult) {
+      console.error("No changes detected. Stage or modify files first.");
+      process.exit(0);
+    }
+    diffResult = generated.diffResult;
+    message = generated.message;
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error(chalk.red(`Error: ${errMsg}`));
@@ -2627,6 +2623,14 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
       );
     }
     process.exit(1);
+  }
+
+  if (diffResult.truncated) {
+    console.error(
+      chalk.yellow(
+        `Warning: Diff exceeded ${getMaxDiffSizeLabel()} and was truncated. Commit message may be incomplete.`
+      )
+    );
   }
 
   if (options.printOnly) {

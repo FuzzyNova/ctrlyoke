@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli)
 - **Area:** `src/git/CommitMessageGenerator.ts` (`CommitMessageGenerator.getDiff`, untracked-file fallback)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -36,16 +36,9 @@ then `content.split("\n")` and `lines.map((l) => "+" + l).join("\n")`. The
 truncation to `MAX_DIFF_BYTES` only happens at the end (~269–271), on the combined
 string, so it does not bound memory.
 
-## Suggested Fix
+## Resolution Details
 
-Keep a running budget of `MAX_DIFF_BYTES` across `parts` (the tracked `git diff`
-output counts against it too). For each untracked file, `fs.promises.lstat` first:
-skip anything that isn't a regular file (symlinks should not be followed —
-emitting the link target text is enough), and once the budget is used up stop
-reading and mark the result `truncated: true`. Read at most the remaining budget
-from a file (open + read a bounded buffer rather than `readFile`). Detect binary
-files (NUL byte in the first 8 KB) and emit a `Binary file b/<path> added` line
-instead of their contents, the way git does. Unit test with a temp repo holding an
-untracked file larger than `MAX_DIFF_BYTES` (and a binary file) asserting the
-result is `truncated: true`, its `diff.length <= MAX_DIFF_BYTES`, and the binary
-contents aren't included.
+`getDiff` now applies a running byte budget to tracked changes and untracked-file
+content. It uses `lstat` to skip non-regular files, bounded reads for text files,
+and a Git-style binary-file line when the sample contains NUL. Temporary-repo
+tests cover an oversized untracked file and a binary file.

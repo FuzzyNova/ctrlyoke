@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli)
 - **Area:** `src/cli.ts` (commit command, ~2592), `src/cli/CommitCommand.ts`, `src/git/GitCommitter.ts`, `src/git/CommitMessageGenerator.ts` (`getDiff`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -35,15 +35,11 @@ non-empty (`CommitMessageGenerator.ts` ~190–208). `commitGeneratedChanges`
 which runs `git add .` (`GitCommitter.ts` ~16–18) — after the message is already
 written. No test covers `--all` (`src/test/unit/CliCommitCommand.test.ts`).
 
-## Suggested Fix
+## Resolution Details
 
-When `--all` is set, stage first, from the repository top level
-(`git add -A` run in the `rev-parse --show-toplevel` directory, or
-`git add -A -- :/`), and only then call `getDiff`, which will now see everything as
-staged. Stage only after the harness/secret preflight has passed if staging has to
-be undone on abort, or state in `--help` that `--all` stages before generating.
-Alternatively give `getDiff` an `includeUnstaged` option that combines staged,
-unstaged and untracked diffs. Make `GitCommitter`'s `addAll` stage the whole repo
-(`-A` from the toplevel) so the commit and the message cover the same set. Unit
-test: staged `a`, unstaged `b`, untracked `c`, `--all` → the diff handed to
-`generateMessage` contains all three.
+The `--all` message path now combines staged, unstaged, and untracked diffs without
+staging before confirmation. If the user aborts, the Git index is unchanged.
+`GitCommitter` stages with `git add -A` from the repository top level, so the
+commit includes the same repository scope when `--cwd` points into a subdirectory.
+A temporary-repository test verifies the generated message input covers all three
+change types.
