@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the long-running bug-fix workflow final step (claude-cli, helper agent, esbuild script with injected killProcessTree)
 - **Area:** `src/utils/CliProcessManager.ts` (`killGracefully` escalation, `killTimeoutId`, `cleanupProcessState`)
-- **Severity:** medium (POSIX only; on Windows `tree-kill` always runs `taskkill /T /F`)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

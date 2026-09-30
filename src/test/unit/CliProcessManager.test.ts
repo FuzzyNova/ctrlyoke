@@ -115,4 +115,90 @@ suite("CliProcessManager teardown", () => {
     assert.strictEqual(result.terminatedByManager, true);
     assert.strictEqual(result.terminationSignal, "SIGTERM");
   });
+
+  test("escalates a timed-out child after another child becomes current", async () => {
+    const killCalls: Array<{ pid: number; signal: string | number }> = [];
+    const manager = new CliProcessManager(
+      process.cwd(),
+      undefined,
+      (pid, signal, callback) => {
+        killCalls.push({ pid, signal: signal ?? "" });
+        if (signal === "SIGKILL") {
+          try {
+            process.kill(pid, "SIGKILL");
+          } catch {
+            // The child may have exited between the manager's check and kill.
+          }
+        }
+        callback?.();
+      }
+    );
+
+    const unresponsiveScript =
+      "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)";
+    const timedOutChild = manager.spawn(process.execPath, ["-e", unresponsiveScript], {
+      timeout: 200,
+    });
+    await assert.rejects(timedOutChild, /Process timeout/);
+    const nextChild = manager.spawn(process.execPath, ["-e", unresponsiveScript]);
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 3500));
+      const firstPid = killCalls.find((call) => call.signal === "SIGTERM")?.pid;
+      assert.ok(firstPid, "timed-out child should have received SIGTERM");
+      assert.ok(
+        killCalls.some(
+          (call) => call.pid === firstPid && call.signal === "SIGKILL"
+        ),
+        "timed-out child should receive SIGKILL after the escalation delay"
+      );
+    } finally {
+      await manager.cancel();
+      await nextChild;
+    }
+  });
+
+  test("closing one child does not clear another child's escalation timer", async () => {
+    const killCalls: Array<{ pid: number; signal: string | number }> = [];
+    const manager = new CliProcessManager(
+      process.cwd(),
+      undefined,
+      (pid, signal, callback) => {
+        killCalls.push({ pid, signal: signal ?? "" });
+        if (signal === "SIGKILL") {
+          try {
+            process.kill(pid, "SIGKILL");
+          } catch {
+            // The child may have exited between the manager's check and kill.
+          }
+        }
+        callback?.();
+      }
+    );
+
+    const unresponsiveScript =
+      "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)";
+    const firstChild = manager.spawn(process.execPath, ["-e", unresponsiveScript], {
+      timeout: 200,
+    });
+    await assert.rejects(firstChild, /Process timeout/);
+    const secondChild = manager.spawn(process.execPath, ["-e", unresponsiveScript], {
+      timeout: 200,
+    });
+    await assert.rejects(secondChild, /Process timeout/);
+
+    await new Promise((resolve) => setTimeout(resolve, 3500));
+    const termPids = killCalls
+      .filter((call) => call.signal === "SIGTERM")
+      .map((call) => call.pid);
+    const killPids = killCalls
+      .filter((call) => call.signal === "SIGKILL")
+      .map((call) => call.pid);
+
+    assert.strictEqual(termPids.length, 2, "both children should receive SIGTERM");
+    assert.ok(
+      termPids.every((pid) => killPids.includes(pid)),
+      "closing the first child should not cancel the second child's SIGKILL"
+    );
+  });
 });

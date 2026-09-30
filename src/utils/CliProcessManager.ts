@@ -86,7 +86,7 @@ type KillProcessTree = (
  */
 export class CliProcessManager {
   private currentProcess?: ChildProcess;
-  private killTimeoutId?: NodeJS.Timeout;
+  private readonly killTimeouts = new Map<ChildProcess, NodeJS.Timeout>();
   private lastSpawnedCommand?: string;
   /**
    * Signals this manager has requested for a child, so `SpawnResult` can report
@@ -185,7 +185,7 @@ export class CliProcessManager {
         if (this.currentProcess === child) {
           this.currentProcess = undefined;
         }
-        this.clearKillTimeout();
+        this.clearKillTimeout(child);
         if (timeoutId) {
           clearTimeout(timeoutId);
         }
@@ -269,7 +269,7 @@ export class CliProcessManager {
       return;
     }
 
-    this.clearKillTimeout();
+    this.clearKillTimeout(child);
 
     this.requestedKills.set(child, "SIGKILL");
     this.logger?.("📤 Sending SIGKILL to process tree (immediate termination)");
@@ -328,7 +328,7 @@ export class CliProcessManager {
         if (this.currentProcess === child) {
           this.currentProcess = undefined;
         }
-        this.clearKillTimeout();
+        this.clearKillTimeout(child);
         if (!settled) {
           settled = true;
           resolve(result);
@@ -364,8 +364,6 @@ export class CliProcessManager {
       // flush their session data. Keep the child current until close so the
       // graceful kill's escalation timer can still force-kill the tree.
       this.killGracefully(this.currentProcess);
-    } else {
-      this.clearKillTimeout();
     }
   }
 
@@ -386,7 +384,7 @@ export class CliProcessManager {
       return;
     }
 
-    this.clearKillTimeout();
+    this.clearKillTimeout(child);
 
     this.requestedKills.set(child, "SIGTERM");
     this.logger?.(
@@ -399,8 +397,9 @@ export class CliProcessManager {
     });
 
     // Escalate to forceful kill after delay if process hasn't exited
-    this.killTimeoutId = setTimeout(() => {
-      if (this.currentProcess === child && child.pid) {
+    const killTimeout = setTimeout(() => {
+      this.killTimeouts.delete(child);
+      if (child.exitCode === null && child.signalCode === null && child.pid) {
         this.requestedKills.set(child, "SIGKILL");
         this.logger?.(
           "⚠️ Process did not respond to SIGTERM after 3s - escalating to SIGKILL"
@@ -412,15 +411,17 @@ export class CliProcessManager {
         });
       }
     }, KILL_ESCALATION_DELAY_MS);
+    this.killTimeouts.set(child, killTimeout);
   }
 
   /**
    * Clear the SIGKILL escalation timeout
    */
-  private clearKillTimeout(): void {
-    if (this.killTimeoutId) {
-      clearTimeout(this.killTimeoutId);
-      this.killTimeoutId = undefined;
+  private clearKillTimeout(child: ChildProcess): void {
+    const killTimeout = this.killTimeouts.get(child);
+    if (killTimeout) {
+      clearTimeout(killTimeout);
+      this.killTimeouts.delete(child);
     }
   }
 }
