@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli), by code reading
 - **Area:** `src/utils/TempFileManager.ts` (`getCategoryFilePath` ~96), `src/core/harness/shared/CliPromptPreparer.ts` (~616-622, ~650, ~803)
-- **Severity:** medium (a step can run another run's prompt, or find its prompt file deleted)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

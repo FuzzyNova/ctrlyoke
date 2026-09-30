@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli), reproduced against the compiled `McpRegistryFileManager`
 - **Area:** `src/utils/McpRegistryFileManager.ts` (`readJsonFile`, `readScope`, `addOrUpdate`, `remove`, `writeJsonFileAtomic`), caller `src/ui/McpManagerService.ts` (`handleSaveRegistryServer`, `handleDeleteRegistryServer`)
-- **Severity:** high (silent loss of every user- or team-configured MCP server in that scope)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -41,6 +41,66 @@ function createSections(overrides?: Partial<PromptSections>): PromptSections {
 }
 
 suite("CliPromptPreparer", () => {
+  test("gives same-step plans unique categorized temp paths and applies those paths", async () => {
+    const workspaceRoot = makeTempDir("ctrlyoke-plan-id-");
+    const originalNow = Date.now;
+    Date.now = () => 1_000_000;
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async () =>
+        createSections({ agentContent: "shared agent instructions" }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => workspaceRoot,
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+    });
+
+    try {
+      const context: WorkflowContext = {
+        promptIndex: 0,
+        allPrompts: [],
+        workflowName: "same-workflow",
+      };
+      const first = await preparer.planPrompt(
+        { prompt: "same prompt" } as PromptStep,
+        context,
+        undefined,
+        undefined
+      );
+      const second = await preparer.planPrompt(
+        { prompt: "same prompt" } as PromptStep,
+        context,
+        undefined,
+        undefined
+      );
+
+      assert.ok(first.tempFilePaths.length > 0);
+      assert.ok(
+        first.tempFilePaths.every((filePath) =>
+          path.basename(filePath).endsWith(".md")
+        )
+      );
+      assert.notDeepStrictEqual(first.tempFilePaths, second.tempFilePaths);
+      for (const plan of [first, second]) {
+        for (const mutation of plan.mutations) {
+          await mutation.apply();
+          assert.ok(mutation.path && fs.existsSync(mutation.path));
+        }
+      }
+      assert.deepStrictEqual(
+        first.mutations.map((mutation) => mutation.path),
+        first.files.map((file) => file.path)
+      );
+    } finally {
+      Date.now = originalNow;
+      removeTempDir(workspaceRoot);
+    }
+  });
+
   test("uses inject-safe temp files for multiline prompts but keeps plain prompts inline", async () => {
     const preparer = new CliPromptPreparer({
       shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
@@ -1746,19 +1806,15 @@ suite("CliPromptPreparer", () => {
         false
       );
 
-      const prepared = await preparer.preparePrompt(
-        { prompt: "prompt text" } as PromptStep,
-        { workflowName: "workflow", promptIndex: 0, allPrompts: [] } as any,
-        { harness: "copilot-cli" } as any,
-        undefined
+      for (const mutation of plan.mutations) {
+        await mutation.apply();
+      }
+      assert.deepStrictEqual(
+        plan.tempFilePaths,
+        plan.files.map((file) => file.path)
       );
-      assert.deepStrictEqual(prepared.tempFilePaths, plan.tempFilePaths);
-      assert.strictEqual(
-        prepared.promptWithInstruction,
-        plan.promptWithInstruction
-      );
-      for (const filePath of plan.tempFilePaths) {
-        await fs.promises.access(filePath);
+      for (const plannedPath of plan.tempFilePaths) {
+        await fs.promises.access(plannedPath);
       }
     } finally {
       removeTempDir(workspaceRoot);

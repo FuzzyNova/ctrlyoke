@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { uniqueAtomicTempPath } from "../config/AtomicFileWrite";
 import type { SettingWriteScope } from "../types/DashboardConstants";
 import {
   MCP_TRANSPORTS,
@@ -9,6 +10,7 @@ import {
 import type { McpServerConfig } from "../types/CtrlYokeTypes";
 import type { ManagedMcpServer } from "../types/WebviewMessageTypes";
 import { Log } from "./Log";
+import { stripLeadingBom } from "./TextUtils";
 import {
   getCtrlYokeUserMcpRegistryPath,
   getCtrlYokeWorkspaceMcpRegistryPath,
@@ -84,7 +86,7 @@ function getManagedDisplayName(server: McpServerConfig): string {
 async function readJsonFile(filePath: string): Promise<unknown> {
   try {
     const content = await fs.promises.readFile(filePath, "utf-8");
-    return JSON.parse(content);
+    return JSON.parse(stripLeadingBom(content));
   } catch {
     return null;
   }
@@ -95,18 +97,76 @@ async function writeJsonFileAtomic(
   data: unknown
 ): Promise<void> {
   await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-  const tempPath = `${filePath}.${process.pid}.tmp`;
+  const tempPath = uniqueAtomicTempPath(filePath);
   try {
     await fs.promises.writeFile(
       tempPath,
       JSON.stringify(data, null, 2),
-      "utf-8"
+      { encoding: "utf-8", flag: "wx" }
     );
     await fs.promises.rename(tempPath, filePath);
   } catch (error) {
     await fs.promises.unlink(tempPath).catch(() => undefined);
     throw error;
   }
+}
+
+const mutationQueues = new Map<string, Promise<void>>();
+
+async function serializeMutation<T>(
+  filePath: string,
+  mutation: () => Promise<T>
+): Promise<T> {
+  const resolvedPath = path.resolve(filePath);
+  const previous = mutationQueues.get(resolvedPath) ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  mutationQueues.set(resolvedPath, current);
+  await previous.catch(() => undefined);
+  try {
+    return await mutation();
+  } finally {
+    release();
+    if (mutationQueues.get(resolvedPath) === current) {
+      mutationQueues.delete(resolvedPath);
+    }
+  }
+}
+
+async function readRawArrayForMutation(filePath: string): Promise<unknown[]> {
+  let content: string;
+  try {
+    content = await fs.promises.readFile(filePath, "utf-8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stripLeadingBom(content));
+  } catch {
+    throw new Error(
+      `Cannot modify MCP registry "${filePath}": file contains invalid JSON. Fix the file before saving.`
+    );
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error(
+      `Cannot modify MCP registry "${filePath}": expected a JSON array. Fix the file before saving.`
+    );
+  }
+  return parsed;
+}
+
+function hasServerId(entry: unknown, id: string): boolean {
+  return (
+    entry !== null &&
+    typeof entry === "object" &&
+    !Array.isArray(entry) &&
+    (entry as Record<string, unknown>).id === id
+  );
 }
 
 export class McpRegistryFileManager {
@@ -204,24 +264,29 @@ export class McpRegistryFileManager {
     }
 
     const filePath = this.getRequiredScopePath(scope);
-    const current = await this.readScope(scope);
-    const next = [...current];
-    const existingIndex = next.findIndex((entry) => entry.id === server.id);
+    await serializeMutation(filePath, async () => {
+      const next = await readRawArrayForMutation(filePath);
+      const existingIndex = next.findIndex((entry) =>
+        hasServerId(entry, server.id)
+      );
 
-    if (existingIndex >= 0) {
-      next[existingIndex] = server;
-    } else {
-      next.push(server);
-    }
+      if (existingIndex >= 0) {
+        next[existingIndex] = server;
+      } else {
+        next.push(server);
+      }
 
-    await writeJsonFileAtomic(filePath, next);
+      await writeJsonFileAtomic(filePath, next);
+    });
   }
 
   async remove(id: string, scope: SettingWriteScope): Promise<void> {
     const filePath = this.getRequiredScopePath(scope);
-    const current = await this.readScope(scope);
-    const next = current.filter((server) => server.id !== id);
-    await writeJsonFileAtomic(filePath, next);
+    await serializeMutation(filePath, async () => {
+      const current = await readRawArrayForMutation(filePath);
+      const next = current.filter((entry) => !hasServerId(entry, id));
+      await writeJsonFileAtomic(filePath, next);
+    });
   }
 
   private getRequiredScopePath(scope: SettingWriteScope): string {
