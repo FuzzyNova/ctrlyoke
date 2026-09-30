@@ -5,6 +5,7 @@ import {
   HARNESS_IDS,
   CTRLYOKE_MCP_MODES,
   PROMPT_DIAGNOSTIC_CODES,
+  SETTING_SCOPES,
 } from "../../types/DashboardConstants";
 import type { McpServerConfig } from "../../types/CtrlYokeTypes";
 import type { CtrlYokeMcpMode } from "../../types/DashboardConstants";
@@ -120,6 +121,46 @@ suite("McpServerNormalizer", () => {
         env: { PLAYWRIGHT_MODE: "test" },
       }
     );
+  });
+
+  test("trusts secret references only from a user-only registry entry", async () => {
+    const server: McpServerConfig = {
+      id: "registry-secret",
+      command: "node",
+      env: { TOKEN: "${secret:REGISTRY_TOKEN}" },
+    };
+    const userEntry: ManagedMcpServer = {
+      id: server.id,
+      displayName: server.id,
+      config: server,
+      locations: [
+        { targetId: "ctrlyoke", scope: SETTING_SCOPES.USER, path: "user" },
+      ],
+    };
+    const workspaceEntry: ManagedMcpServer = {
+      ...userEntry,
+      locations: [
+        {
+          targetId: "ctrlyoke",
+          scope: SETTING_SCOPES.WORKSPACE,
+          path: "workspace",
+        },
+      ],
+    };
+
+    const userResult = await McpServerNormalizer.applyWithDiagnostics(
+      createProperties([server.id]),
+      [userEntry]
+    );
+    const workspaceResult = await McpServerNormalizer.applyWithDiagnostics(
+      createProperties([server.id]),
+      [workspaceEntry]
+    );
+
+    assert.deepStrictEqual(userResult.trustedUserScopeSecretNames, [
+      "REGISTRY_TOKEN",
+    ]);
+    assert.deepStrictEqual(workspaceResult.trustedUserScopeSecretNames, []);
   });
 
   test("keeps the ctrlyoke sentinel as a string", async () => {

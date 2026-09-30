@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli); traced in code and reproduced with an overlapping-action script
 - **Area:** `src/core/harness/shared/CliTransportCoordinator.ts` (`withProcessEnvOverrides` ~795-823, used at ~172, ~350, ~768), `src/core/harness/shared/CliProviderUtils.ts` (`buildProcessEnv` copies `process.env`), `src/utils/SecretResolver.ts` (`resolveSecretValues` checks the environment first)
-- **Severity:** high (security: secrets reach steps and workflows that were not granted them)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

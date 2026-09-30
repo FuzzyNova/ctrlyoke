@@ -347,7 +347,7 @@
     },
     "varsConfig": {
       "type": "object",
-      "description": "Workflow-level variable defaults for {{varName}} substitution. CLI --var key=value flags override these at runtime. Substituted into: prompt text, model, additionalArgs, hook command/env, preCondition script/env, endCondition script/env/retryPrompt/passRetryPrompt, script-step script/env, and worktree setup commands. Every script and condition process also receives each var as a CTRLYOKE_VAR_<KEY> environment variable regardless of {{varName}} usage.",
+      "description": "Workflow-level variable defaults for {{varName}} substitution. CLI --var key=value flags override these at runtime. Substituted into: prompt text, model, additionalArgs, hook command/env, preCondition script/env, endCondition script/env/retryPrompt/passRetryPrompt, script-step script/env, and worktree setup commands. Every script and condition process also receives each var as a CTRLYOKE_VAR_<KEY> environment variable regardless of {{varName}} usage. A value containing `${secret:` causes the step to fail before execution so vars cannot manufacture managed-secret references.",
       "additionalProperties": {
         "type": "string"
       },

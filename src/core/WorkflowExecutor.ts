@@ -92,11 +92,16 @@ import {
   findMissingSecretNames,
   getProcessMapSecretNames,
   getDeclaredSecretGrants,
+  assertSecretGrantTrust,
   MissingSecretError,
   resolveSecretEnvironment,
 } from "../utils/SecretResolver";
 import { getEffectiveSecretGrants } from "../utils/SecretReferenceParser";
 import { McpServerNormalizer } from "../utils/McpServerNormalizer";
+import {
+  secretGrantsTrustStore,
+  type SecretGrantsTrustStore,
+} from "../config/SecretGrantsTrustStore";
 import { PromptFileResolver } from "./PromptFileResolver";
 import { resolvePromptTextWithVariables } from "./PromptTextResolver";
 import {
@@ -486,7 +491,11 @@ export class WorkflowExecutor {
     private readonly endConditionHandler: EndConditionHandler,
     private readonly endConditionEvaluator: EndConditionEvaluator,
     private readonly platform: PlatformAdapter,
-    private readonly userFeedbackSink?: UserFeedbackSink
+    private readonly userFeedbackSink?: UserFeedbackSink,
+    private readonly secretGrantTrustStore: Pick<
+      SecretGrantsTrustStore,
+      "getDecision"
+    > = secretGrantsTrustStore
   ) {
     this.scriptExecutionReporter = new ScriptExecutionReporter(
       endConditionEvaluator
@@ -2135,7 +2144,8 @@ export class WorkflowExecutor {
       const resolvedSecretValues = await this.resolveGrantedSecretValues(
         secretNames,
         context,
-        target
+        target,
+        mcpNormalization.trustedUserScopeSecretNames
       );
       context.secretRedactor?.addResolvedValues(resolvedSecretValues);
       resolvedProperties = {
@@ -3430,13 +3440,28 @@ export class WorkflowExecutor {
   private async resolveGrantedSecretValues(
     names: readonly string[],
     context: WorkflowExecutionContext,
-    target: ExecutionTarget
+    target: ExecutionTarget,
+    trustedNames: readonly string[] = []
   ): Promise<Record<string, string>> {
     if (names.length === 0) {
       return {};
     }
+    const workspaceRoot = this.platform.getWorkspaceRoot();
+    const workflow = this.promptQueue.getWorkflowFile();
+    const scope =
+      target.kind === FINAL_STEP_PHASES.FINAL_STEP
+        ? workflow.finalStep?.name?.trim() || "final step"
+        : workflow.steps?.[target.stepIndex]?.name?.trim() ||
+          `step ${target.stepIndex + 1}`;
+    assertSecretGrantTrust(
+      names,
+      workspaceRoot,
+      trustedNames,
+      this.secretGrantTrustStore,
+      scope
+    );
     const resolutionContext = {
-      workspaceRoot: this.platform.getWorkspaceRoot(),
+      workspaceRoot,
       secretStore: this.platform.getSecretStore?.(),
     };
     const missing = await findMissingSecretNames(names, resolutionContext);
@@ -4381,7 +4406,8 @@ export class WorkflowExecutor {
       const retrySecretValues = await this.resolveGrantedSecretValues(
         retrySecretNames,
         context,
-        target
+        target,
+        mcpNormalization.trustedUserScopeSecretNames
       );
       context.secretRedactor?.addResolvedValues(retrySecretValues);
       resolvedProperties = {

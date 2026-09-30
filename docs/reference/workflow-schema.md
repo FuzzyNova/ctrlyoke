@@ -800,7 +800,7 @@ Optional setup command run after a new named worktree is created. Setup is outsi
 
 ## Variables {#vars}
 
-Workflow-level variable defaults for <code v-pre>{{varName}}</code> substitution. CLI --var key=value flags override these at runtime. Substituted into: prompt text, model, additionalArgs, hook command/env, preCondition script/env, endCondition script/env/retryPrompt/passRetryPrompt, script-step script/env, and worktree setup commands. Every script and condition process also receives each var as a CTRLYOKE\_VAR\_&lt;KEY> environment variable regardless of <code v-pre>{{varName}}</code> usage.
+Workflow-level variable defaults for <code v-pre>{{varName}}</code> substitution. CLI --var key=value flags override these at runtime. Substituted into: prompt text, model, additionalArgs, hook command/env, preCondition script/env, endCondition script/env/retryPrompt/passRetryPrompt, script-step script/env, and worktree setup commands. Every script and condition process also receives each var as a CTRLYOKE\_VAR\_&lt;KEY> environment variable regardless of <code v-pre>{{varName}}</code> usage. A value containing `${secret:` causes the step to fail before execution so vars cannot manufacture managed-secret references.
 
 - **Type:** map of `string`
 

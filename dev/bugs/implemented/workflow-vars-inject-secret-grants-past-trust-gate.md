@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli); traced in code and reproduced with the compiled `VarSubstitutor`/`SecretResolver`
 - **Area:** `src/utils/VarSubstitutor.ts` (`applyToResolvedProperties`, `applyToHook`, `applyToScriptProperties`), `src/core/WorkflowExecutor.ts` (~2086-2140 and `resolveGrantedSecretValues` ~3430), `src/utils/SecretResolver.ts` (`preflightWorkflowSecrets` ~349, `getWorkflowSecretGrants`)
-- **Severity:** high (security: a cloned workflow can exfiltrate any stored secret without the approval prompt)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

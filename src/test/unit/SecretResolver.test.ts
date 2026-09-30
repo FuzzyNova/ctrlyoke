@@ -13,6 +13,7 @@ import {
   MissingSecretError,
   findSecretInterpolationsInPrompt,
   expandSecretInterpolations,
+  assertSecretGrantTrust,
   getDeclaredSecretGrants,
   getWorkflowSecretGrants,
   preflightWorkflowSecrets as preflightWorkflowSecretsImpl,
@@ -123,6 +124,39 @@ suite("SecretResolver", () => {
         error instanceof MissingSecretError &&
         error.message.includes('Secret "MISSING"') &&
         error.message.includes("workspace/user or environment")
+    );
+  });
+
+  test("runtime trust gate allows user registry names and requires ALLOW otherwise", () => {
+    const decisions = new Map<string, SecretGrantTrustDecision>();
+    const trustStore = {
+      getDecision: (_workspace: string, name: string) => decisions.get(name),
+    };
+
+    assertSecretGrantTrust(
+      ["USER_MCP_TOKEN"],
+      "C:\\workspace",
+      ["USER_MCP_TOKEN"],
+      trustStore
+    );
+    assert.throws(
+      () =>
+        assertSecretGrantTrust(
+          ["WORKSPACE_MCP_TOKEN"],
+          "C:\\workspace",
+          [],
+          trustStore,
+          "step 1"
+        ),
+      /has not been approved for this workspace/u
+    );
+
+    decisions.set("WORKFLOW_TOKEN", "allow");
+    assertSecretGrantTrust(
+      ["WORKFLOW_TOKEN"],
+      "C:\\workspace",
+      [],
+      trustStore
     );
   });
 
