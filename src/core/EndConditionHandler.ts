@@ -27,6 +27,10 @@ import { StatusMessageReporter } from "./orchestration/StatusMessageReporter";
 import { PropertyResolver } from "../utils/PropertyResolver";
 import { reportEndConditionEvaluated } from "../utils/TelemetryEvents";
 import { formatComparison } from "../utils/ScriptComparison";
+import {
+  fenceLiteral,
+  LITERAL_FENCE_INFO,
+} from "../utils/FileReferenceParser";
 
 /**
  * The `Expected:` / `Actual:` pair every end-condition failure message shows.
@@ -528,7 +532,13 @@ export class EndConditionHandler {
         prompt.endCondition,
         evaluationResult
       );
-      return `The previous task validation failed. Expected: ${expected}, but got: ${actual}\n\nScript output:\n${evaluationResult.stdout}\n\nPlease fix the issues and try again.`;
+      return [
+        "The previous task validation failed.",
+        `Expected:\n${fenceLiteral(expected, LITERAL_FENCE_INFO)}`,
+        `Actual:\n${fenceLiteral(actual, LITERAL_FENCE_INFO)}`,
+        `Script output:\n${fenceLiteral(evaluationResult.stdout, LITERAL_FENCE_INFO)}`,
+        "Please fix the issues and try again.",
+      ].join("\n\n");
     }
 
     return retryPromptTemplate;

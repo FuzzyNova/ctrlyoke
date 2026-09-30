@@ -36,6 +36,13 @@ suite("FileReferenceParser", () => {
         "```text\n\x00src\x00x.ts\n``` then @src/y.ts"
       );
     });
+
+    test("does not let an inserted literal opener close an authored fence", () => {
+      const prompt = "```text\n@src/x.ts\n```` text\n@src/y.ts\n````";
+      const masked = maskFencedCodeBlocks(prompt);
+      assert.ok(masked.includes("\x00src\x00x.ts"));
+      assert.ok(masked.includes("\x00src\x00y.ts"));
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────

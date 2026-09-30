@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by bug-hunt final step (claude-cli)
 - **Area:** `src/core/EndConditionHandler.ts` (`buildRetryPrompt` fallback)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

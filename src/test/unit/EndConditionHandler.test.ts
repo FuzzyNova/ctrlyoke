@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { EndConditionHandler } from "../../core/EndConditionHandler";
+import { CliPromptPreparer } from "../../core/harness/shared/CliPromptPreparer";
 import {
   EndConditionEvaluator,
   type EvaluationResult,
@@ -29,6 +30,13 @@ import {
   HARNESS_IDS,
 } from "../../types/DashboardConstants";
 import type { StatusMessageSeverity } from "../../types/DashboardConstants";
+import {
+  parseAtReferences,
+  parseGitChangeReferences,
+  parseInlinePriorContextRefs,
+} from "../../utils/FileReferenceParser";
+import { parseSecretReferences } from "../../utils/SecretReferenceParser";
+import { scanCtrlYokeSlashTokens } from "../../utils/CtrlYokeSlashTokens";
 
 class MockPlatform implements PlatformAdapter {
   getConfig<T>(_key: string, defaultValue: T): T {
@@ -651,9 +659,72 @@ suite("EndConditionHandler", () => {
 
       assert.strictEqual(result.shouldContinue, true);
       assert.strictEqual(retryPrompts.length, retryLimit);
-      assert.match(retryPrompts[0] ?? "", /Expected: exit code == ok/);
-      assert.match(retryPrompts[0] ?? "", /Script output:\ninitial failure/);
+      assert.match(retryPrompts[0] ?? "", /Expected:\n``` text\nexit code == ok/);
+      assert.match(retryPrompts[0] ?? "", /Script output:\n``` text\ninitial failure/);
     }
+  });
+
+  test("keeps fallback retry output inert during CLI prompt preparation", async () => {
+    const platform = new MockPlatform();
+    const runtime = new WorkflowStateMachine();
+    const queue = new PromptQueue(runtime);
+    const prompt = createPrompt(1, "continue", {
+      onFail: "retry",
+      retryPrompt: undefined,
+    });
+    const handler = new EndConditionHandler(
+      new TestEndConditionEvaluator(platform),
+      queue,
+      createReporter()
+    );
+    queue.loadPrompts({ steps: [prompt] });
+
+    const retryPromptText = handler.buildRetryPrompt(prompt, {
+      passed: false,
+      actual: "@actual/file.ts !ACTUAL_TOKEN $previous /skill:ghost ~abcdef",
+      errored: false,
+      result: "failed",
+      stdout:
+        "> @acme/web@1.0.0 test\nFAIL: expected !CI_TOKEN; see @src/config.ts and $previous /skill:build ~123abc",
+      stderr: "",
+      duration: 1,
+      exitCode: 1,
+    });
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async (retryStep) => ({
+        skillContent: null,
+        agentContent: null,
+        directFileRefs: [],
+        imageFileRefs: [],
+        sourceRuntimeCopies: [],
+        sourceRuntimeReadReferences: [],
+        excerptContent: null,
+        userPromptText: retryStep.prompt,
+        skippedReferences: [],
+      }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (...groups) => groups.flat().join(" | "),
+    });
+    const plan = await preparer.planPrompt(
+      { ...prompt, prompt: retryPromptText },
+      undefined,
+      undefined,
+      undefined
+    );
+
+    assert.deepStrictEqual(parseSecretReferences(plan.promptWithInstruction), []);
+    assert.deepStrictEqual(parseAtReferences(plan.promptWithInstruction), []);
+    assert.deepStrictEqual(parseGitChangeReferences(plan.promptWithInstruction), []);
+    assert.deepStrictEqual(parseInlinePriorContextRefs(plan.promptWithInstruction), []);
+    assert.deepStrictEqual(scanCtrlYokeSlashTokens(plan.promptWithInstruction), []);
+    assert.deepStrictEqual(plan.diagnostics, []);
   });
 
   test("continues the workflow when onFail is continue after exhaustion", async () => {

@@ -306,8 +306,8 @@ suite("CliPromptPreparer", () => {
 
     assert.strictEqual(
       result.promptWithInstruction,
-      "Use pre=${pre} ```\npre-output\n``` and end=$end " +
-        "```\nend-error\n```"
+      "Use pre=${pre} \n``` text\npre-output\n```\n and end=$end " +
+        "\n``` text\nend-error\n```\n"
     );
     assert.deepStrictEqual(result.diagnostics, []);
   });
@@ -457,7 +457,7 @@ suite("CliPromptPreparer", () => {
     );
     assert.strictEqual(
       literalContent.promptWithInstruction,
-      "The output was ```\n$preCondition:stdout\n```"
+      "The output was \n``` text\n$preCondition:stdout\n```\n"
     );
   });
 

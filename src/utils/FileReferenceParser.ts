@@ -32,6 +32,8 @@ import {
   UNQUOTED_AT_REFERENCE_PATH,
 } from "./ReferencePatterns";
 
+export const LITERAL_FENCE_INFO = "text";
+
 /**
  * Mask every prompt-reference and variable trigger character inside
  * backtick-fenced blocks.
@@ -63,7 +65,18 @@ export function maskFencedCodeBlocks(text: string): string {
     let contentEnd = -1;
 
     while ((closing = fenceRuns.exec(text)) !== null) {
-      if (closing[0].length >= openingLength) {
+      const afterFence = closing.index + closing[0].length;
+      const lineEnd = text.indexOf("\n", afterFence);
+      const lineRemainder = text.slice(
+        afterFence,
+        lineEnd < 0 ? text.length : lineEnd
+      );
+      // fenceLiteral labels inserted openers as `text`. They must not close
+      // an earlier authored run; the generated bare closing fence will still
+      // mask the literal value together with any authored text before it.
+      const isGeneratedOpener =
+        lineRemainder.trim() === LITERAL_FENCE_INFO;
+      if (closing[0].length >= openingLength && !isGeneratedOpener) {
         contentEnd = closing.index + closing[0].length;
         break;
       }
@@ -84,11 +97,17 @@ export function maskFencedCodeBlocks(text: string): string {
   return masked;
 }
 
-/** Fence literal text with a backtick run longer than any run in the text. */
-export function fenceLiteral(text: string, info = ""): string {
+/** Fence literal text with a backtick run longer than any run in its context. */
+export function fenceLiteral(
+  text: string,
+  info = "",
+  surroundingText = ""
+): string {
   let longestRun = 0;
-  for (const match of text.matchAll(/`+/g)) {
-    longestRun = Math.max(longestRun, match[0].length);
+  for (const source of [text, surroundingText]) {
+    for (const match of source.matchAll(/`+/g)) {
+      longestRun = Math.max(longestRun, match[0].length);
+    }
   }
   const fence = "`".repeat(Math.max(3, longestRun + 1));
   return `${fence}${info ? ` ${info}` : ""}\n${text}\n${fence}`;

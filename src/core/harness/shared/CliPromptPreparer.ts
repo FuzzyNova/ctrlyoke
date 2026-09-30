@@ -32,6 +32,7 @@ import { Log } from "../../../utils/Log";
 import { ctrlYokeToolFamilies } from "./CliProviderUtils";
 import {
   fenceLiteral,
+  LITERAL_FENCE_INFO,
   parseInlinePriorContextRefs,
 } from "../../../utils/FileReferenceParser";
 import { substituteConditionOutputRefs } from "../../ConditionOutputRefs";
@@ -142,7 +143,8 @@ export class CliPromptPreparer {
         preCondition: workflowContext?.preConditionResult,
         endCondition: workflowContext?.endConditionResult,
       },
-      fenceLiteral
+      (value, authoredText) =>
+        `\n${fenceLiteral(value, LITERAL_FENCE_INFO, authoredText)}\n`
     );
     const originalPromptText = conditionOutputSubstitution.text;
     const harnessId = resolvedProperties?.harness ?? HARNESS_IDS.COPILOT_CLI;

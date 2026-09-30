@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by bug-hunt final step (claude-cli)
 - **Area:** `src/utils/FileReferenceParser.ts` (`maskFencedCodeBlocks`), `fenceLiteral` as used by `CliPromptPreparer.ts` (~139-146)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
