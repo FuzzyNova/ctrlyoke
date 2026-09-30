@@ -98,6 +98,7 @@ import {
   resetStepRuntimeForRewind,
 } from "./StepIdentity";
 import { hasStarted } from "../utils/StepStatusDerivation";
+import { appendResponseText } from "../utils/ResponseTextJoin";
 
 /** Resolver-derived, in-memory execution cache restored for an active run. */
 export interface ResolvedRuntimeOutputCacheEntry {
@@ -1717,7 +1718,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     const existing =
       this.runtimeOutputCache.get(promptIndex)?.responseText ?? "";
     this.cacheRuntimeOutput(promptIndex, {
-      responseText: existing + additionalText,
+      responseText: appendResponseText(existing, additionalText),
     });
   }
 
@@ -2504,7 +2505,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     }
     this.storeFinalStepResponseText(
       loopIndex,
-      (this.finalStepResponseCache.get(loopIndex) ?? "") + additionalText
+      appendResponseText(
+        this.finalStepResponseCache.get(loopIndex) ?? "",
+        additionalText
+      )
     );
   }
 

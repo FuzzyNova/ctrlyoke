@@ -24,6 +24,7 @@ import {
 import { getCliEntryKey } from "./OutputHistoryTimelineAdapter";
 import { extractTextFromEvents } from "../harness/shared/CliResponseTextExtractor";
 import { Log } from "../../utils/Log";
+import { appendResponseText } from "../../utils/ResponseTextJoin";
 
 export interface SessionActivityRecorderPort {
   readonly id: string;
@@ -357,7 +358,7 @@ export class SessionActivityRecorder {
     try {
       const merged: CliOutput = {
         ...existingOutput,
-        response: existingOutput.response + followUpText,
+        response: appendResponseText(existingOutput.response, followUpText),
         structured: existingOutput.structured
           ? {
               ...existingOutput.structured,

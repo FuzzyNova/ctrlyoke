@@ -6,6 +6,7 @@ import type {
 } from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
+import { joinResponseText } from "../../../utils/ResponseTextJoin";
 import { createTwoFilesPatch } from "diff";
 
 const ENCRYPTED_REASONING_PLACEHOLDER = "[Encrypted reasoning]";
@@ -127,5 +128,5 @@ export function extractTextFromEvents(
       textParts.push(`\n[Deleted: ${(event.data as { path: string }).path}]`);
     }
   }
-  return textParts.join("");
+  return joinResponseText(textParts);
 }

@@ -93,4 +93,24 @@ suite("CliResponseTextExtractor", () => {
 
     assert.strictEqual(result, "\n[Edited: src/example.ts (+1, -1)]");
   });
+
+  test("separates consecutive text messages with a paragraph break", () => {
+    const result = extractTextFromEvents(
+      output([
+        { type: CLI_EVENT_TYPES.TEXT, data: { text: "Committing." } },
+        { type: CLI_EVENT_TYPES.TEXT, data: { text: "Committed." } },
+        {
+          type: CLI_EVENT_TYPES.FILE_DELETE,
+          data: { path: "old.ts" },
+        },
+        { type: CLI_EVENT_TYPES.TEXT, data: { text: "Done." } },
+      ]),
+      { includeFullDiffs: false }
+    );
+
+    assert.strictEqual(
+      result,
+      "Committing.\n\nCommitted.\n[Deleted: old.ts]\n\nDone."
+    );
+  });
 });

@@ -1120,7 +1120,7 @@ suite("CliLogMonitor", () => {
         assert.strictEqual(notificationCallCount, 1);
         assert.strictEqual(
           result.cliResult?.response,
-          "I will wait for the task.The background task finished."
+          "I will wait for the task.\n\nThe background task finished."
         );
       } finally {
         process.env.HOME = previousHome;

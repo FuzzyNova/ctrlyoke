@@ -289,7 +289,7 @@ suite("WorkflowInstance session activity forwarding", () => {
       // The persisted response text (what $previous/$all/$step:N read via
       // RunOutputResolver.resolvePriorContextItems) must include follow-up
       // activity, not just the pre-follow-up response.
-      assert.strictEqual(entry.cliOutput.response, "done and did more.");
+      assert.strictEqual(entry.cliOutput.response, "done\n\n and did more.");
       assert.deepStrictEqual(entry.cliOutput.tokens, {
         prompt: 10,
         completion: 5,
@@ -427,7 +427,10 @@ suite("WorkflowInstance session activity forwarding", () => {
           CLI_EVENT_TYPES.TEXT,
         ]
       );
-      assert.strictEqual(entry.cliOutput.response, "done first. second.");
+      assert.strictEqual(
+        entry.cliOutput.response,
+        "done\n\n first.\n\n second."
+      );
       // Exactly one divider, even though both bursts read the aggregate.
       assert.strictEqual(
         (entry.cliOutput.structured?.events ?? []).filter(
@@ -502,7 +505,7 @@ suite("WorkflowInstance session activity forwarding", () => {
 
     assert.strictEqual(
       (instance.promptQueue as any).runtimeOutputCache.get(0).responseText,
-      "before. and after."
+      "before.\n\n and after."
     );
     assert.ok((instance.promptQueue as any).state.steps[0]._runtime?.stepId);
     assert.strictEqual(
@@ -550,7 +553,7 @@ suite("WorkflowInstance session activity forwarding", () => {
 
     assert.strictEqual(
       (instance.promptQueue as any).finalStepResponseCache.get(0),
-      "loop-before. loop-after."
+      "loop-before.\n\n loop-after."
     );
   });
 });

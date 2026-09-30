@@ -23,6 +23,7 @@ import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 import { isWorkflowRunning, isWorkflowActive } from "../utils/status";
 import { joinCliTextEvents } from "../utils/outputUtils";
+import { appendResponseText } from "@root/utils/ResponseTextJoin";
 import type {
   WorktreeRunProjection,
   CoordinationScopeSnapshot,
@@ -243,7 +244,7 @@ function mergeResumedActivityIntoOutput(
   return {
     ...existing,
     response: followUpText
-      ? (existing.response ?? "") + followUpText
+      ? appendResponseText(existing.response ?? "", followUpText)
       : existing.response,
     structured: {
       ...existingStructured,

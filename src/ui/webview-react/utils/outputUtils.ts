@@ -8,6 +8,7 @@ import { truncate } from "./string";
 import type { CliOutput as CliOutputType, TextData } from "../types/cliEvents";
 import { CLI_EVENT_TYPES } from "../types/cliEvents";
 import { OUTPUT_TOOL_BADGE_LABELS } from "@root/types/DashboardConstants";
+import { joinResponseText } from "@root/utils/ResponseTextJoin";
 
 const OUTPUT_TOOL_NAMES = {
   GREP: "grep",
@@ -97,15 +98,15 @@ export function buildDiffAnchorPrefix(
   return `cy-diff-${kindSlug}-${stepIndex}-r${runIndex}-a${attemptIndex}`;
 }
 
-/** Concatenates the text of every TEXT event, in order. */
+/** Joins the text of every TEXT event, in order, as separate messages. */
 export function joinCliTextEvents(
   events: readonly { type: string; data?: unknown }[]
 ): string {
-  return events
-    .filter((e) => e.type === CLI_EVENT_TYPES.TEXT)
-    .map((e) => (e.data as TextData | undefined)?.text)
-    .filter(Boolean)
-    .join("");
+  return joinResponseText(
+    events
+      .filter((e) => e.type === CLI_EVENT_TYPES.TEXT)
+      .map((e) => (e.data as TextData | undefined)?.text ?? "")
+  );
 }
 
 /**

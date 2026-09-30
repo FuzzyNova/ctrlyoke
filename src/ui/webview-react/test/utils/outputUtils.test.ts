@@ -95,7 +95,7 @@ describe("extractCliOutputText", () => {
         metadata: {},
       },
     };
-    expect(extractCliOutputText(output as any)).toBe("base+resumed");
+    expect(extractCliOutputText(output as any)).toBe("base\n\n+resumed");
   });
 });
 

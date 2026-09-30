@@ -570,7 +570,7 @@ describe("appendStreamingEvents", () => {
     ]);
 
     const entry = store().liveOrderedEntries[0] as OrderedCliHistoryEntry;
-    expect(entry.cliOutput.response).toBe("done.Committed.");
+    expect(entry.cliOutput.response).toBe("done.\n\nCommitted.");
   });
 
   it("updates the rendered history snapshot when follow-up activity arrives for a retired run", () => {
