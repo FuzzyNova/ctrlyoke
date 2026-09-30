@@ -1944,6 +1944,21 @@ suite("PromptQueue State Machine Tests", () => {
       );
     });
 
+    test("clearPendingRewind drops the rewind so the next runtime write omits it", async () => {
+      queue.loadPrompts(
+        createPromptFile([{ prompt: "prefix" }, { prompt: "suffix" }])
+      );
+      queue.applyPendingRewind(1, 1, 2, false);
+
+      queue.clearPendingRewind();
+
+      // The working-file writer serializes `pendingRewind` from this state.
+      assert.strictEqual(queue.getState().pendingRewind, undefined);
+      assert.strictEqual(queue.getState().currentIndex, 1);
+      await queue.updateWorkflowName("renamable again");
+      assert.strictEqual(queue.getState().workflowName, "renamable again");
+    });
+
     test("keeps PAUSED state when applying an addressed paused-run rewind", () => {
       queue.loadPrompts(
         createPromptFile([{ prompt: "prefix" }, { prompt: "suffix" }])

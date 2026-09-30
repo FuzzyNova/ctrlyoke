@@ -4662,6 +4662,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
           workflowKey: run.workflowKey,
           runRef: run.runRef,
         }),
+        clearPendingRewind: () => undefined,
         executeContinuationAtRun: async (...args: unknown[]) => {
           executionArgs = args;
           await (args[3] as () => Promise<void>)();
@@ -4806,6 +4807,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         }),
         getExecutionRunRef: () => run.runRef,
         ownsRunnerLock: () => true,
+        clearPendingRewind: () => undefined,
         executeContinuationAtRun: async () => {
           continued = true;
         },
@@ -5193,6 +5195,139 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         rewind.definitionRevision,
         "committing a rewind must not change the definition revision"
       );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  /** A rewind whose descriptor edit was committed but whose run-file flag was written back. */
+  async function createOrphanedRewind(workspace: string) {
+    const run = await createTwoStepRun(workspace);
+    const lineage = new WorkflowLineageRepository();
+    const rewind = await WorkingFileManager.beginPendingRewind(
+      workspace,
+      run.workflowKey,
+      run.runRef,
+      1,
+      1,
+      (await lineage.readDescriptor(workspace, run.workflowKey)).revision
+    );
+    const committed = await WorkingFileManager.commitPendingRewind(
+      workspace,
+      run.workflowKey,
+      run.runRef,
+      rewind.definitionRevision,
+      rewind.descriptorRevision
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(run.workingFilePath, "utf8")
+    );
+    workingFile._runtime = {
+      ...workingFile._runtime,
+      pendingRewind: {
+        fromStepIndex: 1,
+        baseDefinitionRevision: rewind.definitionRevision,
+      },
+    };
+    await fs.writeFile(run.workingFilePath, JSON.stringify(workingFile));
+    return { run, committed };
+  }
+
+  test("continuing clears a run-file pendingRewind the descriptor no longer backs", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-continue-orphan-rewind-")
+    );
+    try {
+      const { run, committed } = await createOrphanedRewind(workspace);
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        run.workflowKey,
+        run.runRef
+      );
+      let executed = false;
+      internal.buildWorkflowInstance = () => ({
+        executeContinuationAtRun: async () => {
+          executed = true;
+        },
+      });
+
+      await orchestrator.continueAtRun(
+        { workflowKey: run.workflowKey, runRef: run.runRef },
+        committed.definitionRevision,
+        committed.descriptorRevision,
+        PANEL_CLIENT_ID
+      );
+
+      assert.strictEqual(executed, true);
+      const workingFile = JSON.parse(
+        await fs.readFile(run.workingFilePath, "utf8")
+      );
+      assert.strictEqual(
+        workingFile._runtime?.pendingRewind,
+        undefined,
+        "an orphaned flag must not survive a continuation"
+      );
+      assert.strictEqual(
+        workingFile.definitionRevision,
+        committed.definitionRevision
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("continuing drops the in-memory pending rewind from every resident instance bound to the run", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-continue-clears-memory-")
+    );
+    try {
+      const run = await createTwoStepRun(workspace);
+      const rewind = await WorkingFileManager.beginPendingRewind(
+        workspace,
+        run.workflowKey,
+        run.runRef,
+        1,
+        1,
+        (
+          await new WorkflowLineageRepository().readDescriptor(
+            workspace,
+            run.workflowKey
+          )
+        ).revision
+      );
+      const cleared: string[] = [];
+      const resident = (id: string, runRef = run.runRef) => ({
+        id,
+        getQueueState: () => ({
+          status: EXECUTION_STATES.IDLE,
+          workflowKey: run.workflowKey,
+          runRef,
+        }),
+        getExecutionRunRef: () => undefined,
+        clearPendingRewind: () => {
+          cleared.push(id);
+        },
+        executeContinuationAtRun: async () => undefined,
+      });
+      const { orchestrator, internal } = createHarness(
+        workspace,
+        run.workflowKey,
+        run.runRef,
+        resident("live")
+      );
+      internal.retiredInstances = new Map([
+        ["retired", resident("retired")],
+        ["other-run", resident("other-run", "run-other" as never)],
+      ]);
+
+      await orchestrator.continueAtRun(
+        { workflowKey: run.workflowKey, runRef: run.runRef },
+        rewind.definitionRevision,
+        rewind.descriptorRevision,
+        PANEL_CLIENT_ID
+      );
+
+      assert.deepStrictEqual(cleared, ["live", "retired"]);
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
     }

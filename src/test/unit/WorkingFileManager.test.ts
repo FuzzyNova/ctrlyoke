@@ -1414,6 +1414,54 @@ suite("WorkingFileManager", () => {
       assert.strictEqual(descriptor.pendingEdit, undefined);
     });
 
+    test("clearOrphanedPendingRewind leaves a descriptor-backed rewind alone and strips an orphan", async () => {
+      const { workflowKey, runRef, runFilePath } = await makeCompletedRun();
+      await WorkingFileManager.beginPendingRewind(
+        tmpWorkspace,
+        workflowKey,
+        runRef,
+        1,
+        1,
+        2
+      );
+
+      assert.strictEqual(
+        await WorkingFileManager.clearOrphanedPendingRewind(
+          tmpWorkspace,
+          workflowKey,
+          runRef
+        ),
+        false
+      );
+      const backed = JSON.parse(await fs.readFile(runFilePath, "utf8"));
+      assert.ok(backed._runtime?.pendingRewind, "a real pending rewind stays");
+
+      // Drop the descriptor's pendingEdit, leaving the run-file flag orphaned.
+      const descriptorPath = WorkflowPaths.descriptorPath(
+        tmpWorkspace,
+        workflowKey
+      );
+      const descriptor = JSON.parse(await fs.readFile(descriptorPath, "utf8"));
+      delete descriptor.pendingEdit;
+      await fs.writeFile(descriptorPath, JSON.stringify(descriptor));
+
+      assert.strictEqual(
+        await WorkingFileManager.clearOrphanedPendingRewind(
+          tmpWorkspace,
+          workflowKey,
+          runRef
+        ),
+        true
+      );
+      const cleared = JSON.parse(await fs.readFile(runFilePath, "utf8"));
+      assert.strictEqual(cleared._runtime?.pendingRewind, undefined);
+      assert.strictEqual(
+        cleared.definitionRevision,
+        backed.definitionRevision,
+        "clearing the flag is not a definition edit"
+      );
+    });
+
     test("requires confirmation before discarding edited suffix content", async () => {
       const { workflowKey, runRef, runFilePath } = await makeCompletedRun();
       await WorkingFileManager.beginPendingRewind(

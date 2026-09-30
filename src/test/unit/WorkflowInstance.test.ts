@@ -4227,3 +4227,24 @@ suite("WorkflowInstance run-metadata bookkeeping", () => {
     }
   });
 });
+
+suite("WorkflowInstance pending rewind at execution start", () => {
+  test("beginning execution drops an in-memory pending rewind", () => {
+    const instance = createSummaryTestInstance();
+    instance.promptQueue.loadPrompts({
+      steps: [{ prompt: "prefix" }, { prompt: "suffix" }],
+    } as any);
+    instance.promptQueue.applyPendingRewind(1, 1, 2, false);
+    assert.ok(instance.getQueueState().pendingRewind);
+
+    const lifecycle = (instance as any).createWorkflowStartupLifecyclePort();
+    try {
+      lifecycle.beginExecution("");
+      // Every runtime write serializes this state, so a running instance can
+      // no longer write the continuation banner back into its run file.
+      assert.strictEqual(instance.getQueueState().pendingRewind, undefined);
+    } finally {
+      (instance as any).releaseActiveRunRedactor?.();
+    }
+  });
+});

@@ -1836,17 +1836,6 @@ export class WorkingFileManager {
     expectedDescriptorRevision: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
   ): Promise<{ definitionRevision: number; descriptorRevision: number }> {
-    const runFilePath = WorkflowPaths.runFilePath(
-      workspaceFolderPath,
-      workflowKey,
-      runRef
-    );
-    const snapshotPath = WorkflowPaths.pendingRewindBaseFilePath(
-      workspaceFolderPath,
-      workflowKey,
-      runRef
-    );
-
     return lineageRepository.mutateDescriptorAtRevision(
       workspaceFolderPath,
       workflowKey,
@@ -1861,50 +1850,131 @@ export class WorkingFileManager {
             "This run does not have a pending continuation to commit"
           );
         }
-        return withFileLock(runFilePath, async () => {
-          const current = await readWorkingFileFromDisk(runFilePath);
-          const currentRevision = current.definitionRevision ?? 1;
-          assertDefinitionRevision(expectedDefinitionRevision, currentRevision);
-          const nextRuntime = current._runtime
-            ? { ...current._runtime }
-            : undefined;
-          if (nextRuntime) {
-            delete nextRuntime.pendingRewind;
-          }
-          const committed: WorkingFile = {
-            ...current,
-            _runtime: nextRuntime,
-          };
-          await writeWorkingFileAtomicTo(runFilePath, committed, {
-            skipLock: true,
-          });
-          // Best-effort snapshot cleanup: the run head is now durable, so a
-          // leftover snapshot must never be able to overwrite it. Never
-          // recursively remove the directory — a damaged/foreign entry must
-          // survive for investigation rather than being silently erased.
-          await fs.unlink(snapshotPath).catch(() => {});
-          await fs
-            .rmdir(
-              WorkflowPaths.pendingRewindDir(
-                workspaceFolderPath,
-                workflowKey,
-                runRef
-              )
-            )
-            .catch((error: NodeJS.ErrnoException) => {
-              if (error.code !== "ENOTEMPTY" && error.code !== "ENOENT")
-                throw error;
-            });
-          return {
-            value: {
-              definitionRevision: currentRevision,
-              descriptorRevision: expectedDescriptorRevision + 1,
-            },
-            descriptor: { ...descriptor, pendingEdit: undefined },
-          };
-        });
+        const definitionRevision =
+          await WorkingFileManager.stripPendingRewindFromRunFile(
+            workspaceFolderPath,
+            workflowKey,
+            runRef,
+            expectedDefinitionRevision
+          );
+        return {
+          value: {
+            definitionRevision,
+            descriptorRevision: expectedDescriptorRevision + 1,
+          },
+          descriptor: { ...descriptor, pendingEdit: undefined },
+        };
       }
     );
+  }
+
+  /**
+   * Remove a run file's `_runtime.pendingRewind` that the lineage descriptor
+   * no longer backs (no `pendingEdit` rewinding this run). Such a flag is left
+   * behind when an instance that still held the rewind in memory rewrote the
+   * run file after the continuation was committed; left alone, it shows the
+   * continuation banner forever and cannot be discarded. A descriptor that
+   * *does* back the flag is left untouched — that is a real pending
+   * continuation. Returns whether anything was removed.
+   */
+  public static async clearOrphanedPendingRewind(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
+  ): Promise<boolean> {
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspaceFolderPath,
+      workflowKey,
+      runRef
+    );
+    return withFileLock(
+      WorkflowPaths.descriptorPath(workspaceFolderPath, workflowKey),
+      async () => {
+        const descriptor = await lineageRepository.readDescriptor(
+          workspaceFolderPath,
+          workflowKey
+        );
+        if (
+          descriptor.pendingEdit?.kind === WORKTREE_EDIT_KINDS.REWIND &&
+          descriptor.pendingEdit.runRef === runRef
+        ) {
+          return false;
+        }
+        const current = await readWorkingFileFromDisk(runFilePath);
+        if (!current._runtime?.pendingRewind) {
+          return false;
+        }
+        Log.warn(
+          `[WorkingFileManager] clearing orphaned pendingRewind on ${workflowKey}/${runRef} (descriptor has no matching pendingEdit)`
+        );
+        await WorkingFileManager.stripPendingRewindFromRunFile(
+          workspaceFolderPath,
+          workflowKey,
+          runRef
+        );
+        return true;
+      }
+    );
+  }
+
+  /**
+   * Drop `_runtime.pendingRewind` from a run file and clean up its rewind
+   * snapshot. Callers must already hold the lineage descriptor lock.
+   * Returns the run's (unchanged) definition revision.
+   */
+  private static async stripPendingRewindFromRunFile(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    expectedDefinitionRevision?: number
+  ): Promise<number> {
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspaceFolderPath,
+      workflowKey,
+      runRef
+    );
+    const snapshotPath = WorkflowPaths.pendingRewindBaseFilePath(
+      workspaceFolderPath,
+      workflowKey,
+      runRef
+    );
+    return withFileLock(runFilePath, async () => {
+      const current = await readWorkingFileFromDisk(runFilePath);
+      const currentRevision = current.definitionRevision ?? 1;
+      if (expectedDefinitionRevision !== undefined) {
+        assertDefinitionRevision(expectedDefinitionRevision, currentRevision);
+      }
+      const nextRuntime = current._runtime
+        ? { ...current._runtime }
+        : undefined;
+      if (nextRuntime) {
+        delete nextRuntime.pendingRewind;
+      }
+      await writeWorkingFileAtomicTo(
+        runFilePath,
+        { ...current, _runtime: nextRuntime },
+        { skipLock: true }
+      );
+      // Best-effort snapshot cleanup: the run head is now durable, so a
+      // leftover snapshot must never be able to overwrite it. Never
+      // recursively remove the directory — a damaged/foreign entry must
+      // survive for investigation rather than being silently erased.
+      await fs.unlink(snapshotPath).catch(() => {});
+      await fs
+        .rmdir(
+          WorkflowPaths.pendingRewindDir(
+            workspaceFolderPath,
+            workflowKey,
+            runRef
+          )
+        )
+        .catch((error: NodeJS.ErrnoException) => {
+          if (error.code !== "ENOTEMPTY" && error.code !== "ENOENT")
+            throw error;
+        });
+      return currentRevision;
+    });
   }
 
   /**

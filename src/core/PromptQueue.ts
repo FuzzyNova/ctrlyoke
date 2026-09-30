@@ -2471,6 +2471,23 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   }
 
   /**
+   * Forget an in-memory pending rewind once it can no longer be pending: the
+   * continuation was committed on disk, or this run is starting to execute.
+   * Nothing is written here — every runtime write serializes `pendingRewind`
+   * from memory, so the next one persists the cleared state. Leaving it set
+   * is what let a stale instance write the flag back into a committed run.
+   */
+  public clearPendingRewind(): void {
+    if (!this.state.pendingRewind) {
+      return;
+    }
+    Log.debug(
+      `[PromptQueue] Cleared in-memory pendingRewind (fromStepIndex=${this.state.pendingRewind.fromStepIndex})`
+    );
+    this.state.pendingRewind = undefined;
+  }
+
+  /**
    * Persist durable runtime state for workflow-level finalStep execution.
    */
   public async setFinalStepRuntime(

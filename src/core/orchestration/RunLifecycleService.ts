@@ -61,6 +61,7 @@ export interface RunLifecycleInstancePort {
   getQueueState(): QueueState;
   getExecutionRunRef(): RunRef | undefined;
   ownsRunnerLock(): boolean;
+  clearPendingRewind(): void;
   beginPendingRewind(
     workflowKey: WorkflowKey,
     runRef: RunRef,
@@ -733,16 +734,13 @@ export class RunLifecycleService {
       expectedDescriptorRevision,
       clientId
     );
-    if (pendingRewindOnThisRun) {
-      await WorkingFileManager.commitPendingRewind(
-        workspaceRoot,
-        address.workflowKey,
-        address.runRef,
-        expectedDefinitionRevision,
-        expectedDescriptorRevision,
-        this.host.getLineageRepository()
-      );
-    }
+    await this.settlePendingRewindForContinuation(
+      workspaceRoot,
+      address,
+      pendingRewindOnThisRun,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision
+    );
     const appended = await RunContinuationService.appendStepsToRun(
       workspaceRoot,
       address.workflowKey,
@@ -788,16 +786,13 @@ export class RunLifecycleService {
         expectedDescriptorRevision,
         clientId
       );
-    if (pendingRewindOnThisRun) {
-      await WorkingFileManager.commitPendingRewind(
-        workspaceRoot,
-        address.workflowKey,
-        address.runRef,
-        expectedDefinitionRevision,
-        expectedDescriptorRevision,
-        this.host.getLineageRepository()
-      );
-    }
+    await this.settlePendingRewindForContinuation(
+      workspaceRoot,
+      address,
+      pendingRewindOnThisRun,
+      expectedDefinitionRevision,
+      expectedDescriptorRevision
+    );
     const instance =
       activeInstance ??
       this.findResidentInstanceForRun(address.workflowKey, address.runRef) ??
@@ -813,6 +808,46 @@ export class RunLifecycleService {
       address.workflowKey,
       address.runRef
     );
+  }
+
+  /**
+   * Make sure nothing still claims a pending continuation on a run that is
+   * about to continue. A descriptor-backed rewind is committed; a run-file
+   * flag the descriptor does not back (an orphan written back by a stale
+   * instance) is cleared. Every resident instance bound to the run then drops
+   * its in-memory copy, so none can rewrite the flag if the continuation fails
+   * before the executing instance reloads.
+   */
+  private async settlePendingRewindForContinuation(
+    workspaceRoot: string,
+    address: { workflowKey: WorkflowKey; runRef: RunRef },
+    pendingRewindOnThisRun: boolean,
+    expectedDefinitionRevision: number,
+    expectedDescriptorRevision: number
+  ): Promise<void> {
+    if (pendingRewindOnThisRun) {
+      await WorkingFileManager.commitPendingRewind(
+        workspaceRoot,
+        address.workflowKey,
+        address.runRef,
+        expectedDefinitionRevision,
+        expectedDescriptorRevision,
+        this.host.getLineageRepository()
+      );
+    } else {
+      await WorkingFileManager.clearOrphanedPendingRewind(
+        workspaceRoot,
+        address.workflowKey,
+        address.runRef,
+        this.host.getLineageRepository()
+      );
+    }
+    for (const instance of this.findResidentInstancesForRun(
+      address.workflowKey,
+      address.runRef
+    )) {
+      instance.clearPendingRewind();
+    }
   }
 
   async validateExplicitContinuationTarget(
@@ -1167,14 +1202,21 @@ export class RunLifecycleService {
     workflowKey: WorkflowKey,
     runRef: RunRef
   ): RunLifecycleInstancePort | undefined {
-    const matches = (instance: RunLifecycleInstancePort) => {
+    return this.findResidentInstancesForRun(workflowKey, runRef)[0];
+  }
+
+  /** Every live, then retired, instance whose queue is bound to this run. */
+  private findResidentInstancesForRun(
+    workflowKey: WorkflowKey,
+    runRef: RunRef
+  ): RunLifecycleInstancePort[] {
+    return [
+      ...this.host.registry.getInstances().values(),
+      ...this.host.registry.getRetiredInstances().values(),
+    ].filter((instance) => {
       const state = instance.getQueueState();
       return state.workflowKey === workflowKey && state.runRef === runRef;
-    };
-    return (
-      [...this.host.registry.getInstances().values()].find(matches) ??
-      [...this.host.registry.getRetiredInstances().values()].find(matches)
-    );
+    });
   }
 
   private findActiveInstanceForLineage(

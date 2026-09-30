@@ -2025,6 +2025,8 @@ export class WorkflowInstance
       isStartPending: () => this.startPending,
       beginExecution: (historyFilePath) => {
         this.startPending = true;
+        // An executing run cannot have a pending continuation.
+        this.promptQueue.clearPendingRewind();
         this.executionSettledPromise = new Promise<void>((resolve) => {
           this.resolveExecutionSettled = resolve;
         });
@@ -2287,6 +2289,7 @@ export class WorkflowInstance
       return;
     }
 
+    this.promptQueue.clearPendingRewind();
     await this.promptQueue.commitRuntimeTransition();
 
     if (this.workflowExecutor.isAwaitingResponse()) {
@@ -2604,6 +2607,11 @@ export class WorkflowInstance
         `Failed to queue prompts: ${getErrorMessage(error)}`
       );
     }
+  }
+
+  /** Forget a pending rewind this instance still holds in memory. */
+  clearPendingRewind(): void {
+    this.promptQueue.clearPendingRewind();
   }
 
   async updateWorkflowName(workflowName: string): Promise<void> {
