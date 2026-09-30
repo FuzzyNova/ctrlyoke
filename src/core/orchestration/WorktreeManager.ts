@@ -2218,7 +2218,7 @@ export class WorktreeManager {
       );
     }
 
-    await this.persistRuntime({
+    const provisioningRuntime: WorkingFileWorktreeRuntimePatch = {
       ...this.buildRuntime(repositoryInputs, branchName, worktreePath!),
       origin,
       lifecycleState: WORKTREE_LIFECYCLE_STATES.PROVISIONING,
@@ -2229,9 +2229,13 @@ export class WorktreeManager {
         ? WORKTREE_BRANCH_STATES.PRESENT
         : WORKTREE_BRANCH_STATES.MISSING,
       baseCommit: capturedBase,
-    });
-
+    };
+    // Creating a checkout is a side effect the run file must know about before
+    // it happens. Attaching to an existing one is not, so its runtime waits for
+    // the lease: a continue that cannot get the lease must leave the run file's
+    // previous worktree record untouched rather than claim a new provisioning.
     if (needsProvisioning) {
+      await this.persistRuntime(provisioningRuntime);
       const mutation = await withWorktreeMutationLock(
         commonDirectory,
         async () => {
@@ -2377,18 +2381,39 @@ export class WorktreeManager {
       ...(options.worktree ? { worktree: options.worktree } : {}),
     };
 
-    const lease = await this.leaseManager.acquire(
-      {
-        mode: "exclusive-worktree",
-        stateRoot: options.stateRoot,
-        executionRoot: executionWorkspace.executionRoot,
-        workflowKey: options.workflowKey,
-        runRef: options.runRef,
-        runner: options.runner ?? "vscode",
-        instanceId: options.instanceId ?? crypto.randomUUID(),
-      },
-      git
-    );
+    let lease: ExecutionLeaseHandle;
+    try {
+      lease = await this.leaseManager.acquire(
+        {
+          mode: "exclusive-worktree",
+          stateRoot: options.stateRoot,
+          executionRoot: executionWorkspace.executionRoot,
+          workflowKey: options.workflowKey,
+          runRef: options.runRef,
+          runner: options.runner ?? "vscode",
+          instanceId: options.instanceId ?? crypto.randomUUID(),
+        },
+        git
+      );
+    } catch (error) {
+      if (needsProvisioning) {
+        // The checkout now exists; record that instead of "missing".
+        await this.persistRuntime({
+          lifecycleState: WORKTREE_LIFECYCLE_STATES.PROVISIONING,
+          directoryState: WORKTREE_DIRECTORY_STATES.PRESENT,
+          branchState: WORKTREE_BRANCH_STATES.PRESENT,
+        }).catch(() => undefined);
+      }
+      throw error;
+    }
+    if (!needsProvisioning) {
+      try {
+        await this.persistRuntime(provisioningRuntime);
+      } catch (error) {
+        await lease.release();
+        throw error;
+      }
+    }
 
     let runtimeTrust: RuntimeTrustedRootHandle;
     try {

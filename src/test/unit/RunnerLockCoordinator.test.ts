@@ -10,9 +10,11 @@ import type {
   WorkflowRunnerLock,
 } from "../../types/CtrlYokeTypes";
 import {
+  HeartbeatFailureReporter,
   RunnerLockCoordinator,
   type RunnerLockCoordinatorPort,
 } from "../../core/orchestration/RunnerLockCoordinator";
+import { Log } from "../../utils/Log";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { readWorkflowLock } from "../../utils/WorkflowLockInspector";
 
@@ -113,6 +115,39 @@ suite("RunnerLockCoordinator", () => {
       );
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("heartbeat failures are logged once per failure streak, not swallowed", async () => {
+    const originalWarn = Log.warn;
+    const originalInfo = Log.info;
+    const warnings: string[] = [];
+    const infos: string[] = [];
+    Log.warn = (message: string) => {
+      warnings.push(message);
+    };
+    Log.info = (message: string) => {
+      infos.push(message);
+    };
+    try {
+      const reporter = new HeartbeatFailureReporter("execution lease");
+      const failure = Promise.reject(new Error("EPERM"));
+      await reporter.track(failure);
+      await reporter.track(Promise.reject(new Error("EPERM")));
+      await reporter.track(Promise.reject(new Error("EPERM")));
+      assert.strictEqual(warnings.length, 1);
+      assert.match(warnings[0], /execution lease heartbeat failed/);
+
+      await reporter.track(Promise.resolve());
+      await reporter.track(Promise.resolve());
+      assert.strictEqual(infos.length, 1);
+      assert.match(infos[0], /recovered after 3 failed attempt/);
+
+      await reporter.track(Promise.reject(new Error("EPERM")));
+      assert.strictEqual(warnings.length, 2, "a new streak logs again");
+    } finally {
+      Log.warn = originalWarn;
+      Log.info = originalInfo;
     }
   });
 });

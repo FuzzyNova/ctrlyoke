@@ -6,8 +6,8 @@ import {
   generateOwnerToken,
   isOwnerStale,
   isProcessAlive,
-  STALE_HEARTBEAT_MS,
 } from "../../utils/LockSafetyPrimitives";
+import { lockFilePath, withFileLock } from "../../utils/FileLockUtils";
 import {
   resolveExecutionRootScope,
   scopeStorageRoot,
@@ -88,71 +88,28 @@ export class ExecutionLeaseConflictError extends Error {
   }
 }
 
-interface LeaseScope {
+/** Where one execution root's leases and arbitration lock live. */
+export interface LeaseScope {
   identity: string;
   storageRoot: string;
   leasesRoot: string;
+  /** `withFileLock` target; the lock file itself is `arbitrationPath`. */
+  arbitrationTarget: string;
   arbitrationPath: string;
 }
 
-const ARBITRATION_TIMEOUT_MS = 5_000;
-const ARBITRATION_RETRY_DELAY_MS = 25;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
+/**
+ * Serialize lease mutations for one execution root. Uses the shared
+ * `withFileLock` primitive so arbitration gets the same delete-pending retry and
+ * rename-away release as every other ctrlyoke lock; a private copy of that loop
+ * missed both and wedged a lease until reboot.
+ */
 async function withArbitrationLock<T>(
-  lockPath: string,
+  scope: LeaseScope,
   action: () => Promise<T>
 ): Promise<T> {
-  const start = Date.now();
-  await fs.mkdir(path.dirname(lockPath), { recursive: true });
-
-  while (Date.now() - start < ARBITRATION_TIMEOUT_MS) {
-    try {
-      const handle = await fs.open(lockPath, "wx");
-      try {
-        await handle.writeFile(`${process.pid} ${Date.now()}`, "utf8");
-      } finally {
-        await handle.close();
-      }
-      try {
-        return await action();
-      } finally {
-        await fs.unlink(lockPath).catch((error: unknown) => {
-          if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-            throw error;
-          }
-        });
-      }
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
-        throw error;
-      }
-
-      try {
-        const stats = await fs.stat(lockPath);
-        if (Date.now() - stats.mtimeMs > STALE_HEARTBEAT_MS) {
-          await fs.unlink(lockPath).catch((unlinkError: unknown) => {
-            if ((unlinkError as NodeJS.ErrnoException).code !== "ENOENT") {
-              throw unlinkError;
-            }
-          });
-          continue;
-        }
-      } catch (statError) {
-        if ((statError as NodeJS.ErrnoException).code !== "ENOENT") {
-          throw statError;
-        }
-      }
-      await sleep(ARBITRATION_RETRY_DELAY_MS);
-    }
-  }
-
-  throw new Error(
-    `Timed out waiting for execution lease arbitration: ${lockPath}`
-  );
+  await fs.mkdir(scope.storageRoot, { recursive: true });
+  return withFileLock(scope.arbitrationTarget, action);
 }
 
 async function readJson<T>(filePath: string): Promise<T | null> {
@@ -170,11 +127,13 @@ async function resolveLeaseScope(
 ): Promise<LeaseScope> {
   const scope = await resolveExecutionRootScope(executionRoot, git);
   const storageRoot = scopeStorageRoot(scope, "execution-leases");
+  const arbitrationTarget = path.join(storageRoot, "arbitration");
   return {
     identity: scope.identity,
     storageRoot,
     leasesRoot: path.join(storageRoot, "leases"),
-    arbitrationPath: path.join(storageRoot, "arbitration.lock"),
+    arbitrationTarget,
+    arbitrationPath: lockFilePath(arbitrationTarget),
   };
 }
 
@@ -265,7 +224,7 @@ export class ExecutionRootLeaseManager {
     };
 
     await fs.mkdir(scope.leasesRoot, { recursive: true });
-    await withArbitrationLock(scope.arbitrationPath, async () => {
+    await withArbitrationLock(scope, async () => {
       await verifyExecutionRootScopeRecord({
         storageRoot: scope.storageRoot,
         scopeIdentity: scope.identity,
@@ -313,7 +272,7 @@ export class ExecutionRootLeaseManager {
     scope: LeaseScope,
     ownerToken: string
   ): Promise<void> {
-    await withArbitrationLock(scope.arbitrationPath, async () => {
+    await withArbitrationLock(scope, async () => {
       const leasePath = path.join(scope.leasesRoot, `${ownerToken}.json`);
       const existing = await readJson<ExecutionLease>(leasePath);
       if (!existing) return;
@@ -326,7 +285,7 @@ export class ExecutionRootLeaseManager {
   }
 
   static async release(scope: LeaseScope, ownerToken: string): Promise<void> {
-    await withArbitrationLock(scope.arbitrationPath, async () => {
+    await withArbitrationLock(scope, async () => {
       const leasePath = path.join(scope.leasesRoot, `${ownerToken}.json`);
       const existing = await readJson<ExecutionLease>(leasePath);
       if (!existing || existing.ownerToken !== ownerToken) return;
@@ -337,12 +296,7 @@ export class ExecutionRootLeaseManager {
   }
 
   /** Exposed for focused tests and diagnostics; acquisition uses the same resolver. */
-  static async getScopeInfo(executionRoot: string): Promise<{
-    identity: string;
-    storageRoot: string;
-    leasesRoot: string;
-    arbitrationPath: string;
-  }> {
+  static async getScopeInfo(executionRoot: string): Promise<LeaseScope> {
     return resolveLeaseScope(executionRoot);
   }
 

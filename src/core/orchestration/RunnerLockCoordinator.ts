@@ -25,6 +25,41 @@ export interface RunnerLockCoordinatorPort {
   readonly getExecutionLease: () => ExecutionLeaseHandle | undefined;
 }
 
+/**
+ * Heartbeats run on a timer with nobody awaiting them, so a failure would
+ * otherwise vanish. A wedged lock fails every tick, so this logs once when a
+ * failure streak starts and once when it ends, never per tick.
+ */
+export class HeartbeatFailureReporter {
+  private failingSince: number | undefined;
+  private failures = 0;
+
+  constructor(private readonly label: string) {}
+
+  async track(heartbeat: Promise<void>): Promise<void> {
+    try {
+      await heartbeat;
+    } catch (error) {
+      this.failures += 1;
+      if (this.failingSince === undefined) {
+        this.failingSince = Date.now();
+        Log.warn(
+          `${this.label} heartbeat failed; further failures are not logged until it recovers:`,
+          error
+        );
+      }
+      return;
+    }
+    if (this.failingSince !== undefined) {
+      Log.info(
+        `${this.label} heartbeat recovered after ${this.failures} failed attempt(s) over ${Date.now() - this.failingSince}ms`
+      );
+      this.failingSince = undefined;
+      this.failures = 0;
+    }
+  }
+}
+
 /** Owns the per-lineage runner lock, heartbeat, and cross-process stop request. */
 export class RunnerLockCoordinator {
   private currentLockOwnerToken: string | undefined;
@@ -139,18 +174,26 @@ export class RunnerLockCoordinator {
     if (!ownerToken && !this.port.getExecutionLease()) {
       return;
     }
+    const runnerLock = new HeartbeatFailureReporter(
+      `[inst:${this.port.id.slice(0, 8)}] runner lock`
+    );
+    const executionLease = new HeartbeatFailureReporter(
+      `[inst:${this.port.id.slice(0, 8)}] execution lease`
+    );
     this.heartbeatInterval = setInterval(() => {
       if (ownerToken) {
-        WorkflowLockManager.updateHeartbeat(
-          workspaceRoot,
-          workflowKey,
-          ownerToken
-        ).catch(() => {});
+        void runnerLock.track(
+          WorkflowLockManager.updateHeartbeat(
+            workspaceRoot,
+            workflowKey,
+            ownerToken
+          )
+        );
       }
-      this.port
-        .getExecutionLease()
-        ?.updateHeartbeat()
-        .catch(() => {});
+      const lease = this.port.getExecutionLease();
+      if (lease) {
+        void executionLease.track(lease.updateHeartbeat());
+      }
     }, HEARTBEAT_INTERVAL_MS);
   }
 

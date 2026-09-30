@@ -99,6 +99,35 @@ suite("ExecutionRootLeaseManager", function () {
     }
   });
 
+  test("arbitrates through the shared file lock and frees it after every operation", async () => {
+    const root = await tempDirectory("arbitration");
+    try {
+      const scope = await ExecutionRootLeaseManager.getScopeInfo(root);
+      assert.strictEqual(
+        path.basename(scope.arbitrationPath),
+        "arbitration.lock"
+      );
+      // A dead holder's arbitration lock is reclaimed like any stale lock.
+      await fs.mkdir(scope.storageRoot, { recursive: true });
+      await fs.writeFile(scope.arbitrationPath, "999999 stale", "utf8");
+      const past = new Date(Date.now() - 60_000);
+      await fs.utimes(scope.arbitrationPath, past, past);
+
+      const lease = await ExecutionRootLeaseManager.acquire(
+        request(root, "exclusive-worktree", "arbitration")
+      );
+      await lease.updateHeartbeat();
+      await lease.release();
+
+      const leftovers = (await fs.readdir(scope.storageRoot)).filter((name) =>
+        name.startsWith("arbitration.lock")
+      );
+      assert.deepStrictEqual(leftovers, []);
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
   test("reclaims stale leases of either mode", async () => {
     const root = await tempDirectory("stale");
     try {

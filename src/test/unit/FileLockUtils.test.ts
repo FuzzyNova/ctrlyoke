@@ -3,7 +3,11 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, test, afterEach } from "mocha";
-import { FileLockTimeoutError, withFileLock } from "../../utils/FileLockUtils";
+import {
+  FileLockTimeoutError,
+  FileLockUnavailableError,
+  withFileLock,
+} from "../../utils/FileLockUtils";
 import { errorWithCode } from "../helpers/errnoError";
 
 suite("FileLockUtils", () => {
@@ -147,8 +151,69 @@ suite("FileLockUtils", () => {
             throw errorWithCode("EACCES");
           },
         }),
-        (error: NodeJS.ErrnoException) => error.code === "EACCES"
+        (error: NodeJS.ErrnoException) =>
+          error instanceof FileLockUnavailableError &&
+          error.code === "EACCES" &&
+          /delete-pending/.test(error.message) &&
+          error.message.includes(`${target}.lock`)
       );
+    });
+
+    // On Windows an unlinked file that another process still has open stays
+    // delete-pending, and the name refuses every open until that handle
+    // closes. Release must therefore free the lock *name* without depending on
+    // the unlink completing.
+    test("release frees the lock name even when the unlink never completes", async () => {
+      const directory = await fs.mkdtemp(path.join(os.tmpdir(), "cy-lock-"));
+      try {
+        const target = path.join(directory, "state.json");
+        const unlinked: string[] = [];
+        await withFileLock(target, async () => undefined, {
+          // Simulates delete-pending: the call "succeeds" but the file stays.
+          unlink: async (filePath) => {
+            unlinked.push(filePath);
+          },
+        });
+
+        const remaining = await fs.readdir(directory);
+        assert.ok(!remaining.includes("state.json.lock"), remaining.join());
+        assert.strictEqual(unlinked.length, 1);
+        assert.match(
+          path.basename(unlinked[0]),
+          /^state\.json\.lock\.[0-9a-f-]+\.released$/
+        );
+
+        const result = await withFileLock(target, async () => "reacquired", {
+          timeoutMs: 200,
+        });
+        assert.strictEqual(result, "reacquired");
+      } finally {
+        await fs.rm(directory, { recursive: true, force: true });
+      }
+    });
+
+    test("stale-lock takeover also moves the old lock aside", async () => {
+      const directory = await fs.mkdtemp(path.join(os.tmpdir(), "cy-lock-"));
+      try {
+        const target = path.join(directory, "state.json");
+        const lockPath = `${target}.lock`;
+        await fs.writeFile(lockPath, "99999 stale-lock", "utf8");
+        const past = new Date(Date.now() - 60_000);
+        await fs.utimes(lockPath, past, past);
+
+        const renamed: string[] = [];
+        await withFileLock(target, async () => undefined, {
+          rename: async (source, destination) => {
+            renamed.push(source);
+            await fs.rename(source, destination);
+          },
+        });
+        // Once for the stale takeover, once for this holder's own release.
+        assert.deepStrictEqual(renamed, [lockPath, lockPath]);
+        assert.deepStrictEqual(await fs.readdir(directory), []);
+      } finally {
+        await fs.rm(directory, { recursive: true, force: true });
+      }
     });
 
     test("still times out as held when a sharing error follows a held lock", async () => {

@@ -309,10 +309,14 @@ suite("WorktreeManager", function () {
       instanceId: "native-test",
     });
     try {
+      const updates: string[] = [];
       await assert.rejects(
-        resolve(manager(parent), repository, "feature/lease"),
+        resolve(manager(parent, updates), repository, "feature/lease"),
         /Execution root is in use/
       );
+      // An existing checkout records nothing until its lease is held, so a
+      // refused continue leaves the run's previous worktree runtime intact.
+      assert.deepStrictEqual(updates, []);
     } finally {
       await nativeLease.release();
     }
