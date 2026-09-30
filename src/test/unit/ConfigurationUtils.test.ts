@@ -364,6 +364,23 @@ suite("ConfigurationUtils — spawn tool permissions", () => {
     );
   });
 
+  test("treats null settings permissions as no flags across accessors", () => {
+    configService.setUserBackend(
+      makeBackend({ defaults: { toolPermissions: null } })
+    );
+
+    assert.strictEqual(
+      ConfigurationUtils.getCliToolPermissions(),
+      PERMISSION_MODES.NONE
+    );
+    assert.deepStrictEqual(ConfigurationUtils.getCliAllowedTools(), []);
+    assert.deepStrictEqual(ConfigurationUtils.getCliDeniedTools(), []);
+    assert.strictEqual(
+      ConfigurationUtils.resolveSpawnToolPermissions(undefined),
+      null
+    );
+  });
+
   test("falls back to the settings default, including a none default", () => {
     configService.setUserBackend(
       makeBackend({

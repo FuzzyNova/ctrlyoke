@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by bug-hunt final step (claude-cli)
 - **Area:** `src/utils/ConfigurationUtils.ts` (`getCliToolPermissions`, `getCliAllowedTools`, `getCliDeniedTools`, `resolveSpawnToolPermissions`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

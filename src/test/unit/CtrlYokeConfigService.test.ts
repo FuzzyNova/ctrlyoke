@@ -121,6 +121,50 @@ suite("CtrlYokeConfigService", () => {
     );
   });
 
+  test("malformed object sections cannot replace object defaults", () => {
+    service.setUserBackend(
+      makeBackend({
+        diagnostics: null,
+        defaults: { toolPermissions: "invalid" },
+      } as unknown as PartialCtrlYokeSettings)
+    );
+
+    assert.strictEqual(service.get("diagnostics").verboseLogging, false);
+    assert.strictEqual(
+      service.get("defaults").toolPermissions?.mode,
+      CTRLYOKE_SETTINGS_DEFAULTS.defaults.toolPermissions?.mode
+    );
+  });
+
+  test("keeps schema-nullable toolPermissions null from user and workspace scopes", () => {
+    service.setUserBackend(
+      makeBackend({ defaults: { toolPermissions: null } })
+    );
+    assert.strictEqual(service.get("defaults").toolPermissions, null);
+
+    service.setUserBackend(makeBackend({}));
+    service.setWorkspaceBackend({
+      getAll: () => ({ defaults: { toolPermissions: null } }),
+      set: async () => {},
+    });
+    assert.strictEqual(service.get("defaults").toolPermissions, null);
+  });
+
+  test("filters malformed workspace object sections before merge", () => {
+    service.setWorkspaceBackend({
+      getAll: () =>
+        ({ diagnostics: "invalid", defaults: { toolPermissions: [] } }) as unknown as PartialCtrlYokeSettings,
+      set: async () => {},
+    });
+
+    assert.strictEqual(service.get("diagnostics").verboseLogging, false);
+    assert.strictEqual(
+      service.get("defaults").toolPermissions?.mode,
+      CTRLYOKE_SETTINGS_DEFAULTS.defaults.toolPermissions?.mode
+    );
+    assert.strictEqual(service.getScoped("diagnostics", "workspace"), undefined);
+  });
+
   test("workspace backend overrides user backend", () => {
     service.setUserBackend(
       makeBackend({ defaults: { harness: "claude-cli" } })
@@ -478,6 +522,57 @@ suite("FileConfigBackend", () => {
     fs.writeFileSync(configPath, "{ invalid json }", "utf-8");
     const backend = new FileConfigBackend(configPath);
     assert.deepStrictEqual(backend.getAll(), {});
+  });
+
+  test("empty, whitespace-only, and comment-only files accept writes", async () => {
+    const contentByCase = [
+      "",
+      " \r\n\t",
+      "// settings go here\n/* empty */",
+      "\uFEFF \r\n",
+      "\uFEFF// settings go here\n",
+    ];
+    for (const [index, content] of contentByCase.entries()) {
+      const configPath = path.join(tmpDir, `empty-${index}.json`);
+      fs.writeFileSync(configPath, content, "utf-8");
+      const backend = new FileConfigBackend(configPath);
+
+      assert.deepStrictEqual(backend.getAll(), {});
+      await backend.set("diagnostics.verboseLogging", true);
+      assert.strictEqual(
+        JSON.parse(fs.readFileSync(configPath, "utf-8")).diagnostics
+          .verboseLogging,
+        true
+      );
+    }
+  });
+
+  test("rejects non-object roots without changing their bytes", async () => {
+    for (const [index, content] of ["null", "[]", '"settings"', "42"].entries()) {
+      const configPath = path.join(tmpDir, `root-${index}.json`);
+      const original = Buffer.from(content, "utf-8");
+      fs.writeFileSync(configPath, original);
+      const backend = new FileConfigBackend(configPath);
+
+      assert.deepStrictEqual(backend.getAll(), {});
+      await assert.rejects(backend.set("ui.showCostEstimates", false), /invalid JSON/);
+      assert.deepStrictEqual(fs.readFileSync(configPath), original);
+    }
+  });
+
+  test("null or primitive sections do not replace object defaults", () => {
+    const service = new CtrlYokeConfigService();
+    service.setUserBackend({
+      getAll: () =>
+        ({ diagnostics: null, defaults: { toolPermissions: 7 } }) as unknown as PartialCtrlYokeSettings,
+      set: async () => {},
+    });
+
+    assert.strictEqual(service.get("diagnostics").verboseLogging, false);
+    assert.strictEqual(
+      service.get("defaults").toolPermissions?.mode,
+      CTRLYOKE_SETTINGS_DEFAULTS.defaults.toolPermissions?.mode
+    );
   });
 
   test("set() preserves settings in a BOM-prefixed file", async () => {

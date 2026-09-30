@@ -3,6 +3,8 @@ import type {
   PartialCtrlYokeSettings,
 } from "../types/CtrlYokeSettings";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../types/CtrlYokeSettings";
+import settingsSchema from "../../schemas/settings-schema.json";
+import workflowSchema from "../../schemas/workflow-schema.json";
 import {
   SETTING_SCOPES,
   SETTING_PATHS,
@@ -55,10 +57,78 @@ function hasSettingPath(settings: unknown, settingPath: string): boolean {
   return true;
 }
 
-/** Remove forbidden workspace paths without mutating the backend's data. */
+type JsonSchema = {
+  [key: string]: unknown;
+  $ref?: string;
+  type?: string | string[];
+  properties?: Record<string, JsonSchema>;
+  oneOf?: JsonSchema[];
+  anyOf?: JsonSchema[];
+  allOf?: JsonSchema[];
+};
+
+const SCHEMA_DOCUMENTS: Record<string, JsonSchema> = {
+  "settings.json": settingsSchema as JsonSchema,
+  "workflow.json": workflowSchema as JsonSchema,
+};
+
+function resolveSchemaRef(schema: JsonSchema): JsonSchema {
+  if (!schema.$ref) return schema;
+  const [document = "settings.json", pointer = ""] = schema.$ref.split("#");
+  const root = SCHEMA_DOCUMENTS[document.split("/").pop() ?? document];
+  if (!root || !pointer) return schema;
+  return pointer
+    .split("/")
+    .filter(Boolean)
+    .map((part) => part.replace(/~1/g, "/").replace(/~0/g, "~"))
+    .reduce<JsonSchema | undefined>((current, part) => {
+      const referenced = current?.[part];
+      return referenced && typeof referenced === "object"
+        ? (referenced as JsonSchema)
+        : undefined;
+    }, root) ?? schema;
+}
+
+function schemaAllowsNull(
+  schema: JsonSchema,
+  seen = new Set<JsonSchema>()
+): boolean {
+  if (seen.has(schema)) return false;
+  seen.add(schema);
+  if (
+    schema.type === "null" ||
+    (Array.isArray(schema.type) && schema.type.includes("null"))
+  ) {
+    return true;
+  }
+  if (schema.$ref) return schemaAllowsNull(resolveSchemaRef(schema), seen);
+  return [...(schema.oneOf ?? []), ...(schema.anyOf ?? [])].some((branch) =>
+    schemaAllowsNull(branch, seen)
+  );
+}
+
+/**
+ * Derive nullable setting leaves from the same schemas used to validate files,
+ * so merge exceptions cannot drift from settings-schema.json.
+ */
+function getSettingSchema(settingPath: string): JsonSchema | undefined {
+  let current: JsonSchema | undefined = SCHEMA_DOCUMENTS["settings.json"];
+  for (const part of settingPath.split(".")) {
+    if (!current) return undefined;
+    current = resolveSchemaRef(current).properties?.[part];
+  }
+  return current;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/** Remove forbidden and malformed workspace sections without mutating data. */
 function filterWorkspaceSettings(
   settings: Record<string, unknown>,
-  prefix = ""
+  prefix = "",
+  defaults: unknown = CTRLYOKE_SETTINGS_DEFAULTS
 ): Record<string, unknown> {
   const filtered: Record<string, unknown> = {};
   const entries = Object.entries(settings);
@@ -69,10 +139,23 @@ function filterWorkspaceSettings(
       continue;
     }
 
-    if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    const defaultValue = isPlainObject(defaults) ? defaults[key] : undefined;
+    if (
+      isPlainObject(defaultValue) &&
+      !isPlainObject(value) &&
+      !(
+        value === null &&
+        schemaAllowsNull(getSettingSchema(settingPath) ?? {})
+      )
+    ) {
+      continue;
+    }
+
+    if (isPlainObject(value)) {
       const nested = filterWorkspaceSettings(
         value as Record<string, unknown>,
-        settingPath
+        settingPath,
+        defaultValue
       );
       if (Object.keys(nested).length > 0) {
         filtered[key] = nested;
@@ -86,27 +169,35 @@ function filterWorkspaceSettings(
   return filtered;
 }
 
-/** Deep merge: source properties override target; objects are merged recursively, arrays/primitives are replaced */
+/** Recursively merge compatible objects, keeping defaults for malformed sections. */
 function deepMerge<T extends Record<string, unknown>>(
   target: T,
-  source: Partial<T>
+  source: Partial<T>,
+  prefix = ""
 ): T {
   const result = { ...target };
   for (const key of Object.keys(source) as (keyof T)[]) {
     const sourceVal = source[key];
     const targetVal = result[key];
+    const settingPath = prefix ? `${prefix}.${String(key)}` : String(key);
     if (
-      sourceVal !== undefined &&
-      sourceVal !== null &&
-      typeof sourceVal === "object" &&
-      !Array.isArray(sourceVal) &&
-      typeof targetVal === "object" &&
-      targetVal !== null &&
-      !Array.isArray(targetVal)
+      isPlainObject(targetVal) &&
+      !isPlainObject(sourceVal) &&
+      !(
+        sourceVal === null &&
+        schemaAllowsNull(getSettingSchema(settingPath) ?? {})
+      )
+    ) {
+      continue;
+    }
+    if (
+      isPlainObject(sourceVal) &&
+      isPlainObject(targetVal)
     ) {
       result[key] = deepMerge(
         targetVal as Record<string, unknown>,
-        sourceVal as Record<string, unknown>
+        sourceVal as Record<string, unknown>,
+        settingPath
       ) as T[keyof T];
     } else if (sourceVal !== undefined) {
       result[key] = sourceVal as T[keyof T];

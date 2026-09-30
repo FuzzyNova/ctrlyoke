@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { parse, type ParseError } from "jsonc-parser";
+import { parse, stripComments, type ParseError } from "jsonc-parser";
 import type { ConfigBackend } from "./CtrlYokeConfigService";
 import type { PartialCtrlYokeSettings } from "../types/CtrlYokeSettings";
 import {
@@ -85,15 +85,27 @@ export class FileConfigBackend implements ConfigBackend {
       // File doesn't exist — return empty settings (expected on first use)
       return {};
     }
+    const normalizedContent = stripLeadingBom(content);
+    if (stripComments(normalizedContent).trim() === "") {
+      return {};
+    }
     try {
       const errors: ParseError[] = [];
-      const parsed = parse(stripLeadingBom(content), errors, {
+      const parsed: unknown = parse(normalizedContent, errors, {
         allowTrailingComma: true,
-      }) as PartialCtrlYokeSettings;
+      });
       if (errors.length > 0) {
         throw new Error("Invalid JSONC syntax");
       }
-      const version = readSchemaVersion(parsed);
+      if (
+        parsed === null ||
+        typeof parsed !== "object" ||
+        Array.isArray(parsed)
+      ) {
+        throw new Error("Settings root must be an object");
+      }
+      const parsedSettings = parsed as PartialCtrlYokeSettings;
+      const version = readSchemaVersion(parsedSettings);
       if (isNewerSchemaVersion(PERSISTED_STORES.SETTINGS, version)) {
         this.newerSchemaVersion = version;
         if (!warnedNewerSettingsPaths.has(this.configPath)) {
@@ -104,10 +116,10 @@ export class FileConfigBackend implements ConfigBackend {
         }
       }
       if (!isNewerSchemaVersion(PERSISTED_STORES.SETTINGS, version)) {
-        return migrateToCurrent(PERSISTED_STORES.SETTINGS, parsed)
+        return migrateToCurrent(PERSISTED_STORES.SETTINGS, parsedSettings)
           .doc as PartialCtrlYokeSettings;
       }
-      return parsed;
+      return parsedSettings;
     } catch {
       // File exists but contains invalid JSONC. Reads remain best-effort, but
       // set() must not overwrite the user's only copy of the settings.

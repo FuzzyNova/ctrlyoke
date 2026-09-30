@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by bug-hunt final step (claude-cli)
 - **Area:** `src/config/FileConfigBackend.ts` (`load`, `set`), `src/config/CtrlYokeConfigService.ts` (`deepMerge`, `filterWorkspaceSettings`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

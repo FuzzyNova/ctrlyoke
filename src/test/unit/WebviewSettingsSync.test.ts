@@ -880,6 +880,10 @@ suite("WebviewSettingsSync", () => {
       try {
         configService.getAll = (() => ({
           ...CTRLYOKE_SETTINGS_DEFAULTS,
+          defaults: {
+            ...CTRLYOKE_SETTINGS_DEFAULTS.defaults,
+            toolPermissions: null,
+          },
           notifications: {
             ...CTRLYOKE_SETTINGS_DEFAULTS.notifications,
             browser: {
@@ -906,6 +910,10 @@ suite("WebviewSettingsSync", () => {
         assert.strictEqual(
           settingsMsg.settings.settings.notifications.browser.mode,
           "push"
+        );
+        assert.strictEqual(
+          settingsMsg.settings.settings.defaults.toolPermissions,
+          null
         );
         assert.strictEqual(
           settingsMsg.settings.sources["notifications.browser.mode"],

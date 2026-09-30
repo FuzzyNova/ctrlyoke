@@ -125,7 +125,7 @@ export interface CtrlYokeGlobalSettings {
       mode: PermissionMode;
       allowedTools: string[];
       deniedTools: string[];
-    };
+    } | null;
     /** Default end condition applied to all new workflows. null/undefined = disabled. */
     endCondition?: EndCondition | null;
     /** Default pre-condition applied to all new workflows. null/undefined = disabled. */

@@ -55,6 +55,10 @@ interface ExternalRootsTrustStoreLike {
   ): string[];
 }
 
+function getDefaultCliToolPermissionConfig(): ToolPermissionConfig | null {
+  return configService.get(CONFIG_KEYS.DEFAULTS).toolPermissions;
+}
+
 /** Convert an authored seconds value to milliseconds, preserving omission. */
 export function secondsToMs(seconds: number | undefined): number | undefined {
   return seconds === undefined ? undefined : seconds * 1000;
@@ -760,7 +764,9 @@ export const ConfigurationUtils = {
    * passes no permission flags and the harness uses its own configuration.
    */
   getCliToolPermissions(): PermissionMode {
-    return configService.get(CONFIG_KEYS.DEFAULTS).toolPermissions.mode;
+    return (
+      getDefaultCliToolPermissionConfig()?.mode ?? PERMISSION_MODES.NONE
+    );
   },
 
   /**
@@ -772,12 +778,11 @@ export const ConfigurationUtils = {
   resolveSpawnToolPermissions(
     toolPermissions: ToolPermissionConfig | null | undefined
   ): ToolPermissionConfig | null {
-    const config = toolPermissions ?? {
-      mode: ConfigurationUtils.getCliToolPermissions(),
-      allowedTools: ConfigurationUtils.getCliAllowedTools(),
-      deniedTools: ConfigurationUtils.getCliDeniedTools(),
-    };
-    return toolPermissions === null || config.mode === PERMISSION_MODES.NONE
+    const config =
+      toolPermissions === undefined
+        ? getDefaultCliToolPermissionConfig()
+        : toolPermissions;
+    return config === null || config?.mode === PERMISSION_MODES.NONE
       ? null
       : config;
   },
@@ -1044,14 +1049,14 @@ export const ConfigurationUtils = {
    * Get allowed tools for CLI operations (shared between Copilot and Claude)
    */
   getCliAllowedTools(): string[] {
-    return configService.get(CONFIG_KEYS.DEFAULTS).toolPermissions.allowedTools;
+    return getDefaultCliToolPermissionConfig()?.allowedTools ?? [];
   },
 
   /**
    * Get denied tools for CLI operations (shared between Copilot and Claude)
    */
   getCliDeniedTools(): string[] {
-    return configService.get(CONFIG_KEYS.DEFAULTS).toolPermissions.deniedTools;
+    return getDefaultCliToolPermissionConfig()?.deniedTools ?? [];
   },
 
   // ============================================================
