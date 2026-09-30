@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by bug-hunt final step (claude-cli)
 - **Area:** `src/mcp-server.ts` (`release_paths` handler)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

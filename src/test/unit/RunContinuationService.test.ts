@@ -848,6 +848,30 @@ suite("RunContinuationService addressed step mutations", () => {
     );
   });
 
+  test("explains that a run with no pending steps cannot be reordered", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-step-reorder-empty-")
+    );
+    await seedRun(EXECUTION_STATES.RUNNING, 1, [
+      { prompt: "done", _runtime: { completedAt: 10 } },
+      { prompt: "in flight", _runtime: { startedAt: 11 } },
+    ]);
+
+    await assert.rejects(
+      RunContinuationService.reorderStepsAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        [],
+        1,
+        new WorkflowLineageRepository(),
+        undefined,
+        true
+      ),
+      /no steps are pending, so there is nothing to reorder/i
+    );
+  });
+
   test("rejects numeric append positions that would move the in-flight step", async () => {
     workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-step-insert-")

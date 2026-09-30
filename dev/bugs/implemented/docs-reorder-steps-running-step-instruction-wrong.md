@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by bug-hunt final step (claude-cli)
 - **Area:** `docs/reference/mcp-tools.md` (Step mutations)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -908,6 +908,12 @@ export class RunContinuationService {
           }
         }
 
+        if (movableIndices.length === 0) {
+          throw new Error(
+            "No steps are pending, so there is nothing to reorder"
+          );
+        }
+
         if (
           absoluteOrder.length !== movableIndices.length ||
           absoluteOrder.some(

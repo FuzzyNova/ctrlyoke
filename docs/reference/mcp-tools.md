@@ -74,7 +74,7 @@ Returns `success`, `destination` (`queue` or `activeParallelGroup`), `queueItems
 
 - `edit_step` takes a zero-based `index` and an `updates` object. Updatable fields: `prompt`, `name`, `model`, `harness`, `resumeSession`, `sessionId`, `agent`, `enabled`, `color`, `additionalArgs` (array of strings), `skills`. Omitted fields keep their values. `clearProperties` lists fields to remove so they inherit workflow defaults again.
 - `remove_step` takes the same `index`.
-- `reorder_steps` takes `indices`: all pending steps' absolute zero-based indices in the desired execution order. When a step is running, include it first in that order.
+- `reorder_steps` takes `indices`: only the not-yet-started steps' absolute zero-based indices in the desired execution order. Never include a running or completed step.
 
 Completed and currently running steps cannot be edited, removed, or moved.
 
