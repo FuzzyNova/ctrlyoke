@@ -59,6 +59,25 @@ interface StepOutputBufferEntry {
   rawTextOutput?: boolean;
 }
 
+type AccumulatedOutput = Pick<
+  StepOutputBufferEntry,
+  "accumulatedText" | "accumulatedEvents"
+>;
+
+function getAccumulatedOutput(
+  existing: StepOutputBufferEntry | undefined,
+  attemptIndex: number,
+  runIndex: number
+): AccumulatedOutput {
+  return existing?.attemptIndex === attemptIndex &&
+    existing.runIndex === runIndex
+    ? {
+        accumulatedText: existing.accumulatedText,
+        accumulatedEvents: existing.accumulatedEvents,
+      }
+    : { accumulatedText: "", accumulatedEvents: [] };
+}
+
 interface CompletedStepEntry {
   outputs: any[];
   retryState?: { currentRetry: number; maxRetries: number };
@@ -181,9 +200,12 @@ export class OutputCaptureBuffer {
     rawTextOutput: boolean | undefined,
     runIndex: number = 0
   ): void {
-    // Preserve accumulatedText/Events across the two captureOutputInit calls
-    // per attempt (the second call updates cliCommand once the process starts).
     const existing = this.stepOutputBuffer.get(stepIndex);
+    const accumulatedOutput = getAccumulatedOutput(
+      existing,
+      attemptIndex,
+      runIndex
+    );
     this.stepOutputBuffer.set(stepIndex, {
       prompt,
       cliCommand,
@@ -192,8 +214,7 @@ export class OutputCaptureBuffer {
       timestampMs,
       attemptIndex,
       runIndex,
-      accumulatedText: existing?.accumulatedText ?? "",
-      accumulatedEvents: existing?.accumulatedEvents ?? [],
+      ...accumulatedOutput,
       rawTextOutput,
     });
 
@@ -317,6 +338,11 @@ export class OutputCaptureBuffer {
     runIndex: number = 0
   ): void {
     const existing = this.finalStepOutputBuffer.get(loopIndex);
+    const accumulatedOutput = getAccumulatedOutput(
+      existing,
+      attemptIndex,
+      runIndex
+    );
     this.finalStepOutputBuffer.set(loopIndex, {
       prompt,
       cliCommand,
@@ -325,8 +351,7 @@ export class OutputCaptureBuffer {
       timestampMs,
       attemptIndex,
       runIndex,
-      accumulatedText: existing?.accumulatedText ?? "",
-      accumulatedEvents: existing?.accumulatedEvents ?? [],
+      ...accumulatedOutput,
       rawTextOutput,
     });
   }

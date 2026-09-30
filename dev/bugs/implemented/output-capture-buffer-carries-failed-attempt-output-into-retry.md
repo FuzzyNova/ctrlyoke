@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli); traced in code
 - **Area:** `src/core/OutputCaptureBuffer.ts` (`captureOutputInit` ~184-198, `captureFinalStepOutputInit` ~319-331), `src/core/WorkflowExecutor.ts` (`handleHarnessFailure` retry branch ~5210-5236, `createFinalCliOutput` ~3684-3764)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

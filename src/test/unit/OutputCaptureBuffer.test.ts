@@ -130,6 +130,9 @@ suite("OutputCaptureBuffer", () => {
       );
       // Accumulate some data
       buffer.captureChunk(0, "partial response");
+      buffer.captureEvents(0, [
+        { type: "tool_call" } as unknown as CliEvent,
+      ]);
       // Second init (cliCommand populated)
       buffer.captureOutputInit(
         0,
@@ -166,6 +169,46 @@ suite("OutputCaptureBuffer", () => {
       );
       assert.ok(chunkCall);
       assert.strictEqual(chunkCall!.args[1], "partial response");
+      assert.strictEqual(
+        buffer.getBufferedOutput(0)?.structured?.events.length,
+        1
+      );
+    });
+
+    test("should reset accumulated output for a new attempt or run", () => {
+      const { callbacks } = makeCallbacks();
+      const buffer = new OutputCaptureBuffer("tag", callbacks);
+      const init = (attemptIndex: number, runIndex: number): void =>
+        buffer.captureOutputInit(
+          0,
+          "prompt",
+          undefined,
+          undefined,
+          undefined,
+          100,
+          attemptIndex,
+          false,
+          runIndex
+        );
+
+      init(0, 0);
+      buffer.captureChunk(0, "old attempt");
+      buffer.captureEvents(0, [{ type: "tool_call" } as unknown as CliEvent]);
+      init(1, 0);
+      assert.strictEqual(buffer.getBufferedOutput(0)?.response, "");
+      assert.strictEqual(
+        buffer.getBufferedOutput(0)?.structured?.events.length ?? 0,
+        0
+      );
+
+      buffer.captureChunk(0, "old run");
+      buffer.captureEvents(0, [{ type: "tool_result" } as unknown as CliEvent]);
+      init(1, 1);
+      assert.strictEqual(buffer.getBufferedOutput(0)?.response, "");
+      assert.strictEqual(
+        buffer.getBufferedOutput(0)?.structured?.events.length ?? 0,
+        0
+      );
     });
 
     test("should fire onPromptStart with correct totalSteps from callback", () => {
@@ -514,6 +557,56 @@ suite("OutputCaptureBuffer", () => {
   });
 
   suite("finalStep capture", () => {
+    test("should preserve accumulation only for the same attempt and run", () => {
+      const { callbacks } = makeCallbacks();
+      const buffer = new OutputCaptureBuffer("tag", callbacks);
+      const init = (attemptIndex: number, runIndex: number): void =>
+        buffer.captureFinalStepOutputInit(
+          0,
+          "final prompt",
+          undefined,
+          undefined,
+          undefined,
+          100,
+          attemptIndex,
+          false,
+          runIndex
+        );
+
+      init(0, 0);
+      buffer.captureFinalStepChunk(0, "same attempt");
+      buffer.captureFinalStepEvents(0, [
+        { type: "tool_call" } as unknown as CliEvent,
+      ]);
+      init(0, 0);
+      assert.strictEqual(
+        buffer.getFinalStepBufferedOutput(0)?.response,
+        "same attempt"
+      );
+      assert.strictEqual(
+        buffer.getFinalStepBufferedOutput(0)?.structured?.events.length,
+        1
+      );
+
+      init(1, 0);
+      assert.strictEqual(buffer.getFinalStepBufferedOutput(0)?.response, "");
+      assert.strictEqual(
+        buffer.getFinalStepBufferedOutput(0)?.structured?.events.length ?? 0,
+        0
+      );
+
+      buffer.captureFinalStepChunk(0, "old run");
+      buffer.captureFinalStepEvents(0, [
+        { type: "tool_result" } as unknown as CliEvent,
+      ]);
+      init(1, 1);
+      assert.strictEqual(buffer.getFinalStepBufferedOutput(0)?.response, "");
+      assert.strictEqual(
+        buffer.getFinalStepBufferedOutput(0)?.structured?.events.length ?? 0,
+        0
+      );
+    });
+
     test("should buffer finalStep init and chunks", () => {
       const { callbacks } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("tag", callbacks);
