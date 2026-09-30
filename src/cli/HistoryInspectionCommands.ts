@@ -214,11 +214,13 @@ export async function showHistoryCommand(
     if (!runSummary) {
       throw new Error(`Run "${runRef}" was not found in history.`);
     }
+    const workingFileStepCount =
+      runSummary.workingFileStepCount ?? runSummary.stepCount;
     if (targetFilter.kind === FINAL_STEP_PHASES.QUEUE) {
-      assertStepIndex(runSummary.stepCount, targetFilter.stepIndex, "--step");
+      assertStepIndex(workingFileStepCount, targetFilter.stepIndex, "--step");
     } else if (runSummary.hasFinalStep === false) {
       throw new Error(
-        `Invalid --step value "final". This run has no final step; ${formatValidStepIndexRange(runSummary.stepCount)}.`
+        `Invalid --step value "final". This run has no final step; ${formatValidStepIndexRange(workingFileStepCount)}.`
       );
     }
   }

@@ -155,6 +155,36 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     await fs.rm(tempWorkspace, { recursive: true, force: true });
   });
 
+  test("run summaries expose working-file step count while a manifest is still empty", async () => {
+    const { filePath, workflowKey, runRef } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "running-step-count"
+    );
+    const runFilePath = WorkflowPaths.runFilePath(
+      tempWorkspace,
+      workflowKey,
+      runRef
+    );
+    await fs.writeFile(
+      runFilePath,
+      JSON.stringify({
+        steps: [{ prompt: "first" }, { prompt: "second" }],
+        _runtime: {
+          currentIndex: 0,
+          executionState: EXECUTION_STATES.RUNNING,
+        },
+      })
+    );
+
+    const manifest = await recorder.readManifest(filePath);
+    const [summary] = await manager.getRunSummaries(workflowKey);
+
+    assert.strictEqual(manifest.stepCount, 0);
+    assert.strictEqual(summary?.executionState, EXECUTION_STATES.RUNNING);
+    assert.strictEqual(summary?.workingFileStepCount, 2);
+  });
+
   test("shares one history search index service per workspace", async () => {
     const equivalentWorkspacePath = path.join(tempWorkspace, ".");
     const otherWorkspace = await fs.mkdtemp(

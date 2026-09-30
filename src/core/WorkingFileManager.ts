@@ -2123,6 +2123,9 @@ export class WorkingFileManager {
         ...(workingFile._runtime?.worktree
           ? { worktree: workingFile._runtime.worktree }
           : {}),
+        ...(workingFile._runtime?.lastActivityAt !== undefined
+          ? { lastActivityAt: workingFile._runtime.lastActivityAt }
+          : {}),
       };
 
       // Write atomically while holding lock

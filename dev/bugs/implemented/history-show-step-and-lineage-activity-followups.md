@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the long-running bug-fix workflow final step (claude-cli, helper agent; real CLI with isolated `CTRLYOKE_HOME`, compiled `out/` script)
 - **Area:** `src/cli/HistoryInspectionCommands.ts` (~l.218), `src/core/WorkingFileManager.ts` (`updateWorkingFileDirect`, ~l.2113), `src/utils/WorkingFileMetadata.ts` (`getLineageLastModifiedAt`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 Follow-ups to 1b10a6b86 (`cli-history-show-out-of-range-step-silent.md`) and 1f3b9aa42
 (`lineage-recency-inconsistent-across-surfaces.md`).

@@ -390,11 +390,7 @@ suite("CLI history inspection command handlers", () => {
     try {
       const key = "release-2026-09-20T12-00-00Z" as WorkflowKey;
       const runRef = "run-2026-09-29T10-00-00-000Z" as RunRef;
-      const runFilePath = WorkflowPaths.runFilePath(
-        workspaceRoot,
-        key,
-        runRef
-      );
+      const runFilePath = WorkflowPaths.runFilePath(workspaceRoot, key, runRef);
       await fs.mkdir(path.dirname(runFilePath), { recursive: true });
       await fs.writeFile(
         runFilePath,
@@ -681,6 +677,46 @@ suite("CLI history inspection command handlers", () => {
           )
         ),
       /Invalid --step index: 2\. This run has 2 steps, so valid zero-based indices are 0 to 1\./
+    );
+  });
+
+  test("validates steps against the running working file when manifest count is zero", async () => {
+    const key = "release" as WorkflowKey;
+    const manager = new TestHistoryManager(
+      new Map(),
+      new Map([
+        [
+          key,
+          [
+            {
+              workflowKey: key,
+              runRef: "run-2026-09-20T12-00-00-000Z" as RunRef,
+              runDirectory: "/workspace/run-3",
+              runId: 3,
+              startedAt: 1,
+              executionState: EXECUTION_STATES.RUNNING,
+              definitionRevision: 1,
+              stepCount: 0,
+              workingFileStepCount: 2,
+              hasFinalStep: false,
+              hasMixedHarnesses: false,
+              hasMixedModels: false,
+            },
+          ],
+        ],
+      ])
+    );
+
+    await showHistoryCommand(
+      { workflow: key, run: "3", step: "1" },
+      new TestIo(),
+      dependencies(
+        new TestLineageRepository([key], new Map(), new Map()),
+        manager,
+        new TestRunOutputResolver([
+          settledAttempt({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 }),
+        ])
+      )
     );
   });
 

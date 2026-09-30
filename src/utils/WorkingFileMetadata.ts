@@ -2,6 +2,8 @@ import * as fs from "fs";
 import type { RunRef, WorkflowKey, WorkingFile } from "../types/CtrlYokeTypes";
 import * as WorkflowPaths from "./WorkflowPaths";
 
+const LINEAGE_ACTIVITY_READ_BATCH_SIZE = 32;
+
 /** Removes lineage-owned fields left in pre-release run files. */
 export function stripLegacyWorkingFileLineageMetadata<T extends object>(
   workingFile: T
@@ -72,31 +74,44 @@ export async function getLineageLastModifiedAt(
     return resolveLineageLastModifiedAt(descriptorLastModifiedAt);
   }
 
-  const activityTimestamps = await Promise.all(
-    entries
-      .filter(
-        (entry) =>
-          entry.isDirectory() &&
-          (WorkflowPaths.isRunDirEntry(entry) ||
-            WorkflowPaths.isDraftDirEntry(entry))
-      )
-      .map(async (entry) => {
-        const workingFilePath =
-          WorkflowPaths.isDraftDirEntry(entry)
+  const directories = entries.filter(
+    (entry) =>
+      entry.isDirectory() &&
+      (WorkflowPaths.isRunDirEntry(entry) ||
+        WorkflowPaths.isDraftDirEntry(entry))
+  );
+  const activityTimestamps: Array<number | undefined> = [];
+  for (
+    let startIndex = 0;
+    startIndex < directories.length;
+    startIndex += LINEAGE_ACTIVITY_READ_BATCH_SIZE
+  ) {
+    const batch = directories.slice(
+      startIndex,
+      startIndex + LINEAGE_ACTIVITY_READ_BATCH_SIZE
+    );
+    activityTimestamps.push(
+      ...(await Promise.all(
+        batch.map(async (entry) => {
+          const workingFilePath = WorkflowPaths.isDraftDirEntry(entry)
             ? WorkflowPaths.draftFilePath(workspaceRoot, workflowKey)
             : WorkflowPaths.runFilePath(
                 workspaceRoot,
                 workflowKey,
                 entry.name as RunRef
               );
-        try {
-          const content = await fs.promises.readFile(workingFilePath, "utf8");
-          return getWorkingFileLastActivityAt(JSON.parse(content) as WorkingFile);
-        } catch {
-          return undefined;
-        }
-      })
-  );
+          try {
+            const content = await fs.promises.readFile(workingFilePath, "utf8");
+            return getWorkingFileLastActivityAt(
+              JSON.parse(content) as WorkingFile
+            );
+          } catch {
+            return undefined;
+          }
+        })
+      ))
+    );
+  }
   return resolveLineageLastModifiedAt(
     descriptorLastModifiedAt,
     ...activityTimestamps
