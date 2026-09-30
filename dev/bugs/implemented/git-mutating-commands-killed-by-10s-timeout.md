@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli)
 - **Area:** `src/utils/GitUtils.ts` (`GIT_TIMEOUT_MS`, `execGit`, `commitAll`, `addWorktree`, `mergeNoFastForward`, `abortMerge`); callers in `src/core/orchestration/WorktreeManager.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

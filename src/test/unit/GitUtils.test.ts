@@ -15,6 +15,7 @@ import {
   hasUncommittedChanges,
   commitAll,
   addWorktree,
+  setGitTimeoutOverridesForTests,
   removeWorktree,
   GitWorktreeBranchCheckoutError,
   absoluteGitDir,
@@ -279,6 +280,19 @@ suite("GitUtils worktree plumbing", function () {
     }).trim();
   }
 
+  async function installSlowPreCommitHook(delayMs: number): Promise<void> {
+    const hooksDirectory = path.join(workspaceRoot, ".git", "hooks");
+    await fs.mkdir(hooksDirectory, { recursive: true });
+    const preCommitHook = path.join(hooksDirectory, "pre-commit");
+    await fs.writeFile(
+      preCommitHook,
+      `#!/usr/bin/env node\nsetTimeout(() => process.exit(0), ${delayMs});\n`
+    );
+    if (process.platform !== "win32") {
+      await fs.chmod(preCommitHook, 0o755);
+    }
+  }
+
   setup(async () => {
     workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "cy-worktree-git-")
@@ -292,12 +306,15 @@ suite("GitUtils worktree plumbing", function () {
   });
 
   teardown(async () => {
-    await fs.rm(workspaceRoot, {
-      recursive: true,
-      force: true,
-      maxRetries: 5,
-      retryDelay: 50,
-    });
+    // A timed-out test hook can outlive Git briefly while Node exits it.
+    await fs
+      .rm(workspaceRoot, {
+        recursive: true,
+        force: true,
+        maxRetries: 10,
+        retryDelay: 100,
+      })
+      .catch(() => {});
   });
 
   test("parses NUL-delimited records without damaging awkward paths", () => {
@@ -366,6 +383,48 @@ suite("GitUtils worktree plumbing", function () {
       true
     );
     assert.strictEqual(await hasUncommittedChanges(workspaceRoot), false);
+  });
+
+  test("allows a slow pre-commit hook to finish beyond the short Git timeout", async () => {
+    await fs.writeFile(path.join(workspaceRoot, "tracked.txt"), "changed\n");
+    await installSlowPreCommitHook(500);
+
+    const restoreTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 100,
+      mutationTimeoutMs: 2_000,
+    });
+    try {
+      assert.strictEqual(
+        await commitAll(workspaceRoot, "slow hook commit"),
+        true
+      );
+      assert.strictEqual(
+        runGit(["log", "-1", "--format=%s"]),
+        "slow hook commit"
+      );
+    } finally {
+      restoreTimeouts();
+    }
+  });
+
+  test("describes a Git command timeout and suggests a slow hook", async () => {
+    await fs.writeFile(path.join(workspaceRoot, "tracked.txt"), "changed\n");
+    await installSlowPreCommitHook(500);
+    const restoreTimeouts = setGitTimeoutOverridesForTests({
+      shortTimeoutMs: 100,
+      mutationTimeoutMs: 100,
+    });
+    try {
+      await assert.rejects(
+        commitAll(workspaceRoot, "timeout hook commit"),
+        (error: unknown) =>
+          error instanceof Error &&
+          error.message.includes("git commit timed out after 0.1 seconds") &&
+          error.message.includes("slow Git hook")
+      );
+    } finally {
+      restoreTimeouts();
+    }
   });
 
   test("reports the existing checkout when a branch is already attached", async () => {
