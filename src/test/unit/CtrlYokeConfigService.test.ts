@@ -151,6 +151,20 @@ suite("CtrlYokeConfigService", () => {
     assert.strictEqual(service.get("defaults").toolPermissions, null);
   });
 
+  test("merges partial overlays onto nullable object defaults", () => {
+    service.setUserBackend(
+      makeBackend({ defaults: { toolPermissions: null } })
+    );
+    service.setCliOverlay({
+      defaults: { toolPermissions: { mode: "custom" } },
+    });
+
+    assert.deepStrictEqual(service.get("defaults").toolPermissions, {
+      ...CTRLYOKE_SETTINGS_DEFAULTS.defaults.toolPermissions,
+      mode: "custom",
+    });
+  });
+
   test("filters malformed workspace object sections before merge", () => {
     service.setWorkspaceBackend({
       getAll: () =>
@@ -794,6 +808,23 @@ suite("FileConfigBackend", () => {
     const content = JSON.parse(fs.readFileSync(configPath, "utf-8"));
     assert.strictEqual(content.ui.showCliCommand, false);
     assert.strictEqual(content.execution.injectMode, false);
+  });
+
+  test("shares cached reads across scopes backed by the same file", async () => {
+    const configPath = path.join(tmpDir, "settings.json");
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({ ui: { showCliCommand: true } }),
+      "utf-8"
+    );
+    const service = new CtrlYokeConfigService();
+    service.setUserBackend(new FileConfigBackend(configPath));
+    service.setWorkspaceBackend(new FileConfigBackend(configPath));
+
+    assert.strictEqual(service.get("ui").showCliCommand, true);
+    await service.set("ui.showCliCommand", false, "user");
+
+    assert.strictEqual(service.get("ui").showCliCommand, false);
   });
 
   test("round-trips step color mode and harness color settings", async () => {

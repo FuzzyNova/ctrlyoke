@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the long-running bug-fix workflow final step (claude-cli, helper agent, esbuild scripts against real source)
 - **Area:** `src/config/FileConfigBackend.ts`, `src/config/CtrlYokeConfigService.ts` (`deepMerge`), `src/utils/ConfigurationUtils.ts` (`resolveSpawnToolPermissions`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 Both are incomplete fixes: 3285cd6b8 (`settings-set-prototype-pollution-and-shared-tmp.md`) and
 809823e5b (`settings-default-toolpermissions-null-crashes.md`).

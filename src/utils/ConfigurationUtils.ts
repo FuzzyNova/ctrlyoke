@@ -56,7 +56,21 @@ interface ExternalRootsTrustStoreLike {
 }
 
 function getDefaultCliToolPermissionConfig(): ToolPermissionConfig | null {
-  return configService.get(CONFIG_KEYS.DEFAULTS).toolPermissions;
+  return normalizeToolPermissionConfig(
+    configService.get(CONFIG_KEYS.DEFAULTS).toolPermissions
+  );
+}
+
+function normalizeToolPermissionConfig(
+  config: ToolPermissionConfig | null
+): ToolPermissionConfig | null {
+  return config === null
+    ? null
+    : {
+        ...config,
+        allowedTools: config.allowedTools ?? [],
+        deniedTools: config.deniedTools ?? [],
+      };
 }
 
 /** Convert an authored seconds value to milliseconds, preserving omission. */
@@ -781,8 +795,8 @@ export const ConfigurationUtils = {
     const config =
       toolPermissions === undefined
         ? getDefaultCliToolPermissionConfig()
-        : toolPermissions;
-    return config === null || config?.mode === PERMISSION_MODES.NONE
+        : normalizeToolPermissionConfig(toolPermissions);
+    return config === null || config.mode === PERMISSION_MODES.NONE
       ? null
       : config;
   },

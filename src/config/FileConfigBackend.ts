@@ -19,37 +19,41 @@ import { uniqueAtomicTempPath } from "./AtomicFileWrite";
 import { foldPathForCompare } from "../utils/PathCasing";
 
 const warnedNewerSettingsPaths = new Set<string>();
-const writeQueuesByPath = new Map<string, AsyncWriteQueue>();
+interface FileConfigBackendState {
+  cache?: PartialCtrlYokeSettings;
+  writeQueue: AsyncWriteQueue;
+}
+
+const backendStatesByPath = new Map<string, FileConfigBackendState>();
 const FORBIDDEN_SETTING_PATH_SEGMENTS = new Set([
   "__proto__",
   "constructor",
   "prototype",
 ]);
 
-function getWriteQueue(configPath: string): AsyncWriteQueue {
+function getBackendState(configPath: string): FileConfigBackendState {
   const key = foldPathForCompare(path.resolve(configPath));
-  let queue = writeQueuesByPath.get(key);
-  if (!queue) {
-    queue = new AsyncWriteQueue();
-    writeQueuesByPath.set(key, queue);
+  let state = backendStatesByPath.get(key);
+  if (!state) {
+    state = { writeQueue: new AsyncWriteQueue() };
+    backendStatesByPath.set(key, state);
   }
-  return queue;
+  return state;
 }
 
 export class FileConfigBackend implements ConfigBackend {
-  private cache?: PartialCtrlYokeSettings;
   // Serializes set() calls so a read-modify-write can't read a stale file out
   // from under a write that's still in flight. Two settings paths committed
   // back-to-back (e.g. TerminalControlBarEditor's addShortcut writing
   // mobileCustomShortcuts then mobileBarLayout) reach here as two overlapping
   // calls; without this queue, the second call's load() can run before the
   // first call's save() lands, so the second write clobbers the first.
-  private readonly writeQueue: AsyncWriteQueue;
+  private readonly state: FileConfigBackendState;
   private newerSchemaVersion?: number;
   private hasInvalidContent = false;
 
   constructor(private readonly configPath: string) {
-    this.writeQueue = getWriteQueue(configPath);
+    this.state = getBackendState(configPath);
   }
 
   /** Returns the path this backend reads from */
@@ -63,11 +67,11 @@ export class FileConfigBackend implements ConfigBackend {
 
   /** Load and parse the config file. Returns {} if file doesn't exist or is invalid JSON. */
   getAll(): PartialCtrlYokeSettings {
-    if (this.cache !== undefined) {
-      return this.cache;
+    if (this.state.cache !== undefined) {
+      return this.state.cache;
     }
-    this.cache = this.load();
-    return this.cache;
+    this.state.cache = this.load();
+    return this.state.cache;
   }
 
   /** Write a setting using dot-notation path (e.g. "execution.injectMode") */
@@ -81,7 +85,7 @@ export class FileConfigBackend implements ConfigBackend {
         `Cannot update settings path "${settingPath}": path segment "${forbiddenSegment}" is not allowed.`
       );
     }
-    return this.writeQueue.enqueue(async () => {
+    return this.state.writeQueue.enqueue(async () => {
       const current = this.load();
       if (this.newerSchemaVersion !== undefined) {
         refuseNewerSchema(
@@ -101,7 +105,7 @@ export class FileConfigBackend implements ConfigBackend {
         value
       );
       await this.save(current);
-      this.cache = undefined;
+      this.state.cache = undefined;
     });
   }
 

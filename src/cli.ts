@@ -8,6 +8,7 @@ import * as readline from "readline";
 import { access, readFile } from "fs/promises";
 
 import { CliAdapter } from "./platform/CliAdapter";
+import { applyCliToolPermissionOptions } from "./cli/CliToolPermissionOverlay";
 import { ConsoleUserFeedbackSink } from "./platform/ConsoleUserFeedbackSink";
 import type { ResolvedCliConfig } from "./platform/CliAdapter";
 import { registerCliAdapter } from "./platform/vscode-shim";
@@ -754,32 +755,7 @@ async function runCommand(
     // regardless of what the user's config file says.
     overlay.defaults = { ...overlay.defaults, executionMode };
   }
-  if (options.permissionMode) {
-    overlay.defaults = {
-      ...overlay.defaults,
-      toolPermissions: {
-        mode: options.permissionMode,
-      },
-    };
-  }
-  if (options.allowTool?.length) {
-    overlay.defaults = {
-      ...overlay.defaults,
-      toolPermissions: {
-        ...(overlay.defaults?.toolPermissions ?? {}),
-        allowedTools: options.allowTool,
-      },
-    };
-  }
-  if (options.denyTool?.length) {
-    overlay.defaults = {
-      ...overlay.defaults,
-      toolPermissions: {
-        ...(overlay.defaults?.toolPermissions ?? {}),
-        deniedTools: options.denyTool,
-      },
-    };
-  }
+  applyCliToolPermissionOptions(overlay, options);
   if (options.timeout !== undefined || options.scriptTimeout !== undefined) {
     overlay.execution = {
       ...(options.timeout !== undefined && {

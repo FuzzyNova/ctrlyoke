@@ -124,6 +124,15 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function getSettingDefault(settingPath: string): unknown {
+  return settingPath
+    .split(".")
+    .reduce<unknown>((current, part) => {
+      if (!isPlainObject(current)) return undefined;
+      return current[part];
+    }, CTRLYOKE_SETTINGS_DEFAULTS);
+}
+
 /** Remove forbidden and malformed workspace sections without mutating data. */
 function filterWorkspaceSettings(
   settings: Record<string, unknown>,
@@ -197,6 +206,17 @@ function deepMerge<T extends Record<string, unknown>>(
       result[key] = deepMerge(
         targetVal as Record<string, unknown>,
         sourceVal as Record<string, unknown>,
+        settingPath
+      ) as T[keyof T];
+    } else if (
+      isPlainObject(sourceVal) &&
+      targetVal === null &&
+      schemaAllowsNull(getSettingSchema(settingPath) ?? {}) &&
+      isPlainObject(getSettingDefault(settingPath))
+    ) {
+      result[key] = deepMerge(
+        getSettingDefault(settingPath) as Record<string, unknown>,
+        sourceVal,
         settingPath
       ) as T[keyof T];
     } else if (sourceVal !== undefined) {

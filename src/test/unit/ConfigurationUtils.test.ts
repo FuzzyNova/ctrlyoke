@@ -8,11 +8,13 @@ import {
   secondsToMs,
 } from "../../utils/ConfigurationUtils";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import {
   PERMISSION_MODES,
   STATUS_LINE_HARNESS_IDS,
 } from "../../types/DashboardConstants";
 import { ExternalRootsTrustStore } from "../../config/ExternalRootsTrustStore";
+import { QwenToolPermissionMapper } from "../../core/harness/qwen/QwenToolPermissionMapper";
 
 function makeBackend(data: PartialCtrlYokeSettings): ConfigBackend {
   return {
@@ -335,6 +337,7 @@ suite("ConfigurationUtils — spawn tool permissions", () => {
   teardown(() => {
     configService.setUserBackend(makeBackend({}));
     configService.setWorkspaceBackend(makeBackend({}));
+    configService.setCliOverlay({});
   });
 
   const custom = {
@@ -379,6 +382,24 @@ suite("ConfigurationUtils — spawn tool permissions", () => {
       ConfigurationUtils.resolveSpawnToolPermissions(undefined),
       null
     );
+  });
+
+  test("normalizes a partial CLI permission-mode overlay over null settings", async () => {
+    configService.setUserBackend(
+      makeBackend({ defaults: { toolPermissions: null } })
+    );
+    // This is the shape produced by cli.ts for --permission-mode custom.
+    configService.setCliOverlay({
+      defaults: { toolPermissions: { mode: PERMISSION_MODES.CUSTOM } },
+    });
+
+    const resolved = ConfigurationUtils.resolveSpawnToolPermissions(undefined);
+    assert.deepStrictEqual(resolved, {
+      ...CTRLYOKE_SETTINGS_DEFAULTS.defaults.toolPermissions,
+      mode: PERMISSION_MODES.CUSTOM,
+    });
+    assert.ok(resolved);
+    await new QwenToolPermissionMapper().prepare(resolved, {});
   });
 
   test("falls back to the settings default, including a none default", () => {
