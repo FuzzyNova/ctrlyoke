@@ -5165,12 +5165,24 @@ export class WorkflowInstance
 
   private onAttemptTransition(transition: WorkflowAttemptTransition): void {
     const target = transition.current.target;
-    if (target.kind !== FINAL_STEP_PHASES.QUEUE) {
-      return;
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+      this.reportQueueAttemptTransition(transition, target.stepIndex);
     }
 
+    // Every attempt transition, final-step ones included, changes the active
+    // set. A final step begins without a workflow runtime transition (the run
+    // stays `running`), so this is the only push that tells the dashboard its
+    // signed index is live — skipping it leaves the final step's terminal
+    // closeable while it runs.
+    this.dashboardSink?.updateActiveStepIndices?.(this.getActiveStepIndices());
+  }
+
+  private reportQueueAttemptTransition(
+    transition: WorkflowAttemptTransition,
+    stepIndex: number
+  ): void {
     const state = this.promptQueue.getState();
-    const step = state.steps[target.stepIndex];
+    const step = state.steps[stepIndex];
 
     switch (transition.command) {
       case WORKFLOW_ATTEMPT_COMMANDS.BEGIN:
@@ -5185,63 +5197,61 @@ export class WorkflowInstance
                 { hostCanProvidePty: this.hostCanProvidePty }
               ).harness);
           Log.info(
-            `[inst:${this.id.slice(0, 8)}] Step ${target.stepIndex + 1}/${state.steps.length} started ` +
+            `[inst:${this.id.slice(0, 8)}] Step ${stepIndex + 1}/${state.steps.length} started ` +
               `(attempt ${transition.current.attemptIndex + 1}, command="${command}"` +
               (harness ? `, harness=${harness}` : "") +
               ")"
           );
         } else {
           Log.info(
-            `[inst:${this.id.slice(0, 8)}] Step ${target.stepIndex + 1} started ` +
+            `[inst:${this.id.slice(0, 8)}] Step ${stepIndex + 1} started ` +
               `(attempt ${transition.current.attemptIndex + 1})`
           );
         }
         if (transition.current.attemptIndex > 0) {
-          this.dashboardSink?.updateStepStatus(target.stepIndex, {
+          this.dashboardSink?.updateStepStatus(stepIndex, {
             state: STEP_STATUS.RUNNING,
           });
         }
         break;
       case WORKFLOW_ATTEMPT_COMMANDS.SCHEDULE_RETRY:
         Log.debug(
-          `[inst:${this.id.slice(0, 8)}] Step ${target.stepIndex + 1} retry scheduled ` +
+          `[inst:${this.id.slice(0, 8)}] Step ${stepIndex + 1} retry scheduled ` +
             `(attempt ${transition.current.attemptIndex + 1})`
         );
         this.dashboardSink?.updateRetryAttempt(
-          target.stepIndex,
+          stepIndex,
           transition.current.retryCount ?? transition.current.attemptIndex,
           transition.current.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES
         );
         break;
       case WORKFLOW_ATTEMPT_COMMANDS.CANCEL:
         Log.debug(
-          `[inst:${this.id.slice(0, 8)}] Step ${target.stepIndex + 1} cancelled ` +
+          `[inst:${this.id.slice(0, 8)}] Step ${stepIndex + 1} cancelled ` +
             `(attempt ${transition.current.attemptIndex + 1})`
         );
-        this.dashboardSink?.updateStepStatus(target.stepIndex, {
+        this.dashboardSink?.updateStepStatus(stepIndex, {
           state: STEP_STATUS.CANCELLED,
         });
         break;
       case WORKFLOW_ATTEMPT_COMMANDS.COMPLETE:
         Log.info(
-          `[inst:${this.id.slice(0, 8)}] Step ${target.stepIndex + 1} completed ` +
+          `[inst:${this.id.slice(0, 8)}] Step ${stepIndex + 1} completed ` +
             `(attempt ${transition.current.attemptIndex + 1})`
         );
         if (transition.current.attemptIndex > 0) {
-          this.dashboardSink?.updateRetryAttempt(target.stepIndex, 0, 0);
+          this.dashboardSink?.updateRetryAttempt(stepIndex, 0, 0);
         }
         break;
       case WORKFLOW_ATTEMPT_COMMANDS.FAIL:
         Log.info(
-          `[inst:${this.id.slice(0, 8)}] Step ${target.stepIndex + 1} failed ` +
+          `[inst:${this.id.slice(0, 8)}] Step ${stepIndex + 1} failed ` +
             `(attempt ${transition.current.attemptIndex + 1}, failureReason="${transition.current.failureReason ?? "unknown"}")`
         );
         break;
       default:
         break;
     }
-
-    this.dashboardSink?.updateActiveStepIndices?.(this.getActiveStepIndices());
   }
 
   private getCurrentCancellationTarget(): WorkflowAttemptTarget | undefined {

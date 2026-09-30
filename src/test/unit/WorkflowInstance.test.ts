@@ -1579,6 +1579,62 @@ suite("WorkflowInstance runtime transitions", () => {
       { stepIndex: 0, state: STEP_STATUS.RUNNING },
     ]);
   });
+
+  test("pushes the signed final-step index when a final-step attempt begins and completes", () => {
+    // A final step starts while the run stays `running`, so no runtime
+    // transition carries activeStepIndices — the attempt transition is the
+    // only signal that gates the final step's terminal against closing.
+    const platform = new MockPlatform();
+    const activeUpdates: number[][] = [];
+
+    const dashboardSink: any = {
+      updateFileSelected: async () => {},
+      updateSessionRestored: async () => {},
+      updateExecutionStarted: () => {},
+      updateProgress: () => {},
+      updateExecutionState: () => {},
+      updateActiveStepIndices: (activeStepIndices: number[]) => {
+        activeUpdates.push([...activeStepIndices]);
+      },
+      updateStepStatus: () => {},
+      updateRetryAttempt: () => {},
+      updateCliOutput: () => {},
+      updateCliStreamingChunk: () => {},
+      updateCliStreamingEvents: () => {},
+      updateStepsExtended: () => {},
+      updatePromptDeleted: () => {},
+      updateFinalStep: () => {},
+      updateFinalStepStatus: () => {},
+      updateFinalStepOutput: () => {},
+      updateFinalStepStreamingChunk: () => {},
+      updateFinalStepStreamingEvents: () => {},
+      updateStatusMessage: () => {},
+      notifyPromptsReordered: () => {},
+    };
+
+    const instance = new WorkflowInstance(
+      platform,
+      dashboardSink,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+
+    instance.promptQueue.loadPrompts({
+      steps: [{ prompt: "queue-1" }],
+      finalStep: { prompt: "final" },
+    });
+
+    const runtime = instance.promptQueue.getRuntimeStateMachine();
+    const target = { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 };
+
+    runtime.beginAttempt(target, 0);
+    runtime.completeAttempt(target, 0);
+
+    assert.deepStrictEqual(activeUpdates, [[-1], []]);
+  });
 });
 
 suite("WorkflowInstance eager working file creation", () => {
