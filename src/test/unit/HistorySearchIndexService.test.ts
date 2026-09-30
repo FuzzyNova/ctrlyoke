@@ -106,6 +106,30 @@ suite("HistorySearchIndexService", () => {
     assert.strictEqual(codexResults.totalCount, 1);
   });
 
+  test("keeps case-significant regex escapes in separate cached searches", async () => {
+    await createRun("regex-case-cache-2026-09-30T22-00-00", 1, 1500, [
+      createStatusDraft(1550, "123"),
+      createStatusDraft(1600, "ABC"),
+    ]);
+
+    const index = new HistorySearchIndexService();
+    const digits = await index.search(
+      { query: "\\d{3}", regex: true, limit: 10 },
+      workspaceRoot
+    );
+    const nonDigits = await index.search(
+      { query: "\\D{3}", regex: true, limit: 10 },
+      workspaceRoot
+    );
+
+    assert.strictEqual(digits.totalCount, 1);
+    assert.strictEqual(nonDigits.totalCount, 1);
+    assert.notStrictEqual(
+      digits.results[0]?.matchSnippet,
+      nonDigits.results[0]?.matchSnippet
+    );
+  });
+
   test("streams large event text while preserving index truncation", async () => {
     const visibleTerm = "streamed-visible-term";
     const hiddenTerm = "streamed-hidden-term";
@@ -838,6 +862,10 @@ suite("HistorySearchIndexService", () => {
     }
 
     const index = new HistorySearchIndexService();
+    await index.search(
+      { query: "cancelled-cache-warm-no-match", limit: 5 },
+      workspaceRoot
+    );
     const firstPage = await index.search(
       { query: term, limit: 5 },
       workspaceRoot
@@ -863,6 +891,39 @@ suite("HistorySearchIndexService", () => {
     assert.strictEqual(full.countState, "exact");
     assert.strictEqual(full.totalCount, totalRuns);
     assert.strictEqual(full.results.length, totalRuns);
+  });
+
+  test("refreshes cached shards after another service rebuilds the shared index", async () => {
+    const workflowId = "external-rebuild-cache-2026-09-30T22-01-00";
+    await createRun(workflowId, 1, 1800, [
+      createStatusDraft(1850, "before-term"),
+    ]);
+
+    const firstIndex = new HistorySearchIndexService();
+    const before = await firstIndex.search(
+      { query: "before-term", limit: 10 },
+      workspaceRoot
+    );
+    assert.strictEqual(before.totalCount, 1);
+
+    const source = (await listRunSources(workspaceRoot))[0];
+    assert.ok(source);
+    await recorder.appendEvents(source.manifestPath, [
+      createStatusDraft(1900, "after-term"),
+    ]);
+
+    const secondIndex = new HistorySearchIndexService();
+    const external = await secondIndex.search(
+      { query: "after-term", limit: 10 },
+      workspaceRoot
+    );
+    assert.strictEqual(external.totalCount, 1);
+
+    const refreshed = await firstIndex.search(
+      { query: "after-term", limit: 10 },
+      workspaceRoot
+    );
+    assert.strictEqual(refreshed.totalCount, 1);
   });
 
   test("does not lose deep matches after a resumed scan is cancelled mid-extend", async () => {

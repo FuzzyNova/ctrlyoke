@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli), reproduced against the compiled modules
 - **Area:** `src/core/orchestration/HistorySearchMatcher.ts` (`readQuantifier` ~618), `src/core/orchestration/HistorySearchIndexService.ts` (`getSnapshotKey` ~1183), `src/ui/WebviewMessageRouter.ts` (`getHistorySearchListingKey` ~145, `SEARCH_HISTORY` handler ~1535)
-- **Severity:** medium (wrong search results; stuck dashboard spinner)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

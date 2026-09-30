@@ -629,10 +629,11 @@ function readQuantifier(
   const close = source.indexOf("}", start + 1);
   if (close === -1 || close >= end)
     return { minimum: 1, exactlyOne: true, index: start };
-  const match = /^\{(\d+)(?:,(\d*)?)?\}/.exec(source.slice(start, close + 1));
+  const match = /^\{(\d+)(,(\d*))?\}/.exec(source.slice(start, close + 1));
   if (!match) return { minimum: 1, exactlyOne: true, index: start };
   const minimum = Number(match[1]);
-  const maximum = match[2] === undefined ? minimum : Number(match[2]);
+  const hasMaximum = match[2] !== undefined && match[3] !== "";
+  const maximum = hasMaximum ? Number(match[3]) : undefined;
   return {
     minimum,
     exactlyOne: minimum === 1 && maximum === 1,

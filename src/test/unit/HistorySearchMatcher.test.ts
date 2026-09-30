@@ -112,6 +112,26 @@ suite("HistorySearchMatcher", () => {
     }
   });
 
+  test("treats open-ended repetition counts as unbounded", () => {
+    const cases = [
+      { pattern: "ab{1,}c", text: "abbc" },
+      { pattern: "x{1,}", text: "xxx" },
+      { pattern: "a{2,}", text: "aaa" },
+      { pattern: "a{1,1}", text: "a" },
+    ];
+
+    for (const { pattern, text } of cases) {
+      const matcher = createHistorySearchMatcher(pattern, true);
+      assert.ok(
+        matcher.requiredLiteral === undefined ||
+          text.toLowerCase().includes(matcher.requiredLiteral.toLowerCase()),
+        `${pattern} rejected ${text} in its literal prefilter`
+      );
+      assert.ok(matcher.find(text), `${pattern} should match ${text}`);
+      disposeHistorySearchMatcher(matcher);
+    }
+  });
+
   test("rejects an invalid regex as a typed error", () => {
     assert.throws(
       () => createHistorySearchMatcher("[", true),

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli), reproduced against the compiled modules
 - **Area:** `src/core/orchestration/HistorySearchIndexService.ts` (`scanForMatches` `consider` closure and the `addedDedupeKeys` rollback ~700-810; `rebuild()` `result.skipped` branch ~1060)
-- **Severity:** medium (search silently misses results while reporting an exact count)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

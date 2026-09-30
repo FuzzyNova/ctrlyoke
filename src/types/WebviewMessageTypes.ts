@@ -23,6 +23,7 @@ import {
   AnyTargetId,
   PromptEditorInsertMode,
   MESSAGE_TYPES,
+  SEARCH_HISTORY_ERROR_CODES,
   TRUST_DECISIONS,
   STATUS_MESSAGE_SEVERITY,
   EXECUTION_MODES,
@@ -1825,8 +1826,8 @@ export interface SearchHistoryErrorMessage {
   type: typeof MESSAGE_TYPES.SEARCH_HISTORY_ERROR;
   query: string;
   regex: boolean;
-  code: "invalidPattern";
-  pattern: string;
+  code: (typeof SEARCH_HISTORY_ERROR_CODES)[keyof typeof SEARCH_HISTORY_ERROR_CODES];
+  pattern?: string;
   message: string;
 }
 

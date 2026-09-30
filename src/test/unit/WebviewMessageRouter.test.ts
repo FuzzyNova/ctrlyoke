@@ -18,11 +18,15 @@ import {
   HARNESS_IDS,
   END_CONDITION_SCRIPT_TYPES,
   USER_FEEDBACK_SEVERITY,
+  SEARCH_HISTORY_ERROR_CODES,
   VSCODE_COMMANDS,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../../types/DashboardConstants";
 import { WorkflowVariantService } from "../../core/orchestration/WorkflowVariantService";
-import { InvalidHistorySearchPatternError } from "../../core/orchestration/HistorySearchMatcher";
+import {
+  HistorySearchRegexTimeoutError,
+  InvalidHistorySearchPatternError,
+} from "../../core/orchestration/HistorySearchMatcher";
 import { VsCodeUserFeedbackSink } from "../../platform/VsCodeUserFeedbackSink";
 import {
   LicenseActivationLimitError,
@@ -1181,6 +1185,37 @@ suite("WebviewMessageRouter — license actions", () => {
       }
     });
 
+    test("case-significant regex queries supersede each other", async () => {
+      const recorded: RecordedSearch[] = [];
+      const { router, restore } = buildSearchRouter(recorded);
+      try {
+        const digits = router.route({
+          type: MESSAGE_TYPES.SEARCH_HISTORY,
+          query: "\\d{3}",
+          limit: 50,
+          regex: true,
+        });
+        await settle();
+        const nonDigits = router.route({
+          type: MESSAGE_TYPES.SEARCH_HISTORY,
+          query: "\\D{3}",
+          limit: 50,
+          regex: true,
+        });
+        await settle();
+
+        assert.strictEqual(recorded[0].signal?.aborted, true);
+        recorded[0].resolve();
+        await digits;
+        await settle();
+        assert.strictEqual(recorded.length, 2);
+        recorded[1].resolve();
+        await nonDigits;
+      } finally {
+        restore();
+      }
+    });
+
     test("returns invalid regex patterns as typed webview errors", async () => {
       const emitted: any[] = [];
       const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
@@ -1221,6 +1256,50 @@ suite("WebviewMessageRouter — license actions", () => {
             pattern: "[a",
             message:
               'Invalid history search pattern "[a": Unterminated character class',
+          },
+        ]);
+      } finally {
+        Object.defineProperty(vscode.workspace, "workspaceFolders", {
+          value: originalWorkspaceFolders,
+          configurable: true,
+        });
+      }
+    });
+
+    test("returns regex timeouts as a typed webview error", async () => {
+      const emitted: any[] = [];
+      const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+      Object.defineProperty(vscode.workspace, "workspaceFolders", {
+        value: [{ uri: vscode.Uri.file(path.join(__dirname, "workspace")) }],
+        configurable: true,
+      });
+      const historySearchService = {
+        search: () =>
+          Promise.reject(new HistorySearchRegexTimeoutError("(a+)+$")),
+      };
+      const router = new WebviewMessageRouter(
+        (message) => emitted.push(message),
+        { sendWorkflowPropertiesToSettings: async () => {} } as any,
+        {} as any,
+        () => undefined as any,
+        historySearchService as any,
+        { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+      );
+      try {
+        await router.route({
+          type: MESSAGE_TYPES.SEARCH_HISTORY,
+          query: "(a+)+$",
+          limit: 50,
+          regex: true,
+        });
+        assert.deepStrictEqual(emitted, [
+          {
+            type: MESSAGE_TYPES.SEARCH_HISTORY_ERROR,
+            query: "(a+)+$",
+            regex: true,
+            code: SEARCH_HISTORY_ERROR_CODES.REGEX_TIMEOUT,
+            pattern: "(a+)+$",
+            message: new HistorySearchRegexTimeoutError("(a+)+$").message,
           },
         ]);
       } finally {

@@ -16,6 +16,7 @@ import {
   isStatusLineHarnessId,
   END_CONDITION_SCRIPT_TYPES,
   HISTORY_SEARCH_COUNT_STATES,
+  SEARCH_HISTORY_ERROR_CODES,
   type EndConditionScriptType,
   type UserFeedbackSeverity,
   type WebviewLogLevel,
@@ -93,8 +94,14 @@ import {
 } from "./WebviewClientContext";
 import { HistorySearchService } from "../core/orchestration/HistorySearchService";
 import { HistorySearchCancelledError } from "../core/orchestration/HistorySearchIndexService";
-import { InvalidHistorySearchPatternError } from "../core/orchestration/HistorySearchMatcher";
-import { normalizeHistorySearchFilters } from "../core/orchestration/HistorySearchFilters";
+import {
+  HistorySearchRegexTimeoutError,
+  InvalidHistorySearchPatternError,
+} from "../core/orchestration/HistorySearchMatcher";
+import {
+  normalizeHistorySearchFilters,
+  normalizeHistorySearchQueryKey,
+} from "../core/orchestration/HistorySearchFilters";
 import type { HistorySearchFilters } from "../types/WorkflowTimelineTypes";
 import { WorkflowVariantService } from "../core/orchestration/WorkflowVariantService";
 import { redactExecutionPreview } from "../types/PreviewRedactor";
@@ -148,8 +155,11 @@ function getHistorySearchListingKey(message: {
   deep?: unknown;
   regex?: unknown;
 }): string {
+  const regex = message.regex === true;
   const query =
-    typeof message.query === "string" ? message.query.trim().toLowerCase() : "";
+    typeof message.query === "string"
+      ? normalizeHistorySearchQueryKey(message.query, regex)
+      : "";
   const filters =
     message.filters && typeof message.filters === "object"
       ? (message.filters as HistorySearchFilters)
@@ -158,7 +168,7 @@ function getHistorySearchListingKey(message: {
     query,
     filters: normalizeHistorySearchFilters(filters),
     deep: message.deep === true,
-    regex: message.regex === true,
+    regex,
   });
 }
 
@@ -1543,7 +1553,18 @@ export class WebviewMessageRouter {
             type: MESSAGE_TYPES.SEARCH_HISTORY_ERROR,
             query,
             regex: message.regex === true,
-            code: "invalidPattern",
+            code: SEARCH_HISTORY_ERROR_CODES.INVALID_PATTERN,
+            pattern: error.pattern,
+            message: error.message,
+          });
+          return;
+        }
+        if (error instanceof HistorySearchRegexTimeoutError) {
+          ctx.emit({
+            type: MESSAGE_TYPES.SEARCH_HISTORY_ERROR,
+            query,
+            regex: message.regex === true,
+            code: SEARCH_HISTORY_ERROR_CODES.REGEX_TIMEOUT,
             pattern: error.pattern,
             message: error.message,
           });

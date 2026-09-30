@@ -93,6 +93,15 @@ export function normalizeHistorySearchFilters(
   };
 }
 
+/** Regex syntax is case-sensitive even though matching itself is case-insensitive. */
+export function normalizeHistorySearchQueryKey(
+  query: string,
+  regex: boolean
+): string {
+  const trimmed = query.trim();
+  return regex ? trimmed : trimmed.toLowerCase();
+}
+
 function normalizePath(value: string): string {
   return value.replaceAll("\\", "/").toLowerCase();
 }
