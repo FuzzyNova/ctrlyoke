@@ -322,7 +322,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
         onConfirm={handleConfirmDeleteAllRuns}
         title="Delete All Runs"
         message={`Delete all runs for "${workflowName}"?`}
-        detail="This will permanently delete all run history for this workflow. This action cannot be undone."
+        detail="They move to Recently deleted, where you can restore them from Settings → General → Run History."
       />
     </div>
   );

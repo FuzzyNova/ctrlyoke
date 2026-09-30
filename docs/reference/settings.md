@@ -501,6 +501,14 @@ User-only storage location configuration.
 
 Store run history under the user state home or beside the workspace.
 
+### `storage.trashRetentionDays` {#storage-trashretentiondays}
+
+- **Type:** `integer`
+- **Default:** `30`
+- **Constraints:** minimum 1
+
+Days a deleted run or workflow stays in Recently deleted before it is permanently removed. Every history delete, including Clear all history, moves runs to Recently deleted, where they can be restored until then.
+
 ## `permissions` {#permissions}
 
 Harness-specific path and sandbox permission settings.

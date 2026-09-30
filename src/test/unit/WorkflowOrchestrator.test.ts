@@ -1939,11 +1939,14 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       assert.strictEqual(remaining.length, 1);
       assert.strictEqual(remaining[0].runRef, newer.runRef);
 
-      // Not a registered viewer of this lineage, so the only refresh it gets
-      // is the manifest-only push — never a full RUN_VIEW_LOADED snapshot.
-      assert.strictEqual(pushed.length, 1);
-      assert.strictEqual(pushed[0].type, MESSAGE_TYPES.RUN_SUMMARIES_LOADED);
-      assert.strictEqual(pushed[0].runSummaries?.length, 1);
+      // The requester is told the run went to Recently deleted (its Undo
+      // toast) and, not being a registered viewer of this lineage, gets only
+      // the manifest-only push — never a full RUN_VIEW_LOADED snapshot.
+      assert.deepStrictEqual(
+        pushed.map((message) => message.type),
+        [MESSAGE_TYPES.HISTORY_TRASHED, MESSAGE_TYPES.RUN_SUMMARIES_LOADED]
+      );
+      assert.strictEqual(pushed[1].runSummaries?.length, 1);
 
       // Nobody was actually looking at the deleted run, so the toast must
       // stay silent.

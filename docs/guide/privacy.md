@@ -59,4 +59,6 @@ Fuzzy Nova's servers.
 ctrlyoke writes logs to `.ctrlyoke/logs/` in the workspace, and run history under
 `~/.ctrlyoke` (or `.ctrlyoke/.runs/` in workspace storage mode). They contain your prompts and
 output and stay local. Delete them whenever you like; `ctrlyoke history prune` removes history for
-projects that no longer exist.
+projects that no longer exist. Runs and workflows you delete from the dashboard first go to
+Recently deleted (a `.trash` directory beside the run history) and are removed for good after
+`storage.trashRetentionDays`; `ctrlyoke history trash empty` removes them sooner.

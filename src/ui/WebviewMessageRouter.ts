@@ -7,6 +7,7 @@ import {
 import { resolveNamedRelativePath } from "../platform/WorkspaceRootResolver";
 import {
   MESSAGE_TYPES,
+  HISTORY_TRASH_ACTIONS,
   SECRET_REGISTRY_ACTION_STATES,
   LOG_LEVELS,
   PANEL_CLIENT_ID,
@@ -63,6 +64,10 @@ import type {
   UpdateExternalRootDecisionMessage,
   CreateEndConditionScriptMessage,
   RetryHarnessDetectionMessage,
+  ClearWorkflowHistoryMessage,
+  HistoryClearPreviewRequestMessage,
+  HistoryTrashEntryActionMessage,
+  HistoryTrashEmptyMessage,
   DeleteSecretMessage,
   SetSecretMessage,
   BatchApprovalResponseMessage,
@@ -468,6 +473,7 @@ export class WebviewMessageRouter {
     this.registerWorkflowVariants(table);
     this.registerWorkflowModal(table);
     this.registerWorkflowStatus(table);
+    this.registerHistoryTrash(table);
     this.registerSettings(table);
     this.registerLicense(table);
     this.registerSaveWorkflow(table);
@@ -1805,20 +1811,65 @@ export class WebviewMessageRouter {
       this.serializer.handleLoadWorkflow(message, ctx.postMessage);
     });
 
-    table.set(MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY, async (_message, ctx) => {
-      const currentWorkingFilePath = this.getOrchestrator()?.getQueueState(
+    table.set(MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY, async (message, ctx) => {
+      const request = message as Partial<ClearWorkflowHistoryMessage>;
+      const currentWorkflowKey = this.getOrchestrator()?.getQueueState(
         ctx.clientId
-      )?.workingFilePath;
-      const deleted = await this.serializer.handleClearWorkflowHistory(
-        ctx.postMessage
+      )?.workflowKey;
+      const trashedKeys = await this.serializer.handleClearWorkflowHistory(
+        request.confirmation,
+        ctx.postMessage,
+        ctx.clientId
       );
-      // Clear the stale working file path if it was deleted by the history clear.
-      // Same logic as REMOVE_WORKFLOW_HISTORY — we do NOT call clearWorkflow() to
-      // preserve the user's prompts and source file reference.
-      if (deleted && currentWorkingFilePath) {
+      // Clear the stale working file path only if this client's own lineage
+      // was moved; a live one is skipped and keeps its file. Same logic as
+      // REMOVE_WORKFLOW_HISTORY — we do NOT call clearWorkflow() to preserve
+      // the user's prompts and source file reference.
+      if (currentWorkflowKey && trashedKeys.has(currentWorkflowKey)) {
         this.getOrchestrator()?.clearWorkingFilePath(ctx.clientId);
       }
     });
+  }
+
+  private registerHistoryTrash(table: DispatchTable): void {
+    table.set(
+      MESSAGE_TYPES.HISTORY_CLEAR_PREVIEW_REQUEST,
+      async (message, ctx) => {
+        const request = message as Partial<HistoryClearPreviewRequestMessage>;
+        if (typeof request.requestId !== "string") return;
+        await this.serializer.handleHistoryClearPreview(
+          request.requestId,
+          ctx.postMessage
+        );
+      }
+    );
+
+    table.set(
+      MESSAGE_TYPES.HISTORY_TRASH_LIST_REQUEST,
+      async (_message, ctx) => {
+        await this.serializer.handleHistoryTrashList(ctx.postMessage);
+      }
+    );
+
+    const trashActions = [
+      [MESSAGE_TYPES.HISTORY_TRASH_RESTORE, HISTORY_TRASH_ACTIONS.RESTORE],
+      [MESSAGE_TYPES.HISTORY_TRASH_PURGE, HISTORY_TRASH_ACTIONS.PURGE],
+      [MESSAGE_TYPES.HISTORY_TRASH_EMPTY, HISTORY_TRASH_ACTIONS.EMPTY],
+    ] as const;
+    for (const [type, action] of trashActions) {
+      table.set(type, async (message, ctx) => {
+        const request = message as Partial<
+          Pick<HistoryTrashEntryActionMessage, "entryId"> &
+            Pick<HistoryTrashEmptyMessage, "confirmation">
+        >;
+        await this.serializer.handleHistoryTrashAction(
+          action,
+          { entryId: request.entryId, confirmation: request.confirmation },
+          ctx.postMessage,
+          ctx.clientId
+        );
+      });
+    }
   }
 
   private registerSettings(table: DispatchTable): void {
@@ -2397,7 +2448,12 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY, async (message, ctx) => {
       if (message.address) {
-        await this.serializer.handleRemoveWorkflowHistory(message.address);
+        const removed = await this.serializer.handleRemoveWorkflowHistory(
+          message.address,
+          ctx.postMessage,
+          ctx.clientId
+        );
+        if (!removed) return;
         // Only the instance whose own file was just deleted may be reset. Keying
         // this off the view address instead would clear an unrelated live
         // workflow's path, and its next write would then fork a duplicate

@@ -93,7 +93,6 @@ interface WorkflowListProps {
   onCancelPauseRunning: (workflow: WorkflowSummary) => void;
   onResumeRunning: (workflow: WorkflowSummary) => void;
   onStopRunning: (workflow: WorkflowSummary) => void;
-  onClearHistory: () => void;
   onRemove?: (address: WorkflowViewAddress) => void;
   onToggleFavorite?: (address: WorkflowViewAddress) => void;
   /** Drills into a lineage's run panel without selecting/loading it. Omitted rows render no indicator. */
@@ -349,7 +348,6 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
  *   while running)
  * - Highlights current workflow
  * - Click to load workflow or switch to a running instance
- * - Clear history option
  * - Virtualizes each region's rows once they grow large (see
  *   VirtualizedDropdownList) so a long history doesn't slow down opening
  *   the dropdown
@@ -370,7 +368,6 @@ export const WorkflowList = React.forwardRef<
     onCancelPauseRunning,
     onResumeRunning,
     onStopRunning,
-    onClearHistory,
     onRemove,
     onToggleFavorite,
     onDrillIntoRuns,
@@ -554,20 +551,6 @@ export const WorkflowList = React.forwardRef<
           </button>
         )}
       </div>
-
-      {/* Footer - Clear History: only ever targets persisted history, never
-          live instances — hidden when no history rows exist */}
-      {hasRecentRows && (
-        <div className="workflow-menu-footer p-1 border-t border-dropdown-border bg-editor-bg flex-shrink-0">
-          <button
-            type="button"
-            onClick={onClearHistory}
-            className="workflow-menu-action cy-dropdown-row w-full px-3 py-1.5 border-none bg-transparent text-link-fg text-center cursor-pointer text-xs rounded transition-colors hover:bg-list-hover-bg"
-          >
-            Clear History
-          </button>
-        </div>
-      )}
     </div>
   );
 });

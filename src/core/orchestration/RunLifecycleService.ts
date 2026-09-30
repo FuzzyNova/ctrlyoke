@@ -4,6 +4,10 @@ import { RunContinuationService } from "./RunContinuationService";
 import { OutputHistoryManager } from "./OutputHistoryManager";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import {
+  HistoryTrashRepository,
+  toHistoryTrashedMessage,
+} from "./HistoryTrashRepository";
+import {
   assertDefinitionRevision,
   assertDescriptorRevision,
 } from "./RevisionPrecondition";
@@ -19,6 +23,7 @@ import type {
 } from "../../types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
+  HISTORY_TRASH_ENTRY_KINDS,
   type HarnessId,
   USER_FEEDBACK_SEVERITY,
   WORKFLOW_LOCK_LIVENESS,
@@ -1006,7 +1011,22 @@ export class RunLifecycleService {
     const deletedRunId = (
       await historyManager.getRunSummaries(address.workflowKey)
     ).find((summary) => summary.runRef === address.runRef)?.runId;
-    await historyManager.deleteRunByRef(address.workflowKey, address.runRef);
+    const trash = new HistoryTrashRepository(workspaceRoot).begin(
+      HISTORY_TRASH_ENTRY_KINDS.RUN,
+      clientId
+    );
+    let trashed;
+    try {
+      await historyManager.deleteRunByRef(
+        address.workflowKey,
+        address.runRef,
+        trash
+      );
+    } finally {
+      // Also clears the empty pending entry a refused delete leaves behind.
+      trashed = await trash.commit();
+    }
+    if (trashed) send(toHistoryTrashedMessage(trashed));
     const remaining = await historyManager.getRunSummaries(address.workflowKey);
     const fallback: WorkflowViewAddress = remaining[0]
       ? {
@@ -1074,10 +1094,14 @@ export class RunLifecycleService {
     const historyManager = new OutputHistoryManager(workspaceRoot);
     const executionRunRef = this.findExecutionRunRef(workflowKey);
     const runRefs = await historyManager.getRunsForWorkflow(workflowKey);
+    const trash = new HistoryTrashRepository(workspaceRoot).begin(
+      HISTORY_TRASH_ENTRY_KINDS.LINEAGE_RUNS,
+      clientId
+    );
     for (const runRef of runRefs) {
       if (runRef === executionRunRef) continue;
       try {
-        await historyManager.deleteRunByRef(workflowKey, runRef);
+        await historyManager.deleteRunByRef(workflowKey, runRef, trash);
       } catch (error) {
         Log.warn(
           `[WorkflowOrchestrator] deleteAllRunsForLineage: failed to delete ${workflowKey}/${runRef}:`,
@@ -1085,6 +1109,8 @@ export class RunLifecycleService {
         );
       }
     }
+    const trashed = await trash.commit();
+    if (trashed) send(toHistoryTrashedMessage(trashed));
     const remaining = await historyManager.getRunSummaries(workflowKey);
     const fallback: WorkflowViewAddress = remaining[0]
       ? {

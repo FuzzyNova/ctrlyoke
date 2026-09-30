@@ -20,6 +20,7 @@ ctrlyoke history list [--cwd <path>] [--all] [--json]
 ctrlyoke history runs --workflow <key> [--cwd <path>] [--json]
 ctrlyoke history show --workflow <key> --run <ref|runId> [--step <index|final>] [--json]
 ctrlyoke history search <query> [filters] [--json]
+ctrlyoke history trash list|restore <id>|purge <id>|empty [--yes]
 ctrlyoke step edit [file] --workflow <key> --run <ref|runId> --index <index> [--prompt <text>]
 ctrlyoke step remove --workflow <key> --run <ref|runId> --index <index>
 ctrlyoke step reorder --workflow <key> --run <ref|runId> --order <indices>
@@ -468,6 +469,27 @@ required literal may parse every candidate document.
 `--json` emits one versioned JSON result blob bounded by `--limit` (up to 100
 results). This is deliberately different from `history show --json`, which
 emits NDJSON because a run can contain an unbounded stream of attempts.
+
+## `ctrlyoke history trash`
+
+Deleting a run or workflow from the dashboard, including Clear all history,
+moves it to Recently deleted instead of erasing it. It stays there for
+`storage.trashRetentionDays` (30 days by default) and can be restored until
+then:
+
+```bash
+ctrlyoke history trash list
+ctrlyoke history trash restore 2026-09-30T00-02-13-403Z-1a2b3c4d
+ctrlyoke history trash purge 2026-09-30T00-02-13-403Z-1a2b3c4d --yes
+ctrlyoke history trash empty --yes
+```
+
+`list` prints each entry's id, what it holds, its size, and how many days it
+has left, and removes entries that have expired; `--json` emits them as one
+versioned document. `restore` puts an entry back; a run whose slot has been
+taken again stays in Recently deleted and is reported. `purge` and `empty`
+delete permanently, so they ask first, and refuse without `--yes` when not run
+interactively.
 
 ## `ctrlyoke step`
 

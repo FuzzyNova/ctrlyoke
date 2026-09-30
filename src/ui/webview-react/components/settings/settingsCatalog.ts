@@ -248,6 +248,29 @@ const STATIC_SETTINGS_CATALOG = {
     description:
       "Choose where ctrlyoke keeps run history. Workspace mode keeps it beside the repo, still ignores .runs/, and does not make runs shareable.",
   },
+  "history.recentlyDeleted": {
+    id: "history.recentlyDeleted",
+    tab: GLOBAL_SETTINGS_TABS.GENERAL,
+    label: "Recently deleted",
+    description:
+      "Deleted runs and workflows, which you can restore until they expire.",
+    keywords: ["trash", "restore", "undo delete", "deleted runs"],
+  },
+  "storage.trashRetentionDays": {
+    id: "storage.trashRetentionDays",
+    path: "storage.trashRetentionDays",
+    tab: GLOBAL_SETTINGS_TABS.GENERAL,
+    label: "Keep deleted items (days)",
+    keywords: ["trash", "recently deleted", "retention", "undo delete"],
+  },
+  "history.clearAll": {
+    id: "history.clearAll",
+    tab: GLOBAL_SETTINGS_TABS.GENERAL,
+    label: "Clear all history",
+    description:
+      "Moves every workflow and run in this project to Recently deleted. Running workflows are kept.",
+    keywords: ["clear history", "delete all", "wipe", "remove history"],
+  },
   "queue.maxSteps": {
     id: "queue.maxSteps",
     path: "queue.maxSteps",

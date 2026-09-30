@@ -111,7 +111,19 @@ import type {
 } from "./UsageTypes";
 import type { CommitMessageGenerationRecord } from "../git/CommitMessageGenerationTracker";
 export type { CommitMessageGenerationRecord } from "../git/CommitMessageGenerationTracker";
-import type { McpLocalSource } from "./DashboardConstants";
+import type {
+  HistoryTrashEntryKind,
+  McpLocalSource,
+} from "./DashboardConstants";
+import type {
+  HistoryClearPreview,
+  HistoryTrashEntrySummary,
+  HistoryTrashOutcome,
+} from "./HistoryTrashTypes";
+export type {
+  HistoryClearPreview,
+  HistoryTrashEntrySummary,
+} from "./HistoryTrashTypes";
 import type {
   AttemptCostEstimate,
   AttemptCostUnavailableReason,
@@ -2005,6 +2017,76 @@ export interface RunSummariesLoadedMessage {
 export interface DeleteAllRunsForLineageMessage {
   type: typeof MESSAGE_TYPES.DELETE_ALL_RUNS_FOR_LINEAGE;
   workflowKey: WorkflowKey;
+}
+
+/**
+ * Webview → Extension: Clear all history. The host refuses it unless
+ * `confirmation` is exactly `CLEAR_HISTORY_CONFIRMATION_PHRASE`.
+ */
+export interface ClearWorkflowHistoryMessage {
+  type: typeof MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY;
+  confirmation: string;
+}
+
+/** Webview → Extension: count what Clear all history would move. */
+export interface HistoryClearPreviewRequestMessage {
+  type: typeof MESSAGE_TYPES.HISTORY_CLEAR_PREVIEW_REQUEST;
+  requestId: string;
+}
+
+/** Extension → Webview: request-correlated Clear all history preview. */
+export interface HistoryClearPreviewMessage {
+  type: typeof MESSAGE_TYPES.HISTORY_CLEAR_PREVIEW;
+  requestId: string;
+  preview?: HistoryClearPreview;
+  error?: string;
+}
+
+/**
+ * Extension → Webview: a delete moved history into Recently deleted. Sent
+ * only to the client that asked, which offers Undo for `entryId`.
+ */
+export interface HistoryTrashedMessage {
+  type: typeof MESSAGE_TYPES.HISTORY_TRASHED;
+  entryId: string;
+  kind: HistoryTrashEntryKind;
+  message: string;
+  skippedLive: WorkflowKey[];
+}
+
+/** Webview → Extension: list Recently deleted. */
+export interface HistoryTrashListRequestMessage {
+  type: typeof MESSAGE_TYPES.HISTORY_TRASH_LIST_REQUEST;
+}
+
+/** Extension → Webview: Recently deleted entries, newest first. */
+export interface HistoryTrashListMessage {
+  type: typeof MESSAGE_TYPES.HISTORY_TRASH_LIST;
+  entries: HistoryTrashEntrySummary[];
+  retentionDays: number;
+  totalBytes: number;
+}
+
+/** Webview → Extension: restore or permanently delete one trashed entry. */
+export interface HistoryTrashEntryActionMessage {
+  type:
+    | typeof MESSAGE_TYPES.HISTORY_TRASH_RESTORE
+    | typeof MESSAGE_TYPES.HISTORY_TRASH_PURGE;
+  entryId: string;
+}
+
+/**
+ * Webview → Extension: permanently delete everything in Recently deleted.
+ * Refused unless `confirmation` is `EMPTY_TRASH_CONFIRMATION_PHRASE`.
+ */
+export interface HistoryTrashEmptyMessage {
+  type: typeof MESSAGE_TYPES.HISTORY_TRASH_EMPTY;
+  confirmation: string;
+}
+
+/** Extension → Webview: outcome of a restore/purge/empty action. */
+export interface HistoryTrashResultMessage extends HistoryTrashOutcome {
+  type: typeof MESSAGE_TYPES.HISTORY_TRASH_RESULT;
 }
 
 /** Start the currently viewed draft through its explicit address. */

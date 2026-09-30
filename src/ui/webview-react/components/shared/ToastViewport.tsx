@@ -17,7 +17,8 @@ function isPersistentSeverity(toast: ToastItem): boolean {
 }
 
 function getToastTimeout(toast: ToastItem): number {
-  return isPersistentSeverity(toast)
+  // A toast that offers an action (Undo, Open in New Tab) needs time to reach.
+  return isPersistentSeverity(toast) || toast.action
     ? TOAST_WARNING_ERROR_TIMEOUT_MS
     : TOAST_INFO_SUCCESS_TIMEOUT_MS;
 }

@@ -285,7 +285,16 @@ export const MESSAGE_TYPES = {
   GET_RECENT_WORKFLOWS: "getRecentWorkflows", // Webview -> Extension: Request workflow history
   RECENT_WORKFLOWS: "recentWorkflows", // Extension -> Webview: Send workflow history
   LOAD_WORKFLOW: "loadWorkflow", // Webview -> Extension: Load specific workflow
-  CLEAR_WORKFLOW_HISTORY: "clearWorkflowHistory", // Webview -> Extension: Delete all history files
+  CLEAR_WORKFLOW_HISTORY: "clearWorkflowHistory", // Webview -> Extension: Move every non-live lineage to Recently deleted; requires { confirmation: CLEAR_HISTORY_CONFIRMATION_PHRASE }
+  HISTORY_CLEAR_PREVIEW_REQUEST: "historyClearPreviewRequest", // Webview -> Extension: { requestId } count what Clear all history would move
+  HISTORY_CLEAR_PREVIEW: "historyClearPreview", // Extension -> Webview: request-correlated HistoryClearPreview
+  HISTORY_TRASHED: "historyTrashed", // Extension -> Webview: a delete moved history into Recently deleted (drives the Undo toast)
+  HISTORY_TRASH_LIST_REQUEST: "historyTrashListRequest", // Webview -> Extension: list Recently deleted entries
+  HISTORY_TRASH_LIST: "historyTrashList", // Extension -> Webview: Recently deleted entries, newest first
+  HISTORY_TRASH_RESTORE: "historyTrashRestore", // Webview -> Extension: { entryId } put a trashed entry back
+  HISTORY_TRASH_PURGE: "historyTrashPurge", // Webview -> Extension: { entryId } permanently delete one trashed entry
+  HISTORY_TRASH_EMPTY: "historyTrashEmpty", // Webview -> Extension: { confirmation } permanently delete every trashed entry
+  HISTORY_TRASH_RESULT: "historyTrashResult", // Extension -> Webview: outcome of a restore/purge/empty action
   TOGGLE_WORKFLOW_FAVORITE: "toggleWorkflowFavorite", // Webview -> Extension: Toggle favorite on a recent workflow entry { filePath }
 
   // Settings view messages
@@ -2049,12 +2058,52 @@ export const WORKFLOW_VIEW_ADDRESS_KIND = {
 } as const;
 
 // ============================================================================
+// HISTORY TRASH - Recently deleted run history
+// ============================================================================
+
+/** What one Recently deleted entry holds; a bulk delete is always one entry. */
+export const HISTORY_TRASH_ENTRY_KINDS = {
+  /** One run of one lineage. */
+  RUN: "run",
+  /** A whole lineage: descriptor, draft, and every run. */
+  LINEAGE: "lineage",
+  /** Every run of one lineage ("Delete all runs"); the lineage itself stays. */
+  LINEAGE_RUNS: "lineageRuns",
+  /** Clear all history: every lineage that was not live. */
+  ALL: "all",
+} as const;
+
+export type HistoryTrashEntryKind =
+  (typeof HISTORY_TRASH_ENTRY_KINDS)[keyof typeof HISTORY_TRASH_ENTRY_KINDS];
+
+/** Outcome kinds reported by HISTORY_TRASH_RESULT. */
+export const HISTORY_TRASH_ACTIONS = {
+  RESTORE: "restore",
+  PURGE: "purge",
+  EMPTY: "empty",
+} as const;
+
+export type HistoryTrashAction =
+  (typeof HISTORY_TRASH_ACTIONS)[keyof typeof HISTORY_TRASH_ACTIONS];
+
+/**
+ * Typed confirmation the host requires on CLEAR_WORKFLOW_HISTORY and
+ * HISTORY_TRASH_EMPTY. Checked host-side too, so no client can trigger a
+ * whole-history operation with one untyped message.
+ */
+export const CLEAR_HISTORY_CONFIRMATION_PHRASE = "clear history";
+export const EMPTY_TRASH_CONFIRMATION_PHRASE = "empty trash";
+
+/** Default and minimum for `storage.trashRetentionDays`. */
+export const DEFAULT_TRASH_RETENTION_DAYS = 30;
+export const MIN_TRASH_RETENTION_DAYS = 1;
+
+// ============================================================================
 // WORKFLOW DELETE SCOPES - History/context-menu deletion targets
 // ============================================================================
 export const WORKFLOW_DELETE_SCOPES = {
   LINEAGE: "lineage",
   RUN: "run",
-  ALL: "all",
 } as const;
 
 export type WorkflowDeleteScope =

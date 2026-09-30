@@ -23,6 +23,7 @@ import {
   ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
   HARNESS_IDS,
+  HISTORY_TRASH_ENTRY_KINDS,
   OUTPUT_ACTIVITY_KINDS,
   STEP_TYPES,
   WORKFLOW_LOCK_LIVENESS,
@@ -61,6 +62,11 @@ import {
   type RunSummary,
 } from "../../types/WorkflowTimelineTypes";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
+import {
+  HISTORY_TRASH_REQUESTERS,
+  HistoryTrashRepository,
+  type HistoryTrashBatch,
+} from "./HistoryTrashRepository";
 import {
   lookupRunSummary,
   stampRunFiles,
@@ -1481,10 +1487,16 @@ export class OutputHistoryManager {
     }
   }
 
-  /** Delete one stable run identity. Callers must never resolve a display index late. */
+  /**
+   * Moves one stable run identity to Recently deleted. Callers must never
+   * resolve a display index late. A caller deleting several runs as one action
+   * passes its own `trash` batch and commits it; otherwise the run gets an
+   * entry of its own.
+   */
   async deleteRunByRef(
     workflowKey: WorkflowKey,
-    runRef: RunRef
+    runRef: RunRef,
+    trash?: HistoryTrashBatch
   ): Promise<number> {
     const runs = await this.getRunsForWorkflow(workflowKey);
     if (!runs.includes(runRef)) {
@@ -1493,12 +1505,22 @@ export class OutputHistoryManager {
       );
     }
     const protectedRunRefs = await this.getProtectedRunRefs(workflowKey);
+    const batch =
+      trash ??
+      new HistoryTrashRepository(this._workspaceFolderPath).begin(
+        HISTORY_TRASH_ENTRY_KINDS.RUN,
+        HISTORY_TRASH_REQUESTERS.UNKNOWN
+      );
     await this.lineageRepository.deleteRun(
       this._workspaceFolderPath,
       workflowKey,
       runRef,
-      protectedRunRefs
+      protectedRunRefs,
+      (runDir) => batch.moveRunDir(workflowKey, runRef, runDir)
     );
+    if (!trash) {
+      await batch.commit();
+    }
     // Returning only after the refreshed documents land makes a deleted run
     // unreachable through search as well as through the run list.
     await this.refreshSearchIndex();

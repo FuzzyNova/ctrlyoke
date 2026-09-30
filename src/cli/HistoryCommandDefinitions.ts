@@ -57,6 +57,32 @@ export interface HistorySearchOptions {
   color?: boolean;
 }
 
+export interface HistoryTrashListOptions {
+  cwd?: string;
+  json?: boolean;
+}
+
+export interface HistoryTrashRestoreOptions {
+  cwd?: string;
+}
+
+export interface HistoryTrashPurgeOptions {
+  cwd?: string;
+  yes?: boolean;
+}
+
+export interface HistoryTrashEmptyOptions {
+  cwd?: string;
+  yes?: boolean;
+}
+
+export interface HistoryTrashCommandHandlers {
+  list(options: HistoryTrashListOptions): Promise<void>;
+  restore(entryId: string, options: HistoryTrashRestoreOptions): Promise<void>;
+  purge(entryId: string, options: HistoryTrashPurgeOptions): Promise<void>;
+  empty(options: HistoryTrashEmptyOptions): Promise<void>;
+}
+
 export interface HistoryCommandHandlers {
   prune(options: HistoryPruneOptions): Promise<void>;
   relink(
@@ -68,6 +94,7 @@ export interface HistoryCommandHandlers {
   runs(options: HistoryRunsOptions): Promise<void>;
   show(options: HistoryShowOptions): Promise<void>;
   search(query: string, options: HistorySearchOptions): Promise<void>;
+  trash: HistoryTrashCommandHandlers;
 }
 
 /** Registers lifecycle commands that operate on the user project registry. */
@@ -203,5 +230,55 @@ export function registerHistoryCommands(
     )
     .action(async (query: string, options: HistorySearchOptions) =>
       handlers.search(query, options)
+    );
+
+  registerHistoryTrashCommands(history, handlers.trash);
+}
+
+const CWD_OPTION_FLAGS = "-d, --cwd <path>";
+const CWD_OPTION_DESCRIPTION = "Working directory (default: current directory)";
+
+/** `history trash`: Recently deleted runs and workflows. */
+function registerHistoryTrashCommands(
+  history: Command,
+  handlers: HistoryTrashCommandHandlers
+): void {
+  const trash = history
+    .command("trash")
+    .description(
+      "List, restore, or permanently delete Recently deleted runs and workflows"
+    );
+
+  trash
+    .command("list")
+    .description("List Recently deleted, newest first")
+    .option(CWD_OPTION_FLAGS, CWD_OPTION_DESCRIPTION)
+    .option("--json", "Output as JSON")
+    .action(async (options: HistoryTrashListOptions) => handlers.list(options));
+
+  trash
+    .command("restore <id>")
+    .description("Put a Recently deleted entry back into run history")
+    .option(CWD_OPTION_FLAGS, CWD_OPTION_DESCRIPTION)
+    .action(async (entryId: string, options: HistoryTrashRestoreOptions) =>
+      handlers.restore(entryId, options)
+    );
+
+  trash
+    .command("purge <id>")
+    .description("Permanently delete one Recently deleted entry")
+    .option(CWD_OPTION_FLAGS, CWD_OPTION_DESCRIPTION)
+    .option("-y, --yes", "Delete without asking")
+    .action(async (entryId: string, options: HistoryTrashPurgeOptions) =>
+      handlers.purge(entryId, options)
+    );
+
+  trash
+    .command("empty")
+    .description("Permanently delete everything in Recently deleted")
+    .option(CWD_OPTION_FLAGS, CWD_OPTION_DESCRIPTION)
+    .option("-y, --yes", "Delete without asking")
+    .action(async (options: HistoryTrashEmptyOptions) =>
+      handlers.empty(options)
     );
 }

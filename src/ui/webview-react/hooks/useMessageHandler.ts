@@ -61,6 +61,7 @@ import { useHarnessFileStore } from "../store/useHarnessFileStore";
 import { useMcpManagerStore } from "../store/useMcpManagerStore";
 import { useWorkspaceViewerStore } from "../store/workspaceViewerStore";
 import { useCompatibilityStore } from "../store/compatibilityStore";
+import { useHistoryTrashStore } from "../store/historyTrashStore";
 import { useExecutionPreviewStore } from "../store/executionPreviewStore";
 import { useHarnessUsageStore } from "../store/harnessUsageStore";
 import { useWorkspaceStatsStore } from "../store/workspaceStatsStore";
@@ -103,7 +104,7 @@ import {
 import { getTargetKey, toOutputMessageTarget } from "@utils/outputProjection";
 import { navigateToWorkflowAddress } from "@utils/runNavigation";
 import { serializeRoute } from "@/navigation/route";
-import { notifyUser } from "@utils/notifyUser";
+import { notifyUser, showWebviewToast } from "@utils/notifyUser";
 
 // ============================================================================
 // Types
@@ -748,6 +749,68 @@ export function createMessageHandlers(
     useUiStore.getState().setHarnessDetectionRetryResult({
       requestId: message.requestId,
       success: message.success === true,
+      ...(typeof message.error === "string" ? { error: message.error } : {}),
+    });
+  };
+
+  // --------------------------------------------------------------------------
+  // Recently deleted (history trash)
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.HISTORY_TRASHED] = (message) => {
+    if (typeof message.entryId !== "string") return;
+    const entryId = message.entryId;
+    // Keep an on-screen Recently deleted summary current.
+    if (useHistoryTrashStore.getState().listing) {
+      getVsCodeApi().postMessage({
+        type: MESSAGE_TYPES.HISTORY_TRASH_LIST_REQUEST,
+      });
+    }
+    const skippedLive: unknown[] = Array.isArray(message.skippedLive)
+      ? message.skippedLive
+      : [];
+    showWebviewToast(String(message.message), USER_FEEDBACK_SEVERITY.SUCCESS, {
+      ...(skippedLive.length > 0
+        ? {
+            detail: `${skippedLive.length} running ${skippedLive.length === 1 ? "workflow was" : "workflows were"} kept.`,
+          }
+        : {}),
+      action: {
+        label: "Undo",
+        onClick: () =>
+          getVsCodeApi().postMessage({
+            type: MESSAGE_TYPES.HISTORY_TRASH_RESTORE,
+            entryId,
+          }),
+      },
+    });
+  };
+
+  handlers[MESSAGE_TYPES.HISTORY_TRASH_LIST] = (message) => {
+    if (!Array.isArray(message.entries)) return;
+    useHistoryTrashStore.getState().setListing({
+      entries: message.entries,
+      retentionDays: Number(message.retentionDays),
+      totalBytes: Number(message.totalBytes),
+    });
+  };
+
+  handlers[MESSAGE_TYPES.HISTORY_TRASH_RESULT] = (message) => {
+    if (typeof message.entryId === "string") {
+      useHistoryTrashStore.getState().clearEntryPending(message.entryId);
+    }
+    showWebviewToast(
+      String(message.message),
+      message.ok === true
+        ? USER_FEEDBACK_SEVERITY.SUCCESS
+        : USER_FEEDBACK_SEVERITY.ERROR
+    );
+  };
+
+  handlers[MESSAGE_TYPES.HISTORY_CLEAR_PREVIEW] = (message) => {
+    if (typeof message.requestId !== "string") return;
+    useHistoryTrashStore.getState().receiveClearPreview({
+      requestId: message.requestId,
+      ...(message.preview ? { preview: message.preview } : {}),
       ...(typeof message.error === "string" ? { error: message.error } : {}),
     });
   };

@@ -116,7 +116,14 @@ import { registerSecretCommands } from "./cli/SecretCommandDefinitions";
 import {
   pruneHistoryCommand,
   relinkHistoryCommand,
+  type HistoryCommandIo,
 } from "./cli/HistoryCommands";
+import {
+  emptyTrashCommand,
+  listTrashCommand,
+  purgeTrashCommand,
+  restoreTrashCommand,
+} from "./cli/HistoryTrashCommands";
 import {
   listHistoryCommand,
   runsHistoryCommand,
@@ -270,6 +277,28 @@ registerHistoryCommands(program, {
     handleHistoryCommand(
       searchHistoryCommand(query, options, createHistoryInspectionCommandIo())
     ),
+  trash: {
+    list: (options) =>
+      handleHistoryCommand(
+        listTrashCommand(options, createHistoryInspectionCommandIo())
+      ),
+    restore: (entryId, options) =>
+      handleHistoryCommand(
+        restoreTrashCommand(
+          entryId,
+          options,
+          createHistoryInspectionCommandIo()
+        )
+      ),
+    purge: (entryId, options) =>
+      handleHistoryCommand(
+        purgeTrashCommand(entryId, options, createHistoryCommandIo())
+      ),
+    empty: (options) =>
+      handleHistoryCommand(
+        emptyTrashCommand(options, createHistoryCommandIo())
+      ),
+  },
 });
 
 registerStepCommands(program, {
@@ -1357,6 +1386,15 @@ function handleHistoryCommand(operation: Promise<void>): Promise<void> {
     console.error(chalk.red(`Error: ${message}`));
     process.exit(2);
   });
+}
+
+function createHistoryCommandIo(): HistoryCommandIo {
+  return {
+    writeOut: (message) => console.log(message),
+    writeErr: (message) => console.error(chalk.yellow(message)),
+    isInteractive: !!process.stdin.isTTY && !!process.stdout.isTTY,
+    confirm: promptYesNo,
+  };
 }
 
 function createHistoryInspectionCommandIo(): HistoryInspectionCommandIo {

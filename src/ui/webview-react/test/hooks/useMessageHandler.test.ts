@@ -53,6 +53,7 @@ import { useEditorStore } from "@store/editorStore";
 import { useTerminalStore } from "@store/terminalStore";
 import { useWorkspaceStatsStore } from "@store/workspaceStatsStore";
 import { useCompatibilityStore } from "@store/compatibilityStore";
+import { useHistoryTrashStore } from "@store/historyTrashStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { getWorkflowDefinitionMutation } from "@utils/workflowMutation";
 import {
@@ -74,7 +75,10 @@ import {
   STEP_TYPES,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
-import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
+import {
+  HISTORY_TRASH_ENTRY_KINDS,
+  USER_FEEDBACK_SEVERITY,
+} from "@root/types/DashboardConstants";
 import { workflowViewAddressKey } from "@utils/viewAddress";
 
 // ---------------------------------------------------------------------------
@@ -5224,5 +5228,91 @@ describe("MCP_CONFIG_PREVIEW_RESULT", () => {
     expect(webviewWarnMock).not.toHaveBeenCalledWith(
       expect.stringContaining("Unknown message type")
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Recently deleted (history trash)
+// ---------------------------------------------------------------------------
+
+describe("Recently deleted messages", () => {
+  beforeEach(() => {
+    useUiStore.getState().clearToasts();
+    useHistoryTrashStore.setState({
+      listing: undefined,
+      clearPreview: undefined,
+      pendingEntryIds: [],
+    });
+  });
+
+  it("HISTORY_TRASHED shows a toast whose Undo restores that entry", () => {
+    const postMessage = vi.spyOn(getVsCodeApi(), "postMessage");
+    act(() => {
+      createMessageHandlers(false)[MESSAGE_TYPES.HISTORY_TRASHED]({
+        type: MESSAGE_TYPES.HISTORY_TRASHED,
+        entryId: "entry-1",
+        kind: HISTORY_TRASH_ENTRY_KINDS.ALL,
+        message: "Moved 3 workflows (5 runs) to Recently deleted",
+        skippedLive: ["live-key"],
+      });
+    });
+
+    const [toast] = useUiStore.getState().toastQueue;
+    expect(toast).toMatchObject({
+      message: "Moved 3 workflows (5 runs) to Recently deleted",
+      detail: "1 running workflow was kept.",
+    });
+    toast.action?.onClick();
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.HISTORY_TRASH_RESTORE,
+      entryId: "entry-1",
+    });
+    postMessage.mockRestore();
+  });
+
+  it("HISTORY_TRASH_RESULT clears the entry's pending state and reports the outcome", () => {
+    useHistoryTrashStore.getState().markEntryPending("entry-1");
+    act(() => {
+      createMessageHandlers(false)[MESSAGE_TYPES.HISTORY_TRASH_RESULT]({
+        type: MESSAGE_TYPES.HISTORY_TRASH_RESULT,
+        action: "restore",
+        entryId: "entry-1",
+        ok: false,
+        message: "That item is no longer in Recently deleted.",
+      });
+    });
+
+    expect(useHistoryTrashStore.getState().pendingEntryIds).toEqual([]);
+    expect(useUiStore.getState().toastQueue[0]).toMatchObject({
+      severity: USER_FEEDBACK_SEVERITY.ERROR,
+    });
+  });
+
+  it("HISTORY_TRASH_LIST and HISTORY_CLEAR_PREVIEW land in the trash store", () => {
+    useHistoryTrashStore.getState().requestClearPreview("preview-1");
+    act(() => {
+      const handlers = createMessageHandlers(false);
+      handlers[MESSAGE_TYPES.HISTORY_TRASH_LIST]({
+        entries: [],
+        retentionDays: 30,
+        totalBytes: 0,
+      });
+      handlers[MESSAGE_TYPES.HISTORY_CLEAR_PREVIEW]({
+        requestId: "preview-1",
+        preview: { lineageCount: 1, runCount: 2, bytes: 3, liveLineages: [] },
+      });
+    });
+
+    expect(useHistoryTrashStore.getState().listing).toEqual({
+      entries: [],
+      retentionDays: 30,
+      totalBytes: 0,
+    });
+    expect(useHistoryTrashStore.getState().clearPreview?.preview).toEqual({
+      lineageCount: 1,
+      runCount: 2,
+      bytes: 3,
+      liveLineages: [],
+    });
   });
 });

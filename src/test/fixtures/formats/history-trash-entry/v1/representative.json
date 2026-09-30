@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-09-30T00-02-13-403Z-1a2b3c4d",
+  "kind": "all",
+  "deletedAt": 1790726533403,
+  "requestedBy": "browser:fixture",
+  "items": [
+    {
+      "workflowKey": "fix-bug-2026-09-29T10-00-00-000",
+      "workflowName": "Fix bug",
+      "wholeLineage": true,
+      "runRefs": ["run-2026-09-29T10-00-01-000Z"],
+      "runIds": [1]
+    },
+    {
+      "workflowKey": "plan-2026-09-29T11-00-00-000",
+      "workflowName": "Plan",
+      "wholeLineage": false,
+      "runRefs": [
+        "run-2026-09-29T11-00-01-000Z",
+        "run-2026-09-29T11-30-01-000Z"
+      ],
+      "runIds": [3, 4]
+    }
+  ],
+  "skippedLive": ["reply-to-step-plan-2026-09-29T12-00-00-000"],
+  "bytes": 48213
+}

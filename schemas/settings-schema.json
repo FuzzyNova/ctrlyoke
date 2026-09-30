@@ -299,6 +299,12 @@
           "enum": ["user", "workspace"],
           "default": "user",
           "description": "Store run history under the user state home or beside the workspace."
+        },
+        "trashRetentionDays": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 30,
+          "description": "Days a deleted run or workflow stays in Recently deleted before it is permanently removed. Every history delete, including Clear all history, moves runs to Recently deleted, where they can be restored until then."
         }
       }
     },

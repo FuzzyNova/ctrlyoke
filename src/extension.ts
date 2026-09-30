@@ -58,7 +58,7 @@ import { saveIfDirty } from "./utils/FileSystemUtils";
 import { getErrorMessage } from "./utils/ErrorUtils";
 import { findWorkflowFilesInWorkspace } from "./utils/WorkflowFileDiscovery";
 import { WorkspaceInitializer } from "./core/orchestration/WorkspaceInitializer";
-import { PATH_CONSTANTS } from "./utils/ConfigurationUtils";
+import { ConfigurationUtils, PATH_CONSTANTS } from "./utils/ConfigurationUtils";
 import {
   initPtyProcessManager,
   setPtyPostMessage,
@@ -86,6 +86,7 @@ import {
 } from "./utils/ProjectStateRegistry";
 import { ctrlyokeStateHome } from "./utils/ProjectStatePaths";
 import { initializeRunHistoryLocation } from "./utils/RunHistoryStoragePolicy";
+import { scheduleTrashPurge } from "./core/orchestration/HistoryTrashRepository";
 import { LicenseService, LICENSE_TIERS } from "./license/LicenseService";
 import { registerNativeOutputCaptureCommand } from "./ui/NativeOutputCaptureCommand";
 import { StatusBarManager } from "./ui/StatusBarManager";
@@ -309,6 +310,13 @@ export async function activate(context: vscode.ExtensionContext) {
         context.subscriptions.push({
           dispose: () => clearInterval(tempCleanupTimer),
         });
+
+        // Recently deleted run history expires after storage.trashRetentionDays.
+        context.subscriptions.push(
+          scheduleTrashPurge(workspaceRoot, () =>
+            ConfigurationUtils.getTrashRetentionDays()
+          )
+        );
       } else {
         // Not yet initialized — remember the root so we can set the pending
         // flag on the orchestrator once it is created below.

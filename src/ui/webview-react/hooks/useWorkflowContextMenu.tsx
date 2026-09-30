@@ -24,7 +24,7 @@ export interface WorkflowContextMenuTarget {
    * "run" — one addressed run inside a lineage (run-panel rows). Delete removes
    * only that run.
    */
-  scope: Exclude<WorkflowDeleteScope, typeof WORKFLOW_DELETE_SCOPES.ALL>;
+  scope: WorkflowDeleteScope;
   /** Lineage-scoped on every surface, including run-panel rows. */
   isFavorite?: boolean;
   /** Absent → Copy renders disabled. */

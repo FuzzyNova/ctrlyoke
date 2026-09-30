@@ -20,6 +20,7 @@ import {
   type CtrlYokeMcpMode,
   CTRLYOKE_MCP_MODES,
   RUN_HISTORY_LOCATIONS,
+  DEFAULT_TRASH_RETENTION_DAYS,
   STATUS_LINE_HARNESS_IDS,
   STEP_COLOR_MODES,
   TOAST_LEVEL_MODES,
@@ -144,6 +145,8 @@ export interface CtrlYokeGlobalSettings {
   /** User-only location for persisted workflow run history. */
   storage: {
     runHistoryLocation: RunHistoryLocation;
+    /** Days a deleted run stays in Recently deleted before it is purged. */
+    trashRetentionDays: number;
   };
 
   // Permissions (harness-specific advanced settings)
@@ -460,6 +463,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
   },
   storage: {
     runHistoryLocation: RUN_HISTORY_LOCATIONS.USER,
+    trashRetentionDays: DEFAULT_TRASH_RETENTION_DAYS,
   },
   permissions: {
     codexSandboxMode: CODEX_SANDBOX_MODES.WORKSPACE_WRITE,

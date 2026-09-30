@@ -46,6 +46,7 @@ import {
   type HistoryRunsOptions,
   type HistorySearchOptions,
   type HistoryShowOptions,
+  type HistoryTrashCommandHandlers,
 } from "../../cli/HistoryCommandDefinitions";
 import type {
   HistorySearchQuery,
@@ -239,6 +240,13 @@ teardown(() => {
   chalk.level = chalkLevel;
 });
 
+const NOOP_TRASH_HANDLERS: HistoryTrashCommandHandlers = {
+  list: async () => {},
+  restore: async () => {},
+  purge: async () => {},
+  empty: async () => {},
+};
+
 suite("CLI history inspection command parser", () => {
   test("registers list and runs with their discovery options", async () => {
     const calls: {
@@ -259,6 +267,7 @@ suite("CLI history inspection command parser", () => {
       },
       show: async () => {},
       search: async () => {},
+      trash: NOOP_TRASH_HANDLERS,
     });
 
     await program.parseAsync(
@@ -292,6 +301,7 @@ suite("CLI history inspection command parser", () => {
         showOptions = options;
       },
       search: async () => {},
+      trash: NOOP_TRASH_HANDLERS,
     });
 
     await program.parseAsync(
@@ -335,6 +345,7 @@ suite("CLI history inspection command parser", () => {
         searchQuery = query;
         searchOptions = options;
       },
+      trash: NOOP_TRASH_HANDLERS,
     });
 
     await program.parseAsync(

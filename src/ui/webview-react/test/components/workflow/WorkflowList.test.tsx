@@ -91,7 +91,6 @@ function renderWorkflowList(
       onCancelPauseRunning={() => undefined}
       onResumeRunning={() => undefined}
       onStopRunning={() => undefined}
-      onClearHistory={() => undefined}
       tier={tier}
     />
   );
@@ -217,7 +216,6 @@ describe("WorkflowList row action scoping", () => {
         onCancelPauseRunning={() => undefined}
         onResumeRunning={() => undefined}
         onStopRunning={() => undefined}
-        onClearHistory={() => undefined}
         onToggleFavorite={onToggleFavorite}
         onRemove={onRemove}
       />
@@ -285,7 +283,6 @@ describe("WorkflowList recent row worktree", () => {
         onCancelPauseRunning={() => undefined}
         onResumeRunning={() => undefined}
         onStopRunning={() => undefined}
-        onClearHistory={() => undefined}
       />
     );
 
@@ -329,7 +326,6 @@ describe("WorkflowList context targets", () => {
         onCancelPauseRunning={() => undefined}
         onResumeRunning={() => undefined}
         onStopRunning={() => undefined}
-        onClearHistory={() => undefined}
         onOpenContextMenu={onOpenContextMenu}
       />
     );

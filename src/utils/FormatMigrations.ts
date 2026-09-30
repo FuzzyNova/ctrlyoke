@@ -40,6 +40,7 @@ export const BASELINE_SCHEMA_VERSIONS: Record<PersistedStore, number> = {
   [PERSISTED_STORES.MANAGED_WORKTREE_RECORD]: 1,
   [PERSISTED_STORES.NAMED_WORKTREE_SETUP]: 1,
   [PERSISTED_STORES.INSTALLATIONS]: 1,
+  [PERSISTED_STORES.HISTORY_TRASH_ENTRY]: 1,
 };
 
 /** Ordered migrations, one entry for every version transition. */
@@ -60,6 +61,7 @@ export const MIGRATIONS: Record<PersistedStore, readonly FormatMigration[]> = {
   [PERSISTED_STORES.MANAGED_WORKTREE_RECORD]: [],
   [PERSISTED_STORES.NAMED_WORKTREE_SETUP]: [],
   [PERSISTED_STORES.INSTALLATIONS]: [],
+  [PERSISTED_STORES.HISTORY_TRASH_ENTRY]: [],
 };
 
 export class MigrationError extends Error {

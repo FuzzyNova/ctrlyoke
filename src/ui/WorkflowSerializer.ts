@@ -8,6 +8,10 @@ import {
   WORKFLOW_PROPERTY_KEYS,
   PROMPT_PROPERTIES,
   PANEL_CLIENT_ID,
+  CLEAR_HISTORY_CONFIRMATION_PHRASE,
+  EMPTY_TRASH_CONFIRMATION_PHRASE,
+  HISTORY_TRASH_ACTIONS,
+  type HistoryTrashAction,
   WORKFLOW_FILE_FORMATS,
   type WorkflowFileFormat,
   WORKFLOW_VIEW_ADDRESS_KIND,
@@ -37,6 +41,14 @@ import type {
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
 import { WorkflowLineageRepository } from "../core/orchestration/WorkflowLineageRepository";
+import {
+  HistoryTrashRepository,
+  toHistoryTrashedMessage,
+} from "../core/orchestration/HistoryTrashRepository";
+import {
+  describeRestoreResult,
+  TRASH_ENTRY_GONE_MESSAGE,
+} from "../utils/HistoryTrashDescriptions";
 import {
   getWorkingFileLastActivityAt,
   resolveLineageLastModifiedAt,
@@ -82,6 +94,8 @@ import { normalizeParallelGroupTopology } from "../core/ParallelGroupTopology";
 const LAST_EXPORT_DIR_KEY = "ctrlyoke.lastWorkflowExportDir";
 /** workspaceState key for the last directory used by a template variable picker. */
 const LAST_TEMPLATE_BROWSE_DIR_KEY = "ctrlyoke.lastTemplateBrowseDir";
+
+const NO_WORKFLOW_KEYS: ReadonlySet<WorkflowKey> = new Set();
 
 export class WorkflowSerializer {
   private readonly lineageRepository = new WorkflowLineageRepository();
@@ -1447,92 +1461,215 @@ export class WorkflowSerializer {
     }
   }
 
-  async handleClearWorkflowHistory(
-    postMessage?: PostMessageFn
-  ): Promise<boolean> {
-    const workspaceRoot = vscode.workspace.workspaceFolders?.length
+  private resolveHistoryWorkspaceRoot(): string | undefined {
+    return vscode.workspace.workspaceFolders?.length
       ? getVsCodeWorkspaceRoot()
       : undefined;
-    if (!workspaceRoot) {
-      return false;
+  }
+
+  private readonly isLineageExecuting = (workflowKey: WorkflowKey): boolean =>
+    this.getManager()?.isLineageExecuting(workflowKey) ?? false;
+
+  /**
+   * Clear all history: moves every lineage that is not live into one Recently
+   * deleted entry. Refused without the typed confirmation phrase, so no client
+   * can wipe history with a single untyped message.
+   */
+  async handleClearWorkflowHistory(
+    confirmation: unknown,
+    postMessage: PostMessageFn = this.postMessage,
+    clientId: string = PANEL_CLIENT_ID
+  ): Promise<ReadonlySet<WorkflowKey>> {
+    if (confirmation !== CLEAR_HISTORY_CONFIRMATION_PHRASE) {
+      Log.warn(
+        `[WorkflowSerializer] Refused Clear all history from ${clientId}: confirmation phrase missing`
+      );
+      this.sendActionFailure(
+        postMessage,
+        "clear workflow history",
+        "Clear all history needs its confirmation phrase. Use Settings → General → Run History."
+      );
+      return NO_WORKFLOW_KEYS;
     }
-
-    const pm = postMessage ?? this.postMessage;
-
+    const workspaceRoot = this.resolveHistoryWorkspaceRoot();
+    if (!workspaceRoot) {
+      return NO_WORKFLOW_KEYS;
+    }
+    Log.info(`[WorkflowSerializer] Clear all history requested by ${clientId}`);
     try {
-      try {
-        const workflowKeys =
-          await this.lineageRepository.listLineageKeys(workspaceRoot);
-
-        for (const workflowKey of workflowKeys) {
-          await fs.rm(WorkflowPaths.lineageDir(workspaceRoot, workflowKey), {
-            recursive: true,
-            force: true,
-          });
-        }
-
-        pm({
-          type: MESSAGE_TYPES.RECENT_WORKFLOWS,
-          workflows: [],
-        });
-        return true;
-      } catch (error) {
-        Log.error(
-          "[WorkflowSerializer] Failed to delete workflow files:",
-          error
-        );
+      const { entry, skippedLive, failed } = await new HistoryTrashRepository(
+        workspaceRoot
+      ).trashAllLineages(clientId, this.isLineageExecuting);
+      if (entry) {
+        postMessage(toHistoryTrashedMessage(entry));
+      }
+      if (failed.length > 0) {
         this.sendActionFailure(
-          pm,
-          "delete workflow history",
-          `Failed to delete workflow history: ${getErrorMessage(error)}`
+          postMessage,
+          "clear workflow history",
+          `${failed.length} ${failed.length === 1 ? "workflow was" : "workflows were"} in use and left in place.`
         );
       }
+      if (skippedLive.length > 0) {
+        Log.info(
+          `[WorkflowSerializer] Clear all history kept live workflows: ${skippedLive.join(", ")}`
+        );
+      }
+      await this.handleGetRecentWorkflows(postMessage);
+      return new Set(entry?.items.map((item) => item.workflowKey));
     } catch (error) {
       Log.error(
         "[WorkflowSerializer] Failed to clear workflow history:",
         error
       );
+      this.sendActionFailure(
+        postMessage,
+        "clear workflow history",
+        `Failed to clear workflow history: ${getErrorMessage(error)}`
+      );
+      return NO_WORKFLOW_KEYS;
     }
-    return false;
+  }
+
+  /** Counts what Clear all history would move, for its confirmation dialog. */
+  async handleHistoryClearPreview(
+    requestId: string,
+    postMessage: PostMessageFn = this.postMessage
+  ): Promise<void> {
+    const workspaceRoot = this.resolveHistoryWorkspaceRoot();
+    try {
+      if (!workspaceRoot) {
+        throw new Error("Open a workspace to manage its run history.");
+      }
+      const preview = await new HistoryTrashRepository(
+        workspaceRoot
+      ).previewClearAll(this.isLineageExecuting);
+      postMessage({
+        type: MESSAGE_TYPES.HISTORY_CLEAR_PREVIEW,
+        requestId,
+        preview,
+      });
+    } catch (error) {
+      postMessage({
+        type: MESSAGE_TYPES.HISTORY_CLEAR_PREVIEW,
+        requestId,
+        error: getErrorMessage(error),
+      });
+    }
   }
 
   /**
-   * Handle REMOVE_WORKFLOW_HISTORY by deleting one addressed lineage directory.
+   * Handle REMOVE_WORKFLOW_HISTORY: moves one addressed lineage to Recently
+   * deleted, refusing a live one. Returns whether it was moved.
    */
   async handleRemoveWorkflowHistory(
-    address: WorkflowViewAddress
-  ): Promise<void> {
+    address: WorkflowViewAddress,
+    postMessage: PostMessageFn = this.postMessage,
+    clientId: string = PANEL_CLIENT_ID
+  ): Promise<boolean> {
+    const workspaceRoot = this.resolveHistoryWorkspaceRoot();
+    if (!workspaceRoot) {
+      return false;
+    }
     try {
-      const workspaceRoot = vscode.workspace.workspaceFolders?.length
-        ? getVsCodeWorkspaceRoot()
-        : undefined;
-      if (!workspaceRoot) {
-        return;
+      const entry = await new HistoryTrashRepository(
+        workspaceRoot
+      ).trashLineage(address.workflowKey, clientId, this.isLineageExecuting);
+      if (entry) {
+        postMessage(toHistoryTrashedMessage(entry));
       }
+      return entry !== undefined;
+    } catch (error) {
+      Log.warn(
+        `[WorkflowSerializer] handleRemoveWorkflowHistory: could not delete ${address.workflowKey}: ${getErrorMessage(error)}`
+      );
+      this.sendActionFailure(
+        postMessage,
+        "delete workflow history",
+        getErrorMessage(error)
+      );
+      // The client removed the row optimistically; send the real list back.
+      await this.handleGetRecentWorkflows(postMessage);
+      return false;
+    }
+  }
 
-      try {
-        await fs.rm(
-          WorkflowPaths.lineageDir(workspaceRoot, address.workflowKey),
-          {
-            recursive: true,
-            force: true,
+  /** Recently deleted, newest first, for the settings view. */
+  async handleHistoryTrashList(
+    postMessage: PostMessageFn = this.postMessage
+  ): Promise<void> {
+    const workspaceRoot = this.resolveHistoryWorkspaceRoot();
+    const retentionDays = ConfigurationUtils.getTrashRetentionDays();
+    const entries = workspaceRoot
+      ? await new HistoryTrashRepository(workspaceRoot).list(retentionDays)
+      : [];
+    postMessage({
+      type: MESSAGE_TYPES.HISTORY_TRASH_LIST,
+      entries,
+      retentionDays,
+      totalBytes: entries.reduce((total, entry) => total + entry.bytes, 0),
+    });
+  }
+
+  /** Restores, purges, or empties Recently deleted, then resends the list. */
+  async handleHistoryTrashAction(
+    action: HistoryTrashAction,
+    request: { entryId?: unknown; confirmation?: unknown },
+    postMessage: PostMessageFn = this.postMessage,
+    clientId: string = PANEL_CLIENT_ID
+  ): Promise<void> {
+    const entryId =
+      typeof request.entryId === "string" &&
+      WorkflowPaths.isValidTrashEntryId(request.entryId)
+        ? request.entryId
+        : undefined;
+    const reply = (ok: boolean, message: string) =>
+      postMessage({
+        type: MESSAGE_TYPES.HISTORY_TRASH_RESULT,
+        action,
+        ...(entryId ? { entryId } : {}),
+        ok,
+        message,
+      });
+    try {
+      const workspaceRoot = this.resolveHistoryWorkspaceRoot();
+      if (!workspaceRoot) {
+        throw new Error("Open a workspace to manage its run history.");
+      }
+      const trash = new HistoryTrashRepository(workspaceRoot);
+      switch (action) {
+        case HISTORY_TRASH_ACTIONS.RESTORE: {
+          if (!entryId) throw new Error(TRASH_ENTRY_GONE_MESSAGE);
+          reply(true, describeRestoreResult(await trash.restore(entryId)));
+          await this.handleGetRecentWorkflows(postMessage);
+          break;
+        }
+        case HISTORY_TRASH_ACTIONS.PURGE:
+          if (!entryId) throw new Error(TRASH_ENTRY_GONE_MESSAGE);
+          await trash.purge(entryId, `requested by ${clientId}`);
+          reply(true, "Permanently deleted");
+          break;
+        case HISTORY_TRASH_ACTIONS.EMPTY: {
+          if (request.confirmation !== EMPTY_TRASH_CONFIRMATION_PHRASE) {
+            throw new Error(
+              "Emptying Recently deleted needs its confirmation phrase."
+            );
           }
-        );
-        Log.debug(
-          `[WorkflowSerializer] handleRemoveWorkflowHistory: removed lineage "${address.workflowKey}"`
-        );
-      } catch (error) {
-        Log.warn(
-          `[WorkflowSerializer] handleRemoveWorkflowHistory: failed to delete lineage ${address.workflowKey}:`,
-          error
-        );
+          const count = await trash.purgeAll(`emptied by ${clientId}`);
+          reply(
+            true,
+            `Permanently deleted ${count} ${count === 1 ? "item" : "items"}`
+          );
+          break;
+        }
       }
     } catch (error) {
-      Log.error(
-        "[WorkflowSerializer] Failed to remove workflow history entry:",
-        error
+      Log.warn(
+        `[WorkflowSerializer] Recently deleted ${action} failed: ${getErrorMessage(error)}`
       );
+      reply(false, getErrorMessage(error));
     }
+    await this.handleHistoryTrashList(postMessage);
   }
 
   // ============================================================================

@@ -36,6 +36,7 @@ export const PERSISTED_STORES = {
   MANAGED_WORKTREE_RECORD: "managed-worktree-record",
   NAMED_WORKTREE_SETUP: "named-worktree-setup",
   INSTALLATIONS: "installations",
+  HISTORY_TRASH_ENTRY: "history-trash-entry",
 } as const;
 
 export type PersistedStore =
@@ -62,6 +63,7 @@ export const CURRENT_SCHEMA_VERSIONS = {
   [PERSISTED_STORES.MANAGED_WORKTREE_RECORD]: 1,
   [PERSISTED_STORES.NAMED_WORKTREE_SETUP]: 1,
   [PERSISTED_STORES.INSTALLATIONS]: 1,
+  [PERSISTED_STORES.HISTORY_TRASH_ENTRY]: 1,
 } as const satisfies Record<PersistedStore, number>;
 
 const STORE_LABELS: Record<PersistedStore, string> = {
@@ -81,6 +83,7 @@ const STORE_LABELS: Record<PersistedStore, string> = {
   [PERSISTED_STORES.MANAGED_WORKTREE_RECORD]: "managed worktree record",
   [PERSISTED_STORES.NAMED_WORKTREE_SETUP]: "named worktree setup record",
   [PERSISTED_STORES.INSTALLATIONS]: "installation registry",
+  [PERSISTED_STORES.HISTORY_TRASH_ENTRY]: "recently deleted entry",
 };
 
 /** Thrown instead of writing a store that a newer ctrlyoke version owns. */

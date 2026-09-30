@@ -3205,6 +3205,15 @@ export class WorkflowOrchestrator {
     return this.runLifecycleService.findExecutionRunRef(workflowKey);
   }
 
+  /**
+   * True while any run of `workflowKey` is owned by an executor, here or in a
+   * watched external process. History deletes use it alongside the runner
+   * lock so a paused run (which holds no lock) is still protected.
+   */
+  isLineageExecuting(workflowKey: WorkflowKey): boolean {
+    return this.findExecutionRunRef(workflowKey) !== undefined;
+  }
+
   clearWorkingFilePath(clientId: string): void {
     this.getInstanceForClient(clientId).clearWorkingFilePath();
   }

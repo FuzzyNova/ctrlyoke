@@ -513,41 +513,9 @@ describe("WorkflowStatus — loaded state", () => {
     expect(useUiStore.getState().viewingDeletedWorkflow).toBeNull();
   });
 
-  it("routes clear history through the confirmation modal when enabled", () => {
-    setRecentWorkflows([
-      {
-        workflowName: "History Workflow",
-        executionState: EXECUTION_STATES.COMPLETED,
-      },
-    ]);
-    useSettingsStore.setState((state) => ({
-      globalSettings: {
-        ...state.globalSettings,
-        confirmDeleteOperations: true,
-      },
-    }));
-
-    render(<WorkflowStatus />);
-    fireEvent.click(screen.getByRole("button", { name: /Show workflows/i }));
-    fireEvent.click(screen.getByRole("button", { name: "Clear History" }));
-
-    const modal = screen.getByRole("dialog");
-    expect(
-      within(modal).getByText("Delete all workflows and their run history?")
-    ).toBeInTheDocument();
-    expect(postMessageSpy).not.toHaveBeenCalledWith({
-      type: MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY,
-    });
-
-    fireEvent.click(within(modal).getByRole("button", { name: "Delete" }));
-
-    expect(postMessageSpy).toHaveBeenCalledWith({
-      type: MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY,
-    });
-    expect(useUiStore.getState().recentWorkflows).toEqual([]);
-  });
-
-  it("clears history directly when delete confirmation is disabled", () => {
+  it("does not offer Clear History in the workflow dropdown", () => {
+    // Clear all history lives in Settings behind a typed confirmation; the
+    // dropdown footer sat where a phone thumb lands and wiped history in one tap.
     setRecentWorkflows([
       {
         workflowName: "History Workflow",
@@ -563,13 +531,13 @@ describe("WorkflowStatus — loaded state", () => {
 
     render(<WorkflowStatus />);
     fireEvent.click(screen.getByRole("button", { name: /Show workflows/i }));
-    fireEvent.click(screen.getByRole("button", { name: "Clear History" }));
 
-    expect(postMessageSpy).toHaveBeenCalledWith({
-      type: MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY,
-    });
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(useUiStore.getState().recentWorkflows).toEqual([]);
+    expect(
+      screen.queryByRole("button", { name: /clear history/i })
+    ).not.toBeInTheDocument();
+    expect(postMessageSpy).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY })
+    );
   });
 
   it("falls back to file stem when workflowName is empty", () => {
@@ -2123,7 +2091,8 @@ describe("WorkflowStatus — run navigation panel", () => {
     await user.click(screen.getByRole("button", { name: "Delete Run" }));
 
     const modal = screen.getByRole("dialog");
-    expect(within(modal).getByText(/Delete run history/i)).toBeInTheDocument();
+    expect(within(modal).getByText(/^Delete run "/i)).toBeInTheDocument();
+    expect(within(modal).getByText(/moves to Recently deleted/i)).toBeVisible();
     expect(postMessageSpy).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: MESSAGE_TYPES.DELETE_RUN_HISTORY })
     );

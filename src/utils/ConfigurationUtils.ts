@@ -22,6 +22,8 @@ import type { StatusLineSegment } from "./StatuslineFormat";
 import {
   HARNESS_IDS,
   DEFAULT_MODELS,
+  DEFAULT_TRASH_RETENTION_DAYS,
+  MIN_TRASH_RETENTION_DAYS,
   CTRLYOKE_DIR,
   LOGS_DIR,
   CAPABILITIES_FILE,
@@ -178,6 +180,13 @@ export const PATH_CONSTANTS = {
    * for every deeper path under this root.
    */
   RUNS_DIR: ".runs",
+
+  /**
+   * Recently deleted run history, a sibling of RUNS_DIR under the same project
+   * state root so moving a lineage in or out is a same-volume rename. Kept
+   * outside `.runs` so nothing that scans run storage has to skip it.
+   */
+  TRASH_DIR: ".trash",
 
   /** Scripts directory name (subdirectory of CTRLYOKE_DIR) */
   SCRIPTS_DIR: "scripts",
@@ -797,6 +806,14 @@ export const ConfigurationUtils = {
   /** Get the user-only location selected for persisted workflow run history. */
   getRunHistoryLocation(): RunHistoryLocation {
     return configService.get(CONFIG_KEYS.STORAGE).runHistoryLocation;
+  },
+
+  /** Days a deleted run stays in Recently deleted, clamped to the minimum. */
+  getTrashRetentionDays(): number {
+    const days = configService.get(CONFIG_KEYS.STORAGE).trashRetentionDays;
+    return typeof days === "number" && Number.isFinite(days)
+      ? Math.max(MIN_TRASH_RETENTION_DAYS, Math.floor(days))
+      : DEFAULT_TRASH_RETENTION_DAYS;
   },
 
   /**

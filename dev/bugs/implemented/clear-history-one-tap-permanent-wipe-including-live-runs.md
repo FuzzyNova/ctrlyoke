@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-29 by user (lost the full `c:\dev\ctrlyoke` run history from the hosted dashboard on a phone)
 - **Area:** `src/ui/WorkflowSerializer.ts`, `src/ui/WebviewMessageRouter.ts`, `src/ui/webview-react/components/workflow/WorkflowList.tsx`, `src/ui/webview-react/components/workflow/WorkflowStatus.tsx`
-- **Severity:** critical
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -53,6 +53,8 @@ delete had already finished, so the cause had to be reconstructed indirectly.
   session log.
 
 ## Suggested Fix
+
+Full design: `dev/implemented/RECOVERABLE_HISTORY_DELETE_PLAN.md`.
 
 1. Always confirm `WORKFLOW_DELETE_SCOPES.ALL`, regardless of
    `confirmDeleteOperations`. A type-to-confirm or a count ("Delete 1,326

@@ -415,12 +415,19 @@ export class WorkflowLineageRepository {
    * the descriptor's cache-like latest-run hint. Callers supply every run that
    * is temporarily in use by their operation; the durable pending-rewind target
    * is always protected here as well.
+   *
+   * `removeRunDir` decides where the directory goes. User deletes pass one that
+   * moves it into Recently deleted (`HistoryTrashBatch.moveRunDir`); retention
+   * pruning keeps the default, a permanent delete. It must fail with ENOENT
+   * when the directory is missing.
    */
   async deleteRun(
     workspaceRoot: string,
     workflowKey: WorkflowKey,
     runRef: RunRef,
-    protectedRunRefs: ReadonlySet<RunRef> = new Set()
+    protectedRunRefs: ReadonlySet<RunRef> = new Set(),
+    removeRunDir: (runDir: string) => Promise<void> = (runDir) =>
+      fs.promises.rm(runDir, { recursive: true, force: false })
   ): Promise<DeletedRun> {
     const descriptorPath = WorkflowPaths.descriptorPath(
       workspaceRoot,
@@ -448,7 +455,7 @@ export class WorkflowLineageRepository {
 
       const runDir = WorkflowPaths.runDir(workspaceRoot, workflowKey, runRef);
       try {
-        await fs.promises.rm(runDir, { recursive: true, force: false });
+        await removeRunDir(runDir);
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
           throw error;
@@ -471,6 +478,58 @@ export class WorkflowLineageRepository {
       };
       await this.writeDescriptorDirect(workspaceRoot, workflowKey, updated);
       return { remainingRunRefs, descriptorRevision: updated.revision };
+    });
+  }
+
+  /**
+   * Puts restored run directories back into a lineage while holding its
+   * descriptor lock, then repairs the descriptor: `latestRunRef` is recomputed
+   * and `nextRunId` is raised past every restored run's ID so a later run can
+   * never reuse one. A lineage whose descriptor is gone (it was deleted after
+   * the runs were) gets a fresh minimal one named `workflowName`.
+   *
+   * `moveIn` performs the moves and returns the restored runs' display IDs.
+   */
+  async restoreRuns(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey,
+    workflowName: string,
+    moveIn: (lineageDir: string) => Promise<number[]>
+  ): Promise<void> {
+    const lineageDir = WorkflowPaths.lineageDir(workspaceRoot, workflowKey);
+    await fs.promises.mkdir(lineageDir, { recursive: true });
+    const descriptorPath = WorkflowPaths.descriptorPath(
+      workspaceRoot,
+      workflowKey
+    );
+    await withFileLock(descriptorPath, async () => {
+      const existing = await this.tryReadDescriptor(workspaceRoot, workflowKey);
+      const restoredRunIds = await moveIn(lineageDir);
+      const latestRunRef = (
+        await this.listRunRefs(workspaceRoot, workflowKey)
+      )[0];
+      const minimumNextRunId = Math.max(0, ...restoredRunIds) + 1;
+      const now = Date.now();
+      const descriptor: WorkflowLineageDescriptor = existing
+        ? {
+            ...existing,
+            latestRunRef,
+            nextRunId: Math.max(existing.nextRunId, minimumNextRunId),
+            lastModifiedAt: now,
+            revision: existing.revision + 1,
+          }
+        : {
+            schemaVersion: DESCRIPTOR_SCHEMA_VERSION,
+            workflowKey,
+            workflowName,
+            isFavorite: false,
+            createdAt: now,
+            lastModifiedAt: now,
+            ...(latestRunRef ? { latestRunRef } : {}),
+            nextRunId: minimumNextRunId,
+            revision: 1,
+          };
+      await this.writeDescriptorDirect(workspaceRoot, workflowKey, descriptor);
     });
   }
 
@@ -543,7 +602,7 @@ export class WorkflowLineageRepository {
   }
 
   /** Lists valid promoted run directories newest first. */
-  private async listRunRefs(
+  async listRunRefs(
     workspaceRoot: string,
     workflowKey: WorkflowKey
   ): Promise<RunRef[]> {

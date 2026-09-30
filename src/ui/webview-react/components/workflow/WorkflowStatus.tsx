@@ -94,14 +94,13 @@ const WORKFLOW_ROW_WIDTH_CSS_VAR = "--workflow-row-usable-width";
 // dropdown in its departing run-panel state.
 const RUN_PANEL_EXIT_FALLBACK_MS = 320;
 
-type PendingDelete =
-  | {
-      address: WorkflowViewAddress;
-      scope: WorkflowContextMenuTarget["scope"];
-    }
-  | {
-      scope: typeof WORKFLOW_DELETE_SCOPES.ALL;
-    };
+interface PendingDelete {
+  address: WorkflowViewAddress;
+  scope: WorkflowContextMenuTarget["scope"];
+}
+
+const RECENTLY_DELETED_DETAIL =
+  "It moves to Recently deleted, where you can restore it from Settings → General → Run History.";
 
 function assertNever(value: never): never {
   throw new Error(`Unexpected pending delete scope: ${String(value)}`);
@@ -128,7 +127,6 @@ function sortRecentWorkflows(workflows: RecentWorkflow[]): RecentWorkflow[] {
  * - Displays current workflow name and execution state
  * - Click main button to edit workflow name inline
  * - Dropdown shows recent workflows
- * - Clear history option
  */
 export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   className = "",
@@ -1129,27 +1127,6 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     [displayName, displayedViewAddress, setViewingDeletedWorkflow]
   );
 
-  // Clear workflow history
-  const handleClearHistory = useCallback(() => {
-    if (!globalSettings.confirmDeleteOperations) {
-      vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY });
-      if (displayedViewAddress) {
-        markIfViewingDeletedLineage(displayedViewAddress.workflowKey);
-      }
-      setRecentWorkflows([]);
-      closeDropdown();
-      return;
-    }
-    setPendingDelete({ scope: WORKFLOW_DELETE_SCOPES.ALL });
-  }, [
-    closeDropdown,
-    displayedViewAddress,
-    globalSettings.confirmDeleteOperations,
-    markIfViewingDeletedLineage,
-    setRecentWorkflows,
-    vscode,
-  ]);
-
   // Remove a single entry from recent workflow history — shows confirm modal or deletes directly
   const handleRemoveWorkflow = useCallback(
     (address: WorkflowViewAddress) => {
@@ -1204,30 +1181,22 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
             )
         );
         break;
-      case WORKFLOW_DELETE_SCOPES.ALL:
-        vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY });
-        if (displayedViewAddress) {
-          markIfViewingDeletedLineage(displayedViewAddress.workflowKey);
-        }
-        setRecentWorkflows([]);
-        closeDropdown();
-        break;
       default:
-        assertNever(pendingDelete);
+        assertNever(pendingDelete.scope);
     }
     setPendingDelete(null);
-  }, [
-    closeDropdown,
-    displayedViewAddress,
-    markIfViewingDeletedLineage,
-    pendingDelete,
-    setRecentWorkflows,
-    vscode,
-  ]);
+  }, [markIfViewingDeletedLineage, pendingDelete, setRecentWorkflows, vscode]);
 
   const handleRemoveWorkflowCancel = useCallback(() => {
     setPendingDelete(null);
   }, []);
+
+  const pendingDeleteName = pendingDelete
+    ? (recentWorkflows.find(
+        (workflow) =>
+          workflow.address.workflowKey === pendingDelete.address.workflowKey
+      )?.workflowName ?? pendingDelete.address.workflowKey)
+    : "";
 
   const handleToggleFavorite = useCallback(
     (address: WorkflowViewAddress) => {
@@ -1855,7 +1824,6 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               onCancelPauseRunning={handleCancelPauseWorkflow}
               onResumeRunning={handleResumeWorkflow}
               onStopRunning={handleStopWorkflow}
-              onClearHistory={handleClearHistory}
               onRemove={handleRemoveWorkflow}
               onToggleFavorite={handleToggleFavorite}
               onOpenContextMenu={openWorkflowContextMenu}
@@ -1923,26 +1891,16 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         onCancel={handleRemoveWorkflowCancel}
         onConfirm={handleRemoveWorkflowConfirm}
         title={
-          pendingDelete?.scope === WORKFLOW_DELETE_SCOPES.ALL
-            ? "Delete All Workflow History"
-            : pendingDelete?.scope === WORKFLOW_DELETE_SCOPES.RUN
-              ? "Delete Run History"
-              : "Delete Workflow History"
+          pendingDelete?.scope === WORKFLOW_DELETE_SCOPES.RUN
+            ? "Delete Run"
+            : "Delete Workflow"
         }
         message={
-          pendingDelete?.scope === WORKFLOW_DELETE_SCOPES.ALL
-            ? "Delete all workflows and their run history?"
-            : pendingDelete?.scope === WORKFLOW_DELETE_SCOPES.RUN
-              ? `Delete run "${pendingDelete.address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN ? pendingDelete.address.runRef : ""}"?`
-              : `Remove "${pendingDelete?.address.workflowKey ?? ""}" from history?`
+          pendingDelete?.scope === WORKFLOW_DELETE_SCOPES.RUN
+            ? `Delete run "${pendingDelete.address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN ? pendingDelete.address.runRef : ""}"?`
+            : `Delete "${pendingDeleteName}" and all of its runs?`
         }
-        detail={
-          pendingDelete?.scope === WORKFLOW_DELETE_SCOPES.ALL
-            ? "This will permanently delete all workflow queue files and run history. This action cannot be undone."
-            : pendingDelete?.scope === WORKFLOW_DELETE_SCOPES.RUN
-              ? "This will permanently delete this run's history. This action cannot be undone."
-              : "This will permanently delete the workflow's queue files and all run history. This action cannot be undone."
-        }
+        detail={RECENTLY_DELETED_DETAIL}
       />
     </div>
   );

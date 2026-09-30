@@ -168,6 +168,62 @@ export function runsRootForProjectState(projectRoot: string): string {
   return path.join(path.resolve(projectRoot), PATH_CONSTANTS.RUNS_DIR);
 }
 
+// ---- Recently deleted (`.trash`, a sibling of `.runs`) ----
+
+const TRASH_ENTRY_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9-]{0,127}$/;
+const PENDING_TRASH_ENTRY_SUFFIX = ".pending";
+
+/** Resolve the Recently deleted root beside `.runs` for `stateRoot`'s project. */
+export function trashRoot(stateRoot: string): string {
+  return path.join(
+    projectStateRoot(stateRoot, getFrozenRunHistoryLocation()),
+    PATH_CONSTANTS.TRASH_DIR
+  );
+}
+
+export function isValidTrashEntryId(entryId: string): boolean {
+  return TRASH_ENTRY_ID_PATTERN.test(entryId);
+}
+
+function trashEntryPath(stateRoot: string, name: string): string {
+  const root = trashRoot(stateRoot);
+  const dir = path.join(root, name);
+  if (!isPathWithinDirectory(path.resolve(dir), path.resolve(root))) {
+    throw new WorkflowPathError(`Path escapes .trash root: "${dir}"`);
+  }
+  return dir;
+}
+
+/** A committed Recently deleted entry directory. */
+export function trashEntryDir(stateRoot: string, entryId: string): string {
+  if (!isValidTrashEntryId(entryId)) {
+    throw new WorkflowPathError(`Invalid trash entry id: "${entryId}"`);
+  }
+  return trashEntryPath(stateRoot, entryId);
+}
+
+/** The staging directory an entry is assembled in before it is committed. */
+export function pendingTrashEntryDir(
+  stateRoot: string,
+  entryId: string
+): string {
+  if (!isValidTrashEntryId(entryId)) {
+    throw new WorkflowPathError(`Invalid trash entry id: "${entryId}"`);
+  }
+  return trashEntryPath(stateRoot, `${entryId}${PENDING_TRASH_ENTRY_SUFFIX}`);
+}
+
+/** The entry id of a `.trash` child, and whether it is still pending; undefined otherwise. */
+export function parseTrashEntryDirName(
+  name: string
+): { entryId: string; pending: boolean } | undefined {
+  const pending = name.endsWith(PENDING_TRASH_ENTRY_SUFFIX);
+  const entryId = pending
+    ? name.slice(0, -PENDING_TRASH_ENTRY_SUFFIX.length)
+    : name;
+  return isValidTrashEntryId(entryId) ? { entryId, pending } : undefined;
+}
+
 export function lineageDir(
   workspaceRoot: string,
   workflowKey: WorkflowKey

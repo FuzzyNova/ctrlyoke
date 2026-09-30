@@ -869,6 +869,7 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "steps[].type": "Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible).",
   "storage": "User-only storage location configuration.",
   "storage.runHistoryLocation": "Store run history under the user state home or beside the workspace.",
+  "storage.trashRetentionDays": "Days a deleted run or workflow stays in Recently deleted before it is permanently removed. Every history delete, including Clear all history, moves runs to Recently deleted, where they can be restored until then.",
   "terminal": "Embedded terminal settings.",
   "terminal.cursorBlink": "Blink the terminal cursor.",
   "terminal.cursorStyle": "Terminal cursor shape.",

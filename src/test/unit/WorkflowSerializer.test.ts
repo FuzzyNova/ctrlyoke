@@ -10,10 +10,14 @@ import { WorkflowSerializer } from "../../ui/WorkflowSerializer";
 import { configService } from "../../config/CtrlYokeConfigService";
 import { CONFIG_KEYS } from "../../utils/ConfigurationUtils";
 import {
+  CLEAR_HISTORY_CONFIRMATION_PHRASE,
+  EMPTY_TRASH_CONFIRMATION_PHRASE,
+  HISTORY_TRASH_ACTIONS,
   MESSAGE_TYPES,
   PROMPT_PROPERTIES,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../../types/DashboardConstants";
+import type { WorkflowOrchestrator } from "../../core/WorkflowOrchestrator";
 import type {
   WorkflowViewAddress,
   WorkflowKey,
@@ -214,6 +218,34 @@ async function writeDraftWorkingFile(
       _runtime: { currentIndex: 0, executionState: "idle" },
     })
   );
+}
+
+/** Runs `run` with a temp directory as the only VS Code workspace folder. */
+async function withWorkspace(
+  prefix: string,
+  run: (workspaceRoot: string) => Promise<void>
+): Promise<void> {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
+  const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+  try {
+    Object.defineProperty(vscode.workspace, "workspaceFolders", {
+      value: [
+        {
+          uri: vscode.Uri.file(workspaceRoot),
+          name: prefix,
+          index: 0,
+        },
+      ],
+      configurable: true,
+    });
+    await run(workspaceRoot);
+  } finally {
+    Object.defineProperty(vscode.workspace, "workspaceFolders", {
+      value: originalWorkspaceFolders,
+      configurable: true,
+    });
+    await fs.rm(workspaceRoot, { recursive: true, force: true });
+  }
 }
 
 suite("WorkflowSerializer", () => {
@@ -1370,33 +1402,6 @@ suite("WorkflowSerializer", () => {
   });
 
   suite("handleGetRecentWorkflows: runNav", () => {
-    async function withWorkspace(
-      prefix: string,
-      run: (workspaceRoot: string) => Promise<void>
-    ): Promise<void> {
-      const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
-      const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
-      try {
-        Object.defineProperty(vscode.workspace, "workspaceFolders", {
-          value: [
-            {
-              uri: vscode.Uri.file(workspaceRoot),
-              name: prefix,
-              index: 0,
-            },
-          ],
-          configurable: true,
-        });
-        await run(workspaceRoot);
-      } finally {
-        Object.defineProperty(vscode.workspace, "workspaceFolders", {
-          value: originalWorkspaceFolders,
-          configurable: true,
-        });
-        await fs.rm(workspaceRoot, { recursive: true, force: true });
-      }
-    }
-
     test("a single promoted run with no draft reports runCount 1 and no drill affordance beyond it", async () => {
       await withWorkspace("ctrlyoke-recent-single-", async (workspaceRoot) => {
         const repository = new WorkflowLineageRepository();
@@ -1670,6 +1675,217 @@ suite("WorkflowSerializer", () => {
           });
         }
       );
+    });
+  });
+  suite("history deletes go to Recently deleted", () => {
+    function createSerializer(
+      messages: any[],
+      isLineageExecuting: (workflowKey: WorkflowKey) => boolean = () => false
+    ): WorkflowSerializer {
+      return new WorkflowSerializer(
+        (message) => messages.push(message),
+        {} as any,
+        () =>
+          ({
+            isLineageExecuting,
+            getWorkflowSummaries: () => [],
+          }) as unknown as WorkflowOrchestrator,
+        () => undefined,
+        fakeWorkspaceState()
+      );
+    }
+
+    async function cleanUpStateRoot(workspaceRoot: string): Promise<void> {
+      await fs.rm(path.dirname(WorkflowPaths.runsRoot(workspaceRoot)), {
+        recursive: true,
+        force: true,
+      });
+    }
+
+    test("Clear all history is refused without its confirmation phrase", async () => {
+      await withWorkspace("ctrlyoke-clear-refused-", async (workspaceRoot) => {
+        const repository = new WorkflowLineageRepository();
+        const lineage = await repository.createLineage(
+          workspaceRoot,
+          "wf-keep",
+          "Keep"
+        );
+        const messages: any[] = [];
+        try {
+          const moved =
+            await createSerializer(messages).handleClearWorkflowHistory(
+              undefined
+            );
+
+          assert.strictEqual(moved.size, 0);
+          assert.deepStrictEqual(
+            await repository.listLineageKeys(workspaceRoot),
+            [lineage.workflowKey]
+          );
+          assert.strictEqual(
+            messages[0].type,
+            MESSAGE_TYPES.WORKFLOW_ACTION_FAILED
+          );
+        } finally {
+          await cleanUpStateRoot(workspaceRoot);
+        }
+      });
+    });
+
+    test("Clear all history with the phrase moves idle workflows and keeps executing ones", async () => {
+      await withWorkspace("ctrlyoke-clear-all-", async (workspaceRoot) => {
+        const repository = new WorkflowLineageRepository();
+        const idle = await repository.createLineage(
+          workspaceRoot,
+          "wf-idle",
+          "Idle"
+        );
+        const paused = await repository.createLineage(
+          workspaceRoot,
+          "wf-paused",
+          "Paused"
+        );
+        const messages: any[] = [];
+        try {
+          const moved = await createSerializer(
+            messages,
+            (workflowKey) => workflowKey === paused.workflowKey
+          ).handleClearWorkflowHistory(CLEAR_HISTORY_CONFIRMATION_PHRASE);
+
+          assert.deepStrictEqual([...moved], [idle.workflowKey]);
+          assert.deepStrictEqual(
+            await repository.listLineageKeys(workspaceRoot),
+            [paused.workflowKey]
+          );
+          const trashed = messages.find(
+            (message) => message.type === MESSAGE_TYPES.HISTORY_TRASHED
+          );
+          assert.ok(trashed, "the client should get an Undo toast");
+          assert.deepStrictEqual(trashed.skippedLive, [paused.workflowKey]);
+        } finally {
+          await cleanUpStateRoot(workspaceRoot);
+        }
+      });
+    });
+
+    test("removing an executing workflow is refused and the list is resent", async () => {
+      await withWorkspace("ctrlyoke-remove-live-", async (workspaceRoot) => {
+        const repository = new WorkflowLineageRepository();
+        const lineage = await repository.createLineage(
+          workspaceRoot,
+          "wf-live",
+          "Live"
+        );
+        const messages: any[] = [];
+        try {
+          const removed = await createSerializer(
+            messages,
+            () => true
+          ).handleRemoveWorkflowHistory({
+            workflowKey: lineage.workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+          });
+
+          assert.strictEqual(removed, false);
+          assert.deepStrictEqual(
+            await repository.listLineageKeys(workspaceRoot),
+            [lineage.workflowKey]
+          );
+          assert.deepStrictEqual(
+            messages.map((message) => message.type),
+            [
+              MESSAGE_TYPES.WORKFLOW_ACTION_FAILED,
+              MESSAGE_TYPES.RECENT_WORKFLOWS,
+            ]
+          );
+          assert.match(messages[0].error, /Stop it before deleting it/);
+        } finally {
+          await cleanUpStateRoot(workspaceRoot);
+        }
+      });
+    });
+
+    test("a restore puts the workflow back and resends the list", async () => {
+      await withWorkspace("ctrlyoke-restore-", async (workspaceRoot) => {
+        const repository = new WorkflowLineageRepository();
+        const lineage = await repository.createLineage(
+          workspaceRoot,
+          "wf-restore",
+          "Restore"
+        );
+        const messages: any[] = [];
+        const serializer = createSerializer(messages);
+        try {
+          await serializer.handleRemoveWorkflowHistory({
+            workflowKey: lineage.workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+          });
+          const trashed = messages.find(
+            (message) => message.type === MESSAGE_TYPES.HISTORY_TRASHED
+          );
+          assert.ok(trashed);
+          messages.length = 0;
+
+          await serializer.handleHistoryTrashAction(
+            HISTORY_TRASH_ACTIONS.RESTORE,
+            { entryId: trashed.entryId }
+          );
+
+          assert.deepStrictEqual(
+            await repository.listLineageKeys(workspaceRoot),
+            [lineage.workflowKey]
+          );
+          assert.deepStrictEqual(
+            messages.map((message) => message.type),
+            [
+              MESSAGE_TYPES.HISTORY_TRASH_RESULT,
+              MESSAGE_TYPES.RECENT_WORKFLOWS,
+              MESSAGE_TYPES.HISTORY_TRASH_LIST,
+            ]
+          );
+          assert.strictEqual(messages[0].ok, true);
+          assert.deepStrictEqual(messages[2].entries, []);
+        } finally {
+          await cleanUpStateRoot(workspaceRoot);
+        }
+      });
+    });
+
+    test("emptying Recently deleted needs its own phrase", async () => {
+      await withWorkspace("ctrlyoke-empty-", async (workspaceRoot) => {
+        const repository = new WorkflowLineageRepository();
+        const lineage = await repository.createLineage(
+          workspaceRoot,
+          "wf-empty",
+          "Empty"
+        );
+        const messages: any[] = [];
+        const serializer = createSerializer(messages);
+        try {
+          await serializer.handleRemoveWorkflowHistory({
+            workflowKey: lineage.workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+          });
+          messages.length = 0;
+
+          await serializer.handleHistoryTrashAction(
+            HISTORY_TRASH_ACTIONS.EMPTY,
+            { confirmation: CLEAR_HISTORY_CONFIRMATION_PHRASE }
+          );
+          assert.strictEqual(messages[0].ok, false);
+          assert.strictEqual(messages[1].entries.length, 1);
+
+          messages.length = 0;
+          await serializer.handleHistoryTrashAction(
+            HISTORY_TRASH_ACTIONS.EMPTY,
+            { confirmation: EMPTY_TRASH_CONFIRMATION_PHRASE }
+          );
+          assert.strictEqual(messages[0].ok, true);
+          assert.deepStrictEqual(messages[1].entries, []);
+        } finally {
+          await cleanUpStateRoot(workspaceRoot);
+        }
+      });
     });
   });
 });

@@ -12,7 +12,10 @@ function createSettings(): FullGlobalSettings {
   return {
     settings: {
       ...CTRLYOKE_SETTINGS_DEFAULTS,
-      storage: { runHistoryLocation: RUN_HISTORY_LOCATIONS.USER },
+      storage: {
+        ...CTRLYOKE_SETTINGS_DEFAULTS.storage,
+        runHistoryLocation: RUN_HISTORY_LOCATIONS.USER,
+      },
     },
     sources: {},
     runHistoryPath: "C:/Users/test/.ctrlyoke/projects/ctrlyoke-hash/.runs",

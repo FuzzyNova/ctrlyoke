@@ -114,4 +114,23 @@ describe("ToastViewport", () => {
     });
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
+
+  it("keeps a toast with an action (such as Undo) up for the longer timeout", () => {
+    useUiStore.getState().showToast("Moved", USER_FEEDBACK_SEVERITY.SUCCESS, {
+      action: { label: "Undo", onClick: vi.fn() },
+    });
+    render(<ToastViewport />);
+
+    act(() => {
+      vi.advanceTimersByTime(TOAST_INFO_SUCCESS_TIMEOUT_MS);
+    });
+    expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(
+        TOAST_WARNING_ERROR_TIMEOUT_MS - TOAST_INFO_SUCCESS_TIMEOUT_MS
+      );
+    });
+    expect(screen.queryByText("Moved")).not.toBeInTheDocument();
+  });
 });
