@@ -1011,6 +1011,7 @@ suite("WorkflowSerializer", () => {
           path.join(inheritedAssets, BUNDLE_MANIFEST_FILE_NAME),
           JSON.stringify({
             version: BUNDLE_MANIFEST_VERSION,
+            owner: "fix-tests.ctrlyoke.yaml",
             files: ["inherited.png"],
           }),
           "utf8"
@@ -1227,11 +1228,29 @@ suite("WorkflowSerializer", () => {
           configurable: true,
         });
         await fs.mkdir(path.dirname(workingFilePath), { recursive: true });
+        const assetsDirectory = path.join(
+          workspaceRoot,
+          "exports",
+          "blocked.assets"
+        );
+        await fs.mkdir(assetsDirectory, { recursive: true });
+        await fs.writeFile(
+          path.join(assetsDirectory, BUNDLE_MANIFEST_FILE_NAME),
+          JSON.stringify({
+            version: BUNDLE_MANIFEST_VERSION,
+            owner: "blocked.ctrlyoke.json",
+            files: [],
+          }),
+          "utf8"
+        );
+        await fs.writeFile(
+          path.join(workspaceRoot, "exports", "blocked.ctrlyoke.json"),
+          "{}",
+          "utf8"
+        );
         await fs.writeFile(
           workingFilePath,
-          JSON.stringify({
-            steps: [{ prompt: "Attach @.ctrlyoke/attachments/missing.png" }],
-          }),
+          JSON.stringify({ steps: [{ prompt: "No generated references" }] }),
           "utf8"
         );
         const serializer = new WorkflowSerializer(
@@ -1255,6 +1274,11 @@ suite("WorkflowSerializer", () => {
           (message) => message.requestId === "blocked-preview"
         );
         assert.ok(preview?.bundlePreview?.blockers.length > 0);
+        assert.ok(
+          preview.bundlePreview.blockers.some((blocker: { message: string }) =>
+            blocker.message.includes("blocked.ctrlyoke.json")
+          )
+        );
 
         await serializer.handleSaveWorkflow(
           "blocked-save",

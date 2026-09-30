@@ -30,6 +30,9 @@ export async function writeWorkflowBundle(
   options: WorkflowBundleWriteOptions
 ): Promise<WorkflowBundleWriteResult> {
   const { workflowPath, serializedWorkflow, plan } = options;
+  if (plan.blockers.length > 0) {
+    throw new Error(plan.blockers.map((blocker) => blocker.message).join("\n"));
+  }
   const warnings: string[] = [
     ...plan.warnings.map((warning) => warning.message),
   ];
@@ -96,7 +99,11 @@ export async function writeWorkflowBundle(
           await writeFileAtomic(
             manifestPath,
             JSON.stringify(
-              { version: BUNDLE_MANIFEST_VERSION, files },
+              {
+                version: BUNDLE_MANIFEST_VERSION,
+                owner: path.basename(workflowPath),
+                files,
+              },
               null,
               2
             ) + "\n"
@@ -119,7 +126,11 @@ export async function writeWorkflowBundle(
       const hasInvalidManifest = plan.warnings.some(
         (warning) => warning.code === "invalid-assets-manifest"
       );
-      if (copies.length === 0 && !hasInvalidManifest) {
+      if (
+        copies.length === 0 &&
+        plan.managedAssetsDirectory === true &&
+        !hasInvalidManifest
+      ) {
         try {
           await fs.unlink(manifestPath);
         } catch (error) {

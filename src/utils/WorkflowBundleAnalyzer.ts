@@ -25,7 +25,8 @@ import {
 } from "../types/DashboardConstants";
 
 export { BUNDLE_MANIFEST_FILE_NAME } from "../types/DashboardConstants";
-export const BUNDLE_MANIFEST_VERSION = 1;
+export const BUNDLE_MANIFEST_VERSION = 2;
+const LEGACY_BUNDLE_MANIFEST_VERSION = 1;
 
 export const BUNDLE_GENERATED_STORES = {
   ATTACHMENTS: "attachments",
@@ -66,6 +67,8 @@ export interface BundlePlan {
   blockers: BundleDiagnostic[];
   pruneCandidates: string[];
   assetsDirectory?: string;
+  /** True only when this workflow owns the existing manifest and may prune it. */
+  managedAssetsDirectory?: boolean;
 }
 
 /** Fingerprint the user-visible bundle work, excluding filesystem metadata. */
@@ -133,6 +136,7 @@ interface ResolvedReference {
 interface ExistingManifest {
   files: Set<string>;
   valid: boolean;
+  owner?: string;
   error?: unknown;
 }
 
@@ -674,7 +678,38 @@ async function finalizeCopyPlan(
     : path.resolve(workspaceRoot, options.destinationPath);
   const assetsDirectory = deriveAssetsDirectory(destinationPath);
   plan.assetsDirectory = assetsDirectory;
+  const destinationFileName = path.basename(destinationPath);
   const manifest = await readExistingManifest(assetsDirectory, plan);
+  if (manifest.valid) {
+    if (manifest.owner) {
+      if (
+        foldPathForCompare(manifest.owner) !==
+        foldPathForCompare(destinationFileName)
+      ) {
+        addBlocker(
+          plan,
+          "assets-owned-by-sibling-workflow",
+          `The sibling workflow "${manifest.owner}" owns "${path.basename(assetsDirectory)}". Save As cannot adopt or prune its assets.`
+        );
+      } else {
+        plan.managedAssetsDirectory = true;
+      }
+    } else {
+      const sibling = await findSameStemWorkflowSibling(destinationPath);
+      if (sibling) {
+        addBlocker(
+          plan,
+          "legacy-assets-have-sibling-workflow",
+          `The legacy manifest in "${path.basename(assetsDirectory)}" has no owner, and sibling workflow "${sibling}" exists. Save As cannot determine who owns these assets.`
+        );
+      } else {
+        plan.managedAssetsDirectory = true;
+      }
+    }
+  }
+  if (plan.blockers.length > 0) {
+    return;
+  }
   if (plan.copies.length === 0) {
     plan.pruneCandidates = manifest.valid ? [...manifest.files] : [];
     if (
@@ -972,24 +1007,85 @@ async function loadExistingManifest(
     const value = JSON.parse(await fs.readFile(manifestPath, "utf8")) as {
       version?: unknown;
       files?: unknown;
+      owner?: unknown;
     };
     if (
-      value.version !== BUNDLE_MANIFEST_VERSION ||
+      (value.version !== BUNDLE_MANIFEST_VERSION &&
+        value.version !== LEGACY_BUNDLE_MANIFEST_VERSION) ||
       !Array.isArray(value.files)
     ) {
       throw new Error("unsupported manifest version or file list");
+    }
+    if (
+      value.version === BUNDLE_MANIFEST_VERSION &&
+      (typeof value.owner !== "string" ||
+        path.basename(value.owner) !== value.owner ||
+        /[\\/]/.test(value.owner) ||
+        !isWorkflowFileName(value.owner))
+    ) {
+      throw new Error("manifest has an invalid workflow owner");
     }
     const files = value.files.filter(isSafeManifestPath);
     if (files.length !== value.files.length) {
       throw new Error("manifest contains unsafe paths");
     }
-    return { files: new Set(files), valid: true };
+    return {
+      files: new Set(files),
+      valid: true,
+      ...(typeof value.owner === "string" ? { owner: value.owner } : {}),
+    };
   } catch (error) {
     if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
       return { files: new Set(), valid: false };
     }
     return { files: new Set(), valid: false, error };
   }
+}
+
+async function findSameStemWorkflowSibling(
+  destinationPath: string
+): Promise<string | undefined> {
+  const destinationName = path.basename(destinationPath);
+  const destinationStem = getWorkflowFileStem(destinationName);
+  if (!destinationStem) {
+    return undefined;
+  }
+  try {
+    const entries = await fs.readdir(path.dirname(destinationPath), {
+      withFileTypes: true,
+    });
+    return entries.find((entry) => {
+      const stem = getWorkflowFileStem(entry.name);
+      return (
+        entry.isFile() &&
+        foldPathForCompare(entry.name) !==
+          foldPathForCompare(destinationName) &&
+        stem !== undefined &&
+        foldPathForCompare(stem) === foldPathForCompare(destinationStem)
+      );
+    })?.name;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException | undefined)?.code !== "ENOENT") {
+      throw error;
+    }
+    return undefined;
+  }
+}
+
+function getWorkflowFileStem(fileName: string): string | undefined {
+  if (!isWorkflowFileName(fileName)) {
+    return undefined;
+  }
+  return fileName
+    .replace(/\.ctrlyoke\.(?:json|ya?ml)$/i, "")
+    .replace(/\.prompt\.md$/i, "");
+}
+
+function isWorkflowFileName(fileName: string): boolean {
+  return (
+    /\.ctrlyoke\.(?:json|ya?ml)$/i.test(fileName) ||
+    /\.prompt\.md$/i.test(fileName)
+  );
 }
 
 async function getManifestedAssetsDirectory(

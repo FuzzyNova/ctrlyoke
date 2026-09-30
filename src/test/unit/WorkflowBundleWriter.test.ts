@@ -62,6 +62,7 @@ suite("WorkflowBundleWriter", () => {
         path.join(assets, BUNDLE_MANIFEST_FILE_NAME),
         JSON.stringify({
           version: BUNDLE_MANIFEST_VERSION,
+          owner: "fix-tests.ctrlyoke.yaml",
           files: ["stale.txt", "keep.txt"],
         }),
         "utf8"
@@ -154,6 +155,7 @@ suite("WorkflowBundleWriter", () => {
         path.join(assets, BUNDLE_MANIFEST_FILE_NAME),
         JSON.stringify({
           version: BUNDLE_MANIFEST_VERSION,
+          owner: "fix-tests.ctrlyoke.yaml",
           files: ["old.txt"],
         }),
         "utf8"
@@ -169,10 +171,35 @@ suite("WorkflowBundleWriter", () => {
           blockers: [],
           pruneCandidates: ["old.txt"],
           assetsDirectory: assets,
+          managedAssetsDirectory: true,
         },
       });
 
       await assert.rejects(() => fs.access(assets));
+    } finally {
+      await cleanup(workspace);
+    }
+  });
+
+  test("keeps an assets directory this save never managed", async () => {
+    const workspace = await makeWorkspace("ctrlyoke-bundle-writer-unmanaged-");
+    try {
+      const assets = path.join(workspace, "fix-tests.assets");
+      await fs.mkdir(assets, { recursive: true });
+      await writeWorkflowBundle({
+        workflowPath: path.join(workspace, "fix-tests.ctrlyoke.yaml"),
+        serializedWorkflow: "prompt: no references\n",
+        plan: {
+          copies: [],
+          inlines: [],
+          warnings: [],
+          blockers: [],
+          pruneCandidates: [],
+          assetsDirectory: assets,
+        },
+      });
+
+      assert.strictEqual((await fs.stat(assets)).isDirectory(), true);
     } finally {
       await cleanup(workspace);
     }
@@ -317,7 +344,11 @@ suite("WorkflowBundleWriter", () => {
             "utf8"
           )
         ),
-        { version: BUNDLE_MANIFEST_VERSION, files: ["source.png"] }
+        {
+          version: BUNDLE_MANIFEST_VERSION,
+          owner: "fix-tests.ctrlyoke.yaml",
+          files: ["source.png"],
+        }
       );
     } finally {
       await cleanup(workspace);

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli), reproduced by bundling the real analyzer and writer against a temp workspace
 - **Area:** `src/utils/WorkflowBundleAnalyzer.ts` (`deriveAssetsDirectory` ~1013, `finalizeCopyPlan` ~679 and ~738), `src/utils/WorkflowBundleWriter.ts` (prune and empty-directory removal ~110-131)
-- **Severity:** high (silently deletes assets belonging to a different workflow)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
