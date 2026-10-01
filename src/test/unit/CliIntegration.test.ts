@@ -2119,6 +2119,58 @@ suite("CliIntegration", () => {
       );
     });
 
+    test("attaches the skills an agent declares, merged with the step's own", async () => {
+      const root = mkTempDir("cy-cli-agent-skills-");
+      const agentDir = path.join(root, ".ctrlyoke", "agents");
+      fs.mkdirSync(agentDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(agentDir, "skilled.agent.md"),
+        "---\nname: Skilled\nskills: [declared-skill, step-skill]\n---\nAgent body"
+      );
+      for (const skill of ["declared-skill", "step-skill"]) {
+        const skillDir = path.join(root, ".ctrlyoke", "skills", skill);
+        fs.mkdirSync(skillDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(skillDir, "SKILL.md"),
+          `---\nname: ${skill}\ndescription: The ${skill}.\n---\nBody`
+        );
+      }
+
+      const integration = new TestCliIntegration(
+        createProvider(),
+        new MockSingleRootPlatform(root),
+        false
+      );
+
+      const withStepSkills = await (integration as any).buildPromptSections(
+        { prompt: "Do it." } as PromptStep,
+        "skilled",
+        ["step-skill"]
+      );
+      assert.strictEqual(
+        withStepSkills.skillContent.match(/## Skill: step-skill/g)?.length,
+        1,
+        "a skill both the step and the agent name is attached once"
+      );
+      assert.ok(
+        withStepSkills.skillContent.includes("## Skill: declared-skill")
+      );
+
+      const agentOnly = await (integration as any).buildPromptSections(
+        { prompt: "Do it." } as PromptStep,
+        "skilled",
+        undefined
+      );
+      assert.ok(agentOnly.skillContent.includes("## Skill: declared-skill"));
+
+      const noAgent = await (integration as any).buildPromptSections(
+        { prompt: "Do it." } as PromptStep,
+        undefined,
+        undefined
+      );
+      assert.strictEqual(noAgent.skillContent, null);
+    });
+
     test("strips the @ prefix for a Codex-like provider even in single-root", async () => {
       const root = mkTempDir("cy-cli-");
       fs.writeFileSync(path.join(root, "a.ts"), "export const a = 1;\n");

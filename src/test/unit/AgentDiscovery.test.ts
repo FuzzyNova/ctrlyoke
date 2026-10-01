@@ -28,6 +28,26 @@ Agent instructions`);
     );
   });
 
+  test("reads declared skills as a YAML list or a comma-separated string", () => {
+    assert.deepStrictEqual(
+      parseAgentFrontmatter("---\nskills: [alpha, beta, alpha]\n---\nBody")
+        .skills,
+      ["alpha", "beta"]
+    );
+    assert.deepStrictEqual(
+      parseAgentFrontmatter("---\nskills: alpha, beta\n---\nBody").skills,
+      ["alpha", "beta"]
+    );
+    assert.strictEqual(
+      parseAgentFrontmatter("---\nskills: []\n---\nBody").skills,
+      undefined
+    );
+    assert.strictEqual(
+      parseAgentFrontmatter("---\nskills: 3\n---\nBody").skills,
+      undefined
+    );
+  });
+
   test("parses line-anchored frontmatter with inline fences and a BOM", async () => {
     const content =
       "\uFEFF---\nname: Reviewer\ndescription: Reviews diffs --- strictly\nmodel: gpt-5\n---\nAgent body";

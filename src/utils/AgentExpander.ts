@@ -73,6 +73,18 @@ export class AgentExpander {
   }
 
   /**
+   * Skills the named agent declares in its frontmatter (`skills:`), or an
+   * empty list when the agent is unknown or declares none.
+   */
+  static async getAgentSkills(
+    agentName: string,
+    workspaceRoot?: string
+  ): Promise<string[]> {
+    const agents = await AgentExpander.getAgents(workspaceRoot);
+    return AgentDiscovery.findAgentByName(agents, agentName)?.skills ?? [];
+  }
+
+  /**
    * Strip YAML frontmatter from agent file content, returning only the markdown body.
    *
    * ctrlyoke does NOT honor agent-level model or tool overrides:

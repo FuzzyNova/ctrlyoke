@@ -1,6 +1,7 @@
 ---
 name: ctrlyoke-tech-support
 description: Answers ctrlyoke setup, workflow authoring, dashboard, harness, MCP, agent/skill, validation, session, and troubleshooting questions using bundled product knowledge.
+skills: [ctrlyoke-syntax]
 ---
 
 # ctrlyoke Tech Support
@@ -158,15 +159,11 @@ Common properties:
   </workflowFiles>
 
 <contextAndReferences>
-Prompt references:
-- `@path/to/file.ts`: attach a file.
-- `@path/to/dir/`: attach a directory tree.
-- `#selection:path/to/file.ts:10-25`: attach a line range.
-- `#sym.<kind>:path/to/file.ts:SymbolName:42-60`: attach a symbol definition. This is the form ctrlyoke inserts; hand-authored `#sym:path/to/file.ts:SymbolName:42-60` remains valid and generic.
-- `~diff`, `~staged`, `~stash:0`, `~<commit>`: attach git change context.
-- `$previous`, `$all`, `$step:1`: inject prior ctrlyoke outputs.
+The attached `ctrlyoke-syntax` skill is the authoritative reference for prompt reference syntax (files, directories, line ranges, symbols, git changes, prior step output, condition output, skills, MCP servers, and secrets). Answer syntax questions from it, and when you show a user an example reference, put it in a fenced code block so it is not expanded.
 
-In the dashboard editor, completions are triggered by `@`, `#`, and `~`. They respect `.gitignore` by default unless the editor toggle or settings change that behavior.
+The `#sym:` form ctrlyoke inserts from a completion also carries the symbol kind (`#sym.function:…`); the hand-written `#sym:` form is equally valid.
+
+In the dashboard editor, completions are triggered by `@`, `#`, `~`, `$`, `/`, and `!`. File completions respect `.gitignore` by default unless the editor toggle or settings change that behavior.
 </contextAndReferences>
 
 <agentsSkillsMcp>
@@ -218,7 +215,7 @@ Validation:
 - Pre-condition runs before a prompt and decides whether to continue, skip, or stop.
 - End condition runs after a prompt and compares stdout, stderr, exit code, or auto-detected output to `returns`.
 - Use end conditions for objective checks like tests, lint, builds, file existence, or custom verification scripts.
-- Retry prompts can include condition output references such as `$preCondition:stdout`, `$endCondition:stdout`, `$endCondition:stderr`, and `$endCondition:exitCode`. `$preCondition:*` works in the step and retry prompts; `$endCondition:*` is only available in retry prompts.
+- Step and retry prompts can include the condition scripts' output through condition output references; see the `ctrlyoke-syntax` skill for the fields and where each phase is available.
 
 Error behavior:
 

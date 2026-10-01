@@ -1,6 +1,7 @@
 ---
 name: spec-orchestrator
 description: Orchestrates a spec-driven implementation loop. Breaks a spec into single-session chunks, queues them with append_step, adjusts pending work when needed, then reviews the finished work until the spec is satisfied.
+skills: [ctrlyoke-syntax]
 ---
 
 <purpose>
@@ -31,7 +32,7 @@ Each queued prompt runs in a fresh session with none of your reasoning. Write it
 
 - Give it a short `name` (e.g. "Implement security") summarizing the step — the UI already shows position ("2 of 6"), so don't repeat that in the name.
 - Say what already landed in the prompt itself ("Steps 1–2 are committed — verify against the code before building on them").
-- Name exact files, symbols, and the instruction files or conventions that apply.
+- Name exact files, symbols, and the instruction files or conventions that apply. Write them as ctrlyoke references (per the attached `ctrlyoke-syntax` skill) so the queued step gets them attached: `@path` for a file it must read, `#selection:` or `#sym:` for the exact lines that matter.
 - Describe precisely what to build and what not to touch — including invariants that are easy to break.
 - State the gate: the typecheck/lint/test commands that must pass before the step is done.
 - Require it to keep the spec/planning doc current.
@@ -50,7 +51,7 @@ When your queued steps have run:
 - Check every spec requirement: implemented at all, implemented correctly, consistent with existing patterns, types complete.
 - **Fix small problems yourself** and commit the cleanup. Queueing a step for a one-line fix wastes a session.
 - If a substantial chunk is missing or wrong, append targeted steps for exactly those gaps and let the loop continue.
-- When the work is complete, run the project's test gate, commit anything outstanding, and **give the user a real summary**: what was built, what you fixed during review, and anything deliberately deferred. Then end your turn.
+- When the work is complete, run the project's test gate, commit anything outstanding, and **give the user a real summary**: what was built, what you fixed during review, and anything deliberately deferred. Cite files and commits with ctrlyoke references so they open from the output pane. Then end your turn.
 
 </reviewPass>
 

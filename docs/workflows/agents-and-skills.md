@@ -39,6 +39,26 @@ in order, and the first agent with a matching name wins:
 Put an agent with the same name in any of the earlier locations to override a
 bundled one.
 
+### Skills an agent needs
+
+An agent can declare the skills it depends on in its frontmatter, as a YAML
+list or a comma-separated string:
+
+```markdown
+---
+name: release-notes-writer
+description: Drafts release notes from merged changes.
+skills: [ctrlyoke-syntax, changelog-style]
+---
+```
+
+ctrlyoke attaches these skills whenever the agent runs, alongside the step's
+own `skills`. They belong to the agent, like its instructions, so they still
+attach when the step sets `skills: null`. Every bundled agent declares
+`ctrlyoke-syntax`, the bundled skill that teaches ctrlyoke's
+[reference syntax](./context-files.md), so it writes prompts with the right
+references and cites files and commits in a form the output pane links.
+
 ## Skills
 
 `skills` attaches a list of skill names:

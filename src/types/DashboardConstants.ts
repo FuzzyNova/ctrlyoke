@@ -4088,6 +4088,10 @@ export const MCP_SKILL_NAMES = {
   COMMIT_MESSAGE: "ctrlyoke-commit-message-tool",
 } as const;
 
+// Built-in skill teaching ctrlyoke's inline reference syntax. The bundled
+// agents declare it in their frontmatter `skills:` so it attaches with them.
+export const REFERENCE_SYNTAX_SKILL_NAME = "ctrlyoke-syntax";
+
 // ============================================================================
 // EXTENSION IDENTIFIERS - Development and packaged extension identity values
 // ============================================================================

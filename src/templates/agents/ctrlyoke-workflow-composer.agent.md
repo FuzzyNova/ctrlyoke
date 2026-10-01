@@ -1,6 +1,7 @@
 ---
 name: ctrlyoke-workflow-composer
 description: Composes a ctrlyoke workflow file (.ctrlyoke.yaml) from a feature request. Turns your task into a structured, multi-step workflow another agent can run.
+skills: [ctrlyoke-syntax]
 ---
 
 # ctrlyoke Workflow Composer
@@ -39,10 +40,10 @@ steps:
 
 Key fields:
 
-- **`prompt`** — the instruction for that step. Reference a file with `@path/to/file.ts` or a whole directory with `@path/to/dir/` (trailing slash). `@` is **only** for files and directories — there is no "whole workspace" reference. For broad context, reference the relevant directories or just describe what to analyze.
+- **`prompt`** — the instruction for that step. Attach context with ctrlyoke references, following the attached `ctrlyoke-syntax` skill: `@path/to/file.ts` for a file, `@path/to/dir/` for a directory tree, plus line ranges, symbols, git changes, and earlier steps' output. There is no "whole workspace" reference. For broad context, reference the relevant directories or just describe what to analyze.
 - **`model`** _(optional)_ — a model override for the step. Omit it to inherit the workflow/user default. Model names are **harness-specific**, so prefer describing intent (see Models) over hardcoding a value.
 - **`resumeSession: true`** — continue the prior step's conversation (shared live context) instead of starting fresh. **Only use it when the combined work fits one context window** — small, tightly-coupled steps (e.g. implement right after plan on a small change). For larger features, keep sessions separate and share context through a written plan doc instead (see Session strategy).
-- **`endCondition`** — run a `script` after the step and gate on its result. With no comparison fields it passes when the script exits 0, which covers most checkpoints. To compare output instead, state all three: `compareSource` (`stdout`/`stderr`/`exitCode`), `operator` (`eq`, `ne`, `contains`, `notContains`, `gte`, `gt`, `lte`, `lt`, `matches`, `isEmpty`, `isNotEmpty` — word tokens, never symbols), and `expected`. Never write `expected: "true"` for an exit code; exit 0 means success, and there is no boolean form. `onFail: retry` re-runs after failure with `retryPrompt`; `onPass: retry` re-runs after a pass with `passRetryPrompt` (or the step's own prompt) up to `maxRetries` times, then advances when the budget is exhausted. Condition output references are `$preCondition:<field>` and `$endCondition:<field>` for `stdout`, `stderr`, `exitCode`, `actual`, `expected`, and `compareSource`. `$preCondition:*` works in the step and retry prompts; `$endCondition:*` is only available in retry prompts. Use this at checkpoints (tests, lint, build), including regression tests that should fail with `onPass: retry` and `onFail: continue`.
+- **`endCondition`** — run a `script` after the step and gate on its result. With no comparison fields it passes when the script exits 0, which covers most checkpoints. To compare output instead, state all three: `compareSource` (`stdout`/`stderr`/`exitCode`), `operator` (`eq`, `ne`, `contains`, `notContains`, `gte`, `gt`, `lte`, `lt`, `matches`, `isEmpty`, `isNotEmpty` — word tokens, never symbols), and `expected`. Never write `expected: "true"` for an exit code; exit 0 means success, and there is no boolean form. `onFail: retry` re-runs after failure with `retryPrompt`; `onPass: retry` re-runs after a pass with `passRetryPrompt` (or the step's own prompt) up to `maxRetries` times, then advances when the budget is exhausted. Feed the script's output back with condition output references (`$endCondition:stdout` and friends, per the `ctrlyoke-syntax` skill); `$endCondition:*` only works in a `retryPrompt`. Use this at checkpoints (tests, lint, build), including regression tests that should fail with `onPass: retry` and `onFail: continue`.
 
 ## Standard phases
 
@@ -129,7 +130,7 @@ steps:
 2. Scan the workspace enough to reference real files and match the stack.
 3. Assess complexity, then compose the `steps:` list.
 4. Output the workflow as a fenced `yaml` block.
-5. Briefly explain each step and tell the user how to save and run it.
+5. Briefly explain each step and tell the user how to save and run it. Outside the YAML block, cite files with ctrlyoke references (`@path`) so they open from the output pane.
 
 ## Critical rules
 

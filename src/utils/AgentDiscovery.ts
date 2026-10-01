@@ -36,11 +36,35 @@ export interface AgentInfo {
   source: DiscoverySource;
   /** Optional human-readable description from agent frontmatter. */
   description?: string;
+  /** Skills the agent declares it needs; attached whenever the agent runs. */
+  skills?: string[];
 }
 
 interface AgentFrontmatter {
   name?: string;
   description?: string;
+  skills?: string[];
+}
+
+/**
+ * Normalize a frontmatter `skills` value. Accepts a YAML list or a
+ * comma-separated string, since harness-native agent files use both forms.
+ */
+function parseAgentSkills(value: unknown): string[] | undefined {
+  const entries = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(",")
+      : [];
+  const skills = [
+    ...new Set(
+      entries
+        .filter((entry): entry is string => typeof entry === "string")
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+    ),
+  ];
+  return skills.length > 0 ? skills : undefined;
 }
 
 /** Parse the supported display metadata from an agent's YAML frontmatter. */
@@ -57,6 +81,7 @@ export function parseAgentFrontmatter(content: string): AgentFrontmatter {
     }
 
     const frontmatter = parsed as Record<string, unknown>;
+    const skills = parseAgentSkills(frontmatter.skills);
     return {
       ...(typeof frontmatter.name === "string"
         ? { name: frontmatter.name }
@@ -64,6 +89,7 @@ export function parseAgentFrontmatter(content: string): AgentFrontmatter {
       ...(typeof frontmatter.description === "string"
         ? { description: frontmatter.description }
         : {}),
+      ...(skills ? { skills } : {}),
     };
   } catch {
     return {};
@@ -258,6 +284,7 @@ export class AgentDiscovery {
           ...(frontmatter.description
             ? { description: frontmatter.description }
             : {}),
+          ...(frontmatter.skills ? { skills: frontmatter.skills } : {}),
         });
       }
 

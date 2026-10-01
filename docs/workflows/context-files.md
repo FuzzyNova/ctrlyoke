@@ -69,7 +69,7 @@ $step:1,3-5
 
 These let a prompt pull prior ctrlyoke output into the prompt text:
 
-- `$previous` pulls in the step just before this one, and `$all` pulls in every earlier queue step
+- `$previous` pulls in the most recent earlier step that produced output, and `$all` pulls in every earlier queue step
 - `$finalStep` pulls in the most recent `finalStep` loop output, and `$allFinalStep` pulls in every earlier `finalStep` loop output
 - `$step:1,3-5` pulls in specific steps by their 1-based step number
 
@@ -108,6 +108,14 @@ References inside a triple-backtick fenced block are not expanded. Use a fence
 when you paste logs, examples, or earlier ctrlyoke instructions that contain
 `@`, `#`, `~`, `$`, `!`, or `/skill:` text. Single-backtick inline code does
 **not** suppress expansion.
+
+## References in replies
+
+The output pane recognizes the same syntax in an AI reply. When a response
+cites `@src/auth/login.ts`, a `#selection:` or `#sym:` range, a `~<commit>`,
+or a `$step:` reference, it renders as a link that opens the target, exactly as
+in an echoed prompt. Attach the bundled `ctrlyoke-syntax` skill to a step to
+teach the AI to cite its work this way; every bundled agent already includes it.
 
 ## How context reaches CLI harnesses
 
