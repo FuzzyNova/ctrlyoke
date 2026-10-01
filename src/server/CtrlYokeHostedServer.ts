@@ -102,6 +102,11 @@ import { secretRedactionService } from "../utils/SecretRedactionService";
 import { installSecretRedactionMiddleware } from "./SecretRedactionMiddleware";
 import { buildHostedErrorPage } from "./HostedErrorPageTemplate";
 import { IS_DEV_MODE } from "../utils/BuildConfig";
+import {
+  bytesToMb,
+  noteMemoryActivity,
+  registerMemoryContext,
+} from "../utils/MemoryDiagnostics";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { isLoopbackBindAddress } from "../utils/NetworkUtils";
 
@@ -118,6 +123,9 @@ const WORKSPACE_FILE_ROUTE_PATH = "/api/workspace-viewer/file";
 function redactHostedTransportMessage(message: unknown): unknown {
   return secretRedactionService.redactValue(message);
 }
+
+/** Hosted sends at least this large are noted for the memory watchdog. */
+const LARGE_HOSTED_SEND_BYTES = 1024 * 1024;
 
 /**
  * Theme vars are spliced verbatim into a server-rendered `<style>` block
@@ -177,6 +185,7 @@ export class CtrlYokeHostedServer
   private httpServer: Server;
   private wss: WebSocketServer;
   private connections = new Set<WebSocket>();
+  private readonly unregisterMemoryContext: () => void;
   private readonly socketLiveness = new WeakMap<WebSocket, boolean>();
   private readonly socketLastProtocolPongAt = new WeakMap<WebSocket, number>();
   private readonly socketLastApplicationAckAt = new WeakMap<
@@ -276,6 +285,9 @@ export class CtrlYokeHostedServer
     installSecretRedactionMiddleware(this.app);
     this.setupRoutes();
     this.setupWebSocket();
+    this.unregisterMemoryContext = registerMemoryContext("hosted", () =>
+      this.hostedMemoryContext()
+    );
     this.setupHeartbeat();
     hub.addClient(this);
   }
@@ -985,8 +997,9 @@ export class CtrlYokeHostedServer
         }
         const normalizedPath = path.posix.normalize(`/${decodedPath}`);
         const staticPath = normalizedPath.toLowerCase();
-        const isProtectedHtmlPath =
-          /^\/index(?:~\d+)?\.html?(?::.*)?$/.test(staticPath);
+        const isProtectedHtmlPath = /^\/index(?:~\d+)?\.html?(?::.*)?$/.test(
+          staticPath
+        );
         const isProtectedFaviconPath =
           /^\/(?:favicon|favico~\d+)\.svg(?::.*)?$/.test(staticPath);
         if (isProtectedHtmlPath || isProtectedFaviconPath) {
@@ -2096,7 +2109,9 @@ export class CtrlYokeHostedServer
       );
       const send = (reply: unknown): void => {
         if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify(redactHostedTransportMessage(reply)));
+          const json = JSON.stringify(redactHostedTransportMessage(reply));
+          ws.send(json);
+          this.noteLargeSend(reply, json, ws, clientTag);
         }
       };
       this.sendInitialState(ws);
@@ -2368,8 +2383,44 @@ export class CtrlYokeHostedServer
   private broadcast(message: unknown): void {
     const json = JSON.stringify(redactHostedTransportMessage(message));
     for (const ws of this.connections) {
-      if (ws.readyState === WebSocket.OPEN) ws.send(json);
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(json);
+        this.noteLargeSend(message, json, ws);
+      }
     }
+  }
+
+  /**
+   * Large sends and per-socket queue depth (`bufferedAmount`, which nothing
+   * here bounds) are reported to the memory watchdog so a heap jump can be
+   * tied to the hosted delivery that caused it.
+   */
+  private noteLargeSend(
+    message: unknown,
+    json: string,
+    ws: WebSocket,
+    clientTag?: string
+  ): void {
+    if (json.length < LARGE_HOSTED_SEND_BYTES) return;
+    const tag = clientTag ?? this.socketClientTags.get(ws);
+    const type = (message as { type?: unknown } | null)?.type;
+    noteMemoryActivity(
+      `hosted send ${typeof type === "string" ? type : "unknown"} ${bytesToMb(json.length)}MB client=${tag ?? "?"} queued=${bytesToMb(ws.bufferedAmount)}MB`
+    );
+  }
+
+  private hostedMemoryContext(): Record<string, number> {
+    let totalQueued = 0;
+    let maxQueued = 0;
+    for (const ws of this.connections) {
+      totalQueued += ws.bufferedAmount;
+      maxQueued = Math.max(maxQueued, ws.bufferedAmount);
+    }
+    return {
+      connections: this.connections.size,
+      queuedMB: bytesToMb(totalQueued),
+      maxSocketQueuedMB: bytesToMb(maxQueued),
+    };
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -2631,6 +2682,7 @@ export class CtrlYokeHostedServer
   }
 
   dispose(): void {
+    this.unregisterMemoryContext();
     if (this.devServerUrlFileOwned) this.clearDevServerUrlFile();
     this.viewerService.dispose();
     this.hub.removeClient(this);

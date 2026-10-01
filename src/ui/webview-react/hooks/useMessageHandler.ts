@@ -105,6 +105,7 @@ import { getTargetKey, toOutputMessageTarget } from "@utils/outputProjection";
 import { navigateToWorkflowAddress } from "@utils/runNavigation";
 import { serializeRoute } from "@/navigation/route";
 import { notifyUser, showWebviewToast } from "@utils/notifyUser";
+import { notePanelMessage } from "@utils/memorySampler";
 
 // ============================================================================
 // Types
@@ -3281,6 +3282,7 @@ export function useMessageHandler(): UseMessageHandlerReturn {
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       const message = event.data;
+      notePanelMessage(message);
       const view = useUiStore.getState();
       // Definition/output sink messages still carry an in-memory instance id
       // rather than a run ref, so they cannot safely update a different

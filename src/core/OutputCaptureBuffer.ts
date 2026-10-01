@@ -14,6 +14,7 @@ import {
 import type { IDashboardSink } from "../types/IDashboardSink";
 import { normalizeCliEvents } from "../utils/CliEventNormalizer";
 import { Log } from "../utils/Log";
+import { noteMemoryActivity } from "../utils/MemoryDiagnostics";
 
 /**
  * Data carried by onPromptStart when a prompt step begins (or retries).
@@ -426,6 +427,9 @@ export class OutputCaptureBuffer {
     instanceTag: string,
     activeTargets: ReadonlySet<string> = new Set()
   ): void {
+    noteMemoryActivity(
+      `replay ${instanceTag} completedSteps=${this.completedStepOutputs.size} finalStepLoops=${this.finalStepCompletedOutputs.size}`
+    );
     // Replay completed step outputs so the user sees prior-prompt results
     // when switching back to a workflow that is already partway through.
     if (this.completedStepOutputs.size > 0) {

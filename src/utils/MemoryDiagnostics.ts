@@ -1,6 +1,6 @@
 import { Log } from "./Log";
 
-function toMb(bytes: number): number {
+export function bytesToMb(bytes: number): number {
   return Math.round((bytes / (1024 * 1024)) * 10) / 10;
 }
 
@@ -23,6 +23,63 @@ export function logMemoryUsage(
         .join(" ")
     : "";
   Log.debug(
-    `[MemoryDiagnostics] ${label}: rss=${toMb(usage.rss)}MB heapUsed=${toMb(usage.heapUsed)}MB heapTotal=${toMb(usage.heapTotal)}MB external=${toMb(usage.external)}MB arrayBuffers=${toMb(usage.arrayBuffers)}MB${extraSuffix}`
+    `[MemoryDiagnostics] ${label}: rss=${bytesToMb(usage.rss)}MB heapUsed=${bytesToMb(usage.heapUsed)}MB heapTotal=${bytesToMb(usage.heapTotal)}MB external=${bytesToMb(usage.external)}MB arrayBuffers=${bytesToMb(usage.arrayBuffers)}MB${extraSuffix}`
   );
+}
+
+/** Live gauges a subsystem contributes to every memory sample. */
+export type MemoryContextProvider = () => Record<string, string | number>;
+
+const contextProviders = new Map<string, MemoryContextProvider>();
+const MAX_RECENT_ACTIVITIES = 12;
+const recentActivities: Array<{ at: number; label: string }> = [];
+
+/**
+ * Register gauges (e.g. hosted sockets' queued bytes) that the memory sampler
+ * includes in each logged sample. Returns an unregister function.
+ */
+export function registerMemoryContext(
+  name: string,
+  provider: MemoryContextProvider
+): () => void {
+  contextProviders.set(name, provider);
+  return () => {
+    if (contextProviders.get(name) === provider) {
+      contextProviders.delete(name);
+    }
+  };
+}
+
+/**
+ * Record a potentially memory-heavy operation (a full run replay, a large
+ * hosted send) so the next sample that sees heap growth can name what ran in
+ * between. Cheap: a bounded in-memory ring, never logged on its own.
+ */
+export function noteMemoryActivity(label: string): void {
+  recentActivities.push({ at: Date.now(), label });
+  if (recentActivities.length > MAX_RECENT_ACTIVITIES) {
+    recentActivities.shift();
+  }
+}
+
+/** Activities noted at or after `since`, oldest first. */
+export function getMemoryActivitiesSince(
+  since: number
+): ReadonlyArray<{ at: number; label: string }> {
+  return recentActivities.filter((activity) => activity.at >= since);
+}
+
+/** Current values from every registered context provider, prefixed by name. */
+export function collectMemoryContext(): Record<string, string | number> {
+  const context: Record<string, string | number> = {};
+  for (const [name, provider] of contextProviders) {
+    try {
+      for (const [key, value] of Object.entries(provider())) {
+        context[`${name}.${key}`] = value;
+      }
+    } catch {
+      // A failing gauge must never break sampling.
+    }
+  }
+  return context;
 }

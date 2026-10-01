@@ -60,6 +60,10 @@ import { findWorkflowFilesInWorkspace } from "./utils/WorkflowFileDiscovery";
 import { WorkspaceInitializer } from "./core/orchestration/WorkspaceInitializer";
 import { ConfigurationUtils, PATH_CONSTANTS } from "./utils/ConfigurationUtils";
 import {
+  heapSnapshotThresholdFromEnv,
+  MemoryWatchdog,
+} from "./utils/MemoryWatchdog";
+import {
   initPtyProcessManager,
   setPtyPostMessage,
   getPtyProcessManager,
@@ -100,6 +104,7 @@ let workflowOrchestrator: WorkflowOrchestrator;
 let webviewProvider: CtrlYokeWebviewProvider;
 let licenseService: LicenseService;
 let hostedServer: CtrlYokeHostedServer | undefined;
+let memoryWatchdog: MemoryWatchdog | undefined;
 let notificationManager: NotificationManager | undefined;
 // Exempts the running server's own connection token from heuristic secret
 // redaction (see secretRedactionService.protectValue) for as long as the
@@ -220,6 +225,17 @@ export async function activate(context: vscode.ExtensionContext) {
       context,
       workspaceFolders?.length ? getVsCodeWorkspaceRoot() : undefined
     );
+    // Samples heap growth into the session log. The one-time heap snapshot is
+    // opt-in (CTRLYOKE_HEAP_SNAPSHOT_MB) and only written while a session log
+    // file exists (dev or verbose logging).
+    memoryWatchdog = new MemoryWatchdog({
+      snapshotThresholdBytes: heapSnapshotThresholdFromEnv(),
+      getSnapshotDirectory: () => {
+        const logFilePath = Log.getLogFilePath();
+        return logFilePath ? path.dirname(logFilePath) : undefined;
+      },
+    });
+    memoryWatchdog.start();
 
     // Bundled CLI on PATH for integrated terminals and, before any harness
     // can spawn, for the processes the orchestrator launches.
@@ -1704,6 +1720,8 @@ export async function deactivate(): Promise<void> {
     }
 
     disposeTelemetry();
+    memoryWatchdog?.dispose();
+    memoryWatchdog = undefined;
 
     Log.debug("[Extension] ctrlyoke: Extension deactivated");
   } finally {

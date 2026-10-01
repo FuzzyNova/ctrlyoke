@@ -17,6 +17,7 @@ import type {
   WorkflowViewIdentityMessage,
 } from "../../types/WebviewMessageTypes";
 import { Log } from "../../utils/Log";
+import { noteMemoryActivity } from "../../utils/MemoryDiagnostics";
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { OutputHistoryManager } from "./OutputHistoryManager";
@@ -498,6 +499,9 @@ export class RunViewPublisher implements RunLifecycleViewPort {
     }
 
     send(snapshot);
+    noteMemoryActivity(
+      `runView ${address.workflowKey}/${address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN ? address.runRef : "draft"} client=${clientId.slice(0, 12)} historyEntries=${view.history?.orderedEntries?.length ?? 0}`
+    );
     Log.debug(
       `[deliverRunView] client=${clientId.slice(0, 12)} address=${address.workflowKey}/${address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN ? address.runRef : "draft"} snapshot sent`
     );

@@ -79,6 +79,7 @@ import { HistorySearchDrawer } from "@components/search";
 import { ToastViewport } from "@components/shared/ToastViewport";
 import { BatchApprovalModal } from "@components/shared/BatchApprovalModal";
 import { ChoiceModal } from "@components/shared/ChoiceModal";
+import { startPanelMemorySampler } from "@utils/memorySampler";
 
 function App() {
   const vscode = useVsCodeApi();
@@ -397,6 +398,9 @@ function App() {
   // suppresses every server-initiated view update until it is retired.
   useRunViewLoadWatchdog();
   useDuplicateWorkflowWatchdog();
+
+  // Sample the panel's memory into the session log (see memorySampler).
+  useEffect(() => startPanelMemorySampler(), []);
 
   // Signal ready to extension
   useEffect(() => {

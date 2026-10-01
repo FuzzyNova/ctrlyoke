@@ -1,45 +1,79 @@
 # Extension host crashes repeatedly during one long-running workflow
 
 - **Found:** 2026-10-01 by claude-cli (user-reported)
-- **Area:** unknown; suspected extension-host memory use by a run with a very large timeline
+- **Area:** extension test runner (`src/test/runTest.ts`) with no guard against a runaway test; hosted run-view delivery (secondary)
 - **Severity:** high
 
 ## Symptom
 
-The VS Code extension host died twice in the same `bug-backlog` run
-(`run-2026-09-30T13-41-01-546Z`, 38 steps, ~11 h, 40 harness attempts):
+During the `bug-backlog` run (`run-2026-09-30T13-41-01-546Z`, 38 steps, a 45.7 MB
+`events.jsonl`), VS Code windows and extension hosts crashed repeatedly. Twice the whole machine
+was affected: dwm, Task Manager and the NVIDIA container crashed too, and one crash needed a
+reboot. The user was also watching the run from an iPhone over the hosted dashboard, which made
+the phone look like the cause.
 
-1. 2026-09-30 ~22:09Z during step 34: system-wide resource trouble (other processes crashed too) and
-   an extension-host heap of ~1.7 GB, followed by an orderly host shutdown at 22:14Z.
-2. 2026-10-01 00:07:33Z during step 35 (continuation, Codex step resuming session
-   `01a0f455-…`), ~5.5 min after it started. The ctrlyoke log ends cleanly on a line boundary with
-   no error; VS Code reported the host unresponsive at 00:07:52 and it exited at 00:08:49 with code
-   `4294930433` (`0xFFFF7001`), then auto-restarted. No minidump was written ("crash server did not
-   respond"), so the OOM signature could not be confirmed.
+## Root cause: a test retried forever and exhausted the machine's commit memory
 
-From the user's side the run "stopped without an error message, or the UI stopped updating".
+Windows logged a low-virtual-memory event (System log, Event 2004,
+`Resource-Exhaustion-Detector`) for each machine-wide crash. Every one has the same signature:
+system commit at its 127.9 GB limit, topped by a **freshly started `Code.exe` holding
+~700,000 handles**:
 
-## Evidence
+| Event (local)    | Top process                      | Started (UTC) | Codex ran `npm test` (UTC) |
+| ---------------- | -------------------------------- | ------------- | -------------------------- |
+| 2026-09-30 19:07 | Code.exe 3.0 GB, 773,511 handles | 00:03:13      | 00:02:13                   |
+| 2026-09-30 20:52 | Code.exe 3.1 GB, 720,041 handles | 01:48:46      | 01:47:51                   |
+| 2026-09-30 22:21 | Code.exe 3.4 GB, 675,837 handles | 03:16:50      | 03:15:47                   |
 
-- The run's `events.jsonl` is 45.7 MB. The continuation promoted 39 history entries to live in the
-  panel at start.
-- In the minutes before the second crash the ctrlyoke log shows only `HeadlessLogTail` polls of
-  ~1 KB Codex events every ~30 s; nothing large was being processed. Codex kept writing its session
-  log until 00:08:05, after the host froze.
-- The extension host is shared with other extensions (Claude Code, Copilot Chat, etc.), so
-  ctrlyoke is the leading suspect, not a proven one.
-- Logs: `.ctrlyoke/logs/ctrlyoke-1790774099025.log` (first crash), `ctrlyoke-1790812839474.log`
-  (second), and `%APPDATA%/Code/logs/20260930T190034/main.log`.
+Each of those processes was the VS Code **test instance** that the run's own Codex step (step 34,
+working in the `bug-fix` worktree) launched through `npm test`. The leftover test user-data dirs
+(`%TEMP%/ctrlyoke-extension-test-user-data-4-*`) show the cause: the first `EndConditionHandler`
+test, which Codex added for unlimited-retry formatting
+(`formats unlimited retry status denominators`), sets up unlimited retries with an evaluator that
+ends in success. The handler then re-runs on every pass,
+`End condition passed, re-running (pass retry N/∞)`, more than 100,000 times in about 90 s.
+Nothing in the loop waits on a timer, so Mocha's timeout never fires. Every iteration logs, the
+test window's renderer grows to millions of log lines and hundreds of thousands of handles, and
+system commit runs out within about four minutes.
 
-## Steps to Reproduce
+The 20:52 "renderer process gone (oom)" in the dev host window was another process hitting that
+same exhaustion, not a fault in the dashboard.
 
-Not yet reproduced. The likely shape is continuing a run whose timeline is tens of MB.
+The first crash, around 17:14 local (2026-09-30), has no Event 2004 and remains unexplained. Its
+log shows a separate extension-host heap jump, 403 MB to 1,867 MB at 16:24–16:29Z.
 
-## Suggested Investigation
+## What the memory samplers ruled out
 
-- Reproduce under the dev host with `--inspect` on the extension host and take heap snapshots
-  before and a few minutes after continuing a large run; diff retained sizes.
-- Audit which paths read or hold the whole `events.jsonl` (history load for the run view,
-  `promoteHistoryToLive` payloads, token reducers, history search indexing) for a continued run.
-- Consider logging `process.memoryUsage()` periodically while a run executes, so the next crash
-  leaves a heap trajectory in the session log.
+`MemoryWatchdog` (extension host) and `[PanelMemory]` (dashboard) ran through the 22:21 repro:
+
+- The extension-host heap never stayed high. It always fell back to ~270 MB, and was 272 MB at the
+  last sample before the machine failed.
+- `hosted.queuedMB` stayed at 0 throughout. The phone always read what it was sent, so there was
+  no backpressure buildup.
+
+## Secondary problem: every run-view open is very expensive
+
+These don't cause the crash, but they are real problems:
+
+- Each `runViewLoaded` for this run is a **42.7 MB** hosted message (61 history entries, 8,062
+  activity entries). Building it spikes the extension-host heap by 300–650 MB. The panel's heap
+  spikes by about 420 MB per load.
+- The iPhone PWA reconnected (close code 1006) and reloaded the run about 25 times in 12 minutes,
+  sometimes every 5–10 s. iOS was probably killing the page while it handled the 43 MB payload.
+  Overlapping loads pushed the extension-host heap to 1,736 MB (limit 4,192 MB).
+- The heap snapshot `.ctrlyoke/logs/ctrlyoke-heap-2026-10-01T03-10-39-364Z.heapsnapshot` was
+  taken during one of these spikes.
+
+## Suggested Fix
+
+1. Fix or remove the looping test in the `bug-fix` worktree before step 34 runs `npm test` again.
+2. Give `runTest.ts` a guard against a runaway shard, for example killing a shard whose output
+   rate or process memory passes a ceiling. One looping test should fail the suite, not take down
+   the machine.
+3. Check whether production can loop the same way: an unlimited pass-retry step whose end
+   condition keeps passing re-runs the harness forever.
+4. Make run views proportional to what's on screen instead of the run's total length, and stop
+   sending the history twice (`runViewLoaded` and then `outputHistoryLoaded`).
+
+Logs: `.ctrlyoke/logs/ctrlyoke-1790824029160.log`; `%APPDATA%/Code/logs/20260930T194052/main.log`;
+`%TEMP%/ctrlyoke-extension-test-user-data-4-WHTXG4/logs/20260930T221650/window1/renderer*.log`.
