@@ -182,6 +182,35 @@ suite("SecretResolver", () => {
     assert.deepStrictEqual(missing, []);
   });
 
+  test("preflight ignores grants of steps that already completed", async () => {
+    // A continued run re-runs preflight on every start. A step that finished
+    // long ago (here one whose prompt quoted `!NAME` as an example) must not
+    // keep warning about a secret it can never use again.
+    const workflow: PromptFile = {
+      steps: [
+        {
+          name: "finished",
+          prompt: "Escape `!NAME` like other reference syntax",
+          _runtime: { startedAt: 1, completedAt: 2 },
+        },
+        { name: "pending", prompt: "Use !PENDING_TOKEN" },
+      ],
+    };
+
+    const missing = await preflightWorkflowSecrets(
+      workflow,
+      platformWith(new InMemorySecretStore({})),
+      "C:\workspace",
+      {},
+      { failOnMissing: false }
+    );
+
+    assert.deepStrictEqual(missing, ["PENDING_TOKEN"]);
+    assert.deepStrictEqual(getWorkflowSecretGrants(workflow), [
+      "PENDING_TOKEN",
+    ]);
+  });
+
   test("preflight shares the resolution path and accepts env passthrough", async () => {
     const workflow: PromptFile = {
       steps: [

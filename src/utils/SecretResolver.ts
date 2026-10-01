@@ -279,14 +279,33 @@ export function getDeclaredSecretGrants(
   );
 }
 
+/**
+ * The steps whose secret grants still matter, paired with their 1-based
+ * position for diagnostics. A queue step that has already settled
+ * (`completedAt`) never runs again, so its grants are neither approved nor
+ * checked: a continued run would otherwise re-warn on every start about a
+ * secret only a long-finished step asked for. The final step is always kept
+ * because appending steps makes it run again.
+ */
+function stepsAwaitingExecution(
+  workflow: PromptFile
+): Array<{ step: WorkflowStep; position: number }> {
+  const queue = (workflow.steps ?? []).map((step, index) => ({
+    step,
+    position: index + 1,
+  }));
+  return [
+    ...queue.filter(({ step }) => step._runtime?.completedAt === undefined),
+    ...(workflow.finalStep
+      ? [{ step: workflow.finalStep, position: queue.length + 1 }]
+      : []),
+  ];
+}
+
 export function getWorkflowSecretGrants(workflow: PromptFile): string[] {
   const grants = new Set<string>();
-  const steps = [
-    ...(workflow.steps ?? []),
-    ...(workflow.finalStep ? [workflow.finalStep] : []),
-  ];
 
-  for (const step of steps) {
+  for (const { step } of stepsAwaitingExecution(workflow)) {
     for (const name of getDeclaredSecretGrants(step, workflow)) {
       grants.add(name);
     }
@@ -371,12 +390,8 @@ export async function preflightWorkflowSecrets(
   // so it is surfaced as a per-step advisory by WorkflowExecutor rather than
   // blocking the run. Env-map interpolation below is a different case: those
   // maps really do interpolate, so an ungranted name there stays an error.
-  const steps = [
-    ...(workflow.steps ?? []),
-    ...(workflow.finalStep ? [workflow.finalStep] : []),
-  ];
-  for (const [index, step] of steps.entries()) {
-    const scope = step.name?.trim() || `step ${index + 1}`;
+  for (const { step, position } of stepsAwaitingExecution(workflow)) {
+    const scope = step.name?.trim() || `step ${position}`;
     const grants = getDeclaredSecretGrants(step, workflow);
     const mapNames = getProcessMaps(step, workflow).flatMap((map) =>
       collectSecretInterpolationNames(map)
