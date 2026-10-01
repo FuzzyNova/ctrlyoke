@@ -43,7 +43,7 @@ Measured with the `[MemoryWatchdog]`/`[PanelMemory]` samplers (see the
   the logs did not measure it.
 
 That run also crashed the machine three times. Those crashes were a test that
-looped forever (`dev/bugs/backlog/extension-host-crash-during-long-bug-backlog-run.md`),
+looped forever (`dev/bugs/implemented/extension-host-crash-during-long-bug-backlog-run.md`),
 not this payload. The reload loop is real regardless.
 
 ## Background

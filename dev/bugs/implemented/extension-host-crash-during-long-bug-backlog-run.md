@@ -2,7 +2,10 @@
 
 - **Found:** 2026-10-01 by claude-cli (user-reported)
 - **Area:** extension test runner (`src/test/runTest.ts`) with no guard against a runaway test; hosted run-view delivery (secondary)
-- **Severity:** high
+- **Resolution:** fixed by a58f19257 (event-loop stall watchdog for extension-test hosts). The
+  looping test landed already bounded (`onPass: "continue"`) in 8bb91406b. Run-view payload work
+  is closed in `dev/implemented/RUN_VIEW_PAYLOAD_PAGING_PLAN.md`. The 17:14 crash with no
+  Event 2004 is still unexplained and has no repro.
 
 ## Symptom
 
@@ -66,7 +69,7 @@ These don't cause the crash, but they are real problems:
 
 ## Suggested Fix
 
-1. Done: the looping test in the `bug-fix` worktree now uses `onPass: "continue"`.
+1. Done: the looping test now uses `onPass: "continue"` (landed that way in 8bb91406b).
 2. Done: `src/test/suite/eventLoopStallWatchdog.ts` kills an extension host whose event loop
    stays blocked for 30 s, and the shard's failure names the test that was running.
 3. Checked, no change: in production every pass retry awaits a real harness run and a script
