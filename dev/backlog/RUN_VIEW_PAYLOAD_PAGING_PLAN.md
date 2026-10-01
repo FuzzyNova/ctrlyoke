@@ -1,6 +1,7 @@
 # Run-View Payload & Paging Plan
 
-**Status:** Backlog — proposed 2026-09-06, updated 2026-10-01
+**Status:** Sequencing items 1–4 complete (1B not pursued); 1A, 3, and 4
+remain backlog — proposed 2026-09-06, updated 2026-10-01
 **Priority:** P1 (raised 2026-10-01: a phone viewing a large run was caught in
 a reload loop that rebuilt and resent the full run view about every 10 s; see
 "2026-10-01 evidence" below. The quadratic-CPU half of the original report is
@@ -269,24 +270,22 @@ is optional and is not the timeline slice timestamp; the sequence and timestamp
 on the activity entry are the ordering source. Retry, phase, parallel, and
 final-step identities all participate in this ordering.
 
-**A narrower saving remains possible.** Keep TEXT, SCRIPT, and STATUS activity
-entries, since their chunk boundaries/order (and status severity) affect rows.
-For structured entries, make the aggregate a lossless canonical copy first,
-then assign each normalized event its originating slice's
-`activityTimestampMs` and `activitySequence` and omit only the duplicate
-structured activity payload. The source mapping must use
-`normalizeCliEventsWithSource` so a paired completion retains the opening
-slice's order. Assign it while `OutputHistoryTimelineAdapter` folds each
-`CLI_OUTPUT_EVENTS_APPENDED` batch through `StreamingCliOutputAccumulator`;
-the resolver path and completed `CLI_OUTPUT_RECORDED` replacements must retain
-the same event fields and metadata. The real-run mismatch above means adding
-order fields alone is insufficient: first resolve why fields such as
-`callerType` differ, and compare every normalized event payload. The measured
-structured activity projection for that run was about 19.4 MB serialized, so
-this narrower option may still save substantial duplicate bytes, but its net
-payload reduction needs a fresh measurement after the canonical aggregate is
-lossless. It does not eliminate all `activityEntries` or justify switching the
-webview wholesale to aggregates.
+**Not pursued (2026-10-01).** The narrower structured-only saving is not safe
+yet. It would retain TEXT, SCRIPT, and STATUS activity entries, since their
+chunk boundaries/order (and status severity) affect rows, and omit only
+structured activity payload after making the aggregate a lossless canonical
+copy. But the persisted-run comparison found aggregate events missing fields
+present in activity events (including `callerType`), so adding ordering
+metadata would still change rows. The plain-text counterexample also rules out
+dropping all activity entries: concatenated `cliOutput.response` cannot recover
+which side of a tool event each text chunk occupied. Revisit the narrower
+option only after resolving the aggregate/event-field mismatch, retaining
+originating-slice order through `normalizeCliEventsWithSource` and the
+`StreamingCliOutputAccumulator`/resolver/replacement paths, and proving row
+equivalence against the production projection. The measured structured
+activity projection for the run was about 19.4 MB serialized, but that is not
+a safe-reduction estimate until the lossless aggregate and equivalence check
+are in place.
 
 ### Proposal 1C — cap tool output in the payload, fetch the rest on expand
 
@@ -527,10 +526,10 @@ That makes it the first thing to land against the reload loop.
    the 2026-10-01 run because its largest individual field was 55,979 bytes.
    It still lands before 1B so large outliers can be fetched on demand; 1B's
    broader saving depends on an equivalence proof that may not hold.
-4. **Proposal 1B** (structured-only activity reduction): exact replacement
-   failed the equivalence check. Consider the narrower structured-slice
-   reduction above only after the aggregate/event-field mismatch is resolved
-   and a fresh row-equivalence and payload-size comparison passes.
+4. **Proposal 1B** (activity reduction): not pursued because the aggregate
+   loses event fields and concatenates text across activity boundaries. The
+   narrower structured-slice option remains backlog until the aggregate is
+   lossless and a fresh production-path row-equivalence comparison passes.
 5. **Problem 1A** (windowing + paging): **only if**, after steps 1–4, the
    `RUN_VIEW_LOADED` for the 2026-10-01 `bug-backlog` run is still over
    ~5 MB serialized, or the iPhone acceptance criterion below still fails.
