@@ -2887,8 +2887,6 @@ export class WorkflowExecutor {
       executionRoot
     );
 
-    context.onSnapshotCaptured?.(target, snapshot);
-
     if (context.historyFilePath && context.outputHistoryManager) {
       await context.outputHistoryManager.saveSnapshotForTarget(
         context.historyFilePath,
@@ -2896,6 +2894,10 @@ export class WorkflowExecutor {
         snapshot
       );
     }
+
+    // Publish after persistence so a client that immediately requests file
+    // content can resolve it through OutputHistoryManager's enriched reader.
+    context.onSnapshotCaptured?.(target, snapshot);
   }
 
   private toOutputExecutionTarget(

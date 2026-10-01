@@ -7,6 +7,7 @@ import {
 import { resolveNamedRelativePath } from "../platform/WorkspaceRootResolver";
 import {
   MESSAGE_TYPES,
+  FINAL_STEP_PHASES,
   HISTORY_TRASH_ACTIONS,
   SECRET_REGISTRY_ACTION_STATES,
   LOG_LEVELS,
@@ -1460,6 +1461,60 @@ export class WebviewMessageRouter {
         );
       }
     });
+
+    table.set(
+      MESSAGE_TYPES.REQUEST_WORKSPACE_SNAPSHOT_CONTENT,
+      async (message, ctx) => {
+        if (
+          typeof message.requestId !== "string" ||
+          typeof message.address?.workflowKey !== "string" ||
+          typeof message.address?.runRef !== "string" ||
+          typeof message.path !== "string" ||
+          !message.target ||
+          !((message.target.kind === FINAL_STEP_PHASES.QUEUE &&
+            Number.isInteger(message.target.stepIndex) &&
+            message.target.stepIndex >= 0) ||
+            (message.target.kind === FINAL_STEP_PHASES.FINAL_STEP &&
+              Number.isInteger(message.target.loopIndex) &&
+              message.target.loopIndex >= 0))
+        ) {
+          return;
+        }
+
+        const request = {
+          requestId: message.requestId as string,
+          address: {
+            workflowKey: message.address.workflowKey,
+            runRef: message.address.runRef,
+          },
+          target: message.target,
+          path: message.path as string,
+        };
+        let content:
+          | {
+              beforeContent?: string;
+              contentToRestore?: string;
+              contentCaptureSkipped?: boolean;
+            }
+          | undefined;
+        try {
+          content = await this.getOrchestrator()?.getWorkspaceSnapshotFileContent(
+            request.address,
+            request.target,
+            request.path
+          );
+        } catch (error) {
+          Log.warn(
+            `[WebviewMessageRouter] Snapshot content request failed: ${getErrorMessage(error)}`
+          );
+        }
+        ctx.emit({
+          type: MESSAGE_TYPES.WORKSPACE_SNAPSHOT_CONTENT,
+          ...request,
+          ...content,
+        });
+      }
+    );
 
     table.set(MESSAGE_TYPES.LOAD_RUN_SUMMARIES, async (message, ctx) => {
       const orchestrator = this.getOrchestrator();

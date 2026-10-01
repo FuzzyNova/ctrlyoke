@@ -15,6 +15,7 @@ import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
 import {
   LICENSE_ACTIONS,
   MESSAGE_TYPES,
+  FINAL_STEP_PHASES,
   HARNESS_IDS,
   END_CONDITION_SCRIPT_TYPES,
   USER_FEEDBACK_SEVERITY,
@@ -832,6 +833,69 @@ suite("WebviewMessageRouter — execution preview transport", () => {
     assert.strictEqual(result.requestToken, 12);
     assert.strictEqual(result.displayedDefinitionRevision, 7);
     assert.ok(!JSON.stringify(result.preview).includes("supersecret"));
+  });
+});
+
+suite("WebviewMessageRouter — workspace snapshot content", () => {
+  test("routes an addressed file request and returns the correlated content", async () => {
+    const emitted: any[] = [];
+    let call: unknown;
+    const router = buildRouter({
+      getWorkspaceSnapshotFileContent: async (...args: unknown[]) => {
+        call = args;
+        return { beforeContent: "before", contentCaptureSkipped: false };
+      },
+    }, (message) => emitted.push(message));
+
+    const request = {
+      workflowKey: "workflow-a",
+      runRef: "run-2026-01-01T00-00-00-000Z",
+    };
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 3 };
+    await router.route({
+      type: MESSAGE_TYPES.REQUEST_WORKSPACE_SNAPSHOT_CONTENT,
+      requestId: "snapshot-7",
+      address: request,
+      target,
+      path: "src/example.ts",
+    });
+
+    assert.deepStrictEqual(call, [request, target, "src/example.ts"]);
+    assert.deepStrictEqual(emitted[0], {
+      type: MESSAGE_TYPES.WORKSPACE_SNAPSHOT_CONTENT,
+      requestId: "snapshot-7",
+      address: request,
+      target,
+      path: "src/example.ts",
+      beforeContent: "before",
+      contentCaptureSkipped: false,
+    });
+  });
+
+  test("answers with request-correlated missing content", async () => {
+    const emitted: any[] = [];
+    let called = false;
+    const router = buildRouter({
+      getWorkspaceSnapshotFileContent: async () => {
+        called = true;
+        return undefined;
+      },
+    }, (message) => emitted.push(message));
+
+    await router.route({
+      type: MESSAGE_TYPES.REQUEST_WORKSPACE_SNAPSHOT_CONTENT,
+      requestId: "snapshot-missing",
+      address: {
+        workflowKey: "workflow-a",
+        runRef: "run-2026-01-01T00-00-00-000Z",
+      },
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      path: "../../secret.txt",
+    });
+
+    assert.strictEqual(called, true);
+    assert.strictEqual(emitted[0].requestId, "snapshot-missing");
+    assert.strictEqual(emitted[0].beforeContent, undefined);
   });
 });
 

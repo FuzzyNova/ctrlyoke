@@ -450,6 +450,8 @@ export const MESSAGE_TYPES = {
   DELETE_RUN_HISTORY: "deleteRunHistory", // Webview -> Extension: Delete a single run by address, any run in the lineage (not required to be the viewed run)
   DELETE_ALL_RUNS_FOR_LINEAGE: "deleteAllRunsForLineage", // Webview -> Extension: Delete every non-executing run of an explicit lineage (run-navigation panel's "Delete all runs")
   RUN_VIEW_LOADED: "runViewLoaded", // Extension -> Webview: Atomic definition/settings/output snapshot for a view address
+  REQUEST_WORKSPACE_SNAPSHOT_CONTENT: "requestWorkspaceSnapshotContent", // Webview -> Extension: Fetch one changed file's captured snapshot content
+  WORKSPACE_SNAPSHOT_CONTENT: "workspaceSnapshotContent", // Extension -> Webview: Request-correlated snapshot content
   WORKFLOW_VIEW_IDENTITY: "workflowViewIdentity", // Extension -> Webview: Authoritative address + revisions after a definition write
   WORKFLOW_ACTION_FAILED: "workflowActionFailed", // Extension -> Webview: { action, error, requestId? } an addressed view/mutation/run action was rejected
   REQUEST_EXECUTION_PREVIEW: "requestExecutionPreview", // Webview -> Extension: compute one addressed dry-run snapshot

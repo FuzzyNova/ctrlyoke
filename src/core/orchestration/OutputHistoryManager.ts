@@ -14,6 +14,7 @@ import {
   OutputExecutionTarget,
   OutputActivityEntry,
   WorkspaceSnapshot,
+  SnapshotFileChange,
   UndoRecord,
   StepOutput,
 } from "../../types/OutputHistoryTypes";
@@ -201,6 +202,8 @@ export class OutputHistoryManager {
     (flush, result) => this.publishStreamingFlush(flush, result)
   );
   private readonly snapshotService = new WorkspaceSnapshotService();
+  /** Latest snapshots accepted from the live executor, even before disk flush completes. */
+  private readonly liveSnapshots = new Map<string, WorkspaceSnapshot>();
   /** Latest fire-and-forget search-index refresh; see flushPendingIndexRefresh. */
   private pendingIndexRefresh: Promise<void> = Promise.resolve();
   /** One aggregate owner per active run manifest. */
@@ -900,6 +903,10 @@ export class OutputHistoryManager {
     if (!historyFilePath) {
       return;
     }
+    this.liveSnapshots.set(
+      this.getSnapshotCacheKey(historyFilePath, target),
+      snapshot
+    );
     try {
       const existingSnapshot =
         await this.runMetadataScanner.findLatestWorkspaceSnapshot(
@@ -930,6 +937,48 @@ export class OutputHistoryManager {
         error
       );
     }
+  }
+
+  /** Read one file from the latest snapshot for a target without projecting the full run. */
+  async getSnapshotFileContent(
+    historyFilePath: string,
+    target: OutputExecutionTarget,
+    filePath: string
+  ): Promise<
+    | Pick<
+        SnapshotFileChange,
+        "beforeContent" | "contentToRestore" | "contentCaptureSkipped"
+      >
+    | undefined
+  > {
+    if (!historyFilePath || !filePath) return undefined;
+    const snapshot =
+      this.liveSnapshots.get(this.getSnapshotCacheKey(historyFilePath, target)) ??
+      (await this.runMetadataScanner.findLatestWorkspaceSnapshot(
+        historyFilePath,
+        target
+      ));
+    const fileChange = snapshot?.changedFiles.find(
+      (change) => change.path === filePath
+    );
+    if (!snapshot || !fileChange) return undefined;
+
+    const enriched = await this.enrichWorkspaceSnapshot(snapshot);
+    const enrichedChange = enriched.changedFiles.find(
+      (change) => change.path === filePath
+    );
+    if (!enrichedChange) return undefined;
+    return {
+      ...(enrichedChange.beforeContent !== undefined
+        ? { beforeContent: enrichedChange.beforeContent }
+        : {}),
+      ...(enrichedChange.contentToRestore !== undefined
+        ? { contentToRestore: enrichedChange.contentToRestore }
+        : {}),
+      ...(enrichedChange.contentCaptureSkipped !== undefined
+        ? { contentCaptureSkipped: enrichedChange.contentCaptureSkipped }
+        : {}),
+    };
   }
 
   /**
@@ -1692,9 +1741,8 @@ export class OutputHistoryManager {
       if (!stepOutput.workspaceSnapshot) {
         return stepOutput;
       }
-      const enriched = await this.snapshotService.enrichSnapshotBeforeContent(
-        stepOutput.workspaceSnapshot,
-        this._workspaceFolderPath
+      const enriched = await this.enrichWorkspaceSnapshot(
+        stepOutput.workspaceSnapshot
       );
       if (enriched === stepOutput.workspaceSnapshot) {
         return stepOutput;
@@ -1728,6 +1776,22 @@ export class OutputHistoryManager {
       Object.fromEntries(promptEntries);
 
     return { ...history, promptOutputs, finalStepOutputs };
+  }
+
+  private enrichWorkspaceSnapshot(
+    snapshot: WorkspaceSnapshot
+  ): Promise<WorkspaceSnapshot> {
+    return this.snapshotService.enrichSnapshotBeforeContent(
+      snapshot,
+      this._workspaceFolderPath
+    );
+  }
+
+  private getSnapshotCacheKey(
+    historyFilePath: string,
+    target: OutputExecutionTarget
+  ): string {
+    return `${historyFilePath}:${JSON.stringify(target)}`;
   }
 
   private async saveTimelineExecutionOutput(

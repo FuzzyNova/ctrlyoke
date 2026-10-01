@@ -314,6 +314,13 @@ message, so on the hosted server it still goes through
 
 Independent of 1A/1B, and probably the cheapest of the three to land.
 
+**Progress (2026-10-01):** The first half is implemented: webviews request
+`REQUEST_WORKSPACE_SNAPSHOT_CONTENT`, and `WebviewMessageRouter` answers with
+`WORKSPACE_SNAPSHOT_CONTENT` through `OutputHistoryManager`'s targeted,
+enriched snapshot read. The run-view payload and its consumers are unchanged;
+the follow-up step will move those consumers to this fetch before stripping
+snapshot contents from the payload.
+
 ## Problem 3: redaction re-walks the entire payload per message
 
 `redactHostedTransportMessage` runs `secretRedactionService.redactValue` over

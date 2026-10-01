@@ -173,6 +173,8 @@ export {
   type ExecutionPreviewScope,
   type RequestExecutionPreviewMessage,
   type ExecutionPreviewResultMessage,
+  type RequestWorkspaceSnapshotContentMessage,
+  type WorkspaceSnapshotContentMessage,
   type SaveWorkflowBundlePreview,
   type SaveBundleDiagnostic,
 

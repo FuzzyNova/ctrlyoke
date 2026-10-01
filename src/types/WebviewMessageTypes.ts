@@ -68,6 +68,7 @@ import type {
   RunRef,
   WorkingFile,
   WorkflowRunNavigationSummary,
+  WorkflowRunAddress,
   WorkflowTokenTotals,
   WorktreeRunProjection,
   ScriptVerdict,
@@ -1915,6 +1916,27 @@ export interface RunViewLoadedMessage {
   };
 }
 
+/** Webview → Extension: fetch captured content for one indexed snapshot file. */
+export interface RequestWorkspaceSnapshotContentMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_WORKSPACE_SNAPSHOT_CONTENT;
+  requestId: string;
+  address: WorkflowRunAddress;
+  target: OutputExecutionTarget;
+  path: string;
+}
+
+/** Extension → Webview: the requested content, if it was captured. */
+export interface WorkspaceSnapshotContentMessage {
+  type: typeof MESSAGE_TYPES.WORKSPACE_SNAPSHOT_CONTENT;
+  requestId: string;
+  address: WorkflowRunAddress;
+  target: OutputExecutionTarget;
+  path: string;
+  beforeContent?: string;
+  contentToRestore?: string;
+  contentCaptureSkipped?: boolean;
+}
+
 /**
  * Authoritative address and revisions for the client's own editing target,
  * published after every definition write. `RUN_VIEW_LOADED` also carries these,
@@ -2896,6 +2918,7 @@ export type IncomingMessage =
   | ActiveStepIndicesChangedMessage
   | ProgressUpdateMessage
   | SearchIndexRebuildProgressMessage
+  | WorkspaceSnapshotContentMessage
   | StepStatusChangedMessage
   | RetryAttemptChangedMessage
   | CliOutputMessage

@@ -38,6 +38,7 @@ import {
   type WorkspaceWorktreeOwnership,
   projectWorktreeRuntime,
 } from "../types/CtrlYokeTypes";
+import type { OutputExecutionTarget } from "../types/OutputHistoryTypes";
 import {
   ACTION_TYPES,
   EXTERNAL_EXECUTION_RESOLUTION_KINDS,
@@ -2903,6 +2904,33 @@ export class WorkflowOrchestrator {
       definitionRollback,
       announceReplayBoundary,
       skipTerminalReplay
+    );
+  }
+
+  async getWorkspaceSnapshotFileContent(
+    address: WorkflowRunAddress,
+    target: OutputExecutionTarget,
+    filePath: string
+  ): Promise<
+    | {
+        beforeContent?: string;
+        contentToRestore?: string;
+        contentCaptureSkipped?: boolean;
+      }
+    | undefined
+  > {
+    const workspaceRoot = this.requireWorkspaceRoot();
+    const liveInstance = this.workflowInstanceRegistry.findInstanceForLineage(
+      address.workflowKey
+    );
+    const historyManager =
+      liveInstance?.getQueueState().runRef === address.runRef
+        ? liveInstance.getOutputHistoryManager()
+        : new OutputHistoryManager(workspaceRoot);
+    return historyManager.getSnapshotFileContent(
+      historyManager.getHistoryFilePath(address.workflowKey, address.runRef),
+      target,
+      filePath
     );
   }
 
