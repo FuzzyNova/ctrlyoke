@@ -14,6 +14,7 @@ import {
   destroyOrphanedMouseSelection,
   findSlashCompletionContext,
   findCustomCompletionContext,
+  relintForContextChange,
   keyboardTooltipSpace,
   type CodeMirrorEditorMode,
 } from "@components/editor/CodeMirrorEditor";
@@ -165,6 +166,49 @@ describe("CodeMirrorEditor prior-context references", () => {
 
       expect(chip?.getAttribute("data-invalid")).toBe("true");
       expect(referenceValidity.get("$previous")).toBe(false);
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+});
+
+describe("CodeMirrorEditor prior-context re-lint on step context change", () => {
+  it("clears a stale invalid $step chip once the step count arrives", async () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const referenceValidity = new Map<string, boolean>();
+    const stepCountRef = { current: 0 };
+    const view = new EditorView({
+      parent,
+      doc: "$step:1-3",
+      extensions: [
+        createAtomicReferenceExtension(new Map(), referenceValidity),
+        createPriorContextLintExtension(
+          stepCountRef,
+          { current: false },
+          referenceValidity
+        ),
+      ],
+    });
+
+    try {
+      // First lint runs before the workflow steps have loaded.
+      forceLinting(view);
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      expect(referenceValidity.get("$step:1-3")).toBe(false);
+
+      // No lint is pending now, so a bare forceLinting would be a no-op.
+      stepCountRef.current = 5;
+      relintForContextChange(view);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      const chip = view.dom.querySelector<HTMLElement>(".cm-atomic-ref");
+      expect(referenceValidity.get("$step:1-3")).toBe(true);
+      expect(chip?.hasAttribute("data-invalid")).toBe(false);
+      let diagnosticCount = 0;
+      forEachDiagnostic(view.state, () => diagnosticCount++);
+      expect(diagnosticCount).toBe(0);
     } finally {
       view.destroy();
       parent.remove();

@@ -49,3 +49,24 @@ export function parseRangeNotation(text: string): number[] | null {
   if (result.size === 0) return null;
   return [...result].sort((a, b) => a - b);
 }
+
+/** Format a number[] as compact range notation, e.g. [1,2,4,5,6] → "1,2,4-6". Inverse of parseRangeNotation. */
+export function formatRangeNotation(nums: readonly number[]): string {
+  if (nums.length === 0) return "";
+  const sorted = [...new Set(nums)].sort((a, b) => a - b);
+  const parts: string[] = [];
+  let start = sorted[0];
+  let end = sorted[0];
+
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i] === end + 1) {
+      end = sorted[i];
+    } else {
+      parts.push(start === end ? `${start}` : `${start}-${end}`);
+      start = sorted[i];
+      end = sorted[i];
+    }
+  }
+  parts.push(start === end ? `${start}` : `${start}-${end}`);
+  return parts.join(",");
+}

@@ -29,7 +29,10 @@ import {
   createGitChangeReferencePattern,
   createReferencePatterns,
 } from "../../../utils/ReferencePatterns";
-import { parseRangeNotation } from "../../../utils/RangeNotationParser";
+import {
+  formatRangeNotation,
+  parseRangeNotation,
+} from "../../../utils/RangeNotationParser";
 
 export { SYMBOL_KIND_ICONS } from "../../../types/SymbolKindConstants";
 
@@ -587,7 +590,7 @@ export function describePriorContextChip(
       : ref.kind;
   const label =
     ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.STEP
-      ? `step ${ref.indices?.join(",") ?? ""}`
+      ? `step ${formatRangeNotation(ref.indices ?? [])}`
       : PRIOR_CONTEXT_CHIP_LABELS[ref.kind];
   return {
     icon: "book",

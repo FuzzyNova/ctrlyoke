@@ -81,6 +81,7 @@ import {
 import { WebviewLog } from "../../utils/logger";
 import { useSettingsStore } from "../../store/settingsStore";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
+import { formatRangeNotation } from "@root/utils/RangeNotationParser";
 import { scanCtrlYokeSlashTokens } from "@root/utils/CtrlYokeSlashTokens";
 import { createGitChangeReferencePattern } from "@root/utils/ReferencePatterns";
 import {
@@ -801,28 +802,28 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   useEffect(() => {
     stepCountRef.current = props.stepCount ?? 0;
     if (viewRef.current) {
-      forceLinting(viewRef.current);
+      relintForContextChange(viewRef.current);
     }
   }, [props.stepCount]);
 
   useEffect(() => {
     hasFinalStepRef.current = props.hasFinalStep ?? false;
     if (viewRef.current) {
-      forceLinting(viewRef.current);
+      relintForContextChange(viewRef.current);
     }
   }, [props.hasFinalStep]);
 
   useEffect(() => {
     hasPreConditionRef.current = props.hasPreCondition ?? false;
     if (viewRef.current) {
-      forceLinting(viewRef.current);
+      relintForContextChange(viewRef.current);
     }
   }, [props.hasPreCondition]);
 
   useEffect(() => {
     modeRef.current = mode;
     if (viewRef.current) {
-      forceLinting(viewRef.current);
+      relintForContextChange(viewRef.current);
     }
   }, [mode]);
 
@@ -1878,6 +1879,29 @@ const symbolKindsUpdatedEffect = StateEffect.define<void>();
 // validity map counterpart to symbolKindsUpdatedEffect.
 const referenceValidityUpdatedEffect = StateEffect.define<void>();
 
+// Dispatched when non-document lint inputs (stepCount, hasFinalStep,
+// hasPreCondition, mode) change. forceLinting alone is a no-op unless a lint is
+// already pending, so without this effect a prompt first linted before the
+// workflow's steps loaded keeps its stale "steps do not exist" warnings until
+// the user edits the text. The ref-driven linters' needsRefresh watches it.
+const lintContextChangedEffect = StateEffect.define<void>();
+
+function isLintRefreshUpdate(update: ViewUpdate): boolean {
+  return (
+    update.docChanged ||
+    update.viewportChanged ||
+    update.transactions.some((tr) =>
+      tr.effects.some((effect) => effect.is(lintContextChangedEffect))
+    )
+  );
+}
+
+/** Re-run linting after a non-document lint input changed (see lintContextChangedEffect). */
+export function relintForContextChange(view: EditorView): void {
+  view.dispatch({ effects: lintContextChangedEffect.of(undefined) });
+  forceLinting(view);
+}
+
 // Atomic mode: replace each reference's text with a compact chip widget and
 // mark the range atomic via the atomicRanges facet, so arrow keys skip over the
 // whole reference and Backspace/Delete removes it in one press — the caret can
@@ -2837,7 +2861,7 @@ export function createPriorContextLintExtension(
               const label =
                 outOfRange.length === 1
                   ? `step ${outOfRange[0]} does not exist`
-                  : `steps ${outOfRange.join(", ")} do not exist`;
+                  : `steps ${formatRangeNotation(outOfRange)} do not exist`;
               message = `Prior context not found — ${label}`;
             }
           }
@@ -2870,7 +2894,7 @@ export function createPriorContextLintExtension(
     },
     {
       delay: 300,
-      needsRefresh: (update) => update.docChanged || update.viewportChanged,
+      needsRefresh: isLintRefreshUpdate,
     }
   );
 }
@@ -2922,7 +2946,7 @@ export function createConditionOutputLintExtension(
     },
     {
       delay: 300,
-      needsRefresh: (update) => update.docChanged || update.viewportChanged,
+      needsRefresh: isLintRefreshUpdate,
     }
   );
 }

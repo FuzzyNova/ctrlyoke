@@ -377,9 +377,14 @@ describe("atomic reference presentation", () => {
   it("labels a $step range reference", () => {
     const chips = findAtomicReferences("$step:1,3-4");
     expect(chips[0]).toMatchObject({
-      label: "step 1,3,4",
+      label: "step 1,3-4",
       attrs: { "data-type": "priorContext", "data-ref": "step:1,3,4" },
     });
+  });
+
+  it("labels a long contiguous $step range in compact range notation", () => {
+    const [chip] = findAtomicReferences("$step:1-99");
+    expect(chip.label).toBe("step 1-99");
   });
 
   it("rejects invalid and oversized $step ranges without expanding them", () => {

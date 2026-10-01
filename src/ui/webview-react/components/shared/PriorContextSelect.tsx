@@ -10,7 +10,10 @@ import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
 import { DropdownPortal } from "./DropdownPortal";
 import type { PriorContext, WorkflowRunAddress } from "@/types/messages";
-import { parseRangeNotation } from "@root/utils/RangeNotationParser";
+import {
+  formatRangeNotation,
+  parseRangeNotation,
+} from "@root/utils/RangeNotationParser";
 import { dropdownBorderClass } from "@utils/dropdownValidation";
 import { Icon } from "./Icon";
 
@@ -39,27 +42,6 @@ function getMode(value: PriorContext | undefined): KeywordMode {
   if (Array.isArray(value)) return PRIOR_CONTEXT_SELECTION_MODES.CUSTOM;
   if (isRunAddress(value)) return PRIOR_CONTEXT_SELECTION_MODES.RUN;
   return value as KeywordMode;
-}
-
-/** Format a number[] as compact range notation, e.g. [1,2,4,5,6] → "1,2,4-6". */
-function formatAsRangeNotation(nums: number[]): string {
-  if (nums.length === 0) return "";
-  const sorted = [...new Set(nums)].sort((a, b) => a - b);
-  const parts: string[] = [];
-  let start = sorted[0];
-  let end = sorted[0];
-
-  for (let i = 1; i < sorted.length; i++) {
-    if (sorted[i] === end + 1) {
-      end = sorted[i];
-    } else {
-      parts.push(start === end ? `${start}` : `${start}-${end}`);
-      start = sorted[i];
-      end = sorted[i];
-    }
-  }
-  parts.push(start === end ? `${start}` : `${start}-${end}`);
-  return parts.join(",");
 }
 
 /**
@@ -104,7 +86,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
     () => mode === PRIOR_CONTEXT_SELECTION_MODES.CUSTOM
   );
   const [customText, setCustomText] = useState(() =>
-    Array.isArray(value) ? formatAsRangeNotation(value) : ""
+    Array.isArray(value) ? formatRangeNotation(value) : ""
   );
   const [workflowKey, setWorkflowKey] = useState(() =>
     isRunAddress(value) ? value.workflowKey : ""
@@ -126,7 +108,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
       return;
     }
     if (Array.isArray(value)) {
-      setCustomText(formatAsRangeNotation(value));
+      setCustomText(formatRangeNotation(value));
       setWantsCustom(true);
       setCustomError(false);
     } else {

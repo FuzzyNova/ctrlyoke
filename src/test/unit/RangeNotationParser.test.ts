@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
+  formatRangeNotation,
   MAX_RANGE_NOTATION_INDICES,
   parseRangeNotation,
 } from "../../utils/RangeNotationParser";
@@ -67,5 +68,20 @@ suite("RangeNotationParser", () => {
   test("returns null for values outside the safe integer range", () => {
     assert.strictEqual(parseRangeNotation("9007199254740992"), null);
     assert.strictEqual(parseRangeNotation("1-9007199254740992"), null);
+  });
+
+  test("formats indices as compact range notation", () => {
+    assert.strictEqual(formatRangeNotation([1, 2, 3, 4, 6]), "1-4,6");
+    assert.strictEqual(formatRangeNotation([6, 2, 1, 2]), "1-2,6");
+    assert.strictEqual(formatRangeNotation([5]), "5");
+    assert.strictEqual(formatRangeNotation([]), "");
+  });
+
+  test("round-trips through parseRangeNotation", () => {
+    const indices = [1, 2, 3, 7, 9, 10, 11];
+    assert.deepStrictEqual(
+      parseRangeNotation(formatRangeNotation(indices)),
+      indices
+    );
   });
 });
