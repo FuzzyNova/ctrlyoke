@@ -66,14 +66,14 @@ These don't cause the crash, but they are real problems:
 
 ## Suggested Fix
 
-1. Fix or remove the looping test in the `bug-fix` worktree before step 34 runs `npm test` again.
-2. Give `runTest.ts` a guard against a runaway shard, for example killing a shard whose output
-   rate or process memory passes a ceiling. One looping test should fail the suite, not take down
-   the machine.
-3. Check whether production can loop the same way: an unlimited pass-retry step whose end
-   condition keeps passing re-runs the harness forever.
-4. Make run views proportional to what's on screen instead of the run's total length, and stop
-   sending the history twice (`runViewLoaded` and then `outputHistoryLoaded`).
+1. Done: the looping test in the `bug-fix` worktree now uses `onPass: "continue"`.
+2. Done: `src/test/suite/eventLoopStallWatchdog.ts` kills an extension host whose event loop
+   stays blocked for 30 s, and the shard's failure names the test that was running.
+3. Checked, no change: in production every pass retry awaits a real harness run and a script
+   process, and checks the stop flag. An unlimited `onPass: retry` loop is documented behavior
+   that costs harness runs, but it never starves the event loop.
+4. Open: make run views proportional to what's on screen instead of the run's total length, and
+   stop sending the history twice (`runViewLoaded` and then `outputHistoryLoaded`).
 
 Logs: `.ctrlyoke/logs/ctrlyoke-1790824029160.log`; `%APPDATA%/Code/logs/20260930T194052/main.log`;
 `%TEMP%/ctrlyoke-extension-test-user-data-4-WHTXG4/logs/20260930T221650/window1/renderer*.log`.

@@ -20,6 +20,7 @@ import {
   writeShardTimings,
   type TestTimings,
 } from "./sharding";
+import { startEventLoopStallWatchdog } from "./eventLoopStallWatchdog";
 
 async function activateExtensionForTests(): Promise<void> {
   const extension = vscode.extensions.all.find(
@@ -146,6 +147,7 @@ export function run(): Promise<void> {
         // Mocha defers the run itself to the next tick, so listeners attached
         // right after `run()` returns still see every event.
         recordElapsedPerFile(runner, testsRoot, elapsed);
+        startEventLoopStallWatchdog(runner);
       })().catch((err) => {
         console.error(err);
         e(err);

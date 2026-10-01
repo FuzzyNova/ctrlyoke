@@ -3,6 +3,7 @@ import * as os from "os";
 import * as path from "path";
 import { Writable } from "stream";
 import { mergeShardTimings } from "./suite/sharding";
+import { STALL_REPORT_ENV_VAR } from "./suite/eventLoopStallWatchdog";
 
 /**
  * How many VS Code instances to split the extension-host suite across.
@@ -65,6 +66,7 @@ async function runShard(
   const userDataDir = await fs.mkdtemp(
     path.join(os.tmpdir(), `ctrlyoke-extension-test-user-data-${index}-`)
   );
+  const stallReportPath = path.join(stateHome, "event-loop-stall.txt");
   const sharded = SHARD_COUNT > 1;
   const sink = sharded ? createShardSink() : undefined;
 
@@ -79,13 +81,18 @@ async function runShard(
         CTRLYOKE_HOME: stateHome,
         CTRLYOKE_TEST_SHARD_INDEX: String(index),
         CTRLYOKE_TEST_SHARD_COUNT: String(SHARD_COUNT),
+        [STALL_REPORT_ENV_VAR]: stallReportPath,
       },
       stdout: sink?.stream,
       stderr: sink?.stream,
     });
     return { index };
   } catch (failure) {
-    return { index, failure };
+    const stallReport = await readIfExists(stallReportPath);
+    return {
+      index,
+      failure: stallReport ? `${String(failure)}\n${stallReport}` : failure,
+    };
   } finally {
     if (sink) {
       const rule = "-".repeat(72);
@@ -94,6 +101,14 @@ async function runShard(
       );
     }
     await Promise.all([discard(stateHome), discard(userDataDir)]);
+  }
+}
+
+async function readIfExists(file: string): Promise<string | undefined> {
+  try {
+    return (await fs.readFile(file, "utf8")).trim();
+  } catch {
+    return undefined;
   }
 }
 
