@@ -272,6 +272,12 @@ needs either the fetch or an explicit "truncated" state:
 Export and copy-all probably belong on the extension side, where the full
 history can be read directly.
 
+Land this in the same order as Problem 2. The full-text fetch comes first, with
+the payload uncapped. Capping is switched on only in the commit where the last
+consumer above stops assuming the full text is present. Live streaming output
+(the in-memory buffer replay) stays uncapped, so every consumer must accept both
+capped and complete entries.
+
 ## Problem 2: `workspaceSnapshot` contents ride along on every load
 
 `promptOutputs` is 16.4 MB of captured file contents, sent so that a file-edit
@@ -286,6 +292,25 @@ snapshots on read (git-head `beforeContent` hydration), so the on-demand path
 must go through the same enrichment rather than reading the timeline directly —
 otherwise replay and diff rendering diverge, which the orchestration
 instructions already warn about.
+
+**Consumers the fetch must cover (added 2026-10-01 during staging).** Diff
+rows are not the only reader of snapshot contents. The undo/redo dialogs build
+their input in the webview from the same snapshot:
+`useOutputUndoActions.ts` passes `promptUndo.workspaceSnapshot` and
+`row.workspaceSnapshot` to `buildUndoDialogInputForPrompt` /
+`buildUndoDialogInputForSpecificEvent`, which read `beforeContent` and
+`contentToRestore` (`SnapshotFileChange` in `OutputHistoryTypes.ts`). Strip
+both fields from the index, and make every one of these consumers fetch, or
+state explicitly that the content is unavailable. `structuredPatch`,
+`afterHash`, `lineEnding`, `changeType` and `contentCaptureSkipped` are small
+and stay on the index.
+
+**Landing order.** Land the fetch request and its extension-side handler
+first, with the payload unchanged. Then switch the webview consumers to it and
+strip the contents in the same commit, so no commit leaves a consumer reading a
+field that is no longer sent. The on-demand reply is an ordinary outbound
+message, so on the hosted server it still goes through
+`redactHostedTransportMessage`. The same rule applies to the Proposal 1C fetch.
 
 Independent of 1A/1B, and probably the cheapest of the three to land.
 
