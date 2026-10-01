@@ -4,8 +4,8 @@ import {
   formatHiddenOutputNotice,
 } from "@utils/outputTruncation";
 import { highlightText, type RowFindDecoration } from "@utils/outputFind";
-import { Icon } from "../shared/Icon";
 import { TOOL_ERROR_LINE, TOOL_RESULT_LINE } from "./outputStyles";
+import { ToolCallExpandToggle } from "./ToolCallExpandToggle";
 
 /** Selects a section root by name — the `data-collapsible-output-section` below. */
 export function collapsibleOutputSectionSelector(section: string): string {
@@ -79,29 +79,27 @@ export const CollapsibleOutputSection = memo<CollapsibleOutputSectionProps>(
         className={isError ? TOOL_ERROR_LINE : TOOL_RESULT_LINE}
       >
         {canToggle && (
-          <button
-            type="button"
-            className={`flex w-full items-center gap-1 bg-[var(--bg-primary)] text-left text-bash-expand-link cursor-pointer hover:underline border-0 p-0 font-inherit ${
+          // Same pill as "Show full command", so the two read as one control
+          // family. The wrapper is flex so its height is the pill's 1.625em —
+          // one result line, which is what the estimators charge for it.
+          <div
+            className={`flex bg-[var(--bg-primary)] ${
               isExpanded
                 ? "sticky top-[var(--cy-output-sticky-top,0px)] z-[1]"
                 : ""
             }`}
-            aria-expanded={isExpanded}
-            aria-controls={contentId}
-            onClick={(event) => {
-              event.preventDefault();
-              pinToggle(event.currentTarget);
-              onToggle(!isExpanded);
-            }}
           >
-            <Icon
-              name="chevron-right"
-              className={`text-[length:var(--cy-output-font-size-sm)] transition-transform ${
-                isExpanded ? "rotate-90" : ""
-              }`}
+            <ToolCallExpandToggle
+              expanded={isExpanded}
+              onToggle={(toggle) => {
+                pinToggle(toggle);
+                onToggle(!isExpanded);
+              }}
+              label={formatFullOutputToggleLabel(noun, false)}
+              showLabel
+              aria-controls={contentId}
             />
-            <span>{formatFullOutputToggleLabel(noun, isExpanded)}</span>
-          </button>
+          </div>
         )}
         {/* Highlight only the visible slice — find offsets are computed against
           the full text, and highlightText drops matches past its end, so a

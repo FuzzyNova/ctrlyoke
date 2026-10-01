@@ -3,11 +3,13 @@ import { Icon } from "../shared/Icon";
 
 export interface ToolCallExpandToggleProps {
   expanded: boolean;
-  onToggle: () => void;
+  /** Receives the clicked button, for callers that anchor scroll on it. */
+  onToggle: (toggle: HTMLButtonElement) => void;
   label?: string;
   showLabel?: boolean;
   title?: string;
   "aria-label"?: string;
+  "aria-controls"?: string;
 }
 
 /** Shared expand/collapse affordance for dense tool-call headers. */
@@ -18,6 +20,7 @@ export const ToolCallExpandToggle: React.FC<ToolCallExpandToggleProps> = ({
   showLabel = false,
   title,
   "aria-label": ariaLabel,
+  "aria-controls": ariaControls,
 }) => {
   const resolvedLabel = label?.replace(/^show\b/i, expanded ? "Hide" : "Show");
 
@@ -27,11 +30,12 @@ export const ToolCallExpandToggle: React.FC<ToolCallExpandToggleProps> = ({
       className="self-start inline-flex h-[1.625em] shrink-0 items-center gap-1 whitespace-nowrap rounded bg-btn-secondary-bg px-1.5 text-[length:var(--cy-output-font-size-sm)] leading-none text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover cursor-pointer font-inherit"
       onClick={(event) => {
         event.preventDefault();
-        onToggle();
+        onToggle(event.currentTarget);
       }}
       title={title}
       aria-label={ariaLabel ?? title ?? resolvedLabel}
       aria-expanded={expanded}
+      aria-controls={ariaControls}
     >
       <Icon
         name={expanded ? "codicon-fold" : "codicon-unfold"}

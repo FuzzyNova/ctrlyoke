@@ -84,7 +84,7 @@ describe("GenericToolCallOutput", () => {
     await user.click(screen.getByRole("button", { name: "Show full output" }));
     const expandedOutput = screen.getByRole("button", {
       name: "Hide full output",
-    }).parentElement;
+    }).parentElement?.parentElement;
     expect(screen.queryByText(hiddenLinesNotice)).not.toBeInTheDocument();
     expect(expandedOutput?.textContent).toContain(
       `line ${lastVisibleLine + 1}`

@@ -50,7 +50,8 @@ describe("CollapsibleOutputSection", () => {
   it("sticks the toggle only while expanded, below any pinned banner", () => {
     const { rerender, onToggle, pinToggle } = renderSection();
     expect(
-      screen.getByRole("button", { name: "Show full output" }).className
+      screen.getByRole("button", { name: "Show full output" }).parentElement
+        ?.className
     ).not.toContain("sticky");
 
     rerender(
@@ -69,8 +70,12 @@ describe("CollapsibleOutputSection", () => {
       </OutputTogglePinContext.Provider>
     );
     const hide = screen.getByRole("button", { name: "Hide full output" });
-    expect(hide.className).toContain("sticky");
-    expect(hide.className).toContain("top-[var(--cy-output-sticky-top,0px)]");
+    // Sticky lives on the toggle's wrapper, which spans the section's width
+    // and paints the background the stuck pill sits on.
+    expect(hide.parentElement?.className).toContain("sticky");
+    expect(hide.parentElement?.className).toContain(
+      "top-[var(--cy-output-sticky-top,0px)]"
+    );
     expect(hide).toHaveAttribute("aria-controls", "section-output");
     expect(screen.queryByText(/more lines/)).not.toBeInTheDocument();
   });
@@ -96,6 +101,6 @@ describe("CollapsibleOutputSection", () => {
     expect(getEnclosingCollapsibleOutputSection(toggle)).toBe("error");
     expect(
       container.querySelector(collapsibleOutputSectionSelector("error"))
-    ).toBe(toggle.parentElement);
+    ).toBe(toggle.parentElement?.parentElement);
   });
 });
