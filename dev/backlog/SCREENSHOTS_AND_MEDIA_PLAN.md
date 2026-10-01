@@ -198,17 +198,35 @@ Each item: what to capture, what prep it needs, where it's used.
     completions, the visual-viewport-aware tooltip repositioning (`CodeMirrorEditor.tsx`'s
     `keyboardTooltipSpace`/`repositionTooltips` handling exists specifically for this). iPhone is fine
     for this one; it's not platform-specific.
-  - **The iOS install recording:** the onboarding flow end to end — scan the QR code from
-    `ServerSection.tsx` with the phone camera → the ctrlyoke URL opens in mobile Safari → "Add to Home
-    Screen" install the PWA → open the installed app and see/take control of the workflow that's
-    actually running on the PC.
+  - **The iOS install walkthrough — annotated stills plus two short clips, not one long recording.**
+    The flow is: scan the QR code from `ServerSection.tsx` with the phone camera → the ctrlyoke URL
+    opens in mobile Safari → install and trust the certificate → "Add to Home Screen" install the PWA
+    → open the installed app and see/take control of the workflow that's actually running on the PC.
+    Most of that is clicking through Apple's certificate and trust menus, which works better as numbered
+    steps with one still per screen than as a video the reader has to pause and scrub:
+    - **Stills** for each certificate/trust/install screen. iOS splits trust across two places —
+      Settings → General → VPN & Device Management (install the profile), then Settings → General →
+      About → Certificate Trust Settings (enable full trust). The second is the step people miss, so it
+      gets its own still. Mark up every still with a box or arrow on the exact item to tap, and write
+      the menu path as text in the step too (searchable, screen-reader friendly, survives iOS moving
+      things).
+    - **Short clips (a few seconds each)** only where motion is the point: the QR scan → camera →
+      Safari hand-off, and the take-control payoff (also the landing-page candidate).
+    - Pull the stills from the existing full recording (Resolve: Color page → right-click viewer →
+      Grab Still, export from the Gallery) rather than re-shooting; an iPhone screen recording is at
+      native resolution (~1170px wide), which clears category H's floor. Keep the full recording as the
+      source master.
+    - Check every still and clip for personal details before publishing: certificate name, device name,
+      and the server URL/IP.
   - **The Android install recording:** the same flow's Chrome equivalent — scan the QR code → the URL
     opens in Chrome → tap Chrome's install affordance (this varies: an address-bar install icon, the ⋮
     menu's "Install app" / "Add to Home screen" item, or a custom in-app install banner, depending on
     Android/Chrome version and whether the page fires `beforeinstallprompt`) → open the installed app
-    from the home screen/app drawer and see/take control of the same running workflow.
+    from the home screen/app drawer and see/take control of the same running workflow. Unlike iOS,
+    this one may stay mostly video: the install affordance varies by device and Chrome version, so a
+    short clip plus "it may look like X or Y" text can beat stills of a single variant.
 
-  The iOS and Android install recordings together are the release-blocking PWA-setup tutorial's
+  The iOS and Android install walkthroughs together are the release-blocking PWA-setup tutorial's
   centerpiece asset — the hard requirement is documented Android + iOS install instructions in
   `docs/pro/`, and these recordings are the visual walkthrough that instructions alone don't convey
   well.
@@ -227,7 +245,9 @@ Each item: what to capture, what prep it needs, where it's used.
 - **Use:** the editor GIF pairs with #3 (the desktop/mobile composite) as a new landing "mobile"
   section. The iOS and Android install recordings are primarily documentation —
   `docs/pro/mobile-setup.md`'s iOS and Android sections respectively — and a trimmed clip of either is
-  a strong Pro-callout candidate on landing too.
+  a strong Pro-callout candidate on landing too. Edit in DaVinci Resolve (free); it has no GIF
+  export, so export MP4 and convert with ffmpeg. iPhone screen recordings are variable frame rate —
+  convert to constant frame rate (HandBrake/ffmpeg) first if Resolve drifts audio or stutters.
 
 ### 8. YAML snippets for template marketing
 
@@ -290,6 +310,14 @@ Each item: what to capture, what prep it needs, where it's used.
 - **Use:** primarily `docs/` — one screenshot per relevant doc page (workflow properties, permissions,
   MCP servers, hooks) rather than landing, though the Harness tab (harness/model picker) is a
   reasonable landing candidate paired with #1.
+- **Crop — decided: panel only.** No surrounding dashboard; at docs width a half-dashboard crop
+  shrinks the form text to unreadable. Where the panel lives is shown once by #13a, which leads the
+  docs page.
+- **Status:** captured (`images/screenshots/*-tab-*-400x800.png`) and slotted into
+  `docs/workflows/properties-panel.md`. Open follow-ups: re-capture `mcp-tab` with no personal
+  path visible (the cclsp entry shows a `C:/Users/<name>/...` command); re-shoot the set at 2x when
+  convenient (current captures are 1x, below category A's 880px floor); add #13a to the top of the page
+  once captured.
 
 ### 13. VS Code "Getting Started with ctrlyoke" walkthrough — one media asset per step
 
