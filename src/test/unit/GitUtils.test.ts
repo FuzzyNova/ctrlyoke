@@ -409,17 +409,17 @@ suite("GitUtils worktree plumbing", function () {
 
   test("describes a Git command timeout and suggests a slow hook", async () => {
     await fs.writeFile(path.join(workspaceRoot, "tracked.txt"), "changed\n");
-    await installSlowPreCommitHook(500);
+    await installSlowPreCommitHook(5_000);
     const restoreTimeouts = setGitTimeoutOverridesForTests({
-      shortTimeoutMs: 100,
-      mutationTimeoutMs: 100,
+      shortTimeoutMs: 2_000,
+      mutationTimeoutMs: 2_000,
     });
     try {
       await assert.rejects(
         commitAll(workspaceRoot, "timeout hook commit"),
         (error: unknown) =>
           error instanceof Error &&
-          error.message.includes("git commit timed out after 0.1 seconds") &&
+          error.message.includes("git commit timed out after 2 seconds") &&
           error.message.includes("slow Git hook")
       );
     } finally {

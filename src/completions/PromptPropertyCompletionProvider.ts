@@ -20,6 +20,12 @@ interface PropertyDefinition {
 type PropertyOverride = Partial<Omit<PropertyDefinition, "key">>;
 
 const RUNTIME_PROPERTY = "_runtime";
+const YAML_STEP_LIST_PARENT_KEYS = {
+  STEPS: PROMPT_PROPERTIES.STEPS,
+  PARALLEL: PROMPT_PROPERTIES.PARALLEL,
+} as const;
+type StepListParentKey =
+  (typeof YAML_STEP_LIST_PARENT_KEYS)[keyof typeof YAML_STEP_LIST_PARENT_KEYS];
 
 /** Human-focused completion details; the workflow schema owns the key set. */
 const PROPERTY_OVERRIDES: Readonly<Record<string, PropertyOverride>> = {
@@ -290,8 +296,7 @@ export class PromptPropertyCompletionProvider
       isPositionInsideYamlBlockScalar(
         (lineNumber) => document.lineAt(lineNumber).text,
         position.line,
-        position.character,
-        "prompt"
+        position.character
       )
     ) {
       return undefined;
@@ -306,7 +311,12 @@ export class PromptPropertyCompletionProvider
     }
 
     // Check if we're inside a steps list item block
-    const blockInfo = this.findPromptStepBlock(document, position.line);
+    const blockInfo = this.findPromptStepBlock(
+      document,
+      position.line,
+      line.match(/^\s*/)?.[0].length ?? 0,
+      /^\s*-\s/.test(textBeforeCursor)
+    );
     if (!blockInfo.isInsidePromptStep) {
       return undefined;
     }
@@ -360,30 +370,31 @@ export class PromptPropertyCompletionProvider
    */
   private findPromptStepBlock(
     document: vscode.TextDocument,
-    currentLine: number
+    currentLine: number,
+    cursorIndent: number,
+    cursorHasListDash: boolean
   ): { isInsidePromptStep: boolean; hasTypeScript: boolean } {
     const NOT_INSIDE = { isInsidePromptStep: false, hasTypeScript: false };
 
-    // Find the start of the current list item by searching backwards for a
-    // list-item marker (`- `) that is at the prompt-list indentation level.
+    // Find the list item whose body indentation matches the logical key
+    // indentation (the key in `- key:` starts two columns after the dash).
     let itemStartLine = -1;
     let itemIndent = -1;
+    const logicalCursorIndent = cursorIndent + (cursorHasListDash ? 2 : 0);
 
     for (let i = currentLine; i >= Math.max(0, currentLine - 100); i--) {
       const text = document.lineAt(i).text;
-
-      // A list item marker at some indentation
       const dashMatch = text.match(/^(\s*)-\s/);
       if (dashMatch) {
-        itemStartLine = i;
-        itemIndent = dashMatch[1].length;
-        break;
-      }
-
-      // If we hit a YAML key at column 0 that is a parent key (not indented),
-      // we've left the steps list area entirely.
-      if (/^\w/.test(text) && text.includes(":")) {
-        return NOT_INSIDE;
+        const candidateIndent = dashMatch[1].length;
+        if (candidateIndent + 2 === logicalCursorIndent) {
+          itemStartLine = i;
+          itemIndent = candidateIndent;
+          break;
+        }
+      } else if (text.trim() !== "" && !/^\s*#/.test(text)) {
+        const lineIndent = text.search(/\S/);
+        if (lineIndent < logicalCursorIndent) return NOT_INSIDE;
       }
     }
 
@@ -391,21 +402,16 @@ export class PromptPropertyCompletionProvider
       return NOT_INSIDE;
     }
 
-    // Verify that this list item is under a `steps:` key by searching further back
-    let underPromptsKey = false;
-    for (let i = itemStartLine - 1; i >= Math.max(0, itemStartLine - 50); i--) {
-      const text = document.lineAt(i).text;
-      if (/^\s*steps\s*:/.test(text)) {
-        underPromptsKey = true;
-        break;
-      }
-      // Stop if we hit another top-level key (col 0 non-list key)
-      if (/^\w/.test(text) && text.includes(":")) {
-        break;
-      }
-    }
-
-    if (!underPromptsKey) {
+    const parentKey = this.findListParentKey(
+      document,
+      itemStartLine,
+      itemIndent
+    );
+    if (
+      parentKey !== YAML_STEP_LIST_PARENT_KEYS.STEPS &&
+      (parentKey !== YAML_STEP_LIST_PARENT_KEYS.PARALLEL ||
+        !this.isParallelGroupInsideSteps(document, itemStartLine, itemIndent))
+    ) {
       return NOT_INSIDE;
     }
 
@@ -456,6 +462,57 @@ export class PromptPropertyCompletionProvider
     }
 
     return { isInsidePromptStep: true, hasTypeScript };
+  }
+
+  private findListParentKey(
+    document: vscode.TextDocument,
+    itemStartLine: number,
+    itemIndent: number
+  ): StepListParentKey | undefined {
+    const parentIndent = itemIndent - 2;
+    if (parentIndent < 0) return undefined;
+
+    for (let line = itemStartLine - 1; line >= 0; line--) {
+      const text = document.lineAt(line).text;
+      if (text.trim() === "" || /^\s*#/.test(text)) continue;
+      const indent = text.search(/\S/);
+      const keyIndent = indent + (/^\s*-\s+/.test(text) ? 2 : 0);
+      if (keyIndent < parentIndent) return undefined;
+      if (keyIndent !== parentIndent) continue;
+      const parentKeyPattern = new RegExp(
+        `^(?:\\s*-\\s+)?(${Object.values(YAML_STEP_LIST_PARENT_KEYS).join("|")})\\s*:`
+      );
+      const keyMatch = parentKeyPattern.exec(text);
+      return keyMatch?.[1] as StepListParentKey | undefined;
+    }
+    return undefined;
+  }
+
+  private isParallelGroupInsideSteps(
+    document: vscode.TextDocument,
+    itemStartLine: number,
+    itemIndent: number
+  ): boolean {
+    const parallelLine = itemStartLine - 1;
+    for (
+      let line = parallelLine;
+      line >= Math.max(0, parallelLine - 100);
+      line--
+    ) {
+      const text = document.lineAt(line).text;
+      const dashMatch = text.match(/^(\s*)-\s/);
+      if (!dashMatch) continue;
+      const ownerIndent = dashMatch[1].length;
+      if (ownerIndent >= itemIndent) continue;
+      if (
+        this.findListParentKey(document, line, ownerIndent) ===
+        YAML_STEP_LIST_PARENT_KEYS.STEPS
+      ) {
+        return true;
+      }
+      return false;
+    }
+    return false;
   }
 
   /**

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli); reproduced by running the provider against a stub `vscode`
 - **Area:** `src/completions/PromptPropertyCompletionProvider.ts` (block-scalar guard ~289-312 only checks `prompt`; `findPromptStepBlock` ~361-458 matches the nearest `- ` line at any depth and ignores indentation)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
