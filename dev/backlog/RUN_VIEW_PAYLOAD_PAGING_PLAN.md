@@ -229,18 +229,64 @@ the reader:
 ### Proposal 1B — stop shipping `activityEntries` alongside the aggregates
 
 22.4 MB (41 % of the payload) exists so the renderer can interleave text and
-tool blocks chronologically. The aggregate already holds every event; what the
-activity stream adds is (a) the slice boundaries and (b) each slice's timestamp.
+tool blocks chronologically. The activity stream carries structured event
+payloads and their slice boundaries/timestamps, plus standalone text deltas;
+the persisted-run comparison below also found some event fields missing from
+the corresponding aggregate.
 
-Investigate replacing the full delta payload with per-event ordering metadata
-on the aggregate's normalized events — the aggregate plus a `timestampMs`
-(already present on most `CliEvent`s) may be enough for
-`mapOrderedHistoryEntriesToMessages` to produce the same interleaving without a
-second copy of the payload. If it is, this is the single largest win available
-and it is independent of paging.
+**Investigation (2026-10-01): exact replacement does not hold.** The candidate
+cannot reproduce every current row from `orderedEntries[].cliOutput.structured.events`
+plus ordering metadata alone:
 
-Do 1B before 1A if it holds up: it is a projection change with no new protocol
-and no client range-tracking, and it shrinks whatever 1A would later page.
+- Plain-text and script stdout are persisted as
+  `CLI_OUTPUT_CHUNK_APPENDED` string deltas. `StreamingCliOutputAccumulator`
+  concatenates them into `cliOutput.response`; they are not represented in
+  `structured.events`. For example, activity slices `(seq 2, text "before ")`,
+  `(seq 3, bash tool)`, `(seq 4, text "after")` become one response string
+  (`"before after"`) plus the tool event. No per-event timestamp or slice
+  marker can recover which side of the tool each part occupied. The committed
+  Vitest harness pins this counterexample and also verifies equality for a
+  structured-only fixture with missing `CliEvent.timestamp`, paired tool
+  events across slices, retries, a parallel group, a final-step loop, and a
+  phase-distinct condition attempt.
+- A scratchpad comparison against the available persisted
+  `bug-backlog/run-2026-09-30T13-41-01-546Z` run also differed: current
+  projection built 6,600 rows, while the aggregate-event candidate built
+  6,581. This loaded projection had 73 ordered entries and 8,661 activity
+  entries, all structured (no plain-text activity). The first differing row
+  showed streamed event fields including `callerType: "direct"` and optional
+  event-data properties that were absent from the corresponding aggregate
+  event. Ordering metadata cannot restore event payload fields that the
+  aggregate does not contain.
+
+The current projection sorts activities by `(timestampMs, sequence)`. It groups
+structured slices by target/run/attempt/phase, flattens each attempt, then uses
+`normalizeCliEventsWithSource` to pair calls/results and anchor the merged event
+to the slice that opened it. A completion slice absorbed into an earlier
+operation disappears. Text/script chunks coalesce only while adjacent in the
+globally sorted activity stream and with the same identity. `CliEvent.timestamp`
+is optional and is not the timeline slice timestamp; the sequence and timestamp
+on the activity entry are the ordering source. Retry, phase, parallel, and
+final-step identities all participate in this ordering.
+
+**A narrower saving remains possible.** Keep TEXT, SCRIPT, and STATUS activity
+entries, since their chunk boundaries/order (and status severity) affect rows.
+For structured entries, make the aggregate a lossless canonical copy first,
+then assign each normalized event its originating slice's
+`activityTimestampMs` and `activitySequence` and omit only the duplicate
+structured activity payload. The source mapping must use
+`normalizeCliEventsWithSource` so a paired completion retains the opening
+slice's order. Assign it while `OutputHistoryTimelineAdapter` folds each
+`CLI_OUTPUT_EVENTS_APPENDED` batch through `StreamingCliOutputAccumulator`;
+the resolver path and completed `CLI_OUTPUT_RECORDED` replacements must retain
+the same event fields and metadata. The real-run mismatch above means adding
+order fields alone is insufficient: first resolve why fields such as
+`callerType` differ, and compare every normalized event payload. The measured
+structured activity projection for that run was about 19.4 MB serialized, so
+this narrower option may still save substantial duplicate bytes, but its net
+payload reduction needs a fresh measurement after the canonical aggregate is
+lossless. It does not eliminate all `activityEntries` or justify switching the
+webview wholesale to aggregates.
 
 ### Proposal 1C — cap tool output in the payload, fetch the rest on expand
 
@@ -481,8 +527,10 @@ That makes it the first thing to land against the reload loop.
    the 2026-10-01 run because its largest individual field was 55,979 bytes.
    It still lands before 1B so large outliers can be fetched on demand; 1B's
    broader saving depends on an equivalence proof that may not hold.
-4. **Problem 1B** (drop the duplicated `activityEntries` encoding): ~22 MB, a
-   projection change, but the interleaving must be proven equivalent first.
+4. **Proposal 1B** (structured-only activity reduction): exact replacement
+   failed the equivalence check. Consider the narrower structured-slice
+   reduction above only after the aggregate/event-field mismatch is resolved
+   and a fresh row-equivalence and payload-size comparison passes.
 5. **Problem 1A** (windowing + paging): **only if**, after steps 1–4, the
    `RUN_VIEW_LOADED` for the 2026-10-01 `bug-backlog` run is still over
    ~5 MB serialized, or the iPhone acceptance criterion below still fails.
