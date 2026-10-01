@@ -182,9 +182,27 @@ export function useOutputContextMenu({
             disabledTitle: hoveredStepKey
               ? "No output to copy for this step"
               : "No step under cursor",
-            onClick: () => {
+            onClick: async () => {
               if (!hoveredOutputText) return;
-              void writeClipboardText(hoveredOutputText);
+              const lastCliIdx = hoveredStepKey
+                ? lastCliIndexPerStep.get(hoveredStepKey)
+                : undefined;
+              const hoveredMessage =
+                lastCliIdx === undefined ? undefined : allMessages[lastCliIdx];
+              const fullMessages =
+                address && hoveredMessage
+                  ? await hydrateOutputMessages(
+                      [hoveredMessage],
+                      address,
+                      fetchToolOutputEvent
+                    )
+                  : [hoveredMessage];
+              const fullMessage = fullMessages[0];
+              const fullText =
+                fullMessage?.type === OUTPUT_MESSAGE_TYPES.CLI
+                  ? extractCliOutputText(fullMessage.data as CliOutputType)
+                  : hoveredOutputText;
+              if (fullText) void writeClipboardText(fullText);
             },
           },
           { type: "divider" },

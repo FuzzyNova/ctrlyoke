@@ -278,14 +278,28 @@ consumer above stops assuming the full text is present. Live streaming output
 (the in-memory buffer replay) stays uncapped, so every consumer must accept both
 capped and complete entries.
 
-**Progress (2026-10-01):** The first infrastructure step adds a request/reply
+**Infrastructure (2026-10-01):** The first step adds a request/reply
 for one normalized aggregate event, addressed by run, target, attempt, and
 event index, plus a cached webview client. The extension resolves it through
 `OutputHistoryManager.loadHistory()`, preserving the same normalization and
 snapshot enrichment path as the view. Markdown export and Copy All hydrate any
-marked event before formatting. The run-view payload remains uncapped while
-expanded-row consumers are migrated; the next step can enable projection only
-after those consumers fetch full content too.
+marked event before formatting.
+
+**Landed (2026-10-01):** `RUN_VIEW_LOADED` now caps bash output and tool-result
+text in both the normalized aggregate events and activity slices. Persisted
+history and live buffered replay remain complete. Expand and row-copy actions
+fetch the full normalized event; Copy All and copy-hovered hydrate before
+formatting. In-pane find searches the capped head and displays “Matches in
+truncated outputs may be missed.” Collapsed Bash rendering is unchanged because
+the 400,000-byte head exceeds the pane's 100,000-character collapsed preview
+budget, including four-byte UTF-8 characters.
+
+Measured with a scratch script against the user's
+`bug-backlog` run `run-2026-09-30T13-41-01-546Z`: the largest individual bash
+output/error or tool-result output/error field in `events.jsonl` was 55,979
+bytes, below the 400,000-byte cap. The projection therefore saved **0 bytes**
+on this run. The 7.8 MB and 4.9 MB totals describe all output text, but no
+individual field reached the cap.
 
 ## Problem 2: `workspaceSnapshot` contents ride along on every load
 
@@ -462,9 +476,11 @@ That makes it the first thing to land against the reload loop.
    and it halves the server cost of every reconnect.
 2. **Problem 2** (on-demand `workspaceSnapshot` contents): ~16 MB off the
    payload, no protocol redesign, no client range tracking.
-3. **Proposal 1C** (capped tool output, fetched on expand): ~13 MB on the
-   2026-10-01 run. Moved ahead of 1B because its saving is certain; 1B's
-   depends on an equivalence proof that may not hold.
+3. **Proposal 1C** (capped tool output, fetched on expand): protects payloads
+   containing individual large outputs. The 400,000-byte head saved 0 bytes on
+   the 2026-10-01 run because its largest individual field was 55,979 bytes.
+   It still lands before 1B so large outliers can be fetched on demand; 1B's
+   broader saving depends on an equivalence proof that may not hold.
 4. **Problem 1B** (drop the duplicated `activityEntries` encoding): ~22 MB, a
    projection change, but the interleaving must be proven equivalent first.
 5. **Problem 1A** (windowing + paging): **only if**, after steps 1–4, the

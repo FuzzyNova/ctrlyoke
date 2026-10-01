@@ -17,6 +17,7 @@ function createState(
     caseSensitive: false,
     currentMatch: 0,
     matchCount: 0,
+    mayMissMatches: false,
     ...overrides,
   };
 }
@@ -42,6 +43,23 @@ describe("OutputFindBar", () => {
     expect(
       screen.queryByRole("textbox", { name: /find in output/i })
     ).not.toBeInTheDocument();
+  });
+
+  it("warns when find is searching capped output heads", () => {
+    render(
+      <OutputFindBar
+        state={createState({ isOpen: true, mayMissMatches: true })}
+        onQueryChange={vi.fn()}
+        onNavigate={vi.fn()}
+        onToggleCaseSensitive={vi.fn()}
+        onClose={vi.fn()}
+        onKeyDown={vi.fn()}
+      />
+    );
+
+    expect(
+      screen.getByText("Matches in truncated outputs may be missed.")
+    ).toHaveAttribute("role", "status");
   });
 
   it("keeps rendering long enough to play the exit animation", () => {

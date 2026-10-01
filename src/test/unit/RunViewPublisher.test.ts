@@ -12,8 +12,11 @@ import {
 } from "../../core/orchestration/RunViewPublisher";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import {
+  CLI_EVENT_TYPES,
   EXECUTION_STATES,
   MESSAGE_TYPES,
+  OUTPUT_ACTIVITY_KINDS,
+  OUTPUT_HISTORY_KINDS,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../../types/DashboardConstants";
 import type {
@@ -23,6 +26,7 @@ import type {
   RunRef,
 } from "../../types/CtrlYokeTypes";
 import type { IDashboardSink } from "../../types/IDashboardSink";
+import type { WorkflowOutputHistory } from "../../types/OutputHistoryTypes";
 import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
 import { FINAL_STEP_PHASES } from "../../types/DashboardConstants";
 
@@ -198,6 +202,112 @@ async function writeAddressedFile(
 }
 
 suite("RunViewPublisher", () => {
+  test("caps run-view tool output while on-demand fetch returns the original", async () => {
+    const { root, publisher } = await createPublisher();
+    try {
+      const workflowKey = "tool-output-payload" as WorkflowKey;
+      const runRef = "run-2026-10-01T00-00-00-000Z" as RunRef;
+      const address: WorkflowViewAddress = {
+        workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef,
+      };
+      await writeAddressedFile(root, address, 1);
+      const historyManager = new OutputHistoryManager(root);
+      const { filePath } = await historyManager.initializeRunAt(
+        workflowKey,
+        runRef,
+        WorkflowPaths.runDir(root, workflowKey, runRef),
+        1,
+        1
+      );
+      const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+      const completeEvent = {
+        type: CLI_EVENT_TYPES.BASH_COMMAND,
+        data: {
+          command: "cat log",
+          output: "full output line\n".repeat(30_000),
+        },
+      };
+      const initialOutput = {
+        prompt: "prompt",
+        response: "",
+        elapsed: 1,
+        isStreaming: true,
+        timestampMs: 1,
+        runIndex: 0,
+        attemptIndex: 0,
+      };
+      await historyManager.startStreamingExecutionOutput(
+        filePath,
+        target,
+        initialOutput
+      );
+      await historyManager.appendStreamingEvents(
+        filePath,
+        target,
+        0,
+        0,
+        [completeEvent]
+      );
+      await historyManager.saveExecutionOutput(filePath, target, [
+        {
+          ...initialOutput,
+          isStreaming: false,
+          structured: { events: [completeEvent], metadata: {} },
+        },
+      ]);
+
+      const sent: unknown[] = [];
+      await publisher.loadRunViewForClient(address, (message) => sent.push(message), "client-tool-output");
+      const loaded = sent.find(
+        (message) => (message as { type?: string }).type === MESSAGE_TYPES.RUN_VIEW_LOADED
+      ) as { history?: WorkflowOutputHistory | null };
+      const history = loaded.history;
+      const aggregate = history?.orderedEntries.find(
+        (entry) => entry.kind === OUTPUT_HISTORY_KINDS.CLI
+      );
+      const cappedAggregateEvent =
+        aggregate?.kind === OUTPUT_HISTORY_KINDS.CLI
+          ? aggregate.cliOutput.structured?.events?.[0]
+          : undefined;
+      assert.strictEqual(cappedAggregateEvent?.outputTruncated, true);
+      assert.ok(
+        (cappedAggregateEvent?.data as { output: string }).output.length <
+          completeEvent.data.output.length
+      );
+      const activityEvent = (history?.activityEntries ?? [])
+        .filter((entry) => entry.kind === OUTPUT_ACTIVITY_KINDS.STRUCTURED)
+        .flatMap((entry) => entry.events ?? [])[0];
+      assert.strictEqual(activityEvent?.outputTruncated, true);
+      assert.ok(
+        (activityEvent?.data as { output: string }).output.length <
+          completeEvent.data.output.length
+      );
+
+      const fetched = await historyManager.getCliOutputEvent(
+        filePath,
+        target,
+        0,
+        0,
+        undefined,
+        0
+      );
+      assert.strictEqual(fetched?.outputTruncated, undefined);
+      assert.strictEqual(
+        (fetched?.data as { output?: string }).output,
+        completeEvent.data.output
+      );
+    } finally {
+      await fs.rm(root, {
+        recursive: true,
+        force: true,
+        maxRetries: 5,
+        retryDelay: 100,
+      });
+    }
+  });
+
   test("binds the addressed lineage before reading its view", async () => {
     const { root, publisher, registry, events } = await createPublisher();
     try {

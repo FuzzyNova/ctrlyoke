@@ -13,7 +13,7 @@ export type FetchToolOutputEvent = (
   identity: ToolOutputEventIdentity
 ) => Promise<CliEvent | undefined>;
 
-function isTruncated(event: CliEvent): boolean {
+export function isToolOutputTruncated(event: CliEvent): boolean {
   if (event.outputTruncated) return true;
   if (event.type === CLI_EVENT_TYPES.BASH_COMMAND) {
     return Boolean(
@@ -33,10 +33,10 @@ export async function hydrateCliOutputEvents(
   fetchEvent: FetchToolOutputEvent
 ): Promise<CliOutput> {
   const events = output.structured?.events;
-  if (!events?.some(isTruncated)) return output;
+  if (!events?.some(isToolOutputTruncated)) return output;
   const fullEvents = await Promise.all(
     events.map(async (event, eventIndex) => {
-      if (!isTruncated(event)) return event;
+      if (!isToolOutputTruncated(event)) return event;
       return (
         (await fetchEvent({ ...identity, eventIndex })) ?? event
       );

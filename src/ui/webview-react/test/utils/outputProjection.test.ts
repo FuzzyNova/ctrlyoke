@@ -521,6 +521,7 @@ describe("outputProjection", () => {
     expect(messages).toHaveLength(1);
     expect(messages[0]?.sequence).toBe(1);
     expect(messages[0]?.activityEvents).toHaveLength(1);
+    expect(messages[0]?.activityEventIndices).toEqual([0]);
     expect(messages[0]?.activityEvents?.[0]).toMatchObject({
       type: CLI_EVENT_TYPES.TOOL_CALL,
       data: { id: "tool-1", result: { success: true, output: "done" } },
@@ -578,6 +579,7 @@ describe("outputProjection", () => {
     expect(messages).toHaveLength(2);
     expect(messages[0]?.sequence).toBe(1);
     expect(messages[0]?.activityEvents).toHaveLength(1);
+    expect(messages[0]?.activityEventIndices).toEqual([0]);
     expect(messages[0]?.activityEvents?.[0]).toMatchObject({
       type: CLI_EVENT_TYPES.BASH_COMMAND,
       data: { status: OPERATION_STATUS.COMPLETED, output: "all good" },
@@ -586,6 +588,7 @@ describe("outputProjection", () => {
     expect(messages[1]?.activityEvents?.[0]).toMatchObject({
       type: CLI_EVENT_TYPES.THINKING,
     });
+    expect(messages[1]?.activityEventIndices).toEqual([1]);
   });
 
   it("keeps every slice whose first event has no stable identity", () => {

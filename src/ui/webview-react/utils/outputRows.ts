@@ -282,7 +282,9 @@ export interface StructuredEventRow extends OutputRowBase<
   event: CliEvent;
   eventIndex: number;
   rawTextOutput: boolean;
-  attemptIndex: number;
+  attemptIndex?: number;
+  runIndex?: number;
+  phase?: ExecutionPhase;
   workspaceSnapshot?: WorkspaceSnapshot;
   undoRecord?: UndoRecord;
   diff?: OutputRowDiffMeta;
@@ -340,6 +342,9 @@ export interface StatsRow extends OutputRowBase<typeof OUTPUT_ROW_KINDS.STATS> {
   target: OutputMessageTarget;
   output: CliOutputType;
   outputText?: string;
+  attemptIndex?: number;
+  runIndex?: number;
+  phase?: ExecutionPhase;
 }
 
 export interface ScriptVerdictRow extends OutputRowBase<
@@ -2799,9 +2804,13 @@ export function buildOutputRows(
         rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
         target,
         event: visibleEvent.event,
-        eventIndex: visibleEvent.originalIndex,
+        eventIndex:
+          message.activityEventIndices?.[visibleEvent.originalIndex] ??
+          visibleEvent.originalIndex,
         rawTextOutput,
-        attemptIndex: visibleEvent.originalIndex,
+        attemptIndex,
+        runIndex,
+        phase: message.phase,
         workspaceSnapshot,
         undoRecord,
         hideDiff: visibleEvent.hideDiff,
@@ -2933,6 +2942,9 @@ export function buildOutputRows(
         target,
         output: aggregateOutput,
         outputText,
+        attemptIndex,
+        runIndex,
+        phase: message.phase,
         estimateSize: 24,
       });
     }

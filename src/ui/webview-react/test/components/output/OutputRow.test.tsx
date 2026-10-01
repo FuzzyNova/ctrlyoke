@@ -21,9 +21,11 @@ import {
   OUTPUT_ROW_KINDS,
   SCRIPT_VERDICT_OUTCOMES,
   STEP_TYPES,
+  WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
+import { capToolOutputEvent } from "@root/utils/ToolOutputPayload";
 
 afterEach(() => {
   useSettingsStore.setState({ fullGlobalSettings: null });
@@ -55,6 +57,7 @@ function buildBashRow(
     eventIndex: 0,
     rawTextOutput: false,
     attemptIndex: 0,
+    runIndex: 0,
     hideDiff: false,
   };
 }
@@ -75,6 +78,7 @@ function buildToolCallRow(
     eventIndex: 0,
     rawTextOutput: false,
     attemptIndex: 0,
+    runIndex: 0,
     hideDiff: false,
   };
 }
@@ -118,6 +122,83 @@ function buildStatsRow(tokens: TokenStats): OutputRenderRow {
 }
 
 describe("OutputRow token stats", () => {
+  it("fetches complete tool output before copying the row output", async () => {
+    const fullOutput = `${"copy head\n".repeat(40_000)}FULL_COPY_MARKER`;
+    const cappedEvent = capToolOutputEvent({
+      type: CLI_EVENT_TYPES.TOOL_RESULT,
+      data: {
+        toolCallId: "copy-tool",
+        result: { success: true, output: fullOutput },
+      },
+    });
+    const output = {
+      prompt: "prompt",
+      response: "",
+      elapsed: 1,
+      isStreaming: false,
+      structured: { events: [cappedEvent], metadata: {} },
+    };
+    const row: OutputRenderRow = {
+      key: "copy-stats",
+      target: TARGET,
+      estimateSize: 24,
+      rowKind: OUTPUT_ROW_KINDS.STATS,
+      output,
+      outputText: "head only",
+      attemptIndex: 1,
+      runIndex: 0,
+    };
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "workflow-a" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: "run-2026-10-01T00-00-00-000Z" as never,
+      },
+    });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    const postMessage = vi.spyOn(window.vscodeApi!, "postMessage");
+    postMessage.mockImplementation((request: { type: string; requestId?: string }) => {
+      if (request.type !== MESSAGE_TYPES.REQUEST_TOOL_OUTPUT_CONTENT) return;
+      window.setTimeout(() => {
+        window.dispatchEvent(
+          new MessageEvent("message", {
+            data: {
+              type: MESSAGE_TYPES.TOOL_OUTPUT_CONTENT,
+              requestId: request.requestId,
+              event: {
+                type: CLI_EVENT_TYPES.TOOL_RESULT,
+                data: {
+                  toolCallId: "copy-tool",
+                  result: { success: true, output: fullOutput },
+                },
+              },
+            },
+          })
+        );
+      }, 0);
+    });
+
+    render(<OutputRow row={row} isExecutionActive={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "Copy output to clipboard" }));
+
+    await waitFor(() => {
+      expect(postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: MESSAGE_TYPES.REQUEST_TOOL_OUTPUT_CONTENT,
+          attemptIndex: 1,
+          runIndex: 0,
+          eventIndex: 0,
+        })
+      );
+    });
+    expect(writeText).toHaveBeenCalledWith("head only");
+    postMessage.mockRestore();
+  });
+
   it("shows current context without inventing a visible total", () => {
     const { container } = render(
       <OutputRow
@@ -553,6 +634,134 @@ describe("OutputRow activity attribution label", () => {
 });
 
 describe("OutputRow auto-expand on hidden active match", () => {
+  it("fetches the complete bash output when a capped row expands", async () => {
+    const fullOutput = `${"visible head\n".repeat(40_000)}FULL_TAIL_MARKER`;
+    const cappedEvent = capToolOutputEvent({
+      type: CLI_EVENT_TYPES.BASH_COMMAND,
+      data: {
+        command: "cat log",
+        output: fullOutput,
+        status: OPERATION_STATUS.COMPLETED,
+      },
+    });
+    const row: StructuredEventRow = {
+      ...buildBashRow("cat log", undefined, undefined),
+      event: cappedEvent,
+      eventIndex: 0,
+      attemptIndex: 3,
+      runIndex: 2,
+    };
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "workflow-a" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: "run-2026-10-01T00-00-00-000Z" as never,
+      },
+    });
+    const postMessage = vi.spyOn(window.vscodeApi!, "postMessage");
+    postMessage.mockImplementation((request: { type: string; requestId?: string }) => {
+      if (request.type !== MESSAGE_TYPES.REQUEST_TOOL_OUTPUT_CONTENT) return;
+      window.setTimeout(() => {
+        window.dispatchEvent(
+          new MessageEvent("message", {
+            data: {
+              type: MESSAGE_TYPES.TOOL_OUTPUT_CONTENT,
+              requestId: request.requestId,
+              event: {
+                type: CLI_EVENT_TYPES.BASH_COMMAND,
+                data: {
+                  command: "cat log",
+                  output: fullOutput,
+                  status: OPERATION_STATUS.COMPLETED,
+                },
+              },
+            },
+          })
+        );
+      }, 0);
+    });
+
+    render(<OutputRow row={row} isExecutionActive={false} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /show \d+ more lines/i })
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Loading full output");
+
+    expect(await screen.findByText(/FULL_TAIL_MARKER/)).toBeInTheDocument();
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attemptIndex: 3,
+        runIndex: 2,
+        eventIndex: 0,
+      })
+    );
+    postMessage.mockRestore();
+  });
+
+  it("fetches a capped standalone tool result when it expands", async () => {
+    const fullOutput = `${"tool head\n".repeat(40_000)}FULL_TOOL_RESULT_MARKER`;
+    const cappedEvent = capToolOutputEvent({
+      type: CLI_EVENT_TYPES.TOOL_RESULT,
+      data: {
+        toolCallId: "tool-1",
+        result: { success: true, output: fullOutput },
+      },
+    });
+    const row: StructuredEventRow = {
+      key: "row-tool-result",
+      target: TARGET,
+      estimateSize: 0,
+      rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
+      event: cappedEvent,
+      eventIndex: 4,
+      rawTextOutput: false,
+      attemptIndex: 1,
+      runIndex: 0,
+      hideDiff: false,
+    };
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "workflow-a" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: "run-2026-10-01T00-00-00-000Z" as never,
+      },
+    });
+    const postMessage = vi.spyOn(window.vscodeApi!, "postMessage");
+    postMessage.mockImplementation((request: { type: string; requestId?: string }) => {
+      if (request.type !== MESSAGE_TYPES.REQUEST_TOOL_OUTPUT_CONTENT) return;
+      window.setTimeout(() => {
+        window.dispatchEvent(
+          new MessageEvent("message", {
+            data: {
+              type: MESSAGE_TYPES.TOOL_OUTPUT_CONTENT,
+              requestId: request.requestId,
+              event: {
+                type: CLI_EVENT_TYPES.TOOL_RESULT,
+                data: {
+                  toolCallId: "tool-1",
+                  result: { success: true, output: fullOutput },
+                },
+              },
+            },
+          })
+        );
+      }, 0);
+    });
+
+    render(<OutputRow row={row} isExecutionActive={false} />);
+    fireEvent.click(screen.getByRole("button", { name: /show more/i }));
+
+    expect(await screen.findByText(/FULL_TOOL_RESULT_MARKER/)).toBeInTheDocument();
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attemptIndex: 1,
+        runIndex: 0,
+        eventIndex: 4,
+      })
+    );
+    postMessage.mockRestore();
+  });
+
   it.each([
     [SCRIPT_VERDICT_OUTCOMES.PASSED, "✔ Passed"],
     [SCRIPT_VERDICT_OUTCOMES.FAILED, "✖ Failed"],

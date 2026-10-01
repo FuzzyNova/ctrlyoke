@@ -30,6 +30,8 @@ interface BashOutputProps {
   command: string;
   output?: string;
   error?: string;
+  outputLoading?: boolean;
+  errorLoading?: boolean;
   commandFindMatches?: RowFindDecoration["matches"];
   outputFindMatches?: RowFindDecoration["matches"];
   errorFindMatches?: RowFindDecoration["matches"];
@@ -80,6 +82,8 @@ export const BashOutput = memo<BashOutputProps>(
     command,
     output,
     error,
+    outputLoading = false,
+    errorLoading = false,
     commandFindMatches,
     outputFindMatches,
     errorFindMatches,
@@ -158,6 +162,10 @@ export const BashOutput = memo<BashOutputProps>(
     ) => {
       if (!content) return null;
 
+      const isLoading =
+        (type === BASH_OUTPUT_EXPANSION_SECTIONS.OUTPUT && outputLoading) ||
+        (type === BASH_OUTPUT_EXPANSION_SECTIONS.ERROR && errorLoading);
+
       const preview = buildCollapsedOutputPreview(content, {
         expanded: isExpanded,
         maxLines,
@@ -181,7 +189,11 @@ export const BashOutput = memo<BashOutputProps>(
             className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]"
             id={`${containerId}-${type}`}
           >
-            {highlightText(preview.visibleText, findMatches ?? [])}
+            {isLoading ? (
+              <span role="status">Loading full output…</span>
+            ) : (
+              highlightText(preview.visibleText, findMatches ?? [])
+            )}
             {canToggle && (
               <button
                 type="button"

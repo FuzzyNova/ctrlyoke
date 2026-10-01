@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { WorkflowStep } from "@store/workflowStore";
+import { cleanup, render } from "@testing-library/react";
+import { BashOutput } from "@components/output/BashOutput";
+import { createElement } from "react";
+import { capToolOutputEvent, RUN_VIEW_TOOL_OUTPUT_HEAD_BYTES } from "@root/utils/ToolOutputPayload";
 import {
   buildOutputRows,
   estimateOutputRowHeight,
@@ -42,6 +46,39 @@ import {
 
 describe("outputRows", () => {
   const steps = [{ name: "Analyze code" } as WorkflowStep];
+
+  it("renders a capped bash event identically to its full event while collapsed", () => {
+    const fullText = "x".repeat(RUN_VIEW_TOOL_OUTPUT_HEAD_BYTES + 100);
+    const fullEvent = {
+      type: CLI_EVENT_TYPES.BASH_COMMAND,
+      data: {
+        command: "cat log",
+        output: fullText,
+        status: OPERATION_STATUS.COMPLETED,
+      },
+    } as const;
+    const cappedEvent = capToolOutputEvent(fullEvent);
+    const cappedData = cappedEvent.data as { command: string; output?: string };
+    const fullRender = render(
+      createElement(BashOutput, {
+        command: "cat log",
+        output: fullText,
+        status: OPERATION_STATUS.COMPLETED,
+      })
+    );
+    const fullCollapsedText = fullRender.container.textContent;
+    cleanup();
+    const cappedRender = render(
+      createElement(BashOutput, {
+        command: cappedData.command,
+        output: cappedData.output,
+        status: OPERATION_STATUS.COMPLETED,
+      })
+    );
+
+    expect(cappedRender.container.textContent).toBe(fullCollapsedText);
+    cleanup();
+  });
 
   it("renders a recorded script command once while preserving harness prompt rows", () => {
     const buildRows = (
