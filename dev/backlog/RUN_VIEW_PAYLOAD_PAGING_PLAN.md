@@ -34,7 +34,10 @@ Measured with the `[MemoryWatchdog]`/`[PanelMemory]` samplers (see the
   panel received `RUN_VIEW_LOADED` (61 entries), then `SESSION_RESTORED`
   followed by `OUTPUT_HISTORY_LOADED` with the same 61/8 062 entries
   (`WorkflowInstance.replayOutputHistoryTo`), so it built the run twice in a
-  few seconds.
+  few seconds. The server built it twice too (see Problem 5), and browser
+  connects take the same path, so each phone reconnect probably cost two
+  history builds rather than one. That last point comes from reading the code;
+  the logs did not measure it.
 
 That run also crashed the machine three times. Those crashes were a test that
 looped forever (`dev/bugs/backlog/extension-host-crash-during-long-bug-backlog-run.md`),
@@ -179,6 +182,50 @@ explicit "loaded range" concept. **Design that before writing the reader**;
 a windowed payload with a minimap that silently only covers the window is worse
 than the current slow load.
 
+#### If 1A is ever needed: tuning constraints
+
+The output pane already keeps _rendering_ separate from _data_:
+`useOutputVirtualization` virtualizes rows with an adaptive overscan, and
+`useOutputScrollSeek` swaps in `OutputScrollSeekPlaceholder` during fast
+scrolls. Paging changes only the data side. **The fetch window must not be the
+viewport.** If it were, every scroll past the loaded edge would wait on a
+round-trip, and on a phone that wait is easy to see. Settle these before writing
+the reader:
+
+- **Page by step-attempt, not by row.** Rows exist only after the client runs
+  `buildOutputRows`, and their heights vary by orders of magnitude, so the
+  server cannot count or size them. The unit is an `orderedEntries` entry (one
+  CLI attempt or other history entry), together with its activity slices. The
+  existing pagers (`usePagedCommitHistory`, `usePagedFileHistory`,
+  `usePagedGitRefDiff`, `usePagedWorkspaceDirectory` over
+  `VirtualizedPagedList`) use a fixed `pageSize` over a known total of
+  uniform-height items. Reuse their direction-aware prefetch logic, not their
+  paging model.
+- **Ship a skeleton with the first window.** The initial payload carries one
+  small record per step-attempt for the whole run: target key, status, event
+  count or byte size, and an estimated height. It also carries the minimap
+  bars (`quantizeOutputMinimapBars` can produce them from this data without
+  building any rows). That keeps scroll height, the scrollbar thumb, and the
+  minimap correct before any content arrives. An unloaded attempt renders as a
+  placeholder of its estimated height, reusing `OutputScrollSeekPlaceholder`,
+  so a fetch that lands only changes heights the virtualizer is already
+  handling.
+- **Use a byte budget with a prefetch margin, not a row count.** Size each
+  page by serialized bytes (on the order of 1–2 MB), and keep at least a few
+  screen-heights loaded ahead of the scroll direction. Start the next fetch
+  when the user scrolls within that margin of the loaded edge, not when they
+  reach it. A minimap click or a find/navigation jump into an unloaded region
+  fetches the attempt containing the target first, then widens around it.
+- **Bound what the client keeps.** Loaded attempts accumulate in
+  `workflowStore`. Decide whether to evict far-away pages (which costs a
+  refetch on scroll-back) or keep everything once loaded (which caps the
+  savings at the first window). Keeping everything is the simpler default;
+  re-measure on the phone before adding eviction.
+- **Give find, export, and copy-all an answer over unloaded ranges.** This is
+  the same consumer list as Proposal 1C below, and the two proposals should
+  share one answer, most likely to run these on the extension side against the
+  full history.
+
 ### Proposal 1B — stop shipping `activityEntries` alongside the aggregates
 
 22.4 MB (41 % of the payload) exists so the renderer can interleave text and
@@ -280,13 +327,53 @@ treating payload size as the whole story.
 
 ## Problem 5: resuming a running run sends its history twice
 
-When the panel binds to a live instance, `RUN_VIEW_LOADED` already carries the
-history, and then `replayFullStateTo` (`SESSION_RESTORED`) plus
-`WorkflowInstance.replayOutputHistoryTo` (`OUTPUT_HISTORY_LOADED`) load the same
-history again. `CtrlYokeWebviewProvider.loadOutputHistoryForWorkflow` is a
-second sender of the same message. Work out which path should own the history
-for a live instance, and send it once. This is small, independent of the
-rest, and halves the panel's cost on that path.
+`WorkflowOrchestrator.replayWorkflowStateTo` binds a client (the panel, or any
+browser at `ready` via `WebviewMessageRouter.completeBrowserReadyAfterStartup`)
+to a live or retired instance. For an instance with a lineage, it currently
+sends:
+
+1. `loadRunViewForClient` → `RUN_VIEW_LOADED` with the full history. Because
+   the address is live, `RunViewPublisher.deliverRunView` then also calls
+   `replayBufferedOutputTo`, which replays every completed step's in-memory
+   output, and it replays terminals when the bind returned an id.
+2. `replayFullStateTo` → `SESSION_RESTORED`. The client runs a second
+   `workflowStore.loadWorkflow` plus `applyWorkflowChange`, and then the same
+   in-memory buffer replays **a second time**.
+3. `replayOutputHistoryTo` → **a second server-side `loadHistory()`** and an
+   `OUTPUT_HISTORY_LOADED` carrying the same history.
+4. `WORKFLOW_VIEW_IDENTITY`, which exists only to restore the identity that
+   step 2 cleared.
+5. Terminal replay again, unless `skipTerminalReplay` is set.
+
+Step 1's `RunViewPublisher` path is already the complete live-bind protocol:
+snapshot, then buffered replay, then terminals.
+`WorkflowInstance.replayBufferedOutputTo`'s own doc comment says
+`SESSION_RESTORED` must not follow an addressed snapshot. Steps 2–5 are the
+pre-run-view protocol left in place on top of it.
+
+**Proposal:** when `queueState.workflowKey` is set, `loadRunViewForClient` is
+the only sender, and `replayWorkflowStateTo` returns after it. Keep
+`replayFullStateTo` only for the no-lineage case (a brand-new workflow,
+`asReplacement`). Steps 3–5 then go away for lineage-backed instances, and
+`replayOutputHistoryTo` may have no callers left. Before cutting step 2, check
+everything `SESSION_RESTORED` carries that `RUN_VIEW_LOADED` does not. The main
+candidate is the authoritative in-memory execution state
+(`getAuthoritativeExecutionState`), since the working file can lag it and the
+client drops a snapshot whose `executionState` looks stale (`RUN_VIEW_LOADED`
+handler in `useMessageHandler.ts`). Also check `results`, `parallelGroups`,
+schema warnings, and final-step runtime. Anything missing goes onto the
+snapshot, or onto a small follow-up message that does not reset state, never
+back onto `SESSION_RESTORED`.
+
+`CtrlYokeWebviewProvider.loadOutputHistoryForWorkflow` is **not** a second
+sender on this path. No code calls it except the pass-throughs in
+`DashboardBroadcastHub` and `WorkflowTaggedSink`. Delete it together with the
+`IDashboardSink.loadOutputHistoryForWorkflow` member and its no-op in
+`NotificationManager`.
+
+This is small and independent of the rest. It halves the server's history
+reads on every bind, browser reconnects included, not just the panel's cost.
+That makes it the first thing to land against the reload loop.
 
 ## Non-goals
 
@@ -307,15 +394,20 @@ rest, and halves the panel's cost on that path.
 
 ## Sequencing
 
-1. **Problem 5** (send the history once on resume) — small and independent.
-2. **Problem 2** (on-demand `workspaceSnapshot` contents) — ~16 MB off the
+1. **Problem 5** (send the history once on resume): small and independent,
+   and it halves the server cost of every reconnect.
+2. **Problem 2** (on-demand `workspaceSnapshot` contents): ~16 MB off the
    payload, no protocol redesign, no client range tracking.
-3. **Problem 1B** (drop the duplicated `activityEntries` encoding) — ~22 MB, a
-   projection change, but needs the interleaving to be proven equivalent first.
-4. **Proposal 1C** (capped tool output, fetched on expand) — ~13 MB on the
-   2026-10-01 run, and a much smaller change than 1A.
-5. **Problem 1A** (windowing + paging) — only worth its complexity if the steps above
-   leave a payload that still hurts. Design the minimap/range story first.
+3. **Proposal 1C** (capped tool output, fetched on expand): ~13 MB on the
+   2026-10-01 run. Moved ahead of 1B because its saving is certain; 1B's
+   depends on an equivalence proof that may not hold.
+4. **Problem 1B** (drop the duplicated `activityEntries` encoding): ~22 MB, a
+   projection change, but the interleaving must be proven equivalent first.
+5. **Problem 1A** (windowing + paging): **only if**, after steps 1–4, the
+   `RUN_VIEW_LOADED` for the 2026-10-01 `bug-backlog` run is still over
+   ~5 MB serialized, or the iPhone acceptance criterion below still fails.
+   Design the skeleton/minimap/range story first (see "If 1A is ever needed:
+   tuning constraints").
 6. **Problem 3** (redaction) — investigate alongside; independent of the rest.
 7. **Problem 4** (amortize repeat deliveries) — after 1B and 2, if a
    reconnecting client still hurts. Re-measure with the samplers first.
@@ -336,6 +428,13 @@ rest, and halves the panel's cost on that path.
 - [ ] The `bug-backlog` run above, opened from the iPhone PWA and backgrounded
       and foregrounded several times, no longer drives a reload loop, and the
       `[MemoryWatchdog]` heap stays well below 1 GB through it.
-- [ ] A live instance's history reaches the panel once per bind, not twice.
+- [ ] Binding any client (panel or browser) to a live instance with a lineage
+      costs one server-side `loadHistory`, one `RUN_VIEW_LOADED`, and no
+      `SESSION_RESTORED` or `OUTPUT_HISTORY_LOADED`. The client runs one
+      `workflowStore.loadWorkflow`, and completed-step buffers replay at most
+      once.
+- [ ] If 1A lands, scrolling at normal speed through a paged run never shows
+      a placeholder in the viewport (the prefetch margin covers it), and the
+      scrollbar and minimap cover the whole run from the first paint.
 - [ ] New coverage for the on-demand/windowed reads in `src/test/**`, and for
       the client's range handling in `src/ui/webview-react/test/**`.
