@@ -72,8 +72,8 @@ These don't cause the crash, but they are real problems:
 3. Checked, no change: in production every pass retry awaits a real harness run and a script
    process, and checks the stop flag. An unlimited `onPass: retry` loop is documented behavior
    that costs harness runs, but it never starves the event loop.
-4. Open: make run views proportional to what's on screen instead of the run's total length, and
-   stop sending the history twice (`runViewLoaded` and then `outputHistoryLoaded`).
+4. Moved to `dev/backlog/RUN_VIEW_PAYLOAD_PAGING_PLAN.md` (now P1), which records the phone
+   reload loop and the history sent twice on resume.
 
 Logs: `.ctrlyoke/logs/ctrlyoke-1790824029160.log`; `%APPDATA%/Code/logs/20260930T194052/main.log`;
 `%TEMP%/ctrlyoke-extension-test-user-data-4-WHTXG4/logs/20260930T221650/window1/renderer*.log`.

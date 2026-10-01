@@ -1,9 +1,44 @@
 # Run-View Payload & Paging Plan
 
-**Status:** Backlog — proposed 2026-09-06
-**Priority:** P2 (raised to P1 if a run-view load is reported OOM'ing or hanging
-the extension host again; the quadratic-CPU half of the original report is
+**Status:** Backlog — proposed 2026-09-06, updated 2026-10-01
+**Priority:** P1 (raised 2026-10-01: a phone viewing a large run was caught in
+a reload loop that rebuilt and resent the full run view about every 10 s; see
+"2026-10-01 evidence" below. The quadratic-CPU half of the original report is
 already fixed — see "Already shipped" below)
+
+## 2026-10-01 evidence: a phone reload loop
+
+Measured with the `[MemoryWatchdog]`/`[PanelMemory]` samplers (see the
+"Crash investigation" note in `.github/copilot-instructions.md`) on the
+`bug-backlog` run `run-2026-09-30T13-41-01-546Z` (38 steps, a 43.7 MB
+`events.jsonl`, 61 history entries, 8 062 activity entries). Session log:
+`.ctrlyoke/logs/ctrlyoke-1790824029160.log`.
+
+- **Each open is a 42.7 MB `RUN_VIEW_LOADED`.** Building one spikes the
+  extension-host heap by 300–650 MB (reading the history, the redaction copy,
+  `JSON.stringify`), and the VS Code panel's heap by about 420 MB on receipt.
+  All of it is transient: the heap returned to ~270 MB each time.
+- **An iPhone PWA viewing the run kept reconnecting.** WebSockets closed with
+  code 1006 after 2–36 s, and each new connection asked for the run again: at
+  least 29 deliveries in 10 minutes (~1.2 GB serialized), against 3 to the panel.
+  The likeliest cause is iOS killing the page while it parses and renders the
+  payload, but nothing on the phone side was measured. Overlapping rebuilds
+  pushed the extension-host heap to 1 736 MB (limit 4 192 MB).
+- **Where this run's bytes are** (`events.jsonl`, by field): 7.8 MB of
+  `bashCommand.output` and 4.9 MB of `toolResult.result` (tool output the
+  dashboard collapses to 3 lines by default), 14.9 MB of
+  `cliOutputRecorded.structured` (the per-attempt aggregate that duplicates the
+  appended deltas, i.e. Proposal 1B's duplication), and 8.6 MB of
+  `workspaceSnapshotCaptured` (Problem 2).
+- **Resuming a running instance sends the history twice to the panel.** The
+  panel received `RUN_VIEW_LOADED` (61 entries), then `SESSION_RESTORED`
+  followed by `OUTPUT_HISTORY_LOADED` with the same 61/8 062 entries
+  (`WorkflowInstance.replayOutputHistoryTo`), so it built the run twice in a
+  few seconds.
+
+That run also crashed the machine three times. Those crashes were a test that
+looped forever (`dev/bugs/backlog/extension-host-crash-during-long-bug-backlog-run.md`),
+not this payload. The reload loop is real regardless.
 
 ## Background
 
@@ -160,6 +195,36 @@ and it is independent of paging.
 Do 1B before 1A if it holds up: it is a projection change with no new protocol
 and no client range-tracking, and it shrinks whatever 1A would later page.
 
+### Proposal 1C — cap tool output in the payload, fetch the rest on expand
+
+Tool output is the largest content the user mostly never expands: in the
+2026-10-01 run, 7.8 MB of `bashCommand.output` and 4.9 MB of
+`toolResult.result`, all shipped in full while the output pane collapses each
+one to 3 lines (`outputTruncation.ts` `buildCollapsedOutputPreview`;
+`outputRows.ts` character budget and `maxResultLines`). No message type
+fetches an entry's full content today, and nothing on the history path
+truncates (`OutputHistoryManager.loadHistory`, `RunViewPublisher.deliverRunView`
+and both `OUTPUT_HISTORY_LOADED` senders pass the history through as is).
+
+Send each tool output capped (head plus a byte count and a "truncated" marker)
+and add a request keyed by address, attempt and event for the full text, used
+when a row is expanded. `TimelineRecorder.truncateHistorySearchEvent` already
+caps exactly these fields for search indexing; reuse its per-field knowledge
+rather than writing a second truncator.
+
+Before doing this, deal with every webview consumer of the full text. Each one
+needs either the fetch or an explicit "truncated" state:
+
+- in-pane find (`useOutputFind.ts` → `utils/outputFind.ts`);
+- Markdown export (`useOutputExport.ts` → `utils/markdownExport.ts`, which
+  writes bash output in full);
+- copy (`OutputRow.tsx` row copy, `useOutputContextMenu.tsx` copy-all and
+  copy-hovered);
+- the expanded `BashOutput` and tool-result views.
+
+Export and copy-all probably belong on the extension side, where the full
+history can be read directly.
+
 ## Problem 2: `workspaceSnapshot` contents ride along on every load
 
 `promptOutputs` is 16.4 MB of captured file contents, sent so that a file-edit
@@ -192,6 +257,37 @@ write, which suggests the transport walk is largely re-doing settled work — bu
 that has to be verified per message type, not assumed, before anything is
 relaxed. Treat this as an investigation, not a scheduled change.
 
+## Problem 4: a reconnecting client re-pays the whole build every time
+
+Nothing amortizes a run view across deliveries. Each request re-reads the
+history, re-redacts it, and re-serializes it, even when the run's timeline has
+not advanced since the previous delivery to a client that dropped seconds ago.
+In the 2026-10-01 loop that cost was paid at least 29 times in 10 minutes, and
+deliveries overlapped.
+
+**Proposal:** after Problems 1B and 2 shrink the payload, consider (a) caching
+the redacted, serialized snapshot keyed by run address plus timeline
+`nextSequence`, so a repeat request for an unchanged run is a send rather than
+a rebuild, and (b) collapsing overlapping requests for the same address into one
+in-flight build. Both must respect the redaction rules in Problem 3. The cache
+holds the already-redacted string, never the raw history, and must be dropped
+when the redaction configuration changes.
+
+Separately, find out what is killing the phone's page. The hosted shim already
+logs `pageshow`/visibility and foreground probes into the session log; add
+whatever is missing to tell an iOS page kill apart from a network drop before
+treating payload size as the whole story.
+
+## Problem 5: resuming a running run sends its history twice
+
+When the panel binds to a live instance, `RUN_VIEW_LOADED` already carries the
+history, and then `replayFullStateTo` (`SESSION_RESTORED`) plus
+`WorkflowInstance.replayOutputHistoryTo` (`OUTPUT_HISTORY_LOADED`) load the same
+history again. `CtrlYokeWebviewProvider.loadOutputHistoryForWorkflow` is a
+second sender of the same message. Work out which path should own the history
+for a live instance, and send it once. This is small, independent of the
+rest, and halves the panel's cost on that path.
+
 ## Non-goals
 
 - **No worker thread for the run-view read.** Unlike the
@@ -211,13 +307,18 @@ relaxed. Treat this as an investigation, not a scheduled change.
 
 ## Sequencing
 
-1. **Problem 2** (on-demand `workspaceSnapshot` contents) — ~16 MB off the
+1. **Problem 5** (send the history once on resume) — small and independent.
+2. **Problem 2** (on-demand `workspaceSnapshot` contents) — ~16 MB off the
    payload, no protocol redesign, no client range tracking.
-2. **Problem 1B** (drop the duplicated `activityEntries` encoding) — ~22 MB, a
+3. **Problem 1B** (drop the duplicated `activityEntries` encoding) — ~22 MB, a
    projection change, but needs the interleaving to be proven equivalent first.
-3. **Problem 1A** (windowing + paging) — only worth its complexity if 1 and 2
+4. **Proposal 1C** (capped tool output, fetched on expand) — ~13 MB on the
+   2026-10-01 run, and a much smaller change than 1A.
+5. **Problem 1A** (windowing + paging) — only worth its complexity if the steps above
    leave a payload that still hurts. Design the minimap/range story first.
-4. **Problem 3** (redaction) — investigate alongside; independent of the rest.
+6. **Problem 3** (redaction) — investigate alongside; independent of the rest.
+7. **Problem 4** (amortize repeat deliveries) — after 1B and 2, if a
+   reconnecting client still hurts. Re-measure with the samplers first.
 
 ## Acceptance criteria
 
@@ -232,5 +333,9 @@ relaxed. Treat this as an investigation, not a scheduled change.
 - [ ] The output panel, minimap, and diff rows render identically to today for
       a fully-loaded run; a partially-loaded run states its own boundaries
       rather than silently presenting a window as the whole run.
+- [ ] The `bug-backlog` run above, opened from the iPhone PWA and backgrounded
+      and foregrounded several times, no longer drives a reload loop, and the
+      `[MemoryWatchdog]` heap stays well below 1 GB through it.
+- [ ] A live instance's history reaches the panel once per bind, not twice.
 - [ ] New coverage for the on-demand/windowed reads in `src/test/**`, and for
       the client's range handling in `src/ui/webview-react/test/**`.
