@@ -10,6 +10,7 @@ import {
   type AtomicReferenceKind,
   type SettingWriteScope,
 } from "@root/types/DashboardConstants";
+import type { AtomicReferenceChip as AtomicReferenceDescriptor } from "./atomicReferences";
 
 /**
  * Shape of a context reference to act on, independent of where it came from
@@ -34,6 +35,28 @@ export interface ContextReferenceTarget {
 
 interface VsCodeLike {
   postMessage: (message: unknown) => void;
+}
+
+/**
+ * Read the open target back off an atomic-reference descriptor's `data-*`
+ * attributes, so every output renderer that starts from a parsed descriptor
+ * (echoed prompts, Markdown replies) opens it the same way.
+ */
+export function contextReferenceTargetFromDescriptor(
+  descriptor: AtomicReferenceDescriptor
+): ContextReferenceTarget {
+  const { attrs } = descriptor;
+  return {
+    type: asAtomicReferenceKind(attrs["data-type"]),
+    path: attrs["data-path"],
+    gitRef: attrs["data-git-ref"],
+    lineStart: attrs["data-line-start"],
+    lineEnd: attrs["data-line-end"],
+    ref: attrs["data-ref"],
+    skillName: attrs["data-skill-name"],
+    mcpServerName: attrs["data-mcp-server-name"],
+    secretName: attrs["data-secret-name"],
+  };
 }
 
 /** Narrow a DOM data-type attribute at the boundary to the shared contract. */

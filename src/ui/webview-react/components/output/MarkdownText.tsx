@@ -13,8 +13,8 @@ import { findAndReplace } from "mdast-util-find-and-replace";
 import { visit } from "unist-util-visit";
 import { visitParents } from "unist-util-visit-parents";
 import { toString as mdastToString } from "mdast-util-to-string";
-import type { Root } from "mdast";
-import type { PluginTuple } from "unified";
+import type { Root, Text } from "mdast";
+import type { Pluggable, PluginTuple } from "unified";
 import { openFile } from "@hooks/useMessageHandler";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "../../types/messages";
@@ -28,10 +28,17 @@ import {
 } from "@utils/syntaxHighlighting";
 import {
   createFileReferenceChip,
+  findAtomicReferences,
   referenceBasename,
   type AtomicReferenceChip as AtomicReferenceDescriptor,
 } from "@utils/atomicReferences";
+import {
+  ATOMIC_REFERENCE_KINDS,
+  isImageRefPath,
+} from "@root/types/DashboardConstants";
+import { asAtomicReferenceKind } from "@utils/contextReferenceActions";
 import { AtomicReferenceChip } from "./AtomicReferenceChip";
+import { ContextReference } from "./ContextReference";
 import type { RowFindDecoration } from "@utils/outputFind";
 import {
   FILE_EXTENSIONS,
@@ -42,7 +49,16 @@ import { Icon } from "../shared/Icon";
 
 const MARKDOWN_NODE_TYPES = {
   LINK: "link",
+  TEXT: "text",
+  HTML: "html",
 } as const;
+
+/** Key of the remark-gfm entry in streamdown's `defaultRemarkPlugins`. */
+const STREAMDOWN_GFM_PLUGIN_KEY = "gfm";
+
+/** Raw-HTML elements a remark plugin emits for a reference with a source range. */
+const RANGED_REFERENCE_ELEMENT_PATTERN =
+  /^<(?:context-ref|file-ref|image-ref)\b[^>]*\sdata-ref-start="(\d+)"[^>]*\sdata-ref-end="(\d+)"/;
 
 const MERMAID_RENDER_STATES = {
   RENDERING: "rendering",
@@ -167,13 +183,100 @@ function remarkFileLinks() {
         }
         replacements.push({
           type: "html",
-          value: `<file-ref path="${encoded}" data-ref-start="${start}" data-ref-end="${end}" data-ref-label="${encodeURIComponent(normalized)}">${display}</file-ref>`,
+          value: `<file-ref path="${encoded}" data-ref-start="${start}" data-ref-end="${end}" data-ref-source="${encodeURIComponent(raw)}" data-ref-label="${encodeURIComponent(normalized)}">${display}</file-ref>`,
         });
         cursor = match.index + raw.length;
       }
       if (replacements.length === 0) return;
       if (cursor < value.length) {
         replacements.push({ type: "text", value: value.slice(cursor) });
+      }
+      (parent.children as Array<unknown>).splice(index, 1, ...replacements);
+      return index + replacements.length;
+    });
+  };
+}
+
+/**
+ * Whether a parsed reference should become a `<context-ref>` in a reply: only
+ * kinds that open something. Condition-output refs (`$endCondition:stdout`)
+ * only mean something inside a retry prompt and have no open target. Secret
+ * grants (`!NAME`) are skipped: a reply has no reason to cite one, and shouted
+ * prose such as `!IMPORTANT` would otherwise become a link. Image `@` refs stay
+ * plain text for {@link remarkImageRefs}, which renders a thumbnail.
+ */
+function isReplyContextReference(ref: AtomicReferenceDescriptor): boolean {
+  const type = asAtomicReferenceKind(ref.attrs["data-type"]);
+  if (!type || type === ATOMIC_REFERENCE_KINDS.SECRET) return false;
+  return !(
+    type === ATOMIC_REFERENCE_KINDS.FILE &&
+    isImageRefPath(ref.attrs["data-path"] ?? "")
+  );
+}
+
+/**
+ * Remark plugin that turns ctrlyoke context references in reply text
+ * (`@file`, `@dir/`, `#selection:`, `#sym:`, `~git`, `$step:`/`$previous`,
+ * `/skill:`, `/mcp:`) into `<context-ref>` elements, so an
+ * agent can cite them in a summary and the output pane links them exactly as it
+ * does in an echoed prompt. Parsing is `findAtomicReferences`, the same parser
+ * the prompt editor and echoed prompts use.
+ *
+ * Runs before {@link remarkFileLinks}, so `@src/foo.ts` is claimed whole rather
+ * than leaving a stray `@` before a bare-path link. Bare paths are not ctrlyoke
+ * syntax and keep flowing to `remarkFileLinks` unchanged.
+ *
+ * The raw token travels in `data-ref-source` rather than being sliced back out
+ * of the Markdown later: in streaming mode each block is parsed on its own, so
+ * a node's offsets are block-relative and only line up with the whole reply in
+ * static (find) mode — the only mode in which find decorations exist.
+ */
+function remarkContextReferences() {
+  return (tree: Root, file?: { value?: unknown }): undefined => {
+    const source = typeof file?.value === "string" ? file.value : "";
+    visitParents(tree, MARKDOWN_NODE_TYPES.TEXT, (node, ancestors) => {
+      if (
+        ancestors.some((ancestor) => ancestor.type === MARKDOWN_NODE_TYPES.LINK)
+      ) {
+        return;
+      }
+      const parent = ancestors[ancestors.length - 1];
+      if (!parent || !node.position) return;
+      const index = (parent.children as unknown[]).indexOf(node);
+      const refs = findAtomicReferences(node.value).filter(
+        isReplyContextReference
+      );
+      if (refs.length === 0) return;
+
+      const nodeStart = node.position.start.offset ?? 0;
+      const replacements: Array<Record<string, unknown>> = [];
+      let cursor = 0;
+      for (const ref of refs) {
+        const raw = node.value.slice(ref.from, ref.to);
+        // A text node's value is unescaped, so an escape earlier in the node
+        // shifts its offsets against the source; re-anchor on the raw token.
+        let start = nodeStart + ref.from;
+        if (source && source.slice(start, start + raw.length) !== raw) {
+          const found = source.indexOf(raw, nodeStart);
+          if (found >= 0) start = found;
+        }
+        if (ref.from > cursor) {
+          replacements.push({
+            type: MARKDOWN_NODE_TYPES.TEXT,
+            value: node.value.slice(cursor, ref.from),
+          });
+        }
+        replacements.push({
+          type: MARKDOWN_NODE_TYPES.HTML,
+          value: `<context-ref data-ref-source="${encodeURIComponent(raw)}" data-ref-start="${start}" data-ref-end="${start + raw.length}">${escapeHtml(raw)}</context-ref>`,
+        });
+        cursor = ref.to;
+      }
+      if (cursor < node.value.length) {
+        replacements.push({
+          type: MARKDOWN_NODE_TYPES.TEXT,
+          value: node.value.slice(cursor),
+        });
       }
       (parent.children as Array<unknown>).splice(index, 1, ...replacements);
       return index + replacements.length;
@@ -614,7 +717,7 @@ function remarkLocalLinks() {
 
       (parent.children as typeof parent.children)[index] = {
         type: "html",
-        value: `<file-ref path="${encoded}" data-ref-start="${targetStart}" data-ref-end="${targetEnd}" data-ref-label="${encodeURIComponent(label)}">${displayText}</file-ref>`,
+        value: `<file-ref path="${encoded}" data-ref-start="${targetStart}" data-ref-end="${targetEnd}" data-ref-source="${encodeURIComponent(node.url)}" data-ref-label="${encodeURIComponent(label)}">${displayText}</file-ref>`,
       };
     });
   };
@@ -669,15 +772,26 @@ function remarkHighlightMatches({
   caseSensitive,
   activeIndex,
 }: HighlightMatchesOptions) {
-  return (tree: Root): undefined => {
+  return (tree: Root, file?: { value?: unknown }): undefined => {
     if (!query) return;
 
-    let occurrence = -1;
+    const queryPattern = () =>
+      new RegExp(escapeRegExp(query), caseSensitive ? "g" : "gi");
+    const referenceMatchesBefore = countRangedReferenceMatchesBefore(
+      tree,
+      typeof file?.value === "string" ? file.value : "",
+      queryPattern
+    );
+
+    let textOccurrence = -1;
     findAndReplace(tree, [
       [
-        new RegExp(escapeRegExp(query), caseSensitive ? "g" : "gi"),
-        (match: string) => {
-          occurrence += 1;
+        queryPattern(),
+        (match: string, { stack }: { stack: unknown[] }) => {
+          textOccurrence += 1;
+          const occurrence =
+            textOccurrence +
+            (referenceMatchesBefore.get(stack[stack.length - 1] as Text) ?? 0);
           const activeAttr =
             occurrence === activeIndex ? ' data-find-active="true"' : "";
           return {
@@ -690,13 +804,74 @@ function remarkHighlightMatches({
   };
 }
 
-// Module-level stable array so Streamdown's memo doesn't see a new reference.
+/**
+ * For each text node, how many find matches lie inside reference elements
+ * (`<context-ref>`, `<file-ref>`, `<image-ref>`) that precede it in document
+ * order. Those references were lifted out of text nodes before this plugin
+ * runs and render their own marks from exact find decorations, but the find
+ * hook still counts their matches, so the text-node ordinal must skip past them
+ * or `activeIndex` would outline a second, wrong occurrence.
+ */
+function countRangedReferenceMatchesBefore(
+  tree: Root,
+  source: string,
+  queryPattern: () => RegExp
+): Map<Text, number> {
+  const before = new Map<Text, number>();
+  if (!source) return before;
+  let referenceMatches = 0;
+  visit(tree, (node) => {
+    if (node.type === MARKDOWN_NODE_TYPES.TEXT) {
+      before.set(node, referenceMatches);
+      return;
+    }
+    if (node.type !== MARKDOWN_NODE_TYPES.HTML) return;
+    const range = RANGED_REFERENCE_ELEMENT_PATTERN.exec(node.value);
+    if (!range) return;
+    referenceMatches += (
+      source.slice(Number(range[1]), Number(range[2])).match(queryPattern()) ??
+      []
+    ).length;
+  });
+  return before;
+}
+
+/**
+ * Streamdown's defaults with remark-gfm's single-tilde strikethrough turned
+ * off. A ctrlyoke git reference starts with one `~`, so with it on, a reply
+ * such as "Reverted ~abc1234~ entirely" or "See ~abc1234 (the regression)~"
+ * struck through its own text and swallowed the reference. Double-tilde
+ * `~~strikethrough~~` still renders. Scoped to replies that opt into context
+ * references, so other Markdown (workspace previews) keeps GitHub's behavior.
+ */
+const REPLY_DEFAULT_REMARK_PLUGINS: Pluggable[] = Object.entries(
+  defaultRemarkPlugins
+).map(([key, plugin]) =>
+  key === STREAMDOWN_GFM_PLUGIN_KEY && Array.isArray(plugin)
+    ? ([
+        plugin[0],
+        { ...(plugin[1] as object | undefined), singleTilde: false },
+      ] as Pluggable)
+    : plugin
+);
+
+// Module-level stable arrays so Streamdown's memo doesn't see a new reference.
 // Spread streamdown's defaults (remarkGfm) first, then add our file-link plugins.
 const REMARK_PLUGINS = [
   ...Object.values(defaultRemarkPlugins),
   remarkLocalLinks,
   // Image refs first so their paths become <image-ref> before remarkFileLinks
   // scans (extensions are disjoint, but order keeps the intent explicit).
+  remarkImageRefs,
+  remarkFileLinks,
+];
+
+// Output replies additionally link ctrlyoke context references, ahead of the
+// image/file plugins so `@`-prefixed tokens are claimed whole.
+const REPLY_REMARK_PLUGINS = [
+  ...REPLY_DEFAULT_REMARK_PLUGINS,
+  remarkLocalLinks,
+  remarkContextReferences,
   remarkImageRefs,
   remarkFileLinks,
 ];
@@ -908,11 +1083,18 @@ function MermaidBlock({ code }: { code: string }) {
   );
 }
 
-// Extends rehype-sanitize's allowlist so it keeps <file-ref path="…"> and
-// <mark data-find-active="…"> nodes produced by remarkFileLinks /
-// remarkHighlightMatches.
+// Extends rehype-sanitize's allowlist so it keeps <file-ref path="…">,
+// <context-ref …> and <mark data-find-active="…"> nodes produced by
+// remarkFileLinks / remarkContextReferences / remarkHighlightMatches.
 const FILE_REF_ALLOWED_TAGS = {
-  "file-ref": ["path", "dataRefStart", "dataRefEnd", "dataRefLabel"],
+  "file-ref": [
+    "path",
+    "dataRefStart",
+    "dataRefEnd",
+    "dataRefSource",
+    "dataRefLabel",
+  ],
+  "context-ref": ["dataRefSource", "dataRefStart", "dataRefEnd"],
   "image-ref": ["path", "dataRefStart", "dataRefEnd"],
   mark: ["dataFindActive"],
 };
@@ -964,6 +1146,13 @@ interface MarkdownTextProps {
   /** Opt into compact atomic-reference chips for local Markdown links. */
   atomicContextReferences?: boolean;
   /**
+   * Link ctrlyoke context references (`@file`, `#selection:`, `~commit`, …)
+   * cited in the text, and disable single-tilde strikethrough so `~commit`
+   * refs survive. For output-pane replies only; other Markdown (workspace
+   * previews, untrusted coordination notes) keeps plain GFM.
+   */
+  contextReferences?: boolean;
+  /**
    * Whether streamdown's per-table "view fullscreen" control is enabled.
    * Its fullscreen overlay portals into `document.body`, which only renders
    * correctly inside the main dashboard webview. In the workspace-viewer
@@ -982,6 +1171,8 @@ interface MarkdownTextProps {
  *
  * Enhancements over plain Streamdown:
  * - Workspace file paths are auto-linked and open in VS Code on click.
+ * - With `contextReferences` (output replies), ctrlyoke references the agent
+ *   cites (`@file`, `#selection:`, `~commit`, …) link like echoed prompts.
  * - Bold, italic, headings, tables, and blockquotes use VS Code theme colours
  *   drawn from the symbol-icon palette (interface blue, function purple,
  *   class amber) — similar to how Claude and Copilot colour their responses.
@@ -995,6 +1186,7 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
   highlightActiveIndex = -1,
   findDecorations,
   atomicContextReferences = false,
+  contextReferences = false,
   tableFullscreen = true,
 }) => {
   // Find-highlight options for code blocks/inline code. These are skipped by
@@ -1028,13 +1220,17 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
           const label = labelEncoded
             ? decodeURIComponent(labelEncoded)
             : filePath;
+          // The raw token rides on the element: in streaming mode the offsets
+          // are block-relative, so slicing `children` with them copied the
+          // wrong text for any reference after the first block.
+          const sourceEncoded = props["data-ref-source"] as string | undefined;
           const descriptor = createFileReferenceChip(filePath);
           return (
             <AtomicReferenceChip
               descriptor={descriptor}
               presentation={createMarkdownReferencePresentation(
                 descriptor,
-                children.slice(sourceStart, sourceEnd),
+                sourceEncoded ? decodeURIComponent(sourceEncoded) : filePath,
                 sourceStart,
                 sourceEnd,
                 label
@@ -1053,6 +1249,26 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
           <FileRefButton filePath={filePath}>
             {props.children as React.ReactNode}
           </FileRefButton>
+        );
+      },
+
+      // ── Context-ref custom element ─────────────────────────────────────
+      // Rendered by remarkContextReferences for ctrlyoke references cited in
+      // the reply; re-parsed from its raw token so the descriptor (and so the
+      // label, icon and open target) is the one the prompt editor builds.
+      "context-ref": (props: Record<string, unknown>) => {
+        const encoded = props["data-ref-source"] as string | undefined;
+        const source = encoded ? decodeURIComponent(encoded) : "";
+        const [parsed] = findAtomicReferences(source);
+        if (!parsed) return <>{props.children as React.ReactNode}</>;
+        const from = Number(props["data-ref-start"] ?? 0);
+        return (
+          <ContextReference
+            descriptor={{ ...parsed, from, to: from + source.length }}
+            text={source}
+            matches={findDecorations?.matches ?? []}
+            atomicContextReferences={atomicContextReferences}
+          />
         );
       },
 
@@ -1227,14 +1443,17 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
         </pre>
       ),
     }),
-    [atomicContextReferences, children, codeFindHighlight, findDecorations]
+    [atomicContextReferences, codeFindHighlight, findDecorations]
   );
 
   // Only append the highlight plugin when there's a non-whitespace query, so
   // the common case keeps Streamdown's stable REMARK_PLUGINS reference (and a
   // query of all spaces doesn't wrap every space character in <mark>).
   const remarkPlugins = useMemo(() => {
-    if (!highlightQuery?.trim()) return REMARK_PLUGINS;
+    const basePlugins = contextReferences
+      ? REPLY_REMARK_PLUGINS
+      : REMARK_PLUGINS;
+    if (!highlightQuery?.trim()) return basePlugins;
 
     const highlightPlugin: PluginTuple<[HighlightMatchesOptions], Root, Root> =
       [
@@ -1246,8 +1465,13 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
         },
       ];
 
-    return [...REMARK_PLUGINS, highlightPlugin];
-  }, [highlightQuery, highlightCaseSensitive, highlightActiveIndex]);
+    return [...basePlugins, highlightPlugin];
+  }, [
+    contextReferences,
+    highlightQuery,
+    highlightCaseSensitive,
+    highlightActiveIndex,
+  ]);
 
   // Streamdown's <Streamdown> is wrapped in React.memo with a custom comparator
   // that never compares `remarkPlugins`/`rehypePlugins`/`allowedTags` — only

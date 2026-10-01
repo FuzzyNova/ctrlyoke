@@ -15,10 +15,8 @@ import {
 import { useSettingsStore } from "@store/settingsStore";
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import {
-  ATOMIC_REFERENCE_KINDS,
   BASH_OUTPUT_EXPANSION_SECTIONS,
   HISTORY_MATCH_FIELDS,
-  KEYBOARD_KEYS,
   OUTPUT_DEFAULT_LABELS,
   OUTPUT_ROW_KINDS,
   TOOL_CALL_EXPANSION_SECTIONS,
@@ -98,18 +96,8 @@ import {
   TOOL_RESULT_STANDALONE_INDENT,
   getStepIdentityBarStyle,
 } from "./outputStyles";
-import { AtomicReferenceChip } from "./AtomicReferenceChip";
-import {
-  createAtomicReferencePresentation,
-  findAtomicReferences,
-  type AtomicReferenceChip as AtomicReferenceDescriptor,
-  type ContextReferenceMatch,
-} from "@utils/atomicReferences";
-import {
-  asAtomicReferenceKind,
-  openContextReference,
-} from "@utils/contextReferenceActions";
-import { getVsCodeApi } from "@hooks/useVsCodeApi";
+import { ContextReference } from "./ContextReference";
+import { findAtomicReferences } from "@utils/atomicReferences";
 import { formatCliCommandDisplay } from "@utils/outputCommandDisplay";
 import { renderCommandTextWithFileLinks } from "@utils/cliCommandFileLinks";
 import { useUiStore } from "@store/uiStore";
@@ -382,6 +370,7 @@ const TextOutput: React.FC<{
         highlightActiveIndex={highlightActiveIndex}
         findDecorations={findDecorations}
         atomicContextReferences={atomicContextReferences}
+        contextReferences
       >
         {text}
       </MarkdownText>
@@ -469,6 +458,7 @@ const ThinkingOutput: React.FC<{
           highlightActiveIndex={highlightActiveIndex}
           findDecorations={findDecorations}
           atomicContextReferences={atomicContextReferences}
+          contextReferences
         >
           {text}
         </MarkdownText>
@@ -503,6 +493,7 @@ const UserSteerOutput: React.FC<{
         highlightActiveIndex={highlightActiveIndex}
         findDecorations={findDecorations}
         atomicContextReferences={atomicContextReferences}
+        contextReferences
       >
         {text}
       </MarkdownText>
@@ -1544,87 +1535,28 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
   );
 };
 
-/** Human-readable tooltip for a decorated prompt reference. */
-function promptReferenceTooltip(ref: ContextReferenceMatch): string {
-  switch (ref.type) {
-    case ATOMIC_REFERENCE_KINDS.GIT:
-      return `Open git ${ref.gitRef ?? ""}`;
-    case ATOMIC_REFERENCE_KINDS.DIRECTORY:
-      return `Reveal ${ref.path ?? ""}`;
-    case ATOMIC_REFERENCE_KINDS.LINE_RANGE:
-      return `Open ${ref.path ?? ""}:${ref.lineStart}-${ref.lineEnd}`;
-    case ATOMIC_REFERENCE_KINDS.SYMBOL:
-      return `Go to ${ref.symbolName ?? ""} in ${ref.path ?? ""}:${ref.lineStart}-${ref.lineEnd}`;
-    case ATOMIC_REFERENCE_KINDS.PRIOR_CONTEXT:
-      return `Open ${ref.ref ?? "context"}`;
-    case ATOMIC_REFERENCE_KINDS.SKILL:
-      return `Open ctrlyoke skill ${ref.skillName ?? ""}`;
-    case ATOMIC_REFERENCE_KINDS.MCP:
-      return `Open ctrlyoke MCP server ${ref.mcpServerName ?? ""} in MCP Manager`;
-    case ATOMIC_REFERENCE_KINDS.SECRET:
-      return `Open ctrlyoke Secrets settings for ${ref.secretName ?? ""}`;
-    default:
-      return `Open ${ref.path ?? ""}`;
-  }
-}
-
 /**
  * Renders an echoed prompt as plain, selectable text (kept verbatim so it stays
  * easy to copy) while turning ctrlyoke context references into clickable links
  * that open exactly like the prompt editor's — symbol/selection reveal their
  * range, directories reveal, files open (images open in VS Code / the workspace
- * viewer), and git refs open the commit view. Reuses findContextReferenceMatches
- * + openContextReference so the behavior stays single-sourced with
- * CodeMirrorEditor. Deliberately NOT Markdown: the prompt uses ctrlyoke's own
- * reference syntax, which Markdown would mangle.
+ * viewer), and git refs open the commit view. Reuses findAtomicReferences +
+ * ContextReference so the behavior stays single-sourced with CodeMirrorEditor
+ * and with references cited in Markdown replies. Deliberately NOT Markdown: the
+ * prompt uses ctrlyoke's own reference syntax, which Markdown would mangle.
  */
 const PromptReferenceText: React.FC<{
   text: string;
   matches: RowFindDecoration["matches"];
   atomicContextReferences: boolean;
 }> = ({ text, matches, atomicContextReferences }) => {
-  const vscode = getVsCodeApi();
   // Skip references inside ``` fenced blocks — they aren't expanded when the
   // prompt runs, so CodeMirror doesn't decorate them either; match that here.
-  // One pass, one array: each entry pairs the chip descriptor with the
-  // ContextReferenceMatch that drives the plain-text (setting off) path, so the
-  // two presentations can never disagree about which token is at which offset.
-  const refs = useMemo(
-    () =>
-      findAtomicReferences(text).map((descriptor) => ({
-        descriptor,
-        match: {
-          from: descriptor.from,
-          to: descriptor.to,
-          type: descriptor.attrs["data-type"] as ContextReferenceMatch["type"],
-          path: descriptor.attrs["data-path"],
-          gitRef: descriptor.attrs["data-git-ref"],
-          lineStart: descriptor.attrs["data-line-start"],
-          lineEnd: descriptor.attrs["data-line-end"],
-          symbolName: descriptor.attrs["data-symbol-name"],
-          ref: descriptor.attrs["data-ref"],
-          skillName: descriptor.attrs["data-skill-name"],
-          mcpServerName: descriptor.attrs["data-mcp-server-name"],
-          secretName: descriptor.attrs["data-secret-name"],
-        } satisfies ContextReferenceMatch,
-      })),
-    [text]
-  );
-
-  // Rebase the row-relative find matches onto a [start,end) sub-slice so find
-  // highlighting still lands correctly inside both plain text and link spans.
-  const sliceMatches = (start: number, end: number) =>
-    matches
-      .filter((match) => match.start < end && match.end > start)
-      .map((match) => ({
-        start: Math.max(0, match.start - start),
-        end: Math.min(end, match.end) - start,
-        active: match.active,
-      }));
+  const refs = useMemo(() => findAtomicReferences(text), [text]);
 
   const nodes: React.ReactNode[] = [];
   let cursor = 0;
-  for (const { descriptor, match: ref } of refs) {
+  for (const ref of refs) {
     // References are sorted and non-overlapping; skip any that would run
     // backwards so a stray match can't corrupt the slicing.
     if (ref.from < cursor) continue;
@@ -1633,50 +1565,29 @@ const PromptReferenceText: React.FC<{
         <React.Fragment key={`text-${cursor}`}>
           {highlightText(
             text.slice(cursor, ref.from),
-            sliceMatches(cursor, ref.from)
+            sliceDecorationMatches({ matches }, cursor, ref.from)
           )}
         </React.Fragment>
       );
     }
-    if (atomicContextReferences) {
-      nodes.push(
-        <AtomicPromptReference
-          key={`ref-${ref.from}`}
-          descriptor={descriptor}
-          text={text.slice(ref.from, ref.to)}
-          matches={matches}
-          vscode={vscode}
-        />
-      );
-    } else {
-      nodes.push(
-        <span
-          key={`ref-${ref.from}`}
-          role="link"
-          tabIndex={0}
-          className="cursor-pointer text-link-fg hover:text-link-active-fg hover:underline"
-          title={promptReferenceTooltip(ref)}
-          onClick={() => openContextReference(ref, vscode)}
-          onKeyDown={(event) => {
-            if (event.key === KEYBOARD_KEYS.ENTER || event.key === " ") {
-              event.preventDefault();
-              openContextReference(ref, vscode);
-            }
-          }}
-        >
-          {highlightText(
-            text.slice(ref.from, ref.to),
-            sliceMatches(ref.from, ref.to)
-          )}
-        </span>
-      );
-    }
+    nodes.push(
+      <ContextReference
+        key={`ref-${ref.from}`}
+        descriptor={ref}
+        text={text.slice(ref.from, ref.to)}
+        matches={matches}
+        atomicContextReferences={atomicContextReferences}
+      />
+    );
     cursor = ref.to;
   }
   if (cursor < text.length) {
     nodes.push(
       <React.Fragment key="text-tail">
-        {highlightText(text.slice(cursor), sliceMatches(cursor, text.length))}
+        {highlightText(
+          text.slice(cursor),
+          sliceDecorationMatches({ matches }, cursor, text.length)
+        )}
       </React.Fragment>
     );
   }
@@ -1689,34 +1600,6 @@ const PromptReferenceText: React.FC<{
     </div>
   );
 };
-
-const AtomicPromptReference: React.FC<{
-  descriptor: AtomicReferenceDescriptor;
-  text: string;
-  matches: RowFindDecoration["matches"];
-  vscode: ReturnType<typeof getVsCodeApi>;
-}> = ({ descriptor, text, matches, vscode }) => (
-  <AtomicReferenceChip
-    descriptor={descriptor}
-    presentation={createAtomicReferencePresentation(descriptor, text)}
-    findMatches={matches}
-    onOpen={() =>
-      openContextReference(
-        {
-          type: asAtomicReferenceKind(descriptor.attrs["data-type"]),
-          path: descriptor.attrs["data-path"],
-          gitRef: descriptor.attrs["data-git-ref"],
-          lineStart: descriptor.attrs["data-line-start"],
-          lineEnd: descriptor.attrs["data-line-end"],
-          ref: descriptor.attrs["data-ref"],
-          skillName: descriptor.attrs["data-skill-name"],
-          mcpServerName: descriptor.attrs["data-mcp-server-name"],
-        },
-        vscode
-      )
-    }
-  />
-);
 
 function OutputRowComponent({
   row,

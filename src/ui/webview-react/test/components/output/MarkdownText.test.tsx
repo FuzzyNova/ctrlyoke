@@ -5,7 +5,8 @@
  * code blocks exercise the real refractor rendering path.
  */
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { MESSAGE_TYPES } from "@/types/messages";
 import userEvent from "@testing-library/user-event";
 
 // Mock openFile so clicking file links doesn't try to post to vscode
@@ -394,5 +395,198 @@ describe("MarkdownText", () => {
     expect(
       await screen.findByRole("button", { name: /copied/i })
     ).toBeInTheDocument();
+  });
+});
+
+describe("MarkdownText context references in replies", () => {
+  const postMessage = () => vi.mocked(window.vscodeApi!.postMessage);
+  const links = (container: HTMLElement) =>
+    Array.from(container.querySelectorAll<HTMLElement>('[role="link"]'));
+
+  it("links every ctrlyoke reference kind an agent can cite", () => {
+    const reply = [
+      "Changed @src/utils/foo.ts and @src/ui/ (see #selection:src/utils/foo.ts:3-5",
+      "and #sym:src/utils/foo.ts:bar:10-12) after ~abc1234 and ~diff,",
+      "using $step:2, $previous, $endCondition:stdout and /skill:commit and /mcp:ctrlyoke.",
+    ].join(" ");
+    const { container } = render(
+      <MarkdownText contextReferences>{reply}</MarkdownText>
+    );
+
+    expect(links(container).map((link) => link.textContent)).toEqual([
+      "@src/utils/foo.ts",
+      "@src/ui/",
+      "#selection:src/utils/foo.ts:3-5",
+      "#sym:src/utils/foo.ts:bar:10-12",
+      "~abc1234",
+      "~diff",
+      "$step:2",
+      "$previous",
+      // $endCondition:stdout has no open target outside a retry prompt.
+      "/skill:commit",
+      "/mcp:ctrlyoke",
+    ]);
+    // `@src/utils/foo.ts` is claimed whole — no stray `@` before a bare link.
+    expect(
+      container.querySelector('button[aria-label="Open file"]')
+    ).toBeNull();
+  });
+
+  it("opens cited references like the prompt editor does", () => {
+    postMessage().mockClear();
+    const { container } = render(
+      <MarkdownText contextReferences>
+        Fixed #selection:src/a.ts:3-5, broken by ~abc1234
+      </MarkdownText>
+    );
+    const [selection, commit] = links(container);
+
+    fireEvent.click(selection);
+    expect(postMessage()).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.OPEN_FILE,
+      path: "src/a.ts",
+      lineStart: 3,
+      lineEnd: 5,
+    });
+    fireEvent.click(commit);
+    expect(postMessage()).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.OPEN_GIT_CHANGE,
+      ref: "abc1234",
+    });
+  });
+
+  it("renders cited references as chips with canonical copy text when atomic formatting is on", () => {
+    const { container } = render(
+      <MarkdownText contextReferences atomicContextReferences>
+        {"Intro paragraph.\n\nI modified @src/ui/foo.ts after ~abc1234def"}
+      </MarkdownText>
+    );
+    const chips = container.querySelectorAll(".atomic-reference-chip");
+    expect(chips).toHaveLength(2);
+    expect(chips[0]).toHaveTextContent("foo.ts");
+    expect(chips[0]).toHaveAttribute(
+      "data-atomic-reference-copy-text",
+      "@src/ui/foo.ts"
+    );
+    expect(chips[1]).toHaveTextContent("abc1234");
+    expect(chips[1]).toHaveAttribute(
+      "data-atomic-reference-copy-text",
+      "~abc1234def"
+    );
+  });
+
+  it("keeps linking bare file paths exactly as before", async () => {
+    const plain = render(
+      <MarkdownText contextReferences>See src/utils/foo.ts now</MarkdownText>
+    );
+    expect(
+      await plain.findByRole("button", { name: "Open file" })
+    ).toBeInTheDocument();
+    plain.unmount();
+
+    const chip = render(
+      <MarkdownText contextReferences atomicContextReferences>
+        {"Intro.\n\nSee src/ui/webview-react/utils/foo.ts now"}
+      </MarkdownText>
+    );
+    const button = await chip.findByRole("button", { name: /open src/i });
+    expect(button).toHaveClass("atomic-reference-chip");
+    // The second block's chip copies its own path, not text sliced from the
+    // first block with block-relative offsets.
+    expect(button).toHaveAttribute(
+      "data-atomic-reference-copy-text",
+      "src/ui/webview-react/utils/foo.ts"
+    );
+  });
+
+  it("leaves code, links, image refs and secret grants alone", async () => {
+    const { container } = render(
+      <MarkdownText contextReferences>
+        {
+          "`@src/a.ts` [~abc1234](https://example.com) !API_KEY @docs/shot.png\n\n```\n@src/b.ts\n```"
+        }
+      </MarkdownText>
+    );
+    expect(links(container)).toHaveLength(0);
+    // The image ref keeps its thumbnail path (falling back to a file button).
+    expect(
+      await screen.findByRole("button", { name: "Open file" })
+    ).toHaveTextContent("docs/shot.png");
+  });
+
+  it("does not parse ctrlyoke syntax unless the caller opts in", () => {
+    const { container } = render(
+      <MarkdownText>Fixed by ~abc1234 and #selection:src/a.ts:3-5</MarkdownText>
+    );
+    expect(links(container)).toHaveLength(0);
+  });
+
+  it("keeps a single-tilde commit ref from striking through the reply", () => {
+    const { container } = render(
+      <MarkdownText contextReferences>
+        See ~abc1234 (the regression)~ and later, while ~~this~~ is struck.
+      </MarkdownText>
+    );
+    expect(links(container).map((link) => link.textContent)).toEqual([
+      "~abc1234",
+    ]);
+    const struck = container.querySelectorAll("del");
+    expect(struck).toHaveLength(1);
+    expect(struck[0]).toHaveTextContent("this");
+  });
+
+  it("keeps GitHub single-tilde strikethrough for Markdown that does not opt in", () => {
+    const { container } = render(
+      <MarkdownText>See ~abc1234 (the regression)~ and later</MarkdownText>
+    );
+    expect(container.querySelector("del")).toHaveTextContent("abc1234");
+  });
+
+  it("keeps the active find match aligned past matches inside a reference", () => {
+    const reply = "Edited @src/foo.ts then foo again";
+    const refStart = reply.indexOf("foo.ts");
+    const plainStart = reply.lastIndexOf("foo");
+    const { container } = render(
+      <MarkdownText
+        contextReferences
+        highlightQuery="foo"
+        highlightActiveIndex={1}
+        findDecorations={{
+          matches: [
+            { start: refStart, end: refStart + 3, active: false },
+            { start: plainStart, end: plainStart + 3, active: true },
+          ],
+        }}
+      >
+        {reply}
+      </MarkdownText>
+    );
+    const active = container.querySelectorAll('mark[data-find-active="true"]');
+    expect(active).toHaveLength(1);
+    expect(active[0].closest('[role="link"]')).toBeNull();
+  });
+
+  it("expands a cited chip to reveal a find match in its hidden path", async () => {
+    const reply = "See #selection:src/webview-react/a.ts:3-5";
+    const start = reply.indexOf("webview-react");
+    render(
+      <MarkdownText
+        contextReferences
+        atomicContextReferences
+        highlightQuery="webview-react"
+        highlightActiveIndex={0}
+        findDecorations={{
+          matches: [
+            { start, end: start + "webview-react".length, active: true },
+          ],
+        }}
+      >
+        {reply}
+      </MarkdownText>
+    );
+    const mark = await screen.findByText("webview-react");
+    expect(mark.tagName).toBe("MARK");
+    expect(mark).toHaveAttribute("data-find-active", "true");
+    expect(mark.closest(".atomic-reference-chip")).not.toBeNull();
   });
 });

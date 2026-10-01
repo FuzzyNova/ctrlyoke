@@ -17,7 +17,8 @@ export interface AtomicReferenceChipProps {
   className?: string;
 }
 
-function atomicReferenceAriaLabel(
+/** Accessible name (and plain-link tooltip) describing what opening a reference does. */
+export function atomicReferenceAriaLabel(
   descriptor: AtomicReferenceDescriptor
 ): string {
   const { attrs, title } = descriptor;
