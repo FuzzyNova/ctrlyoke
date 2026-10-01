@@ -89,4 +89,6 @@ for the details.
 
 - Learn the building blocks in [Core concepts](/guide/concepts)
 - See a fuller example in [Your first workflow](/guide/your-first-workflow)
+- Change harness, validation, and permissions from the dashboard with the
+  [Workflow properties panel](/workflows/properties-panel)
 - Look up schema fields in [Workflow schema reference](/reference/workflow-schema)

@@ -1,6 +1,8 @@
 # End conditions and pre-conditions
 
 Script gates make workflows react to project state instead of trusting the model to declare success.
+You can write them in the workflow file or set them from the Validation tab of the
+[Workflow properties panel](/workflows/properties-panel#validation).
 
 ## End condition
 

@@ -59,6 +59,10 @@ export default defineConfig({
           text: "Writing workflows",
           items: [
             { text: "Overview", link: "/workflows/" },
+            {
+              text: "Workflow properties panel",
+              link: "/workflows/properties-panel",
+            },
             { text: "YAML format", link: "/workflows/yaml-format" },
             { text: "JSON format", link: "/workflows/json-format" },
             {

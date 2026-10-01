@@ -33,6 +33,8 @@ manual-test/hooks/output/
 docs/.vitepress/dist
 docs/.vitepress/.temp
 docs/.vitepress/cache
+# Copied from images/screenshots/ by scripts/sync-docs-screenshots.mjs
+docs/public/screenshots/
 
 # Copilot CLI OTEL telemetry file (created when CWD is workspace root because
 # COPILOT_OTEL_FILE_EXPORTER_PATH is set to the relative path "NUL")
