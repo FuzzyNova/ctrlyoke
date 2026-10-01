@@ -8,17 +8,22 @@ Do not re-derive them here.
 ## Where the payload stands
 
 The `bug-backlog` run (`run-2026-09-30T13-41-01-546Z`) serialized to 42.7 MB
-before this work. After Problem 2 (snapshot contents on demand) and Proposal 1C
-(tool output capped at 8 KiB), its `RUN_VIEW_LOADED` history is **27.6 MB**:
+before this work. After Problem 2 (snapshot contents on demand), its
+`RUN_VIEW_LOADED` history is **38.55 MB**:
 
 | Part              | Size     |
 | ----------------- | -------- |
-| `activityEntries` | 13.48 MB |
-| `orderedEntries`  | 13.45 MB |
+| `activityEntries` | 19.44 MB |
+| `orderedEntries`  | 18.45 MB |
 | `promptOutputs`   | 0.65 MB  |
 
-That is still well over the ~5 MB threshold the plan set for starting 1A. The
-iPhone reload-loop criterion has not been re-measured.
+Proposal 1C (tool output capped at 8 KiB) brought this to 27.6 MB, but it was
+rolled back the same day: expanding a capped output re-projected the whole run,
+blanked the pane, and lost its result on collapse. The plan's "Rolled back"
+note under Proposal 1C has the details and the conditions for trying it again.
+
+Either figure is well over the ~5 MB threshold the plan set for starting 1A.
+The iPhone reload-loop criterion has not been re-measured.
 
 ## Open items, in suggested order
 

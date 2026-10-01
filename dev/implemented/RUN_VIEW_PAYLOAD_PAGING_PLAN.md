@@ -1,7 +1,8 @@
 # Run-View Payload & Paging Plan
 
 **Status:** Implemented 2026-10-01 for sequencing items 1–4 (Problem 5,
-Problem 2, Proposal 1C; 1B investigated and not pursued). Problems 1A, 3 and 4
+Problem 2, Proposal 1C; 1B investigated and not pursued). Proposal 1C was
+rolled back the same day (see "Rolled back" under it). Problems 1A, 3 and 4
 and the 1B follow-up are open in `dev/backlog/RUN_VIEW_PAYLOAD_FOLLOWUPS.md`;
 the sections below stay as their design record. Proposed 2026-09-06.
 **Priority:** P1 (raised 2026-10-01: a phone viewing a large run was caught in
@@ -393,6 +394,32 @@ estimate from the review's raw-field scan at 8 KiB and the measured 10.95 MB
 projection reduction are consistent within the different serialization
 boundaries.
 
+**Rolled back (2026-10-01).** Using it in the dashboard showed three problems:
+
+- Expanding a capped output did nothing visible for seconds. Each request
+  re-ran a full `OutputHistoryManager.loadHistory()` projection of the whole
+  run to answer for one event, which is exactly the extension-host work this
+  plan set out to cut, and it was slowest on the large runs that were capped.
+- The pane blanked and redrew when the full text arrived. The row first shrank
+  to a one-line "Loading full output…" and then grew to full height, and the
+  virtualizer re-laid the list out around it.
+- Expanding again after collapsing paid the delay and the flash again. The
+  fetched event was held in row-local state, which reset whenever the row was
+  rebuilt or scrolled out of view.
+
+In-pane find also stopped seeing matches past the cap, and copy and export each
+needed a round trip. Against that, the saving was 28% on one run and nothing on
+the other, which left the `bug-backlog` payload at 27.6 MB, still far over the
+~5 MB windowing threshold. So the cap, the `REQUEST_TOOL_OUTPUT_CONTENT` fetch,
+and the client hydration were all removed. The `CliEventText` extraction that
+search indexing uses was kept.
+
+Reconsider 1C only after Problem 4's delivery cache exists, so that a fetch is
+a lookup rather than a projection, and only with a client-side store of fetched
+events that outlives the row. The output pane now shows every collapsed tool
+output behind a "Show full output" toggle above the text, so a future cap could
+fetch while that toggle opens, without a placeholder row.
+
 ## Problem 2: `workspaceSnapshot` contents ride along on every load
 
 `promptOutputs` is 16.4 MB of captured file contents, sent so that a file-edit
@@ -573,7 +600,8 @@ That makes it the first thing to land against the reload loop.
    the current parallel-steps-plan projection, whose individual fields are all
    below the cap. Batched reads keep full-output consumers from multiplying
    full-history projections. This lands before 1B; 1B remains unpursued because
-   its broader activity reduction lacks an equivalence proof.
+   its broader activity reduction lacks an equivalence proof. **Rolled back
+   the same day**; see "Rolled back" under Proposal 1C.
 4. **Proposal 1B** (activity reduction): not pursued because the aggregate
    loses event fields and concatenates text across activity boundaries. The
    narrower structured-slice option remains backlog until the aggregate is
