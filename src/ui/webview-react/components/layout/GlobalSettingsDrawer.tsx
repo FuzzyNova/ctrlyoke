@@ -382,7 +382,12 @@ export function GlobalSettingsDrawer() {
         disabled={globalSettingsReadOnly}
         className="flex flex-1 min-h-0 min-w-0 border-0 p-0 m-0"
       >
-        <div className="flex flex-1 min-h-0">
+        {/* `min-w-0` is load-bearing: without it this row's automatic minimum
+            width is its content's min-content width, so a single wide child
+            in any section (a long select label, an unbreakable value)
+            widens the whole page past the drawer instead of wrapping or
+            scrolling inside its own control. */}
+        <div className="flex flex-1 min-h-0 min-w-0">
           {/* Left: vertical tab bar */}
           <GlobalSettingsVerticalTabBar
             tabs={visibleTabs.map((t) => ({
@@ -417,7 +422,7 @@ export function GlobalSettingsDrawer() {
             use equal columns; all other tabs use the standard width cap. */}
             {fullSettings &&
             effectiveActiveTab === GLOBAL_SETTINGS_TABS.WORKFLOW ? (
-              <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex-1 flex flex-col min-h-0 min-w-0">
                 {noSearchMatchesNotice}
                 <WorkflowDefaultsSection
                   settings={fullSettings}
@@ -431,7 +436,7 @@ export function GlobalSettingsDrawer() {
             ) : (
               <div
                 data-settings-content-scroll
-                className="flex-1 overflow-y-auto overflow-x-hidden"
+                className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden"
               >
                 {noSearchMatchesNotice}
                 <div

@@ -301,6 +301,10 @@ export function StatsUsageSection({
           mainLabel="Refresh"
           mainAction={() => sendMessage(MESSAGE_TYPES.REFRESH_WORKSPACE_STATS)}
           options={exportOptions}
+          // The settings content column clips horizontal overflow, and this
+          // control sits at its right edge: an in-flow menu (min 200px,
+          // left-aligned to the trigger) gets cut off on narrow widths.
+          portal
           variant="secondary"
           mainTitle="Refresh workspace statistics"
           dropdownTitle="Export workspace statistics"

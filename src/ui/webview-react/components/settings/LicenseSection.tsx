@@ -272,7 +272,7 @@ export function LicenseSection() {
             onCommit={setLicenseKey}
             onValueChange={setLicenseKey}
             placeholder="Paste your Pro license key"
-            className="min-w-64 flex-1 bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono focus:outline-none focus:border-focus-border"
+            className="min-w-0 basis-64 flex-1 bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono focus:outline-none focus:border-focus-border"
           />
           <ActionButton
             label="Activate"

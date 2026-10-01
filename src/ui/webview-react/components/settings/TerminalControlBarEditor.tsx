@@ -350,15 +350,16 @@ function KeyCaptureInput({
 
   if (editing) {
     return (
-      <input
+      <LocalTextInput
         autoFocus
-        type="text"
         value={sequence}
         placeholder="\\x1b[1;5A"
         aria-label={ariaLabel}
         title="Literal escape notation: \\x1b[A, \\t, \\r"
-        onChange={(event) => onSequenceChange(event.target.value)}
-        onBlur={() => setEditing(false)}
+        onCommit={(next) => {
+          if (next !== sequence) onSequenceChange(next);
+          setEditing(false);
+        }}
         className="min-w-0 flex-1 bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono focus:outline-none focus:border-focus-border"
       />
     );

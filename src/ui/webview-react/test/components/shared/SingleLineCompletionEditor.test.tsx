@@ -69,6 +69,14 @@ describe("SingleLineCompletionEditor", () => {
     ]);
   });
 
+  it("soft-wraps long values in wrapSingleLine mode instead of widening", () => {
+    const { content } = renderEditor({ wrapSingleLine: true });
+
+    // Without lineWrapping, `.cm-content` stays `white-space: pre` and a long
+    // unbroken value pushes the whole settings page off screen.
+    expect(content).toHaveClass("cm-lineWrapping");
+  });
+
   it("calls onBlur when the editor loses focus", () => {
     const onBlur = vi.fn();
     const { content } = renderEditor({ onBlur });

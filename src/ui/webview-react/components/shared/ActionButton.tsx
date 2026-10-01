@@ -62,7 +62,9 @@ export function ActionButton({
       : label;
   const iconName = pending ? "loading" : flashing ? successIcon : icon;
 
-  const className = `cy-select-trigger text-xs inline-flex items-center gap-1 w-auto transition-colors ${
+  // `cy-select-trigger` fixes `h-7`; a label that wraps in a narrow container
+  // would spill out of that box, so let the button grow from it instead.
+  const className = `cy-select-trigger text-xs inline-flex items-center gap-1 w-auto h-auto min-h-7 max-w-full transition-colors ${
     flashing
       ? "text-indicator-success border-indicator-success cursor-default"
       : "hover:bg-list-hover-bg hover:text-foreground disabled:hover:bg-dropdown-bg disabled:hover:text-dropdown-fg"

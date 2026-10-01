@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { SingleLineCompletionEditor } from "./SingleLineCompletionEditor";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { useCompletionRequest } from "@hooks/useCompletionRequest";
+import { useLocalValue } from "@hooks/useLocalInput";
 import { WebviewLog } from "@utils/logger";
 import { MESSAGE_TYPES, type HarnessId } from "@root/types/DashboardConstants";
 import type { HarnessFlagCompletionsResponseMessage } from "@root/types/WebviewMessageTypes";
@@ -246,6 +247,36 @@ export function AdditionalArgsEditor({
       placeholder={ADDITIONAL_ARGS_PLACEHOLDER}
       wrapSingleLine
       completionSource={completionSource}
+    />
+  );
+}
+
+export type LocalAdditionalArgsEditorProps = Omit<
+  AdditionalArgsEditorProps,
+  "onChange" | "onBlur"
+> & {
+  onCommit: (value: string) => void;
+};
+
+/**
+ * `AdditionalArgsEditor` that buffers edits locally and commits on blur, the
+ * same contract as `LocalTextInput`. Use it wherever each commit is a
+ * persisted settings write, so typing does not round-trip every keystroke.
+ */
+export function LocalAdditionalArgsEditor({
+  value,
+  onCommit,
+  ...props
+}: LocalAdditionalArgsEditorProps) {
+  const local = useLocalValue(value, (next) => {
+    if (next !== value) onCommit(next);
+  });
+  return (
+    <AdditionalArgsEditor
+      {...props}
+      value={local.value}
+      onChange={local.onChange}
+      onBlur={local.onBlur}
     />
   );
 }

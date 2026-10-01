@@ -383,7 +383,11 @@ export function SingleLineCompletionEditor({
         multiline
           ? multilineTheme
           : wrapSingleLine
-            ? wrapSingleLineTheme
+            ? // The theme alone only caps the height: without lineWrapping,
+              // `.cm-content` keeps CodeMirror's default `white-space: pre`,
+              // so a long value never wraps and its intrinsic width pushes
+              // the surrounding settings page off screen instead.
+              [wrapSingleLineTheme, EditorView.lineWrapping]
             : singleLineTheme,
         tooltips({ parent: document.body, tooltipSpace: keyboardTooltipSpace }),
         EditorView.domEventHandlers({

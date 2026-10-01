@@ -17,6 +17,7 @@ import { CustomSelect } from "../../shared/CustomSelect";
 import { toAgentSelectOption } from "../../shared/agentSelectOptions";
 import { MultiCheckboxDropdown } from "../../shared/MultiCheckboxDropdown";
 import { SettingInputRow } from "../../shared/SettingInputRow";
+import { LocalTextInput } from "../../shared/LocalInputs";
 import { FieldDiagnostic } from "../../shared/FieldDiagnostic";
 import { SecretGrantsEditor } from "../../shared/SecretGrantsEditor";
 import {
@@ -155,17 +156,14 @@ export function DefaultsHarnessPage({
               id="defaults-worktree-branch"
               {...rowProps}
             >
-              <input
+              <LocalTextInput
                 id="defaults-worktree-branch"
-                type="text"
                 value={
                   worktreeConfig !== false && "branch" in worktreeConfig
                     ? (worktreeConfig.branch ?? "")
                     : ""
                 }
-                onChange={(event) =>
-                  updateWorktreeField("branch", event.target.value)
-                }
+                onCommit={(value) => updateWorktreeField("branch", value)}
                 className={`w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(worktreeBranchDiagnostics)} rounded focus:outline-none focus:border-focus-border font-mono h-7`}
               />
               <FieldDiagnostic
@@ -179,15 +177,12 @@ export function DefaultsHarnessPage({
               id="defaults-worktree-base"
               {...rowProps}
             >
-              <input
+              <LocalTextInput
                 id="defaults-worktree-base"
-                type="text"
                 value={
                   worktreeConfig !== false ? (worktreeConfig.base ?? "") : ""
                 }
-                onChange={(event) =>
-                  updateWorktreeField("base", event.target.value)
-                }
+                onCommit={(value) => updateWorktreeField("base", value)}
                 placeholder="Current branch (HEAD)"
                 className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
               />
@@ -198,15 +193,12 @@ export function DefaultsHarnessPage({
               id="defaults-worktree-setup"
               {...rowProps}
             >
-              <input
+              <LocalTextInput
                 id="defaults-worktree-setup"
-                type="text"
                 value={
                   worktreeConfig !== false ? (worktreeConfig.setup ?? "") : ""
                 }
-                onChange={(event) =>
-                  updateWorktreeField("setup", event.target.value)
-                }
+                onCommit={(value) => updateWorktreeField("setup", value)}
                 placeholder="e.g. npm ci"
                 className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
               />
@@ -223,15 +215,12 @@ export function DefaultsHarnessPage({
               id="defaults-worktree-base"
               {...rowProps}
             >
-              <input
+              <LocalTextInput
                 id="defaults-worktree-base"
-                type="text"
                 value={
                   worktreeConfig !== false ? (worktreeConfig.base ?? "") : ""
                 }
-                onChange={(event) =>
-                  updateWorktreeField("base", event.target.value)
-                }
+                onCommit={(value) => updateWorktreeField("base", value)}
                 placeholder="Current branch (HEAD)"
                 className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
               />
@@ -244,15 +233,12 @@ export function DefaultsHarnessPage({
               id="defaults-worktree-setup"
               {...rowProps}
             >
-              <input
+              <LocalTextInput
                 id="defaults-worktree-setup"
-                type="text"
                 value={
                   worktreeConfig !== false ? (worktreeConfig.setup ?? "") : ""
                 }
-                onChange={(event) =>
-                  updateWorktreeField("setup", event.target.value)
-                }
+                onCommit={(value) => updateWorktreeField("setup", value)}
                 placeholder="e.g. npm ci"
                 className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
               />

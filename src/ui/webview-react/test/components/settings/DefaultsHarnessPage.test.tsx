@@ -84,6 +84,38 @@ describe("DefaultsHarnessPage execution defaults", () => {
     ).toHaveValue("npm ci");
   });
 
+  it("commits worktree text fields on blur, not on every keystroke", async () => {
+    const onUpdate = vi.fn();
+    const user = userEvent.setup();
+    const settings = createSettings();
+    settings.settings.defaults.worktree = {
+      mode: WORKTREE_MODES.NAMED,
+      branch: "",
+    };
+
+    render(
+      <DefaultsHarnessPage
+        settings={settings}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={onUpdate}
+        onReset={() => {}}
+      />
+    );
+
+    await user.type(
+      screen.getByLabelText("Branch, property defaults.worktree.branch"),
+      "feature"
+    );
+    expect(onUpdate).not.toHaveBeenCalled();
+
+    await user.tab();
+    expect(onUpdate).toHaveBeenCalledOnce();
+    expect(onUpdate).toHaveBeenCalledWith("defaults.worktree", {
+      mode: WORKTREE_MODES.NAMED,
+      branch: "feature",
+    });
+  });
+
   it("writes false when the None worktree default is selected", async () => {
     const onUpdate = vi.fn();
     const user = userEvent.setup();

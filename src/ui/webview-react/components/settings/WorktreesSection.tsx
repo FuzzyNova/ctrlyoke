@@ -477,8 +477,8 @@ export function WorktreesSection({
         aria-labelledby="manage-worktrees-heading"
         className="border-t border-panel-border pt-4"
       >
-        <div className="flex items-start justify-between gap-2">
-          <div>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0 flex-1 basis-48">
             <h4
               id="manage-worktrees-heading"
               className="text-sm font-semibold text-foreground"

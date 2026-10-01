@@ -12,9 +12,9 @@ import { useEffect, useState } from "react";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import {
-  AdditionalArgsEditor,
   CustomSelect,
   HarnessDropdown,
+  LocalAdditionalArgsEditor,
 } from "@components/shared";
 import { DROPDOWN_NAMESPACES } from "../../types/dropdownNamespaces";
 import { LocalTextInput } from "../shared/LocalInputs";
@@ -163,7 +163,7 @@ export function HarnessesSection({
                 id={`extra-args-${harnessId}`}
                 {...rowProps}
               >
-                <AdditionalArgsEditor
+                <LocalAdditionalArgsEditor
                   id={`extra-args-${harnessId}`}
                   harnessId={harnessId}
                   value={
@@ -171,7 +171,7 @@ export function HarnessesSection({
                       harnessId
                     ] ?? ""
                   }
-                  onChange={(v) =>
+                  onCommit={(v) =>
                     onUpdate(
                       `defaults.additionalArgs.${harnessId}`,
                       v || undefined
