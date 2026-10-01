@@ -13,6 +13,7 @@ import {
   type RetryKind,
 } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
+import { formatRetryDenominator } from "../utils/LimitUtils";
 import {
   EndConditionEvaluator,
   EvaluationResult,
@@ -364,6 +365,7 @@ export class EndConditionHandler {
       retryKind === RETRY_KINDS.PASS
         ? this.buildPassRetryPrompt(prompt)
         : this.buildRetryPrompt(prompt, evaluationResult);
+    const retryDenominator = formatRetryDenominator(maxRetries);
 
     retryContext.runtime.scheduleRetry(
       retryContext.attemptTarget,
@@ -374,8 +376,8 @@ export class EndConditionHandler {
 
     Log.info(
       retryKind === RETRY_KINDS.PASS
-        ? `End condition passed, re-running (pass retry ${currentRetry}/${maxRetries})...`
-        : `Validation failed, retrying (attempt ${currentRetry}/${maxRetries})...`
+        ? `End condition passed, re-running (pass retry ${currentRetry}/${retryDenominator})...`
+        : `Validation failed, retrying (attempt ${currentRetry}/${retryDenominator})...`
     );
 
     const hasQueueStep =
@@ -387,8 +389,8 @@ export class EndConditionHandler {
       const ellipsis = retryPromptText.length > 60 ? "..." : "";
       const statusMessage =
         retryKind === RETRY_KINDS.PASS
-          ? `Re-running Prompt ${currentIndex + 1} (Pass retry ${currentRetry}/${maxRetries}): ${retryPromptPreview}${ellipsis}`
-          : `Retrying Prompt ${currentIndex + 1} (Attempt ${currentRetry}/${maxRetries}): ${retryPromptPreview}${ellipsis}`;
+          ? `Re-running Prompt ${currentIndex + 1} (Pass retry ${currentRetry}/${retryDenominator}): ${retryPromptPreview}${ellipsis}`
+          : `Retrying Prompt ${currentIndex + 1} (Attempt ${currentRetry}/${retryDenominator}): ${retryPromptPreview}${ellipsis}`;
       this.statusMessageReporter.report(
         {
           kind: FINAL_STEP_PHASES.QUEUE,

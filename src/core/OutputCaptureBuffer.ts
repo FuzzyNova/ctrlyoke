@@ -3,8 +3,7 @@ import type {
   CliOutput,
   TokenStats,
 } from "../types/WebviewMessageTypes";
-import type { WorkflowStep, PromptStep } from "../types/CtrlYokeTypes";
-import { isScriptStep } from "../types/CtrlYokeTypes";
+import type { WorkflowStep } from "../types/CtrlYokeTypes";
 import { EXECUTION_STATES } from "../types/CtrlYokeTypes";
 import {
   FINAL_STEP_PHASES,
@@ -53,6 +52,7 @@ interface StepOutputBufferEntry {
   workingDirectory: string | undefined;
   timestampMs: number;
   attemptIndex: number;
+  retryState?: { currentRetry: number; maxRetries: number };
   runIndex: number;
   accumulatedText: string;
   accumulatedEvents: CliEvent[];
@@ -216,26 +216,8 @@ export class OutputCaptureBuffer {
       runIndex,
       ...accumulatedOutput,
       rawTextOutput,
+      retryState: this.completedStepOutputs.get(stepIndex)?.retryState,
     });
-
-    // When a retry starts streaming, eagerly set retryState in completedStepOutputs
-    // so replayTo() can send RETRY_ATTEMPT_CHANGED before replaying outputs.
-    if (attemptIndex > 0) {
-      const completedEntry = this.completedStepOutputs.get(stepIndex);
-      if (completedEntry) {
-        const promptStep = this.callbacks.getWorkflowStep(stepIndex);
-        const promptStepTyped =
-          promptStep && !isScriptStep(promptStep)
-            ? (promptStep as PromptStep)
-            : undefined;
-        const maxRetries =
-          promptStepTyped?.endCondition?.maxRetries ?? attemptIndex;
-        completedEntry.retryState = { currentRetry: attemptIndex, maxRetries };
-        Log.trace(
-          `${this.instanceTag} captureOutputInit: set retryState for step ${stepIndex} (attempt ${attemptIndex}/${maxRetries})`
-        );
-      }
-    }
 
     const totalSteps = this.callbacks.getTotalSteps();
     this.callbacks.onPromptStart({
@@ -283,16 +265,6 @@ export class OutputCaptureBuffer {
     const attemptIndex = output.attemptIndex ?? 0;
     if (existing) {
       existing.outputs.push(output);
-      if (attemptIndex > 0) {
-        const promptStep = this.callbacks.getWorkflowStep(stepIndex);
-        const promptStepTyped =
-          promptStep && !isScriptStep(promptStep)
-            ? (promptStep as PromptStep)
-            : undefined;
-        const maxRetries =
-          promptStepTyped?.endCondition?.maxRetries ?? attemptIndex;
-        existing.retryState = { currentRetry: attemptIndex, maxRetries };
-      }
     } else {
       this.completedStepOutputs.set(stepIndex, { outputs: [output] });
     }
@@ -315,6 +287,23 @@ export class OutputCaptureBuffer {
       harness: output.structured?.metadata?.harness,
       elapsed: output.elapsed,
     });
+  }
+
+  /** Store the exact effective retry state emitted by the runtime transition. */
+  captureRetryState(
+    stepIndex: number,
+    currentRetry: number,
+    maxRetries: number
+  ): void {
+    const retryState = { currentRetry, maxRetries };
+    const completedEntry = this.completedStepOutputs.get(stepIndex);
+    if (completedEntry) {
+      completedEntry.retryState = retryState;
+    }
+    const streamingEntry = this.stepOutputBuffer.get(stepIndex);
+    if (streamingEntry) {
+      streamingEntry.retryState = retryState;
+    }
   }
 
   getBufferedOutput(stepIndex: number): CliOutput | undefined {
@@ -522,28 +511,23 @@ export class OutputCaptureBuffer {
         // Belt-and-suspenders: ensure retryState was already sent above so
         // the webview store accepts attemptIndex > 0 outputs.
         if (buffer.attemptIndex > 0) {
-          const completedEntry = this.completedStepOutputs.get(stepIndex);
-          if (!completedEntry?.retryState) {
+          const retryState =
+            this.completedStepOutputs.get(stepIndex)?.retryState ??
+            buffer.retryState;
+          if (!retryState) {
             // Edge case: retry streaming started but completedStepOutputs
             // doesn't have retryState yet (defend against timing gaps).
-            const promptStep = this.callbacks.getWorkflowStep(stepIndex);
-            const promptStepTyped =
-              promptStep && !isScriptStep(promptStep)
-                ? (promptStep as PromptStep)
-                : undefined;
-            const maxRetries =
-              promptStepTyped?.endCondition?.maxRetries ?? buffer.attemptIndex;
             Log.trace(
-              `${instanceTag} replayFullStateTo: sending fallback retryState for step ${stepIndex} (attempt ${buffer.attemptIndex}/${maxRetries})`
-            );
-            dashboardSink.updateRetryAttempt(
-              stepIndex,
-              buffer.attemptIndex,
-              maxRetries
+              `${instanceTag} replayFullStateTo: retry state unavailable for streaming step ${stepIndex} attempt ${buffer.attemptIndex}`
             );
           } else {
             Log.trace(
-              `${instanceTag} replayFullStateTo: retryState already sent for step ${stepIndex} (attempt ${completedEntry.retryState.currentRetry}/${completedEntry.retryState.maxRetries})`
+              `${instanceTag} replayFullStateTo: sending retryState for step ${stepIndex} (attempt ${retryState.currentRetry}/${retryState.maxRetries})`
+            );
+            dashboardSink.updateRetryAttempt(
+              stepIndex,
+              retryState.currentRetry,
+              retryState.maxRetries
             );
           }
         }

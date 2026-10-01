@@ -5207,6 +5207,11 @@ export class WorkflowInstance
           `[inst:${this.id.slice(0, 8)}] Step ${target.stepIndex + 1} retry scheduled ` +
             `(attempt ${transition.current.attemptIndex + 1})`
         );
+        this.outputCaptureBuffer.captureRetryState(
+          target.stepIndex,
+          transition.current.retryCount ?? transition.current.attemptIndex,
+          transition.current.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES
+        );
         this.dashboardSink?.updateRetryAttempt(
           target.stepIndex,
           transition.current.retryCount ?? transition.current.attemptIndex,

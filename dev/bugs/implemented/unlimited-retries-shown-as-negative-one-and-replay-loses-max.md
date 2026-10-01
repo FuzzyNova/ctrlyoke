@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli); traced in code
 - **Area:** `src/core/EndConditionHandler.ts` (~357-391), `src/core/WorkflowInstance.ts` (`updateRetryAttempt` forwarding), `PromptStepDetails.tsx` (~151, under `src/ui/webview-react/components/`), `src/core/OutputCaptureBuffer.ts` (~209-211, ~271-273, ~508-510)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

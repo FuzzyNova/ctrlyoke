@@ -256,6 +256,44 @@ function createReporter(
 }
 
 suite("EndConditionHandler", () => {
+  test("formats unlimited retry status denominators", async () => {
+    const platform = new MockPlatform();
+    const runtime = new WorkflowStateMachine();
+    const queue = new PromptQueue(runtime);
+    // Retry the initial failure once, then succeed on the retry evaluation.
+    const prompt = createPrompt(-1, "continue", {
+      onFail: "retry",
+      retryPrompt: "Run again",
+    });
+    const dashboard = new DashboardSinkDouble();
+    const handler = new EndConditionHandler(
+      new TestEndConditionEvaluator(platform, [
+        validationFailure("again"),
+        successResult("ok"),
+      ]),
+      queue,
+      createReporter(dashboard)
+    );
+
+    queue.loadPrompts({ steps: [prompt] });
+    await handler.handleEndConditionResult(
+      prompt,
+      validationFailure("initial"),
+      {
+        integration: new MockHarnessIntegration(undefined, false),
+        totalSteps: 1,
+        workspaceFolderPath: process.cwd(),
+        currentPromptFilePath: "workflow.ctrlyoke.yaml",
+        runtime,
+        attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        attemptIndex: 0,
+      },
+      async () => "response"
+    );
+
+    assert.match(dashboard.statusMessages[0].message, /Attempt 1\/∞/);
+  });
+
   test("completes the current attempt through the runtime owner on initial success", async () => {
     const platform = new MockPlatform();
     const runtime = new WorkflowStateMachine();

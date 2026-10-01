@@ -5,6 +5,7 @@ import type { RetryState, CliOutput } from "../../store/workflowStore";
 import type { StepDetails } from "./WorkflowStep";
 import { HarnessIcon } from "@components/shared/HarnessIcon";
 import { Icon } from "../shared/Icon";
+import { formatRetryDenominator } from "../../../../utils/LimitUtils";
 
 /**
  * A single prompt-level property override to display in the overrides row.
@@ -148,7 +149,7 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
         <div className="mt-1 pl-5 flex items-center gap-1.5 text-xs font-semibold text-warning-fg">
           <Icon name="refresh" className="text-xs" />
           <span>
-            Retry {retryState.currentRetry} of {retryState.maxRetries}
+            Retry {retryState.currentRetry} of {formatRetryDenominator(retryState.maxRetries)}
           </span>
         </div>
       )}

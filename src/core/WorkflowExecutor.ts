@@ -76,7 +76,11 @@ import {
   type ResolvedProperties,
 } from "../utils/PropertyResolver";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
-import { exceedsLimit, isUnlimited } from "../utils/LimitUtils";
+import {
+  exceedsLimit,
+  formatRetryDenominator,
+  isUnlimited,
+} from "../utils/LimitUtils";
 import {
   buildStepLimitError,
   getEffectiveMaxStepsSource,
@@ -3565,7 +3569,7 @@ export class WorkflowExecutor {
     const maxRetries = policy.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES;
     const canRetry = canRetryErrorBehavior(policy, attemptIndex);
     const actionText = canRetry
-      ? `retry ${attemptIndex + 1} of ${isUnlimited(maxRetries) ? "unlimited" : maxRetries}`
+      ? `retry ${attemptIndex + 1} of ${formatRetryDenominator(maxRetries)}`
       : policy.onError === CONDITION_ACTIONS.CONTINUE
         ? CONDITION_ACTIONS.CONTINUE
         : WORKFLOW_EXECUTION_OUTCOMES.STOP;
@@ -3852,7 +3856,7 @@ export class WorkflowExecutor {
         return undefined;
       }
 
-      return `retry ${this.promptQueue.getCurrentRetryCount(target) + 1} of ${this.promptQueue.getEffectiveMaxRetries(prompt)}`;
+      return `retry ${this.promptQueue.getCurrentRetryCount(target) + 1} of ${formatRetryDenominator(this.promptQueue.getEffectiveMaxRetries(prompt))}`;
     };
 
     await this.trackStatusMessage(

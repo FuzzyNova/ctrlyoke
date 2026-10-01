@@ -508,7 +508,7 @@ suite("OutputCaptureBuffer", () => {
       assert.strictEqual(outputCalls.length, 2, "should replay both attempts");
     });
 
-    test("should set retryState when attemptIndex > 0", () => {
+    test("replays the effective retryState recorded by the runtime", () => {
       const promptStep: Partial<PromptStep> = {
         endCondition: { maxRetries: 3 } as any,
       };
@@ -518,6 +518,7 @@ suite("OutputCaptureBuffer", () => {
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
       buffer.captureCompletedOutput(0, { response: "r0", attemptIndex: 0 });
+      buffer.captureRetryState(0, 1, -1);
       buffer.captureCompletedOutput(0, { response: "r1", attemptIndex: 1 });
 
       const { sink, calls } = makeDashboardSink();
@@ -532,7 +533,7 @@ suite("OutputCaptureBuffer", () => {
       );
       assert.ok(retryCalls.length > 0, "should replay retry state");
       assert.strictEqual(retryCalls[0].args[1], 1); // currentRetry
-      assert.strictEqual(retryCalls[0].args[2], 3); // maxRetries
+      assert.strictEqual(retryCalls[0].args[2], -1); // effective maxRetries
     });
 
     test("should remove step from streaming buffer after completion", () => {
@@ -1089,6 +1090,7 @@ suite("OutputCaptureBuffer", () => {
         1,
         false
       );
+      buffer.captureRetryState(0, 1, 4);
       buffer.captureChunk(0, "retry response");
 
       const { sink, calls } = makeDashboardSink();
@@ -1105,7 +1107,7 @@ suite("OutputCaptureBuffer", () => {
       );
       assert.ok(retryCall, "should send retryState for attemptIndex > 0");
       assert.strictEqual(retryCall!.args[1], 1); // currentRetry
-      assert.strictEqual(retryCall!.args[2], 2); // maxRetries
+      assert.strictEqual(retryCall!.args[2], 4); // recorded effective maxRetries
     });
   });
 });
