@@ -37,7 +37,7 @@ import {
   type UndoRedoDirection,
 } from "@root/types/DashboardConstants";
 import { getLanguageFromPath } from "@utils/syntaxHighlighting";
-import { hasRenderableDiff } from "@utils/diffUtils";
+import { hasRenderableDiff, normalizeStructuredPatch } from "@utils/diffUtils";
 
 export const UNDO_FILE_CANDIDATE_TIERS = {
   TIER1: "tier1",
@@ -493,11 +493,17 @@ function applyStructuredPatch(
   hunks: UnifiedDiffHunk[],
   reverse = false
 ): string | undefined {
-  const patched = Diff.applyPatch(
-    content.replace(/\r\n/g, "\n"),
-    formatStructuredPatch("workflow-file", hunks, reverse)
-  );
-  return patched === false ? undefined : patched;
+  try {
+    const normalizedHunks = normalizeStructuredPatch(hunks);
+    if (normalizedHunks.length === 0) return undefined;
+    const patched = Diff.applyPatch(
+      content.replace(/\r\n/g, "\n"),
+      formatStructuredPatch("workflow-file", normalizedHunks, reverse)
+    );
+    return patched === false ? undefined : patched;
+  } catch {
+    return undefined;
+  }
 }
 
 interface AggregationPart {

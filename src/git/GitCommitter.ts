@@ -14,7 +14,12 @@ export class GitCommitter {
     options?: CommitOptions
   ): Promise<void> {
     if (options?.addAll) {
-      await execFileAsync("git", ["add", "."], { cwd });
+      const { stdout } = await execFileAsync(
+        "git",
+        ["rev-parse", "--show-toplevel"],
+        { cwd, encoding: "utf8" }
+      );
+      await execFileAsync("git", ["add", "-A"], { cwd: stdout.trim() });
     }
     await execFileAsync("git", ["commit", "-m", message], { cwd });
   }

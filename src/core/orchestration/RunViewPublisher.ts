@@ -25,7 +25,7 @@ import { PostMessageDashboardSink } from "../../ui/PostMessageDashboardSink";
 import { WorkflowTaggedSink } from "../WorkflowTaggedSink";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import {
-  resolveLineageLastModifiedAt,
+  getLineageLastModifiedAt,
   stripLegacyWorkingFileLineageMetadata,
 } from "../../utils/WorkingFileMetadata";
 import type { RunLifecycleViewPort } from "./RunLifecycleService";
@@ -534,12 +534,10 @@ export class RunViewPublisher implements RunLifecycleViewPort {
       requestId,
       workflowKey,
       descriptorRevision: descriptor.revision,
-      lastModifiedAt: resolveLineageLastModifiedAt(
-        descriptor.lastModifiedAt,
-        ...runSummaries.flatMap((summary) => [
-          summary.startedAt,
-          summary.completedAt,
-        ])
+      lastModifiedAt: await getLineageLastModifiedAt(
+        workspaceRoot,
+        workflowKey,
+        descriptor.lastModifiedAt
       ),
       runSummaries,
       executionRunRef: this.host.findExecutionRunRef(workflowKey),

@@ -1,7 +1,11 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { UNLIMITED_LIMIT } from "../../types/DashboardConstants";
-import { exceedsLimit, isUnlimited } from "../../utils/LimitUtils";
+import {
+  exceedsLimit,
+  formatRetryDenominator,
+  isUnlimited,
+} from "../../utils/LimitUtils";
 import {
   getEffectiveMaxStepsSource,
   resolveEffectiveMaxSteps,
@@ -12,6 +16,11 @@ suite("LimitUtils", () => {
     assert.strictEqual(isUnlimited(UNLIMITED_LIMIT), true);
     assert.strictEqual(isUnlimited(0), false);
     assert.strictEqual(isUnlimited(10), false);
+  });
+
+  test("formats finite and unlimited retry denominators", () => {
+    assert.strictEqual(formatRetryDenominator(3), "3");
+    assert.strictEqual(formatRetryDenominator(UNLIMITED_LIMIT), "∞");
   });
 
   test("exceeds a finite limit only when the count is greater", () => {

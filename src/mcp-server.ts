@@ -61,8 +61,7 @@ import { isUnlimited } from "./utils/LimitUtils";
 import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
 import { deriveStepStatusesFromRuntime } from "./utils/StepStatusDerivation";
 import {
-  getWorkingFileLastActivityAt,
-  resolveLineageLastModifiedAt,
+  getLineageLastModifiedAt,
   stripLegacyWorkingFileLineageMetadata,
 } from "./utils/WorkingFileMetadata";
 import { RunContinuationService } from "./core/orchestration/RunContinuationService";
@@ -72,6 +71,8 @@ import {
 } from "./core/ParallelGroupTopology";
 import { RunOutputResolver } from "./core/orchestration/RunOutputResolver";
 import type { RunRef, WorkflowKey } from "./types/CtrlYokeTypes";
+import { formatArgString } from "./utils/CliArgParser";
+import { claimPathForCompare } from "./utils/CoordinationClaimPath";
 import { isPathWithinDirectory } from "./utils/PathSecurity";
 import {
   CoordinationParticipantRegistry,
@@ -361,7 +362,7 @@ function toWorkflowStepUpdates(
   const { additionalArgs, ...workflowUpdates } = updates;
   return additionalArgs === undefined
     ? workflowUpdates
-    : { ...workflowUpdates, additionalArgs: additionalArgs.join(" ") };
+    : { ...workflowUpdates, additionalArgs: formatArgString(additionalArgs) };
 }
 
 export class CtrlYokeMCPServer {
@@ -957,7 +958,11 @@ export class CtrlYokeMCPServer {
     // Naming a path you never held releases nothing. `released: []` alone
     // looks like a successful release of the paths that were asked for, so
     // say which ones were not yours to release.
-    const notHeld = paths?.filter((value) => !released.includes(value)) ?? [];
+    const releasedForCompare = new Set(released.map(claimPathForCompare));
+    const notHeld =
+      paths?.filter(
+        (value) => !releasedForCompare.has(claimPathForCompare(value))
+      ) ?? [];
     return {
       content: [
         {
@@ -1821,9 +1826,10 @@ export class CtrlYokeMCPServer {
               totalSteps: allSteps.length,
               completedSteps: completedCount,
               startedAt: data.startedAt ?? null,
-              lastModifiedAt: resolveLineageLastModifiedAt(
-                descriptor.lastModifiedAt,
-                getWorkingFileLastActivityAt(data)
+              lastModifiedAt: await getLineageLastModifiedAt(
+                this.workspaceRoot,
+                workflowKey,
+                descriptor.lastModifiedAt
               ),
               workingFile: filePath,
               runDirectory: WorkflowPaths.runDirectoryForWorkingFile(filePath),

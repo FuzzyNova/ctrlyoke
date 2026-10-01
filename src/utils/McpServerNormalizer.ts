@@ -5,6 +5,7 @@ import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   CTRLYOKE_SLASH_TOKEN_KINDS,
   PROMPT_DIAGNOSTIC_CODES,
+  SETTING_SCOPES,
   SPECIAL_TARGET_IDS,
 } from "../types/DashboardConstants";
 import type { CompatibilityDiagnostic } from "../types/CompatibilityTypes";
@@ -17,10 +18,13 @@ import {
 } from "./McpRegistryFileManager";
 import { scanCtrlYokeSlashTokens } from "./CtrlYokeSlashTokens";
 import { Log } from "./Log";
+import { collectSecretInterpolationNames } from "./SecretResolver";
 
 export interface McpServerNormalizationResult {
   readonly properties: ResolvedProperties;
   readonly diagnostics: readonly CompatibilityDiagnostic[];
+  /** Secret references from selected user-scope registry entries. */
+  readonly trustedUserScopeSecretNames: readonly string[];
 }
 
 /**
@@ -79,7 +83,11 @@ export class McpServerNormalizer {
           this.createUnknownReferenceDiagnostic(properties, token.name)
         )
       );
-      return { properties, diagnostics };
+      return {
+        properties,
+        diagnostics,
+        trustedUserScopeSecretNames: [],
+      };
     }
     const unknownIds = new Set<string>();
     const normalizedServers: (string | McpServerConfig)[] = [];
@@ -137,12 +145,38 @@ export class McpServerNormalizer {
       );
     }
 
+    const trustedUserScopeSecretNames = new Set<string>();
+    for (const server of managedServers) {
+      const hasUserLocation = server.locations.some(
+        (location) => location.scope === SETTING_SCOPES.USER
+      );
+      const hasWorkspaceOverride = server.locations.some(
+        (location) => location.scope === SETTING_SCOPES.WORKSPACE
+      );
+      const selectedFromRegistry = normalizedServers.some(
+        (normalized) => normalized === server.config
+      );
+      if (
+        selectedFromRegistry &&
+        hasUserLocation &&
+        !hasWorkspaceOverride
+      ) {
+        for (const name of [
+          ...collectSecretInterpolationNames(server.config.env),
+          ...collectSecretInterpolationNames(server.config.headers),
+        ]) {
+          trustedUserScopeSecretNames.add(name);
+        }
+      }
+    }
+
     return {
       properties: {
         ...properties,
         mcpServers: normalizedServers,
       },
       diagnostics,
+      trustedUserScopeSecretNames: [...trustedUserScopeSecretNames],
     };
   }
 

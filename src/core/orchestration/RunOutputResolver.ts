@@ -319,11 +319,11 @@ export class RunOutputResolver {
               output: event.payload.cliOutput,
               responseText: event.payload.cliOutput.response,
               kind:
-                (event.responseKind ??
-                event.payload.cliOutput.source ===
-                  SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP)
+                event.responseKind ??
+                (event.payload.cliOutput.source ===
+                SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP
                   ? TIMELINE_ATTEMPT_KINDS.SCRIPT
-                  : TIMELINE_ATTEMPT_KINDS.AI,
+                  : TIMELINE_ATTEMPT_KINDS.AI),
             },
           };
           break;

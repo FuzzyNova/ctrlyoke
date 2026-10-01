@@ -347,7 +347,7 @@
     },
     "varsConfig": {
       "type": "object",
-      "description": "Workflow-level variable defaults for {{varName}} substitution. CLI --var key=value flags override these at runtime. Substituted into: prompt text, model, additionalArgs, hook command/env, preCondition script/env, endCondition script/env/retryPrompt/passRetryPrompt, script-step script/env, and worktree setup commands. Every script and condition process also receives each var as a CTRLYOKE_VAR_<KEY> environment variable regardless of {{varName}} usage.",
+      "description": "Workflow-level variable defaults for {{varName}} substitution. CLI --var key=value flags override these at runtime. Substituted into: prompt text, model, additionalArgs, hook command/env, preCondition script/env, endCondition script/env/retryPrompt/passRetryPrompt, script-step script/env, and worktree setup commands. Every script and condition process also receives each var as a CTRLYOKE_VAR_<KEY> environment variable regardless of {{varName}} usage. A value containing `${secret:` causes the step to fail before execution so vars cannot manufacture managed-secret references.",
       "additionalProperties": {
         "type": "string"
       },
@@ -1038,7 +1038,7 @@
           "type": "string",
           "enum": ["continue", "retry", "stopWorkflow"],
           "default": "stopWorkflow",
-          "description": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times); if retryPrompt is omitted, a fallback prompt includes the expected and actual values and script output. When maxRetries is omitted, one retry is allowed. 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default); a configured retryPrompt also enables failure retries while budget remains."
+          "description": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times); if retryPrompt is omitted, a fallback prompt includes the expected and actual values and script output. When maxRetries is omitted, one retry is allowed. 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default). A retryPrompt alone does not enable retries; set maxRetries above 0 on the condition or in defaults.endCondition.maxRetries, or use onFail: retry."
         }
       },
       "required": ["script"],
@@ -1266,6 +1266,10 @@
         "schemaVersion": {
           "type": "number",
           "description": "Run-file format version for _runtime metadata and run bookkeeping, stamped on every write. It is independent of the root schemaVersion, which versions the workflow definition format. A file written by a newer ctrlyoke is refused rather than overwritten."
+        },
+        "lastActivityAt": {
+          "type": "number",
+          "description": "Latest persisted activity for the run, including an appended step that has not started yet."
         },
         "currentIndex": {
           "type": "number",

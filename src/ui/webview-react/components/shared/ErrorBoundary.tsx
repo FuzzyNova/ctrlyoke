@@ -3,6 +3,7 @@ import { WebviewLog } from "@utils/logger";
 
 interface Props {
   children: ReactNode;
+  fallback?: ReactNode;
 }
 
 interface State {
@@ -42,6 +43,8 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render(): ReactNode {
     if (this.state.hasError) {
+      if (this.props.fallback !== undefined) return this.props.fallback;
+
       return (
         <div
           style={{

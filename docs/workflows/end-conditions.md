@@ -20,10 +20,10 @@ endCondition:
     $endCondition:stderr
 ```
 
-A failed validation is re-prompted while retry budget remains. A configured
-`retryPrompt` (on the step or in `defaults.endCondition.retryPrompt`) also enables
-failure retries with the default `onFail: stopWorkflow`. With `onFail: retry`, no
-template is required: ctrlyoke sends a fallback prompt containing the expected
+A failed validation is re-prompted while retry budget remains. A `retryPrompt`
+alone does not enable retries: set `maxRetries` above 0 on the condition or in
+`defaults.endCondition.maxRetries`, or use `onFail: retry`. With `onFail: retry`,
+no template is required: ctrlyoke sends a fallback prompt containing the expected
 and actual values and script output. The implicit retry limit is one when
 `onFail: retry` is set and `maxRetries` is omitted. When the budget runs out the
 step fails and the workflow stops. `onFail: continue` skips retries and advances
@@ -123,6 +123,10 @@ Three things worth knowing:
   text. If you need both, that is two conditions, not one.
 - **Text is trimmed and case-sensitive.** Add `ignoreCase: true` for a
   case-insensitive `eq`/`ne`/`contains`/`notContains`.
+- **Script output is sanitized before comparison.** ANSI control sequences are
+  removed and CRLF line endings become LF, consistently for headless and
+  interactive script execution. The sanitized stdout/stderr are also used by
+  `$endCondition:*` and `$preCondition:*` output references.
 
 Operators are word tokens (`gte`, not `>=`) because symbols are not usable as
 YAML values — `operator: >=` is a parse error, and `operator: !=` parses as a YAML

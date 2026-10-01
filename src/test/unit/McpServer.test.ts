@@ -11,6 +11,7 @@ import {
   type McpToolCallingContext,
 } from "../../mcp-server";
 import { getGlobalMaxSteps } from "../../utils/QueueLimitUtils";
+import { parseArgString } from "../../utils/CliArgParser";
 import { ensureMcpStorageInitialized } from "../helpers/mcpStorage";
 import { removeTempDir } from "../helpers/tempWorkspace";
 import {
@@ -35,6 +36,7 @@ import type {
   WorkflowKey,
   WorkflowLineageDescriptor,
   WorkflowStep,
+  PromptStep,
   WorkingFile,
   WorkingFileWorktreeRuntime,
 } from "../../types/CtrlYokeTypes";
@@ -1526,6 +1528,28 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     }
   });
 
+  test("preserves additionalArgs boundaries when editing a pending step", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun("edit-step-args");
+    const args = ["--append-system-prompt", "be terse", "it's"];
+    try {
+      await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 2,
+        updates: { additionalArgs: args },
+      });
+      const persisted = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+
+      assert.deepStrictEqual(
+        parseArgString((persisted.steps?.[2] as PromptStep).additionalArgs!),
+        args
+      );
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
   test("merges a partial edit into a pending script step", async () => {
     const server = await setup();
     const { run, ownerToken } = await prepareActiveRun("edit-script-step");
@@ -2986,17 +3010,29 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     });
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
 
-    await server.invokeTool(MCP_CLAIM_PATHS_TOOL_NAME, {
-      paths: ["src/mine.ts"],
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, "platform", {
+      value: "win32",
+      configurable: true,
     });
-    const released = responseJson(
-      await server.invokeTool(MCP_RELEASE_PATHS_TOOL_NAME, {
-        paths: ["src/mine.ts", "src/never-claimed.ts"],
-      })
-    );
+    try {
+      await server.invokeTool(MCP_CLAIM_PATHS_TOOL_NAME, {
+        paths: ["src/Foo.ts"],
+      });
+      const released = responseJson(
+        await server.invokeTool(MCP_RELEASE_PATHS_TOOL_NAME, {
+          paths: ["src/foo.ts", "src/never-claimed.ts"],
+        })
+      );
 
-    assert.deepStrictEqual(released.released, ["src/mine.ts"]);
-    assert.deepStrictEqual(released.notHeld, ["src/never-claimed.ts"]);
-    assert.match(released.note, /not released/);
+      assert.deepStrictEqual(released.released, ["src/Foo.ts"]);
+      assert.deepStrictEqual(released.notHeld, ["src/never-claimed.ts"]);
+      assert.match(released.note, /not released/);
+    } finally {
+      Object.defineProperty(process, "platform", {
+        value: originalPlatform,
+        configurable: true,
+      });
+    }
   });
 });

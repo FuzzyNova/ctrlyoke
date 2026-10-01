@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { CliOutput } from "@store/workflowStore";
 import type { WorkflowStep } from "@store/workflowStore";
-import { getStepSessionId } from "@utils/stepMetadataClipboard";
+import type { HarnessId } from "@root/types/DashboardConstants";
+import {
+  getStepSessionDetails,
+  getStepSessionId,
+} from "@utils/stepMetadataClipboard";
 
 const step = (sessionId?: string): WorkflowStep =>
   ({ prompt: "Question", _runtime: { sessionId } }) as WorkflowStep;
@@ -16,6 +20,17 @@ const output = (sessionId?: string): CliOutput => ({
   },
 });
 
+const outputWithHarness = (
+  sessionId: string,
+  harness: HarnessId
+): CliOutput => ({
+  ...output(sessionId),
+  structured: {
+    events: [],
+    metadata: { sessionId, harness },
+  },
+});
+
 describe("getStepSessionId", () => {
   it("prefers the latest output session ID", () => {
     expect(
@@ -23,6 +38,19 @@ describe("getStepSessionId", () => {
         sessionId: "runtime-session",
       })
     ).toBe("output-session");
+  });
+
+  it("keeps the harness paired with the output session ID", () => {
+    expect(
+      getStepSessionDetails(
+        {
+          prompt: "Question",
+          _runtime: { sessionId: "old", harness: "copilot-cli" },
+        },
+        outputWithHarness("latest", "claude-cli"),
+        { sessionId: "runtime", harness: "qwen-cli" }
+      )
+    ).toEqual({ sessionId: "latest", harness: "claude-cli" });
   });
 
   it("falls back to runtime metadata and then the step runtime", () => {

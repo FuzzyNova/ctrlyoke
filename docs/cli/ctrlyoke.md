@@ -525,8 +525,8 @@ ctrlyoke step remove --workflow release --run 7 --index 3
 
 ### `ctrlyoke step reorder`
 
-Pass every pending step's absolute zero-based index once, in its desired
-execution order. When a step is in flight, include that index first:
+Pass every not-yet-started step's absolute zero-based index exactly once, in
+the desired execution order. Never include a running or completed step:
 
 ```bash
 ctrlyoke step reorder --workflow release --run 7 --order 3,4,5

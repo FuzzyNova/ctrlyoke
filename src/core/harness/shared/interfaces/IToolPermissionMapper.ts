@@ -29,6 +29,8 @@ export interface PermissionContext {
   readonly isInteractive?: boolean;
   readonly workspaceRoot?: string;
   readonly workingFilePath?: string;
+  /** Environment snapshot used when resolving harness configuration paths. */
+  readonly environment?: NodeJS.ProcessEnv;
   /** Codex-only mode settings, supplied by the provider. */
   readonly sandboxMode?: string;
   readonly approvalPolicy?: string;

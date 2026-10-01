@@ -14,6 +14,8 @@ import {
   LICENSE_MACHINE_FINGERPRINT_SECRET_KEY,
   LICENSE_MACHINE_ID_SECRET_KEY,
   LICENSE_FILE_TTL_MS,
+  LICENSE_REFRESH_INTERVAL_MS,
+  LICENSE_REFRESH_RETRY_BASE_MS,
   LICENSE_SOURCES,
   LICENSE_SOURCE_SECRET_KEY,
   ENTITLEMENT_CACHE_TTL_MS,
@@ -87,6 +89,41 @@ class InMemoryTrialState implements LicenseTrialStateStore {
 const NOW = Date.parse("2026-08-28T12:00:00.000Z");
 const DAY = 24 * 60 * 60 * 1000;
 const KEYGEN_API_PATH = new URL(KEYGEN_API_BASE_URL).pathname;
+
+class ManualRefreshTimer {
+  private nextId = 1;
+  readonly entries = new Map<number, { callback: () => void; delay: number }>();
+
+  setTimeout = ((callback: () => void, delay: number) => {
+    const id = this.nextId++;
+    const handle = {
+      unref: () => undefined,
+      id,
+    } as unknown as ReturnType<typeof setTimeout>;
+    this.entries.set(id, { callback, delay });
+    return handle;
+  }) as typeof setTimeout;
+
+  clearTimeout = ((handle: ReturnType<typeof setTimeout>) => {
+    const id = (handle as unknown as { id: number }).id;
+    this.entries.delete(id);
+  }) as typeof clearTimeout;
+
+  async fireNext(): Promise<void> {
+    const entry = this.entries.entries().next().value as
+      | [number, { callback: () => void; delay: number }]
+      | undefined;
+    assert.ok(entry, "expected a scheduled refresh timer");
+    this.entries.delete(entry[0]);
+    entry[1].callback();
+    // The timer callback intentionally detaches its async refresh. Wait until
+    // it schedules the next timer, which proves the attempt has settled.
+    for (let index = 0; index < 100 && this.entries.size === 0; index++) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+    assert.ok(this.entries.size > 0, "refresh did not schedule its next timer");
+  }
+}
 
 let signingKey: CryptoKey;
 let verificationKeyHex: string;
@@ -715,6 +752,85 @@ suite("LicenseService", () => {
     assert.strictEqual(calls.length, 0);
   });
 
+  test("refreshes on its owned timer when the clock enters the TTL window", async () => {
+    const secrets = new InMemorySecretStore();
+    const issuedAt = NOW - 20 * DAY;
+    await cache(secrets, await createLicenseFile({ issued: issuedAt }));
+    await secrets.store(LICENSE_KEY_SECRET_KEY, "live-key");
+    const calls: RequestCall[] = [];
+    const freshFile = await createLicenseFile({ issued: NOW + 5 * DAY });
+    const timer = new ManualRefreshTimer();
+    let clock = NOW;
+    const service = createService(secrets, {
+      fetch: createKeygenFetch(calls, { checkout: new Response(freshFile) }),
+      now: () => clock,
+      setTimeout: timer.setTimeout,
+      clearTimeout: timer.clearTimeout,
+    });
+
+    assert.strictEqual(
+      [...timer.entries.values()][0].delay,
+      LICENSE_REFRESH_INTERVAL_MS
+    );
+    clock += 5 * DAY;
+    await timer.fireNext();
+
+    assert.strictEqual(calls.length, 1);
+    assert.strictEqual(await secrets.get(LICENSE_FILE_SECRET_KEY), freshFile);
+    assert.strictEqual(
+      [...timer.entries.values()][0].delay,
+      LICENSE_REFRESH_INTERVAL_MS
+    );
+    service.dispose();
+    assert.strictEqual(timer.entries.size, 0);
+  });
+
+  test("retries a failed in-window checkout with the backoff timer", async () => {
+    const secrets = new InMemorySecretStore();
+    await cache(
+      secrets,
+      await createLicenseFile({ issued: NOW - 25 * DAY })
+    );
+    await secrets.store(LICENSE_KEY_SECRET_KEY, "live-key");
+    const calls: RequestCall[] = [];
+    const freshFile = await createLicenseFile({ issued: NOW });
+    let checkoutCount = 0;
+    const fetch: typeof globalThis.fetch = async (input, init = {}) => {
+      const parsed = new URL(String(input));
+      calls.push({
+        method: init.method ?? "GET",
+        url: parsed.pathname + parsed.search,
+        headers: Object.fromEntries(new Headers(init.headers).entries()),
+      });
+      checkoutCount++;
+      return checkoutCount === 1
+        ? new Response(null, { status: 503 })
+        : new Response(freshFile, { status: 200 });
+    };
+    const timer = new ManualRefreshTimer();
+    const service = createService(secrets, {
+      fetch,
+      setTimeout: timer.setTimeout,
+      clearTimeout: timer.clearTimeout,
+    });
+
+    await timer.fireNext();
+    assert.strictEqual(calls.length, 1);
+    assert.strictEqual(
+      [...timer.entries.values()][0].delay,
+      LICENSE_REFRESH_RETRY_BASE_MS
+    );
+
+    await timer.fireNext();
+    assert.strictEqual(calls.length, 2);
+    assert.strictEqual(await secrets.get(LICENSE_FILE_SECRET_KEY), freshFile);
+    assert.strictEqual(
+      [...timer.entries.values()][0].delay,
+      LICENSE_REFRESH_INTERVAL_MS
+    );
+    service.dispose();
+  });
+
   test("deactivates the Keygen machine and clears local license secrets", async () => {
     const secrets = new InMemorySecretStore();
     const file = await createLicenseFile();
@@ -913,8 +1029,11 @@ function createService(
   secrets: InMemorySecretStore,
   options: {
     readonly fetch?: typeof fetch;
+    readonly now?: () => number;
     readonly machineFingerprint?: string | (() => Promise<string>);
     readonly trialState?: LicenseTrialStateStore;
+    readonly setTimeout?: typeof setTimeout;
+    readonly clearTimeout?: typeof clearTimeout;
   } = {}
 ): LicenseService {
   return new LicenseService(secrets, {

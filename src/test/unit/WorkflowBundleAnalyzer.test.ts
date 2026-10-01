@@ -111,6 +111,137 @@ suite("WorkflowBundleAnalyzer", () => {
     }
   });
 
+  test("preserves a differently-cased user asset when choosing a name", async function () {
+    if (process.platform !== "win32") {
+      this.skip();
+      return;
+    }
+    const workspace = await makeWorkspace("ctrlyoke-bundle-case-user-");
+    try {
+      const source = path.join(
+        workspace,
+        ".ctrlyoke",
+        "attachments",
+        "notes.txt"
+      );
+      const assets = path.join(workspace, "workflows", "fix-tests.assets");
+      await fs.mkdir(assets, { recursive: true });
+      await fs.writeFile(source, "generated", "utf8");
+      await fs.writeFile(path.join(assets, "Notes.txt"), "user owned", "utf8");
+
+      const result = await analyze(workspace, {
+        prompt: "Use @.ctrlyoke/attachments/notes.txt",
+      });
+
+      assert.notStrictEqual(
+        path.basename(result.plan.copies[0].destinationPath),
+        "notes.txt"
+      );
+      await writeWorkflowBundle({
+        workflowPath: destination(workspace),
+        serializedWorkflow: JSON.stringify(result.workflow),
+        plan: result.plan,
+      });
+      assert.strictEqual(
+        await fs.readFile(path.join(assets, "Notes.txt"), "utf8"),
+        "user owned"
+      );
+      assert.strictEqual(
+        await fs.readFile(result.plan.copies[0].destinationPath, "utf8"),
+        "generated"
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("does not prune a manifested asset when a save republishes its case variant", async function () {
+    if (process.platform !== "win32") {
+      this.skip();
+      return;
+    }
+    const workspace = await makeWorkspace("ctrlyoke-bundle-case-managed-");
+    try {
+      const source = path.join(
+        workspace,
+        ".ctrlyoke",
+        "attachments",
+        "notes.txt"
+      );
+      const assets = path.join(workspace, "workflows", "fix-tests.assets");
+      await fs.mkdir(assets, { recursive: true });
+      await fs.writeFile(source, "new generated", "utf8");
+      await fs.writeFile(path.join(assets, "Notes.txt"), "old", "utf8");
+      await fs.writeFile(
+        path.join(assets, BUNDLE_MANIFEST_FILE_NAME),
+        JSON.stringify({
+          version: BUNDLE_MANIFEST_VERSION,
+          owner: "fix-tests.ctrlyoke.yaml",
+          files: ["Notes.txt"],
+        }),
+        "utf8"
+      );
+
+      const result = await analyze(workspace, {
+        prompt: "Use @.ctrlyoke/attachments/notes.txt",
+      });
+      assert.deepStrictEqual(result.plan.pruneCandidates, []);
+      await writeWorkflowBundle({
+        workflowPath: destination(workspace),
+        serializedWorkflow: JSON.stringify(result.workflow),
+        plan: result.plan,
+      });
+      assert.strictEqual(
+        await fs.readFile(path.join(assets, "Notes.txt"), "utf8"),
+        "new generated"
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("assigns distinct names to source files that differ only by case", async function () {
+    if (process.platform !== "win32") {
+      this.skip();
+      return;
+    }
+    const workspace = await makeWorkspace("ctrlyoke-bundle-case-sources-");
+    try {
+      const upper = path.join(
+        workspace,
+        ".ctrlyoke",
+        "attachments",
+        "Notes.md"
+      );
+      const lower = path.join(workspace, ".ctrlyoke", "prompts", "notes.md");
+      await fs.writeFile(upper, "AAA", "utf8");
+      await fs.writeFile(lower, "BBB", "utf8");
+      const result = await analyze(workspace, {
+        prompt:
+          "one @.ctrlyoke/attachments/Notes.md two @.ctrlyoke/prompts/notes.md",
+      });
+
+      assert.strictEqual(result.plan.copies.length, 2);
+      assert.notStrictEqual(
+        result.plan.copies[0].relativePath.toLowerCase(),
+        result.plan.copies[1].relativePath.toLowerCase()
+      );
+      await writeWorkflowBundle({
+        workflowPath: destination(workspace),
+        serializedWorkflow: JSON.stringify(result.workflow),
+        plan: result.plan,
+      });
+      const contents = await Promise.all(
+        result.plan.copies.map((copy) =>
+          fs.readFile(copy.destinationPath, "utf8")
+        )
+      );
+      assert.deepStrictEqual(new Set(contents), new Set(["AAA", "BBB"]));
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("bundles a bare generated-store ref shadowed by a same-named file beside the workflow", async () => {
     const workspace = await makeWorkspace("ctrlyoke-bundle-shadow-");
     try {
@@ -413,6 +544,7 @@ suite("WorkflowBundleAnalyzer", () => {
         path.join(sourceAssets, BUNDLE_MANIFEST_FILE_NAME),
         JSON.stringify({
           version: BUNDLE_MANIFEST_VERSION,
+          owner: "fix-tests.ctrlyoke.yaml",
           files: ["shot.png"],
         }),
         "utf8"
@@ -427,6 +559,7 @@ suite("WorkflowBundleAnalyzer", () => {
         path.join(destinationAssets, BUNDLE_MANIFEST_FILE_NAME),
         JSON.stringify({
           version: BUNDLE_MANIFEST_VERSION,
+          owner: "fix-tests.ctrlyoke.yaml",
           files: ["stale.png"],
         }),
         "utf8"
@@ -568,6 +701,7 @@ suite("WorkflowBundleAnalyzer", () => {
         path.join(assets, ".ctrlyoke-assets.json"),
         JSON.stringify({
           version: BUNDLE_MANIFEST_VERSION,
+          owner: "fix-tests.ctrlyoke.yaml",
           files: ["stale.txt"],
         }),
         "utf8"
@@ -576,6 +710,168 @@ suite("WorkflowBundleAnalyzer", () => {
       assert.strictEqual(result.plan.copies.length, 0);
       assert.deepStrictEqual(result.plan.pruneCandidates, ["stale.txt"]);
       assert.strictEqual(result.plan.blockers.length, 0);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("blocks a same-stem JSON Save As from pruning the YAML owner's assets", async () => {
+    const workspace = await makeWorkspace("ctrlyoke-bundle-sibling-owner-");
+    try {
+      const source = path.join(
+        workspace,
+        ".ctrlyoke",
+        "attachments",
+        "shot.png"
+      );
+      await fs.writeFile(source, "yaml asset", "utf8");
+      const yamlPath = path.join(
+        workspace,
+        "workflows",
+        "fix-tests.ctrlyoke.yaml"
+      );
+      const yamlAnalysis = await analyzeWorkflowBundle(
+        { prompt: "Attach @.ctrlyoke/attachments/shot.png" },
+        { workspaceRoot: workspace, destinationPath: yamlPath }
+      );
+      await writeWorkflowBundle({
+        workflowPath: yamlPath,
+        serializedWorkflow: JSON.stringify(yamlAnalysis.workflow),
+        plan: yamlAnalysis.plan,
+      });
+
+      const jsonPath = path.join(
+        workspace,
+        "workflows",
+        "fix-tests.ctrlyoke.json"
+      );
+      const jsonAnalysis = await analyzeWorkflowBundle(
+        { prompt: "No generated references" },
+        { workspaceRoot: workspace, destinationPath: jsonPath }
+      );
+      assert.ok(
+        jsonAnalysis.plan.blockers.some((blocker) =>
+          blocker.message.includes("fix-tests.ctrlyoke.yaml")
+        )
+      );
+      assert.deepStrictEqual(jsonAnalysis.plan.pruneCandidates, []);
+      await assert.rejects(() =>
+        writeWorkflowBundle({
+          workflowPath: jsonPath,
+          serializedWorkflow: JSON.stringify(jsonAnalysis.workflow),
+          plan: jsonAnalysis.plan,
+        })
+      );
+      assert.strictEqual(
+        await fs.readFile(
+          path.join(workspace, "workflows", "fix-tests.assets", "shot.png"),
+          "utf8"
+        ),
+        "yaml asset"
+      );
+      assert.strictEqual(
+        await fs.access(jsonPath).then(
+          () => true,
+          () => false
+        ),
+        false
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("lets the owning workflow prune its own stale assets on re-save", async () => {
+    const workspace = await makeWorkspace("ctrlyoke-bundle-owner-resave-");
+    try {
+      const source = path.join(
+        workspace,
+        ".ctrlyoke",
+        "attachments",
+        "shot.png"
+      );
+      await fs.writeFile(source, "yaml asset", "utf8");
+      const yamlPath = path.join(
+        workspace,
+        "workflows",
+        "fix-tests.ctrlyoke.yaml"
+      );
+      const firstSave = await analyzeWorkflowBundle(
+        { prompt: "Attach @.ctrlyoke/attachments/shot.png" },
+        { workspaceRoot: workspace, destinationPath: yamlPath }
+      );
+      await writeWorkflowBundle({
+        workflowPath: yamlPath,
+        serializedWorkflow: JSON.stringify(firstSave.workflow),
+        plan: firstSave.plan,
+      });
+
+      const resave = await analyzeWorkflowBundle(
+        { prompt: "No generated references" },
+        { workspaceRoot: workspace, destinationPath: yamlPath }
+      );
+      assert.strictEqual(resave.plan.blockers.length, 0);
+      assert.strictEqual(resave.plan.managedAssetsDirectory, true);
+      assert.deepStrictEqual(resave.plan.pruneCandidates, ["shot.png"]);
+      await writeWorkflowBundle({
+        workflowPath: yamlPath,
+        serializedWorkflow: JSON.stringify(resave.workflow),
+        plan: resave.plan,
+      });
+      await assert.rejects(() =>
+        fs.access(path.join(workspace, "workflows", "fix-tests.assets"))
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("adopts a legacy manifest only when no same-stem workflow sibling exists", async () => {
+    const workspace = await makeWorkspace("ctrlyoke-bundle-legacy-adopt-");
+    try {
+      const assets = path.join(workspace, "workflows", "fix-tests.assets");
+      await fs.mkdir(assets, { recursive: true });
+      await fs.writeFile(path.join(assets, "stale.png"), "stale", "utf8");
+      await fs.writeFile(
+        path.join(assets, BUNDLE_MANIFEST_FILE_NAME),
+        JSON.stringify({ version: 1, files: ["stale.png"] }),
+        "utf8"
+      );
+
+      const result = await analyze(workspace, { prompt: "No references" });
+      assert.strictEqual(result.plan.blockers.length, 0);
+      assert.strictEqual(result.plan.managedAssetsDirectory, true);
+      assert.deepStrictEqual(result.plan.pruneCandidates, ["stale.png"]);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("blocks adopting a legacy manifest when a same-stem sibling exists", async () => {
+    const workspace = await makeWorkspace("ctrlyoke-bundle-legacy-sibling-");
+    try {
+      const assets = path.join(workspace, "workflows", "fix-tests.assets");
+      await fs.mkdir(assets, { recursive: true });
+      await fs.writeFile(path.join(assets, "stale.png"), "stale", "utf8");
+      await fs.writeFile(
+        path.join(assets, BUNDLE_MANIFEST_FILE_NAME),
+        JSON.stringify({ version: 1, files: ["stale.png"] }),
+        "utf8"
+      );
+      await fs.writeFile(
+        path.join(workspace, "workflows", "fix-tests.ctrlyoke.json"),
+        "{}",
+        "utf8"
+      );
+
+      const result = await analyze(workspace, { prompt: "No references" });
+      assert.ok(
+        result.plan.blockers.some((blocker) =>
+          blocker.message.includes("fix-tests.ctrlyoke.json")
+        )
+      );
+      assert.strictEqual(result.plan.managedAssetsDirectory, undefined);
+      assert.deepStrictEqual(result.plan.pruneCandidates, []);
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
     }
@@ -652,6 +948,79 @@ suite("WorkflowBundleAnalyzer", () => {
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
       await fs.rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  test("allows a plain Save As through a symlinked destination directory", async function () {
+    const workspace = await makeWorkspace(
+      "ctrlyoke-bundle-linked-destination-"
+    );
+    try {
+      const realDirectory = path.join(workspace, "actual-workflows");
+      const linkedDirectory = path.join(workspace, "workflows");
+      await fs.mkdir(realDirectory, { recursive: true });
+      await fs.symlink(
+        realDirectory,
+        linkedDirectory,
+        process.platform === "win32" ? "junction" : "dir"
+      );
+
+      const result = await analyze(workspace, { prompt: "Plain workflow" });
+
+      assert.deepStrictEqual(result.plan.blockers, []);
+      assert.strictEqual(result.plan.copies.length, 0);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException | undefined)?.code === "EPERM") {
+        this.skip();
+        return;
+      }
+      throw error;
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("accepts generated references when the workspace root is a symlink", async function () {
+    const workspace = await makeWorkspace("ctrlyoke-bundle-linked-root-");
+    const linkedRoot = `${workspace}-link`;
+    try {
+      const source = path.join(
+        workspace,
+        ".ctrlyoke",
+        "attachments",
+        "image.png"
+      );
+      await fs.writeFile(source, "image bytes", "utf8");
+      await fs.symlink(
+        workspace,
+        linkedRoot,
+        process.platform === "win32" ? "junction" : "dir"
+      );
+      const linkedDestination = path.join(
+        linkedRoot,
+        "workflows",
+        "linked.ctrlyoke.yaml"
+      );
+      const result = await analyzeWorkflowBundle(
+        { prompt: "Attach @.ctrlyoke/attachments/image.png" },
+        { workspaceRoot: linkedRoot, destinationPath: linkedDestination }
+      );
+
+      assert.deepStrictEqual(result.plan.blockers, []);
+      assert.strictEqual(result.plan.copies.length, 1);
+      assert.strictEqual(
+        await fs.readFile(result.plan.copies[0].sourcePath, "utf8"),
+        "image bytes"
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException | undefined)?.code === "EPERM") {
+        this.skip();
+        return;
+      }
+      throw error;
+    } finally {
+      await fs.rm(linkedRoot, { recursive: true, force: true }).catch(() => {});
+      await fs.rm(workspace, { recursive: true, force: true });
     }
   });
 

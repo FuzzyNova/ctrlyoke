@@ -26,7 +26,13 @@ import {
 } from "../types/DashboardConstants";
 import { parseRangeNotation } from "./RangeNotationParser";
 import { NOT_AFTER_BOUNDARY } from "./ReferenceBoundary";
-import { createGitChangeReferencePattern } from "./ReferencePatterns";
+import {
+  createGitChangeReferencePattern,
+  createInlinePriorContextReferencePattern,
+  UNQUOTED_AT_REFERENCE_PATH,
+} from "./ReferencePatterns";
+
+export const LITERAL_FENCE_INFO = "text";
 
 /**
  * Mask every prompt-reference and variable trigger character inside
@@ -47,44 +53,69 @@ import { createGitChangeReferencePattern } from "./ReferencePatterns";
  */
 export function maskFencedCodeBlocks(text: string): string {
   const fenceRuns = /`{3,}/g;
-  let masked = text;
+  const blocks: Array<{ start: number; end: number }> = [];
+  let opening = fenceRuns.exec(text);
 
-  while (fenceRuns.lastIndex < text.length) {
-    const opening = fenceRuns.exec(text);
-    if (!opening) {
-      break;
-    }
+  while (opening) {
     const openingLength = opening[0].length;
-    let closing: RegExpExecArray | null;
-    let contentEnd = -1;
+    let next: RegExpExecArray | null;
+    let restartedAtGeneratedOpener = false;
 
-    while ((closing = fenceRuns.exec(text)) !== null) {
-      if (closing[0].length >= openingLength) {
-        contentEnd = closing.index + closing[0].length;
+    while ((next = fenceRuns.exec(text)) !== null) {
+      if (next[0].length < openingLength) {
+        continue;
+      }
+
+      const afterFence = next.index + next[0].length;
+      const lineEnd = text.indexOf("\n", afterFence);
+      const lineRemainder = text.slice(
+        afterFence,
+        lineEnd < 0 ? text.length : lineEnd
+      );
+      const isGeneratedOpener =
+        lineRemainder.trim() === LITERAL_FENCE_INFO;
+
+      if (isGeneratedOpener) {
+        // The generated fence is longer than every run in the authored text
+        // and substituted value. End the authored block here, then scan the
+        // generated literal as its own block so backticks in the value cannot
+        // close the authored fence.
+        blocks.push({ start: opening.index, end: afterFence });
+        opening = next;
+        restartedAtGeneratedOpener = true;
         break;
       }
-    }
 
-    if (contentEnd < 0) {
+      blocks.push({ start: opening.index, end: afterFence });
+      opening = fenceRuns.exec(text);
+      restartedAtGeneratedOpener = true;
       break;
     }
 
-    const blockStart = opening.index;
-    const block = text.slice(blockStart, contentEnd);
-    const maskedBlock = block.replace(/[@#~!$/{}]/g, "\x00");
-    masked =
-      masked.slice(0, blockStart) + maskedBlock + masked.slice(contentEnd);
-    fenceRuns.lastIndex = contentEnd;
+    if (!restartedAtGeneratedOpener) {
+      break;
+    }
   }
 
+  let masked = text;
+  for (const { start, end } of blocks) {
+    const block = text.slice(start, end).replace(/[@#~!$/{}]/g, "\x00");
+    masked = masked.slice(0, start) + block + masked.slice(end);
+  }
   return masked;
 }
 
-/** Fence literal text with a backtick run longer than any run in the text. */
-export function fenceLiteral(text: string, info = ""): string {
+/** Fence literal text with a backtick run longer than any run in its context. */
+export function fenceLiteral(
+  text: string,
+  info = "",
+  surroundingText = ""
+): string {
   let longestRun = 0;
-  for (const match of text.matchAll(/`+/g)) {
-    longestRun = Math.max(longestRun, match[0].length);
+  for (const source of [text, surroundingText]) {
+    for (const match of source.matchAll(/`+/g)) {
+      longestRun = Math.max(longestRun, match[0].length);
+    }
   }
   const fence = "`".repeat(Math.max(3, longestRun + 1));
   return `${fence}${info ? ` ${info}` : ""}\n${text}\n${fence}`;
@@ -160,7 +191,7 @@ export function parseAtReferences(prompt: string): FileReference[] {
   // characters. The unquoted body still permits an embedded @ so a path like
   // src/myimage@512x512.png parses as one reference, not split at the inner @.
   const regex = new RegExp(
-    `${NOT_AFTER_BOUNDARY}@(?:"([^"]+)"|([^\\s:]+))`,
+    `${NOT_AFTER_BOUNDARY}@(?:"([^"]+)"|(${UNQUOTED_AT_REFERENCE_PATH}))`,
     "g"
   );
   let match;
@@ -355,10 +386,7 @@ export function parseInlinePriorContextRefs(
   // characters immediately before $, not just alphanumerics — e.g. a
   // shell/env-style "price$previous" or a filename containing "$" shouldn't
   // expand.
-  const regex = new RegExp(
-    `${NOT_AFTER_BOUNDARY}\\$([A-Za-z][A-Za-z0-9]*(?::[A-Za-z0-9,\\-]*)?)`,
-    "g"
-  );
+  const regex = createInlinePriorContextReferencePattern();
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(maskedText)) !== null) {

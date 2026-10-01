@@ -107,6 +107,92 @@ suite("McpRegistryFileManager", () => {
     );
   });
 
+  test("strips a BOM before mutating a valid registry", async () => {
+    const manager = new McpRegistryFileManager(workspaceRoot);
+    const registryPath = path.join(
+      workspaceRoot,
+      ".ctrlyoke",
+      "mcp",
+      "servers.json"
+    );
+    await fs.mkdir(path.dirname(registryPath), { recursive: true });
+    await fs.writeFile(
+      registryPath,
+      `\uFEFF${JSON.stringify([{ id: "existing", command: "node" }])}`,
+      "utf-8"
+    );
+
+    await manager.addOrUpdate(
+      { id: "added", command: "python" },
+      SETTING_SCOPES.WORKSPACE
+    );
+
+    assert.deepStrictEqual(JSON.parse(await fs.readFile(registryPath, "utf-8")), [
+      { id: "existing", command: "node" },
+      { id: "added", command: "python" },
+    ]);
+  });
+
+  test("refuses to mutate trailing-comma JSON and leaves the file untouched", async () => {
+    const manager = new McpRegistryFileManager(workspaceRoot);
+    const registryPath = path.join(
+      workspaceRoot,
+      ".ctrlyoke",
+      "mcp",
+      "servers.json"
+    );
+    const contents = '[{"id":"existing","command":"node"},]';
+    await fs.mkdir(path.dirname(registryPath), { recursive: true });
+    await fs.writeFile(registryPath, contents, "utf-8");
+
+    await assert.rejects(
+      manager.addOrUpdate(
+        { id: "added", command: "python" },
+        SETTING_SCOPES.WORKSPACE
+      ),
+      (error: Error) =>
+        error.message.includes(registryPath) &&
+        error.message.includes("invalid JSON")
+    );
+    assert.strictEqual(await fs.readFile(registryPath, "utf-8"), contents);
+  });
+
+  test("preserves invalid raw entries across add, remove, and rename", async () => {
+    const manager = new McpRegistryFileManager(workspaceRoot);
+    const registryPath = path.join(
+      workspaceRoot,
+      ".ctrlyoke",
+      "mcp",
+      "servers.json"
+    );
+    const invalidEntry = { id: "invalid", command: "node", env: { PORT: 3 } };
+    await fs.mkdir(path.dirname(registryPath), { recursive: true });
+    await fs.writeFile(
+      registryPath,
+      JSON.stringify([
+        { id: "old-name", command: "old" },
+        invalidEntry,
+      ]),
+      "utf-8"
+    );
+
+    await manager.addOrUpdate(
+      { id: "added", command: "python" },
+      SETTING_SCOPES.WORKSPACE
+    );
+    await manager.remove("added", SETTING_SCOPES.WORKSPACE);
+    await manager.remove("old-name", SETTING_SCOPES.WORKSPACE);
+    await manager.addOrUpdate(
+      { id: "new-name", command: "new" },
+      SETTING_SCOPES.WORKSPACE
+    );
+
+    assert.deepStrictEqual(JSON.parse(await fs.readFile(registryPath, "utf-8")), [
+      invalidEntry,
+      { id: "new-name", command: "new" },
+    ]);
+  });
+
   test("falls back to the remaining scope when removing one copy of a shared server", async () => {
     const manager = new McpRegistryFileManager(workspaceRoot);
 

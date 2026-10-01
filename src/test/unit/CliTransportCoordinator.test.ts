@@ -1111,6 +1111,7 @@ line two`,
     const secretName = "CTRLYOKE_TEST_COORDINATOR_SECRET";
     const previousSecret = process.env[secretName];
     delete process.env[secretName];
+    let concurrentSpawnSecret: string | undefined;
 
     const coordinator = new CliTransportCoordinator({
       provider: {
@@ -1156,7 +1157,32 @@ line two`,
           assert.deepStrictEqual(args, ["--interactive", "prompt"]);
           assert.strictEqual(env[secretName], "secret-value");
           assert.strictEqual(env.HOOK_TOKEN, "hook-value");
-          assert.strictEqual(process.env[secretName], "secret-value");
+          assert.strictEqual(
+            process.env[secretName],
+            undefined,
+            "a granted value must stay out of the host environment"
+          );
+          const sibling = new CliTransportCoordinator({
+            provider: createHeadlessProvider(),
+            processManager: {
+              spawn: async (
+                _command: string,
+                _args: string[],
+                options?: { env?: Record<string, string> }
+              ) => {
+                concurrentSpawnSecret = options?.env?.[secretName];
+                return { stdout: "", stderr: "", exitCode: 0 };
+              },
+              isActive: () => false,
+            } as any,
+            resolveCliCommand: resolveCommand,
+            runtimeState: {
+              getWorkspaceRoot: () => process.cwd(),
+              isCancelling: () => false,
+            },
+            hostCallbacks: createHeadlessHostCallbacks(),
+          });
+          await sibling.executeHeadless([], "sibling", [], async () => true);
           await new Promise((resolve) => setTimeout(resolve, 10));
           return { exitCode: null, terminatedByManager: true };
         },
@@ -1198,6 +1224,11 @@ line two`,
     );
 
     assert.strictEqual(result.success, true);
+    assert.strictEqual(
+      concurrentSpawnSecret,
+      undefined,
+      "a concurrent child must not inherit another action's secret"
+    );
     assert.strictEqual(process.env[secretName], undefined);
     if (previousSecret !== undefined) {
       process.env[secretName] = previousSecret;

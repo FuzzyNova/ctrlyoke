@@ -248,6 +248,31 @@ describe("structured patch helpers", () => {
     expect(normalizeStructuredPatch([hunk, hunk])).toEqual([hunk]);
   });
 
+  it("drops invalid patch lines and recomputes hunk counts", () => {
+    const [normalized] = normalizeStructuredPatch([
+      {
+        oldStart: 4,
+        oldLines: 99,
+        newStart: 4,
+        newLines: 99,
+        lines: [
+          "-before",
+          "unprefixed persisted data",
+          "+after",
+          "\\ No newline at end of file",
+        ],
+      },
+    ]);
+
+    expect(normalized).toEqual({
+      oldStart: 4,
+      oldLines: 1,
+      newStart: 4,
+      newLines: 1,
+      lines: ["-before", "+after", "\\ No newline at end of file"],
+    });
+  });
+
   it("flags out-of-order hunk sequences as malformed", () => {
     const malformedPatch: UnifiedDiffHunk[] = [
       {

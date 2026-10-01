@@ -1,6 +1,7 @@
 import * as crypto from "crypto";
 import { normalizeCodexHookMatcher } from "../shared/CodexHookUtils";
 import { Log } from "../../../utils/Log";
+import { quoteTomlBasicString } from "../shared/InlineToml";
 import {
   CODEX_HOOK_EVENTS,
   CODEX_HOOK_HANDLER_TYPES,
@@ -180,7 +181,7 @@ export function canonicalizeJson(value: unknown): unknown {
 
 export function toInlineTomlValue(value: unknown): string {
   if (typeof value === "string") {
-    return JSON.stringify(value);
+    return quoteTomlBasicString(value);
   }
 
   if (typeof value === "boolean") {
@@ -206,7 +207,7 @@ export function toInlineTomlValue(value: unknown): string {
     .sort(([left], [right]) => compareByteOrder(left, right))
     .map(
       ([key, entryValue]) =>
-        `${JSON.stringify(key)} = ${toInlineTomlValue(entryValue)}`
+        `${quoteTomlBasicString(key)} = ${toInlineTomlValue(entryValue)}`
     )
     .join(", ");
   return `{ ${entries} }`;

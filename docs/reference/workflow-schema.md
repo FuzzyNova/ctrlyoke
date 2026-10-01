@@ -649,7 +649,7 @@ What to do when the end condition passes. 'continue': advance to the next step (
 - **Type:** `"continue" | "retry" | "stopWorkflow"`
 - **Default:** `"stopWorkflow"`
 
-What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times); if retryPrompt is omitted, a fallback prompt includes the expected and actual values and script output. When maxRetries is omitted, one retry is allowed. 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default); a configured retryPrompt also enables failure retries while budget remains.
+What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times); if retryPrompt is omitted, a fallback prompt includes the expected and actual values and script output. When maxRetries is omitted, one retry is allowed. 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default). A retryPrompt alone does not enable retries; set maxRetries above 0 on the condition or in defaults.endCondition.maxRetries, or use onFail: retry.
 
 ## Shared script fields {#script-fields}
 
@@ -800,7 +800,7 @@ Optional setup command run after a new named worktree is created. Setup is outsi
 
 ## Variables {#vars}
 
-Workflow-level variable defaults for <code v-pre>{{varName}}</code> substitution. CLI --var key=value flags override these at runtime. Substituted into: prompt text, model, additionalArgs, hook command/env, preCondition script/env, endCondition script/env/retryPrompt/passRetryPrompt, script-step script/env, and worktree setup commands. Every script and condition process also receives each var as a CTRLYOKE\_VAR\_&lt;KEY> environment variable regardless of <code v-pre>{{varName}}</code> usage.
+Workflow-level variable defaults for <code v-pre>{{varName}}</code> substitution. CLI --var key=value flags override these at runtime. Substituted into: prompt text, model, additionalArgs, hook command/env, preCondition script/env, endCondition script/env/retryPrompt/passRetryPrompt, script-step script/env, and worktree setup commands. Every script and condition process also receives each var as a CTRLYOKE\_VAR\_&lt;KEY> environment variable regardless of <code v-pre>{{varName}}</code> usage. A value containing `${secret:` causes the step to fail before execution so vars cannot manufacture managed-secret references.
 
 - **Type:** map of `string`
 

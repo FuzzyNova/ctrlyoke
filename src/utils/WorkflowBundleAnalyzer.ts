@@ -17,6 +17,7 @@ import {
   isPathWithinAnyDirectory,
   isPathWithinDirectory,
 } from "./PathSecurity";
+import { foldPathForCompare } from "./PathCasing";
 import {
   BUNDLE_MANIFEST_FILE_NAME,
   PROMPT_FILE_RESOLUTION_STATUSES,
@@ -24,7 +25,8 @@ import {
 } from "../types/DashboardConstants";
 
 export { BUNDLE_MANIFEST_FILE_NAME } from "../types/DashboardConstants";
-export const BUNDLE_MANIFEST_VERSION = 1;
+export const BUNDLE_MANIFEST_VERSION = 2;
+const LEGACY_BUNDLE_MANIFEST_VERSION = 1;
 
 export const BUNDLE_GENERATED_STORES = {
   ATTACHMENTS: "attachments",
@@ -65,6 +67,8 @@ export interface BundlePlan {
   blockers: BundleDiagnostic[];
   pruneCandidates: string[];
   assetsDirectory?: string;
+  /** True only when this workflow owns the existing manifest and may prune it. */
+  managedAssetsDirectory?: boolean;
 }
 
 /** Fingerprint the user-visible bundle work, excluding filesystem metadata. */
@@ -132,6 +136,7 @@ interface ResolvedReference {
 interface ExistingManifest {
   files: Set<string>;
   valid: boolean;
+  owner?: string;
   error?: unknown;
 }
 
@@ -358,15 +363,16 @@ async function analyzeLonePromptFile(
   }
 
   const canonicalPath = await realpathOrUndefined(resolution.path);
+  const realRoots = await realpathRoots(trustedRoots);
   const lexicalGeneratedStore = getGeneratedStore(
     resolution.path,
     trustedRoots
   );
   const generatedStore = canonicalPath
-    ? getGeneratedStore(canonicalPath, trustedRoots)
+    ? getGeneratedStore(canonicalPath, realRoots)
     : undefined;
   const outsideTrustedRoots = canonicalPath
-    ? !isPathWithinAnyDirectory(canonicalPath, trustedRoots)
+    ? !isPathWithinAnyDirectory(canonicalPath, realRoots)
     : true;
 
   if (outsideTrustedRoots) {
@@ -605,9 +611,10 @@ async function resolveInlineReference(
     };
   }
 
+  const realRoots = await realpathRoots(trustedRoots);
   const outsideTrustedRoots = !isPathWithinAnyDirectory(
     canonicalPath,
-    trustedRoots
+    realRoots
   );
   const lexicalEscape = lexicalGenerated && outsideTrustedRoots;
   return {
@@ -615,10 +622,10 @@ async function resolveInlineReference(
     token,
     candidatePath: candidate,
     canonicalPath,
-    generatedStore: getGeneratedStore(canonicalPath, trustedRoots),
+    generatedStore: getGeneratedStore(canonicalPath, realRoots),
     bundleAssetsDirectory: outsideTrustedRoots
       ? undefined
-      : await getManifestedAssetsDirectory(canonicalPath, trustedRoots),
+      : await getManifestedAssetsDirectory(canonicalPath, realRoots),
     missingGeneratedStore: lexicalEscape
       ? getGeneratedStore(lexicalGenerated, trustedRoots)
       : undefined,
@@ -671,13 +678,49 @@ async function finalizeCopyPlan(
     : path.resolve(workspaceRoot, options.destinationPath);
   const assetsDirectory = deriveAssetsDirectory(destinationPath);
   plan.assetsDirectory = assetsDirectory;
-  if (!(await validateExportDirectory(assetsDirectory, trustedRoots, plan))) {
+  const destinationFileName = path.basename(destinationPath);
+  const manifest = await readExistingManifest(assetsDirectory, plan);
+  if (manifest.valid) {
+    if (manifest.owner) {
+      if (
+        foldPathForCompare(manifest.owner) !==
+        foldPathForCompare(destinationFileName)
+      ) {
+        addBlocker(
+          plan,
+          "assets-owned-by-sibling-workflow",
+          `The sibling workflow "${manifest.owner}" owns "${path.basename(assetsDirectory)}". Save As cannot adopt or prune its assets.`
+        );
+      } else {
+        plan.managedAssetsDirectory = true;
+      }
+    } else {
+      const sibling = await findSameStemWorkflowSibling(destinationPath);
+      if (sibling) {
+        addBlocker(
+          plan,
+          "legacy-assets-have-sibling-workflow",
+          `The legacy manifest in "${path.basename(assetsDirectory)}" has no owner, and sibling workflow "${sibling}" exists. Save As cannot determine who owns these assets.`
+        );
+      } else {
+        plan.managedAssetsDirectory = true;
+      }
+    }
+  }
+  if (plan.blockers.length > 0) {
     return;
   }
-
-  const manifest = await readExistingManifest(assetsDirectory, plan);
   if (plan.copies.length === 0) {
     plan.pruneCandidates = manifest.valid ? [...manifest.files] : [];
+    if (
+      plan.pruneCandidates.length > 0 &&
+      !(await validateExportDirectory(assetsDirectory, trustedRoots, plan))
+    ) {
+      return;
+    }
+    return;
+  }
+  if (!(await validateExportDirectory(assetsDirectory, trustedRoots, plan))) {
     return;
   }
   const existingNames = await getExistingNames(assetsDirectory);
@@ -721,9 +764,9 @@ async function finalizeCopyPlan(
       copy.contentHash,
       usedNames,
       existingNames,
-      manifest.files
+      new Set([...manifest.files].map(foldPathForCompare))
     );
-    usedNames.add(name);
+    usedNames.add(foldPathForCompare(name));
     const destination = path.join(assetsDirectory, name);
     copy.destinationPath = destination;
     copy.relativePath = toWorkflowRelativePath(destination, destinationPath);
@@ -732,11 +775,15 @@ async function finalizeCopyPlan(
   plan.copies = [...sourceByContent.values()];
   const managedNames = new Set(
     plan.copies.map((copy) =>
-      path.relative(assetsDirectory, copy.destinationPath).replace(/\\/g, "/")
+      foldPathForCompare(
+        path.relative(assetsDirectory, copy.destinationPath).replace(/\\/g, "/")
+      )
     )
   );
   plan.pruneCandidates = manifest.valid
-    ? [...manifest.files].filter((file) => !managedNames.has(file))
+    ? [...manifest.files].filter(
+        (file) => !managedNames.has(foldPathForCompare(file))
+      )
     : [];
 
   // Names are now known; apply the complete-token edits to every field by
@@ -831,27 +878,30 @@ function chooseAssetName(
   existingNames: Set<string>,
   managedNames: Set<string>
 ): string {
+  const foldedBaseName = foldPathForCompare(baseName);
   const baseAvailable =
-    !usedNames.has(baseName) &&
-    (!existingNames.has(baseName) || managedNames.has(baseName));
+    !usedNames.has(foldedBaseName) &&
+    (!existingNames.has(foldedBaseName) || managedNames.has(foldedBaseName));
   if (baseAvailable) {
     return baseName;
   }
   const extension = path.extname(baseName);
   const stem = extension ? baseName.slice(0, -extension.length) : baseName;
   const hashed = `${stem}-${contentHash.slice(0, 8)}${extension}`;
+  const foldedHashed = foldPathForCompare(hashed);
   if (
-    !usedNames.has(hashed) &&
-    (!existingNames.has(hashed) || managedNames.has(hashed))
+    !usedNames.has(foldedHashed) &&
+    (!existingNames.has(foldedHashed) || managedNames.has(foldedHashed))
   ) {
     return hashed;
   }
   let counter = 2;
   while (true) {
     const candidate = `${stem}-${contentHash.slice(0, 8)}-${counter}${extension}`;
+    const foldedCandidate = foldPathForCompare(candidate);
     if (
-      !usedNames.has(candidate) &&
-      (!existingNames.has(candidate) || managedNames.has(candidate))
+      !usedNames.has(foldedCandidate) &&
+      (!existingNames.has(foldedCandidate) || managedNames.has(foldedCandidate))
     ) {
       return candidate;
     }
@@ -876,7 +926,10 @@ async function validateExportDirectory(
   while (true) {
     try {
       const stat = await fs.lstat(ancestor);
-      if (stat.isSymbolicLink()) {
+      if (
+        stat.isSymbolicLink() &&
+        path.resolve(ancestor) === path.resolve(assetsDirectory)
+      ) {
         addBlocker(
           plan,
           "assets-directory-symlink",
@@ -954,24 +1007,85 @@ async function loadExistingManifest(
     const value = JSON.parse(await fs.readFile(manifestPath, "utf8")) as {
       version?: unknown;
       files?: unknown;
+      owner?: unknown;
     };
     if (
-      value.version !== BUNDLE_MANIFEST_VERSION ||
+      (value.version !== BUNDLE_MANIFEST_VERSION &&
+        value.version !== LEGACY_BUNDLE_MANIFEST_VERSION) ||
       !Array.isArray(value.files)
     ) {
       throw new Error("unsupported manifest version or file list");
+    }
+    if (
+      value.version === BUNDLE_MANIFEST_VERSION &&
+      (typeof value.owner !== "string" ||
+        path.basename(value.owner) !== value.owner ||
+        /[\\/]/.test(value.owner) ||
+        !isWorkflowFileName(value.owner))
+    ) {
+      throw new Error("manifest has an invalid workflow owner");
     }
     const files = value.files.filter(isSafeManifestPath);
     if (files.length !== value.files.length) {
       throw new Error("manifest contains unsafe paths");
     }
-    return { files: new Set(files), valid: true };
+    return {
+      files: new Set(files),
+      valid: true,
+      ...(typeof value.owner === "string" ? { owner: value.owner } : {}),
+    };
   } catch (error) {
     if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
       return { files: new Set(), valid: false };
     }
     return { files: new Set(), valid: false, error };
   }
+}
+
+async function findSameStemWorkflowSibling(
+  destinationPath: string
+): Promise<string | undefined> {
+  const destinationName = path.basename(destinationPath);
+  const destinationStem = getWorkflowFileStem(destinationName);
+  if (!destinationStem) {
+    return undefined;
+  }
+  try {
+    const entries = await fs.readdir(path.dirname(destinationPath), {
+      withFileTypes: true,
+    });
+    return entries.find((entry) => {
+      const stem = getWorkflowFileStem(entry.name);
+      return (
+        entry.isFile() &&
+        foldPathForCompare(entry.name) !==
+          foldPathForCompare(destinationName) &&
+        stem !== undefined &&
+        foldPathForCompare(stem) === foldPathForCompare(destinationStem)
+      );
+    })?.name;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException | undefined)?.code !== "ENOENT") {
+      throw error;
+    }
+    return undefined;
+  }
+}
+
+function getWorkflowFileStem(fileName: string): string | undefined {
+  if (!isWorkflowFileName(fileName)) {
+    return undefined;
+  }
+  return fileName
+    .replace(/\.ctrlyoke\.(?:json|ya?ml)$/i, "")
+    .replace(/\.prompt\.md$/i, "");
+}
+
+function isWorkflowFileName(fileName: string): boolean {
+  return (
+    /\.ctrlyoke\.(?:json|ya?ml)$/i.test(fileName) ||
+    /\.prompt\.md$/i.test(fileName)
+  );
 }
 
 async function getManifestedAssetsDirectory(
@@ -988,7 +1102,11 @@ async function getManifestedAssetsDirectory(
         return undefined;
       }
       const manifest = await loadExistingManifest(directory);
-      return manifest.valid && manifest.files.has(relativePath)
+      return manifest.valid &&
+        [...manifest.files].some(
+          (file) =>
+            foldPathForCompare(file) === foldPathForCompare(relativePath)
+        )
         ? directory
         : undefined;
     }
@@ -1004,7 +1122,7 @@ async function getManifestedAssetsDirectory(
 async function getExistingNames(assetsDirectory: string): Promise<Set<string>> {
   try {
     const entries = await fs.readdir(assetsDirectory, { withFileTypes: true });
-    return new Set(entries.map((entry) => entry.name));
+    return new Set(entries.map((entry) => foldPathForCompare(entry.name)));
   } catch {
     return new Set();
   }

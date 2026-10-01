@@ -1,6 +1,5 @@
 import * as fs from "fs";
 import * as path from "path";
-import { randomUUID } from "crypto";
 import { parse, type ParseError } from "jsonc-parser";
 import {
   assertWritableSchema,
@@ -10,6 +9,7 @@ import {
 } from "../utils/PersistedSchemaGuard";
 import { migrateToCurrent } from "../utils/FormatMigrations";
 import { stripLeadingBom } from "../utils/TextUtils";
+import { uniqueAtomicTempPath } from "./AtomicFileWrite";
 
 /** On-disk shape shared by the user-local trust-decision stores. */
 export interface TrustDecisionFile<Decision> {
@@ -72,7 +72,7 @@ export async function saveTrustDecisionFile<Decision>(
   }
   assertWritableSchema(store, data, storePath);
   await fs.promises.mkdir(path.dirname(storePath), { recursive: true });
-  const tmpPath = `${storePath}.${process.pid}.${randomUUID()}.tmp`;
+  const tmpPath = uniqueAtomicTempPath(storePath);
   await fs.promises.writeFile(
     tmpPath,
     JSON.stringify(

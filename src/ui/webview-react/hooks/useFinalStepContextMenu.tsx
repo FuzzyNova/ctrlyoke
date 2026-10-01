@@ -5,7 +5,7 @@ import {
 } from "../components/shared/StepContextMenu";
 import type { WorkflowStep, CliOutput } from "@store/workflowStore";
 import {
-  getStepSessionId,
+  getStepSessionDetails,
   type StepRuntimeMetaSnapshot,
 } from "@utils/stepMetadataClipboard";
 import {
@@ -137,7 +137,7 @@ export function useFinalStepContextMenu({
             ? [
                 buildReplyToStepMenuItem({
                   step: finalStep,
-                  sessionId: getStepSessionId(
+                  ...getStepSessionDetails(
                     finalStep,
                     latestOutput,
                     runtimeMeta

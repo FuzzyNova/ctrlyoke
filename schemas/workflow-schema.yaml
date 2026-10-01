@@ -290,7 +290,8 @@ $defs:
       command/env, preCondition script/env, endCondition script/env/retryPrompt/passRetryPrompt,
       script-step script/env, and worktree setup commands. Every script and condition process also
       receives each var as a CTRLYOKE_VAR_<KEY> environment variable regardless of {{varName}}
-      usage.
+      usage. A value containing `${secret:` causes the step to fail before execution so vars cannot
+      manufacture managed-secret references.
     additionalProperties:
       type: string
     propertyNames:
@@ -956,7 +957,8 @@ $defs:
           times); if retryPrompt is omitted, a fallback prompt includes the expected and actual
           values and script output. When maxRetries is omitted, one retry is allowed. 'continue':
           advance to the next step even if validation fails. 'stopWorkflow': halt execution
-          (default); a configured retryPrompt also enables failure retries while budget remains.
+          (default). A retryPrompt alone does not enable retries; set maxRetries above 0 on the
+          condition or in defaults.endCondition.maxRetries, or use onFail: retry.
     required:
       - script
     unevaluatedProperties: false
@@ -1205,6 +1207,11 @@ $defs:
           Run-file format version for _runtime metadata and run bookkeeping, stamped on every write.
           It is independent of the root schemaVersion, which versions the workflow definition
           format. A file written by a newer ctrlyoke is refused rather than overwritten.
+      lastActivityAt:
+        type: number
+        description: >-
+          Latest persisted activity for the run, including an appended step that has not started
+          yet.
       currentIndex:
         type: number
         description: Index of currently executing prompt (0-based)

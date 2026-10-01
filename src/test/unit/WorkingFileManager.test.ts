@@ -533,6 +533,28 @@ suite("WorkingFileManager", () => {
       assert.strictEqual(Object.hasOwn(persisted, "lastModifiedAt"), false);
     });
 
+    test("preserves externally stamped lastActivityAt across updateWorkingFile", async () => {
+      const workingFilePath = tempFile("activity-stamp-preserve");
+      await writeTempJson(workingFilePath, {
+        ...makeMinimalWorkingFile(),
+        steps: [{ prompt: "old activity", _runtime: { startedAt: 1_000 } }],
+        _runtime: {
+          currentIndex: 0,
+          executionState: EXECUTION_STATES.RUNNING,
+          lastActivityAt: 5_000,
+        },
+      });
+
+      const access = makeMockAccess(workingFilePath);
+      access.getStatus = () => EXECUTION_STATES.PAUSED;
+      await new WorkingFileManager(access).updateWorkingFile();
+
+      const persisted = JSON.parse(
+        await fs.readFile(workingFilePath, "utf-8")
+      ) as WorkingFile;
+      assert.strictEqual(persisted._runtime?.lastActivityAt, 5_000);
+    });
+
     test("atomically patches worktree runtime without disturbing queue runtime or definition revision", async () => {
       const workingFilePath = tempFile("worktree-patch");
       const worktree = makeWorktreeRuntime();

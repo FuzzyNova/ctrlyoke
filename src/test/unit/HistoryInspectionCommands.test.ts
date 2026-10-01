@@ -383,6 +383,69 @@ suite("CLI history inspection command parser", () => {
 });
 
 suite("CLI history inspection command handlers", () => {
+  test("history list uses the activity time of an appended in-progress step", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-history-recency-")
+    );
+    try {
+      const key = "release-2026-09-20T12-00-00Z" as WorkflowKey;
+      const runRef = "run-2026-09-29T10-00-00-000Z" as RunRef;
+      const runFilePath = WorkflowPaths.runFilePath(workspaceRoot, key, runRef);
+      await fs.mkdir(path.dirname(runFilePath), { recursive: true });
+      await fs.writeFile(
+        runFilePath,
+        JSON.stringify({
+          startedAt: 1_700_000_000_000,
+          steps: [{ prompt: "appended and still running" }],
+          _runtime: {
+            currentIndex: 0,
+            executionState: EXECUTION_STATES.RUNNING,
+            lastActivityAt: Date.now(),
+          },
+        })
+      );
+      const manager = new TestHistoryManager(
+        new Map([
+          [
+            key,
+            {
+              ...navigation(runRef, EXECUTION_STATES.RUNNING),
+              startedAt: 1_700_000_000_000,
+              completedAt: undefined,
+            },
+          ],
+        ]),
+        new Map()
+      );
+      const io = new TestIo();
+
+      await listHistoryCommand(
+        { json: true },
+        io,
+        dependencies(
+          new TestLineageRepository(
+            [key],
+            new Map([[key, descriptor(key)]]),
+            new Map([[key, "Release"]])
+          ),
+          manager,
+          undefined,
+          undefined,
+          workspaceRoot
+        )
+      );
+
+      const [row] = JSON.parse(io.output[0]) as Array<{
+        lastModifiedAt: number;
+        latestRun: { completedAt: number | null };
+      }>;
+      assert.ok(row.lastModifiedAt > 1_700_000_000_000);
+      assert.strictEqual(row.latestRun.completedAt, null);
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("uses one navigation-manifest read per lineage instead of every run summary", async () => {
     const key = "release-2026-09-20T12-00-00Z" as WorkflowKey;
     const manager = new TestHistoryManager(
@@ -554,6 +617,7 @@ suite("CLI history inspection command handlers", () => {
               executionState: EXECUTION_STATES.COMPLETED,
               definitionRevision: 1,
               stepCount: 2,
+              hasFinalStep: true,
               hasMixedHarnesses: false,
               hasMixedModels: false,
             },
@@ -597,6 +661,85 @@ suite("CLI history inspection command handlers", () => {
     }
     assert.deepStrictEqual(promptHeaders, [0, 1]);
     assert.deepStrictEqual(finalLabels, [0, 1]);
+  });
+
+  test("rejects a queue step outside the resolved run's valid range", async () => {
+    const key = "release" as WorkflowKey;
+    await assert.rejects(
+      () =>
+        showHistoryCommand(
+          { workflow: key, run: "3", step: "2" },
+          new TestIo(),
+          dependencies(
+            new TestLineageRepository([key], new Map(), new Map()),
+            historyManagerForShow(key),
+            new TestRunOutputResolver([])
+          )
+        ),
+      /Invalid --step index: 2\. This run has 2 steps, so valid zero-based indices are 0 to 1\./
+    );
+  });
+
+  test("validates steps against the running working file when manifest count is zero", async () => {
+    const key = "release" as WorkflowKey;
+    const manager = new TestHistoryManager(
+      new Map(),
+      new Map([
+        [
+          key,
+          [
+            {
+              workflowKey: key,
+              runRef: "run-2026-09-20T12-00-00-000Z" as RunRef,
+              runDirectory: "/workspace/run-3",
+              runId: 3,
+              startedAt: 1,
+              executionState: EXECUTION_STATES.RUNNING,
+              definitionRevision: 1,
+              stepCount: 0,
+              workingFileStepCount: 2,
+              hasFinalStep: false,
+              hasMixedHarnesses: false,
+              hasMixedModels: false,
+            },
+          ],
+        ],
+      ])
+    );
+
+    await showHistoryCommand(
+      { workflow: key, run: "3", step: "1" },
+      new TestIo(),
+      dependencies(
+        new TestLineageRepository([key], new Map(), new Map()),
+        manager,
+        new TestRunOutputResolver([
+          settledAttempt({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 }),
+        ])
+      )
+    );
+  });
+
+  test("rejects final when the resolved run has no final step", async () => {
+    const key = "release" as WorkflowKey;
+    const manager = historyManagerForShow(key);
+    const summary = (await manager.getRunSummaries(key))[0];
+    assert.ok(summary);
+    summary.hasFinalStep = false;
+
+    await assert.rejects(
+      () =>
+        showHistoryCommand(
+          { workflow: key, run: "3", step: "final" },
+          new TestIo(),
+          dependencies(
+            new TestLineageRepository([key], new Map(), new Map()),
+            manager,
+            new TestRunOutputResolver([])
+          )
+        ),
+      /no final step; valid zero-based indices are 0 to 1/
+    );
   });
 
   test("renders a folded attempt response exactly once", async () => {
@@ -1158,6 +1301,7 @@ function historyManagerForShow(key: WorkflowKey): TestHistoryManager {
             executionState: EXECUTION_STATES.COMPLETED,
             definitionRevision: 1,
             stepCount: 2,
+            hasFinalStep: true,
             hasMixedHarnesses: false,
             hasMixedModels: false,
           },

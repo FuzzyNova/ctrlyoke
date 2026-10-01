@@ -62,6 +62,40 @@ export class UnapprovedSecretGrantError extends MissingSecretError {
   }
 }
 
+export function formatUnapprovedSecretGrantError(
+  names: readonly string[],
+  scope: string
+): string {
+  return names
+    .map(
+      (name) =>
+        `Secret "${name}" is missing for scope "${scope}" (workspace/user or environment) — ` +
+        `this grant has not been approved for this workspace. Approve it with ` +
+        `"ctrlyoke trust-secret-grants <file>" (or from the ctrlyoke panel in ` +
+        `VS Code), then re-run.`
+    )
+    .join(" ");
+}
+
+export function assertSecretGrantTrust(
+  names: readonly string[],
+  workspaceRoot: string,
+  trustedNames: readonly string[] = [],
+  trustStore: Pick<SecretGrantsTrustStore, "getDecision"> =
+    secretGrantsTrustStore,
+  scope = "step"
+): void {
+  const trusted = new Set(trustedNames);
+  const unapproved = [...new Set(names)].filter(
+    (name) =>
+      !trusted.has(name) &&
+      trustStore.getDecision(workspaceRoot, name) !== TRUST_DECISIONS.ALLOW
+  );
+  if (unapproved.length > 0) {
+    throw new Error(formatUnapprovedSecretGrantError(unapproved, scope));
+  }
+}
+
 export interface SecretResolutionContext {
   workspaceRoot: string;
   secretStore?: SecretStore;
@@ -430,14 +464,9 @@ export async function preflightWorkflowSecrets(
       }
     } catch (error) {
       if (error instanceof UnapprovedSecretGrantError) {
-        const missingNames = error.secretNames.map(
-          (name) =>
-            `Secret "${name}" is missing for scope "${scope}" (${error.scope}) — ` +
-            `this grant has not been approved for this workspace. Approve it with ` +
-            `"ctrlyoke trust-secret-grants <file>" (or from the ctrlyoke panel in ` +
-            `VS Code), then re-run.`
+        throw new Error(
+          formatUnapprovedSecretGrantError(error.secretNames, scope)
         );
-        throw new Error(missingNames.join(" "));
       }
       if (error instanceof MissingSecretError) {
         const missingNames = error.secretNames.map(

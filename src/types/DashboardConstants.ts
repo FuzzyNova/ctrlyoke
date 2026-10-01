@@ -217,6 +217,11 @@ export const LICENSE_UI = {
 // ============================================================================
 // MESSAGE TYPES - Communication between extension and webview
 // ============================================================================
+export const SEARCH_HISTORY_ERROR_CODES = {
+  INVALID_PATTERN: "invalidPattern",
+  REGEX_TIMEOUT: "regexTimeout",
+} as const;
+
 export const MESSAGE_TYPES = {
   // Extension -> Webview
   INIT: "init",

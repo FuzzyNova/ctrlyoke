@@ -169,14 +169,12 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       let hookSessionId: string | undefined;
       let harnessError: string | undefined;
 
-      const spawnPromise = this.withProcessEnvOverrides(secretEnv, () =>
-        this.deps.processManager.spawnInteractive(
-          command.command,
-          command.args,
-          workingDir,
-          { ...interactiveEnv, ...env, ...secretEnv },
-          command.requiresShellVerbatimArgs
-        )
+      const spawnPromise = this.deps.processManager.spawnInteractive(
+        command.command,
+        command.args,
+        workingDir,
+        { ...interactiveEnv, ...env, ...secretEnv },
+        command.requiresShellVerbatimArgs
       ).finally(() => {
         processExited = true;
       });
@@ -347,40 +345,38 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
 
       let session: PtySession;
       try {
-        session = await this.withProcessEnvOverrides(secretEnv, async () =>
-          ptyManager.spawnPty({
-            workflowId,
-            stepName,
-            stepIndex,
-            kind: SESSION_KINDS.AI_CLI,
-            promptNumber,
-            harnessId,
-            parallelGroupId,
-            sessionId: preSessionId,
-            command: command.command,
-            args: toPtySpawnArgs(
-              command.args,
-              command.requiresShellVerbatimArgs ?? false
-            ),
-            cwd,
-            env: mergedEnv,
-            onData: (ptySession, chunk) => {
-              postMessage({
-                type: MESSAGE_TYPES.TERMINAL_OUTPUT,
-                workflowId: ptySession.workflowId,
-                sessionId: ptySession.id,
-                data: chunk,
-              });
-            },
-            onExit: (ptySession, exitCode) => {
-              postMessage(buildTerminalEndedMessage(ptySession, exitCode));
-              if (this.currentPtySession === ptySession) {
-                this.currentPtySession = undefined;
-              }
-              this.deps.hostCallbacks.onPtyExit(ptySession, exitCode);
-            },
-          })
-        );
+        session = await ptyManager.spawnPty({
+          workflowId,
+          stepName,
+          stepIndex,
+          kind: SESSION_KINDS.AI_CLI,
+          promptNumber,
+          harnessId,
+          parallelGroupId,
+          sessionId: preSessionId,
+          command: command.command,
+          args: toPtySpawnArgs(
+            command.args,
+            command.requiresShellVerbatimArgs ?? false
+          ),
+          cwd,
+          env: mergedEnv,
+          onData: (ptySession, chunk) => {
+            postMessage({
+              type: MESSAGE_TYPES.TERMINAL_OUTPUT,
+              workflowId: ptySession.workflowId,
+              sessionId: ptySession.id,
+              data: chunk,
+            });
+          },
+          onExit: (ptySession, exitCode) => {
+            postMessage(buildTerminalEndedMessage(ptySession, exitCode));
+            if (this.currentPtySession === ptySession) {
+              this.currentPtySession = undefined;
+            }
+            this.deps.hostCallbacks.onPtyExit(ptySession, exitCode);
+          },
+        });
       } catch (error) {
         const message = getErrorMessage(error);
         Log.warn(
@@ -765,18 +761,14 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
 
     let result: SpawnResult;
     try {
-      result = await this.withProcessEnvOverrides(
-        { ...headlessEnvOverrides, ...secretEnv },
-        async () =>
-          this.deps.processManager.spawn(command, args, {
-            cwd: this.deps.runtimeState.getWorkspaceRoot() || "",
-            timeout: options.timeout,
-            onStdout: options.onStdout,
-            shell: false,
-            windowsVerbatimArguments: options.windowsVerbatimArguments,
-            env,
-          })
-      );
+      result = await this.deps.processManager.spawn(command, args, {
+        cwd: this.deps.runtimeState.getWorkspaceRoot() || "",
+        timeout: options.timeout,
+        onStdout: options.onStdout,
+        shell: false,
+        windowsVerbatimArguments: options.windowsVerbatimArguments,
+        env,
+      });
     } catch (error) {
       if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
         throw new CliTransportError(
@@ -790,37 +782,6 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
 
     Log.info("[CliTransportCoordinator] Process exited - execution complete");
     return result;
-  }
-
-  private async withProcessEnvOverrides<T>(
-    overrides: NodeJS.ProcessEnv | undefined,
-    action: () => Promise<T>
-  ): Promise<T> {
-    if (!overrides || Object.keys(overrides).length === 0) {
-      return action();
-    }
-
-    const previousValues = new Map<string, string | undefined>();
-    for (const [key, value] of Object.entries(overrides)) {
-      previousValues.set(key, process.env[key]);
-      if (value === undefined) {
-        delete process.env[key];
-      } else {
-        process.env[key] = value;
-      }
-    }
-
-    try {
-      return await action();
-    } finally {
-      for (const [key, value] of previousValues) {
-        if (value === undefined) {
-          delete process.env[key];
-        } else {
-          process.env[key] = value;
-        }
-      }
-    }
   }
 
   private async resolveSecretEnvironment(

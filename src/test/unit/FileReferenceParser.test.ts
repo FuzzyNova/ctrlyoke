@@ -36,6 +36,13 @@ suite("FileReferenceParser", () => {
         "```text\n\x00src\x00x.ts\n``` then @src/y.ts"
       );
     });
+
+    test("does not let an inserted literal opener close an authored fence", () => {
+      const prompt = "```text\n@src/x.ts\n```` text\n@src/y.ts\n````";
+      const masked = maskFencedCodeBlocks(prompt);
+      assert.ok(masked.includes("\x00src\x00x.ts"));
+      assert.ok(masked.includes("\x00src\x00y.ts"));
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -59,10 +66,34 @@ suite("FileReferenceParser", () => {
       assert.strictEqual(refs[0].isDirectory, false);
     });
 
+    test("parses an at-reference path containing a hash", () => {
+      const refs = parseAtReferences("see @src/C#/a.cs");
+      assert.strictEqual(refs.length, 1);
+      assert.strictEqual(refs[0].path, "src/C#/a.cs");
+    });
+
     test("parses Windows-style file path", () => {
       const refs = parseAtReferences("See @src\\utils\\helper.ts");
       assert.strictEqual(refs.length, 1);
       assert.strictEqual(refs[0].path, "src\\utils\\helper.ts");
+    });
+
+    test("parses unquoted Windows drive paths with either separator", () => {
+      assert.deepStrictEqual(
+        ["@C:/x/a.ts", "@C:\\x\\a.ts"].map((input) =>
+          parseAtReferences(input).map((ref) => ref.path)
+        ),
+        [["C:/x/a.ts"], ["C:\\x\\a.ts"]]
+      );
+    });
+
+    test("keeps a line suffix outside an unquoted Windows drive path", () => {
+      for (const suffix of [":10", ":10-20"]) {
+        const text = `Review @C:/x/a.ts${suffix} now`;
+        const ref = parseAtReferences(text)[0];
+        assert.strictEqual(ref.path, "C:/x/a.ts");
+        assert.strictEqual(ref.endOffset, "Review @C:/x/a.ts".length);
+      }
     });
 
     test("parses directory reference (trailing slash)", () => {
@@ -485,6 +516,26 @@ suite("FileReferenceParser", () => {
       const refs = parseInlinePriorContextRefs("Use $previous, then continue.");
       assert.strictEqual(refs.length, 1);
       assert.deepStrictEqual(refs[0].ref, { kind: "previous" });
+    });
+
+    test("leaves a prose colon after bare prior-context keywords", () => {
+      for (const keyword of ["previous", "all", "finalStep"]) {
+        const text = `Here is $${keyword}: fix it`;
+        const refs = parseInlinePriorContextRefs(text);
+        assert.strictEqual(refs.length, 1, keyword);
+        assert.strictEqual(refs[0].token, `$${keyword}`);
+        assert.strictEqual(
+          text.slice(text.indexOf(refs[0].token) + refs[0].token.length),
+          ": fix it"
+        );
+      }
+    });
+
+    test("keeps the argument colon on step references", () => {
+      assert.strictEqual(
+        parseInlinePriorContextRefs("See $step:2: then continue")[0].token,
+        "$step:2"
+      );
     });
 
     test("treats a trailing comma on $step: as sentence punctuation", () => {

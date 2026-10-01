@@ -1,5 +1,16 @@
 import { NOT_AFTER_BOUNDARY, NOT_BEFORE_BOUNDARY } from "./ReferenceBoundary";
 
+/** Shared unquoted @ path body. A colon is valid only in the drive prefix. */
+export const UNQUOTED_AT_REFERENCE_PATH = String.raw`(?:[A-Za-z]:)?[^\s:"]+`;
+
+/** Build the shared inline prior-context pattern for parsing and decoration. */
+export function createInlinePriorContextReferencePattern(): RegExp {
+  return new RegExp(
+    `${NOT_AFTER_BOUNDARY}\\$((?:step:[A-Za-z0-9,\\-]*|[A-Za-z][A-Za-z0-9]*))`,
+    "g"
+  );
+}
+
 /** Build a fresh regex for complete ~git-change references. */
 export function createGitChangeReferencePattern(): RegExp {
   return new RegExp(
@@ -19,11 +30,11 @@ export function createGitChangeReferencePattern(): RegExp {
  * the trailing-lookahead note on `fullFile` below.
  *
  * These are *decoration* patterns. The runtime expansion parser in
- * `FileReferenceParser.ts` is deliberately a separate implementation with a
- * looser `@` body, because it resolves a reference rather than highlighting
- * one. The invariant that matters is directional: a reference decorated here
- * must also expand at runtime, or the user gets a chip that silently resolves
- * to nothing.
+ * `FileReferenceParser.ts` uses the shared unquoted `@` path fragment but
+ * remains a separate implementation because it resolves rather than
+ * highlighting references. The invariant that matters is directional: a
+ * reference decorated here must also expand at runtime, or the user gets a
+ * chip that silently resolves to nothing.
  *
  * Consumed by the webview bundle as well as the extension host, so this module
  * must stay free of `vscode` and Node-only imports.
@@ -67,7 +78,7 @@ export function createReferencePatterns(): ReferencePatterns {
     // through to `directory`. The bug only hides on one-character extensions
     // (`@dir.d/`), where there is nothing to give back.
     fullFile: new RegExp(
-      `${NOT_AFTER_BOUNDARY}@([^\\s#"]+\\.[\\p{L}\\p{N}]+)(?![\\p{L}\\p{N}/])`,
+      `${NOT_AFTER_BOUNDARY}@(${UNQUOTED_AT_REFERENCE_PATH}\\.[\\p{L}\\p{N}]+)(?![\\p{L}\\p{N}/])`,
       "gu"
     ),
     // @"path with spaces/dir/"
@@ -76,7 +87,10 @@ export function createReferencePatterns(): ReferencePatterns {
       "g"
     ),
     // @path/to/dir/
-    directory: new RegExp(`${NOT_AFTER_BOUNDARY}@([^\\s#"]+\\/)`, "g"),
+    directory: new RegExp(
+      `${NOT_AFTER_BOUNDARY}@(${UNQUOTED_AT_REFERENCE_PATH}\\/)`,
+      "g"
+    ),
     // #selection:<path>:10-20 — path quoted, or bare with no whitespace/`:`/`"`.
     lineRange: new RegExp(
       `${NOT_AFTER_BOUNDARY}#selection:(?:"([^"]+)"|([^\\s:"]+)):(\\d+)-(\\d+)`,

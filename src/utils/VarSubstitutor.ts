@@ -36,6 +36,7 @@ import { VARIABLE_NAME_PATTERN_SOURCE } from "./KeyValueKeyKinds";
  * workflows that document ctrlyoke syntax runnable.
  */
 export class VarSubstitutor {
+  private static readonly SECRET_REFERENCE_PREFIX = "${secret:";
   private static readonly PLACEHOLDER_RE = new RegExp(
     `\\{\\{(${VARIABLE_NAME_PATTERN_SOURCE})\\}\\}`,
     "g"
@@ -57,7 +58,17 @@ export class VarSubstitutor {
         if (!Object.prototype.hasOwnProperty.call(vars, key)) {
           return match;
         }
-        return vars[key];
+        const value = vars[key];
+        // Variable substitution must not turn ordinary workflow data into an
+        // executable managed-secret interpolation. Fail before the process
+        // environment can be built, leaving downstream secret expansion out
+        // of reach.
+        if (value.includes(this.SECRET_REFERENCE_PREFIX)) {
+          throw new Error(
+            `Variable "${key}" cannot contain a managed secret reference`
+          );
+        }
+        return value;
       }
     );
   }

@@ -41,6 +41,7 @@ import {
 } from "../../types/WorkflowTimelineTypes";
 import { getExitCode } from "../../cli/CliExitCode";
 import { configService } from "../../config/CtrlYokeConfigService";
+import type { SecretGrantsTrustStore } from "../../config/SecretGrantsTrustStore";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import { CliEvent } from "../../types/WebviewMessageTypes";
 import type { CliOutput } from "../../types/WebviewMessageTypes";
@@ -149,7 +150,10 @@ function makeParallelContext(
 
 function makeExecutor(
   queue: PromptQueue,
-  evaluator?: EndConditionEvaluator
+  evaluator?: EndConditionEvaluator,
+  trustStore: Pick<SecretGrantsTrustStore, "getDecision"> = {
+    getDecision: () => "allow",
+  }
 ): WorkflowExecutor {
   const platform = new MockPlatform();
   const conditionEvaluator = evaluator ?? new EndConditionEvaluator(platform);
@@ -161,7 +165,14 @@ function makeExecutor(
       () => undefined
     )
   );
-  return new WorkflowExecutor(queue, handler, conditionEvaluator, platform);
+  return new WorkflowExecutor(
+    queue,
+    handler,
+    conditionEvaluator,
+    platform,
+    undefined,
+    trustStore
+  );
 }
 
 class InspectableWorkflowExecutor extends WorkflowExecutor {
@@ -2182,6 +2193,90 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       );
     } finally {
       configService.setCliOverlay({});
+    }
+  });
+
+  test("blocks a var-generated hook secret before the hook environment reaches the harness", async () => {
+    const secretName = "CTRLYOKE_TEST_VAR_INJECTED_SECRET";
+    const previousValue = process.env[secretName];
+    process.env[secretName] = "must-not-leak";
+    const queue = new PromptQueue();
+    queue.loadPrompts({
+      vars: { injected: "${secret:" + secretName + "}" },
+      steps: [
+        {
+          prompt: "hi",
+          hooks: [
+            {
+              event: "stop",
+              command: "send-token",
+              env: { TOKEN: "{{injected}}" },
+            },
+          ],
+        },
+      ],
+    });
+    const integration = new MockHarnessIntegration(undefined, false);
+
+    try {
+      await assert.rejects(
+        makeExecutor(queue, undefined, { getDecision: () => undefined }).execute(
+          integration,
+          makeContext(integration)
+        ),
+        /cannot contain a managed secret reference/u
+      );
+      assert.deepStrictEqual(
+        integration.sentPrompts,
+        [],
+        "the harness and its hook env must not be started"
+      );
+    } finally {
+      if (previousValue === undefined) {
+        delete process.env[secretName];
+      } else {
+        process.env[secretName] = previousValue;
+      }
+    }
+  });
+
+  test("runs a hook with a raw workflow grant that has an ALLOW decision", async () => {
+    const secretName = "CTRLYOKE_TEST_APPROVED_SECRET";
+    const previousValue = process.env[secretName];
+    process.env[secretName] = "approved-value";
+    const queue = new PromptQueue();
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "hi",
+          hooks: [
+            {
+              event: "stop",
+              command: "send-token",
+              env: { TOKEN: "${secret:" + secretName + "}" },
+            },
+          ],
+        },
+      ],
+    });
+    const integration = new MockHarnessIntegration(undefined, false);
+    let resolvedHookEnv: Record<string, string> | undefined;
+    const context = makeContext(integration);
+    context.getIntegrationForPrompt = (_prompt, properties) => {
+      resolvedHookEnv = properties.hooks?.[0]?.env;
+      return integration;
+    };
+
+    try {
+      await makeExecutor(queue).execute(integration, context);
+      assert.deepStrictEqual(integration.sentPrompts, ["hi"]);
+      assert.deepStrictEqual(resolvedHookEnv, { TOKEN: "approved-value" });
+    } finally {
+      if (previousValue === undefined) {
+        delete process.env[secretName];
+      } else {
+        process.env[secretName] = previousValue;
+      }
     }
   });
 

@@ -4184,9 +4184,9 @@ export class WorkflowInstance
               return {
                 ...comparison,
                 errored: processResult.errored ?? false,
-                stdout: processResult.stdout ?? "",
-                stderr: processResult.stderr ?? "",
-                result: processResult.result,
+                stdout: comparison.stdout,
+                stderr: comparison.stderr,
+                result: comparison.result,
                 error: processResult.error,
                 timeout: processResult.timeout,
                 duration: Date.now() - startedAt,
@@ -5218,6 +5218,11 @@ export class WorkflowInstance
         Log.debug(
           `[inst:${this.id.slice(0, 8)}] Step ${stepIndex + 1} retry scheduled ` +
             `(attempt ${transition.current.attemptIndex + 1})`
+        );
+        this.outputCaptureBuffer.captureRetryState(
+          stepIndex,
+          transition.current.retryCount ?? transition.current.attemptIndex,
+          transition.current.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES
         );
         this.dashboardSink?.updateRetryAttempt(
           stepIndex,

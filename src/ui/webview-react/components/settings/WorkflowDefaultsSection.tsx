@@ -16,6 +16,7 @@ import { DefaultsValidationPage } from "./defaults/DefaultsValidationPage";
 import { DefaultsMcpPage } from "./defaults/DefaultsMcpPage";
 import { DefaultsHooksPage } from "./defaults/DefaultsHooksPage";
 import { DefaultsPermissionsPage } from "./defaults/DefaultsPermissionsPage";
+import { PERMISSION_MODES } from "@root/types/DashboardConstants";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -41,7 +42,7 @@ export function WorkflowDefaultsSection({
   const sources = settings.sources as Record<string, SettingSource>;
   const tabOverrides = useSettingsDrawerTabOverrides(
     sources,
-    settings.settings.defaults.toolPermissions.mode
+    settings.settings.defaults.toolPermissions?.mode ?? PERMISSION_MODES.NONE
   );
 
   const pageProps = { settings, activeScope, onUpdate, onReset };

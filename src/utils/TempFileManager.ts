@@ -98,14 +98,15 @@ export class TempFileManager {
     originalFilePath?: string,
     stepNumber?: number,
     partNumber?: number,
-    timestamp = Math.floor(Date.now() / 1000)
+    timestamp = Math.floor(Date.now() / 1000),
+    planId = crypto.randomUUID()
   ): string {
     const basename = originalFilePath
       ? this.sanitizeBasename(originalFilePath)
       : "prompt";
     const stepSuffix = stepNumber ? `-${stepNumber}` : "";
     const partSuffix = partNumber !== undefined ? `.${partNumber}` : "";
-    const filename = `${timestamp}-${basename}${stepSuffix}.${category}${partSuffix}.md`;
+    const filename = `${timestamp}-${basename}${stepSuffix}-${planId}.${category}${partSuffix}.md`;
     return path.join(this.tempDir, filename);
   }
 
@@ -113,7 +114,10 @@ export class TempFileManager {
   async writeCategoryFile(filePath: string, content: string): Promise<void> {
     await this.ensureTempDir();
     try {
-      await fs.promises.writeFile(filePath, content, "utf-8");
+      await fs.promises.writeFile(filePath, content, {
+        encoding: "utf-8",
+        flag: "wx",
+      });
     } catch (err) {
       Log.error(`[TempFileManager] Failed to write category temp file: ${err}`);
       throw new Error(`Cannot write category temp file: ${filePath}`);

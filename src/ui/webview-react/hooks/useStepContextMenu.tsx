@@ -20,7 +20,7 @@ import {
   readWorkflowStepFromClipboard,
 } from "@utils/stepClipboard";
 import {
-  getStepSessionId,
+  getStepSessionDetails,
   type StepRuntimeMetaSnapshot,
 } from "@utils/stepMetadataClipboard";
 import {
@@ -323,7 +323,7 @@ export function useStepContextMenu({
           { type: "divider" },
           buildReplyToStepMenuItem({
             step,
-            sessionId: getStepSessionId(step, latestOutput, runtimeMeta),
+            ...getStepSessionDetails(step, latestOutput, runtimeMeta),
             sourceLabel: `Step ${deleteIndex + 1}`,
           }),
           { type: "divider" },

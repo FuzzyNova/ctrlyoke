@@ -1011,6 +1011,7 @@ suite("WorkflowSerializer", () => {
           path.join(inheritedAssets, BUNDLE_MANIFEST_FILE_NAME),
           JSON.stringify({
             version: BUNDLE_MANIFEST_VERSION,
+            owner: "fix-tests.ctrlyoke.yaml",
             files: ["inherited.png"],
           }),
           "utf8"
@@ -1227,11 +1228,29 @@ suite("WorkflowSerializer", () => {
           configurable: true,
         });
         await fs.mkdir(path.dirname(workingFilePath), { recursive: true });
+        const assetsDirectory = path.join(
+          workspaceRoot,
+          "exports",
+          "blocked.assets"
+        );
+        await fs.mkdir(assetsDirectory, { recursive: true });
+        await fs.writeFile(
+          path.join(assetsDirectory, BUNDLE_MANIFEST_FILE_NAME),
+          JSON.stringify({
+            version: BUNDLE_MANIFEST_VERSION,
+            owner: "blocked.ctrlyoke.json",
+            files: [],
+          }),
+          "utf8"
+        );
+        await fs.writeFile(
+          path.join(workspaceRoot, "exports", "blocked.ctrlyoke.json"),
+          "{}",
+          "utf8"
+        );
         await fs.writeFile(
           workingFilePath,
-          JSON.stringify({
-            steps: [{ prompt: "Attach @.ctrlyoke/attachments/missing.png" }],
-          }),
+          JSON.stringify({ steps: [{ prompt: "No generated references" }] }),
           "utf8"
         );
         const serializer = new WorkflowSerializer(
@@ -1255,6 +1274,11 @@ suite("WorkflowSerializer", () => {
           (message) => message.requestId === "blocked-preview"
         );
         assert.ok(preview?.bundlePreview?.blockers.length > 0);
+        assert.ok(
+          preview.bundlePreview.blockers.some((blocker: { message: string }) =>
+            blocker.message.includes("blocked.ctrlyoke.json")
+          )
+        );
 
         await serializer.handleSaveWorkflow(
           "blocked-save",
@@ -1680,7 +1704,13 @@ suite("WorkflowSerializer", () => {
   suite("history deletes go to Recently deleted", () => {
     function createSerializer(
       messages: any[],
-      isLineageExecuting: (workflowKey: WorkflowKey) => boolean = () => false
+      isLineageExecuting: (workflowKey: WorkflowKey) => boolean = () => false,
+      refreshRunViewsForLineages?: (
+        workflowKeys: readonly WorkflowKey[],
+        send: (message: unknown) => void,
+        clientId: string,
+        preferLatestRunForDraft: boolean
+      ) => Promise<void>
     ): WorkflowSerializer {
       return new WorkflowSerializer(
         (message) => messages.push(message),
@@ -1689,6 +1719,7 @@ suite("WorkflowSerializer", () => {
           ({
             isLineageExecuting,
             getWorkflowSummaries: () => [],
+            refreshRunViewsForLineages,
           }) as unknown as WorkflowOrchestrator,
         () => undefined,
         fakeWorkspaceState()
@@ -1845,6 +1876,56 @@ suite("WorkflowSerializer", () => {
           );
           assert.strictEqual(messages[0].ok, true);
           assert.deepStrictEqual(messages[2].entries, []);
+        } finally {
+          await cleanUpStateRoot(workspaceRoot);
+        }
+      });
+    });
+
+    test("restore refreshes views for the restored workflow keys", async () => {
+      await withWorkspace("ctrlyoke-restore-refresh-", async (workspaceRoot) => {
+        const repository = new WorkflowLineageRepository();
+        const lineage = await repository.createLineage(
+          workspaceRoot,
+          "wf-restore-refresh",
+          "Restore refresh"
+        );
+        const messages: any[] = [];
+        let refreshedKeys: readonly WorkflowKey[] = [];
+        try {
+          const serializer = createSerializer(
+            messages,
+            () => false,
+            async (keys, send, _clientId, preferLatestRunForDraft) => {
+              refreshedKeys = keys;
+              assert.strictEqual(preferLatestRunForDraft, true);
+              send({
+                type: MESSAGE_TYPES.RUN_VIEW_LOADED,
+                workflowKey: lineage.workflowKey,
+                runs: [{ runRef: "run-restored" }],
+              });
+            }
+          );
+          await serializer.handleRemoveWorkflowHistory({
+            workflowKey: lineage.workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+          });
+          const trashed = messages.find(
+            (message) => message.type === MESSAGE_TYPES.HISTORY_TRASHED
+          );
+          assert.ok(trashed);
+          messages.length = 0;
+
+          await serializer.handleHistoryTrashAction(
+            HISTORY_TRASH_ACTIONS.RESTORE,
+            { entryId: trashed.entryId }
+          );
+
+          assert.deepStrictEqual(refreshedKeys, [lineage.workflowKey]);
+          const loaded = messages.find(
+            (message) => message.type === MESSAGE_TYPES.RUN_VIEW_LOADED
+          );
+          assert.deepStrictEqual(loaded.runs, [{ runRef: "run-restored" }]);
         } finally {
           await cleanUpStateRoot(workspaceRoot);
         }

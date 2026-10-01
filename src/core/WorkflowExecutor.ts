@@ -76,14 +76,17 @@ import {
   type ResolvedProperties,
 } from "../utils/PropertyResolver";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
-import { exceedsLimit, isUnlimited } from "../utils/LimitUtils";
+import {
+  exceedsLimit,
+  formatRetryDenominator,
+  isUnlimited,
+} from "../utils/LimitUtils";
 import {
   buildStepLimitError,
   getEffectiveMaxStepsSource,
   resolveEffectiveMaxSteps,
 } from "../utils/QueueLimitUtils";
 import { resolveReportedScriptProperties } from "../utils/ScriptComparison";
-import { sanitizeTerminalOutput } from "../utils/TerminalOutputSanitizer";
 import { VarSubstitutor } from "../utils/VarSubstitutor";
 import {
   findSecretInterpolationsInPrompt,
@@ -92,11 +95,16 @@ import {
   findMissingSecretNames,
   getProcessMapSecretNames,
   getDeclaredSecretGrants,
+  assertSecretGrantTrust,
   MissingSecretError,
   resolveSecretEnvironment,
 } from "../utils/SecretResolver";
 import { getEffectiveSecretGrants } from "../utils/SecretReferenceParser";
 import { McpServerNormalizer } from "../utils/McpServerNormalizer";
+import {
+  secretGrantsTrustStore,
+  type SecretGrantsTrustStore,
+} from "../config/SecretGrantsTrustStore";
 import { PromptFileResolver } from "./PromptFileResolver";
 import { resolvePromptTextWithVariables } from "./PromptTextResolver";
 import {
@@ -486,7 +494,11 @@ export class WorkflowExecutor {
     private readonly endConditionHandler: EndConditionHandler,
     private readonly endConditionEvaluator: EndConditionEvaluator,
     private readonly platform: PlatformAdapter,
-    private readonly userFeedbackSink?: UserFeedbackSink
+    private readonly userFeedbackSink?: UserFeedbackSink,
+    private readonly secretGrantTrustStore: Pick<
+      SecretGrantsTrustStore,
+      "getDecision"
+    > = secretGrantsTrustStore
   ) {
     this.scriptExecutionReporter = new ScriptExecutionReporter(
       endConditionEvaluator
@@ -2135,7 +2147,8 @@ export class WorkflowExecutor {
       const resolvedSecretValues = await this.resolveGrantedSecretValues(
         secretNames,
         context,
-        target
+        target,
+        mcpNormalization.trustedUserScopeSecretNames
       );
       context.secretRedactor?.addResolvedValues(resolvedSecretValues);
       resolvedProperties = {
@@ -2629,11 +2642,10 @@ export class WorkflowExecutor {
         }
 
         const exitCode = ptyExitCode ?? 1;
-        const stdout = sanitizeTerminalOutput(outputChunks.join(""));
         const comparison = this.endConditionEvaluator.evaluateResult(
           {
-            result: stdout,
-            stdout,
+            result: outputChunks.join(""),
+            stdout: outputChunks.join(""),
             stderr: "",
             success: exitCode === 0,
             exitCode,
@@ -2643,9 +2655,9 @@ export class WorkflowExecutor {
         return {
           ...comparison,
           errored: ptyTimedOut,
-          stdout,
-          stderr: "",
-          result: "",
+          stdout: comparison.stdout,
+          stderr: comparison.stderr,
+          result: comparison.result,
           duration: Date.now() - timestampMs,
           exitCode,
           timeout: ptyTimedOut,
@@ -3430,13 +3442,28 @@ export class WorkflowExecutor {
   private async resolveGrantedSecretValues(
     names: readonly string[],
     context: WorkflowExecutionContext,
-    target: ExecutionTarget
+    target: ExecutionTarget,
+    trustedNames: readonly string[] = []
   ): Promise<Record<string, string>> {
     if (names.length === 0) {
       return {};
     }
+    const workspaceRoot = this.platform.getWorkspaceRoot();
+    const workflow = this.promptQueue.getWorkflowFile();
+    const scope =
+      target.kind === FINAL_STEP_PHASES.FINAL_STEP
+        ? workflow.finalStep?.name?.trim() || "final step"
+        : workflow.steps?.[target.stepIndex]?.name?.trim() ||
+          `step ${target.stepIndex + 1}`;
+    assertSecretGrantTrust(
+      names,
+      workspaceRoot,
+      trustedNames,
+      this.secretGrantTrustStore,
+      scope
+    );
     const resolutionContext = {
-      workspaceRoot: this.platform.getWorkspaceRoot(),
+      workspaceRoot,
       secretStore: this.platform.getSecretStore?.(),
     };
     const missing = await findMissingSecretNames(names, resolutionContext);
@@ -3542,7 +3569,7 @@ export class WorkflowExecutor {
     const maxRetries = policy.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES;
     const canRetry = canRetryErrorBehavior(policy, attemptIndex);
     const actionText = canRetry
-      ? `retry ${attemptIndex + 1} of ${isUnlimited(maxRetries) ? "unlimited" : maxRetries}`
+      ? `retry ${attemptIndex + 1} of ${formatRetryDenominator(maxRetries)}`
       : policy.onError === CONDITION_ACTIONS.CONTINUE
         ? CONDITION_ACTIONS.CONTINUE
         : WORKFLOW_EXECUTION_OUTCOMES.STOP;
@@ -3829,7 +3856,7 @@ export class WorkflowExecutor {
         return undefined;
       }
 
-      return `retry ${this.promptQueue.getCurrentRetryCount(target) + 1} of ${this.promptQueue.getEffectiveMaxRetries(prompt)}`;
+      return `retry ${this.promptQueue.getCurrentRetryCount(target) + 1} of ${formatRetryDenominator(this.promptQueue.getEffectiveMaxRetries(prompt))}`;
     };
 
     await this.trackStatusMessage(
@@ -4381,7 +4408,8 @@ export class WorkflowExecutor {
       const retrySecretValues = await this.resolveGrantedSecretValues(
         retrySecretNames,
         context,
-        target
+        target,
+        mcpNormalization.trustedUserScopeSecretNames
       );
       context.secretRedactor?.addResolvedValues(retrySecretValues);
       resolvedProperties = {

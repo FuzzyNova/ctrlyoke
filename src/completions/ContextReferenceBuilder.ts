@@ -1,21 +1,28 @@
+import { UNQUOTED_AT_REFERENCE_PATH } from "../utils/ReferencePatterns";
+
 export function normalizeReferencePath(pathValue: string): string {
   return pathValue.replace(/\\/g, "/");
 }
 
 export function quoteReferencePath(pathValue: string): string {
-  return pathValue.includes(" ") ? `"${pathValue}"` : pathValue;
+  const unquotedPathPattern = new RegExp(
+    `^(?:${UNQUOTED_AT_REFERENCE_PATH})$`
+  );
+  // Keep drive-letter paths quoted even though the parser understands their
+  // colon prefix. This is the established insertion format for absolute paths.
+  return !/[\s:]/.test(pathValue) && unquotedPathPattern.test(pathValue)
+    ? pathValue
+    : `"${pathValue}"`;
 }
 
 /**
  * Quote a value that sits in a **colon-delimited field** of a `#selection:` or
  * `#sym:` reference (their path, and a symbol's name).
  *
- * Stricter than {@link quoteReferencePath}, which only quotes on spaces. Inside
- * `#sym:<path>:<name>:<start>-<end>` a colon is structurally ambiguous — it is
- * the field separator — so a Windows absolute path (`C:\dev\a.ts`) or a symbol
- * name containing a colon produces a token no parser can read unless it is
- * quoted. In an `@ref` there is no following field, so a colon is unambiguous
- * there and `quoteReferencePath` stays space-only.
+ * In `#sym:<path>:<name>:<start>-<end>`, colons separate fields, so a Windows
+ * absolute path (`C:\dev\a.ts`) or a symbol name containing a colon must be
+ * quoted for the parser to read it. `quoteReferencePath` uses the same rule
+ * as defense in depth for references created from absolute paths.
  *
  * A literal `"` in a path or symbol name is not supported: both the quoted and
  * the bare form of a field exclude it, and there is no escape syntax.

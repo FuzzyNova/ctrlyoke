@@ -25,7 +25,10 @@ import {
 import { getClaudeModelName, MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
-import { CliProviderUtils } from "../shared/CliProviderUtils";
+import {
+  CliProviderUtils,
+  hasCtrlYokeServer,
+} from "../shared/CliProviderUtils";
 import type { PromptFile } from "../../../types/CtrlYokeTypes";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
@@ -304,9 +307,10 @@ export class ClaudeCliProvider implements ICliProvider {
       args.push(...mcpPreparation.cliArgs);
       // Auto-approve ctrlyoke MCP tools only when the ctrlyoke server is included
       // Claude uses mcp__servername pattern to match all tools from a server
-      const mcpServersResolved =
-        workflowContext?.resolvedProperties?.mcpServers ?? [];
-      if (mcpServersResolved.includes("ctrlyoke")) {
+      if (
+        workflowContext?.resolvedProperties &&
+        hasCtrlYokeServer(workflowContext.resolvedProperties)
+      ) {
         args.push("--allowed-tools", "mcp__ctrlyoke");
         Log.debug("[ClaudeCliProvider] ctrlyoke MCP tools auto-approved");
       }

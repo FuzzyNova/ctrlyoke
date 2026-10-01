@@ -32,6 +32,7 @@ import {
 } from "./interfaces/PreparedMutation";
 import type { CliExecutionSession } from "./CliExecutionSession";
 import type { CliProviderWorkflowContext } from "./CliProviderUtils";
+import { CliProviderUtils } from "./CliProviderUtils";
 
 export interface ExecutionPlanBuilderDeps {
   readonly provider: ICliProvider;
@@ -242,6 +243,7 @@ export class ExecutionPlanBuilder {
       isInteractive,
       workspaceRoot,
       workingFilePath: session.workflowContext?.workingFilePath,
+      environment: CliProviderUtils.buildProcessEnv(),
     };
     const permissionApplication: ToolPermissionApplication = this.deps.provider
       .planToolPermissions

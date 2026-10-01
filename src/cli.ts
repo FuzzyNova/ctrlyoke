@@ -8,6 +8,7 @@ import * as readline from "readline";
 import { access, readFile } from "fs/promises";
 
 import { CliAdapter } from "./platform/CliAdapter";
+import { applyCliToolPermissionOptions } from "./cli/CliToolPermissionOverlay";
 import { ConsoleUserFeedbackSink } from "./platform/ConsoleUserFeedbackSink";
 import type { ResolvedCliConfig } from "./platform/CliAdapter";
 import { registerCliAdapter } from "./platform/vscode-shim";
@@ -74,7 +75,10 @@ import {
   resolvePackageRootFromEntry,
 } from "./utils/CtrlyokeCliPath";
 import { aboutCommand } from "./cli/CliAboutCommand";
-import { commitGeneratedChanges } from "./cli/CommitCommand";
+import {
+  commitGeneratedChanges,
+  generateCommitMessageForChanges,
+} from "./cli/CommitCommand";
 import { noteCliInstallation } from "./cli/CliInstallationNotice";
 import {
   applyRunStateRefusal,
@@ -754,32 +758,7 @@ async function runCommand(
     // regardless of what the user's config file says.
     overlay.defaults = { ...overlay.defaults, executionMode };
   }
-  if (options.permissionMode) {
-    overlay.defaults = {
-      ...overlay.defaults,
-      toolPermissions: {
-        mode: options.permissionMode,
-      },
-    };
-  }
-  if (options.allowTool?.length) {
-    overlay.defaults = {
-      ...overlay.defaults,
-      toolPermissions: {
-        ...(overlay.defaults?.toolPermissions ?? {}),
-        allowedTools: options.allowTool,
-      },
-    };
-  }
-  if (options.denyTool?.length) {
-    overlay.defaults = {
-      ...overlay.defaults,
-      toolPermissions: {
-        ...(overlay.defaults?.toolPermissions ?? {}),
-        deniedTools: options.denyTool,
-      },
-    };
-  }
+  applyCliToolPermissionOptions(overlay, options);
   if (options.timeout !== undefined || options.scriptTimeout !== undefined) {
     overlay.execution = {
       ...(options.timeout !== undefined && {
@@ -2613,29 +2592,22 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
   );
 
   console.error(chalk.dim("Checking for changes..."));
-  const diffResult = await generator.getDiff(workingDir);
-  if (!diffResult) {
-    console.error("No changes detected. Stage or modify files first.");
-    process.exit(0);
-  }
-
-  if (diffResult.truncated) {
-    console.error(
-      chalk.yellow(
-        `Warning: Diff exceeded ${getMaxDiffSizeLabel()} and was truncated. Commit message may be incomplete.`
-      )
-    );
-  }
-
   console.error(chalk.dim("Generating commit message..."));
+  let diffResult;
   let message: string;
   try {
-    ({ message } = await generator.generateMessage(
-      diffResult.diff,
+    const generated = await generateCommitMessageForChanges(
+      generator,
       workingDir,
-      undefined,
+      options,
       options.hint
-    ));
+    );
+    if (!generated.diffResult) {
+      console.error("No changes detected. Stage or modify files first.");
+      process.exit(0);
+    }
+    diffResult = generated.diffResult;
+    message = generated.message;
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error(chalk.red(`Error: ${errMsg}`));
@@ -2651,6 +2623,14 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
       );
     }
     process.exit(1);
+  }
+
+  if (diffResult.truncated) {
+    console.error(
+      chalk.yellow(
+        `Warning: Diff exceeded ${getMaxDiffSizeLabel()} and was truncated. Commit message may be incomplete.`
+      )
+    );
   }
 
   if (options.printOnly) {

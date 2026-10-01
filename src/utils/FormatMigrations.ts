@@ -47,7 +47,14 @@ export const BASELINE_SCHEMA_VERSIONS: Record<PersistedStore, number> = {
 export const MIGRATIONS: Record<PersistedStore, readonly FormatMigration[]> = {
   [PERSISTED_STORES.WORKFLOW_DEFINITION]: [],
   [PERSISTED_STORES.SETTINGS]: [],
-  [PERSISTED_STORES.RUN_FILE]: [],
+  [PERSISTED_STORES.RUN_FILE]: [
+    {
+      store: PERSISTED_STORES.RUN_FILE,
+      from: 1,
+      describe: "Add per-run activity timestamps",
+      migrate: (doc) => doc,
+    },
+  ],
   [PERSISTED_STORES.LINEAGE_DESCRIPTOR]: [],
   [PERSISTED_STORES.RUNNER_LOCK]: [],
   [PERSISTED_STORES.TIMELINE]: [],

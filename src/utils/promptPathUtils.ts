@@ -31,6 +31,16 @@ export function looksLikeFilePath(
 ): boolean {
   const trimmed = promptValue.trim();
 
+  // Reject shapes that identify prose, while allowing spaces anywhere in a
+  // path segment (including multiple words in a file or folder name).
+  if (
+    /\r|\n/.test(trimmed) ||
+    /^\/\w+\s/.test(trimmed) ||
+    /(?:,|;|\.)\s/.test(trimmed)
+  ) {
+    return false;
+  }
+
   // Skip if it starts with @ or # — those are ctrlyoke references (context
   // reference / inline selection), not a standalone prompt file path. The
   // folder-qualified multi-root form below only differs from an @-reference

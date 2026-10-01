@@ -12,6 +12,13 @@ import {
   PERMISSION_MODE_OPTIONS_META,
   toSelectOptions,
 } from "@root/types/SchemaUiMetadata";
+import { PERMISSION_MODES } from "@root/types/DashboardConstants";
+
+const EMPTY_TOOL_PERMISSIONS = {
+  mode: PERMISSION_MODES.NONE,
+  allowedTools: [] as string[],
+  deniedTools: [] as string[],
+};
 
 interface Props {
   settings: FullGlobalSettings;
@@ -27,7 +34,8 @@ export function DefaultsPermissionsPage({
   onReset,
 }: Props) {
   const sources = settings.sources as Record<string, SettingSource>;
-  const toolPermissions = settings.settings.defaults.toolPermissions;
+  const toolPermissions =
+    settings.settings.defaults.toolPermissions ?? EMPTY_TOOL_PERMISSIONS;
   const [allowedTools, setAllowedTools] = useState(
     toolPermissions.allowedTools
   );

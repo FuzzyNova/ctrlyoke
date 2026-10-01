@@ -7,6 +7,7 @@ import {
   type ConfigBackend,
 } from "../../config/CtrlYokeConfigService";
 import { FileConfigBackend } from "../../config/FileConfigBackend";
+import { uniqueAtomicTempPath } from "../../config/AtomicFileWrite";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
@@ -119,6 +120,64 @@ suite("CtrlYokeConfigService", () => {
       all.defaults.executionMode,
       CTRLYOKE_SETTINGS_DEFAULTS.defaults.executionMode
     );
+  });
+
+  test("malformed object sections cannot replace object defaults", () => {
+    service.setUserBackend(
+      makeBackend({
+        diagnostics: null,
+        defaults: { toolPermissions: "invalid" },
+      } as unknown as PartialCtrlYokeSettings)
+    );
+
+    assert.strictEqual(service.get("diagnostics").verboseLogging, false);
+    assert.strictEqual(
+      service.get("defaults").toolPermissions?.mode,
+      CTRLYOKE_SETTINGS_DEFAULTS.defaults.toolPermissions?.mode
+    );
+  });
+
+  test("keeps schema-nullable toolPermissions null from user and workspace scopes", () => {
+    service.setUserBackend(
+      makeBackend({ defaults: { toolPermissions: null } })
+    );
+    assert.strictEqual(service.get("defaults").toolPermissions, null);
+
+    service.setUserBackend(makeBackend({}));
+    service.setWorkspaceBackend({
+      getAll: () => ({ defaults: { toolPermissions: null } }),
+      set: async () => {},
+    });
+    assert.strictEqual(service.get("defaults").toolPermissions, null);
+  });
+
+  test("merges partial overlays onto nullable object defaults", () => {
+    service.setUserBackend(
+      makeBackend({ defaults: { toolPermissions: null } })
+    );
+    service.setCliOverlay({
+      defaults: { toolPermissions: { mode: "custom" } },
+    });
+
+    assert.deepStrictEqual(service.get("defaults").toolPermissions, {
+      ...CTRLYOKE_SETTINGS_DEFAULTS.defaults.toolPermissions,
+      mode: "custom",
+    });
+  });
+
+  test("filters malformed workspace object sections before merge", () => {
+    service.setWorkspaceBackend({
+      getAll: () =>
+        ({ diagnostics: "invalid", defaults: { toolPermissions: [] } }) as unknown as PartialCtrlYokeSettings,
+      set: async () => {},
+    });
+
+    assert.strictEqual(service.get("diagnostics").verboseLogging, false);
+    assert.strictEqual(
+      service.get("defaults").toolPermissions?.mode,
+      CTRLYOKE_SETTINGS_DEFAULTS.defaults.toolPermissions?.mode
+    );
+    assert.strictEqual(service.getScoped("diagnostics", "workspace"), undefined);
   });
 
   test("workspace backend overrides user backend", () => {
@@ -480,6 +539,57 @@ suite("FileConfigBackend", () => {
     assert.deepStrictEqual(backend.getAll(), {});
   });
 
+  test("empty, whitespace-only, and comment-only files accept writes", async () => {
+    const contentByCase = [
+      "",
+      " \r\n\t",
+      "// settings go here\n/* empty */",
+      "\uFEFF \r\n",
+      "\uFEFF// settings go here\n",
+    ];
+    for (const [index, content] of contentByCase.entries()) {
+      const configPath = path.join(tmpDir, `empty-${index}.json`);
+      fs.writeFileSync(configPath, content, "utf-8");
+      const backend = new FileConfigBackend(configPath);
+
+      assert.deepStrictEqual(backend.getAll(), {});
+      await backend.set("diagnostics.verboseLogging", true);
+      assert.strictEqual(
+        JSON.parse(fs.readFileSync(configPath, "utf-8")).diagnostics
+          .verboseLogging,
+        true
+      );
+    }
+  });
+
+  test("rejects non-object roots without changing their bytes", async () => {
+    for (const [index, content] of ["null", "[]", '"settings"', "42"].entries()) {
+      const configPath = path.join(tmpDir, `root-${index}.json`);
+      const original = Buffer.from(content, "utf-8");
+      fs.writeFileSync(configPath, original);
+      const backend = new FileConfigBackend(configPath);
+
+      assert.deepStrictEqual(backend.getAll(), {});
+      await assert.rejects(backend.set("ui.showCostEstimates", false), /invalid JSON/);
+      assert.deepStrictEqual(fs.readFileSync(configPath), original);
+    }
+  });
+
+  test("null or primitive sections do not replace object defaults", () => {
+    const service = new CtrlYokeConfigService();
+    service.setUserBackend({
+      getAll: () =>
+        ({ diagnostics: null, defaults: { toolPermissions: 7 } }) as unknown as PartialCtrlYokeSettings,
+      set: async () => {},
+    });
+
+    assert.strictEqual(service.get("diagnostics").verboseLogging, false);
+    assert.strictEqual(
+      service.get("defaults").toolPermissions?.mode,
+      CTRLYOKE_SETTINGS_DEFAULTS.defaults.toolPermissions?.mode
+    );
+  });
+
   test("set() preserves settings in a BOM-prefixed file", async () => {
     const configPath = path.join(tmpDir, "settings.json");
     fs.writeFileSync(
@@ -593,6 +703,40 @@ suite("FileConfigBackend", () => {
     );
   });
 
+  test("set() rejects prototype-sensitive path segments", async () => {
+    const configPath = path.join(tmpDir, "settings.json");
+    const original = Buffer.from('{"ui":{"showCostEstimates":true}}', "utf-8");
+    fs.writeFileSync(configPath, original);
+    const backend = new FileConfigBackend(configPath);
+
+    for (const settingPath of [
+      "__proto__.polluted",
+      "constructor.prototype.polluted",
+      "ui.prototype.polluted",
+    ]) {
+      await assert.rejects(
+        async () => backend.set(settingPath, "yes"),
+        /path segment .* is not allowed/
+      );
+    }
+
+    assert.strictEqual(({} as Record<string, unknown>).polluted, undefined);
+    assert.deepStrictEqual(fs.readFileSync(configPath), original);
+  });
+
+  test("uses unique process-scoped names for atomic temp files", () => {
+    const configPath = path.join(tmpDir, "settings.json");
+    const first = uniqueAtomicTempPath(configPath);
+    const second = uniqueAtomicTempPath(configPath);
+    const prefix = `${configPath}.${process.pid}.`;
+    const randomSuffix = first.slice(prefix.length, -".tmp".length);
+
+    assert.ok(first.startsWith(prefix));
+    assert.match(randomSuffix, /^[0-9a-f-]{36}$/);
+    assert.ok(first.endsWith(".tmp"));
+    assert.notStrictEqual(first, second);
+  });
+
   test("filePath getter returns the configured path", () => {
     const configPath = path.join(tmpDir, "settings.json");
     const backend = new FileConfigBackend(configPath);
@@ -647,6 +791,40 @@ suite("FileConfigBackend", () => {
       popup: ["abc-123"],
       hidden: [],
     });
+  });
+
+  test("serializes concurrent writes from backends for the same path", async () => {
+    const configPath = path.join(tmpDir, "settings.json");
+    const userBackend = new FileConfigBackend(configPath);
+    const workspaceBackend = new FileConfigBackend(
+      `${tmpDir}${path.sep}nested${path.sep}..${path.sep}settings.json`
+    );
+
+    await Promise.all([
+      userBackend.set("ui.showCliCommand", false),
+      workspaceBackend.set("execution.injectMode", false),
+    ]);
+
+    const content = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    assert.strictEqual(content.ui.showCliCommand, false);
+    assert.strictEqual(content.execution.injectMode, false);
+  });
+
+  test("shares cached reads across scopes backed by the same file", async () => {
+    const configPath = path.join(tmpDir, "settings.json");
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({ ui: { showCliCommand: true } }),
+      "utf-8"
+    );
+    const service = new CtrlYokeConfigService();
+    service.setUserBackend(new FileConfigBackend(configPath));
+    service.setWorkspaceBackend(new FileConfigBackend(configPath));
+
+    assert.strictEqual(service.get("ui").showCliCommand, true);
+    await service.set("ui.showCliCommand", false, "user");
+
+    assert.strictEqual(service.get("ui").showCliCommand, false);
   });
 
   test("round-trips step color mode and harness color settings", async () => {

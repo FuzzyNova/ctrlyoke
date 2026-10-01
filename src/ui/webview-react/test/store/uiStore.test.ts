@@ -1141,6 +1141,37 @@ describe("setRecentWorkflows", () => {
   });
 });
 
+describe("updateRecentWorkflowFromSummary", () => {
+  it("never lowers lineage recency when a live run summary is older", () => {
+    store().setRecentWorkflows([
+      {
+        address: {
+          workflowKey: "wf-1" as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: "run-1" as never,
+        },
+        workflowName: "wf-1",
+        executionState: "running",
+        lastModifiedAt: 2_000,
+      },
+    ]);
+
+    store().updateRecentWorkflowFromSummary({
+      id: "wf-1",
+      workflowKey: "wf-1" as never,
+      workflowName: "wf-1",
+      filePath: "",
+      executionState: "running",
+      currentStep: 1,
+      totalSteps: 1,
+      startedAt: 1_000,
+      completedAt: undefined,
+    } as WorkflowSummary);
+
+    expect(store().recentWorkflows[0].lastModifiedAt).toBe(2_000);
+  });
+});
+
 describe("toggleRecentWorkflowsDropdown", () => {
   it("flips recentWorkflowsDropdownOpen", () => {
     expect(store().recentWorkflowsDropdownOpen).toBe(false);

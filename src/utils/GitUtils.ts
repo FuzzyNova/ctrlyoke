@@ -7,8 +7,65 @@ import { GIT_CHANGE_KINDS } from "../types/DashboardConstants";
 import { foldPathForCompare } from "./PathCasing";
 
 const GIT_TIMEOUT_MS = 10_000;
+const GIT_MUTATION_TIMEOUT_MS = 5 * 60_000;
 const GIT_MAX_BUFFER = 50 * 1024 * 1024;
 const execFilePromisified = promisify(execFile);
+
+interface GitTimeoutOverrides {
+  shortTimeoutMs?: number;
+  mutationTimeoutMs?: number;
+}
+
+let gitTimeoutOverrides: GitTimeoutOverrides = {};
+
+/** Override Git command timeouts for isolated tests. */
+export function setGitTimeoutOverridesForTests(
+  overrides: GitTimeoutOverrides
+): () => void {
+  const previousOverrides = gitTimeoutOverrides;
+  gitTimeoutOverrides = overrides;
+  return () => {
+    gitTimeoutOverrides = previousOverrides;
+  };
+}
+
+function getGitTimeoutMs(mutation = false): number {
+  return mutation
+    ? (gitTimeoutOverrides.mutationTimeoutMs ?? GIT_MUTATION_TIMEOUT_MS)
+    : (gitTimeoutOverrides.shortTimeoutMs ?? GIT_TIMEOUT_MS);
+}
+
+function gitCommandName(args: readonly string[]): string {
+  const commandStart = args[0] === "-C" ? 2 : 0;
+  const command = args[commandStart] ?? "";
+  const operation = args[commandStart + 1];
+  const includeOperation =
+    (command === "merge" && operation === "--abort") ||
+    (command === "worktree" &&
+      (operation === "add" || operation === "remove")) ||
+    (command === "add" && operation === "--all");
+  return `git ${[command, ...(includeOperation && operation ? [operation] : [])].join(" ")}`;
+}
+
+function isTimeoutError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const execError = error as NodeJS.ErrnoException;
+  return execError.code === "ETIMEDOUT";
+}
+
+function exceededTimeout(startedAt: number, timeoutMs: number): boolean {
+  return Date.now() - startedAt >= timeoutMs;
+}
+
+function timeoutError(args: readonly string[], timeoutMs: number): Error {
+  const timeoutSeconds = timeoutMs / 1000;
+  const timeoutDescription = Number.isInteger(timeoutSeconds)
+    ? `${timeoutSeconds} seconds`
+    : `${timeoutSeconds.toFixed(1)} seconds`;
+  return new Error(
+    `${gitCommandName(args)} timed out after ${timeoutDescription}; a slow Git hook or large checkout may be responsible.`
+  );
+}
 
 export interface GitPorcelainV1Entry {
   x: string;
@@ -82,11 +139,24 @@ const execFileAsync = async (
   args: readonly string[],
   options: ExecFileOptions = {}
 ): Promise<{ stdout: string; stderr: string }> => {
-  const result = await execFilePromisified(file, args, {
-    timeout: GIT_TIMEOUT_MS,
-    maxBuffer: GIT_MAX_BUFFER,
-    ...options,
-  });
+  const timeoutMs = options.timeout ?? getGitTimeoutMs();
+  const startedAt = Date.now();
+  let result;
+  try {
+    result = await execFilePromisified(file, args, {
+      timeout: timeoutMs,
+      maxBuffer: GIT_MAX_BUFFER,
+      ...options,
+    });
+  } catch (error) {
+    if (
+      file === "git" &&
+      (isTimeoutError(error) || exceededTimeout(startedAt, timeoutMs))
+    ) {
+      throw timeoutError(args, timeoutMs);
+    }
+    throw error;
+  }
   return {
     stdout: result.stdout.toString(),
     stderr: result.stderr.toString(),
@@ -107,12 +177,14 @@ function execGitCheckIgnore(
   repoRoot: string,
   absolutePaths: readonly string[]
 ): Promise<{ stdout: string; stderr: string }> {
+  const timeoutMs = getGitTimeoutMs();
+  const startedAt = Date.now();
   return new Promise((resolve, reject) => {
     const child = execFile(
       "git",
       ["-C", repoRoot, "check-ignore", "-z", "--stdin"],
       {
-        timeout: GIT_TIMEOUT_MS,
+        timeout: timeoutMs,
         maxBuffer: GIT_MAX_BUFFER,
       },
       (error, stdout, stderr) => {
@@ -123,6 +195,13 @@ function execGitCheckIgnore(
           };
           execError.stdout = stdout;
           execError.stderr = stderr;
+          if (
+            isTimeoutError(execError) ||
+            exceededTimeout(startedAt, timeoutMs)
+          ) {
+            reject(timeoutError(["-C", repoRoot, "check-ignore"], timeoutMs));
+            return;
+          }
           reject(execError);
           return;
         }
@@ -1342,7 +1421,7 @@ export async function addWorktree(
   } else if (branchName && !options.createBranch) {
     args.push(branchName);
   }
-  await execGit(args);
+  await execGit(args, { timeout: getGitTimeoutMs(true) });
 }
 
 export async function removeWorktree(
@@ -1353,7 +1432,7 @@ export async function removeWorktree(
   const args = ["-C", repoRoot, "worktree", "remove"];
   if (force) args.push("--force");
   args.push("--", worktreePath);
-  await execGit(args);
+  await execGit(args, { timeout: getGitTimeoutMs(true) });
 }
 
 export async function pruneWorktrees(repoRoot: string): Promise<void> {
@@ -1516,7 +1595,8 @@ export async function mergeFastForward(
   dir: string,
   ref: string
 ): Promise<void> {
-  await execGit(["-C", dir, "merge", "--ff-only", "--", ref]);
+  const args = ["-C", dir, "merge", "--ff-only", "--", ref];
+  await execGit(args, { timeout: getGitTimeoutMs(true) });
 }
 
 /** Merge a ref non-interactively, creating a merge commit when necessary. */
@@ -1524,7 +1604,8 @@ export async function mergeNoFastForward(
   dir: string,
   ref: string
 ): Promise<void> {
-  await execGit(["-C", dir, "merge", "--no-ff", "--no-edit", "--", ref]);
+  const args = ["-C", dir, "merge", "--no-ff", "--no-edit", "--", ref];
+  await execGit(args, { timeout: getGitTimeoutMs(true) });
 }
 
 /** Return all unmerged paths using Git's NUL-delimited name output. */
@@ -1542,7 +1623,8 @@ export async function getUnmergedPaths(dir: string): Promise<string[]> {
 
 /** Abort an in-progress merge without invoking a shell or editor. */
 export async function abortMerge(dir: string): Promise<void> {
-  await execGit(["-C", dir, "merge", "--abort"]);
+  const args = ["-C", dir, "merge", "--abort"];
+  await execGit(args, { timeout: getGitTimeoutMs(true) });
 }
 
 /** Stage and commit all changes. Returns false when there is nothing to commit. */
@@ -1551,8 +1633,11 @@ export async function commitAll(
   message: string
 ): Promise<boolean> {
   if (!(await hasUncommittedChanges(dir))) return false;
-  await execGit(["-C", dir, "add", "--all", "--", "."]);
-  await execGit(["-C", dir, "commit", `--message=${message}`, "--"], {
+  const addArgs = ["-C", dir, "add", "--all", "--", "."];
+  await execGit(addArgs, { timeout: getGitTimeoutMs(true) });
+  const commitArgs = ["-C", dir, "commit", `--message=${message}`, "--"];
+  await execGit(commitArgs, {
+    timeout: getGitTimeoutMs(true),
     env: {
       ...process.env,
       GIT_EDITOR: "true",

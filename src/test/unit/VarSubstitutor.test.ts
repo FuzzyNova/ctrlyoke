@@ -81,6 +81,16 @@ suite("VarSubstitutor Tests", () => {
         "C:\\Users\\foo"
       );
     });
+
+    test("rejects variable values that contain a secret reference", () => {
+      assert.throws(
+        () =>
+          VarSubstitutor.substitute("TOKEN={{value}}", {
+            value: "${secret:GITHUB_TOKEN}",
+          }),
+        /cannot contain a managed secret reference/u
+      );
+    });
   });
 
   suite("applyToPromptText", () => {

@@ -233,4 +233,44 @@ suite("CommitMessageGenerator", () => {
         .catch(() => {});
     }
   });
+
+  test("bounds an oversized untracked file by the diff budget", async () => {
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "cy-commit-large-untracked-"));
+    try {
+      await execFileAsync("git", ["init"], { cwd });
+      await fs.writeFile(
+        path.join(cwd, "large.txt"),
+        "large untracked line\n".repeat(40_000)
+      );
+
+      const result = await new CommitMessageGenerator().getDiff(cwd);
+
+      assert.ok(result);
+      assert.strictEqual(result.truncated, true);
+      assert.ok(Buffer.byteLength(result.diff, "utf8") <= MAX_DIFF_BYTES);
+    } finally {
+      await fs
+        .rm(cwd, { recursive: true, force: true, maxRetries: 5 })
+        .catch(() => {});
+    }
+  });
+
+  test("represents untracked binary files without decoding their contents", async () => {
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "cy-commit-binary-"));
+    try {
+      await execFileAsync("git", ["init"], { cwd });
+      const binaryContents = Buffer.from([0x41, 0x00, 0xff, 0x42]);
+      await fs.writeFile(path.join(cwd, "image.bin"), binaryContents);
+
+      const result = await new CommitMessageGenerator().getDiff(cwd);
+
+      assert.ok(result);
+      assert.ok(result.diff.includes("Binary file b/image.bin added"));
+      assert.ok(!result.diff.includes(binaryContents.toString("utf8")));
+    } finally {
+      await fs
+        .rm(cwd, { recursive: true, force: true, maxRetries: 5 })
+        .catch(() => {});
+    }
+  });
 });

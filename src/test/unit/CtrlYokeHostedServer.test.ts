@@ -152,6 +152,10 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
         "/%69ndex.html",
         "/index%2ehtml",
         "/./index.html",
+        "/%5Cindex.html",
+        "/.%5Cindex.html",
+        "/a%5C..%5Cindex.html",
+        "/%5Cfavicon.svg",
       ]) {
         const response = await sendGetRequest(port, requestPath);
         assert.notStrictEqual(response.statusCode, 200, requestPath);
@@ -175,14 +179,25 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
       for (const requestPath of [
         "/index.html::$DATA",
         "/INDEX~1.HTM",
+        "/./INDEX~1.HTM",
+        "/a/../INDEX~1.HTM",
+        "/.%5CINDEX~1.HTM",
+        "/./index.html::$DATA",
+        "/%5Cindex.html::$DATA",
         "/favicon.svg::$DATA",
+        "/./favicon.svg::$DATA",
         "/FAVICO~1.SVG",
+        "/./FAVICO~1.SVG",
       ]) {
         const response = await sendGetRequest(port, requestPath);
         assert.strictEqual(response.statusCode, 404, requestPath);
         assert.ok(!response.body.includes("{{cspSource}}"), requestPath);
         assert.ok(!response.body.includes("<html"), requestPath);
       }
+
+      const legitimateAsset = await sendGetRequest(port, "/standalone-shim.js");
+      assert.strictEqual(legitimateAsset.statusCode, 200);
+      assert.ok(legitimateAsset.body.length > 0);
     });
   });
 

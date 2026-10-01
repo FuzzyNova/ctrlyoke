@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { parseArgString } from "../../utils/CliArgParser";
+import { formatArgString, parseArgString } from "../../utils/CliArgParser";
 
 suite("CliArgParser", () => {
   suite("parseArgString", () => {
@@ -85,6 +85,27 @@ suite("CliArgParser", () => {
 
     test("handles tab characters as whitespace", () => {
       assert.deepStrictEqual(parseArgString("a\tb"), ["a", "b"]);
+    });
+  });
+
+  suite("formatArgString", () => {
+    test("round-trips argument boundaries, quotes, whitespace, and empty args", () => {
+      const args = [
+        "--append-system-prompt",
+        "be terse",
+        "it's",
+        'say "hello"',
+        "",
+        "trailing\\",
+        "two\\\\slashes",
+        "with space and \\\\slashes",
+      ];
+
+      assert.deepStrictEqual(parseArgString(formatArgString(args)), args);
+    });
+
+    test("round-trips an empty argument list", () => {
+      assert.deepStrictEqual(parseArgString(formatArgString([])), []);
     });
   });
 });

@@ -6,9 +6,47 @@ import { isScriptWorkflowStep } from "./stepClipboard";
 /** Runtime metadata carried on a step (`step._runtime`), used before a full CliOutput exists. */
 export interface StepRuntimeMetaSnapshot {
   sessionId?: string;
+  harness?: string;
   elapsed?: number;
   contextWindowUsed?: number;
   contextWindowSize?: number;
+}
+
+export interface StepSessionDetails {
+  sessionId?: string;
+  harness?: string;
+  model?: string;
+}
+
+/** Resolve the concrete session and the harness that owns that session. */
+export function getStepSessionDetails(
+  step: WorkflowStep,
+  latestOutput: CliOutput | null | undefined,
+  runtimeMeta: StepRuntimeMetaSnapshot | null | undefined
+): StepSessionDetails {
+  const outputSessionId = latestOutput?.structured?.metadata?.sessionId;
+  if (typeof outputSessionId === "string" && outputSessionId.length > 0) {
+    return {
+      sessionId: outputSessionId,
+      harness: latestOutput?.structured?.metadata?.harness,
+      model: latestOutput?.structured?.metadata?.model,
+    };
+  }
+
+  const runtimeSessionId = runtimeMeta?.sessionId;
+  if (typeof runtimeSessionId === "string" && runtimeSessionId.length > 0) {
+    return {
+      sessionId: runtimeSessionId,
+      harness: runtimeMeta?.harness ?? step._runtime?.harness,
+    };
+  }
+
+  const stepSessionId = step._runtime?.sessionId;
+  if (typeof stepSessionId === "string" && stepSessionId.length > 0) {
+    return { sessionId: stepSessionId, harness: step._runtime?.harness };
+  }
+
+  return {};
 }
 
 /** Resolve the concrete session this step used, preferring its latest output. */
@@ -17,15 +55,7 @@ export function getStepSessionId(
   latestOutput: CliOutput | null | undefined,
   runtimeMeta: StepRuntimeMetaSnapshot | null | undefined
 ): string | undefined {
-  const candidates = [
-    latestOutput?.structured?.metadata?.sessionId,
-    runtimeMeta?.sessionId,
-    step._runtime?.sessionId,
-  ];
-  return candidates.find(
-    (sessionId): sessionId is string =>
-      typeof sessionId === "string" && sessionId.length > 0
-  );
+  return getStepSessionDetails(step, latestOutput, runtimeMeta).sessionId;
 }
 
 export interface StepMetadataClipboardInput {

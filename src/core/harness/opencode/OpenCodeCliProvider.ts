@@ -646,7 +646,10 @@ export class OpenCodeCliProvider implements ICliProvider {
     }
     const collisionContext =
       context.permissionCollisionContext ??
-      (await resolveOpenCodePermissionCollisionContext(context.workspaceRoot));
+      (await resolveOpenCodePermissionCollisionContext(
+        context.workspaceRoot,
+        context.environment
+      ));
     const policy = toolPermissions
       ? this.toolPermissionMapper.buildPermissionPolicy(
           toolPermissions,

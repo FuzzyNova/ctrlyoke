@@ -83,7 +83,9 @@ if ($operation -eq 'get') {
     } else {
       $bytes = New-Object byte[] $native.CredentialBlobSize
       [Runtime.InteropServices.Marshal]::Copy($native.CredentialBlob, $bytes, 0, $bytes.Length)
-      [Console]::Out.Write([Text.Encoding]::Unicode.GetString($bytes))
+      $value = [Text.Encoding]::Unicode.GetString($bytes)
+      $utf8 = [Text.Encoding]::UTF8.GetBytes($value)
+      [Console]::Out.Write([Convert]::ToBase64String($utf8))
     }
   } finally {
     [CtrlYokeCredentialManager]::CredFree($credential)
@@ -92,7 +94,8 @@ if ($operation -eq 'get') {
 }
 
 if ($operation -eq 'store') {
-  $value = [Console]::In.ReadToEnd()
+  $valueBase64 = [Console]::In.ReadToEnd()
+  $value = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($valueBase64))
   $bytes = [Text.Encoding]::Unicode.GetBytes($value)
   $blob = [Runtime.InteropServices.Marshal]::AllocCoTaskMem($bytes.Length)
   try {
@@ -459,7 +462,9 @@ class WindowsCredentialBackend implements CredentialBackend {
 
   private async readCredential(key: string): Promise<string | undefined> {
     const result = await this.execute("get", key);
-    return result.exitCode === 0 ? result.stdout : undefined;
+    return result.exitCode === 0
+      ? Buffer.from(result.stdout, "base64").toString("utf8")
+      : undefined;
   }
 
   private async writeCredential(key: string, value: string): Promise<void> {
@@ -506,7 +511,9 @@ $target = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${targetV
         "-EncodedCommand",
         script,
       ],
-      value
+      value === undefined
+        ? undefined
+        : Buffer.from(value, "utf8").toString("base64")
     );
   }
 }

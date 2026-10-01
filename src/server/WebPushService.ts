@@ -7,6 +7,7 @@ import { ctrlyokeStateHome } from "../utils/ProjectStatePaths";
 import { withFileLock } from "../utils/FileLockUtils";
 import { Log } from "../utils/Log";
 import { secretRedactionService } from "../utils/SecretRedactionService";
+import { stripLeadingBom } from "../utils/TextUtils";
 import type { CompletionNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
 
 const PRIVATE_DIRECTORY_MODE = 0o700;
@@ -50,7 +51,7 @@ interface VapidPrivateJwk {
 }
 
 interface StoredPushRegistry {
-  subscriptions: StoredPushSubscription[];
+  subscriptions: unknown[];
 }
 
 export interface PushSubscriptionListResult {
@@ -115,17 +116,19 @@ export class WebPushService {
       const registry = await this.withSubscriptionFileLock(() =>
         this.readSubscriptions()
       );
-      const subscriptions = registry.subscriptions.map((subscription) => ({
-        id: subscription.id,
-        createdAt: subscription.createdAt,
-        updatedAt: subscription.updatedAt,
-        lastSuccessAt: subscription.lastSuccessAt,
-        lastFailureAt: subscription.lastFailureAt,
-        lastFailureStatus: subscription.lastFailureStatus,
-        userAgent: subscription.userAgent,
-        label: subscription.label,
-        stale: isSubscriptionStale(subscription),
-      }));
+      const subscriptions = registry.subscriptions
+        .filter(isValidStoredSubscription)
+        .map((subscription) => ({
+          id: subscription.id,
+          createdAt: subscription.createdAt,
+          updatedAt: subscription.updatedAt,
+          lastSuccessAt: subscription.lastSuccessAt,
+          lastFailureAt: subscription.lastFailureAt,
+          lastFailureStatus: subscription.lastFailureStatus,
+          userAgent: subscription.userAgent,
+          label: subscription.label,
+          stale: isSubscriptionStale(subscription),
+        }));
 
       return {
         subscriptions,
@@ -146,7 +149,9 @@ export class WebPushService {
         const now = Date.now();
         const endpointHash = hashEndpoint(subscription.endpoint);
         const existing = registry.subscriptions.find(
-          (item) => item.endpointHash === endpointHash
+          (item): item is StoredPushSubscription =>
+            isValidStoredSubscription(item) &&
+            item.endpointHash === endpointHash
         );
 
         const next: StoredPushSubscription = {
@@ -165,7 +170,9 @@ export class WebPushService {
 
         if (existing) {
           registry.subscriptions = registry.subscriptions.map((item) =>
-            item.id === existing.id ? next : item
+            isValidStoredSubscription(item) && item.id === existing.id
+              ? next
+              : item
           );
         } else {
           registry.subscriptions.push(next);
@@ -183,7 +190,8 @@ export class WebPushService {
         const registry = await this.readSubscriptions();
         const before = registry.subscriptions.length;
         registry.subscriptions = registry.subscriptions.filter(
-          (subscription) => subscription.id !== id
+          (subscription) =>
+            !isValidStoredSubscription(subscription) || subscription.id !== id
         );
         if (registry.subscriptions.length === before) {
           return false;
@@ -201,7 +209,7 @@ export class WebPushService {
     return this.withSerializedAccess(async () => {
       return this.withSubscriptionFileLock(async () => {
         const registry = await this.readSubscriptions();
-        if (registry.subscriptions.length === 0) {
+        if (!registry.subscriptions.some(isValidStoredSubscription)) {
           return { sent: 0, removed: 0, failed: 0 };
         }
 
@@ -221,9 +229,13 @@ export class WebPushService {
         let sent = 0;
         let removed = 0;
         let failed = 0;
-        const survivors: StoredPushSubscription[] = [];
+        const survivors: unknown[] = [];
 
         for (const subscription of registry.subscriptions) {
+          if (!isValidStoredSubscription(subscription)) {
+            survivors.push(subscription);
+            continue;
+          }
           try {
             const { endpoint, headers, body } = await buildPushHTTPRequest({
               privateJWK: keys.privateJwk,
@@ -314,38 +326,85 @@ export class WebPushService {
   private async getOrCreateVapidKeys(): Promise<StoredVapidKeys> {
     await ensurePrivateDirectory(this.notificationsDir);
     return withFileLock(this.vapidKeysPath, async () => {
+      let content: string;
       try {
-        const content = await fsp.readFile(this.vapidKeysPath, "utf8");
-        const parsed = JSON.parse(content) as Partial<StoredVapidKeys>;
-        if (isStoredVapidKeys(parsed)) {
-          await fsp.chmod(this.vapidKeysPath, PRIVATE_FILE_MODE);
-          return parsed;
+        content = await fsp.readFile(this.vapidKeysPath, "utf8");
+      } catch (error) {
+        if (getErrorCode(error) === "ENOENT") {
+          const generated = await generateVapidKeys();
+          await atomicWriteJson(this.vapidKeysPath, generated);
+          return generated;
         }
-      } catch {
-        // Fall through and generate new keys.
+        throw new Error(
+          `Cannot read VAPID keys file "${this.vapidKeysPath}": ${getErrorMessage(error)}`
+        );
       }
 
-      const generated = await generateVapidKeys();
-      await atomicWriteJson(this.vapidKeysPath, generated);
-      return generated;
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(stripLeadingBom(content));
+      } catch {
+        throw new Error(
+          `Cannot use VAPID keys file "${this.vapidKeysPath}": file contains invalid JSON. Fix the file before continuing.`
+        );
+      }
+      if (!isStoredVapidKeys(parsed)) {
+        throw new Error(
+          `Cannot use VAPID keys file "${this.vapidKeysPath}": file contains invalid VAPID keys. Fix the file before continuing.`
+        );
+      }
+
+      await fsp.chmod(this.vapidKeysPath, PRIVATE_FILE_MODE).catch((error) => {
+        Log.warn(
+          `[WebPushService] Could not restrict permissions for VAPID keys file ${this.vapidKeysPath}: ${getErrorMessage(error)}`
+        );
+      });
+      return parsed;
     });
   }
 
   private async readSubscriptions(): Promise<StoredPushRegistry> {
     await ensurePrivateDirectory(this.notificationsDir);
 
+    let content: string;
     try {
-      const content = await fsp.readFile(this.subscriptionsPath, "utf8");
-      const parsed = JSON.parse(content) as Partial<StoredPushRegistry>;
-      await fsp.chmod(this.subscriptionsPath, PRIVATE_FILE_MODE);
-      return {
-        subscriptions: Array.isArray(parsed.subscriptions)
-          ? parsed.subscriptions.filter(isValidStoredSubscription)
-          : [],
-      };
-    } catch {
-      return { subscriptions: [] };
+      content = await fsp.readFile(this.subscriptionsPath, "utf8");
+    } catch (error) {
+      if (getErrorCode(error) === "ENOENT") {
+        return { subscriptions: [] };
+      }
+      throw new Error(
+        `Cannot read push subscriptions file "${this.subscriptionsPath}": ${getErrorMessage(error)}`
+      );
     }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(stripLeadingBom(content));
+    } catch {
+      throw new Error(
+        `Cannot modify push subscriptions file "${this.subscriptionsPath}": file contains invalid JSON. Fix the file before saving.`
+      );
+    }
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed) ||
+      !Array.isArray((parsed as Partial<StoredPushRegistry>).subscriptions)
+    ) {
+      throw new Error(
+        `Cannot modify push subscriptions file "${this.subscriptionsPath}": expected an object with a subscriptions array. Fix the file before saving.`
+      );
+    }
+
+    await fsp
+      .chmod(this.subscriptionsPath, PRIVATE_FILE_MODE)
+      .catch((error) => {
+        Log.warn(
+          `[WebPushService] Could not restrict permissions for push subscriptions file ${this.subscriptionsPath}: ${getErrorMessage(error)}`
+        );
+      });
+    return parsed as StoredPushRegistry;
   }
 
   private async writeSubscriptions(
@@ -542,4 +601,12 @@ function getErrorMessage(error: unknown): string {
     return error.message;
   }
   return String(error);
+}
+
+function getErrorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== "object") {
+    return undefined;
+  }
+  const candidate = error as { code?: unknown };
+  return typeof candidate.code === "string" ? candidate.code : undefined;
 }

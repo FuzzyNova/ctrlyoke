@@ -663,6 +663,8 @@ export interface WorktreeCompletionResult {
 export interface WorkingFileRuntime {
   /** Run-file format version (`PersistedSchemaGuard`); stamped on every write. */
   schemaVersion?: number;
+  /** Latest persisted run activity, including edits such as appending steps. */
+  lastActivityAt?: number;
   currentIndex: number;
   executionState: ExecutionState;
   /** Latest run-scoped token aggregate projected from timeline history. */

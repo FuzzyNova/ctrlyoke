@@ -131,6 +131,10 @@ export interface RunSummary {
   executionState: ExecutionState;
   definitionRevision: number;
   stepCount: number;
+  /** Step count from the persisted working file, which is current during a run. */
+  workingFileStepCount?: number;
+  /** Whether the run's persisted working definition includes a final step. */
+  hasFinalStep?: boolean;
   primaryHarness?: string;
   primaryModel?: string;
   hasMixedHarnesses: boolean;

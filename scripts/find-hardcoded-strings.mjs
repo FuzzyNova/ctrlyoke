@@ -150,6 +150,16 @@ const KNOWN_UNRELATED_LITERALS = new Set([
   // unrelated token-totals-variant discriminant ("complete" | "partial" |
   // "running"). Different domains, same English word.
   "partial",
+  // "remove": QwenToolPermissionMapper.ts checks a harness tool alias;
+  // GitUtils.ts checks a Git worktree subcommand. They are different external
+  // vocabularies and cannot share an application constant.
+  "remove",
+  // "add": GitUtils.ts checks both the worktree subcommand and the index
+  // subcommand. Their spelling comes from Git's CLI grammar, not app flow.
+  "add",
+  // "worktree": PromptFileParser.ts reads the workflow property, while
+  // GitUtils.ts checks Git's top-level CLI subcommand.
+  "worktree",
 ]);
 
 const EQUALITY_OPERATORS = new Set([

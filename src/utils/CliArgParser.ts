@@ -32,8 +32,12 @@ export function parseArgString(input: string): string[] {
       tokenStarted = true;
       i++;
       while (i < len && input[i] !== '"') {
-        if (input[i] === "\\" && i + 1 < len && input[i + 1] === '"') {
-          current += '"';
+        if (
+          input[i] === "\\" &&
+          i + 1 < len &&
+          (input[i + 1] === '"' || input[i + 1] === "\\")
+        ) {
+          current += input[i + 1];
           i += 2;
         } else {
           current += input[i++];
@@ -67,4 +71,20 @@ export function parseArgString(input: string): string[] {
   }
 
   return tokens;
+}
+
+/**
+ * Formats argument tokens as a string that {@link parseArgString} can recover.
+ * Tokens containing whitespace or quote characters are double-quoted, with
+ * backslashes and double quotes escaped for the parser.
+ */
+export function formatArgString(args: string[]): string {
+  return args
+    .map((arg) => {
+      if (arg.length === 0 || /[\s'"]/.test(arg)) {
+        return `"${arg.replace(/[\\"]/g, "\\$&")}"`;
+      }
+      return arg;
+    })
+    .join(" ");
 }

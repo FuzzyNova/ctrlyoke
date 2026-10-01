@@ -98,12 +98,13 @@ async function readPermissionLayer(
  * then project config. Values are merged per key so type replacement is preserved.
  */
 export async function resolveOpenCodePermissionCollisionContext(
-  workspaceRoot?: string
+  workspaceRoot?: string,
+  environment: NodeJS.ProcessEnv = process.env
 ): Promise<OpenCodePermissionCollisionContext> {
   const configPaths = [
     path.join(os.homedir(), ".config", "opencode", "opencode.json"),
   ];
-  const configuredPath = process.env.OPENCODE_CONFIG?.trim();
+  const configuredPath = environment.OPENCODE_CONFIG?.trim();
   if (configuredPath) {
     configPaths.push(
       path.isAbsolute(configuredPath)

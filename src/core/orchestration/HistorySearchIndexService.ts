@@ -21,6 +21,7 @@ import { HistorySearchDocumentCache } from "./HistorySearchDocumentCache";
 import {
   matchesFilters,
   normalizeHistorySearchFilters,
+  normalizeHistorySearchQueryKey,
 } from "./HistorySearchFilters";
 import {
   getHistorySearchDocumentDedupeKey,
@@ -665,129 +666,153 @@ export class HistorySearchIndexService {
     let currentGroupStartedAt: number | undefined;
     let cancelled = false;
     let stoppedEarly = false;
+    let admissionsCommitted = false;
 
-    for (; index < shardOrder.length; index++) {
-      if (signal?.aborted) {
-        cancelled = true;
-        break;
-      }
-
-      // The deep pass is deliberately inside this run's existing group buffer:
-      // its results must share the indexed pass's ordering, dedupe, early-stop,
-      // paging, partial-result, and cancellation semantics.
-      const shard = shardOrder[index];
-      if (
-        currentGroupStartedAt !== undefined &&
-        shard.startedAt !== currentGroupStartedAt
-      ) {
-        const countBeforeGroup = newResults.length;
-        finalizeGroup();
-        if (onPartialResultsFound && newResults.length > countBeforeGroup) {
-          onPartialResultsFound([...newResults], totalMatchCount);
+    try {
+      for (; index < shardOrder.length; index++) {
+        if (signal?.aborted) {
+          cancelled = true;
+          break;
         }
-        if (targetCount !== undefined && totalMatchCount >= targetCount) {
-          stoppedEarly = true;
+
+        // The deep pass is deliberately inside this run's existing group buffer:
+        // its results must share the indexed pass's ordering, dedupe, early-stop,
+        // paging, partial-result, and cancellation semantics.
+        const shard = shardOrder[index];
+        if (
+          currentGroupStartedAt !== undefined &&
+          shard.startedAt !== currentGroupStartedAt
+        ) {
+          const countBeforeGroup = newResults.length;
+          finalizeGroup();
+          if (onPartialResultsFound && newResults.length > countBeforeGroup) {
+            onPartialResultsFound([...newResults], totalMatchCount);
+          }
+          if (targetCount !== undefined && totalMatchCount >= targetCount) {
+            stoppedEarly = true;
+            break;
+          }
+        }
+        currentGroupStartedAt = shard.startedAt;
+
+        const consider = async (
+          document: HistorySearchDocument
+        ): Promise<void> => {
+          if (signal?.aborted) {
+            throw new HistorySearchCancelledError();
+          }
+          let match;
+          try {
+            match = await findHistorySearchMatch(
+              matcher,
+              document.text,
+              signal
+            );
+          } catch (error) {
+            if (error instanceof HistorySearchMatcherCancelledError) {
+              throw new HistorySearchCancelledError();
+            }
+            throw error;
+          }
+          if (match === undefined || !matchesFilters(document, filters)) {
+            return;
+          }
+          const projected = projectHistorySearchResult(
+            document,
+            match,
+            snippetChars
+          );
+          const result = {
+            ...projected,
+            workflowName: await resolveWorkflowName(projected.workflowKey),
+          };
+          groupBuffer.push({
+            result,
+            dedupeKey: getHistorySearchDocumentDedupeKey(document, result),
+            timestampMs: document.timestampMs,
+            sequence: document.sequence,
+          });
+        };
+
+        const cachedDocuments = this.documentCache.get(shard.shardName);
+        if (cachedDocuments) {
+          documentsScannedThisCall += cachedDocuments.length;
+          for (const document of cachedDocuments) {
+            await consider(document);
+          }
+        } else if (this.documentCache.wouldRetain(shard.startedAt)) {
+          // Worth a full, unfiltered parse so every document in this run can be
+          // retained for future queries, not just today's candidates.
+          const shardRead = await readShardDocuments(
+            documentsDir,
+            shard.shardName,
+            signal
+          );
+          documentsScannedThisCall += shardRead.documents.length;
+          for (const document of shardRead.documents) {
+            await consider(document);
+          }
+          if (shardRead.complete) {
+            this.documentCache.set(
+              shard.shardName,
+              shard.startedAt,
+              shardRead.documents
+            );
+          }
+        } else {
+          for await (const document of streamHistorySearchDocuments(
+            documentsDir,
+            matcher,
+            {
+              hasPersistedLowercaseKey,
+              resolvedShardOrder: [shard.shardName],
+            },
+            () => {
+              documentsScannedThisCall += 1;
+            },
+            signal
+          )) {
+            await consider(document);
+          }
+        }
+
+        if (
+          deep &&
+          shard.manifestPath !== undefined &&
+          shard.overCapCandidateCount !== 0
+        ) {
+          deepScannedRuns += 1;
+          for await (const document of scanHistoryRunDeep(
+            workspaceFolderPath,
+            shard.manifestPath,
+            matcher,
+            resolveWorkflowName,
+            signal
+          )) {
+            await consider(document);
+          }
+        }
+        // The generator returns early (without throwing) on cancellation, so a
+        // partial shard scan looks like a legitimate — if incomplete — result
+        // unless checked for here.
+        if (signal?.aborted) {
+          cancelled = true;
           break;
         }
       }
-      currentGroupStartedAt = shard.startedAt;
-
-      const consider = async (
-        document: HistorySearchDocument
-      ): Promise<void> => {
-        let match;
-        try {
-          match = await findHistorySearchMatch(matcher, document.text, signal);
-        } catch (error) {
-          if (error instanceof HistorySearchMatcherCancelledError) {
-            throw new HistorySearchCancelledError();
-          }
-          throw error;
-        }
-        if (match === undefined || !matchesFilters(document, filters)) {
-          return;
-        }
-        const projected = projectHistorySearchResult(
-          document,
-          match,
-          snippetChars
-        );
-        const result = {
-          ...projected,
-          workflowName: await resolveWorkflowName(projected.workflowKey),
-        };
-        groupBuffer.push({
-          result,
-          dedupeKey: getHistorySearchDocumentDedupeKey(document, result),
-          timestampMs: document.timestampMs,
-          sequence: document.sequence,
-        });
-      };
-
-      const cachedDocuments = this.documentCache.get(shard.shardName);
-      if (cachedDocuments) {
-        documentsScannedThisCall += cachedDocuments.length;
-        for (const document of cachedDocuments) {
-          await consider(document);
-        }
-      } else if (this.documentCache.wouldRetain(shard.startedAt)) {
-        // Worth a full, unfiltered parse so every document in this run can be
-        // retained for future queries, not just today's candidates.
-        const shardRead = await readShardDocuments(
-          documentsDir,
-          shard.shardName,
-          signal
-        );
-        documentsScannedThisCall += shardRead.documents.length;
-        for (const document of shardRead.documents) {
-          await consider(document);
-        }
-        if (shardRead.complete) {
-          this.documentCache.set(
-            shard.shardName,
-            shard.startedAt,
-            shardRead.documents
-          );
-        }
-      } else {
-        for await (const document of streamHistorySearchDocuments(
-          documentsDir,
-          matcher,
-          {
-            hasPersistedLowercaseKey,
-            resolvedShardOrder: [shard.shardName],
-          },
-          () => {
-            documentsScannedThisCall += 1;
-          },
-          signal
-        )) {
-          await consider(document);
-        }
-      }
-
-      if (
-        deep &&
-        shard.manifestPath !== undefined &&
-        shard.overCapCandidateCount !== 0
-      ) {
-        deepScannedRuns += 1;
-        for await (const document of scanHistoryRunDeep(
-          workspaceFolderPath,
-          shard.manifestPath,
-          matcher,
-          resolveWorkflowName,
-          signal
-        )) {
-          await consider(document);
-        }
-      }
-      // The generator returns early (without throwing) on cancellation, so a
-      // partial shard scan looks like a legitimate — if incomplete — result
-      // unless checked for here.
-      if (signal?.aborted) {
+    } catch (error) {
+      if (error instanceof HistorySearchCancelledError) {
         cancelled = true;
-        break;
+      } else {
+        throw error;
+      }
+    } finally {
+      if (!admissionsCommitted) {
+        // A resumed scan shares this set with its retained cursor. Anything
+        // admitted by an aborted/failed call must be removed before reuse.
+        for (const key of addedDedupeKeys) {
+          seen.delete(key);
+        }
       }
     }
 
@@ -798,11 +823,6 @@ export class HistorySearchIndexService {
       documentsScanned: priorDocumentsScanned + documentsScannedThisCall,
     };
     if (cancelled) {
-      // Undo this call's admissions to the (possibly shared) dedupe set so
-      // the retained cursor is exactly as it was before this scan started.
-      for (const key of addedDedupeKeys) {
-        seen.delete(key);
-      }
       disposeHistorySearchMatcher(matcher);
       return {
         newResults: [],
@@ -827,6 +847,7 @@ export class HistorySearchIndexService {
       deepScannedRuns,
       totalMatchCount,
     };
+    admissionsCommitted = true;
     disposeHistorySearchMatcher(matcher);
     return result;
   }
@@ -1030,6 +1051,7 @@ export class HistorySearchIndexService {
       onProgress?: IndexRebuildProgressCallback;
     }
   ): Promise<void> {
+    const previousManifest = this.loadedManifest;
     const indexDir = this.getIndexDir(workspaceFolderPath);
     await fs.promises.mkdir(indexDir, { recursive: true });
 
@@ -1053,9 +1075,12 @@ export class HistorySearchIndexService {
       }
 
       if (result.skipped) {
-        // Nothing on disk changed, so every cached shard is still correct.
         this.dropLoadedIndex();
         await this.loadIfPossible(workspaceFolderPath);
+        this.clearDocumentCacheIfManifestChanged(
+          previousManifest,
+          this.loadedManifest
+        );
         Log.info(
           "[HistorySearchIndexService] rebuild skipped: on-disk index already fresh"
         );
@@ -1070,8 +1095,24 @@ export class HistorySearchIndexService {
       }
       this.dropLoadedIndex();
       await this.loadIfPossible(workspaceFolderPath);
+      this.clearDocumentCacheIfManifestChanged(
+        previousManifest,
+        this.loadedManifest
+      );
     } finally {
       await worker.terminate();
+    }
+  }
+
+  private clearDocumentCacheIfManifestChanged(
+    previous: HistorySearchIndexManifest | undefined,
+    current: HistorySearchIndexManifest | undefined
+  ): void {
+    if (
+      JSON.stringify(previous?.indexedRuns) !==
+      JSON.stringify(current?.indexedRuns)
+    ) {
+      this.documentCache.clear();
     }
   }
 
@@ -1193,7 +1234,7 @@ export class HistorySearchIndexService {
       .update(
         JSON.stringify({
           workspaceFolderPath,
-          query: query.trim().toLowerCase(),
+          query: normalizeHistorySearchQueryKey(query, regex),
           filters: normalizeHistorySearchFilters(filters),
           deep,
           regex,

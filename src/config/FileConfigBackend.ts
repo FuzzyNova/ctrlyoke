@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { parse, type ParseError } from "jsonc-parser";
+import { parse, stripComments, type ParseError } from "jsonc-parser";
 import type { ConfigBackend } from "./CtrlYokeConfigService";
 import type { PartialCtrlYokeSettings } from "../types/CtrlYokeSettings";
 import {
@@ -15,22 +15,46 @@ import { Log } from "../utils/Log";
 import { migrateToCurrent } from "../utils/FormatMigrations";
 import { stripLeadingBom } from "../utils/TextUtils";
 import { AsyncWriteQueue } from "./AsyncWriteQueue";
+import { uniqueAtomicTempPath } from "./AtomicFileWrite";
+import { foldPathForCompare } from "../utils/PathCasing";
 
 const warnedNewerSettingsPaths = new Set<string>();
+interface FileConfigBackendState {
+  cache?: PartialCtrlYokeSettings;
+  writeQueue: AsyncWriteQueue;
+}
+
+const backendStatesByPath = new Map<string, FileConfigBackendState>();
+const FORBIDDEN_SETTING_PATH_SEGMENTS = new Set([
+  "__proto__",
+  "constructor",
+  "prototype",
+]);
+
+function getBackendState(configPath: string): FileConfigBackendState {
+  const key = foldPathForCompare(path.resolve(configPath));
+  let state = backendStatesByPath.get(key);
+  if (!state) {
+    state = { writeQueue: new AsyncWriteQueue() };
+    backendStatesByPath.set(key, state);
+  }
+  return state;
+}
 
 export class FileConfigBackend implements ConfigBackend {
-  private cache?: PartialCtrlYokeSettings;
   // Serializes set() calls so a read-modify-write can't read a stale file out
   // from under a write that's still in flight. Two settings paths committed
   // back-to-back (e.g. TerminalControlBarEditor's addShortcut writing
   // mobileCustomShortcuts then mobileBarLayout) reach here as two overlapping
   // calls; without this queue, the second call's load() can run before the
   // first call's save() lands, so the second write clobbers the first.
-  private readonly writeQueue = new AsyncWriteQueue();
+  private readonly state: FileConfigBackendState;
   private newerSchemaVersion?: number;
   private hasInvalidContent = false;
 
-  constructor(private readonly configPath: string) {}
+  constructor(private readonly configPath: string) {
+    this.state = getBackendState(configPath);
+  }
 
   /** Returns the path this backend reads from */
   get filePath(): string {
@@ -43,16 +67,25 @@ export class FileConfigBackend implements ConfigBackend {
 
   /** Load and parse the config file. Returns {} if file doesn't exist or is invalid JSON. */
   getAll(): PartialCtrlYokeSettings {
-    if (this.cache !== undefined) {
-      return this.cache;
+    if (this.state.cache !== undefined) {
+      return this.state.cache;
     }
-    this.cache = this.load();
-    return this.cache;
+    this.state.cache = this.load();
+    return this.state.cache;
   }
 
   /** Write a setting using dot-notation path (e.g. "execution.injectMode") */
   set(settingPath: string, value: unknown): Promise<void> {
-    return this.writeQueue.enqueue(async () => {
+    const pathParts = settingPath.split(".");
+    const forbiddenSegment = pathParts.find((part) =>
+      FORBIDDEN_SETTING_PATH_SEGMENTS.has(part)
+    );
+    if (forbiddenSegment !== undefined) {
+      throw new Error(
+        `Cannot update settings path "${settingPath}": path segment "${forbiddenSegment}" is not allowed.`
+      );
+    }
+    return this.state.writeQueue.enqueue(async () => {
       const current = this.load();
       if (this.newerSchemaVersion !== undefined) {
         refuseNewerSchema(
@@ -68,11 +101,11 @@ export class FileConfigBackend implements ConfigBackend {
       }
       this.setNestedValue(
         current as Record<string, unknown>,
-        settingPath.split("."),
+        pathParts,
         value
       );
       await this.save(current);
-      this.cache = undefined;
+      this.state.cache = undefined;
     });
   }
 
@@ -85,15 +118,27 @@ export class FileConfigBackend implements ConfigBackend {
       // File doesn't exist — return empty settings (expected on first use)
       return {};
     }
+    const normalizedContent = stripLeadingBom(content);
+    if (stripComments(normalizedContent).trim() === "") {
+      return {};
+    }
     try {
       const errors: ParseError[] = [];
-      const parsed = parse(stripLeadingBom(content), errors, {
+      const parsed: unknown = parse(normalizedContent, errors, {
         allowTrailingComma: true,
-      }) as PartialCtrlYokeSettings;
+      });
       if (errors.length > 0) {
         throw new Error("Invalid JSONC syntax");
       }
-      const version = readSchemaVersion(parsed);
+      if (
+        parsed === null ||
+        typeof parsed !== "object" ||
+        Array.isArray(parsed)
+      ) {
+        throw new Error("Settings root must be an object");
+      }
+      const parsedSettings = parsed as PartialCtrlYokeSettings;
+      const version = readSchemaVersion(parsedSettings);
       if (isNewerSchemaVersion(PERSISTED_STORES.SETTINGS, version)) {
         this.newerSchemaVersion = version;
         if (!warnedNewerSettingsPaths.has(this.configPath)) {
@@ -104,10 +149,10 @@ export class FileConfigBackend implements ConfigBackend {
         }
       }
       if (!isNewerSchemaVersion(PERSISTED_STORES.SETTINGS, version)) {
-        return migrateToCurrent(PERSISTED_STORES.SETTINGS, parsed)
+        return migrateToCurrent(PERSISTED_STORES.SETTINGS, parsedSettings)
           .doc as PartialCtrlYokeSettings;
       }
-      return parsed;
+      return parsedSettings;
     } catch {
       // File exists but contains invalid JSONC. Reads remain best-effort, but
       // set() must not overwrite the user's only copy of the settings.
@@ -133,7 +178,7 @@ export class FileConfigBackend implements ConfigBackend {
     // This prevents an interrupted write from leaving the settings file
     // empty/corrupt (which would cause the next set() call to silently
     // wipe all settings).
-    const tmpPath = `${this.configPath}.tmp`;
+    const tmpPath = uniqueAtomicTempPath(this.configPath);
     await fs.promises.writeFile(
       tmpPath,
       JSON.stringify(data, null, 2),
@@ -159,8 +204,9 @@ export class FileConfigBackend implements ConfigBackend {
     }
 
     const [head, ...rest] = pathParts;
+    const hasOwnHead = Object.prototype.hasOwnProperty.call(obj, head);
     if (
-      !(head in obj) ||
+      !hasOwnHead ||
       typeof obj[head] !== "object" ||
       obj[head] === null ||
       Array.isArray(obj[head])

@@ -134,6 +134,31 @@ describe("DiffView", () => {
     expect(container.firstChild).toBeNull();
   });
 
+  it("shows raw patch text when structured patch conversion fails", () => {
+    mockToRdvHunks.mockImplementationOnce(() => {
+      throw new Error("invalid persisted patch");
+    });
+
+    const { container } = render(
+      <DiffView
+        structuredPatch={[
+          {
+            oldStart: 1,
+            oldLines: 1,
+            newStart: 1,
+            newLines: 1,
+            lines: ["-before", "+after"],
+          },
+        ]}
+        globallyCollapsed={false}
+      />
+    );
+
+    expect(container.querySelector("pre")?.textContent).toBe(
+      "@@ -1,1 +1,1 @@\n-before\n+after"
+    );
+  });
+
   it("shows a summary toggle when collapsed", () => {
     mockGetRenderedDiffStats.mockReturnValue({
       added: 1,

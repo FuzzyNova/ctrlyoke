@@ -1296,6 +1296,8 @@ export class OutputHistoryManager {
         primaryModel,
         hasMixedHarnesses,
         hasMixedModels,
+        hasFinalStep,
+        workingFileStepCount,
         unstarted,
         tokenTotals,
         worktree,
@@ -1323,6 +1325,10 @@ export class OutputHistoryManager {
           executionState: executionState ?? manifest.executionState,
           definitionRevision: manifest.definitionRevision,
           stepCount: manifest.stepCount,
+          ...(workingFileStepCount !== undefined
+            ? { workingFileStepCount }
+            : {}),
+          ...(hasFinalStep !== undefined ? { hasFinalStep } : {}),
           primaryHarness,
           primaryModel,
           hasMixedHarnesses,
@@ -1372,6 +1378,8 @@ export class OutputHistoryManager {
     hasMixedHarnesses: boolean;
     hasMixedModels: boolean;
     unstarted?: boolean;
+    hasFinalStep?: boolean;
+    workingFileStepCount?: number;
   }> {
     try {
       const content = await fs.promises.readFile(runFilePath, "utf8");
@@ -1398,6 +1406,7 @@ export class OutputHistoryManager {
             completedAt?: number;
           };
         }>;
+        finalStep?: unknown;
       };
 
       const harnesses = new Set<string>();
@@ -1428,6 +1437,8 @@ export class OutputHistoryManager {
         hasMixedHarnesses: harnesses.size > 1,
         hasMixedModels: models.size > 1,
         unstarted: isUnstartedRunFile(workingFile),
+        hasFinalStep: workingFile.finalStep !== undefined,
+        workingFileStepCount: workingFile.steps?.length ?? 0,
       };
     } catch {
       return {

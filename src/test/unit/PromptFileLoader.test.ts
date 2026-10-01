@@ -429,6 +429,20 @@ suite("PromptFileLoader Tests", () => {
       );
     });
 
+    test("should seed no tool permission flags when the settings default is null", () => {
+      configService.setCliOverlay({
+        defaults: { toolPermissions: null },
+      });
+
+      const defaults = PromptFileLoader.populateSettingsDefaults({});
+
+      assert.deepStrictEqual(defaults.toolPermissions, {
+        mode: PERMISSION_MODES.NONE,
+        allowedTools: [],
+        deniedTools: [],
+      });
+    });
+
     test("should NOT overwrite toolPermissions when explicitly set in source", () => {
       const explicitPermissions = {
         mode: PERMISSION_MODES.CUSTOM,

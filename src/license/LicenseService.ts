@@ -57,6 +57,10 @@ export const REMOTE_ACCESS_TRIAL_START_KEY =
   "ctrlyoke.remoteAccessTrialStartedAt";
 /** Allow normal client/server clock skew without weakening the file TTL. */
 export const LICENSE_CLOCK_SKEW_MS = 5 * 60 * 1000;
+/** Background refresh cadence for long-lived extension hosts. */
+export const LICENSE_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
+/** Initial retry delay after a failed refresh within the TTL window. */
+export const LICENSE_REFRESH_RETRY_BASE_MS = 15 * 60 * 1000;
 /**
  * getEntitlement()'s in-memory cache window. Some backing SecretStores (e.g.
  * OsCredentialStore) shell out to a platform CLI per call, and getEntitlement
@@ -141,7 +145,12 @@ export interface LicenseServiceOptions {
   readonly machineFingerprint?: string | (() => Promise<string>);
   /** VS Code globalState-like store for the extension-only remote-access trial. */
   readonly trialState?: LicenseTrialStateStore;
+  /** Test seams for the owned background refresh schedule. */
+  readonly setTimeout?: typeof setTimeout;
+  readonly clearTimeout?: typeof clearTimeout;
 }
+
+type RefreshOutcome = "refreshed" | "skipped" | "failed-in-window";
 
 export interface LicenseTrialStateStore {
   get<T>(key: string): T | undefined;
@@ -225,6 +234,12 @@ export class LicenseService implements LicenseService {
   private readonly machineFingerprintOption:
     string | (() => Promise<string>) | undefined;
   private readonly trialState: LicenseTrialStateStore | undefined;
+  private readonly scheduleTimeout: typeof setTimeout;
+  private readonly cancelTimeout: typeof clearTimeout;
+  private refreshTimer: ReturnType<typeof setTimeout> | undefined;
+  private refreshInFlight: Promise<RefreshOutcome> | undefined;
+  private refreshRetryDelay = LICENSE_REFRESH_RETRY_BASE_MS;
+  private disposed = false;
   private cachedEntitlement:
     { readonly value: Entitlement; readonly expiresAt: number } | undefined;
 
@@ -239,6 +254,9 @@ export class LicenseService implements LicenseService {
     this.request = options.fetch ?? fetch;
     this.machineFingerprintOption = options.machineFingerprint;
     this.trialState = options.trialState;
+    this.scheduleTimeout = options.setTimeout ?? setTimeout;
+    this.cancelTimeout = options.clearTimeout ?? clearTimeout;
+    this.scheduleBackgroundRefresh(LICENSE_REFRESH_INTERVAL_MS);
   }
 
   async getEntitlement(): Promise<Entitlement> {
@@ -476,15 +494,37 @@ export class LicenseService implements LicenseService {
   }
 
   async refresh(): Promise<void> {
+    await this.refreshOnce();
+  }
+
+  private refreshOnce(): Promise<RefreshOutcome> {
+    if (this.refreshInFlight) {
+      return this.refreshInFlight;
+    }
+    const inFlight = this.performRefresh().then((outcome) => {
+      this.updateBackgroundSchedule(outcome);
+      return outcome;
+    });
+    this.refreshInFlight = inFlight;
+    void inFlight.then(() => {
+      if (this.refreshInFlight === inFlight) {
+        this.refreshInFlight = undefined;
+      }
+    });
+    return inFlight;
+  }
+
+  private async performRefresh(): Promise<RefreshOutcome> {
+    let inRefreshWindow = false;
     try {
       const cached = await this.readCachedLicense();
       if (!cached || cached.source !== LICENSE_SOURCES.ONLINE) {
-        return;
+        return "skipped";
       }
 
       const key = await this.secretStore.get(LICENSE_KEY_SECRET_KEY);
       if (!key) {
-        return;
+        return "skipped";
       }
 
       const verified = await this.verifyCachedLicense(
@@ -498,14 +538,15 @@ export class LicenseService implements LicenseService {
         now < ttlExpiry - LICENSE_REFRESH_LEAD_MS ||
         now > ttlExpiry + LICENSE_OFFLINE_GRACE_MS
       ) {
-        return;
+        return "skipped";
       }
 
       const licenseId = verified.entitlement.licenseId;
       if (!licenseId) {
-        return;
+        return "skipped";
       }
 
+      inRefreshWindow = true;
       const blob = await this.checkoutLicense(key, licenseId);
       const refreshed = await this.verifyCachedLicense(
         blob,
@@ -519,10 +560,44 @@ export class LicenseService implements LicenseService {
       );
       await this.secretStore.store(LICENSE_ID_SECRET_KEY, licenseId);
       this.setEntitlement(refreshed.entitlement);
+      return "refreshed";
     } catch {
       // Refresh is deliberately best-effort. The signed cache and offline grace
       // continue to protect a paying user during a connectivity outage.
+      return inRefreshWindow ? "failed-in-window" : "skipped";
     }
+  }
+
+  private scheduleBackgroundRefresh(delay: number): void {
+    if (this.disposed) {
+      return;
+    }
+    this.refreshTimer = this.scheduleTimeout(() => {
+      this.refreshTimer = undefined;
+      void this.refreshOnce();
+    }, delay);
+    this.refreshTimer.unref?.();
+  }
+
+  private updateBackgroundSchedule(outcome: RefreshOutcome): void {
+    if (this.disposed) {
+      return;
+    }
+    if (this.refreshTimer !== undefined) {
+      this.cancelTimeout(this.refreshTimer);
+      this.refreshTimer = undefined;
+    }
+    if (outcome === "failed-in-window") {
+      const retryDelay = this.refreshRetryDelay;
+      this.refreshRetryDelay = Math.min(
+        this.refreshRetryDelay * 2,
+        LICENSE_REFRESH_INTERVAL_MS
+      );
+      this.scheduleBackgroundRefresh(retryDelay);
+      return;
+    }
+    this.refreshRetryDelay = LICENSE_REFRESH_RETRY_BASE_MS;
+    this.scheduleBackgroundRefresh(LICENSE_REFRESH_INTERVAL_MS);
   }
 
   async activateWithSignIn?(): Promise<Entitlement> {
@@ -541,6 +616,11 @@ export class LicenseService implements LicenseService {
   }
 
   dispose(): void {
+    this.disposed = true;
+    if (this.refreshTimer !== undefined) {
+      this.cancelTimeout(this.refreshTimer);
+      this.refreshTimer = undefined;
+    }
     this.changes.dispose();
   }
 

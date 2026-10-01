@@ -48,6 +48,7 @@ const execFileAsync = promisify(execFile);
 // against truly pathological diffs (e.g. generated files, minified bundles).
 export const MAX_DIFF_BYTES = 750 * 1024;
 const GIT_DIFF_MAX_BUFFER = 100 * 1024 * 1024;
+const BINARY_DETECTION_BYTES = 8 * 1024;
 const COMMIT_MESSAGE_MCP_TOOL = MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME;
 const COMMIT_MESSAGE_LINEAGE_POINTER = ".commit-message-lineage.json";
 const COMMIT_MESSAGE_WORKFLOW_NAME = "commit-message-generation";
@@ -103,6 +104,36 @@ export interface DiffResult {
 
 export function getMaxDiffSizeLabel(): string {
   return `${Math.floor(MAX_DIFF_BYTES / 1024)} KB`;
+}
+
+function truncateUtf8(value: string, maxBytes: number): string {
+  const buffer = Buffer.from(value, "utf8");
+  if (buffer.length <= maxBytes) {
+    return value;
+  }
+  let truncated = buffer.subarray(0, maxBytes).toString("utf8");
+  while (Buffer.byteLength(truncated, "utf8") > maxBytes) {
+    truncated = truncated.slice(0, -1);
+  }
+  return truncated;
+}
+
+async function readFilePrefix(
+  filePath: string,
+  maxBytes: number,
+  position = 0
+): Promise<Buffer> {
+  if (maxBytes <= 0) {
+    return Buffer.alloc(0);
+  }
+  const handle = await fs.open(filePath, "r");
+  try {
+    const buffer = Buffer.allocUnsafe(maxBytes);
+    const { bytesRead } = await handle.read(buffer, 0, maxBytes, position);
+    return buffer.subarray(0, bytesRead);
+  } finally {
+    await handle.close();
+  }
 }
 
 export function buildCommitMessagePrompt(
@@ -187,21 +218,26 @@ export class CommitMessageGenerator {
     private readonly runnerHostIdentity?: RunnerHostIdentity
   ) {}
 
-  async getDiff(cwd: string): Promise<DiffResult | null> {
+  async getDiff(
+    cwd: string,
+    options: { includeUnstaged?: boolean } = {}
+  ): Promise<DiffResult | null> {
     // Primary: staged changes
     const stagedCommand = "git diff --cached";
+    let stagedDiff = "";
     try {
-      const { stdout: stagedDiff } = await execFileAsync(
+      const result = await execFileAsync(
         "git",
         ["diff", "--cached"],
         { cwd, encoding: "utf8", maxBuffer: GIT_DIFF_MAX_BUFFER }
       );
-      if (stagedDiff.trim()) {
-        const truncated = stagedDiff.length > MAX_DIFF_BYTES;
+      stagedDiff = result.stdout;
+      if (stagedDiff.trim() && !options.includeUnstaged) {
+        const diff = truncateUtf8(stagedDiff, MAX_DIFF_BYTES);
         return {
-          diff: stagedDiff.slice(0, MAX_DIFF_BYTES),
+          diff,
           staged: true,
-          truncated,
+          truncated: Buffer.byteLength(stagedDiff, "utf8") > MAX_DIFF_BYTES,
           commands: [stagedCommand],
           includesUntrackedFiles: false,
         };
@@ -213,17 +249,74 @@ export class CommitMessageGenerator {
     }
 
     // Fallback: unstaged tracked + untracked files
-    const parts: string[] = [];
-    const commands = [stagedCommand, "git diff"];
+    let diff = "";
+    let usedBytes = 0;
+    let truncated = false;
+    const append = (part: string): void => {
+      const remaining = MAX_DIFF_BYTES - usedBytes;
+      if (remaining <= 0) {
+        truncated = true;
+        return;
+      }
+      const bounded = truncateUtf8(part, remaining);
+      diff += bounded;
+      usedBytes += Buffer.byteLength(bounded, "utf8");
+      if (Buffer.byteLength(part, "utf8") > Buffer.byteLength(bounded, "utf8")) {
+        truncated = true;
+      }
+    };
+    const commands = [
+      stagedCommand,
+      options.includeUnstaged ? "git diff HEAD" : "git diff",
+    ];
     let includesUntrackedFiles = false;
+    let hasStagedChanges = false;
     try {
-      const { stdout: trackedDiff } = await execFileAsync("git", ["diff"], {
-        cwd,
-        encoding: "utf8",
-        maxBuffer: GIT_DIFF_MAX_BUFFER,
-      });
-      if (trackedDiff.trim()) {
-        parts.push(trackedDiff);
+      if (stagedDiff.trim()) {
+        hasStagedChanges = true;
+      }
+      if (options.includeUnstaged) {
+        try {
+          const { stdout: headDiff } = await execFileAsync(
+            "git",
+            ["diff", "HEAD"],
+            { cwd, encoding: "utf8", maxBuffer: GIT_DIFF_MAX_BUFFER }
+          );
+          if (headDiff.trim()) {
+            append(headDiff);
+          }
+        } catch (error) {
+          const stderr =
+            typeof error === "object" && error !== null && "stderr" in error
+              ? String(error.stderr)
+              : "";
+          if (!/ambiguous argument 'HEAD'|unknown revision.*HEAD/i.test(stderr)) {
+            throw error;
+          }
+          commands.push("git diff");
+          // An unborn repository has no HEAD comparison; combine its staged
+          // additions with the regular unstaged diff instead.
+          if (stagedDiff.trim()) {
+            append(stagedDiff);
+          }
+          const { stdout: trackedDiff } = await execFileAsync("git", ["diff"], {
+            cwd,
+            encoding: "utf8",
+            maxBuffer: GIT_DIFF_MAX_BUFFER,
+          });
+          if (trackedDiff.trim()) {
+            append(trackedDiff);
+          }
+        }
+      } else {
+        const { stdout: trackedDiff } = await execFileAsync("git", ["diff"], {
+          cwd,
+          encoding: "utf8",
+          maxBuffer: GIT_DIFF_MAX_BUFFER,
+        });
+        if (trackedDiff.trim()) {
+          append(trackedDiff);
+        }
       }
     } catch (error) {
       if (!isNotGitRepositoryError(error)) {
@@ -241,17 +334,54 @@ export class CommitMessageGenerator {
       const untrackedFiles = parseGitNulSeparatedPaths(untrackedOut);
       includesUntrackedFiles = untrackedFiles.length > 0;
       for (const filePath of untrackedFiles) {
+        const remaining = MAX_DIFF_BYTES - usedBytes;
+        if (remaining <= 0) {
+          truncated = true;
+          break;
+        }
         try {
-          const content = await fs.readFile(path.join(cwd, filePath), "utf8");
-          const lines = content.split("\n");
-          parts.push(
-            `diff --git a/${filePath} b/${filePath}\n` +
-              `new file mode 100644\n` +
-              `--- /dev/null\n` +
-              `+++ b/${filePath}\n` +
-              `@@ -0,0 +1,${lines.length} @@\n` +
-              lines.map((l) => `+${l}`).join("\n")
+          const absolutePath = path.join(cwd, filePath);
+          const stat = await fs.lstat(absolutePath);
+          if (!stat.isFile()) {
+            continue;
+          }
+
+          const header = `diff --git a/${filePath} b/${filePath}\n`;
+          const binaryHeader = `${header}new file mode 100644\nBinary file b/${filePath} added\n`;
+          const sample = await readFilePrefix(
+            absolutePath,
+            Math.min(BINARY_DETECTION_BYTES, remaining)
           );
+          if (sample.includes(0)) {
+            append(binaryHeader);
+            continue;
+          }
+
+          const fileBudget = Math.max(0, remaining - Buffer.byteLength(header, "utf8"));
+          if (fileBudget === 0) {
+            append(header);
+            truncated = true;
+            break;
+          }
+          const restBuffer = await readFilePrefix(
+            absolutePath,
+            Math.max(0, fileBudget - sample.length),
+            sample.length
+          );
+          const contentBuffer = Buffer.concat([sample, restBuffer]);
+          const content = contentBuffer.toString("utf8");
+          const lines = content.split("\n");
+          const prefix =
+            `${header}new file mode 100644\n` +
+            `--- /dev/null\n` +
+            `+++ b/${filePath}\n` +
+            `@@ -0,0 +1,${lines.length} @@\n`;
+          append(prefix);
+          append(lines.map((line) => `+${line}`).join("\n"));
+          if (contentBuffer.length < stat.size || usedBytes >= MAX_DIFF_BYTES) {
+            truncated = true;
+            break;
+          }
         } catch {
           // skip unreadable files
         }
@@ -262,14 +392,12 @@ export class CommitMessageGenerator {
       }
     }
 
-    const combined = parts.join("\n");
-    if (!combined.trim()) {
+    if (!diff.trim()) {
       return null;
     }
-    const truncated = combined.length > MAX_DIFF_BYTES;
     return {
-      diff: combined.slice(0, MAX_DIFF_BYTES),
-      staged: false,
+      diff,
+      staged: hasStagedChanges,
       truncated,
       commands,
       includesUntrackedFiles,

@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "steps": [{ "prompt": "Run fixture" }],
+  "_runtime": {
+    "schemaVersion": 2,
+    "lastActivityAt": 1700000000000,
+    "currentIndex": 0,
+    "executionState": "completed"
+  }
+}

@@ -4,11 +4,55 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
 import {
+  CliProcessManager,
+  SpawnOptions,
+  SpawnResult,
+} from "../../utils/CliProcessManager";
+import {
   resolveScriptInvocation,
   ScriptProcessRunner,
 } from "../../core/orchestration/ScriptProcessRunner";
 
 suite("ScriptProcessRunner", () => {
+  test("reports an unrequested signal death as a script failure", async () => {
+    class SignalledProcessManager
+      implements Pick<CliProcessManager, "spawn" | "cancel" | "dispose">
+    {
+      async spawn(
+        _command: string,
+        _args: string[],
+        _options?: SpawnOptions
+      ): Promise<SpawnResult> {
+        return {
+          stdout: "",
+          stderr: "",
+          exitCode: 1,
+          terminationSignal: "SIGKILL",
+          terminatedByManager: false,
+        };
+      }
+
+      async cancel(): Promise<void> {}
+
+      dispose(): void {}
+    }
+
+    const runner = new ScriptProcessRunner(
+      process.cwd(),
+      new SignalledProcessManager()
+    );
+    const result = await runner.run({
+      cwd: process.cwd(),
+      timeout: 1000,
+      argv: [process.execPath, "-e", "process.kill(process.pid, 'SIGKILL')"],
+    });
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.cancelled, undefined);
+    assert.strictEqual(result.exitCode, 1);
+    assert.match(result.error ?? "", /SIGKILL/);
+  });
+
   test("isolates timeout and cancellation state between runners", async () => {
     const root = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-script-runner-")
@@ -51,7 +95,7 @@ suite("ScriptProcessRunner", () => {
     }
   });
 
-  test("dispose kills a shell command's child process tree promptly", async () => {
+  test("cancel kills a shell command's child process tree promptly", async () => {
     const root = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-script-runner-cancel-")
     );
@@ -70,7 +114,7 @@ suite("ScriptProcessRunner", () => {
         windowsVerbatimArguments: invocation.windowsVerbatimArguments,
       });
       await new Promise((resolve) => setTimeout(resolve, 250));
-      runner.dispose();
+      await runner.cancel();
       const result = await resultPromise;
 
       assert.ok(Date.now() - startedAt < 4000);

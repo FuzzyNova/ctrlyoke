@@ -4,6 +4,14 @@ import {
   substituteConditionOutputRefs,
   type ConditionOutputContext,
 } from "../../core/ConditionOutputRefs";
+import {
+  fenceLiteral,
+  LITERAL_FENCE_INFO,
+  parseAtReferences,
+  parseAllFileReferences,
+  parseInlinePriorContextRefs,
+} from "../../utils/FileReferenceParser";
+import { parseSecretReferences } from "../../utils/SecretReferenceParser";
 import type { ConditionEvaluationSummary } from "../../types/CtrlYokeTypes";
 import {
   RETRY_PROMPT_PLACEHOLDERS,
@@ -165,5 +173,46 @@ suite("Condition output references", () => {
 
     assert.strictEqual(result.text, `price${token}`);
     assert.deepStrictEqual(result.unresolved, []);
+  });
+
+  test("keeps condition output inert after an unpaired backtick run in prose", () => {
+    const authoredPrompt =
+      "Wrap code in ``` fences. Output: $endCondition:stdout done";
+    const result = substituteConditionOutputRefs(
+      authoredPrompt,
+      {
+        endCondition: {
+          ...endCondition,
+          stdout: "see !CI_TOKEN and @src/a.ts",
+        },
+      },
+      (value, source) =>
+        `\n${fenceLiteral(value, LITERAL_FENCE_INFO, source)}\n`
+    );
+
+    assert.ok(result.text.includes("\n```` text\n"));
+    assert.deepStrictEqual(parseSecretReferences(result.text), []);
+    assert.deepStrictEqual(parseAtReferences(result.text), []);
+    assert.deepStrictEqual(parseAllFileReferences(result.text), []);
+  });
+
+  test("keeps condition output inert when it contains a fence after an authored stray fence", () => {
+    const authoredPrompt =
+      "Wrap code in ``` fences. Output: $endCondition:stdout done";
+    const result = substituteConditionOutputRefs(
+      authoredPrompt,
+      {
+        endCondition: {
+          ...endCondition,
+          stdout: "a\n```\nsee !CI_TOKEN and @src/a.ts $previous",
+        },
+      },
+      (value, source) =>
+        `\n${fenceLiteral(value, LITERAL_FENCE_INFO, source)}\n`
+    );
+
+    assert.deepStrictEqual(parseSecretReferences(result.text), []);
+    assert.deepStrictEqual(parseAtReferences(result.text), []);
+    assert.deepStrictEqual(parseInlinePriorContextRefs(result.text), []);
   });
 });

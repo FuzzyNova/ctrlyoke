@@ -983,6 +983,15 @@ export class CtrlYokeHostedServer
     });
     // Register static files after the explicit HTML entry route so /index.html
     // receives the same token check and hosted-page patching as /.
+    const isWindows = process.platform === "win32";
+    const protectedStaticPaths = new Set(
+      [
+        path.resolve(webviewDist, "index.html"),
+        path.resolve(webviewDist, "favicon.svg"),
+      ].map((protectedPath) =>
+        isWindows ? protectedPath.toLowerCase() : protectedPath
+      )
+    );
     this.app.use(
       (req, res, next) => {
         let decodedPath = req.path;
@@ -995,14 +1004,34 @@ export class CtrlYokeHostedServer
         } catch {
           return next();
         }
-        const normalizedPath = path.posix.normalize(`/${decodedPath}`);
-        const staticPath = normalizedPath.toLowerCase();
-        const isProtectedHtmlPath = /^\/index(?:~\d+)?\.html?(?::.*)?$/.test(
-          staticPath
-        );
+        // express.static resolves the decoded request path with the platform
+        // path implementation. Mirror that resolution here so separators and
+        // dot segments cannot make a protected file look like another path.
+        const resolvedPath = path.resolve(webviewDist, `.${decodedPath}`);
+        const comparisonPath = isWindows
+          ? resolvedPath.toLowerCase()
+          : resolvedPath;
+        const protectsResolvedPath = protectedStaticPaths.has(comparisonPath);
+        const resolvedDirectory = path.dirname(resolvedPath);
+        const comparisonDirectory = isWindows
+          ? resolvedDirectory.toLowerCase()
+          : resolvedDirectory;
+        const comparisonWebviewDist = isWindows
+          ? webviewDist.toLowerCase()
+          : webviewDist;
+        const isWebviewRootFile = comparisonDirectory === comparisonWebviewDist;
+        const staticPath = path.basename(resolvedPath).toLowerCase();
+        const isProtectedHtmlPath =
+          isWebviewRootFile &&
+          /^index(?:~\d+)?\.html?(?::.*)?$/.test(staticPath);
         const isProtectedFaviconPath =
-          /^\/(?:favicon|favico~\d+)\.svg(?::.*)?$/.test(staticPath);
-        if (isProtectedHtmlPath || isProtectedFaviconPath) {
+          isWebviewRootFile &&
+          /^(?:favicon|favico~\d+)\.svg(?::.*)?$/.test(staticPath);
+        if (
+          protectsResolvedPath ||
+          isProtectedHtmlPath ||
+          isProtectedFaviconPath
+        ) {
           return res.sendStatus(404);
         }
         return next();

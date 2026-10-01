@@ -11,6 +11,7 @@ import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import {
   COMPLETION_NOTIFICATION_SEVERITY,
   OUTPUT_TABS,
+  SEARCH_HISTORY_ERROR_CODES,
 } from "@root/types/DashboardConstants";
 
 const { handleCompletionNotificationEventMock } = vi.hoisted(() => ({
@@ -2938,6 +2939,26 @@ describe("history search messages", () => {
     });
 
     expect(useUiStore.getState().isHistorySearchOpen).toBe(true);
+  });
+
+  it("clears the loading state when a regex times out", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      useUiStore.getState().setHistorySearchQuery("(a+)+$");
+      useUiStore.getState().setHistorySearchRegex(true);
+      useUiStore.getState().setHistorySearchResults([], true);
+      dispatch(MESSAGE_TYPES.SEARCH_HISTORY_ERROR, {
+        query: "(a+)+$",
+        regex: true,
+        code: SEARCH_HISTORY_ERROR_CODES.REGEX_TIMEOUT,
+        pattern: "(a+)+$",
+        message: "Regex timed out",
+      });
+    });
+
+    expect(useUiStore.getState().historySearchLoading).toBe(false);
+    expect(useUiStore.getState().historySearchError).toBe("Regex timed out");
   });
 
   it("applies matching search results and ignores stale queries", () => {

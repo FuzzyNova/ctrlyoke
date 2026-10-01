@@ -357,6 +357,30 @@ describe("EditorSection", () => {
     expect(screen.queryByRole("status", { name: /Replying to/ })).toBeNull();
   });
 
+  it("hides the reply banner for script drafts and restores it for prompt drafts", () => {
+    const sessionId = "3f2a9c1e-1234-4567-89ab-cdef01234567";
+    useEditorStore.getState().startReplyToStep({
+      properties: { ...useEditorStore.getState().properties },
+      sessionId,
+      harness: HARNESS_IDS.CLAUDE_CLI,
+      sourceLabel: "Step 3",
+    });
+
+    render(<EditorSection />);
+    expect(
+      screen.getByRole("status", { name: /Replying to/ })
+    ).toBeInTheDocument();
+
+    act(() => useEditorStore.getState().setStepType(STEP_TYPES.SCRIPT));
+    expect(screen.queryByRole("status", { name: /Replying to/ })).toBeNull();
+    expect(useEditorStore.getState().replyContext?.sessionId).toBe(sessionId);
+
+    act(() => useEditorStore.getState().setStepType(STEP_TYPES.PROMPT));
+    expect(
+      screen.getByRole("status", { name: /Replying to/ })
+    ).toBeInTheDocument();
+  });
+
   it("Cancel restores the draft properties and clears the reply banner", () => {
     const store = useEditorStore.getState();
     store.setProperty(PROMPT_PROPERTIES.MODEL, "draft-model");

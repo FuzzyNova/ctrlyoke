@@ -50,6 +50,8 @@ export interface HistoryClearPreview {
 export interface HistoryTrashRestoreResult {
   restoredLineages: number;
   restoredRuns: number;
+  /** Lineages whose history was restored. */
+  restoredWorkflowKeys: WorkflowKey[];
   /** Paths that could not go back because something now occupies them. */
   conflicts: string[];
 }

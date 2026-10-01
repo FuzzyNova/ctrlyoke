@@ -1,6 +1,9 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { createReferencePatterns } from "../../utils/ReferencePatterns";
+import {
+  createInlinePriorContextReferencePattern,
+  createReferencePatterns,
+} from "../../utils/ReferencePatterns";
 
 /** Collect capture group 1 for every match of `pattern` in `text`. */
 function paths(pattern: RegExp, text: string): string[] {
@@ -19,10 +22,27 @@ suite("ReferencePatterns", () => {
   });
 
   suite("fullFile", () => {
+    test("decorates Windows drive paths in slash and backslash forms", () => {
+      const { fullFile } = createReferencePatterns();
+      assert.deepStrictEqual(
+        paths(
+          fullFile,
+          "@C:/x/a.ts @C:\\x\\a.ts @C:/x/a.ts:10 @C:/x/a.ts:10-20"
+        ),
+        ["C:/x/a.ts", "C:\\x\\a.ts", "C:/x/a.ts", "C:/x/a.ts"]
+      );
+    });
     test("matches an ordinary unquoted path", () => {
       const { fullFile } = createReferencePatterns();
       assert.deepStrictEqual(paths(fullFile, "see @src/foo.ts here"), [
         "src/foo.ts",
+      ]);
+    });
+
+    test("decorates paths containing a hash the same way runtime parses them", () => {
+      const { fullFile } = createReferencePatterns();
+      assert.deepStrictEqual(paths(fullFile, "@src/C#/a.cs"), [
+        "src/C#/a.cs",
       ]);
     });
 
@@ -74,6 +94,14 @@ suite("ReferencePatterns", () => {
         "docs/résumé.日本語",
       ]);
     });
+  });
+
+  test("leaves prose colons after bare prior-context references", () => {
+    const regex = createInlinePriorContextReferencePattern();
+    assert.deepStrictEqual(
+      [..."Here is $previous: fix it".matchAll(regex)].map((match) => match[0]),
+      ["$previous"]
+    );
   });
 
   suite("directory", () => {

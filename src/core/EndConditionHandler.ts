@@ -13,6 +13,7 @@ import {
   type RetryKind,
 } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
+import { formatRetryDenominator } from "../utils/LimitUtils";
 import {
   EndConditionEvaluator,
   EvaluationResult,
@@ -27,6 +28,10 @@ import { StatusMessageReporter } from "./orchestration/StatusMessageReporter";
 import { PropertyResolver } from "../utils/PropertyResolver";
 import { reportEndConditionEvaluated } from "../utils/TelemetryEvents";
 import { formatComparison } from "../utils/ScriptComparison";
+import {
+  fenceLiteral,
+  LITERAL_FENCE_INFO,
+} from "../utils/FileReferenceParser";
 
 /**
  * The `Expected:` / `Actual:` pair every end-condition failure message shows.
@@ -360,6 +365,7 @@ export class EndConditionHandler {
       retryKind === RETRY_KINDS.PASS
         ? this.buildPassRetryPrompt(prompt)
         : this.buildRetryPrompt(prompt, evaluationResult);
+    const retryDenominator = formatRetryDenominator(maxRetries);
 
     retryContext.runtime.scheduleRetry(
       retryContext.attemptTarget,
@@ -370,8 +376,8 @@ export class EndConditionHandler {
 
     Log.info(
       retryKind === RETRY_KINDS.PASS
-        ? `End condition passed, re-running (pass retry ${currentRetry}/${maxRetries})...`
-        : `Validation failed, retrying (attempt ${currentRetry}/${maxRetries})...`
+        ? `End condition passed, re-running (pass retry ${currentRetry}/${retryDenominator})...`
+        : `Validation failed, retrying (attempt ${currentRetry}/${retryDenominator})...`
     );
 
     const hasQueueStep =
@@ -383,8 +389,8 @@ export class EndConditionHandler {
       const ellipsis = retryPromptText.length > 60 ? "..." : "";
       const statusMessage =
         retryKind === RETRY_KINDS.PASS
-          ? `Re-running Prompt ${currentIndex + 1} (Pass retry ${currentRetry}/${maxRetries}): ${retryPromptPreview}${ellipsis}`
-          : `Retrying Prompt ${currentIndex + 1} (Attempt ${currentRetry}/${maxRetries}): ${retryPromptPreview}${ellipsis}`;
+          ? `Re-running Prompt ${currentIndex + 1} (Pass retry ${currentRetry}/${retryDenominator}): ${retryPromptPreview}${ellipsis}`
+          : `Retrying Prompt ${currentIndex + 1} (Attempt ${currentRetry}/${retryDenominator}): ${retryPromptPreview}${ellipsis}`;
       this.statusMessageReporter.report(
         {
           kind: FINAL_STEP_PHASES.QUEUE,
@@ -528,7 +534,13 @@ export class EndConditionHandler {
         prompt.endCondition,
         evaluationResult
       );
-      return `The previous task validation failed. Expected: ${expected}, but got: ${actual}\n\nScript output:\n${evaluationResult.stdout}\n\nPlease fix the issues and try again.`;
+      return [
+        "The previous task validation failed.",
+        `Expected:\n${fenceLiteral(expected, LITERAL_FENCE_INFO)}`,
+        `Actual:\n${fenceLiteral(actual, LITERAL_FENCE_INFO)}`,
+        `Script output:\n${fenceLiteral(evaluationResult.stdout, LITERAL_FENCE_INFO)}`,
+        "Please fix the issues and try again.",
+      ].join("\n\n");
     }
 
     return retryPromptTemplate;
