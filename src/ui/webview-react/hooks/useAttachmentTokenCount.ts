@@ -11,6 +11,9 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { MESSAGE_TYPES } from "../types/messages";
 import { countTokens } from "../utils/tokenizer";
 import { sendMessage } from "./useMessageHandler";
+import { useUiStore } from "@store/uiStore";
+import { workflowViewAddressKey } from "@utils/viewAddress";
+import { decodePriorContextTokenRef } from "@root/utils/FileReferenceParser";
 import {
   parseAtReferences,
   parseSelectionReferences,
@@ -31,7 +34,9 @@ const attachmentTokenCache = new Map<string, number>();
 const pendingRequests = new Set<string>();
 
 /** Registered callbacks to invoke when new counts arrive */
-const countUpdateCallbacks = new Set<() => void>();
+const countUpdateCallbacks = new Set<
+  (counts: Record<string, number>) => void
+>();
 
 /**
  * Delay before requesting counts for newly-seen references. Typing a long path
@@ -59,14 +64,16 @@ function ensureGlobalListener(): void {
     let changed = false;
 
     for (const [ref, count] of Object.entries(counts)) {
-      attachmentTokenCache.set(ref, count);
+      // Prior-context counts depend on the displayed run's output. They are
+      // delivered to the current hook instances but never persisted globally.
+      if (!decodePriorContextTokenRef(ref)) attachmentTokenCache.set(ref, count);
       pendingRequests.delete(ref);
       changed = true;
     }
 
     if (changed) {
       // Notify all registered hooks to re-compute their totals
-      countUpdateCallbacks.forEach((cb) => cb());
+      countUpdateCallbacks.forEach((cb) => cb(counts));
     }
   });
 }
@@ -138,17 +145,39 @@ export function useAttachmentTokenCount(
 ): number {
   ensureGlobalListener();
 
-  const [, forceUpdate] = useState(0);
-  const callbackRef = useRef<() => void>(() => {});
+  const displayedViewAddress = useUiStore((state) => state.displayedViewAddress);
+  const viewKey = displayedViewAddress
+    ? workflowViewAddressKey(displayedViewAddress)
+    : "draft";
+
+  const [priorContextCounts, setPriorContextCounts] = useState<{
+    viewKey: string;
+    counts: Record<string, number>;
+  }>({ viewKey, counts: {} });
+  const callbackRef = useRef<(counts: Record<string, number>) => void>(() => {});
 
   // Keep callback ref up-to-date
   useEffect(() => {
-    callbackRef.current = () => forceUpdate((n) => n + 1);
+    callbackRef.current = (counts) => {
+      const priorCounts = Object.fromEntries(
+        Object.entries(counts).filter(([ref]) => decodePriorContextTokenRef(ref))
+      );
+      if (Object.keys(priorCounts).length > 0) {
+        setPriorContextCounts((current) => ({
+          viewKey,
+          counts: {
+            ...(current.viewKey === viewKey ? current.counts : {}),
+            ...priorCounts,
+          },
+        }));
+      }
+    };
   });
 
   // Register/unregister a stable callback wrapper
   useEffect(() => {
-    const cb = (): void => callbackRef.current();
+    const cb = (counts: Record<string, number>): void =>
+      callbackRef.current(counts);
     countUpdateCallbacks.add(cb);
     return () => {
       countUpdateCallbacks.delete(cb);
@@ -162,20 +191,20 @@ export function useAttachmentTokenCount(
     [promptText, stepCount]
   );
 
-  // Request uncached references, debounced. Filtering happens when the timer
-  // fires (not when it's scheduled) so anything another editor cached during
-  // the debounce window is skipped.
+  // Ordinary references are cached. Prior-context references are always
+  // requested for the current view because their output changes across runs.
   useEffect(() => {
     if (refs.length === 0) return;
 
     const timer = setTimeout(() => {
-      const uncached = refs.filter(
-        (ref) => !attachmentTokenCache.has(ref) && !pendingRequests.has(ref)
-      );
+      const uncached = refs.filter((ref) => {
+        if (decodePriorContextTokenRef(ref)) return true;
+        return !attachmentTokenCache.has(ref) && !pendingRequests.has(ref);
+      });
       if (uncached.length === 0) return;
 
       for (const ref of uncached) {
-        pendingRequests.add(ref);
+        if (!decodePriorContextTokenRef(ref)) pendingRequests.add(ref);
       }
 
       sendMessage(MESSAGE_TYPES.REQUEST_ATTACHMENT_TOKEN_COUNTS, {
@@ -184,15 +213,20 @@ export function useAttachmentTokenCount(
     }, REFERENCE_REQUEST_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [refs]);
+  }, [refs, viewKey]);
 
   // Raw prompt tokens are re-encoded only when the text actually changes, not on
   // every unrelated re-render (e.g. an incoming cached-count notification).
   const rawTokens = useMemo(() => countTokens(promptText), [promptText]);
 
-  // Total: raw prompt tokens + cached attachment tokens.
+  // Total: raw prompt tokens + cached attachments + view-scoped prior context.
   const attachmentTokens = refs.reduce((sum, ref) => {
-    return sum + (attachmentTokenCache.get(ref) ?? 0);
+    const priorCount = decodePriorContextTokenRef(ref)
+      ? priorContextCounts.viewKey === viewKey
+        ? priorContextCounts.counts[ref]
+        : undefined
+      : undefined;
+    return sum + (priorCount ?? attachmentTokenCache.get(ref) ?? 0);
   }, 0);
 
   return rawTokens + attachmentTokens;

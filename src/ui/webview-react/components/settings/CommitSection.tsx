@@ -88,7 +88,10 @@ export function CommitSection({
     )?.workflowName;
     ui.closeGlobalSettings();
     ui.setOutputCollapsed(false);
-    ui.setActiveOutputTab(record.workflowKey, OUTPUT_TABS.OUTPUT);
+    ui.forceOutputTabForWorkflow(
+      record.workflowKey as WorkflowViewAddress["workflowKey"],
+      OUTPUT_TABS.OUTPUT
+    );
     navigateToWorkflowAddress(getVsCodeApi(), address, targetWorkflowName);
   };
   const generationStatus = lastCommitMessageGeneration

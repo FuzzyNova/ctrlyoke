@@ -94,6 +94,12 @@ describe("CommitSection", () => {
   });
 
   it("navigates to the persisted generation output", () => {
+    useUiStore.getState().setLoadedWorkflows([
+      {
+        id: "commit-generation-instance",
+        workflowKey: "commit-message-generation-20260824-120000",
+      } as never,
+    ]);
     render(
       <CommitSection
         settings={createSettings()}
@@ -123,10 +129,9 @@ describe("CommitSection", () => {
     expect(useUiStore.getState().globalSettingsOpen).toBe(false);
     expect(useUiStore.getState().outputCollapsed).toBe(false);
     expect(
-      useUiStore.getState().activeOutputTabs[
-        "commit-message-generation-20260824-120000"
-      ]
+      useUiStore.getState().activeOutputTabs["commit-generation-instance"]
     ).toBe("output");
+    expect(useUiStore.getState().pendingOutputTabs).toEqual([]);
     expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.LOAD_RUN_VIEW,
       address: {
