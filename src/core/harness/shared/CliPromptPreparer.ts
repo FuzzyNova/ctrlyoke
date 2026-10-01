@@ -617,11 +617,10 @@ export class CliPromptPreparer {
     const stepNumber = workflowContext
       ? workflowContext.promptIndex + 1
       : undefined;
-    // TempFileManager uses second-resolution names. One timestamp keeps the
-    // planned paths byte-for-byte identical to the files applied below. The
-    // plan ID separates concurrent plans with the same workflow and step.
-    const timestamp = Math.floor(Date.now() / 1000);
-    const planId = crypto.randomUUID();
+    // One plan ID keeps the planned paths byte-for-byte identical to the
+    // files applied below and separates concurrent plans with the same
+    // workflow and step.
+    const planId = TempFileManager.createPlanId();
 
     const formatTempRef = (plannedPath: string): string =>
       this.deps.formatTempFileRef(tempMgr, plannedPath);
@@ -654,7 +653,6 @@ export class CliPromptPreparer {
           filePath,
           stepNumber,
           partNumber,
-          timestamp,
           planId
         );
         const reference = formatTempRef(plannedPath);
@@ -808,7 +806,6 @@ export class CliPromptPreparer {
         filePath,
         stepNumber,
         partNumber,
-        timestamp,
         planId
       );
       const reference = formatTempRef(promptPath);
