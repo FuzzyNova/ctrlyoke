@@ -46,7 +46,9 @@ function renderModel(
         },
       } as OutputMessage)
     : undefined;
-  const messages = outputMessage ? [...allMessages, outputMessage] : allMessages;
+  const messages = outputMessage
+    ? [...allMessages, outputMessage]
+    : allMessages;
   return renderHook(() =>
     useOutputMinimapModel({
       allMessages: messages,
@@ -58,7 +60,9 @@ function renderModel(
       hiddenTargetKeys: ["queue:2"],
       historyOutputs: null,
       isViewingHistory: false,
-      lastCliIndexPerStep: outputMessage ? new Map([["queue:2", 1]]) : new Map(),
+      lastCliIndexPerStep: outputMessage
+        ? new Map([["queue:2", 1]])
+        : new Map(),
       onOpenMinimapDialog: vi.fn(),
       outputFontSize: 14,
       rowLayout: {

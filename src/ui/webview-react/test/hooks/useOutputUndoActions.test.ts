@@ -164,9 +164,10 @@ describe("useOutputUndoActions", () => {
 
     const opening = result.current.handlePromptViewMeta(target, promptUndo);
     const request = postMessage.mock.calls[0]?.[0] as
-      | { type: string; requestId: string }
-      | undefined;
-    expect(request?.type).toBe(MESSAGE_TYPES.REQUEST_WORKSPACE_SNAPSHOT_CONTENT);
+      { type: string; requestId: string } | undefined;
+    expect(request?.type).toBe(
+      MESSAGE_TYPES.REQUEST_WORKSPACE_SNAPSHOT_CONTENT
+    );
     act(() => {
       window.dispatchEvent(
         new MessageEvent("message", {
@@ -181,7 +182,9 @@ describe("useOutputUndoActions", () => {
     });
     await act(async () => opening);
 
-    expect(result.current.minimapDialogState?.input?.snapshotOnlyFiles[0]).toMatchObject({
+    expect(
+      result.current.minimapDialogState?.input?.snapshotOnlyFiles[0]
+    ).toMatchObject({
       contentToRestore: "original deleted file",
     });
     expect(

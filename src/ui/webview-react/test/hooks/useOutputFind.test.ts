@@ -3,7 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FINAL_STEP_PHASES } from "@/types/messages";
 import { useOutputFind } from "@hooks/useOutputFind";
 import type { OutputRenderRow } from "@utils/outputRows";
-import { CLI_EVENT_TYPES, OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  OUTPUT_ROW_KINDS,
+} from "@root/types/DashboardConstants";
 
 const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
 

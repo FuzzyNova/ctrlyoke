@@ -155,7 +155,11 @@ export class UndoRedoCoordinator {
       files.map(async (file) => {
         if (file.action !== UNDO_FILE_ACTIONS.RESTORE_CONTENT) return file;
         let content:
-          | Awaited<ReturnType<WorkflowOrchestrator["getWorkspaceSnapshotFileContent"]>>
+          | Awaited<
+              ReturnType<
+                WorkflowOrchestrator["getWorkspaceSnapshotFileContent"]
+              >
+            >
           | undefined;
         try {
           content = await orchestrator?.getWorkspaceSnapshotFileContent(

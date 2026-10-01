@@ -2676,7 +2676,9 @@ export function createMessageHandlers(
       results: liveState?.results ?? results,
       finalStep: liveState?.finalStep ?? workingFile.finalStep ?? null,
       finalStepStatus:
-        liveState?.finalStepRuntime?.status ?? runtime?.finalStep?.status ?? null,
+        liveState?.finalStepRuntime?.status ??
+        runtime?.finalStep?.status ??
+        null,
       finalStepLoopCount:
         liveState?.finalStepRuntime?.loopCount ??
         runtime?.finalStep?.loopCount ??

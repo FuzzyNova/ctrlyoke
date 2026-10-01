@@ -387,8 +387,8 @@ export function useOutputUndoActions({
       }
 
       let workspaceSnapshot = row.workspaceSnapshot;
-      const indexedChange = workspaceSnapshot?.changedFiles.find(
-        (change) => sameFilePath(change.path, request.path)
+      const indexedChange = workspaceSnapshot?.changedFiles.find((change) =>
+        sameFilePath(change.path, request.path)
       );
       if (indexedChange?.contentAvailableOnDemand && runAddress) {
         const snapshot = workspaceSnapshot;
@@ -452,8 +452,9 @@ export function useOutputUndoActions({
           : historyOutputs?.promptOutputs[entry.target.stepIndex]
               ?.workspaceSnapshot;
       return (
-        snapshot?.changedFiles.some((change) => change.contentAvailableOnDemand) ??
-        false
+        snapshot?.changedFiles.some(
+          (change) => change.contentAvailableOnDemand
+        ) ?? false
       );
     });
     if (!needsSnapshotContent) {
@@ -503,7 +504,13 @@ export function useOutputUndoActions({
         return { ...entry, undoCandidates: candidates };
       })
     ).then(openWorkflowDialog);
-  }, [historyOutputs, requestSnapshotContent, runAddress, workflowChangeData.entries, workflowDisplayName]);
+  }, [
+    historyOutputs,
+    requestSnapshotContent,
+    runAddress,
+    workflowChangeData.entries,
+    workflowDisplayName,
+  ]);
 
   const closeMinimapDialog = useCallback(() => {
     setMinimapDialogState(null);

@@ -41,7 +41,9 @@ describe("WorkspaceSnapshotContentClient", () => {
       beforeContent: "original",
       contentCaptureSkipped: false,
     });
-    await expect(client.request(address, target, "src/file.ts")).resolves.toEqual({
+    await expect(
+      client.request(address, target, "src/file.ts")
+    ).resolves.toEqual({
       beforeContent: "original",
       contentCaptureSkipped: false,
     });

@@ -427,13 +427,21 @@ function truncateHistorySearchEvent(
       onStringTruncated
     );
     for (const structuredEvent of cliOutput.structured?.events ?? []) {
-      truncateCliEventTextFields(structuredEvent, maxTextLength, onStringTruncated);
+      truncateCliEventTextFields(
+        structuredEvent,
+        maxTextLength,
+        onStringTruncated
+      );
     }
   } else if (
     event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED
   ) {
     for (const structuredEvent of event.payload.events) {
-      truncateCliEventTextFields(structuredEvent, maxTextLength, onStringTruncated);
+      truncateCliEventTextFields(
+        structuredEvent,
+        maxTextLength,
+        onStringTruncated
+      );
     }
   } else if (event.eventType === TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED) {
     event.payload.statusMessage.message = truncateRequiredString(

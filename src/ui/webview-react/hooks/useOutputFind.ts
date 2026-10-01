@@ -237,9 +237,10 @@ export function useOutputFind(
   }, [externalRequest, open]);
 
   return {
-    state: mayMissMatches === state.mayMissMatches
-      ? state
-      : { ...state, mayMissMatches },
+    state:
+      mayMissMatches === state.mayMissMatches
+        ? state
+        : { ...state, mayMissMatches },
     setState,
     search,
     open,

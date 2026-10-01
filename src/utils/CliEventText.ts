@@ -14,50 +14,131 @@ export function truncateCliEventTextFields(
   switch (event.type) {
     case CLI_EVENT_TYPES.TEXT:
     case CLI_EVENT_TYPES.THINKING:
-      truncateStringProperty(event.data, "text", maxTextLength, onStringTruncated);
+      truncateStringProperty(
+        event.data,
+        "text",
+        maxTextLength,
+        onStringTruncated
+      );
       break;
     case CLI_EVENT_TYPES.BASH_COMMAND:
-      truncateStringProperty(event.data, "command", maxTextLength, onStringTruncated);
-      truncateStringProperty(event.data, "output", maxTextLength, onStringTruncated);
-      truncateStringProperty(event.data, "error", maxTextLength, onStringTruncated);
+      truncateStringProperty(
+        event.data,
+        "command",
+        maxTextLength,
+        onStringTruncated
+      );
+      truncateStringProperty(
+        event.data,
+        "output",
+        maxTextLength,
+        onStringTruncated
+      );
+      truncateStringProperty(
+        event.data,
+        "error",
+        maxTextLength,
+        onStringTruncated
+      );
       break;
     case CLI_EVENT_TYPES.FILE_WRITE:
-      truncateStringProperty(event.data, "content", maxTextLength, onStringTruncated);
+      truncateStringProperty(
+        event.data,
+        "content",
+        maxTextLength,
+        onStringTruncated
+      );
       break;
     case CLI_EVENT_TYPES.FILE_EDIT:
       truncateStructuredPatch(event.data, maxTextLength, onStringTruncated);
       break;
     case CLI_EVENT_TYPES.MCP_TOOL_CALL:
     case CLI_EVENT_TYPES.TOOL_CALL:
-      truncateStringProperty(event.data, "server", maxTextLength, onStringTruncated);
-      truncateStringProperty(event.data, "tool", maxTextLength, onStringTruncated);
-      truncateStringProperty(event.data, "name", maxTextLength, onStringTruncated);
-      truncateJsonProperty(event.data, "parameters", maxTextLength, onStringTruncated);
+      truncateStringProperty(
+        event.data,
+        "server",
+        maxTextLength,
+        onStringTruncated
+      );
+      truncateStringProperty(
+        event.data,
+        "tool",
+        maxTextLength,
+        onStringTruncated
+      );
+      truncateStringProperty(
+        event.data,
+        "name",
+        maxTextLength,
+        onStringTruncated
+      );
+      truncateJsonProperty(
+        event.data,
+        "parameters",
+        maxTextLength,
+        onStringTruncated
+      );
       break;
     case CLI_EVENT_TYPES.TOOL_RESULT: {
-      const result = (event.data as { result?: Record<string, unknown> }).result;
+      const result = (event.data as { result?: Record<string, unknown> })
+        .result;
       if (result) {
-        truncateStringProperty(result, "output", maxTextLength, onStringTruncated);
-        truncateStringProperty(result, "error", maxTextLength, onStringTruncated);
+        truncateStringProperty(
+          result,
+          "output",
+          maxTextLength,
+          onStringTruncated
+        );
+        truncateStringProperty(
+          result,
+          "error",
+          maxTextLength,
+          onStringTruncated
+        );
       }
       break;
     }
     case CLI_EVENT_TYPES.WEB_SEARCH: {
-      truncateStringProperty(event.data, "query", maxTextLength, onStringTruncated);
+      truncateStringProperty(
+        event.data,
+        "query",
+        maxTextLength,
+        onStringTruncated
+      );
       const results = (event.data as { results?: unknown }).results;
       if (Array.isArray(results)) {
         for (const result of results) {
           if (result && typeof result === "object") {
-            truncateStringProperty(result, "title", maxTextLength, onStringTruncated);
-            truncateStringProperty(result, "snippet", maxTextLength, onStringTruncated);
-            truncateStringProperty(result, "url", maxTextLength, onStringTruncated);
+            truncateStringProperty(
+              result,
+              "title",
+              maxTextLength,
+              onStringTruncated
+            );
+            truncateStringProperty(
+              result,
+              "snippet",
+              maxTextLength,
+              onStringTruncated
+            );
+            truncateStringProperty(
+              result,
+              "url",
+              maxTextLength,
+              onStringTruncated
+            );
           }
         }
       }
       break;
     }
     case CLI_EVENT_TYPES.COMPACTION:
-      truncateStringProperty(event.data, "summary", maxTextLength, onStringTruncated);
+      truncateStringProperty(
+        event.data,
+        "summary",
+        maxTextLength,
+        onStringTruncated
+      );
       break;
     default:
       break;
@@ -70,7 +151,8 @@ function truncateStructuredPatch(
   onStringTruncated?: () => void
 ): void {
   if (!data || typeof data !== "object") return;
-  const structuredPatch = (data as { structuredPatch?: unknown }).structuredPatch;
+  const structuredPatch = (data as { structuredPatch?: unknown })
+    .structuredPatch;
   if (!Array.isArray(structuredPatch)) return;
   const lines = structuredPatch.flatMap((hunk) => {
     if (!hunk || typeof hunk !== "object") return [];
@@ -95,7 +177,10 @@ function truncateStringProperty(
 ): void {
   if (!value || typeof value !== "object") return;
   const record = value as Record<string, unknown>;
-  if (typeof record[property] === "string" && record[property].length > maxTextLength) {
+  if (
+    typeof record[property] === "string" &&
+    record[property].length > maxTextLength
+  ) {
     onStringTruncated?.();
     record[property] = record[property].slice(0, maxTextLength);
   }

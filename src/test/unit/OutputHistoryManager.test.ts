@@ -2325,8 +2325,8 @@ suite("OutputHistoryManager snapshot enrichment on loadHistory", () => {
     };
     await manager.saveSnapshotForTarget(filePath, target, snapshot);
 
-    const historySnapshot = (await manager.loadHistory(filePath)).promptOutputs[0]
-      ?.workspaceSnapshot?.changedFiles[0];
+    const historySnapshot = (await manager.loadHistory(filePath))
+      .promptOutputs[0]?.workspaceSnapshot?.changedFiles[0];
     const onDemand = await manager.getSnapshotFileContent(
       filePath,
       target,
@@ -2344,7 +2344,11 @@ suite("OutputHistoryManager snapshot enrichment on loadHistory", () => {
   });
 
   test("on-demand content only reads paths in the target snapshot", async () => {
-    const { filePath } = await initTestRun(manager, tempWorkspace, "wf-fetch-path");
+    const { filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-fetch-path"
+    );
     await manager.saveSnapshotForTarget(
       filePath,
       { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
@@ -2352,7 +2356,11 @@ suite("OutputHistoryManager snapshot enrichment on loadHistory", () => {
         capturedAt: 1000,
         strategy: SNAPSHOT_STRATEGIES.FILESYSTEM,
         changedFiles: [
-          { path: "src/allowed.ts", changeType: "modified", beforeContent: "before" },
+          {
+            path: "src/allowed.ts",
+            changeType: "modified",
+            beforeContent: "before",
+          },
         ],
       }
     );
@@ -2384,7 +2392,11 @@ suite("OutputHistoryManager snapshot enrichment on loadHistory", () => {
   });
 
   test("returns capture-skipped metadata when snapshot content is absent", async () => {
-    const { filePath } = await initTestRun(manager, tempWorkspace, "wf-fetch-missing");
+    const { filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-fetch-missing"
+    );
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
     await manager.saveSnapshotForTarget(filePath, target, {
       capturedAt: 1000,
@@ -2405,7 +2417,11 @@ suite("OutputHistoryManager snapshot enrichment on loadHistory", () => {
   });
 
   test("serves the live snapshot cache while persistence is in progress", async () => {
-    const { filePath } = await initTestRun(manager, tempWorkspace, "wf-fetch-live");
+    const { filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-fetch-live"
+    );
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
     const saving = manager.saveSnapshotForTarget(filePath, target, {
       capturedAt: 1000,

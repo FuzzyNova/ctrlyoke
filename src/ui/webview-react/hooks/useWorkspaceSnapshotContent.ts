@@ -17,14 +17,13 @@ type SnapshotContent = Pick<
 /** Request/reply cache shared by snapshot consumers in this webview. */
 export class WorkspaceSnapshotContentClient {
   private readonly cache = new Map<string, SnapshotContent>();
-  private readonly pending = new Map<
-    string,
-    Promise<SnapshotContent>
-  >();
+  private readonly pending = new Map<string, Promise<SnapshotContent>>();
   private nextRequestId = 0;
 
   constructor(
-    private readonly send: (message: RequestWorkspaceSnapshotContentMessage) => void,
+    private readonly send: (
+      message: RequestWorkspaceSnapshotContentMessage
+    ) => void,
     private readonly makeRequestId: () => string = () =>
       `snapshot-content-${++this.nextRequestId}-${generateId()}`
   ) {}
@@ -34,7 +33,12 @@ export class WorkspaceSnapshotContentClient {
     target: OutputExecutionTarget,
     path: string
   ): Promise<SnapshotContent> {
-    const key = JSON.stringify([address.workflowKey, address.runRef, target, path]);
+    const key = JSON.stringify([
+      address.workflowKey,
+      address.runRef,
+      target,
+      path,
+    ]);
     const cached = this.cache.get(key);
     if (cached) return Promise.resolve(cached);
     const existing = this.pending.get(key);
