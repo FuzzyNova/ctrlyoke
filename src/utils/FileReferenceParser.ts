@@ -28,6 +28,7 @@ import { parseRangeNotation } from "./RangeNotationParser";
 import { NOT_AFTER_BOUNDARY } from "./ReferenceBoundary";
 import {
   createGitChangeReferencePattern,
+  createConditionOutputReferencePattern,
   createInlinePriorContextReferencePattern,
   UNQUOTED_AT_REFERENCE_PATH,
 } from "./ReferencePatterns";
@@ -72,8 +73,7 @@ export function maskFencedCodeBlocks(text: string): string {
         afterFence,
         lineEnd < 0 ? text.length : lineEnd
       );
-      const isGeneratedOpener =
-        lineRemainder.trim() === LITERAL_FENCE_INFO;
+      const isGeneratedOpener = lineRemainder.trim() === LITERAL_FENCE_INFO;
 
       if (isGeneratedOpener) {
         // The generated fence is longer than every run in the authored text
@@ -452,10 +452,7 @@ export function parseInlinePriorContextRefs(
 export function parseConditionOutputRefs(text: string): ConditionOutputMatch[] {
   const matches: ConditionOutputMatch[] = [];
   const maskedText = maskFencedCodeBlocks(text);
-  const regex = new RegExp(
-    `${NOT_AFTER_BOUNDARY}\\$([A-Za-z]+)(?::([A-Za-z]+))?`,
-    "g"
-  );
+  const regex = createConditionOutputReferencePattern();
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(maskedText)) !== null) {

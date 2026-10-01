@@ -18,6 +18,7 @@ import {
   findConditionOutputRefs,
   findContextReferenceMatches,
   findInlinePriorContextRefs,
+  findUnknownConditionOutputFields,
   getFencedBlockRanges,
   isInFencedBlock,
   type AtomicReferenceChip,
@@ -61,6 +62,7 @@ import {
   USER_FEEDBACK_SEVERITY,
   CTRLYOKE_SLASH_TOKEN_KINDS,
   PRIOR_CONTEXT_REFERENCE_KINDS,
+  RETRY_PROMPT_PLACEHOLDERS,
   SCRIPT_OUTPUT_SOURCES,
   CAPTURING_OUTPUT_PLACEHOLDER,
   OUTPUT_SNAPSHOT_SAVE_TIMEOUT_MS,
@@ -2939,6 +2941,35 @@ export function createConditionOutputLintExtension(
               message: `$endCondition:${ref.field} is only available in the retry prompt, not the initial prompt`,
             });
           }
+        }
+
+        for (const ref of findUnknownConditionOutputFields(text, from)) {
+          if (isInFencedBlock(ref.from, ref.to, fencedRanges)) continue;
+          const replacement = ref.suggestion
+            ? `$${ref.phase}:${ref.suggestion}`
+            : undefined;
+          diagnostics.push({
+            from: ref.from,
+            to: ref.to,
+            severity: "warning",
+            message: `Unknown field "${ref.field}" for $${ref.phase} — it will not be expanded${
+              replacement ? `. Did you mean ${replacement}?` : ""
+            } Known fields: ${Object.values(RETRY_PROMPT_PLACEHOLDERS).join(", ")}.`,
+            ...(replacement
+              ? {
+                  actions: [
+                    {
+                      name: `Change to ${replacement}`,
+                      apply: (view: EditorView, from: number, to: number) => {
+                        view.dispatch({
+                          changes: { from, to, insert: replacement },
+                        });
+                      },
+                    },
+                  ],
+                }
+              : {}),
+          });
         }
       }
 

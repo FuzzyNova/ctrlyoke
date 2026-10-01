@@ -130,6 +130,74 @@ describe("CodeMirrorEditor condition-output references", () => {
     }
   );
 
+  it("lints a reference followed by a trailing comma", async () => {
+    // The comma used to be swallowed into the field, so the reference was
+    // neither chipped nor linted even though a run expanded it.
+    await expect(
+      getConditionOutputDiagnostics(
+        "Fix $preCondition:stdout, then retry",
+        "prompt",
+        false
+      )
+    ).resolves.toEqual([
+      {
+        message:
+          "$preCondition:stdout has no effect — this step has no pre-condition configured",
+      },
+    ]);
+    await expect(
+      getConditionOutputDiagnostics(
+        "Fix $preCondition:stdout, then retry",
+        "prompt",
+        true
+      )
+    ).resolves.toEqual([]);
+  });
+
+  it("warns about an unknown field and offers the field it extends", async () => {
+    const diagnostics = await getConditionOutputDiagnostics(
+      "Fix $preCondition:stdout2 now",
+      "prompt",
+      true
+    );
+    expect(diagnostics).toEqual([
+      {
+        message: `Unknown field "stdout2" for $preCondition — it will not be expanded. Did you mean $preCondition:stdout? Known fields: ${Object.values(RETRY_PROMPT_PLACEHOLDERS).join(", ")}.`,
+      },
+    ]);
+  });
+
+  it("applies the unknown-field quick fix", async () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const view = new EditorView({
+      parent,
+      doc: "Fix $endCondition:exitCodes now",
+      extensions: [
+        createConditionOutputLintExtension(
+          { current: true },
+          { current: "endCondition" }
+        ),
+      ],
+    });
+    try {
+      forceLinting(view);
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      let applied = false;
+      forEachDiagnostic(view.state, (diagnostic, from, to) => {
+        const action = diagnostic.actions?.[0];
+        if (!action || applied) return;
+        action.apply(view, from, to);
+        applied = true;
+      });
+      expect(applied).toBe(true);
+      expect(view.state.doc.toString()).toBe("Fix $endCondition:exitCode now");
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+
   it("does not lint condition-output references inside fenced code blocks", async () => {
     await expect(
       getConditionOutputDiagnostics(

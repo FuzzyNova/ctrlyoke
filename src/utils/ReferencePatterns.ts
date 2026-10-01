@@ -11,6 +11,24 @@ export function createInlinePriorContextReferencePattern(): RegExp {
   );
 }
 
+/**
+ * Build the shared `$phase:field` condition-output pattern (`$preCondition:stdout`).
+ * Capture 1 = phase, 2 = field (absent when there is no `:`).
+ *
+ * Both captures are whole word tokens (letters, digits, `_`) so a reference
+ * never matches a prefix of a longer word: `$preCondition:stdout2` captures the
+ * unknown field `stdout2` rather than expanding `stdout` and gluing on `2`,
+ * matching `$previous2` and `~diffx`, which are not references either. Prose
+ * punctuation (`,` `.` `-` `)`) ends the token. Callers validate the phase and
+ * field against the known sets; an unknown field is reported, not guessed at.
+ */
+export function createConditionOutputReferencePattern(): RegExp {
+  return new RegExp(
+    `${NOT_AFTER_BOUNDARY}\\$([A-Za-z][A-Za-z0-9_]*)(?::([A-Za-z0-9_]+))?`,
+    "g"
+  );
+}
+
 /** Build a fresh regex for complete ~git-change references. */
 export function createGitChangeReferencePattern(): RegExp {
   return new RegExp(

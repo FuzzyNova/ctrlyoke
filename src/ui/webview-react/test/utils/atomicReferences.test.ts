@@ -7,6 +7,7 @@ import {
   findAtomicReferences,
   findContextReferenceMatches,
   findInlinePriorContextRefs,
+  findUnknownConditionOutputFields,
   projectAtomicReferenceFind,
   referenceBasename,
   SYMBOL_ICON_COLORS,
@@ -328,9 +329,58 @@ describe("atomic reference presentation", () => {
     "$endCondition:unknownField",
     "x$preCondition:stdout",
     "$preCondition:stdoutSuffix",
+    "$preCondition:stdout2",
+    "$preCondition:stdout_x",
+    "$preCondition2:stdout",
   ])("does not chip invalid condition-output ref %s", (token) => {
     expect(findConditionOutputRefs(token)).toEqual([]);
     expect(findAtomicReferences(token)).toEqual([]);
+  });
+
+  it.each([",", ".", "-", ")", ":", ";"])(
+    "chips a condition-output ref followed by %s",
+    (punctuation) => {
+      const text = `Fix $preCondition:stdout${punctuation} then retry`;
+      expect(findConditionOutputRefs(text)).toEqual([
+        {
+          from: "Fix ".length,
+          to: "Fix $preCondition:stdout".length,
+          token: "$preCondition:stdout",
+          phase: "preCondition",
+          field: "stdout",
+        },
+      ]);
+    }
+  );
+
+  it.each([
+    ["$preCondition:stdout2", "stdout2", "stdout"],
+    ["$endCondition:exitCodes", "exitCodes", "exitCode"],
+    ["$endCondition:STDERR", "STDERR", "stderr"],
+    ["$preCondition:stdo", "stdo", "stdout"],
+    ["$preCondition:bogus", "bogus", undefined],
+  ])(
+    "reports %s as an unknown field with suggestion %s → %s",
+    (token, field, suggestion) => {
+      expect(findUnknownConditionOutputFields(`a ${token}`, 10)).toEqual([
+        {
+          from: 12,
+          to: 12 + token.length,
+          token,
+          phase: token.startsWith("$pre") ? "preCondition" : "endCondition",
+          field,
+          ...(suggestion ? { suggestion } : {}),
+        },
+      ]);
+    }
+  );
+
+  it("does not report known fields or unknown phases as unknown fields", () => {
+    expect(
+      findUnknownConditionOutputFields(
+        "$preCondition:stdout, $other:stdout2 $previous"
+      )
+    ).toEqual([]);
   });
 
   it("renders end-condition output with the checklist icon", () => {

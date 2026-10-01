@@ -23,8 +23,8 @@ import {
   type RetryPromptPlaceholder,
 } from "../../../types/DashboardConstants";
 import { parseSecretReferences } from "../../../utils/SecretReferenceParser";
-import { NOT_AFTER_BOUNDARY } from "../../../utils/ReferenceBoundary";
 import {
+  createConditionOutputReferencePattern,
   createInlinePriorContextReferencePattern,
   createGitChangeReferencePattern,
   createReferencePatterns,
@@ -448,46 +448,92 @@ function isConditionOutputField(
   return CONDITION_OUTPUT_FIELDS.has(value);
 }
 
+/** A `$phase:field` token whose phase is known but whose field is not. */
+export interface UnknownConditionOutputFieldRef {
+  from: number;
+  to: number;
+  token: string;
+  phase: ConditionOutputPhase;
+  field: string;
+  /** The known field the author most likely meant, when one is close. */
+  suggestion?: RetryPromptPlaceholder;
+}
+
+/**
+ * Every `$phase:field` token with a known phase, using the same shared
+ * pattern as the runtime parser (`parseConditionOutputRefs`), so the editor
+ * chips exactly what a run will substitute.
+ */
+function scanConditionOutputTokens(
+  text: string,
+  offset: number
+): Array<{
+  from: number;
+  to: number;
+  token: string;
+  phase: ConditionOutputPhase;
+  field: string;
+}> {
+  const results = [];
+  const regex = createConditionOutputReferencePattern();
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text)) !== null) {
+    const phase = match[1];
+    const field = match[2];
+    if (field === undefined || !isConditionOutputPhase(phase)) continue;
+    const token = match[0];
+    const from = offset + match.index;
+    results.push({ from, to: from + token.length, token, phase, field });
+  }
+  return results;
+}
+
 /**
  * Find condition-output refs without widening the prior-context ref type.
- *
- * This intentionally mirrors findInlinePriorContextRefs' tokenizer. The two
- * namespaces have different runtime meanings and must remain separate.
+ * Only known fields are returned; see {@link findUnknownConditionOutputFields}.
  */
 export function findConditionOutputRefs(
   text: string,
   offset = 0
 ): ConditionOutputRef[] {
-  const results: ConditionOutputRef[] = [];
-  const regex = new RegExp(
-    `${NOT_AFTER_BOUNDARY}\\$([A-Za-z][A-Za-z0-9]*(?::[A-Za-z0-9,\\-]*)?)`,
-    "g"
+  return scanConditionOutputTokens(text, offset).flatMap((ref) =>
+    isConditionOutputField(ref.field) ? [{ ...ref, field: ref.field }] : []
   );
-  let match: RegExpExecArray | null;
+}
 
-  while ((match = regex.exec(text)) !== null) {
-    const body = match[1];
-    const separatorIndex = body.indexOf(":");
-    if (separatorIndex === -1) continue;
+/**
+ * Find `$phase:field` tokens with a known phase and an unknown field (for
+ * example `$preCondition:stdout2`). Neither the editor nor a run expands
+ * these, so the editor reports them instead of leaving them silently inert.
+ */
+export function findUnknownConditionOutputFields(
+  text: string,
+  offset = 0
+): UnknownConditionOutputFieldRef[] {
+  return scanConditionOutputTokens(text, offset).flatMap((ref) => {
+    if (isConditionOutputField(ref.field)) return [];
+    const suggestion = suggestConditionOutputField(ref.field);
+    return [suggestion ? { ...ref, suggestion } : ref];
+  });
+}
 
-    const phase = body.slice(0, separatorIndex);
-    const field = body.slice(separatorIndex + 1);
-    if (!isConditionOutputPhase(phase) || !isConditionOutputField(field)) {
-      continue;
-    }
-
-    const token = match[0];
-    const from = offset + match.index;
-    results.push({
-      from,
-      to: from + token.length,
-      token,
-      phase,
-      field,
-    });
-  }
-
-  return results;
+/**
+ * The known field an unknown one was probably meant to be: a case-insensitive
+ * match, the longest known field the typed one extends (`stdout2`,
+ * `exitCodes`), or a known field the typed one abbreviates (`stdo`).
+ */
+function suggestConditionOutputField(
+  field: string
+): RetryPromptPlaceholder | undefined {
+  const typed = field.toLowerCase();
+  const known = [...CONDITION_OUTPUT_FIELDS] as RetryPromptPlaceholder[];
+  const extended = known
+    .filter((candidate) => typed.startsWith(candidate.toLowerCase()))
+    .sort((left, right) => right.length - left.length)[0];
+  return (
+    extended ??
+    known.find((candidate) => candidate.toLowerCase().startsWith(typed))
+  );
 }
 
 export const PRIOR_CONTEXT_CHIP_LABELS: Record<

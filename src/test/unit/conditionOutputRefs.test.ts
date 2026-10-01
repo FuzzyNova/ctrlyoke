@@ -139,6 +139,21 @@ suite("Condition output references", () => {
     assert.deepStrictEqual(result.unresolved, []);
   });
 
+  for (const token of [
+    "$preCondition:stdout2",
+    "$preCondition:stdout_x",
+    "$preCondition2:stdout",
+  ]) {
+    test(`leaves ${token} whole instead of expanding a known prefix`, () => {
+      const result = substituteConditionOutputRefs(`${token} next`, {
+        preCondition,
+      });
+
+      assert.strictEqual(result.text, `${token} next`);
+      assert.deepStrictEqual(result.unresolved, []);
+    });
+  }
+
   test("uses empty expected and the exitCode compare-source default", () => {
     const summary: ConditionEvaluationSummary = {
       ...preCondition,

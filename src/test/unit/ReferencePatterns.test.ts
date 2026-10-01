@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
+  createConditionOutputReferencePattern,
   createInlinePriorContextReferencePattern,
   createReferencePatterns,
 } from "../../utils/ReferencePatterns";
@@ -41,9 +42,7 @@ suite("ReferencePatterns", () => {
 
     test("decorates paths containing a hash the same way runtime parses them", () => {
       const { fullFile } = createReferencePatterns();
-      assert.deepStrictEqual(paths(fullFile, "@src/C#/a.cs"), [
-        "src/C#/a.cs",
-      ]);
+      assert.deepStrictEqual(paths(fullFile, "@src/C#/a.cs"), ["src/C#/a.cs"]);
     });
 
     test("keeps a dotted directory segment in the path", () => {
@@ -92,6 +91,43 @@ suite("ReferencePatterns", () => {
       const { fullFile } = createReferencePatterns();
       assert.deepStrictEqual(paths(fullFile, "see @docs/résumé.日本語 now"), [
         "docs/résumé.日本語",
+      ]);
+    });
+  });
+
+  suite("conditionOutput", () => {
+    const tokens = (text: string) =>
+      [...text.matchAll(createConditionOutputReferencePattern())].map(
+        (match) => [match[0], match[1], match[2]]
+      );
+
+    test("ends the token at prose punctuation", () => {
+      assert.deepStrictEqual(
+        tokens(
+          "$preCondition:stdout, $endCondition:stderr. ($preCondition:exitCode) $endCondition:actual-"
+        ),
+        [
+          ["$preCondition:stdout", "preCondition", "stdout"],
+          ["$endCondition:stderr", "endCondition", "stderr"],
+          ["$preCondition:exitCode", "preCondition", "exitCode"],
+          ["$endCondition:actual", "endCondition", "actual"],
+        ]
+      );
+    });
+
+    test("captures whole word fields instead of a known prefix", () => {
+      assert.deepStrictEqual(
+        tokens("$preCondition:stdout2 $preCondition:stdout_x"),
+        [
+          ["$preCondition:stdout2", "preCondition", "stdout2"],
+          ["$preCondition:stdout_x", "preCondition", "stdout_x"],
+        ]
+      );
+    });
+
+    test("captures a whole word phase", () => {
+      assert.deepStrictEqual(tokens("$preCondition2:stdout"), [
+        ["$preCondition2:stdout", "preCondition2", "stdout"],
       ]);
     });
   });
