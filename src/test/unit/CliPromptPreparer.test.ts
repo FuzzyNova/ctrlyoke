@@ -43,8 +43,6 @@ function createSections(overrides?: Partial<PromptSections>): PromptSections {
 suite("CliPromptPreparer", () => {
   test("gives same-step plans unique categorized temp paths and applies those paths", async () => {
     const workspaceRoot = makeTempDir("ctrlyoke-plan-id-");
-    const originalNow = Date.now;
-    Date.now = () => 1_000_000;
     const preparer = new CliPromptPreparer({
       shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
       buildPromptSections: async () =>
@@ -84,6 +82,12 @@ suite("CliPromptPreparer", () => {
           path.basename(filePath).endsWith(".md")
         )
       );
+      // Plan ID stays short so prompt @references remain readable.
+      assert.ok(
+        first.tempFilePaths.every((filePath) =>
+          /^same-workflow-1-[0-9a-f]{8}\./.test(path.basename(filePath))
+        )
+      );
       assert.notDeepStrictEqual(first.tempFilePaths, second.tempFilePaths);
       for (const plan of [first, second]) {
         for (const mutation of plan.mutations) {
@@ -96,7 +100,6 @@ suite("CliPromptPreparer", () => {
         first.files.map((file) => file.path)
       );
     } finally {
-      Date.now = originalNow;
       removeTempDir(workspaceRoot);
     }
   });

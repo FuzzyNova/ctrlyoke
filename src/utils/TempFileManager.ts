@@ -90,6 +90,18 @@ export class TempFileManager {
   }
 
   /**
+   * Short random ID that is the sole uniquifier for categorized temp files.
+   * Parallel steps and concurrent runs can plan the same workflow name and
+   * step at the same instant, so no time-based component is safe here. 8 hex
+   * chars keeps temp file names readable in the harness prompt; any residual
+   * collision fails loudly because writeCategoryFile writes with the exclusive
+   * `wx` flag.
+   */
+  static createPlanId(): string {
+    return crypto.randomBytes(4).toString("hex");
+  }
+
+  /**
    * Return the path a categorized file would use without touching the file
    * system. The caller can pass the result to writeCategoryFile later.
    */
@@ -98,15 +110,14 @@ export class TempFileManager {
     originalFilePath?: string,
     stepNumber?: number,
     partNumber?: number,
-    timestamp = Math.floor(Date.now() / 1000),
-    planId = crypto.randomUUID()
+    planId = TempFileManager.createPlanId()
   ): string {
     const basename = originalFilePath
       ? this.sanitizeBasename(originalFilePath)
       : "prompt";
     const stepSuffix = stepNumber ? `-${stepNumber}` : "";
     const partSuffix = partNumber !== undefined ? `.${partNumber}` : "";
-    const filename = `${timestamp}-${basename}${stepSuffix}-${planId}.${category}${partSuffix}.md`;
+    const filename = `${basename}${stepSuffix}-${planId}.${category}${partSuffix}.md`;
     return path.join(this.tempDir, filename);
   }
 

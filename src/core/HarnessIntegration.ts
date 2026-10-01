@@ -541,11 +541,11 @@ export abstract class HarnessIntegration {
    * Build prompt sections from prompt item, separating content by category.
    *
    * Returns each category separately so callers can write them to typed files:
-   *   agent instructions → <ts>-<name>.agent.prompt.md
-   *   skills             → <ts>-<name>.skills.prompt.md
+   *   agent instructions → <name>-<step>-<planId>.agent.md
+   *   skills             → <name>-<step>-<planId>.skills.md
    *   direct file refs   → @path inline in instruction string (harness auto-reads)
-   *   excerpts           → <ts>-<name>.excerpts.prompt.md
-   *   user prompt        → <ts>-<name>.prompt.md
+   *   excerpts           → <name>-<step>-<planId>.excerpts.md
+   *   user prompt        → <name>-<step>-<planId>.prompt.md
    *
    * @param prompt The prompt item to build sections for
    * @param resolvedAgent Optional resolved agent name
