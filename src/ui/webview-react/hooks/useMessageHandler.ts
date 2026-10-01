@@ -2298,19 +2298,17 @@ export function createMessageHandlers(
       const uiStore = useUiStore.getState();
       // A run at index 0 is "live" only when both the webview and the history
       // manifest agree it is still active. If the manifest was already
-      // finalised as "completed" (which happens before replayOutputHistoryTo
-      // reads it) but SESSION_RESTORED hasn't been processed yet, trusting
-      // only the webview state would silently drop the history — causing the
-      // last step to vanish until the user navigates away and back.
+      // finalised as "completed" before a delayed history reply arrives,
+      // trusting only the webview state would silently drop the history —
+      // causing the last step to vanish until the user navigates away and back.
       const isLiveCurrentRun =
         currentRunIndex === 0 &&
         isWorkflowActive(workflowStore.executionState) &&
         isWorkflowActive(history.executionState);
 
       if (isLiveCurrentRun) {
-        // Workflow replay may send the newest run's history after SESSION_RESTORED.
-        // Seed the complete persisted timeline into live output, preserving any
-        // buffered events that were replayed between those two messages.
+        // Seed the complete persisted timeline into live output, preserving
+        // any buffered events that arrived while the history was loading.
         workflowStore.hydrateLiveRunHistory(history);
         uiStore.clearHistoryView();
         return;
@@ -2465,6 +2463,7 @@ export function createMessageHandlers(
       workflowProperties,
       executionRunRef,
       pendingRewind,
+      liveState,
     } = message;
     if (!address || !workingFile) return;
     const incomingDefinitionRevision = workingFile.definitionRevision ?? 1;
@@ -2596,11 +2595,11 @@ export function createMessageHandlers(
     // FILE_SELECTED/SESSION_RESTORED messages). Derive results from that
     // per-step runtime so completed/failed/cancelled/skipped chips still
     // render their status border after loading a run view.
-    const currentIndex = runtime?.currentIndex ?? 0;
+    const currentIndex = liveState?.currentIndex ?? runtime?.currentIndex ?? 0;
     const results = deriveStepStatusesFromRuntime(
-      workingFile.steps ?? [],
+      liveState?.steps ?? workingFile.steps ?? [],
       currentIndex,
-      runtime?.executionState,
+      liveState?.executionState ?? runtime?.executionState,
       STEP_STATUS.SENT
     ).map((status) => ({ status }));
     // Guard against a requestless snapshot regressing a genuinely live
@@ -2647,37 +2646,50 @@ export function createMessageHandlers(
       !message.requestId &&
       snapshotDescribesLiveExecution &&
       isWorkflowActive(currentExecutionState) &&
-      !isWorkflowActive(runtime?.executionState ?? EXECUTION_STATES.IDLE);
+      !isWorkflowActive(
+        liveState?.executionState ??
+          runtime?.executionState ??
+          EXECUTION_STATES.IDLE
+      );
     const resolvedExecutionState = isStaleExecutionStateRegression
       ? currentExecutionState
-      : runtime?.executionState;
+      : (liveState?.executionState ?? runtime?.executionState);
     if (isStaleExecutionStateRegression) {
       WebviewLog.debug(
-        `[RUN_VIEW_LOADED] ignoring stale executionState=${runtime?.executionState ?? "(none)"} ` +
+        `[RUN_VIEW_LOADED] ignoring stale executionState=${liveState?.executionState ?? runtime?.executionState ?? "(none)"} ` +
           `for ${address.workflowKey}: keeping live state=${currentExecutionState}`
       );
     }
     useWorkflowStore.getState().loadWorkflow({
       fileName: message.workflowName ?? address.workflowKey,
       workflowName: message.workflowName ?? address.workflowKey,
-      steps: workingFile.steps ?? [],
-      parallelGroups: workingFile.parallelGroups ?? [],
+      steps: liveState?.steps ?? workingFile.steps ?? [],
+      parallelGroups:
+        liveState?.parallelGroups ?? workingFile.parallelGroups ?? [],
       executionState: resolvedExecutionState,
-      currentStep: runtime?.currentIndex,
+      currentStep: liveState?.currentIndex ?? runtime?.currentIndex,
       // Live-only — never persisted to `_runtime`, so absent whenever this
       // snapshot has no bound instance (see RunViewLoadedMessage.activeStepIndices).
       // Falls back to `[]` like every other loadWorkflow caller: a run with no
       // live instance genuinely has no step actively executing.
       activeStepIndices: message.activeStepIndices ?? [],
-      results,
-      finalStep: workingFile.finalStep ?? null,
-      finalStepStatus: runtime?.finalStep?.status ?? null,
-      finalStepLoopCount: runtime?.finalStep?.loopCount ?? 0,
-      finalStepPhase: runtime?.finalStep?.phase ?? null,
+      results: liveState?.results ?? results,
+      finalStep: liveState?.finalStep ?? workingFile.finalStep ?? null,
+      finalStepStatus:
+        liveState?.finalStepRuntime?.status ?? runtime?.finalStep?.status ?? null,
+      finalStepLoopCount:
+        liveState?.finalStepRuntime?.loopCount ??
+        runtime?.finalStep?.loopCount ??
+        0,
+      finalStepPhase:
+        liveState?.finalStepRuntime?.phase ?? runtime?.finalStep?.phase ?? null,
+      schemaWarnings: liveState?.schemaWarnings,
       preserveLiveOutput: isSameViewReplay,
       preserveUndoHistory,
     });
-    const normalized = normalizeWorkflowProperties(workflowProperties);
+    const normalized = normalizeWorkflowProperties(
+      liveState?.workflowProperties ?? workflowProperties
+    );
     useSettingsStore.getState().setWorkflowProperties(normalized);
     useWorkflowStore.getState().syncIncomingWorkflowProperties(normalized);
     const ui = useUiStore.getState();

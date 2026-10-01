@@ -28,7 +28,8 @@ class FakeInstance implements RunViewPublisherInstance {
   constructor(
     public readonly id: string,
     private readonly workingFilePath: string,
-    private readonly activeStepIndices: number[] = []
+    private readonly activeStepIndices: number[] = [],
+    private readonly events: string[] = []
   ) {}
 
   getSummary(): WorkflowSummary {
@@ -43,10 +44,28 @@ class FakeInstance implements RunViewPublisherInstance {
     };
   }
 
-  replayBufferedOutputTo(_sink: IDashboardSink): void {}
+  replayBufferedOutputTo(_sink: IDashboardSink): void {
+    this.events.push("buffer");
+  }
 
   getActiveStepIndices(): number[] {
     return this.activeStepIndices;
+  }
+
+  getRunViewLiveState(): RunViewPublisherInstance["getRunViewLiveState"] extends () => infer T
+    ? T
+    : never {
+    return {
+      executionState: EXECUTION_STATES.RUNNING,
+      currentIndex: 0,
+      steps: [{ prompt: "one" }],
+      results: [],
+      parallelGroups: [],
+      finalStep: null,
+      finalStepRuntime: undefined,
+      workflowProperties: {},
+      schemaWarnings: [],
+    };
   }
 }
 
@@ -150,7 +169,7 @@ async function createPublisher(): Promise<{
     loadFreshInstanceAndReplay: async () => {},
     findExecutionRunRef: () => undefined,
     getActiveTerminalWorkflowRefs: () => [],
-    replayTerminalSessionsTo: () => {},
+    replayTerminalSessionsTo: () => events.push("terminals"),
   });
   return { root, publisher, registry, events };
 }
@@ -188,7 +207,7 @@ suite("RunViewPublisher", () => {
       await writeAddressedFile(root, address, 2);
       registry.addInstance(
         workflowKey,
-        new FakeInstance("instance-a", "draft")
+        new FakeInstance("instance-a", "draft", [], events)
       );
 
       const sent: unknown[] = [];
@@ -208,6 +227,7 @@ suite("RunViewPublisher", () => {
         (sent.at(-1) as { type: string }).type,
         MESSAGE_TYPES.RUN_VIEW_LOADED
       );
+      assert.strictEqual(events.filter((event) => event === "buffer").length, 1);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
@@ -220,7 +240,7 @@ suite("RunViewPublisher", () => {
   // doesn't fall back to `[]` and wrongly treat a live step's terminal as
   // idle.
   test("addressed switch snapshot carries the bound instance's live activeStepIndices", async () => {
-    const { root, publisher, registry } = await createPublisher();
+    const { root, publisher, registry, events } = await createPublisher();
     try {
       const workflowKey = "lineage-running" as WorkflowKey;
       const address: WorkflowViewAddress = {
@@ -230,7 +250,7 @@ suite("RunViewPublisher", () => {
       await writeAddressedFile(root, address, 1);
       registry.addInstance(
         workflowKey,
-        new FakeInstance("instance-running", "draft", [1])
+        new FakeInstance("instance-running", "draft", [1], events)
       );
 
       const sent: unknown[] = [];
@@ -243,8 +263,52 @@ suite("RunViewPublisher", () => {
       const snapshot = sent.find(
         (message) =>
           (message as { type?: string }).type === MESSAGE_TYPES.RUN_VIEW_LOADED
-      ) as { activeStepIndices?: number[] } | undefined;
+      ) as
+        | {
+            activeStepIndices?: number[];
+            liveState?: { executionState: string };
+          }
+        | undefined;
       assert.deepStrictEqual(snapshot?.activeStepIndices, [1]);
+      assert.strictEqual(
+        snapshot?.liveState?.executionState,
+        EXECUTION_STATES.RUNNING
+      );
+      assert.strictEqual(events.filter((event) => event === "buffer").length, 1);
+      assert.strictEqual(
+        events.filter((event) => event === "terminals").length,
+        1
+      );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("skipTerminalReplay leaves terminal replay to the caller", async () => {
+    const { root, publisher, registry, events } = await createPublisher();
+    try {
+      const workflowKey = "lineage-skip-terminals" as WorkflowKey;
+      const address: WorkflowViewAddress = {
+        workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      };
+      await writeAddressedFile(root, address, 1);
+      registry.addInstance(
+        workflowKey,
+        new FakeInstance("instance-skip", "draft")
+      );
+
+      await publisher.loadRunViewForClient(
+        address,
+        () => {},
+        "client-skip",
+        undefined,
+        undefined,
+        false,
+        true
+      );
+
+      assert.ok(!events.includes("terminals"));
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }

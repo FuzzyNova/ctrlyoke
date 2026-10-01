@@ -118,13 +118,6 @@ export class WorkflowTaggedSink implements IDashboardSink {
     );
   }
 
-  async loadOutputHistoryForWorkflow?(workflowFilePath: string): Promise<void> {
-    return this.inner.loadOutputHistoryForWorkflow?.(
-      workflowFilePath,
-      this.workflowId
-    );
-  }
-
   updateExecutionStarted(
     workflowId: string,
     fileName: string,

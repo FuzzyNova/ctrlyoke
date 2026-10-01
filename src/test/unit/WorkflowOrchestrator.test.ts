@@ -447,7 +447,6 @@ suite("WorkflowOrchestrator SESSION_RESTORED revision forwarding", () => {
         _sink: unknown,
         options?: { asReplacement?: boolean }
       ) => replayCalls.push(options),
-      replayOutputHistoryTo: async () => {},
     };
     internal.instances = new Map([["inst-new", instance]]);
     internal.retiredInstances = new Map();
@@ -1071,6 +1070,17 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       getExecutionRunRef: () => runRef,
       replayBufferedOutputTo: () => undefined,
       getActiveStepIndices: () => [],
+      getRunViewLiveState: () => ({
+        executionState: EXECUTION_STATES.RUNNING,
+        currentIndex: 0,
+        steps: [{ prompt: "current" }],
+        results: [],
+        parallelGroups: [],
+        finalStep: null,
+        finalStepRuntime: undefined,
+        workflowProperties: {},
+        schemaWarnings: [],
+      }),
     };
 
     internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
@@ -2167,8 +2177,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         {
           getSummary: () => ({ workingFilePath: "C:\\workflow.json" }),
           getQueueState: () => ({ workflowKey, runRef }),
-          replayFullStateTo: () => operations.push("live-output"),
-          replayOutputHistoryTo: async () => operations.push("output-history"),
+          replayFullStateTo: () => operations.push("session-restored"),
         },
       ],
     ]);
@@ -2179,8 +2188,13 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     internal.loadRunViewForClient = async (
       address: unknown,
       _send: (message: unknown) => void,
-      clientId: string
+      clientId: string,
+      _requestId: string | undefined,
+      _definitionRollback: unknown,
+      _announceReplayBoundary: boolean,
+      skipTerminalReplay: boolean
     ) => {
+      assert.strictEqual(skipTerminalReplay, true);
       assert.strictEqual(
         internal.viewerRegistry.get(clientId),
         workflowId,
@@ -2201,11 +2215,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       { skipTerminalReplay: true }
     );
 
-    assert.deepStrictEqual(operations, [
-      "run-view",
-      "live-output",
-      "output-history",
-    ]);
+    assert.deepStrictEqual(operations, ["run-view"]);
   });
 
   test("loadRunSummariesForClient sends a request-correlated summary snapshot without binding a client view", async () => {
@@ -2272,17 +2282,12 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     }
   });
 
-  test("re-publishes the addressed view identity after the live replay so SESSION_RESTORED cannot leave the client without a run address", async () => {
+  test("a lineage bind uses only the addressed run-view sender", async () => {
     const orchestrator = createTestOrchestrator();
     const internal = orchestrator as any;
     const workflowId = "workflow-live";
     const workflowKey = "live-lineage" as never;
     const runRef = "run-2026-07-21T12-00-00-000Z" as never;
-    const address = {
-      workflowKey,
-      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-      runRef,
-    };
     const operations: string[] = [];
     const sent: unknown[] = [];
 
@@ -2294,13 +2299,9 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         {
           getSummary: () => ({ workingFilePath: "C:\\workflow.json" }),
           getQueueState: () => ({ workflowKey, runRef }),
-          // Model the live replay clearing the client's displayed address the
-          // way SESSION_RESTORED → applyWorkflowChange() does on the client.
           replayFullStateTo: () => {
-            operations.push("live-output");
             sent.push({ type: MESSAGE_TYPES.SESSION_RESTORED });
           },
-          replayOutputHistoryTo: async () => operations.push("output-history"),
         },
       ],
     ]);
@@ -2311,17 +2312,6 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     internal.loadRunViewForClient = async () => {
       operations.push("run-view");
     };
-    const identity = {
-      type: MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY,
-      address,
-      definitionRevision: 3,
-      descriptorRevision: 2,
-    };
-    internal.getViewIdentity = async () => {
-      operations.push("view-identity");
-      return identity;
-    };
-
     await orchestrator.replayWorkflowStateTo(
       workflowId,
       (msg) => sent.push(msg),
@@ -2329,28 +2319,18 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       { skipTerminalReplay: true }
     );
 
-    // The identity must be re-published, and only after the live replay that
-    // cleared it — otherwise SESSION_RESTORED would overwrite it again.
-    assert.deepStrictEqual(operations, [
-      "run-view",
-      "live-output",
-      "output-history",
-      "view-identity",
-    ]);
-    const identityIndex = sent.findIndex(
-      (msg) =>
-        (msg as { type?: string }).type === MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY
-    );
-    const sessionRestoredIndex = sent.findIndex(
-      (msg) =>
-        (msg as { type?: string }).type === MESSAGE_TYPES.SESSION_RESTORED
-    );
-    assert.ok(identityIndex >= 0, "view identity must be sent to the client");
+    assert.deepStrictEqual(operations, ["run-view"]);
     assert.ok(
-      identityIndex > sessionRestoredIndex,
-      "view identity must be re-published after SESSION_RESTORED cleared it"
+      !sent.some((msg) => {
+        const type = (msg as { type?: string }).type;
+        return (
+          type === MESSAGE_TYPES.SESSION_RESTORED ||
+          type === MESSAGE_TYPES.OUTPUT_HISTORY_LOADED ||
+          type === MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY
+        );
+      }),
+      "the addressed run-view path owns the lineage snapshot and identity"
     );
-    assert.deepStrictEqual(sent[identityIndex], identity);
   });
 });
 

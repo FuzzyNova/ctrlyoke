@@ -59,6 +59,7 @@ export interface RunViewPublisherInstance {
   getSummary(): WorkflowSummary;
   replayBufferedOutputTo(sink: IDashboardSink): void;
   getActiveStepIndices(): number[];
+  getRunViewLiveState(): RunViewLoadedMessage["liveState"];
 }
 
 export interface RunViewPublisherExternalRunWatchPort {
@@ -286,7 +287,8 @@ export class RunViewPublisher implements RunLifecycleViewPort {
     clientId: string,
     requestId?: string,
     definitionRollback?: DefinitionRollbackInvalidation,
-    announceReplayBoundary = false
+    announceReplayBoundary = false,
+    skipTerminalReplay = false
   ): Promise<void> {
     const workspaceRoot = this.requireWorkspaceRoot();
     // This must remain first: binding is lineage-scoped and controls terminals,
@@ -309,7 +311,8 @@ export class RunViewPublisher implements RunLifecycleViewPort {
       boundWorkflowId,
       requestId,
       definitionRollback,
-      announceReplayBoundary
+      announceReplayBoundary,
+      skipTerminalReplay
     );
   }
 
@@ -410,7 +413,8 @@ export class RunViewPublisher implements RunLifecycleViewPort {
     boundWorkflowId: string | null,
     requestId?: string,
     definitionRollback?: DefinitionRollbackInvalidation,
-    announceReplayBoundary = false
+    announceReplayBoundary = false,
+    skipTerminalReplay = false
   ): void {
     const { workingFile } = view;
     const executionRunRef = this.host.findExecutionRunRef(address.workflowKey);
@@ -458,6 +462,9 @@ export class RunViewPublisher implements RunLifecycleViewPort {
       // idle one.
       ...(boundInstance
         ? { activeStepIndices: boundInstance.getActiveStepIndices() }
+        : {}),
+      ...(boundInstance && isLiveAddress
+        ? { liveState: boundInstance.getRunViewLiveState() }
         : {}),
       pendingRewind: workingFile._runtime?.pendingRewind,
       descriptorRevision: view.descriptorRevision,
@@ -513,7 +520,7 @@ export class RunViewPublisher implements RunLifecycleViewPort {
         )
       );
     }
-    if (boundWorkflowId) {
+    if (boundWorkflowId && !skipTerminalReplay) {
       this.host.replayTerminalSessionsTo(boundWorkflowId, send, clientId);
     }
   }

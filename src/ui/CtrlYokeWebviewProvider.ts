@@ -42,8 +42,6 @@ import type { WorkflowSummary } from "../types/CtrlYokeTypes";
 import { PostMessageDashboardSink } from "./PostMessageDashboardSink";
 import { workflowDisplayStep } from "../types/CtrlYokeTypes";
 import { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
-import * as WorkflowPaths from "../utils/WorkflowPaths";
-import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { configService } from "../config/CtrlYokeConfigService";
 import { WebviewSettingsSync } from "./WebviewSettingsSync";
 import { WorkflowSerializer } from "./WorkflowSerializer";
@@ -1088,67 +1086,6 @@ export class CtrlYokeWebviewProvider
    */
   public setHub(hub: DashboardBroadcastHub): void {
     this.hub = hub;
-  }
-
-  /**
-   * Load and send output history for the exact promoted run to the webview.
-   * Called after session restore when autoLoadRecentSession is enabled.
-   * The run address is parsed from the execution file; it never follows a
-   * lineage's newest run merely because another run was created meanwhile.
-   *
-   * @param workingFilePath Absolute path to the working file
-   */
-  public async loadOutputHistoryForWorkflow(
-    workingFilePath: string,
-    workflowInstanceId?: string
-  ): Promise<void> {
-    if (!this.outputHistoryManager) {
-      return;
-    }
-
-    if (!ConfigurationUtils.shouldAutoLoadRecentSession()) {
-      return;
-    }
-
-    try {
-      const address =
-        WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath);
-      if (!address?.runRef) {
-        return;
-      }
-      const { workflowKey, runRef } = address;
-      const runs =
-        await this.outputHistoryManager.getRunsForWorkflow(workflowKey);
-      const currentRunIndex = runs.indexOf(runRef);
-      if (currentRunIndex < 0) {
-        return;
-      }
-
-      const historyPath = this.outputHistoryManager.getHistoryFilePath(
-        workflowKey,
-        runRef
-      );
-
-      const history = await this.outputHistoryManager.loadHistory(historyPath);
-      Log.debug(
-        `[CtrlYokeWebviewProvider] loadOutputHistoryForWorkflow: sending run ${currentRunIndex + 1} of ${runs.length}`
-      );
-
-      this.postMessage({
-        type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
-        history,
-        availableRuns: runs.length,
-        currentRunIndex,
-        ...(workflowInstanceId !== undefined
-          ? { workflowId: workflowInstanceId }
-          : {}),
-      });
-    } catch (error) {
-      Log.warn(
-        "[CtrlYokeWebviewProvider] Failed to load output history for workflow:",
-        error
-      );
-    }
   }
 
   /**

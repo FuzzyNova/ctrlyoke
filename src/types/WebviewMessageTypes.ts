@@ -62,6 +62,7 @@ import type {
   ToolPermissionsOverride,
   UserHookConfig,
   WorkflowStep,
+  QueueState,
   WorkflowViewAddress,
   WorkflowKey,
   RunRef,
@@ -75,6 +76,8 @@ import type {
   CoordinationScopeSnapshot,
   WorkflowValidationWarning,
   ExecutionProperties,
+  PromptResult,
+  FinalStepRuntimeState,
 } from "./CtrlYokeTypes";
 import type {
   CtrlYokeGlobalSettings,
@@ -1102,7 +1105,7 @@ export interface RecentWorkflowsMessage {
     address: WorkflowViewAddress;
     runDirectory?: string;
     workflowName: string;
-    executionState: string;
+    executionState: QueueState["status"];
     lastModifiedAt?: number;
     startedAt?: number;
     isFavorite?: boolean;
@@ -1876,6 +1879,18 @@ export interface RunViewLoadedMessage {
    * "nothing is running" instead of two representations meaning the same thing.
    */
   activeStepIndices?: number[];
+  /** Authoritative in-memory state for the live addressed instance. */
+  liveState?: {
+    executionState: string;
+    currentIndex: number;
+    steps: WorkflowStep[];
+    results: PromptResult[];
+    parallelGroups: ParallelGroupDefinition[];
+    finalStep: WorkflowStep | null;
+    finalStepRuntime?: FinalStepRuntimeState;
+    workflowProperties: Record<string, unknown>;
+    schemaWarnings: WorkflowValidationWarning[];
+  };
   /** Durable continuation marker for the addressed run, if it is being rewound. */
   pendingRewind?: {
     fromStepIndex: number;

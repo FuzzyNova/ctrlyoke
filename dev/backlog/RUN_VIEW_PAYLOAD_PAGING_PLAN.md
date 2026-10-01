@@ -350,7 +350,14 @@ logs `pageshow`/visibility and foreground probes into the session log; add
 whatever is missing to tell an iOS page kill apart from a network drop before
 treating payload size as the whole story.
 
-## Problem 5: resuming a running run sends its history twice
+## Problem 5: resuming a running run sends its history twice — landed 2026-10-01
+
+**Landed:** lineage binds now use `RUN_VIEW_LOADED` as their sole snapshot,
+including authoritative live queue state (execution state, steps/results,
+parallel groups, final-step runtime, workflow properties, and schema warnings).
+The second history loader, `replayOutputHistoryTo`, and its unused dashboard
+sink/provider pass-throughs were deleted. The addressed publisher remains the
+single owner of buffered-output and terminal replay.
 
 `WorkflowOrchestrator.replayWorkflowStateTo` binds a client (the panel, or any
 browser at `ready` via `WebviewMessageRouter.completeBrowserReadyAfterStartup`)
@@ -453,7 +460,7 @@ That makes it the first thing to land against the reload loop.
 - [ ] The `bug-backlog` run above, opened from the iPhone PWA and backgrounded
       and foregrounded several times, no longer drives a reload loop, and the
       `[MemoryWatchdog]` heap stays well below 1 GB through it.
-- [ ] Binding any client (panel or browser) to a live instance with a lineage
+- [x] Binding any client (panel or browser) to a live instance with a lineage
       costs one server-side `loadHistory`, one `RUN_VIEW_LOADED`, and no
       `SESSION_RESTORED` or `OUTPUT_HISTORY_LOADED`. The client runs one
       `workflowStore.loadWorkflow`, and completed-step buffers replay at most

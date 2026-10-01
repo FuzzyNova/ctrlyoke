@@ -589,11 +589,9 @@ export class WorkflowOrchestrator {
   /**
    * WorkflowId of the first workflow successfully replayed to the panel during the current
    * startup sequence, or null if no startup replay has occurred yet. Used to suppress
-   * redundant replays from subsequent READY messages (BootstrapApp → App.tsx →
-   * CLIENT_ID_ASSIGNED each trigger handleClientReady). Every extra replay sends
-   * SESSION_RESTORED which clears historyOutputs, causing a visible output flash before
-   * OUTPUT_HISTORY_LOADED restores it. After _autoLoadHasSettled, this field is irrelevant
-   * as replays are always allowed (reconnect / webview reload).
+   * redundant full snapshots from subsequent READY messages (BootstrapApp →
+   * App.tsx → CLIENT_ID_ASSIGNED each trigger handleClientReady). After
+   * _autoLoadHasSettled, replays are always allowed (reconnect / webview reload).
    */
   private panelStartupReplayedWorkflowId: string | null = null;
 
@@ -953,14 +951,10 @@ export class WorkflowOrchestrator {
       // Update viewerRegistry immediately — before any awaits — so that retireWorkflow
       // called from a concurrent state-change event sees isViewed=true and keeps the
       // instance in retiredInstances rather than discarding it. Moving this after the
-      // awaits created a race: the workflow could complete during
-      // replayOutputHistoryTo, causing retirement with stale (false) isViewed.
+      // awaits created a race: the workflow could complete during run-view loading,
+      // causing retirement with stale (false) isViewed.
       this.setViewedWorkflowId(clientId, workflowId);
 
-      // Load the addressed disk snapshot before replaying the live in-memory state.
-      // RUN_VIEW_LOADED resets the webview's live output store, so sending it after
-      // replayFullStateTo caused newly connected browser clients to discard the full
-      // reconnect buffer and display only the potentially incomplete on-disk history.
       const queueState = instance.getQueueState();
       if (queueState.workflowKey) {
         await this.loadRunViewForClient(
@@ -973,48 +967,25 @@ export class WorkflowOrchestrator {
             : {
                 workflowKey: queueState.workflowKey,
                 kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
-              },
+          },
           send,
-          clientId
+          clientId,
+          undefined,
+          undefined,
+          false,
+          options?.skipTerminalReplay
         );
+        // RunViewPublisher sends the full addressed snapshot, then overlays
+        // the bound live output buffer and replays terminals (unless the caller
+        // requested skipTerminalReplay). It is the complete lineage bind.
+        return;
       }
 
-      // A brand-new workflow (New / Ctrl+N) has no lineage yet, so the
-      // addressed RUN_VIEW_LOADED above did not run and nothing has published
-      // an address for it. Its SESSION_RESTORED therefore *replaces* whatever
-      // the client was displaying, and must omit `definitionRevision` — with
-      // one, the webview reads it as a replay of the workflow already on
-      // screen and keeps that workflow's view address, so the rename and every
-      // prompt that follows is written to the workflow the user just left.
+      // A brand-new workflow has no lineage/address to publish, so its full
+      // state replay replaces whatever the client was displaying.
       instance.replayFullStateTo(sink, {
-        asReplacement: !queueState.workflowKey,
+        asReplacement: true,
       });
-      await instance.replayOutputHistoryTo(send);
-      // The addressed RUN_VIEW_LOADED above set the client's displayed view
-      // address (and, for a system-generated lineage, its read-only
-      // lockdown), but replayFullStateTo's SESSION_RESTORED then ran
-      // applyWorkflowChange() on the client, which clears that address,
-      // revisions, and the system-generated flag as part of resetting
-      // cross-workflow state — and unlike the output store it re-populates
-      // via replayOutputHistoryTo, nothing re-publishes them. Left cleared,
-      // the header loses its run identity, the Run/Re-run control collapses
-      // to the disabled "Load a workflow to run" state, and a running
-      // commit-message-generation lineage briefly shows its lockdown banner
-      // before silently becoming editable. Re-publish the authoritative
-      // identity now — WORKFLOW_VIEW_IDENTITY carries isSystemGenerated
-      // alongside address/revisions for exactly this restore.
-      if (queueState.workflowKey) {
-        const identity = await this.getViewIdentity(clientId);
-        if (identity) {
-          send(identity);
-        }
-      }
-      // Replay active terminal sessions to the client so it can render the live
-      // terminal. Only needed for initial connections and reloads where the
-      // client's xterm.js registry has been wiped. Callers that know the client's
-      // registry is intact (workflow switches, panel setDashboardReady) pass
-      // skipTerminalReplay: true so we don't clear and dispose live xtermjs
-      // instances that already hold the correct scrollback.
       if (!options?.skipTerminalReplay) {
         this.replayTerminalSessionsTo(workflowId, send, clientId);
       }
@@ -1759,12 +1730,9 @@ export class WorkflowOrchestrator {
             await this.getActiveInstance().autoLoadFromWorkingFile(
               workingFilePath
             );
-            // Replay full state to the panel (SESSION_RESTORED + ACTIVE_WORKFLOW_CHANGED
-            // + OUTPUT_HISTORY_LOADED). This is required because
-            // DashboardBroadcastHub.updateSessionRestored() is a no-op — SESSION_RESTORED
-            // is only sent via direct PostMessageDashboardSink (inside replayWorkflowStateTo),
-            // never via the hub. Without this call the panel receives no step state and all
-            // status icons show as idle/pending even for completed runs.
+            // Replay to the panel directly: lineage-backed sessions use the
+            // addressed run-view snapshot, while a lineage-less new workflow
+            // still needs SESSION_RESTORED. Neither is a hub broadcast.
             const instance = this.getActiveInstance();
             if (this.storedPanelSend) {
               await this.replayWorkflowStateTo(
@@ -2269,10 +2237,8 @@ export class WorkflowOrchestrator {
 
     // For the panel, suppress duplicate replays after the first one during startup.
     // Multiple READY messages arrive during startup (BootstrapApp → App.tsx →
-    // CLIENT_ID_ASSIGNED), and each replay sends SESSION_RESTORED which clears
-    // historyOutputs, causing a visible output flash before OUTPUT_HISTORY_LOADED
-    // restores it. After _autoLoadHasSettled, replays are always allowed (reconnect /
-    // webview reload).
+    // CLIENT_ID_ASSIGNED), and each replay sends a full snapshot. After
+    // _autoLoadHasSettled, replays are always allowed (reconnect / webview reload).
     const skipPanelStartupReplay =
       clientId === this.PANEL_CLIENT_ID &&
       !this._autoLoadHasSettled &&
@@ -2926,7 +2892,8 @@ export class WorkflowOrchestrator {
     clientId: string,
     requestId?: string,
     definitionRollback?: DefinitionRollbackInvalidation,
-    announceReplayBoundary = false
+    announceReplayBoundary = false,
+    skipTerminalReplay = false
   ): Promise<void> {
     await this.runViewPublisher.loadRunViewForClient(
       address,
@@ -2934,7 +2901,8 @@ export class WorkflowOrchestrator {
       clientId,
       requestId,
       definitionRollback,
-      announceReplayBoundary
+      announceReplayBoundary,
+      skipTerminalReplay
     );
   }
 
