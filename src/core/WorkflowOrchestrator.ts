@@ -114,6 +114,7 @@ import {
 import { WorkflowCommandHandler } from "./orchestration/WorkflowCommandHandler";
 import { WorkspaceSessionManager } from "./orchestration/WorkspaceSessionManager";
 import { WorkspaceInitializer } from "./orchestration/WorkspaceInitializer";
+import { WorkflowActivityTracker } from "./orchestration/WorkflowActivityTracker";
 import {
   WorkflowInstanceRegistry,
   type LineageExecutionClaim,
@@ -347,6 +348,10 @@ export class WorkflowOrchestrator {
       getActiveQueueState: () => this.getActiveQueueState(),
       getActiveTerminalWorkflowRefs: () => this.getActiveTerminalWorkflowRefs(),
       syncExecutingRunViews: (instance) => this.syncExecutingRunViews(instance),
+      observeWorkflowActivity: (summary) =>
+        this.observeWorkflowActivity(summary),
+      acknowledgeWorkflowView: (workflowId, address) =>
+        this.acknowledgeWorkflowView(workflowId, address),
     });
   }
 
@@ -538,6 +543,7 @@ export class WorkflowOrchestrator {
 
   /** Emits the queue state of the instance currently viewed by the panel. */
   private activeQueueStateChangedEmitter?: TypedEmitter<QueueState | undefined>;
+  private workflowActivityTracker?: WorkflowActivityTracker;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Cross-cutting concerns
@@ -709,7 +715,6 @@ export class WorkflowOrchestrator {
     this.runViewPublisher = this.createRunViewPublisher();
 
     // Wire harness status subscriptions
-    const defaultIntegration = this.getDefaultIntegration();
     const allIntegrations: Array<[HarnessId, CliIntegration]> = [
       [HARNESS_IDS.COPILOT_CLI, this.copilotCliIntegration],
       [HARNESS_IDS.CLAUDE_CLI, this.claudeCliIntegration],
@@ -722,9 +727,11 @@ export class WorkflowOrchestrator {
       const installHint = integration.getInstallHint();
       this.disposableRegistry.add(
         integration.onDidChangeStatus((status) => {
-          if (integration === defaultIntegration) {
+          // Resolved per event: the default harness is a setting that can
+          // change after construction.
+          if (integration === this.getDefaultIntegration()) {
             Log.trace(
-              `[WorkflowOrchestrator] Copilot status changed to: ${status}`
+              `[WorkflowOrchestrator] Default harness ${harnessId} status changed to: ${status}`
             );
             this.updateStatusBar();
           }
@@ -4714,6 +4721,7 @@ export class WorkflowOrchestrator {
   dispose(): void {
     this.activeQueueStateChangedEmitter?.dispose();
     this.activeQueueStateChangedEmitter = undefined;
+    this.workflowActivityTracker?.dispose();
 
     // Dispose all retired instances (completed/stopped, not in main map)
     for (const instance of this.retiredInstances.values()) {
@@ -5033,11 +5041,61 @@ export class WorkflowOrchestrator {
     this.antigravityCliIntegration.setWorkflowName(name);
   }
 
+  private getWorkflowActivityTracker(): WorkflowActivityTracker {
+    return (this.workflowActivityTracker ??= new WorkflowActivityTracker(() =>
+      this.updateStatusBar()
+    ));
+  }
+
+  private observeWorkflowActivity(summary: WorkflowSummary): void {
+    if (this.getWorkflowActivityTracker().observe(summary)) {
+      this.updateStatusBar();
+    }
+  }
+
+  private acknowledgeWorkflowView(
+    workflowId: string | null,
+    address: WorkflowViewAddress | null
+  ): void {
+    if (
+      this.getWorkflowActivityTracker().acknowledgeView(workflowId, address)
+    ) {
+      this.updateStatusBar();
+    }
+  }
+
+  /**
+   * Status bar click while a failure is unseen: open the panel on the oldest
+   * failed run. Acknowledging explicitly covers a panel already showing it,
+   * where the navigation does not change the view address.
+   */
+  async openUnseenFailedRun(): Promise<void> {
+    const failure = this.getWorkflowActivityTracker().getOldestUnseenFailure();
+    await this.openPanel();
+    if (!failure) return;
+    if (failure.workflowKey && failure.runRef) {
+      await this.runLifecycleService.switchClientToRunAddress(
+        {
+          workflowKey: failure.workflowKey,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: failure.runRef,
+        },
+        this.PANEL_CLIENT_ID
+      );
+    }
+    this.acknowledgeWorkflowView(failure.workflowId, null);
+  }
+
   private updateStatusBar(): void {
-    const activeInstance = this.getActiveInstance();
-    const state = activeInstance.getQueueState();
-    const harnessStatus = this.getDefaultIntegration().getDetailedStatus();
-    this.statusBarSink?.updateStatusBar(state, harnessStatus);
+    if (!this.statusBarSink) return;
+    const activity = this.getWorkflowActivityTracker().buildSummary(
+      this.getAllWorkflows().map((instance) => instance.getSummary())
+    );
+    const harnessId = ConfigurationUtils.getIntegrationMode();
+    this.statusBarSink.updateStatusBar(activity, {
+      ...this.resolveDetectorIntegration(harnessId).getDetailedStatus(),
+      harnessId,
+    });
   }
 
   // ─────────────────────────────────────────────────────────────────────────

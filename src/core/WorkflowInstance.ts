@@ -4023,10 +4023,7 @@ export class WorkflowInstance
   ): Promise<string | undefined> {
     const integration = this.getDetectorIntegration(harnessId);
     let status = integration.getDetailedStatus();
-    if (
-      status.initializationStatus === HarnessStatus.Initializing ||
-      status.initializationStatus === HarnessStatus.Waiting
-    ) {
+    if (status.initializationStatus === HarnessStatus.Initializing) {
       await new Promise<void>((resolve) => {
         let settled = false;
         const settle = () => {

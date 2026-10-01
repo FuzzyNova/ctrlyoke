@@ -14,6 +14,8 @@ import type {
   HarnessId,
   QueueState,
   RunnerHostIdentity,
+  WorkflowSummary,
+  WorkflowViewAddress,
 } from "../../types/CtrlYokeTypes";
 import type { ActiveTerminalWorkflowRef } from "../../types/WebviewMessageTypes";
 import type { HarnessUsageSnapshot } from "../../types/UsageTypes";
@@ -45,6 +47,11 @@ export class TestWorkflowInstanceRegistryHost implements WorkflowInstanceRegistr
   /** Records the calls a test may want to assert on. */
   readonly fired: (QueueState | undefined)[] = [];
   readonly synced: WorkflowInstance[] = [];
+  readonly observed: WorkflowSummary[] = [];
+  readonly acknowledged: {
+    workflowId: string | null;
+    address: WorkflowViewAddress | null;
+  }[] = [];
 
   resolveDetectorIntegration(_harnessOverride?: HarnessId): HarnessIntegration {
     return new MockHarnessIntegration(undefined, false);
@@ -84,5 +91,14 @@ export class TestWorkflowInstanceRegistryHost implements WorkflowInstanceRegistr
   async approveSecretGrantsForWorkflow(): Promise<void> {}
   syncExecutingRunViews(instance: WorkflowInstance): void {
     this.synced.push(instance);
+  }
+  observeWorkflowActivity(summary: WorkflowSummary): void {
+    this.observed.push(summary);
+  }
+  acknowledgeWorkflowView(
+    workflowId: string | null,
+    address: WorkflowViewAddress | null
+  ): void {
+    this.acknowledged.push({ workflowId, address });
   }
 }

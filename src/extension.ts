@@ -689,6 +689,22 @@ function registerCommands(
     }
   );
 
+  // Status bar click while a run that failed this session is still unseen
+  const openUnseenFailedRunCommand = vscode.commands.registerCommand(
+    VSCODE_COMMANDS.OPEN_UNSEEN_FAILED_RUN,
+    async () => {
+      await workflowOrchestrator.openUnseenFailedRun();
+    }
+  );
+
+  // Status bar click while the default harness is unavailable
+  const retryHarnessDetectionCommand = vscode.commands.registerCommand(
+    VSCODE_COMMANDS.RETRY_HARNESS_DETECTION,
+    async () => {
+      await workflowOrchestrator.retryHarnessDetection();
+    }
+  );
+
   const openSecretsSettingsCommand = vscode.commands.registerCommand(
     VSCODE_COMMANDS.OPEN_SECRETS_SETTINGS,
     async () => {
@@ -1627,6 +1643,8 @@ function registerCommands(
   // Add all production commands to subscriptions
   context.subscriptions.push(
     openPanelCommand,
+    openUnseenFailedRunCommand,
+    retryHarnessDetectionCommand,
     openSecretsSettingsCommand,
     showGettingStartedCommand,
     registerInstallCliCommand(context),

@@ -7,7 +7,11 @@ import {
   EXECUTION_STATES,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../../types/DashboardConstants";
-import type { QueueState } from "../../types/CtrlYokeTypes";
+import type {
+  QueueState,
+  RunRef,
+  WorkflowKey,
+} from "../../types/CtrlYokeTypes";
 
 function fakeInstance(
   id: string,
@@ -137,5 +141,45 @@ suite("WorkflowInstanceRegistry", () => {
     assert.strictEqual(registry.promoteInstanceToLive(instance), true);
     assert.strictEqual(registry.getInstances().get(instance.id), instance);
     assert.strictEqual(registry.getRetiredInstances().has(instance.id), false);
+  });
+  test("reports a client's navigation, not a re-bind to the same view, for status bar acknowledgement", () => {
+    const host = new TestWorkflowInstanceRegistryHost();
+    const registry = new WorkflowInstanceRegistry(host);
+    const instance = fakeInstance(
+      "instance-a",
+      "lineage-a",
+      EXECUTION_STATES.ERROR
+    );
+    registry.getInstances().set(instance.id, instance);
+    registry.registerClient("client-a");
+
+    registry.setViewedWorkflowId("client-a", instance.id);
+    registry.setViewedWorkflowId("client-a", instance.id);
+    assert.deepStrictEqual(host.acknowledged, [
+      {
+        workflowId: instance.id,
+        address: {
+          workflowKey: "lineage-a",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        },
+      },
+    ]);
+
+    const runAddress = {
+      workflowKey: "lineage-a" as WorkflowKey,
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+      runRef: "run-1" as RunRef,
+    } as const;
+    registry.setViewAddress("client-a", runAddress);
+    registry.setViewAddress("client-a", { ...runAddress });
+    assert.strictEqual(host.acknowledged.length, 2);
+    assert.deepStrictEqual(host.acknowledged[1], {
+      workflowId: null,
+      address: runAddress,
+    });
+    assert.deepStrictEqual(
+      registry.getViewAddressRegistry().get("client-a"),
+      runAddress
+    );
   });
 });

@@ -175,7 +175,6 @@ export function buildPriorContextXmlFromItems(
  */
 export enum HarnessStatus {
   Initializing = "initializing",
-  Waiting = "waiting",
   Ready = "ready",
   Unavailable = "unavailable",
 }
@@ -1056,8 +1055,6 @@ export abstract class HarnessIntegration {
     initializationStatus: HarnessStatus;
     isReady: boolean;
     message: string;
-    pollingAttempts?: number;
-    maxPollingAttempts?: number;
   } {
     const status = this.getInitializationStatus();
     let message = "";
@@ -1065,9 +1062,6 @@ export abstract class HarnessIntegration {
     switch (status) {
       case HarnessStatus.Initializing:
         message = "🔍 Initializing Harness integration...";
-        break;
-      case HarnessStatus.Waiting:
-        message = "⏳ Waiting for Harness...";
         break;
       case HarnessStatus.Ready:
         message = "✅ Harness ready";
@@ -1127,9 +1121,7 @@ export abstract class HarnessIntegration {
   }
 
   /**
-   * Retry integration detection/initialization
-   * CLI: Re-runs initialize()
-   * Chat: Restarts polling for Harness availability
+   * Retry integration detection by re-running initialize().
    */
   async retryDetection(): Promise<void> {
     await this.initialize();

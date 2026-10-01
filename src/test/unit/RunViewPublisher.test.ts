@@ -99,6 +99,10 @@ class FakeRegistry implements RunViewPublisherRegistryPort {
     return this.addresses;
   }
 
+  setViewAddress(clientId: string, address: WorkflowViewAddress): void {
+    this.addresses.set(clientId, address);
+  }
+
   getViewMessageSinks(): Map<string, (message: unknown) => void> {
     return this.sinks;
   }

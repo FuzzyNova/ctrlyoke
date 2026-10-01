@@ -629,10 +629,7 @@ export class WorkflowStartupPipeline {
       this.port.getDetectorIntegration(preflightHarness);
     let detailedStatus = detectedIntegration.getDetailedStatus();
 
-    if (
-      detailedStatus.initializationStatus === HarnessStatus.Initializing ||
-      detailedStatus.initializationStatus === HarnessStatus.Waiting
-    ) {
+    if (detailedStatus.initializationStatus === HarnessStatus.Initializing) {
       Log.info(
         `[executeLoadedPromptFile] ctrlyoke: Harness not ready (${detailedStatus.initializationStatus}), waiting for status change…`
       );

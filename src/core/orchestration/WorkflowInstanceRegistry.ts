@@ -9,6 +9,7 @@ import type {
   PromptFile,
   RunnerHostIdentity,
   WorkflowKey,
+  WorkflowSummary,
   WorkflowViewAddress,
 } from "../../types/CtrlYokeTypes";
 import { workflowDisplayStep } from "../../types/CtrlYokeTypes";
@@ -25,7 +26,10 @@ import type { UserFeedbackSink } from "../UserFeedbackSink";
 import type { UserInteractionPort } from "../../ui/UserInteractionPort";
 import { getPtyProcessManager } from "../harness/PtyProcessManager";
 import { Log } from "../../utils/Log";
-import type { RunViewPublisherRegistryPort } from "./RunViewPublisher";
+import {
+  sameViewAddress,
+  type RunViewPublisherRegistryPort,
+} from "./RunViewPublisher";
 import type { RunLifecycleRegistryPort } from "./RunLifecycleService";
 
 export interface LineageExecutionClaim {
@@ -130,6 +134,13 @@ export interface WorkflowInstanceRegistryHost extends WorkflowInstanceRegistryBu
   readonly getActiveQueueState: () => QueueState | undefined;
   readonly getActiveTerminalWorkflowRefs: () => ActiveTerminalWorkflowRef[];
   readonly syncExecutingRunViews: (instance: WorkflowInstance) => void;
+  /** Every instance state change, before a terminal state retires it. */
+  readonly observeWorkflowActivity: (summary: WorkflowSummary) => void;
+  /** A client navigated to a different instance or run address. */
+  readonly acknowledgeWorkflowView: (
+    workflowId: string | null,
+    address: WorkflowViewAddress | null
+  ) => void;
 }
 
 /** Owns workflow instances, retirement, lineage binding, and client viewers. */
@@ -444,10 +455,9 @@ export class WorkflowInstanceRegistry
     this.viewerRegistry.set(clientId, workflowId);
     if (previous === workflowId) return;
     const adopted = workflowId ? this.findInstance(workflowId) : undefined;
-    this.viewAddressRegistry.set(
-      clientId,
-      lineageAddressOf(adopted?.getQueueState())
-    );
+    const address = lineageAddressOf(adopted?.getQueueState());
+    this.viewAddressRegistry.set(clientId, address);
+    this.host.acknowledgeWorkflowView(workflowId, address);
     const previousInRetired = previous
       ? this.retiredInstances.has(previous)
       : false;
@@ -461,6 +471,18 @@ export class WorkflowInstanceRegistry
     );
     if (clientId === this.panelClientId && this.host) {
       this.host.fireActiveQueueStateChanged(this.host.getActiveQueueState());
+    }
+  }
+
+  /**
+   * Point a client at a run address. Navigation (a changed address) is
+   * reported to the host; re-delivering the same address is a refresh.
+   */
+  setViewAddress(clientId: string, address: WorkflowViewAddress): void {
+    const previous = this.viewAddressRegistry.get(clientId);
+    this.viewAddressRegistry.set(clientId, address);
+    if (!sameViewAddress(previous, address)) {
+      this.host.acknowledgeWorkflowView(null, address);
     }
   }
 
@@ -577,6 +599,7 @@ export class WorkflowInstanceRegistry
         host.fireActiveQueueStateChanged(state);
       }
       const summary = instance.getSummary();
+      host.observeWorkflowActivity(summary);
       const inRegistry = this.instances.has(instance.id);
       const lineageIdentity = `${state.workflowKey ?? ""}|${state.runRef ?? ""}`;
       if (lineageIdentity !== lastLineageIdentity) {

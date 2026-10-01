@@ -4353,6 +4353,9 @@ export const VSCODE_COMMANDS = {
   MERGE_WORKTREE: "ctrlyoke.mergeWorktree",
   MANAGE_WORKTREES: "ctrlyoke.manageWorktrees",
   OPEN_WORKTREE_OWNER: "ctrlyoke.openWorktreeOwner",
+  OPEN_PANEL: "ctrlyoke.openPanel",
+  OPEN_UNSEEN_FAILED_RUN: "ctrlyoke.openUnseenFailedRun",
+  RETRY_HARNESS_DETECTION: "ctrlyoke.retryHarnessDetection",
   RELOAD_WINDOW: "workbench.action.reloadWindow",
 } as const;
 

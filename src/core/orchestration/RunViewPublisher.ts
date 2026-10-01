@@ -48,6 +48,7 @@ export interface StepColorInvalidation {
 /** The instance/view state consumed by the addressed-view read path. */
 export interface RunViewPublisherRegistryPort {
   getViewAddressRegistry(): Map<string, WorkflowViewAddress | null>;
+  setViewAddress(clientId: string, address: WorkflowViewAddress): void;
   getViewMessageSinks(): Map<string, (message: unknown) => void>;
   getLineageBindingClients(): Set<string>;
   getViewedWorkflowId(clientId: string): string | null;
@@ -465,7 +466,7 @@ export class RunViewPublisher implements RunLifecycleViewPort {
     const { workingFile } = view;
     const executionRunRef = this.host.findExecutionRunRef(address.workflowKey);
     const workspaceRoot = this.host.workspaceRoot;
-    this.host.registry.getViewAddressRegistry().set(clientId, address);
+    this.host.registry.setViewAddress(clientId, address);
     this.host.registry.getViewMessageSinks().set(clientId, send);
 
     // Only a live view can hold in-memory output the timeline read above could
