@@ -1048,33 +1048,6 @@ export class WorkflowInstance
     );
   }
 
-  async replayOutputHistoryTo(send: (msg: unknown) => void): Promise<void> {
-    const { workflowKey, runRef } = this.promptQueue.getState();
-    if (!workflowKey || !runRef) {
-      return;
-    }
-    try {
-      const om = this.outputHistoryManager;
-      const runs = await om.getRunsForWorkflow(workflowKey);
-      const currentRunIndex = runs.indexOf(runRef);
-      if (currentRunIndex >= 0) {
-        const historyPath = om.getHistoryFilePath(workflowKey, runRef);
-        const history = await om.loadHistory(historyPath);
-        send({
-          type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
-          history,
-          availableRuns: runs.length,
-          currentRunIndex,
-        });
-      }
-    } catch (err) {
-      Log.warn(
-        `[inst:${this.id.slice(0, 8)}] replayOutputHistoryTo failed:`,
-        err
-      );
-    }
-  }
-
   /** Release file-system watchers and child processes owned by this instance */
   dispose(): void {
     // Clear heartbeat interval (the finally block in startWorkflowExecution handles
@@ -1246,6 +1219,22 @@ export class WorkflowInstance
 
   getQueueState(): QueueState {
     return this.promptQueue.getState();
+  }
+
+  /** Runtime-only state that can be newer than the addressed working file. */
+  getRunViewLiveState() {
+    const state = this.promptQueue.getState();
+    return {
+      executionState: this.getAuthoritativeExecutionState(),
+      currentIndex: state.currentIndex,
+      steps: state.steps,
+      results: state.results,
+      parallelGroups: state.parallelGroups,
+      finalStep: this.promptQueue.getWorkflowFile().finalStep ?? null,
+      finalStepRuntime: this.promptQueue.getFinalStepRuntime(),
+      workflowProperties: this.getWorkflowPropertiesForDashboard(),
+      schemaWarnings: this.promptFileLoader.getLastSchemaWarnings(),
+    };
   }
 
   /** Filesystem root whose coordination board belongs to this instance. */

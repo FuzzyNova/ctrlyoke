@@ -70,8 +70,6 @@ export class NotificationManager implements DashboardClient {
   updateExecutionState(): void {}
   updateExecutionCompleted(): void {}
 
-  async loadOutputHistoryForWorkflow(): Promise<void> {}
-
   sendTestNotification(): void {
     this.showNotification(buildTestNotificationEvent());
   }

@@ -66,11 +66,6 @@ export interface IDashboardSink {
     schemaWarnings?: WorkflowValidationWarning[]
   ): Promise<void>;
 
-  loadOutputHistoryForWorkflow?(
-    workflowFilePath: string,
-    workflowInstanceId?: string
-  ): Promise<void>;
-
   updateExecutionStarted(
     workflowId: string,
     fileName: string,

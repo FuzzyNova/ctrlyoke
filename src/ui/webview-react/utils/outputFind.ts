@@ -28,6 +28,7 @@ import { resolveCtrlYokeToolView } from "../components/output/ctrlyoke-tools/reg
 import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
 import { buildSelectionReferenceText } from "@root/completions/ContextReferenceBuilder";
 import { getToolResultText } from "./toolResultText";
+import { isToolOutputTruncated } from "./toolOutputHydration";
 
 export { getToolResultText } from "./toolResultText";
 
@@ -488,4 +489,13 @@ export function findOutputMatches(
   });
 
   return matches;
+}
+
+/** Find indexes the payload head; callers surface that tail text was omitted. */
+export function hasTruncatedOutput(rows: readonly OutputRenderRow[]): boolean {
+  return rows.some(
+    (row) =>
+      row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
+      isToolOutputTruncated(row.event)
+  );
 }

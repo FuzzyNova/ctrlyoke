@@ -7,7 +7,7 @@ deliberately not done — see its verdict below.
 
 ## Relationship to the paging plan
 
-`dev/backlog/RUN_VIEW_PAYLOAD_PAGING_PLAN.md` is about the **payload** — the
+`dev/implemented/RUN_VIEW_PAYLOAD_PAGING_PLAN.md` is about the **payload** — the
 54.5 MB `RUN_VIEW_LOADED` message. This plan is about what the **client does
 with the rows after they arrive**. On the reproduction run the client side was
 by far the larger cost: 15.6 s of blocked main thread against 1.5 s of
@@ -508,6 +508,6 @@ attributes real time to minimap reconciliation specifically.
   address.
 - **The residual settle frame.** Removing the 255–420 ms hitch at drag release
   means attacking React commit and style/layout for ~5 000 rows, which is the
-  windowing work in `dev/backlog/RUN_VIEW_PAYLOAD_PAGING_PLAN.md`, not a memo
+  windowing work in `dev/backlog/RUN_VIEW_PAYLOAD_FOLLOWUPS.md`, not a memo
   change here. `quantizeOutputMinimapBars` was deliberately built as a
   structural projection so that plan can reuse it.

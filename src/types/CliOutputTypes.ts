@@ -32,6 +32,12 @@ export interface CliEvent {
    * produced inside a spawned sub-agent (Task tool). Omitted for non-tool events.
    */
   callerType?: CallerType | string;
+  /** True when one or more large text fields were capped for a run-view payload. */
+  outputTruncated?: boolean;
+  /** UTF-8 byte count of the complete capped text field(s), before projection. */
+  outputTotalBytes?: number;
+  /** Number of rendered lines across complete capped output/error fields. */
+  outputTotalLines?: number;
 }
 
 /**
@@ -276,6 +282,13 @@ export interface ToolResult {
   output?: string;
   /** Error message (if failed) */
   error?: string;
+  /** True when output or error was capped for a run-view payload. */
+  outputTruncated?: boolean;
+  /** UTF-8 byte count of the complete output/error text before projection. */
+  outputTotalBytes?: number;
+  outputTotalLines?: number;
+  outputLines?: number;
+  errorLines?: number;
 }
 
 /**
@@ -354,6 +367,13 @@ export interface BashCommandData {
   status?: FileOperationStatus;
   /** Tool call ID used to correlate this command with its result */
   toolCallId?: string;
+  /** True when output or error was capped for a run-view payload. */
+  outputTruncated?: boolean;
+  /** UTF-8 byte count of the complete output/error text before projection. */
+  outputTotalBytes?: number;
+  outputTotalLines?: number;
+  outputLines?: number;
+  errorLines?: number;
 }
 
 /**

@@ -8,6 +8,7 @@ import {
   WORKTREE_DIRECTORY_STATES,
   WORKTREE_LIFECYCLE_STATES,
   WORKTREE_MODES,
+  UNDO_FILE_ACTIONS,
 } from "../types/DashboardConstants";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import type { PostMessageFn } from "./WebviewSettingsSync";
@@ -80,8 +81,14 @@ export class UndoRedoCoordinator {
     _clientId: string = PANEL_CLIENT_ID
   ): Promise<void> {
     const { requestId, target, files, workflowKey, runRef } = message.data;
+    const authoritativeFiles = await this.loadSnapshotRestoreContents(
+      target,
+      files,
+      workflowKey,
+      runRef
+    );
     const result = await this.applyUndoEntries(
-      [{ target, files }],
+      [{ target, files: authoritativeFiles }],
       workflowKey,
       runRef,
       postMessage,
@@ -111,18 +118,66 @@ export class UndoRedoCoordinator {
     _clientId: string = PANEL_CLIENT_ID
   ): Promise<void> {
     const { requestId, workflowKey, runRef, entries } = message.data;
+    const authoritativeEntries = await Promise.all(
+      entries.map(async (entry) => ({
+        ...entry,
+        files: await this.loadSnapshotRestoreContents(
+          entry.target,
+          entry.files,
+          workflowKey,
+          runRef
+        ),
+      }))
+    );
     const firstTarget = entries[0]?.target ?? {
       kind: FINAL_STEP_PHASES.QUEUE,
       stepIndex: 0,
     };
     const result = await this.applyUndoEntries(
-      entries,
+      authoritativeEntries,
       workflowKey,
       runRef,
       postMessage,
       { emitUndoRecordWithoutHistory: false }
     );
     this.emitUndoPromptResult(postMessage, requestId, firstTarget, result);
+  }
+
+  /** Restore-content undo bodies always come from the addressed run history. */
+  private async loadSnapshotRestoreContents(
+    target: OutputExecutionTarget,
+    files: UndoFileInstruction[],
+    workflowKey: WorkflowKey,
+    runRef: RunRef
+  ): Promise<UndoFileInstruction[]> {
+    const orchestrator = this.getOrchestrator();
+    return Promise.all(
+      files.map(async (file) => {
+        if (file.action !== UNDO_FILE_ACTIONS.RESTORE_CONTENT) return file;
+        let content:
+          | Awaited<
+              ReturnType<
+                WorkflowOrchestrator["getWorkspaceSnapshotFileContent"]
+              >
+            >
+          | undefined;
+        try {
+          content = await orchestrator?.getWorkspaceSnapshotFileContent(
+            { workflowKey, runRef },
+            target,
+            file.path
+          );
+        } catch {
+          content = undefined;
+        }
+        return {
+          ...file,
+          ...(content?.contentToRestore !== undefined
+            ? { contentToRestore: content.contentToRestore }
+            : { contentToRestore: undefined }),
+        };
+      })
+    );
   }
 
   async handleRedoWorkflowChanges(
@@ -216,9 +271,23 @@ export class UndoRedoCoordinator {
 
     for (const entry of entries) {
       if (entry.files.length === 0) continue;
+      const filesWithContent = entry.files.filter((file) => {
+        if (
+          file.action !== UNDO_FILE_ACTIONS.RESTORE_CONTENT ||
+          file.contentToRestore !== undefined
+        ) {
+          return true;
+        }
+        failedFiles.push({
+          path: file.path,
+          error: "Snapshot restore content is unavailable in run history",
+        });
+        return false;
+      });
+      if (filesWithContent.length === 0) continue;
       try {
         const result = await snapshotService.undoFiles(
-          entry.files,
+          filesWithContent,
           workspace.executionRoot,
           workspace.namedWorkspaceRoots
         );
@@ -231,7 +300,7 @@ export class UndoRedoCoordinator {
       } catch (error) {
         const errorMessage = getErrorMessage(error);
         failedFiles.push(
-          ...this.createFailedUndoFiles(entry.files, errorMessage)
+          ...this.createFailedUndoFiles(filesWithContent, errorMessage)
         );
       }
     }

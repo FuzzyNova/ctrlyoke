@@ -84,18 +84,6 @@ export class DashboardBroadcastHub
     }
   }
 
-  async loadOutputHistoryForWorkflow(
-    workflowFilePath: string,
-    workflowInstanceId?: string
-  ): Promise<void> {
-    for (const client of this.clients) {
-      await client.loadOutputHistoryForWorkflow?.(
-        workflowFilePath,
-        workflowInstanceId
-      );
-    }
-  }
-
   updateWorktreeMerge(
     address: Extract<WorkflowViewAddress, { kind: "run" }>,
     worktree: WorktreeRunProjection

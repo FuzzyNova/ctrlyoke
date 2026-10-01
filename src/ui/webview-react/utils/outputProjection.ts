@@ -42,6 +42,8 @@ export interface OutputMessage {
   activityKind?: OutputActivityEntry["kind"];
   activityText?: string;
   activityEvents?: CliEvent[];
+  /** Aggregate event indices corresponding to `activityEvents` after normalization. */
+  activityEventIndices?: number[];
   /** Aggregate attempt metadata retained for undo/stats while activities render. */
   aggregate?: CliOutput;
 }
@@ -97,7 +99,7 @@ function activityIdentityKey(entry: OutputActivityEntry): string {
  */
 function normalizeStructuredActivityEvents(
   activities: readonly OutputActivityEntry[]
-): Map<OutputActivityEntry, CliEvent[]> {
+): Map<OutputActivityEntry, { events: CliEvent[]; indices: number[] }> {
   const slicesByIdentity = new Map<string, OutputActivityEntry[]>();
   for (const activity of activities) {
     if (activity.kind !== OUTPUT_ACTIVITY_KINDS.STRUCTURED) continue;
@@ -110,8 +112,12 @@ function normalizeStructuredActivityEvents(
     }
   }
 
-  const eventsBySlice = new Map<OutputActivityEntry, CliEvent[]>();
+  const eventsBySlice = new Map<
+    OutputActivityEntry,
+    { events: CliEvent[]; indices: number[] }
+  >();
   for (const slices of slicesByIdentity.values()) {
+    let aggregateEventIndex = 0;
     const attemptEvents: CliEvent[] = [];
     const sliceByEventIndex: OutputActivityEntry[] = [];
     for (const slice of slices) {
@@ -125,11 +131,13 @@ function normalizeStructuredActivityEvents(
       attemptEvents
     )) {
       const slice = sliceByEventIndex[sourceIndex];
+      const index = aggregateEventIndex++;
       const owned = eventsBySlice.get(slice);
       if (owned) {
-        owned.push(event);
+        owned.events.push(event);
+        owned.indices.push(index);
       } else {
-        eventsBySlice.set(slice, [event]);
+        eventsBySlice.set(slice, { events: [event], indices: [index] });
       }
     }
   }
@@ -270,9 +278,10 @@ export function mapOrderedHistoryEntriesToMessages(
     const aggregate = aggregateByIdentity.get(identityKey);
     const isStructured = activity.kind === OUTPUT_ACTIVITY_KINDS.STRUCTURED;
     const baseKey = `${identityKey}:${activity.kind}`;
-    const events = isStructured
-      ? (structuredEventsBySlice.get(activity) ?? [])
+    const normalizedSlice = isStructured
+      ? structuredEventsBySlice.get(activity)
       : undefined;
+    const events = isStructured ? (normalizedSlice?.events ?? []) : undefined;
     // Every event this slice carried was merged into a block an earlier slice
     // opened, so the slice has nothing of its own left to draw.
     if (events?.length === 0) continue;
@@ -338,6 +347,7 @@ export function mapOrderedHistoryEntriesToMessages(
       activityKind: activity.kind,
       activityText: activity.text,
       activityEvents: events,
+      activityEventIndices: normalizedSlice?.indices,
       aggregate: aggregate?.data as CliOutput | undefined,
     };
     activityByKey.set(activityKey, message);

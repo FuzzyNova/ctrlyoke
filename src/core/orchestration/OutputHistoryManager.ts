@@ -14,6 +14,7 @@ import {
   OutputExecutionTarget,
   OutputActivityEntry,
   WorkspaceSnapshot,
+  SnapshotFileChange,
   UndoRecord,
   StepOutput,
 } from "../../types/OutputHistoryTypes";
@@ -21,10 +22,12 @@ import { WorkspaceSnapshotService } from "../../utils/WorkspaceSnapshotService";
 import { CliOutput, StatusMessage } from "../../types/WebviewMessageTypes";
 import {
   ACTIVE_EXECUTION_STATES,
+  EXECUTION_PHASES,
   EXECUTION_STATES,
   HARNESS_IDS,
   HISTORY_TRASH_ENTRY_KINDS,
   OUTPUT_ACTIVITY_KINDS,
+  OUTPUT_HISTORY_KINDS,
   STEP_TYPES,
   WORKFLOW_LOCK_LIVENESS,
   WORKTREE_EDIT_KINDS,
@@ -41,7 +44,10 @@ import { OutputHistoryTimelineAdapter } from "./OutputHistoryTimelineAdapter";
 import { HistorySearchIndexService } from "./HistorySearchIndexService";
 import { getSharedHistorySearchIndexService } from "./HistorySearchIndexServiceRegistry";
 import { TimelineRecorder } from "./TimelineRecorder";
-import { RunOutputResolver } from "./RunOutputResolver";
+import {
+  RunOutputResolver,
+  sameOutputExecutionTarget,
+} from "./RunOutputResolver";
 import { RunMetadataScanner } from "./RunMetadataScanner";
 import { WorkflowTokenTotalsReducer } from "./WorkflowTokenTotalsReducer";
 import { ObservedHarnessUsageStore } from "../harness/shared/usage/ObservedHarnessUsageStore";
@@ -179,6 +185,10 @@ export interface RunNavigationSummary {
  * - History is a self-contained snapshot (renders independently of current prompts)
  */
 export class OutputHistoryManager {
+  private static readonly pendingToolOutputHistoryReads = new Map<
+    string,
+    Promise<WorkflowOutputHistory>
+  >();
   private readonly timelineRecorder = new TimelineRecorder();
   private readonly timelineAdapter = new OutputHistoryTimelineAdapter(
     this.timelineRecorder
@@ -201,6 +211,8 @@ export class OutputHistoryManager {
     (flush, result) => this.publishStreamingFlush(flush, result)
   );
   private readonly snapshotService = new WorkspaceSnapshotService();
+  /** Latest snapshots accepted from the live executor, even before disk flush completes. */
+  private readonly liveSnapshots = new Map<string, WorkspaceSnapshot>();
   /** Latest fire-and-forget search-index refresh; see flushPendingIndexRefresh. */
   private pendingIndexRefresh: Promise<void> = Promise.resolve();
   /** One aggregate owner per active run manifest. */
@@ -900,6 +912,10 @@ export class OutputHistoryManager {
     if (!historyFilePath) {
       return;
     }
+    this.liveSnapshots.set(
+      this.getSnapshotCacheKey(historyFilePath, target),
+      snapshot
+    );
     try {
       const existingSnapshot =
         await this.runMetadataScanner.findLatestWorkspaceSnapshot(
@@ -930,6 +946,66 @@ export class OutputHistoryManager {
         error
       );
     }
+  }
+
+  /** Read one file from the latest snapshot for a target without projecting the full run. */
+  async getSnapshotFileContent(
+    historyFilePath: string,
+    target: OutputExecutionTarget,
+    filePath: string
+  ): Promise<
+    | Pick<
+        SnapshotFileChange,
+        "beforeContent" | "contentToRestore" | "contentCaptureSkipped"
+      >
+    | undefined
+  > {
+    if (!historyFilePath || !filePath) return undefined;
+    const snapshot =
+      this.liveSnapshots.get(
+        this.getSnapshotCacheKey(historyFilePath, target)
+      ) ??
+      (await this.runMetadataScanner.findLatestWorkspaceSnapshot(
+        historyFilePath,
+        target
+      ));
+    const fileChange =
+      snapshot?.changedFiles.find((change) => change.path === filePath) ??
+      this.findSnapshotChangeForUndoPath(snapshot, filePath);
+    if (!snapshot || !fileChange) return undefined;
+
+    const enriched = await this.enrichWorkspaceSnapshot(snapshot);
+    const enrichedChange = enriched.changedFiles.find(
+      (change) => change.path === fileChange.path
+    );
+    if (!enrichedChange) return undefined;
+    return {
+      ...(enrichedChange.beforeContent !== undefined
+        ? { beforeContent: enrichedChange.beforeContent }
+        : {}),
+      ...(enrichedChange.contentToRestore !== undefined
+        ? { contentToRestore: enrichedChange.contentToRestore }
+        : {}),
+      ...(enrichedChange.contentCaptureSkipped !== undefined
+        ? { contentCaptureSkipped: enrichedChange.contentCaptureSkipped }
+        : {}),
+    };
+  }
+
+  /** Match legacy CLI absolute paths only when they identify one indexed path. */
+  private findSnapshotChangeForUndoPath(
+    snapshot: WorkspaceSnapshot | undefined,
+    filePath: string
+  ): SnapshotFileChange | undefined {
+    if (!snapshot || !path.isAbsolute(filePath)) return undefined;
+    const normalizedRequest = filePath.replace(/\\/g, "/").toLowerCase();
+    const matches = snapshot.changedFiles.filter((change) => {
+      const normalizedSnapshotPath = change.path
+        .replace(/\\/g, "/")
+        .toLowerCase();
+      return normalizedRequest.endsWith(`/${normalizedSnapshotPath}`);
+    });
+    return matches.length === 1 ? matches[0] : undefined;
   }
 
   /**
@@ -1071,6 +1147,59 @@ export class OutputHistoryManager {
       // timeline remains renderable without a worktree projection.
     }
     return enriched;
+  }
+
+  /** Read events from the exact normalized aggregate used by RUN_VIEW_LOADED. */
+  async getCliOutputEvents(
+    historyFilePath: string,
+    identities: readonly {
+      target: OutputExecutionTarget;
+      attemptIndex: number;
+      runIndex?: number;
+      phase?: ExecutionPhase;
+      eventIndex: number;
+    }[]
+  ): Promise<(CliEvent | undefined)[]> {
+    if (identities.length === 0) return [];
+    let pendingRead =
+      OutputHistoryManager.pendingToolOutputHistoryReads.get(historyFilePath);
+    if (!pendingRead) {
+      pendingRead = this.loadHistory(historyFilePath);
+      OutputHistoryManager.pendingToolOutputHistoryReads.set(
+        historyFilePath,
+        pendingRead
+      );
+      const clearPendingRead = () => {
+        if (
+          OutputHistoryManager.pendingToolOutputHistoryReads.get(
+            historyFilePath
+          ) === pendingRead
+        ) {
+          OutputHistoryManager.pendingToolOutputHistoryReads.delete(
+            historyFilePath
+          );
+        }
+      };
+      void pendingRead.then(clearPendingRead, clearPendingRead);
+    }
+    const history = await pendingRead;
+    return identities.map((identity) => {
+      if (!Number.isInteger(identity.eventIndex) || identity.eventIndex < 0) {
+        return undefined;
+      }
+      const entry = history.orderedEntries.find(
+        (candidate) =>
+          candidate.kind === OUTPUT_HISTORY_KINDS.CLI &&
+          sameOutputExecutionTarget(candidate.target, identity.target) &&
+          candidate.attemptIndex === identity.attemptIndex &&
+          (candidate.runIndex ?? 0) === (identity.runIndex ?? 0) &&
+          (candidate.phase ?? EXECUTION_PHASES.PROMPT) ===
+            (identity.phase ?? EXECUTION_PHASES.PROMPT)
+      );
+      return entry?.kind === OUTPUT_HISTORY_KINDS.CLI
+        ? entry.cliOutput.structured?.events[identity.eventIndex]
+        : undefined;
+    });
   }
 
   /**
@@ -1692,9 +1821,8 @@ export class OutputHistoryManager {
       if (!stepOutput.workspaceSnapshot) {
         return stepOutput;
       }
-      const enriched = await this.snapshotService.enrichSnapshotBeforeContent(
-        stepOutput.workspaceSnapshot,
-        this._workspaceFolderPath
+      const enriched = await this.enrichWorkspaceSnapshot(
+        stepOutput.workspaceSnapshot
       );
       if (enriched === stepOutput.workspaceSnapshot) {
         return stepOutput;
@@ -1728,6 +1856,22 @@ export class OutputHistoryManager {
       Object.fromEntries(promptEntries);
 
     return { ...history, promptOutputs, finalStepOutputs };
+  }
+
+  private enrichWorkspaceSnapshot(
+    snapshot: WorkspaceSnapshot
+  ): Promise<WorkspaceSnapshot> {
+    return this.snapshotService.enrichSnapshotBeforeContent(
+      snapshot,
+      this._workspaceFolderPath
+    );
+  }
+
+  private getSnapshotCacheKey(
+    historyFilePath: string,
+    target: OutputExecutionTarget
+  ): string {
+    return `${historyFilePath}:${JSON.stringify(target)}`;
   }
 
   private async saveTimelineExecutionOutput(

@@ -1957,7 +1957,7 @@ describe("RUN_VIEW_LOADED stale execution state regression", () => {
   // persists RUNNING, so it carries the pre-start "idle" snapshot. That
   // snapshot must not be allowed to revert the live execution state just
   // because the client was still addressed at the draft a moment ago.
-  it("keeps RUNNING when a draft-promotion snapshot arrives with a stale idle state", () => {
+  it("uses authoritative live execution state when the addressed file is stale", () => {
     renderHook(() => useMessageHandler());
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     const draftAddress = {
@@ -2004,6 +2004,17 @@ describe("RUN_VIEW_LOADED stale execution state regression", () => {
         // The backend always reports the lineage's executing run alongside the
         // snapshot; during the promotion race that is this very address.
         executionRunRef: runAddress.runRef,
+        liveState: {
+          executionState: EXECUTION_STATES.RUNNING,
+          currentIndex: 0,
+          steps: [makePrompt("first")],
+          parallelGroups: [],
+          results: [],
+          finalStep: null,
+          finalStepRuntime: undefined,
+          workflowProperties: {},
+          schemaWarnings: [],
+        },
       });
     });
 
@@ -2660,14 +2671,7 @@ describe("run view revision snapshots", () => {
     expect(useUiStore.getState().displayedDescriptorRevision).toBe(5);
   });
 
-  it("restores the system-generated lockdown a SESSION_RESTORED replay cleared", () => {
-    // Reproduces the "commit-message-generation banner flashes then vanishes"
-    // bug: binding a client to a *running* instance sends RUN_VIEW_LOADED
-    // (setting the lockdown) followed by replayFullStateTo's raw
-    // SESSION_RESTORED (which clears it via applyWorkflowChange), then
-    // re-publishes WORKFLOW_VIEW_IDENTITY to restore the address — that
-    // identity publish must also restore the lockdown, or it never comes back
-    // while the workflow keeps running.
+  it("applies system-generated lockdown from the addressed run snapshot", () => {
     renderHook(() => useMessageHandler());
     // resetUi() (in the file-level beforeEach) does not clear
     // pendingRunViewRequestId, so a prior test's in-flight request ID can
@@ -2686,28 +2690,6 @@ describe("run view revision snapshots", () => {
         workflowProperties: {},
         runSummaries: [],
         history: null,
-        descriptorRevision: 1,
-        isSystemGenerated: true,
-      });
-    });
-    expect(useUiStore.getState().viewedLineageIsSystemGenerated).toBe(true);
-
-    act(() => {
-      dispatch(MESSAGE_TYPES.SESSION_RESTORED, {
-        fileName: "commit-message-generation.ctrlyoke.yaml",
-        steps: [],
-        results: [],
-        executionState: EXECUTION_STATES.RUNNING,
-        currentIndex: 0,
-        workflowProperties: {},
-      });
-    });
-    expect(useUiStore.getState().viewedLineageIsSystemGenerated).toBe(false);
-
-    act(() => {
-      dispatch(MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY, {
-        address,
-        definitionRevision: 1,
         descriptorRevision: 1,
         isSystemGenerated: true,
       });

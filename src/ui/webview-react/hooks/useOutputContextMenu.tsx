@@ -10,8 +10,11 @@ import type { CliOutput as CliOutputType } from "../types/cliEvents";
 import { FINAL_STEP_PHASES } from "../types/messages";
 import { OUTPUT_MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import { getTargetKey } from "@utils/outputProjection";
+import type { WorkflowRunAddress } from "@root/types/CtrlYokeTypes";
+import { useToolOutputContent } from "@hooks/useToolOutputContent";
+import { hydrateOutputMessages } from "@utils/toolOutputHydration";
 
-function buildCopyAllText(
+export function buildCopyAllText(
   allMessages: OutputMessage[],
   lastCliIndexPerStep: Map<string, number>,
   hiddenTargetKeys: readonly string[]
@@ -64,6 +67,7 @@ function buildCopyAllText(
 }
 
 interface UseOutputContextMenuOptions {
+  address?: WorkflowRunAddress;
   anchorScrollFractions?: Map<string, number>;
   allMessages: OutputMessage[];
   hiddenTargetKeys: readonly string[];
@@ -73,6 +77,7 @@ interface UseOutputContextMenuOptions {
 }
 
 export function useOutputContextMenu({
+  address,
   anchorScrollFractions,
   allMessages,
   hiddenTargetKeys,
@@ -80,6 +85,7 @@ export function useOutputContextMenu({
   lastCliIndexPerStep,
   onOpenFind,
 }: UseOutputContextMenuOptions) {
+  const fetchToolOutputEvent = useToolOutputContent();
   const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
     null
   );
@@ -152,8 +158,21 @@ export function useOutputContextMenu({
             icon: "codicon-copy",
             disabled: !hasAnyOutput || copyAllText.length === 0,
             disabledTitle: "No output to copy",
-            onClick: () => {
-              void writeClipboardText(copyAllText);
+            onClick: async () => {
+              const fullMessages = address
+                ? await hydrateOutputMessages(
+                    allMessages,
+                    address,
+                    fetchToolOutputEvent
+                  )
+                : allMessages;
+              void writeClipboardText(
+                buildCopyAllText(
+                  fullMessages,
+                  lastCliIndexPerStep,
+                  hiddenTargetKeys
+                )
+              );
             },
           },
           {
@@ -163,9 +182,27 @@ export function useOutputContextMenu({
             disabledTitle: hoveredStepKey
               ? "No output to copy for this step"
               : "No step under cursor",
-            onClick: () => {
+            onClick: async () => {
               if (!hoveredOutputText) return;
-              void writeClipboardText(hoveredOutputText);
+              const lastCliIdx = hoveredStepKey
+                ? lastCliIndexPerStep.get(hoveredStepKey)
+                : undefined;
+              const hoveredMessage =
+                lastCliIdx === undefined ? undefined : allMessages[lastCliIdx];
+              const fullMessages =
+                address && hoveredMessage
+                  ? await hydrateOutputMessages(
+                      [hoveredMessage],
+                      address,
+                      fetchToolOutputEvent
+                    )
+                  : [hoveredMessage];
+              const fullMessage = fullMessages[0];
+              const fullText =
+                fullMessage?.type === OUTPUT_MESSAGE_TYPES.CLI
+                  ? extractCliOutputText(fullMessage.data as CliOutputType)
+                  : hoveredOutputText;
+              if (fullText) void writeClipboardText(fullText);
             },
           },
           { type: "divider" },
@@ -182,11 +219,13 @@ export function useOutputContextMenu({
     },
     [
       anchorScrollFractions,
+      address,
       allMessages,
       hiddenTargetKeys,
       stepScrollFractions,
       lastCliIndexPerStep,
       onOpenFind,
+      fetchToolOutputEvent,
     ]
   );
 

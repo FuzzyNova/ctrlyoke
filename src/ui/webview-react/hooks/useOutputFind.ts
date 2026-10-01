@@ -11,6 +11,7 @@ import type { OutputMessageTarget } from "@utils/outputProjection";
 import type { OutputRenderRow } from "@utils/outputRows";
 import {
   findOutputMatches,
+  hasTruncatedOutput,
   type OutputFindMatch,
   type RowFindDecoration,
 } from "@utils/outputFind";
@@ -21,6 +22,7 @@ export interface OutputFindState {
   matchCount: number;
   currentMatch: number;
   caseSensitive: boolean;
+  mayMissMatches: boolean;
 }
 
 const INITIAL_STATE: OutputFindState = {
@@ -29,6 +31,7 @@ const INITIAL_STATE: OutputFindState = {
   matchCount: 0,
   currentMatch: 0,
   caseSensitive: false,
+  mayMissMatches: false,
 };
 
 export interface OutputFindOpenRequest {
@@ -88,6 +91,7 @@ export function useOutputFind(
     () => findOutputMatches(rows, state.query, state.caseSensitive),
     [rows, state.query, state.caseSensitive]
   );
+  const mayMissMatches = useMemo(() => hasTruncatedOutput(rows), [rows]);
 
   // Keep matchCount/currentMatch in sync as rows/query/caseSensitive change,
   // preserving the current position when it's still valid. This must never
@@ -233,7 +237,10 @@ export function useOutputFind(
   }, [externalRequest, open]);
 
   return {
-    state,
+    state:
+      mayMissMatches === state.mayMissMatches
+        ? state
+        : { ...state, mayMissMatches },
     setState,
     search,
     open,

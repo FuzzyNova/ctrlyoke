@@ -2307,6 +2307,140 @@ suite("OutputHistoryManager snapshot enrichment on loadHistory", () => {
       "original content"
     );
   });
+
+  test("on-demand snapshot content matches loadHistory enrichment", async () => {
+    const { filePath } = await initTestRun(manager, tempWorkspace, "wf-fetch");
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const snapshot: WorkspaceSnapshot = {
+      capturedAt: 1000,
+      strategy: SNAPSHOT_STRATEGIES.GIT,
+      changedFiles: [
+        {
+          path: "src/restore.ts",
+          changeType: "deleted",
+          contentToRestore: "original file contents",
+          contentCaptureSkipped: false,
+        },
+      ],
+    };
+    await manager.saveSnapshotForTarget(filePath, target, snapshot);
+
+    const historySnapshot = (await manager.loadHistory(filePath))
+      .promptOutputs[0]?.workspaceSnapshot?.changedFiles[0];
+    const onDemand = await manager.getSnapshotFileContent(
+      filePath,
+      target,
+      "src/restore.ts"
+    );
+    assert.strictEqual(
+      onDemand?.contentToRestore,
+      historySnapshot?.contentToRestore
+    );
+    assert.strictEqual(
+      onDemand?.contentCaptureSkipped,
+      historySnapshot?.contentCaptureSkipped
+    );
+    assert.strictEqual(onDemand?.beforeContent, historySnapshot?.beforeContent);
+  });
+
+  test("on-demand content only reads paths in the target snapshot", async () => {
+    const { filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-fetch-path"
+    );
+    await manager.saveSnapshotForTarget(
+      filePath,
+      { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      {
+        capturedAt: 1000,
+        strategy: SNAPSHOT_STRATEGIES.FILESYSTEM,
+        changedFiles: [
+          {
+            path: "src/allowed.ts",
+            changeType: "modified",
+            beforeContent: "before",
+          },
+        ],
+      }
+    );
+
+    assert.strictEqual(
+      await manager.getSnapshotFileContent(
+        filePath,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        "../../private.txt"
+      ),
+      undefined
+    );
+    assert.deepStrictEqual(
+      await manager.getSnapshotFileContent(
+        filePath,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        path.join(tempWorkspace, "src", "allowed.ts")
+      ),
+      { beforeContent: "before" }
+    );
+    assert.strictEqual(
+      await manager.getSnapshotFileContent(
+        filePath,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
+        "src/allowed.ts"
+      ),
+      undefined
+    );
+  });
+
+  test("returns capture-skipped metadata when snapshot content is absent", async () => {
+    const { filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-fetch-missing"
+    );
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    await manager.saveSnapshotForTarget(filePath, target, {
+      capturedAt: 1000,
+      strategy: SNAPSHOT_STRATEGIES.FILESYSTEM,
+      changedFiles: [
+        {
+          path: "src/large.ts",
+          changeType: "modified",
+          contentCaptureSkipped: true,
+        },
+      ],
+    });
+
+    assert.deepStrictEqual(
+      await manager.getSnapshotFileContent(filePath, target, "src/large.ts"),
+      { contentCaptureSkipped: true }
+    );
+  });
+
+  test("serves the live snapshot cache while persistence is in progress", async () => {
+    const { filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-fetch-live"
+    );
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const saving = manager.saveSnapshotForTarget(filePath, target, {
+      capturedAt: 1000,
+      strategy: SNAPSHOT_STRATEGIES.FILESYSTEM,
+      changedFiles: [
+        {
+          path: "src/live.ts",
+          changeType: "deleted",
+          contentToRestore: "live capture",
+        },
+      ],
+    });
+
+    assert.deepStrictEqual(
+      await manager.getSnapshotFileContent(filePath, target, "src/live.ts"),
+      { contentToRestore: "live capture" }
+    );
+    await saving;
+  });
 });
 
 suite("OutputHistoryManager usage store feed", () => {

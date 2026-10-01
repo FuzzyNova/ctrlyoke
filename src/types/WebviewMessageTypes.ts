@@ -62,11 +62,13 @@ import type {
   ToolPermissionsOverride,
   UserHookConfig,
   WorkflowStep,
+  QueueState,
   WorkflowViewAddress,
   WorkflowKey,
   RunRef,
   WorkingFile,
   WorkflowRunNavigationSummary,
+  WorkflowRunAddress,
   WorkflowTokenTotals,
   WorktreeRunProjection,
   ScriptVerdict,
@@ -75,6 +77,8 @@ import type {
   CoordinationScopeSnapshot,
   WorkflowValidationWarning,
   ExecutionProperties,
+  PromptResult,
+  FinalStepRuntimeState,
 } from "./CtrlYokeTypes";
 import type {
   CtrlYokeGlobalSettings,
@@ -1102,7 +1106,7 @@ export interface RecentWorkflowsMessage {
     address: WorkflowViewAddress;
     runDirectory?: string;
     workflowName: string;
-    executionState: string;
+    executionState: QueueState["status"];
     lastModifiedAt?: number;
     startedAt?: number;
     isFavorite?: boolean;
@@ -1876,6 +1880,18 @@ export interface RunViewLoadedMessage {
    * "nothing is running" instead of two representations meaning the same thing.
    */
   activeStepIndices?: number[];
+  /** Authoritative in-memory state for the live addressed instance. */
+  liveState?: {
+    executionState: string;
+    currentIndex: number;
+    steps: WorkflowStep[];
+    results: PromptResult[];
+    parallelGroups: ParallelGroupDefinition[];
+    finalStep: WorkflowStep | null;
+    finalStepRuntime?: FinalStepRuntimeState;
+    workflowProperties: Record<string, unknown>;
+    schemaWarnings: WorkflowValidationWarning[];
+  };
   /** Durable continuation marker for the addressed run, if it is being rewound. */
   pendingRewind?: {
     fromStepIndex: number;
@@ -1898,6 +1914,53 @@ export interface RunViewLoadedMessage {
   definitionRollback?: {
     fromRevision: number;
   };
+}
+
+/** Webview → Extension: fetch captured content for one indexed snapshot file. */
+export interface RequestWorkspaceSnapshotContentMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_WORKSPACE_SNAPSHOT_CONTENT;
+  requestId: string;
+  address: WorkflowRunAddress;
+  target: OutputExecutionTarget;
+  path: string;
+}
+
+/** Extension → Webview: the requested content, if it was captured. */
+export interface WorkspaceSnapshotContentMessage {
+  type: typeof MESSAGE_TYPES.WORKSPACE_SNAPSHOT_CONTENT;
+  requestId: string;
+  address: WorkflowRunAddress;
+  target: OutputExecutionTarget;
+  path: string;
+  beforeContent?: string;
+  contentToRestore?: string;
+  contentCaptureSkipped?: boolean;
+}
+
+export interface ToolOutputEventIdentity {
+  target: OutputExecutionTarget;
+  attemptIndex: number;
+  /** Aggregate runIndex disambiguates repeated attempts in a loop. */
+  runIndex?: number;
+  phase?: ExecutionPhase;
+  /** Stable position in the normalized aggregate event array. */
+  eventIndex: number;
+}
+
+/** Webview → Extension: fetch full structured events from addressed history. */
+export interface RequestToolOutputContentMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_TOOL_OUTPUT_CONTENT;
+  requestId: string;
+  address: WorkflowRunAddress;
+  events: ToolOutputEventIdentity[];
+}
+
+/** Extension → Webview: full structured events, if present in addressed history. */
+export interface ToolOutputContentMessage {
+  type: typeof MESSAGE_TYPES.TOOL_OUTPUT_CONTENT;
+  requestId: string;
+  address: WorkflowRunAddress;
+  events: Array<ToolOutputEventIdentity & { event?: CliEvent }>;
 }
 
 /**
@@ -2881,6 +2944,8 @@ export type IncomingMessage =
   | ActiveStepIndicesChangedMessage
   | ProgressUpdateMessage
   | SearchIndexRebuildProgressMessage
+  | WorkspaceSnapshotContentMessage
+  | ToolOutputContentMessage
   | StepStatusChangedMessage
   | RetryAttemptChangedMessage
   | CliOutputMessage

@@ -1,12 +1,14 @@
 import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useOutputUndoActions } from "@hooks/useOutputUndoActions";
 import { useUiStore } from "@store/uiStore";
 import type { RunRef, WorkflowKey } from "@root/types/CtrlYokeTypes";
 import {
   FINAL_STEP_PHASES,
+  MESSAGE_TYPES,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
+import type { OutputRowPromptUndoMeta } from "@utils/outputRows";
 
 const RUN_ADDRESS = {
   workflowKey: "workflow-1" as WorkflowKey,
@@ -55,10 +57,10 @@ describe("useOutputUndoActions", () => {
     expect(getRenderCount() - rendersAfterMount).toBeLessThanOrEqual(2);
   });
 
-  it("stamps the displayed run address onto workflow dialog state", () => {
+  it("stamps the displayed run address onto workflow dialog state", async () => {
     const { result } = renderUndoActions();
 
-    act(() => {
+    await act(async () => {
       result.current.handleWorkflowView();
     });
 
@@ -84,7 +86,7 @@ describe("useOutputUndoActions", () => {
     expect(result.current.workflowDialogState).toBeNull();
   });
 
-  it("keeps blocked candidates in the single workflow entry list", () => {
+  it("keeps blocked candidates in the single workflow entry list", async () => {
     const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
     const { result } = renderHook(() =>
       useOutputUndoActions({
@@ -114,7 +116,7 @@ describe("useOutputUndoActions", () => {
       })
     );
 
-    act(() => result.current.handleWorkflowView());
+    await act(async () => result.current.handleWorkflowView());
 
     expect(result.current.workflowChangeSummary).toMatchObject({
       total: 1,
@@ -128,5 +130,65 @@ describe("useOutputUndoActions", () => {
       result.current.workflowDialogState?.entries[0]?.undoCandidates?.[0]
         ?.instruction
     ).toBeNull();
+  });
+
+  it("fetches indexed snapshot restore content before opening a prompt dialog", async () => {
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+    const { result } = renderUndoActions();
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
+    const promptUndo: OutputRowPromptUndoMeta = {
+      workspacePath: "/repo",
+      allStepOutputs: [],
+      workspaceSnapshot: {
+        capturedAt: 1,
+        strategy: "filesystem",
+        changedFiles: [
+          {
+            path: "src/deleted.ts",
+            changeType: "deleted",
+            contentAvailableOnDemand: true,
+          },
+        ],
+      },
+      summary: {
+        total: 1,
+        undoable: 0,
+        undone: 0,
+        blocked: 1,
+        label: "View 1 change",
+        compactLabel: "View 1",
+        title: "1 file changed",
+      },
+    };
+
+    const opening = result.current.handlePromptViewMeta(target, promptUndo);
+    const request = postMessage.mock.calls[0]?.[0] as
+      { type: string; requestId: string } | undefined;
+    expect(request?.type).toBe(
+      MESSAGE_TYPES.REQUEST_WORKSPACE_SNAPSHOT_CONTENT
+    );
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.WORKSPACE_SNAPSHOT_CONTENT,
+            requestId: request?.requestId,
+            beforeContent: "before",
+            contentToRestore: "original deleted file",
+          },
+        })
+      );
+    });
+    await act(async () => opening);
+
+    expect(
+      result.current.minimapDialogState?.input?.snapshotOnlyFiles[0]
+    ).toMatchObject({
+      contentToRestore: "original deleted file",
+    });
+    expect(
+      result.current.minimapDialogState?.input?.snapshotOnlyFiles[0]
+    ).toMatchObject({ changeType: "deleted" });
   });
 });

@@ -15,6 +15,7 @@ import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
 import {
   LICENSE_ACTIONS,
   MESSAGE_TYPES,
+  FINAL_STEP_PHASES,
   HARNESS_IDS,
   END_CONDITION_SCRIPT_TYPES,
   USER_FEEDBACK_SEVERITY,
@@ -832,6 +833,173 @@ suite("WebviewMessageRouter — execution preview transport", () => {
     assert.strictEqual(result.requestToken, 12);
     assert.strictEqual(result.displayedDefinitionRevision, 7);
     assert.ok(!JSON.stringify(result.preview).includes("supersecret"));
+  });
+});
+
+suite("WebviewMessageRouter — workspace snapshot content", () => {
+  test("routes an addressed file request and returns the correlated content", async () => {
+    const emitted: any[] = [];
+    let call: unknown;
+    const router = buildRouter(
+      {
+        getWorkspaceSnapshotFileContent: async (...args: unknown[]) => {
+          call = args;
+          return { beforeContent: "before", contentCaptureSkipped: false };
+        },
+      },
+      (message) => emitted.push(message)
+    );
+
+    const request = {
+      workflowKey: "workflow-a",
+      runRef: "run-2026-01-01T00-00-00-000Z",
+    };
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 3 };
+    await router.route({
+      type: MESSAGE_TYPES.REQUEST_WORKSPACE_SNAPSHOT_CONTENT,
+      requestId: "snapshot-7",
+      address: request,
+      target,
+      path: "src/example.ts",
+    });
+
+    assert.deepStrictEqual(call, [request, target, "src/example.ts"]);
+    assert.deepStrictEqual(emitted[0], {
+      type: MESSAGE_TYPES.WORKSPACE_SNAPSHOT_CONTENT,
+      requestId: "snapshot-7",
+      address: request,
+      target,
+      path: "src/example.ts",
+      beforeContent: "before",
+      contentCaptureSkipped: false,
+    });
+  });
+
+  test("answers with request-correlated missing content", async () => {
+    const emitted: any[] = [];
+    let called = false;
+    const router = buildRouter(
+      {
+        getWorkspaceSnapshotFileContent: async () => {
+          called = true;
+          return undefined;
+        },
+      },
+      (message) => emitted.push(message)
+    );
+
+    await router.route({
+      type: MESSAGE_TYPES.REQUEST_WORKSPACE_SNAPSHOT_CONTENT,
+      requestId: "snapshot-missing",
+      address: {
+        workflowKey: "workflow-a",
+        runRef: "run-2026-01-01T00-00-00-000Z",
+      },
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      path: "../../secret.txt",
+    });
+
+    assert.strictEqual(called, true);
+    assert.strictEqual(emitted[0].requestId, "snapshot-missing");
+    assert.strictEqual(emitted[0].beforeContent, undefined);
+  });
+});
+
+suite("WebviewMessageRouter — full tool output", () => {
+  test("routes a batch of aggregate events by addressed attempts and indices", async () => {
+    const emitted: any[] = [];
+    let call: unknown;
+    const event = { type: "text", data: { text: "full" } };
+    const router = buildRouter(
+      {
+        getToolOutputEvents: async (...args: unknown[]) => {
+          call = args;
+          return [event, undefined];
+        },
+      },
+      (message) => emitted.push(message)
+    );
+    const address = {
+      workflowKey: "workflow-a",
+      runRef: "run-2026-01-01T00-00-00-000Z",
+    };
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 };
+
+    await router.route({
+      type: MESSAGE_TYPES.REQUEST_TOOL_OUTPUT_CONTENT,
+      requestId: "tool-output-3",
+      address,
+      events: [
+        { target, attemptIndex: 1, runIndex: 4, eventIndex: 9 },
+        { target, attemptIndex: 1, runIndex: 4, eventIndex: 10 },
+      ],
+    });
+
+    assert.deepStrictEqual(call, [
+      address,
+      [
+        { target, attemptIndex: 1, runIndex: 4, eventIndex: 9 },
+        { target, attemptIndex: 1, runIndex: 4, eventIndex: 10 },
+      ],
+    ]);
+    assert.deepStrictEqual(emitted[0], {
+      type: MESSAGE_TYPES.TOOL_OUTPUT_CONTENT,
+      requestId: "tool-output-3",
+      address,
+      events: [
+        { target, attemptIndex: 1, runIndex: 4, eventIndex: 9, event },
+        {
+          target,
+          attemptIndex: 1,
+          runIndex: 4,
+          eventIndex: 10,
+          event: undefined,
+        },
+      ],
+    });
+  });
+
+  test("rejects invalid execution targets in both content handlers", async () => {
+    const emitted: any[] = [];
+    let called = false;
+    const router = buildRouter(
+      {
+        getWorkspaceSnapshotFileContent: async () => {
+          called = true;
+          return undefined;
+        },
+        getToolOutputEvents: async () => {
+          called = true;
+          return [];
+        },
+      },
+      (message) => emitted.push(message)
+    );
+    const address = {
+      workflowKey: "workflow-a",
+      runRef: "run-2026-01-01T00-00-00-000Z",
+    };
+    await router.route({
+      type: MESSAGE_TYPES.REQUEST_WORKSPACE_SNAPSHOT_CONTENT,
+      requestId: "bad-target-1",
+      address,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: -1 },
+      path: "src/file.ts",
+    });
+    await router.route({
+      type: MESSAGE_TYPES.REQUEST_TOOL_OUTPUT_CONTENT,
+      requestId: "bad-target-2",
+      address,
+      events: [
+        {
+          target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: -1 },
+          attemptIndex: 0,
+          eventIndex: 0,
+        },
+      ],
+    });
+    assert.strictEqual(called, false);
+    assert.deepStrictEqual(emitted, []);
   });
 });
 

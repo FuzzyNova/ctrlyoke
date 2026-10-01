@@ -97,7 +97,7 @@ export function OutputFindBar({
     <div
       ref={containerDivRef}
       role="search"
-      className={`absolute right-[calc(var(--cy-output-minimap-width)_+_0.5rem)] top-0 z-content-floating flex items-center gap-1.5 overflow-hidden rounded border border-simple-find-sash-border bg-panel-sticky-bg/92 px-2 py-1 shadow-md backdrop-blur-md ${
+      className={`absolute right-[calc(var(--cy-output-minimap-width)_+_0.5rem)] top-0 z-content-floating flex flex-wrap items-center gap-1.5 overflow-hidden rounded border border-simple-find-sash-border bg-panel-sticky-bg/92 px-2 py-1 shadow-md backdrop-blur-md ${
         isNarrow ? "left-2" : ""
       } ${closing ? "animate-output-find-exit" : "animate-output-find-enter"}`}
       onKeyDown={onKeyDown}
@@ -119,6 +119,11 @@ export function OutputFindBar({
       >
         {counterLabel}
       </span>
+      {state.mayMissMatches && (
+        <span className="basis-full text-xs text-description-fg" role="status">
+          Matches in truncated outputs may be missed.
+        </span>
+      )}
       <button
         type="button"
         className="icon-btn shrink-0 px-1.5 py-1 text-description-fg hover:text-foreground"
