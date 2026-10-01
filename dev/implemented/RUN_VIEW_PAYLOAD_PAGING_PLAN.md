@@ -1,7 +1,9 @@
 # Run-View Payload & Paging Plan
 
-**Status:** Sequencing items 1–4 complete (1B not pursued); 1A, 3, and 4
-remain backlog — proposed 2026-09-06, updated 2026-10-01
+**Status:** Implemented 2026-10-01 for sequencing items 1–4 (Problem 5,
+Problem 2, Proposal 1C; 1B investigated and not pursued). Problems 1A, 3 and 4
+and the 1B follow-up are open in `dev/backlog/RUN_VIEW_PAYLOAD_FOLLOWUPS.md`;
+the sections below stay as their design record. Proposed 2026-09-06.
 **Priority:** P1 (raised 2026-10-01: a phone viewing a large run was caught in
 a reload loop that rebuilt and resent the full run view about every 10 s; see
 "2026-10-01 evidence" below. The quadratic-CPU half of the original report is
