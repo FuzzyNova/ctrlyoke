@@ -609,6 +609,42 @@ suite("ExecutionPreviewService", () => {
     );
   });
 
+  test("lists the skills a step's agent declares alongside its own", async () => {
+    const workspaceRoot = await fsPromises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-preview-agent-skills-")
+    );
+    temporaryRoots.push(workspaceRoot);
+    const agentDir = path.join(workspaceRoot, ".ctrlyoke", "agents");
+    await fsPromises.mkdir(agentDir, { recursive: true });
+    await fsPromises.writeFile(
+      path.join(agentDir, "skilled-preview.agent.md"),
+      "---\nname: skilled-preview\nskills: [declared-skill, step-skill]\n---\nAgent body"
+    );
+
+    const preview = await createService(workspaceRoot).build({
+      workflow: {
+        steps: [
+          {
+            prompt: "with agent",
+            agent: "skilled-preview",
+            skills: ["step-skill"],
+          },
+          { prompt: "agent only", agent: "skilled-preview", skills: null },
+          { prompt: "no agent", skills: ["step-skill"] },
+        ],
+      },
+    });
+
+    assert.deepStrictEqual(
+      preview.steps.map((step) => step.resolvedProperties.skills),
+      [
+        ["step-skill", "declared-skill"],
+        ["declared-skill", "step-skill"],
+        ["step-skill"],
+      ]
+    );
+  });
+
   test("uses shared planning paths and produces a step-scoped DTO", async () => {
     const workflow: PromptFile = {
       harness: HARNESS_IDS.CLAUDE_CLI,

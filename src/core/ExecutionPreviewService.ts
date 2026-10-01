@@ -83,6 +83,7 @@ import { VarSubstitutor } from "../utils/VarSubstitutor";
 import { McpServerNormalizer } from "../utils/McpServerNormalizer";
 import { McpRegistryFileManager } from "../utils/McpRegistryFileManager";
 import { SessionValidator } from "../utils/SessionValidator";
+import { AgentExpander } from "../utils/AgentExpander";
 import { CliPromptPreparer } from "./harness/shared/CliPromptPreparer";
 import { CliExecutionSession } from "./harness/shared/CliExecutionSession";
 import { resolveShellInvocation } from "./harness/PtyProcessManager";
@@ -538,12 +539,18 @@ export class ExecutionPreviewService {
       properties.endCondition,
       properties.errorBehavior
     );
+    const skills = await AgentExpander.resolveEffectiveSkills(
+      properties.skills,
+      properties.agent,
+      this.options.workspaceRoot
+    );
     const resolvedProperties = this.toResolvedPropertiesPreview(
       properties,
       targetResolution,
       conditionPreview,
       Boolean(resolvedSessionId),
       secretNames,
+      skills,
       workflow
     );
     const variablesPreview = this.buildVariablesPreview(variables, request);
@@ -822,6 +829,7 @@ export class ExecutionPreviewService {
     conditions: ConditionPreview,
     sessionPresent: boolean,
     secretNames: readonly string[],
+    skills: readonly string[],
     workflow: PromptFile
   ) {
     const version =
@@ -845,7 +853,7 @@ export class ExecutionPreviewService {
         resolutionSource: this.toPropertySource(target.sources.sessionId),
       },
       ...(properties.agent ? { agent: properties.agent } : {}),
-      skills: [...(properties.skills ?? [])],
+      skills: [...skills],
       secrets: [...secretNames],
       mcpServerIds: (properties.mcpServers ?? []).map((server) =>
         typeof server === "string" ? server : server.id

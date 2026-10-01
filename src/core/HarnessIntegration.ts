@@ -601,15 +601,11 @@ export abstract class HarnessIntegration {
       }
     }
 
-    // An agent's declared skills are part of the agent, like its body text:
-    // they attach whenever the agent runs, even where the step disables its
-    // inherited `skills` with null.
-    const agentSkills = resolvedAgent
-      ? await AgentExpander.getAgentSkills(resolvedAgent, workspaceRoot)
-      : [];
-    const skillNames = [
-      ...new Set([...(resolvedSkills ?? []), ...agentSkills]),
-    ];
+    const skillNames = await AgentExpander.resolveEffectiveSkills(
+      resolvedSkills,
+      resolvedAgent,
+      workspaceRoot
+    );
 
     const skillContent = skillNames.length
       ? await this.expandSkillBlock(
