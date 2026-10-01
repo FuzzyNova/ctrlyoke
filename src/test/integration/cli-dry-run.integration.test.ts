@@ -1,42 +1,14 @@
 import * as assert from "assert";
-import { execFile } from "child_process";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, teardown, test } from "mocha";
+import { runCli } from "./helpers/cliProcess";
 import { projectKey } from "../../utils/ProjectStatePaths";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { WORKING_FILE_NAME } from "../../utils/WorkflowPaths";
 
-interface CliRunResult {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
 const temporaryRoots: string[] = [];
-
-function runCli(
-  args: string[],
-  cwd: string,
-  env?: NodeJS.ProcessEnv
-): Promise<CliRunResult> {
-  const cliPath = path.join(__dirname, "..", "..", "cli.js");
-  return new Promise((resolve) => {
-    execFile(
-      "node",
-      [cliPath, ...args],
-      { cwd, env: { ...process.env, ...env }, maxBuffer: 8 * 1024 * 1024 },
-      (error, stdout, stderr) => {
-        resolve({
-          code: typeof error?.code === "number" ? error.code : error ? 1 : 0,
-          stdout,
-          stderr,
-        });
-      }
-    );
-  });
-}
 
 suite("CLI dry-run process", () => {
   teardown(async () => {

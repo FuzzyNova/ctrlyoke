@@ -1712,7 +1712,10 @@ suite("WorkflowExecutor finalStep phase 2", () => {
         },
         {
           type: "script",
-          script: `node -e "setTimeout(() => console.log('slow natural exit'), 10000)"`,
+          // Far longer than the elapsed bound below: under a full `npm test`
+          // load a shell-spawned `node` has taken 8s just to start, so a short
+          // natural exit here is indistinguishable from a working cancel.
+          script: `node -e "setTimeout(() => console.log('slow natural exit'), 120000)"`,
         },
       ],
       parallelGroups: [
@@ -1724,7 +1727,11 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       const startedAt = Date.now();
       await executor.execute(integration, context);
 
-      assert.ok(Date.now() - startedAt < 5000);
+      const elapsedMs = Date.now() - startedAt;
+      assert.ok(
+        elapsedMs < 25000,
+        `failFast should cancel the slow sibling long before its natural exit; took ${elapsedMs}ms`
+      );
       assert.deepStrictEqual(
         queue.getState().results.map((result) => result.status),
         [STEP_STATUS.FAILED, STEP_STATUS.CANCELLED]
@@ -2220,10 +2227,9 @@ suite("WorkflowExecutor finalStep phase 2", () => {
 
     try {
       await assert.rejects(
-        makeExecutor(queue, undefined, { getDecision: () => undefined }).execute(
-          integration,
-          makeContext(integration)
-        ),
+        makeExecutor(queue, undefined, {
+          getDecision: () => undefined,
+        }).execute(integration, makeContext(integration)),
         /cannot contain a managed secret reference/u
       );
       assert.deepStrictEqual(

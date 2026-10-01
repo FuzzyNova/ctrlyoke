@@ -1,30 +1,11 @@
 import * as assert from "assert";
-import { execFile } from "child_process";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, teardown, test } from "mocha";
-
-interface CliResult {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
+import { runCli } from "./helpers/cliProcess";
 
 const temporaryRoots: string[] = [];
-
-function runCli(args: string[], cwd: string): Promise<CliResult> {
-  const cliPath = path.join(__dirname, "..", "..", "cli.js");
-  return new Promise((resolve) => {
-    execFile("node", [cliPath, ...args], { cwd }, (error, stdout, stderr) => {
-      resolve({
-        code: typeof error?.code === "number" ? error.code : error ? 1 : 0,
-        stdout,
-        stderr,
-      });
-    });
-  });
-}
 
 suite("ctrlyoke validate compatibility command", () => {
   teardown(async () => {
@@ -350,7 +331,9 @@ suite("ctrlyoke validate compatibility command", () => {
   });
 
   test("keeps parser diagnostics out of JSON stdout across validation and secret gates", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-cli-parse-"));
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-cli-parse-")
+    );
     temporaryRoots.push(root);
     const workflow = path.join(root, "invalid.ctrlyoke.yaml");
     await fs.writeFile(workflow, "steps:\n  - bogus: 1\n", "utf8");

@@ -1,39 +1,11 @@
 import * as assert from "assert";
-import { execFile } from "child_process";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, teardown, test } from "mocha";
-
-interface CliResult {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
+import { runCli } from "./helpers/cliProcess";
 
 const temporaryRoots: string[] = [];
-
-function runCli(
-  args: string[],
-  cwd: string,
-  env: NodeJS.ProcessEnv
-): Promise<CliResult> {
-  const cliPath = path.join(__dirname, "..", "..", "cli.js");
-  return new Promise((resolve) => {
-    execFile(
-      "node",
-      [cliPath, ...args],
-      { cwd, env: { ...process.env, ...env }, maxBuffer: 8 * 1024 * 1024 },
-      (error, stdout, stderr) => {
-        resolve({
-          code: typeof error?.code === "number" ? error.code : error ? 1 : 0,
-          stdout,
-          stderr,
-        });
-      }
-    );
-  });
-}
 
 suite("CLI maxSteps append enforcement", () => {
   teardown(async () => {
