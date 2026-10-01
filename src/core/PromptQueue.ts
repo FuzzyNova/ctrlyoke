@@ -98,6 +98,7 @@ import {
   resetStepRuntimeForRewind,
 } from "./StepIdentity";
 import { hasStarted } from "../utils/StepStatusDerivation";
+import { settleInterruptedRun } from "../utils/InterruptedRunSettlement";
 import { appendResponseText } from "../utils/ResponseTextJoin";
 
 /** Resolver-derived, in-memory execution cache restored for an active run. */
@@ -488,7 +489,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       const workingFile = await this.readWorkingFile(workingFilePath);
 
       const runtime = workingFile._runtime;
-      this.finalStepRuntime = runtime?.finalStep;
       this.clearRuntimeOutputCache();
 
       const topology = normalizeParallelGroupTopology({
@@ -499,6 +499,35 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       const recoveredIdsAdded = prompts.some(
         (prompt, index) => prompt !== topology.steps[index]
       );
+
+      // Determine execution state
+      // When loading a persisted working file for display, NEVER restore as active
+      // unless the caller explicitly wants to continue execution. Loading a dashboard
+      // view must not start or imply an active VS Code runner after a restart/crash.
+      // Force to STOPPED — preserves per-prompt progress so the user can see how far the
+      // workflow got and resume from the current prompt. PAUSED is semantically wrong here
+      // (it implies the user intentionally paused); STOPPED signals "aborted, position kept".
+      let executionState = runtime?.executionState || EXECUTION_STATES.IDLE;
+      let forcedToStopped = false;
+      if (
+        preventRunningAutoStart &&
+        (executionState === EXECUTION_STATES.RUNNING ||
+          executionState === EXECUTION_STATES.PAUSING ||
+          executionState === EXECUTION_STATES.CANCELLING)
+      ) {
+        executionState = EXECUTION_STATES.STOPPED;
+        forcedToStopped = true;
+        // The owner that left this run active is gone, so its in-flight step
+        // claim can never be released. Settle it in the same write, or the
+        // stopped run refuses every continue with `alreadyClaimed` — and the
+        // startup normalization that would have settled it skips a run that
+        // is no longer active.
+        settleInterruptedRun({ ...workingFile, steps: prompts });
+        Log.info(
+          "[PromptQueue] Working file load: forced active state to STOPPED to prevent auto-start"
+        );
+      }
+      this.finalStepRuntime = runtime?.finalStep;
       const pendingRewind = runtime?.pendingRewind
         ? {
             ...runtime.pendingRewind,
@@ -546,28 +575,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
             };
           }
         }
-      }
-
-      // Determine execution state
-      // When loading a persisted working file for display, NEVER restore as active
-      // unless the caller explicitly wants to continue execution. Loading a dashboard
-      // view must not start or imply an active VS Code runner after a restart/crash.
-      // Force to STOPPED — preserves per-prompt progress so the user can see how far the
-      // workflow got and resume from the current prompt. PAUSED is semantically wrong here
-      // (it implies the user intentionally paused); STOPPED signals "aborted, position kept".
-      let executionState = runtime?.executionState || EXECUTION_STATES.IDLE;
-      let forcedToStopped = false;
-      if (
-        preventRunningAutoStart &&
-        (executionState === EXECUTION_STATES.RUNNING ||
-          executionState === EXECUTION_STATES.PAUSING ||
-          executionState === EXECUTION_STATES.CANCELLING)
-      ) {
-        executionState = EXECUTION_STATES.STOPPED;
-        forcedToStopped = true;
-        Log.info(
-          "[PromptQueue] Working file load: forced active state to STOPPED to prevent auto-start"
-        );
       }
 
       const lineageAddress =

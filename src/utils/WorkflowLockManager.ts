@@ -4,16 +4,15 @@ import {
   WorkflowRunnerLock,
   type RunRef,
   type WorkflowKey,
+  type WorkingFile,
 } from "../types/CtrlYokeTypes";
 import {
   ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
-  FINAL_STEP_PHASES,
-  PROMPT_TERMINAL_STATUS,
-  STEP_STATUS,
   WORKFLOW_LOCK_LIVENESS,
 } from "../types/DashboardConstants";
 import type { ExecutionState } from "../types/DashboardConstants";
+import { settleInterruptedRun } from "./InterruptedRunSettlement";
 import { Log } from "./Log";
 import * as WorkflowPaths from "./WorkflowPaths";
 import {
@@ -255,25 +254,7 @@ export class WorkflowLockManager {
         lock.runRef as RunRef
       );
 
-      let runningFile: {
-        _runtime?: {
-          executionState?: string;
-          currentIndex?: number;
-          finalStep?: {
-            phase?: string;
-            status?: string;
-            completedAt?: number;
-          };
-        };
-        steps?: Array<{
-          _runtime?: {
-            startedAt?: number;
-            completedAt?: number;
-            terminalStatus?: string;
-          };
-        }>;
-        [key: string]: unknown;
-      };
+      let runningFile: WorkingFile;
 
       try {
         const content = await fs.promises.readFile(runFilePath, "utf8");
@@ -312,32 +293,7 @@ export class WorkflowLockManager {
 
       if (runningFile._runtime) {
         runningFile._runtime.executionState = EXECUTION_STATES.STOPPED;
-        const currentIndex = runningFile._runtime.currentIndex ?? 0;
-        const interruptedStep = runningFile.steps?.[currentIndex];
-        if (
-          interruptedStep?._runtime?.startedAt &&
-          !interruptedStep._runtime.completedAt
-        ) {
-          const stoppedAt = Date.now();
-          interruptedStep._runtime = {
-            startedAt: interruptedStep._runtime?.startedAt ?? stoppedAt,
-            ...interruptedStep._runtime,
-            completedAt: stoppedAt,
-            terminalStatus: PROMPT_TERMINAL_STATUS.CANCELLED,
-          };
-          runningFile._runtime.currentIndex = currentIndex + 1;
-        } else if (
-          currentIndex >= (runningFile.steps?.length ?? 0) &&
-          runningFile._runtime.finalStep?.phase ===
-            FINAL_STEP_PHASES.FINAL_STEP &&
-          runningFile._runtime.finalStep.status !== STEP_STATUS.COMPLETED
-        ) {
-          runningFile._runtime.finalStep = {
-            ...runningFile._runtime.finalStep,
-            status: STEP_STATUS.CANCELLED,
-            completedAt: Date.now(),
-          };
-        }
+        settleInterruptedRun(runningFile);
       }
       try {
         const tmpPath = runFilePath + ".tmp";

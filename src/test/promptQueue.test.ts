@@ -461,6 +461,74 @@ suite("PromptQueue State Machine Tests", () => {
       }
     });
 
+    // A host that dies mid-step leaves the step claimed (startedAt) but never
+    // settled (completedAt). Loading that run for display forces it to
+    // STOPPED; unless the same write settles the claim, every later continue
+    // fails with "claim alreadyClaimed".
+    test("settles a dead owner's in-flight step when forcing a loaded run to STOPPED", async () => {
+      const workspace = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-prompt-queue-interrupted-")
+      );
+
+      try {
+        const workingFilePath = await queue.createWorkingFile(
+          "interrupted-recovery",
+          [{ prompt: "done" }, { prompt: "in flight" }, { prompt: "next" }],
+          workspace
+        );
+        const workingFile = await queue.readWorkingFile(workingFilePath);
+        workingFile.steps![0]._runtime = {
+          ...workingFile.steps![0]._runtime,
+          startedAt: 1,
+          completedAt: 2,
+          terminalStatus: PROMPT_TERMINAL_STATUS.COMPLETED,
+        };
+        workingFile.steps![1]._runtime = {
+          ...workingFile.steps![1]._runtime,
+          startedAt: 3,
+        };
+        workingFile._runtime = {
+          currentIndex: 1,
+          executionState: EXECUTION_STATES.RUNNING,
+        };
+        await fs.writeFile(
+          workingFilePath,
+          JSON.stringify(workingFile, null, 2)
+        );
+
+        const restored = new PromptQueue();
+        await restored.restoreFromWorkingFile(workingFilePath, true);
+
+        assert.strictEqual(
+          restored.getState().status,
+          EXECUTION_STATES.STOPPED
+        );
+        assert.strictEqual(restored.getState().currentIndex, 2);
+        const persisted = await restored.readWorkingFile(workingFilePath);
+        assert.strictEqual(
+          persisted._runtime?.executionState,
+          EXECUTION_STATES.STOPPED
+        );
+        assert.strictEqual(persisted._runtime?.currentIndex, 2);
+        assert.strictEqual(
+          persisted.steps![1]._runtime?.terminalStatus,
+          PROMPT_TERMINAL_STATUS.CANCELLED
+        );
+        assert.ok(persisted.steps![1]._runtime?.completedAt !== undefined);
+
+        const interrupted = await restored.claimStepById(
+          persisted.steps![1]._runtime!.stepId!
+        );
+        assert.strictEqual(interrupted.status, STEP_CLAIM_OUTCOMES.TERMINAL);
+        const next = await restored.claimStepById(
+          persisted.steps![2]._runtime!.stepId!
+        );
+        assert.strictEqual(next.status, STEP_CLAIM_OUTCOMES.CLAIMED);
+      } finally {
+        await fs.rm(workspace, { recursive: true, force: true });
+      }
+    });
+
     test("preserves IDs through edit, replacement, and reorder", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       const before = queue
