@@ -142,13 +142,15 @@ function buildResultSectionRenderPlan(
   outputContentWidth?: number,
   outputFontSize = DEFAULT_OUTPUT_FONT_SIZE,
   maxResultLines = GENERIC_TOOL_CALL_MAX_RESULT_LINES,
-  maxResultChars = GENERIC_TOOL_CALL_MAX_RESULT_CHARS
+  maxResultChars = GENERIC_TOOL_CALL_MAX_RESULT_CHARS,
+  fullLineCount?: number
 ): ToolCallSectionRenderPlan {
-  const lineCount = countLines(text);
+  const lineCount = fullLineCount ?? countLines(text);
   const preview = buildCollapsedOutputPreview(text, {
     expanded,
     maxLines: maxResultLines,
     maxChars: maxResultChars,
+    fullLineCount,
   });
   // When only 1 line would be hidden, buildCollapsedOutputPreview returns the
   // full text (isTruncated=false). Use expanded || isTruncated so the
@@ -257,7 +259,8 @@ export function buildToolCallRenderPlan(
         outputContentWidth,
         outputFontSize,
         resolvedMaxResultLines,
-        maxResultChars
+        maxResultChars,
+        result?.outputLines
       )
     : getEmptySectionRenderPlan();
   const errorPlan = error
@@ -268,7 +271,8 @@ export function buildToolCallRenderPlan(
         outputContentWidth,
         outputFontSize,
         resolvedMaxResultLines,
-        maxResultChars
+        maxResultChars,
+        result?.errorLines
       )
     : getEmptySectionRenderPlan();
 

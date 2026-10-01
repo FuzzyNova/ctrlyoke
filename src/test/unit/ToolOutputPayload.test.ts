@@ -13,6 +13,7 @@ suite("ToolOutputPayload", () => {
       text: "small output",
       truncated: false,
       totalBytes: 12,
+      totalLines: 1,
     });
   });
 
@@ -32,12 +33,29 @@ suite("ToolOutputPayload", () => {
     ];
     const bash = capToolOutputEvent(source[0]);
     const result = capToolOutputEvent(source[1]);
-    const bashData = bash.data as { output: string; outputTruncated: boolean; outputTotalBytes: number };
-    const resultData = result.data as { result: { output: string; outputTruncated: boolean; outputTotalBytes: number } };
+    const bashData = bash.data as {
+      output: string;
+      outputTruncated: boolean;
+      outputTotalBytes: number;
+      outputLines: number;
+      outputTotalLines: number;
+    };
+    const resultData = result.data as {
+      result: {
+        output: string;
+        outputTruncated: boolean;
+        outputTotalBytes: number;
+      };
+    };
 
     assert.strictEqual(bashData.outputTruncated, true);
     assert.strictEqual(bashData.outputTotalBytes, 600_000);
-    assert.ok(new TextEncoder().encode(bashData.output).byteLength <= RUN_VIEW_TOOL_OUTPUT_HEAD_BYTES);
+    assert.strictEqual(bashData.outputLines, 1);
+    assert.strictEqual(bashData.outputTotalLines, 1);
+    assert.ok(
+      new TextEncoder().encode(bashData.output).byteLength <=
+        RUN_VIEW_TOOL_OUTPUT_HEAD_BYTES
+    );
     assert.strictEqual(resultData.result.outputTruncated, true);
     assert.strictEqual(resultData.result.outputTotalBytes, 500_000);
     assert.strictEqual(

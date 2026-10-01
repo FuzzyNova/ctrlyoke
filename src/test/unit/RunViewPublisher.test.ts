@@ -28,6 +28,7 @@ import type {
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import type { WorkflowOutputHistory } from "../../types/OutputHistoryTypes";
 import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
+import { capToolOutputEvent } from "../../utils/ToolOutputPayload";
 import { FINAL_STEP_PHASES } from "../../types/DashboardConstants";
 
 class FakeInstance implements RunViewPublisherInstance {
@@ -243,13 +244,9 @@ suite("RunViewPublisher", () => {
         target,
         initialOutput
       );
-      await historyManager.appendStreamingEvents(
-        filePath,
-        target,
-        0,
-        0,
-        [completeEvent]
-      );
+      await historyManager.appendStreamingEvents(filePath, target, 0, 0, [
+        completeEvent,
+      ]);
       await historyManager.saveExecutionOutput(filePath, target, [
         {
           ...initialOutput,
@@ -259,9 +256,14 @@ suite("RunViewPublisher", () => {
       ]);
 
       const sent: unknown[] = [];
-      await publisher.loadRunViewForClient(address, (message) => sent.push(message), "client-tool-output");
+      await publisher.loadRunViewForClient(
+        address,
+        (message) => sent.push(message),
+        "client-tool-output"
+      );
       const loaded = sent.find(
-        (message) => (message as { type?: string }).type === MESSAGE_TYPES.RUN_VIEW_LOADED
+        (message) =>
+          (message as { type?: string }).type === MESSAGE_TYPES.RUN_VIEW_LOADED
       ) as { history?: WorkflowOutputHistory | null };
       const history = loaded.history;
       const aggregate = history?.orderedEntries.find(
@@ -285,18 +287,26 @@ suite("RunViewPublisher", () => {
           completeEvent.data.output.length
       );
 
-      const fetched = await historyManager.getCliOutputEvent(
-        filePath,
-        target,
-        0,
-        0,
-        undefined,
-        0
-      );
-      assert.strictEqual(fetched?.outputTruncated, undefined);
+      let historyReads = 0;
+      const loadHistory = historyManager.loadHistory.bind(historyManager);
+      historyManager.loadHistory = async (...args) => {
+        historyReads++;
+        return loadHistory(...args);
+      };
+      const fetched = await historyManager.getCliOutputEvents(filePath, [
+        { target, attemptIndex: 0, runIndex: 0, eventIndex: 0 },
+        { target, attemptIndex: 0, runIndex: 0, eventIndex: 0 },
+      ]);
+      assert.strictEqual(historyReads, 1);
+      assert.strictEqual(fetched[0]?.outputTruncated, undefined);
       assert.strictEqual(
-        (fetched?.data as { output?: string }).output,
+        (fetched[0]?.data as { output?: string }).output,
         completeEvent.data.output
+      );
+      assert.deepStrictEqual(fetched[0], completeEvent);
+      assert.deepStrictEqual(
+        capToolOutputEvent(fetched[0]!),
+        cappedAggregateEvent
       );
     } finally {
       await fs.rm(root, {
@@ -339,7 +349,10 @@ suite("RunViewPublisher", () => {
         (sent.at(-1) as { type: string }).type,
         MESSAGE_TYPES.RUN_VIEW_LOADED
       );
-      assert.strictEqual(events.filter((event) => event === "buffer").length, 1);
+      assert.strictEqual(
+        events.filter((event) => event === "buffer").length,
+        1
+      );
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
@@ -396,12 +409,30 @@ suite("RunViewPublisher", () => {
         }
       );
       const sent: unknown[] = [];
-      await publisher.loadRunViewForClient(address, (message) => sent.push(message), "client-snapshot");
+      await publisher.loadRunViewForClient(
+        address,
+        (message) => sent.push(message),
+        "client-snapshot"
+      );
       const loaded = sent.find(
         (message) =>
           (message as { type?: string }).type === MESSAGE_TYPES.RUN_VIEW_LOADED
-      ) as { history?: { promptOutputs: Record<number, { workspaceSnapshot?: { changedFiles: Array<Record<string, unknown>> } }> } } | undefined;
-      const changes = loaded?.history?.promptOutputs[0]?.workspaceSnapshot?.changedFiles;
+      ) as
+        | {
+            history?: {
+              promptOutputs: Record<
+                number,
+                {
+                  workspaceSnapshot?: {
+                    changedFiles: Array<Record<string, unknown>>;
+                  };
+                }
+              >;
+            };
+          }
+        | undefined;
+      const changes =
+        loaded?.history?.promptOutputs[0]?.workspaceSnapshot?.changedFiles;
       assert.ok(changes);
       assert.deepStrictEqual(changes[0], {
         path: "deleted.txt",
@@ -471,7 +502,10 @@ suite("RunViewPublisher", () => {
         snapshot?.liveState?.executionState,
         EXECUTION_STATES.RUNNING
       );
-      assert.strictEqual(events.filter((event) => event === "buffer").length, 1);
+      assert.strictEqual(
+        events.filter((event) => event === "buffer").length,
+        1
+      );
       assert.strictEqual(
         events.filter((event) => event === "terminals").length,
         1

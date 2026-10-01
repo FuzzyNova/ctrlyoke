@@ -161,7 +161,7 @@ describe("OutputRow token stats", () => {
       value: { writeText },
     });
     const postMessage = vi.spyOn(window.vscodeApi!, "postMessage");
-    postMessage.mockImplementation((request: { type: string; requestId?: string }) => {
+    postMessage.mockImplementation((request: any) => {
       if (request.type !== MESSAGE_TYPES.REQUEST_TOOL_OUTPUT_CONTENT) return;
       window.setTimeout(() => {
         window.dispatchEvent(
@@ -169,13 +169,16 @@ describe("OutputRow token stats", () => {
             data: {
               type: MESSAGE_TYPES.TOOL_OUTPUT_CONTENT,
               requestId: request.requestId,
-              event: {
-                type: CLI_EVENT_TYPES.TOOL_RESULT,
-                data: {
-                  toolCallId: "copy-tool",
-                  result: { success: true, output: fullOutput },
+              events: request.events.map((identity: any) => ({
+                ...identity,
+                event: {
+                  type: CLI_EVENT_TYPES.TOOL_RESULT,
+                  data: {
+                    toolCallId: "copy-tool",
+                    result: { success: true, output: fullOutput },
+                  },
                 },
-              },
+              })),
             },
           })
         );
@@ -183,15 +186,21 @@ describe("OutputRow token stats", () => {
     });
 
     render(<OutputRow row={row} isExecutionActive={false} />);
-    fireEvent.click(screen.getByRole("button", { name: "Copy output to clipboard" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Copy output to clipboard" })
+    );
 
     await waitFor(() => {
       expect(postMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           type: MESSAGE_TYPES.REQUEST_TOOL_OUTPUT_CONTENT,
-          attemptIndex: 1,
-          runIndex: 0,
-          eventIndex: 0,
+          events: expect.arrayContaining([
+            expect.objectContaining({
+              attemptIndex: 1,
+              runIndex: 0,
+              eventIndex: 0,
+            }),
+          ]),
         })
       );
     });
@@ -351,9 +360,10 @@ describe("OutputRow snapshot diffs", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Toggle diff" }));
     const request = postMessage.mock.calls[0]?.[0] as
-      | { type: string; requestId: string }
-      | undefined;
-    expect(request?.type).toBe(MESSAGE_TYPES.REQUEST_WORKSPACE_SNAPSHOT_CONTENT);
+      { type: string; requestId: string } | undefined;
+    expect(request?.type).toBe(
+      MESSAGE_TYPES.REQUEST_WORKSPACE_SNAPSHOT_CONTENT
+    );
     window.dispatchEvent(
       new MessageEvent("message", {
         data: {
@@ -659,7 +669,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
       },
     });
     const postMessage = vi.spyOn(window.vscodeApi!, "postMessage");
-    postMessage.mockImplementation((request: { type: string; requestId?: string }) => {
+    postMessage.mockImplementation((request: any) => {
       if (request.type !== MESSAGE_TYPES.REQUEST_TOOL_OUTPUT_CONTENT) return;
       window.setTimeout(() => {
         window.dispatchEvent(
@@ -667,14 +677,17 @@ describe("OutputRow auto-expand on hidden active match", () => {
             data: {
               type: MESSAGE_TYPES.TOOL_OUTPUT_CONTENT,
               requestId: request.requestId,
-              event: {
-                type: CLI_EVENT_TYPES.BASH_COMMAND,
-                data: {
-                  command: "cat log",
-                  output: fullOutput,
-                  status: OPERATION_STATUS.COMPLETED,
+              events: request.events.map((identity: any) => ({
+                ...identity,
+                event: {
+                  type: CLI_EVENT_TYPES.BASH_COMMAND,
+                  data: {
+                    command: "cat log",
+                    output: fullOutput,
+                    status: OPERATION_STATUS.COMPLETED,
+                  },
                 },
-              },
+              })),
             },
           })
         );
@@ -690,9 +703,13 @@ describe("OutputRow auto-expand on hidden active match", () => {
     expect(await screen.findByText(/FULL_TAIL_MARKER/)).toBeInTheDocument();
     expect(postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
-        attemptIndex: 3,
-        runIndex: 2,
-        eventIndex: 0,
+        events: expect.arrayContaining([
+          expect.objectContaining({
+            attemptIndex: 3,
+            runIndex: 2,
+            eventIndex: 0,
+          }),
+        ]),
       })
     );
     postMessage.mockRestore();
@@ -727,7 +744,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
       },
     });
     const postMessage = vi.spyOn(window.vscodeApi!, "postMessage");
-    postMessage.mockImplementation((request: { type: string; requestId?: string }) => {
+    postMessage.mockImplementation((request: any) => {
       if (request.type !== MESSAGE_TYPES.REQUEST_TOOL_OUTPUT_CONTENT) return;
       window.setTimeout(() => {
         window.dispatchEvent(
@@ -735,13 +752,16 @@ describe("OutputRow auto-expand on hidden active match", () => {
             data: {
               type: MESSAGE_TYPES.TOOL_OUTPUT_CONTENT,
               requestId: request.requestId,
-              event: {
-                type: CLI_EVENT_TYPES.TOOL_RESULT,
-                data: {
-                  toolCallId: "tool-1",
-                  result: { success: true, output: fullOutput },
+              events: request.events.map((identity: any) => ({
+                ...identity,
+                event: {
+                  type: CLI_EVENT_TYPES.TOOL_RESULT,
+                  data: {
+                    toolCallId: "tool-1",
+                    result: { success: true, output: fullOutput },
+                  },
                 },
-              },
+              })),
             },
           })
         );
@@ -751,12 +771,18 @@ describe("OutputRow auto-expand on hidden active match", () => {
     render(<OutputRow row={row} isExecutionActive={false} />);
     fireEvent.click(screen.getByRole("button", { name: /show more/i }));
 
-    expect(await screen.findByText(/FULL_TOOL_RESULT_MARKER/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/FULL_TOOL_RESULT_MARKER/)
+    ).toBeInTheDocument();
     expect(postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
-        attemptIndex: 1,
-        runIndex: 0,
-        eventIndex: 4,
+        events: expect.arrayContaining([
+          expect.objectContaining({
+            attemptIndex: 1,
+            runIndex: 0,
+            eventIndex: 4,
+          }),
+        ]),
       })
     );
     postMessage.mockRestore();

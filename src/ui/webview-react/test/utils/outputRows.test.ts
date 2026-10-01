@@ -3,7 +3,7 @@ import type { WorkflowStep } from "@store/workflowStore";
 import { cleanup, render } from "@testing-library/react";
 import { BashOutput } from "@components/output/BashOutput";
 import { createElement } from "react";
-import { capToolOutputEvent, RUN_VIEW_TOOL_OUTPUT_HEAD_BYTES } from "@root/utils/ToolOutputPayload";
+import { capToolOutputEvent } from "@root/utils/ToolOutputPayload";
 import {
   buildOutputRows,
   estimateOutputRowHeight,
@@ -48,7 +48,10 @@ describe("outputRows", () => {
   const steps = [{ name: "Analyze code" } as WorkflowStep];
 
   it("renders a capped bash event identically to its full event while collapsed", () => {
-    const fullText = "x".repeat(RUN_VIEW_TOOL_OUTPUT_HEAD_BYTES + 100);
+    const fullText = Array.from(
+      { length: 6_000 },
+      (_, index) => `line ${index}`
+    ).join("\n");
     const fullEvent = {
       type: CLI_EVENT_TYPES.BASH_COMMAND,
       data: {
@@ -58,7 +61,11 @@ describe("outputRows", () => {
       },
     } as const;
     const cappedEvent = capToolOutputEvent(fullEvent);
-    const cappedData = cappedEvent.data as { command: string; output?: string };
+    const cappedData = cappedEvent.data as {
+      command: string;
+      output?: string;
+      outputLines?: number;
+    };
     const fullRender = render(
       createElement(BashOutput, {
         command: "cat log",
@@ -72,6 +79,7 @@ describe("outputRows", () => {
       createElement(BashOutput, {
         command: cappedData.command,
         output: cappedData.output,
+        outputLineCount: cappedData.outputLines,
         status: OPERATION_STATUS.COMPLETED,
       })
     );

@@ -323,28 +323,73 @@ consumer above stops assuming the full text is present. Live streaming output
 (the in-memory buffer replay) stays uncapped, so every consumer must accept both
 capped and complete entries.
 
-**Infrastructure (2026-10-01):** The first step adds a request/reply
-for one normalized aggregate event, addressed by run, target, attempt, and
-event index, plus a cached webview client. The extension resolves it through
-`OutputHistoryManager.loadHistory()`, preserving the same normalization and
-snapshot enrichment path as the view. Markdown export and Copy All hydrate any
-marked event before formatting.
+**Infrastructure (2026-10-01):** Tool output requests carry the run address
+and a list of event identities (target, attempt, run, phase, and normalized
+event index); the reply returns all requested events. `OutputHistoryManager`
+resolves each batch with one `loadHistory()` projection, preserving the exact
+normalization, event-index numbering, and snapshot enrichment used by the run
+view. Concurrent tool-output batches for the same history file share an
+in-flight history read. A parity test compares a fetched full event after the
+same 8 KiB cap with the corresponding `RUN_VIEW_LOADED` aggregate event.
 
-**Landed (2026-10-01):** `RUN_VIEW_LOADED` now caps bash output and tool-result
-text in both the normalized aggregate events and activity slices. Persisted
-history and live buffered replay remain complete. Expand and row-copy actions
-fetch the full normalized event; Copy All and copy-hovered hydrate before
-formatting. In-pane find searches the capped head and displays “Matches in
-truncated outputs may be missed.” Collapsed Bash rendering is unchanged because
-the 400,000-byte head exceeds the pane's 100,000-character collapsed preview
-budget, including four-byte UTF-8 characters.
+Hydration gathers truncated event identities across all entries/messages and
+sends one batch for Copy All, Markdown export, and copy-hovered. Single-row
+expand and copy use a batch of one and share the webview cache. In-pane find
+searches the capped head and displays “Matches in truncated outputs may be
+missed.”
 
-Measured with a scratch script against the user's
-`bug-backlog` run `run-2026-09-30T13-41-01-546Z`: the largest individual bash
-output/error or tool-result output/error field in `events.jsonl` was 55,979
-bytes, below the 400,000-byte cap. The projection therefore saved **0 bytes**
-on this run. The 7.8 MB and 4.9 MB totals describe all output text, but no
-individual field reached the cap.
+**Landed (2026-10-01):** `RUN_VIEW_LOADED` caps bash output and tool-result
+text in both normalized aggregate events and activity slices at
+`RUN_VIEW_TOOL_OUTPUT_HEAD_BYTES` (8,192 bytes per field). Each capped event
+carries the original `outputTotalBytes` and `outputTotalLines`; bash/tool-result
+data also carries per-field line counts so the collapsed preview and row-height
+estimates retain the full line total. Persisted history and live buffered
+replay remain complete. The default three-line collapsed preview remains
+identical to the full output. With an unusually wide pane or a large
+`collapsedToolOutputLineCount` setting, the preview budget can exceed the 8 KiB
+head; the available head is shown with the existing expand control.
+
+The review's raw-field scan on `bug-backlog` measured about 15.4 MB saved at
+4 KiB (1,577 fields capped), 10.7 MB at 8 KiB (880 fields capped), and 5.5 MB
+at 16 KiB. The 8 KiB cap retains more of each output while still removing
+material payload size; its 10.95 MB projection reduction below is close to the
+raw scan's estimate.
+
+Measured with a scratch script outside the repository using the compiled
+`OutputHistoryManager.loadHistory()` projection, the same snapshot-body strip
+as Problem 2, and the `RUN_VIEW_LOADED` tool-output cap. Component sizes below
+are UTF-8 JSON bytes (decimal MB); the total is the serialized history object.
+“Before” is after Problem 2's snapshot-body strip and before 1C; “After” also
+applies 1C. The bug-backlog run's current projection saves 10.95 MB (28.4%):
+
+| `bug-backlog` (`run-2026-09-30T13-41-01-546Z`) |       Before |        After |
+| ---------------------------------------------- | -----------: | -----------: |
+| `activityEntries` (8,661)                      |     19.44 MB |     13.48 MB |
+| `promptOutputs`                                |      0.65 MB |      0.65 MB |
+| `orderedEntries` (73)                          |     18.45 MB |     13.45 MB |
+| **Total**                                      | **38.55 MB** | **27.60 MB** |
+
+The current `parallel-steps-plan` run has no individual tool-output field over
+8 KiB, so 1C saves 0 bytes there:
+
+| `parallel-steps-plan` (`run-2026-09-04T01-35-57-252Z`) |       Before |        After |
+| ------------------------------------------------------ | -----------: | -----------: |
+| `activityEntries` (7,350)                              |     10.06 MB |     10.06 MB |
+| `promptOutputs`                                        |      0.00 MB |      0.00 MB |
+| `orderedEntries` (20)                                  |      2.91 MB |      2.91 MB |
+| **Total**                                              | **12.97 MB** | **12.97 MB** |
+
+The original 54.5 MB serialization is not reproducible from the current
+parallel-steps run files: its `events.jsonl` is now 16.98 MB, and this compiled
+history projection is 12.97 MB before and after 1C. Since the measured 1C delta
+on that reproduction is zero, the payload-size acceptance criterion remains
+open pending a reproducible material reduction on that run.
+
+The 1C result is data-dependent: this cap materially reduces the bug-backlog
+payload while leaving the parallel-steps payload unchanged. The 10.7 MB
+estimate from the review's raw-field scan at 8 KiB and the measured 10.95 MB
+projection reduction are consistent within the different serialization
+boundaries.
 
 ## Problem 2: `workspaceSnapshot` contents ride along on every load
 
@@ -521,11 +566,12 @@ That makes it the first thing to land against the reload loop.
    and it halves the server cost of every reconnect.
 2. **Problem 2** (on-demand `workspaceSnapshot` contents): ~16 MB off the
    payload, no protocol redesign, no client range tracking.
-3. **Proposal 1C** (capped tool output, fetched on expand): protects payloads
-   containing individual large outputs. The 400,000-byte head saved 0 bytes on
-   the 2026-10-01 run because its largest individual field was 55,979 bytes.
-   It still lands before 1B so large outliers can be fetched on demand; 1B's
-   broader saving depends on an equivalence proof that may not hold.
+3. **Proposal 1C** (capped tool output, fetched on expand): the 8 KiB head
+   saves 10.95 MB (28.4%) on the current bug-backlog projection and 0 bytes on
+   the current parallel-steps-plan projection, whose individual fields are all
+   below the cap. Batched reads keep full-output consumers from multiplying
+   full-history projections. This lands before 1B; 1B remains unpursued because
+   its broader activity reduction lacks an equivalence proof.
 4. **Proposal 1B** (activity reduction): not pursued because the aggregate
    loses event fields and concatenates text across activity boundaries. The
    narrower structured-slice option remains backlog until the aggregate is
@@ -547,7 +593,7 @@ That makes it the first thing to land against the reload loop.
 - [ ] The `RUN_VIEW_LOADED` payload for that run is materially smaller than
       54.5 MB, with the reduction attributable to specific parts (record the
       new breakdown the way this plan records the current one).
-- [ ] Whatever is fetched on demand goes through `OutputHistoryManager`, so
+- [x] Whatever is fetched on demand goes through `OutputHistoryManager`, so
       snapshot enrichment and replay semantics stay identical to the eager path.
 - [ ] The output panel, minimap, and diff rows render identically to today for
       a fully-loaded run; a partially-loaded run states its own boundaries
@@ -563,5 +609,5 @@ That makes it the first thing to land against the reload loop.
 - [ ] If 1A lands, scrolling at normal speed through a paged run never shows
       a placeholder in the viewport (the prefetch margin covers it), and the
       scrollbar and minimap cover the whole run from the first paint.
-- [ ] New coverage for the on-demand/windowed reads in `src/test/**`, and for
+- [x] New coverage for the on-demand/windowed reads in `src/test/**`, and for
       the client's range handling in `src/ui/webview-react/test/**`.

@@ -93,10 +93,7 @@ import {
   type OutputFindMatch,
   type RowFindDecoration,
 } from "@utils/outputFind";
-import {
-  getPromptChangeLabelParts,
-  sameFilePath,
-} from "@utils/promptUndo";
+import { getPromptChangeLabelParts, sameFilePath } from "@utils/promptUndo";
 import {
   OUTPUT_BLOCK_BASE,
   TOOL_RESULT_LINE,
@@ -531,7 +528,12 @@ const UserSteerOutput: React.FC<{
 );
 
 const ToolResultOutput: React.FC<{
-  result: { success: boolean; output?: string; error?: string; outputTruncated?: boolean };
+  result: {
+    success: boolean;
+    output?: string;
+    error?: string;
+    outputTruncated?: boolean;
+  };
   content?: React.ReactNode;
   loading?: boolean;
   onExpand?: () => void;
@@ -556,7 +558,7 @@ const ToolResultOutput: React.FC<{
         {loading ? (
           <span role="status">Loading full output…</span>
         ) : expanded ? (
-          content ?? contentText
+          (content ?? contentText)
         ) : (
           contentText
         )}
@@ -637,13 +639,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       const activeIndex = matches.findIndex((match) => match.active);
       return activeIndex;
     };
-    const {
-      rawTextOutput,
-      eventIndex,
-      hideDiff,
-      workspaceSnapshot,
-      diff,
-    } = row;
+    const { rawTextOutput, eventIndex, hideDiff, workspaceSnapshot, diff } =
+      row;
     const event = fullEvent ?? row.event;
     useEffect(() => {
       setFullEvent(undefined);
@@ -653,7 +650,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       if (
         !isToolOutputTruncated(event) ||
         displayedViewAddress?.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN
-      ) return;
+      )
+        return;
       setIsLoadingToolOutput(true);
       try {
         const fetched = await fetchToolOutputEvent({
@@ -672,19 +670,23 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
         setIsLoadingToolOutput(false);
       }
     }, [displayedViewAddress, event, fetchToolOutputEvent, row]);
-    const updateToolCallExpansion = useCallback((
-      section: ToolCallExpansionSection,
-      expanded: boolean
-    ) => {
-      if (
-        expanded &&
-        (section === TOOL_CALL_EXPANSION_SECTIONS.OUTPUT ||
-          section === TOOL_CALL_EXPANSION_SECTIONS.ERROR)
-      ) void requestFullToolOutput();
-      onToolCallExpansionChange?.(row.key, section, expanded);
-    }, [onToolCallExpansionChange, requestFullToolOutput, row.key]);
+    const updateToolCallExpansion = useCallback(
+      (section: ToolCallExpansionSection, expanded: boolean) => {
+        if (
+          expanded &&
+          (section === TOOL_CALL_EXPANSION_SECTIONS.OUTPUT ||
+            section === TOOL_CALL_EXPANSION_SECTIONS.ERROR)
+        )
+          void requestFullToolOutput();
+        onToolCallExpansionChange?.(row.key, section, expanded);
+      },
+      [onToolCallExpansionChange, requestFullToolOutput, row.key]
+    );
     const effectiveWorkspaceSnapshot = useMemo(() => {
-      if (Object.keys(loadedSnapshotContent).length === 0 || !workspaceSnapshot) {
+      if (
+        Object.keys(loadedSnapshotContent).length === 0 ||
+        !workspaceSnapshot
+      ) {
         return workspaceSnapshot;
       }
       return {
@@ -698,8 +700,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
     }, [loadedSnapshotContent, workspaceSnapshot]);
 
     const fetchSnapshotContent = (path: string) => {
-      const indexedChange = workspaceSnapshot?.changedFiles.find(
-        (change) => sameFilePath(change.path, path)
+      const indexedChange = workspaceSnapshot?.changedFiles.find((change) =>
+        sameFilePath(change.path, path)
       );
       if (
         !indexedChange?.contentAvailableOnDemand ||
@@ -901,6 +903,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             command={data.command}
             output={data.output}
             error={data.error}
+            outputLineCount={data.outputLines}
+            errorLineCount={data.errorLines}
             outputLoading={isLoadingToolOutput && Boolean(data.outputTruncated)}
             errorLoading={isLoadingToolOutput && Boolean(data.outputTruncated)}
             commandFindMatches={getFieldMatches(HISTORY_MATCH_FIELDS.COMMAND)}
@@ -917,7 +921,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
                 expanded &&
                 section !== BASH_OUTPUT_EXPANSION_SECTIONS.COMMAND &&
                 isToolOutputTruncated(event)
-              ) void requestFullToolOutput();
+              )
+                void requestFullToolOutput();
               onBashExpansionChange?.(row.key, section, expanded);
             }}
           />
@@ -1237,7 +1242,9 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
         return (
           <ToolResultOutput
             result={data.result}
-            loading={isLoadingToolOutput && Boolean(data.result.outputTruncated)}
+            loading={
+              isLoadingToolOutput && Boolean(data.result.outputTruncated)
+            }
             onExpand={() => void requestFullToolOutput()}
             content={highlightText(
               !data.result.success && data.result.error

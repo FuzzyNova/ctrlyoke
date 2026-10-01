@@ -77,6 +77,8 @@ import type {
   ServerPortFallbackInfo,
   BindAddressFallbackInfo,
 } from "../types/WebviewMessageTypes";
+import type { OutputExecutionTarget } from "../types/OutputHistoryTypes";
+import type { ToolOutputEventIdentity } from "../types/WebviewMessageTypes";
 import type {
   WorkflowVariantCreatedMessage,
   WorkflowVariantFailedMessage,
@@ -95,6 +97,7 @@ import {
 } from "./WebviewClientContext";
 import { HistorySearchService } from "../core/orchestration/HistorySearchService";
 import { HistorySearchCancelledError } from "../core/orchestration/HistorySearchIndexService";
+
 import {
   HistorySearchRegexTimeoutError,
   InvalidHistorySearchPatternError,
@@ -111,6 +114,38 @@ import {
   type LicenseActionService,
 } from "./LicenseSettingsHandlers";
 import { WebviewUserInteractionPort } from "./WebviewUserInteractionPort";
+
+function isValidOutputExecutionTarget(
+  value: unknown
+): value is OutputExecutionTarget {
+  if (!value || typeof value !== "object") return false;
+  const target = value as Record<string, unknown>;
+  return (
+    (target.kind === FINAL_STEP_PHASES.QUEUE &&
+      Number.isInteger(target.stepIndex) &&
+      (target.stepIndex as number) >= 0) ||
+    (target.kind === FINAL_STEP_PHASES.FINAL_STEP &&
+      Number.isInteger(target.loopIndex) &&
+      (target.loopIndex as number) >= 0)
+  );
+}
+
+function isValidToolOutputEventIdentity(
+  value: unknown
+): value is ToolOutputEventIdentity {
+  if (!value || typeof value !== "object") return false;
+  const identity = value as Record<string, unknown>;
+  return (
+    isValidOutputExecutionTarget(identity.target) &&
+    Number.isInteger(identity.attemptIndex) &&
+    (identity.attemptIndex as number) >= 0 &&
+    Number.isInteger(identity.eventIndex) &&
+    (identity.eventIndex as number) >= 0 &&
+    (identity.runIndex === undefined ||
+      (Number.isInteger(identity.runIndex) &&
+        (identity.runIndex as number) >= 0))
+  );
+}
 
 /**
  * A dispatch-table entry. Every handler receives the originating client's scope
@@ -1470,13 +1505,7 @@ export class WebviewMessageRouter {
           typeof message.address?.workflowKey !== "string" ||
           typeof message.address?.runRef !== "string" ||
           typeof message.path !== "string" ||
-          !message.target ||
-          !((message.target.kind === FINAL_STEP_PHASES.QUEUE &&
-            Number.isInteger(message.target.stepIndex) &&
-            message.target.stepIndex >= 0) ||
-            (message.target.kind === FINAL_STEP_PHASES.FINAL_STEP &&
-              Number.isInteger(message.target.loopIndex) &&
-              message.target.loopIndex >= 0))
+          !isValidOutputExecutionTarget(message.target)
         ) {
           return;
         }
@@ -1498,11 +1527,12 @@ export class WebviewMessageRouter {
             }
           | undefined;
         try {
-          content = await this.getOrchestrator()?.getWorkspaceSnapshotFileContent(
-            request.address,
-            request.target,
-            request.path
-          );
+          content =
+            await this.getOrchestrator()?.getWorkspaceSnapshotFileContent(
+              request.address,
+              request.target,
+              request.path
+            );
         } catch (error) {
           Log.warn(
             `[WebviewMessageRouter] Snapshot content request failed: ${getErrorMessage(error)}`
@@ -1516,52 +1546,52 @@ export class WebviewMessageRouter {
       }
     );
 
-    table.set(MESSAGE_TYPES.REQUEST_TOOL_OUTPUT_CONTENT, async (message, ctx) => {
-      if (
-        typeof message.requestId !== "string" ||
-        typeof message.address?.workflowKey !== "string" ||
-        typeof message.address?.runRef !== "string" ||
-        !Number.isInteger(message.attemptIndex) ||
-        message.attemptIndex < 0 ||
-        !Number.isInteger(message.eventIndex) ||
-        message.eventIndex < 0 ||
-        !message.target ||
-        !((message.target.kind === FINAL_STEP_PHASES.QUEUE &&
-          Number.isInteger(message.target.stepIndex) && message.target.stepIndex >= 0) ||
-          (message.target.kind === FINAL_STEP_PHASES.FINAL_STEP &&
-            Number.isInteger(message.target.loopIndex) && message.target.loopIndex >= 0))
-      ) {
-        return;
+    table.set(
+      MESSAGE_TYPES.REQUEST_TOOL_OUTPUT_CONTENT,
+      async (message, ctx) => {
+        if (
+          typeof message.requestId !== "string" ||
+          typeof message.address?.workflowKey !== "string" ||
+          typeof message.address?.runRef !== "string" ||
+          !Array.isArray(message.events) ||
+          !message.events.every(isValidToolOutputEventIdentity)
+        )
+          return;
+        const requestedEvents = message.events as ToolOutputEventIdentity[];
+        const request = {
+          requestId: message.requestId,
+          address: {
+            workflowKey: message.address.workflowKey,
+            runRef: message.address.runRef,
+          },
+          events: requestedEvents,
+        };
+        let events: (import("../types/CliOutputTypes").CliEvent | undefined)[] =
+          [];
+        try {
+          events =
+            (await this.getOrchestrator()?.getToolOutputEvents(
+              request.address,
+              request.events
+            )) ?? [];
+        } catch (error) {
+          Log.warn(
+            `[WebviewMessageRouter] Tool output request failed: ${getErrorMessage(error)}`
+          );
+        }
+        ctx.emit({
+          type: MESSAGE_TYPES.TOOL_OUTPUT_CONTENT,
+          requestId: request.requestId,
+          address: request.address,
+          events: request.events.map(
+            (identity: ToolOutputEventIdentity, index: number) => ({
+              ...identity,
+              event: events[index],
+            })
+          ),
+        });
       }
-      const request = {
-        requestId: message.requestId,
-        address: {
-          workflowKey: message.address.workflowKey,
-          runRef: message.address.runRef,
-        },
-        target: message.target,
-        attemptIndex: message.attemptIndex,
-        runIndex: message.runIndex,
-        phase: message.phase,
-        eventIndex: message.eventIndex,
-      };
-      let event;
-      try {
-        event = await this.getOrchestrator()?.getToolOutputEvent(
-          request.address,
-          request.target,
-          request.attemptIndex,
-          request.runIndex,
-          request.phase,
-          request.eventIndex
-        );
-      } catch (error) {
-        Log.warn(
-          `[WebviewMessageRouter] Tool output request failed: ${getErrorMessage(error)}`
-        );
-      }
-      ctx.emit({ type: MESSAGE_TYPES.TOOL_OUTPUT_CONTENT, ...request, event });
-    });
+    );
 
     table.set(MESSAGE_TYPES.LOAD_RUN_SUMMARIES, async (message, ctx) => {
       const orchestrator = this.getOrchestrator();

@@ -1937,11 +1937,7 @@ export interface WorkspaceSnapshotContentMessage {
   contentCaptureSkipped?: boolean;
 }
 
-/** Webview → Extension: fetch one full structured event from addressed history. */
-export interface RequestToolOutputContentMessage {
-  type: typeof MESSAGE_TYPES.REQUEST_TOOL_OUTPUT_CONTENT;
-  requestId: string;
-  address: WorkflowRunAddress;
+export interface ToolOutputEventIdentity {
   target: OutputExecutionTarget;
   attemptIndex: number;
   /** Aggregate runIndex disambiguates repeated attempts in a loop. */
@@ -1951,17 +1947,20 @@ export interface RequestToolOutputContentMessage {
   eventIndex: number;
 }
 
-/** Extension → Webview: full structured event, if it exists in addressed history. */
+/** Webview → Extension: fetch full structured events from addressed history. */
+export interface RequestToolOutputContentMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_TOOL_OUTPUT_CONTENT;
+  requestId: string;
+  address: WorkflowRunAddress;
+  events: ToolOutputEventIdentity[];
+}
+
+/** Extension → Webview: full structured events, if present in addressed history. */
 export interface ToolOutputContentMessage {
   type: typeof MESSAGE_TYPES.TOOL_OUTPUT_CONTENT;
   requestId: string;
   address: WorkflowRunAddress;
-  target: OutputExecutionTarget;
-  attemptIndex: number;
-  runIndex?: number;
-  phase?: ExecutionPhase;
-  eventIndex: number;
-  event?: CliEvent;
+  events: Array<ToolOutputEventIdentity & { event?: CliEvent }>;
 }
 
 /**

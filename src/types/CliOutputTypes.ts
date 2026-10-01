@@ -36,6 +36,8 @@ export interface CliEvent {
   outputTruncated?: boolean;
   /** UTF-8 byte count of the complete capped text field(s), before projection. */
   outputTotalBytes?: number;
+  /** Number of rendered lines across complete capped output/error fields. */
+  outputTotalLines?: number;
 }
 
 /**
@@ -284,6 +286,9 @@ export interface ToolResult {
   outputTruncated?: boolean;
   /** UTF-8 byte count of the complete output/error text before projection. */
   outputTotalBytes?: number;
+  outputTotalLines?: number;
+  outputLines?: number;
+  errorLines?: number;
 }
 
 /**
@@ -366,6 +371,9 @@ export interface BashCommandData {
   outputTruncated?: boolean;
   /** UTF-8 byte count of the complete output/error text before projection. */
   outputTotalBytes?: number;
+  outputTotalLines?: number;
+  outputLines?: number;
+  errorLines?: number;
 }
 
 /**

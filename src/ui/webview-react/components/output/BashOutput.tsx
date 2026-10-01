@@ -30,6 +30,8 @@ interface BashOutputProps {
   command: string;
   output?: string;
   error?: string;
+  outputLineCount?: number;
+  errorLineCount?: number;
   outputLoading?: boolean;
   errorLoading?: boolean;
   commandFindMatches?: RowFindDecoration["matches"];
@@ -82,6 +84,8 @@ export const BashOutput = memo<BashOutputProps>(
     command,
     output,
     error,
+    outputLineCount,
+    errorLineCount,
     outputLoading = false,
     errorLoading = false,
     commandFindMatches,
@@ -170,6 +174,10 @@ export const BashOutput = memo<BashOutputProps>(
         expanded: isExpanded,
         maxLines,
         maxChars: maxCharacters,
+        fullLineCount:
+          type === BASH_OUTPUT_EXPANSION_SECTIONS.OUTPUT
+            ? outputLineCount
+            : errorLineCount,
       });
       const canToggle = isExpanded || preview.isTruncated;
 

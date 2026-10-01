@@ -1,14 +1,17 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useRef } from "react";
 import { useOutputContextMenu } from "@hooks/useOutputContextMenu";
 import type { OutputMessage } from "@utils/outputProjection";
 import { FINAL_STEP_PHASES } from "@/types/messages";
 import { OUTPUT_MESSAGE_TYPES } from "@root/types/DashboardConstants";
-import {
-  CLI_EVENT_TYPES,
-  MESSAGE_TYPES,
-} from "@/types/messages";
+import { CLI_EVENT_TYPES, MESSAGE_TYPES } from "@/types/messages";
 
 function makeCliMessage(
   index: number,
@@ -151,7 +154,7 @@ describe("useOutputContextMenu", () => {
       },
     };
     vi.spyOn(window.vscodeApi!, "postMessage").mockImplementation(
-      (request: { type: string; requestId?: string }) => {
+      (request: any) => {
         if (request.type !== MESSAGE_TYPES.REQUEST_TOOL_OUTPUT_CONTENT) return;
         window.setTimeout(() => {
           window.dispatchEvent(
@@ -159,10 +162,13 @@ describe("useOutputContextMenu", () => {
               data: {
                 type: MESSAGE_TYPES.TOOL_OUTPUT_CONTENT,
                 requestId: request.requestId,
-                event: {
-                  type: CLI_EVENT_TYPES.BASH_COMMAND,
-                  data: { command: "cat log", output: "complete output" },
-                },
+                events: request.events.map((identity: any) => ({
+                  ...identity,
+                  event: {
+                    type: CLI_EVENT_TYPES.BASH_COMMAND,
+                    data: { command: "cat log", output: "complete output" },
+                  },
+                })),
               },
             })
           );
@@ -177,12 +183,18 @@ describe("useOutputContextMenu", () => {
       expect(window.vscodeApi!.postMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           type: MESSAGE_TYPES.REQUEST_TOOL_OUTPUT_CONTENT,
-          attemptIndex: 2,
-          runIndex: 3,
-          eventIndex: 0,
+          events: expect.arrayContaining([
+            expect.objectContaining({
+              attemptIndex: 2,
+              runIndex: 3,
+              eventIndex: 0,
+            }),
+          ]),
         })
       );
     });
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("head only"));
+    expect(writeText).toHaveBeenCalledWith(
+      expect.stringContaining("head only")
+    );
   });
 });

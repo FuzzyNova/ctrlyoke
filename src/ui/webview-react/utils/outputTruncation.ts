@@ -172,6 +172,8 @@ export interface CollapsedOutputPreviewOptions {
   expanded: boolean;
   maxLines?: number;
   maxChars?: number;
+  /** Complete rendered line count when `text` is only a capped head. */
+  fullLineCount?: number;
 }
 
 export interface CollapsedSingleLinePreviewOptions {
@@ -209,9 +211,10 @@ export function buildCollapsedOutputPreview(
     expanded,
     maxLines = DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
     maxChars = DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS,
+    fullLineCount: completeLineCount,
   }: CollapsedOutputPreviewOptions
 ): CollapsedOutputPreview {
-  const fullLineCount = countLines(text);
+  const fullLineCount = completeLineCount ?? countLines(text);
   if (expanded || (text.length <= maxChars && fullLineCount <= maxLines)) {
     return {
       fullLineCount,

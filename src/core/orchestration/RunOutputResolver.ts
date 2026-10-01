@@ -1324,6 +1324,14 @@ function getTargetKey(target: OutputExecutionTarget): string {
     : `final:${target.loopIndex}`;
 }
 
+/** Compare execution targets by their discriminated identity. */
+export function sameOutputExecutionTarget(
+  left: OutputExecutionTarget,
+  right: OutputExecutionTarget
+): boolean {
+  return getTargetKey(left) === getTargetKey(right);
+}
+
 function getAttemptKey(attempt: ResolvedRunAttempt): string {
   return `${getTargetKey(attempt.target)}:run:${attempt.runIndex}:attempt:${attempt.attemptIndex}${getExecutionPhaseKeySuffix(attempt.phase)}`;
 }

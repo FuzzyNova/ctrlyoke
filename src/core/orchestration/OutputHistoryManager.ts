@@ -44,7 +44,10 @@ import { OutputHistoryTimelineAdapter } from "./OutputHistoryTimelineAdapter";
 import { HistorySearchIndexService } from "./HistorySearchIndexService";
 import { getSharedHistorySearchIndexService } from "./HistorySearchIndexServiceRegistry";
 import { TimelineRecorder } from "./TimelineRecorder";
-import { RunOutputResolver } from "./RunOutputResolver";
+import {
+  RunOutputResolver,
+  sameOutputExecutionTarget,
+} from "./RunOutputResolver";
 import { RunMetadataScanner } from "./RunMetadataScanner";
 import { WorkflowTokenTotalsReducer } from "./WorkflowTokenTotalsReducer";
 import { ObservedHarnessUsageStore } from "../harness/shared/usage/ObservedHarnessUsageStore";
@@ -182,6 +185,10 @@ export interface RunNavigationSummary {
  * - History is a self-contained snapshot (renders independently of current prompts)
  */
 export class OutputHistoryManager {
+  private static readonly pendingToolOutputHistoryReads = new Map<
+    string,
+    Promise<WorkflowOutputHistory>
+  >();
   private readonly timelineRecorder = new TimelineRecorder();
   private readonly timelineAdapter = new OutputHistoryTimelineAdapter(
     this.timelineRecorder
@@ -955,14 +962,16 @@ export class OutputHistoryManager {
   > {
     if (!historyFilePath || !filePath) return undefined;
     const snapshot =
-      this.liveSnapshots.get(this.getSnapshotCacheKey(historyFilePath, target)) ??
+      this.liveSnapshots.get(
+        this.getSnapshotCacheKey(historyFilePath, target)
+      ) ??
       (await this.runMetadataScanner.findLatestWorkspaceSnapshot(
         historyFilePath,
         target
       ));
-    const fileChange = snapshot?.changedFiles.find(
-      (change) => change.path === filePath
-    ) ?? this.findSnapshotChangeForUndoPath(snapshot, filePath);
+    const fileChange =
+      snapshot?.changedFiles.find((change) => change.path === filePath) ??
+      this.findSnapshotChangeForUndoPath(snapshot, filePath);
     if (!snapshot || !fileChange) return undefined;
 
     const enriched = await this.enrichWorkspaceSnapshot(snapshot);
@@ -1140,29 +1149,57 @@ export class OutputHistoryManager {
     return enriched;
   }
 
-  /** Read one event from the normalized aggregate used by RUN_VIEW_LOADED. */
-  async getCliOutputEvent(
+  /** Read events from the exact normalized aggregate used by RUN_VIEW_LOADED. */
+  async getCliOutputEvents(
     historyFilePath: string,
-    target: OutputExecutionTarget,
-    attemptIndex: number,
-    runIndex: number | undefined,
-    phase: ExecutionPhase | undefined,
-    eventIndex: number
-  ): Promise<CliEvent | undefined> {
-    if (!Number.isInteger(eventIndex) || eventIndex < 0) return undefined;
-    const history = await this.loadHistory(historyFilePath);
-    const entry = history.orderedEntries.find(
-      (candidate) =>
-        candidate.kind === OUTPUT_HISTORY_KINDS.CLI &&
-        JSON.stringify(candidate.target) === JSON.stringify(target) &&
-        candidate.attemptIndex === attemptIndex &&
-        (candidate.runIndex ?? 0) === (runIndex ?? 0) &&
-        (candidate.phase ?? EXECUTION_PHASES.PROMPT) ===
-          (phase ?? EXECUTION_PHASES.PROMPT)
-    );
-    return entry?.kind === OUTPUT_HISTORY_KINDS.CLI
-      ? entry.cliOutput.structured?.events[eventIndex]
-      : undefined;
+    identities: readonly {
+      target: OutputExecutionTarget;
+      attemptIndex: number;
+      runIndex?: number;
+      phase?: ExecutionPhase;
+      eventIndex: number;
+    }[]
+  ): Promise<(CliEvent | undefined)[]> {
+    if (identities.length === 0) return [];
+    let pendingRead =
+      OutputHistoryManager.pendingToolOutputHistoryReads.get(historyFilePath);
+    if (!pendingRead) {
+      pendingRead = this.loadHistory(historyFilePath);
+      OutputHistoryManager.pendingToolOutputHistoryReads.set(
+        historyFilePath,
+        pendingRead
+      );
+      const clearPendingRead = () => {
+        if (
+          OutputHistoryManager.pendingToolOutputHistoryReads.get(
+            historyFilePath
+          ) === pendingRead
+        ) {
+          OutputHistoryManager.pendingToolOutputHistoryReads.delete(
+            historyFilePath
+          );
+        }
+      };
+      void pendingRead.then(clearPendingRead, clearPendingRead);
+    }
+    const history = await pendingRead;
+    return identities.map((identity) => {
+      if (!Number.isInteger(identity.eventIndex) || identity.eventIndex < 0) {
+        return undefined;
+      }
+      const entry = history.orderedEntries.find(
+        (candidate) =>
+          candidate.kind === OUTPUT_HISTORY_KINDS.CLI &&
+          sameOutputExecutionTarget(candidate.target, identity.target) &&
+          candidate.attemptIndex === identity.attemptIndex &&
+          (candidate.runIndex ?? 0) === (identity.runIndex ?? 0) &&
+          (candidate.phase ?? EXECUTION_PHASES.PROMPT) ===
+            (identity.phase ?? EXECUTION_PHASES.PROMPT)
+      );
+      return entry?.kind === OUTPUT_HISTORY_KINDS.CLI
+        ? entry.cliOutput.structured?.events[identity.eventIndex]
+        : undefined;
+    });
   }
 
   /**
