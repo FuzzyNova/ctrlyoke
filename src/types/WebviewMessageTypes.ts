@@ -1937,6 +1937,33 @@ export interface WorkspaceSnapshotContentMessage {
   contentCaptureSkipped?: boolean;
 }
 
+/** Webview → Extension: fetch one full structured event from addressed history. */
+export interface RequestToolOutputContentMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_TOOL_OUTPUT_CONTENT;
+  requestId: string;
+  address: WorkflowRunAddress;
+  target: OutputExecutionTarget;
+  attemptIndex: number;
+  /** Aggregate runIndex disambiguates repeated attempts in a loop. */
+  runIndex?: number;
+  phase?: ExecutionPhase;
+  /** Stable position in the normalized aggregate event array. */
+  eventIndex: number;
+}
+
+/** Extension → Webview: full structured event, if it exists in addressed history. */
+export interface ToolOutputContentMessage {
+  type: typeof MESSAGE_TYPES.TOOL_OUTPUT_CONTENT;
+  requestId: string;
+  address: WorkflowRunAddress;
+  target: OutputExecutionTarget;
+  attemptIndex: number;
+  runIndex?: number;
+  phase?: ExecutionPhase;
+  eventIndex: number;
+  event?: CliEvent;
+}
+
 /**
  * Authoritative address and revisions for the client's own editing target,
  * published after every definition write. `RUN_VIEW_LOADED` also carries these,
@@ -2919,6 +2946,7 @@ export type IncomingMessage =
   | ProgressUpdateMessage
   | SearchIndexRebuildProgressMessage
   | WorkspaceSnapshotContentMessage
+  | ToolOutputContentMessage
   | StepStatusChangedMessage
   | RetryAttemptChangedMessage
   | CliOutputMessage

@@ -1516,6 +1516,53 @@ export class WebviewMessageRouter {
       }
     );
 
+    table.set(MESSAGE_TYPES.REQUEST_TOOL_OUTPUT_CONTENT, async (message, ctx) => {
+      if (
+        typeof message.requestId !== "string" ||
+        typeof message.address?.workflowKey !== "string" ||
+        typeof message.address?.runRef !== "string" ||
+        !Number.isInteger(message.attemptIndex) ||
+        message.attemptIndex < 0 ||
+        !Number.isInteger(message.eventIndex) ||
+        message.eventIndex < 0 ||
+        !message.target ||
+        !((message.target.kind === FINAL_STEP_PHASES.QUEUE &&
+          Number.isInteger(message.target.stepIndex) && message.target.stepIndex >= 0) ||
+          (message.target.kind === FINAL_STEP_PHASES.FINAL_STEP &&
+            Number.isInteger(message.target.loopIndex) && message.target.loopIndex >= 0))
+      ) {
+        return;
+      }
+      const request = {
+        requestId: message.requestId,
+        address: {
+          workflowKey: message.address.workflowKey,
+          runRef: message.address.runRef,
+        },
+        target: message.target,
+        attemptIndex: message.attemptIndex,
+        runIndex: message.runIndex,
+        phase: message.phase,
+        eventIndex: message.eventIndex,
+      };
+      let event;
+      try {
+        event = await this.getOrchestrator()?.getToolOutputEvent(
+          request.address,
+          request.target,
+          request.attemptIndex,
+          request.runIndex,
+          request.phase,
+          request.eventIndex
+        );
+      } catch (error) {
+        Log.warn(
+          `[WebviewMessageRouter] Tool output request failed: ${getErrorMessage(error)}`
+        );
+      }
+      ctx.emit({ type: MESSAGE_TYPES.TOOL_OUTPUT_CONTENT, ...request, event });
+    });
+
     table.set(MESSAGE_TYPES.LOAD_RUN_SUMMARIES, async (message, ctx) => {
       const orchestrator = this.getOrchestrator();
       if (!orchestrator) return;

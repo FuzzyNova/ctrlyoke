@@ -22,10 +22,12 @@ import { WorkspaceSnapshotService } from "../../utils/WorkspaceSnapshotService";
 import { CliOutput, StatusMessage } from "../../types/WebviewMessageTypes";
 import {
   ACTIVE_EXECUTION_STATES,
+  EXECUTION_PHASES,
   EXECUTION_STATES,
   HARNESS_IDS,
   HISTORY_TRASH_ENTRY_KINDS,
   OUTPUT_ACTIVITY_KINDS,
+  OUTPUT_HISTORY_KINDS,
   STEP_TYPES,
   WORKFLOW_LOCK_LIVENESS,
   WORKTREE_EDIT_KINDS,
@@ -1136,6 +1138,31 @@ export class OutputHistoryManager {
       // timeline remains renderable without a worktree projection.
     }
     return enriched;
+  }
+
+  /** Read one event from the normalized aggregate used by RUN_VIEW_LOADED. */
+  async getCliOutputEvent(
+    historyFilePath: string,
+    target: OutputExecutionTarget,
+    attemptIndex: number,
+    runIndex: number | undefined,
+    phase: ExecutionPhase | undefined,
+    eventIndex: number
+  ): Promise<CliEvent | undefined> {
+    if (!Number.isInteger(eventIndex) || eventIndex < 0) return undefined;
+    const history = await this.loadHistory(historyFilePath);
+    const entry = history.orderedEntries.find(
+      (candidate) =>
+        candidate.kind === OUTPUT_HISTORY_KINDS.CLI &&
+        JSON.stringify(candidate.target) === JSON.stringify(target) &&
+        candidate.attemptIndex === attemptIndex &&
+        (candidate.runIndex ?? 0) === (runIndex ?? 0) &&
+        (candidate.phase ?? EXECUTION_PHASES.PROMPT) ===
+          (phase ?? EXECUTION_PHASES.PROMPT)
+    );
+    return entry?.kind === OUTPUT_HISTORY_KINDS.CLI
+      ? entry.cliOutput.structured?.events[eventIndex]
+      : undefined;
   }
 
   /**

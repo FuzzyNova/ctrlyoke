@@ -899,6 +899,48 @@ suite("WebviewMessageRouter — workspace snapshot content", () => {
   });
 });
 
+suite("WebviewMessageRouter — full tool output", () => {
+  test("routes the complete aggregate event by addressed attempt and index", async () => {
+    const emitted: any[] = [];
+    let call: unknown;
+    const event = { type: "text", data: { text: "full" } };
+    const router = buildRouter({
+      getToolOutputEvent: async (...args: unknown[]) => {
+        call = args;
+        return event;
+      },
+    }, (message) => emitted.push(message));
+    const address = {
+      workflowKey: "workflow-a",
+      runRef: "run-2026-01-01T00-00-00-000Z",
+    };
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 };
+
+    await router.route({
+      type: MESSAGE_TYPES.REQUEST_TOOL_OUTPUT_CONTENT,
+      requestId: "tool-output-3",
+      address,
+      target,
+      attemptIndex: 1,
+      runIndex: 4,
+      eventIndex: 9,
+    });
+
+    assert.deepStrictEqual(call, [address, target, 1, 4, undefined, 9]);
+    assert.deepStrictEqual(emitted[0], {
+      type: MESSAGE_TYPES.TOOL_OUTPUT_CONTENT,
+      requestId: "tool-output-3",
+      address,
+      target,
+      attemptIndex: 1,
+      runIndex: 4,
+      phase: undefined,
+      eventIndex: 9,
+      event,
+    });
+  });
+});
+
 suite("WebviewMessageRouter — license actions", () => {
   test("delegates license actions and refreshes machines after deactivation", async () => {
     const messages: any[] = [];

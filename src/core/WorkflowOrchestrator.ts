@@ -55,6 +55,7 @@ import {
   type HarnessId,
   type QueuePosition,
   type ActionType,
+  type ExecutionPhase,
   type WorktreeManagementAction,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../types/DashboardConstants";
@@ -2931,6 +2932,32 @@ export class WorkflowOrchestrator {
       historyManager.getHistoryFilePath(address.workflowKey, address.runRef),
       target,
       filePath
+    );
+  }
+
+  async getToolOutputEvent(
+    address: WorkflowRunAddress,
+    target: OutputExecutionTarget,
+    attemptIndex: number,
+    runIndex: number | undefined,
+    phase: ExecutionPhase | undefined,
+    eventIndex: number
+  ): Promise<import("../types/WebviewMessageTypes").CliEvent | undefined> {
+    const workspaceRoot = this.requireWorkspaceRoot();
+    const liveInstance = this.workflowInstanceRegistry.findInstanceForLineage(
+      address.workflowKey
+    );
+    const historyManager =
+      liveInstance?.getQueueState().runRef === address.runRef
+        ? liveInstance.getOutputHistoryManager()
+        : new OutputHistoryManager(workspaceRoot);
+    return historyManager.getCliOutputEvent(
+      historyManager.getHistoryFilePath(address.workflowKey, address.runRef),
+      target,
+      attemptIndex,
+      runIndex,
+      phase,
+      eventIndex
     );
   }
 

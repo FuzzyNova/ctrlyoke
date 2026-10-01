@@ -278,6 +278,15 @@ consumer above stops assuming the full text is present. Live streaming output
 (the in-memory buffer replay) stays uncapped, so every consumer must accept both
 capped and complete entries.
 
+**Progress (2026-10-01):** The first infrastructure step adds a request/reply
+for one normalized aggregate event, addressed by run, target, attempt, and
+event index, plus a cached webview client. The extension resolves it through
+`OutputHistoryManager.loadHistory()`, preserving the same normalization and
+snapshot enrichment path as the view. Markdown export and Copy All hydrate any
+marked event before formatting. The run-view payload remains uncapped while
+expanded-row consumers are migrated; the next step can enable projection only
+after those consumers fetch full content too.
+
 ## Problem 2: `workspaceSnapshot` contents ride along on every load
 
 `promptOutputs` is 16.4 MB of captured file contents, sent so that a file-edit
