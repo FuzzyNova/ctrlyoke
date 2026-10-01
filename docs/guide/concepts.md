@@ -113,7 +113,7 @@ Prompts can include structured references that the prompt editor understands:
 | `#selection:./path/to/file.ts:10-25`           | Attach a line range relative to the workflow file                                                                   |
 | `#sym.<kind>:path/to/file.ts:SymbolName:42-60` | Attach a symbol definition; ctrlyoke inserts the kind, while `#sym:path:SymbolName:42-60` remains valid and generic |
 | `~diff`, `~staged`, `~stash:0`, `~<commit>`    | Attach git change context                                                                                           |
-| `$previous`, `$all`, `$step:1`                 | Inject prior ctrlyoke output                                                                                        |
+| `$previous`, `$previous:3`, `$all`, `$step:1`  | Inject prior ctrlyoke output                                                                                        |
 
 For `@`, `#selection:`, and `#sym:` references, a leading `./` or `../` resolves from the
 workflow file's directory. Standalone prompt-file paths follow the separate rules in

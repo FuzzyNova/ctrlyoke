@@ -6,7 +6,9 @@ import {
   getPermissionModeBadge,
   getPermissionModeVisual,
   getPermissionTabOverride,
+  priorContextBadge,
 } from "@components/shared/tabBadgeUtils";
+import type { RunRef, WorkflowKey } from "@root/types/CtrlYokeTypes";
 
 describe("permission tab badges", () => {
   it("omits the badge for none", () => {
@@ -91,5 +93,22 @@ describe("permission tab badges", () => {
       badgeCodicon: "warning",
       badgeColor: "text-warning-fg",
     });
+  });
+});
+
+describe("priorContextBadge", () => {
+  it("labels every priorContext form compactly", () => {
+    expect(priorContextBadge("previous").label).toBe("ctx: prev");
+    expect(priorContextBadge([1, 3]).label).toBe("ctx: [1,3]");
+    expect(priorContextBadge({ previous: 3 }).label).toBe("ctx: prev 3");
+  });
+
+  it("labels a run address as run and keeps the address in the title", () => {
+    const badge = priorContextBadge({
+      workflowKey: "lineage-a" as WorkflowKey,
+      runRef: "run-2026-07-20T00-00-00-000Z" as RunRef,
+    });
+    expect(badge.label).toBe("ctx: run");
+    expect(badge.title).toContain('"workflowKey":"lineage-a"');
   });
 });

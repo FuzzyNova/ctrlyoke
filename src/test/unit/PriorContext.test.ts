@@ -40,6 +40,9 @@ suite("prior-context XML", () => {
 
   test("maps inline references to the resolver's canonical context selectors", () => {
     assert.strictEqual(refToPriorContext({ kind: "previous" }), "previous");
+    assert.deepStrictEqual(refToPriorContext({ kind: "previous", count: 3 }), {
+      previous: 3,
+    });
     assert.strictEqual(
       refToPriorContext({ kind: "finalStep" }),
       "finalStepPrevious"

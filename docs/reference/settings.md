@@ -219,11 +219,15 @@ Resume an existing session when running a workflow.
 
 ### `defaults.priorContext` {#defaults-priorcontext}
 
-- **Type:** `"all" | "previous" | "none" | "finalStepAll" | "finalStepPrevious"` or `integer[]`
+- **Type:** `"all" | "previous" | "none" | "finalStepAll" | "finalStepPrevious"` or `integer[]` or `{ previous }`
 - **Default:** `"none"`
 - **Workflow field:** [`priorContext`](/reference/workflow-schema#execution-properties-priorcontext) — a workflow or step value overrides this default
 
 Default priorContext for every step that doesn't set its own.
+
+Fields:
+
+- `previous` · `integer` · required — How many of the most recent earlier outputs to include
 
 ### `defaults.mcpServers` {#defaults-mcpservers}
 

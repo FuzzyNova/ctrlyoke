@@ -11,10 +11,8 @@ import {
   MCP_SERVER_IDS,
   STEP_TYPES,
 } from "@root/types/DashboardConstants";
-import {
-  PERMISSION_MODE_OPTIONS_META,
-  PRIOR_CONTEXT_KEYWORD_OPTIONS_META,
-} from "@root/types/SchemaUiMetadata";
+import { PERMISSION_MODE_OPTIONS_META } from "@root/types/SchemaUiMetadata";
+import { priorContextBadge } from "../shared/tabBadgeUtils";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import { useUiStore } from "@store/uiStore";
@@ -1034,25 +1032,7 @@ const WorkflowStepsPanelInner: React.FC<{
 
       // priorContext — show whenever explicitly set
       if (step.priorContext !== undefined) {
-        let ctxLabel: string;
-        if (Array.isArray(step.priorContext)) {
-          ctxLabel = `ctx: [${step.priorContext.join(",")}]`;
-        } else {
-          const meta =
-            PRIOR_CONTEXT_KEYWORD_OPTIONS_META[
-              step.priorContext as keyof typeof PRIOR_CONTEXT_KEYWORD_OPTIONS_META
-            ];
-          ctxLabel = `ctx: ${meta?.short ?? String(step.priorContext)}`;
-        }
-        result.push({
-          label: ctxLabel,
-          title: schemaTitle(
-            "priorContext",
-            Array.isArray(step.priorContext)
-              ? JSON.stringify(step.priorContext)
-              : String(step.priorContext)
-          ),
-        });
+        result.push(priorContextBadge(step.priorContext));
       }
 
       // endCondition — only show "ec: disabled" if the workflow actually has an

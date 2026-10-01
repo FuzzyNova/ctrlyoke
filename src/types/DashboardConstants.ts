@@ -2664,6 +2664,8 @@ export type PriorContextReferenceKind =
   (typeof PRIOR_CONTEXT_REFERENCE_KINDS)[keyof typeof PRIOR_CONTEXT_REFERENCE_KINDS];
 
 export const PRIOR_CONTEXT_SELECTION_MODES = {
+  /** `{ previous: N }` — the last N outputs before the prompt. */
+  PREVIOUS_COUNT: "previousCount",
   RUN: "run",
   CUSTOM: "custom",
 } as const;

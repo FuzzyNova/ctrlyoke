@@ -84,6 +84,7 @@ import { WebviewLog } from "../../utils/logger";
 import { useSettingsStore } from "../../store/settingsStore";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 import { formatRangeNotation } from "@root/utils/RangeNotationParser";
+import { formatInlinePriorContextBody } from "@root/utils/FileReferenceParser";
 import { scanCtrlYokeSlashTokens } from "@root/utils/CtrlYokeSlashTokens";
 import { createGitChangeReferencePattern } from "@root/utils/ReferencePatterns";
 import {
@@ -2749,13 +2750,9 @@ function createPriorContextDecorationExtension(
           const refs = findInlinePriorContextRefs(text, from);
           for (const ref of refs) {
             if (isInFencedBlock(ref.from, ref.to, fencedRanges)) continue;
-            const dataRef =
-              ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.STEP
-                ? `${PRIOR_CONTEXT_REFERENCE_KINDS.STEP}:${ref.indices!.join(",")}`
-                : ref.kind;
             const attributes: Record<string, string> = {
               "data-type": ATOMIC_REFERENCE_KINDS.PRIOR_CONTEXT,
-              "data-ref": dataRef,
+              "data-ref": formatInlinePriorContextBody(ref.ref),
             };
             if (referenceValidity?.get(ref.token) === false) {
               attributes["data-invalid"] = BOOLEAN_STRING_VALUES.TRUE;
@@ -2836,27 +2833,36 @@ export function createPriorContextLintExtension(
         for (const ref of refs) {
           if (isInFencedBlock(ref.from, ref.to, fencedRanges)) continue;
 
+          const parsed = ref.ref;
           let message: string | undefined;
+          // A partially satisfiable ref warns without marking the chip invalid.
+          let resolvable = false;
           if (
-            ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS ||
-            ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.ALL
+            parsed.kind === PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS ||
+            parsed.kind === PRIOR_CONTEXT_REFERENCE_KINDS.ALL
           ) {
             if (stepCount <= 0) {
               message =
                 "Prior context not found — no prior steps exist at this position";
+            } else if (
+              parsed.kind === PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS &&
+              parsed.count !== undefined &&
+              parsed.count > stepCount
+            ) {
+              // Not an error at runtime (it takes what exists), but the
+              // author asked for more than this position can ever supply.
+              resolvable = true;
+              message = `Only ${stepCount} prior ${stepCount === 1 ? "step exists" : "steps exist"} at this position — $previous:${parsed.count} will include at most ${stepCount}`;
             }
           } else if (
-            ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP ||
-            ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP
+            parsed.kind === PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP ||
+            parsed.kind === PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP
           ) {
             if (!hasFinalStep) {
               message = "Prior context not found — no final step is configured";
             }
-          } else if (
-            ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.STEP &&
-            ref.indices
-          ) {
-            const outOfRange = ref.indices.filter(
+          } else if (parsed.kind === PRIOR_CONTEXT_REFERENCE_KINDS.STEP) {
+            const outOfRange = parsed.indices.filter(
               (i) => i < 1 || i > stepCount
             );
             if (outOfRange.length > 0) {
@@ -2872,15 +2878,13 @@ export function createPriorContextLintExtension(
             diagnostics.push({
               from: ref.from,
               to: ref.to,
-              severity: "warning",
+              severity: resolvable ? "info" : "warning",
               message,
             });
           }
-          if (
-            referenceValidity &&
-            referenceValidity.get(ref.token) !== !message
-          ) {
-            referenceValidity.set(ref.token, !message);
+          const valid = !message || resolvable;
+          if (referenceValidity && referenceValidity.get(ref.token) !== valid) {
+            referenceValidity.set(ref.token, valid);
             validityChanged = true;
           }
         }

@@ -425,6 +425,11 @@ export const PRIOR_CONTEXT_SELECT_OPTIONS_META = {
     label: "Inherit",
     pseudo: { omit: true },
   },
+  [PRIOR_CONTEXT_SELECTION_MODES.PREVIOUS_COUNT]: {
+    value: PRIOR_CONTEXT_SELECTION_MODES.PREVIOUS_COUNT,
+    label: "Previous N",
+    pseudo: { writes: "priorContext: { previous: 3 }" },
+  },
   [PRIOR_CONTEXT_SELECTION_MODES.RUN]: {
     value: PRIOR_CONTEXT_SELECTION_MODES.RUN,
     label: "Completed run output",

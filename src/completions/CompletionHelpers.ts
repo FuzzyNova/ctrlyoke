@@ -1384,6 +1384,11 @@ export function getPriorContextCompletions(
   // so the completion never disagrees with what picking it produces.
   const keywords = [
     { label: "previous", detail: "Output of the previous step", icon: "book" },
+    {
+      label: "previous:",
+      detail: "Last N step outputs, e.g. $previous:3",
+      icon: "book",
+    },
     { label: "all", detail: "Outputs of all prior steps", icon: "book" },
     {
       label: "finalStep",

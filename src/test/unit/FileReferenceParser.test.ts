@@ -7,6 +7,8 @@ import {
   parseDirectoryReferences,
   parseAllFileReferences,
   parseGitChangeReferences,
+  formatInlinePriorContextBody,
+  parseInlinePriorContextBody,
   parseInlinePriorContextRefs,
   encodePriorContextTokenRef,
   decodePriorContextTokenRef,
@@ -550,6 +552,68 @@ suite("FileReferenceParser", () => {
     test("still rejects an interior empty range entry", () => {
       const refs = parseInlinePriorContextRefs("Use $step:1,,3 please");
       assert.strictEqual(refs.length, 0);
+    });
+
+    test("parses $previous:N as the last N outputs", () => {
+      const text = "Look at $previous:3, then fix it";
+      const refs = parseInlinePriorContextRefs(text);
+      assert.strictEqual(refs.length, 1);
+      assert.deepStrictEqual(refs[0].ref, { kind: "previous", count: 3 });
+      assert.strictEqual(refs[0].token, "$previous:3");
+      assert.strictEqual(
+        text.slice(refs[0].startOffset, refs[0].endOffset),
+        "$previous:3"
+      );
+    });
+
+    test("drops a zero $previous count instead of guessing", () => {
+      assert.deepStrictEqual(parseInlinePriorContextRefs("$previous:0"), []);
+    });
+
+    test("ignores $previous:N inside a fenced block", () => {
+      assert.deepStrictEqual(
+        parseInlinePriorContextRefs("```\n$previous:3\n```"),
+        []
+      );
+    });
+  });
+
+  suite("parseInlinePriorContextBody / formatInlinePriorContextBody", () => {
+    test("round-trips every body form through its canonical spelling", () => {
+      for (const body of [
+        "previous",
+        "previous:3",
+        "all",
+        "finalStep",
+        "allFinalStep",
+        "step:1-3,5",
+      ]) {
+        const parsed = parseInlinePriorContextBody(body);
+        assert.ok(parsed, body);
+        assert.strictEqual(
+          parseInlinePriorContextBody(formatInlinePriorContextBody(parsed.ref))
+            ?.ref.kind,
+          parsed.ref.kind,
+          body
+        );
+      }
+      assert.strictEqual(
+        formatInlinePriorContextBody({ kind: "step", indices: [1, 2, 3, 5] }),
+        "step:1,2,3,5"
+      );
+    });
+
+    test("excludes a trailing step comma from the consumed length", () => {
+      assert.strictEqual(
+        parseInlinePriorContextBody("step:1,4,")?.length,
+        "step:1,4".length
+      );
+    });
+
+    test("rejects unknown and malformed bodies", () => {
+      for (const body of ["previously", "previous:", "previous:-1", "step:"]) {
+        assert.strictEqual(parseInlinePriorContextBody(body), null, body);
+      }
     });
   });
 

@@ -323,11 +323,6 @@ const SETTINGS_ENUM_METADATA = [
     "EXECUTION_MODE_OPTIONS_META",
   ],
   [
-    "defaults.priorContext",
-    PRIOR_CONTEXT_KEYWORD_OPTIONS_META,
-    "PRIOR_CONTEXT_KEYWORD_OPTIONS_META",
-  ],
-  [
     "permissions.codexSandboxMode",
     CODEX_SANDBOX_MODE_OPTIONS_META,
     "CODEX_SANDBOX_MODE_OPTIONS_META",
@@ -521,6 +516,31 @@ suite("Settings schema -> Global Settings dashboard control parity", () => {
         `${settingPath}: settings UI must pass its settings-relative path to CustomSelect`
       );
     }
+  });
+
+  // defaults.priorContext is not a plain enum (it also takes [1, 3] and
+  // { previous: N }), so it renders through PriorContextSelect instead of a
+  // CustomSelect; its keyword options must still match the schema enum.
+  test("defaults.priorContext keywords match the schema and use the shared select", () => {
+    const resolved = schemaNodeAtPath("defaults.priorContext");
+    assert.deepStrictEqual(
+      Object.values(PRIOR_CONTEXT_KEYWORD_OPTIONS_META)
+        .map(({ value }) => value)
+        .sort(),
+      schemaEnumValues(resolved.node, resolved.document).sort()
+    );
+    const page = readFileSync(
+      path.join(
+        WEBVIEW_SOURCE_ROOT,
+        "components",
+        "settings",
+        "defaults",
+        "DefaultsContextPage.tsx"
+      ),
+      "utf8"
+    ).replace(/\s+/g, " ");
+    assert.ok(page.includes("<PriorContextSelect"));
+    assert.ok(page.includes('schemaPath="defaults.priorContext"'));
   });
 
   test("CustomSelect controls have a schema path or a reasoned UI-only exception", () => {

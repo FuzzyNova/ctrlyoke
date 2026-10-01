@@ -149,6 +149,9 @@
             },
             {
               "$ref": "workflow.json#/$defs/priorContextPromptNumbers"
+            },
+            {
+              "$ref": "workflow.json#/$defs/priorContextPreviousCount"
             }
           ],
           "description": "Default priorContext for every step that doesn't set its own.",

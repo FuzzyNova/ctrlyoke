@@ -19,6 +19,7 @@ import {
   parseSelectionReferences,
   parseSymbolReferences,
   parseGitChangeReferences,
+  formatInlinePriorContextBody,
   parseInlinePriorContextRefs,
   encodePriorContextTokenRef,
 } from "@root/utils/FileReferenceParser";
@@ -66,7 +67,8 @@ function ensureGlobalListener(): void {
     for (const [ref, count] of Object.entries(counts)) {
       // Prior-context counts depend on the displayed run's output. They are
       // delivered to the current hook instances but never persisted globally.
-      if (!decodePriorContextTokenRef(ref)) attachmentTokenCache.set(ref, count);
+      if (!decodePriorContextTokenRef(ref))
+        attachmentTokenCache.set(ref, count);
       pendingRequests.delete(ref);
       changed = true;
     }
@@ -118,8 +120,14 @@ function extractRawReferences(promptText: string, stepCount: number): string[] {
   }
 
   for (const match of parseInlinePriorContextRefs(promptText)) {
-    // token is "$previous", "$step:1,3", … — drop the leading "$" for the body.
-    refs.push(encodePriorContextTokenRef(match.token.slice(1), stepCount));
+    // Canonical body ("previous:3", "step:1,3"), so equivalent spellings
+    // share one cached count.
+    refs.push(
+      encodePriorContextTokenRef(
+        formatInlinePriorContextBody(match.ref),
+        stepCount
+      )
+    );
   }
 
   // Deduplicate while preserving order
@@ -145,7 +153,9 @@ export function useAttachmentTokenCount(
 ): number {
   ensureGlobalListener();
 
-  const displayedViewAddress = useUiStore((state) => state.displayedViewAddress);
+  const displayedViewAddress = useUiStore(
+    (state) => state.displayedViewAddress
+  );
   const viewKey = displayedViewAddress
     ? workflowViewAddressKey(displayedViewAddress)
     : "draft";
@@ -154,13 +164,17 @@ export function useAttachmentTokenCount(
     viewKey: string;
     counts: Record<string, number>;
   }>({ viewKey, counts: {} });
-  const callbackRef = useRef<(counts: Record<string, number>) => void>(() => {});
+  const callbackRef = useRef<(counts: Record<string, number>) => void>(
+    () => {}
+  );
 
   // Keep callback ref up-to-date
   useEffect(() => {
     callbackRef.current = (counts) => {
       const priorCounts = Object.fromEntries(
-        Object.entries(counts).filter(([ref]) => decodePriorContextTokenRef(ref))
+        Object.entries(counts).filter(([ref]) =>
+          decodePriorContextTokenRef(ref)
+        )
       );
       if (Object.keys(priorCounts).length > 0) {
         setPriorContextCounts((current) => ({

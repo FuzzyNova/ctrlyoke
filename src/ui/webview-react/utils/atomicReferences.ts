@@ -4,6 +4,9 @@
  * This intentionally stays separate from src/utils/FileReferenceParser.ts:
  * that parser feeds runtime harness context expansion and is tuned for prose
  * tolerance, while this parser needs exact source ranges and UI match types.
+ * Inline prior-context refs are the exception: their syntax is small enough
+ * that both sides share FileReferenceParser's scanner, so a chip and the
+ * injected context can never disagree about what `$previous:3` means.
  */
 
 import { sliceDecorationMatches, type RowFindDecoration } from "./outputFind";
@@ -19,20 +22,20 @@ import {
   RETRY_PROMPT_PLACEHOLDERS,
   SCRIPT_OUTPUT_SOURCES,
   type AtomicReferenceKind,
-  type PriorContextReferenceKind,
   type RetryPromptPlaceholder,
 } from "../../../types/DashboardConstants";
 import { parseSecretReferences } from "../../../utils/SecretReferenceParser";
 import {
   createConditionOutputReferencePattern,
-  createInlinePriorContextReferencePattern,
   createGitChangeReferencePattern,
   createReferencePatterns,
 } from "../../../utils/ReferencePatterns";
+import { formatRangeNotation } from "../../../utils/RangeNotationParser";
 import {
-  formatRangeNotation,
-  parseRangeNotation,
-} from "../../../utils/RangeNotationParser";
+  formatInlinePriorContextBody,
+  scanInlinePriorContextRefs,
+  type InlinePriorContextRef,
+} from "../../../utils/FileReferenceParser";
 
 export { SYMBOL_KIND_ICONS } from "../../../types/SymbolKindConstants";
 
@@ -409,12 +412,12 @@ export function gitReferenceLabel(gitRef: string): string {
   return gitRef.slice(0, 7);
 }
 
-export interface InlinePriorContextRef {
+/** An inline prior-context ref located in editor/document text. */
+export interface InlinePriorContextRange {
   from: number;
   to: number;
   token: string;
-  kind: PriorContextReferenceKind;
-  indices?: number[];
+  ref: InlinePriorContextRef;
 }
 
 type ConditionOutputPhase =
@@ -549,6 +552,20 @@ export const PRIOR_CONTEXT_CHIP_LABELS: Record<
   allFinalStep: "all final",
 };
 
+/** Compact chip label for a prior-context ref, e.g. "previous 3", "step 1-3". */
+export function priorContextChipLabel(ref: InlinePriorContextRef): string {
+  switch (ref.kind) {
+    case PRIOR_CONTEXT_REFERENCE_KINDS.STEP:
+      return `step ${formatRangeNotation(ref.indices)}`;
+    case PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS:
+      return ref.count === undefined
+        ? PRIOR_CONTEXT_CHIP_LABELS[ref.kind]
+        : `${PRIOR_CONTEXT_CHIP_LABELS[ref.kind]} ${ref.count}`;
+    default:
+      return PRIOR_CONTEXT_CHIP_LABELS[ref.kind];
+  }
+}
+
 function describeContextReferenceChip(
   ref: ContextReferenceMatch,
   docText: string,
@@ -626,25 +643,16 @@ function describeContextReferenceChip(
 }
 
 export function describePriorContextChip(
-  ref: InlinePriorContextRef,
+  range: InlinePriorContextRange,
   docText: string
 ): Omit<AtomicReferenceChip, "from" | "to"> {
-  const title = docText.slice(ref.from, ref.to);
-  const dataRef =
-    ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.STEP
-      ? `${PRIOR_CONTEXT_REFERENCE_KINDS.STEP}:${ref.indices?.join(",") ?? ""}`
-      : ref.kind;
-  const label =
-    ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.STEP
-      ? `step ${formatRangeNotation(ref.indices ?? [])}`
-      : PRIOR_CONTEXT_CHIP_LABELS[ref.kind];
   return {
     icon: "book",
-    label,
-    title,
+    label: priorContextChipLabel(range.ref),
+    title: docText.slice(range.from, range.to),
     attrs: {
       "data-type": ATOMIC_REFERENCE_KINDS.PRIOR_CONTEXT,
-      "data-ref": dataRef,
+      "data-ref": formatInlinePriorContextBody(range.ref),
     },
   };
 }
@@ -900,64 +908,11 @@ export function isInFencedBlock(
 export function findInlinePriorContextRefs(
   text: string,
   offset = 0
-): InlinePriorContextRef[] {
-  const results: InlinePriorContextRef[] = [];
-  // Same word-boundary rationale as the @/#/~ patterns above.
-  const regex = createInlinePriorContextReferencePattern();
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(text)) !== null) {
-    const body = match[1];
-    const token = match[0];
-    const from = offset + match.index;
-    const to = from + token.length;
-    if (body === PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS)
-      results.push({
-        from,
-        to,
-        token,
-        kind: PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS,
-      });
-    else if (body === PRIOR_CONTEXT_REFERENCE_KINDS.ALL)
-      results.push({
-        from,
-        to,
-        token,
-        kind: PRIOR_CONTEXT_REFERENCE_KINDS.ALL,
-      });
-    else if (body === PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP)
-      results.push({
-        from,
-        to,
-        token,
-        kind: PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP,
-      });
-    else if (body === PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP)
-      results.push({
-        from,
-        to,
-        token,
-        kind: PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP,
-      });
-    else if (body.startsWith(`${PRIOR_CONTEXT_REFERENCE_KINDS.STEP}:`)) {
-      const stepPrefix = `${PRIOR_CONTEXT_REFERENCE_KINDS.STEP}:`;
-      // A trailing comma is ordinary sentence punctuation, not an empty range
-      // entry — e.g. "review $step:1,3, then tell me..." — so it's trimmed
-      // before parsing and excluded from the matched range/token, leaving it
-      // to render as plain text (same idiom as parseAtReferences stripping
-      // trailing prose punctuation from unquoted @ paths).
-      const rawRangeText = body.slice(stepPrefix.length);
-      const rangeText = rawRangeText.replace(/,+$/, "");
-      const trimmedLength = rawRangeText.length - rangeText.length;
-      const indices = parseRangeNotation(rangeText);
-      if (indices !== null)
-        results.push({
-          from,
-          to: to - trimmedLength,
-          token: trimmedLength > 0 ? token.slice(0, -trimmedLength) : token,
-          kind: PRIOR_CONTEXT_REFERENCE_KINDS.STEP,
-          indices,
-        });
-    }
-  }
-  return results;
+): InlinePriorContextRange[] {
+  return scanInlinePriorContextRefs(text).map((match) => ({
+    from: offset + match.startOffset,
+    to: offset + match.endOffset,
+    token: match.token,
+    ref: match.ref,
+  }));
 }

@@ -4,11 +4,7 @@ import type {
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
 import { PRIOR_CONTEXT_KEYWORDS } from "@root/types/DashboardConstants";
-import {
-  PRIOR_CONTEXT_KEYWORD_OPTIONS_META,
-  toSelectOptions,
-} from "@root/types/SchemaUiMetadata";
-import { CustomSelect } from "../../shared/CustomSelect";
+import { PriorContextSelect } from "../../shared/PriorContextSelect";
 import { SettingInputRow } from "../../shared/SettingInputRow";
 import { SettingToggleRow } from "../../shared/SettingToggleRow";
 
@@ -42,19 +38,17 @@ export function DefaultsContextPage({
         id="defaults-prior-context"
         {...rowProps}
       >
-        <CustomSelect
+        {/* The shared select, so Custom ranges and Previous N defaults
+            display and edit as themselves instead of reading as "None". */}
+        <PriorContextSelect
           id="defaults-prior-context"
-          value={
-            typeof wf.priorContext === "string"
-              ? wf.priorContext
-              : PRIOR_CONTEXT_KEYWORDS.NONE
+          value={wf.priorContext}
+          // A default always has a value: clearing a custom range means none.
+          onChange={(v) =>
+            onUpdate("defaults.priorContext", v ?? PRIOR_CONTEXT_KEYWORDS.NONE)
           }
-          onChange={(v) => onUpdate("defaults.priorContext", v)}
           schemaPath="defaults.priorContext"
-          options={toSelectOptions(
-            PRIOR_CONTEXT_KEYWORD_OPTIONS_META,
-            "defaults.priorContext"
-          )}
+          allowRunAddress={false}
         />
       </SettingInputRow>
     </div>

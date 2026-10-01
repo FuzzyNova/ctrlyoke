@@ -135,7 +135,8 @@ export interface FileReference {
 }
 
 export type InlinePriorContextRef =
-  | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS }
+  /** `$previous` (no count) or `$previous:N` (the last N outputs). */
+  | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS; count?: number }
   | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.ALL }
   | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP }
   | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP }
@@ -145,6 +146,10 @@ export interface InlinePriorContextMatch {
   ref: InlinePriorContextRef;
   /** The full matched token, e.g. "$previous" or "$step:1,3-5". */
   token: string;
+  /** Offset of the `$` in the scanned text. */
+  startOffset: number;
+  /** Offset one past the token's last character in the scanned text. */
+  endOffset: number;
 }
 
 export interface ConditionOutputMatch {
@@ -366,22 +371,91 @@ export function parseDirectoryReferences(prompt: string): FileReference[] {
 // ============================================================================
 
 /**
- * Parse inline prior-context references from prompt text.
+ * Parse one inline prior-context reference body (the text after `$`, e.g.
+ * "previous", "previous:3", "step:1,3-5") — the single parser behind the
+ * runtime ({@link parseInlinePriorContextRefs}), the editor's chips and lint,
+ * and the Ctrl+click preview, so they can never disagree about what a token
+ * means.
  *
- * Recognized tokens:
- * - $previous
- * - $all
- * - $finalStep
- * - $allFinalStep
- * - $step:N,M,A-B
- *
- * Unknown $tokens are ignored so future syntaxes can pass through unchanged.
+ * Returns null for unknown or invalid bodies. `length` is how much of the body
+ * the reference spans: a trailing comma on `step:` is ordinary sentence
+ * punctuation, not an empty range entry — e.g. "review $step:1,3, then tell
+ * me..." — so it is excluded, the same way parseAtReferences strips trailing
+ * prose punctuation from unquoted @ paths.
  */
-export function parseInlinePriorContextRefs(
+export function parseInlinePriorContextBody(
+  body: string
+): { ref: InlinePriorContextRef; length: number } | null {
+  switch (body) {
+    case PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS:
+    case PRIOR_CONTEXT_REFERENCE_KINDS.ALL:
+    case PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP:
+    case PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP:
+      return { ref: { kind: body }, length: body.length };
+  }
+
+  const previousPrefix = `${PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS}:`;
+  if (body.startsWith(previousPrefix)) {
+    const countText = body.slice(previousPrefix.length);
+    const count = /^\d+$/.test(countText) ? Number(countText) : NaN;
+    if (!Number.isSafeInteger(count) || count < 1) {
+      return null;
+    }
+    return {
+      ref: { kind: PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS, count },
+      length: body.length,
+    };
+  }
+
+  const stepPrefix = `${PRIOR_CONTEXT_REFERENCE_KINDS.STEP}:`;
+  if (body.startsWith(stepPrefix)) {
+    const rawRangeText = body.slice(stepPrefix.length);
+    const rangeText = rawRangeText.replace(/,+$/, "");
+    const indices = parseRangeNotation(rangeText);
+    if (!indices) {
+      return null;
+    }
+    return {
+      ref: { kind: PRIOR_CONTEXT_REFERENCE_KINDS.STEP, indices },
+      length: stepPrefix.length + rangeText.length,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * The canonical body (no `$`) for a parsed reference — the inverse of
+ * {@link parseInlinePriorContextBody}. Used wherever a reference is carried as
+ * text between layers (chip `data-ref`, preview requests, token-count keys).
+ */
+export function formatInlinePriorContextBody(
+  ref: InlinePriorContextRef
+): string {
+  switch (ref.kind) {
+    case PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS:
+      return ref.count === undefined ? ref.kind : `${ref.kind}:${ref.count}`;
+    case PRIOR_CONTEXT_REFERENCE_KINDS.STEP:
+      return `${ref.kind}:${ref.indices.join(",")}`;
+    default:
+      return ref.kind;
+  }
+}
+
+/**
+ * Find inline prior-context references in `text` exactly as given — no fence
+ * masking. Callers that need fence-awareness either mask first (as
+ * {@link parseInlinePriorContextRefs} does) or check ranges themselves (the
+ * editor, which works on viewport slices).
+ *
+ * Recognized tokens: $previous, $previous:N, $all, $finalStep, $allFinalStep,
+ * $step:N,M,A-B. Unknown $tokens are ignored so future syntaxes can pass
+ * through unchanged.
+ */
+export function scanInlinePriorContextRefs(
   text: string
 ): InlinePriorContextMatch[] {
   const matches: InlinePriorContextMatch[] = [];
-  const maskedText = maskFencedCodeBlocks(text);
   // Same word-boundary rationale as parseAtReferences: rejects filename-legal
   // characters immediately before $, not just alphanumerics — e.g. a
   // shell/env-style "price$previous" or a filename containing "$" shouldn't
@@ -389,57 +463,32 @@ export function parseInlinePriorContextRefs(
   const regex = createInlinePriorContextReferencePattern();
   let match: RegExpExecArray | null;
 
-  while ((match = regex.exec(maskedText)) !== null) {
-    const body = match[1];
-    const token = match[0];
-
-    if (body === PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS) {
-      matches.push({
-        ref: { kind: PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS },
-        token,
-      });
+  while ((match = regex.exec(text)) !== null) {
+    const parsed = parseInlinePriorContextBody(match[1]);
+    if (!parsed) {
       continue;
     }
-    if (body === PRIOR_CONTEXT_REFERENCE_KINDS.ALL) {
-      matches.push({ ref: { kind: PRIOR_CONTEXT_REFERENCE_KINDS.ALL }, token });
-      continue;
-    }
-    if (body === PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP) {
-      matches.push({
-        ref: { kind: PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP },
-        token,
-      });
-      continue;
-    }
-    if (body === PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP) {
-      matches.push({
-        ref: { kind: PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP },
-        token,
-      });
-      continue;
-    }
-    if (body.startsWith(`${PRIOR_CONTEXT_REFERENCE_KINDS.STEP}:`)) {
-      const stepPrefix = `${PRIOR_CONTEXT_REFERENCE_KINDS.STEP}:`;
-      // A trailing comma is ordinary sentence punctuation, not an empty range
-      // entry — e.g. "review $step:1,3, then tell me..." — so it's trimmed
-      // before parsing and off the reported token, the same way parseAtReferences
-      // strips trailing prose punctuation from unquoted @ paths.
-      const rawRangeText = body.slice(stepPrefix.length);
-      const rangeText = rawRangeText.replace(/,+$/, "");
-      const trimmedLength = rawRangeText.length - rangeText.length;
-      const indices = parseRangeNotation(rangeText);
-      if (!indices) {
-        console.warn(`Invalid inline prior context range "${token}" skipped`);
-        continue;
-      }
-      matches.push({
-        ref: { kind: PRIOR_CONTEXT_REFERENCE_KINDS.STEP, indices },
-        token: trimmedLength > 0 ? token.slice(0, -trimmedLength) : token,
-      });
-    }
+    // +1 for the leading "$".
+    const token = match[0].slice(0, parsed.length + 1);
+    matches.push({
+      ref: parsed.ref,
+      token,
+      startOffset: match.index,
+      endOffset: match.index + token.length,
+    });
   }
 
   return matches;
+}
+
+/**
+ * Parse inline prior-context references from prompt text, ignoring any inside
+ * fenced code blocks. See {@link scanInlinePriorContextRefs} for the syntax.
+ */
+export function parseInlinePriorContextRefs(
+  text: string
+): InlinePriorContextMatch[] {
+  return scanInlinePriorContextRefs(maskFencedCodeBlocks(text));
 }
 
 /**

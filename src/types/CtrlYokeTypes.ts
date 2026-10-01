@@ -65,6 +65,8 @@ export type { ToolPermissionMode };
  * - "previous": Inject only the immediately preceding prompt's output
  * - "none": Explicit no-op (same as omitting the field)
  * - number[]: Inject specific prompt outputs by 1-based prompt number (e.g., [1, 3])
+ * - PreviousStepsPriorContext: Inject the last N outputs before this prompt
+ *   (`{ previous: 3 }`), counted relative to the prompt so it survives reordering.
  * - WorkflowRunAddress: Inject the complete, terminal timeline of an explicitly
  *   addressed run in this workspace. Addresses intentionally contain no path.
  *
@@ -74,7 +76,30 @@ export type { ToolPermissionMode };
 export type PriorContext =
   | (typeof PRIOR_CONTEXT_KEYWORDS)[keyof typeof PRIOR_CONTEXT_KEYWORDS]
   | number[]
+  | PreviousStepsPriorContext
   | WorkflowRunAddress;
+
+/**
+ * The last `previous` earlier queue steps that produced output, oldest first.
+ * Same "produced output" rule as the `"previous"` keyword, which is the
+ * `previous: 1` case — steps with no output never count toward N.
+ */
+export interface PreviousStepsPriorContext {
+  previous: number;
+}
+
+/** True when a prior-context value selects the last N outputs. */
+export function isPreviousStepsPriorContext(
+  value: PriorContext | undefined
+): value is PreviousStepsPriorContext {
+  return (
+    !!value &&
+    !Array.isArray(value) &&
+    typeof value === "object" &&
+    "previous" in value &&
+    typeof value.previous === "number"
+  );
+}
 
 /**
  * User-defined MCP server configuration for attaching external MCP servers to harness invocations.
@@ -485,6 +510,7 @@ export function isWorkflowRunAddress(
     !!value &&
     !Array.isArray(value) &&
     typeof value === "object" &&
+    "workflowKey" in value &&
     typeof value.workflowKey === "string" &&
     typeof value.runRef === "string"
   );

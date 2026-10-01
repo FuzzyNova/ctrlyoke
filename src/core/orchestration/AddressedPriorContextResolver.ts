@@ -1,9 +1,10 @@
 import * as fs from "fs";
 import * as path from "path";
-import type {
-  PriorContext,
-  WorkflowRunAddress,
-  WorkflowStep,
+import {
+  isWorkflowRunAddress,
+  type PriorContext,
+  type WorkflowRunAddress,
+  type WorkflowStep,
 } from "../../types/CtrlYokeTypes";
 import type { PriorContextItem } from "../HarnessIntegration";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
@@ -67,7 +68,7 @@ export class AddressedPriorContextResolver {
     const local: PriorContext[] = [];
     const addressed: WorkflowRunAddress[] = [];
     for (const context of contexts) {
-      if (isAddress(context)) addressed.push(context);
+      if (isWorkflowRunAddress(context)) addressed.push(context);
       else local.push(context);
     }
 
@@ -127,10 +128,6 @@ export class AddressedPriorContextResolver {
       );
     }
   }
-}
-
-function isAddress(value: PriorContext): value is WorkflowRunAddress {
-  return !Array.isArray(value) && typeof value === "object" && value !== null;
 }
 
 function isContained(candidate: string, root: string): boolean {

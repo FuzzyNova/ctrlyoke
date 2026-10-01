@@ -2,8 +2,17 @@ import {
   PERMISSION_MODES,
   PRIOR_CONTEXT_KEYWORDS,
 } from "@root/types/DashboardConstants";
-import type { UserHookConfig } from "@root/types/CtrlYokeTypes";
-import { PERMISSION_MODE_OPTIONS_META } from "@root/types/SchemaUiMetadata";
+import {
+  isPreviousStepsPriorContext,
+  isWorkflowRunAddress,
+  type PriorContext,
+  type UserHookConfig,
+} from "@root/types/CtrlYokeTypes";
+import {
+  PERMISSION_MODE_OPTIONS_META,
+  PRIOR_CONTEXT_KEYWORD_OPTIONS_META,
+} from "@root/types/SchemaUiMetadata";
+import { schemaTitle } from "@utils/schemaPropertyLabels";
 
 /** Tab icon override shape used by DrawerTabBar */
 export interface TabIconOverride {
@@ -162,19 +171,48 @@ export function getValidationTabOverride(
 
 /**
  * Focus-border (blue) icon if resume session is active or prior context is not "none".
- * Accepts unknown priorContext to handle both string union and number[] without importing PriorContext.
+ * Accepts unknown priorContext to handle the string, number[], and object forms without importing PriorContext.
  */
 export function getContextTabOverride(
   resumeSession: boolean | undefined,
   priorContext: unknown
 ): TabIconOverride | undefined {
   const sessionActive = resumeSession === true;
+  // Any object form ({ previous: N }, a run address) always injects context.
   const contextActive = Array.isArray(priorContext)
     ? priorContext.length > 0
-    : typeof priorContext === "string" &&
-      priorContext !== PRIOR_CONTEXT_KEYWORDS.NONE;
+    : (typeof priorContext === "string" &&
+        priorContext !== PRIOR_CONTEXT_KEYWORDS.NONE) ||
+      (typeof priorContext === "object" && priorContext !== null);
   if (sessionActive || contextActive) {
     return FOCUS_TAB_OVERRIDE;
   }
   return undefined;
+}
+
+/** Compact step-row chip for an explicitly set priorContext. */
+export function priorContextBadge(priorContext: PriorContext): {
+  label: string;
+  title: string;
+} {
+  let label: string;
+  if (Array.isArray(priorContext)) {
+    label = `ctx: [${priorContext.join(",")}]`;
+  } else if (isPreviousStepsPriorContext(priorContext)) {
+    label = `ctx: ${PRIOR_CONTEXT_KEYWORD_OPTIONS_META.previous.short} ${priorContext.previous}`;
+  } else if (isWorkflowRunAddress(priorContext)) {
+    // The full address is in the title; it is too long for a chip.
+    label = "ctx: run";
+  } else {
+    label = `ctx: ${PRIOR_CONTEXT_KEYWORD_OPTIONS_META[priorContext]?.short ?? priorContext}`;
+  }
+  return {
+    label,
+    title: schemaTitle(
+      "priorContext",
+      typeof priorContext === "object"
+        ? JSON.stringify(priorContext)
+        : priorContext
+    ),
+  };
 }

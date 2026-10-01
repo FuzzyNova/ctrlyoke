@@ -11,6 +11,10 @@ import { useClickOutside } from "@hooks/useClickOutside";
 import { DropdownPortal } from "./DropdownPortal";
 import type { PriorContext, WorkflowRunAddress } from "@/types/messages";
 import {
+  isPreviousStepsPriorContext,
+  isWorkflowRunAddress,
+} from "@root/types/CtrlYokeTypes";
+import {
   formatRangeNotation,
   parseRangeNotation,
 } from "@root/utils/RangeNotationParser";
@@ -27,21 +31,37 @@ interface PriorContextSelectProps {
   defaultLabel?: string;
   dropdownMaxHeight?: string;
   schemaPath?: string;
+  /**
+   * Offer the "Completed run output" option. Off for settings defaults, whose
+   * schema has no run-address form (a run belongs to one workspace).
+   */
+  allowRunAddress?: boolean;
 }
 
 export type KeywordMode = keyof typeof PRIOR_CONTEXT_SELECT_OPTIONS_META;
 
-function isRunAddress(
-  value: PriorContext | undefined
-): value is WorkflowRunAddress {
-  return !!value && !Array.isArray(value) && typeof value === "object";
-}
+/** Count the "Previous N" option starts at when first selected. */
+const DEFAULT_PREVIOUS_COUNT = 3;
 
 function getMode(value: PriorContext | undefined): KeywordMode {
   if (value === undefined) return INHERIT_DEFAULT_OPTION;
   if (Array.isArray(value)) return PRIOR_CONTEXT_SELECTION_MODES.CUSTOM;
-  if (isRunAddress(value)) return PRIOR_CONTEXT_SELECTION_MODES.RUN;
+  if (isPreviousStepsPriorContext(value))
+    return PRIOR_CONTEXT_SELECTION_MODES.PREVIOUS_COUNT;
+  if (isWorkflowRunAddress(value)) return PRIOR_CONTEXT_SELECTION_MODES.RUN;
   return value as KeywordMode;
+}
+
+/**
+ * Display label for any prior-context value ("Previous", "Previous 3",
+ * "Custom", …) — shared by this select and the inherited-value labels.
+ */
+export function formatPriorContextLabel(value: PriorContext): string {
+  if (isPreviousStepsPriorContext(value)) {
+    return `${PRIOR_CONTEXT_SELECT_OPTIONS_META.previous.label} ${value.previous}`;
+  }
+  const mode = getMode(value);
+  return PRIOR_CONTEXT_SELECT_OPTIONS_META[mode]?.label ?? String(value);
 }
 
 /**
@@ -50,9 +70,11 @@ function getMode(value: PriorContext | undefined): KeywordMode {
  * The popup is rendered via a portal at document.body with position:fixed so
  * it escapes any overflow:hidden ancestors and is never clipped.
  *
- * Keyword options: Default (optional), None, Previous, All, finalStepPrevious,
- * finalStepAll, Custom. When "Custom" is selected, a text input appears below
- * the dropdown where the user can enter range notation like "1,2,4-10".
+ * Keyword options: Default (optional), None, Previous, Previous N, All,
+ * finalStepPrevious, finalStepAll, Run, Custom. "Previous N" shows a count
+ * input and writes `{ previous: N }`, which stays relative to the step; when
+ * "Custom" is selected, a text input appears below the dropdown where the user
+ * can enter absolute range notation like "1,2,4-10".
  */
 export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   id,
@@ -62,6 +84,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   defaultLabel,
   dropdownMaxHeight = "60vh",
   schemaPath = "priorContext",
+  allowRunAddress = true,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const reactId = useId();
@@ -89,10 +112,17 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
     Array.isArray(value) ? formatRangeNotation(value) : ""
   );
   const [workflowKey, setWorkflowKey] = useState(() =>
-    isRunAddress(value) ? value.workflowKey : ""
+    isWorkflowRunAddress(value) ? value.workflowKey : ""
   );
   const [runRef, setRunRef] = useState(() =>
-    isRunAddress(value) ? value.runRef : ""
+    isWorkflowRunAddress(value) ? value.runRef : ""
+  );
+  const [previousCountText, setPreviousCountText] = useState(() =>
+    String(
+      isPreviousStepsPriorContext(value)
+        ? value.previous
+        : DEFAULT_PREVIOUS_COUNT
+    )
   );
   const [customError, setCustomError] = useState(false);
   // Track onChange calls originating from our text input so we don't sync back
@@ -116,15 +146,26 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
       setCustomText("");
       setCustomError(false);
     }
-    if (isRunAddress(value)) {
+    if (isWorkflowRunAddress(value)) {
       setWorkflowKey(value.workflowKey);
       setRunRef(value.runRef);
+    }
+    if (isPreviousStepsPriorContext(value)) {
+      setPreviousCountText(String(value.previous));
     }
   }, [value]);
 
   const selectKeyword = (k: KeywordMode) => {
     if (k === PRIOR_CONTEXT_SELECTION_MODES.CUSTOM) {
       setWantsCustom(true);
+      setIsOpen(false);
+      return;
+    }
+    if (k === PRIOR_CONTEXT_SELECTION_MODES.PREVIOUS_COUNT) {
+      setWantsCustom(false);
+      setCustomError(false);
+      const count = parsePreviousCount(previousCountText);
+      onChange({ previous: count ?? DEFAULT_PREVIOUS_COUNT });
       setIsOpen(false);
       return;
     }
@@ -163,6 +204,15 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
     }
   };
 
+  const handlePreviousCountChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const text = e.target.value.replace(/[^0-9]/g, "");
+    setPreviousCountText(text);
+    const count = parsePreviousCount(text);
+    if (count !== undefined) onChange({ previous: count });
+  };
+
   const updateRunAddress = (key: string, ref: string) => {
     setWorkflowKey(key);
     setRunRef(ref);
@@ -177,19 +227,24 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   let buttonLabel: string;
   if (showCustomInput) {
     buttonLabel = "Custom";
-  } else if (mode === INHERIT_DEFAULT_OPTION && defaultLabel) {
-    buttonLabel = inheritLabel;
-  } else if (mode === INHERIT_DEFAULT_OPTION) {
+  } else if (value === undefined) {
     buttonLabel = inheritLabel;
   } else {
-    buttonLabel = PRIOR_CONTEXT_SELECT_OPTIONS_META[mode].label;
+    buttonLabel = formatPriorContextLabel(value);
   }
 
-  const keywords: KeywordMode[] = showDefault
+  // The trigger names the value actually written; the option list keeps the
+  // pseudo-options' example shapes.
+  const triggerValue = isPreviousStepsPriorContext(value)
+    ? { writes: `${schemaPath}: { previous: ${value.previous} }` }
+    : (PRIOR_CONTEXT_SELECT_OPTIONS_META[mode].pseudo ?? mode);
+
+  const allKeywords: KeywordMode[] = showDefault
     ? [
         INHERIT_DEFAULT_OPTION,
         PRIOR_CONTEXT_KEYWORDS.NONE,
         PRIOR_CONTEXT_KEYWORDS.PREVIOUS,
+        PRIOR_CONTEXT_SELECTION_MODES.PREVIOUS_COUNT,
         PRIOR_CONTEXT_KEYWORDS.ALL,
         PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS,
         PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL,
@@ -199,12 +254,16 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
     : [
         PRIOR_CONTEXT_KEYWORDS.NONE,
         PRIOR_CONTEXT_KEYWORDS.PREVIOUS,
+        PRIOR_CONTEXT_SELECTION_MODES.PREVIOUS_COUNT,
         PRIOR_CONTEXT_KEYWORDS.ALL,
         PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS,
         PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL,
         PRIOR_CONTEXT_SELECTION_MODES.RUN,
         PRIOR_CONTEXT_SELECTION_MODES.CUSTOM,
       ];
+  const keywords = allowRunAddress
+    ? allKeywords
+    : allKeywords.filter((k) => k !== PRIOR_CONTEXT_SELECTION_MODES.RUN);
 
   return (
     <div className="flex flex-col gap-1 w-full">
@@ -215,15 +274,8 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
           id={id}
           type="button"
           onClick={() => setIsOpen((prev) => !prev)}
-          aria-label={schemaAriaLabel(
-            buttonLabel,
-            schemaPath,
-            PRIOR_CONTEXT_SELECT_OPTIONS_META[mode].pseudo ?? mode
-          )}
-          title={schemaTitle(
-            schemaPath,
-            PRIOR_CONTEXT_SELECT_OPTIONS_META[mode].pseudo ?? mode
-          )}
+          aria-label={schemaAriaLabel(buttonLabel, schemaPath, triggerValue)}
+          title={schemaTitle(schemaPath, triggerValue)}
           aria-expanded={isOpen}
           aria-haspopup="listbox"
           aria-controls={listboxId}
@@ -284,6 +336,27 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
         </DropdownPortal>
       </div>
 
+      {mode === PRIOR_CONTEXT_SELECTION_MODES.PREVIOUS_COUNT && (
+        <div className="mt-1 flex flex-col gap-1">
+          <input
+            type="text"
+            inputMode="numeric"
+            value={previousCountText}
+            onChange={handlePreviousCountChange}
+            placeholder="e.g. 3"
+            aria-label="Number of previous step outputs"
+            className={`w-full px-2 text-xs bg-input-bg text-input-fg border rounded focus:outline-none focus:border-focus-border h-7 ${dropdownBorderClass(
+              parsePreviousCount(previousCountText) === undefined,
+              "error"
+            )}`}
+          />
+          <span className="text-xxs text-description-fg">
+            The last N outputs before this step, counted from this step so it
+            stays correct when steps move.
+          </span>
+        </div>
+      )}
+
       {mode === PRIOR_CONTEXT_SELECTION_MODES.RUN && (
         <div className="mt-1 grid grid-cols-1 gap-1">
           <input
@@ -336,3 +409,11 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
     </div>
   );
 };
+
+/** A whole count of at least 1, or undefined while the input is incomplete. */
+function parsePreviousCount(text: string): number | undefined {
+  const count = Number(text);
+  return text !== "" && Number.isSafeInteger(count) && count >= 1
+    ? count
+    : undefined;
+}

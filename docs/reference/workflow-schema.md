@@ -221,16 +221,25 @@ Script gate that runs before the prompt. Determines whether to run the prompt, s
 
 ### `priorContext` {#execution-properties-priorcontext}
 
-- **Type:** `"all" | "previous" | "none" | "finalStepAll" | "finalStepPrevious"` or `integer[]` or [Run address](#run-address)
+- **Type:** `"all" | "previous" | "none" | "finalStepAll" | "finalStepPrevious"` or `integer[]` or `{ previous }` or [Run address](#run-address)
 - **Settings default:** [`defaults.priorContext`](/reference/settings#defaults-priorcontext)
 
-Controls injection of prior prompt outputs into this prompt's text before sending to the AI. 'all' injects all prior outputs; 'previous' injects the immediately preceding output; 'none' disables injection; an array of integers ([1, 3]) injects specific prompts by 1-based index; or { workflowKey, runRef } imports the complete terminal output from one run in this workspace. Addresses never contain local paths. When omitted, no context is injected. Note: combining with resumeSession:true may duplicate context (accepted limitation).
+Controls injection of prior prompt outputs into this prompt's text before sending to the AI. 'all' injects all prior outputs; 'previous' injects the immediately preceding output; { previous: N } injects the last N outputs before this prompt; 'none' disables injection; an array of integers ([1, 3]) injects specific prompts by 1-based index; or { workflowKey, runRef } imports the complete terminal output from one run in this workspace. Addresses never contain local paths. When omitted, no context is injected. Note: combining with resumeSession:true may duplicate context (accepted limitation).
 
 Accepted forms:
 
 - `"all" | "previous" | "none" | "finalStepAll" | "finalStepPrevious"` — Keyword shorthand: 'all' = all prior queue prompt outputs, 'previous' = immediately preceding queue prompt output, 'none' = no injection, 'finalStepAll' = all previous final step loop outputs, 'finalStepPrevious' = immediately preceding final step loop output
 - `integer[]` — Specific prior prompt numbers to include (1-based, e.g. [1, 3] includes prompts 1 and 3)
+- `{ previous }` — The last N queue prompt outputs before this prompt, oldest first (e.g. { previous: 3 }). Counted relative to the prompt, so it stays correct when steps are inserted or reordered. Like 'previous', steps that produced no output are skipped rather than counted; { previous: 1 } is the same as 'previous'. Inline equivalent: $previous:N.
 - [Run address](#run-address) — Import all resolved queue and final-step output from one completed run in this same workspace.
+
+### `priorContext.previous` {#execution-properties-priorcontext-previous}
+
+- **Type:** `integer`
+- **Required:** yes
+- **Constraints:** minimum 1
+
+How many of the most recent earlier outputs to include
 
 ### `additionalArgs` {#execution-properties-additionalargs}
 

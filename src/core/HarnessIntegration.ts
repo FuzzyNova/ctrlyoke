@@ -84,7 +84,9 @@ function mcpToolSkillContextForPrompt(
 export function refToPriorContext(ref: InlinePriorContextRef): PriorContext {
   switch (ref.kind) {
     case PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS:
-      return PRIOR_CONTEXT_KEYWORDS.PREVIOUS;
+      return ref.count === undefined
+        ? PRIOR_CONTEXT_KEYWORDS.PREVIOUS
+        : { previous: ref.count };
     case PRIOR_CONTEXT_REFERENCE_KINDS.ALL:
       return PRIOR_CONTEXT_KEYWORDS.ALL;
     case PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP:

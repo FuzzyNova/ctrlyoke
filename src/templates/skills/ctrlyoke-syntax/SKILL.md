@@ -22,7 +22,7 @@ When you summarize work, cite what you touched with these tokens instead of plai
 | A symbol (its line range)  | `#sym:src/auth/login.ts:validateToken:42-57` |
 | A commit (7–40 hex chars)  | `~3f9c2a1`                                   |
 | Uncommitted/staged changes | `~diff`, `~staged`                           |
-| An earlier step's output   | `$step:2`, `$previous`                       |
+| An earlier step's output   | `$step:2`, `$previous`, `$previous:3`        |
 
 For example: "I fixed the expiry check in #sym:src/auth/login.ts:validateToken:42-57, which ~3f9c2a1 broke, and added a case to @src/auth/login.test.ts."
 
@@ -42,6 +42,7 @@ For example: "I fixed the expiry check in #sym:src/auth/login.ts:validateToken:4
 | `~diff` / `~staged`            | Working-tree (with untracked file names) / staged diff.                                                                                                  |
 | `~stash:0` / `~3f9c2a1`        | That stash entry's diff / that commit's diff.                                                                                                            |
 | `$previous`                    | Output of the most recent earlier step that produced any.                                                                                                |
+| `$previous:3`                  | Output of the last 3 earlier steps that produced any, oldest first; counted back from this prompt, so it stays correct when steps move.                  |
 | `$all` / `$step:1,3-5`         | Output of every earlier step / of steps 1, 3, 4 and 5 (1-based; only earlier steps).                                                                     |
 | `$finalStep` / `$allFinalStep` | Output of the latest / every `finalStep` loop pass.                                                                                                      |
 | `$preCondition:stdout`         | Replaced in place by that script output. Fields: `stdout`, `stderr`, `exitCode`, `expected`, `actual`, `compareSource`. Works in step and retry prompts. |

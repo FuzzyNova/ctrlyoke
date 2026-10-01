@@ -5,7 +5,10 @@ import type {
   ScriptRuntimeOutput,
   WorkflowStep,
 } from "../../types/CtrlYokeTypes";
-import { isScriptStep } from "../../types/CtrlYokeTypes";
+import {
+  isPreviousStepsPriorContext,
+  isScriptStep,
+} from "../../types/CtrlYokeTypes";
 import {
   FINAL_STEP_PHASES,
   getExecutionPhaseKeySuffix,
@@ -903,23 +906,31 @@ export class RunOutputResolver {
   ): Promise<PriorContextItem[]> {
     const queueIndices = new Set<number>();
     const explicitQueueIndices = new Set<number>();
-    const previousCandidateIndices = new Set<number>();
+    // "previous" and { previous: N } both select the last N outputs; several
+    // in one prompt ($previous with $previous:3) merge to the largest N.
+    let previousCount = 0;
     let includeAllQueue = false;
-    let includePreviousQueue = false;
     let includeAllFinalSteps = false;
     let includePreviousFinalStep = false;
 
     for (const context of contexts) {
+      const requestedPrevious =
+        context === PRIOR_CONTEXT_KEYWORDS.PREVIOUS
+          ? 1
+          : isPreviousStepsPriorContext(context)
+            ? context.previous
+            : 0;
       if (context === PRIOR_CONTEXT_KEYWORDS.ALL) {
         includeAllQueue = true;
         for (let index = 0; index < groupStartBoundary; index++) {
           queueIndices.add(index);
         }
-      } else if (context === PRIOR_CONTEXT_KEYWORDS.PREVIOUS) {
-        includePreviousQueue = true;
+      } else if (requestedPrevious > 0) {
+        // Every earlier step is a candidate: which ones count toward N is only
+        // known once their outputs resolve (steps without output are skipped).
+        previousCount = Math.max(previousCount, requestedPrevious);
         for (let index = 0; index < groupStartBoundary; index++) {
           queueIndices.add(index);
-          previousCandidateIndices.add(index);
         }
       } else if (context === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL) {
         includeAllFinalSteps = true;
@@ -978,11 +989,10 @@ export class RunOutputResolver {
     const selectedQueueIndices = includeAllQueue
       ? new Set(queueIndices)
       : new Set(explicitQueueIndices);
-    if (includePreviousQueue) {
-      const previous = resolvedQueueItems
-        .filter((item) => previousCandidateIndices.has(item.index))
-        .at(-1);
-      if (previous) selectedQueueIndices.add(previous.index);
+    if (previousCount > 0) {
+      for (const item of resolvedQueueItems.slice(-previousCount)) {
+        selectedQueueIndices.add(item.index);
+      }
     }
     const queueItems = resolvedQueueItems.filter((item) =>
       selectedQueueIndices.has(item.index)

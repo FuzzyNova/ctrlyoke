@@ -3,10 +3,18 @@ import { NOT_AFTER_BOUNDARY, NOT_BEFORE_BOUNDARY } from "./ReferenceBoundary";
 /** Shared unquoted @ path body. A colon is valid only in the drive prefix. */
 export const UNQUOTED_AT_REFERENCE_PATH = String.raw`(?:[A-Za-z]:)?[^\s:"]+`;
 
-/** Build the shared inline prior-context pattern for parsing and decoration. */
+/**
+ * Build the shared inline prior-context pattern for parsing and decoration.
+ * Capture 1 = the body after `$`; `parseInlinePriorContextBody` validates it.
+ *
+ * `previous:` takes its count only as a whole digit run, so prose such as
+ * `$previous: fix it` or `$previous:3x` falls back to the bare `$previous`
+ * alternative instead of swallowing the colon — the same bare-keyword
+ * behaviour those texts had before counts existed.
+ */
 export function createInlinePriorContextReferencePattern(): RegExp {
   return new RegExp(
-    `${NOT_AFTER_BOUNDARY}\\$((?:step:[A-Za-z0-9,\\-]*|[A-Za-z][A-Za-z0-9]*))`,
+    `${NOT_AFTER_BOUNDARY}\\$((?:step:[A-Za-z0-9,\\-]*|previous:[0-9]+(?![A-Za-z0-9_])|[A-Za-z][A-Za-z0-9]*))`,
     "g"
   );
 }

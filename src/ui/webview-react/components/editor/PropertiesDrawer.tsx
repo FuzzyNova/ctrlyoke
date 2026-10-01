@@ -43,6 +43,7 @@ import {
   DrawerRow,
   HarnessDropdown,
   HARNESS_DISPLAY_NAMES,
+  formatPriorContextLabel,
   PriorContextSelect,
   SkillsSelect,
   McpServersEditor,
@@ -67,7 +68,6 @@ import {
   ERROR_BEHAVIOR_SELECTION_OPTIONS_META,
   EXECUTION_MODE_OPTIONS_META,
   PERMISSION_MODE_OPTIONS_META,
-  PRIOR_CONTEXT_SELECT_OPTIONS_META,
   RESUME_SESSION_OPTIONS_META,
   toSelectOptions,
 } from "@root/types/SchemaUiMetadata";
@@ -371,19 +371,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   const resolvedPriorContext =
     workflowProperties.priorContext ??
     (globalSettings.priorContext as PriorContext);
-  const defaultPriorContextLabel = (() => {
-    if (Array.isArray(resolvedPriorContext)) {
-      return "Inherit (Custom)";
-    }
-    if (resolvedPriorContext && typeof resolvedPriorContext === "object") {
-      return "Inherit (Completed run output)";
-    }
-    const label =
-      PRIOR_CONTEXT_SELECT_OPTIONS_META[
-        resolvedPriorContext as keyof typeof PRIOR_CONTEXT_SELECT_OPTIONS_META
-      ]?.label;
-    return `Inherit (${label ?? resolvedPriorContext})`;
-  })();
+  const defaultPriorContextLabel = `Inherit (${formatPriorContextLabel(
+    resolvedPriorContext
+  )})`;
 
   // Get models for current harness
   const currentHarness = (properties.harness ??

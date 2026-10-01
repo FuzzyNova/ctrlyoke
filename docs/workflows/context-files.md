@@ -61,6 +61,7 @@ Use these when a prompt should reason over local changes, staged work, a stash e
 
 ```text
 $previous
+$previous:3
 $all
 $finalStep
 $allFinalStep
@@ -70,12 +71,13 @@ $step:1,3-5
 These let a prompt pull prior ctrlyoke output into the prompt text:
 
 - `$previous` pulls in the most recent earlier step that produced output, and `$all` pulls in every earlier queue step
+- `$previous:3` pulls in the last 3 earlier steps that produced output, oldest first. It counts back from the prompt it is written in, so it keeps meaning "the last 3" when steps are added or reordered, and it includes fewer if fewer exist
 - `$finalStep` pulls in the most recent `finalStep` loop output, and `$allFinalStep` pulls in every earlier `finalStep` loop output
 - `$step:1,3-5` pulls in specific steps by their 1-based step number
 
 They are the inline form of the `priorContext` step property
-(`previous`, `all`, `finalStepPrevious`, `finalStepAll`, or an array such as
-`[1, 3]`).
+(`previous`, `{ previous: 3 }`, `all`, `finalStepPrevious`, `finalStepAll`, or an
+array such as `[1, 3]`).
 
 ## Context at a parallel boundary
 

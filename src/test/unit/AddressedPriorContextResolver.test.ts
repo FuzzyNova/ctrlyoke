@@ -46,6 +46,27 @@ suite("AddressedPriorContextResolver", () => {
     );
   });
 
+  test("routes { previous: N } to the same run instead of treating it as an address", async () => {
+    const resolver = {
+      getManifest: async () => {
+        throw new Error("a relative selector must never be resolved as a run");
+      },
+      resolveAllPriorContextItems: async () => [],
+    } as unknown as RunOutputResolver;
+    const result = await new AddressedPriorContextResolver(
+      workspaceRoot,
+      resolver
+    ).resolve([{ previous: 3 }], async (local) => {
+      assert.deepStrictEqual(local, [{ previous: 3 }]);
+      return [{ index: 0, prompt: "local", text: "local output" }];
+    });
+
+    assert.deepStrictEqual(
+      result.map((item) => item.text),
+      ["local output"]
+    );
+  });
+
   test("rejects traversal, missing sources, and nonterminal source manifests without path leakage", async () => {
     const resolver = {
       getManifest: async () => ({ completedAt: undefined }),

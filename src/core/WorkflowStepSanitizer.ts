@@ -293,6 +293,14 @@ function clonePriorContext(value: unknown): PriorContext | undefined {
   ) {
     return [...value];
   }
+  if (
+    isRecord(value) &&
+    typeof value.previous === "number" &&
+    Number.isInteger(value.previous) &&
+    value.previous >= 1
+  ) {
+    return { previous: value.previous };
+  }
   return undefined;
 }
 

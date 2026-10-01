@@ -132,6 +132,18 @@ suite("ReferencePatterns", () => {
     });
   });
 
+  test("captures a $previous count only as a whole digit run", () => {
+    const regex = createInlinePriorContextReferencePattern();
+    assert.deepStrictEqual(
+      [
+        ..."see $previous:3, $previous:12. $previous:3x $previous:".matchAll(
+          regex
+        ),
+      ].map((match) => match[0]),
+      ["$previous:3", "$previous:12", "$previous", "$previous"]
+    );
+  });
+
   test("leaves prose colons after bare prior-context references", () => {
     const regex = createInlinePriorContextReferencePattern();
     assert.deepStrictEqual(

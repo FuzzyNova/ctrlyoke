@@ -241,6 +241,49 @@ describe("CodeMirrorEditor prior-context references", () => {
   });
 });
 
+describe("CodeMirrorEditor $previous:N lint", () => {
+  it("notes an over-large count without marking the chip invalid", async () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const referenceValidity = new Map<string, boolean>();
+    const view = new EditorView({
+      parent,
+      doc: "$previous:5",
+      extensions: [
+        createAtomicReferenceExtension(new Map(), referenceValidity),
+        createPriorContextLintExtension(
+          { current: 2 },
+          { current: false },
+          referenceValidity
+        ),
+      ],
+    });
+
+    try {
+      forceLinting(view);
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      const chip = view.dom.querySelector<HTMLElement>(".cm-atomic-ref");
+      const diagnostics: Array<{ severity: string; message: string }> = [];
+      forEachDiagnostic(view.state, (diagnostic) =>
+        diagnostics.push(diagnostic)
+      );
+
+      expect(chip?.getAttribute("data-ref")).toBe("previous:5");
+      expect(chip?.hasAttribute("data-invalid")).toBe(false);
+      expect(referenceValidity.get("$previous:5")).toBe(true);
+      expect(diagnostics).toEqual([
+        expect.objectContaining({
+          severity: "info",
+          message: expect.stringContaining("will include at most 2"),
+        }),
+      ]);
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+});
+
 describe("CodeMirrorEditor prior-context re-lint on step context change", () => {
   it("clears a stale invalid $step chip once the step count arrives", async () => {
     const parent = document.createElement("div");

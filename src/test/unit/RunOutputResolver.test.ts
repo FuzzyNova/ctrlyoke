@@ -501,6 +501,28 @@ suite("RunOutputResolver", () => {
       ["partial retry response", "pass\n0", finalResponse],
       "prior context is resolved from timeline attempts, including scripts and final loops"
     );
+    const lastOneItems = await resolver.resolvePriorContextItems(
+      manifestPath,
+      [{ previous: 1 }],
+      revisionTwo.steps,
+      2
+    );
+    assert.deepStrictEqual(
+      lastOneItems.map((item) => item.text),
+      ["pass\n0"],
+      "{ previous: 1 } selects the same output as the previous keyword"
+    );
+    const lastNItems = await resolver.resolvePriorContextItems(
+      manifestPath,
+      ["previous", { previous: 5 }],
+      revisionTwo.steps,
+      2
+    );
+    assert.deepStrictEqual(
+      lastNItems.map((item) => item.text),
+      ["partial retry response", "pass\n0"],
+      "previous selectors merge to the largest N, capped at what exists, oldest first"
+    );
     const groupBoundaryItems = await resolver.resolvePriorContextItems(
       manifestPath,
       ["previous", "all", [2]],
@@ -677,10 +699,13 @@ suite("RunOutputResolver", () => {
 
   test("preserves recorded response kinds and uses source only for legacy events", async () => {
     const kinds = ["ai", "script", "condition", undefined] as const;
-    const targets = kinds.map((_, stepIndex) => ({
-      kind: FINAL_STEP_PHASES.QUEUE,
-      stepIndex,
-    } as const));
+    const targets = kinds.map(
+      (_, stepIndex) =>
+        ({
+          kind: FINAL_STEP_PHASES.QUEUE,
+          stepIndex,
+        }) as const
+    );
     const drafts: WorkflowTimelineEventDraft[] = [];
     for (const [stepIndex, responseKind] of kinds.entries()) {
       const target = targets[stepIndex];

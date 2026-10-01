@@ -424,6 +424,34 @@ describe("atomic reference presentation", () => {
     ).toMatchObject({ invalid: true });
   });
 
+  it("labels a $previous:N reference with its count", () => {
+    const text = "Look at $previous:3, then fix it";
+    const [chip] = findAtomicReferences(text);
+    expect(chip).toMatchObject({
+      label: "previous 3",
+      title: "$previous:3",
+      attrs: { "data-type": "priorContext", "data-ref": "previous:3" },
+    });
+    expect(text.slice(chip.from, chip.to)).toBe("$previous:3");
+  });
+
+  it("locates prior-context refs with the shared runtime parser", () => {
+    expect(findInlinePriorContextRefs("x $previous:2 $step:1,", 10)).toEqual([
+      {
+        from: 12,
+        to: 23,
+        token: "$previous:2",
+        ref: { kind: "previous", count: 2 },
+      },
+      {
+        from: 24,
+        to: 31,
+        token: "$step:1",
+        ref: { kind: "step", indices: [1] },
+      },
+    ]);
+  });
+
   it("labels a $step range reference", () => {
     const chips = findAtomicReferences("$step:1,3-4");
     expect(chips[0]).toMatchObject({

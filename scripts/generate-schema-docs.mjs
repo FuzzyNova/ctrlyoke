@@ -79,6 +79,7 @@ const STRUCTURAL_WORKFLOW_DEFINITIONS = new Set([
   "priorContext",
   "priorContextKeyword",
   "priorContextPromptNumbers",
+  "priorContextPreviousCount",
   "secrets",
   "skills",
   "singleStepRoot",
