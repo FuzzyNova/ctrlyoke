@@ -20,7 +20,6 @@ import { Log } from "../../utils/Log";
 import { noteMemoryActivity } from "../../utils/MemoryDiagnostics";
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
-import { capToolOutputHistory } from "../../utils/ToolOutputPayload";
 import { OutputHistoryManager } from "./OutputHistoryManager";
 import type {
   WorkflowOutputHistory,
@@ -497,9 +496,7 @@ export class RunViewPublisher implements RunLifecycleViewPort {
         : {}),
       workingFile,
       workflowName: view.workflowName,
-      // Only the addressed snapshot is projected. Persisted history and the
-      // live buffer replay below remain complete for extension consumers.
-      history: view.history ? capToolOutputHistory(view.history) : null,
+      history: view.history,
       runSummaries: view.runSummaries,
       workflowProperties: view.workflowProperties,
       executionRunRef,

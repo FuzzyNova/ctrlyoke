@@ -3,10 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FINAL_STEP_PHASES } from "@/types/messages";
 import { useOutputFind } from "@hooks/useOutputFind";
 import type { OutputRenderRow } from "@utils/outputRows";
-import {
-  CLI_EVENT_TYPES,
-  OUTPUT_ROW_KINDS,
-} from "@root/types/DashboardConstants";
+import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
 
 const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
 
@@ -66,42 +63,6 @@ describe("useOutputFind", () => {
     expect(result.current.state.query).toBe("");
     expect(result.current.state.matchCount).toBe(0);
     expect(result.current.activeMatch).toBeNull();
-  });
-
-  it("finds the capped head and reports that truncated tails may be missed", () => {
-    const rows: OutputRenderRow[] = [
-      {
-        key: "capped-bash",
-        rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
-        target,
-        event: {
-          type: CLI_EVENT_TYPES.BASH_COMMAND,
-          data: {
-            command: "cat log",
-            output: "visible head",
-            outputTruncated: true,
-            outputTotalBytes: 500_000,
-          },
-          outputTruncated: true,
-          outputTotalBytes: 500_000,
-        },
-        eventIndex: 0,
-        attemptIndex: 0,
-        runIndex: 0,
-        rawTextOutput: false,
-        hideDiff: false,
-        estimateSize: 40,
-      },
-    ];
-    const { result } = renderHook(() => useOutputFind(rows, onRevealMatch));
-
-    act(() => result.current.open("head"));
-    expect(result.current.state.matchCount).toBe(1);
-    expect(result.current.state.mayMissMatches).toBe(true);
-
-    act(() => result.current.search("tail"));
-    expect(result.current.state.matchCount).toBe(0);
-    expect(result.current.state.mayMissMatches).toBe(true);
   });
 
   it("wraps navigation when moving past the last match", () => {

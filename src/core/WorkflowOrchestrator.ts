@@ -2934,24 +2934,6 @@ export class WorkflowOrchestrator {
     );
   }
 
-  async getToolOutputEvents(
-    address: WorkflowRunAddress,
-    identities: readonly import("../types/WebviewMessageTypes").ToolOutputEventIdentity[]
-  ): Promise<(import("../types/WebviewMessageTypes").CliEvent | undefined)[]> {
-    const workspaceRoot = this.requireWorkspaceRoot();
-    const liveInstance = this.workflowInstanceRegistry.findInstanceForLineage(
-      address.workflowKey
-    );
-    const historyManager =
-      liveInstance?.getQueueState().runRef === address.runRef
-        ? liveInstance.getOutputHistoryManager()
-        : new OutputHistoryManager(workspaceRoot);
-    return historyManager.getCliOutputEvents(
-      historyManager.getHistoryFilePath(address.workflowKey, address.runRef),
-      identities
-    );
-  }
-
   private async publishRunViewToClients(
     address: WorkflowViewAddress,
     targets: ReadonlyArray<{

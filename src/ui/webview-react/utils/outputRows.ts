@@ -282,9 +282,6 @@ export interface StructuredEventRow extends OutputRowBase<
   event: CliEvent;
   eventIndex: number;
   rawTextOutput: boolean;
-  attemptIndex?: number;
-  runIndex?: number;
-  phase?: ExecutionPhase;
   workspaceSnapshot?: WorkspaceSnapshot;
   undoRecord?: UndoRecord;
   diff?: OutputRowDiffMeta;
@@ -342,9 +339,6 @@ export interface StatsRow extends OutputRowBase<typeof OUTPUT_ROW_KINDS.STATS> {
   target: OutputMessageTarget;
   output: CliOutputType;
   outputText?: string;
-  attemptIndex?: number;
-  runIndex?: number;
-  phase?: ExecutionPhase;
 }
 
 export interface ScriptVerdictRow extends OutputRowBase<
@@ -1300,8 +1294,6 @@ function estimateBashOutputHeight(
     output?: string;
     error?: string;
     status?: string;
-    outputLines?: number;
-    errorLines?: number;
   };
   // TOOL_CALL_LINE has no whitespace-pre-wrap, so \n in the command string
   // collapses to a space in rendering. Flatten before estimating to avoid
@@ -1346,14 +1338,12 @@ function estimateBashOutputHeight(
         {
           content: normalizedError,
           expanded: expansion?.errorExpanded ?? false,
-          fullLineCount: data.errorLines,
         },
       ]
     : [
         {
           content: normalizedOutput,
           expanded: expansion?.outputExpanded ?? false,
-          fullLineCount: data.outputLines,
         },
         {
           content: normalizedError,
@@ -1361,7 +1351,7 @@ function estimateBashOutputHeight(
         },
       ];
 
-  for (const { content, expanded, fullLineCount } of contentsToEstimate) {
+  for (const { content, expanded } of contentsToEstimate) {
     // Skip empty/whitespace-only content — BashOutput sanitizes ANSI codes
     // which often leaves blank-only error streams that don't render.
     if (!content || content.trim().length === 0) continue;
@@ -1369,7 +1359,6 @@ function estimateBashOutputHeight(
       expanded,
       maxLines: maxResultLines,
       maxChars: maxResultCharacters,
-      fullLineCount,
     });
     // The "[show N more lines]" toggle is an inline <button> appended to the
     // last visible line, not a block of its own — it only costs a line when it
@@ -2809,13 +2798,8 @@ export function buildOutputRows(
         rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
         target,
         event: visibleEvent.event,
-        eventIndex:
-          message.activityEventIndices?.[visibleEvent.originalIndex] ??
-          visibleEvent.originalIndex,
+        eventIndex: visibleEvent.originalIndex,
         rawTextOutput,
-        attemptIndex,
-        runIndex,
-        phase: message.phase,
         workspaceSnapshot,
         undoRecord,
         hideDiff: visibleEvent.hideDiff,
@@ -2947,9 +2931,6 @@ export function buildOutputRows(
         target,
         output: aggregateOutput,
         outputText,
-        attemptIndex,
-        runIndex,
-        phase: message.phase,
         estimateSize: 24,
       });
     }

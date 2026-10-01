@@ -22,12 +22,10 @@ import { WorkspaceSnapshotService } from "../../utils/WorkspaceSnapshotService";
 import { CliOutput, StatusMessage } from "../../types/WebviewMessageTypes";
 import {
   ACTIVE_EXECUTION_STATES,
-  EXECUTION_PHASES,
   EXECUTION_STATES,
   HARNESS_IDS,
   HISTORY_TRASH_ENTRY_KINDS,
   OUTPUT_ACTIVITY_KINDS,
-  OUTPUT_HISTORY_KINDS,
   STEP_TYPES,
   WORKFLOW_LOCK_LIVENESS,
   WORKTREE_EDIT_KINDS,
@@ -44,10 +42,7 @@ import { OutputHistoryTimelineAdapter } from "./OutputHistoryTimelineAdapter";
 import { HistorySearchIndexService } from "./HistorySearchIndexService";
 import { getSharedHistorySearchIndexService } from "./HistorySearchIndexServiceRegistry";
 import { TimelineRecorder } from "./TimelineRecorder";
-import {
-  RunOutputResolver,
-  sameOutputExecutionTarget,
-} from "./RunOutputResolver";
+import { RunOutputResolver } from "./RunOutputResolver";
 import { RunMetadataScanner } from "./RunMetadataScanner";
 import { WorkflowTokenTotalsReducer } from "./WorkflowTokenTotalsReducer";
 import { ObservedHarnessUsageStore } from "../harness/shared/usage/ObservedHarnessUsageStore";
@@ -185,10 +180,6 @@ export interface RunNavigationSummary {
  * - History is a self-contained snapshot (renders independently of current prompts)
  */
 export class OutputHistoryManager {
-  private static readonly pendingToolOutputHistoryReads = new Map<
-    string,
-    Promise<WorkflowOutputHistory>
-  >();
   private readonly timelineRecorder = new TimelineRecorder();
   private readonly timelineAdapter = new OutputHistoryTimelineAdapter(
     this.timelineRecorder
@@ -1147,59 +1138,6 @@ export class OutputHistoryManager {
       // timeline remains renderable without a worktree projection.
     }
     return enriched;
-  }
-
-  /** Read events from the exact normalized aggregate used by RUN_VIEW_LOADED. */
-  async getCliOutputEvents(
-    historyFilePath: string,
-    identities: readonly {
-      target: OutputExecutionTarget;
-      attemptIndex: number;
-      runIndex?: number;
-      phase?: ExecutionPhase;
-      eventIndex: number;
-    }[]
-  ): Promise<(CliEvent | undefined)[]> {
-    if (identities.length === 0) return [];
-    let pendingRead =
-      OutputHistoryManager.pendingToolOutputHistoryReads.get(historyFilePath);
-    if (!pendingRead) {
-      pendingRead = this.loadHistory(historyFilePath);
-      OutputHistoryManager.pendingToolOutputHistoryReads.set(
-        historyFilePath,
-        pendingRead
-      );
-      const clearPendingRead = () => {
-        if (
-          OutputHistoryManager.pendingToolOutputHistoryReads.get(
-            historyFilePath
-          ) === pendingRead
-        ) {
-          OutputHistoryManager.pendingToolOutputHistoryReads.delete(
-            historyFilePath
-          );
-        }
-      };
-      void pendingRead.then(clearPendingRead, clearPendingRead);
-    }
-    const history = await pendingRead;
-    return identities.map((identity) => {
-      if (!Number.isInteger(identity.eventIndex) || identity.eventIndex < 0) {
-        return undefined;
-      }
-      const entry = history.orderedEntries.find(
-        (candidate) =>
-          candidate.kind === OUTPUT_HISTORY_KINDS.CLI &&
-          sameOutputExecutionTarget(candidate.target, identity.target) &&
-          candidate.attemptIndex === identity.attemptIndex &&
-          (candidate.runIndex ?? 0) === (identity.runIndex ?? 0) &&
-          (candidate.phase ?? EXECUTION_PHASES.PROMPT) ===
-            (identity.phase ?? EXECUTION_PHASES.PROMPT)
-      );
-      return entry?.kind === OUTPUT_HISTORY_KINDS.CLI
-        ? entry.cliOutput.structured?.events[identity.eventIndex]
-        : undefined;
-    });
   }
 
   /**

@@ -114,7 +114,6 @@ function findSegments(
     event: { type: CLI_EVENT_TYPES.MCP_TOOL_CALL, data: call },
     eventIndex: 0,
     rawTextOutput: false,
-    attemptIndex: 0,
     hideDiff: false,
     estimateSize: 80,
   };

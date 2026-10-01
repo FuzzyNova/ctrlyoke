@@ -105,13 +105,7 @@ import { renderCommandTextWithFileLinks } from "@utils/cliCommandFileLinks";
 import { useUiStore } from "@store/uiStore";
 import { workflowViewAddressKey } from "@utils/viewAddress";
 import { getTargetKey } from "@utils/outputProjection";
-import type { OutputMessageTarget } from "@utils/outputProjection";
 import { useWorkspaceSnapshotContent } from "@hooks/useWorkspaceSnapshotContent";
-import { useToolOutputContent } from "@hooks/useToolOutputContent";
-import {
-  hydrateCliOutputEvents,
-  isToolOutputTruncated,
-} from "@utils/toolOutputHydration";
 import { getStepKindIconClass } from "@utils/status";
 import type {
   CliHeaderRow,
@@ -119,11 +113,9 @@ import type {
   ParallelGroupHeaderRow,
   StepHiddenRow,
   ScriptOutputRow,
-  StatsRow,
   StructuredEventRow,
 } from "@utils/outputRows";
 import {
-  getCliTextForCopy,
   getDisplayStructuredPatch,
   getSnapshotBeforeContent,
   isScriptOutput,
@@ -235,12 +227,6 @@ interface OutputRowProps {
 }
 
 const SHELL_WORKFLOW_ID = "_shell";
-
-function toToolOutputTarget(target: OutputMessageTarget) {
-  return target.kind === FINAL_STEP_PHASES.FINAL_STEP
-    ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: target.index }
-    : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: target.index };
-}
 
 const StepHiddenRowView: React.FC<{
   row: StepHiddenRow;
@@ -519,17 +505,9 @@ const UserSteerOutput: React.FC<{
 );
 
 const ToolResultOutput: React.FC<{
-  result: {
-    success: boolean;
-    output?: string;
-    error?: string;
-    outputTruncated?: boolean;
-  };
+  result: { success: boolean; output?: string; error?: string };
   content?: React.ReactNode;
-  loading?: boolean;
-  onExpand?: () => void;
-}> = ({ result, content, loading = false, onExpand }) => {
-  const [expanded, setExpanded] = useState(false);
+}> = ({ result, content }) => {
   let contentText: string;
 
   if (!result.success && result.error) {
@@ -546,25 +524,7 @@ const ToolResultOutput: React.FC<{
     >
       <span className="shrink-0">⎿</span>
       <span className="whitespace-pre-wrap min-w-0 [overflow-wrap:anywhere]">
-        {loading ? (
-          <span role="status">Loading full output…</span>
-        ) : expanded ? (
-          (content ?? contentText)
-        ) : (
-          contentText
-        )}
-        {(result.outputTruncated || contentText.length >= 100) && (
-          <button
-            type="button"
-            className="ml-1 text-bash-expand-link"
-            onClick={() => {
-              if (!expanded) onExpand?.();
-              setExpanded((current) => !current);
-            }}
-          >
-            {expanded ? "[show less]" : "[show more]"}
-          </button>
-        )}
+        {content ?? contentText}
       </span>
     </div>
   );
@@ -609,9 +569,6 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
     const displayedViewAddress = useUiStore(
       (state) => state.displayedViewAddress
     );
-    const fetchToolOutputEvent = useToolOutputContent();
-    const [fullEvent, setFullEvent] = useState<CliEvent | undefined>();
-    const [isLoadingToolOutput, setIsLoadingToolOutput] = useState(false);
     const requestSnapshotContent = useWorkspaceSnapshotContent();
     const [loadedSnapshotContent, setLoadedSnapshotContent] = useState<
       Record<string, string>
@@ -630,49 +587,14 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       const activeIndex = matches.findIndex((match) => match.active);
       return activeIndex;
     };
-    const { rawTextOutput, eventIndex, hideDiff, workspaceSnapshot, diff } =
-      row;
-    const event = fullEvent ?? row.event;
-    useEffect(() => {
-      setFullEvent(undefined);
-      setIsLoadingToolOutput(false);
-    }, [row.key, row.event]);
-    const requestFullToolOutput = useCallback(async () => {
-      if (
-        !isToolOutputTruncated(event) ||
-        displayedViewAddress?.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN
-      )
-        return;
-      setIsLoadingToolOutput(true);
-      try {
-        const fetched = await fetchToolOutputEvent({
-          address: {
-            workflowKey: displayedViewAddress.workflowKey,
-            runRef: displayedViewAddress.runRef,
-          },
-          target: toToolOutputTarget(row.target),
-          attemptIndex: row.attemptIndex ?? 0,
-          runIndex: row.runIndex ?? 0,
-          phase: row.phase,
-          eventIndex: row.eventIndex ?? 0,
-        });
-        if (fetched) setFullEvent(fetched);
-      } finally {
-        setIsLoadingToolOutput(false);
-      }
-    }, [displayedViewAddress, event, fetchToolOutputEvent, row]);
-    const updateToolCallExpansion = useCallback(
-      (section: ToolCallExpansionSection, expanded: boolean) => {
-        if (
-          expanded &&
-          (section === TOOL_CALL_EXPANSION_SECTIONS.OUTPUT ||
-            section === TOOL_CALL_EXPANSION_SECTIONS.ERROR)
-        )
-          void requestFullToolOutput();
-        onToolCallExpansionChange?.(row.key, section, expanded);
-      },
-      [onToolCallExpansionChange, requestFullToolOutput, row.key]
-    );
+    const {
+      event,
+      rawTextOutput,
+      eventIndex,
+      hideDiff,
+      workspaceSnapshot,
+      diff,
+    } = row;
     const effectiveWorkspaceSnapshot = useMemo(() => {
       if (
         Object.keys(loadedSnapshotContent).length === 0 ||
@@ -894,10 +816,6 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             command={data.command}
             output={data.output}
             error={data.error}
-            outputLineCount={data.outputLines}
-            errorLineCount={data.errorLines}
-            outputLoading={isLoadingToolOutput && Boolean(data.outputTruncated)}
-            errorLoading={isLoadingToolOutput && Boolean(data.outputTruncated)}
             commandFindMatches={getFieldMatches(HISTORY_MATCH_FIELDS.COMMAND)}
             outputFindMatches={getFieldMatches(HISTORY_MATCH_FIELDS.RESPONSE)}
             errorFindMatches={getFieldMatches(HISTORY_MATCH_FIELDS.ERROR)}
@@ -907,15 +825,9 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             maxCharacters={row.collapsedToolOutputMaxCharacters}
             showLabel={row.showParamsLabel}
             expansion={bashExpansion}
-            onExpansionChange={(section, expanded) => {
-              if (
-                expanded &&
-                section !== BASH_OUTPUT_EXPANSION_SECTIONS.COMMAND &&
-                isToolOutputTruncated(event)
-              )
-                void requestFullToolOutput();
-              onBashExpansionChange?.(row.key, section, expanded);
-            }}
+            onExpansionChange={(section, expanded) =>
+              onBashExpansionChange?.(row.key, section, expanded)
+            }
           />
         );
       }
@@ -1116,16 +1028,13 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
                 findCaseSensitive={findCaseSensitive}
                 errorFindMatches={getFieldMatches("toolContent", 0)}
                 expansion={row.toolCall.expansion}
-                onExpansionChange={updateToolCallExpansion}
+                onExpansionChange={(section, expanded) =>
+                  onToolCallExpansionChange?.(row.key, section, expanded)
+                }
                 findDecorations={{
                   matches: getFieldMatches("toolBody", 0),
                 }}
               />
-              {isLoadingToolOutput && (
-                <div className="text-xs text-description-fg" role="status">
-                  Loading full output…
-                </div>
-              )}
             </ToolCallBlock>
           );
         }
@@ -1145,12 +1054,6 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             errorFindMatches={
               toolContentIsError ? toolContentMatches : undefined
             }
-            outputLoading={
-              isLoadingToolOutput && Boolean(data.result?.outputTruncated)
-            }
-            errorLoading={
-              isLoadingToolOutput && Boolean(data.result?.outputTruncated)
-            }
             showLabel={row.showParamsLabel}
             labelContent={highlightText(
               `MCP: ${data.server}.${data.tool}`,
@@ -1158,7 +1061,9 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             )}
             expansion={row.toolCall?.expansion}
             renderPlan={row.toolCall?.renderPlan}
-            onExpansionChange={updateToolCallExpansion}
+            onExpansionChange={(section, expanded) =>
+              onToolCallExpansionChange?.(row.key, section, expanded)
+            }
           />
         );
       }
@@ -1215,15 +1120,11 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             errorFindMatches={
               toolContentIsError ? toolContentMatches : undefined
             }
-            outputLoading={
-              isLoadingToolOutput && Boolean(data.result?.outputTruncated)
-            }
-            errorLoading={
-              isLoadingToolOutput && Boolean(data.result?.outputTruncated)
-            }
             expansion={row.toolCall?.expansion}
             renderPlan={row.toolCall?.renderPlan}
-            onExpansionChange={updateToolCallExpansion}
+            onExpansionChange={(section, expanded) =>
+              onToolCallExpansionChange?.(row.key, section, expanded)
+            }
           />
         );
       }
@@ -1233,10 +1134,6 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
         return (
           <ToolResultOutput
             result={data.result}
-            loading={
-              isLoadingToolOutput && Boolean(data.result.outputTruncated)
-            }
-            onExpand={() => void requestFullToolOutput()}
             content={highlightText(
               !data.result.success && data.result.error
                 ? data.result.error
@@ -1484,20 +1381,16 @@ const CliHeaderRowView: React.FC<{
   );
 };
 
-const StatsRowView: React.FC<{ row: StatsRow }> = ({ row }) => {
-  const output = row.output;
-  const outputText = row.outputText;
+const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
+  const isStatsRow = row.rowKind === OUTPUT_ROW_KINDS.STATS;
+  const output = isStatsRow ? row.output : undefined;
+  const outputText = isStatsRow ? row.outputText : undefined;
   const structuredMetadata = output?.structured?.metadata;
   const sessionId = structuredMetadata?.sessionId;
   const harnessId = structuredMetadata?.harness;
   const harnessName = harnessId ? getHarnessDisplayName(harnessId) : undefined;
   const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
   const [copiedOutput, setCopiedOutput] = useState(false);
-  const [copyingOutput, setCopyingOutput] = useState(false);
-  const displayedViewAddress = useUiStore(
-    (state) => state.displayedViewAddress
-  );
-  const fetchToolOutputEvent = useToolOutputContent();
   const showCostEstimates = useSettingsStore(
     (state) => state.fullGlobalSettings?.settings.ui.showCostEstimates !== false
   );
@@ -1514,38 +1407,11 @@ const StatsRowView: React.FC<{ row: StatsRow }> = ({ row }) => {
 
   const handleCopyOutput = useCallback(async () => {
     if (!outputText) return;
-    let text = outputText;
-    if (
-      output &&
-      displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
-      output.structured?.events?.some(isToolOutputTruncated)
-    ) {
-      setCopyingOutput(true);
-      try {
-        const fullOutput = await hydrateCliOutputEvents(
-          output,
-          {
-            address: {
-              workflowKey: displayedViewAddress.workflowKey,
-              runRef: displayedViewAddress.runRef,
-            },
-            target: toToolOutputTarget(row.target),
-            attemptIndex: row.attemptIndex ?? 0,
-            runIndex: row.runIndex ?? 0,
-            phase: row.phase,
-          },
-          fetchToolOutputEvent
-        );
-        text = getCliTextForCopy(fullOutput) ?? outputText;
-      } finally {
-        setCopyingOutput(false);
-      }
-    }
-    const didCopy = await copyTextToClipboard(text);
+    const didCopy = await copyTextToClipboard(outputText);
     if (!didCopy) return;
     setCopiedOutput(true);
     window.setTimeout(() => setCopiedOutput(false), 1200);
-  }, [displayedViewAddress, fetchToolOutputEvent, output, outputText, row]);
+  }, [outputText]);
 
   if (!output) return null;
 
@@ -1709,9 +1575,7 @@ const StatsRowView: React.FC<{ row: StatsRow }> = ({ row }) => {
         aria-label="Copy output to clipboard"
       >
         <Icon name={copiedOutput ? "codicon-check" : "codicon-copy"} />
-        <span>
-          {copyingOutput ? "Loading…" : copiedOutput ? "Copied" : "Copy output"}
-        </span>
+        <span>{copiedOutput ? "Copied" : "Copy output"}</span>
       </button>
     );
   }

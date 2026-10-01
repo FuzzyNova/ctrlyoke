@@ -341,22 +341,20 @@ function mapAggregateEventsToMessages(
     };
     const groups = new Map<
       string,
-      { order: ActivityOrder; events: CliEvent[]; indices: number[] }
+      { order: ActivityOrder; events: CliEvent[] }
     >();
-    events.forEach((event, index) => {
+    events.forEach((event) => {
       if (!event.activityOrder) return;
       const groupKey = `${event.activityOrder.timestampMs}:${event.activityOrder.sequence}`;
       const group = groups.get(groupKey) ?? {
         order: event.activityOrder,
         events: [],
-        indices: [],
       };
       const { activityOrder: _activityOrder, ...renderEvent } = event;
       group.events.push(renderEvent);
-      group.indices.push(index);
       groups.set(groupKey, group);
     });
-    for (const { order, events: activityEvents, indices } of groups.values()) {
+    for (const { order, events: activityEvents } of groups.values()) {
       const activityKey = `${identity}:${OUTPUT_ACTIVITY_KINDS.STRUCTURED}:${order.sequence}`;
       messages.push({
         type: "cli",
@@ -377,7 +375,6 @@ function mapAggregateEventsToMessages(
         activityKey,
         activityKind: OUTPUT_ACTIVITY_KINDS.STRUCTURED,
         activityEvents,
-        activityEventIndices: indices,
         aggregate: outputForRows,
       });
     }

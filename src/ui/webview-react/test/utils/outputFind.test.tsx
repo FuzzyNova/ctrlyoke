@@ -54,7 +54,6 @@ function makeStructuredBashRow(
     },
     eventIndex: 0,
     rawTextOutput: true,
-    attemptIndex: 0,
     hideDiff: false,
     estimateSize: 48,
   };
@@ -80,7 +79,6 @@ function makeStructuredToolCallRow(
     },
     eventIndex: 0,
     rawTextOutput: true,
-    attemptIndex: 0,
     hideDiff: false,
     estimateSize: 48,
   };
@@ -295,7 +293,6 @@ describe("outputFind", () => {
         },
         eventIndex: 0,
         rawTextOutput: true,
-        attemptIndex: 0,
         hideDiff: false,
         estimateSize: 48,
       };

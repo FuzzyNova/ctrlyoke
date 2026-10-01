@@ -11,12 +11,8 @@ import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import { FINAL_STEP_PHASES, MESSAGE_TYPES } from "@/types/messages";
 import { OUTPUT_MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import { WebviewLog } from "@/utils/logger";
-import type { WorkflowRunAddress } from "@root/types/CtrlYokeTypes";
-import { useToolOutputContent } from "@hooks/useToolOutputContent";
-import { hydrateOrderedCliEntries } from "@utils/toolOutputHydration";
 
 interface UseOutputExportInput {
-  address?: WorkflowRunAddress;
   allMessages: OutputMessage[];
   currentStep: number;
   executionState: string;
@@ -61,7 +57,6 @@ function getVisibleStepRange(
 
 export function useOutputExport({
   allMessages,
-  address,
   currentStep,
   executionState,
   fileName,
@@ -72,7 +67,6 @@ export function useOutputExport({
   steps,
   totalSteps,
 }: UseOutputExportInput) {
-  const fetchToolOutputEvent = useToolOutputContent();
   const [modalOpen, setModalOpen] = useState(false);
   const [includeCommand, setIncludeCommand] = useState(true);
   const [includeMetadata, setIncludeMetadata] = useState(true);
@@ -131,7 +125,7 @@ export function useOutputExport({
     [allMessages, finalStep?.name, steps]
   );
 
-  const confirmExport = useCallback(async () => {
+  const confirmExport = useCallback(() => {
     let parsedRange: number[] | undefined;
     if (stepRange.trim()) {
       const parsed = parseRangeNotation(stepRange);
@@ -150,14 +144,6 @@ export function useOutputExport({
 
     let markdownContent: string;
     try {
-      const fullHistoryEntries =
-        isViewingHistory && address && historyOrderedEntries
-          ? await hydrateOrderedCliEntries(
-              historyOrderedEntries,
-              address,
-              fetchToolOutputEvent
-            )
-          : historyOrderedEntries;
       markdownContent = generateMarkdownExport(
         buildExportMessages(),
         {
@@ -168,8 +154,8 @@ export function useOutputExport({
         },
         {
           orderedEntries:
-            isViewingHistory && fullHistoryEntries?.length
-              ? fullHistoryEntries
+            isViewingHistory && historyOrderedEntries?.length
+              ? historyOrderedEntries
               : undefined,
           exportOptions,
         }
@@ -202,10 +188,8 @@ export function useOutputExport({
     });
   }, [
     buildExportMessages,
-    address,
     currentStep,
     executionState,
-    fetchToolOutputEvent,
     fileName,
     historyOrderedEntries,
     includeCommand,

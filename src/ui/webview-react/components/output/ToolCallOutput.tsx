@@ -65,8 +65,6 @@ interface McpToolCallOutputProps {
   paramsFindMatches?: RowFindDecoration["matches"];
   outputFindMatches?: RowFindDecoration["matches"];
   errorFindMatches?: RowFindDecoration["matches"];
-  outputLoading?: boolean;
-  errorLoading?: boolean;
   showLabel?: boolean;
   expansion?: ToolCallExpansionState;
   renderPlan?: ToolCallRenderPlan;
@@ -86,8 +84,6 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
   paramsFindMatches,
   outputFindMatches,
   errorFindMatches,
-  outputLoading = false,
-  errorLoading = false,
   showLabel = false,
   expansion,
   renderPlan,
@@ -149,9 +145,6 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
         ? TOOL_ERROR_LINE
         : TOOL_RESULT_LINE;
     const visibleText = getVisibleToolCallText(content, sectionPlan);
-    const isLoading =
-      (type === TOOL_CALL_EXPANSION_SECTIONS.ERROR && errorLoading) ||
-      (type !== TOOL_CALL_EXPANSION_SECTIONS.ERROR && outputLoading);
 
     return (
       <div className={`${cssClass} flex items-start gap-1`}>
@@ -160,11 +153,7 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
           className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]"
           id={`${containerId}-${type}`}
         >
-          {isLoading ? (
-            <span role="status">Loading full output…</span>
-          ) : (
-            highlightText(visibleText, findMatches ?? [])
-          )}
+          {highlightText(visibleText, findMatches ?? [])}
           {sectionPlan.canToggle && (
             <button
               type="button"
@@ -301,8 +290,6 @@ interface GenericToolCallOutputProps {
   paramsFindMatches?: RowFindDecoration["matches"];
   outputFindMatches?: RowFindDecoration["matches"];
   errorFindMatches?: RowFindDecoration["matches"];
-  outputLoading?: boolean;
-  errorLoading?: boolean;
   showLabel?: boolean;
   expansion?: ToolCallExpansionState;
   renderPlan?: ToolCallRenderPlan;
@@ -321,8 +308,6 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
   paramsFindMatches,
   outputFindMatches,
   errorFindMatches,
-  outputLoading = false,
-  errorLoading = false,
   showLabel = false,
   expansion,
   renderPlan,
@@ -389,9 +374,6 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
         ? TOOL_ERROR_LINE
         : TOOL_RESULT_LINE;
     const visibleText = getVisibleToolCallText(content, sectionPlan);
-    const isLoading =
-      (type === TOOL_CALL_EXPANSION_SECTIONS.ERROR && errorLoading) ||
-      (type !== TOOL_CALL_EXPANSION_SECTIONS.ERROR && outputLoading);
 
     // Highlight only the visible (possibly truncated) slice — find match
     // offsets are computed against the full text, but highlightText's
@@ -404,11 +386,7 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
           className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]"
           id={`${containerId}-${type}`}
         >
-          {isLoading ? (
-            <span role="status">Loading full output…</span>
-          ) : (
-            highlightText(visibleText, findMatches ?? [])
-          )}
+          {highlightText(visibleText, findMatches ?? [])}
           {sectionPlan.canToggle && (
             <button
               type="button"

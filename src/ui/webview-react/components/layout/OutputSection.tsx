@@ -559,13 +559,6 @@ const OutputSectionInner: React.FC = () => {
 
   const outputExport = useOutputExport({
     allMessages,
-    address:
-      displayedAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
-        ? {
-            workflowKey: displayedAddress.workflowKey,
-            runRef: displayedAddress.runRef,
-          }
-        : undefined,
     currentStep,
     executionState,
     fileName,
@@ -1332,13 +1325,6 @@ const OutputSectionInner: React.FC = () => {
   }, [clearHiddenOutputTargets, outputFilterAddressKey]);
 
   const { openContextMenu, outputContextMenuPortal } = useOutputContextMenu({
-    address:
-      displayedAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
-        ? {
-            workflowKey: displayedAddress.workflowKey,
-            runRef: displayedAddress.runRef,
-          }
-        : undefined,
     anchorScrollFractions: stepScrollFractions,
     allMessages,
     hiddenTargetKeys: hiddenOutputEntry?.keys ?? EMPTY_HIDDEN_TARGET_KEYS,

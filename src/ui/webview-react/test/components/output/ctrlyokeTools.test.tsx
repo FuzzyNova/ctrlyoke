@@ -205,7 +205,6 @@ describe("ctrlyoke MCP tool views", () => {
       event: { type: CLI_EVENT_TYPES.MCP_TOOL_CALL, data },
       eventIndex: 0,
       rawTextOutput: false,
-      attemptIndex: 0,
       hideDiff: false,
       estimateSize: 80,
       toolCall: {
@@ -248,7 +247,6 @@ describe("ctrlyoke MCP tool views", () => {
       event: { type: CLI_EVENT_TYPES.MCP_TOOL_CALL, data },
       eventIndex: 0,
       rawTextOutput: false,
-      attemptIndex: 0,
       hideDiff: false,
       estimateSize: 80,
     };
@@ -334,7 +332,6 @@ describe("ctrlyoke MCP tool views", () => {
       event: { type: CLI_EVENT_TYPES.MCP_TOOL_CALL, data },
       eventIndex: 0,
       rawTextOutput: false,
-      attemptIndex: 0,
       hideDiff: false,
       estimateSize: 80,
     };
@@ -507,7 +504,6 @@ describe("ctrlyoke MCP tool views", () => {
       event: { type: CLI_EVENT_TYPES.MCP_TOOL_CALL, data },
       eventIndex: 0,
       rawTextOutput: false,
-      attemptIndex: 0,
       hideDiff: false,
       estimateSize: 80,
     };
@@ -606,7 +602,6 @@ describe("ctrlyoke MCP tool views", () => {
       event: { type: CLI_EVENT_TYPES.MCP_TOOL_CALL, data },
       eventIndex: 0,
       rawTextOutput: false,
-      attemptIndex: 0,
       hideDiff: false,
       estimateSize: 80,
       toolCall: {
@@ -794,7 +789,6 @@ describe("ctrlyoke MCP tool views", () => {
       event: { type: CLI_EVENT_TYPES.MCP_TOOL_CALL, data: eventData },
       eventIndex: 0,
       rawTextOutput: false,
-      attemptIndex: 0,
       hideDiff: false,
       estimateSize: 80,
     };
@@ -916,7 +910,6 @@ describe("ctrlyoke MCP tool views", () => {
       event: { type: CLI_EVENT_TYPES.MCP_TOOL_CALL, data },
       eventIndex: 0,
       rawTextOutput: false,
-      attemptIndex: 0,
       hideDiff: false,
       estimateSize: 80,
     };
