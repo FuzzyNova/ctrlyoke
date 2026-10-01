@@ -225,12 +225,18 @@ export class WorkflowLockManager {
    * Normalize stale locks on extension startup.
    *
    * Scans every lineage directory under run storage. For each lineage whose
-   * locked `RunRef`'s `_runtime.executionState` is active (running/pausing/cancelling):
-   *   - "none" or "stale" lock  → writes "stopped" to that run's `_runtime.executionState`,
-   *     cleans up any stale lock file
+   * locked `RunRef`'s `_runtime.executionState` is active (running/pausing/paused/cancelling):
+   *   - "none" or "stale" lock  → removes the stale lock file and, unless the run is
+   *     PAUSED, writes "stopped" to that run's `_runtime.executionState`
    *   - active lock             → preserves the live run and lock
    *
+   * PAUSED keeps its state: a pause is only confirmed at a step boundary, so a dead
+   * owner left nothing in flight to settle, and PAUSED is how the dashboard tells a
+   * run the user deliberately paused apart from one that was stopped or interrupted.
+   * Resume re-acquires the lock (and any worktree) on whichever host continues it.
+   *
    * Returns the exact run file paths recovered/still-active, keyed by lineage.
+   * A paused run is in neither list: it was not interrupted and is not executing.
    */
   static async normalizeStaleLocks(
     workspaceRoot: string,
@@ -287,28 +293,34 @@ export class WorkflowLockManager {
       }
 
       // "absent" or "stale"
-      Log.info(
-        `[WorkflowLockManager] normalizeStaleLocks: normalizing ${workflowKey} from ${executionState} stopped (lock=${lockInspection.liveness})`
-      );
+      if (executionState === EXECUTION_STATES.PAUSED) {
+        Log.info(
+          `[WorkflowLockManager] normalizeStaleLocks: ${workflowKey} is paused — keeping paused state, removing ${lockInspection.liveness} lock`
+        );
+      } else {
+        Log.info(
+          `[WorkflowLockManager] normalizeStaleLocks: normalizing ${workflowKey} from ${executionState} → stopped (lock=${lockInspection.liveness})`
+        );
 
-      if (runningFile._runtime) {
-        runningFile._runtime.executionState = EXECUTION_STATES.STOPPED;
-        settleInterruptedRun(runningFile);
-      }
-      try {
-        const tmpPath = runFilePath + ".tmp";
-        await fs.promises.writeFile(
-          tmpPath,
-          JSON.stringify(runningFile, null, 2),
-          "utf8"
-        );
-        await fs.promises.rename(tmpPath, runFilePath);
-        recoveredRunFiles.push(runFilePath);
-      } catch (writeErr) {
-        Log.warn(
-          `[WorkflowLockManager] normalizeStaleLocks: failed to normalize ${workflowKey}:`,
-          writeErr
-        );
+        if (runningFile._runtime) {
+          runningFile._runtime.executionState = EXECUTION_STATES.STOPPED;
+          settleInterruptedRun(runningFile);
+        }
+        try {
+          const tmpPath = runFilePath + ".tmp";
+          await fs.promises.writeFile(
+            tmpPath,
+            JSON.stringify(runningFile, null, 2),
+            "utf8"
+          );
+          await fs.promises.rename(tmpPath, runFilePath);
+          recoveredRunFiles.push(runFilePath);
+        } catch (writeErr) {
+          Log.warn(
+            `[WorkflowLockManager] normalizeStaleLocks: failed to normalize ${workflowKey}:`,
+            writeErr
+          );
+        }
       }
 
       // Clean up the stale lock file directly (no live owner token to check against).

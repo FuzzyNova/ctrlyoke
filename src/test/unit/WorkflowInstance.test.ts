@@ -1201,6 +1201,56 @@ suite("WorkflowInstance runtime transitions", () => {
     }
   });
 
+  test("shutdown leaves a paused run paused on disk", async () => {
+    // Closing VS Code used to stop() every paused run without a worktree, so a
+    // deliberate pause came back as STOPPED after the restart.
+    const platform = new MockPlatform();
+    const tempDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-shutdown-paused-")
+    );
+    let instance: WorkflowInstance | undefined;
+
+    try {
+      instance = new WorkflowInstance(
+        platform,
+        undefined,
+        new MockIntegrationFactory(platform),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        tempDir
+      );
+      const steps: PromptStep[] = [{ prompt: "done" }, { prompt: "pending" }];
+      const workingFilePath = await instance.promptQueue.createWorkingFile(
+        "shutdown-paused",
+        steps,
+        tempDir
+      );
+      instance.promptQueue.loadPrompts({ steps }, workingFilePath);
+
+      const runtime = instance.promptQueue.getRuntimeStateMachine();
+      await startQueueExecution(instance);
+      assert.strictEqual(runtime.pause(), true);
+      assert.strictEqual(runtime.confirmPaused(), true);
+      await instance.promptQueue.commitRuntimeTransition();
+
+      await instance.shutdown();
+
+      assert.strictEqual(
+        instance.getQueueState().status,
+        EXECUTION_STATES.PAUSED
+      );
+      const persisted = JSON.parse(await fs.readFile(workingFilePath, "utf8"));
+      assert.strictEqual(
+        persisted._runtime.executionState,
+        EXECUTION_STATES.PAUSED
+      );
+    } finally {
+      await instance?.outputHistoryManager.flushPendingIndexRefresh();
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   test("drives execution-state updates and cancelled-step status from runtime transitions", async () => {
     const platform = new MockPlatform();
 

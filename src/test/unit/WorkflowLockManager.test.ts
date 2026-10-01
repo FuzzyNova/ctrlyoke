@@ -234,6 +234,68 @@ suite("WorkflowLockManager stale-run recovery", () => {
     }
   });
 
+  test("keeps a paused run paused and removes its stale lock", async () => {
+    // A user pause must survive a host restart: the paused owner exits with its
+    // lock still on disk, and startup must not rewrite the run to STOPPED.
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-lock-paused-")
+    );
+    const workflowKey = "paused-2026-01-01T00-00-00" as WorkflowKey;
+    const runRef = "run-2026-01-01T00-00-00-000Z" as RunRef;
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspaceRoot,
+      workflowKey,
+      runRef
+    );
+    const pausedRun = {
+      steps: [
+        {
+          prompt: "done before pause",
+          _runtime: { startedAt: 100, completedAt: 200 },
+        },
+        { prompt: "next after resume" },
+      ],
+      _runtime: {
+        currentIndex: 1,
+        executionState: EXECUTION_STATES.PAUSED,
+      },
+    };
+
+    try {
+      await fs.mkdir(path.dirname(runFilePath), { recursive: true });
+      await fs.writeFile(runFilePath, JSON.stringify(pausedRun), "utf8");
+      await WorkflowLockManager.acquireLock(workspaceRoot, workflowKey, {
+        schemaVersion: 2,
+        workflowKey,
+        runRef,
+        runner: RUNNER_IDS.VSCODE,
+        pid: 999_999,
+        ownerToken: "paused-owner-token",
+        hostInstanceId: "old-extension-host",
+        executionInstanceId: "old-execution",
+        startedAt: 0,
+        lastHeartbeat: 0,
+      });
+
+      const result = await WorkflowLockManager.normalizeStaleLocks(
+        workspaceRoot,
+        [workflowKey]
+      );
+
+      assert.deepStrictEqual(result.activeRunFiles, []);
+      assert.deepStrictEqual(result.recoveredRunFiles, []);
+      assert.deepStrictEqual(
+        JSON.parse(await fs.readFile(runFilePath, "utf8")),
+        pausedRun
+      );
+      await assert.rejects(
+        fs.access(WorkflowLockManager.getLockPath(workspaceRoot, workflowKey))
+      );
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("preserves a live active-CLI run and lock", async () => {
     const workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-lock-live-cli-")

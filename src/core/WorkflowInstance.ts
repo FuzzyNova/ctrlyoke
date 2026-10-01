@@ -1161,27 +1161,28 @@ export class WorkflowInstance
    * `WorkflowLockManager.normalizeStaleLocks` plus
    * `OutputHistoryManager.recoverInterruptedRun`.
    *
+   * A PAUSED run is never stopped here: nothing is in flight, and the user's
+   * deliberate pause must survive the restart. Its runner lock is left for
+   * startup normalization, which removes it without touching the paused state.
+   *
    * Ordinary view disposal remains synchronous.
    */
   async shutdown(): Promise<void> {
     const status = this.workflowRuntime.status;
-    const preservePausedWorktree =
+    const preservePausingWorktree =
       Boolean(this.executionWorkspace.worktree) &&
-      (status === EXECUTION_STATES.PAUSED ||
-        status === EXECUTION_STATES.PAUSING);
+      status === EXECUTION_STATES.PAUSING;
     if (
-      status === EXECUTION_STATES.RUNNING ||
-      status === EXECUTION_STATES.PAUSING ||
-      status === EXECUTION_STATES.PAUSED
+      (status === EXECUTION_STATES.RUNNING ||
+        status === EXECUTION_STATES.PAUSING) &&
+      !preservePausingWorktree
     ) {
-      if (!preservePausedWorktree) {
-        await this.stop().catch((error) =>
-          Log.warn(
-            `[inst:${this.id.slice(0, 8)}] Failed to request stop during shutdown:`,
-            error
-          )
-        );
-      }
+      await this.stop().catch((error) =>
+        Log.warn(
+          `[inst:${this.id.slice(0, 8)}] Failed to request stop during shutdown:`,
+          error
+        )
+      );
     }
 
     await this.flushDurableState();
