@@ -66,10 +66,22 @@ async function offeredKeys(step: "prompt" | "script"): Promise<string[]> {
     language: "yaml",
     content: stepYaml,
   });
+  const result = await completionResult(document);
+  assert.ok(result, `${step} step should receive key completions`);
+  return result.items
+    .map((item) =>
+      typeof item.label === "string" ? item.label : item.label.label
+    )
+    .sort();
+}
+
+async function completionResult(
+  document: vscode.TextDocument
+): Promise<vscode.CompletionList | undefined> {
   const provider = new PromptPropertyCompletionProvider();
   const tokenSource = new vscode.CancellationTokenSource();
   try {
-    const result = await provider.provideCompletionItems(
+    return await provider.provideCompletionItems(
       document,
       new vscode.Position(
         document.lineCount - 1,
@@ -81,15 +93,19 @@ async function offeredKeys(step: "prompt" | "script"): Promise<string[]> {
         triggerCharacter: undefined,
       }
     );
-    assert.ok(result, `${step} step should receive key completions`);
-    return result.items
-      .map((item) =>
-        typeof item.label === "string" ? item.label : item.label.label
-      )
-      .sort();
   } finally {
     tokenSource.dispose();
   }
+}
+
+async function resultForYaml(
+  content: string
+): Promise<vscode.CompletionList | undefined> {
+  const document = await vscode.workspace.openTextDocument({
+    language: "yaml",
+    content,
+  });
+  return completionResult(document);
 }
 
 suite("PromptPropertyCompletionProvider", () => {
@@ -112,22 +128,40 @@ suite("PromptPropertyCompletionProvider", () => {
       language: "yaml",
       content: "steps:\n  - prompt: |\n      Summarize the diff and\n      mo",
     });
-    const provider = new PromptPropertyCompletionProvider();
-    const tokenSource = new vscode.CancellationTokenSource();
-    try {
-      const line = document.lineAt(document.lineCount - 1);
-      const result = await provider.provideCompletionItems(
-        document,
-        new vscode.Position(document.lineCount - 1, line.text.length),
-        tokenSource.token,
-        {
-          triggerKind: vscode.CompletionTriggerKind.Invoke,
-          triggerCharacter: undefined,
-        }
-      );
-      assert.strictEqual(result, undefined);
-    } finally {
-      tokenSource.dispose();
+    assert.strictEqual(await completionResult(document), undefined);
+  });
+
+  test("does not offer step keys in nested list or mapping values", async () => {
+    for (const yaml of [
+      "steps:\n  - prompt: hi\n    skills:\n      - ",
+      "steps:\n  - prompt: hi\n    mcpServers:\n      - ",
+      "steps:\n  - prompt: hi\n    toolPermissions:\n      allowedTools:\n        - ",
+      "steps:\n  - prompt: hi\n    endCondition:\n      script: npm test\n      re",
+    ]) {
+      assert.strictEqual(await resultForYaml(yaml), undefined, yaml);
     }
+  });
+
+  test("does not offer step keys in any block scalar value", async () => {
+    for (const header of ["|", ">", "|-", ">+", "|2-", ">-2"]) {
+      const script = `steps:\n  - type: script\n    script: ${header}\n      echo hi\n      ti`;
+      assert.strictEqual(await resultForYaml(script), undefined, header);
+
+      const endCondition = `steps:\n  - prompt: hi\n    endCondition:\n      script: ${header}\n        mo`;
+      assert.strictEqual(await resultForYaml(endCondition), undefined, header);
+    }
+  });
+
+  test("offers step keys for members of a parallel group", async () => {
+    const result = await resultForYaml(
+      "steps:\n  - parallel:\n      - prompt: hi\n        "
+    );
+    assert.ok(result);
+    assert.ok(
+      result.items.some((item) =>
+        (typeof item.label === "string" ? item.label : item.label.label) ===
+        "resumeSession"
+      )
+    );
   });
 });

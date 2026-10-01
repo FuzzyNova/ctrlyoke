@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli); traced in code
 - **Area:** `src/ui/webview-react/components/search/HistorySearchDrawer.tsx` (~323), `src/ui/webview-react/components/settings/CommitSection.tsx` (~91), `src/ui/webview-react/hooks/useAttachmentTokenCount.ts` (module cache ~28, key ~115)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

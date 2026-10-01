@@ -320,7 +320,7 @@ export function HistorySearchDrawer() {
       // switch to it (and make sure the output section isn't collapsed) so
       // the result is actually visible after navigating.
       ui.setOutputCollapsed(false);
-      ui.setActiveOutputTab(result.workflowKey, OUTPUT_TABS.OUTPUT);
+      ui.forceOutputTabForWorkflow(result.workflowKey, OUTPUT_TABS.OUTPUT);
       const address = {
         workflowKey: result.workflowKey,
         kind: "run" as const,

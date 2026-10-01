@@ -566,6 +566,25 @@ describe("HistorySearchDrawer filters", () => {
     );
   });
 
+  it("selects output for the target workflow instance when opening a result", () => {
+    useUiStore.getState().setLoadedWorkflows([
+      { id: "search-workflow-instance", workflowKey: result.workflowKey } as never,
+    ]);
+    renderSearch();
+    act(() => {
+      useUiStore.getState().setHistorySearchResults([result], false, {
+        totalCount: 1,
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Search Workflow/ }));
+
+    expect(
+      useUiStore.getState().activeOutputTabs["search-workflow-instance"]
+    ).toBe("output");
+    expect(useUiStore.getState().activeOutputTabs[result.workflowKey]).toBeUndefined();
+  });
+
   it("re-issues immediately when the harness filter changes", () => {
     renderSearch();
     fireEvent.click(

@@ -6,11 +6,11 @@ export function isPositionInsideYamlBlockScalar(
   getLineText: (line: number) => string,
   currentLine: number,
   currentCharacter: number,
-  key: string
+  key?: string
 ): boolean {
-  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escapedKey = key?.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const keyPattern = new RegExp(
-    `^(\\s*)(?:-\\s+)?(${escapedKey})\\s*:\\s*(.*)$`
+    `^(\\s*)(?:-\\s+)?(${escapedKey ?? "[\\w-]+"})\\s*:\\s*(.*)$`
   );
 
   for (let line = currentLine; line >= 0; line--) {

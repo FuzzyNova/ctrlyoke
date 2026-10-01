@@ -3171,6 +3171,7 @@ export const PROMPT_PROPERTIES = {
 
   // Workflow-level properties (multi-step format)
   STEPS: "steps",
+  PARALLEL: "parallel",
   FINAL_STEP: "finalStep",
   VARS: "vars",
   WORKTREE: "worktree",

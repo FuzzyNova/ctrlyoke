@@ -732,6 +732,8 @@ interface UiState {
 
   // Terminal tab state (per workflow, defaults to 'output')
   activeOutputTabs: Record<string, OutputTab>;
+  /** Lineages whose output tab should be selected as soon as their instance loads. */
+  pendingOutputTabs: { workflowKey: WorkflowKey; tab: OutputTab }[];
   // Workflows with at least one running terminal session
   terminalActiveWorkflows: Set<string>;
 
@@ -1015,6 +1017,7 @@ interface UiActions {
 
   // Terminal tab switching
   setActiveOutputTab: (workflowId: string, tab: OutputTab) => void;
+  forceOutputTabForWorkflow: (workflowKey: WorkflowKey, tab: OutputTab) => void;
   setTerminalSessionActive: (workflowId: string, active: boolean) => void;
 
   // Terminal session rail layout
@@ -1187,6 +1190,7 @@ const initialState: UiState = {
   contentPreviewModal: null,
   suffixEditConfirmation: null,
   activeOutputTabs: {},
+  pendingOutputTabs: [],
   terminalActiveWorkflows: new Set<string>(),
   terminalRailCollapsed: true,
   terminalRailSizePx: 140,
@@ -1744,13 +1748,32 @@ export const useUiStore = create<UiState & UiActions>()(
       // Every mutation of `loadedWorkflows` reconciles the observed-running
       // ledger from the resulting list, so the two can never drift apart.
       setLoadedWorkflows: (workflows) =>
-        set((state) => ({
-          loadedWorkflows: workflows,
-          observedRunningWorkflowIds: reconcileObservedRunning(
-            state.observedRunningWorkflowIds,
-            workflows
-          ),
-        })),
+        set((state) => {
+          const pendingByKey = new Map<WorkflowKey, OutputTab>(
+            state.pendingOutputTabs.map(
+              ({ workflowKey, tab }) => [workflowKey, tab] as const
+            )
+          );
+          const activeOutputTabs = { ...state.activeOutputTabs };
+          for (const workflow of workflows) {
+            if (!workflow.workflowKey) continue;
+            const tab = pendingByKey.get(workflow.workflowKey);
+            if (tab) activeOutputTabs[workflow.id] = tab;
+            pendingByKey.delete(workflow.workflowKey);
+          }
+          return {
+            loadedWorkflows: workflows,
+            observedRunningWorkflowIds: reconcileObservedRunning(
+              state.observedRunningWorkflowIds,
+              workflows
+            ),
+            activeOutputTabs,
+            pendingOutputTabs: [...pendingByKey].map(([workflowKey, tab]) => ({
+              workflowKey,
+              tab,
+            })),
+          };
+        }),
 
       addLoadedWorkflow: (workflow) =>
         set((state) => {
@@ -1758,12 +1781,23 @@ export const useUiStore = create<UiState & UiActions>()(
             ...state.loadedWorkflows.filter((w) => w.id !== workflow.id),
             workflow,
           ];
+          const pending = state.pendingOutputTabs.find(
+            (item) => item.workflowKey === workflow.workflowKey
+          );
           return {
             loadedWorkflows,
             observedRunningWorkflowIds: reconcileObservedRunning(
               state.observedRunningWorkflowIds,
               loadedWorkflows
             ),
+            activeOutputTabs: pending
+              ? { ...state.activeOutputTabs, [workflow.id]: pending.tab }
+              : state.activeOutputTabs,
+            pendingOutputTabs: pending
+              ? state.pendingOutputTabs.filter(
+                  (item) => item.workflowKey !== workflow.workflowKey
+                )
+              : state.pendingOutputTabs,
           };
         }),
 
@@ -1906,6 +1940,26 @@ export const useUiStore = create<UiState & UiActions>()(
         set((state) => ({
           activeOutputTabs: { ...state.activeOutputTabs, [workflowId]: tab },
         })),
+
+      forceOutputTabForWorkflow: (workflowKey, tab) =>
+        set((state) => {
+          const targetIds = state.loadedWorkflows
+            .filter((workflow) => workflow.workflowKey === workflowKey)
+            .map((workflow) => workflow.id);
+          if (targetIds.length > 0) {
+            const activeOutputTabs = { ...state.activeOutputTabs };
+            for (const id of targetIds) activeOutputTabs[id] = tab;
+            return { activeOutputTabs };
+          }
+          return {
+            pendingOutputTabs: [
+              ...state.pendingOutputTabs.filter(
+                (pending) => pending.workflowKey !== workflowKey
+              ),
+              { workflowKey, tab },
+            ],
+          };
+        }),
 
       setTerminalSessionActive: (workflowId: string, active: boolean) =>
         set((state) => {

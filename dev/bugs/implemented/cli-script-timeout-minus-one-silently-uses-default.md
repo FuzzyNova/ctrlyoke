@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli); reproduced with `out/cli.js`
 - **Area:** `src/cli/CliRunCommandDefinitions.ts` (`--script-timeout` ~169-172, `parseTimeoutSeconds` ~215-226), `src/utils/ConfigurationUtils.ts` (`getScriptTimeoutMs` ~411-419)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
