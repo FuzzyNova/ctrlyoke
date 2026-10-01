@@ -13,10 +13,9 @@ describe("GenericToolCallOutput", () => {
   // one line (a single hidden line renders in full, with no toggle at all).
   const FIXTURE_LINES = 12;
   const HIDDEN_LINES = FIXTURE_LINES - DEFAULT_COLLAPSED_OUTPUT_MAX_LINES;
-  const showMoreLabel = new RegExp(
-    `\\[show ${HIDDEN_LINES} more lines\\]`,
-    "i"
-  );
+  // The hidden-lines notice sits inside the collapsed section, so its parent
+  // is the section root holding the preview text.
+  const hiddenLinesNotice = new RegExp(`${HIDDEN_LINES} more lines \\(click`);
   const lastVisibleLine = DEFAULT_COLLAPSED_OUTPUT_MAX_LINES;
 
   it("preserves uncontrolled expansion behavior by default", async () => {
@@ -41,7 +40,7 @@ describe("GenericToolCallOutput", () => {
       />
     );
 
-    const collapsedOutput = screen.getByText(showMoreLabel).parentElement;
+    const collapsedOutput = screen.getByText(hiddenLinesNotice).parentElement;
 
     expect(
       screen.queryByText("detail: lift expansion state")
@@ -82,13 +81,11 @@ describe("GenericToolCallOutput", () => {
       )
     ).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: showMoreLabel }));
+    await user.click(screen.getByRole("button", { name: "Show full output" }));
     const expandedOutput = screen.getByRole("button", {
-      name: /\[show less\]/i,
+      name: "Hide full output",
     }).parentElement;
-    expect(
-      screen.getByRole("button", { name: /\[show less\]/i })
-    ).toBeInTheDocument();
+    expect(screen.queryByText(hiddenLinesNotice)).not.toBeInTheDocument();
     expect(expandedOutput?.textContent).toContain(
       `line ${lastVisibleLine + 1}`
     );
@@ -126,7 +123,7 @@ describe("GenericToolCallOutput", () => {
       />
     );
 
-    const collapsedError = screen.getByText(showMoreLabel).parentElement;
+    const collapsedError = screen.getByText(hiddenLinesNotice).parentElement;
 
     expect(collapsedError?.textContent).toContain(`error ${lastVisibleLine}`);
     expect(collapsedError?.textContent).not.toContain(
@@ -136,7 +133,7 @@ describe("GenericToolCallOutput", () => {
     await user.click(
       screen.getByRole("button", { name: "Show all parameters" })
     );
-    await user.click(screen.getByRole("button", { name: showMoreLabel }));
+    await user.click(screen.getByRole("button", { name: "Show full error" }));
 
     expect(onExpansionChange).toHaveBeenNthCalledWith(1, "params", true);
     expect(onExpansionChange).toHaveBeenNthCalledWith(2, "error", true);
@@ -144,7 +141,7 @@ describe("GenericToolCallOutput", () => {
       screen.getByRole("button", { name: "Show all parameters" })
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /\[show less\]/i })
+      screen.queryByRole("button", { name: "Hide full error" })
     ).not.toBeInTheDocument();
     expect(
       screen.queryByText("subject: output-layout")
@@ -166,8 +163,9 @@ describe("GenericToolCallOutput", () => {
       />
     );
 
-    const collapsedOutput =
-      screen.getByText("[show more output]").parentElement;
+    const collapsedOutput = screen.getByText(
+      /More output \(click Show full output/
+    ).parentElement;
 
     expect(collapsedOutput?.textContent).not.toContain("x".repeat(1300));
   });
@@ -196,7 +194,7 @@ describe("GenericToolCallOutput", () => {
       />
     );
 
-    expect(screen.getByText("[show 4 more lines]")).toBeInTheDocument();
+    expect(screen.getByText(/4 more lines \(click/)).toBeInTheDocument();
     expect(screen.queryByText("line 5")).not.toBeInTheDocument();
   });
 

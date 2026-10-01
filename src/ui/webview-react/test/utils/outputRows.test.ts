@@ -2134,13 +2134,13 @@ describe("outputRows", () => {
     }
 
     // A ● block's height is exactly my-2 plus whole header and ⎿ result lines —
-    // profiler measurements land on this grid with zero residual. In particular
-    // there is no extra line for the "[show N more lines]" toggle: it is an
-    // inline <button> on the last visible line, not a block of its own.
+    // profiler measurements land on this grid with zero residual. A collapsed
+    // section adds two block lines at the result line height: the "Show full
+    // output" toggle above the preview and the hidden-lines notice below it.
     expect(bashRow.estimateSize).toBe(
       TOOL_CALL_BLOCK_VERTICAL_CHROME +
         toolCallLineHeight(13) +
-        DEFAULT_COLLAPSED_OUTPUT_MAX_LINES * toolResultLineHeight(13)
+        (DEFAULT_COLLAPSED_OUTPUT_MAX_LINES + 2) * toolResultLineHeight(13)
     );
   });
 

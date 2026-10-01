@@ -10,20 +10,21 @@
  */
 import React, { useId, useState } from "react";
 import { extractKeyParameters } from "@utils/outputUtils";
-import { formatCollapsedOutputToggleLabel } from "@utils/outputTruncation";
 import {
   DEFAULT_TOOL_CALL_EXPANSION_STATE,
   buildToolCallRenderPlan,
   getGenericToolCallOutput,
   getGenericToolCallParamsText,
   getVisibleToolCallText,
+  withToolCallSectionExpansion,
   type ToolCallExpansionSection,
   type ToolCallExpansionState,
   type ToolCallRenderPlan,
   type ToolCallSectionRenderPlan,
 } from "@utils/toolCallLayout";
 import { highlightText, type RowFindDecoration } from "@utils/outputFind";
-import { TOOL_RESULT_LINE, TOOL_ERROR_LINE } from "./outputStyles";
+import { TOOL_ERROR_LINE } from "./outputStyles";
+import { CollapsibleOutputSection } from "./CollapsibleOutputSection";
 import { ToolDot } from "./FileOperationOutput";
 import { ToolCallBlock } from "./ToolCallBlock";
 import { ToolCallExpandToggle } from "./ToolCallExpandToggle";
@@ -51,6 +52,71 @@ function resultDotStatus(result?: ToolResult): ToolResultStatus {
   return result.success
     ? TOOL_RESULT_STATUSES.SUCCESS
     : TOOL_RESULT_STATUSES.ERROR;
+}
+
+// ── Shared expansion + result sections ──────────────────────────────────────
+
+/**
+ * Expansion state for a tool call that may be controlled by the output pane
+ * (`expansion` given) or self-managed (standalone renders).
+ */
+function useToolCallExpansion(
+  expansion: ToolCallExpansionState | undefined,
+  onExpansionChange:
+    ((section: ToolCallExpansionSection, expanded: boolean) => void) | undefined
+): [
+  ToolCallExpansionState,
+  (section: ToolCallExpansionSection, expanded: boolean) => void,
+] {
+  const [uncontrolledExpansion, setUncontrolledExpansion] =
+    useState<ToolCallExpansionState>(() => ({
+      ...DEFAULT_TOOL_CALL_EXPANSION_STATE,
+    }));
+  const updateExpansion = (
+    section: ToolCallExpansionSection,
+    expanded: boolean
+  ) => {
+    if (expansion === undefined) {
+      setUncontrolledExpansion((previous) =>
+        withToolCallSectionExpansion(previous, section, expanded)
+      );
+    }
+    onExpansionChange?.(section, expanded);
+  };
+  return [expansion ?? uncontrolledExpansion, updateExpansion];
+}
+
+type ToolResultSectionType =
+  | typeof TOOL_CALL_EXPANSION_SECTIONS.OUTPUT
+  | typeof TOOL_CALL_EXPANSION_SECTIONS.ERROR;
+
+function renderToolResultSection(
+  containerId: string,
+  content: string,
+  type: ToolResultSectionType,
+  sectionPlan: ToolCallSectionRenderPlan,
+  findMatches: RowFindDecoration["matches"] | undefined,
+  updateExpansion: (
+    section: ToolCallExpansionSection,
+    expanded: boolean
+  ) => void
+): React.ReactNode {
+  const isError = type === TOOL_CALL_EXPANSION_SECTIONS.ERROR;
+  return (
+    <CollapsibleOutputSection
+      section={type}
+      contentId={`${containerId}-${type}`}
+      isError={isError}
+      noun={isError ? "error" : "output"}
+      visibleText={getVisibleToolCallText(content, sectionPlan)}
+      findMatches={findMatches}
+      canToggle={sectionPlan.canToggle}
+      isExpanded={sectionPlan.isExpanded}
+      isTruncated={sectionPlan.isTruncated}
+      hiddenLineCount={sectionPlan.hiddenLineCount}
+      onToggle={(expanded) => updateExpansion(type, expanded)}
+    />
+  );
 }
 
 // ============================================================================
@@ -91,12 +157,11 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
   labelContent,
   className = "",
 }) => {
-  const [uncontrolledExpansion, setUncontrolledExpansion] =
-    useState<ToolCallExpansionState>(() => ({
-      ...DEFAULT_TOOL_CALL_EXPANSION_STATE,
-    }));
+  const [resolvedExpansion, updateExpansion] = useToolCallExpansion(
+    expansion,
+    onExpansionChange
+  );
   const containerId = useId();
-  const resolvedExpansion = expansion ?? uncontrolledExpansion;
   const fullParamsText = getGenericToolCallParamsText(parameters);
   const { output: outputStr, error: errorStr } =
     getGenericToolCallOutput(result);
@@ -107,71 +172,6 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
       result,
       expansion: resolvedExpansion,
     });
-
-  const updateExpansion = (
-    section: ToolCallExpansionSection,
-    expanded: boolean
-  ) => {
-    if (expansion === undefined) {
-      setUncontrolledExpansion((previous) => {
-        switch (section) {
-          case TOOL_CALL_EXPANSION_SECTIONS.PARAMS:
-            return { ...previous, paramsExpanded: expanded };
-          case TOOL_CALL_EXPANSION_SECTIONS.OUTPUT:
-            return { ...previous, outputExpanded: expanded };
-          case TOOL_CALL_EXPANSION_SECTIONS.ERROR:
-            return { ...previous, errorExpanded: expanded };
-          case TOOL_CALL_EXPANSION_SECTIONS.RAW:
-            return { ...previous, rawExpanded: expanded };
-          default:
-            return previous;
-        }
-      });
-    }
-    onExpansionChange?.(section, expanded);
-  };
-
-  const renderExpandableSection = (
-    content: string,
-    type: Exclude<
-      ToolCallExpansionSection,
-      typeof TOOL_CALL_EXPANSION_SECTIONS.PARAMS
-    >,
-    sectionPlan: ToolCallSectionRenderPlan,
-    findMatches?: RowFindDecoration["matches"]
-  ) => {
-    const cssClass =
-      type === TOOL_CALL_EXPANSION_SECTIONS.ERROR
-        ? TOOL_ERROR_LINE
-        : TOOL_RESULT_LINE;
-    const visibleText = getVisibleToolCallText(content, sectionPlan);
-
-    return (
-      <div className={`${cssClass} flex items-start gap-1`}>
-        <span className="shrink-0">⎿</span>
-        <div
-          className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]"
-          id={`${containerId}-${type}`}
-        >
-          {highlightText(visibleText, findMatches ?? [])}
-          {sectionPlan.canToggle && (
-            <button
-              type="button"
-              className="text-bash-expand-link no-underline text-[length:var(--cy-output-font-size-sm)] ml-1 cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
-              onClick={(event) => {
-                event.preventDefault();
-                updateExpansion(type, !sectionPlan.isExpanded);
-              }}
-            >
-              {sectionPlan.isExpanded
-                ? "[show less]"
-                : formatCollapsedOutputToggleLabel(sectionPlan, false)}
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  };
 
   return (
     <ToolCallBlock
@@ -210,18 +210,22 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
       )}
 
       {outputStr &&
-        renderExpandableSection(
+        renderToolResultSection(
+          containerId,
           outputStr,
           TOOL_CALL_EXPANSION_SECTIONS.OUTPUT,
           resolvedRenderPlan.output,
-          outputFindMatches
+          outputFindMatches,
+          updateExpansion
         )}
       {errorStr &&
-        renderExpandableSection(
+        renderToolResultSection(
+          containerId,
           errorStr,
           TOOL_CALL_EXPANSION_SECTIONS.ERROR,
           resolvedRenderPlan.error,
-          errorFindMatches
+          errorFindMatches,
+          updateExpansion
         )}
     </ToolCallBlock>
   );
@@ -314,12 +318,11 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
   onExpansionChange,
   className = "",
 }) => {
-  const [uncontrolledExpansion, setUncontrolledExpansion] =
-    useState<ToolCallExpansionState>(() => ({
-      ...DEFAULT_TOOL_CALL_EXPANSION_STATE,
-    }));
+  const [resolvedExpansion, updateExpansion] = useToolCallExpansion(
+    expansion,
+    onExpansionChange
+  );
   const containerId = useId();
-  const resolvedExpansion = expansion ?? uncontrolledExpansion;
 
   const params = extractKeyParameters(name, parameters);
   const fullParamsText = getGenericToolCallParamsText(parameters);
@@ -338,73 +341,6 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
   const summaryAlreadySignalsTruncation = params.includes("...");
   const showSummaryEllipsis =
     showCollapsedParamsIndicator && !summaryAlreadySignalsTruncation;
-
-  const updateExpansion = (
-    section: ToolCallExpansionSection,
-    expanded: boolean
-  ) => {
-    if (expansion === undefined) {
-      setUncontrolledExpansion((previous) => {
-        switch (section) {
-          case TOOL_CALL_EXPANSION_SECTIONS.PARAMS:
-            return { ...previous, paramsExpanded: expanded };
-          case TOOL_CALL_EXPANSION_SECTIONS.OUTPUT:
-            return { ...previous, outputExpanded: expanded };
-          case TOOL_CALL_EXPANSION_SECTIONS.ERROR:
-            return { ...previous, errorExpanded: expanded };
-          default:
-            return previous;
-        }
-      });
-    }
-    onExpansionChange?.(section, expanded);
-  };
-
-  const renderExpandableSection = (
-    content: string,
-    type: Exclude<
-      ToolCallExpansionSection,
-      typeof TOOL_CALL_EXPANSION_SECTIONS.PARAMS
-    >,
-    sectionPlan: ToolCallSectionRenderPlan,
-    findMatches?: RowFindDecoration["matches"]
-  ) => {
-    const cssClass =
-      type === TOOL_CALL_EXPANSION_SECTIONS.ERROR
-        ? TOOL_ERROR_LINE
-        : TOOL_RESULT_LINE;
-    const visibleText = getVisibleToolCallText(content, sectionPlan);
-
-    // Highlight only the visible (possibly truncated) slice — find match
-    // offsets are computed against the full text, but highlightText's
-    // normalizeMatches clips/drops any matches outside [0, visibleText.length],
-    // so matches hidden behind "[show more]" simply don't render a <mark>.
-    return (
-      <div className={`${cssClass} flex items-start gap-1`}>
-        <span className="shrink-0">⎿</span>
-        <div
-          className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]"
-          id={`${containerId}-${type}`}
-        >
-          {highlightText(visibleText, findMatches ?? [])}
-          {sectionPlan.canToggle && (
-            <button
-              type="button"
-              className="text-bash-expand-link no-underline text-[length:var(--cy-output-font-size-sm)] ml-1 cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
-              onClick={(event) => {
-                event.preventDefault();
-                updateExpansion(type, !sectionPlan.isExpanded);
-              }}
-            >
-              {sectionPlan.isExpanded
-                ? "[show less]"
-                : formatCollapsedOutputToggleLabel(sectionPlan, false)}
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  };
 
   return (
     <ToolCallBlock
@@ -450,18 +386,22 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
       )}
 
       {outputStr &&
-        renderExpandableSection(
+        renderToolResultSection(
+          containerId,
           outputStr,
           TOOL_CALL_EXPANSION_SECTIONS.OUTPUT,
           resolvedRenderPlan.output,
-          outputFindMatches
+          outputFindMatches,
+          updateExpansion
         )}
       {errorStr &&
-        renderExpandableSection(
+        renderToolResultSection(
+          containerId,
           errorStr,
           TOOL_CALL_EXPANSION_SECTIONS.ERROR,
           resolvedRenderPlan.error,
-          errorFindMatches
+          errorFindMatches,
+          updateExpansion
         )}
     </ToolCallBlock>
   );

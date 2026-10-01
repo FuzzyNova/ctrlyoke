@@ -5,7 +5,10 @@ import {
   buildCollapsedSingleLinePreview,
   buildCollapsedOutputPreview,
   formatCollapsedOutputToggleLabel,
+  formatFullOutputToggleLabel,
+  formatHiddenOutputNotice,
   formatScriptOutputTailToggleLabel,
+  getCollapsibleOutputChromeLineCount,
   getCollapsedOutputMaxChars,
   splitTextIntoLineSegments,
   takeTrailingLines,
@@ -192,5 +195,44 @@ describe("outputTruncation", () => {
       );
       expect(formatScriptOutputTailToggleLabel(42, true)).toBe("[show less]");
     });
+  });
+});
+
+describe("collapsible output section chrome", () => {
+  it("counts the toggle and the notice while collapsed and truncated", () => {
+    expect(
+      getCollapsibleOutputChromeLineCount({ isTruncated: true }, false)
+    ).toBe(2);
+  });
+
+  it("counts only the toggle once expanded", () => {
+    expect(
+      getCollapsibleOutputChromeLineCount({ isTruncated: false }, true)
+    ).toBe(1);
+  });
+
+  it("adds nothing to a section that fits", () => {
+    expect(
+      getCollapsibleOutputChromeLineCount({ isTruncated: false }, false)
+    ).toBe(0);
+  });
+
+  it("labels the toggle by direction and section", () => {
+    expect(formatFullOutputToggleLabel("output", false)).toBe(
+      "Show full output"
+    );
+    expect(formatFullOutputToggleLabel("error", true)).toBe("Hide full error");
+  });
+
+  it("states the hidden amount and points back at the toggle", () => {
+    expect(formatHiddenOutputNotice(1, "output")).toBe(
+      "\u2026 1 more line (click Show full output to view)"
+    );
+    expect(formatHiddenOutputNotice(1234, "error")).toBe(
+      `\u2026 ${(1234).toLocaleString()} more lines (click Show full error to view)`
+    );
+    expect(formatHiddenOutputNotice(0, "output")).toBe(
+      "\u2026 More output (click Show full output to view)"
+    );
   });
 });

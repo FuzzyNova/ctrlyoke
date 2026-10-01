@@ -14,6 +14,7 @@ import type { DiffGapExpansionState } from "@utils/outputRenderUtils";
 import type { HarnessColorSettings } from "@root/types/CtrlYokeSettings";
 import {
   DEFAULT_TOOL_CALL_EXPANSION_STATE,
+  withToolCallSectionExpansion,
   type ToolCallExpansionSection,
   type ToolCallExpansionState,
 } from "@utils/toolCallLayout";
@@ -34,8 +35,6 @@ import { workflowViewAddressKey } from "@utils/viewAddress";
 import {
   BASH_OUTPUT_EXPANSION_SECTIONS,
   OUTPUT_ROW_KINDS,
-  READ_OUTPUT_EXPANSION_SECTION_PREFIX,
-  TOOL_CALL_EXPANSION_SECTIONS,
 } from "@root/types/DashboardConstants";
 import type {
   OrderedHistoryEntry,
@@ -522,45 +521,14 @@ export function useOutputRowsModel({
       setToolCallExpansionState((previous) => {
         const currentState =
           previous.get(rowKey) ?? DEFAULT_TOOL_CALL_EXPANSION_STATE;
-        const readOutputIndex = section.startsWith(
-          READ_OUTPUT_EXPANSION_SECTION_PREFIX
-        )
-          ? section.slice(READ_OUTPUT_EXPANSION_SECTION_PREFIX.length)
-          : undefined;
-        const nextState: ToolCallExpansionState = {
-          ...currentState,
-          paramsExpanded:
-            section === TOOL_CALL_EXPANSION_SECTIONS.PARAMS
-              ? expanded
-              : currentState.paramsExpanded,
-          outputExpanded:
-            section === TOOL_CALL_EXPANSION_SECTIONS.OUTPUT
-              ? expanded
-              : currentState.outputExpanded,
-          errorExpanded:
-            section === TOOL_CALL_EXPANSION_SECTIONS.ERROR
-              ? expanded
-              : currentState.errorExpanded,
-          rawExpanded:
-            section === TOOL_CALL_EXPANSION_SECTIONS.RAW
-              ? expanded
-              : currentState.rawExpanded,
-          appendStepPromptsExpanded:
-            section === TOOL_CALL_EXPANSION_SECTIONS.APPEND_STEP_PROMPTS
-              ? expanded
-              : currentState.appendStepPromptsExpanded,
-          readOutputExpanded:
-            readOutputIndex !== undefined
-              ? {
-                  ...currentState.readOutputExpanded,
-                  [readOutputIndex]: expanded,
-                }
-              : currentState.readOutputExpanded,
-          listHarnessModelsExpanded:
-            section === TOOL_CALL_EXPANSION_SECTIONS.LIST_HARNESS_MODELS
-              ? expanded
-              : currentState.listHarnessModelsExpanded,
-        };
+        const nextState = withToolCallSectionExpansion(
+          currentState,
+          section,
+          expanded
+        );
+        if (nextState === currentState) {
+          return previous;
+        }
 
         const isDefaultState =
           !nextState.paramsExpanded &&
@@ -572,20 +540,6 @@ export function useOutputRowsModel({
           !nextState.appendStepPromptsExpanded &&
           !nextState.listHarnessModelsExpanded &&
           !Object.values(nextState.readOutputExpanded ?? {}).some(Boolean);
-
-        if (
-          currentState.paramsExpanded === nextState.paramsExpanded &&
-          currentState.outputExpanded === nextState.outputExpanded &&
-          currentState.errorExpanded === nextState.errorExpanded &&
-          currentState.rawExpanded === nextState.rawExpanded &&
-          currentState.appendStepPromptsExpanded ===
-            nextState.appendStepPromptsExpanded &&
-          currentState.listHarnessModelsExpanded ===
-            nextState.listHarnessModelsExpanded &&
-          currentState.readOutputExpanded === nextState.readOutputExpanded
-        ) {
-          return previous;
-        }
 
         const next = new Map(previous);
         if (isDefaultExpansionState) {

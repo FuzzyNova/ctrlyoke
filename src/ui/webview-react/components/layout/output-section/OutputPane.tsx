@@ -1,4 +1,4 @@
-import React, { memo, Profiler } from "react";
+import React, { memo, Profiler, useLayoutEffect, useRef } from "react";
 import { OUTPUT_TABS, type OutputTab } from "@root/types/DashboardConstants";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import {
@@ -31,6 +31,7 @@ import {
   OutputScrollSeekPlaceholder,
   shouldRenderScrollSeekPlaceholder,
 } from "./OutputScrollSeekPlaceholder";
+import { OUTPUT_STICKY_TOP_CSS_VAR } from "@components/output/outputStyles";
 import { Icon } from "../../shared/Icon";
 
 interface OutputPaneProps {
@@ -216,6 +217,30 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
     onWheel,
   } = props;
 
+  // Sticky section toggles must stop below a pinned banner, whose height
+  // changes with its content (worktree buttons, wrapping on narrow panes).
+  const runBannerRef = useRef<HTMLDivElement>(null);
+  const hasRunBanner = runBanner !== undefined;
+  useLayoutEffect(() => {
+    const scrollElement = scrollContainerRef.current;
+    const banner = runBannerRef.current;
+    if (!scrollElement) return;
+    if (!isRunBannerPinned || !hasRunBanner || !banner) {
+      scrollElement.style.removeProperty(OUTPUT_STICKY_TOP_CSS_VAR);
+      return;
+    }
+    const applyOffset = () =>
+      scrollElement.style.setProperty(
+        OUTPUT_STICKY_TOP_CSS_VAR,
+        `${banner.offsetHeight}px`
+      );
+    applyOffset();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(applyOffset);
+    observer.observe(banner);
+    return () => observer.disconnect();
+  }, [hasRunBanner, isRunBannerPinned, scrollContainerRef]);
+
   const handleCopyCapture = (event: React.ClipboardEvent<HTMLDivElement>) => {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return;
@@ -295,6 +320,7 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
             address={runBanner.address}
             isPinned={isRunBannerPinned}
             onTogglePinned={onToggleRunBannerPinned}
+            containerRef={runBannerRef}
             showBackToLive={showBackToLive}
             onBackToLive={onBackToLive}
           />

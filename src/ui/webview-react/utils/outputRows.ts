@@ -72,6 +72,7 @@ import {
   buildCollapsedSingleLinePreview,
   buildCollapsedOutputPreview,
   getCollapsedOutputMaxChars,
+  getCollapsibleOutputChromeLineCount,
   stripTrailingNewline,
   splitTextIntoLineSegments,
   takeTrailingLines,
@@ -1360,12 +1361,8 @@ function estimateBashOutputHeight(
       maxLines: maxResultLines,
       maxChars: maxResultCharacters,
     });
-    // The "[show N more lines]" toggle is an inline <button> appended to the
-    // last visible line, not a block of its own — it only costs a line when it
-    // happens to wrap. Charging it a full line unconditionally was the single
-    // largest bias on this row kind.
     totalHeight +=
-      estimateWrappedLineCount(
+      (estimateWrappedLineCount(
         stripTrailingNewline(preview.visibleText),
         outputContentWidth,
         outputFontSize - 1,
@@ -1375,7 +1372,9 @@ function estimateBashOutputHeight(
             toolResultPrefixWidth(outputFontSize),
           charWidthMultiplier: 0.6,
         }
-      ) * toolResultLineHeight(outputFontSize);
+      ) +
+        getCollapsibleOutputChromeLineCount(preview, expanded)) *
+      toolResultLineHeight(outputFontSize);
   }
 
   return totalHeight + TOOL_CALL_BLOCK_HALF_VERTICAL_CHROME;

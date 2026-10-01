@@ -128,9 +128,9 @@ describe("BashOutput", () => {
     expect(screen.getByText(/exit: 1/)).toBeInTheDocument();
   });
 
-  it("truncates long output and shows 'show more' link", () => {
+  it("collapses long output behind a toggle above it and a notice below it", () => {
     const lines = Array.from({ length: 20 }, (_, i) => `line ${i}`).join("\n");
-    render(
+    const { container } = render(
       <BashOutput
         command="cat"
         output={lines}
@@ -138,7 +138,19 @@ describe("BashOutput", () => {
         maxLines={10}
       />
     );
-    expect(screen.getByText(/show .* more line/i)).toBeInTheDocument();
+    const toggle = screen.getByRole("button", { name: "Show full output" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    const notice = screen.getByText(
+      "… 10 more lines (click Show full output to view)"
+    );
+    expect(notice.closest("button")).toBeNull();
+
+    // Toggle first, then the text, then the notice: expanding grows the
+    // section downward from the toggle instead of moving it.
+    const text = screen.getByText(/line 0/);
+    const order = Array.from(container.querySelectorAll("*"));
+    expect(order.indexOf(toggle)).toBeLessThan(order.indexOf(text));
+    expect(order.indexOf(text)).toBeLessThan(order.indexOf(notice));
   });
 
   it("uses the supplied collapsed result line count", () => {
@@ -154,7 +166,9 @@ describe("BashOutput", () => {
       />
     );
 
-    expect(screen.getByText("[show 4 more lines]")).toBeInTheDocument();
+    expect(
+      screen.getByText("… 4 more lines (click Show full output to view)")
+    ).toBeInTheDocument();
     expect(screen.queryByText("line 5")).not.toBeInTheDocument();
   });
 
@@ -169,11 +183,13 @@ describe("BashOutput", () => {
       />
     );
 
-    expect(screen.getByText("[show more output]")).toBeInTheDocument();
+    expect(
+      screen.getByText("… More output (click Show full output to view)")
+    ).toBeInTheDocument();
     expect(container.textContent).not.toContain("x".repeat(1300));
   });
 
-  it("expands output when 'show more' link clicked", async () => {
+  it("expands output when the toggle is clicked", async () => {
     const user = userEvent.setup();
     const lines = Array.from({ length: 20 }, (_, i) => `line ${i}`).join("\n");
     render(
@@ -184,16 +200,15 @@ describe("BashOutput", () => {
         maxLines={10}
       />
     );
-    await user.click(
-      screen.getByRole("button", { name: /show .* more line/i })
-    );
+    await user.click(screen.getByRole("button", { name: "Show full output" }));
     expect(
-      screen.getByRole("button", { name: /show less/i })
-    ).toBeInTheDocument();
+      screen.getByRole("button", { name: "Hide full output" })
+    ).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText(/line 19/)).toBeInTheDocument();
+    expect(screen.queryByText(/more lines/)).not.toBeInTheDocument();
   });
 
-  it("collapses output when 'show less' clicked", async () => {
+  it("collapses output when the toggle is clicked again", async () => {
     const user = userEvent.setup();
     const lines = Array.from({ length: 20 }, (_, i) => `line ${i}`).join("\n");
     render(
@@ -204,16 +219,29 @@ describe("BashOutput", () => {
         maxLines={10}
       />
     );
-    await user.click(
-      screen.getByRole("button", { name: /show .* more line/i })
-    );
-    await user.click(screen.getByRole("button", { name: /show less/i }));
+    await user.click(screen.getByRole("button", { name: "Show full output" }));
+    await user.click(screen.getByRole("button", { name: "Hide full output" }));
     expect(
-      screen.getByRole("button", { name: /show .* more line/i })
+      screen.getByRole("button", { name: "Show full output" })
     ).toBeInTheDocument();
   });
 
-  it("does not show expand link when output fits in maxLines", () => {
+  it("names the toggle after the error section it controls", () => {
+    const lines = Array.from({ length: 20 }, (_, i) => `err ${i}`).join("\n");
+    render(
+      <BashOutput
+        command="cat"
+        error={lines}
+        status={OPERATION_STATUS.FAILED}
+        maxLines={10}
+      />
+    );
+    expect(
+      screen.getByRole("button", { name: "Show full error" })
+    ).toBeInTheDocument();
+  });
+
+  it("does not show a toggle when output fits in maxLines", () => {
     render(
       <BashOutput
         command="ls"
@@ -222,7 +250,10 @@ describe("BashOutput", () => {
         maxLines={10}
       />
     );
-    expect(screen.queryByText(/show .* more line/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /full output/ })
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/more line/)).not.toBeInTheDocument();
   });
 
   it("renders without status prop (treats as completed)", () => {
@@ -257,7 +288,7 @@ describe("BashOutput", () => {
     expect(marks[1].textContent).toBe("alpha");
   });
 
-  it("does not render a mark for a find match hidden behind 'show more'", () => {
+  it("does not render a mark for a find match hidden by the collapse", () => {
     const lines = Array.from({ length: 20 }, (_, i) => `line ${i}`).join("\n");
     const hiddenMatchStart = lines.indexOf("line 19");
     const { container } = render(
@@ -277,7 +308,7 @@ describe("BashOutput", () => {
     );
 
     expect(container.querySelector("mark")).toBeNull();
-    expect(screen.getByText(/show .* more line/i)).toBeInTheDocument();
+    expect(screen.getByText(/10 more lines/)).toBeInTheDocument();
   });
 
   it("strips ANSI and control characters from command output", () => {

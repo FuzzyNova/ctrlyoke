@@ -3,14 +3,20 @@ import {
   DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS,
   DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
   buildCollapsedOutputPreview,
+  canToggleCollapsedOutput,
   getCollapsedOutputMaxChars,
+  getCollapsibleOutputChromeLineCount,
 } from "./outputTruncation";
 import {
   DEFAULT_OUTPUT_FONT_SIZE,
   toolCallLineHeight,
   toolResultLineHeight,
 } from "./outputLineMetrics";
-import type { ToolCallExpansionSection as SharedToolCallExpansionSection } from "@root/types/DashboardConstants";
+import {
+  READ_OUTPUT_EXPANSION_SECTION_PREFIX,
+  TOOL_CALL_EXPANSION_SECTIONS,
+  type ToolCallExpansionSection as SharedToolCallExpansionSection,
+} from "@root/types/DashboardConstants";
 
 export interface ToolCallExpansionState {
   paramsExpanded: boolean;
@@ -34,6 +40,59 @@ export const DEFAULT_TOOL_CALL_EXPANSION_STATE: Readonly<ToolCallExpansionState>
     readOutputExpanded: {},
     listHarnessModelsExpanded: false,
   });
+
+type ToolCallFlagSection =
+  (typeof TOOL_CALL_EXPANSION_SECTIONS)[keyof typeof TOOL_CALL_EXPANSION_SECTIONS];
+
+const TOOL_CALL_SECTION_EXPANSION_FIELDS: Record<
+  ToolCallFlagSection,
+  Exclude<keyof ToolCallExpansionState, "readOutputExpanded">
+> = {
+  [TOOL_CALL_EXPANSION_SECTIONS.PARAMS]: "paramsExpanded",
+  [TOOL_CALL_EXPANSION_SECTIONS.OUTPUT]: "outputExpanded",
+  [TOOL_CALL_EXPANSION_SECTIONS.ERROR]: "errorExpanded",
+  [TOOL_CALL_EXPANSION_SECTIONS.RAW]: "rawExpanded",
+  [TOOL_CALL_EXPANSION_SECTIONS.APPEND_STEP_PROMPTS]:
+    "appendStepPromptsExpanded",
+  [TOOL_CALL_EXPANSION_SECTIONS.LIST_HARNESS_MODELS]:
+    "listHarnessModelsExpanded",
+};
+
+function isReadOutputExpansionSection(
+  section: ToolCallExpansionSection
+): section is `${typeof READ_OUTPUT_EXPANSION_SECTION_PREFIX}${number}` {
+  return section.startsWith(READ_OUTPUT_EXPANSION_SECTION_PREFIX);
+}
+
+/**
+ * Applies one section's expand/collapse to a tool call's expansion state.
+ * Shared by the uncontrolled tool-call components and the output pane's
+ * per-row expansion map. Returns `state` itself when nothing changes.
+ */
+export function withToolCallSectionExpansion(
+  state: ToolCallExpansionState,
+  section: ToolCallExpansionSection,
+  expanded: boolean
+): ToolCallExpansionState {
+  if (isReadOutputExpansionSection(section)) {
+    const readOutputIndex = section.slice(
+      READ_OUTPUT_EXPANSION_SECTION_PREFIX.length
+    );
+    if ((state.readOutputExpanded?.[readOutputIndex] ?? false) === expanded) {
+      return state;
+    }
+    return {
+      ...state,
+      readOutputExpanded: {
+        ...state.readOutputExpanded,
+        [readOutputIndex]: expanded,
+      },
+    };
+  }
+  const field = TOOL_CALL_SECTION_EXPANSION_FIELDS[section];
+  if ((state[field] ?? false) === expanded) return state;
+  return { ...state, [field]: expanded };
+}
 
 export const GENERIC_TOOL_CALL_MAX_RESULT_LINES =
   DEFAULT_COLLAPSED_OUTPUT_MAX_LINES;
@@ -150,10 +209,7 @@ function buildResultSectionRenderPlan(
     maxLines: maxResultLines,
     maxChars: maxResultChars,
   });
-  // When only 1 line would be hidden, buildCollapsedOutputPreview returns the
-  // full text (isTruncated=false). Use expanded || isTruncated so the
-  // "[show less]" button is still available when the section is expanded.
-  const canToggle = expanded || preview.isTruncated;
+  const canToggle = canToggleCollapsedOutput(preview, expanded);
 
   // Count visual lines (with wrapping) when content width is known.
   // Raw countLines() misses wrap-induced lines — output text uses whitespace-pre-wrap
@@ -186,7 +242,11 @@ function buildResultSectionRenderPlan(
     visibleLineCount: preview.visibleLineCount,
     hiddenLineCount: preview.hiddenLineCount,
     visibleText: preview.visibleText,
-    height: visualLineCount * sectionLineHeight + TOOL_CALL_RESULT_BOTTOM_GAP,
+    height:
+      (visualLineCount +
+        getCollapsibleOutputChromeLineCount(preview, expanded)) *
+        sectionLineHeight +
+      TOOL_CALL_RESULT_BOTTOM_GAP,
   };
 }
 

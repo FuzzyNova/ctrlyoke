@@ -88,7 +88,13 @@ import {
   getDistanceFromBottomPx,
   nextAutoscrollArmed,
   resolveDiffGapExpansionScrollTarget,
+  resolveTogglePinScrollTarget,
 } from "@utils/outputAutoscroll";
+import {
+  OutputTogglePinContext,
+  collapsibleOutputSectionSelector,
+  getEnclosingCollapsibleOutputSection,
+} from "@components/output/CollapsibleOutputSection";
 import {
   KEYBOARD_KEYS,
   WORKFLOW_VIEW_ADDRESS_KIND,
@@ -719,6 +725,73 @@ const OutputSectionInner: React.FC = () => {
     if (repointedTarget) {
       scrollTargetRef.current = repointedTarget;
     }
+  }, [rows, scrollTargetRef, outputRef]);
+
+  // A "Show full output" toggle sits above the text it controls, so the
+  // section grows and shrinks *below* it; holding the toggle where it was
+  // clicked is what keeps the click from moving anything the user was looking
+  // at. The pane anchors on the toggle's row at the offset that puts the
+  // toggle back at its clicked position. This also covers following the
+  // bottom (which would otherwise push the toggle up by the growth) and a
+  // sticky "Hide" clicked deep inside a long output (whose row then shrinks to
+  // far above the viewport). Like the diff-gap pin above, it must run before
+  // useOutputScrollTarget's layout effect in the same commit.
+  const pendingTogglePinRef = useRef<{
+    rowKey: string;
+    section: string;
+    toggleViewportTopPx: number;
+  } | null>(null);
+
+  const pinOutputToggle = useCallback(
+    (toggle: HTMLElement) => {
+      const scrollElement = outputRef.current;
+      const rowKey =
+        toggle.closest<HTMLElement>("[data-row-key]")?.dataset.rowKey;
+      const section = getEnclosingCollapsibleOutputSection(toggle);
+      if (!scrollElement || !rowKey || !section) return;
+      const pin = {
+        rowKey,
+        section,
+        toggleViewportTopPx:
+          toggle.getBoundingClientRect().top -
+          scrollElement.getBoundingClientRect().top,
+      };
+      pendingTogglePinRef.current = pin;
+      // The click's re-render commits before the next frame; a pin still
+      // pending by then had nothing to hold and must not fire on some later,
+      // unrelated rows update.
+      requestAnimationFrame(() => {
+        if (pendingTogglePinRef.current === pin) {
+          pendingTogglePinRef.current = null;
+        }
+      });
+    },
+    [outputRef]
+  );
+
+  useLayoutEffect(() => {
+    const pending = pendingTogglePinRef.current;
+    if (!pending) return;
+    pendingTogglePinRef.current = null;
+
+    const scrollElement = outputRef.current;
+    const rowElement = scrollElement
+      ? findRenderedRowElementByKey(scrollElement, pending.rowKey)
+      : null;
+    const sectionElement = rowElement?.querySelector<HTMLElement>(
+      collapsibleOutputSectionSelector(pending.section)
+    );
+    if (!rowElement || !sectionElement) return;
+
+    // The toggle is the section's first line, so the section's own top is the
+    // toggle's natural (unstuck) position within the row.
+    autoscrollEnabled.current = false;
+    scrollTargetRef.current = resolveTogglePinScrollTarget(
+      pending.rowKey,
+      pending.toggleViewportTopPx,
+      sectionElement.getBoundingClientRect().top -
+        rowElement.getBoundingClientRect().top
+    );
   }, [rows, scrollTargetRef, outputRef]);
 
   const {
@@ -1615,62 +1688,68 @@ const OutputSectionInner: React.FC = () => {
           <TerminalView workflowId={terminalWorkflowId} />
         </div>
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <OutputPane
-            activeOutputTab={activeOutputTab}
-            activeMatch={activeMatch}
-            bashExpansionState={bashExpansionState}
-            contentHeight={rowLayout.totalSize}
-            findBar={findBar}
-            findDecorations={rowDecorations}
-            findQuery={findState.isOpen ? findState.query : undefined}
-            findCaseSensitive={findState.caseSensitive}
-            atomicContextReferences={atomicContextReferences}
-            hasOutput={hasOutput}
-            isExecutionActive={isExecutionActive}
-            isNavigationTargetVirtualized={isNavigationTargetVirtualized}
-            isOutputCollapsed={outputCollapsed}
-            isOutputScrollSeeking={isOutputScrollSeeking}
-            isOutputVirtualized={isOutputVirtualized}
-            minimapSteps={minimapSteps}
-            nonVirtualRows={nonVirtualRows}
-            nonVirtualSpacerHeight={nonVirtualSpacerHeight}
-            outputRef={mergedOutputRef}
-            scrollContainerRef={outputRef}
-            renderedScrollSeekIndices={renderedScrollSeekIndices}
-            rows={rows}
-            showVirtualizationOverlay={showVirtualizationOverlay}
-            virtualRows={virtualRows}
-            virtualizedTotalSize={rowVirtualizer.getTotalSize()}
-            measureRowElement={measureRowElement}
-            measureStaticRowElement={measureStaticRowElement}
-            runBanner={displayedRunBanner}
-            workspaceWorktreeOwnership={workspaceWorktreeOwnership ?? undefined}
-            isRunBannerPinned={runBannerPinned}
-            onToggleRunBannerPinned={toggleRunBannerPinned}
-            showBackToLive={isViewingHistory && isExecutionActive}
-            onBackToLive={handleBackToLive}
-            onBashExpansionChange={handleBashExpansionChange}
-            onScriptVerdictExpansionChange={handleScriptVerdictExpansionChange}
-            onScriptOutputExpansionChange={handleScriptOutputExpansionChange}
-            onAttemptGroupToggle={handleAttemptGroupToggle}
-            onContextMenuOpen={openContextMenu}
-            onDiffCollapsedChange={handleDiffCollapsedChange}
-            onDiffGapExpand={handleDiffGapExpandWithScrollPin}
-            onFileUndo={handleFileUndo}
-            hiddenActivityTargetKeys={hiddenActivityTargetKeys}
-            onMinimapStepClick={handleMinimapStepClick}
-            onMinimapStepToggle={handleMinimapStepToggle}
-            onMinimapStepSolo={handleMinimapStepSolo}
-            onOutputProfilerRender={handleOutputProfilerRender}
-            onPromptView={handlePromptView}
-            onScroll={handleScroll}
-            onToolCallExpansionChange={handleToolCallExpansionChange}
-            onTouchCancel={handleOutputTouchCancel}
-            onTouchEnd={handleOutputTouchEnd}
-            onTouchMove={handleOutputTouchMove}
-            onTouchStart={handleOutputTouchStart}
-            onWheel={handleWheel}
-          />
+          <OutputTogglePinContext.Provider value={pinOutputToggle}>
+            <OutputPane
+              activeOutputTab={activeOutputTab}
+              activeMatch={activeMatch}
+              bashExpansionState={bashExpansionState}
+              contentHeight={rowLayout.totalSize}
+              findBar={findBar}
+              findDecorations={rowDecorations}
+              findQuery={findState.isOpen ? findState.query : undefined}
+              findCaseSensitive={findState.caseSensitive}
+              atomicContextReferences={atomicContextReferences}
+              hasOutput={hasOutput}
+              isExecutionActive={isExecutionActive}
+              isNavigationTargetVirtualized={isNavigationTargetVirtualized}
+              isOutputCollapsed={outputCollapsed}
+              isOutputScrollSeeking={isOutputScrollSeeking}
+              isOutputVirtualized={isOutputVirtualized}
+              minimapSteps={minimapSteps}
+              nonVirtualRows={nonVirtualRows}
+              nonVirtualSpacerHeight={nonVirtualSpacerHeight}
+              outputRef={mergedOutputRef}
+              scrollContainerRef={outputRef}
+              renderedScrollSeekIndices={renderedScrollSeekIndices}
+              rows={rows}
+              showVirtualizationOverlay={showVirtualizationOverlay}
+              virtualRows={virtualRows}
+              virtualizedTotalSize={rowVirtualizer.getTotalSize()}
+              measureRowElement={measureRowElement}
+              measureStaticRowElement={measureStaticRowElement}
+              runBanner={displayedRunBanner}
+              workspaceWorktreeOwnership={
+                workspaceWorktreeOwnership ?? undefined
+              }
+              isRunBannerPinned={runBannerPinned}
+              onToggleRunBannerPinned={toggleRunBannerPinned}
+              showBackToLive={isViewingHistory && isExecutionActive}
+              onBackToLive={handleBackToLive}
+              onBashExpansionChange={handleBashExpansionChange}
+              onScriptVerdictExpansionChange={
+                handleScriptVerdictExpansionChange
+              }
+              onScriptOutputExpansionChange={handleScriptOutputExpansionChange}
+              onAttemptGroupToggle={handleAttemptGroupToggle}
+              onContextMenuOpen={openContextMenu}
+              onDiffCollapsedChange={handleDiffCollapsedChange}
+              onDiffGapExpand={handleDiffGapExpandWithScrollPin}
+              onFileUndo={handleFileUndo}
+              hiddenActivityTargetKeys={hiddenActivityTargetKeys}
+              onMinimapStepClick={handleMinimapStepClick}
+              onMinimapStepToggle={handleMinimapStepToggle}
+              onMinimapStepSolo={handleMinimapStepSolo}
+              onOutputProfilerRender={handleOutputProfilerRender}
+              onPromptView={handlePromptView}
+              onScroll={handleScroll}
+              onToolCallExpansionChange={handleToolCallExpansionChange}
+              onTouchCancel={handleOutputTouchCancel}
+              onTouchEnd={handleOutputTouchEnd}
+              onTouchMove={handleOutputTouchMove}
+              onTouchStart={handleOutputTouchStart}
+              onWheel={handleWheel}
+            />
+          </OutputTogglePinContext.Provider>
         </div>
       </div>
 

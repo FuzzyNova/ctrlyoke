@@ -325,3 +325,22 @@ export function resolveDiffGapExpansionScrollTarget(
     viewportOffsetPx: currentTarget.viewportOffsetPx - insertedHeightPx,
   };
 }
+
+/**
+ * Anchors the pane on the row holding a clicked section toggle so the toggle
+ * lands back where it was clicked once the section has grown or shrunk below
+ * it. `toggleOffsetInRowPx` is the toggle's *natural* offset from its row's
+ * top after the change — not its sticky position, which depends on the very
+ * scroll offset being solved for.
+ */
+export function resolveTogglePinScrollTarget(
+  rowKey: string,
+  toggleViewportTopPx: number,
+  toggleOffsetInRowPx: number
+): OutputScrollTarget {
+  return {
+    kind: OUTPUT_SCROLL_TARGET_KINDS.ROW,
+    rowKey,
+    viewportOffsetPx: toggleViewportTopPx - toggleOffsetInRowPx,
+  };
+}

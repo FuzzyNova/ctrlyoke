@@ -6,10 +6,10 @@ import {
   DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
   buildCollapsedSingleLinePreview,
   buildCollapsedOutputPreview,
-  formatCollapsedOutputToggleLabel,
+  canToggleCollapsedOutput,
 } from "@utils/outputTruncation";
 import { highlightText, type RowFindDecoration } from "@utils/outputFind";
-import { TOOL_RESULT_LINE, TOOL_ERROR_LINE } from "./outputStyles";
+import { CollapsibleOutputSection } from "./CollapsibleOutputSection";
 import { ToolCallBlock } from "./ToolCallBlock";
 import { ToolCallExpandToggle } from "./ToolCallExpandToggle";
 import type { FileOperationStatus } from "../../types/cliEvents";
@@ -70,7 +70,7 @@ export const DEFAULT_BASH_OUTPUT_EXPANSION_STATE: Readonly<BashOutputExpansionSt
  * - Command shown with bullet prefix
  * - Output/error with ⎿ prefix
  * - Exit code with color-coded status badge
- * - Expandable long content with "show more" link
+ * - Long output collapsed behind a "Show full output" toggle above it
  *
  * Wrapped in React.memo so completed bash steps do not re-render when
  * other steps are streaming.
@@ -143,7 +143,6 @@ export const BashOutput = memo<BashOutputProps>(
       status === OPERATION_STATUS.FAILED ||
       !status;
 
-    // Render expandable content.
     // Only the visible slice is in the DOM — the full string is not kept in the
     // React tree when collapsed, preventing large bash outputs from accumulating
     // DOM nodes even when hidden.
@@ -163,39 +162,22 @@ export const BashOutput = memo<BashOutputProps>(
         maxLines,
         maxChars: maxCharacters,
       });
-      const canToggle = isExpanded || preview.isTruncated;
+      const isError = type === BASH_OUTPUT_EXPANSION_SECTIONS.ERROR;
 
-      const cssClass =
-        type === BASH_OUTPUT_EXPANSION_SECTIONS.ERROR
-          ? TOOL_ERROR_LINE
-          : TOOL_RESULT_LINE;
-
-      // Highlight only the visible (possibly truncated) slice — find match
-      // offsets are computed against the full text, but highlightText's
-      // normalizeMatches clips/drops any matches outside [0, visibleText.length],
-      // so matches hidden behind "[show more]" simply don't render a <mark>.
       return (
-        <div className={`${cssClass} flex items-start gap-1`}>
-          <span className="shrink-0">⎿</span>
-          <div
-            className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]"
-            id={`${containerId}-${type}`}
-          >
-            {highlightText(preview.visibleText, findMatches ?? [])}
-            {canToggle && (
-              <button
-                type="button"
-                className="text-bash-expand-link no-underline text-[length:var(--cy-output-font-size-sm)] ml-1 cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
-                onClick={(event) => {
-                  event.preventDefault();
-                  updateExpansion(type, !isExpanded);
-                }}
-              >
-                {formatCollapsedOutputToggleLabel(preview, isExpanded)}
-              </button>
-            )}
-          </div>
-        </div>
+        <CollapsibleOutputSection
+          section={type}
+          contentId={`${containerId}-${type}`}
+          isError={isError}
+          noun={isError ? "error" : "output"}
+          visibleText={preview.visibleText}
+          findMatches={findMatches}
+          canToggle={canToggleCollapsedOutput(preview, isExpanded)}
+          isExpanded={isExpanded}
+          isTruncated={preview.isTruncated}
+          hiddenLineCount={preview.hiddenLineCount}
+          onToggle={(expanded) => updateExpansion(type, expanded)}
+        />
       );
     };
 

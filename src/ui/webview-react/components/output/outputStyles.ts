@@ -68,3 +68,11 @@ export function getStepIdentityBarStyle(color: string): {
     backgroundImage: `linear-gradient(to right, transparent 0, transparent ${STEP_IDENTITY_BAR_OFFSET_PX}px, ${color} ${STEP_IDENTITY_BAR_OFFSET_PX}px, ${color} ${barEnd}px, transparent ${barEnd}px)`,
   };
 }
+
+/**
+ * Top offset for content that sticks inside the output pane, set on the scroll
+ * container to the pinned run banner's height (0 when unpinned) so sticky
+ * toggles stop below the banner instead of under it. Tailwind classes must
+ * spell it literally: `top-[var(--cy-output-sticky-top,0px)]`.
+ */
+export const OUTPUT_STICKY_TOP_CSS_VAR = "--cy-output-sticky-top";

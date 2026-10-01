@@ -9,6 +9,7 @@ import {
   nextAutoscrollArmed,
   resolveDeferredScrollTargetApplyDelayMs,
   resolveDiffGapExpansionScrollTarget,
+  resolveTogglePinScrollTarget,
   shouldSyncMeasurementCorrection,
   type AutoscrollLatchInput,
   type OutputScrollAttributionInput,
@@ -449,5 +450,26 @@ describe("resolveDiffGapExpansionScrollTarget", () => {
     expect(
       resolveDiffGapExpansionScrollTarget(anchoredRow, "diff-row", 0.4)
     ).toBeNull();
+  });
+});
+
+describe("resolveTogglePinScrollTarget", () => {
+  it("anchors the toggle's row so the toggle lands where it was clicked", () => {
+    // Toggle clicked 300px down the viewport, 40px below its row's top.
+    expect(resolveTogglePinScrollTarget("row-a", 300, 40)).toEqual({
+      kind: "row",
+      rowKey: "row-a",
+      viewportOffsetPx: 260,
+    });
+  });
+
+  it("allows a row top above the viewport for a toggle deep inside its row", () => {
+    // A sticky "Hide" clicked at the top of the pane, whose natural position
+    // is 900px into a long row: the row top must sit 900px above the viewport.
+    expect(resolveTogglePinScrollTarget("row-a", 0, 900)).toEqual({
+      kind: "row",
+      rowKey: "row-a",
+      viewportOffsetPx: -900,
+    });
   });
 });

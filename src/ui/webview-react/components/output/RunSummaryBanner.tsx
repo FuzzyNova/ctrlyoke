@@ -157,6 +157,8 @@ export interface RunSummaryBannerProps extends RunBannerData {
   /** True while browsing history and a different run is executing live. */
   showBackToLive: boolean;
   onBackToLive?: () => void;
+  /** Root element, measured by the pane to offset sticky content below it. */
+  containerRef?: React.Ref<HTMLDivElement>;
 }
 
 export const WorkspaceWorktreeOwnershipBanner: React.FC<{
@@ -189,6 +191,7 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
   onTogglePinned,
   showBackToLive,
   onBackToLive,
+  containerRef,
 }) => {
   const worktreeOutcome = worktree
     ? formatWorktreeOutcome(worktree)
@@ -226,6 +229,7 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
 
   return (
     <div
+      ref={containerRef}
       className={`flex flex-col gap-1 px-3 py-1.5 text-[length:var(--cy-output-font-size-sm)] text-description-fg bg-editor-bg border-b border-widget-border flex-shrink-0 ${
         isPinned ? "sticky top-0 z-header" : ""
       }`}

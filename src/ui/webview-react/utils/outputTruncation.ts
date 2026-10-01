@@ -269,6 +269,53 @@ export function formatCollapsedOutputToggleLabel(
   }]`;
 }
 
+/**
+ * Whether a collapsible output section offers its "Show full output" toggle.
+ * An expanded section always does, so it can be collapsed again.
+ */
+export function canToggleCollapsedOutput(
+  preview: Pick<CollapsedOutputPreview, "isTruncated">,
+  expanded: boolean
+): boolean {
+  return expanded || preview.isTruncated;
+}
+
+/**
+ * Block lines a collapsible output section adds around its text: the toggle
+ * line above it, plus the hidden-lines notice below it while collapsed. Single
+ * source for `CollapsibleOutputSection` and every height estimator that sizes
+ * one, so the two cannot drift.
+ */
+export function getCollapsibleOutputChromeLineCount(
+  preview: Pick<CollapsedOutputPreview, "isTruncated">,
+  expanded: boolean
+): number {
+  const toggleLine = canToggleCollapsedOutput(preview, expanded) ? 1 : 0;
+  const noticeLine = !expanded && preview.isTruncated ? 1 : 0;
+  return toggleLine + noticeLine;
+}
+
+export function formatFullOutputToggleLabel(
+  noun: string,
+  expanded: boolean
+): string {
+  return `${expanded ? "Hide" : "Show"} full ${noun}`;
+}
+
+/** Non-interactive notice under a collapsed section; the toggle sits above. */
+export function formatHiddenOutputNotice(
+  hiddenLineCount: number,
+  noun: string
+): string {
+  const amount =
+    hiddenLineCount > 0
+      ? `${hiddenLineCount.toLocaleString()} more line${
+          hiddenLineCount !== 1 ? "s" : ""
+        }`
+      : `More ${noun}`;
+  return `… ${amount} (click Show full ${noun} to view)`;
+}
+
 export function buildCollapsedSingleLinePreview(
   text: string,
   {

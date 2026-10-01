@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   buildToolCallRenderPlan,
+  DEFAULT_TOOL_CALL_EXPANSION_STATE,
   getVisibleToolCallText,
+  withToolCallSectionExpansion,
 } from "@utils/toolCallLayout";
+import { toolResultLineHeight } from "@utils/outputLineMetrics";
+import { readOutputExpansionSection } from "@root/types/DashboardConstants";
 
 describe("toolCallLayout", () => {
   const parameters = {
@@ -130,5 +134,72 @@ describe("toolCallLayout", () => {
     expect(getVisibleToolCallText(longOutput, renderPlan.output)).toHaveLength(
       1200
     );
+  });
+});
+
+describe("toolCallLayout collapsible section height", () => {
+  const output = Array.from(
+    { length: 20 },
+    (_, index) => `line ${index + 1}`
+  ).join("\n");
+
+  it("charges the toggle and notice lines while collapsed, the toggle once expanded", () => {
+    const plan = (outputExpanded: boolean) =>
+      buildToolCallRenderPlan({
+        result: { success: true, output },
+        expansion: {
+          paramsExpanded: false,
+          outputExpanded,
+          errorExpanded: false,
+        },
+        outputFontSize: 13,
+        maxResultLines: 5,
+      }).output;
+    const lineHeight = toolResultLineHeight(13);
+
+    const collapsed = plan(false);
+    const expanded = plan(true);
+    // Collapsed: 5 preview lines + toggle + notice. Expanded: 20 + toggle.
+    expect(expanded.height - collapsed.height).toBeCloseTo(
+      (20 + 1 - (5 + 2)) * lineHeight
+    );
+  });
+});
+
+describe("withToolCallSectionExpansion", () => {
+  it("sets the flag for a named section", () => {
+    expect(
+      withToolCallSectionExpansion(
+        DEFAULT_TOOL_CALL_EXPANSION_STATE,
+        "output",
+        true
+      ).outputExpanded
+    ).toBe(true);
+  });
+
+  it("tracks read-output sections per step", () => {
+    const next = withToolCallSectionExpansion(
+      DEFAULT_TOOL_CALL_EXPANSION_STATE,
+      readOutputExpansionSection(3),
+      true
+    );
+    expect(next.readOutputExpanded).toEqual({ "3": true });
+  });
+
+  it("returns the same state when nothing changes", () => {
+    expect(
+      withToolCallSectionExpansion(
+        DEFAULT_TOOL_CALL_EXPANSION_STATE,
+        "error",
+        false
+      )
+    ).toBe(DEFAULT_TOOL_CALL_EXPANSION_STATE);
+    expect(
+      withToolCallSectionExpansion(
+        DEFAULT_TOOL_CALL_EXPANSION_STATE,
+        readOutputExpansionSection(1),
+        false
+      )
+    ).toBe(DEFAULT_TOOL_CALL_EXPANSION_STATE);
   });
 });
