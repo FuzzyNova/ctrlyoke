@@ -705,6 +705,7 @@ describe("outputRows", () => {
           changedFiles: [0, 1].map((index) => ({
             path: `src/file-${index}.ts`,
             changeType: FILE_OPERATION_KINDS.CREATED,
+            contentAvailableOnDemand: true,
           })),
         },
       },
@@ -721,6 +722,11 @@ describe("outputRows", () => {
     );
     // Both members' files are covered by the one group-wide snapshot.
     expect(headerRow?.promptUndo?.summary.label).toBe("View 2 changes");
+    expect(
+      headerRow?.promptUndo?.workspaceSnapshot?.changedFiles.every(
+        (change) => change.contentAvailableOnDemand
+      )
+    ).toBe(true);
     expect(
       result.rows
         .filter((row) => row.rowKind !== OUTPUT_ROW_KINDS.PARALLEL_GROUP_HEADER)

@@ -678,6 +678,61 @@ describe("UndoChangesDialog", () => {
     );
   });
 
+  it("sends fetched snapshot restore content in an undo request", () => {
+    const instruction: UndoFileInstruction = {
+      path: "src/deleted.ts",
+      action: "restore-content",
+      contentToRestore: "fetched original file",
+    };
+    const input = {
+      scope: { mode: "prompt" as const, target: queueTarget },
+      eventAttributedFiles: [],
+      snapshotOnlyFiles: [],
+      workspacePath: "C:/dev/ctrlyoke",
+    };
+    sendMessageMock.mockClear();
+
+    render(
+      <UndoChangesDialog
+        mode="undo"
+        target={queueTarget}
+        workflowKey={workflowKey}
+        runRef={runRef}
+        workspacePath={input.workspacePath}
+        input={input}
+        requestId="undo-fetched-snapshot-content"
+        onClose={vi.fn()}
+        workflowEntries={[
+          {
+            target: queueTarget,
+            label: "Prompt 1",
+            undoCandidates: [
+              {
+                path: instruction.path,
+                changeType: "deleted",
+                tier: "tier2",
+                instruction,
+              },
+            ],
+          },
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Undo 1 file" }));
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      MESSAGE_TYPES.UNDO_WORKFLOW_CHANGES,
+      {
+        data: {
+          requestId: "undo-fetched-snapshot-content",
+          workflowKey,
+          runRef,
+          entries: [{ target: queueTarget, files: [instruction] }],
+        },
+      }
+    );
+  });
+
   it("opens the file when the header's open-file button is clicked", () => {
     const instruction: UndoFileInstruction = {
       path: "src/example.ts",

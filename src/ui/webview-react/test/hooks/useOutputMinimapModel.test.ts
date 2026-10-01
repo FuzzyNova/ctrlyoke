@@ -7,6 +7,7 @@ import {
 import { useOutputMinimapModel } from "@hooks/useOutputMinimapModel";
 import type { OutputMessage } from "@utils/outputProjection";
 import type { OutputRenderRow } from "@utils/outputRows";
+import type { WorkspaceSnapshot } from "@root/types/OutputHistoryTypes";
 
 const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 2 } as const;
 
@@ -24,11 +25,32 @@ function makeMessage(timestamp: number): OutputMessage {
   } as OutputMessage;
 }
 
-function renderModel(allMessages: OutputMessage[], hiddenAtMs: number) {
+function renderModel(
+  allMessages: OutputMessage[],
+  hiddenAtMs: number,
+  workspaceSnapshot?: WorkspaceSnapshot
+) {
+  const outputMessage = workspaceSnapshot
+    ? ({
+        type: "cli",
+        target,
+        timestamp: 201,
+        attemptIndex: 0,
+        runIndex: 0,
+        data: {
+          prompt: "prompt",
+          response: "done",
+          elapsed: 1,
+          isStreaming: false,
+          workingDirectory: "/repo",
+        },
+      } as OutputMessage)
+    : undefined;
+  const messages = outputMessage ? [...allMessages, outputMessage] : allMessages;
   return renderHook(() =>
     useOutputMinimapModel({
-      allMessages,
-      allowUndoActions: false,
+      allMessages: messages,
+      allowUndoActions: workspaceSnapshot !== undefined,
       finalStep: null,
       finalStepWorkspaceSnapshots: {},
       firstRowIndexByTarget: new Map([["queue:2", 0]]),
@@ -36,7 +58,7 @@ function renderModel(allMessages: OutputMessage[], hiddenAtMs: number) {
       hiddenTargetKeys: ["queue:2"],
       historyOutputs: null,
       isViewingHistory: false,
-      lastCliIndexPerStep: new Map(),
+      lastCliIndexPerStep: outputMessage ? new Map([["queue:2", 1]]) : new Map(),
       onOpenMinimapDialog: vi.fn(),
       outputFontSize: 14,
       rowLayout: {
@@ -45,11 +67,28 @@ function renderModel(allMessages: OutputMessage[], hiddenAtMs: number) {
         totalSize: 40,
       },
       rows: [] as OutputRenderRow[],
-      stepOutputsMap: new Map(),
+      stepOutputsMap: new Map(
+        workspaceSnapshot
+          ? [
+              [
+                "queue:2",
+                [
+                  {
+                    prompt: "prompt",
+                    response: "done",
+                    elapsed: 1,
+                    isStreaming: false,
+                    workingDirectory: "/repo",
+                  },
+                ],
+              ],
+            ]
+          : []
+      ),
       steps: [],
       undoRecords: {},
       uniqueStepTargets: [target],
-      workspaceSnapshots: {},
+      workspaceSnapshots: workspaceSnapshot ? { 2: workspaceSnapshot } : {},
     })
   );
 }
@@ -113,6 +152,25 @@ describe("useOutputMinimapModel hidden activity", () => {
     expect(result.current.minimapSteps[0]).toMatchObject({
       hidden: true,
       hasHiddenActivity: false,
+    });
+  });
+
+  it("keeps changed-step flags from the snapshot index without file bodies", () => {
+    const snapshot: WorkspaceSnapshot = {
+      capturedAt: 1,
+      strategy: "filesystem",
+      changedFiles: [
+        {
+          path: "src/changed.ts",
+          changeType: "created",
+          contentAvailableOnDemand: true,
+        },
+      ],
+    };
+    const { result } = renderModel([makeMessage(200)], 100, snapshot);
+
+    expect(result.current.minimapSteps[0]?.changeSummary).toMatchObject({
+      total: 1,
     });
   });
 });

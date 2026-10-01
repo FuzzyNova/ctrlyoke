@@ -6,6 +6,7 @@ import * as Diff from "diff";
 import { execFileSync } from "child_process";
 import { suite, test } from "mocha";
 import { UndoRedoCoordinator } from "../../ui/UndoRedoCoordinator";
+import type { WorkflowOrchestrator } from "../../core/WorkflowOrchestrator";
 import {
   FINAL_STEP_PHASES,
   MESSAGE_TYPES,
@@ -189,6 +190,65 @@ suite("UndoRedoCoordinator", function () {
     }
   });
 
+  test("re-reads restore-content from run history instead of trusting the webview", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-undo-authoritative-content-")
+    );
+    try {
+      const filePath = path.join(workspaceRoot, "deleted.txt");
+      await fs.writeFile(filePath, "post-run", "utf8");
+      const workflowKey = "undo-authoritative" as WorkflowKey;
+      const runRef = "run-2026-08-11T00-00-00-000Z" as RunRef;
+      const runFilePath = WorkflowPaths.runFilePath(
+        workspaceRoot,
+        workflowKey,
+        runRef
+      );
+      await fs.mkdir(path.dirname(runFilePath), { recursive: true });
+      await fs.writeFile(runFilePath, JSON.stringify({}), "utf8");
+      const target = {
+        kind: FINAL_STEP_PHASES.QUEUE,
+        stepIndex: 0,
+      } as const;
+      const orchestrator = {
+        getWorkspaceSnapshotFileContent: async () => ({
+          contentToRestore: "authoritative history content",
+        }),
+      } as unknown as WorkflowOrchestrator;
+      const coordinator = new UndoRedoCoordinator(
+        () => orchestrator,
+        () => ({ executionRoot: workspaceRoot, namedWorkspaceRoots: [] })
+      );
+
+      await coordinator.handleUndoPromptChanges(
+        {
+          type: MESSAGE_TYPES.UNDO_PROMPT_CHANGES,
+          data: {
+            requestId: "undo-authoritative-content",
+            target,
+            workflowKey,
+            runRef,
+            files: [
+              {
+                path: "deleted.txt",
+                action: UNDO_FILE_ACTIONS.RESTORE_CONTENT,
+                contentToRestore: "forged webview content",
+              },
+            ],
+          },
+        },
+        (() => undefined) as PostMessageFn
+      );
+
+      assert.strictEqual(
+        await fs.readFile(filePath, "utf8"),
+        "authoritative history content"
+      );
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("restores a named worktree without touching the source checkout", async () => {
     const sourceRoot = await createGitWorkspace();
     const executionRoot = path.join(
@@ -231,8 +291,13 @@ suite("UndoRedoCoordinator", function () {
       };
       await writeRunFile(sourceRoot, runtime, workflowKey, runRef);
 
+      const orchestrator = {
+        getWorkspaceSnapshotFileContent: async () => ({
+          contentToRestore: "base\n",
+        }),
+      } as unknown as WorkflowOrchestrator;
       const coordinator = new UndoRedoCoordinator(
-        () => undefined,
+        () => orchestrator,
         () => ({
           executionRoot: sourceRoot,
           namedWorkspaceRoots: [{ name: "repo", fsPath: sourceRoot }],
@@ -410,8 +475,13 @@ suite("UndoRedoCoordinator", function () {
         runRef
       );
 
+      const orchestrator = {
+        getWorkspaceSnapshotFileContent: async () => ({
+          contentToRestore: "base\n",
+        }),
+      } as unknown as WorkflowOrchestrator;
       const coordinator = new UndoRedoCoordinator(
-        () => undefined,
+        () => orchestrator,
         () => ({
           executionRoot: sourceRoot,
           namedWorkspaceRoots: [{ name: "repo", fsPath: sourceRoot }],

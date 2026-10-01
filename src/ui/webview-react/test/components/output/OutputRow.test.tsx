@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { OutputRow } from "@components/output/OutputRow";
 import { getStepIdentityBarStyle } from "@components/output/outputStyles";
 import {
@@ -27,6 +27,7 @@ import { useUiStore } from "@store/uiStore";
 
 afterEach(() => {
   useSettingsStore.setState({ fullGlobalSettings: null });
+  useUiStore.setState({ displayedViewAddress: null });
 });
 
 const TARGET = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
@@ -199,6 +200,98 @@ describe("OutputRow token stats", () => {
     );
 
     expect(container).not.toHaveTextContent("$0.41");
+  });
+});
+
+describe("OutputRow snapshot diffs", () => {
+  it("fetches snapshot before-content when an indexed diff is expanded", async () => {
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "workflow-1" as never,
+        kind: "run",
+        runRef: "run-2026-01-01T00-00-00-000Z" as never,
+      },
+    });
+    const row: StructuredEventRow = {
+      key: "indexed-file-edit",
+      target: TARGET,
+      estimateSize: 80,
+      rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
+      event: {
+        type: CLI_EVENT_TYPES.FILE_EDIT,
+        data: {
+          path: "src/example.ts",
+          newContent: "new value",
+          status: OPERATION_STATUS.COMPLETED,
+          structuredPatch: [
+            {
+              oldStart: 1,
+              oldLines: 1,
+              newStart: 1,
+              newLines: 1,
+              lines: ["-old value", "+new value"],
+            },
+          ],
+        },
+      },
+      eventIndex: 0,
+      rawTextOutput: false,
+      attemptIndex: 0,
+      hideDiff: false,
+      diff: {
+        key: "indexed-file-edit-diff",
+        addedLines: 1,
+        removedLines: 1,
+        runs: [],
+        isCollapsed: true,
+        renderPlan: { viewType: "unified" } as never,
+      },
+      workspaceSnapshot: {
+        capturedAt: 1,
+        strategy: "filesystem",
+        changedFiles: [
+          {
+            path: "src/example.ts",
+            changeType: "modified",
+            contentAvailableOnDemand: true,
+          },
+        ],
+      },
+    };
+
+    const view = render(
+      <OutputRow
+        row={row}
+        isExecutionActive={false}
+        onDiffCollapsedChange={vi.fn()}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Toggle diff" }));
+    const request = postMessage.mock.calls[0]?.[0] as
+      | { type: string; requestId: string }
+      | undefined;
+    expect(request?.type).toBe(MESSAGE_TYPES.REQUEST_WORKSPACE_SNAPSHOT_CONTENT);
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: MESSAGE_TYPES.WORKSPACE_SNAPSHOT_CONTENT,
+          requestId: request?.requestId,
+          beforeContent: "old value",
+        },
+      })
+    );
+    view.rerender(
+      <OutputRow
+        row={{ ...row, diff: { ...row.diff!, isCollapsed: false } }}
+        isExecutionActive={false}
+        onDiffCollapsedChange={vi.fn()}
+      />
+    );
+    await waitFor(() => {
+      expect(view.container.textContent).toContain("old value");
+    });
   });
 });
 

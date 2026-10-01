@@ -21,6 +21,10 @@ import { noteMemoryActivity } from "../../utils/MemoryDiagnostics";
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { OutputHistoryManager } from "./OutputHistoryManager";
+import type {
+  WorkflowOutputHistory,
+  WorkspaceSnapshot,
+} from "../../types/OutputHistoryTypes";
 import { PostMessageDashboardSink } from "../../ui/PostMessageDashboardSink";
 import { WorkflowTaggedSink } from "../WorkflowTaggedSink";
 import type { IDashboardSink } from "../../types/IDashboardSink";
@@ -126,6 +130,48 @@ export function sameViewAddress(
 function describeViewAddress(address: WorkflowViewAddress | null): string {
   if (!address) return "none";
   return `${address.workflowKey}/${address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN ? address.runRef : "draft"}`;
+}
+
+/** Keep the snapshot index in run-view messages; full file bodies are fetched per consumer. */
+function stripSnapshotContents(
+  history: WorkflowOutputHistory | null
+): WorkflowOutputHistory | null {
+  if (!history) return history;
+  const stripSnapshot = (snapshot: WorkspaceSnapshot | undefined) => {
+    if (!snapshot) return snapshot;
+    return {
+      ...snapshot,
+      changedFiles: snapshot.changedFiles.map((change) => {
+        const hasCapturedContent =
+          change.beforeContent !== undefined ||
+          change.contentToRestore !== undefined;
+        if (!hasCapturedContent) return change;
+        const {
+          beforeContent: _beforeContent,
+          contentToRestore: _contentToRestore,
+          ...indexEntry
+        } = change;
+        return { ...indexEntry, contentAvailableOnDemand: true };
+      }),
+    };
+  };
+  const stripOutputs = (outputs: WorkflowOutputHistory["promptOutputs"]) =>
+    Object.fromEntries(
+      Object.entries(outputs).map(([index, output]) => [
+        index,
+        {
+          ...output,
+          workspaceSnapshot: stripSnapshot(output.workspaceSnapshot),
+        },
+      ])
+    );
+  return {
+    ...history,
+    promptOutputs: stripOutputs(history.promptOutputs),
+    ...(history.finalStepOutputs
+      ? { finalStepOutputs: stripOutputs(history.finalStepOutputs) }
+      : {}),
+  };
 }
 
 /** Owns addressed run-view reads, fan-out, identity publication, and refreshes. */
@@ -396,7 +442,7 @@ export class RunViewPublisher implements RunLifecycleViewPort {
     void finalStep;
     return {
       workingFile,
-      history,
+      history: stripSnapshotContents(history),
       runSummaries,
       workflowProperties,
       descriptorRevision: descriptor.revision,

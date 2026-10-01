@@ -2365,6 +2365,14 @@ suite("OutputHistoryManager snapshot enrichment on loadHistory", () => {
       ),
       undefined
     );
+    assert.deepStrictEqual(
+      await manager.getSnapshotFileContent(
+        filePath,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        path.join(tempWorkspace, "src", "allowed.ts")
+      ),
+      { beforeContent: "before" }
+    );
     assert.strictEqual(
       await manager.getSnapshotFileContent(
         filePath,

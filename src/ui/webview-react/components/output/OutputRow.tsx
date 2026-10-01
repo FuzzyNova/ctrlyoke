@@ -23,6 +23,7 @@ import {
   OUTPUT_ROW_KINDS,
   TOOL_CALL_EXPANSION_SECTIONS,
   TOOL_RESULT_STATUSES,
+  WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 import {
   AskUserQuestionOutput,
@@ -71,6 +72,7 @@ import type {
 } from "../../types/cliEvents";
 import {
   CLI_EVENT_TYPES,
+  FINAL_STEP_PHASES,
   getHarnessDisplayName,
   getHarnessShortName,
   SCRIPT_OUTPUT_SOURCES,
@@ -91,7 +93,10 @@ import {
   type OutputFindMatch,
   type RowFindDecoration,
 } from "@utils/outputFind";
-import { getPromptChangeLabelParts } from "@utils/promptUndo";
+import {
+  getPromptChangeLabelParts,
+  sameFilePath,
+} from "@utils/promptUndo";
 import {
   OUTPUT_BLOCK_BASE,
   TOOL_RESULT_LINE,
@@ -115,6 +120,7 @@ import { renderCommandTextWithFileLinks } from "@utils/cliCommandFileLinks";
 import { useUiStore } from "@store/uiStore";
 import { workflowViewAddressKey } from "@utils/viewAddress";
 import { getTargetKey } from "@utils/outputProjection";
+import { useWorkspaceSnapshotContent } from "@hooks/useWorkspaceSnapshotContent";
 import { getStepKindIconClass } from "@utils/status";
 import type {
   CliHeaderRow,
@@ -572,6 +578,13 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
     bashExpansion,
     onBashExpansionChange,
   }) => {
+    const displayedViewAddress = useUiStore(
+      (state) => state.displayedViewAddress
+    );
+    const requestSnapshotContent = useWorkspaceSnapshotContent();
+    const [loadedSnapshotContent, setLoadedSnapshotContent] = useState<
+      Record<string, string>
+    >({});
     const searchSegments = getOutputRowSearchSegments(row);
     const getFieldMatches = (field: string, occurrence = 0) => {
       const segment = searchSegments.filter((entry) => entry.field === field)[
@@ -594,6 +607,50 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       workspaceSnapshot,
       diff,
     } = row;
+    const effectiveWorkspaceSnapshot = useMemo(() => {
+      if (Object.keys(loadedSnapshotContent).length === 0 || !workspaceSnapshot) {
+        return workspaceSnapshot;
+      }
+      return {
+        ...workspaceSnapshot,
+        changedFiles: workspaceSnapshot.changedFiles.map((change) =>
+          loadedSnapshotContent[change.path] !== undefined
+            ? { ...change, beforeContent: loadedSnapshotContent[change.path] }
+            : change
+        ),
+      };
+    }, [loadedSnapshotContent, workspaceSnapshot]);
+
+    const fetchSnapshotContent = (path: string) => {
+      const indexedChange = workspaceSnapshot?.changedFiles.find(
+        (change) => sameFilePath(change.path, path)
+      );
+      if (
+        !indexedChange?.contentAvailableOnDemand ||
+        displayedViewAddress?.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN
+      ) {
+        return;
+      }
+      const target =
+        row.target.kind === FINAL_STEP_PHASES.FINAL_STEP
+          ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: row.target.index }
+          : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: row.target.index };
+      void requestSnapshotContent(
+        {
+          workflowKey: displayedViewAddress.workflowKey,
+          runRef: displayedViewAddress.runRef,
+        },
+        target,
+        indexedChange.path
+      ).then((content) => {
+        if (content.beforeContent !== undefined) {
+          setLoadedSnapshotContent((current) => ({
+            ...current,
+            [path]: content.beforeContent!,
+          }));
+        }
+      });
+    };
 
     const isActiveRow = activeFindMatch?.rowKey === row.key;
     const collapsedToolOutputLineCount =
@@ -789,15 +846,15 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
         const displayStructuredPatch = getDisplayStructuredPatch(
           data.path,
           data.structuredPatch,
-          workspaceSnapshot
+          effectiveWorkspaceSnapshot
         );
         const activeDiffMatch = getFieldMatches("diff").find(
           (match) => match.active
         );
         const displayOldContent = displayStructuredPatch
-          ? getSnapshotBeforeContent(data.path, workspaceSnapshot)
+          ? getSnapshotBeforeContent(data.path, effectiveWorkspaceSnapshot)
           : (data.oldContent ??
-            getSnapshotBeforeContent(data.path, workspaceSnapshot));
+            getSnapshotBeforeContent(data.path, effectiveWorkspaceSnapshot));
         const handleUndo =
           onFileUndo == null
             ? undefined
@@ -840,8 +897,10 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             viewType={diff?.renderPlan.viewType}
             onCollapsedChange={
               diff
-                ? (collapsed) =>
-                    onDiffCollapsedChange?.(row.key, diff.key, collapsed)
+                ? (collapsed) => {
+                    if (!collapsed) fetchSnapshotContent(data.path);
+                    onDiffCollapsedChange?.(row.key, diff.key, collapsed);
+                  }
                 : undefined
             }
             onExpandGap={

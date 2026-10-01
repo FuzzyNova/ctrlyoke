@@ -214,6 +214,8 @@ export interface SnapshotFileChange {
   beforeContent?: string;
   /** True if before-content was skipped due to size (>512 KB) or binary detection. */
   contentCaptureSkipped?: boolean;
+  /** Run-view index omitted captured content; the client can fetch it on demand. */
+  contentAvailableOnDemand?: boolean;
   /**
    * SHA-256 of file content after the prompt completed.
    * Enables reliable drift detection: if current hash differs at dialog-open time,

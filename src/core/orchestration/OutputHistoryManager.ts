@@ -960,12 +960,12 @@ export class OutputHistoryManager {
       ));
     const fileChange = snapshot?.changedFiles.find(
       (change) => change.path === filePath
-    );
+    ) ?? this.findSnapshotChangeForUndoPath(snapshot, filePath);
     if (!snapshot || !fileChange) return undefined;
 
     const enriched = await this.enrichWorkspaceSnapshot(snapshot);
     const enrichedChange = enriched.changedFiles.find(
-      (change) => change.path === filePath
+      (change) => change.path === fileChange.path
     );
     if (!enrichedChange) return undefined;
     return {
@@ -979,6 +979,22 @@ export class OutputHistoryManager {
         ? { contentCaptureSkipped: enrichedChange.contentCaptureSkipped }
         : {}),
     };
+  }
+
+  /** Match legacy CLI absolute paths only when they identify one indexed path. */
+  private findSnapshotChangeForUndoPath(
+    snapshot: WorkspaceSnapshot | undefined,
+    filePath: string
+  ): SnapshotFileChange | undefined {
+    if (!snapshot || !path.isAbsolute(filePath)) return undefined;
+    const normalizedRequest = filePath.replace(/\\/g, "/").toLowerCase();
+    const matches = snapshot.changedFiles.filter((change) => {
+      const normalizedSnapshotPath = change.path
+        .replace(/\\/g, "/")
+        .toLowerCase();
+      return normalizedRequest.endsWith(`/${normalizedSnapshotPath}`);
+    });
+    return matches.length === 1 ? matches[0] : undefined;
   }
 
   /**

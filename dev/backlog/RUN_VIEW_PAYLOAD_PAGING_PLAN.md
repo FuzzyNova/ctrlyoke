@@ -314,12 +314,28 @@ message, so on the hosted server it still goes through
 
 Independent of 1A/1B, and probably the cheapest of the three to land.
 
-**Progress (2026-10-01):** The first half is implemented: webviews request
-`REQUEST_WORKSPACE_SNAPSHOT_CONTENT`, and `WebviewMessageRouter` answers with
-`WORKSPACE_SNAPSHOT_CONTENT` through `OutputHistoryManager`'s targeted,
-enriched snapshot read. The run-view payload and its consumers are unchanged;
-the follow-up step will move those consumers to this fetch before stripping
-snapshot contents from the payload.
+**Landed (2026-10-01):** `RUN_VIEW_LOADED` retains the snapshot index and strips
+`beforeContent` and `contentToRestore` from entries that have captured content,
+marking those entries with `contentAvailableOnDemand`. The index retains paths,
+change kinds, base source, patches, hashes, line endings, capture-skipped state,
+and repo metadata. `OutputHistoryManager.loadHistory()` remains full because
+startup, external-run, and undo-record callers use its enriched history; only
+`RunViewPublisher` projects the lean client payload.
+
+`REQUEST_WORKSPACE_SNAPSHOT_CONTENT` / `WORKSPACE_SNAPSHOT_CONTENT` and the
+address/target/path client cache serve the content through the same history
+manager enrichment. File-edit rows fetch when a diff expands. Prompt, file, and
+workflow undo dialogs fetch indexed content before opening. The minimap still
+uses `changedFiles` from the index. Live in-memory snapshot messages retain
+their full bodies; webview consumers support both full live snapshots and
+content-marked run-view indexes. Undo execution re-reads `restore-content`
+instructions from addressed history and ignores client-supplied bodies.
+
+Measured on `bug-backlog` run
+`run-2026-09-30T13-41-01-546Z`: stripping snapshot body properties from the
+45 persisted `workspaceSnapshotCaptured` records removes 8,982,233 serialized
+UTF-8 bytes (8.57 MiB; 302 changed-file entries had captured content). This is
+the persisted capture size before any git-head enrichment performed on load.
 
 ## Problem 3: redaction re-walks the entire payload per message
 

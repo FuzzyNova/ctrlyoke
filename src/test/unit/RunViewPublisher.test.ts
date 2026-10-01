@@ -23,6 +23,8 @@ import type {
   RunRef,
 } from "../../types/CtrlYokeTypes";
 import type { IDashboardSink } from "../../types/IDashboardSink";
+import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
+import { FINAL_STEP_PHASES } from "../../types/DashboardConstants";
 
 class FakeInstance implements RunViewPublisherInstance {
   constructor(
@@ -228,6 +230,91 @@ suite("RunViewPublisher", () => {
         MESSAGE_TYPES.RUN_VIEW_LOADED
       );
       assert.strictEqual(events.filter((event) => event === "buffer").length, 1);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("strips captured snapshot bodies from run-view history and marks on-demand entries", async () => {
+    const { root, publisher } = await createPublisher();
+    try {
+      const workflowKey = "snapshot-payload" as WorkflowKey;
+      const runRef = "run-2026-09-30T13-41-01-546Z" as RunRef;
+      const address: WorkflowViewAddress = {
+        workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef,
+      };
+      await writeAddressedFile(root, address, 1);
+      const historyManager = new OutputHistoryManager(root);
+      await historyManager.initializeRunAt(
+        workflowKey,
+        runRef,
+        WorkflowPaths.runDir(root, workflowKey, runRef),
+        1,
+        1
+      );
+      await historyManager.saveSnapshotForTarget(
+        historyManager.getHistoryFilePath(workflowKey, runRef),
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        {
+          capturedAt: 1,
+          strategy: "filesystem",
+          changedFiles: [
+            {
+              path: "deleted.txt",
+              changeType: "deleted",
+              contentToRestore: "large deleted content",
+              contentCaptureSkipped: false,
+            },
+            {
+              path: "large.ts",
+              changeType: "modified",
+              beforeContent: "large before content",
+              baseSource: "capturedBefore",
+              structuredPatch: [],
+              afterHash: "hash",
+              lineEnding: "crlf",
+              repo: "repo",
+            },
+            {
+              path: "skipped.bin",
+              changeType: "modified",
+              contentCaptureSkipped: true,
+            },
+          ],
+        }
+      );
+      const sent: unknown[] = [];
+      await publisher.loadRunViewForClient(address, (message) => sent.push(message), "client-snapshot");
+      const loaded = sent.find(
+        (message) =>
+          (message as { type?: string }).type === MESSAGE_TYPES.RUN_VIEW_LOADED
+      ) as { history?: { promptOutputs: Record<number, { workspaceSnapshot?: { changedFiles: Array<Record<string, unknown>> } }> } } | undefined;
+      const changes = loaded?.history?.promptOutputs[0]?.workspaceSnapshot?.changedFiles;
+      assert.ok(changes);
+      assert.deepStrictEqual(changes[0], {
+        path: "deleted.txt",
+        changeType: "deleted",
+        contentCaptureSkipped: false,
+        contentAvailableOnDemand: true,
+      });
+      assert.deepStrictEqual(changes[1], {
+        path: "large.ts",
+        changeType: "modified",
+        baseSource: "capturedBefore",
+        structuredPatch: [],
+        afterHash: "hash",
+        lineEnding: "crlf",
+        repo: "repo",
+        contentAvailableOnDemand: true,
+      });
+      assert.deepStrictEqual(changes[2], {
+        path: "skipped.bin",
+        changeType: "modified",
+        contentCaptureSkipped: true,
+      });
+      assert.ok(!JSON.stringify(loaded).includes("large before content"));
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
