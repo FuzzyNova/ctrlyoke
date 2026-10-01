@@ -305,6 +305,27 @@ suite("CLI run command parser", () => {
     );
   });
 
+  test("requires --script-timeout to be a positive whole number", async () => {
+    await assert.rejects(
+      createRunProgram({}).parseAsync(["run", "--script-timeout", "-1"], {
+        from: "user",
+      }),
+      (error: Error) => {
+        assert.match(error.message, /script-timeout/);
+        assert.match(error.message, /whole number/);
+        assert.doesNotMatch(error.message, /unlimited/);
+        return true;
+      }
+    );
+
+    await assert.rejects(
+      createRunProgram({}).parseAsync(["run", "--script-timeout", "1.5"], {
+        from: "user",
+      }),
+      /script-timeout.*whole number/
+    );
+  });
+
   test("applies --permission-mode over nullable settings with complete mapper config", async () => {
     const calls: {
       run?: { file: string | undefined; options: RunCommandOptions };

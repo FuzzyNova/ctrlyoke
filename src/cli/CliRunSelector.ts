@@ -1,3 +1,4 @@
+import * as fs from "node:fs/promises";
 import type { RunRef, WorkflowKey } from "../types/CtrlYokeTypes";
 import type { RunSummary } from "../types/WorkflowTimelineTypes";
 import { withFileLock } from "../utils/FileLockUtils";
@@ -9,6 +10,12 @@ import * as WorkflowPaths from "../utils/WorkflowPaths";
  */
 export interface CliRunSummaryProvider {
   getRunSummaries(workflowKey: WorkflowKey): Promise<RunSummary[]>;
+}
+
+export function createWorkflowLineageNotFoundError(
+  workflowKey: WorkflowKey
+): Error {
+  return new Error(`Workflow lineage "${workflowKey}" was not found.`);
 }
 
 export async function resolveCliRunRef(
@@ -71,6 +78,21 @@ export async function resolveCliRunRefAtLineage(
   selector: string | undefined,
   optionName: "--from" | "--run"
 ): Promise<RunRef> {
+  let lineageStats: Awaited<ReturnType<typeof fs.stat>>;
+  try {
+    lineageStats = await fs.stat(
+      WorkflowPaths.lineageDir(workspaceRoot, workflowKey)
+    );
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw createWorkflowLineageNotFoundError(workflowKey);
+    }
+    throw error;
+  }
+  if (!lineageStats.isDirectory()) {
+    throw createWorkflowLineageNotFoundError(workflowKey);
+  }
+
   return withFileLock(
     WorkflowPaths.descriptorPath(workspaceRoot, workflowKey),
     () =>

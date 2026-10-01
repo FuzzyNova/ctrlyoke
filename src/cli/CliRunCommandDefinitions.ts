@@ -1,4 +1,4 @@
-import { Command } from "commander";
+import { Command, InvalidArgumentError } from "commander";
 import chalk from "chalk";
 import {
   PERMISSION_MODES,
@@ -169,7 +169,7 @@ function addExecutionOptions(command: Command): Command {
     .option(
       "--script-timeout <seconds>",
       `Override the ${SETTING_PATHS.EXECUTION_SCRIPT_TIMEOUT_SEC} setting for this run`,
-      parseTimeoutSeconds
+      parseScriptTimeoutSeconds
     )
     .option("--headless", "Force headless mode (CI/CD, no user interaction)")
     .option(
@@ -221,6 +221,16 @@ function parseTimeoutSeconds(value: string): number {
       )
     );
     process.exit(2);
+  }
+  return seconds;
+}
+
+function parseScriptTimeoutSeconds(value: string): number {
+  const seconds = Number(value);
+  if (!Number.isInteger(seconds) || seconds <= 0) {
+    throw new InvalidArgumentError(
+      `script-timeout "${value}" must be a whole number of seconds greater than 0`
+    );
   }
   return seconds;
 }

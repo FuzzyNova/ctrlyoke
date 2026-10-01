@@ -3,6 +3,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import {
+  createWorkflowLineageNotFoundError,
   resolveCliRunRef,
   resolveCliRunRefAtLineage,
 } from "../../cli/CliRunSelector";
@@ -133,6 +134,35 @@ suite("CliRunSelector", () => {
         fs.access(
           `${WorkflowPaths.descriptorPath(workspace, created.workflowKey)}.lock`
         )
+      );
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects a missing lineage before creating its descriptor lock", async () => {
+    const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "cli-selector-"));
+    const missingKey = "missing-workflow" as WorkflowKey;
+    try {
+      await assert.rejects(
+        resolveCliRunRefAtLineage(
+          workspace,
+          historyWith([]),
+          missingKey,
+          "1",
+          "--run"
+        ),
+        (error: Error) => {
+          assert.strictEqual(
+            error.message,
+            createWorkflowLineageNotFoundError(missingKey).message
+          );
+          return true;
+        }
+      );
+      await assert.rejects(
+        fs.access(`${WorkflowPaths.descriptorPath(workspace, missingKey)}.lock`),
+        { code: "ENOENT" }
       );
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });

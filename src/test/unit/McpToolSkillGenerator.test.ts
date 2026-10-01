@@ -81,6 +81,22 @@ suite("McpToolSkillGenerator", () => {
     assert.ok(!reference.includes("<path>"));
   });
 
+  test("inserts replacement tokens in context paths literally", () => {
+    const literalPath = "C:/workspace/$$/$&/$`/$'";
+    const reference = McpToolSkillGenerator.generateToolReference(
+      ["workflow_status"],
+      {
+        mcpServerPath: literalPath,
+        workspaceRoot: literalPath,
+        workingFilePath: literalPath,
+      }
+    );
+
+    assert.ok(reference.includes(`node "${literalPath}"`));
+    assert.ok(reference.includes(`--workspace "${literalPath}"`));
+    assert.ok(reference.includes(`--working-file "${literalPath}"`));
+  });
+
   test("substitutes the commit output path on the commit skill path", () => {
     const reference = McpToolSkillGenerator.generateToolReference(
       [MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME],

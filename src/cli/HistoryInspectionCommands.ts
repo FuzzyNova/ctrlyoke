@@ -8,7 +8,10 @@ import type {
   HistoryShowOptions,
   HistorySearchOptions as HistorySearchCommandOptions,
 } from "./HistoryCommandDefinitions";
-import { resolveCliRunRef } from "./CliRunSelector";
+import {
+  createWorkflowLineageNotFoundError,
+  resolveCliRunRef,
+} from "./CliRunSelector";
 import { CliTerminalFormatter } from "./CliTerminalFormatter";
 import type {
   RunRef,
@@ -170,7 +173,7 @@ export async function runsHistoryCommand(
     workspace.workspaceRoot
   );
   if (!lineageKeys.includes(workflowKey)) {
-    throw new Error(`Workflow lineage "${options.workflow}" was not found.`);
+    throw createWorkflowLineageNotFoundError(workflowKey);
   }
 
   const workflowName = await lineageRepository.readWorkflowDisplayName(
