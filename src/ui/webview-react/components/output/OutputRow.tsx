@@ -91,7 +91,10 @@ import {
   type OutputFindMatch,
   type RowFindDecoration,
 } from "@utils/outputFind";
-import { getPromptChangeLabelParts, sameFilePath } from "@utils/promptUndo";
+import {
+  getPromptChangeLabelParts,
+  resolveSnapshotFileMatch,
+} from "@utils/promptUndo";
 import { workflowViewAddressKey } from "@utils/viewAddress";
 import {
   OUTPUT_BLOCK_BASE,
@@ -645,9 +648,9 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
     ]);
 
     const fetchSnapshotContent = (path: string) => {
-      const indexedChange = workspaceSnapshot?.changedFiles.find((change) =>
-        sameFilePath(change.path, path)
-      );
+      const indexedChange = workspaceSnapshot
+        ? resolveSnapshotFileMatch(workspaceSnapshot.changedFiles, path)
+        : undefined;
       if (
         !indexedChange?.contentAvailableOnDemand ||
         appliedViewAddress?.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN

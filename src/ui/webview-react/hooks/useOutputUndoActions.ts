@@ -15,6 +15,7 @@ import {
   aggregateWorkflowUndoFiles,
   createPromptChangeSummary,
   sameFilePath,
+  resolveSnapshotFileMatch,
 } from "@utils/promptUndo";
 import type {
   CliHeaderRow,
@@ -206,18 +207,32 @@ export function useOutputUndoActions({
             ? (effectiveUndoRecord.redoInstructions ?? [])
             : [];
 
+        const workspaceRoot = stepOutputs.find(
+          (output) => output.workingDirectory
+        )?.workingDirectory;
         const allCandidates = buildUndoCandidatesForOutputs(
           stepOutputs,
-          effectiveSnapshot
+          effectiveSnapshot,
+          workspaceRoot
         );
         const candidates =
           redoInstructions.length > 0
-            ? allCandidates.filter(
-                (candidate) =>
-                  !redoInstructions.some((instruction) =>
-                    sameFilePath(candidate.path, instruction.path)
-                  )
-              )
+            ? (() => {
+                const excludedCandidates = new Set(
+                  redoInstructions
+                    .map((instruction) =>
+                      resolveSnapshotFileMatch(
+                        allCandidates,
+                        instruction.path,
+                        workspaceRoot
+                      )
+                    )
+                    .filter((candidate) => candidate != null)
+                );
+                return allCandidates.filter(
+                  (candidate) => !excludedCandidates.has(candidate)
+                );
+              })()
             : allCandidates;
         if (candidates.length > 0 || redoInstructions.length > 0) {
           entries.push({
@@ -387,9 +402,13 @@ export function useOutputUndoActions({
       }
 
       let workspaceSnapshot = row.workspaceSnapshot;
-      const indexedChange = workspaceSnapshot?.changedFiles.find((change) =>
-        sameFilePath(change.path, request.path)
-      );
+      const indexedChange = workspaceSnapshot
+        ? resolveSnapshotFileMatch(
+            workspaceSnapshot.changedFiles,
+            request.path,
+            workspacePath
+          )
+        : undefined;
       if (indexedChange?.contentAvailableOnDemand && runAddress) {
         const snapshot = workspaceSnapshot;
         if (!snapshot) return;

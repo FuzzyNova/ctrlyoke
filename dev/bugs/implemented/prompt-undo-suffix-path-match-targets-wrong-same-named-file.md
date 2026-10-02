@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), reproduced in a scratch Vitest test
 - **Area:** `src/ui/webview-react/utils/promptUndo.ts` (`sameFilePath`, `buildUndoFileCandidates` tier-1/tier-2 matching)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

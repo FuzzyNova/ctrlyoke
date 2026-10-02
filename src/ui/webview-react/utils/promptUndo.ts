@@ -126,7 +126,8 @@ export interface SpecificEventDiffFallback {
  */
 function resolveEventUndoInstruction(
   event: CliEvent,
-  snapshotFiles: SnapshotFileChange[]
+  snapshotFiles: SnapshotFileChange[],
+  workspaceRoot?: string
 ): UndoFileInstruction | null {
   switch (event.type) {
     case CLI_EVENT_TYPES.FILE_WRITE: {
@@ -137,7 +138,11 @@ function resolveEventUndoInstruction(
     case CLI_EVENT_TYPES.FILE_DELETE: {
       const d = event.data as FileDeleteData;
       if (!d.path) return null;
-      const snap = snapshotFiles.find((f) => sameFilePath(f.path, d.path));
+      const snap = resolveSnapshotFileMatch(
+        snapshotFiles,
+        d.path,
+        workspaceRoot
+      );
       if (!snap) return null;
       if (snap.contentToRestore != null)
         return {
@@ -163,6 +168,68 @@ export function sameFilePath(a: string, b: string): boolean {
   if (na === nb) return true;
   // One is absolute, the other is a relative suffix of the absolute path.
   return na.endsWith("/" + nb) || nb.endsWith("/" + na);
+}
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+}
+
+function isAbsolutePath(path: string): boolean {
+  return (
+    path.startsWith("/") || /^[a-z]:\//i.test(path) || path.startsWith("//")
+  );
+}
+
+function relativizeToWorkspace(
+  path: string,
+  workspaceRoot: string
+): string | undefined {
+  const normalizedPath = normalizePath(path);
+  const normalizedRoot = normalizePath(workspaceRoot);
+  if (normalizedPath === normalizedRoot) return "";
+  if (normalizedPath.startsWith(`${normalizedRoot}/`)) {
+    return normalizedPath.slice(normalizedRoot.length + 1);
+  }
+  return undefined;
+}
+
+/** Resolve one snapshot entry for an event path, preferring exact and most-specific matches. */
+export function resolveSnapshotFileMatch<T extends { path: string }>(
+  snapshotFiles: T[],
+  eventPath: string,
+  workspaceRoot?: string
+): T | undefined {
+  let comparableEventPath = eventPath;
+  if (workspaceRoot && isAbsolutePath(eventPath)) {
+    const relativePath = relativizeToWorkspace(eventPath, workspaceRoot);
+    if (relativePath === undefined) return undefined;
+    comparableEventPath = relativePath;
+  }
+
+  const normalizedEventPath = normalizePath(comparableEventPath);
+  const exactMatch = snapshotFiles.find(
+    (file) => normalizePath(file.path) === normalizedEventPath
+  );
+  if (exactMatch) return exactMatch;
+
+  // With a known root, relative paths must match exactly. Without one, use the
+  // longest suffix to bridge event and snapshot paths without a root.
+  if (workspaceRoot) return undefined;
+  return snapshotFiles
+    .filter((file) => {
+      const normalizedSnapshotPath = normalizePath(file.path);
+      return (
+        normalizedEventPath.endsWith(`/${normalizedSnapshotPath}`) ||
+        normalizedSnapshotPath.endsWith(`/${normalizedEventPath}`)
+      );
+    })
+    .sort(
+      (a, b) => normalizePath(b.path).length - normalizePath(a.path).length
+    )[0];
+}
+
+function getOutputWorkspaceRoot(cliOutputs: CliOutput[]): string | undefined {
+  return cliOutputs.find((output) => output.workingDirectory)?.workingDirectory;
 }
 
 /** Map a CLI event type to a PromptChangeType for display purposes. */
@@ -230,7 +297,8 @@ function exceedsMaxContentSize(content: string): boolean {
  */
 export function buildUndoCandidatesForOutputs(
   cliOutputs: CliOutput[],
-  snapshot: WorkspaceSnapshot | undefined
+  snapshot: WorkspaceSnapshot | undefined,
+  workspaceRoot = getOutputWorkspaceRoot(cliOutputs)
 ): UndoFileCandidate[] {
   const snapshotFiles: SnapshotFileChange[] = snapshot?.changedFiles ?? [];
 
@@ -303,12 +371,16 @@ export function buildUndoCandidatesForOutputs(
     }
   }
 
+  const matchedSnapshotIndexes = new Set<number>();
   const tier1Candidates: UndoFileCandidate[] = Array.from(
     accumMap.entries()
   ).map(([filePath, accum]) => {
-    // Use path-insensitive matching: CLI events emit absolute paths while the
-    // workspace snapshot stores workspace-relative paths.
-    const snapEntry = snapshotFiles.find((f) => sameFilePath(f.path, filePath));
+    const snapEntry = resolveSnapshotFileMatch(
+      snapshotFiles,
+      filePath,
+      workspaceRoot
+    );
+    if (snapEntry) matchedSnapshotIndexes.add(snapshotFiles.indexOf(snapEntry));
 
     // Snapshot-based instruction (works for all harnesses and CLI tool changes).
     // No snapshot entry → non-undoable (instruction = null).
@@ -346,13 +418,9 @@ export function buildUndoCandidatesForOutputs(
     };
   });
 
-  const tier1EventPaths = Array.from(accumMap.keys());
-
   // Collect Tier 2 candidates: snapshot entries not covered by any event.
-  // Use path-insensitive matching so absolute event paths and relative snapshot
-  // paths are correctly treated as the same file.
   const tier2Candidates: UndoFileCandidate[] = snapshotFiles
-    .filter((snap) => !tier1EventPaths.some((p) => sameFilePath(snap.path, p)))
+    .filter((_snap, index) => !matchedSnapshotIndexes.has(index))
     .map((snap) => ({
       path: snap.path,
       changeType: snap.changeType,
@@ -941,15 +1009,23 @@ export function buildUndoDialogInputForPrompt(
     mode: UNDO_DIALOG_SCOPE_MODES.PROMPT,
     target,
   };
-  const allCandidates = buildUndoCandidatesForOutputs(cliOutputs, snapshot);
+  const allCandidates = buildUndoCandidatesForOutputs(
+    cliOutputs,
+    snapshot,
+    workspacePath
+  );
 
   // Strip out files already undone (present in redo instructions).
-  const candidates =
-    excludePaths && excludePaths.length > 0
-      ? allCandidates.filter(
-          (c) => !excludePaths.some((ep) => sameFilePath(c.path, ep.path))
-        )
-      : allCandidates;
+  const excludedCandidates = new Set(
+    (excludePaths ?? [])
+      .map((instruction) =>
+        resolveSnapshotFileMatch(allCandidates, instruction.path, workspacePath)
+      )
+      .filter((candidate): candidate is UndoFileCandidate => candidate != null)
+  );
+  const candidates = allCandidates.filter(
+    (candidate) => !excludedCandidates.has(candidate)
+  );
 
   const tier2Paths = new Set(
     candidates
@@ -961,10 +1037,8 @@ export function buildUndoDialogInputForPrompt(
     eventAttributedFiles: candidates.filter(
       (c) => c.tier === UNDO_FILE_CANDIDATE_TIERS.TIER1
     ),
-    snapshotOnlyFiles: (snapshot?.changedFiles ?? []).filter(
-      (s) =>
-        tier2Paths.has(s.path) &&
-        !(excludePaths ?? []).some((ep) => sameFilePath(s.path, ep.path))
+    snapshotOnlyFiles: (snapshot?.changedFiles ?? []).filter((s) =>
+      tier2Paths.has(s.path)
     ),
     workspacePath,
   };
@@ -1044,7 +1118,11 @@ export function buildUndoDialogInputForSpecificEvent(
       instruction = null;
     }
   } else {
-    instruction = resolveEventUndoInstruction(event, snapshotFiles);
+    instruction = resolveEventUndoInstruction(
+      event,
+      snapshotFiles,
+      workspacePath
+    );
   }
 
   const candidate: UndoFileCandidate = {
@@ -1152,9 +1230,24 @@ export function computePromptChangeSummary(
   );
   const candidates =
     redoInstructions.length > 0
-      ? allCandidates.filter(
-          (c) => !redoInstructions.some((ri) => sameFilePath(c.path, ri.path))
-        )
+      ? (() => {
+          const excludedCandidates = new Set(
+            redoInstructions
+              .map((instruction) =>
+                resolveSnapshotFileMatch(
+                  allCandidates,
+                  instruction.path,
+                  getOutputWorkspaceRoot(allStepOutputs)
+                )
+              )
+              .filter(
+                (candidate): candidate is UndoFileCandidate => candidate != null
+              )
+          );
+          return allCandidates.filter(
+            (candidate) => !excludedCandidates.has(candidate)
+          );
+        })()
       : allCandidates;
   const { undoableCount, blockedCount } = getPromptUndoSummary(candidates);
   return createPromptChangeSummary(

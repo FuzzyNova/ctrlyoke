@@ -13,7 +13,7 @@ import {
   OPERATION_STATUS,
 } from "../types/messages";
 import type { WorkspaceSnapshot } from "@root/types/OutputHistoryTypes";
-import { sameFilePath } from "./promptUndo";
+import { resolveSnapshotFileMatch, sameFilePath } from "./promptUndo";
 import {
   buildDiffRenderPlanFromStats,
   getRenderedDiffStats,
@@ -177,22 +177,22 @@ function getSnapshotStructuredPatch(
   path: string,
   workspaceSnapshot?: WorkspaceSnapshot
 ): FileEditData["structuredPatch"] | undefined {
-  return workspaceSnapshot?.changedFiles.find(
-    (change) =>
-      change.structuredPatch &&
-      change.structuredPatch.length > 0 &&
-      sameFilePath(path, change.path)
-  )?.structuredPatch;
+  const match = workspaceSnapshot
+    ? resolveSnapshotFileMatch(workspaceSnapshot.changedFiles, path)
+    : undefined;
+  return match?.structuredPatch && match.structuredPatch.length > 0
+    ? match.structuredPatch
+    : undefined;
 }
 
 export function getSnapshotBeforeContent(
   path: string,
   workspaceSnapshot?: WorkspaceSnapshot
 ): string | undefined {
-  return workspaceSnapshot?.changedFiles.find(
-    (change) =>
-      change.beforeContent !== undefined && sameFilePath(path, change.path)
-  )?.beforeContent;
+  return workspaceSnapshot
+    ? resolveSnapshotFileMatch(workspaceSnapshot.changedFiles, path)
+        ?.beforeContent
+    : undefined;
 }
 
 export function getDisplayStructuredPatch(

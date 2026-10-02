@@ -444,6 +444,71 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
     expect(candidates[0].instruction).not.toBeNull();
   });
 
+  it("matches the most specific snapshot path and keeps the shallower file in tier 2", () => {
+    const output = makeCliOutput([
+      makeFileEditEvent("C:/ws/packages/api/package.json"),
+    ]);
+    const rootPatch: UnifiedDiffHunk[] = [
+      {
+        oldStart: 1,
+        oldLines: 1,
+        newStart: 1,
+        newLines: 1,
+        lines: ["-root", "+root changed"],
+      },
+    ];
+    const nestedPatch: UnifiedDiffHunk[] = [
+      {
+        oldStart: 1,
+        oldLines: 1,
+        newStart: 1,
+        newLines: 1,
+        lines: ["-lodash@1", "+lodash@2"],
+      },
+    ];
+    const snapshot = makeSnapshot([
+      { ...makeModifiedSnap("package.json", rootPatch), beforeContent: "root" },
+      {
+        ...makeModifiedSnap("packages/api/package.json", nestedPatch),
+        beforeContent: "nested",
+      },
+    ]);
+
+    const candidates = buildUndoCandidatesForOutputs([output], snapshot);
+
+    expect(candidates[0]).toMatchObject({
+      path: "C:/ws/packages/api/package.json",
+      instruction: { path: "packages/api/package.json" },
+      structuredPatch: nestedPatch,
+    });
+    expect(candidates).toContainEqual(
+      expect.objectContaining({
+        path: "package.json",
+        tier: UNDO_FILE_CANDIDATE_TIERS.TIER2,
+      })
+    );
+  });
+
+  it("does not match a nested edit to a root snapshot file when workspace root is known", () => {
+    const output = makeCliOutput([
+      makeFileEditEvent("C:/ws/packages/api/package.json"),
+    ]);
+    const snapshot = makeSnapshot([makeModifiedSnap("package.json")]);
+
+    const candidates = buildUndoCandidatesForOutputs(
+      [output],
+      snapshot,
+      "C:/ws"
+    );
+
+    expect(candidates[0].instruction).toBeNull();
+    expect(candidates[0].structuredPatch).toEqual(PATCH);
+    expect(candidates[1]).toMatchObject({
+      path: "package.json",
+      tier: UNDO_FILE_CANDIDATE_TIERS.TIER2,
+    });
+  });
+
   it("uses snapshot structuredPatch over per-event patches for display", () => {
     const snapPatch: UnifiedDiffHunk[] = [
       {
