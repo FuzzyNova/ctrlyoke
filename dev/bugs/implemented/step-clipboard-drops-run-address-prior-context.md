@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli), reviewing the `$previous:N` change (8f317f5cd); confirmed against compiled `out/`
 - **Area:** `src/core/WorkflowStepSanitizer.ts` (`clonePriorContext`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

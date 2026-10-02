@@ -504,13 +504,14 @@ export interface WorkflowRunAddress {
 
 /** True when a persisted prior-context value addresses one promoted run. */
 export function isWorkflowRunAddress(
-  value: PriorContext | undefined
+  value: unknown
 ): value is WorkflowRunAddress {
   return (
     !!value &&
     !Array.isArray(value) &&
     typeof value === "object" &&
     "workflowKey" in value &&
+    "runRef" in value &&
     typeof value.workflowKey === "string" &&
     typeof value.runRef === "string"
   );

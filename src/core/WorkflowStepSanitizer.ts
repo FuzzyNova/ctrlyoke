@@ -8,6 +8,7 @@ import {
 } from "../types/DashboardConstants";
 import {
   isScriptStep,
+  isWorkflowRunAddress,
   type ErrorBehavior,
   type EndCondition,
   type HarnessId,
@@ -286,6 +287,9 @@ function cloneToolPermissions(
 function clonePriorContext(value: unknown): PriorContext | undefined {
   if (typeof value === "string") {
     return value as PriorContext;
+  }
+  if (isWorkflowRunAddress(value)) {
+    return { workflowKey: value.workflowKey, runRef: value.runRef };
   }
   if (
     Array.isArray(value) &&

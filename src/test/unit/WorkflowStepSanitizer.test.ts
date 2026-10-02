@@ -202,6 +202,54 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
       {}
     );
   });
+
+  test("preserves run-address priorContext through sanitization and clipboard round trips", () => {
+    const step = {
+      type: STEP_TYPES.PROMPT,
+      prompt: "continue from the completed run",
+      priorContext: {
+        workflowKey: "workflow-1",
+        runRef: "run-2026-01-01T00-00-00-000Z",
+        ignored: "not part of WorkflowRunAddress",
+      },
+    } as any;
+    const expected = {
+      type: STEP_TYPES.PROMPT,
+      prompt: "continue from the completed run",
+      priorContext: {
+        workflowKey: "workflow-1",
+        runRef: "run-2026-01-01T00-00-00-000Z",
+      },
+    };
+
+    assert.deepStrictEqual(sanitizeClipboardWorkflowStep(step), expected);
+    assert.deepStrictEqual(
+      parseClipboardWorkflowStep(serializeWorkflowStepForClipboard(step)),
+      expected
+    );
+  });
+
+  test("drops malformed priorContext objects while retaining supported forms", () => {
+    for (const priorContext of [{ workflowKey: 1 }, { runRef: "run-1" }]) {
+      assert.deepStrictEqual(
+        sanitizeClipboardWorkflowStep({ prompt: "prompt", priorContext }),
+        { prompt: "prompt" }
+      );
+    }
+
+    assert.deepStrictEqual(
+      sanitizeClipboardWorkflowStep({ prompt: "prompt", priorContext: { previous: 3 } }),
+      { prompt: "prompt", priorContext: { previous: 3 } }
+    );
+    assert.deepStrictEqual(
+      sanitizeClipboardWorkflowStep({ prompt: "prompt", priorContext: "all" }),
+      { prompt: "prompt", priorContext: "all" }
+    );
+    assert.deepStrictEqual(
+      sanitizeClipboardWorkflowStep({ prompt: "prompt", priorContext: [1, 3] }),
+      { prompt: "prompt", priorContext: [1, 3] }
+    );
+  });
 });
 
 suite("WorkflowStepSanitizer response-source cutover", () => {
