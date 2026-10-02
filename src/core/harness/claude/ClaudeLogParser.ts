@@ -33,6 +33,7 @@ import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
 import {
   CLAUDE_CONTENT_BLOCK_TYPES,
   CLAUDE_EVENT_TYPES,
+  CLAUDE_MODEL_SENTINELS,
   CLAUDE_PROGRESS_TYPES,
   CLAUDE_STOP_REASONS,
   CLAUDE_SYSTEM_SUBTYPES,
@@ -316,6 +317,9 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         event.type === CLAUDE_EVENT_TYPES.ASSISTANT &&
         event.message?.content
       ) {
+        const isSyntheticMessage =
+          event.message.model === CLAUDE_MODEL_SENTINELS.SYNTHETIC;
+
         // Process content blocks in order they appear
         for (const contentBlock of event.message.content) {
           // TEXT - Extract text content
@@ -383,11 +387,17 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           }
           // Track last assistant turn's usage — this represents the current
           // context window state (not cumulative across turns like the totals above)
-          lastAssistantUsage = usage;
+          if (!isSyntheticMessage) {
+            lastAssistantUsage = usage;
+          }
         }
 
         // Extract model info
-        if (event.message.model && !model) {
+        if (
+          event.message.model &&
+          !isSyntheticMessage &&
+          !model
+        ) {
           model = event.message.model;
         }
       }
@@ -584,6 +594,11 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   ): { used: number; size: number } | null {
     if (event.type === CLAUDE_EVENT_TYPES.ASSISTANT) {
       const assistantEvent = event as ClaudeProviderEvent;
+      if (
+        assistantEvent.message?.model === CLAUDE_MODEL_SENTINELS.SYNTHETIC
+      ) {
+        return null;
+      }
       const usage = assistantEvent.message?.usage;
       if (!usage) return null;
       const used =

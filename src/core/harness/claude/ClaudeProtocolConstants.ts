@@ -7,6 +7,10 @@ export const CLAUDE_EVENT_TYPES = {
   PROGRESS: "progress",
 } as const;
 
+export const CLAUDE_MODEL_SENTINELS = {
+  SYNTHETIC: "<synthetic>",
+} as const;
+
 export const CLAUDE_CONTENT_BLOCK_TYPES = {
   TEXT: "text",
   TOOL_USE: "tool_use",

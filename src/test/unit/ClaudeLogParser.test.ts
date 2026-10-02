@@ -1,7 +1,9 @@
 import * as assert from "assert";
 import * as fs from "fs";
 import * as path from "path";
+import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
 import { ClaudeLogParser } from "../../core/harness/claude/ClaudeLogParser";
+import { BaseCliEvent } from "../../core/harness/shared/interfaces/ILogParser";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 
 suite("ClaudeLogParser", () => {
@@ -18,6 +20,117 @@ suite("ClaudeLogParser", () => {
       removeTempDir(testHome);
       testHome = undefined;
     }
+  });
+
+  test("ignores synthetic assistant usage when computing step context", () => {
+    const parser = new ClaudeLogParser();
+    const events: BaseCliEvent[] = [
+      {
+        type: "assistant",
+        message: {
+          model: "claude-opus-4-6",
+          usage: {
+            input_tokens: 1000,
+            cache_read_input_tokens: 150000,
+            cache_creation_input_tokens: 0,
+            output_tokens: 200,
+          },
+          content: [{ type: "text", text: "A real response." }],
+        },
+      },
+      {
+        type: "assistant",
+        message: {
+          model: "<synthetic>",
+          usage: {
+            input_tokens: 0,
+            cache_read_input_tokens: 0,
+            cache_creation_input_tokens: 0,
+            output_tokens: 0,
+          },
+          stop_reason: "stop_sequence",
+          content: [
+            {
+              type: "text",
+              text: "API Error: Server error mid-response. The response above may be incomplete.",
+            },
+          ],
+        },
+      },
+    ];
+
+    const result = parser.extractResponse(events);
+
+    assert.strictEqual(result.metadata.model, "claude-opus-4-6");
+    assert.strictEqual(
+      result.metadata.usage?.contextWindowUsedTokens,
+      151000
+    );
+    assert.ok(
+      result.events.some(
+        (event) =>
+          event.type === CLI_EVENT_TYPES.TEXT &&
+          "text" in event.data &&
+          event.data.text.includes("API Error: Server error mid-response")
+      )
+    );
+  });
+
+  test("does not resolve the model from a leading synthetic assistant event", () => {
+    const parser = new ClaudeLogParser();
+    const events: BaseCliEvent[] = [
+      {
+        type: "assistant",
+        message: {
+          model: "<synthetic>",
+          usage: {
+            input_tokens: 0,
+            cache_read_input_tokens: 0,
+            cache_creation_input_tokens: 0,
+            output_tokens: 0,
+          },
+          content: [{ type: "text", text: "API Error." }],
+        },
+      },
+      {
+        type: "assistant",
+        message: {
+          model: "claude-opus-4-6",
+          usage: {
+            input_tokens: 1000,
+            cache_read_input_tokens: 150000,
+            cache_creation_input_tokens: 0,
+            output_tokens: 200,
+          },
+          content: [{ type: "text", text: "A real response." }],
+        },
+      },
+    ];
+
+    const result = parser.extractResponse(events);
+
+    assert.strictEqual(result.metadata.model, "claude-opus-4-6");
+  });
+
+  test("ignores synthetic assistant usage in live context updates", () => {
+    const parser = new ClaudeLogParser();
+    const result = parser.extractLiveContextWindow(
+      {
+        type: "assistant",
+        message: {
+          model: "<synthetic>",
+          usage: {
+            input_tokens: 0,
+            cache_read_input_tokens: 0,
+            cache_creation_input_tokens: 0,
+            output_tokens: 0,
+          },
+        },
+      },
+      "claude-opus-4-6"
+    );
+
+    assert.strictEqual(result, null);
   });
 
   test("discovers sessions from the default managed-worktree path", async () => {
