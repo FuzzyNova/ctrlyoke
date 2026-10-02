@@ -1173,6 +1173,35 @@ suite("HostedWorkspaceViewerService", function () {
       assert.strictEqual(written, "updated");
     });
 
+    test("does not follow a pre-existing cy-tmp hard link", async () => {
+      const root = createWorkspace();
+      const outsideRoot = makeTempDir("cy-viewer-outside-");
+      tempRoots.push(outsideRoot);
+      const targetPath = path.join(root, "edit.txt");
+      const outsidePath = path.join(outsideRoot, "outside.txt");
+      fs.writeFileSync(targetPath, "original");
+      fs.writeFileSync(outsidePath, "outside original");
+      fs.linkSync(outsidePath, `${targetPath}.cy-tmp`);
+
+      await new HostedWorkspaceViewerService(root).saveFile({
+        path: "edit.txt",
+        content: "updated",
+      });
+
+      assert.strictEqual(
+        fs.readFileSync(outsidePath, "utf8"),
+        "outside original"
+      );
+      assert.strictEqual(fs.readFileSync(targetPath, "utf8"), "updated");
+      const savedFile = fs.lstatSync(targetPath);
+      assert.strictEqual(savedFile.isSymbolicLink(), false);
+      assert.strictEqual(
+        savedFile.nlink,
+        1,
+        "saved file must not be a hard link"
+      );
+    });
+
     test("throws for path traversal attempt", async () => {
       const root = createWorkspace();
       const svc = new HostedWorkspaceViewerService(root);

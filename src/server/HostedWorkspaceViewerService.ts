@@ -82,6 +82,7 @@ import {
   isPathWithinAnyDirectory,
 } from "../utils/PathSecurity";
 import { runtimeTrustedRootRegistry } from "../utils/RuntimeTrustedRootRegistry";
+import { writeFileAtomic } from "../utils/AtomicFileUtils";
 import {
   getRecentCommits,
   getFileHistoryCommits,
@@ -1467,9 +1468,7 @@ export class HostedWorkspaceViewerService {
       content = content.replace(/\n/g, "\r\n");
     }
 
-    const tmpPath = `${resolved}.cy-tmp`;
-    await fs.promises.writeFile(tmpPath, content, "utf8");
-    await fs.promises.rename(tmpPath, resolved);
+    await writeFileAtomic(resolved, content);
   }
 
   // ── File operations ──────────────────────────────────────────────────────

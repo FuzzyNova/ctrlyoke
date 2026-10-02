@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (Claude)
 - **Area:** `src/server/HostedWorkspaceViewerService.ts` (`saveFile`)
-- **Severity:** high (security)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

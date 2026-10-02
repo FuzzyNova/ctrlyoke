@@ -1,4 +1,5 @@
 import * as fs from "fs/promises";
+import { randomBytes } from "crypto";
 
 /**
  * Atomic file replacement, hardened against the transient sharing failures
@@ -161,12 +162,21 @@ export async function writeFileAtomic(
   contents: string | Buffer,
   options: RenameRetryOptions = {}
 ): Promise<void> {
-  const tempPath = `${filePath}.tmp`;
+  const tempPath = `${filePath}.${randomBytes(8).toString("hex")}.tmp`;
+  let tempFile: Awaited<ReturnType<typeof fs.open>> | undefined;
+  let tempCreated = false;
   try {
-    await fs.writeFile(tempPath, contents);
+    tempFile = await fs.open(tempPath, "wx");
+    tempCreated = true;
+    await tempFile.writeFile(contents);
+    await tempFile.close();
+    tempFile = undefined;
     await renameWithTransientRetry(tempPath, filePath, options);
   } catch (error) {
-    await fs.unlink(tempPath).catch(() => {});
+    await tempFile?.close().catch(() => {});
+    if (tempCreated) {
+      await fs.unlink(tempPath).catch(() => {});
+    }
     throw error;
   }
 }
