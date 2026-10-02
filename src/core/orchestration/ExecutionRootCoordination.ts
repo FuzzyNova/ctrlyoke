@@ -145,6 +145,22 @@ function pathsOverlap(left: string, right: string): boolean {
   return globPatternsOverlap(leftSegments, rightSegments);
 }
 
+function findConflictingClaim(
+  claims: Iterable<CoordinationClaim>,
+  path: string,
+  participantId: string
+): CoordinationClaim | undefined {
+  for (const claim of claims) {
+    if (
+      claim.owner.participantId !== participantId &&
+      pathsOverlap(claim.path, path)
+    ) {
+      return claim;
+    }
+  }
+  return undefined;
+}
+
 type SegmentToken =
   | { kind: typeof COORDINATION_GLOB_TOKENS.STAR }
   | { kind: typeof COORDINATION_GLOB_TOKENS.ANY }
@@ -394,15 +410,12 @@ export function foldCoordinationEntries(
 
     if (entry.kind === COORDINATION_ENTRY_KINDS.CLAIM) {
       for (const claimPath of entry.paths ?? []) {
-        const existing = [...claims.values()].find((claim) =>
-          pathsOverlap(claim.path, claimPath)
+        const existing = findConflictingClaim(
+          claims.values(),
+          claimPath,
+          entry.from.participantId
         );
-        if (
-          existing &&
-          existing.owner.participantId !== entry.from.participantId
-        ) {
-          continue;
-        }
+        if (existing) continue;
         claims.set(claimPath, {
           path: claimPath,
           owner: participantRecord.participant,
@@ -884,11 +897,13 @@ export class CoordinationParticipantRegistry {
       const granted: string[] = [];
       const denied: CoordinationDeniedClaim[] = [];
       for (const claimPath of paths) {
-        const owner = fold.claims.find((claim) =>
-          pathsOverlap(claim.path, claimPath)
-        )?.owner;
-        if (owner && owner.participantId !== participant.participantId) {
-          denied.push({ path: claimPath, owner });
+        const conflictingClaim = findConflictingClaim(
+          fold.claims,
+          claimPath,
+          participant.participantId
+        );
+        if (conflictingClaim) {
+          denied.push({ path: claimPath, owner: conflictingClaim.owner });
         } else {
           granted.push(claimPath);
         }

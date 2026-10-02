@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli) reading `ExecutionRootCoordination.ts`; reproduced with a `CoordinationParticipantRegistry` script
 - **Area:** `src/core/orchestration/ExecutionRootCoordination.ts` (`CoordinationParticipantRegistry.claimPaths`, `foldCoordinationEntries`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

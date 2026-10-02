@@ -317,6 +317,120 @@ suite("ExecutionRootCoordination", function () {
     }
   });
 
+  test("denies a claim when an earlier own claim masks another owner's conflict", async () => {
+    const root = await tempDirectory();
+    try {
+      const registry = new CoordinationParticipantRegistry(root, {
+        now: () => 10_000,
+      });
+      const first = await registry.registerParticipant({
+        kind: "external",
+        label: "first",
+        via: COORDINATION_PARTICIPANT_VIA.MCP,
+      });
+      const second = await registry.registerParticipant({
+        kind: "external",
+        label: "second",
+        via: COORDINATION_PARTICIPANT_VIA.MCP,
+      });
+
+      assert.deepStrictEqual((await first.claim(["src/a.ts"])).granted, [
+        "src/a.ts",
+      ]);
+      assert.deepStrictEqual((await second.claim(["src/b.ts"])).granted, [
+        "src/b.ts",
+      ]);
+
+      const result = await first.claim(["src"]);
+      assert.deepStrictEqual(result.granted, []);
+      assert.deepStrictEqual(
+        result.denied.map(({ path: claimPath, owner }) => [
+          claimPath,
+          owner.participantId,
+        ]),
+        [["src", second.participantId]]
+      );
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  test("replay denies a claim when an earlier own claim masks another owner", () => {
+    const first = participant("first");
+    const second = participant("second", { pid: 43 });
+    const folded = foldCoordinationEntries(
+      [
+        join(first, 1),
+        claim(first, ["src/a.ts"], 2),
+        join(second, 3),
+        claim(second, ["src/b.ts"], 4),
+        claim(first, ["src"], 5),
+      ],
+      { now: 1_000, processLivenessCheck: () => true }
+    );
+
+    assert.deepStrictEqual(
+      folded.claims.map(({ path: claimPath, owner }) => [
+        claimPath,
+        owner.participantId,
+      ]),
+      [
+        ["src/a.ts", first.participantId],
+        ["src/b.ts", second.participantId],
+      ]
+    );
+  });
+
+  test("finds a concrete conflict after an earlier own claim overlaps the glob", async () => {
+    const root = await tempDirectory();
+    try {
+      const registry = new CoordinationParticipantRegistry(root, {
+        now: () => 10_000,
+      });
+      const first = await registry.registerParticipant({
+        kind: "external",
+        label: "first",
+        via: COORDINATION_PARTICIPANT_VIA.MCP,
+      });
+      const second = await registry.registerParticipant({
+        kind: "external",
+        label: "second",
+        via: COORDINATION_PARTICIPANT_VIA.MCP,
+      });
+
+      await first.claim(["src/a.ts"]);
+      await second.claim(["src/b.ts"]);
+
+      const result = await first.claim(["src/*.ts"]);
+      assert.deepStrictEqual(result.granted, []);
+      assert.deepStrictEqual(
+        result.denied.map((item) => item.owner.participantId),
+        [second.participantId]
+      );
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
+  test("grants a claim overlapping only the participant's own claims", async () => {
+    const root = await tempDirectory();
+    try {
+      const registry = new CoordinationParticipantRegistry(root, {
+        now: () => 10_000,
+      });
+      const owner = await registry.registerParticipant({
+        kind: "external",
+        label: "owner",
+        via: COORDINATION_PARTICIPANT_VIA.MCP,
+      });
+
+      await owner.claim(["src/a.ts"]);
+      assert.deepStrictEqual((await owner.claim(["src"])).granted, ["src"]);
+    } finally {
+      await removeDirectory(root);
+    }
+  });
+
   test("directory claims deny descendants in either claim order", async () => {
     for (const [firstPath, secondPath] of [
       ["dir", "dir/child.ts"],
