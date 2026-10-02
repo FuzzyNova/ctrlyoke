@@ -43,6 +43,7 @@ import {
 } from "./harness/PtyProcessManager";
 import {
   getShellInvocationError,
+  hasMeaningfulNewline,
   resolveShellKind,
 } from "../utils/ShellCatalog";
 import {
@@ -109,10 +110,7 @@ export class EndConditionEvaluator {
    * A first line followed only by blank lines keeps file-path routing.
    */
   static isMultilineInlineScript(script: string): boolean {
-    return script
-      .split(/\r\n?|\n/)
-      .slice(1)
-      .some((line) => /\S/.test(line));
+    return hasMeaningfulNewline(script);
   }
 
   /**

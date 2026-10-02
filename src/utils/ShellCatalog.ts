@@ -173,10 +173,16 @@ export function isShellAvailableOnPlatform(
   return SHELL_KIND_PLATFORMS[resolveShellKind(shell)].includes(platform);
 }
 
-const MULTILINE_SCRIPT_NEWLINE = /\r\n?|\n/;
-
 export const MULTILINE_CMD_SCRIPT_ERROR =
   "Multi-line scripts cannot run under cmd. Set this script's `shell` field to a shell that supports multi-line scripts, for example `shell: pwsh`.";
+
+/** Whether a script has non-whitespace content on a line after its first. */
+export function hasMeaningfulNewline(script: string): boolean {
+  return script
+    .split(/\r\n?|\n/)
+    .slice(1)
+    .some((line) => /\S/.test(line));
+}
 
 /**
  * Return the actionable preflight error for a script/shell combination, if any.
@@ -187,7 +193,7 @@ export function getShellInvocationError(
   script: string,
   shellKind: ShellKind
 ): string | undefined {
-  if (shellKind === SHELL_KINDS.CMD && MULTILINE_SCRIPT_NEWLINE.test(script)) {
+  if (shellKind === SHELL_KINDS.CMD && hasMeaningfulNewline(script)) {
     return MULTILINE_CMD_SCRIPT_ERROR;
   }
   return undefined;

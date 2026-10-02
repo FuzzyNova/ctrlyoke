@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), reproduced with a tsx probe
 - **Area:** `src/utils/ShellCatalog.ts` (`MULTILINE_SCRIPT_NEWLINE`, `getShellInvocationError`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

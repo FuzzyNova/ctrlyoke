@@ -145,6 +145,18 @@ suite("ShellCatalog", () => {
       undefined
     );
     assert.strictEqual(
+      getShellInvocationError("echo hi\n", SHELL_KINDS.CMD),
+      undefined
+    );
+    assert.strictEqual(
+      getShellInvocationError("echo hi\r\n", SHELL_KINDS.CMD),
+      undefined
+    );
+    assert.strictEqual(
+      getShellInvocationError("echo hi\n  \n\t\n", SHELL_KINDS.CMD),
+      undefined
+    );
+    assert.strictEqual(
       getShellInvocationError("echo one\necho two", SHELL_KINDS.PWSH),
       undefined
     );
