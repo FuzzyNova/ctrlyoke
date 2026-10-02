@@ -288,7 +288,10 @@ suite("EndConditionHandler", () => {
         attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         attemptIndex: 0,
       },
-      async () => "response"
+      async (_retryPrompt, _currentIndex, attemptIndex) => ({
+        responseText: "response",
+        attemptIndex,
+      })
     );
 
     assert.match(dashboard.statusMessages[0].message, /Attempt 1\/∞/);
@@ -434,7 +437,7 @@ suite("EndConditionHandler", () => {
       },
       async (_retryPrompt, _currentIndex, attemptIndex) => {
         retryAttemptIndices.push(attemptIndex);
-        return "fixed";
+        return { responseText: "fixed", attemptIndex };
       }
     );
 
@@ -642,7 +645,10 @@ suite("EndConditionHandler", () => {
         attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         attemptIndex: 0,
       },
-      async () => "retry response"
+      async (_retryPrompt, _currentIndex, attemptIndex) => ({
+        responseText: "retry response",
+        attemptIndex,
+      })
     );
 
     assert.strictEqual(result.shouldContinue, false);
@@ -689,9 +695,9 @@ suite("EndConditionHandler", () => {
           attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
           attemptIndex: 0,
         },
-        async (retryPromptStep) => {
+        async (retryPromptStep, _currentIndex, attemptIndex) => {
           retryPrompts.push(retryPromptStep.prompt);
-          return "retry response";
+          return { responseText: "retry response", attemptIndex };
         }
       );
 
@@ -831,9 +837,9 @@ suite("EndConditionHandler", () => {
         attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         attemptIndex: 0,
       },
-      async () => {
+      async (_retryPrompt, _currentIndex, attemptIndex) => {
         retryCallbackCount++;
-        return "fixed";
+        return { responseText: "fixed", attemptIndex };
       }
     );
 
@@ -886,7 +892,7 @@ suite("EndConditionHandler", () => {
       },
       async (retryPromptStep, _currentIndex, attemptIndex) => {
         retryPrompts.push(`${retryPromptStep.prompt}:${attemptIndex}`);
-        return "response";
+        return { responseText: "response", attemptIndex };
       }
     );
 
@@ -957,9 +963,9 @@ suite("EndConditionHandler", () => {
         attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         attemptIndex: 0,
       },
-      async (retryPromptStep) => {
+      async (retryPromptStep, _currentIndex, attemptIndex) => {
         retryPrompts.push(retryPromptStep.prompt);
-        return "response";
+        return { responseText: "response", attemptIndex };
       }
     );
 
@@ -996,7 +1002,10 @@ suite("EndConditionHandler", () => {
         attemptTarget: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
         attemptIndex: 0,
       },
-      async () => "response"
+      async (_retryPrompt, _currentIndex, attemptIndex) => ({
+        responseText: "response",
+        attemptIndex,
+      })
     );
 
     assert.strictEqual(result.shouldContinue, false);
@@ -1042,7 +1051,10 @@ suite("EndConditionHandler", () => {
         attemptTarget: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
         attemptIndex: 0,
       },
-      async () => "response"
+      async (_retryPrompt, _currentIndex, attemptIndex) => ({
+        responseText: "response",
+        attemptIndex,
+      })
     );
 
     assert.strictEqual(result.shouldContinue, true);
@@ -1073,10 +1085,10 @@ suite("EndConditionHandler", () => {
         attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         attemptIndex: 0,
       },
-      async () => {
+      async (_retryPrompt, _currentIndex, attemptIndex) => {
         retryCallbackCount++;
         runtime.requestStop();
-        return "response";
+        return { responseText: "response", attemptIndex };
       }
     );
 
@@ -1115,9 +1127,9 @@ suite("EndConditionHandler", () => {
         attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         attemptIndex: 0,
       },
-      async (retryPromptStep) => {
+      async (retryPromptStep, _currentIndex, attemptIndex) => {
         retryPrompts.push(retryPromptStep.prompt);
-        return "response";
+        return { responseText: "response", attemptIndex };
       }
     );
 
@@ -1159,9 +1171,9 @@ suite("EndConditionHandler", () => {
           evaluationResult: successResult("done"),
         }),
       },
-      async (retryPromptStep) => {
+      async (retryPromptStep, _currentIndex, attemptIndex) => {
         retryPromptText = retryPromptStep.prompt;
-        return "response";
+        return { responseText: "response", attemptIndex };
       }
     );
 
@@ -1192,9 +1204,9 @@ suite("EndConditionHandler", () => {
         attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         attemptIndex: 0,
       },
-      async (retryPromptStep) => {
+      async (retryPromptStep, _currentIndex, attemptIndex) => {
         fallbackText = retryPromptStep.prompt;
-        return "response";
+        return { responseText: "response", attemptIndex };
       }
     );
     assert.strictEqual(fallbackText, "run task");

@@ -758,7 +758,7 @@ suite("WorkflowExecutor condition shell reporting", () => {
     ]);
   });
 
-  test("re-sends an end-condition retry after a retry harness failure", async () => {
+  test("uses the default error retry after an end-condition retry send fails", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
     let sendCount = 0;
@@ -779,10 +779,7 @@ suite("WorkflowExecutor condition shell reporting", () => {
       steps: [
         {
           prompt: "initial",
-          errorBehavior: {
-            onError: CONDITION_ACTIONS.RETRY,
-            maxRetries: 2,
-          },
+          errorBehavior: { onError: CONDITION_ACTIONS.RETRY },
           endCondition: {
             script: "check-result",
             onFail: CONDITION_ACTIONS.RETRY,
@@ -802,6 +799,120 @@ suite("WorkflowExecutor condition shell reporting", () => {
       "initial",
       "retry",
       "retry",
+    ]);
+  });
+
+  test("re-sends an end-condition retry after a retry harness failure on fresh attempt indices", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    let sendCount = 0;
+    integration.onSend = async () => {
+      sendCount += 1;
+      if (sendCount === 2) {
+        integration.harnessErrorFailure = true;
+        return { success: false };
+      }
+      integration.harnessErrorFailure = false;
+      return { responseText: "ok" };
+    };
+    const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+      shellEvaluationResult(false),
+      shellEvaluationResult(false),
+      shellEvaluationResult(true),
+    ]);
+    const scriptExecutionAttempts: number[] = [];
+    const attemptTerminals: Array<{ attemptIndex: number; terminalState: string }> = [];
+    const outputHistoryManager = new Proxy(
+      {
+        recordScriptExecution: async (...args: unknown[]) => {
+          scriptExecutionAttempts.push(args[3] as number);
+        },
+        recordAttemptTerminal: async (...args: unknown[]) => {
+          attemptTerminals.push({
+            attemptIndex: args[3] as number,
+            terminalState: args[4] as string,
+          });
+        },
+      },
+      {
+        get: (target, property) =>
+          Reflect.get(target, property) ?? (async () => undefined),
+      }
+    );
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "initial",
+          errorBehavior: { onError: CONDITION_ACTIONS.RETRY },
+          endCondition: {
+            script: "check-result",
+            onFail: CONDITION_ACTIONS.RETRY,
+            maxRetries: 2,
+            retryPrompt: "retry",
+          },
+        },
+      ],
+    });
+
+    const context = makeContext(integration);
+    context.historyFilePath = "history.json";
+    context.outputHistoryManager = outputHistoryManager as any;
+    await makeExecutor(queue, evaluator).execute(integration, context);
+
+    assert.deepStrictEqual(integration.sentPrompts, [
+      "initial",
+      "retry",
+      "retry",
+      "retry",
+    ]);
+    assert.deepStrictEqual(scriptExecutionAttempts, [0, 2, 3]);
+    assert.ok(
+      attemptTerminals.some(
+        ({ attemptIndex, terminalState }) =>
+          attemptIndex === 3 &&
+          terminalState === TIMELINE_ATTEMPT_TERMINAL_STATES.COMPLETED
+      )
+    );
+  });
+
+  test("allows the default error retry for an end-condition error on retry 2", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new RecordingShellEvaluator(new MockPlatform(), [
+      shellEvaluationResult(false),
+      makeEvaluationResult({
+        passed: false,
+        errored: true,
+        actual: "",
+        error: "end-condition script failed",
+        exitCode: 1,
+      }),
+      shellEvaluationResult(true),
+    ]);
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "initial",
+          errorBehavior: { onError: CONDITION_ACTIONS.RETRY },
+          endCondition: {
+            script: "check-result",
+            onFail: CONDITION_ACTIONS.RETRY,
+            maxRetries: 2,
+            retryPrompt: "retry",
+          },
+        },
+      ],
+    });
+
+    await makeExecutor(queue, evaluator).execute(
+      integration,
+      makeContext(integration)
+    );
+
+    assert.deepStrictEqual(integration.sentPrompts, [
+      "initial",
+      "retry",
+      "initial",
     ]);
   });
 });

@@ -407,13 +407,17 @@ function toReportedConditionProperties(condition: ScriptProperties) {
 }
 
 type PromptFailureDisposition =
-  | { outcome: typeof WORKFLOW_EXECUTION_OUTCOMES.RETRY }
+  | {
+      outcome: typeof WORKFLOW_EXECUTION_OUTCOMES.RETRY;
+      nextErrorRetryCount?: number;
+    }
   | { outcome: typeof WORKFLOW_EXECUTION_OUTCOMES.CONTINUE }
   | { outcome: typeof WORKFLOW_EXECUTION_OUTCOMES.STOP };
 
 type PhaseDisposition = {
   outcome: WorkflowExecutionOutcome;
   nextAttemptIndex?: number;
+  nextErrorRetryCount?: number;
 };
 
 function canRetryErrorBehavior(
@@ -1925,6 +1929,9 @@ export class WorkflowExecutor {
     // pre-condition -> prompt -> end-condition. A whole-step retry therefore
     // re-runs the gate before spending another harness call.
     let attemptIndex = 0;
+    let preConditionErrorRetryCount = 0;
+    const promptErrorRetryCounter = { count: 0 };
+    let endConditionErrorRetryCount = 0;
     while (true) {
       if (context.abortSignal?.aborted) {
         return false;
@@ -2039,10 +2046,14 @@ export class WorkflowExecutor {
             SCRIPT_SOURCE_LABELS[SCRIPT_OUTPUT_SOURCES.PRE_CONDITION],
             preResult,
             preErrorBehavior,
-            attemptIndex
+            attemptIndex,
+            preConditionErrorRetryCount
           );
           if (preDisposition.outcome === CONDITION_ACTIONS.RETRY) {
             attemptIndex = preDisposition.nextAttemptIndex ?? attemptIndex + 1;
+            preConditionErrorRetryCount =
+              preDisposition.nextErrorRetryCount ??
+              preConditionErrorRetryCount + 1;
             continue;
           }
           if (preDisposition.outcome === WORKFLOW_EXECUTION_OUTCOMES.STOP) {
@@ -2298,11 +2309,15 @@ export class WorkflowExecutor {
           signedStepIndex,
           runIndex,
           attemptIndex,
+          promptErrorRetryCounter.count,
           resolvedProperties
         );
 
         if (failureDisposition.outcome === CONDITION_ACTIONS.RETRY) {
           attemptIndex++;
+          promptErrorRetryCounter.count =
+            failureDisposition.nextErrorRetryCount ??
+            promptErrorRetryCounter.count + 1;
           continue;
         }
 
@@ -2359,6 +2374,8 @@ export class WorkflowExecutor {
           runIndex,
           attemptIndex,
           duration,
+          promptErrorRetryCounter,
+          endConditionErrorRetryCount,
           vars && Object.keys(vars).length > 0 ? vars : undefined,
           resolvedProperties.errorBehavior,
           resolvedProperties.secrets
@@ -2366,6 +2383,9 @@ export class WorkflowExecutor {
 
         if (endDisposition.outcome === CONDITION_ACTIONS.RETRY) {
           attemptIndex = endDisposition.nextAttemptIndex ?? attemptIndex + 1;
+          endConditionErrorRetryCount =
+            endDisposition.nextErrorRetryCount ??
+            endConditionErrorRetryCount + 1;
           continue;
         }
 
@@ -2541,6 +2561,7 @@ export class WorkflowExecutor {
     // Begin each whole-step attempt before the script executes. An evaluator
     // retry therefore re-runs the complete script step with the same budget.
     let attemptIndex = 0;
+    let errorRetryCount = 0;
     while (true) {
       if (context.abortSignal?.aborted) {
         return false;
@@ -2725,10 +2746,13 @@ export class WorkflowExecutor {
           evalResult,
           errorBehavior,
           attemptIndex,
+          errorRetryCount,
           false
         );
         if (errorDisposition.outcome === CONDITION_ACTIONS.RETRY) {
           attemptIndex = errorDisposition.nextAttemptIndex ?? attemptIndex + 1;
+          errorRetryCount =
+            errorDisposition.nextErrorRetryCount ?? errorRetryCount + 1;
           continue;
         }
         if (errorDisposition.outcome === WORKFLOW_EXECUTION_OUTCOMES.STOP) {
@@ -3563,15 +3587,16 @@ export class WorkflowExecutor {
     result: EvaluationResult,
     errorBehavior: ErrorBehavior | null | undefined,
     attemptIndex: number,
+    errorRetryCount: number,
     completeAttemptOnContinue: boolean = false
   ): Promise<PhaseDisposition> {
     const policy = errorBehavior ?? {
       onError: CONDITION_ACTIONS.STOP_WORKFLOW,
     };
     const maxRetries = policy.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES;
-    const canRetry = canRetryErrorBehavior(policy, attemptIndex);
+    const canRetry = canRetryErrorBehavior(policy, errorRetryCount);
     const actionText = canRetry
-      ? `retry ${attemptIndex + 1} of ${formatRetryDenominator(maxRetries)}`
+      ? `retry ${errorRetryCount + 1} of ${formatRetryDenominator(maxRetries)}`
       : policy.onError === CONDITION_ACTIONS.CONTINUE
         ? CONDITION_ACTIONS.CONTINUE
         : WORKFLOW_EXECUTION_OUTCOMES.STOP;
@@ -3602,7 +3627,7 @@ export class WorkflowExecutor {
       runtime.scheduleRetry(
         target,
         nextAttemptIndex,
-        nextAttemptIndex,
+        errorRetryCount + 1,
         maxRetries
       );
       const retryDelayMs = ConfigurationUtils.secondsToMs(policy.retryDelaySec);
@@ -3612,6 +3637,7 @@ export class WorkflowExecutor {
       return {
         outcome: WORKFLOW_EXECUTION_OUTCOMES.RETRY,
         nextAttemptIndex,
+        nextErrorRetryCount: errorRetryCount + 1,
       };
     }
 
@@ -3776,6 +3802,8 @@ export class WorkflowExecutor {
     runIndex: number,
     attemptIndex: number,
     duration: number,
+    promptErrorRetryCounter: { count: number },
+    errorRetryCount: number,
     vars?: Record<string, string>,
     errorBehavior?: ErrorBehavior,
     secretNames: readonly string[] = []
@@ -3820,6 +3848,7 @@ export class WorkflowExecutor {
         missingScriptResult,
         errorBehavior,
         attemptIndex,
+        errorRetryCount,
         true
       );
     }
@@ -3916,6 +3945,7 @@ export class WorkflowExecutor {
         evaluationResult,
         errorBehavior,
         attemptIndex,
+        errorRetryCount,
         true
       );
     }
@@ -3988,7 +4018,8 @@ export class WorkflowExecutor {
       context,
       target,
       signedStepIndex,
-      runIndex
+      runIndex,
+      promptErrorRetryCounter
     );
 
     const result = await this.endConditionHandler.handleEndConditionResult(
@@ -4007,6 +4038,7 @@ export class WorkflowExecutor {
         result.errorResult,
         errorBehavior,
         result.errorAttemptIndex ?? attemptIndex,
+        errorRetryCount,
         true
       );
     }
@@ -4342,13 +4374,14 @@ export class WorkflowExecutor {
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
     signedStepIndex: number | undefined,
-    runIndex: number
+    runIndex: number,
+    promptErrorRetryCounter: { count: number }
   ): SendRetryPromptCallback {
     return async (
       retryPromptStep: PromptStep,
       currentIndex: number,
       retryAttemptIndex: number
-    ): Promise<string | null> => {
+    ): Promise<{ responseText: string; attemptIndex: number } | null> => {
       const state = this.promptQueue.getState();
       const workflowFile = this.promptQueue.getWorkflowFile();
       let resolvedProperties = PropertyResolver.resolve(
@@ -4521,11 +4554,15 @@ export class WorkflowExecutor {
           signedStepIndex ?? this.getSignedStepIndex(target),
           runIndex,
           sendAttemptIndex,
+          promptErrorRetryCounter.count,
           retryAttemptProperties
         );
         if (failureDisposition.outcome !== WORKFLOW_EXECUTION_OUTCOMES.RETRY) {
           return null;
         }
+        promptErrorRetryCounter.count =
+          failureDisposition.nextErrorRetryCount ??
+          promptErrorRetryCounter.count + 1;
         sendAttemptIndex += 1;
       }
 
@@ -4542,7 +4579,10 @@ export class WorkflowExecutor {
         resolvedProperties.harness
       );
 
-      return result.responseText;
+      return {
+        responseText: result.responseText,
+        attemptIndex: sendAttemptIndex,
+      };
     };
   }
 
@@ -4964,6 +5004,7 @@ export class WorkflowExecutor {
     signedStepIndex: number,
     runIndex: number,
     attemptIndex: number,
+    errorRetryCount: number,
     resolvedProperties?: ResolvedProperties
   ): Promise<PromptFailureDisposition> {
     const runtime = this.getRuntime();
@@ -5097,6 +5138,7 @@ export class WorkflowExecutor {
         signedStepIndex,
         runIndex,
         attemptIndex,
+        errorRetryCount,
         failureKind,
         resolvedProperties
       );
@@ -5185,6 +5227,7 @@ export class WorkflowExecutor {
     signedStepIndex: number,
     runIndex: number,
     attemptIndex: number,
+    errorRetryCount: number,
     failureKind:
       | typeof FAILURE_KINDS.PROCESS_EXIT
       | typeof FAILURE_KINDS.HARNESS_ERROR
@@ -5211,9 +5254,9 @@ export class WorkflowExecutor {
             ? "Harness execution timed out"
             : "Harness reported an error";
 
-    if (canRetryErrorBehavior(errorBehavior, attemptIndex)) {
+    if (canRetryErrorBehavior(errorBehavior, errorRetryCount)) {
       const nextAttemptIndex = attemptIndex + 1;
-      const retryCount = nextAttemptIndex;
+      const retryCount = errorRetryCount + 1;
       const maxRetries =
         errorBehavior.maxRetries ?? DEFAULT_ERROR_BEHAVIOR_RETRIES;
       const retryLimit = isUnlimited(maxRetries) ? "unlimited" : maxRetries;
@@ -5236,7 +5279,10 @@ export class WorkflowExecutor {
         await this.delay(retryDelayMs!);
       }
 
-      return { outcome: WORKFLOW_EXECUTION_OUTCOMES.RETRY };
+      return {
+        outcome: WORKFLOW_EXECUTION_OUTCOMES.RETRY,
+        nextErrorRetryCount: retryCount,
+      };
     }
 
     runtime.failAttempt(target, attemptIndex, failureReason);

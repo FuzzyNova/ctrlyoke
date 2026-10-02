@@ -441,7 +441,7 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
     assert.strictEqual(warning.payload.statusMessage.severity, "warning");
   });
 
-  test("gate errors and harness failures share one retry budget", async () => {
+  test("gate and harness errors use separate retry budgets", async () => {
     harness = createExecutionHarness(workspace);
     harness.integration.harnessErrorFailure = true;
     harness.integration.onSend = async () => {
@@ -459,8 +459,11 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
     );
     await harness.instance.executeLoadedPromptFile();
 
-    assert.strictEqual(await markerLength(), 2);
-    assert.deepStrictEqual(harness.integration.sentPrompts, ["step 1"]);
+    assert.strictEqual(await markerLength(), 3);
+    assert.deepStrictEqual(harness.integration.sentPrompts, [
+      "step 1",
+      "step 1",
+    ]);
     assert.strictEqual(
       harness.instance.promptQueue.getState().status,
       EXECUTION_STATES.ERROR

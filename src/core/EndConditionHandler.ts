@@ -88,7 +88,7 @@ export type SendRetryPromptCallback = (
   retryPromptStep: PromptStep,
   currentIndex: number,
   attemptIndex: number
-) => Promise<string | null>;
+) => Promise<{ responseText: string; attemptIndex: number } | null>;
 
 /**
  * Result of handling an end condition evaluation.
@@ -415,13 +415,13 @@ export class EndConditionHandler {
       retryContext.totalSteps
     );
 
-    const retryResponseText = await sendRetryPrompt(
+    const retrySendResult = await sendRetryPrompt(
       retryPromptStep,
       currentIndex,
       nextAttemptIndex
     );
 
-    if (retryResponseText === null) {
+    if (retrySendResult === null) {
       const failureReason = retryContext.integration.getLastFailureReason();
       notifyUserFeedback(
         this.userFeedbackSink,
@@ -431,6 +431,8 @@ export class EndConditionHandler {
       this.promptQueue.resetRetryCount(retryContext.attemptTarget);
       return { handlerResult: { shouldContinue: false, failureReason } };
     }
+
+    const retryAttemptIndex = retrySendResult.attemptIndex;
 
     if (retryContext.runtime.stopped) {
       Log.info("[EndConditionHandler] Workflow stopped during retry");
@@ -445,7 +447,7 @@ export class EndConditionHandler {
     const retryReport = retryContext.evaluateCondition
       ? await retryContext.evaluateCondition(
           prompt.endCondition!,
-          nextAttemptIndex
+          retryAttemptIndex
         )
       : {
           evaluationResult: await this.endConditionEvaluator.evaluateCondition(
@@ -458,13 +460,13 @@ export class EndConditionHandler {
     const retryEvaluation = retryReport.evaluationResult;
     await retryContext.onEvaluation?.(
       retryEvaluation,
-      nextAttemptIndex,
+      retryAttemptIndex,
       retryReport.verdict
     );
 
     return {
       evaluationResult: retryEvaluation,
-      attemptIndex: nextAttemptIndex,
+      attemptIndex: retryAttemptIndex,
     };
   }
 

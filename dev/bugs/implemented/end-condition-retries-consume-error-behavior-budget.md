@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli), reproduced by modifying an existing `WorkflowExecutor` unit test
 - **Area:** `src/core/WorkflowExecutor.ts` (`canRetryErrorBehavior` ~419, retry-send loop ~4449-4545, `handleEvaluationError` ~3572), `src/core/EndConditionHandler.ts` (~363, ~418-467)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
