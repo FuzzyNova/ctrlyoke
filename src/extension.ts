@@ -748,7 +748,7 @@ function registerCommands(
           canSelectMany: false,
           openLabel: "Import Pro License File",
           filters: {
-            "ctrlyoke License": ["license", "txt", "json"],
+            "ctrlyoke License": ["license", "txt", "json", "lic"],
             "All Files": ["*"],
           },
         });

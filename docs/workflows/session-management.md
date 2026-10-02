@@ -66,7 +66,9 @@ steps:
     sessionId: "550e8400-e29b-41d4-a716-446655440000"
 ```
 
-A literal ID is passed straight to the harness; ctrlyoke does not check which harness created it.
+A literal ID is not checked against which harness created it, but it must match the
+target harness's session-ID format. If it does not, ctrlyoke starts a new session
+and logs why.
 
 ## Final-step session reference
 
@@ -78,7 +80,11 @@ End-condition retries continue the step's session by default. Set `endCondition.
 
 ## Harness-aware behavior
 
-ctrlyoke does not share sessions across harnesses. Automatic resume skips earlier steps that ran on a different harness, and a numeric reference to a step on another harness starts a new session. (A literal session ID is the exception — it is passed through unchecked.)
+ctrlyoke does not share sessions across harnesses. Automatic resume skips earlier
+steps that ran on a different harness, and a numeric reference to a step on another
+harness starts a new session. A literal session ID is not checked against which
+harness created it, but it must match the target harness's session-ID format;
+otherwise ctrlyoke starts a new session and logs why.
 
 ## Sessions at a parallel group boundary
 

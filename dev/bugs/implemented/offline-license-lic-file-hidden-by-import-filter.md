@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli)
 - **Area:** `src/extension.ts` (`ACTIVATE_OFFLINE_PRO`), `landing/src/pages/license/offline.astro`, `docs/pro/index.md`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

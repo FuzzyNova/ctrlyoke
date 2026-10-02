@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli)
 - **Area:** `docs/workflows/session-management.md`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
