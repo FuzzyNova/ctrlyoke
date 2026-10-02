@@ -130,6 +130,50 @@ afterEach(() => {
 });
 
 describe("HistorySearchDrawer filters", () => {
+  it("keeps later workflow-only pages scoped to the workflow that issued page zero", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "workflow-a" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: "run-a" as never,
+      },
+    });
+    const view = renderSearch({
+      ...DEFAULT_HISTORY_SEARCH_FILTERS,
+      workflowOnly: true,
+    });
+    act(() => {
+      useUiStore.setState({
+        displayedViewAddress: {
+          workflowKey: "workflow-b" as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: "run-b" as never,
+        },
+      });
+      useUiStore.getState().setHistorySearchResults(results(50), false, {
+        totalCount: 100,
+      });
+    });
+    const scroller =
+      view.container.querySelector<HTMLElement>(".overflow-y-auto");
+    expect(scroller).not.toBeNull();
+    if (!scroller) return;
+
+    act(() => {
+      scroller.scrollTop = 5000;
+      fireEvent.scroll(scroller);
+    });
+
+    expect(postMessage).toHaveBeenLastCalledWith({
+      type: MESSAGE_TYPES.SEARCH_HISTORY,
+      query: "needle",
+      listingId: expect.any(String),
+      limit: 50,
+      offset: 50,
+      filters: { workflowKeys: ["workflow-a"] },
+    });
+  });
+
   it("sends no narrowing filters while every option is still selected", () => {
     useUiStore.getState().openHistorySearch();
     useUiStore.getState().setHistorySearchQuery("needle");
@@ -147,6 +191,7 @@ describe("HistorySearchDrawer filters", () => {
     expect(postMessage).toHaveBeenLastCalledWith({
       type: MESSAGE_TYPES.SEARCH_HISTORY,
       query: "needle",
+      listingId: expect.any(String),
       limit: 50,
       filters: {},
     });
@@ -163,6 +208,7 @@ describe("HistorySearchDrawer filters", () => {
     expect(postMessage).toHaveBeenLastCalledWith({
       type: MESSAGE_TYPES.SEARCH_HISTORY,
       query: "needle",
+      listingId: expect.any(String),
       limit: 50,
       filters: {},
       deep: true,
@@ -186,6 +232,7 @@ describe("HistorySearchDrawer filters", () => {
     expect(postMessage).toHaveBeenLastCalledWith({
       type: MESSAGE_TYPES.SEARCH_HISTORY,
       query: "needle",
+      listingId: expect.any(String),
       limit: 50,
       offset: 50,
       filters: {},
@@ -204,6 +251,7 @@ describe("HistorySearchDrawer filters", () => {
     expect(postMessage).toHaveBeenLastCalledWith({
       type: MESSAGE_TYPES.SEARCH_HISTORY,
       query: "needle",
+      listingId: expect.any(String),
       limit: 50,
       filters: {},
       regex: true,
@@ -227,6 +275,7 @@ describe("HistorySearchDrawer filters", () => {
     expect(postMessage).toHaveBeenLastCalledWith({
       type: MESSAGE_TYPES.SEARCH_HISTORY,
       query: "needle",
+      listingId: expect.any(String),
       limit: 50,
       offset: 50,
       filters: {},
@@ -306,6 +355,7 @@ describe("HistorySearchDrawer filters", () => {
       expect.objectContaining({
         type: MESSAGE_TYPES.SEARCH_HISTORY,
         query: "needle",
+        listingId: expect.any(String),
         limit: 50,
         filters: {},
         deep: true,
@@ -330,6 +380,7 @@ describe("HistorySearchDrawer filters", () => {
     expect(postMessage).toHaveBeenLastCalledWith({
       type: MESSAGE_TYPES.SEARCH_HISTORY,
       query: "needle",
+      listingId: expect.any(String),
       limit: 50,
       filters: {
         eventKinds: ALL_HISTORY_EVENT_KINDS.filter(
@@ -367,6 +418,7 @@ describe("HistorySearchDrawer filters", () => {
     expect(postMessage).toHaveBeenLastCalledWith({
       type: MESSAGE_TYPES.SEARCH_HISTORY,
       query: "needle",
+      listingId: expect.any(String),
       limit: 50,
       offset: 50,
       filters: {
@@ -409,6 +461,7 @@ describe("HistorySearchDrawer filters", () => {
       expect.objectContaining({
         type: MESSAGE_TYPES.SEARCH_HISTORY,
         query: "needle",
+        listingId: expect.any(String),
         limit: 50,
         offset: 950,
       })
@@ -467,6 +520,7 @@ describe("HistorySearchDrawer filters", () => {
       expect.objectContaining({
         type: MESSAGE_TYPES.SEARCH_HISTORY,
         query: "needle",
+        listingId: expect.any(String),
         limit: 50,
         offset: 50,
       })
@@ -596,6 +650,7 @@ describe("HistorySearchDrawer filters", () => {
     expect(postMessage).toHaveBeenLastCalledWith({
       type: MESSAGE_TYPES.SEARCH_HISTORY,
       query: "needle",
+      listingId: expect.any(String),
       limit: 50,
       filters: {
         harnesses: ALL_WORKFLOW_HARNESSES.filter(
@@ -618,6 +673,7 @@ describe("HistorySearchDrawer filters", () => {
     expect(postMessage).toHaveBeenLastCalledWith({
       type: MESSAGE_TYPES.SEARCH_HISTORY,
       query: "needle",
+      listingId: expect.any(String),
       limit: 50,
       filters: {
         executionStates: ALL_WORKFLOW_STATES.filter(
@@ -650,6 +706,7 @@ describe("HistorySearchDrawer filters", () => {
     expect(postMessage).toHaveBeenLastCalledWith({
       type: MESSAGE_TYPES.SEARCH_HISTORY,
       query: "needle",
+      listingId: expect.any(String),
       limit: 50,
       filters: {
         pathContains: "webview-react",
@@ -686,6 +743,7 @@ describe("HistorySearchDrawer filters", () => {
     expect(postMessage).toHaveBeenLastCalledWith({
       type: MESSAGE_TYPES.SEARCH_HISTORY,
       query: "needle",
+      listingId: expect.any(String),
       limit: 50,
       filters: {
         workflowKeys: ["workflow-1"],
@@ -743,6 +801,7 @@ describe("HistorySearchDrawer filters", () => {
     expect(postMessage).toHaveBeenLastCalledWith({
       type: MESSAGE_TYPES.SEARCH_HISTORY,
       query: "needle",
+      listingId: expect.any(String),
       limit: 50,
       filters: {},
     });

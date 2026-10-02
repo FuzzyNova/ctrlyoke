@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli); traced in code, not reproduced
 - **Area:** `src/ui/webview-react/components/search/HistorySearchDrawer.tsx` (page 0 ~268 vs `requestPage` ~490, `listingId` ~450), `src/ui/webview-react/hooks/useMessageHandler.ts` (~2757)
-- **Severity:** low (confidence: medium)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

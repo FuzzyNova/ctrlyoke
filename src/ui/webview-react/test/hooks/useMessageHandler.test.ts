@@ -2913,6 +2913,28 @@ describe("SUFFIX_EDIT_CONFIRMATION_REQUIRED", () => {
 });
 
 describe("history search messages", () => {
+  it("ignores pages whose listing scope has been superseded", () => {
+    renderHook(() => useMessageHandler());
+    useUiStore.getState().setHistorySearchQuery("needle");
+    useUiStore.getState().setHistorySearchListingId("active-listing");
+    useUiStore.getState().setHistorySearchResults([], true);
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.SEARCH_HISTORY_RESULTS, {
+        query: "needle",
+        listingId: "stale-listing",
+        results: [],
+        offset: 50,
+        totalCount: 100,
+        countState: "exact",
+        hasMore: false,
+      });
+    });
+
+    expect(useUiStore.getState().historySearchResults).toEqual([]);
+    expect(useUiStore.getState().historySearchLoading).toBe(true);
+  });
+
   it("opens the history search drawer when requested", () => {
     renderHook(() => useMessageHandler());
 
@@ -2948,9 +2970,11 @@ describe("history search messages", () => {
 
     act(() => {
       useUiStore.getState().setHistorySearchQuery("needle");
+      useUiStore.getState().setHistorySearchListingId("matching-listing");
       useUiStore.getState().setHistorySearchResults([], true);
       dispatch(MESSAGE_TYPES.SEARCH_HISTORY_RESULTS, {
         query: "needle",
+        listingId: "matching-listing",
         results: [
           {
             workflowKey: "wf-1" as never,
@@ -3009,9 +3033,11 @@ describe("history search messages", () => {
       // echoing it back) carries the trimmed query. Comparing them untrimmed
       // dropped every response and left the drawer spinning forever.
       useUiStore.getState().setHistorySearchQuery("needle ");
+      useUiStore.getState().setHistorySearchListingId("trimmed-listing");
       useUiStore.getState().setHistorySearchResults([], true);
       dispatch(MESSAGE_TYPES.SEARCH_HISTORY_RESULTS, {
         query: "needle",
+        listingId: "trimmed-listing",
         results: [
           {
             workflowKey: "wf-3" as never,
@@ -3040,11 +3066,13 @@ describe("history search messages", () => {
 
     act(() => {
       useUiStore.getState().setHistorySearchQuery("needle");
+      useUiStore.getState().setHistorySearchListingId("partial-listing");
       useUiStore
         .getState()
         .setHistorySearchResults([], true, { totalCount: 0 });
       dispatch(MESSAGE_TYPES.SEARCH_HISTORY_PARTIAL_RESULTS, {
         query: "needle",
+        listingId: "partial-listing",
         results: [
           {
             workflowKey: "wf-1" as never,
@@ -3113,6 +3141,61 @@ describe("history search messages", () => {
     // listing the new query starts from.
     expect(useUiStore.getState().historySearchResults).toEqual([]);
     expect(useUiStore.getState().historySearchTotalCount).toBe(0);
+  });
+});
+
+describe("undo record update messages", () => {
+  it("applies only updates addressed to the applied workflow and run", () => {
+    const runAddress = {
+      workflowKey: "workflow-a" as never,
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+      runRef: "run-a" as never,
+    };
+    useUiStore.setState({
+      displayedViewAddress: runAddress,
+      appliedViewAddress: runAddress,
+    });
+    const setUndoRecord = vi.spyOn(
+      useWorkflowStore.getState(),
+      "setUndoRecord"
+    );
+    const updateHistoryStepUndoRecord = vi.spyOn(
+      useWorkflowStore.getState(),
+      "updateHistoryStepUndoRecord"
+    );
+    const message = {
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      undoRecord: { appliedAt: 1, restoredFiles: [], redoInstructions: [] },
+    };
+
+    act(() => {
+      const handler = createMessageHandlers(false)[
+        MESSAGE_TYPES.UNDO_RECORD_UPDATED
+      ];
+      handler({
+        type: MESSAGE_TYPES.UNDO_RECORD_UPDATED,
+        ...message,
+        workflowKey: "workflow-b",
+        runRef: "run-a",
+      });
+      handler({
+        type: MESSAGE_TYPES.UNDO_RECORD_UPDATED,
+        ...message,
+        workflowKey: "workflow-a",
+        runRef: "run-b",
+      });
+      handler({
+        type: MESSAGE_TYPES.UNDO_RECORD_UPDATED,
+        ...message,
+        workflowKey: "workflow-a",
+        runRef: "run-a",
+      });
+    });
+
+    expect(setUndoRecord).toHaveBeenCalledTimes(1);
+    expect(updateHistoryStepUndoRecord).toHaveBeenCalledTimes(1);
+    setUndoRecord.mockRestore();
+    updateHistoryStepUndoRecord.mockRestore();
   });
 });
 

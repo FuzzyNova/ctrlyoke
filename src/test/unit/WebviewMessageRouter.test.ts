@@ -1108,11 +1108,12 @@ suite("WebviewMessageRouter — license actions", () => {
 
     test("a page request does not cancel an in-flight search for the same listing", async () => {
       const recorded: RecordedSearch[] = [];
-      const { router, restore } = buildSearchRouter(recorded);
+      const { router, restore, emitted } = buildSearchRouter(recorded);
       try {
         const first = router.route({
           type: MESSAGE_TYPES.SEARCH_HISTORY,
           query: "codemirroreditor",
+          listingId: "listing-a",
           limit: 50,
         });
         await settle();
@@ -1121,6 +1122,7 @@ suite("WebviewMessageRouter — license actions", () => {
         const second = router.route({
           type: MESSAGE_TYPES.SEARCH_HISTORY,
           query: "codemirroreditor",
+          listingId: "listing-a",
           limit: 50,
           offset: 50,
         });
@@ -1133,6 +1135,7 @@ suite("WebviewMessageRouter — license actions", () => {
 
         recorded[0].resolve();
         await first;
+        assert.strictEqual(emitted[0].listingId, "listing-a");
         await settle();
         assert.strictEqual(recorded.length, 2);
         recorded[1].resolve();

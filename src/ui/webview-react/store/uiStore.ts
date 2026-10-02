@@ -511,6 +511,8 @@ interface UiState {
    */
   historySearchResults: (HistorySearchResult | undefined)[];
   historySearchQuery: string;
+  /** Request scope whose asynchronous history-search pages may update this listing. */
+  historySearchListingId: string | null;
   historySearchDeep: boolean;
   historySearchRegex: boolean;
   historySearchError: string | null;
@@ -865,6 +867,7 @@ interface UiActions {
   closeHistorySearch: () => void;
   toggleHistorySearch: () => void;
   setHistorySearchQuery: (query: string) => void;
+  setHistorySearchListingId: (listingId: string | null) => void;
   setHistorySearchDeep: (deep: boolean) => void;
   setHistorySearchRegex: (regex: boolean) => void;
   setHistorySearchError: (error: string | null) => void;
@@ -1156,6 +1159,7 @@ const initialState: UiState = {
   isHistorySearchOpen: false,
   historySearchResults: [],
   historySearchQuery: "",
+  historySearchListingId: null,
   historySearchDeep: false,
   historySearchRegex: false,
   historySearchError: null,
@@ -1481,15 +1485,24 @@ export const useUiStore = create<UiState & UiActions>()(
       setHistorySearchQuery: (query) =>
         set({
           historySearchQuery: query,
+          historySearchListingId: null,
           historySearchError: null,
           historySearchTotalCount: 0,
           historySearchCountState: HISTORY_SEARCH_COUNT_STATES.EXACT,
         }),
 
-      setHistorySearchDeep: (deep) => set({ historySearchDeep: deep }),
+      setHistorySearchListingId: (listingId) =>
+        set({ historySearchListingId: listingId }),
+
+      setHistorySearchDeep: (deep) =>
+        set({ historySearchDeep: deep, historySearchListingId: null }),
 
       setHistorySearchRegex: (regex) =>
-        set({ historySearchRegex: regex, historySearchError: null }),
+        set({
+          historySearchRegex: regex,
+          historySearchError: null,
+          historySearchListingId: null,
+        }),
 
       setHistorySearchError: (error) =>
         set({
@@ -1505,6 +1518,7 @@ export const useUiStore = create<UiState & UiActions>()(
       setHistorySearchFilters: (filters) =>
         set({
           historySearchFilters: filters,
+          historySearchListingId: null,
           historySearchResults: [],
           historySearchLoading: false,
           historySearchTotalCount: 0,
@@ -1514,6 +1528,7 @@ export const useUiStore = create<UiState & UiActions>()(
       resetHistorySearchFilters: () =>
         set({
           historySearchFilters: createDefaultHistorySearchFilters(),
+          historySearchListingId: null,
           historySearchDeep: false,
           historySearchRegex: false,
           historySearchError: null,

@@ -1804,10 +1804,13 @@ export interface UserFeedbackMessage {
 export interface SearchHistoryMessage extends Partial<HistorySearchQuery> {
   type: typeof MESSAGE_TYPES.SEARCH_HISTORY;
   query: string;
+  /** Stable client listing scope echoed by every page response. */
+  listingId: string;
 }
 
 export interface SearchHistoryResultsMessage extends HistorySearchResponse {
   type: typeof MESSAGE_TYPES.SEARCH_HISTORY_RESULTS;
+  listingId: string;
 }
 
 /**
@@ -1823,6 +1826,7 @@ export interface SearchHistoryResultsMessage extends HistorySearchResponse {
  */
 export interface SearchHistoryPartialResultsMessage extends HistorySearchResponse {
   type: typeof MESSAGE_TYPES.SEARCH_HISTORY_PARTIAL_RESULTS;
+  listingId: string;
 }
 
 /** Extension -> Webview: the current history query needs user correction. */
@@ -2475,6 +2479,8 @@ export interface UndoRecordUpdatedMessage {
   type: typeof MESSAGE_TYPES.UNDO_RECORD_UPDATED;
   target: OutputExecutionTarget;
   undoRecord: UndoRecord;
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
 }
 
 /** Webview → Extension: request to redo previously undone changes */

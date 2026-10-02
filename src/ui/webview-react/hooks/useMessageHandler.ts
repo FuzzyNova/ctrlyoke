@@ -2770,10 +2770,11 @@ export function createMessageHandlers(
   // SEARCH_HISTORY_RESULTS - Global history search matches
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.SEARCH_HISTORY_RESULTS] = (message) => {
-    const { results, query, offset, totalCount, countState, indexState } =
+    const { results, query, offset, totalCount, countState, indexState, listingId } =
       message as {
         results: HistorySearchResult[];
         query: string;
+        listingId: string;
         offset?: number;
         totalCount?: number;
         countState?: "exact" | "atLeast";
@@ -2784,7 +2785,10 @@ export function createMessageHandlers(
     // (and so the response echoing it back) always carries the trimmed query.
     // Untrimmed, a single trailing space made every response for that query
     // look superseded and get dropped, leaving the drawer spinning forever.
-    if (uiStore.historySearchQuery.trim() !== query) {
+    if (
+      uiStore.historySearchQuery.trim() !== query ||
+      uiStore.historySearchListingId !== listingId
+    ) {
       return;
     }
     uiStore.setHistorySearchResults(results, false, {
@@ -2805,10 +2809,11 @@ export function createMessageHandlers(
   // still be coming.
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.SEARCH_HISTORY_PARTIAL_RESULTS] = (message) => {
-    const { results, query, offset, totalCount, countState, indexState } =
+    const { results, query, offset, totalCount, countState, indexState, listingId } =
       message as {
         results: HistorySearchResult[];
         query: string;
+        listingId: string;
         offset?: number;
         totalCount?: number;
         countState?: "exact" | "atLeast";
@@ -2818,7 +2823,10 @@ export function createMessageHandlers(
     // Same guard as the final response: a push that arrives after its query
     // was superseded (the user kept typing, or issued a new search) must not
     // land on top of whatever the current query has already shown.
-    if (uiStore.historySearchQuery.trim() !== query) {
+    if (
+      uiStore.historySearchQuery.trim() !== query ||
+      uiStore.historySearchListingId !== listingId
+    ) {
       return;
     }
     uiStore.setHistorySearchResults(results, true, {
@@ -3178,6 +3186,17 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.UNDO_RECORD_UPDATED] = (message) => {
     const m = message as UndoRecordUpdatedMessage;
     if (!m.target || !m.undoRecord) return;
+    const uiStore = useUiStore.getState();
+    const messageAddress: WorkflowViewAddress = {
+      workflowKey: m.workflowKey,
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+      runRef: m.runRef,
+    };
+    if (
+      !areWorkflowAddressesEqual(messageAddress, uiStore.appliedViewAddress)
+    ) {
+      return;
+    }
     useWorkflowStore.getState().setUndoRecord(m.target, m.undoRecord);
     useWorkflowStore
       .getState()

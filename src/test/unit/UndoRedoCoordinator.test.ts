@@ -214,12 +214,17 @@ suite("UndoRedoCoordinator", function () {
         getWorkspaceSnapshotFileContent: async () => ({
           contentToRestore: "authoritative history content",
         }),
+        getOutputHistoryManager: () => undefined,
       } as unknown as WorkflowOrchestrator;
       const coordinator = new UndoRedoCoordinator(
         () => orchestrator,
         () => ({ executionRoot: workspaceRoot, namedWorkspaceRoots: [] })
       );
 
+      const messages: Record<string, unknown>[] = [];
+      const postMessage = ((message: Record<string, unknown>) => {
+        messages.push(message);
+      }) as PostMessageFn;
       await coordinator.handleUndoPromptChanges(
         {
           type: MESSAGE_TYPES.UNDO_PROMPT_CHANGES,
@@ -237,12 +242,22 @@ suite("UndoRedoCoordinator", function () {
             ],
           },
         },
-        (() => undefined) as PostMessageFn
+        postMessage
       );
 
       assert.strictEqual(
         await fs.readFile(filePath, "utf8"),
         "authoritative history content"
+      );
+      const undoRecordUpdate = messages.find(
+        (message) => message.type === MESSAGE_TYPES.UNDO_RECORD_UPDATED
+      );
+      assert.deepStrictEqual(
+        {
+          workflowKey: undoRecordUpdate?.workflowKey,
+          runRef: undoRecordUpdate?.runRef,
+        },
+        { workflowKey, runRef }
       );
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });

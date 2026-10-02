@@ -1549,6 +1549,10 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.SEARCH_HISTORY, async (message, ctx) => {
       const query =
         typeof message.query === "string" ? message.query.trim() : "";
+      const listingScope =
+        typeof message.listingId === "string"
+          ? { listingId: message.listingId }
+          : {};
       const limit =
         typeof message.limit === "number" && message.limit > 0
           ? Math.min(message.limit, 100)
@@ -1558,6 +1562,7 @@ export class WebviewMessageRouter {
         ctx.emit({
           type: MESSAGE_TYPES.SEARCH_HISTORY_RESULTS,
           query,
+          ...listingScope,
           offset: 0,
           results: [],
           totalCount: 0,
@@ -1596,12 +1601,14 @@ export class WebviewMessageRouter {
           (partialResponse) => {
             ctx.emit({
               type: MESSAGE_TYPES.SEARCH_HISTORY_PARTIAL_RESULTS,
+              ...listingScope,
               ...partialResponse,
             });
           }
         );
         ctx.emit({
           type: MESSAGE_TYPES.SEARCH_HISTORY_RESULTS,
+          ...listingScope,
           ...response,
         });
       } catch (error) {

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli); traced in code, not reproduced
 - **Area:** `src/ui/UndoRedoCoordinator.ts` (~471-481), `src/ui/webview-react/hooks/useMessageHandler.ts` (~3163)
-- **Severity:** low (confidence: medium; only happens if the user navigates during the async undo window)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

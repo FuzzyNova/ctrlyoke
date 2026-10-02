@@ -495,12 +495,24 @@ export class UndoRedoCoordinator {
         target,
         undoRecord
       );
-      this.emitUndoRecordUpdated(postMessage, target, undoRecord);
+      this.emitUndoRecordUpdated(
+        postMessage,
+        target,
+        undoRecord,
+        workflowKey,
+        runRef
+      );
       return;
     }
 
     if (emitWithoutHistory) {
-      this.emitUndoRecordUpdated(postMessage, target, undoRecord);
+      this.emitUndoRecordUpdated(
+        postMessage,
+        target,
+        undoRecord,
+        workflowKey,
+        runRef
+      );
     }
   }
 
@@ -533,19 +545,29 @@ export class UndoRedoCoordinator {
         : history.finalStepOutputs?.[target.loopIndex]
     ) as { undoRecord?: UndoRecord } | undefined;
     if (stepOutput?.undoRecord) {
-      this.emitUndoRecordUpdated(postMessage, target, stepOutput.undoRecord);
+      this.emitUndoRecordUpdated(
+        postMessage,
+        target,
+        stepOutput.undoRecord,
+        workflowKey,
+        runRef
+      );
     }
   }
 
   private emitUndoRecordUpdated(
     postMessage: PostMessageFn,
     target: OutputExecutionTarget,
-    undoRecord: UndoRecord
+    undoRecord: UndoRecord,
+    workflowKey: WorkflowKey,
+    runRef: RunRef
   ): void {
     postMessage({
       type: MESSAGE_TYPES.UNDO_RECORD_UPDATED,
       target,
       undoRecord,
+      workflowKey,
+      runRef,
     });
   }
 

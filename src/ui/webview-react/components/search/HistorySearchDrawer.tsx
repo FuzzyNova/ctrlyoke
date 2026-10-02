@@ -26,6 +26,7 @@ import {
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 import type { HistoryEventKind } from "@root/types/WorkflowTimelineTypes";
+import type { WorkflowKey } from "@root/types/CtrlYokeTypes";
 import { formatRelativeTimeVerbose } from "@utils/time";
 import { truncateSnippet } from "@utils/string";
 import {
@@ -59,6 +60,18 @@ const HISTORY_RESULT_ESTIMATE = 108;
  * measurement; it is not a free win today.
  */
 export const HISTORY_SEARCH_DEBOUNCE_MS = 600;
+
+function getHistorySearchListingId(
+  query: string,
+  filters: HistorySearchFilterState,
+  workflowKey: WorkflowKey | undefined,
+  deep: boolean,
+  regex: boolean
+): string {
+  return `history-search:${query}:${JSON.stringify(
+    toHistorySearchFilters(filters, workflowKey)
+  )}:${deep ? "deep" : "shallow"}:${regex ? "regex" : "substring"}`;
+}
 
 /**
  * Shared centered column for the search bar, result summary, and result list so
@@ -219,6 +232,9 @@ export function HistorySearchDrawer() {
     (s) => s.resetHistorySearchFilters
   );
   const setHistorySearchResults = useUiStore((s) => s.setHistorySearchResults);
+  const setHistorySearchListingId = useUiStore(
+    (s) => s.setHistorySearchListingId
+  );
   const setPendingHistorySearchNavigation = useUiStore(
     (s) => s.setPendingHistorySearchNavigation
   );
@@ -240,6 +256,9 @@ export function HistorySearchDrawer() {
   // query or filter change to justify it.
   const workflowKeyRef = useRef(workflowKey);
   workflowKeyRef.current = workflowKey;
+  // Keep the scope of the displayed page set tied to page 0, even if the
+  // currently displayed workflow changes while the drawer remains open.
+  const [listingWorkflowKey, setListingWorkflowKey] = useState(workflowKey);
   // Offsets already asked for in this listing. Declared here (rather than
   // beside `listingId` below) so `issueSearch` can reset it whenever it
   // (re)issues a page-0 search — otherwise a page fetched before that reset
@@ -260,17 +279,28 @@ export function HistorySearchDrawer() {
       }
 
       requestedOffsetsRef.current = new Set<number>();
+      const requestedWorkflowKey = workflowKeyRef.current;
+      setListingWorkflowKey(requestedWorkflowKey);
+      const listingId = getHistorySearchListingId(
+        trimmedQuery,
+        filters,
+        requestedWorkflowKey,
+        deepSearchRef.current,
+        regexSearchRef.current
+      );
+      setHistorySearchListingId(listingId);
       setHistorySearchResults([], true, { totalCount: 0 });
       vscode.postMessage({
         type: MESSAGE_TYPES.SEARCH_HISTORY,
         query: trimmedQuery,
+        listingId,
         limit: RESULT_LIMIT,
-        filters: toHistorySearchFilters(filters, workflowKeyRef.current),
+        filters: toHistorySearchFilters(filters, requestedWorkflowKey),
         ...(deepSearchRef.current ? { deep: true } : {}),
         ...(regexSearchRef.current ? { regex: true } : {}),
       });
     },
-    [setHistorySearchResults, trimmedQuery, vscode]
+    [setHistorySearchListingId, setHistorySearchResults, trimmedQuery, vscode]
   );
 
   useEffect(() => {
@@ -289,6 +319,7 @@ export function HistorySearchDrawer() {
   // while the drawer is interactable (open), so no `isOpen` guard is needed.
   useEffect(() => {
     if (trimmedQuery.length < 2) {
+      setHistorySearchListingId(null);
       setHistorySearchResults([], false, {
         totalCount: 0,
         indexState: "ready",
@@ -301,7 +332,7 @@ export function HistorySearchDrawer() {
     }, HISTORY_SEARCH_DEBOUNCE_MS);
 
     return () => window.clearTimeout(timeoutId);
-  }, [issueSearch, query, setHistorySearchResults, trimmedQuery]);
+  }, [issueSearch, query, setHistorySearchListingId, setHistorySearchResults, trimmedQuery]);
 
   const navigateToResult = useCallback(
     (result: HistorySearchResult) => {
@@ -446,10 +477,14 @@ export function HistorySearchDrawer() {
 
   const listingId = useMemo(
     () =>
-      `history-search:${trimmedQuery}:${JSON.stringify(
-        toHistorySearchFilters(historySearchFilters, workflowKey)
-      )}:${deepSearch ? "deep" : "shallow"}:${regexSearch ? "regex" : "substring"}`,
-    [deepSearch, historySearchFilters, regexSearch, trimmedQuery, workflowKey]
+      getHistorySearchListingId(
+        trimmedQuery,
+        historySearchFilters,
+        listingWorkflowKey,
+        deepSearch,
+        regexSearch
+      ),
+    [deepSearch, historySearchFilters, listingWorkflowKey, regexSearch, trimmedQuery]
   );
   const resultsScrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -485,9 +520,10 @@ export function HistorySearchDrawer() {
       vscode.postMessage({
         type: MESSAGE_TYPES.SEARCH_HISTORY,
         query: trimmedQuery,
+        listingId,
         limit: RESULT_LIMIT,
         offset,
-        filters: toHistorySearchFilters(historySearchFilters, workflowKey),
+        filters: toHistorySearchFilters(historySearchFilters, listingWorkflowKey),
         ...(deepSearch ? { deep: true } : {}),
         ...(regexSearch ? { regex: true } : {}),
       });
@@ -500,7 +536,8 @@ export function HistorySearchDrawer() {
       totalCount,
       trimmedQuery,
       vscode,
-      workflowKey,
+      listingWorkflowKey,
+      listingId,
     ]
   );
   // While the total is a lower bound, the virtualized list is sized one page
