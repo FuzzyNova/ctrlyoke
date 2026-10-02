@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), confirmed with a throwaway Vitest probe
 - **Area:** `src/ui/webview-react/components/shared/PriorContextSelect.tsx`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -97,6 +97,9 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   const [wantsCustom, setWantsCustom] = useState(
     () => mode === PRIOR_CONTEXT_SELECTION_MODES.CUSTOM
   );
+  const [wantsRun, setWantsRun] = useState(
+    () => mode === PRIOR_CONTEXT_SELECTION_MODES.RUN
+  );
   const [customText, setCustomText] = useState(() =>
     Array.isArray(value) ? formatRangeNotation(value) : ""
   );
@@ -116,9 +119,12 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   const [customError, setCustomError] = useState(false);
   // Track onChange calls originating from our text input so we don't sync back
   const textChangePendingRef = useRef(false);
+  // Selecting RUN is a local choice until both address fields have a value.
+  const runSelectionPendingRef = useRef(false);
 
   const showCustomInput =
     wantsCustom || mode === PRIOR_CONTEXT_SELECTION_MODES.CUSTOM;
+  const showRunInputs = wantsRun || mode === PRIOR_CONTEXT_SELECTION_MODES.RUN;
 
   // Sync from external value changes (e.g. undo, workflow load)
   useEffect(() => {
@@ -138,6 +144,10 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
     if (isWorkflowRunAddress(value)) {
       setWorkflowKey(value.workflowKey);
       setRunRef(value.runRef);
+      setWantsRun(true);
+      runSelectionPendingRef.current = false;
+    } else if (!runSelectionPendingRef.current) {
+      setWantsRun(false);
     }
     if (isPreviousStepsPriorContext(value)) {
       setPreviousCountText(String(value.previous));
@@ -147,11 +157,15 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   const selectKeyword = (k: KeywordMode) => {
     if (k === PRIOR_CONTEXT_SELECTION_MODES.CUSTOM) {
       setWantsCustom(true);
+      setWantsRun(false);
+      runSelectionPendingRef.current = false;
       setIsOpen(false);
       return;
     }
     if (k === PRIOR_CONTEXT_SELECTION_MODES.PREVIOUS_COUNT) {
       setWantsCustom(false);
+      setWantsRun(false);
+      runSelectionPendingRef.current = false;
       setCustomError(false);
       const count = parsePreviousCount(previousCountText);
       onChange({ previous: count ?? DEFAULT_PREVIOUS_COUNT });
@@ -160,10 +174,14 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
     }
     if (k === PRIOR_CONTEXT_SELECTION_MODES.RUN) {
       setWantsCustom(false);
+      setWantsRun(true);
+      runSelectionPendingRef.current = true;
       setIsOpen(false);
       return;
     }
     setWantsCustom(false);
+    setWantsRun(false);
+    runSelectionPendingRef.current = false;
     setCustomText("");
     setCustomError(false);
     onChange(k === INHERIT_DEFAULT_OPTION ? undefined : k);
@@ -205,17 +223,25 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   const updateRunAddress = (key: string, ref: string) => {
     setWorkflowKey(key);
     setRunRef(ref);
-    if (key && ref)
+    if (key && ref) {
+      runSelectionPendingRef.current = false;
       onChange({ workflowKey: key, runRef: ref } as WorkflowRunAddress);
+    }
   };
 
   // Build button label
   const displayMode = showCustomInput
     ? PRIOR_CONTEXT_SELECTION_MODES.CUSTOM
-    : mode;
+    : showRunInputs
+      ? PRIOR_CONTEXT_SELECTION_MODES.RUN
+      : mode;
   let buttonLabel: string;
   if (showCustomInput) {
     buttonLabel = "Custom";
+  } else if (showRunInputs) {
+    buttonLabel =
+      PRIOR_CONTEXT_SELECT_OPTIONS_META[PRIOR_CONTEXT_SELECTION_MODES.RUN]
+        .label;
   } else if (value === undefined) {
     buttonLabel = inheritLabel;
   } else {
@@ -325,28 +351,30 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
         </DropdownPortal>
       </div>
 
-      {mode === PRIOR_CONTEXT_SELECTION_MODES.PREVIOUS_COUNT && (
-        <div className="mt-1 flex flex-col gap-1">
-          <input
-            type="text"
-            inputMode="numeric"
-            value={previousCountText}
-            onChange={handlePreviousCountChange}
-            placeholder="e.g. 3"
-            aria-label="Number of previous step outputs"
-            className={`w-full px-2 text-xs bg-input-bg text-input-fg border rounded focus:outline-none focus:border-focus-border h-7 ${dropdownBorderClass(
-              parsePreviousCount(previousCountText) === undefined,
-              "error"
-            )}`}
-          />
-          <span className="text-xxs text-description-fg">
-            The last N outputs before this step, counted from this step so it
-            stays correct when steps move.
-          </span>
-        </div>
-      )}
+      {mode === PRIOR_CONTEXT_SELECTION_MODES.PREVIOUS_COUNT &&
+        !showCustomInput &&
+        !showRunInputs && (
+          <div className="mt-1 flex flex-col gap-1">
+            <input
+              type="text"
+              inputMode="numeric"
+              value={previousCountText}
+              onChange={handlePreviousCountChange}
+              placeholder="e.g. 3"
+              aria-label="Number of previous step outputs"
+              className={`w-full px-2 text-xs bg-input-bg text-input-fg border rounded focus:outline-none focus:border-focus-border h-7 ${dropdownBorderClass(
+                parsePreviousCount(previousCountText) === undefined,
+                "error"
+              )}`}
+            />
+            <span className="text-xxs text-description-fg">
+              The last N outputs before this step, counted from this step so it
+              stays correct when steps move.
+            </span>
+          </div>
+        )}
 
-      {mode === PRIOR_CONTEXT_SELECTION_MODES.RUN && (
+      {showRunInputs && (
         <div className="mt-1 grid grid-cols-1 gap-1">
           <input
             value={workflowKey}

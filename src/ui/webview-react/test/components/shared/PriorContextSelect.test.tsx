@@ -85,4 +85,74 @@ describe("PriorContextSelect schema metadata", () => {
       screen.queryByLabelText("Prior-context workflow key")
     ).not.toBeInTheDocument();
   });
+
+  it("shows both run-address inputs when Completed run output is selected", () => {
+    render(<PriorContextSelect value="none" onChange={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /None/ }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /Completed run output/ })
+    );
+
+    expect(
+      screen.getByRole("button", { name: /Completed run output/ })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Prior-context workflow key")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Prior-context run reference")
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Number of previous step outputs")
+    ).not.toBeInTheDocument();
+  });
+
+  it("writes a run address after both fields are filled", () => {
+    const onChange = vi.fn();
+    render(<PriorContextSelect value="none" onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /None/ }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /Completed run output/ })
+    );
+    fireEvent.change(screen.getByLabelText("Prior-context workflow key"), {
+      target: { value: "workflow-1" },
+    });
+    expect(onChange).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText("Prior-context run reference"), {
+      target: { value: "run-42" },
+    });
+    expect(onChange).toHaveBeenLastCalledWith({
+      workflowKey: "workflow-1",
+      runRef: "run-42",
+    });
+  });
+
+  it("hides run-address inputs after switching to another keyword", () => {
+    render(<PriorContextSelect value="none" onChange={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /None/ }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /Completed run output/ })
+    );
+    expect(
+      screen.getByLabelText("Prior-context workflow key")
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Completed run output/ })
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "All, priorContext: all" })
+    );
+
+    expect(
+      screen.queryByLabelText("Prior-context workflow key")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Prior-context run reference")
+    ).not.toBeInTheDocument();
+  });
 });
