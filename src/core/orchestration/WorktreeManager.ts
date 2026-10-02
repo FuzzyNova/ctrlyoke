@@ -147,6 +147,15 @@ export interface ManagedWorktreeOwnershipRecord {
     | typeof WORKTREE_SETUP_OUTCOMES.FAILED;
 }
 
+function findGitWorktreeEntryForRecord(
+  entries: readonly GitWorktreeEntry[],
+  record: Pick<ManagedWorktreeOwnershipRecord, "worktreePath">
+): GitWorktreeEntry | undefined {
+  return entries.find((entry) =>
+    pathsEqual(entry.worktreePath, record.worktreePath)
+  );
+}
+
 export interface NamedWorktreeSetupRecord {
   schemaVersion: typeof NAMED_WORKTREE_SETUP_RECORD_SCHEMA_VERSION;
   worktreePath: string;
@@ -1727,8 +1736,7 @@ export class WorktreeManager {
     for (const entry of entries) {
       const record = records.find(
         (candidate) =>
-          candidate.branchName === entry.branchName &&
-          pathsEqual(candidate.worktreePath, entry.worktreePath)
+          findGitWorktreeEntryForRecord(entries, candidate) === entry
       );
       const inspections = await ExecutionRootLeaseManager.inspectLeases(
         entry.worktreePath,
@@ -1742,15 +1750,22 @@ export class WorktreeManager {
           retryAction: "retry" as const,
         }));
       const inUse = leaseOwners.length > 0;
-      const branchState = entry.branchName
-        ? (await localBranchExists(sourceRoot, entry.branchName))
-          ? WORKTREE_BRANCH_STATES.PRESENT
-          : WORKTREE_BRANCH_STATES.MISSING
-        : WORKTREE_BRANCH_STATES.MISSING;
+      const branchName = record?.branchName ?? entry.branchName;
+      const branchMatchesRecord =
+        !record || entry.branchName === record.branchName;
+      const directoryState = (await this.pathExists(entry.worktreePath))
+        ? WORKTREE_DIRECTORY_STATES.PRESENT
+        : record?.directoryState;
+      const branchState =
+        branchName && branchMatchesRecord
+          ? (await localBranchExists(sourceRoot, branchName))
+            ? WORKTREE_BRANCH_STATES.PRESENT
+            : WORKTREE_BRANCH_STATES.MISSING
+          : WORKTREE_BRANCH_STATES.MISSING;
       const divergence =
-        !record && entry.branchName
+        !record && branchName
           ? WorktreeManager.namedDivergenceCache.get(
-              this.divergenceCacheKey(sourceRoot, entry.branchName)
+              this.divergenceCacheKey(sourceRoot, branchName)
             )
           : undefined;
       const createdAt = record?.createdAt;
@@ -1773,14 +1788,12 @@ export class WorktreeManager {
       managedEntries.push({
         worktreePath: entry.worktreePath,
         headCommit: entry.headCommit,
-        ...(entry.branchName ? { branchName: entry.branchName } : {}),
+        ...(branchName ? { branchName } : {}),
         ownership: record ? "managed" : "user",
         ...(record?.lifecycleState
           ? { lifecycleState: record.lifecycleState }
           : {}),
-        ...(record?.directoryState
-          ? { directoryState: record.directoryState }
-          : {}),
+        ...(directoryState ? { directoryState } : {}),
         branchState,
         ...(createdAt !== undefined
           ? { createdAt, ageMs: now - createdAt }
@@ -1801,13 +1814,7 @@ export class WorktreeManager {
     }
 
     const staleManagedRecords = records.filter(
-      (record) =>
-        !managedEntries.some(
-          (entry) =>
-            entry.ownership === WORKTREE_MODES.MANAGED &&
-            entry.branchName === record.branchName &&
-            pathsEqual(entry.worktreePath, record.worktreePath)
-        )
+      (record) => !findGitWorktreeEntryForRecord(entries, record)
     );
 
     for (const staleRecord of staleManagedRecords) {
@@ -1999,12 +2006,9 @@ export class WorktreeManager {
       }
 
       const currentEntries = await listGitWorktrees(sourceRoot);
-      const entry = currentEntries.find(
-        (candidate) =>
-          candidate.branchName === record.branchName &&
-          pathsEqual(candidate.worktreePath, record.worktreePath)
-      );
-      const inspections = entry
+      const entry = findGitWorktreeEntryForRecord(currentEntries, record);
+      const pathExists = await this.pathExists(record.worktreePath);
+      const inspections = pathExists
         ? await ExecutionRootLeaseManager.inspectLeases(record.worktreePath)
         : [];
       const liveLease = inspections.find((inspection) => !inspection.stale);

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli), reproduced with the compiled `WorktreeManager` against a throwaway repo
 - **Area:** `src/core/orchestration/WorktreeManager.ts` (`applyManagementAction` ~2000-2039, `getManagementStateIn` ~1800-1857)
-- **Severity:** high (data loss)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -44,17 +44,24 @@ shown as `directoryState: removed` while the directory still exists.
 `reconcileBlockedManagedWorktrees` (~2868) already refuses to remove an
 "ambiguous path" for this reason.
 
-## Suggested Fix
+## Resolution
 
-- Match the git entry by **path alone** to decide whether git still knows the
-  worktree. Only treat it as forgotten (and `fs.rm` leftovers) when no
-  registered worktree has that path.
-- Inspect leases whenever the path exists, not only when an entry matched.
-- When the path is registered but on another branch or detached, take the
-  normal `removeWorktree` path. Its dirty-tree refusal and the force flag then
-  apply. Or refuse with a clear error, consistent with reconciliation.
-- Make `getManagementStateIn` classify the directory by path, so the row does
-  not report `removed` for a directory that exists.
-- Tests in the existing WorktreeManager suite: detached HEAD plus a dirty file
-  → non-force Remove does not delete it; a live lease → refused; a genuinely
-  forgotten path → leftovers still cleared.
+Git registration is now matched by worktree path alone and shared by state
+listing and management actions. Existing paths are checked for live leases
+before either Remove action. When Git still registers a path whose HEAD has
+changed or detached, Remove uses `git worktree remove`: Git refuses a dirty
+tree for non-force Remove, while Force remove applies the explicit force flag.
+The lease check refuses both actions while a run is live. Recursive filesystem
+cleanup is reserved for paths Git has fully forgotten, preserving the existing
+leftover cleanup behavior for that case.
+
+State listing associates a registered path with its managed ownership record
+regardless of its current HEAD, so it stays a managed row with its recorded
+branch identity and is not incorrectly shown as removed. The dashboard still
+offers Remove and Force remove for that row, disables both when a live lease is
+present, and hides branch cleanup while the current HEAD no longer matches the
+recorded branch.
+
+The WorktreeManager tests cover a dirty detached worktree, a live lease on a
+detached worktree, and a detached worktree's management state. Existing tests
+continue to cover cleanup of leftover directories after Git forgets the path.

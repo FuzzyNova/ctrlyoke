@@ -1787,6 +1787,82 @@ suite("WorktreeManager", function () {
     assert.strictEqual(reconciledAfterRemove?.directoryState, "removed");
   });
 
+  test("preserves a dirty detached managed worktree on non-force Remove", async () => {
+    const { parent, repository } = await makeRepository(
+      "management-detached-dirty"
+    );
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    await info.lease.release();
+    const preciousPath = path.join(info.worktreePath, "precious.txt");
+    await fs.writeFile(preciousPath, "keep this work\n");
+    execFileSync("git", ["-C", info.worktreePath, "switch", "--detach"], {
+      stdio: "ignore",
+    });
+
+    await assert.rejects(
+      instance.applyManagementAction({
+        sourceCheckoutRoot: repository,
+        action: WORKTREE_MANAGEMENT_ACTIONS.REMOVE,
+        branchName: info.branchName,
+      })
+    );
+
+    assert.strictEqual(
+      await fs.readFile(preciousPath, "utf8"),
+      "keep this work\n"
+    );
+  });
+
+  test("refuses Remove for a detached managed worktree with a live lease", async () => {
+    const { parent, repository } = await makeRepository(
+      "management-detached-live-lease"
+    );
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    execFileSync("git", ["-C", info.worktreePath, "switch", "--detach"], {
+      stdio: "ignore",
+    });
+
+    for (const action of [
+      WORKTREE_MANAGEMENT_ACTIONS.REMOVE,
+      WORKTREE_MANAGEMENT_ACTIONS.FORCE_REMOVE,
+    ]) {
+      await assert.rejects(
+        instance.applyManagementAction({
+          sourceCheckoutRoot: repository,
+          action,
+          branchName: info.branchName,
+          confirmed: true,
+        }),
+        /Worktree is in use by workflow manager-test, run run-1/
+      );
+    }
+
+    const recordPath = await instance.managedWorktreeRecordPath(
+      repository,
+      info.branchName
+    );
+    const record = await instance.readManagedWorktreeRecord(
+      repository,
+      info.branchName
+    );
+    assert.ok(record);
+    await fs.writeFile(
+      recordPath,
+      JSON.stringify({ ...record, directoryState: "removed" }, null, 2)
+    );
+
+    const state = await instance.getManagementState(repository);
+    const entry = state.entries.find(
+      (candidate) => candidate.worktreePath === info.worktreePath
+    );
+    assert.strictEqual(entry?.ownership, "managed");
+    assert.strictEqual(entry?.directoryState, "present");
+    assert.strictEqual(entry?.inUse, true);
+    await info.lease.release();
+  });
+
   test("keeps a newer managed record listed and untouched when Git forgets its worktree", async () => {
     const { parent, repository } = await makeRepository(
       "management-newer-schema"
