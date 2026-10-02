@@ -140,10 +140,7 @@ suite("OsCredentialStore", () => {
 
     await store.store("ctrlyoke.secret.user.API_KEY", value);
 
-    assert.strictEqual(
-      await store.get("ctrlyoke.secret.user.API_KEY"),
-      value
-    );
+    assert.strictEqual(await store.get("ctrlyoke.secret.user.API_KEY"), value);
   });
 
   test("reads existing ASCII credentials through the base64 get path", async () => {
@@ -174,6 +171,72 @@ suite("OsCredentialStore", () => {
       "ctrlyoke.ctrlyoke.pro.license-file#3",
       "ctrlyoke.ctrlyoke.pro.license-file#count",
     ]);
+  });
+
+  test("reads chunked credentials with a legacy bare chunk count", async () => {
+    const { store, vault } = createWindowsStore();
+    const key = "ctrlyoke.pro.license-file";
+    const value = textOfLength(WINDOWS_CHUNK_LENGTH * 2 + 17);
+    vault.credentials.set(
+      `ctrlyoke.${key}`,
+      value.slice(0, WINDOWS_CHUNK_LENGTH)
+    );
+    vault.credentials.set(
+      `ctrlyoke.${key}#1`,
+      value.slice(WINDOWS_CHUNK_LENGTH, WINDOWS_CHUNK_LENGTH * 2)
+    );
+    vault.credentials.set(
+      `ctrlyoke.${key}#2`,
+      value.slice(WINDOWS_CHUNK_LENGTH * 2)
+    );
+    vault.credentials.set(`ctrlyoke.${key}#count`, "3");
+
+    assert.strictEqual(await store.get(key), value);
+  });
+
+  test("rejects a same-size overwrite that fails partway through", async () => {
+    const { store, vault } = createWindowsStore();
+    const key = "ctrlyoke.pro.license-file";
+    await store.store(key, "A".repeat(WINDOWS_CHUNK_LENGTH * 3));
+    vault.failWriteFor = `ctrlyoke.${key}#1`;
+
+    await assert.rejects(
+      store.store(key, "B".repeat(WINDOWS_CHUNK_LENGTH * 3)),
+      /CredWrite failed/
+    );
+
+    vault.failWriteFor = undefined;
+    await assert.rejects(
+      store.get(key),
+      /integrity check.*Re-store the secret/
+    );
+  });
+
+  test("rejects a failed shrink before removing the old chunk count", async () => {
+    const { store, vault } = createWindowsStore();
+    const key = "ctrlyoke.pro.license-file";
+    await store.store(key, "A".repeat(WINDOWS_CHUNK_LENGTH * 3));
+    vault.failWriteFor = `ctrlyoke.${key}`;
+
+    await assert.rejects(store.store(key, "short"), /CredWrite failed/);
+
+    vault.failWriteFor = undefined;
+    await assert.rejects(
+      store.get(key),
+      /integrity check.*Re-store the secret/
+    );
+  });
+
+  test("round-trips a successful chunked overwrite", async () => {
+    const { store } = createWindowsStore();
+    const key = "ctrlyoke.pro.license-file";
+    const original = "A".repeat(WINDOWS_CHUNK_LENGTH * 3);
+    const replacement = "B".repeat(WINDOWS_CHUNK_LENGTH * 3);
+    await store.store(key, original);
+
+    await store.store(key, replacement);
+
+    assert.strictEqual(await store.get(key), replacement);
   });
 
   test("keeps a value intact across a chunk boundary that splits a surrogate pair", async () => {

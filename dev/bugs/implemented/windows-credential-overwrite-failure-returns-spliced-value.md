@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (source review + fake-vault repro)
 - **Area:** `src/platform/OsCredentialStore.ts` (`WindowsCredentialBackend`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
