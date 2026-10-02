@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), code-path review
 - **Area:** `src/ui/webview-react/components/output/OutputRow.tsx`, `src/ui/webview-react/hooks/useOutputUndoActions.ts`, `src/ui/webview-react/hooks/useOutputMinimapModel.ts`
-- **Severity:** medium (regression from ccaf42888 / 1e418308d)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -7,6 +7,7 @@ import {
 } from "@/types/messages";
 import type { WorkflowRunAddress } from "@root/types/CtrlYokeTypes";
 import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
+import type { WorkspaceSnapshot } from "@root/types/OutputHistoryTypes";
 import { getVsCodeApi } from "./useVsCodeApi";
 
 type SnapshotContent = Pick<
@@ -103,4 +104,22 @@ export function useWorkspaceSnapshotContent(): (
       snapshotContentClient.request(address, target, path),
     []
   );
+}
+
+/** Fill every on-demand file body before a snapshot is used to build undo UI. */
+export async function hydrateSnapshot(
+  requestContent: ReturnType<typeof useWorkspaceSnapshotContent>,
+  address: WorkflowRunAddress,
+  target: OutputExecutionTarget,
+  snapshot: WorkspaceSnapshot | undefined
+): Promise<WorkspaceSnapshot | undefined> {
+  if (!snapshot) return undefined;
+  const changedFiles = await Promise.all(
+    snapshot.changedFiles.map(async (change) => {
+      if (!change.contentAvailableOnDemand) return change;
+      const content = await requestContent(address, target, change.path);
+      return { ...change, ...content, contentAvailableOnDemand: undefined };
+    })
+  );
+  return { ...snapshot, changedFiles };
 }

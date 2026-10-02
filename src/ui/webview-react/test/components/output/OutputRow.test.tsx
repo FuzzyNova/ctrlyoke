@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { OutputRow } from "@components/output/OutputRow";
 import { getStepIdentityBarStyle } from "@components/output/outputStyles";
 import {
@@ -203,6 +209,102 @@ describe("OutputRow token stats", () => {
 });
 
 describe("OutputRow snapshot diffs", () => {
+  it("hydrates a diff that mounts already expanded", async () => {
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+    const runAddress = {
+      workflowKey: "workflow-1" as never,
+      kind: "run" as const,
+      runRef: "run-2026-01-01T00-00-00-000Z" as never,
+    };
+    useUiStore.setState({
+      displayedViewAddress: runAddress,
+      appliedViewAddress: runAddress,
+    });
+    const onFileUndo = vi.fn();
+    const row: StructuredEventRow = {
+      key: "expanded-on-mount",
+      target: TARGET,
+      estimateSize: 80,
+      rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
+      event: {
+        type: CLI_EVENT_TYPES.FILE_EDIT,
+        data: {
+          path: "src/expanded-on-mount.ts",
+          newContent: "new value",
+          status: OPERATION_STATUS.COMPLETED,
+          structuredPatch: [
+            {
+              oldStart: 1,
+              oldLines: 1,
+              newStart: 1,
+              newLines: 1,
+              lines: ["-old value", "+new value"],
+            },
+          ],
+        },
+      },
+      eventIndex: 0,
+      rawTextOutput: false,
+      hideDiff: false,
+      diff: {
+        key: "expanded-on-mount-diff",
+        addedLines: 1,
+        removedLines: 1,
+        runs: [],
+        isCollapsed: false,
+        renderPlan: { viewType: "unified" } as never,
+      },
+      workspaceSnapshot: {
+        capturedAt: 1,
+        strategy: "filesystem",
+        changedFiles: [
+          {
+            path: "src/expanded-on-mount.ts",
+            changeType: "modified",
+            contentAvailableOnDemand: true,
+          },
+        ],
+      },
+    };
+
+    render(
+      <OutputRow
+        row={row}
+        isExecutionActive={false}
+        onFileUndo={onFileUndo}
+        onDiffCollapsedChange={vi.fn()}
+      />
+    );
+
+    await waitFor(() => expect(postMessage).toHaveBeenCalledTimes(1));
+    const request = postMessage.mock.calls[0]?.[0] as {
+      type: string;
+      requestId: string;
+    };
+    expect(request.type).toBe(MESSAGE_TYPES.REQUEST_WORKSPACE_SNAPSHOT_CONTENT);
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.WORKSPACE_SNAPSHOT_CONTENT,
+            requestId: request.requestId,
+            beforeContent: "persisted expansion content",
+          },
+        })
+      );
+    });
+    await waitFor(() => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "Undo file operation" })
+      );
+      expect(onFileUndo).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({ oldContent: "persisted expansion content" })
+      );
+    });
+  });
+
   it("applies fetched absolute-path content only to the run it belongs to", async () => {
     const postMessage = vi.mocked(window.vscodeApi!.postMessage);
     postMessage.mockClear();
@@ -1421,11 +1523,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
   it("opens a prior-context reference from step 3 with its preceding-step boundary", () => {
     const originalState = useWorkflowStore.getState();
     useWorkflowStore.setState({
-      steps: [
-        { prompt: "step 1" },
-        { prompt: "step 2" },
-        { prompt: "step 3" },
-      ],
+      steps: [{ prompt: "step 1" }, { prompt: "step 2" }, { prompt: "step 3" }],
       parallelGroups: [],
     });
     const postMessage = vi.mocked(window.vscodeApi!.postMessage);
@@ -1461,11 +1559,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
   it("passes the row boundary through Markdown reply references", () => {
     const originalState = useWorkflowStore.getState();
     useWorkflowStore.setState({
-      steps: [
-        { prompt: "step 1" },
-        { prompt: "step 2" },
-        { prompt: "step 3" },
-      ],
+      steps: [{ prompt: "step 1" }, { prompt: "step 2" }, { prompt: "step 3" }],
       parallelGroups: [],
     });
     const postMessage = vi.mocked(window.vscodeApi!.postMessage);

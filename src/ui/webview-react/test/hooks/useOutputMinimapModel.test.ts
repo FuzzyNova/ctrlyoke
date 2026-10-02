@@ -28,7 +28,8 @@ function makeMessage(timestamp: number): OutputMessage {
 function renderModel(
   allMessages: OutputMessage[],
   hiddenAtMs: number,
-  workspaceSnapshot?: WorkspaceSnapshot
+  workspaceSnapshot?: WorkspaceSnapshot,
+  onOpenMinimapDialog = vi.fn()
 ) {
   const outputMessage = workspaceSnapshot
     ? ({
@@ -63,7 +64,7 @@ function renderModel(
       lastCliIndexPerStep: outputMessage
         ? new Map([["queue:2", 1]])
         : new Map(),
-      onOpenMinimapDialog: vi.fn(),
+      onOpenMinimapDialog,
       outputFontSize: 14,
       rowLayout: {
         rowStartsByIndex: [0],
@@ -176,5 +177,32 @@ describe("useOutputMinimapModel hidden activity", () => {
     expect(result.current.minimapSteps[0]?.changeSummary).toMatchObject({
       total: 1,
     });
+  });
+
+  it("passes the snapshot with the minimap change action for hydration", () => {
+    const snapshot: WorkspaceSnapshot = {
+      capturedAt: 1,
+      strategy: "filesystem",
+      changedFiles: [
+        {
+          path: "src/deleted.ts",
+          changeType: "deleted",
+          contentAvailableOnDemand: true,
+        },
+      ],
+    };
+    const onOpenMinimapDialog = vi.fn();
+    const { result } = renderModel(
+      [makeMessage(200)],
+      100,
+      snapshot,
+      onOpenMinimapDialog
+    );
+
+    result.current.minimapSteps[0]?.changeAction?.onTrigger();
+
+    expect(onOpenMinimapDialog).toHaveBeenCalledWith(
+      expect.objectContaining({ snapshot })
+    );
   });
 });

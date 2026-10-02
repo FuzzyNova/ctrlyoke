@@ -466,10 +466,14 @@ startup, external-run, and undo-record callers use its enriched history; only
 
 `REQUEST_WORKSPACE_SNAPSHOT_CONTENT` / `WORKSPACE_SNAPSHOT_CONTENT` and the
 address/target/path client cache serve the content through the same history
-manager enrichment. File-edit rows fetch when a diff expands. Prompt, file, and
-workflow undo dialogs fetch indexed content before opening. The minimap still
-uses `changedFiles` from the index. Live in-memory snapshot messages retain
-their full bodies; webview consumers support both full live snapshots and
+manager enrichment. `hydrateSnapshot` is the shared webview hydration path for
+CLI-header, minimap, file-row, and workflow-dialog undo entry points. Expanded
+file diffs hydrate from an effect, including when virtualization remounts a
+persistently expanded row; cached requests make those remounts cheap. Workflow
+dialogs select snapshots from history for completed runs and the live snapshot
+stores for mid-run views, and resolve event paths against the workspace root
+before matching snapshot paths. Live in-memory snapshot messages retain their
+full bodies; webview consumers support both full live snapshots and
 content-marked run-view indexes. Undo execution re-reads `restore-content`
 instructions from addressed history and ignores client-supplied bodies.
 

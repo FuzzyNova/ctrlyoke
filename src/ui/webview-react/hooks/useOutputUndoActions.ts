@@ -6,7 +6,11 @@ import type {
 import type { WorkflowStepEntry } from "@components/output/UndoChangesDialog";
 import type { OutputRowFileUndoRequest } from "@components/output/OutputRow";
 import { generateId } from "@utils/string";
-import { getTargetKey, type OutputMessage } from "@utils/outputProjection";
+import {
+  getTargetKey,
+  toOutputMessageTarget,
+  type OutputMessage,
+} from "@utils/outputProjection";
 import type { CliOutput as CliOutputType } from "@/types/cliEvents";
 import {
   buildUndoCandidatesForOutputs,
@@ -42,7 +46,10 @@ import {
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 import { useWorkflowDisplayName } from "@hooks/useWorkflowDisplayName";
-import { useWorkspaceSnapshotContent } from "@hooks/useWorkspaceSnapshotContent";
+import {
+  hydrateSnapshot,
+  useWorkspaceSnapshotContent,
+} from "@hooks/useWorkspaceSnapshotContent";
 import { WebviewLog } from "@utils/logger";
 
 type OutputHistoryView = {
@@ -68,6 +75,7 @@ interface UseOutputUndoActionsInput {
 
 export interface OpenMinimapDialogInput {
   target: UndoExecutionTarget;
+  snapshot?: WorkspaceSnapshot;
   intent: MinimapDialogState["intent"];
   input?: MinimapDialogState["input"];
   redoInstructions: MinimapDialogState["redoInstructions"];
@@ -290,8 +298,9 @@ export function useOutputUndoActions({
   ]);
 
   const openMinimapDialog = useCallback(
-    ({
+    async ({
       target,
+      snapshot,
       input,
       redoInstructions,
       intent,
@@ -300,19 +309,37 @@ export function useOutputUndoActions({
       mode = UNDO_REDO_DIRECTIONS.UNDO,
     }: OpenMinimapDialogInput) => {
       if (!runAddress) return;
+      const hydratedSnapshot = await hydrateSnapshot(
+        requestSnapshotContent,
+        runAddress,
+        target,
+        snapshot
+      );
+      const hydratedInput = input
+        ? {
+            ...input,
+            snapshotOnlyFiles: input.snapshotOnlyFiles.map(
+              (file) =>
+                resolveSnapshotFileMatch(
+                  hydratedSnapshot?.changedFiles ?? [],
+                  file.path
+                ) ?? file
+            ),
+          }
+        : undefined;
       setMinimapDialogState({
         mode,
         intent,
         target,
         address: runAddress,
-        input,
+        input: hydratedInput,
         redoInstructions,
         stepLabel,
         stepName,
         requestId: generateId(),
       });
     },
-    [runAddress]
+    [requestSnapshotContent, runAddress]
   );
 
   const handlePromptViewMeta = useCallback(
@@ -324,21 +351,12 @@ export function useOutputUndoActions({
     ) => {
       if (!promptUndo || !runAddress) return;
       const undoTarget = toUndoExecutionTarget(target);
-      const indexedSnapshot = promptUndo.workspaceSnapshot;
-      const loadedChanges = await Promise.all(
-        (indexedSnapshot?.changedFiles ?? []).map(async (change) => {
-          if (!change.contentAvailableOnDemand) return change;
-          const content = await requestSnapshotContent(
-            runAddress,
-            undoTarget,
-            change.path
-          );
-          return { ...change, ...content, contentAvailableOnDemand: undefined };
-        })
+      const workspaceSnapshot = await hydrateSnapshot(
+        requestSnapshotContent,
+        runAddress,
+        undoTarget,
+        promptUndo.workspaceSnapshot
       );
-      const workspaceSnapshot = indexedSnapshot
-        ? { ...indexedSnapshot, changedFiles: loadedChanges }
-        : undefined;
       const alreadyUndone =
         promptUndo.undoRecord != null && promptUndo.undoRecord.isRedone !== true
           ? promptUndo.undoRecord.redoInstructions
@@ -401,31 +419,22 @@ export function useOutputUndoActions({
         return;
       }
 
-      let workspaceSnapshot = row.workspaceSnapshot;
-      const indexedChange = workspaceSnapshot
+      const indexedChange = row.workspaceSnapshot
         ? resolveSnapshotFileMatch(
-            workspaceSnapshot.changedFiles,
+            row.workspaceSnapshot.changedFiles,
             request.path,
             workspacePath
           )
         : undefined;
-      if (indexedChange?.contentAvailableOnDemand && runAddress) {
-        const snapshot = workspaceSnapshot;
-        if (!snapshot) return;
-        const content = await requestSnapshotContent(
-          runAddress,
-          target,
-          indexedChange.path
-        );
-        workspaceSnapshot = {
-          ...snapshot,
-          changedFiles: snapshot.changedFiles.map((change) =>
-            sameFilePath(change.path, indexedChange.path)
-              ? { ...change, ...content, contentAvailableOnDemand: undefined }
-              : change
-          ),
-        };
-      }
+      const workspaceSnapshot =
+        indexedChange?.contentAvailableOnDemand && runAddress
+          ? await hydrateSnapshot(
+              requestSnapshotContent,
+              runAddress,
+              target,
+              row.workspaceSnapshot
+            )
+          : row.workspaceSnapshot;
 
       const input = buildUndoDialogInputForSpecificEvent(
         target,
@@ -463,19 +472,23 @@ export function useOutputUndoActions({
         requestId: generateId(),
       });
     };
-    const needsSnapshotContent = workflowChangeData.entries.some((entry) => {
-      const snapshot =
-        entry.target.kind === FINAL_STEP_PHASES.FINAL_STEP
-          ? historyOutputs?.finalStepOutputs?.[entry.target.loopIndex]
+    const getSnapshot = (entry: WorkflowStepEntry) => {
+      if (isViewingHistory && historyOutputs) {
+        return entry.target.kind === FINAL_STEP_PHASES.FINAL_STEP
+          ? historyOutputs.finalStepOutputs?.[entry.target.loopIndex]
               ?.workspaceSnapshot
-          : historyOutputs?.promptOutputs[entry.target.stepIndex]
+          : historyOutputs.promptOutputs[entry.target.stepIndex]
               ?.workspaceSnapshot;
-      return (
-        snapshot?.changedFiles.some(
-          (change) => change.contentAvailableOnDemand
-        ) ?? false
-      );
-    });
+      }
+      return entry.target.kind === FINAL_STEP_PHASES.FINAL_STEP
+        ? finalStepWorkspaceSnapshots[entry.target.loopIndex]
+        : workspaceSnapshots[entry.target.stepIndex];
+    };
+    const needsSnapshotContent = workflowChangeData.entries.some((entry) =>
+      getSnapshot(entry)?.changedFiles.some(
+        (change) => change.contentAvailableOnDemand
+      )
+    );
     if (!needsSnapshotContent) {
       openWorkflowDialog(workflowChangeData.entries);
       return;
@@ -483,39 +496,49 @@ export function useOutputUndoActions({
     void Promise.all(
       workflowChangeData.entries.map(async (entry) => {
         const outputTarget = entry.target;
-        const indexedSnapshot =
-          outputTarget.kind === FINAL_STEP_PHASES.FINAL_STEP
-            ? historyOutputs?.finalStepOutputs?.[outputTarget.loopIndex]
-                ?.workspaceSnapshot
-            : historyOutputs?.promptOutputs[outputTarget.stepIndex]
-                ?.workspaceSnapshot;
-        if (!indexedSnapshot) return entry;
+        const indexedSnapshot = getSnapshot(entry);
+        const stepOutputs = stepOutputsMap.get(
+          getTargetKey(toOutputMessageTarget(outputTarget))
+        );
+        const workspaceRoot = stepOutputs?.find(
+          (output) => output.workingDirectory
+        )?.workingDirectory;
+        const hydratedSnapshot = await hydrateSnapshot(
+          requestSnapshotContent,
+          runAddress,
+          outputTarget,
+          indexedSnapshot
+        );
+        if (!hydratedSnapshot) return entry;
         const candidates = await Promise.all(
           (entry.undoCandidates ?? []).map(async (candidate) => {
-            const change = indexedSnapshot.changedFiles.find(
-              (file) =>
-                file.contentAvailableOnDemand &&
-                sameFilePath(file.path, candidate.path)
+            const sourceChange = indexedSnapshot
+              ? resolveSnapshotFileMatch(
+                  indexedSnapshot.changedFiles,
+                  candidate.path,
+                  workspaceRoot
+                )
+              : undefined;
+            if (!sourceChange?.contentAvailableOnDemand) return candidate;
+            const change = resolveSnapshotFileMatch(
+              hydratedSnapshot.changedFiles,
+              sourceChange.path,
+              workspaceRoot
             );
             if (!change) return candidate;
-            const content = await requestSnapshotContent(
-              runAddress,
-              outputTarget,
-              change.path
-            );
             return {
               ...candidate,
-              ...(content.contentToRestore !== undefined
+              ...(change.contentToRestore !== undefined
                 ? {
                     instruction: {
-                      path: candidate.path,
+                      path: change.path,
                       action: "restore-content" as const,
-                      contentToRestore: content.contentToRestore,
+                      contentToRestore: change.contentToRestore,
                     },
                   }
                 : {}),
-              ...(content.beforeContent !== undefined
-                ? { oldContent: content.beforeContent }
+              ...(change.beforeContent !== undefined
+                ? { oldContent: change.beforeContent }
                 : {}),
             };
           })
@@ -525,10 +548,14 @@ export function useOutputUndoActions({
     ).then(openWorkflowDialog);
   }, [
     historyOutputs,
+    isViewingHistory,
+    finalStepWorkspaceSnapshots,
     requestSnapshotContent,
     runAddress,
     workflowChangeData.entries,
     workflowDisplayName,
+    stepOutputsMap,
+    workspaceSnapshots,
   ]);
 
   const closeMinimapDialog = useCallback(() => {

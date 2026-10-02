@@ -109,7 +109,10 @@ import { renderCommandTextWithFileLinks } from "@utils/cliCommandFileLinks";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { getTargetKey } from "@utils/outputProjection";
-import { useWorkspaceSnapshotContent } from "@hooks/useWorkspaceSnapshotContent";
+import {
+  hydrateSnapshot,
+  useWorkspaceSnapshotContent,
+} from "@hooks/useWorkspaceSnapshotContent";
 import { getStepKindIconClass } from "@utils/status";
 import { getPriorContextStepCount } from "@utils/parallelGroups";
 import type {
@@ -617,6 +620,9 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       workspaceSnapshot,
       diff,
     } = row;
+    const [isDiffExpanded, setIsDiffExpanded] = useState(
+      diff?.isCollapsed === false
+    );
     const appliedRunAddressKey =
       appliedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
         ? workflowViewAddressKey(appliedViewAddress)
@@ -660,12 +666,22 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       workspaceSnapshot,
     ]);
 
-    const fetchSnapshotContent = (path: string) => {
-      const indexedChange = workspaceSnapshot
-        ? resolveSnapshotFileMatch(workspaceSnapshot.changedFiles, path)
+    const changedPath =
+      event.type === CLI_EVENT_TYPES.FILE_EDIT ||
+      event.type === CLI_EVENT_TYPES.FILE_WRITE
+        ? (event.data as FileEditData | FileWriteData).path
         : undefined;
+    const matchedChange =
+      changedPath && workspaceSnapshot
+        ? resolveSnapshotFileMatch(workspaceSnapshot.changedFiles, changedPath)
+        : undefined;
+    useEffect(() => {
+      setIsDiffExpanded(diff?.isCollapsed === false);
+    }, [diff?.isCollapsed]);
+    useEffect(() => {
       if (
-        !indexedChange?.contentAvailableOnDemand ||
+        !isDiffExpanded ||
+        !matchedChange?.contentAvailableOnDemand ||
         appliedViewAddress?.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN
       ) {
         return;
@@ -674,26 +690,41 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
         row.target.kind === FINAL_STEP_PHASES.FINAL_STEP
           ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: row.target.index }
           : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: row.target.index };
-      void requestSnapshotContent(
-        {
-          workflowKey: appliedViewAddress.workflowKey,
-          runRef: appliedViewAddress.runRef,
-        },
+      const address = {
+        workflowKey: appliedViewAddress.workflowKey,
+        runRef: appliedViewAddress.runRef,
+      };
+      void hydrateSnapshot(
+        requestSnapshotContent,
+        address,
         target,
-        indexedChange.path
-      ).then((content) => {
-        if (content.beforeContent !== undefined) {
-          setLoadedSnapshotContent((current) => ({
-            ...current,
-            [getLoadedSnapshotContentKey(
-              workflowViewAddressKey(appliedViewAddress),
-              row.target,
-              indexedChange.path
-            )]: content.beforeContent!,
-          }));
-        }
+        workspaceSnapshot
+      ).then((snapshot) => {
+        if (!snapshot) return;
+        setLoadedSnapshotContent((current) => {
+          const next = { ...current };
+          for (const change of snapshot.changedFiles) {
+            if (change.beforeContent !== undefined) {
+              next[
+                getLoadedSnapshotContentKey(
+                  workflowViewAddressKey(appliedViewAddress),
+                  row.target,
+                  change.path
+                )
+              ] = change.beforeContent;
+            }
+          }
+          return next;
+        });
       });
-    };
+    }, [
+      appliedViewAddress,
+      isDiffExpanded,
+      matchedChange?.contentAvailableOnDemand,
+      requestSnapshotContent,
+      row.target,
+      workspaceSnapshot,
+    ]);
 
     const isActiveRow = activeFindMatch?.rowKey === row.key;
     const collapsedToolOutputLineCount =
@@ -944,7 +975,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             onCollapsedChange={
               diff
                 ? (collapsed) => {
-                    if (!collapsed) fetchSnapshotContent(data.path);
+                    setIsDiffExpanded(!collapsed);
                     onDiffCollapsedChange?.(row.key, diff.key, collapsed);
                   }
                 : undefined

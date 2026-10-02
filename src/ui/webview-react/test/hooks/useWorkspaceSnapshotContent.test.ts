@@ -1,9 +1,71 @@
 import { describe, expect, it } from "vitest";
 import { MESSAGE_TYPES, FINAL_STEP_PHASES } from "@/types/messages";
 import type { WorkflowKey, RunRef } from "@root/types/CtrlYokeTypes";
-import { WorkspaceSnapshotContentClient } from "@hooks/useWorkspaceSnapshotContent";
+import {
+  hydrateSnapshot,
+  WorkspaceSnapshotContentClient,
+} from "@hooks/useWorkspaceSnapshotContent";
 
 describe("WorkspaceSnapshotContentClient", () => {
+  it("hydrates every on-demand snapshot entry", async () => {
+    const sent: any[] = [];
+    const client = new WorkspaceSnapshotContentClient(
+      (message) => sent.push(message),
+      () => `request-${sent.length + 1}`
+    );
+    const address = {
+      workflowKey: "workflow-a" as WorkflowKey,
+      runRef: "run-2026-01-01T00-00-00-000Z" as RunRef,
+    };
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 } as const;
+    const snapshot = {
+      capturedAt: 1,
+      strategy: "filesystem" as const,
+      changedFiles: [
+        {
+          path: "src/one.ts",
+          changeType: "modified" as const,
+          contentAvailableOnDemand: true,
+        },
+        {
+          path: "src/two.ts",
+          changeType: "deleted" as const,
+          contentAvailableOnDemand: true,
+        },
+        { path: "src/three.ts", changeType: "created" as const },
+      ],
+    };
+    const hydration = hydrateSnapshot(
+      (requestAddress, requestTarget, path) =>
+        client.request(requestAddress, requestTarget, path),
+      address,
+      target,
+      snapshot
+    );
+    expect(sent.map((message) => message.path)).toEqual([
+      "src/one.ts",
+      "src/two.ts",
+    ]);
+    sent.forEach((message) => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.WORKSPACE_SNAPSHOT_CONTENT,
+            requestId: message.requestId,
+            beforeContent: `before ${message.path}`,
+          },
+        })
+      );
+    });
+    await expect(hydration).resolves.toMatchObject({
+      changedFiles: [
+        { path: "src/one.ts", beforeContent: "before src/one.ts" },
+        { path: "src/two.ts", beforeContent: "before src/two.ts" },
+        { path: "src/three.ts" },
+      ],
+    });
+  });
+
   it("matches replies and caches by address, target, and path", async () => {
     const sent: any[] = [];
     const client = new WorkspaceSnapshotContentClient(

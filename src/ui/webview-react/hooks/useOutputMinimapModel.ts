@@ -384,6 +384,7 @@ export function useOutputMinimapModel({
                   onTrigger: () => {
                     onOpenMinimapDialog({
                       target: undoTarget,
+                      snapshot: effectiveSnapshot,
                       input,
                       redoInstructions: alreadyUndone,
                       intent: UNDO_DIALOG_INTENTS.VIEW,

@@ -1,4 +1,4 @@
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useOutputUndoActions } from "@hooks/useOutputUndoActions";
 import { useUiStore } from "@store/uiStore";
@@ -190,5 +190,140 @@ describe("useOutputUndoActions", () => {
     expect(
       result.current.minimapDialogState?.input?.snapshotOnlyFiles[0]
     ).toMatchObject({ changeType: "deleted" });
+  });
+
+  it("hydrates a minimap snapshot before opening its dialog", async () => {
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+    const { result } = renderUndoActions();
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const snapshot = {
+      capturedAt: 1,
+      strategy: "filesystem" as const,
+      changedFiles: [
+        {
+          path: "src/minimap-deleted.ts",
+          changeType: "deleted" as const,
+          contentAvailableOnDemand: true,
+        },
+      ],
+    };
+    const opening = result.current.openMinimapDialog({
+      target,
+      snapshot,
+      input: {
+        scope: "prompt",
+        eventAttributedFiles: [],
+        snapshotOnlyFiles: snapshot.changedFiles,
+        workspacePath: "/repo",
+      } as never,
+      redoInstructions: undefined,
+      intent: "view" as never,
+    });
+    const request = postMessage.mock.calls[0]?.[0] as
+      { type: string; requestId: string } | undefined;
+    expect(request?.type).toBe(
+      MESSAGE_TYPES.REQUEST_WORKSPACE_SNAPSHOT_CONTENT
+    );
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.WORKSPACE_SNAPSHOT_CONTENT,
+            requestId: request?.requestId,
+            contentToRestore: "deleted file contents",
+          },
+        })
+      );
+    });
+    await act(async () => opening);
+
+    expect(
+      result.current.minimapDialogState?.input?.snapshotOnlyFiles[0]
+    ).toMatchObject({ contentToRestore: "deleted file contents" });
+  });
+
+  it("hydrates live-run snapshots and matches nested files by workspace-relative path", async () => {
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
+    const output = {
+      prompt: "prompt",
+      response: "done",
+      elapsed: 1,
+      isStreaming: false,
+      workingDirectory: "/repo",
+      structured: {
+        events: [
+          {
+            type: "file_edit",
+            data: { path: "/repo/packages/api/package.json" },
+          },
+        ],
+      },
+    };
+    const { result } = renderHook(() =>
+      useOutputUndoActions({
+        allMessages: [
+          { type: "cli", target, timestamp: 1, data: output } as never,
+        ],
+        allowUndoActions: true,
+        finalStepWorkspaceSnapshots: {},
+        historyOutputs: null,
+        isViewingHistory: false,
+        lastCliIndexPerStep: new Map([["queue:0", 0]]),
+        stepOutputsMap: new Map([["queue:0", [output as never]]]),
+        undoRecords: {},
+        uniqueStepTargets: [target],
+        workspaceSnapshots: {
+          0: {
+            capturedAt: 1,
+            strategy: "filesystem",
+            changedFiles: [
+              {
+                path: "package.json",
+                changeType: "deleted",
+                contentAvailableOnDemand: true,
+              },
+              {
+                path: "packages/api/package.json",
+                changeType: "deleted",
+                contentAvailableOnDemand: true,
+              },
+            ],
+          },
+        },
+      })
+    );
+
+    act(() => result.current.handleWorkflowView());
+    expect(postMessage).toHaveBeenCalledTimes(2);
+    for (const [message] of postMessage.mock.calls) {
+      const request = message as { requestId: string; path: string };
+      act(() => {
+        window.dispatchEvent(
+          new MessageEvent("message", {
+            data: {
+              type: MESSAGE_TYPES.WORKSPACE_SNAPSHOT_CONTENT,
+              requestId: request.requestId,
+              contentToRestore: `contents of ${request.path}`,
+            },
+          })
+        );
+      });
+    }
+    await waitFor(() =>
+      expect(result.current.workflowDialogState).not.toBeNull()
+    );
+
+    const nestedCandidate =
+      result.current.workflowDialogState?.entries[0]?.undoCandidates?.find(
+        (candidate) => candidate.path.endsWith("packages/api/package.json")
+      );
+    expect(nestedCandidate?.instruction).toMatchObject({
+      path: "packages/api/package.json",
+      action: "restore-content",
+      contentToRestore: "contents of packages/api/package.json",
+    });
   });
 });
