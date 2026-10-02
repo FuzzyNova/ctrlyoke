@@ -122,8 +122,19 @@ const WORKSPACE_FILE_JSON_BODY_LIMIT_BYTES =
 const WORKSPACE_FILE_ROUTE_PATH = "/api/workspace-viewer/file";
 const SERVER_IDENTITY_ROUTE_PATH = "/api/server-identity";
 
-function createServerIdentityProof(token: string, nonce: string): string {
-  return createHmac("sha256", token).update(nonce).digest("hex");
+function normalizeWorkspaceRoot(workspaceRoot: string): string {
+  const resolved = path.resolve(workspaceRoot);
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+
+function createServerIdentityProof(
+  token: string,
+  nonce: string,
+  workspaceRoot: string
+): string {
+  return createHmac("sha256", token)
+    .update(`${nonce}\n${normalizeWorkspaceRoot(workspaceRoot)}`)
+    .digest("hex");
 }
 
 function timingSafeStringEqual(left: unknown, right: string): boolean {
@@ -866,7 +877,13 @@ export class CtrlYokeHostedServer
         res.status(400).json({ error: "nonce is required" });
         return;
       }
-      res.json({ proof: createServerIdentityProof(this.token, nonce) });
+      res.json({
+        proof: createServerIdentityProof(
+          this.token,
+          nonce,
+          this.workspaceRoot
+        ),
+      });
     });
     // Serve static assets (CSS/JS/fonts) without token — they are not sensitive and
     // the browser fetches them without query params after loading the entry HTML.
@@ -2645,7 +2662,11 @@ export class CtrlYokeHostedServer
               resolve(
                 timingSafeStringEqual(
                   proof,
-                  createServerIdentityProof(this.token, nonce)
+                  createServerIdentityProof(
+                    this.token,
+                    nonce,
+                    this.workspaceRoot
+                  )
                 )
               );
             } catch {

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli), reviewing 88f5584a5 (code reading)
 - **Area:** `src/server/CtrlYokeHostedServer.ts` (`probeExistingServer`, `SERVER_IDENTITY_ROUTE_PATH` route), `src/extension.ts` (`ctrlyoke.enableServer` sibling callback)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

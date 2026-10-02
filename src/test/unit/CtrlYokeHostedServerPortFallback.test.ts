@@ -304,6 +304,50 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
     }
   });
 
+  test("falls back without reporting a same-token server from another workspace as a sibling", async () => {
+    const siblingWorkspaceRoot = makeTempDir("ctrlyoke-hosted-server-sibling-");
+    const currentWorkspaceRoot = makeTempDir("ctrlyoke-hosted-server-current-");
+    const token = "shared-extension-server-token";
+    const sibling = createHostedServer(
+      0,
+      token,
+      undefined,
+      siblingWorkspaceRoot
+    );
+    let second: CtrlYokeHostedServer | undefined;
+    let detectedSibling = false;
+    try {
+      const siblingUrl = await sibling.listen();
+      if (!siblingUrl) throw new Error("Sibling server did not start");
+
+      const siblingPort = Number(new URL(siblingUrl).port);
+      second = createHostedServer(
+        siblingPort,
+        token,
+        () => {
+          detectedSibling = true;
+        },
+        currentWorkspaceRoot
+      );
+
+      const secondUrl = await second.listen();
+
+      if (!secondUrl)
+        throw new Error("Second instance did not start its own server");
+      assert.strictEqual(detectedSibling, false);
+      assert.notStrictEqual(Number(new URL(secondUrl).port), siblingPort);
+      assert.deepStrictEqual(second.getPortFallbackInfo(), {
+        requestedPort: siblingPort,
+        actualPort: Number(new URL(secondUrl).port),
+      });
+    } finally {
+      second?.dispose();
+      sibling.dispose();
+      removeTempDir(currentWorkspaceRoot);
+      removeTempDir(siblingWorkspaceRoot);
+    }
+  });
+
   test("writes its own URL to the dev file when a sibling is detected in dev mode", async () => {
     const workspaceRoot = makeTempDir("ctrlyoke-hosted-server-");
     const token = "sibling-server-token";
