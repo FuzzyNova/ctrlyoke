@@ -29,6 +29,8 @@ import {
 import {
   createFileReferenceChip,
   findAtomicReferences,
+  getFencedBlockRanges,
+  isInFencedBlock,
   referenceBasename,
   type AtomicReferenceChip as AtomicReferenceDescriptor,
 } from "@utils/atomicReferences";
@@ -55,6 +57,12 @@ const MARKDOWN_NODE_TYPES = {
 
 /** Key of the remark-gfm entry in streamdown's `defaultRemarkPlugins`. */
 const STREAMDOWN_GFM_PLUGIN_KEY = "gfm";
+
+// These one-code-unit sentinels keep emphasis markers inside a reference from
+// being parsed as Markdown without shifting any source ranges. A remark plugin
+// restores them after inline parsing, before the reference plugins run.
+const REFERENCE_UNDERSCORE_SENTINEL = "\uE000";
+const REFERENCE_ASTERISK_SENTINEL = "\uE001";
 
 /** Raw-HTML elements a remark plugin emits for a reference with a source range. */
 const RANGED_REFERENCE_ELEMENT_PATTERN =
@@ -215,6 +223,51 @@ function isReplyContextReference(ref: AtomicReferenceDescriptor): boolean {
 }
 
 /**
+ * Keep Markdown emphasis parsing from splitting a context reference into
+ * multiple text nodes. The replacements are one UTF-16 code unit each, so
+ * mdast positions continue to address the original Markdown source.
+ */
+function shieldReferenceEmphasis(markdown: string): string {
+  const inlineCodeRanges: Array<{ from: number; to: number }> = [];
+  const inlineCode = /(`+)([^\n]*?)\1/g;
+  let codeMatch: RegExpExecArray | null;
+  while ((codeMatch = inlineCode.exec(markdown))) {
+    inlineCodeRanges.push({
+      from: codeMatch.index,
+      to: codeMatch.index + codeMatch[0].length,
+    });
+  }
+
+  const codeRanges = [...getFencedBlockRanges(markdown), ...inlineCodeRanges];
+  const protectedRanges = findAtomicReferences(markdown)
+    .filter(isReplyContextReference)
+    .filter((ref) => !isInFencedBlock(ref.from, ref.to, codeRanges));
+  if (protectedRanges.length === 0) return markdown;
+
+  const chars = markdown.split("");
+  for (const { from, to } of protectedRanges) {
+    for (let index = from; index < to; index += 1) {
+      if (chars[index] === "_") chars[index] = REFERENCE_UNDERSCORE_SENTINEL;
+      else if (chars[index] === "*") chars[index] = REFERENCE_ASTERISK_SENTINEL;
+    }
+  }
+  return chars.join("");
+}
+
+/** Restore markers after Markdown has identified emphasis nodes. */
+function remarkRestoreReferenceEmphasis() {
+  return (tree: Root): undefined => {
+    visit(tree, MARKDOWN_NODE_TYPES.TEXT, (node) => {
+      node.value = node.value
+        .split(REFERENCE_UNDERSCORE_SENTINEL)
+        .join("_")
+        .split(REFERENCE_ASTERISK_SENTINEL)
+        .join("*");
+    });
+  };
+}
+
+/**
  * Remark plugin that turns ctrlyoke context references in reply text
  * (`@file`, `@dir/`, `#selection:`, `#sym:`, `~git`, `$step:`/`$previous`,
  * `/skill:`, `/mcp:`) into `<context-ref>` elements, so an
@@ -234,6 +287,11 @@ function isReplyContextReference(ref: AtomicReferenceDescriptor): boolean {
 function remarkContextReferences() {
   return (tree: Root, file?: { value?: unknown }): undefined => {
     const source = typeof file?.value === "string" ? file.value : "";
+    const sourceForSearch = source
+      .split(REFERENCE_UNDERSCORE_SENTINEL)
+      .join("_")
+      .split(REFERENCE_ASTERISK_SENTINEL)
+      .join("*");
     visitParents(tree, MARKDOWN_NODE_TYPES.TEXT, (node, ancestors) => {
       if (
         ancestors.some((ancestor) => ancestor.type === MARKDOWN_NODE_TYPES.LINK)
@@ -251,13 +309,17 @@ function remarkContextReferences() {
       const nodeStart = node.position.start.offset ?? 0;
       const replacements: Array<Record<string, unknown>> = [];
       let cursor = 0;
+      let previousEnd = nodeStart;
       for (const ref of refs) {
         const raw = node.value.slice(ref.from, ref.to);
         // A text node's value is unescaped, so an escape earlier in the node
         // shifts its offsets against the source; re-anchor on the raw token.
         let start = nodeStart + ref.from;
-        if (source && source.slice(start, start + raw.length) !== raw) {
-          const found = source.indexOf(raw, nodeStart);
+        if (source && sourceForSearch.slice(start, start + raw.length) !== raw) {
+          const found = sourceForSearch.indexOf(
+            raw,
+            Math.max(nodeStart, previousEnd)
+          );
           if (found >= 0) start = found;
         }
         if (ref.from > cursor) {
@@ -271,6 +333,7 @@ function remarkContextReferences() {
           value: `<context-ref data-ref-source="${encodeURIComponent(raw)}" data-ref-start="${start}" data-ref-end="${start + raw.length}">${escapeHtml(raw)}</context-ref>`,
         });
         cursor = ref.to;
+        previousEnd = start + raw.length;
       }
       if (cursor < node.value.length) {
         replacements.push({
@@ -870,6 +933,7 @@ const REMARK_PLUGINS = [
 // image/file plugins so `@`-prefixed tokens are claimed whole.
 const REPLY_REMARK_PLUGINS = [
   ...REPLY_DEFAULT_REMARK_PLUGINS,
+  remarkRestoreReferenceEmphasis,
   remarkLocalLinks,
   remarkContextReferences,
   remarkImageRefs,
@@ -1491,6 +1555,10 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
   );
 
   const isHighlighting = !!highlightQuery?.trim();
+  const markdownChildren =
+    contextReferences && typeof children === "string"
+      ? shieldReferenceEmphasis(children)
+      : children;
   const streamdownKey = isHighlighting
     ? `find:${JSON.stringify([highlightQuery, highlightCaseSensitive, highlightActiveIndex])}`
     : "no-find";
@@ -1514,7 +1582,7 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
       allowedTags={FILE_REF_ALLOWED_TAGS}
       // No plugins prop: omitting avoids Shiki WASM CSP issues in VS Code webview
     >
-      {children}
+      {markdownChildren}
     </Streamdown>
   );
 };

@@ -432,6 +432,81 @@ describe("MarkdownText context references in replies", () => {
     ).toBeNull();
   });
 
+  it("keeps references containing Markdown emphasis markers whole", () => {
+    const reply = [
+      "Changed @src/__tests__/foo.test.ts and @pkg/__init__.py.",
+      "See #selection:src/__tests__/a.test.ts:3-5 and #sym:src/a.py:__init__:1-2.",
+      "Keep __bold__ prose bold, and leave `@src/__tests__/inline.ts` alone.",
+      "",
+      "```text\n@src/__tests__/fenced.ts\n```",
+    ].join("\n");
+    const { container } = render(
+      <MarkdownText contextReferences>{reply}</MarkdownText>
+    );
+
+    expect(links(container).map((link) => link.textContent)).toEqual([
+      "@src/__tests__/foo.test.ts",
+      "@pkg/__init__.py",
+      "#selection:src/__tests__/a.test.ts:3-5",
+      "#sym:src/a.py:__init__:1-2",
+    ]);
+    const refs = links(container);
+    expect(refs.map((ref) => ref.getAttribute("title"))).toEqual([
+      "Open src/__tests__/foo.test.ts",
+      "Open pkg/__init__.py",
+      "Open src/__tests__/a.test.ts:3-5",
+      "Go to __init__ in src/a.py:1-2",
+    ]);
+    postMessage().mockClear();
+    refs.forEach((ref) => fireEvent.click(ref));
+    expect(postMessage().mock.calls.map(([message]) => message)).toEqual([
+      { type: MESSAGE_TYPES.OPEN_FILE, path: "src/__tests__/foo.test.ts" },
+      { type: MESSAGE_TYPES.OPEN_FILE, path: "pkg/__init__.py" },
+      {
+        type: MESSAGE_TYPES.OPEN_FILE,
+        path: "src/__tests__/a.test.ts",
+        lineStart: 3,
+        lineEnd: 5,
+      },
+      {
+        type: MESSAGE_TYPES.OPEN_FILE,
+        path: "src/a.py",
+        lineStart: 1,
+        lineEnd: 2,
+      },
+    ]);
+    expect(screen.getByText("bold", { selector: "strong" })).toBeInTheDocument();
+    expect(container.querySelector("code")).toHaveTextContent(
+      "@src/__tests__/inline.ts"
+    );
+  });
+
+  it("anchors repeated references after escaped text to their own source ranges", () => {
+    const reply = "a\\_b ~abc1234 and ~abc1234";
+    const firstStart = reply.indexOf("~abc1234");
+    const secondStart = reply.lastIndexOf("~abc1234");
+    const { container } = render(
+      <MarkdownText
+        contextReferences
+        highlightQuery="abc1234"
+        highlightActiveIndex={1}
+        findDecorations={{
+          matches: [
+            { start: firstStart + 1, end: firstStart + 8, active: false },
+            { start: secondStart + 1, end: secondStart + 8, active: true },
+          ],
+        }}
+      >
+        {reply}
+      </MarkdownText>
+    );
+
+    const refs = links(container);
+    expect(refs).toHaveLength(2);
+    const active = container.querySelector('mark[data-find-active="true"]');
+    expect(active?.closest('[role="link"]')).toBe(refs[1]);
+  });
+
   it("opens cited references like the prompt editor does", () => {
     postMessage().mockClear();
     const { container } = render(
