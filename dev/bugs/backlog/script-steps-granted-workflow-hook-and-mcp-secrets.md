@@ -28,3 +28,13 @@ step kind, but script steps never run hooks or MCP servers.
 For script steps, collect only the step's own `env` (and its pre/end-condition env).
 Confirm first that no documented behavior relies on scripts receiving these; the secrets
 plan does not mention it either way.
+
+## Decision (orchestrator, 2026-10-01)
+
+Fix it. Workflow `hooks` and `mcpServers` are harness configuration — they are
+installed into a CLI harness's hook/MCP config and never run for a `type: script`
+step, so their `${secret:...}` names are not that step's inputs. In `getProcessMaps`
+a script step contributes only `step.env` (script steps do not evaluate pre/end
+conditions; `conditionMaps` is already empty for them). The explicit
+`isScriptStep(step) ? workflow.mcpServers/hooks` branches are the bug, not an
+intentional inheritance. Prompt steps keep their current behavior unchanged.

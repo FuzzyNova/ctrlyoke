@@ -43,3 +43,31 @@ path and any other chunked output that reaches a client or a persisted event.
 Consider whether VT escape sequences inserted mid-secret need stripping before
 matching. This delays output by a few characters, a user-visible behavior change,
 so it needs a design decision before implementation.
+
+## Decision (orchestrator, 2026-10-01)
+
+Implement a per-stream `StreamingSecretRedactor` with these rules:
+
+- **Hold only what could still be a secret.** After redacting `held + chunk`, hold
+  back the longest suffix that is a proper prefix of any current exact secret
+  (`RunSecretRedactor` values, including the JSON-escaped representation); emit
+  everything before it. When no run has registered secrets, nothing is ever held,
+  so the common case has zero added latency. Do not hold a fixed
+  `maxSecretLength - 1` window — that delays every chunk.
+- **No idle-timer flush.** A timer would reopen exactly the leak in the repro
+  (writer pauses mid-secret). Held text is emitted when the next chunk arrives and
+  disambiguates it, or on `flush()` at stream end (process exit, step
+  abort/cancel, session dispose). The accepted cost: an interactive prompt whose
+  trailing characters happen to match a secret's first characters appears only
+  after the next output.
+- **Redact upstream of the transport boundary.** `secretRedactionService.redactValue`
+  at `ptyPostMessage`/webview/hosted sinks stays as-is (stateless defense in depth);
+  the streaming redactor wraps each chunk producer before its chunk is fanned out to
+  the terminal message, the timeline `onOutput`, and persisted events.
+- **VT escapes interleaved mid-secret are out of scope.** Stripping them would change
+  terminal rendering; leave as a documented limitation. Heuristic (pattern-based)
+  redaction across chunk boundaries is likewise out of scope.
+
+Implementation is split: the redactor plus the PTY paths first, then an audit of
+the remaining chunked streams (script stdout/stderr through `StreamChunkCoalescer`,
+headless CLI output chunks) and persisted `events.jsonl`.
