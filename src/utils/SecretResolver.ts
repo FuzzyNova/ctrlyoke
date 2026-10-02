@@ -352,32 +352,33 @@ function getProcessMaps(
   step: WorkflowStep,
   workflow: PromptFile
 ): Array<Record<string, string> | undefined> {
-  const mcpServers = isScriptStep(step)
-    ? (workflow.mcpServers ?? [])
-    : step.mcpServers !== undefined
+  // Script steps do not run harness hooks or MCP servers, and their
+  // pre/end-conditions are not evaluated. Only their own process environment
+  // can contribute process-map secret grants.
+  if (isScriptStep(step)) {
+    return [step.env];
+  }
+
+  const mcpServers =
+    step.mcpServers !== undefined
       ? (step.mcpServers ?? [])
       : (workflow.mcpServers ?? []);
   const mcpMaps = mcpServers.flatMap((server) =>
     typeof server === "string" ? [] : [server.env, server.headers]
   );
-  const hooks = isScriptStep(step)
-    ? (workflow.hooks ?? [])
-    : getEffectiveHookConfigs(step.hooks, workflow.hooks);
+  const hooks = getEffectiveHookConfigs(step.hooks, workflow.hooks);
   const hookMaps = hooks.map((hook: UserHookConfig) => hook.env);
-  const scriptMaps = isScriptStep(step) ? [step.env] : [];
-  const conditionMaps = isScriptStep(step)
-    ? []
-    : [
-        (step.preCondition === null
-          ? undefined
-          : (step.preCondition ?? workflow.preCondition)
-        )?.env,
-        (step.endCondition === null
-          ? undefined
-          : (step.endCondition ?? workflow.endCondition)
-        )?.env,
-      ];
-  return [...mcpMaps, ...hookMaps, ...scriptMaps, ...conditionMaps];
+  const conditionMaps = [
+    (step.preCondition === null
+      ? undefined
+      : (step.preCondition ?? workflow.preCondition)
+    )?.env,
+    (step.endCondition === null
+      ? undefined
+      : (step.endCondition ?? workflow.endCondition)
+    )?.env,
+  ];
+  return [...mcpMaps, ...hookMaps, ...conditionMaps];
 }
 
 function getEffectiveHookConfigs(

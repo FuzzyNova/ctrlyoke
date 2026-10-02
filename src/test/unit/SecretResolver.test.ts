@@ -489,6 +489,78 @@ suite("SecretResolver", () => {
     );
   });
 
+  test("script steps do not inherit workflow hook or MCP secret grants", async () => {
+    const workflow: PromptFile = {
+      mcpServers: [
+        {
+          id: "workflow-service",
+          url: "https://example.test/mcp",
+          headers: { Authorization: "Bearer ${secret:GITHUB_TOKEN}" },
+        },
+      ],
+      hooks: [
+        {
+          event: "stop",
+          command: "echo hook",
+          env: { WEBHOOK: "${secret:SLACK_WEBHOOK}" },
+        },
+      ],
+      steps: [{ type: "script", script: "echo script", secrets: null }],
+    };
+
+    assert.deepStrictEqual(
+      getDeclaredSecretGrants(workflow.steps![0], workflow),
+      []
+    );
+    assert.deepStrictEqual(getWorkflowSecretGrants(workflow), []);
+    assert.deepStrictEqual(
+      await preflightWorkflowSecrets(
+        workflow,
+        platformWith(new InMemorySecretStore({})),
+        "C:\\workspace",
+        {},
+        { failOnMissing: false }
+      ),
+      []
+    );
+  });
+
+  test("prompt steps still receive workflow hook and MCP secret grants", () => {
+    const workflow: PromptFile = {
+      mcpServers: [
+        {
+          id: "workflow-service",
+          url: "https://example.test/mcp",
+          headers: { Authorization: "Bearer ${secret:GITHUB_TOKEN}" },
+        },
+      ],
+      hooks: [
+        {
+          event: "stop",
+          command: "echo hook",
+          env: { WEBHOOK: "${secret:SLACK_WEBHOOK}" },
+        },
+      ],
+      steps: [
+        { type: "script", script: "echo script", secrets: null },
+        { prompt: "Run the harness" },
+      ],
+    };
+
+    assert.deepStrictEqual(
+      getDeclaredSecretGrants(workflow.steps![0], workflow),
+      []
+    );
+    assert.deepStrictEqual(
+      getDeclaredSecretGrants(workflow.steps![1], workflow),
+      ["GITHUB_TOKEN", "SLACK_WEBHOOK"]
+    );
+    assert.deepStrictEqual(getWorkflowSecretGrants(workflow), [
+      "GITHUB_TOKEN",
+      "SLACK_WEBHOOK",
+    ]);
+  });
+
   test("does not grant a step secret to an unrelated step", () => {
     const workflow: PromptFile = {
       steps: [
