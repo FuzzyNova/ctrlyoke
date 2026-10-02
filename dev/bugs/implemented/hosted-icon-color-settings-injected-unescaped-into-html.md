@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), code reading
 - **Area:** `src/server/CtrlYokeHostedServer.ts` (`buildHtml`, `buildManifest`, `serveColorizedSvg`, `serveColorizedPng`), `src/server/IconColorizer.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

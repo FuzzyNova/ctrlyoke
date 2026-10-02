@@ -54,10 +54,6 @@ import {
   NETWORK_INTERFACE_FAMILIES,
   THEME_KINDS,
 } from "../types/DashboardConstants";
-import {
-  ICON_BG_COLOR_DEFAULT,
-  ICON_FG_COLOR_DEFAULT,
-} from "../types/IconColorDefaults";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
 import { findWorkflowFilesInWorkspace } from "../utils/WorkflowFileDiscovery";
@@ -74,7 +70,7 @@ import {
 } from "../ui/notifications/CompletionNotificationFactory";
 import { buildHostedServiceWorkerScript } from "./HostedServiceWorkerScript";
 import { buildHostedStandaloneShimScript } from "./HostedStandaloneShimScript";
-import { colorizeSvg } from "./IconColorizer";
+import { colorizeSvg, resolveHostedIconColors } from "./IconColorizer";
 import {
   WebPushService,
   PushAccessDeniedError,
@@ -121,6 +117,23 @@ const WORKSPACE_FILE_JSON_BODY_LIMIT_BYTES =
   WORKSPACE_FILE_JSON_METADATA_HEADROOM_BYTES;
 const WORKSPACE_FILE_ROUTE_PATH = "/api/workspace-viewer/file";
 const SERVER_IDENTITY_ROUTE_PATH = "/api/server-identity";
+
+function escapeHtmlAttribute(value: string): string {
+  return value.replace(/[&"'<>]/g, (character) => {
+    switch (character) {
+      case "&":
+        return "&amp;";
+      case '"':
+        return "&quot;";
+      case "'":
+        return "&#39;";
+      case "<":
+        return "&lt;";
+      default:
+        return "&gt;";
+    }
+  });
+}
 
 function normalizeWorkspaceRoot(workspaceRoot: string): string {
   const resolved = path.resolve(workspaceRoot);
@@ -1924,26 +1937,24 @@ export class CtrlYokeHostedServer
     // favicon/icon resources aggressively and often ignore Cache-Control headers) pick up the
     // new icon as soon as colors change. The server-side route ignores these params — they exist
     // solely to bust the browser's icon cache. PNG icons are static and need no versioning.
-    const {
-      iconBgColor = ICON_BG_COLOR_DEFAULT,
-      iconFgColor = ICON_FG_COLOR_DEFAULT,
-    } = configService.getAll().server;
-    const iconColorParam = `?bg=${iconBgColor.replace("#", "")}&fg=${iconFgColor.replace("#", "")}`;
+    const { bg, fg } = resolveHostedIconColors(configService.getAll().server);
+    const iconColorParam = `?bg=${bg.replace("#", "")}&fg=${fg.replace("#", "")}`;
+    const escapedIconColorParam = escapeHtmlAttribute(iconColorParam);
     const hostedIconLinks = [
       // sizes="any" signals this is a scalable SVG — browsers that support SVG will prefer it
       // without fetching the PNG at all. Without this attribute browsers fetch both and show
       // whichever responds first (a race condition).  The PNG fallback is removed; all modern
       // browsers that display favicons support SVG. A default /favicon.ico request will 404
       // gracefully, which is fine.
-      `<link rel="icon" type="image/svg+xml" sizes="any" href="${HOSTED_ICON_PATHS.FAVICON_SVG}${iconColorParam}" />`,
+      `<link rel="icon" type="image/svg+xml" sizes="any" href="${HOSTED_ICON_PATHS.FAVICON_SVG}${escapedIconColorParam}" />`,
       // SVG apple-touch-icon — delivers custom background/foreground colors dynamically.
       // No `sizes` attribute makes it the highest-priority default. iOS SpringBoard fetches
       // this independently from Safari; it requires the server cert to be trusted at the
       // system level (Settings → General → About → Certificate Trust Settings). Once trusted,
       // iOS 15+ will use the SVG for the homescreen icon. PNG is kept as a sized fallback because
       // iOS Safari does not support SVG for homescreen icons — only PNG.
-      `<link rel="apple-touch-icon" type="image/svg+xml" sizes="any" href="${HOSTED_ICON_PATHS.APP_ICON_SVG}${iconColorParam}" />`,
-      `<link rel="apple-touch-icon" sizes="180x180" href="${HOSTED_ICON_PATHS.APPLE_TOUCH_ICON_PNG}${iconColorParam}" />`,
+      `<link rel="apple-touch-icon" type="image/svg+xml" sizes="any" href="${HOSTED_ICON_PATHS.APP_ICON_SVG}${escapedIconColorParam}" />`,
+      `<link rel="apple-touch-icon" sizes="180x180" href="${HOSTED_ICON_PATHS.APPLE_TOUCH_ICON_PNG}${escapedIconColorParam}" />`,
       // Enable standalone PWA mode and set the title shown under the home screen icon.
       `<meta name="apple-mobile-web-app-capable" content="yes" />`,
       `<meta name="apple-mobile-web-app-title" content="ctrlyoke" />`,
@@ -2017,14 +2028,11 @@ export class CtrlYokeHostedServer
 
   private serveColorizedSvg(svgPath: string, res: express.Response): void {
     try {
-      const {
-        iconBgColor = ICON_BG_COLOR_DEFAULT,
-        iconFgColor = ICON_FG_COLOR_DEFAULT,
-      } = configService.getAll().server;
+      const { bg, fg } = resolveHostedIconColors(configService.getAll().server);
       const svg = colorizeSvg(
         fs.readFileSync(svgPath, "utf8"),
-        iconBgColor,
-        iconFgColor
+        bg,
+        fg
       );
       this.setNoStore(res);
       res.type("image/svg+xml").send(svg);
@@ -2039,14 +2047,11 @@ export class CtrlYokeHostedServer
     res: express.Response
   ): Promise<void> {
     try {
-      const {
-        iconBgColor = ICON_BG_COLOR_DEFAULT,
-        iconFgColor = ICON_FG_COLOR_DEFAULT,
-      } = configService.getAll().server;
+      const { bg, fg } = resolveHostedIconColors(configService.getAll().server);
       const buffer =
         size === "small"
-          ? await pngIconService.getSmall(svgPath, iconBgColor, iconFgColor)
-          : await pngIconService.getLarge(svgPath, iconBgColor, iconFgColor);
+          ? await pngIconService.getSmall(svgPath, bg, fg)
+          : await pngIconService.getLarge(svgPath, bg, fg);
       if (!buffer) {
         res.status(404).send("Not found");
         return;
@@ -2067,11 +2072,8 @@ export class CtrlYokeHostedServer
   }
 
   private buildManifest(): Record<string, unknown> {
-    const {
-      iconBgColor = ICON_BG_COLOR_DEFAULT,
-      iconFgColor = ICON_FG_COLOR_DEFAULT,
-    } = configService.getAll().server;
-    const iconColorParam = `?bg=${iconBgColor.replace("#", "")}&fg=${iconFgColor.replace("#", "")}`;
+    const { bg, fg } = resolveHostedIconColors(configService.getAll().server);
+    const iconColorParam = `?bg=${bg.replace("#", "")}&fg=${fg.replace("#", "")}`;
     return {
       name: "ctrlyoke",
       short_name: "ctrlyoke",

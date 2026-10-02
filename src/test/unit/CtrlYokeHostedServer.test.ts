@@ -129,6 +129,55 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
     });
   });
 
+  test("rejects unsafe hosted icon colors in HTML, manifest, and SVG", async () => {
+    const unsafeColor = '#000"><script>alert(document.location)</script><link x="';
+    configService.setCliOverlay({
+      server: { iconBgColor: unsafeColor } as never,
+    } as never);
+    try {
+      await withServer(async (_root, port, token) => {
+        const page = await sendGetRequest(port, `/?token=${token}`);
+        assert.strictEqual(page.statusCode, 200);
+        assert.ok(!page.body.includes(unsafeColor));
+        assert.ok(!page.body.includes("<script>alert(document.location)</script>"));
+
+        const manifest = await sendGetRequest(
+          port,
+          `/manifest.webmanifest?token=${token}`
+        );
+        assert.strictEqual(manifest.statusCode, 200);
+        assert.ok(!manifest.body.includes(unsafeColor));
+        assert.ok(!manifest.body.includes("<script>"));
+
+        const favicon = await sendGetRequest(port, "/favicon.svg");
+        assert.strictEqual(favicon.statusCode, 200);
+        assert.ok(!favicon.body.includes(unsafeColor));
+        assert.ok(!favicon.body.includes("<script>"));
+      });
+    } finally {
+      configService.setCliOverlay({});
+    }
+  });
+
+  test("falls back for non-string hosted icon colors", async () => {
+    configService.setCliOverlay({ server: { iconBgColor: 1 } as never } as never);
+    try {
+      await withServer(async (_root, port, token) => {
+        const page = await sendGetRequest(port, `/?token=${token}`);
+        assert.strictEqual(page.statusCode, 200);
+
+        const manifest = await sendGetRequest(
+          port,
+          `/manifest.webmanifest?token=${token}`
+        );
+        assert.strictEqual(manifest.statusCode, 200);
+        assert.ok(JSON.parse(manifest.body));
+      });
+    } finally {
+      configService.setCliOverlay({});
+    }
+  });
+
   test("requires a token and patches /index.html as a hosted page", async () => {
     await withServer(async (_root, port, token) => {
       const unauthorized = await sendGetRequest(port, "/index.html");
