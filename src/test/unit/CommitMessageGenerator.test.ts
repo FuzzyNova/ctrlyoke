@@ -75,6 +75,71 @@ suite("CommitMessageGenerator", () => {
     }
   });
 
+  test("ignores diff.external while gathering commit-message diffs", async () => {
+    const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "cy-commit-ext-diff-"));
+    try {
+      const runGit = async (args: string[]): Promise<void> => {
+        await execFileAsync("git", args, { cwd, encoding: "utf8" });
+      };
+      await runGit(["init"]);
+      await runGit(["config", "user.email", "test@example.com"]);
+      await runGit(["config", "user.name", "CtrlYoke Test"]);
+      await fs.writeFile(path.join(cwd, "tracked.txt"), "base\n");
+      const externalDiffPath = path.join(cwd, "external-diff.js");
+      await fs.writeFile(
+        externalDiffPath,
+        'process.stdout.write("EXTERNAL-DIFF-TOOL OUTPUT\\n");\n',
+        "utf8"
+      );
+      await runGit(["add", "."]);
+      await runGit(["commit", "-m", "initial"]);
+
+      await runGit([
+        "config",
+        "diff.external",
+        `node "${externalDiffPath}"`,
+      ]);
+      await fs.writeFile(path.join(cwd, "tracked.txt"), "staged change\n");
+      await runGit(["add", "tracked.txt"]);
+
+      const generator = new CommitMessageGenerator();
+      const stagedResult = await generator.getDiff(cwd);
+
+      assert.ok(stagedResult);
+      assert.ok(stagedResult.diff.includes("@@"), stagedResult.diff);
+      assert.ok(
+        !stagedResult.diff.includes("EXTERNAL-DIFF-TOOL OUTPUT"),
+        stagedResult.diff
+      );
+
+      await runGit(["commit", "-m", "staged change"]);
+      await fs.writeFile(path.join(cwd, "tracked.txt"), "unstaged change\n");
+      const workingTreeResult = await generator.getDiff(cwd);
+      assert.ok(workingTreeResult);
+      assert.ok(workingTreeResult.diff.includes("@@"), workingTreeResult.diff);
+      assert.ok(
+        !workingTreeResult.diff.includes("EXTERNAL-DIFF-TOOL OUTPUT"),
+        workingTreeResult.diff
+      );
+
+      await runGit(["add", "tracked.txt"]);
+      await fs.writeFile(path.join(cwd, "tracked.txt"), "head diff change\n");
+      const headDiffResult = await generator.getDiff(cwd, {
+        includeUnstaged: true,
+      });
+      assert.ok(headDiffResult);
+      assert.ok(headDiffResult.diff.includes("@@"), headDiffResult.diff);
+      assert.ok(
+        !headDiffResult.diff.includes("EXTERNAL-DIFF-TOOL OUTPUT"),
+        headDiffResult.diff
+      );
+    } finally {
+      await fs
+        .rm(cwd, { recursive: true, force: true, maxRetries: 5 })
+        .catch(() => {});
+    }
+  });
+
   test("carries the persisted run address on generation errors", () => {
     const workflowKey =
       "commit-message-generation-20260824-120000" as WorkflowKey;

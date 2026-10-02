@@ -24,6 +24,7 @@ import {
 import { Log } from "./Log";
 import {
   getCommitDiff,
+  getCommitInfo,
   getWorkingTreeDiff,
   getStagedDiff,
   getStashDiff,
@@ -810,8 +811,8 @@ export class ContextExpander {
         } else {
           // commit
           content = await getCommitDiff(this.workspaceRoot, ref.hash!);
-          const firstLine = content.split("\n")[0] || ref.hash!;
-          title = `Commit ${ref.hash!.slice(0, 7)}: ${firstLine}`;
+          const commitInfo = await getCommitInfo(this.workspaceRoot, ref.hash!);
+          title = `Commit ${ref.hash!.slice(0, 7)}: ${commitInfo.subject}`;
         }
 
         results.push(

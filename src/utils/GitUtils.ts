@@ -6,6 +6,8 @@ import type { ExecFileOptions } from "child_process";
 import { GIT_CHANGE_KINDS } from "../types/DashboardConstants";
 import { foldPathForCompare } from "./PathCasing";
 
+export const GIT_DIFF_NO_EXT_DIFF_OPTION = "--no-ext-diff";
+
 const GIT_TIMEOUT_MS = 10_000;
 const GIT_MUTATION_TIMEOUT_MS = 5 * 60_000;
 const GIT_MAX_BUFFER = 50 * 1024 * 1024;
@@ -642,7 +644,7 @@ export async function getDiffBetweenRefs(
     "diff",
     "--stat",
     "-p",
-    "--no-ext-diff",
+    GIT_DIFF_NO_EXT_DIFF_OPTION,
     "--end-of-options",
     baseRef,
     targetRef,
@@ -658,7 +660,14 @@ export async function getWorkingTreeDiff(
 ): Promise<string> {
   const { stdout: diffOutput } = await execFileAsync(
     "git",
-    ["-C", workspaceRoot, "diff", "--stat", "-p"],
+    [
+      "-C",
+      workspaceRoot,
+      "diff",
+      "--stat",
+      "-p",
+      GIT_DIFF_NO_EXT_DIFF_OPTION,
+    ],
     { timeout: GIT_TIMEOUT_MS }
   );
 
@@ -694,7 +703,15 @@ export async function getWorkingTreeDiff(
 export async function getStagedDiff(workspaceRoot: string): Promise<string> {
   const { stdout } = await execFileAsync(
     "git",
-    ["-C", workspaceRoot, "diff", "--cached", "--stat", "-p"],
+    [
+      "-C",
+      workspaceRoot,
+      "diff",
+      "--cached",
+      "--stat",
+      "-p",
+      GIT_DIFF_NO_EXT_DIFF_OPTION,
+    ],
     { timeout: GIT_TIMEOUT_MS }
   );
   return stdout;

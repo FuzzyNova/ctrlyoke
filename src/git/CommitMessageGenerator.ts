@@ -20,7 +20,10 @@ import {
   MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
 } from "../utils/McpToolDefinitions";
 import { fenceLiteral } from "../utils/FileReferenceParser";
-import { parseGitNulSeparatedPaths } from "../utils/GitUtils";
+import {
+  GIT_DIFF_NO_EXT_DIFF_OPTION,
+  parseGitNulSeparatedPaths,
+} from "../utils/GitUtils";
 import {
   CLI_EVENT_TYPES,
   EXECUTION_MODES,
@@ -43,6 +46,14 @@ import {
 } from "../types/CtrlYokeTypes";
 
 const execFileAsync = promisify(execFile);
+
+function gitDiffArgs(...args: string[]): string[] {
+  return ["diff", ...args, GIT_DIFF_NO_EXT_DIFF_OPTION];
+}
+
+function gitDiffCommand(...args: string[]): string {
+  return `git ${gitDiffArgs(...args).join(" ")}`;
+}
 // ~200k tokens at ~4 bytes/token; leaves room for system prompt and instructions.
 // The harness handles actual context-window limits natively — this is just a safeguard
 // against truly pathological diffs (e.g. generated files, minified bundles).
@@ -223,12 +234,12 @@ export class CommitMessageGenerator {
     options: { includeUnstaged?: boolean } = {}
   ): Promise<DiffResult | null> {
     // Primary: staged changes
-    const stagedCommand = "git diff --cached";
+    const stagedCommand = gitDiffCommand("--cached");
     let stagedDiff = "";
     try {
       const result = await execFileAsync(
         "git",
-        ["diff", "--cached"],
+        gitDiffArgs("--cached"),
         { cwd, encoding: "utf8", maxBuffer: GIT_DIFF_MAX_BUFFER }
       );
       stagedDiff = result.stdout;
@@ -267,7 +278,7 @@ export class CommitMessageGenerator {
     };
     const commands = [
       stagedCommand,
-      options.includeUnstaged ? "git diff HEAD" : "git diff",
+      gitDiffCommand(...(options.includeUnstaged ? ["HEAD"] : [])),
     ];
     let includesUntrackedFiles = false;
     let hasStagedChanges = false;
@@ -279,7 +290,7 @@ export class CommitMessageGenerator {
         try {
           const { stdout: headDiff } = await execFileAsync(
             "git",
-            ["diff", "HEAD"],
+            gitDiffArgs("HEAD"),
             { cwd, encoding: "utf8", maxBuffer: GIT_DIFF_MAX_BUFFER }
           );
           if (headDiff.trim()) {
@@ -293,27 +304,35 @@ export class CommitMessageGenerator {
           if (!/ambiguous argument 'HEAD'|unknown revision.*HEAD/i.test(stderr)) {
             throw error;
           }
-          commands.push("git diff");
+          commands.push(gitDiffCommand());
           // An unborn repository has no HEAD comparison; combine its staged
           // additions with the regular unstaged diff instead.
           if (stagedDiff.trim()) {
             append(stagedDiff);
           }
-          const { stdout: trackedDiff } = await execFileAsync("git", ["diff"], {
-            cwd,
-            encoding: "utf8",
-            maxBuffer: GIT_DIFF_MAX_BUFFER,
-          });
+          const { stdout: trackedDiff } = await execFileAsync(
+            "git",
+            gitDiffArgs(),
+            {
+              cwd,
+              encoding: "utf8",
+              maxBuffer: GIT_DIFF_MAX_BUFFER,
+            }
+          );
           if (trackedDiff.trim()) {
             append(trackedDiff);
           }
         }
       } else {
-        const { stdout: trackedDiff } = await execFileAsync("git", ["diff"], {
-          cwd,
-          encoding: "utf8",
-          maxBuffer: GIT_DIFF_MAX_BUFFER,
-        });
+        const { stdout: trackedDiff } = await execFileAsync(
+          "git",
+          gitDiffArgs(),
+          {
+            cwd,
+            encoding: "utf8",
+            maxBuffer: GIT_DIFF_MAX_BUFFER,
+          }
+        );
         if (trackedDiff.trim()) {
           append(trackedDiff);
         }

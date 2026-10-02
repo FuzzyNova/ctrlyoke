@@ -743,6 +743,39 @@ suite("ContextExpander.expandContextSplit", () => {
     });
   });
 
+  suite("git commit references", () => {
+    test("uses the commit subject as the attachment title", async () => {
+      const root = createGitRepository();
+      writeRepositoryFile(root, "subject.txt");
+      execFileSync("git", ["-C", root, "add", "subject.txt"]);
+      execFileSync("git", [
+        "-C",
+        root,
+        "-c",
+        "user.name=ctrlyoke-test",
+        "-c",
+        "user.email=ctrlyoke-test@example.com",
+        "commit",
+        "-m",
+        "Subject for attachment title",
+      ]);
+      const hash = execFileSync("git", ["-C", root, "rev-parse", "HEAD"], {
+        encoding: "utf8",
+      }).trim();
+
+      const result = await new ContextExpander({
+        workspaceRoot: root,
+      }).expandContextSplit(`~${hash}`);
+
+      assert.ok(
+        result.excerptBlocks.includes(
+          `Commit ${hash.slice(0, 7)}: Subject for attachment title`
+        ),
+        result.excerptBlocks
+      );
+    });
+  });
+
   // ──────────────────────────────────────────────────────────────────────────
   suite("triple-backtick fenced block suppression", () => {
     test("does not expand @, #selection, #sym, or ~ refs inside fenced blocks", async () => {

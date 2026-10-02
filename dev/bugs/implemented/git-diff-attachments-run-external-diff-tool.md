@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli), reproduced against a throwaway repo with a fake external diff tool
 - **Area:** `src/utils/GitUtils.ts` (`getWorkingTreeDiff` ~661, `getStagedDiff` ~697), `src/git/CommitMessageGenerator.ts` (~231, ~282, ~302, ~312), `src/utils/ContextExpander.ts` (~812)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

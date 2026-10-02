@@ -28,6 +28,7 @@ import {
   getFileHistoryCommits,
   getStashFiles,
   getWorkingTreeDiff,
+  getStagedDiff,
   getRecentCommits,
   searchCommitsBySubject,
   getChangedFilesWithBinaryStatus,
@@ -147,6 +148,34 @@ suite("GitUtils.gitRefExists", function () {
 
     assert.ok(diff.includes("café.txt"));
     assert.ok(diff.includes("nested folder/naïve.txt"));
+  });
+
+  test("ignores diff.external when reading staged and working tree patches", async () => {
+    const externalDiffPath = path.join(workspaceRoot, "external-diff.js");
+    await fs.writeFile(
+      externalDiffPath,
+      'process.stdout.write("EXTERNAL-DIFF-TOOL OUTPUT\\n");\n',
+      "utf8"
+    );
+    runGit([
+      "config",
+      "diff.external",
+      `node "${externalDiffPath}"`,
+    ]);
+
+    await writeWorkspaceFile("tracked.txt", "staged change\n");
+    runGit(["add", "tracked.txt"]);
+    const stagedDiff = await getStagedDiff(workspaceRoot);
+    assert.ok(stagedDiff.includes("@@"), stagedDiff);
+    assert.ok(!stagedDiff.includes("EXTERNAL-DIFF-TOOL OUTPUT"), stagedDiff);
+
+    await writeWorkspaceFile("tracked.txt", "working tree change\n");
+    const workingTreeDiff = await getWorkingTreeDiff(workspaceRoot);
+    assert.ok(workingTreeDiff.includes("@@"), workingTreeDiff);
+    assert.ok(
+      !workingTreeDiff.includes("EXTERNAL-DIFF-TOOL OUTPUT"),
+      workingTreeDiff
+    );
   });
 
   test("lists non-ASCII tracked paths in a stash", async () => {
