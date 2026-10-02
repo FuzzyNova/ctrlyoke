@@ -43,6 +43,10 @@ import {
   normalizeExpected,
 } from "../../utils/ScriptComparison";
 import { StreamChunkCoalescer } from "../../utils/StreamChunkCoalescer";
+import {
+  secretRedactionService,
+  StreamingSecretRedactor,
+} from "../../utils/SecretRedactionService";
 import type { StatusMessageReporter } from "./StatusMessageReporter";
 import type { ScriptProcessRunner } from "./ScriptProcessRunner";
 import type { HarnessIntegration } from "../HarnessIntegration";
@@ -257,6 +261,7 @@ export class ScriptExecutionReporter {
     }
 
     const outputSanitizer = new TerminalOutputSanitizer();
+    const stdoutRedactor = new StreamingSecretRedactor();
     const publishSanitizedChunk = (sanitizedChunk: string): void => {
       if (!sanitizedChunk) return;
       if (context.historyFilePath && history) {
@@ -304,7 +309,10 @@ export class ScriptExecutionReporter {
     // flushes. The stateful sanitizer below also carries an escape sequence
     // across coalescer flushes, which can still divide one ANSI sequence.
     const coalescer = new StreamChunkCoalescer(publishChunk);
-    const onOutput = (chunk: string): void => coalescer.append(chunk);
+    // The evaluator callback is stdout only. Redact before coalescing so neither
+    // a timer flush nor the dashboard/timeline can expose a split secret.
+    const onOutput = (chunk: string): void =>
+      coalescer.append(stdoutRedactor.push(chunk));
 
     let evaluationResult: EvaluationResult;
     try {
@@ -328,28 +336,36 @@ export class ScriptExecutionReporter {
       // maxBufferedAgeMs) and is what actually persists the chunk and fires
       // the live activity push, so without this await the final CLI output
       // below can reach the dashboard before the trailing chunk does.
+      const stdoutTail = stdoutRedactor.flush();
+      if (stdoutTail) coalescer.append(stdoutTail);
       coalescer.flush();
       publishSanitizedChunk(outputSanitizer.flush());
       if (context.historyFilePath && history) {
         await history.flushPendingWrites(context.historyFilePath);
       }
     }
+    // Completed stdout and stderr are each whole strings here. Redact each
+    // independently before building client and persisted output records.
+    const safeEvaluationResult = secretRedactionService.redactValue(
+      evaluationResult
+    );
     const outputText = sanitizeTerminalOutput(
-      [evaluationResult.stdout, evaluationResult.stderr]
+      [safeEvaluationResult.stdout, safeEvaluationResult.stderr]
         .filter(Boolean)
         .join("\n")
         .trim()
     );
-    const verdict = this.createVerdict(request, evaluationResult);
+    const verdict = this.createVerdict(request, safeEvaluationResult);
     const finalOutput: CliOutput = {
       ...initOutput,
       response: outputText,
-      elapsed: evaluationResult.duration / 1000,
+      elapsed: safeEvaluationResult.duration / 1000,
       isStreaming: false,
       ...(!evaluationResult.cancelled
         ? {
             exitCode:
-              evaluationResult.exitCode ?? (evaluationResult.passed ? 0 : 1),
+              safeEvaluationResult.exitCode ??
+              (safeEvaluationResult.passed ? 0 : 1),
           }
         : {}),
       ...(!evaluationResult.cancelled ? { scriptVerdict: verdict } : {}),
@@ -372,9 +388,9 @@ export class ScriptExecutionReporter {
         attemptIndex,
         {
           command: properties.script,
-          stdout: evaluationResult.stdout,
-          stderr: evaluationResult.stderr,
-          exitCode: evaluationResult.exitCode,
+          stdout: safeEvaluationResult.stdout,
+          stderr: safeEvaluationResult.stderr,
+          exitCode: safeEvaluationResult.exitCode,
         },
         context.getDefinitionRevisionContext?.(),
         phase
@@ -386,15 +402,15 @@ export class ScriptExecutionReporter {
     }
 
     return {
-      evaluationResult,
+      evaluationResult: safeEvaluationResult,
       finalOutput,
       scriptRuntimeOutput: {
         command: properties.script,
-        stdout: evaluationResult.stdout,
-        stderr: evaluationResult.stderr,
-        ...(evaluationResult.cancelled
+        stdout: safeEvaluationResult.stdout,
+        stderr: safeEvaluationResult.stderr,
+        ...(safeEvaluationResult.cancelled
           ? {}
-          : { exitCode: evaluationResult.exitCode }),
+          : { exitCode: safeEvaluationResult.exitCode }),
       },
       verdict,
       outputText,

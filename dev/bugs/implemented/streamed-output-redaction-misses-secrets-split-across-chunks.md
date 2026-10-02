@@ -2,7 +2,7 @@
 
 - **Found:** 2026-09-30 by the bug-backlog workflow final step (claude-cli)
 - **Area:** `src/core/WorkflowInstance.ts` (~3616, PTY `onData`), `src/core/harness/PtyProcessManager.ts` (`ptyPostMessage`), `src/types/PreviewRedactor.ts` (exact-substring redaction)
-- **Severity:** medium (security; fix needs a behavior change — output buffering — so it is not queued automatically)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -34,15 +34,11 @@ Found by code reading, not reproduced end to end.
 Stateless per-message redaction applied to a stream whose chunk boundaries are
 arbitrary.
 
-## Suggested Fix
+## Original Suggested Fix
 
-Add a streaming redactor per session/stream. Keep a tail buffer of up to
-`maxSecretLength - 1` characters, redact `tail + chunk`, emit only the prefix that
-can no longer begin a secret, and flush the remainder on exit. Apply it to the PTY
-path and any other chunked output that reaches a client or a persisted event.
-Consider whether VT escape sequences inserted mid-secret need stripping before
-matching. This delays output by a few characters, a user-visible behavior change,
-so it needs a design decision before implementation.
+Add a streaming redactor per session/stream and apply it to every chunked output
+path that reaches a client or persisted event. The binding design decision below
+specifies the suffix matching and flush behavior used by the implementation.
 
 ## Decision (orchestrator, 2026-10-01)
 
@@ -78,5 +74,32 @@ headless CLI output chunks) and persisted `events.jsonl`.
   interactive script PTY and harness interactive PTY paths, before terminal
   callbacks and reconnect-buffer recording. Stream tails flush on exit, kill,
   and process-manager disposal.
-- Remaining: audit script stdout/stderr coalescing, headless CLI output chunks,
-  and persisted `events.jsonl` as the next implementation step.
+- Completed: audited script stdout/stderr, headless CLI stdout, JSONL event
+  parsing, CLI terminal formatting, and `events.jsonl`; see Resolution below.
+
+## Resolution
+
+- `ScriptExecutionReporter` now redacts stdout incrementally before
+  `StreamChunkCoalescer`, with one redactor for that stdout stream and a flush
+  before the final dashboard/history record on success, error, timeout, and
+  cancellation paths. Completed stdout and stderr are redacted separately as
+  whole values before completed output and script runtime records are published
+  or persisted. Stderr is not streamed today; it is only exposed after process
+  completion, so it cannot split across published chunks.
+- Plain headless CLI stdout chunks are redacted before the live streaming
+  callback and flushed when the spawned process ends, including a rejected
+  spawn. The standalone CLI's `CliTerminalFormatter` receives those safe chunks.
+  Interactive harness output continues to use the PTY redactor added in the
+  earlier commit.
+- Headless JSONL output is buffered by complete line before the provider parser
+  sees an event. Thus a transport chunk split inside a JSON record is reassembled
+  before that event is redacted at the output boundary; `CliResponseCollector`
+  also redacts its completed stdout/stderr values before failure details are
+  exposed. No per-chunk redactor was added to the JSONL parser.
+- `TimelineRecorder` redacts every event before writing `events.jsonl`. Script
+  and PTY output chunks now arrive there after streaming redaction, so no secret
+  can be divided across consecutive timeline output chunks from those streams.
+  Other complete structured CLI events are still redacted as whole events.
+- The exact matcher handles registered secret values and their JSON-escaped
+  forms. VT escape sequences inserted inside a secret remain unsupported, and
+  heuristic pattern redaction is not made stateful across chunks.

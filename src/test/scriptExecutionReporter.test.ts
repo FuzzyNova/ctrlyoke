@@ -28,6 +28,11 @@ import type {
 } from "../types/OutputHistoryTypes";
 import type { RunRef, WorkflowKey } from "../types/CtrlYokeTypes";
 import { resolveReportedScriptProperties } from "../utils/ScriptComparison";
+import {
+  REDACTION_MARKER,
+  RunSecretRedactor,
+  secretRedactionService,
+} from "../utils/SecretRedactionService";
 
 const temporaryDirectories: string[] = [];
 const outputHistoryManagers: OutputHistoryManager[] = [];
@@ -96,6 +101,76 @@ function makeReporter(result: EvaluationResult, events: string[]) {
 }
 
 suite("ScriptExecutionReporter", () => {
+  test("redacts split streamed stdout and complete stderr before publishing", async () => {
+    const secrets = new RunSecretRedactor();
+    secrets.addResolvedValues({ TOKEN: "secret-value" });
+    const release = secretRedactionService.register(secrets);
+    const streamed: string[] = [];
+    const completed: CliOutput[] = [];
+    const reporter = new ScriptExecutionReporter({} as EndConditionEvaluator);
+    const context: ScriptExecutionReporterContext = {
+      workspaceFolderPath: process.cwd(),
+      statusReporter: new StatusMessageReporter(
+        () => undefined,
+        () => undefined
+      ),
+      onScriptOutput: (_target, output) => {
+        if (output.response) streamed.push(output.response);
+      },
+      onScriptCompletedOutput: (_target, output) => completed.push(output),
+    };
+
+    try {
+      const report = await reporter.report({
+        context,
+        source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
+        properties: resolveReportedScriptProperties({
+          script: "check.sh",
+          compareSource: "stdout",
+          expected: "ok",
+        }),
+        phase: EXECUTION_PHASES.PRE_CONDITION,
+        target: { kind: "queue", stepIndex: 0 },
+        signedStepIndex: 0,
+        runIndex: 0,
+        attemptIndex: 0,
+        timestampMs: 100,
+        onPass: "continue",
+        onFail: "stopWorkflow",
+        actionForErrored: "stopWorkflow",
+        evaluate: async (onOutput) => {
+          onOutput("visible secret-");
+          onOutput("value tail sec");
+          return makeResult({
+            stdout: "visible secret-value tail sec",
+            stderr: "stderr secret-value",
+            actual: "secret-value",
+          });
+        },
+      });
+
+      assert.strictEqual(
+        streamed.join(""),
+        `visible ${REDACTION_MARKER} tail sec`
+      );
+      assert.ok(!streamed.join("").includes("secret-value"));
+      assert.strictEqual(
+        completed[0]?.response,
+        `visible ${REDACTION_MARKER} tail sec\nstderr ${REDACTION_MARKER}`
+      );
+      assert.strictEqual(
+        report.evaluationResult.stderr,
+        `stderr ${REDACTION_MARKER}`
+      );
+      assert.strictEqual(report.verdict.actual, REDACTION_MARKER);
+      assert.ok(
+        !JSON.stringify(report.scriptRuntimeOutput).includes("secret-value")
+      );
+    } finally {
+      release();
+    }
+  });
+
   test("keeps split ANSI sequences out of streamed output", async () => {
     const streamed: string[] = [];
     const evaluator = {

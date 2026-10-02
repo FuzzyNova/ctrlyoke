@@ -315,7 +315,8 @@ suite("CliTransportCoordinator", () => {
           );
           assert.strictEqual(args[args.length - 1], "line one\nline two");
           assert.strictEqual(options?.shell, false);
-          options?.onStdout?.("chunk");
+          options?.onStdout?.("before secret-");
+          options?.onStdout?.("value after");
           return { stdout: "stdout", stderr: "", exitCode: 0 };
         },
         isActive: () => false,
@@ -343,31 +344,42 @@ suite("CliTransportCoordinator", () => {
       },
     });
 
-    const success = await coordinator.executeHeadless(
-      [
-        "-c",
-        String.raw`hooks.state={"C:\<session-flags>\config.toml:stop:0:0" = {}}`,
-      ],
-      "line one\nline two",
-      ["temp-a.md"],
-      async (result) => {
-        assert.deepStrictEqual(result, {
-          stdout: "stdout",
-          stderr: "",
-          exitCode: 0,
-        });
-        return true;
-      }
-    );
+    const redactor = new RunSecretRedactor();
+    redactor.addResolvedValues({ TOKEN: "secret-value" });
+    const releaseSecret = secretRedactionService.register(redactor);
+    try {
+      const success = await coordinator.executeHeadless(
+        [
+          "-c",
+          String.raw`hooks.state={"C:\<session-flags>\config.toml:stop:0:0" = {}}`,
+        ],
+        "line one\nline two",
+        ["temp-a.md"],
+        async (result) => {
+          assert.deepStrictEqual(result, {
+            stdout: "stdout",
+            stderr: "",
+            exitCode: 0,
+          });
+          return true;
+        }
+      );
 
-    assert.strictEqual(success, true);
-    assert.deepStrictEqual(preparedCommand, {
-      promptArgument: "line one\nline two",
-      cliCommand: String.raw`test-cli -c hooks.state={"C:\<session-flags>\config.toml:stop:0:0" = {}} line one
+      assert.strictEqual(success, true);
+      assert.deepStrictEqual(preparedCommand, {
+        promptArgument: "line one\nline two",
+        cliCommand: String.raw`test-cli -c hooks.state={"C:\<session-flags>\config.toml:stop:0:0" = {}} line one
 line two`,
-    });
-    assert.deepStrictEqual(streamedChunks, ["chunk"]);
-    assert.deepStrictEqual(cleanedTempPaths, [["temp-a.md"]]);
+      });
+      assert.strictEqual(
+        streamedChunks.join(""),
+        `before ${REDACTION_MARKER} after`
+      );
+      assert.ok(!streamedChunks.join("").includes("secret-value"));
+      assert.deepStrictEqual(cleanedTempPaths, [["temp-a.md"]]);
+    } finally {
+      releaseSecret();
+    }
   });
 
   test("should stream migrated stdout events through the log parser mapping", async () => {

@@ -41,6 +41,7 @@ import {
   type HeadlessStreamingSource,
 } from "./HeadlessLogTail";
 import { splitCompleteLines } from "../../../utils/TextLines";
+import { StreamingSecretRedactor } from "../../../utils/SecretRedactionService";
 
 interface CliTransportCoordinatorCommandInfo {
   promptArgument: string;
@@ -526,6 +527,13 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         processStdoutRecords([record]);
       };
 
+      // Structured stdout is reassembled into complete JSONL records before
+      // parsing/redaction. Plain live stdout needs stream-aware redaction here.
+      const liveOutputRedactor =
+        shouldStream && !source?.logTail && !stdoutEventPump
+          ? new StreamingSecretRedactor()
+          : undefined;
+
       if (source?.logTail) {
         await source.logTail.start();
       }
@@ -544,35 +552,46 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         return false;
       }
 
-      const result = await this.spawnProcess(command.command, command.args, {
-        timeout: ConfigurationUtils.getMaxPromptExecutionTimeMs(),
-        env,
-        secretNames,
-        windowsVerbatimArguments: command.requiresShellVerbatimArgs,
-        onStdout: shouldStream
-          ? (chunk) => {
-              if (ConfigurationUtils.shouldLogRawCliOutput()) {
-                Log.trace(
-                  `[${this.deps.provider.config.displayName} RAW OUTPUT]: ${chunk}`
-                );
-              }
+      let result: SpawnResult;
+      try {
+        result = await this.spawnProcess(command.command, command.args, {
+          timeout: ConfigurationUtils.getMaxPromptExecutionTimeMs(),
+          env,
+          secretNames,
+          windowsVerbatimArguments: command.requiresShellVerbatimArgs,
+          onStdout: shouldStream
+            ? (chunk) => {
+                if (ConfigurationUtils.shouldLogRawCliOutput()) {
+                  Log.trace(
+                    `[${this.deps.provider.config.displayName} RAW OUTPUT]: ${chunk}`
+                  );
+                }
 
-              if (
-                source?.mode === HEADLESS_SOURCE_MODES.LOG &&
-                source.logTail
-              ) {
-                source.logTail.onStdoutChunk(chunk);
-              } else if (
-                source?.mode === HEADLESS_SOURCE_MODES.STDOUT &&
-                stdoutEventPump
-              ) {
-                processStdoutChunk(chunk);
-              } else {
-                this.deps.hostCallbacks.onStreamingChunk(chunk);
+                if (
+                  source?.mode === HEADLESS_SOURCE_MODES.LOG &&
+                  source.logTail
+                ) {
+                  source.logTail.onStdoutChunk(chunk);
+                } else if (
+                  source?.mode === HEADLESS_SOURCE_MODES.STDOUT &&
+                  stdoutEventPump
+                ) {
+                  processStdoutChunk(chunk);
+                } else {
+                  const safeChunk = liveOutputRedactor
+                    ? liveOutputRedactor.push(chunk)
+                    : chunk;
+                  if (safeChunk) {
+                    this.deps.hostCallbacks.onStreamingChunk(safeChunk);
+                  }
+                }
               }
-            }
-          : undefined,
-      });
+            : undefined,
+        });
+      } finally {
+        const tail = liveOutputRedactor?.flush();
+        if (tail) this.deps.hostCallbacks.onStreamingChunk(tail);
+      }
 
       // A process may finish with one valid record that has no trailing line
       // break. Emit it before any completion callback or log-tail finalization.
