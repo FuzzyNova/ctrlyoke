@@ -139,6 +139,54 @@ export function countStructuredPatchDisplayLines(
 }
 
 /**
+ * Convert a normalized structured patch into the visible diff lines used by
+ * the diff renderer. Prefixes and non-rendered marker/header lines are omitted.
+ */
+export function getStructuredPatchDiffLines(
+  hunks: UnifiedDiffHunk[]
+): DiffLine[] {
+  const diffLines: DiffLine[] = [];
+
+  for (const hunk of hunks) {
+    let oldLineNum = hunk.oldStart;
+    let newLineNum = hunk.newStart;
+
+    for (const line of hunk.lines) {
+      if (!isDisplayableDiffLine(line)) continue;
+
+      const prefix = line[0];
+      const content = line.slice(1);
+      if (prefix === "+") {
+        diffLines.push({
+          type: DIFF_LINE_TYPES.ADDED,
+          newLineNum,
+          content,
+        });
+        newLineNum++;
+      } else if (prefix === "-") {
+        diffLines.push({
+          type: DIFF_LINE_TYPES.REMOVED,
+          oldLineNum,
+          content,
+        });
+        oldLineNum++;
+      } else {
+        diffLines.push({
+          type: DIFF_LINE_TYPES.CONTEXT,
+          oldLineNum,
+          newLineNum,
+          content,
+        });
+        oldLineNum++;
+        newLineNum++;
+      }
+    }
+  }
+
+  return diffLines;
+}
+
+/**
  * Generate diff lines from raw old/new content using the diff library.
  * Normalises Windows line endings before diffing.
  */

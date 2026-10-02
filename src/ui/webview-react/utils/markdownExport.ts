@@ -37,7 +37,11 @@ import {
   mapOrderedHistoryEntriesToMessages,
 } from "./outputProjection";
 import { truncate } from "./string";
-import { generateDiffLines } from "./diffUtils";
+import {
+  generateDiffLines,
+  getStructuredPatchDiffLines,
+  normalizeStructuredPatch,
+} from "./diffUtils";
 import { redactPreviewText } from "@root/types/PreviewRedactor";
 import { useSettingsStore } from "@store/settingsStore";
 import {
@@ -106,31 +110,17 @@ function formatToolResultForMarkdown(result: {
 }
 
 function formatStructuredPatchForMarkdown(hunks: UnifiedDiffHunk[]): string[] {
-  const diffLines: string[] = [];
-
-  hunks.forEach((hunk) => {
-    let oldLineNum = hunk.oldStart;
-    let newLineNum = hunk.newStart;
-
-    hunk.lines.forEach((line) => {
-      const prefix = line[0];
-      const content = line.slice(1);
-
-      if (prefix === "+") {
-        diffLines.push(`+${String(newLineNum).padStart(4)} | ${content}`);
-        newLineNum++;
-      } else if (prefix === "-") {
-        diffLines.push(`-${String(oldLineNum).padStart(4)} | ${content}`);
-        oldLineNum++;
-      } else {
-        diffLines.push(` ${String(oldLineNum).padStart(4)} | ${content}`);
-        oldLineNum++;
-        newLineNum++;
+  return getStructuredPatchDiffLines(normalizeStructuredPatch(hunks)).map(
+    (line) => {
+      if (line.type === DIFF_LINE_TYPES.ADDED) {
+        return `+${String(line.newLineNum).padStart(4)} | ${line.content}`;
       }
-    });
-  });
-
-  return diffLines;
+      if (line.type === DIFF_LINE_TYPES.REMOVED) {
+        return `-${String(line.oldLineNum).padStart(4)} | ${line.content}`;
+      }
+      return ` ${String(line.oldLineNum).padStart(4)} | ${line.content}`;
+    }
+  );
 }
 
 function formatDiffForMarkdown(

@@ -538,9 +538,9 @@ describe("mergeNonTextDiffEntries", () => {
 });
 
 describe("locateActiveDiffMatch", () => {
-  // Mirrors getStructuredPatchText's join semantics exactly: lines flattened
-  // across hunks and joined with "\n", prefix character included. Line
-  // lengths here: " context1"=9, "-removed"=8, "+added"=6, " context2"=9.
+  // Mirrors getStructuredPatchText's join semantics exactly: rendered line
+  // content flattened across hunks and joined with "\n", without prefixes.
+  // Content lengths here: "context1"=8, "removed"=7, "added"=5, "context2"=8.
   const hunk: UnifiedDiffHunk = {
     oldStart: 10,
     oldLines: 3,
@@ -550,20 +550,20 @@ describe("locateActiveDiffMatch", () => {
   };
 
   it("locates a match on a deleted (old-side) line", () => {
-    // "removed" starts right after the "-" prefix: offset 10 (line start) + 1.
-    const result = locateActiveDiffMatch([hunk], 11, 18);
+    // "removed" begins after "context1" and its join separator.
+    const result = locateActiveDiffMatch([hunk], 9, 16);
     expect(result).toEqual({ side: "old", lineNumber: 11, start: 0, end: 7 });
   });
 
   it("locates a match on an inserted (new-side) line", () => {
-    // "added" starts right after the "+" prefix: offset 19 (line start) + 1.
-    const result = locateActiveDiffMatch([hunk], 20, 25);
+    // "added" begins after "context1\nremoved\n".
+    const result = locateActiveDiffMatch([hunk], 17, 22);
     expect(result).toEqual({ side: "new", lineNumber: 11, start: 0, end: 5 });
   });
 
   it("locates a match on a context line as a new-side line", () => {
-    // "context2" starts right after the " " prefix: offset 26 (line start) + 1.
-    const result = locateActiveDiffMatch([hunk], 27, 35);
+    // "context2" begins after "context1\nremoved\nadded\n".
+    const result = locateActiveDiffMatch([hunk], 23, 31);
     expect(result).toEqual({ side: "new", lineNumber: 12, start: 0, end: 8 });
   });
 
@@ -578,7 +578,7 @@ describe("locateActiveDiffMatch", () => {
   it("indexes against the deduplicated hunk sequence, matching getStructuredPatchText", () => {
     // An exact-duplicate hunk is dropped by normalizeStructuredPatch, so an
     // offset must resolve against ONE copy's worth of text, not two.
-    const result = locateActiveDiffMatch([hunk, hunk], 11, 18);
+    const result = locateActiveDiffMatch([hunk, hunk], 9, 16);
     expect(result).toEqual({ side: "old", lineNumber: 11, start: 0, end: 7 });
   });
 });

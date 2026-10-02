@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), reproduced in a scratch Vitest test
 - **Area:** `src/ui/webview-react/utils/outputFind.ts` (`getStructuredPatchText` ~103-118)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

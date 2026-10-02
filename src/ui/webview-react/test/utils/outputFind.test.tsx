@@ -1,10 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
-import type { CliOutput } from "@/types/cliEvents";
+import type { CliOutput, FileEditData } from "@/types/cliEvents";
 import { CLI_EVENT_TYPES } from "@/types/cliEvents";
 import { FINAL_STEP_PHASES } from "@/types/messages";
-import { findOutputMatches, highlightText } from "@utils/outputFind";
-import type { OutputRenderRow, ScriptVerdictRow } from "@utils/outputRows";
+import {
+  findOutputMatches,
+  getOutputRowSearchSegments,
+  highlightText,
+} from "@utils/outputFind";
+import { locateActiveDiffMatch } from "@utils/rdvAdapter";
+import type {
+  OutputRenderRow,
+  ScriptVerdictRow,
+  StructuredEventRow,
+} from "@utils/outputRows";
 import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
 
 const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
@@ -50,6 +59,40 @@ function makeStructuredBashRow(
         command,
         output,
         error,
+      },
+    },
+    eventIndex: 0,
+    rawTextOutput: true,
+    hideDiff: false,
+    estimateSize: 48,
+  };
+}
+
+function makeStructuredFileEditRow(): StructuredEventRow {
+  return {
+    key: "file-edit-1",
+    rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
+    target,
+    event: {
+      type: CLI_EVENT_TYPES.FILE_EDIT,
+      data: {
+        path: "src/example.ts",
+        status: "completed",
+        structuredPatch: [
+          {
+            oldStart: 1,
+            oldLines: 2,
+            newStart: 1,
+            newLines: 2,
+            lines: [
+              " const a = 1;",
+              "-export default a",
+              "\\ No newline at end of file",
+              "+export default a;",
+              "\\ No newline at end of file",
+            ],
+          },
+        ],
       },
     },
     eventIndex: 0,
@@ -206,6 +249,32 @@ describe("outputFind", () => {
         rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
         field: "command",
       });
+    });
+
+    it("searches only rendered diff content and maps offsets without prefixes or markers", () => {
+      const row = makeStructuredFileEditRow();
+      const patch = (row.event.data as FileEditData).structuredPatch;
+      const diffSegment = getOutputRowSearchSegments(row).find(
+        (segment) => segment.field === "diff"
+      )!;
+
+      expect(findOutputMatches([row], "file", false)).toHaveLength(0);
+      expect(findOutputMatches([row], "+", false)).toHaveLength(0);
+
+      const matches = findOutputMatches([row], "export", false);
+      expect(matches).toHaveLength(2);
+      expect(
+        matches.map((match) =>
+          locateActiveDiffMatch(
+            patch,
+            match.start - diffSegment.start,
+            match.end - diffSegment.start
+          )
+        )
+      ).toEqual([
+        { side: "old", lineNumber: 2, start: 0, end: 6 },
+        { side: "new", lineNumber: 2, start: 0, end: 6 },
+      ]);
     });
 
     it("uses sanitized bash output text so match offsets align with rendered content", () => {

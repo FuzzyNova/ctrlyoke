@@ -9,7 +9,10 @@
 import * as DiffLib from "diff";
 import { getCollapsedLinesCountBetween, parseDiff } from "react-diff-view";
 import type { HunkData, ChangeData, DiffType, ViewType } from "react-diff-view";
-import { normalizeStructuredPatch } from "./diffUtils";
+import {
+  getStructuredPatchDiffLines,
+  normalizeStructuredPatch,
+} from "./diffUtils";
 import {
   DEFAULT_OUTPUT_CONTENT_WIDTH,
   DEFAULT_OUTPUT_FONT_SIZE,
@@ -25,6 +28,7 @@ import {
 import type { UnifiedDiffHunk } from "../types/cliEvents";
 import {
   DIFF_CHANGE_TYPES,
+  DIFF_LINE_TYPES,
   DIFF_PAYLOAD_KINDS,
   DIFF_SIDES,
   DIFF_VIEW_TYPES,
@@ -648,8 +652,8 @@ export interface DiffActiveMatchLocation {
 
 /**
  * Maps a "diff" find-field character offset (as produced by
- * `getStructuredPatchText` — `structuredPatch` lines flattened and joined with
- * "\n", prefix character included) back to the specific patch line and side it
+ * `getStructuredPatchText` — rendered diff line content flattened and joined
+ * with "\n", without prefixes or marker lines) back to the specific patch line and side it
  * falls on, so the active occurrence can be marked in react-diff-view's token
  * tree and scrolled to precisely.
  *
@@ -663,44 +667,31 @@ export function locateActiveDiffMatch(
   matchStart: number,
   matchEnd: number
 ): DiffActiveMatchLocation | null {
-  const hunks = normalizeStructuredPatch(structuredPatch);
+  const diffLines = getStructuredPatchDiffLines(
+    normalizeStructuredPatch(structuredPatch)
+  );
   let cursor = 0;
 
-  for (const hunk of hunks) {
-    let oldLineNumber = hunk.oldStart;
-    let newLineNumber = hunk.newStart;
+  for (const line of diffLines) {
+    const lineStart = cursor;
+    const lineEnd = lineStart + line.content.length;
+    cursor = lineEnd + 1; // Match the "\n" join between rendered line content.
 
-    for (const line of hunk.lines) {
-      const lineStart = cursor;
-      const lineEnd = lineStart + line.length;
-      cursor = lineEnd + 1; // +1 for the "\n" join separator
-
-      if (!isDisplayableLine(line)) continue;
-      const prefix = line[0];
-
-      if (matchStart >= lineStart && matchStart < lineEnd) {
-        // -1 to drop the leading +/-/' ' prefix, which is part of the searched
-        // text but not of `change.content` (what gets tokenized/rendered).
-        const localStart = Math.max(0, matchStart - lineStart - 1);
-        const localEnd = Math.max(
-          localStart,
-          Math.min(line.length - 1, matchEnd - lineStart - 1)
-        );
-        const side: DiffSide = prefix === "-" ? DIFF_SIDES.OLD : DIFF_SIDES.NEW;
-        return {
-          side,
-          lineNumber: side === DIFF_SIDES.OLD ? oldLineNumber : newLineNumber,
-          start: localStart,
-          end: localEnd,
-        };
-      }
-
-      if (prefix === "+") newLineNumber++;
-      else if (prefix === "-") oldLineNumber++;
-      else if (prefix === " ") {
-        oldLineNumber++;
-        newLineNumber++;
-      }
+    if (matchStart >= lineStart && matchStart < lineEnd) {
+      const side: DiffSide =
+        line.type === DIFF_LINE_TYPES.REMOVED
+          ? DIFF_SIDES.OLD
+          : DIFF_SIDES.NEW;
+      return {
+        side,
+        lineNumber:
+          side === DIFF_SIDES.OLD ? line.oldLineNum! : line.newLineNum!,
+        start: matchStart - lineStart,
+        end: Math.max(
+          matchStart - lineStart,
+          Math.min(line.content.length, matchEnd - lineStart)
+        ),
+      };
     }
   }
 

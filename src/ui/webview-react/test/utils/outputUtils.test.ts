@@ -565,6 +565,52 @@ describe("generateMarkdownExport", () => {
     expect(md).toContain("⎿  mcp result output");
   });
 
+  it("exports normalized patch hunks without numbering no-newline markers", () => {
+    const hunk: UnifiedDiffHunk = {
+      oldStart: 10,
+      oldLines: 1,
+      newStart: 10,
+      newLines: 2,
+      lines: [
+        "-old last",
+        "\\ No newline at end of file",
+        "+new last",
+        "+another",
+        "\\ No newline at end of file",
+      ],
+    };
+    const outputs = [
+      {
+        type: "cli" as const,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+        timestamp: 1000,
+        attemptIndex: 0,
+        data: {
+          structured: {
+            events: [
+              {
+                type: CLI_EVENT_TYPES.FILE_EDIT,
+                data: {
+                  path: "src/example.ts",
+                  status: "completed",
+                  structuredPatch: [hunk, hunk],
+                },
+              },
+            ],
+          },
+        },
+      },
+    ];
+
+    const md = generateMarkdownExport(outputs, metadata);
+
+    expect(md).toContain("-  10 | old last");
+    expect(md).toContain("+  10 | new last");
+    expect(md).toContain("+  11 | another");
+    expect(md).not.toContain("No newline at end of file");
+    expect(md.match(/\+\s+10 \| new last/g)).toHaveLength(1);
+  });
+
   it("does not export script prompts and keeps script commands when command export is disabled", () => {
     for (const source of Object.values(SCRIPT_OUTPUT_SOURCES)) {
       const md = generateMarkdownExport(

@@ -18,7 +18,10 @@ import type {
 import { CLI_EVENT_TYPES } from "@/types/cliEvents";
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import { DEFAULT_SCRIPT_VERDICT_EXPECTED_TEXT } from "@root/types/CtrlYokeTypes";
-import { normalizeStructuredPatch } from "./diffUtils";
+import {
+  getStructuredPatchDiffLines,
+  normalizeStructuredPatch,
+} from "./diffUtils";
 import type { OutputMessageTarget } from "./outputProjection";
 import type { OutputRenderRow } from "./outputRows";
 import { formatCliCommandDisplay } from "./outputCommandDisplay";
@@ -113,8 +116,10 @@ function getStructuredPatchText(event: CliEvent): string {
   // Normalize (dedup identical hunks) so offsets computed here line up with
   // `locateActiveDiffMatch`, which walks the same normalized sequence to map a
   // match back to the diff line/side it renders on.
-  return normalizeStructuredPatch(data.structuredPatch)
-    .flatMap((hunk) => hunk.lines)
+  return getStructuredPatchDiffLines(
+    normalizeStructuredPatch(data.structuredPatch)
+  )
+    .map((line) => line.content)
     .join("\n");
 }
 
