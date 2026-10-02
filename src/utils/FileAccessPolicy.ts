@@ -1,3 +1,4 @@
+import * as path from "path";
 import { isPathWithinDirectory } from "./PathSecurity";
 
 /**
@@ -30,11 +31,11 @@ export interface FileAccessPolicyOptions {
 /**
  * Decide whether `candidatePath` may be read/opened, and why.
  *
- * Deliberately a pure, synchronous comparator over already-resolved absolute
- * paths — callers are responsible for resolving folder-name-prefixed refs
- * (`resolveNamedRelativePath`) and for supplying the effective (already
- * trust-store-filtered) external roots list. Keeping this function free of
- * I/O and config/trust-store lookups keeps it trivially unit-testable and
+ * Deliberately a pure, synchronous comparator. Callers are responsible for
+ * resolving folder-name-prefixed candidate refs (`resolveNamedRelativePath`)
+ * and supplying the effective (already trust-store-filtered) external roots
+ * list; roots are normalized here before comparison. Keeping this function
+ * free of I/O and config/trust-store lookups keeps it trivially unit-testable and
  * matches how `ContextExpander`/`AttachmentBuilders` already use
  * `isPathWithinAnyDirectory` — this is the shared decision layer for the
  * call sites that additionally need to distinguish "trusted externally" from
@@ -46,34 +47,37 @@ export function evaluateFileAccess(
   options: FileAccessPolicyOptions
 ): FileAccessDecision {
   for (const root of options.workspaceRoots) {
-    if (isPathWithinDirectory(candidatePath, root)) {
+    const normalizedRoot = path.resolve(root);
+    if (isPathWithinDirectory(candidatePath, normalizedRoot)) {
       return {
         allowed: true,
         reason: "workspace",
         normalizedPath: candidatePath,
-        matchedRoot: root,
+        matchedRoot: normalizedRoot,
       };
     }
   }
 
   for (const root of options.ownStateRoots ?? []) {
-    if (isPathWithinDirectory(candidatePath, root)) {
+    const normalizedRoot = path.resolve(root);
+    if (isPathWithinDirectory(candidatePath, normalizedRoot)) {
       return {
         allowed: true,
         reason: "ownStateRoot",
         normalizedPath: candidatePath,
-        matchedRoot: root,
+        matchedRoot: normalizedRoot,
       };
     }
   }
 
   for (const root of options.approvedExternalRoots) {
-    if (isPathWithinDirectory(candidatePath, root)) {
+    const normalizedRoot = path.resolve(root);
+    if (isPathWithinDirectory(candidatePath, normalizedRoot)) {
       return {
         allowed: true,
         reason: "trustedExternalRoot",
         normalizedPath: candidatePath,
-        matchedRoot: root,
+        matchedRoot: normalizedRoot,
       };
     }
   }
