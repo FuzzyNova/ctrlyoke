@@ -3,7 +3,10 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, test, setup, teardown } from "mocha";
-import { ProjectStateRegistry } from "../../utils/ProjectStateRegistry";
+import {
+  ProjectStateRegistry,
+  withUserProjectRegistryLock,
+} from "../../utils/ProjectStateRegistry";
 import {
   getFrozenRunHistoryLocation,
   resetRunHistoryLocationForTests,
@@ -19,15 +22,22 @@ import {
 
 suite("ProjectStateRegistry", () => {
   let stateRoot: string;
+  let originalCtrlyokeHome: string | undefined;
 
   setup(async () => {
     stateRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-registry-state-")
     );
+    originalCtrlyokeHome = process.env.CTRLYOKE_HOME;
     resetRunHistoryLocationForTests();
   });
 
   teardown(async () => {
+    if (originalCtrlyokeHome === undefined) {
+      delete process.env.CTRLYOKE_HOME;
+    } else {
+      process.env.CTRLYOKE_HOME = originalCtrlyokeHome;
+    }
     resetRunHistoryLocationForTests();
     initializeRunHistoryLocation(RUN_HISTORY_LOCATIONS.USER);
     await fs.rm(stateRoot, { recursive: true, force: true });
@@ -57,6 +67,30 @@ suite("ProjectStateRegistry", () => {
     assert.strictEqual(
       second.projectRoot,
       projectStateRoot(stateRoot, RUN_HISTORY_LOCATIONS.USER)
+    );
+  });
+
+  test("supports a state home reached through a symlink or junction", async () => {
+    const realHome = path.join(stateRoot, "real-home");
+    const linkedHome = path.join(stateRoot, "linked-home");
+    await fs.mkdir(realHome);
+    await fs.symlink(
+      realHome,
+      linkedHome,
+      process.platform === "win32" ? "junction" : "dir"
+    );
+    process.env.CTRLYOKE_HOME = linkedHome;
+
+    const registry = new ProjectStateRegistry(RUN_HISTORY_LOCATIONS.USER);
+    const result = await registry.initialize(stateRoot);
+    const lockedProjectsRoot = await withUserProjectRegistryLock(
+      async (projectsRoot) => projectsRoot
+    );
+
+    assert.strictEqual(result.projectRoot, projectStateRoot(stateRoot, "user"));
+    assert.strictEqual(
+      await fs.realpath(lockedProjectsRoot),
+      await fs.realpath(path.join(realHome, "projects"))
     );
   });
 
@@ -134,9 +168,6 @@ suite("ProjectStateRegistry", () => {
   });
 
   test("rejects a symlinked project directory", async function () {
-    if (process.platform === "win32") {
-      this.skip();
-    }
     const registry = new ProjectStateRegistry(RUN_HISTORY_LOCATIONS.USER);
     const projectRoot = projectStateRoot(stateRoot, RUN_HISTORY_LOCATIONS.USER);
     const outside = await fs.mkdtemp(
@@ -144,7 +175,11 @@ suite("ProjectStateRegistry", () => {
     );
     try {
       await fs.mkdir(path.dirname(projectRoot), { recursive: true });
-      await fs.symlink(outside, projectRoot, "dir");
+      await fs.symlink(
+        outside,
+        projectRoot,
+        process.platform === "win32" ? "junction" : "dir"
+      );
       await assert.rejects(
         () => registry.initialize(stateRoot),
         /must not be a symlink/

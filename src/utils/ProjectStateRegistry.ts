@@ -378,7 +378,15 @@ async function assertContainedByRealRoot(
 ): Promise<void> {
   const realRoot = await fs.realpath(projectsRoot);
   const resolvedCandidate = path.resolve(candidate);
-  const relative = path.relative(realRoot, resolvedCandidate);
+  // Resolve the candidate's parent so a state home that reaches the projects
+  // root through a symlink/junction is compared using the same real path form.
+  // Keep the final component lexical: rejectSymlinkProjectDirectory owns the
+  // explicit check for a project directory that is itself a link.
+  const realCandidate = path.join(
+    await fs.realpath(path.dirname(resolvedCandidate)),
+    path.basename(resolvedCandidate)
+  );
+  const relative = path.relative(realRoot, realCandidate);
   if (
     relative === ".." ||
     relative.startsWith(`..${path.sep}`) ||

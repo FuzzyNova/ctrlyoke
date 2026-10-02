@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli subagent), reproduced with `CTRLYOKE_HOME` pointing at a junction
 - **Area:** `src/utils/ProjectStateRegistry.ts` (`assertContainedByRealRoot`, `withUserProjectRegistryLock`)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
