@@ -28,6 +28,7 @@ import {
   OPENCODE_PART_TYPES,
   OPENCODE_STEP_FINISH_REASONS,
   OPENCODE_MESSAGE_ROLES,
+  OPENCODE_TOOL_STATUS,
 } from "./OpenCodeProtocolConstants";
 import { Log } from "../../../utils/Log";
 import { resolveCliCommand } from "../shared/CliLauncherResolver";
@@ -358,6 +359,17 @@ export class OpenCodeLogParser extends BaseLogParser {
         }
         break;
       }
+      case OPENCODE_EVENT_TYPES.ERROR: {
+        const message = getOpenCodeErrorMessage(e.error);
+        if (message) {
+          cliEvents.push({
+            type: CLI_EVENT_TYPES.TEXT,
+            timestamp,
+            data: { text: message },
+          });
+        }
+        break;
+      }
       case OPENCODE_EVENT_TYPES.COMPACTION: {
         // Context was compacted to free up the context window
         cliEvents.push({
@@ -418,6 +430,7 @@ export class OpenCodeLogParser extends BaseLogParser {
     let sawStepUsage = false;
     let harnessReportedCostUsd = 0;
     let sawHarnessReportedCost = false;
+    let responseError: string | undefined;
     const tokenUsage: TokenUsage = {
       inputTokens: 0,
       outputTokens: 0,
@@ -475,6 +488,17 @@ export class OpenCodeLogParser extends BaseLogParser {
             if (toolEvent) {
               cliEvents.push(toolEvent);
             }
+          }
+          break;
+        }
+        case OPENCODE_EVENT_TYPES.ERROR: {
+          responseError = getOpenCodeErrorMessage(e.error);
+          if (responseError) {
+            cliEvents.push({
+              type: CLI_EVENT_TYPES.TEXT,
+              timestamp: e.timestamp as number | undefined,
+              data: { text: responseError },
+            });
           }
           break;
         }
@@ -555,6 +579,7 @@ export class OpenCodeLogParser extends BaseLogParser {
         sessionId,
         model: (model ?? this.resolvedModel) || undefined,
         harness: HARNESS_IDS.OPENCODE_CLI,
+        ...(responseError ? { error: responseError } : {}),
         ...(sawHarnessReportedCost ? { harnessReportedCostUsd } : {}),
         usage: sawStepUsage ? tokenUsage : undefined,
       },
@@ -674,8 +699,11 @@ export class OpenCodeLogParser extends BaseLogParser {
     const p = part as any;
     switch (part.type) {
       case OPENCODE_PART_TYPES.TOOL:
-        // Tool parts transition through "pending" → "completed"; only emit when done.
-        return p.state?.status === OPERATION_STATUS.COMPLETED;
+        // Tool parts transition through pending and a terminal completed/error state.
+        return (
+          p.state?.status === OPERATION_STATUS.COMPLETED ||
+          p.state?.status === OPENCODE_TOOL_STATUS.ERROR
+        );
       case OPENCODE_EVENT_TYPES.TEXT:
       case OPENCODE_PART_TYPES.REASONING:
         // Text/reasoning parts are finalized when time.end is set.
@@ -805,4 +833,14 @@ export class OpenCodeLogParser extends BaseLogParser {
         return null;
     }
   }
+}
+
+function getOpenCodeErrorMessage(error: unknown): string | undefined {
+  const details = error as
+    | { name?: unknown; data?: { message?: unknown } }
+    | undefined;
+  const message = details?.data?.message ?? details?.name;
+  return typeof message === "string" && message.trim()
+    ? message.trim()
+    : undefined;
 }

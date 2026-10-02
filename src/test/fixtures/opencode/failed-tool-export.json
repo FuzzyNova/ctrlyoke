@@ -1,0 +1,23 @@
+{
+  "info": { "id": "ses_export_failed" },
+  "messages": [
+    {
+      "info": { "role": "assistant", "time": { "created": 2000 } },
+      "parts": [
+        {
+          "type": "tool",
+          "id": "prt_export_failed",
+          "sessionID": "ses_export_failed",
+          "messageID": "msg_export_failed",
+          "tool": "write",
+          "callID": "call_export_failed",
+          "state": {
+            "status": "error",
+            "input": { "filePath": "src/polled.ts", "content": "never written" },
+            "error": "OpenCode export write failed"
+          }
+        }
+      ]
+    }
+  ]
+}

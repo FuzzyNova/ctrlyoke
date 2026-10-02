@@ -257,9 +257,15 @@ export class CliResponseCollector {
         Log.warn(`[CliResponseCollector] Headless stderr:\n${stderr}`);
       }
       const detail = this.summarizeStderr(stderr);
+      const parsedError = parsedOutput.metadata.error
+        ? sanitizeTerminalOutput(
+            secretRedactionService.redactText(parsedOutput.metadata.error)
+          ).trim()
+        : undefined;
       return {
         kind: FAILURE_KINDS.PROCESS_EXIT,
-        message: detail || `Process exited with code ${params.exitCode}`,
+        message:
+          parsedError || detail || `Process exited with code ${params.exitCode}`,
       };
     }
 

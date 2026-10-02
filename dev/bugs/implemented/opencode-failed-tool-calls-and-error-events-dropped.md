@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (source review, compiled-module repro, and live opencode 1.18.33 run)
 - **Area:** `src/core/harness/opencode/OpenCodeEventMapper.ts`, `src/core/harness/opencode/OpenCodeLogParser.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

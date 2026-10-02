@@ -9,12 +9,18 @@ export const OPENCODE_MESSAGE_ROLES = {
 export const OPENCODE_EVENT_TYPES = {
   TEXT: "text",
   TOOL_USE: "tool_use",
+  ERROR: "error",
   USER_TEXT: "user_text",
   RETRY: "retry",
   STEP_START: "step_start",
   STEP_FINISH: "step_finish",
   COMPACTION: "compaction",
   SUBTASK: "subtask",
+} as const;
+
+/** Terminal states reported by OpenCode for tool parts. */
+export const OPENCODE_TOOL_STATUS = {
+  ERROR: "error",
 } as const;
 
 export const OPENCODE_PART_TYPES = {

@@ -304,6 +304,8 @@ export interface OutputMetadata {
   usage?: TokenUsage;
   /** CLI version that generated the response */
   cliVersion?: string;
+  /** Harness-reported response error, when the CLI provides one. */
+  error?: string;
   /** Elapsed time in milliseconds */
   elapsed?: number;
   /** Harness identifier from the canonical HARNESS_IDS set. */

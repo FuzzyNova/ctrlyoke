@@ -230,6 +230,29 @@ suite("CliResponseCollector", () => {
     assert.strictEqual(result.cliResult.error, "process crashed");
   });
 
+  test("should prefer parsed harness error text over a bare exit code", async () => {
+    const result = await createCollector(
+      createProvider(
+        createParsedOutput({
+          events: [
+            { type: "text" as any, data: { text: "Provider rejected key" } },
+          ],
+          metadata: { error: "Provider rejected key" },
+        })
+      )
+    ).collectHeadlessResponse({
+      stdout: '{"type":"error"}',
+      stderr: "",
+      exitCode: 1,
+      promptForSessionLog: "say hi",
+      executionStartTime: new Date(),
+    });
+
+    assert.strictEqual(result.failureKind, FAILURE_KINDS.PROCESS_EXIT);
+    assert.strictEqual(result.failureMessage, "Provider rejected key");
+    assert.strictEqual(result.cliResult.error, "Provider rejected key");
+  });
+
   test("should classify a killed process as cancellation, not a harness failure", async () => {
     // Regression: ctrlyoke's own teardown SIGKILLed a running harness, Node
     // reported exit code null (coalesced to 1), and the step was reported as

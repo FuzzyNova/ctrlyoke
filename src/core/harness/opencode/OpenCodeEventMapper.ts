@@ -19,7 +19,10 @@ import {
 } from "../../../types/DashboardConstants";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import { CliEventMapper, type McpToolHint } from "../shared/CliEventMapper";
-import { OPENCODE_TOOL_NAMES } from "./OpenCodeProtocolConstants";
+import {
+  OPENCODE_TOOL_NAMES,
+  OPENCODE_TOOL_STATUS,
+} from "./OpenCodeProtocolConstants";
 
 const OPEN_CODE_QUESTION_TOOL = "question";
 
@@ -81,6 +84,10 @@ export function mapOpenCodeToolPartToCliEvent(
   const input = part.state?.input ?? {};
   const output = part.state?.output ?? "";
   const isCompleted = part.state?.status === OPERATION_STATUS.COMPLETED;
+  const error =
+    typeof part.state?.error === "string" ? part.state.error : undefined;
+  const isFailed = part.state?.status === OPENCODE_TOOL_STATUS.ERROR;
+  const success = isFailed ? false : isCompleted ? true : undefined;
 
   if (toolName === OPEN_CODE_QUESTION_TOOL) {
     return mapOpenCodeQuestionPartToCliEvent(timestamp, part, isCompleted);
@@ -93,8 +100,18 @@ export function mapOpenCodeToolPartToCliEvent(
         timestamp,
         data: {
           command: input.command ?? "",
-          output: typeof output === "string" ? output : JSON.stringify(output),
+          output: isFailed
+            ? (error ?? "")
+            : typeof output === "string"
+              ? output
+              : JSON.stringify(output),
           exitCode: part.state?.metadata?.exit,
+          ...(isFailed
+            ? {
+                status: OPERATION_STATUS.FAILED,
+                error,
+              }
+            : {}),
         },
       };
 
@@ -105,6 +122,13 @@ export function mapOpenCodeToolPartToCliEvent(
         data: {
           path: input.filePath ?? input.path ?? input.file_path ?? "",
           content: input.content ?? "",
+          ...(isFailed
+            ? {
+                status: OPERATION_STATUS.FAILED,
+                success: false,
+                error,
+              }
+            : {}),
         },
       };
 
@@ -129,7 +153,13 @@ export function mapOpenCodeToolPartToCliEvent(
           oldContent: input.oldString ?? "",
           newContent: input.newString ?? "",
           structuredPatch,
-          success: isCompleted,
+          success,
+          ...(isFailed
+            ? {
+                status: OPERATION_STATUS.FAILED,
+                error,
+              }
+            : {}),
         },
       };
     }
@@ -141,6 +171,13 @@ export function mapOpenCodeToolPartToCliEvent(
         data: {
           path: input.filePath ?? input.path ?? input.file_path ?? "",
           ...readLineRange(part.state?.metadata?.display),
+          ...(isFailed
+            ? {
+                status: OPERATION_STATUS.FAILED,
+                success: false,
+                error,
+              }
+            : {}),
         },
       };
 
@@ -164,6 +201,8 @@ export function mapOpenCodeToolPartToCliEvent(
                       ? output
                       : JSON.stringify(output),
                 }
+              : isFailed
+                ? { success: false, output: error, error }
               : undefined,
           },
         };
@@ -182,6 +221,8 @@ export function mapOpenCodeToolPartToCliEvent(
                 output:
                   typeof output === "string" ? output : JSON.stringify(output),
               }
+            : isFailed
+              ? { success: false, output: error, error }
             : undefined,
         },
       };
