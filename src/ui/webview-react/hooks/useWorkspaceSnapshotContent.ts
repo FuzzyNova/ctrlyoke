@@ -66,7 +66,12 @@ export class WorkspaceSnapshotContentClient {
             ? { contentCaptureSkipped: message.contentCaptureSkipped }
             : {}),
         };
-        this.cache.set(key, content);
+        if (
+          content.beforeContent !== undefined ||
+          content.contentToRestore !== undefined
+        ) {
+          this.cache.set(key, content);
+        }
         this.pending.delete(key);
         resolve(content);
       };

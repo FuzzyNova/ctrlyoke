@@ -27,7 +27,7 @@ import { useUiStore } from "@store/uiStore";
 
 afterEach(() => {
   useSettingsStore.setState({ fullGlobalSettings: null });
-  useUiStore.setState({ displayedViewAddress: null });
+  useUiStore.setState({ displayedViewAddress: null, appliedViewAddress: null });
 });
 
 const TARGET = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
@@ -202,16 +202,20 @@ describe("OutputRow token stats", () => {
 });
 
 describe("OutputRow snapshot diffs", () => {
-  it("fetches snapshot before-content when an indexed diff is expanded", async () => {
+  it("applies fetched absolute-path content only to the run it belongs to", async () => {
     const postMessage = vi.mocked(window.vscodeApi!.postMessage);
     postMessage.mockClear();
+    const runA = {
+      workflowKey: "workflow-1" as never,
+      kind: "run" as const,
+      runRef: "run-2026-01-01T00-00-00-000Z" as never,
+    };
+    const runB = { ...runA, runRef: "run-2026-01-02T00-00-00-000Z" as never };
     useUiStore.setState({
-      displayedViewAddress: {
-        workflowKey: "workflow-1" as never,
-        kind: "run",
-        runRef: "run-2026-01-01T00-00-00-000Z" as never,
-      },
+      displayedViewAddress: runB,
+      appliedViewAddress: runA,
     });
+    const onFileUndo = vi.fn();
     const row: StructuredEventRow = {
       key: "indexed-file-edit",
       target: TARGET,
@@ -220,7 +224,7 @@ describe("OutputRow snapshot diffs", () => {
       event: {
         type: CLI_EVENT_TYPES.FILE_EDIT,
         data: {
-          path: "src/example.ts",
+          path: "C:\\dev\\proj\\src\\example.ts",
           newContent: "new value",
           status: OPERATION_STATUS.COMPLETED,
           structuredPatch: [
@@ -262,6 +266,7 @@ describe("OutputRow snapshot diffs", () => {
       <OutputRow
         row={row}
         isExecutionActive={false}
+        onFileUndo={onFileUndo}
         onDiffCollapsedChange={vi.fn()}
       />
     );
@@ -271,24 +276,65 @@ describe("OutputRow snapshot diffs", () => {
     expect(request?.type).toBe(
       MESSAGE_TYPES.REQUEST_WORKSPACE_SNAPSHOT_CONTENT
     );
+    expect(request).toMatchObject({
+      address: {
+        workflowKey: runA.workflowKey,
+        runRef: runA.runRef,
+      },
+      path: "src/example.ts",
+    });
     window.dispatchEvent(
       new MessageEvent("message", {
         data: {
           type: MESSAGE_TYPES.WORKSPACE_SNAPSHOT_CONTENT,
           requestId: request?.requestId,
-          beforeContent: "old value",
+          beforeContent: "run-a-before-content",
         },
       })
     );
+    await waitFor(() => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "Undo file operation" })
+      );
+      expect(onFileUndo).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({ oldContent: "run-a-before-content" })
+      );
+    });
+
+    useUiStore.setState({
+      displayedViewAddress: runB,
+      appliedViewAddress: runB,
+    });
+    onFileUndo.mockClear();
     view.rerender(
       <OutputRow
-        row={{ ...row, diff: { ...row.diff!, isCollapsed: false } }}
+        row={{
+          ...row,
+          workspaceSnapshot: {
+            ...row.workspaceSnapshot!,
+            changedFiles: [
+              {
+                ...row.workspaceSnapshot!.changedFiles[0],
+                beforeContent: "run-b-before-content",
+              },
+            ],
+          },
+          diff: { ...row.diff!, isCollapsed: false },
+        }}
         isExecutionActive={false}
+        onFileUndo={onFileUndo}
         onDiffCollapsedChange={vi.fn()}
       />
     );
     await waitFor(() => {
-      expect(view.container.textContent).toContain("old value");
+      fireEvent.click(
+        screen.getByRole("button", { name: "Undo file operation" })
+      );
+      expect(onFileUndo).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({ oldContent: "run-b-before-content" })
+      );
     });
   });
 });

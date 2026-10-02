@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli)
 - **Area:** `src/ui/webview-react/components/output/OutputRow.tsx`, `src/ui/webview-react/hooks/useWorkspaceSnapshotContent.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

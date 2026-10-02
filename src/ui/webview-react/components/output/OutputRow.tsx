@@ -92,6 +92,7 @@ import {
   type RowFindDecoration,
 } from "@utils/outputFind";
 import { getPromptChangeLabelParts, sameFilePath } from "@utils/promptUndo";
+import { workflowViewAddressKey } from "@utils/viewAddress";
 import {
   OUTPUT_BLOCK_BASE,
   TOOL_RESULT_LINE,
@@ -103,7 +104,6 @@ import { findAtomicReferences } from "@utils/atomicReferences";
 import { formatCliCommandDisplay } from "@utils/outputCommandDisplay";
 import { renderCommandTextWithFileLinks } from "@utils/cliCommandFileLinks";
 import { useUiStore } from "@store/uiStore";
-import { workflowViewAddressKey } from "@utils/viewAddress";
 import { getTargetKey } from "@utils/outputProjection";
 import { useWorkspaceSnapshotContent } from "@hooks/useWorkspaceSnapshotContent";
 import { getStepKindIconClass } from "@utils/status";
@@ -174,6 +174,14 @@ interface StructuredEventContentProps {
     section: BashOutputExpansionSection,
     expanded: boolean
   ) => void;
+}
+
+function getLoadedSnapshotContentKey(
+  viewAddressKey: string,
+  target: StructuredEventRow["target"],
+  path: string
+): string {
+  return JSON.stringify([viewAddressKey, target, path]);
 }
 
 interface OutputRowProps {
@@ -566,9 +574,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
     bashExpansion,
     onBashExpansionChange,
   }) => {
-    const displayedViewAddress = useUiStore(
-      (state) => state.displayedViewAddress
-    );
+    const appliedViewAddress = useUiStore((state) => state.appliedViewAddress);
     const requestSnapshotContent = useWorkspaceSnapshotContent();
     const [loadedSnapshotContent, setLoadedSnapshotContent] = useState<
       Record<string, string>
@@ -595,22 +601,48 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       workspaceSnapshot,
       diff,
     } = row;
+    const appliedRunAddressKey =
+      appliedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
+        ? workflowViewAddressKey(appliedViewAddress)
+        : null;
     const effectiveWorkspaceSnapshot = useMemo(() => {
       if (
         Object.keys(loadedSnapshotContent).length === 0 ||
-        !workspaceSnapshot
+        !workspaceSnapshot ||
+        !appliedRunAddressKey
       ) {
         return workspaceSnapshot;
       }
       return {
         ...workspaceSnapshot,
         changedFiles: workspaceSnapshot.changedFiles.map((change) =>
-          loadedSnapshotContent[change.path] !== undefined
-            ? { ...change, beforeContent: loadedSnapshotContent[change.path] }
+          loadedSnapshotContent[
+            getLoadedSnapshotContentKey(
+              appliedRunAddressKey,
+              row.target,
+              change.path
+            )
+          ] !== undefined
+            ? {
+                ...change,
+                beforeContent:
+                  loadedSnapshotContent[
+                    getLoadedSnapshotContentKey(
+                      appliedRunAddressKey,
+                      row.target,
+                      change.path
+                    )
+                  ],
+              }
             : change
         ),
       };
-    }, [loadedSnapshotContent, workspaceSnapshot]);
+    }, [
+      appliedRunAddressKey,
+      loadedSnapshotContent,
+      row.target,
+      workspaceSnapshot,
+    ]);
 
     const fetchSnapshotContent = (path: string) => {
       const indexedChange = workspaceSnapshot?.changedFiles.find((change) =>
@@ -618,7 +650,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       );
       if (
         !indexedChange?.contentAvailableOnDemand ||
-        displayedViewAddress?.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN
+        appliedViewAddress?.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN
       ) {
         return;
       }
@@ -628,8 +660,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
           : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: row.target.index };
       void requestSnapshotContent(
         {
-          workflowKey: displayedViewAddress.workflowKey,
-          runRef: displayedViewAddress.runRef,
+          workflowKey: appliedViewAddress.workflowKey,
+          runRef: appliedViewAddress.runRef,
         },
         target,
         indexedChange.path
@@ -637,7 +669,11 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
         if (content.beforeContent !== undefined) {
           setLoadedSnapshotContent((current) => ({
             ...current,
-            [path]: content.beforeContent!,
+            [getLoadedSnapshotContentKey(
+              workflowViewAddressKey(appliedViewAddress),
+              row.target,
+              indexedChange.path
+            )]: content.beforeContent!,
           }));
         }
       });
