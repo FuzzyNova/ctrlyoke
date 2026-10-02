@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (Claude)
 - **Area:** `src/server/HostedWorkspaceViewerService.ts` (`getGitRefDiff`, `getWorktreeDiff`)
-- **Severity:** medium (security: scope leak)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -111,6 +111,25 @@ export function parseGitPorcelainV1Z(output: string): GitPorcelainV1Entry[] {
   return entries;
 }
 
+function matchesPathspecs(
+  filePath: string,
+  pathspecs: readonly string[] | undefined
+): boolean {
+  if (!pathspecs?.length) return true;
+  return pathspecs.some((pathspec) => {
+    const literalPrefix = ":(literal)";
+    const prefix = pathspec.startsWith(literalPrefix)
+      ? pathspec.slice(literalPrefix.length)
+      : pathspec;
+    const normalizedPrefix = prefix.replace(/\\/g, "/").replace(/\/+$/, "");
+    const normalizedPath = filePath.replace(/\\/g, "/");
+    return (
+      normalizedPath === normalizedPrefix ||
+      normalizedPath.startsWith(`${normalizedPrefix}/`)
+    );
+  });
+}
+
 /** Parse `git diff --name-status -z`, including both paths for renames/copies. */
 export function parseGitNameStatusZ(output: string): GitPorcelainV1Entry[] {
   const records = parseGitNulSeparatedPaths(output);
@@ -461,7 +480,8 @@ export async function getCommitInfo(
  */
 export async function getCommitDiff(
   workspaceRoot: string,
-  hash: string
+  hash: string,
+  pathspecs?: readonly string[]
 ): Promise<string> {
   const { stdout } = await execFileAsync("git", [
     "-C",
@@ -471,6 +491,7 @@ export async function getCommitDiff(
     "-p",
     "--end-of-options",
     hash,
+    ...(pathspecs?.length ? ["--", ...pathspecs] : []),
   ]);
   return stdout;
 }
@@ -636,7 +657,8 @@ export async function getDiffFilesBetweenRefs(
 export async function getDiffBetweenRefs(
   workspaceRoot: string,
   baseRef: string,
-  targetRef: string
+  targetRef: string,
+  pathspecs?: readonly string[]
 ): Promise<string> {
   const { stdout } = await execGit([
     "-C",
@@ -648,6 +670,7 @@ export async function getDiffBetweenRefs(
     "--end-of-options",
     baseRef,
     targetRef,
+    ...(pathspecs?.length ? ["--", ...pathspecs] : []),
   ]);
   return stdout;
 }
@@ -656,7 +679,8 @@ export async function getDiffBetweenRefs(
  * Returns working tree diff (unstaged changes + untracked file summary).
  */
 export async function getWorkingTreeDiff(
-  workspaceRoot: string
+  workspaceRoot: string,
+  pathspecs?: readonly string[]
 ): Promise<string> {
   const { stdout: diffOutput } = await execFileAsync(
     "git",
@@ -667,6 +691,7 @@ export async function getWorkingTreeDiff(
       "--stat",
       "-p",
       GIT_DIFF_NO_EXT_DIFF_OPTION,
+      ...(pathspecs?.length ? ["--", ...pathspecs] : []),
     ],
     { timeout: GIT_TIMEOUT_MS }
   );
@@ -681,12 +706,15 @@ export async function getWorkingTreeDiff(
       "--porcelain=v1",
       "--untracked-files=all",
       "-z",
+      ...(pathspecs?.length ? ["--", ...pathspecs] : []),
     ],
     { timeout: GIT_TIMEOUT_MS }
   );
 
   const untrackedLines = parseGitPorcelainV1Z(statusOutput)
-    .filter(({ x, y }) => x === "?" && y === "?")
+    .filter(({ x, y, path: filePath }) =>
+      x === "?" && y === "?" && matchesPathspecs(filePath, pathspecs)
+    )
     .map(({ path: filePath }) => filePath);
 
   if (untrackedLines.length > 0) {
@@ -700,7 +728,10 @@ export async function getWorkingTreeDiff(
 /**
  * Returns staged diff only (git diff --cached).
  */
-export async function getStagedDiff(workspaceRoot: string): Promise<string> {
+export async function getStagedDiff(
+  workspaceRoot: string,
+  pathspecs?: readonly string[]
+): Promise<string> {
   const { stdout } = await execFileAsync(
     "git",
     [
@@ -711,6 +742,7 @@ export async function getStagedDiff(workspaceRoot: string): Promise<string> {
       "--stat",
       "-p",
       GIT_DIFF_NO_EXT_DIFF_OPTION,
+      ...(pathspecs?.length ? ["--", ...pathspecs] : []),
     ],
     { timeout: GIT_TIMEOUT_MS }
   );
@@ -746,11 +778,28 @@ export async function getStashList(
  */
 export async function getStashDiff(
   workspaceRoot: string,
-  index: number
+  index: number,
+  pathspecs?: readonly string[]
 ): Promise<string> {
+  const stashRef = `stash@{${index}}`;
+  const args = pathspecs?.length
+    ? [
+        "-C",
+        workspaceRoot,
+        "diff",
+        "--stat",
+        "-p",
+        GIT_DIFF_NO_EXT_DIFF_OPTION,
+        "--end-of-options",
+        `${stashRef}^1`,
+        stashRef,
+        "--",
+        ...pathspecs,
+      ]
+    : ["-C", workspaceRoot, "stash", "show", "-p", stashRef];
   const { stdout } = await execFileAsync(
     "git",
-    ["-C", workspaceRoot, "stash", "show", "-p", `stash@{${index}}`],
+    args,
     { timeout: GIT_TIMEOUT_MS }
   );
   return stdout;

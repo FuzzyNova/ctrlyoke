@@ -2828,6 +2828,25 @@ export class HostedWorkspaceViewerService {
     );
   }
 
+  /**
+   * Git pathspecs that represent the same roots accepted by paged diffs.
+   * `undefined` means a trusted root is the repo toplevel (so preserve Git's
+   * unrestricted output); an empty array means this repo has no visible roots.
+   */
+  private getVisibleRepoPathspecs(repoRoot: string): string[] | undefined {
+    const repo = path.resolve(repoRoot);
+    const trustedRoots = this.trustedRoots.map((root) => path.resolve(root));
+    if (trustedRoots.some((root) => isPathWithinDirectory(repo, root))) {
+      return undefined;
+    }
+
+    const relativeRoots = trustedRoots
+      .filter((root) => isPathWithinDirectory(root, repo))
+      .map((root) => toGitPath(path.relative(repo, root)))
+      .filter(Boolean);
+    return [...new Set(relativeRoots)].map((root) => `:(literal)${root}/`);
+  }
+
   private async buildGitRefDiffPageEntry(
     repoRoot: string,
     file: GitChangedFile,
@@ -2947,10 +2966,15 @@ export class HostedWorkspaceViewerService {
   ): Promise<WorkspaceGitRefDiffResponse> {
     const repoRoot = await this.resolveRepoRoot(repoId);
     const resolution = this.resolveGitRefDiff(ref);
+    const pathspecs = this.getVisibleRepoPathspecs(repoRoot);
+    const diffPathspecs = pathspecs?.length ? pathspecs : undefined;
+    const unifiedDiffForNoVisibleRoots = pathspecs?.length === 0;
 
     if (resolution.kind === "workingTree") {
       const [unifiedDiff, changedFiles] = await Promise.all([
-        getWorkingTreeDiff(repoRoot),
+        unifiedDiffForNoVisibleRoots
+          ? Promise.resolve("")
+          : getWorkingTreeDiff(repoRoot, diffPathspecs),
         getChangedFilesWithBinaryStatus(repoRoot, resolution.changedFilesArgs),
       ]);
       return {
@@ -2964,7 +2988,9 @@ export class HostedWorkspaceViewerService {
     }
     if (resolution.kind === GIT_CHANGE_KINDS.STAGED) {
       const [unifiedDiff, changedFiles] = await Promise.all([
-        getStagedDiff(repoRoot),
+        unifiedDiffForNoVisibleRoots
+          ? Promise.resolve("")
+          : getStagedDiff(repoRoot, diffPathspecs),
         getChangedFilesWithBinaryStatus(repoRoot, resolution.changedFilesArgs),
       ]);
       return {
@@ -2979,7 +3005,9 @@ export class HostedWorkspaceViewerService {
     if (resolution.kind === "stash") {
       const stashIndex = resolution.stashIndex ?? 0;
       const [unifiedDiff, changedFiles] = await Promise.all([
-        getStashDiff(repoRoot, stashIndex),
+        unifiedDiffForNoVisibleRoots
+          ? Promise.resolve("")
+          : getStashDiff(repoRoot, stashIndex, diffPathspecs),
         getChangedFilesWithBinaryStatus(repoRoot, resolution.changedFilesArgs),
       ]);
       return {
@@ -2994,7 +3022,9 @@ export class HostedWorkspaceViewerService {
     // Treat as commit hash
     const hash = resolution.commitHash ?? "";
     const [unifiedDiff, commitInfo, changedFiles] = await Promise.all([
-      getCommitDiff(repoRoot, hash),
+      unifiedDiffForNoVisibleRoots
+        ? Promise.resolve("")
+        : getCommitDiff(repoRoot, hash, diffPathspecs),
       getCommitInfo(repoRoot, hash),
       getChangedFilesWithBinaryStatus(repoRoot, resolution.changedFilesArgs),
     ]);
@@ -3025,10 +3055,13 @@ export class HostedWorkspaceViewerService {
     const repoRoot = await this.requireRepoRootForPath(
       path.resolve(sourceCheckoutRoot)
     );
+    const pathspecs = this.getVisibleRepoPathspecs(repoRoot);
+    if (pathspecs?.length === 0) return { unifiedDiff: "" };
     const unifiedDiff = await getDiffBetweenRefs(
       repoRoot,
       baseCommit,
-      `refs/heads/${branchName}`
+      `refs/heads/${branchName}`,
+      pathspecs?.length ? pathspecs : undefined
     );
     return { unifiedDiff };
   }

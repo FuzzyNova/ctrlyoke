@@ -2337,6 +2337,37 @@ suite("HostedWorkspaceViewerService", function () {
       assert.ok(result.unifiedDiff.includes("feature.txt"));
     });
 
+    test("scopes a nested workspace diff to its trusted root", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      fs.mkdirSync(path.join(root, "app"));
+      fs.mkdirSync(path.join(root, "private"));
+      fs.writeFileSync(path.join(root, "app", "a.txt"), "base app\n");
+      fs.writeFileSync(
+        path.join(root, "private", "notes.txt"),
+        "base private\n"
+      );
+      runGit(root, "add", ".");
+      runGit(root, "commit", "-m", "base");
+      const baseCommit = runGit(root, "rev-parse", "HEAD");
+      runGit(root, "checkout", "-b", "feature/scoped");
+      fs.writeFileSync(path.join(root, "app", "a.txt"), "feature app\n");
+      fs.writeFileSync(
+        path.join(root, "private", "notes.txt"),
+        "feature private\n"
+      );
+      runGit(root, "add", ".");
+      runGit(root, "commit", "-m", "feature");
+
+      const result = await new HostedWorkspaceViewerService(
+        path.join(root, "app")
+      ).getWorktreeDiff(root, baseCommit, "feature/scoped");
+
+      assert.ok(result.unifiedDiff.includes("a.txt"));
+      assert.ok(!result.unifiedDiff.includes("private/"));
+    });
+
     test("rejects a sourceCheckoutRoot outside every discovered repo", async () => {
       const root = createWorkspace();
       runGit(root, "init");
@@ -2351,6 +2382,76 @@ suite("HostedWorkspaceViewerService", function () {
         () => svc.getWorktreeDiff(outside, baseCommit, "main"),
         /not inside a git repository/
       );
+    });
+  });
+
+  suite("getGitRefDiff trusted roots", () => {
+    test("scopes working tree, staged, stash, and commit diffs for nested roots", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      fs.mkdirSync(path.join(root, "app"));
+      fs.mkdirSync(path.join(root, "private"));
+      fs.writeFileSync(path.join(root, "app", "a.txt"), "base app\n");
+      fs.writeFileSync(
+        path.join(root, "private", "notes.txt"),
+        "base private\n"
+      );
+      runGit(root, "add", ".");
+      runGit(root, "commit", "-m", "base");
+
+      const svc = new HostedWorkspaceViewerService(path.join(root, "app"));
+      fs.writeFileSync(path.join(root, "app", "a.txt"), "working app\n");
+      fs.writeFileSync(
+        path.join(root, "private", "notes.txt"),
+        "working private\n"
+      );
+      fs.writeFileSync(
+        path.join(root, "private", "loose.txt"),
+        "untracked private\n"
+      );
+      const working = await svc.getGitRefDiff("~diff");
+      assert.ok(working.unifiedDiff?.includes("a.txt"));
+      assert.ok(!working.unifiedDiff?.includes("private/"));
+
+      runGit(root, "add", ".");
+      const staged = await svc.getGitRefDiff("~staged");
+      assert.ok(staged.unifiedDiff?.includes("a.txt"));
+      assert.ok(!staged.unifiedDiff?.includes("private/"));
+
+      runGit(root, "stash", "push", "-m", "scoped diff fixture");
+      const stashed = await svc.getGitRefDiff("~stash:0");
+      assert.ok(stashed.unifiedDiff?.includes("a.txt"));
+      assert.ok(!stashed.unifiedDiff?.includes("private/"));
+
+      fs.writeFileSync(path.join(root, "app", "a.txt"), "commit app\n");
+      fs.writeFileSync(
+        path.join(root, "private", "notes.txt"),
+        "commit private\n"
+      );
+      runGit(root, "add", ".");
+      runGit(root, "commit", "-m", "both roots");
+      const commit = runGit(root, "rev-parse", "HEAD");
+      const committed = await svc.getGitRefDiff(commit);
+      assert.ok(committed.unifiedDiff?.includes("a.txt"));
+      assert.ok(!committed.unifiedDiff?.includes("private/"));
+    });
+
+    test("keeps the complete diff when the trusted root is the repo toplevel", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "app.txt", "base app\n", "base");
+      commitFile(root, "private-notes.txt", "base private\n", "private base");
+      fs.writeFileSync(path.join(root, "app.txt"), "changed app\n");
+      fs.writeFileSync(path.join(root, "private-notes.txt"), "changed private\n");
+
+      const result = await new HostedWorkspaceViewerService(root).getGitRefDiff(
+        "~diff"
+      );
+
+      assert.ok(result.unifiedDiff?.includes("app.txt"));
+      assert.ok(result.unifiedDiff?.includes("private-notes.txt"));
     });
   });
 });
