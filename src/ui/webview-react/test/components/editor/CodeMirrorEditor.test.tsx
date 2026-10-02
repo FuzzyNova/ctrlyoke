@@ -274,7 +274,8 @@ describe("CodeMirrorEditor $previous:N lint", () => {
       expect(diagnostics).toEqual([
         expect.objectContaining({
           severity: "info",
-          message: expect.stringContaining("will include at most 2"),
+          message:
+            "Only 2 prior steps are available before this step — $previous:5 will include at most 2",
         }),
       ]);
     } finally {

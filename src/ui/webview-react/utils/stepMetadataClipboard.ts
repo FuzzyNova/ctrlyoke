@@ -1,6 +1,8 @@
 import type { WorkflowStep, CliOutput } from "@store/workflowStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { buildAttemptTokenTooltipLines } from "@root/utils/TokenFormatting";
+import type { PriorContext } from "@root/types/CtrlYokeTypes";
+import { formatPriorContextLabel } from "@utils/priorContext";
 import { isScriptWorkflowStep } from "./stepClipboard";
 
 /** Runtime metadata carried on a step (`step._runtime`), used before a full CliOutput exists. */
@@ -106,11 +108,6 @@ function fmtToolPermissions(v: unknown): string {
     parts.push(`allow: ${tp.allowedTools.join(", ")}`);
   if (tp.deniedTools?.length) parts.push(`deny: ${tp.deniedTools.join(", ")}`);
   return parts.join(" | ");
-}
-
-function fmtPriorContext(v: unknown): string {
-  if (Array.isArray(v)) return `[${v.join(", ")}]`;
-  return typeof v === "string" && v.length > 0 ? v : "(none)";
 }
 
 function fmtScriptCondition(v: unknown): string {
@@ -248,7 +245,12 @@ export function buildStepMetadataClipboardText({
         "priorContext",
         step.priorContext,
         getEffectivePriorContext(),
-        fmtPriorContext
+        (value) => {
+          if (value === null || value === undefined) return "(none)";
+          return typeof value === "string" && value.length === 0
+            ? "(none)"
+            : formatPriorContextLabel(value as PriorContext);
+        }
       ),
       resolvedLine(
         "additionalArgs",

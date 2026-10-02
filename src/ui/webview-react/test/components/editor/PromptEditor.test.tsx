@@ -142,6 +142,83 @@ describe("PromptEditor workflow schema warnings", () => {
   });
 });
 
+describe("PromptEditor prior-context parallel-group boundary", () => {
+  it("uses the group start for preview requests from a group member", async () => {
+    const steps = Array.from({ length: 5 }, (_, index) => ({
+      prompt: `step ${index + 1}`,
+    }));
+    useWorkflowStore.setState({
+      steps,
+      parallelGroups: [
+        { id: "group-1", startIndex: 2, endIndex: 4, failFast: false },
+      ],
+    });
+    useEditorStore.getState().selectPrompt(
+      { kind: FINAL_STEP_PHASES.QUEUE, index: 4 },
+      { prompt: "$previous:3" }
+    );
+
+    const { container } = render(<PromptEditor />);
+    const priorContextChip = await waitFor(() => {
+      const chip = container.querySelector<HTMLElement>(
+        '.cm-link[data-type="priorContext"]'
+      );
+      expect(chip).not.toBeNull();
+      return chip!;
+    });
+    await waitFor(() => {
+      expect(container.querySelector(".cm-lintRange-info")).not.toBeNull();
+    });
+    fireEvent.click(priorContextChip);
+
+    await waitFor(() => {
+      expect(
+        postMessageSpy.mock.calls
+          .map(([message]) => message as Record<string, unknown>)
+          .find(
+            (message) =>
+              message.type === MESSAGE_TYPES.REQUEST_PRIOR_CONTEXT_PREVIEW
+          )
+      ).toMatchObject({
+        type: MESSAGE_TYPES.REQUEST_PRIOR_CONTEXT_PREVIEW,
+        ref: "previous:3",
+        stepCount: 2,
+      });
+    });
+  });
+
+  it("keeps the selected queue index as the boundary outside a group", () => {
+    useWorkflowStore.setState({
+      steps: Array.from({ length: 5 }, (_, index) => ({
+        prompt: `step ${index + 1}`,
+      })),
+      parallelGroups: [
+        { id: "group-1", startIndex: 1, endIndex: 2, failFast: false },
+      ],
+    });
+    useEditorStore.getState().selectPrompt(
+      { kind: FINAL_STEP_PHASES.QUEUE, index: 4 },
+      { prompt: "$previous:3" }
+    );
+
+    const { container } = render(<PromptEditor />);
+    const chip = container.querySelector<HTMLElement>(
+      '.cm-link[data-type="priorContext"]'
+    );
+    expect(chip).not.toBeNull();
+    fireEvent.click(chip!);
+
+    expect(
+      postMessageSpy.mock.calls
+        .map(([message]) => message as Record<string, unknown>)
+        .find(
+          (message) =>
+            message.type === MESSAGE_TYPES.REQUEST_PRIOR_CONTEXT_PREVIEW
+        )
+    ).toMatchObject({ stepCount: 4 });
+  });
+});
+
 describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
   it("attaches the displayed run mutation to a prompt submission", async () => {
     const user = userEvent.setup();

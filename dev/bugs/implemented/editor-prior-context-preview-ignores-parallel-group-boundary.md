@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli)
 - **Area:** `src/ui/webview-react/components/editor/PromptEditor.tsx`, `src/ui/PromptEditorSupportService.ts`, `src/utils/PriorContextPreviewBuilder.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -44,12 +44,9 @@ a group member the editor:
   `PriorContextPreviewBuilder.buildPreview`, and for the token-count path
   (`useAttachmentTokenCount` / `encodePriorContextTokenRef`).
 
-## Suggested Fix
+## Resolution
 
-Compute the boundary in the webview the same way the runtime does: if the
-selected queue step lies inside a `ParallelGroupDefinition` in
-`useWorkflowStore.parallelGroups`, use that group's `startIndex`, otherwise the
-step index. Single-source the lookup (a helper next to the existing
-group-membership helper in `WorkflowStepsPanel.tsx` ~225, or a shared util) and
-feed the result to every consumer of `stepCount`. New-prompt and final-step
-targets keep using `prompts.length`.
+The editor now uses the selected step's parallel-group start as its prior-context
+boundary. The shared boundary feeds lint, preview requests, and attachment token
+counts; queue steps outside groups and new-prompt/final-step targets keep their
+existing boundaries. Runtime resolution is unchanged.

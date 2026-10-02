@@ -14,6 +14,7 @@ import {
   isPreviousStepsPriorContext,
   isWorkflowRunAddress,
 } from "@root/types/CtrlYokeTypes";
+import { formatPriorContextLabel } from "@utils/priorContext";
 import {
   formatRangeNotation,
   parseRangeNotation,
@@ -50,18 +51,6 @@ function getMode(value: PriorContext | undefined): KeywordMode {
     return PRIOR_CONTEXT_SELECTION_MODES.PREVIOUS_COUNT;
   if (isWorkflowRunAddress(value)) return PRIOR_CONTEXT_SELECTION_MODES.RUN;
   return value as KeywordMode;
-}
-
-/**
- * Display label for any prior-context value ("Previous", "Previous 3",
- * "Custom", …) — shared by this select and the inherited-value labels.
- */
-export function formatPriorContextLabel(value: PriorContext): string {
-  if (isPreviousStepsPriorContext(value)) {
-    return `${PRIOR_CONTEXT_SELECT_OPTIONS_META.previous.label} ${value.previous}`;
-  }
-  const mode = getMode(value);
-  return PRIOR_CONTEXT_SELECT_OPTIONS_META[mode]?.label ?? String(value);
 }
 
 /**

@@ -19,6 +19,7 @@ import type {
   ParallelGroupDefinition,
   ScriptVerdict,
 } from "@root/types/CtrlYokeTypes";
+import { findParallelGroupForStep } from "./parallelGroups";
 import {
   OUTPUT_ROW_KINDS,
   OUTPUT_MESSAGE_TYPES,
@@ -421,10 +422,7 @@ export function getParallelGroupForStep(
   parallelGroups: readonly ParallelGroupDefinition[] | undefined,
   stepIndex: number
 ): ParallelGroupDefinition | undefined {
-  const group = parallelGroups?.find(
-    (candidate) =>
-      stepIndex >= candidate.startIndex && stepIndex <= candidate.endIndex
-  );
+  const group = findParallelGroupForStep(parallelGroups, stepIndex);
   return group && group.startIndex !== group.endIndex ? group : undefined;
 }
 

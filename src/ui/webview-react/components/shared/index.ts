@@ -49,10 +49,10 @@ export {
 export { DrawerTabBar } from "./DrawerTabBar";
 export { DrawerRow } from "./DrawerRow";
 export {
-  formatPriorContextLabel,
   PriorContextSelect,
   type KeywordMode,
 } from "./PriorContextSelect";
+export { formatPriorContextLabel } from "@utils/priorContext";
 export { LimitSelect } from "./LimitSelect";
 export { SkillsSelect } from "./SkillsSelect";
 export {

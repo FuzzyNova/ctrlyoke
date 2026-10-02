@@ -60,6 +60,7 @@ import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 import { getDictionaryUris } from "@utils/dictionaryUris";
 import { isWorkflowRunning } from "../../utils/status";
 import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
+import { findParallelGroupForStep } from "@utils/parallelGroups";
 import { notifyUser, showWebviewToast } from "@utils/notifyUser";
 import { generateWorkflowNameFromPrompt } from "@root/utils/workflowNaming";
 import {
@@ -166,6 +167,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     finalStepStatus,
     finalStep,
     schemaWarnings,
+    parallelGroups,
   } = useWorkflowStore();
   const {
     propertiesDrawerOpen,
@@ -284,11 +286,13 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     allowWorkspaceFolderPrefix: globalSettings.isMultiRoot,
   });
 
-  // Number of steps that precede this prompt — used by the prior-context linter.
-  // QUEUE(index): steps 0..index-1 are prior; NEW_PROMPT / FINAL_STEP: all queue steps are prior.
+  // Number of steps that precede this prompt — used by prior-context lint,
+  // previews, and attachment token counts. Group members share the runtime
+  // boundary at the group's start so sibling outputs are excluded.
   const stepCount =
     selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
-      ? selectionTarget.index
+      ? (findParallelGroupForStep(parallelGroups, selectionTarget.index)
+          ?.startIndex ?? selectionTarget.index)
       : prompts.length;
   const hasFinalStep = finalStep !== null;
   const effectivePreCondition =

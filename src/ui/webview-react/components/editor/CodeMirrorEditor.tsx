@@ -2843,7 +2843,7 @@ export function createPriorContextLintExtension(
           ) {
             if (stepCount <= 0) {
               message =
-                "Prior context not found — no prior steps exist at this position";
+                "Prior context not found — no prior steps are available before this step";
             } else if (
               parsed.kind === PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS &&
               parsed.count !== undefined &&
@@ -2852,7 +2852,7 @@ export function createPriorContextLintExtension(
               // Not an error at runtime (it takes what exists), but the
               // author asked for more than this position can ever supply.
               resolvable = true;
-              message = `Only ${stepCount} prior ${stepCount === 1 ? "step exists" : "steps exist"} at this position — $previous:${parsed.count} will include at most ${stepCount}`;
+              message = `Only ${stepCount} prior ${stepCount === 1 ? "step is" : "steps are"} available before this step — $previous:${parsed.count} will include at most ${stepCount}`;
             }
           } else if (
             parsed.kind === PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP ||

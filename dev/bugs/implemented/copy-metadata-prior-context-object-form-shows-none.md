@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli)
 - **Area:** `src/ui/webview-react/utils/stepMetadataClipboard.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -27,8 +27,8 @@ two prior-context formatters (`priorContextBadge` in
 `formatPriorContextLabel` in `components/shared/PriorContextSelect.tsx`) but not
 this one.
 
-## Suggested Fix
+## Resolution
 
-Delete the local formatter and reuse `formatPriorContextLabel` (or whichever
-shared formatter covers every `PriorContext` variant, including run addresses),
-so all three surfaces stay in sync.
+Copy Metadata now uses the shared prior-context label formatter for every
+`PriorContext` variant, including `{ previous: N }` and run-address objects. The
+formatter lives in a utility module shared with `PriorContextSelect`.
