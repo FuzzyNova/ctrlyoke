@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli), code reading and a reproduction against the bundled modules
 - **Area:** `src/ui/webview-react/utils/atomicReferences.ts` (`getFencedBlockRanges`), `src/utils/FileReferenceParser.ts` (`maskFencedCodeBlocks`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

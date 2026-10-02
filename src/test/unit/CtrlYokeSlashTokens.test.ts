@@ -78,6 +78,15 @@ suite("CtrlYokeSlashTokens", () => {
     ]);
   });
 
+  test("only scans slash tokens at a word start", () => {
+    const text =
+      'https://example.com/skill:commit x/skill:commit xskill: commit docs/mcp:github a//skill:no ./skill:dot :/mcp:colon /skill:space (/mcp:paren "/skill:quote';
+    assert.deepStrictEqual(
+      scanCtrlYokeSlashTokens(text).map((token) => token.raw),
+      ["/skill:space", "/mcp:paren", "/skill:quote"]
+    );
+  });
+
   test("rewrites every supported token in place", () => {
     assert.strictEqual(
       rewriteCtrlYokeSlashTokens("/skill:commit"),

@@ -538,6 +538,15 @@ describe("atomic reference presentation", () => {
     expect(findAtomicReferences("```\n@src/file.ts\n```")).toEqual([]);
   });
 
+  it("keeps references inside a shorter fence nested in a longer fence inert", () => {
+    const doc = "````md\n```\n$previous\n```\n````";
+    expect(findAtomicReferences(doc)).toEqual([]);
+  });
+
+  it("does not decorate prior-context text that continues with an underscore", () => {
+    expect(findAtomicReferences("$previous_output")).toEqual([]);
+  });
+
   it("excludes condition-output references inside fenced blocks", () => {
     expect(findAtomicReferences("```\n$preCondition:stdout\n```")).toEqual([]);
   });

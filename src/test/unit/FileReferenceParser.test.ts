@@ -490,6 +490,26 @@ suite("FileReferenceParser", () => {
       );
     });
 
+    test("does not truncate prior-context references before underscores", () => {
+      for (const text of [
+        "$all_files",
+        "$previous_output",
+        "$finalStep_1",
+        "$step:1_x",
+      ]) {
+        assert.deepStrictEqual(parseInlinePriorContextRefs(text), [], text);
+      }
+    });
+
+    test("keeps the bare previous fallback before prose colons", () => {
+      assert.deepStrictEqual(
+        parseInlinePriorContextRefs("$previous: fix it $previous:3x").map(
+          (match) => match.token
+        ),
+        ["$previous", "$previous"]
+      );
+    });
+
     test("parses step range notation", () => {
       const refs = parseInlinePriorContextRefs("Use $step:3,1-2,2 please");
       assert.strictEqual(refs.length, 1);

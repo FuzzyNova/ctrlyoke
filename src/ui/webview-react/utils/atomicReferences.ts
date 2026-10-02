@@ -33,6 +33,7 @@ import {
 import { formatRangeNotation } from "../../../utils/RangeNotationParser";
 import {
   formatInlinePriorContextBody,
+  findFencedBlockRanges as findSharedFencedBlockRanges,
   scanInlinePriorContextRefs,
   type InlinePriorContextRef,
 } from "../../../utils/FileReferenceParser";
@@ -889,12 +890,7 @@ export function findContextReferenceMatches(
 export function getFencedBlockRanges(
   text: string
 ): Array<{ from: number; to: number }> {
-  const ranges: Array<{ from: number; to: number }> = [];
-  const regex = /```[\s\S]*?```/g;
-  let match;
-  while ((match = regex.exec(text)) !== null)
-    ranges.push({ from: match.index, to: match.index + match[0].length });
-  return ranges;
+  return findSharedFencedBlockRanges(text);
 }
 
 export function isInFencedBlock(

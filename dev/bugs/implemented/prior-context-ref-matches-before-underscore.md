@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli), reproduced by bundling `FileReferenceParser` with esbuild
 - **Area:** `src/utils/ReferencePatterns.ts` (`createInlinePriorContextReferencePattern`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

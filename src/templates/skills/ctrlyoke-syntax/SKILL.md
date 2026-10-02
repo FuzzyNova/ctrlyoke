@@ -29,6 +29,7 @@ For example: "I fixed the expiry check in #sym:src/auth/login.ts:validateToken:4
 - Use workspace-relative paths with forward slashes. Quote a path that contains spaces: `@"docs/release notes.md"`.
 - Write tokens as plain text. In a reply, text inside backticks or a code block is shown literally and is not linked, which is how you show the syntax itself.
 - A token ends at whitespace or punctuation (`,` `.` `)` `;`). Do not glue letters or digits onto one: `~3f9c2a1x` is not a commit reference.
+- A slash reference can begin at the start of the text or after whitespace and punctuation such as an opening parenthesis or quotation mark. It cannot follow a filename character, slash, dot, or colon, which keeps URL and path segments literal.
 - Use real line numbers from the current file; the link opens exactly the range you write.
 
 ## Writing prompts ctrlyoke will run
@@ -61,3 +62,4 @@ Writing about the syntax without triggering it:
 
 - Only a fenced code block (three or more backticks) stops expansion. **Single-backtick inline code is still expanded**, so put literal examples in a fenced block.
 - A token directly after a letter, digit, or filename character is not a reference (`price$previous`, `user@example.com`).
+- Slash references are recognized only at a word start, outside URL and path segments.

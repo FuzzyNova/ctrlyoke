@@ -210,6 +210,38 @@ describe("CodeMirrorEditor condition-output references", () => {
 });
 
 describe("CodeMirrorEditor prior-context references", () => {
+  it("does not chip or lint prior-context refs inside nested fences", async () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const referenceValidity = new Map<string, boolean>();
+    const view = new EditorView({
+      parent,
+      doc: "````md\n```\n$previous\n```\n````",
+      extensions: [
+        createAtomicReferenceExtension(new Map(), referenceValidity),
+        createPriorContextLintExtension(
+          { current: 0 },
+          { current: false },
+          referenceValidity
+        ),
+      ],
+    });
+
+    try {
+      forceLinting(view);
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      const diagnostics: unknown[] = [];
+      forEachDiagnostic(view.state, (diagnostic) => diagnostics.push(diagnostic));
+
+      expect(view.dom.querySelector(".cm-atomic-ref")).toBeNull();
+      expect(diagnostics).toEqual([]);
+      expect(referenceValidity.has("$previous")).toBe(false);
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+
   it("marks an invalid prior-context chip after lint validation", async () => {
     const parent = document.createElement("div");
     document.body.appendChild(parent);
@@ -351,6 +383,9 @@ describe("CodeMirrorEditor external reference completions", () => {
 
   it("finds slash-token completion contexts and allows namespace punctuation", () => {
     expect(findSlashCompletionContext("/", 4)).toEqual({ from: 4, query: "" });
+    expect(findSlashCompletionContext(" /", 0)).toEqual({ from: 1, query: "" });
+    expect(findSlashCompletionContext("(/", 0)).toEqual({ from: 1, query: "" });
+    expect(findSlashCompletionContext('"/', 0)).toEqual({ from: 1, query: "" });
     expect(findSlashCompletionContext("use /skill:code-review", 0)).toEqual({
       from: 4,
       query: "skill:code-review",

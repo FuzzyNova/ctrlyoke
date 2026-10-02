@@ -14,7 +14,7 @@ export const UNQUOTED_AT_REFERENCE_PATH = String.raw`(?:[A-Za-z]:)?[^\s:"]+`;
  */
 export function createInlinePriorContextReferencePattern(): RegExp {
   return new RegExp(
-    `${NOT_AFTER_BOUNDARY}\\$((?:step:[A-Za-z0-9,\\-]*|previous:[0-9]+(?![A-Za-z0-9_])|[A-Za-z][A-Za-z0-9]*))`,
+    `${NOT_AFTER_BOUNDARY}\\$((?:step:[A-Za-z0-9,_\\-]*|previous:[0-9]+(?![A-Za-z0-9_])|[A-Za-z][A-Za-z0-9_]*))`,
     "g"
   );
 }

@@ -3,6 +3,7 @@ import {
   type CtrlYokeSlashTokenKind,
 } from "../types/DashboardConstants";
 import { maskFencedCodeBlocks } from "./FileReferenceParser";
+import { NOT_AFTER_BOUNDARY } from "./ReferenceBoundary";
 
 // A name may contain `.`, `_`, and `-` internally but must start and end on an
 // alphanumeric, so ordinary sentence punctuation is not swallowed into it:
@@ -13,7 +14,7 @@ const TOKEN_NAME_PATTERN = "[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9])?";
 // than being mistaken for a server reference with trailing text.
 const TOKEN_BOUNDARY_PATTERN = "[a-zA-Z0-9:]";
 const TOKEN_PATTERN = new RegExp(
-  `\\/(${Object.values(CTRLYOKE_SLASH_TOKEN_KINDS).join("|")}):(${TOKEN_NAME_PATTERN})(?!${TOKEN_BOUNDARY_PATTERN})`,
+  `${NOT_AFTER_BOUNDARY}(?<![\\/.:])\\/(${Object.values(CTRLYOKE_SLASH_TOKEN_KINDS).join("|")}):(${TOKEN_NAME_PATTERN})(?!${TOKEN_BOUNDARY_PATTERN})`,
   "g"
 );
 const COMPLETE_TOKEN_PATTERN = new RegExp(

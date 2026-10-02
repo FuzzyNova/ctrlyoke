@@ -52,9 +52,11 @@ export const LITERAL_FENCE_INFO = "text";
  * missed expansion — when a new trigger is added anywhere in the
  * prompt-reference system, it must be added here too.
  */
-export function maskFencedCodeBlocks(text: string): string {
+export function findFencedBlockRanges(
+  text: string
+): Array<{ from: number; to: number }> {
   const fenceRuns = /`{3,}/g;
-  const blocks: Array<{ start: number; end: number }> = [];
+  const ranges: Array<{ from: number; to: number }> = [];
   let opening = fenceRuns.exec(text);
 
   while (opening) {
@@ -80,13 +82,13 @@ export function maskFencedCodeBlocks(text: string): string {
         // and substituted value. End the authored block here, then scan the
         // generated literal as its own block so backticks in the value cannot
         // close the authored fence.
-        blocks.push({ start: opening.index, end: afterFence });
+        ranges.push({ from: opening.index, to: afterFence });
         opening = next;
         restartedAtGeneratedOpener = true;
         break;
       }
 
-      blocks.push({ start: opening.index, end: afterFence });
+      ranges.push({ from: opening.index, to: afterFence });
       opening = fenceRuns.exec(text);
       restartedAtGeneratedOpener = true;
       break;
@@ -97,10 +99,15 @@ export function maskFencedCodeBlocks(text: string): string {
     }
   }
 
+  return ranges;
+}
+
+/** Mask every prompt-reference trigger inside ranges found by the shared scan. */
+export function maskFencedCodeBlocks(text: string): string {
   let masked = text;
-  for (const { start, end } of blocks) {
-    const block = text.slice(start, end).replace(/[@#~!$/{}]/g, "\x00");
-    masked = masked.slice(0, start) + block + masked.slice(end);
+  for (const { from, to } of findFencedBlockRanges(text)) {
+    const block = text.slice(from, to).replace(/[@#~!$/{}]/g, "\x00");
+    masked = masked.slice(0, from) + block + masked.slice(to);
   }
   return masked;
 }
