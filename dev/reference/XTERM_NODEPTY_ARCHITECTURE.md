@@ -45,7 +45,7 @@ FlightPath embeds a full terminal experience in its dashboard using **xterm.js**
   │  │  │ PtySession                              │  │
   │  │  │  - pty: IPty (node-pty)                │  │
   │  │  │  - reconnectBuffer: string[]            │  │
-  │  │  │  - bufferChunk() / clearReconnectBuffer()│ │
+  │  │  │  - bufferChunk()                         │ │
   │  │  └─────────────────────────────────────────┘  │
   └───────────────────────────────────────────────────┘
 ```
@@ -167,11 +167,10 @@ class PtySession {
   private reconnectBufferSize = 0;
 
   bufferChunk(chunk: string); // ring buffer (max 50KB)
-  clearReconnectBuffer(); // called after flush
 }
 ```
 
-**Reconnect buffer:** Every PTY output chunk is buffered in a ring buffer (max 50,000 bytes). When a webview reconnects (reload, panel reposition), this buffer is replayed immediately so the user sees previous output without waiting for new PTY data.
+**Reconnect buffer:** Every PTY output chunk is buffered in a ring buffer (max 50,000 bytes). When a webview reconnects (reload, panel reposition), this bounded buffer is replayed immediately so the user sees previous output without waiting for new PTY data. It remains available for later panel/browser replay and failure-output capture.
 
 ### 6. `WebviewMessageRouter` (extension host)
 
@@ -270,7 +269,6 @@ if (ptyManager) {
     for (const chunk of session.reconnectBuffer) {
       this.emitMessage({ type: MESSAGE_TYPES.TERMINAL_OUTPUT, ... });
     }
-    session.clearReconnectBuffer();
   }
 }
 ```

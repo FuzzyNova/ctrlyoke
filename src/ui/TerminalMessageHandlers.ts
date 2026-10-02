@@ -9,6 +9,7 @@ import {
   buildTerminalEndedMessage,
   getPtyProcessManager,
   ptyPostMessage,
+  type PtyProcessManager,
   type PtySession,
   type SpawnPtyOptions,
 } from "../core/harness/PtyProcessManager";
@@ -32,7 +33,9 @@ type SessionCallbacks = Pick<SpawnPtyOptions, "onData" | "onExit">;
  */
 export class TerminalMessageHandlers {
   constructor(
-    private readonly getUserFeedbackSink: () => UserFeedbackSink | undefined
+    private readonly getUserFeedbackSink: () => UserFeedbackSink | undefined,
+    private readonly getPtyManager: () => PtyProcessManager | null =
+      getPtyProcessManager
   ) {}
 
   /**
@@ -47,7 +50,7 @@ export class TerminalMessageHandlers {
   }
 
   reconnectPanel(ctx: WebviewClientContext): void {
-    const ptyManager = getPtyProcessManager();
+    const ptyManager = this.getPtyManager();
     if (!ptyManager) return;
 
     for (const session of ptyManager.getAllSessions()) {
@@ -86,7 +89,6 @@ export class TerminalMessageHandlers {
           data: chunk,
         });
       }
-      session.clearReconnectBuffer();
     }
   }
 

@@ -345,7 +345,7 @@ export class PtySession {
   lastReportedCols = DEFAULT_COLS;
   lastReportedRows = DEFAULT_ROWS;
 
-  // Ring buffer for webview reconnection: recent output replayed when webview JS context is recreated
+  // Bounded shared replay buffer for panel/browser reconnects and failure output capture.
   readonly reconnectBuffer: string[] = [];
   private reconnectBufferSize = 0;
   private readonly reconnectBufferMaxBytes: number;
@@ -398,14 +398,6 @@ export class PtySession {
       const dropped = this.reconnectBuffer.shift()!;
       this.reconnectBufferSize -= dropped.length;
     }
-  }
-
-  /**
-   * Clear the reconnect buffer (called after flushing to a freshly-connected webview).
-   */
-  clearReconnectBuffer(): void {
-    this.reconnectBuffer.length = 0;
-    this.reconnectBufferSize = 0;
   }
 }
 
