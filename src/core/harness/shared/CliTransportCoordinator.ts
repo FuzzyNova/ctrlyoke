@@ -361,6 +361,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           ),
           cwd,
           env: mergedEnv,
+          streamingSecretRedaction: true,
           onData: (ptySession, chunk) => {
             postMessage({
               type: MESSAGE_TYPES.TERMINAL_OUTPUT,

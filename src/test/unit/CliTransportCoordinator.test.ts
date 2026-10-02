@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { CliTransportCoordinator } from "../../core/harness/shared/CliTransportCoordinator";
+import { PtyProcessManager } from "../../core/harness/PtyProcessManager";
 import { CliTransportError } from "../../core/harness/shared/CliTransportError";
 import type { HeadlessStreamingSource } from "../../core/harness/shared/HeadlessLogTail";
 import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
@@ -19,6 +20,11 @@ import {
 } from "../../types/DashboardConstants";
 import type { NotificationResult } from "../../core/harness/shared/interfaces/INotificationMonitor";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import {
+  REDACTION_MARKER,
+  RunSecretRedactor,
+  secretRedactionService,
+} from "../../utils/SecretRedactionService";
 import { Log } from "../../utils/Log";
 import type {
   CliProcessManager,
@@ -163,6 +169,72 @@ const stdoutProviderFactories: ReadonlyArray<{
 ];
 
 suite("CliTransportCoordinator", () => {
+  test("streams split secrets redacted to terminal messages and replay buffer", async () => {
+    let dataHandler: ((chunk: string) => void) | undefined;
+    let exitHandler: ((event: { exitCode: number }) => void) | undefined;
+    const fakePty = {
+      process: "fake-cli",
+      pid: 123,
+      onData: (handler: (chunk: string) => void) => {
+        dataHandler = handler;
+        return { dispose: () => {} };
+      },
+      onExit: (handler: (event: { exitCode: number }) => void) => {
+        exitHandler = handler;
+        return { dispose: () => {} };
+      },
+      write: () => {},
+      kill: () => {},
+      resize: () => {},
+    };
+    class TestPtyProcessManager extends PtyProcessManager {
+      protected override loadNodePty(): any {
+        return { spawn: () => fakePty };
+      }
+    }
+    const ptyManager = new TestPtyProcessManager();
+    const secretRedactor = new RunSecretRedactor();
+    secretRedactor.addResolvedValues({ TOKEN: "secret-value" });
+    const releaseSecret = secretRedactionService.register(secretRedactor);
+    const postedMessages: Array<{ type?: string; data?: string }> = [];
+    const coordinator = new CliTransportCoordinator({
+      provider: createHeadlessProvider(),
+      processManager: {} as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+      postTerminalMessage: (message: unknown) => {
+        postedMessages.push(message as { type?: string; data?: string });
+      },
+      getPtyManager: () => ptyManager,
+    });
+
+    try {
+      await coordinator.startInteractiveProcess([], "prompt");
+      const session = ptyManager.getAllSessions()[0];
+      assert.ok(dataHandler);
+      dataHandler("before secret");
+      dataHandler("-value after");
+      exitHandler?.({ exitCode: 0 });
+
+      const outputMessages = postedMessages.filter(
+        (message) => message.type === MESSAGE_TYPES.TERMINAL_OUTPUT
+      );
+      const output = outputMessages
+        .map((message) => message.data ?? "")
+        .join("");
+      assert.strictEqual(output, `before ${REDACTION_MARKER} after`);
+      assert.ok(!output.includes("secret-value"));
+      assert.strictEqual(session?.reconnectBuffer.join(""), output);
+    } finally {
+      releaseSecret();
+      ptyManager.dispose();
+    }
+  });
+
   test("classifies an ENOENT spawn as a missing harness", async () => {
     const spawnError = Object.assign(new Error("spawn test-cli ENOENT"), {
       code: "ENOENT",

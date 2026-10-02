@@ -3603,6 +3603,7 @@ export class WorkflowInstance
           args: toPtySpawnArgs(shellArgs, windowsVerbatimArguments),
           cwd: options.cwd,
           env: { ...process.env, ...(options.env ?? {}) },
+          streamingSecretRedaction: true,
           onData: (session, chunk) => {
             ptyPostMessage({
               type: MESSAGE_TYPES.TERMINAL_OUTPUT,

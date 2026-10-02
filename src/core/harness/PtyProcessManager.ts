@@ -2,7 +2,10 @@ import { execSync } from "child_process";
 import type { IPty } from "node-pty";
 import { Log } from "../../utils/Log";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import { secretRedactionService } from "../../utils/SecretRedactionService";
+import {
+  secretRedactionService,
+  StreamingSecretRedactor,
+} from "../../utils/SecretRedactionService";
 import { canonicalizeDriveLetter } from "../../utils/PathCasing";
 import { withWorkingDirectoryEnv } from "../../utils/SpawnEnvironment";
 import { withCtrlyokeBinOnPath } from "../../utils/CtrlyokeCliPath";
@@ -438,6 +441,8 @@ export interface SpawnPtyOptions {
   args: string[] | string;
   cwd: string;
   env?: NodeJS.ProcessEnv;
+  /** Redact exact secrets across chunks before callbacks and replay buffering. */
+  streamingSecretRedaction?: boolean;
   /** Called for every chunk of PTY output */
   onData: (session: PtySession, chunk: string) => void;
   /** Called when the PTY process exits */
@@ -456,6 +461,7 @@ export interface SpawnPtyOptions {
  */
 export class PtyProcessManager {
   private sessions = new Map<string, PtySession>();
+  private streamingFlushes = new Map<string, () => void>();
   /**
    * workflowId → clientId that should become the controller for the next PTY session
    * spawned for that workflow. Set by the WebviewMessageRouter when a client triggers
@@ -703,6 +709,25 @@ export class PtyProcessManager {
     }
 
     this.sessions.set(sessionId, session);
+    const streamingRedactor = options.streamingSecretRedaction
+      ? new StreamingSecretRedactor()
+      : undefined;
+    let streamFlushed = false;
+    const deliver = (chunk: string): void => {
+      if (!chunk) return;
+      session.bufferChunk(chunk);
+      options.onData(session, chunk);
+    };
+    const flushStream = (): void => {
+      if (streamFlushed) return;
+      streamFlushed = true;
+      try {
+        if (streamingRedactor) deliver(streamingRedactor.flush());
+      } finally {
+        this.streamingFlushes.delete(sessionId);
+      }
+    };
+    if (streamingRedactor) this.streamingFlushes.set(sessionId, flushStream);
     logMemoryUsage("PTY session spawned", {
       sessionId,
       kind: options.kind,
@@ -710,11 +735,11 @@ export class PtyProcessManager {
     });
 
     ptyInstance.onData((chunk: string) => {
-      session.bufferChunk(chunk);
-      options.onData(session, chunk);
+      deliver(streamingRedactor ? streamingRedactor.push(chunk) : chunk);
     });
 
     ptyInstance.onExit(({ exitCode }: { exitCode: number }) => {
+      flushStream();
       session.status = resolveEndedTerminalStatus(exitCode, session.endReason);
       this.sessions.delete(sessionId);
       logMemoryUsage("PTY session exited", {
@@ -829,7 +854,13 @@ export class PtyProcessManager {
         `[PtyProcessManager] killSession ${sessionId.slice(0, 8)} (${session.kind}) wf=${session.workflowId.slice(0, 8)} reason=${reason}`
       );
       session.markEnding(reason);
-      session.pty.kill();
+      // Drain any delayed suffix before killing so the terminal and replay
+      // buffer receive every character even if node-pty omits a final onExit.
+      try {
+        this.streamingFlushes.get(sessionId)?.();
+      } finally {
+        session.pty.kill();
+      }
       this.sessions.delete(sessionId);
     }
   }
@@ -962,6 +993,7 @@ export class PtyProcessManager {
   dispose(): void {
     for (const session of this.sessions.values()) {
       session.markEnding(TERMINAL_END_REASONS.CLOSED);
+      this.streamingFlushes.get(session.id)?.();
       try {
         session.pty.kill();
       } catch {
@@ -969,6 +1001,7 @@ export class PtyProcessManager {
       }
     }
     this.sessions.clear();
+    this.streamingFlushes.clear();
     this.workflowRunControllers.clear();
     Log.debug("[PtyProcessManager] disposed — all PTY sessions killed");
   }

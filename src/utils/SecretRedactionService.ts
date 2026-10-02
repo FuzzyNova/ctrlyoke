@@ -57,16 +57,28 @@ export class SecretRedactionService {
   }
 
   redactText(text: string): string {
+    return this.redactTextWithSecrets(text, this.getActiveExactSecrets());
+  }
+
+  /** Exact values currently registered by active runs, excluding exemptions. */
+  getActiveExactSecrets(): readonly string[] {
     const exactSecrets = new Set<string>();
     for (const redactor of this.activeRuns) {
       for (const secret of redactor.getExactSecrets()) {
-        exactSecrets.add(secret);
+        if (!this.protectedValues.has(secret)) {
+          exactSecrets.add(secret);
+        }
       }
     }
+    return [...exactSecrets];
+  }
+
+  /** Apply the same matcher as redactText with a caller's active-secret snapshot. */
+  redactTextWithSecrets(text: string, exactSecrets: readonly string[]): string {
     return redactPreviewText(
       text,
       [],
-      [...exactSecrets],
+      exactSecrets,
       [...this.protectedValues],
       ConfigurationUtils.isHeuristicSecretRedactionEnabled()
     ).text;
@@ -112,6 +124,57 @@ export class SecretRedactionService {
 }
 
 export const secretRedactionService = new SecretRedactionService();
+
+/**
+ * Incremental exact-secret redaction for arbitrary output chunks. Only suffixes
+ * that could begin a currently registered exact value are delayed.
+ */
+export class StreamingSecretRedactor {
+  private held = "";
+
+  constructor(
+    private readonly service: SecretRedactionService = secretRedactionService
+  ) {}
+
+  push(chunk: string): string {
+    const exactSecrets = this.service.getActiveExactSecrets();
+    if (exactSecrets.length === 0) {
+      const pending = this.held;
+      this.held = "";
+      return pending + chunk;
+    }
+
+    const redacted = this.service.redactTextWithSecrets(
+      this.held + chunk,
+      exactSecrets
+    );
+    const safeBoundary =
+      redacted.lastIndexOf(REDACTION_MARKER) +
+      (redacted.includes(REDACTION_MARKER) ? REDACTION_MARKER.length : 0);
+    let holdLength = 0;
+    for (const secret of exactSecrets) {
+      const maxPrefixLength = Math.min(secret.length - 1, redacted.length);
+      for (let length = maxPrefixLength; length > holdLength; length -= 1) {
+        if (length > redacted.length - safeBoundary) {
+          continue;
+        }
+        if (redacted.endsWith(secret.slice(0, length))) {
+          holdLength = length;
+          break;
+        }
+      }
+    }
+
+    this.held = holdLength > 0 ? redacted.slice(-holdLength) : "";
+    return holdLength > 0 ? redacted.slice(0, -holdLength) : redacted;
+  }
+
+  flush(): string {
+    const held = this.held;
+    this.held = "";
+    return held;
+  }
+}
 
 /**
  * JSON escaping is deterministic and commonly appears when a CLI echoes a

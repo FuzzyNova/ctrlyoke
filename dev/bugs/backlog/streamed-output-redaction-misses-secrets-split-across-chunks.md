@@ -71,3 +71,12 @@ Implement a per-stream `StreamingSecretRedactor` with these rules:
 Implementation is split: the redactor plus the PTY paths first, then an audit of
 the remaining chunked streams (script stdout/stderr through `StreamChunkCoalescer`,
 headless CLI output chunks) and persisted `events.jsonl`.
+
+## Progress
+
+- Implemented `StreamingSecretRedactor` and wired streaming redaction into the
+  interactive script PTY and harness interactive PTY paths, before terminal
+  callbacks and reconnect-buffer recording. Stream tails flush on exit, kill,
+  and process-manager disposal.
+- Remaining: audit script stdout/stderr coalescing, headless CLI output chunks,
+  and persisted `events.jsonl` as the next implementation step.
