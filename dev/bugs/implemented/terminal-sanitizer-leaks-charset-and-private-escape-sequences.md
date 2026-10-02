@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), reproduced with the CLI
 - **Area:** `src/utils/TerminalOutputSanitizer.ts` (`ANSI_ESCAPE_SEQUENCE_PATTERN`, `isIncompleteEscape`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

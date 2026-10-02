@@ -1,5 +1,5 @@
 const ANSI_ESCAPE_SEQUENCE_PATTERN =
-  /\x1B(?:\[[0-?]*[ -/]*[@-~]|\][\s\S]*?(?:\x07|\x1B\\)|[@-Z\\-_])/g;
+  /\x1B(?:\[[0-?]*[ -/]*[@-~]|\][\s\S]*?(?:\x07|\x1B\\)|[ -/]*[0-~])/g;
 // Single-pass replacement for the three line-ending/control-char cleanup
 // steps that used to be sequential .replace() calls, each of which rescans
 // the whole string. \r\n is listed before the lone \r alternative so the
@@ -157,6 +157,10 @@ function isIncompleteEscape(suffix: string): boolean {
 
   if (suffix.startsWith("\x1B]")) {
     return !/(?:\x07|\x1B\\)/.test(suffix.slice(2));
+  }
+
+  if (/^\x1B[ -\/]+$/.test(suffix)) {
+    return true;
   }
 
   return false;

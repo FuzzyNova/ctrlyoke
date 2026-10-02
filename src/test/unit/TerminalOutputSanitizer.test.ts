@@ -34,6 +34,21 @@ suite("TerminalOutputSanitizer", () => {
       );
     });
 
+    test("strips charset designation and private escape sequences", () => {
+      const cases = [
+        { input: "\x1B(B", expected: "" },
+        { input: "\x1B7", expected: "" },
+        { input: "\x1B8", expected: "" },
+        { input: "\x1B=", expected: "" },
+        { input: "\x1B>", expected: "" },
+        { input: "\x1Bc", expected: "" },
+      ];
+
+      for (const { input, expected } of cases) {
+        assert.strictEqual(sanitizeTerminalOutput(input), expected, input);
+      }
+    });
+
     test("collapses CRLF to LF", () => {
       assert.strictEqual(sanitizeTerminalOutput("a\r\nb\r\nc"), "a\nb\nc");
     });
@@ -110,6 +125,13 @@ suite("TerminalOutputSanitizer", () => {
     test("discards a trailing incomplete escape sequence", () => {
       const sanitizer = new TerminalOutputSanitizer();
       assert.strictEqual(sanitizer.push("PASS\x1B[3"), "PASS");
+      assert.strictEqual(sanitizer.flush(), "");
+    });
+
+    test("holds an incomplete charset designation across chunks", () => {
+      const sanitizer = new TerminalOutputSanitizer();
+      assert.strictEqual(sanitizer.push("before\x1B("), "before");
+      assert.strictEqual(sanitizer.push("Bafter"), "after");
       assert.strictEqual(sanitizer.flush(), "");
     });
   });

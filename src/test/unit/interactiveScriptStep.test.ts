@@ -52,6 +52,14 @@ const cases: ComparisonCase[] = [
     shouldPass: true,
   },
   {
+    name: "stdout with tput charset reset",
+    compareSource: "stdout",
+    expected: "OK",
+    script: `node -e "process.stdout.write('\\x1b[32mOK\\x1b(B\\x1b[m\\n')"`,
+    ptyOutput: "\x1b[32mOK\x1b(B\x1b[m\r\n",
+    shouldPass: true,
+  },
+  {
     name: "stderr fallback",
     compareSource: "stderr",
     expected: "ERR",
