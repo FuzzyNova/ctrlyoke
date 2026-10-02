@@ -118,6 +118,7 @@ import {
   MCP_READ_NOTES_TOOL_NAME,
   MCP_RELEASE_PATHS_TOOL_NAME,
   MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
+  MCP_STEP_UPDATE_FIELDS,
   MCP_TOOL_DEFINITIONS,
   MCP_WORKFLOW_MUTATION_TOOL_NAMES,
   MCP_WORKFLOW_STATUS_TOOL_NAME,
@@ -359,10 +360,18 @@ export const MAX_GLOBAL_STATUS_RESULTS = 100;
 function toWorkflowStepUpdates(
   updates: McpEditStepArguments["updates"]
 ): Partial<WorkflowStep> {
-  const { additionalArgs, ...workflowUpdates } = updates;
-  return additionalArgs === undefined
-    ? workflowUpdates
-    : { ...workflowUpdates, additionalArgs: formatArgString(additionalArgs) };
+  const allowedFields = new Set<string>(MCP_STEP_UPDATE_FIELDS);
+  const additionalArgsKey = Object.keys({ additionalArgs: undefined })[0];
+  return Object.fromEntries(
+    Object.entries(updates)
+      .filter(([key]) => allowedFields.has(key))
+      .map(([key, value]) => [
+        key,
+        key === additionalArgsKey && Array.isArray(value)
+          ? formatArgString(value)
+          : value,
+      ])
+  ) as Partial<WorkflowStep>;
 }
 
 export class CtrlYokeMCPServer {

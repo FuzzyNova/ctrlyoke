@@ -264,6 +264,7 @@ export const MCP_APPEND_QUEUE_ITEM_SCHEMA: McpToolInputSchema = {
 
 const MCP_STEP_UPDATE_SCHEMA: McpToolInputSchema = {
   type: "object",
+  additionalProperties: false,
   description:
     "Fields to change on the step. Omitted fields keep their current values.",
   properties: {
@@ -277,7 +278,7 @@ const MCP_STEP_UPDATE_SCHEMA: McpToolInputSchema = {
     },
     sessionId: {
       oneOf: [{ type: "string" }, { type: "number" }],
-      description: "The session or step index to resume.",
+      description: "A 1-based step number or a session id string to resume.",
     },
     agent: { type: "string", description: "The agent override." },
     enabled: { type: "boolean", description: "Whether the step is enabled." },
@@ -294,6 +295,11 @@ const MCP_STEP_UPDATE_SCHEMA: McpToolInputSchema = {
     },
   },
 };
+
+/** Allowed fields for edit_step, shared by its update and clear schemas. */
+export const MCP_STEP_UPDATE_FIELDS = Object.keys(
+  MCP_STEP_UPDATE_SCHEMA.properties ?? {}
+) as (keyof McpStepUpdateArguments)[];
 
 /** The single source of truth for ctrlyoke's exposed MCP tool definitions. */
 export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
@@ -391,7 +397,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
         updates: MCP_STEP_UPDATE_SCHEMA,
         clearProperties: {
           type: "array",
-          items: { type: "string" },
+          items: { type: "string", enum: MCP_STEP_UPDATE_FIELDS },
           description:
             "Optional step fields to remove so they inherit defaults.",
         },

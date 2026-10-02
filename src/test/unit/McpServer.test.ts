@@ -1528,6 +1528,109 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     }
   });
 
+  test("rejects fields outside the MCP edit_step capability boundary", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun(
+      "edit-step-unlisted-fields"
+    );
+    try {
+      const before = await fs.readFile(run.runFilePath, "utf8");
+      for (const updates of [
+        { type: "script", script: "echo pwned" },
+        { endCondition: { script: "echo pwned" } },
+        { secrets: ["GITHUB_TOKEN"] },
+      ]) {
+        await assert.rejects(
+          server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, { index: 2, updates }),
+          /updates\..*not allowed/
+        );
+        assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
+      }
+
+      await assert.rejects(
+        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 2,
+          updates: {},
+          clearProperties: ["prompt"],
+        }),
+        /non-empty prompt/
+      );
+      await assert.rejects(
+        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+          index: 2,
+          updates: {},
+          clearProperties: ["script"],
+        }),
+        /clearProperties\[0\].*one of/
+      );
+      assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
+  test("updates and clears every documented edit_step field", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun(
+      "edit-step-allowed-fields"
+    );
+    const updates = {
+      prompt: "updated prompt",
+      name: "step label",
+      model: "model-x",
+      harness: "claude-cli",
+      resumeSession: true,
+      sessionId: 1,
+      agent: "agent-name",
+      enabled: false,
+      color: "blue",
+      additionalArgs: ["--flag", "value"],
+      skills: ["skill-name"],
+    };
+    try {
+      await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, { index: 2, updates });
+      const updated = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+      assert.deepStrictEqual(updated.steps?.[2], {
+        prompt: "updated prompt",
+        name: "step label",
+        model: "model-x",
+        harness: "claude-cli",
+        resumeSession: true,
+        sessionId: 1,
+        agent: "agent-name",
+        enabled: false,
+        color: "blue",
+        additionalArgs: "--flag value",
+        skills: ["skill-name"],
+      });
+
+      await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
+        index: 2,
+        updates: {},
+        clearProperties: [
+          "name",
+          "model",
+          "harness",
+          "resumeSession",
+          "sessionId",
+          "agent",
+          "enabled",
+          "color",
+          "additionalArgs",
+          "skills",
+        ],
+      });
+      const cleared = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+      assert.deepStrictEqual(cleared.steps?.[2], { prompt: "updated prompt" });
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
   test("preserves additionalArgs boundaries when editing a pending step", async () => {
     const server = await setup();
     const { run, ownerToken } = await prepareActiveRun("edit-step-args");
@@ -1581,18 +1684,6 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
         onFail: "stopWorkflow",
         _runtime: { stepId: "script-step-2" },
       });
-
-      await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
-        index: 2,
-        updates: { type: "prompt", prompt: "now a prompt" },
-      });
-      const replaced = JSON.parse(
-        await fs.readFile(run.runFilePath, "utf8")
-      ) as WorkingFile;
-      assert.deepStrictEqual(replaced.steps?.[2], {
-        type: "prompt",
-        prompt: "now a prompt",
-      });
     } finally {
       await releaseActiveRun(run, ownerToken);
     }
@@ -1642,19 +1733,10 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     }
   });
 
-  test("refuses edits that clear required prompt or script content", async () => {
+  test("refuses edits that clear required prompt content", async () => {
     const server = await setup();
     const { run, ownerToken } = await prepareActiveRun("edit-required-content");
     try {
-      const file = JSON.parse(
-        await fs.readFile(run.runFilePath, "utf8")
-      ) as WorkingFile;
-      file.steps![2] = {
-        type: "script",
-        script: "npm test",
-        _runtime: { stepId: "script-step-2" },
-      };
-      await fs.writeFile(run.runFilePath, JSON.stringify(file), "utf8");
       const before = await fs.readFile(run.runFilePath, "utf8");
 
       await assert.rejects(
@@ -1664,14 +1746,6 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
           clearProperties: ["prompt"],
         }),
         /non-empty prompt/
-      );
-      await assert.rejects(
-        server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {
-          index: 2,
-          updates: {},
-          clearProperties: ["script"],
-        }),
-        /non-empty script/
       );
       assert.strictEqual(await fs.readFile(run.runFilePath, "utf8"), before);
     } finally {

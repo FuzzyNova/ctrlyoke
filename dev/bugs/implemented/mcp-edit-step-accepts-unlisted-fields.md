@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli), reproduced against the compiled MCP server (`out/`) with a live run
 - **Area:** `src/utils/McpToolDefinitions.ts` (`MCP_STEP_UPDATE_SCHEMA`, `edit_step` `clearProperties`), `src/mcp-server.ts` (`toWorkflowStepUpdates`), `src/core/WorkflowStepSanitizer.ts` (`mergeWorkflowStepUpdate`)
-- **Severity:** high (security: escapes the documented MCP capability boundary)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
