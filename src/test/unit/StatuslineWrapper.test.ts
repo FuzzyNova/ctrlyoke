@@ -607,6 +607,68 @@ suite("Shared statusline wrappers", function () {
     );
   });
 
+  test("keeps one separator between surviving fields when fields are absent", () => {
+    const model = { type: "field", field: "model" };
+    const separator = { type: "literal", text: "·" };
+    const usage = { type: "field", field: "usage1" };
+    const usage2 = { type: "field", field: "usage2" };
+    const branch = { type: "field", field: "branch" };
+    const version = { type: "field", field: "version" };
+    const modelPayload = { model: { id: "opus" } };
+
+    assert.strictEqual(
+      shared.formatBrandedStatusLine(
+        shared.STATUSLINE_PROVIDERS.CLAUDE,
+        {
+          ...modelPayload,
+          rate_limits: { seven_day: { used_percentage: 41.2 } },
+        },
+        [model, separator, usage, separator, usage2]
+      ),
+      "opus · week 41%"
+    );
+    assert.strictEqual(
+      shared.formatBrandedStatusLine(
+        shared.STATUSLINE_PROVIDERS.CLAUDE,
+        { ...modelPayload, version: "2.1" },
+        [model, separator, branch, separator, version]
+      ),
+      "opus · 2.1"
+    );
+    assert.strictEqual(
+      shared.formatBrandedStatusLine(
+        shared.STATUSLINE_PROVIDERS.CLAUDE,
+        modelPayload,
+        [branch, separator, model]
+      ),
+      "opus"
+    );
+    assert.strictEqual(
+      shared.formatBrandedStatusLine(
+        shared.STATUSLINE_PROVIDERS.CLAUDE,
+        modelPayload,
+        [model, separator, branch]
+      ),
+      "opus"
+    );
+    assert.strictEqual(
+      shared.formatBrandedStatusLine(
+        shared.STATUSLINE_PROVIDERS.CLAUDE,
+        { ...modelPayload, version: "2.1" },
+        [model, separator, usage, separator, branch, separator, version]
+      ),
+      "opus · 2.1"
+    );
+    assert.strictEqual(
+      shared.formatBrandedStatusLine(
+        shared.STATUSLINE_PROVIDERS.CLAUDE,
+        { ...modelPayload, version: "2.1" },
+        [model, separator, version]
+      ),
+      "opus · 2.1"
+    );
+  });
+
   test("sorts Antigravity windows by kind and stable key, including one tier", () => {
     const format = [
       { type: "field", field: "usage1" },

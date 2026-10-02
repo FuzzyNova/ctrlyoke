@@ -729,33 +729,53 @@ export function formatBrandedStatusLine(
       }
     }
 
-    return rendered
-      .filter((segment, index, allSegments) => {
-        if (segment.type !== STATUS_LINE_FORMAT_SEGMENT_TYPES.LITERAL) {
-          return true;
+    const formatted: string[] = [];
+    // Keep outer literal runs as written; inside field gaps, use only the run
+    // nearest the next non-empty field.
+    const literalRuns: string[][] = [];
+    let currentLiteralRun: string[] = [];
+    let hasField = false;
+    let hasNonEmptyField = false;
+
+    for (const segment of rendered) {
+      if (segment.type === STATUS_LINE_FORMAT_SEGMENT_TYPES.LITERAL) {
+        currentLiteralRun.push(segment.text);
+        continue;
+      }
+
+      if (currentLiteralRun.length > 0) {
+        if (hasField) {
+          literalRuns.push(currentLiteralRun);
+        } else {
+          formatted.push(...currentLiteralRun);
         }
-        const previousField = [...allSegments]
-          .slice(0, index)
-          .reverse()
-          .find(
-            (candidate) =>
-              candidate.type === STATUS_LINE_FORMAT_SEGMENT_TYPES.FIELD
-          );
-        const nextField = allSegments
-          .slice(index + 1)
-          .find(
-            (candidate) =>
-              candidate.type === STATUS_LINE_FORMAT_SEGMENT_TYPES.FIELD
-          );
-        return !(
-          previousField &&
-          nextField &&
-          (previousField.text.length === 0 || nextField.text.length === 0)
-        );
-      })
-      .filter((segment) => segment.text.length > 0)
-      .map((segment) => segment.text)
-      .join(" ");
+        currentLiteralRun = [];
+      }
+
+      hasField = true;
+      if (segment.text.length === 0) continue;
+
+      if (hasNonEmptyField) {
+        const separatorRun = literalRuns[literalRuns.length - 1];
+        if (separatorRun) formatted.push(...separatorRun);
+      }
+      formatted.push(segment.text);
+      hasNonEmptyField = true;
+      literalRuns.length = 0;
+    }
+
+    if (currentLiteralRun.length > 0) {
+      formatted.push(...currentLiteralRun);
+    }
+
+    if (!hasField) {
+      return rendered
+        .filter((segment) => segment.text.length > 0)
+        .map((segment) => segment.text)
+        .join(" ");
+    }
+
+    return formatted.join(" ");
   } catch {
     return "";
   }

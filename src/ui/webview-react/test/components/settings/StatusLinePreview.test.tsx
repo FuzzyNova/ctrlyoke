@@ -11,13 +11,14 @@ describe("StatusLinePreview", () => {
     render(
       <StatusLinePreview
         format={[
-          { type: "literal", text: "model:" },
           { type: "field", field: STATUS_LINE_FIELD_IDS.MODEL },
+          { type: "literal", text: "·" },
+          { type: "field", field: STATUS_LINE_FIELD_IDS.VERSION },
         ]}
       />
     );
 
-    expect(screen.getByText(/model: claude-sonnet-4\.5/)).toBeInTheDocument();
+    expect(screen.getByText(/claude-sonnet-4\.5 · preview/)).toBeInTheDocument();
   });
 
   it("uses the provider-specific default usage label", () => {

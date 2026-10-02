@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), reproduced with a tsx probe
 - **Area:** `src/utils/StatuslineFormat.ts` (`formatBrandedStatusLine`, the literal filter ~732-755)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

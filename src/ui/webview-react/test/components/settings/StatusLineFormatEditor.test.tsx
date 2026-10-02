@@ -302,6 +302,7 @@ describe("StatusLineFormatEditor", () => {
             color: undefined,
           },
           { type: "literal", text: "·", color: "magenta" },
+          { type: "field", field: STATUS_LINE_FIELD_IDS.MODEL },
         ]}
         onCommit={vi.fn()}
       />
