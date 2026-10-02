@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli), code reading plus a scratch Express reproduction outside the repo
 - **Area:** `src/server/CtrlYokeHostedServer.ts` (middleware setup ~274-286)
-- **Severity:** medium (security: unauthenticated DoS)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

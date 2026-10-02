@@ -21,7 +21,10 @@ import { VsCodeFileWatcherFactory } from "./platform/VsCodeFileWatcher";
 import { VsCodeSecretStore } from "./platform/VsCodeSecretStore";
 import { OsCredentialStore } from "./platform/OsCredentialStore";
 import { FallbackSecretStore } from "./platform/FallbackSecretStore";
-import { CtrlYokeHostedServer } from "./server/CtrlYokeHostedServer";
+import {
+  CtrlYokeHostedServer,
+  maskHostedServerUrlToken,
+} from "./server/CtrlYokeHostedServer";
 import {
   GIT_CHANGE_KINDS,
   LICENSE_UI,
@@ -1563,7 +1566,9 @@ function registerCommands(
         hostedServer?.updateThemeVars(vars)
       );
       webviewProvider.postMessage({ type: MESSAGE_TYPES.CAPTURE_THEME_VARS });
-      Log.info(`[Extension] ctrlyoke: Hosted server started at ${url}`);
+      Log.info(
+        `[Extension] ctrlyoke: Hosted server started at ${maskHostedServerUrlToken(url)}`
+      );
       if (portFallback) {
         Log.warn(
           `[Extension] ctrlyoke: Port ${portFallback.requestedPort} was already in use — server started on port ${portFallback.actualPort} instead.`

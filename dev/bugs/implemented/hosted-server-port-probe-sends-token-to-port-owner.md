@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli), code reading of `src/server/CtrlYokeHostedServer.ts`
 - **Area:** `src/server/CtrlYokeHostedServer.ts` (`listen` → `probeExistingServer`)
-- **Severity:** high (security: credential disclosure)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

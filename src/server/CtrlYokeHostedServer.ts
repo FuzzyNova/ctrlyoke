@@ -1,4 +1,5 @@
 import express from "express";
+import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { WebSocketServer, WebSocket } from "ws";
 import {
   createServer as createHttpServer,
@@ -119,6 +120,25 @@ const WORKSPACE_FILE_JSON_BODY_LIMIT_BYTES =
   MAX_FILE_SIZE * JSON_STRING_MAX_BYTE_EXPANSION_FACTOR +
   WORKSPACE_FILE_JSON_METADATA_HEADROOM_BYTES;
 const WORKSPACE_FILE_ROUTE_PATH = "/api/workspace-viewer/file";
+const SERVER_IDENTITY_ROUTE_PATH = "/api/server-identity";
+
+function createServerIdentityProof(token: string, nonce: string): string {
+  return createHmac("sha256", token).update(nonce).digest("hex");
+}
+
+function timingSafeStringEqual(left: unknown, right: string): boolean {
+  if (typeof left !== "string") return false;
+  const leftBytes = Buffer.from(left);
+  const rightBytes = Buffer.from(right);
+  return (
+    leftBytes.length === rightBytes.length &&
+    timingSafeEqual(leftBytes, rightBytes)
+  );
+}
+
+export function maskHostedServerUrlToken(url: string): string {
+  return url.replace(/([?&]token=)[^&#]*/i, "$1…");
+}
 
 function redactHostedTransportMessage(message: unknown): unknown {
   return secretRedactionService.redactValue(message);
@@ -276,6 +296,12 @@ export class CtrlYokeHostedServer
       limit: WORKSPACE_FILE_JSON_BODY_LIMIT_BYTES,
     });
     this.app.use((req, res, next) => {
+      // Skip parsing until the route's normal auth middleware can reject an
+      // unauthenticated request. Public endpoints do not consume JSON bodies.
+      if (!this.requestHasValidToken(req)) {
+        next();
+        return;
+      }
       const parser =
         req.method === "PUT" && req.path === WORKSPACE_FILE_ROUTE_PATH
           ? workspaceFileJsonParser
@@ -834,6 +860,14 @@ export class CtrlYokeHostedServer
 
   private setupRoutes(): void {
     const webviewDist = this.resolveWebviewDist();
+    this.app.get(SERVER_IDENTITY_ROUTE_PATH, (req, res) => {
+      const nonce = req.query["nonce"];
+      if (typeof nonce !== "string" || nonce.length > 128) {
+        res.status(400).json({ error: "nonce is required" });
+        return;
+      }
+      res.json({ proof: createServerIdentityProof(this.token, nonce) });
+    });
     // Serve static assets (CSS/JS/fonts) without token — they are not sensitive and
     // the browser fetches them without query params after loading the entry HTML.
     this.app.get("/standalone-shim.js", (_req, res) => {
@@ -2009,10 +2043,10 @@ export class CtrlYokeHostedServer
 
   private requestHasValidToken(req: express.Request): boolean {
     const headerToken = req.get("x-ctrlyoke-token");
-    if (headerToken === this.token) {
+    if (timingSafeStringEqual(headerToken, this.token)) {
       return true;
     }
-    return req.query["token"] === this.token;
+    return timingSafeStringEqual(req.query["token"], this.token);
   }
 
   private buildManifest(): Record<string, unknown> {
@@ -2110,7 +2144,7 @@ export class CtrlYokeHostedServer
   private setupWebSocket(): void {
     this.wss.on("connection", (ws, req) => {
       const url = new URL(req.url ?? "", `http://localhost`);
-      if (url.searchParams.get("token") !== this.token) {
+      if (!timingSafeStringEqual(url.searchParams.get("token"), this.token)) {
         ws.close(4401, "Unauthorized");
         return;
       }
@@ -2581,13 +2615,13 @@ export class CtrlYokeHostedServer
 
   private probeExistingServer(port: number): Promise<boolean> {
     return new Promise((resolve) => {
+      const nonce = randomBytes(32).toString("hex");
       const request = (this.isTls ? httpsRequest : httpRequest)(
         {
           hostname: this.getProbeHost(),
           port,
-          path: "/api/workflow-files",
+          path: `${SERVER_IDENTITY_ROUTE_PATH}?nonce=${nonce}`,
           method: "GET",
-          headers: { "x-ctrlyoke-token": this.token },
           timeout: SIBLING_SERVER_PROBE_TIMEOUT_MS,
           ...(this.isTls ? { rejectUnauthorized: false } : {}),
         },
@@ -2604,7 +2638,16 @@ export class CtrlYokeHostedServer
             }
             try {
               const payload: unknown = JSON.parse(body);
-              resolve(this.isMatchingWorkflowFilesResponse(payload));
+              const proof =
+                payload && typeof payload === "object"
+                  ? (payload as { proof?: unknown }).proof
+                  : undefined;
+              resolve(
+                timingSafeStringEqual(
+                  proof,
+                  createServerIdentityProof(this.token, nonce)
+                )
+              );
             } catch {
               resolve(false);
             }
@@ -2622,29 +2665,6 @@ export class CtrlYokeHostedServer
     if (this.bindAddress === "0.0.0.0") return "127.0.0.1";
     if (this.bindAddress === "::") return "::1";
     return this.bindAddress;
-  }
-
-  private isMatchingWorkflowFilesResponse(payload: unknown): boolean {
-    if (!payload || typeof payload !== "object") return false;
-    const candidate = payload as {
-      workspaceRoot?: unknown;
-      isGitRepo?: unknown;
-      files?: unknown;
-    };
-    return (
-      typeof candidate.workspaceRoot === "string" &&
-      this.sameWorkspace(candidate.workspaceRoot, this.workspaceRoot) &&
-      typeof candidate.isGitRepo === "boolean" &&
-      Array.isArray(candidate.files)
-    );
-  }
-
-  private sameWorkspace(left: string, right: string): boolean {
-    const normalizedLeft = path.resolve(left);
-    const normalizedRight = path.resolve(right);
-    return process.platform === "win32"
-      ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
-      : normalizedLeft === normalizedRight;
   }
 
   private getLanIps(): string[] {

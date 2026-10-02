@@ -372,7 +372,11 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
   });
 
   test("falls back when the occupied port responds as an unrelated process", async () => {
+    let receivedHeaders: import("http").IncomingHttpHeaders | undefined;
+    let receivedUrl: string | undefined;
     const unrelated = createHttpServer((_request, response) => {
+      receivedHeaders = _request.headers;
+      receivedUrl = _request.url;
       response.setHeader("content-type", "application/json");
       response.end(
         JSON.stringify({
@@ -399,6 +403,12 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
       if (!url)
         throw new Error("Unrelated process incorrectly claimed as ctrlyoke");
       assert.strictEqual(detectedSibling, false);
+      assert.strictEqual(
+        receivedHeaders?.["x-ctrlyoke-token"],
+        undefined,
+        "a process occupying the port must not receive the server token"
+      );
+      assert.ok(!receivedUrl?.includes("unrelated-process-token"));
       assert.notStrictEqual(Number(new URL(url).port), occupiedPort);
       assert.deepStrictEqual(server.getPortFallbackInfo(), {
         requestedPort: occupiedPort,

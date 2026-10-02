@@ -7,6 +7,7 @@ import { DashboardBroadcastHub } from "../../ui/DashboardBroadcastHub";
 import { createHostedHarnessStatusUpdate } from "../../server/HostedServerMessageFactory";
 import {
   CtrlYokeHostedServer,
+  maskHostedServerUrlToken,
   sanitizeBrowserClientId,
 } from "../../server/CtrlYokeHostedServer";
 import {
@@ -270,6 +271,18 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
   });
 });
 
+suite("hosted server URL logging", () => {
+  test("masks the token in a hosted server URL", () => {
+    const token = "hosted-server-log-secret";
+    const masked = maskHostedServerUrlToken(
+      `http://localhost:4747/?token=${token}`
+    );
+
+    assert.strictEqual(masked, "http://localhost:4747/?token=…");
+    assert.ok(!masked.includes(token));
+  });
+});
+
 suite("sanitizeBrowserClientId", () => {
   test("passes through a well-formed tabId", () => {
     assert.strictEqual(sanitizeBrowserClientId("k3j4h5abc9"), "k3j4h5abc9");
@@ -438,6 +451,57 @@ suite("CtrlYokeHostedServer file history route", () => {
 });
 
 suite("CtrlYokeHostedServer JSON body limits", () => {
+  test("rejects unauthenticated workspace file PUT before the JSON body finishes", async () => {
+    const token = "unauthenticated-large-file-token";
+    const workspaceRoot = makeTempDir("ctrlyoke-hosted-unauth-save-");
+    const server = new CtrlYokeHostedServer(
+      new DashboardBroadcastHub(),
+      {} as never,
+      (() => ({})) as never,
+      0,
+      workspaceRoot,
+      [],
+      token
+    );
+
+    try {
+      const serverUrl = await server.listen();
+      if (!serverUrl) throw new Error("Hosted server did not start");
+      const url = new URL(serverUrl);
+      const response = await new Promise<number | undefined>((resolve, reject) => {
+        const request = httpRequest(
+          {
+            hostname: "127.0.0.1",
+            port: Number(url.port),
+            path: "/api/workspace-viewer/file",
+            method: "PUT",
+            headers: {
+              "content-type": "application/json",
+              "content-length": 11 * 1024 * 1024,
+            },
+          },
+          (res) => {
+            res.resume();
+            res.on("end", () => resolve(res.statusCode));
+          }
+        );
+        const timeout = setTimeout(
+          () => reject(new Error("Server waited for the unauthenticated body")),
+          5000
+        );
+        request.on("error", () => {});
+        request.on("close", () => clearTimeout(timeout));
+        request.write('{"path":"large.txt","content":"');
+      });
+
+      assert.strictEqual(response, 401);
+      assert.strictEqual(fs.existsSync(path.join(workspaceRoot, "large.txt")), false);
+    } finally {
+      server.dispose();
+      removeTempDir(workspaceRoot);
+    }
+  });
+
   test("saves a 1 MB workspace viewer file", async () => {
     const token = "large-file-save-token";
     const workspaceRoot = makeTempDir("ctrlyoke-hosted-large-save-");

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli), code reading
 - **Area:** `src/extension.ts` (hosted server start), `src/server/CtrlYokeHostedServer.ts`
-- **Severity:** medium (security: credential disclosure)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
