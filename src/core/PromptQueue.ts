@@ -850,24 +850,27 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     await this.updateWorkingFile(true);
   }
 
-  /**
-   * Restore queue state after a dirty-file reload for an append continuation.
-   *
-   * When the prompt file was dirty in VS Code and `loadPrompts` was called (resetting
-   * currentIndex to 0), we need to advance the queue past the N steps that were already
-   * completed in the previous run, so the executor starts at step N.
-   *
-   * @param completedCount Number of steps from the previous run that were completed.
-   */
-  async restoreCompletedSteps(completedCount: number): Promise<void> {
-    const cap = Math.min(completedCount, this.state.steps.length);
-    for (let i = 0; i < cap; i++) {
-      this.state.results[i].status = STEP_STATUS.COMPLETED;
+  /** Restore the settled prefix of an append continuation without erasing skips. */
+  async restoreCompletedOrSkippedSteps(
+    previousResults: QueueState["results"]
+  ): Promise<void> {
+    const limit = Math.min(previousResults.length, this.state.steps.length);
+    let restoredCount = 0;
+    while (restoredCount < limit) {
+      const status = previousResults[restoredCount].status;
+      if (
+        status !== STEP_STATUS.COMPLETED &&
+        status !== STEP_STATUS.SKIPPED
+      ) {
+        break;
+      }
+      this.state.results[restoredCount].status = status;
+      restoredCount++;
     }
-    this.state.currentIndex = cap;
+    this.state.currentIndex = restoredCount;
     this.emitStateChange();
     Log.info(
-      `[PromptQueue] Restored ${cap} completed step(s) for append continuation`
+      `[PromptQueue] Restored ${restoredCount} completed or skipped step(s) for append continuation`
     );
   }
 
@@ -1215,6 +1218,26 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   getCompletedCount(): number {
     return this.state.results.filter(
       (result) => result.status === STEP_STATUS.COMPLETED
+    ).length;
+  }
+
+  /** Get the number of steps with any terminal result. */
+  getTerminalCount(): number {
+    return this.state.results.filter(
+      (result) =>
+        result.status === STEP_STATUS.COMPLETED ||
+        result.status === STEP_STATUS.SKIPPED ||
+        result.status === STEP_STATUS.CANCELLED ||
+        result.status === STEP_STATUS.FAILED
+    ).length;
+  }
+
+  /** Get the number of steps that Resume will not run again. */
+  getCompletedOrSkippedCount(): number {
+    return this.state.results.filter(
+      (result) =>
+        result.status === STEP_STATUS.COMPLETED ||
+        result.status === STEP_STATUS.SKIPPED
     ).length;
   }
 

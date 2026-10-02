@@ -87,9 +87,9 @@ export type WorkflowStartupQueuePort = Pick<
   PromptQueue,
   | "getState"
   | "getWorkflowFile"
-  | "getCompletedCount"
+  | "getCompletedOrSkippedCount"
   | "restart"
-  | "restoreCompletedSteps"
+  | "restoreCompletedOrSkippedSteps"
   | "promoteToNewRun"
   | "updateWorktreeNotice"
   | "finalizeFailedInFlightPrompt"
@@ -247,7 +247,7 @@ export interface WorkflowStartupPipelinePort {
 export interface WorkflowContinuationClassification {
   readonly prevQueueState: QueueState;
   readonly prevExecutionState: QueueState["status"];
-  readonly prevCompletedCount: number;
+  readonly prevSettledStepCount: number;
   readonly isAppendContinuation: boolean;
   readonly isIdleContinuation: boolean;
 }
@@ -523,16 +523,22 @@ export class WorkflowStartupPipeline {
     const prevQueueState = this.port.queue.getState();
     const prevExecutionState =
       this.port.execution.getAuthoritativeExecutionState();
-    const prevCompletedCount =
+    const prevSettledStepCount =
       prevExecutionState === EXECUTION_STATES.COMPLETED
-        ? this.port.queue.getCompletedCount()
+        ? prevQueueState.currentIndex
+        : 0;
+    const prevCompletedOrSkippedCount =
+      prevExecutionState === EXECUTION_STATES.COMPLETED
+        ? this.port.queue.getCompletedOrSkippedCount()
         : 0;
     const filePromptCount = promptFile.steps?.length ?? 0;
     const pendingCount = prevQueueState.results.filter(
       (result) => result.status === STEP_STATUS.PENDING
     ).length;
     const isAppendContinuation =
-      !continueFromCurrent && prevCompletedCount > 0 && pendingCount > 0;
+      !continueFromCurrent &&
+      prevCompletedOrSkippedCount > 0 &&
+      pendingCount > 0;
     // An idle continuation resumes an existing run that was stopped and then
     // repositioned, so it requires a promoted RunRef to continue into: the
     // branch it selects below reuses that run's history file and explicitly
@@ -549,7 +555,8 @@ export class WorkflowStartupPipeline {
 
     Log.debug(
       `[executeLoadedPromptFile] continueFromCurrent=${continueFromCurrent}, ` +
-        `prevQueueStatus=${prevExecutionState}, prevCompletedCount=${prevCompletedCount}, ` +
+        `prevQueueStatus=${prevExecutionState}, prevSettledStepCount=${prevSettledStepCount}, ` +
+        `prevCompletedOrSkippedCount=${prevCompletedOrSkippedCount}, ` +
         `pendingCount=${pendingCount}, filePromptCount=${filePromptCount}, ` +
         `isAppendContinuation=${isAppendContinuation}, isIdleContinuation=${isIdleContinuation}`
     );
@@ -557,7 +564,7 @@ export class WorkflowStartupPipeline {
     return {
       prevQueueState,
       prevExecutionState,
-      prevCompletedCount,
+      prevSettledStepCount,
       isAppendContinuation,
       isIdleContinuation,
     };
@@ -697,7 +704,7 @@ export class WorkflowStartupPipeline {
     readonly workingFilePath: string;
     readonly isAppendContinuation: boolean;
     readonly isIdleContinuation: boolean;
-    readonly prevCompletedCount: number;
+    readonly prevSettledStepCount: number;
   }> {
     const executionState = this.port.execution.getAuthoritativeExecutionState();
     const isRestartFromBeginning =
@@ -727,11 +734,11 @@ export class WorkflowStartupPipeline {
       }
     } else if (classification.isAppendContinuation) {
       Log.info(
-        `[executeLoadedPromptFile] ctrlyoke: Append continuation — skipping restart, continuing from step ${classification.prevCompletedCount}`
+        "[executeLoadedPromptFile] ctrlyoke: Append continuation — skipping restart and preserving settled steps"
       );
       if (executionState === EXECUTION_STATES.IDLE) {
-        await this.port.queue.restoreCompletedSteps(
-          classification.prevCompletedCount
+        await this.port.queue.restoreCompletedOrSkippedSteps(
+          classification.prevQueueState.results
         );
       }
     } else {
@@ -778,7 +785,7 @@ export class WorkflowStartupPipeline {
       Log.debug(
         `[WorkflowInstance] [APPEND-DEBUG] Reusing explicit history file for append continuation: ${this.historyFilePath}`
       );
-      await this.cacheHistoricalStepOutputs(classification.prevCompletedCount);
+      await this.cacheHistoricalStepOutputs(classification.prevSettledStepCount);
     } else if (continueFromCurrent && workflowKey) {
       const runRef = currentQueueState.runRef;
       if (!runRef) {
@@ -815,7 +822,7 @@ export class WorkflowStartupPipeline {
       workingFilePath,
       isAppendContinuation: classification.isAppendContinuation,
       isIdleContinuation: classification.isIdleContinuation,
-      prevCompletedCount: classification.prevCompletedCount,
+      prevSettledStepCount: classification.prevSettledStepCount,
     };
   }
 
@@ -831,7 +838,7 @@ export class WorkflowStartupPipeline {
       readonly workingFilePath: string;
       readonly isAppendContinuation: boolean;
       readonly isIdleContinuation: boolean;
-      readonly prevCompletedCount: number;
+      readonly prevSettledStepCount: number;
     }
   ): Promise<void> {
     if (
@@ -886,14 +893,14 @@ export class WorkflowStartupPipeline {
       } else if (startup.isAppendContinuation) {
         const willInject = integration.canReuseForInject();
         Log.debug(
-          `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true (append-to-completed), preserveStepCount=${startup.prevCompletedCount}, totalSteps=${startup.totalSteps}, isInjectMode=${willInject}`
+          `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true (append-to-completed), preserveStepCount=${startup.prevSettledStepCount}, totalSteps=${startup.totalSteps}, isInjectMode=${willInject}`
         );
         this.port.dashboardSink.updateExecutionStarted(
           this.port.id,
           fileName,
           startup.totalSteps,
           true,
-          startup.prevCompletedCount,
+          startup.prevSettledStepCount,
           willInject ? true : undefined,
           startup.executionMode
         );
@@ -1176,7 +1183,7 @@ export class WorkflowStartupPipeline {
   }
 
   private async cacheHistoricalStepOutputs(
-    prevCompletedCount: number
+    prevSettledStepCount: number
   ): Promise<void> {
     if (!this.historyFilePath) return;
     try {
@@ -1199,7 +1206,7 @@ export class WorkflowStartupPipeline {
           cliEntriesByStep.set(stepIndex, entries);
         }
       }
-      for (let i = 0; i < prevCompletedCount; i++) {
+      for (let i = 0; i < prevSettledStepCount; i++) {
         const entries = cliEntriesByStep.get(i);
         if (!entries || entries.length === 0) continue;
         const maxAttemptIndex = Math.max(

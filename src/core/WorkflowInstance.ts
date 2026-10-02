@@ -2989,12 +2989,14 @@ export class WorkflowInstance
     const status = this.workflowRuntime.status;
     const queueState = this.promptQueue.getState();
     const stepCount = queueState.steps.length;
-    const completedCount = this.promptQueue.getCompletedCount();
+    const terminalCount = this.promptQueue.getTerminalCount();
+    const completedOrSkippedCount =
+      this.promptQueue.getCompletedOrSkippedCount();
 
     if (
       status === EXECUTION_STATES.STOPPED &&
       stepCount > 0 &&
-      completedCount === stepCount
+      completedOrSkippedCount === stepCount
     ) {
       Log.info(
         `[WorkflowInstance] reconcileExecutionState: all ${stepCount} step(s) completed while STOPPED — transitioning to COMPLETED`
@@ -3004,10 +3006,10 @@ export class WorkflowInstance
     } else if (
       status === EXECUTION_STATES.COMPLETED &&
       stepCount > 0 &&
-      completedCount < stepCount
+      terminalCount < stepCount
     ) {
       Log.info(
-        `[WorkflowInstance] reconcileExecutionState: ${stepCount - completedCount} non-terminal step(s) present while COMPLETED — reopening for continuation`
+        `[WorkflowInstance] reconcileExecutionState: ${stepCount - terminalCount} non-terminal step(s) present while COMPLETED — reopening for continuation`
       );
       this.workflowRuntime.reopenForContinuation();
       await this.promptQueue.updateWorkingFile();

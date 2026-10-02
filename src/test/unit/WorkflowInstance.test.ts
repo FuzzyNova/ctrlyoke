@@ -1755,6 +1755,19 @@ suite("WorkflowInstance eager working file creation", () => {
 });
 
 suite("WorkflowInstance append-and-continue", () => {
+  function createReconcileInstance(): WorkflowInstance {
+    const platform = new MockPlatform();
+    return new WorkflowInstance(
+      platform,
+      undefined,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+  }
+
   test("appendFromFile preserves the active workflow properties and appends only source steps", async () => {
     const tempWorkspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "cy-append-props-")
@@ -2571,15 +2584,15 @@ suite("WorkflowInstance append-and-continue", () => {
     );
 
     instance.promptQueue.loadPrompts({
-      steps: [{ prompt: "completed prompt" }, { prompt: "appended prompt" }],
+      steps: [{ prompt: "skipped prompt" }, { prompt: "appended prompt" }],
     });
+    await instance.promptQueue.skipStep(0);
     await markQueueCompleted(instance);
-    (instance.promptQueue as any).state.results[0].status =
-      STEP_STATUS.COMPLETED;
+    (instance.promptQueue as any).state.currentIndex = 1;
     (instance.promptQueue as any).state.results[1].status = STEP_STATUS.PENDING;
 
     await loadPromptFileForTest(instance, "workflow.prompt.md", {
-      steps: [{ prompt: "completed prompt" }, { prompt: "appended prompt" }],
+      steps: [{ prompt: "skipped prompt" }, { prompt: "appended prompt" }],
     });
 
     let restartCalled = false;
@@ -2607,6 +2620,62 @@ suite("WorkflowInstance append-and-continue", () => {
       "prepare-worktree",
       "execution-started",
     ]);
+  });
+
+  test("keeps a completed run completed when deleting its pending step after a skipped step", async () => {
+    const instance = createReconcileInstance();
+    instance.promptQueue.loadPrompts({
+      steps: [{ prompt: "skipped prompt" }, { prompt: "pending prompt" }],
+    });
+    await instance.promptQueue.skipStep(0);
+    await markQueueCompleted(instance);
+    (instance.promptQueue as any).state.currentIndex = 2;
+
+    await instance.deletePromptFromQueue(1);
+
+    assert.strictEqual(
+      instance.promptQueue.getRuntimeStateMachine().status,
+      EXECUTION_STATES.COMPLETED
+    );
+  });
+
+  test("keeps a completed run completed when undo restores a skipped step", async () => {
+    const instance = createReconcileInstance();
+    instance.promptQueue.loadPrompts({ steps: [{ prompt: "skipped prompt" }] });
+    await instance.promptQueue.skipStep(0);
+    await markQueueCompleted(instance);
+
+    await instance.syncStepsForUndoRedo(
+      instance.promptQueue.getState().steps,
+      null
+    );
+
+    assert.strictEqual(
+      instance.promptQueue.getRuntimeStateMachine().status,
+      EXECUTION_STATES.COMPLETED
+    );
+  });
+
+  test("keeps a stopped run stopped when deleting pending work after a cancelled step", async () => {
+    const instance = createReconcileInstance();
+    instance.promptQueue.loadPrompts({
+      steps: [{ prompt: "cancelled prompt" }, { prompt: "pending prompt" }],
+    });
+    await instance.promptQueue.cancelStep(0);
+    (instance.promptQueue as any).state.currentIndex = 1;
+    const runtime = instance.promptQueue.getRuntimeStateMachine();
+    runtime.restore({
+      status: EXECUTION_STATES.STOPPED,
+      stopped: true,
+      startTime: undefined,
+      pausedTime: undefined,
+      totalPausedDuration: 0,
+      executionEndTime: undefined,
+    });
+
+    await instance.deletePromptFromQueue(1);
+
+    assert.strictEqual(runtime.status, EXECUTION_STATES.STOPPED);
   });
 
   test("dispatches fresh execution start before preparing its worktree", async () => {
