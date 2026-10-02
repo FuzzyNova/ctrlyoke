@@ -1209,6 +1209,8 @@ interface MarkdownTextProps {
   findDecorations?: RowFindDecoration;
   /** Opt into compact atomic-reference chips for local Markdown links. */
   atomicContextReferences?: boolean;
+  /** Output-row boundary used when previewing prior-context references. */
+  priorContextStepCount?: number;
   /**
    * Link ctrlyoke context references (`@file`, `#selection:`, `~commit`, …)
    * cited in the text, and disable single-tilde strikethrough so `~commit`
@@ -1250,6 +1252,7 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
   highlightActiveIndex = -1,
   findDecorations,
   atomicContextReferences = false,
+  priorContextStepCount,
   contextReferences = false,
   tableFullscreen = true,
 }) => {
@@ -1332,6 +1335,7 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
             text={source}
             matches={findDecorations?.matches ?? []}
             atomicContextReferences={atomicContextReferences}
+            stepCount={priorContextStepCount}
           />
         );
       },
@@ -1507,7 +1511,12 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
         </pre>
       ),
     }),
-    [atomicContextReferences, codeFindHighlight, findDecorations]
+    [
+      atomicContextReferences,
+      codeFindHighlight,
+      findDecorations,
+      priorContextStepCount,
+    ]
   );
 
   // Only append the highlight plugin when there's a non-whitespace query, so

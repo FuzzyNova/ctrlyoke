@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), code-path review
 - **Area:** `src/ui/webview-react/components/output/ContextReference.tsx`, `src/ui/webview-react/utils/contextReferenceActions.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

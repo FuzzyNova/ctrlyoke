@@ -9,3 +9,16 @@ export function findParallelGroupForStep(
     (group) => stepIndex >= group.startIndex && stepIndex <= group.endIndex
   );
 }
+
+/**
+ * Return the prior-context boundary for a queue step. Members of a parallel
+ * group share its start boundary so sibling outputs are excluded.
+ */
+export function getPriorContextStepCount(
+  parallelGroups: readonly ParallelGroupDefinition[] | undefined,
+  stepIndex: number
+): number {
+  return (
+    findParallelGroupForStep(parallelGroups, stepIndex)?.startIndex ?? stepIndex
+  );
+}

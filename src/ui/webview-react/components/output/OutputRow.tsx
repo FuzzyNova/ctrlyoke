@@ -107,9 +107,11 @@ import { findAtomicReferences } from "@utils/atomicReferences";
 import { formatCliCommandDisplay } from "@utils/outputCommandDisplay";
 import { renderCommandTextWithFileLinks } from "@utils/cliCommandFileLinks";
 import { useUiStore } from "@store/uiStore";
+import { useWorkflowStore } from "@store/workflowStore";
 import { getTargetKey } from "@utils/outputProjection";
 import { useWorkspaceSnapshotContent } from "@hooks/useWorkspaceSnapshotContent";
 import { getStepKindIconClass } from "@utils/status";
+import { getPriorContextStepCount } from "@utils/parallelGroups";
 import type {
   CliHeaderRow,
   OutputRenderRow,
@@ -150,6 +152,7 @@ export interface OutputRowFileUndoRequest {
 interface StructuredEventContentProps {
   row: StructuredEventRow;
   atomicContextReferences?: boolean;
+  priorContextStepCount?: number;
   findDecorations?: RowFindDecoration;
   findQuery?: string;
   findCaseSensitive?: boolean;
@@ -359,6 +362,7 @@ const TextOutput: React.FC<{
   highlightActiveIndex?: number;
   findDecorations?: RowFindDecoration;
   atomicContextReferences?: boolean;
+  priorContextStepCount?: number;
 }> = ({
   text,
   raw = false,
@@ -370,6 +374,7 @@ const TextOutput: React.FC<{
   highlightActiveIndex,
   findDecorations,
   atomicContextReferences = false,
+  priorContextStepCount,
 }) => (
   <div className={`${OUTPUT_BLOCK_BASE} border-l-transparent ${className}`}>
     {raw ? (
@@ -384,6 +389,7 @@ const TextOutput: React.FC<{
         highlightActiveIndex={highlightActiveIndex}
         findDecorations={findDecorations}
         atomicContextReferences={atomicContextReferences}
+        priorContextStepCount={priorContextStepCount}
         contextReferences
       >
         {text}
@@ -447,6 +453,7 @@ const ThinkingOutput: React.FC<{
   highlightActiveIndex?: number;
   findDecorations?: RowFindDecoration;
   atomicContextReferences?: boolean;
+  priorContextStepCount?: number;
 }> = ({
   text,
   label = OUTPUT_DEFAULT_LABELS.THINKING,
@@ -455,6 +462,7 @@ const ThinkingOutput: React.FC<{
   highlightActiveIndex,
   findDecorations,
   atomicContextReferences = false,
+  priorContextStepCount,
 }) => {
   const displayLabel =
     label && label !== OUTPUT_DEFAULT_LABELS.THINKING
@@ -472,6 +480,7 @@ const ThinkingOutput: React.FC<{
           highlightActiveIndex={highlightActiveIndex}
           findDecorations={findDecorations}
           atomicContextReferences={atomicContextReferences}
+          priorContextStepCount={priorContextStepCount}
           contextReferences
         >
           {text}
@@ -488,6 +497,7 @@ const UserSteerOutput: React.FC<{
   highlightActiveIndex?: number;
   findDecorations?: RowFindDecoration;
   atomicContextReferences?: boolean;
+  priorContextStepCount?: number;
 }> = ({
   text,
   findQuery,
@@ -495,6 +505,7 @@ const UserSteerOutput: React.FC<{
   highlightActiveIndex,
   findDecorations,
   atomicContextReferences = false,
+  priorContextStepCount,
 }) => (
   <div className="my-2">
     <div className="text-[length:var(--cy-output-font-size-xs)] text-indicator-info mb-1">
@@ -507,6 +518,7 @@ const UserSteerOutput: React.FC<{
         highlightActiveIndex={highlightActiveIndex}
         findDecorations={findDecorations}
         atomicContextReferences={atomicContextReferences}
+        priorContextStepCount={priorContextStepCount}
         contextReferences
       >
         {text}
@@ -566,6 +578,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
   ({
     row,
     atomicContextReferences = false,
+    priorContextStepCount,
     findDecorations,
     findQuery,
     findCaseSensitive,
@@ -808,6 +821,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
               matches: getFieldMatches(HISTORY_MATCH_FIELDS.RESPONSE),
             }}
             atomicContextReferences={atomicContextReferences}
+            priorContextStepCount={priorContextStepCount}
           />
         );
       }
@@ -827,6 +841,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
               matches: getFieldMatches(HISTORY_MATCH_FIELDS.RESPONSE),
             }}
             atomicContextReferences={atomicContextReferences}
+            priorContextStepCount={priorContextStepCount}
           />
         );
       }
@@ -845,6 +860,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
               matches: getFieldMatches(HISTORY_MATCH_FIELDS.RESPONSE),
             }}
             atomicContextReferences={atomicContextReferences}
+            priorContextStepCount={priorContextStepCount}
           />
         );
       }
@@ -1647,7 +1663,8 @@ const PromptReferenceText: React.FC<{
   text: string;
   matches: RowFindDecoration["matches"];
   atomicContextReferences: boolean;
-}> = ({ text, matches, atomicContextReferences }) => {
+  priorContextStepCount?: number;
+}> = ({ text, matches, atomicContextReferences, priorContextStepCount }) => {
   // Skip references inside ``` fenced blocks — they aren't expanded when the
   // prompt runs, so CodeMirror doesn't decorate them either; match that here.
   const refs = useMemo(() => findAtomicReferences(text), [text]);
@@ -1675,6 +1692,7 @@ const PromptReferenceText: React.FC<{
         text={text.slice(ref.from, ref.to)}
         matches={matches}
         atomicContextReferences={atomicContextReferences}
+        stepCount={priorContextStepCount}
       />
     );
     cursor = ref.to;
@@ -1719,6 +1737,17 @@ function OutputRowComponent({
   onAttemptGroupToggle,
   hasHiddenActivity,
 }: OutputRowProps) {
+  const priorContextStepCount = useWorkflowStore((state) => {
+    const { kind, index } = row.target;
+    if (!Number.isInteger(index) || index < 0) return undefined;
+    if (kind === FINAL_STEP_PHASES.QUEUE && state.steps[index]) {
+      return getPriorContextStepCount(state.parallelGroups, index);
+    }
+    if (kind === FINAL_STEP_PHASES.FINAL_STEP && state.finalStep) {
+      return state.steps.length;
+    }
+    return undefined;
+  });
   const rowSearchSegments = getOutputRowSearchSegments(row);
   const getFieldMatches = (field: string, occurrence = 0) => {
     const segment = rowSearchSegments.filter((entry) => entry.field === field)[
@@ -1783,6 +1812,7 @@ function OutputRowComponent({
           text={row.text}
           matches={getFieldMatches("prompt")}
           atomicContextReferences={atomicContextReferences}
+          priorContextStepCount={priorContextStepCount}
         />
       );
       break;
@@ -1848,6 +1878,7 @@ function OutputRowComponent({
           )}
           findDecorations={{ matches: responseMatches }}
           atomicContextReferences={atomicContextReferences}
+          priorContextStepCount={priorContextStepCount}
         />
       );
       break;
@@ -1880,6 +1911,7 @@ function OutputRowComponent({
         <StructuredEventContent
           row={row}
           atomicContextReferences={atomicContextReferences}
+          priorContextStepCount={priorContextStepCount}
           findDecorations={findDecorations}
           findQuery={findQuery}
           findCaseSensitive={findCaseSensitive}

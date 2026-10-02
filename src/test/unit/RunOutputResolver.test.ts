@@ -4,6 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test, setup, teardown } from "mocha";
 import { RunOutputResolver } from "../../core/orchestration/RunOutputResolver";
+import { PriorContextPreviewBuilder } from "../../utils/PriorContextPreviewBuilder";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import {
   EXECUTION_STATES,
@@ -523,6 +524,15 @@ suite("RunOutputResolver", () => {
       ["partial retry response", "pass\n0"],
       "previous selectors merge to the largest N, capped at what exists, oldest first"
     );
+    const preview = await PriorContextPreviewBuilder.buildPreview(
+      "previous:2",
+      2,
+      revisionTwo.steps,
+      resolver,
+      manifestPath
+    );
+    assert.match(preview, /partial retry response/);
+    assert.match(preview, /<stdout>\npass\n<\/stdout>/);
     const groupBoundaryItems = await resolver.resolvePriorContextItems(
       manifestPath,
       ["previous", "all", [2]],

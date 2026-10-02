@@ -60,7 +60,7 @@ import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 import { getDictionaryUris } from "@utils/dictionaryUris";
 import { isWorkflowRunning } from "../../utils/status";
 import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
-import { findParallelGroupForStep } from "@utils/parallelGroups";
+import { getPriorContextStepCount } from "@utils/parallelGroups";
 import { notifyUser, showWebviewToast } from "@utils/notifyUser";
 import { generateWorkflowNameFromPrompt } from "@root/utils/workflowNaming";
 import {
@@ -291,8 +291,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   // boundary at the group's start so sibling outputs are excluded.
   const stepCount =
     selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
-      ? (findParallelGroupForStep(parallelGroups, selectionTarget.index)
-          ?.startIndex ?? selectionTarget.index)
+      ? getPriorContextStepCount(parallelGroups, selectionTarget.index)
       : prompts.length;
   const hasFinalStep = finalStep !== null;
   const effectivePreCondition =

@@ -28,6 +28,8 @@ interface ContextReferenceProps {
   matches: RowFindDecoration["matches"];
   /** Compact chip formatting (`ui.atomicContextReferences`) vs a plain text link. */
   atomicContextReferences: boolean;
+  /** Output-row boundary used when previewing prior-context references. */
+  stepCount?: number;
 }
 
 /**
@@ -40,11 +42,13 @@ export const ContextReference: React.FC<ContextReferenceProps> = ({
   text,
   matches,
   atomicContextReferences,
+  stepCount,
 }) => {
   const open = () =>
     openContextReference(
       contextReferenceTargetFromDescriptor(descriptor),
-      getVsCodeApi()
+      getVsCodeApi(),
+      stepCount
     );
 
   if (atomicContextReferences) {

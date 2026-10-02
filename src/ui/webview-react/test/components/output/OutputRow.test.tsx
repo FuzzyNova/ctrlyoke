@@ -24,6 +24,7 @@ import {
 } from "@root/types/DashboardConstants";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
+import { useWorkflowStore } from "@store/workflowStore";
 
 afterEach(() => {
   useSettingsStore.setState({ fullGlobalSettings: null });
@@ -1415,6 +1416,126 @@ describe("OutputRow auto-expand on hidden active match", () => {
     expect(chips.container.querySelector("button")).toHaveTextContent(
       "previous"
     );
+  });
+
+  it("opens a prior-context reference from step 3 with its preceding-step boundary", () => {
+    const originalState = useWorkflowStore.getState();
+    useWorkflowStore.setState({
+      steps: [
+        { prompt: "step 1" },
+        { prompt: "step 2" },
+        { prompt: "step 3" },
+      ],
+      parallelGroups: [],
+    });
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+
+    try {
+      const row: OutputRenderRow = {
+        key: "row-step-three-prompt",
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 2 },
+        estimateSize: 0,
+        rowKind: OUTPUT_ROW_KINDS.PROMPT,
+        text: "Use $previous:2",
+      };
+      const { getByRole } = render(
+        <OutputRow row={row} isExecutionActive={false} />
+      );
+
+      fireEvent.click(getByRole("link", { name: "$previous:2" }));
+
+      expect(postMessage).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.REQUEST_PRIOR_CONTEXT_PREVIEW,
+        ref: "previous:2",
+        stepCount: 2,
+      });
+    } finally {
+      useWorkflowStore.setState({
+        steps: originalState.steps,
+        parallelGroups: originalState.parallelGroups,
+      });
+    }
+  });
+
+  it("passes the row boundary through Markdown reply references", () => {
+    const originalState = useWorkflowStore.getState();
+    useWorkflowStore.setState({
+      steps: [
+        { prompt: "step 1" },
+        { prompt: "step 2" },
+        { prompt: "step 3" },
+      ],
+      parallelGroups: [],
+    });
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+
+    try {
+      const row: OutputRenderRow = {
+        key: "row-step-three-response",
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 2 },
+        estimateSize: 0,
+        rowKind: OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
+        text: "I used $previous:2",
+        rawTextOutput: false,
+        animated: false,
+      };
+      const { getByRole } = render(
+        <OutputRow row={row} isExecutionActive={false} />
+      );
+
+      fireEvent.click(getByRole("link", { name: "$previous:2" }));
+
+      expect(postMessage).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.REQUEST_PRIOR_CONTEXT_PREVIEW,
+        ref: "previous:2",
+        stepCount: 2,
+      });
+    } finally {
+      useWorkflowStore.setState({
+        steps: originalState.steps,
+        parallelGroups: originalState.parallelGroups,
+      });
+    }
+  });
+
+  it("uses the queued step count for prior-context references in final-step output", () => {
+    const originalState = useWorkflowStore.getState();
+    useWorkflowStore.setState({
+      steps: [{ prompt: "step 1" }, { prompt: "step 2" }],
+      parallelGroups: [],
+      finalStep: { prompt: "final" },
+    });
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+
+    try {
+      const row: OutputRenderRow = {
+        key: "row-final-prompt",
+        target: { kind: FINAL_STEP_PHASES.FINAL_STEP, index: 0 },
+        estimateSize: 0,
+        rowKind: OUTPUT_ROW_KINDS.PROMPT,
+        text: "Use $previous",
+      };
+      const { getByRole } = render(
+        <OutputRow row={row} isExecutionActive={false} />
+      );
+
+      fireEvent.click(getByRole("link", { name: "$previous" }));
+
+      expect(postMessage).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.REQUEST_PRIOR_CONTEXT_PREVIEW,
+        ref: "previous",
+        stepCount: 2,
+      });
+    } finally {
+      useWorkflowStore.setState({
+        steps: originalState.steps,
+        parallelGroups: originalState.parallelGroups,
+        finalStep: originalState.finalStep,
+      });
+    }
   });
 
   it("projects find marks onto an echoed chip while preserving its full copy text", () => {
