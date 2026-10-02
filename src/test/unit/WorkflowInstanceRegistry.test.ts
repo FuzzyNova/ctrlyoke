@@ -2,6 +2,7 @@ import { suite, test } from "mocha";
 import * as assert from "assert";
 import { WorkflowInstance } from "../../core/WorkflowInstance";
 import { WorkflowInstanceRegistry } from "../../core/orchestration/WorkflowInstanceRegistry";
+import { WorkflowActivityTracker } from "../../core/orchestration/WorkflowActivityTracker";
 import { TestWorkflowInstanceRegistryHost } from "../helpers/workflowInstanceRegistryHost";
 import {
   EXECUTION_STATES,
@@ -181,5 +182,95 @@ suite("WorkflowInstanceRegistry", () => {
       registry.getViewAddressRegistry().get("client-a"),
       runAddress
     );
+  });
+
+  test("acknowledges an opened history run adopted while loading a fresh instance", () => {
+    const host = new TestWorkflowInstanceRegistryHost();
+    const tracker = new WorkflowActivityTracker(() => {});
+    host.acknowledgeWorkflowView = (workflowId, address) => {
+      host.acknowledged.push({ workflowId, address });
+      tracker.acknowledgeView(workflowId, address);
+    };
+    const registry = new WorkflowInstanceRegistry(host);
+    const failedAddress = {
+      workflowKey: "failed-lineage" as WorkflowKey,
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+      runRef: "failed-run" as RunRef,
+    } as const;
+    tracker.observe({
+      id: "failed-instance",
+      workflowKey: failedAddress.workflowKey,
+      runRef: failedAddress.runRef,
+      workflowName: "Failed run",
+      executionState: EXECUTION_STATES.RUNNING,
+      currentStep: 1,
+      totalSteps: 1,
+    });
+    tracker.observe({
+      id: "failed-instance",
+      workflowKey: failedAddress.workflowKey,
+      runRef: failedAddress.runRef,
+      workflowName: "Failed run",
+      executionState: EXECUTION_STATES.ERROR,
+      currentStep: 1,
+      totalSteps: 1,
+    });
+
+    const historyAddress = {
+      workflowKey: "history-lineage" as WorkflowKey,
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+      runRef: "history-run" as RunRef,
+    } as const;
+    let loadedState: QueueState = {
+      workflowKey: undefined,
+      runRef: undefined,
+      status: EXECUTION_STATES.IDLE,
+      stopped: false,
+      currentIndex: 0,
+      steps: [],
+      parallelGroups: [],
+      results: [],
+      completedIndices: new Set<string>(),
+      totalPausedDuration: 0,
+      totalExecutionTime: 0,
+      queueExtensions: 0,
+      definitionRevision: 1,
+    } as QueueState;
+    const instance = Object.create(WorkflowInstance.prototype) as WorkflowInstance;
+    Object.defineProperty(instance, "id", { value: "fresh-instance" });
+    instance.getQueueState = () => loadedState;
+    registry.getInstances().set(instance.id, instance);
+    registry.registerClient("client-a");
+
+    // loadFreshInstanceAndReplay binds the new instance before loadWorkingFile;
+    // the load's state event then adopts its lineage/run address. deliverRunView
+    // subsequently calls setViewAddress with that same address.
+    registry.setViewedWorkflowId("client-a", instance.id);
+    loadedState = {
+      ...loadedState,
+      workflowKey: historyAddress.workflowKey,
+      runRef: historyAddress.runRef,
+    };
+    registry.adoptInstanceLineageAddress(instance, loadedState);
+    registry.setViewAddress("client-a", historyAddress);
+
+    assert.deepStrictEqual(tracker.buildSummary([]).unseenFailures, [
+      {
+        workflowId: "failed-instance",
+        workflowName: "Failed run",
+        workflowKey: failedAddress.workflowKey,
+        runRef: failedAddress.runRef,
+      },
+    ], "viewing a different lineage's run must not clear the failure");
+
+    registry.adoptInstanceLineageAddress(instance, {
+      ...loadedState,
+      workflowKey: failedAddress.workflowKey,
+      runRef: failedAddress.runRef,
+    });
+    registry.setViewAddress("client-a", failedAddress);
+
+    assert.deepStrictEqual(tracker.buildSummary([]).unseenFailures, []);
+    tracker.dispose();
   });
 });

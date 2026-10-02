@@ -456,8 +456,7 @@ export class WorkflowInstanceRegistry
     if (previous === workflowId) return;
     const adopted = workflowId ? this.findInstance(workflowId) : undefined;
     const address = lineageAddressOf(adopted?.getQueueState());
-    this.viewAddressRegistry.set(clientId, address);
-    this.host.acknowledgeWorkflowView(workflowId, address);
+    this.updateViewAddress(clientId, address, workflowId, true);
     const previousInRetired = previous
       ? this.retiredInstances.has(previous)
       : false;
@@ -479,10 +478,22 @@ export class WorkflowInstanceRegistry
    * reported to the host; re-delivering the same address is a refresh.
    */
   setViewAddress(clientId: string, address: WorkflowViewAddress): void {
+    this.updateViewAddress(clientId, address);
+  }
+
+  private updateViewAddress(
+    clientId: string,
+    address: WorkflowViewAddress | null,
+    workflowId: string | null = null,
+    acknowledgeUnchanged = false
+  ): void {
     const previous = this.viewAddressRegistry.get(clientId);
     this.viewAddressRegistry.set(clientId, address);
-    if (!sameViewAddress(previous, address)) {
-      this.host.acknowledgeWorkflowView(null, address);
+    const sameAddress =
+      (previous == null && address == null) ||
+      sameViewAddress(previous, address);
+    if (acknowledgeUnchanged || !sameAddress) {
+      this.host.acknowledgeWorkflowView(workflowId, address);
     }
   }
 
@@ -563,7 +574,7 @@ export class WorkflowInstanceRegistry
       ) {
         continue;
       }
-      this.viewAddressRegistry.set(clientId, address);
+      this.updateViewAddress(clientId, address);
     }
   }
 

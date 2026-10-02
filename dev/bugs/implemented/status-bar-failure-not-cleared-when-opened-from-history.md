@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli), reviewing b2371ff1f; reproduced with a throwaway Mocha test using the real `WorkflowInstanceRegistry` and `WorkflowActivityTracker`
 - **Area:** `src/core/orchestration/WorkflowInstanceRegistry.ts` (`adoptInstanceLineageAddress`, `setViewAddress`), `src/core/orchestration/RunViewPublisher.ts`, `src/core/orchestration/WorkflowActivityTracker.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
