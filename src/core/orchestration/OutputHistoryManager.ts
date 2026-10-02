@@ -6,6 +6,7 @@ import { projectWorktreeRuntime } from "../../types/CtrlYokeTypes";
 import type {
   RunRef,
   WorkflowKey,
+  WorkingFile,
   WorkflowTokenTotals,
   WorktreeRunProjection,
 } from "../../types/CtrlYokeTypes";
@@ -63,6 +64,7 @@ import {
   type RunSummary,
 } from "../../types/WorkflowTimelineTypes";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
+import { WorkingFileManager } from "../WorkingFileManager";
 import {
   HISTORY_TRASH_REQUESTERS,
   HistoryTrashRepository,
@@ -1878,9 +1880,7 @@ export class OutputHistoryManager {
     try {
       const workingFile = JSON.parse(
         await fs.promises.readFile(runFilePath, "utf8")
-      ) as {
-        _runtime?: Record<string, unknown>;
-      };
+      ) as WorkingFile;
       if (
         isNewerRunFile(workingFile) ||
         JSON.stringify(workingFile._runtime?.tokenTotals) ===
@@ -1894,14 +1894,8 @@ export class OutputHistoryManager {
           ...(workingFile._runtime ?? {}),
           tokenTotals,
         },
-      };
-      const tempPath = `${runFilePath}.token-totals.tmp`;
-      await fs.promises.writeFile(
-        tempPath,
-        JSON.stringify(updated, null, 2),
-        "utf8"
-      );
-      await fs.promises.rename(tempPath, runFilePath);
+      } as WorkingFile;
+      await WorkingFileManager.writeWorkingFileAtomic(runFilePath, updated);
     } catch (error) {
       Log.warn(
         `[OutputHistoryManager] failed to repair working-file token totals for ${workflowKey}/${runRef}:`,

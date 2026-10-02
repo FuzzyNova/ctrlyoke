@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (found on disk in this worktree's run history, then traced in source)
 - **Area:** `src/core/orchestration/TimelineRecorder.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

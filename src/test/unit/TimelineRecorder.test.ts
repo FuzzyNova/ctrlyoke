@@ -176,6 +176,38 @@ suite("TimelineRecorder", () => {
     assert.strictEqual(await fs.readFile(manifestPath, "utf8"), original);
   });
 
+  test("preserves the previous manifest when atomic replacement fails", async () => {
+    const original = await fs.readFile(manifestPath, "utf8");
+    const fsPromises = require("fs/promises") as typeof import("fs/promises");
+    const originalRename = fsPromises.rename;
+    Object.defineProperty(fsPromises, "rename", {
+      configurable: true,
+      value: async () => {
+        const error = new Error(
+          "injected rename failure"
+        ) as NodeJS.ErrnoException;
+        error.code = "EIO";
+        throw error;
+      },
+    });
+
+    try {
+      await assert.rejects(
+        recorder.appendEvents(manifestPath, [
+          createStatusEventDraft(110, "failed manifest replacement"),
+        ]),
+        /injected rename failure/
+      );
+    } finally {
+      Object.defineProperty(fsPromises, "rename", {
+        configurable: true,
+        value: originalRename,
+      });
+    }
+
+    assert.strictEqual(await fs.readFile(manifestPath, "utf8"), original);
+  });
+
   test("serializes manifest updates with concurrent append operations", async () => {
     await Promise.all([
       recorder.appendEvents(manifestPath, [

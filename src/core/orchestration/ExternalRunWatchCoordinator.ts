@@ -49,6 +49,7 @@ import {
 } from "./ExternalExecutionResolver";
 import { readWorkflowLockOwnershipInspection } from "../../utils/WorkflowLockInspector";
 import { WorktreeManager } from "./WorktreeManager";
+import { WorkingFileManager } from "../WorkingFileManager";
 import { stripLegacyWorkingFileLineageMetadata } from "../../utils/WorkingFileMetadata";
 import type { RunViewPublisherExternalRunWatchPort } from "./RunViewPublisher";
 
@@ -905,13 +906,10 @@ export class ExternalRunWatchCoordinator implements RunViewPublisherExternalRunW
               workingFile._runtime,
               workingFilePath
             );
-            const tmpPath = workingFilePath + ".tmp";
-            await fs.promises.writeFile(
-              tmpPath,
-              JSON.stringify(workingFile, null, 2),
-              "utf8"
+            await WorkingFileManager.writeWorkingFileAtomic(
+              workingFilePath,
+              workingFile as WorkingFile
             );
-            await fs.promises.rename(tmpPath, workingFilePath);
           } catch (writeErr) {
             Log.warn(
               `[WorkflowOrchestrator] handleExternalRunFinished: failed to normalize working file:`,

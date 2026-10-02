@@ -22,6 +22,7 @@ import {
 } from "../../utils/PersistedSchemaGuard";
 import { migrateToCurrent } from "../../utils/FormatMigrations";
 import { truncateCliEventTextFields } from "../../utils/CliEventText";
+import { writeFileAtomic } from "../../utils/AtomicFileUtils";
 
 export class TimelineRecorder {
   static readonly MANIFEST_FILE_NAME = TIMELINE_STORAGE_FILES.MANIFEST;
@@ -112,7 +113,7 @@ export class TimelineRecorder {
   ): Promise<void> {
     assertWritableSchema(PERSISTED_STORES.TIMELINE, manifest, manifestPath);
     try {
-      await fs.promises.writeFile(
+      await writeFileAtomic(
         manifestPath,
         JSON.stringify(
           secretRedactionService.redactValue({
@@ -121,13 +122,12 @@ export class TimelineRecorder {
           }),
           null,
           2
-        ),
-        "utf8"
+        )
       );
     } finally {
       // The single writer of the manifest half of a run summary. In `finally`
-      // because this is a non-atomic write: a failure can still have changed
-      // the file, so the entry must go either way.
+      // because a failed atomic replacement can leave the old manifest in
+      // place, while a successful replacement changes the cached summary.
       invalidateRunSummaryFor(manifestPath);
     }
   }
