@@ -172,7 +172,7 @@ suite("CompletionNotificationFactory", () => {
     assert.strictEqual(event, undefined);
   });
 
-  test("detects workflow completion transitions only from running", () => {
+  test("detects workflow completion transitions from in-flight states", () => {
     assert.strictEqual(
       isWorkflowCompletionTransition(
         {
@@ -225,6 +225,42 @@ suite("CompletionNotificationFactory", () => {
           currentStep: 2,
           totalSteps: 2,
         }
+      ),
+      false
+    );
+
+    const pausingSummary = {
+      id: "wf-2",
+      workflowName: "compile",
+      filePath: "C:/dev/ctrlyoke/compile.ctrlyoke.yaml",
+      executionState: EXECUTION_STATES.PAUSING,
+      currentStep: 2,
+      totalSteps: 2,
+    };
+
+    for (const [nextState, expectedTitle] of [
+      [EXECUTION_STATES.ERROR, "ctrlyoke - Workflow Failed"],
+      [EXECUTION_STATES.COMPLETED, "ctrlyoke - Workflow Complete"],
+    ] as const) {
+      const nextSummary = { ...pausingSummary, executionState: nextState };
+      assert.strictEqual(
+        isWorkflowCompletionTransition(pausingSummary, nextSummary),
+        true
+      );
+
+      const event = buildWorkflowCompletionNotification({
+        summary: nextSummary,
+        settings: CTRLYOKE_SETTINGS_DEFAULTS.notifications,
+      });
+      assert.strictEqual(event?.title, expectedTitle);
+    }
+
+    // PAUSED means the in-flight step has already finished, so a later error
+    // is not a completion transition for this notification path.
+    assert.strictEqual(
+      isWorkflowCompletionTransition(
+        { ...pausingSummary, executionState: EXECUTION_STATES.PAUSED },
+        { ...pausingSummary, executionState: EXECUTION_STATES.ERROR }
       ),
       false
     );

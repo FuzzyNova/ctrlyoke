@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), code-path review
 - **Area:** `src/ui/notifications/CompletionNotificationFactory.ts` (`isWorkflowCompletionTransition`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

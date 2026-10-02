@@ -2,6 +2,7 @@ import {
   COMPLETION_NOTIFICATION_KINDS,
   COMPLETION_NOTIFICATION_SEVERITY,
   EXECUTION_STATES,
+  IN_FLIGHT_EXECUTION_STATES,
   NOTIFICATION_EVENT_MODES,
   NOTIFICATION_KINDS,
   STEP_STATUS,
@@ -125,7 +126,10 @@ export function isWorkflowCompletionTransition(
     return false;
   }
 
-  return previousSummary?.executionState === EXECUTION_STATES.RUNNING;
+  return (
+    previousSummary !== undefined &&
+    IN_FLIGHT_EXECUTION_STATES.has(previousSummary.executionState)
+  );
 }
 
 export function buildWorkflowCompletionNotification(
