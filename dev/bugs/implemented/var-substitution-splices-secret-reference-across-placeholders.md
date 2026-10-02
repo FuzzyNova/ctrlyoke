@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (source review + esbuild repro)
 - **Area:** `src/utils/VarSubstitutor.ts`
-- **Severity:** low (security defense-in-depth)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -49,7 +49,10 @@ export class VarSubstitutor {
    */
   static substitute(text: string, vars: Record<string, string>): string {
     const maskedText = maskFencedCodeBlocks(text);
-    return text.replace(
+    const substitutedSpans: Array<{ start: number; end: number; key: string }> =
+      [];
+    let outputLengthDelta = 0;
+    const substitutedText = text.replace(
       this.PLACEHOLDER_RE,
       (match, key: string, offset: number) => {
         if (maskedText.slice(offset, offset + match.length).includes("\x00")) {
@@ -68,9 +71,42 @@ export class VarSubstitutor {
             `Variable "${key}" cannot contain a managed secret reference`
           );
         }
+        const start = offset + outputLengthDelta;
+        substitutedSpans.push({ start, end: start + value.length, key });
+        outputLengthDelta += value.length - match.length;
         return value;
       }
     );
+
+    const countSecretReferences = (value: string): number =>
+      value.split(this.SECRET_REFERENCE_PREFIX).length - 1;
+    if (
+      countSecretReferences(substitutedText) >
+      countSecretReferences(text)
+    ) {
+      const contributedKey = substitutedSpans.find(({ start, end }) => {
+        let referenceOffset = substitutedText.indexOf(
+          this.SECRET_REFERENCE_PREFIX
+        );
+        while (referenceOffset !== -1) {
+          const referenceEnd =
+            referenceOffset + this.SECRET_REFERENCE_PREFIX.length;
+          if (start < referenceEnd && end > referenceOffset) return true;
+          referenceOffset = substitutedText.indexOf(
+            this.SECRET_REFERENCE_PREFIX,
+            referenceOffset + 1
+          );
+        }
+        return false;
+      });
+      if (contributedKey) {
+        throw new Error(
+          `Variable "${contributedKey.key}" cannot contain a managed secret reference`
+        );
+      }
+    }
+
+    return substitutedText;
   }
 
   /**

@@ -91,6 +91,36 @@ suite("VarSubstitutor Tests", () => {
         /cannot contain a managed secret reference/u
       );
     });
+
+    test("rejects a secret reference spliced across placeholders", () => {
+      assert.throws(
+        () =>
+          VarSubstitutor.substitute("X={{a}}{{b}}", {
+            a: "${",
+            b: "secret:GITHUB_TOKEN}",
+          }),
+        /Variable "a" cannot contain a managed secret reference/u
+      );
+    });
+
+    test("rejects a secret reference spliced with authored text", () => {
+      assert.throws(
+        () =>
+          VarSubstitutor.substitute("X=${{{b}}", {
+            b: "secret:GITHUB_TOKEN}",
+          }),
+        /Variable "b" cannot contain a managed secret reference/u
+      );
+    });
+
+    test("allows authored secret references alongside other substitutions", () => {
+      assert.strictEqual(
+        VarSubstitutor.substitute("X=${secret:NAME}; Y={{value}}", {
+          value: "ordinary",
+        }),
+        "X=${secret:NAME}; Y=ordinary"
+      );
+    });
   });
 
   suite("applyToPromptText", () => {
