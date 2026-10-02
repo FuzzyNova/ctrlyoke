@@ -833,6 +833,13 @@ export abstract class HarnessIntegration {
       return false;
     }
 
+    if (promptText.startsWith("-")) {
+      Log.debug(
+        "[HarnessIntegration] Prompt starts with a dash, using file-based passing"
+      );
+      return false;
+    }
+
     // Only allow: letters, numbers, spaces, and basic safe punctuation.
     // If anything else exists, use file-based passing.
     if (!HarnessIntegration.SAFE_CHARS_PATTERN.test(promptText)) {

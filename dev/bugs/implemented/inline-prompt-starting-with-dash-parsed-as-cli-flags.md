@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (dry-run across harnesses + live opencode repro)
 - **Area:** `src/core/HarnessIntegration.ts` (`isSimplePrompt`)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
