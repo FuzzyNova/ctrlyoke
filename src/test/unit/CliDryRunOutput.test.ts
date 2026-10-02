@@ -185,6 +185,15 @@ CliTerminalFormatter.flushStreamingBuffer();`
     assert.ok(output.includes("[3 unit-tests] done"));
   });
 
+  test("renders status messages on a new line after streamed text", () => {
+    const output = runFormatterScript(
+      `CliTerminalFormatter.renderStreamingChunk("the response");
+CliTerminalFormatter.renderStatusMessage("Attempt completed", "info");`
+    );
+
+    assert.match(output, /the response\n\n│ ℹ Attempt completed/u);
+  });
+
   test("renders MCP parameters and results in terminal output", () => {
     const output = runFormatterScript(
       `CliTerminalFormatter.renderEvent({

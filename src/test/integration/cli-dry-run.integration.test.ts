@@ -460,6 +460,57 @@ suite("CLI run process harness reporting", () => {
     assert.match(result.stdout, /Harness: claude-cli/);
   });
 
+  test("dry-run applies explicit harness and model overrides over workflow values", async function () {
+    this.timeout(60000);
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-dry-run-harness-override-")
+    );
+    temporaryRoots.push(root);
+    const workflow = path.join(root, "harness-model-override.ctrlyoke.json");
+    await fs.writeFile(
+      workflow,
+      JSON.stringify({
+        harness: "claude-cli",
+        model: "workflow-model",
+        steps: [{ prompt: "Preview with CLI overrides" }],
+      }),
+      "utf8"
+    );
+
+    const result = await runCli(
+      [
+        "run",
+        workflow,
+        "--dry-run",
+        "--json",
+        "--harness",
+        "codex-cli",
+        "--model",
+        "gpt-x",
+        "--cwd",
+        root,
+      ],
+      root
+    );
+
+    assert.strictEqual(result.code, 0, result.stderr);
+    const preview = JSON.parse(result.stdout) as {
+      workflow: { harnessIds: string[] };
+      steps: Array<{
+        resolvedProperties: { harnessId: string; model?: string };
+        command: { displayCommand: string; args: string[] };
+      }>;
+    };
+    assert.deepStrictEqual(preview.workflow.harnessIds, ["codex-cli"]);
+    assert.strictEqual(
+      preview.steps[0].resolvedProperties.harnessId,
+      "codex-cli"
+    );
+    assert.strictEqual(preview.steps[0].resolvedProperties.model, "gpt-x");
+    assert.match(preview.steps[0].command.displayCommand, /codex/u);
+    assert.ok(preview.steps[0].command.args.includes("gpt-x"));
+  });
+
   test("--model overrides the workflow model while step-level models still win", async function () {
     this.timeout(60000);
     const root = await fs.mkdtemp(

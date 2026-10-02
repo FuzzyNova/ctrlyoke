@@ -623,8 +623,9 @@ function renderHistoryAttempt(
       `Attempt ${attempt.terminalState}${attempt.terminalReason ? `: ${attempt.terminalReason}` : ""}`,
       attemptTerminalStateSeverity(attempt.terminalState)
     );
+  } else {
+    CliTerminalFormatter.flushStreamingBuffer(target);
   }
-  CliTerminalFormatter.flushStreamingBuffer(target);
 }
 
 function createHistoryOutputTarget(attempt: ResolvedRunAttemptValue): {

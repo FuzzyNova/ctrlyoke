@@ -1289,6 +1289,7 @@ export class CliTerminalFormatter {
    * using severity-appropriate chalk colour.
    */
   static renderStatusMessage(message: string, severity: string): void {
+    CliTerminalFormatter.flushStreamingBuffer();
     if (severity === STATUS_MESSAGE_SEVERITY.ERROR) {
       // Red left border mirrors border-l-severity-error in the webview
       console.log(`${chalk.red("│")} ${chalk.red("✗ " + message)}`);

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli), reproduced with the built CLI (dry-run only)
 - **Area:** `src/cli.ts` (`dryRunCommand`, ~1516-1575)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

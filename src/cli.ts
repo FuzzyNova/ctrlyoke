@@ -837,6 +837,7 @@ async function runCommand(
       options,
       config,
       harness,
+      explicitHarness,
       workingDir,
       hostCanProvidePty,
       supportsConcurrentInteractiveSessions,
@@ -1518,6 +1519,7 @@ async function dryRunCommand(
   options: RunOptions,
   config: ResolvedCliConfig,
   harness: HarnessId,
+  explicitHarness: HarnessId | undefined,
   workingDir: string,
   hostCanProvidePty: boolean,
   supportsConcurrentInteractiveSessions: boolean,
@@ -1554,6 +1556,14 @@ async function dryRunCommand(
     assertSecretGrantsApproved(workflow, workingDir);
 
     const previewWorkflow = applyDryRunSessionOverrides(workflow, config);
+    if (explicitHarness) {
+      previewWorkflow.harness = resolveCliRunHarnessAndModel(
+        workflow,
+        explicitHarness,
+        harness,
+        config.model
+      ).harness;
+    }
     collectWorkflowHarnesses(previewWorkflow, harness);
     const capabilityRegistry = createCliCapabilityRegistry();
     let capabilities;
