@@ -153,6 +153,7 @@ suite("CliPromptRuntimeCoordinator", () => {
           hooks: null,
           toolPermissions: null,
         },
+        attachedSkills: ["agent-skill", "inline-skill"],
         extractedSessionId: "session-456",
         parsedOutput: createParsedOutput(),
         workingFilePersistence: {
@@ -170,6 +171,10 @@ suite("CliPromptRuntimeCoordinator", () => {
     assert.strictEqual(prompt._runtime?.model, "sonnet");
     assert.strictEqual(prompt._runtime?.executionMode, "headless");
     assert.strictEqual(prompt._runtime?.agent, "reviewer");
+    assert.deepStrictEqual(prompt._runtime?.skills, [
+      "agent-skill",
+      "inline-skill",
+    ]);
     assert.strictEqual(prompt._runtime?.startedAt, 2000);
     assert.strictEqual(prompt._runtime?.completedAt, 3000);
     assert.strictEqual(prompt._runtime?.sessionId, "session-456");

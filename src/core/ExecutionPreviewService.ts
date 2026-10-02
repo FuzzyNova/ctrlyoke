@@ -83,7 +83,6 @@ import { VarSubstitutor } from "../utils/VarSubstitutor";
 import { McpServerNormalizer } from "../utils/McpServerNormalizer";
 import { McpRegistryFileManager } from "../utils/McpRegistryFileManager";
 import { SessionValidator } from "../utils/SessionValidator";
-import { AgentExpander } from "../utils/AgentExpander";
 import { CliPromptPreparer } from "./harness/shared/CliPromptPreparer";
 import { CliExecutionSession } from "./harness/shared/CliExecutionSession";
 import { resolveShellInvocation } from "./harness/PtyProcessManager";
@@ -539,18 +538,13 @@ export class ExecutionPreviewService {
       properties.endCondition,
       properties.errorBehavior
     );
-    const skills = await AgentExpander.resolveEffectiveSkills(
-      properties.skills,
-      properties.agent,
-      this.options.workspaceRoot
-    );
     const resolvedProperties = this.toResolvedPropertiesPreview(
       properties,
       targetResolution,
       conditionPreview,
       Boolean(resolvedSessionId),
       secretNames,
-      skills,
+      properties.skills ?? [],
       workflow
     );
     const variablesPreview = this.buildVariablesPreview(variables, request);
@@ -622,6 +616,10 @@ export class ExecutionPreviewService {
       properties,
       resolvedSessionId
     );
+    const previewResolvedProperties = {
+      ...resolvedProperties,
+      skills: [...promptPlan.attachedSkills],
+    };
     const imageCompatibilityDiagnostics = analyzeCompatibility({
       workflow,
       executionTargets:
@@ -648,7 +646,8 @@ export class ExecutionPreviewService {
     session.preparePrompt(
       promptPlan.promptWithInstruction,
       promptPlan.tempFilePaths,
-      promptPlan.imageFileRefs
+      promptPlan.imageFileRefs,
+      promptPlan.attachedSkills
     );
     const executionPlan = await harness.executionPlanBuilder.plan(session);
     const command = this.toCommandPreview(
@@ -677,7 +676,7 @@ export class ExecutionPreviewService {
         : {}),
       ...(step.name ? { stepName: step.name } : {}),
       type: PREVIEW_STEP_TYPES.PROMPT,
-      resolvedProperties,
+      resolvedProperties: previewResolvedProperties,
       prompt: promptPlan.promptPreview,
       command,
       permissionApplication,

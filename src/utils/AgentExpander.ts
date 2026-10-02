@@ -73,9 +73,10 @@ export class AgentExpander {
   }
 
   /**
-   * The skills a step actually runs with: its own `skills` plus those its
-   * agent declares in frontmatter (`skills:`), deduplicated. An unknown agent
-   * contributes none. An agent's declared skills are part of the
+   * The skills a step actually runs with: its own `skills`, those its agent
+   * declares in frontmatter (`skills:`), and any additional prompt references,
+   * deduplicated. An unknown agent contributes none. An agent's declared
+   * skills are part of the
    * agent, like its body text, so they attach whenever the agent runs, even
    * where the step disables its inherited `skills` with null. Shared by prompt
    * assembly and the dry-run preview so the preview lists what a run attaches.
@@ -83,7 +84,8 @@ export class AgentExpander {
   static async resolveEffectiveSkills(
     stepSkills: readonly string[] | null | undefined,
     agentName: string | undefined,
-    workspaceRoot?: string
+    workspaceRoot?: string,
+    additionalSkillNames: readonly string[] = []
   ): Promise<string[]> {
     const agentSkills = agentName
       ? (AgentDiscovery.findAgentByName(
@@ -91,7 +93,13 @@ export class AgentExpander {
           agentName
         )?.skills ?? [])
       : [];
-    return [...new Set([...(stepSkills ?? []), ...agentSkills])];
+    return [
+      ...new Set([
+        ...(stepSkills ?? []),
+        ...agentSkills,
+        ...additionalSkillNames,
+      ]),
+    ];
   }
 
   /**

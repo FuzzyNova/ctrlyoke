@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli)
 - **Area:** `src/core/harness/shared/CliPromptPreparer.ts`, `src/utils/ResumeAttachmentResolver.ts`, `src/core/harness/shared/CliPromptRuntimeCoordinator.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

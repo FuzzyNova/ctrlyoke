@@ -25,6 +25,7 @@ export class CliPromptRuntimeCoordinator {
     failureKind?: FailureKind;
     failureMessage?: string;
     resolvedProperties?: ResolvedProperties;
+    attachedSkills?: readonly string[];
     workingFilePersistence?: WorkflowWorkingFilePersistence;
   }): Promise<void> {
     if (!params.workingFilePersistence) {
@@ -36,37 +37,38 @@ export class CliPromptRuntimeCoordinator {
     const actualModel = params.resolvedProperties?.model ?? "";
     const actualExecutionMode = params.resolvedProperties?.executionMode;
     const actualAgent = params.resolvedProperties?.agent;
-    const actualSkills = params.resolvedProperties?.skills;
+    const actualSkills = params.attachedSkills
+      ? [...params.attachedSkills]
+      : params.resolvedProperties?.skills;
     const actualSecrets = params.resolvedProperties?.secrets;
 
-    if (!params.prompt._runtime) {
-      params.prompt._runtime = {
-        startedAt: params.executionStartTime.getTime(),
-      };
-    } else if (!params.prompt._runtime.startedAt) {
-      params.prompt._runtime.startedAt = params.executionStartTime.getTime();
+    const runtime = (params.prompt._runtime ??= {
+      startedAt: params.executionStartTime.getTime(),
+    });
+    if (!runtime.startedAt) {
+      runtime.startedAt = params.executionStartTime.getTime();
     }
 
-    params.prompt._runtime.harness = actualHarness;
-    params.prompt._runtime.model = actualModel;
-    params.prompt._runtime.executionMode = actualExecutionMode;
+    runtime.harness = actualHarness;
+    runtime.model = actualModel;
+    runtime.executionMode = actualExecutionMode;
     if (actualAgent) {
-      params.prompt._runtime.agent = actualAgent;
+      runtime.agent = actualAgent;
     }
-    params.prompt._runtime.skills = actualSkills;
+    runtime.skills = actualSkills;
     if (actualSecrets !== undefined) {
-      params.prompt._runtime.secrets = actualSecrets;
+      runtime.secrets = actualSecrets;
     }
 
     const sessionId =
       params.extractedSessionId || params.parsedOutput?.metadata.sessionId;
-    if (sessionId && !params.prompt._runtime.sessionId) {
-      params.prompt._runtime.sessionId = sessionId;
+    if (sessionId && !runtime.sessionId) {
+      runtime.sessionId = sessionId;
     }
 
-    params.prompt._runtime.failureKind = params.failureKind;
-    params.prompt._runtime.failureMessage = params.failureMessage;
-    params.prompt._runtime.completedAt = this.now();
+    runtime.failureKind = params.failureKind;
+    runtime.failureMessage = params.failureMessage;
+    runtime.completedAt = this.now();
 
     await params.workingFilePersistence.updateWorkingFile();
     Log.debug(
@@ -80,13 +82,16 @@ export class CliPromptRuntimeCoordinator {
     extractedSessionId?: string;
     parsedOutput?: UniversalCliOutput;
     workingFilePersistence?: WorkflowWorkingFilePersistence;
+    attachedSkills?: readonly string[];
   }): Promise<UniversalCliOutput | undefined> {
     const actualHarness =
       params.resolvedProperties?.harness ?? this.deps.getIntegrationHarness();
     const actualModel = params.resolvedProperties?.model ?? "";
     const actualExecutionMode = params.resolvedProperties?.executionMode;
     const actualAgent = params.resolvedProperties?.agent;
-    const actualSkills = params.resolvedProperties?.skills;
+    const actualSkills = params.attachedSkills
+      ? [...params.attachedSkills]
+      : params.resolvedProperties?.skills;
     const actualSecrets = params.resolvedProperties?.secrets;
 
     if (!params.prompt._runtime) {

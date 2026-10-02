@@ -610,7 +610,7 @@ $defs:
           settings page separately manages optional harness-native discovery directories whose
           behavior varies by harness; native discovery does not determine workflow skills support.
           Prompt-level skills replace workflow-level skills (no merging). Use null to explicitly
-          disable inherited skills.
+          disable inherited workflow skills; skills declared by the selected agent still attach.
         $ref: '#/$defs/skills'
       secrets:
         description: >-

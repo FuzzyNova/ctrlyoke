@@ -602,15 +602,9 @@ export abstract class HarnessIntegration {
       }
     }
 
-    const skillNames = await AgentExpander.resolveEffectiveSkills(
-      resolvedSkills,
-      resolvedAgent,
-      workspaceRoot
-    );
-
-    const skillContent = skillNames.length
+    const skillContent = resolvedSkills?.length
       ? await this.expandSkillBlock(
-          skillNames,
+          resolvedSkills,
           workspaceRoot,
           this.getExecutionCheckoutRoot(),
           mcpToolSkillContextForPrompt(workflowContext)

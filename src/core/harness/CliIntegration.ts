@@ -1109,7 +1109,8 @@ export class CliIntegration extends HarnessIntegration {
     session.preparePrompt(
       prepared.promptWithInstruction,
       prepared.tempFilePaths,
-      prepared.imageFileRefs
+      prepared.imageFileRefs,
+      prepared.attachedSkills
     );
 
     const imageFileRefs = prepared.imageFileRefs ?? [];
@@ -1556,6 +1557,7 @@ export class CliIntegration extends HarnessIntegration {
         extractedSessionId: session.effectiveSessionId,
         parsedOutput: session.parsedOutput,
         resolvedProperties: session.resolvedProperties,
+        attachedSkills: session.attachedSkills,
         workingFilePersistence: workflowContext.workingFilePersistence,
       });
       return;
@@ -1582,6 +1584,7 @@ export class CliIntegration extends HarnessIntegration {
           this.lastFailureReason ??
           undefined,
         resolvedProperties: session.resolvedProperties,
+        attachedSkills: session.attachedSkills,
         workingFilePersistence: workflowContext.workingFilePersistence,
       });
       return;
@@ -1595,6 +1598,7 @@ export class CliIntegration extends HarnessIntegration {
       await this.promptRuntimeCoordinator.persistSuccessfulPromptRuntime({
         prompt,
         resolvedProperties: session.resolvedProperties,
+        attachedSkills: session.attachedSkills,
         extractedSessionId: session.effectiveSessionId,
         parsedOutput: session.parsedOutput,
         workingFilePersistence: workflowContext?.workingFilePersistence,

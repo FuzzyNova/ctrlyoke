@@ -320,6 +320,7 @@ suite("CliPromptPreparer", () => {
       tempFilePaths: [],
       diagnostics: [],
       imageFileRefs: [],
+      attachedSkills: [],
     });
   });
 
@@ -555,6 +556,7 @@ suite("CliPromptPreparer", () => {
         tempFilePaths: [],
         diagnostics: [],
         imageFileRefs: [],
+        attachedSkills: [],
       });
       assert.strictEqual(buildSectionsCalled, false);
     }
@@ -608,6 +610,7 @@ suite("CliPromptPreparer", () => {
       );
 
       assert.deepStrictEqual(capturedSkills, ["commit"]);
+      assert.deepStrictEqual(result.attachedSkills, ["commit"]);
       assert.ok(result.files.some((file) => file.content.includes("skill")));
       assert.strictEqual(
         result.files.find(
@@ -1049,6 +1052,219 @@ suite("CliPromptPreparer", () => {
     assert.deepStrictEqual(capturedSkills, ["testing"]);
   });
 
+  test("re-attaches previously attached skills when resume omission is off", async () => {
+    const workspaceRoot = makeTempDir(
+      "ctrlyoke-resume-agent-skill-setting-off-"
+    );
+    const agentDir = path.join(workspaceRoot, ".ctrlyoke", "agents");
+    fs.mkdirSync(agentDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(agentDir, "current.agent.md"),
+      "---\nname: current\nskills: [shared-skill]\n---\nCurrent agent"
+    );
+    let capturedSkills: string[] | undefined;
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async (_prompt, _agent, skills) => {
+        capturedSkills = skills;
+        return createSections();
+      },
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => workspaceRoot,
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (value) => value,
+      formatTempFileRef: (_manager, value) => value,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+    });
+
+    try {
+      await preparer.planPrompt(
+        { prompt: "resume", agent: "current", skills: null } as PromptStep,
+        {
+          promptIndex: 1,
+          allPrompts: [
+            {
+              prompt: "start",
+              _runtime: {
+                completedAt: 2,
+                sessionId: "existing-session",
+                harness: HARNESS_IDS.CLAUDE_CLI,
+                agent: "previous",
+                skills: ["shared-skill"],
+              },
+            },
+            { prompt: "resume" } as PromptStep,
+          ],
+        } as WorkflowContext,
+        {
+          harness: HARNESS_IDS.CLAUDE_CLI,
+          agent: "current",
+          skills: null,
+        } as any,
+        "existing-session"
+      );
+
+      assert.deepStrictEqual(capturedSkills, ["shared-skill"]);
+    } finally {
+      removeTempDir(workspaceRoot);
+    }
+  });
+
+  test("filters an agent-declared skill already attached by the previous agent", async () => {
+    const workspaceRoot = makeTempDir("ctrlyoke-resume-agent-skill-");
+    const agentDir = path.join(workspaceRoot, ".ctrlyoke", "agents");
+    fs.mkdirSync(agentDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(agentDir, "current.agent.md"),
+      "---\nname: current\nskills: [shared-skill]\n---\nCurrent agent"
+    );
+    let capturedSkills: string[] | undefined;
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => true,
+      buildPromptSections: async (_prompt, _agent, skills) => {
+        capturedSkills = skills;
+        return createSections({ agentContent: "Current agent" });
+      },
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => workspaceRoot,
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (value) => value,
+      formatTempFileRef: (_manager, value) => value,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+    });
+
+    try {
+      const plan = await preparer.planPrompt(
+        { prompt: "continue", agent: "current" } as PromptStep,
+        {
+          promptIndex: 1,
+          allPrompts: [
+            {
+              prompt: "start",
+              _runtime: {
+                completedAt: 2,
+                sessionId: "session-a",
+                harness: HARNESS_IDS.CLAUDE_CLI,
+                agent: "previous",
+                skills: ["shared-skill"],
+              },
+            } as PromptStep,
+            { prompt: "continue" } as PromptStep,
+          ],
+        } as WorkflowContext,
+        { harness: HARNESS_IDS.CLAUDE_CLI, agent: "current" } as any,
+        "session-a"
+      );
+
+      assert.deepStrictEqual(capturedSkills, undefined);
+      assert.deepStrictEqual(plan.attachedSkills, []);
+    } finally {
+      removeTempDir(workspaceRoot);
+    }
+  });
+
+  test("filters an agent-declared skill duplicated by explicit step skills", async () => {
+    const workspaceRoot = makeTempDir("ctrlyoke-resume-explicit-agent-skill-");
+    const agentDir = path.join(workspaceRoot, ".ctrlyoke", "agents");
+    fs.mkdirSync(agentDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(agentDir, "current.agent.md"),
+      "---\nname: current\nskills: [shared-skill]\n---\nCurrent agent"
+    );
+    let capturedSkills: string[] | undefined;
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => true,
+      buildPromptSections: async (_prompt, _agent, skills) => {
+        capturedSkills = skills;
+        return createSections();
+      },
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => workspaceRoot,
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (value) => value,
+      formatTempFileRef: (_manager, value) => value,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+    });
+
+    try {
+      const plan = await preparer.planPrompt(
+        { prompt: "continue", skills: ["shared-skill"] } as PromptStep,
+        {
+          promptIndex: 1,
+          allPrompts: [
+            {
+              prompt: "start",
+              _runtime: {
+                completedAt: 2,
+                sessionId: "session-a",
+                harness: HARNESS_IDS.CLAUDE_CLI,
+                agent: "previous",
+                skills: ["shared-skill"],
+              },
+            } as PromptStep,
+            { prompt: "continue" } as PromptStep,
+          ],
+        } as WorkflowContext,
+        {
+          harness: HARNESS_IDS.CLAUDE_CLI,
+          agent: "current",
+          skills: ["shared-skill"],
+        } as any,
+        "session-a"
+      );
+
+      assert.deepStrictEqual(capturedSkills, undefined);
+      assert.deepStrictEqual(plan.attachedSkills, []);
+    } finally {
+      removeTempDir(workspaceRoot);
+    }
+  });
+
+  test("keeps agent-declared skills on a non-resumed step, including skills null", async () => {
+    const workspaceRoot = makeTempDir("ctrlyoke-agent-skill-null-");
+    const agentDir = path.join(workspaceRoot, ".ctrlyoke", "agents");
+    fs.mkdirSync(agentDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(agentDir, "current.agent.md"),
+      "---\nname: current\nskills: [declared-skill]\n---\nCurrent agent"
+    );
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => true,
+      buildPromptSections: async (_prompt, _agent, skills) =>
+        createSections({ skillContent: skills?.join(",") ?? null }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => workspaceRoot,
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (value) => value,
+      formatTempFileRef: (_manager, value) => value,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+    });
+
+    try {
+      const plan = await preparer.planPrompt(
+        { prompt: "continue", skills: null } as PromptStep,
+        undefined,
+        {
+          harness: HARNESS_IDS.CLAUDE_CLI,
+          agent: "current",
+          skills: null,
+        } as any,
+        undefined
+      );
+      assert.deepStrictEqual(plan.attachedSkills, ["declared-skill"]);
+    } finally {
+      removeTempDir(workspaceRoot);
+    }
+  });
+
   test("should create categorized files when extras exist", async () => {
     const createdFiles: string[] = [];
     const preparer = new CliPromptPreparer({
@@ -1318,6 +1534,7 @@ suite("CliPromptPreparer", () => {
       tempFilePaths: [],
       diagnostics: [],
       imageFileRefs: [],
+      attachedSkills: [],
     });
   });
 
@@ -1352,6 +1569,7 @@ suite("CliPromptPreparer", () => {
       tempFilePaths: [],
       diagnostics: [],
       imageFileRefs: [],
+      attachedSkills: [],
     });
     assert.strictEqual(buildSectionsCalled, false);
   });
@@ -1383,6 +1601,7 @@ suite("CliPromptPreparer", () => {
       tempFilePaths: [],
       diagnostics: [],
       imageFileRefs: [],
+      attachedSkills: [],
     });
   });
 
@@ -1469,6 +1688,7 @@ suite("CliPromptPreparer", () => {
         tempFilePaths: [],
         diagnostics: [],
         imageFileRefs: [],
+        attachedSkills: [],
       });
     });
 
@@ -1489,6 +1709,7 @@ suite("CliPromptPreparer", () => {
         tempFilePaths: [],
         diagnostics: [],
         imageFileRefs: [],
+        attachedSkills: [],
       });
     });
 
@@ -1542,6 +1763,7 @@ suite("CliPromptPreparer", () => {
         tempFilePaths: [],
         diagnostics: [],
         imageFileRefs: [],
+        attachedSkills: [],
       });
     });
 

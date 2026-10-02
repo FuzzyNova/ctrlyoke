@@ -42,6 +42,7 @@ import {
 } from "../../../utils/SecretReferenceParser";
 import { getProcessMapSecretNames } from "../../../utils/SecretResolver";
 import { ResumeAttachmentResolver } from "../../../utils/ResumeAttachmentResolver";
+import { AgentExpander } from "../../../utils/AgentExpander";
 import {
   scanCtrlYokeSlashTokens,
   rewriteCtrlYokeSlashTokens,
@@ -79,6 +80,7 @@ export interface PromptFileResult {
   promptWithInstruction: string;
   diagnostics: readonly CompatibilityDiagnostic[];
   imageFileRefs: readonly string[];
+  attachedSkills: readonly string[];
 }
 
 /** Pure categorized prompt preparation plus deferred temp-file mutations. */
@@ -91,6 +93,7 @@ export interface PromptPreparationPlan {
   readonly diagnostics: readonly CompatibilityDiagnostic[];
   /** Resolved images included in the outgoing prompt. */
   readonly imageFileRefs: readonly string[];
+  readonly attachedSkills: readonly string[];
 }
 
 export interface CliPromptPreparerDeps {
@@ -193,22 +196,9 @@ export class CliPromptPreparer {
     const promptIndex = workflowContext?.promptIndex ?? 0;
     const allPrompts = workflowContext?.allPrompts ?? [prompt];
     const workspaceRoot = this.deps.getWorkspaceRoot();
-    const attachmentResolution =
+    const shouldFilterResumeAttachments =
       !!resolvedSessionId &&
-      this.deps.shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume()
-        ? ResumeAttachmentResolver.resolve({
-            promptIndex,
-            allPrompts,
-            harness: resolvedProperties?.harness,
-            resumeSession: true,
-            resolvedSessionId,
-            agent: resolvedProperties?.agent,
-            skills: resolvedProperties?.skills,
-          })
-        : {
-            agent: resolvedProperties?.agent,
-            skills: resolvedProperties?.skills,
-          };
+      this.deps.shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume();
     const skillTokens = scanCtrlYokeSlashTokens(originalPromptText).filter(
       (token) => token.kind === CTRLYOKE_SLASH_TOKEN_KINDS.SKILL
     );
@@ -232,9 +222,27 @@ export class CliPromptPreparer {
           .map((token) => token.name)
       ),
     ];
-    const effectiveSkills = [
-      ...new Set([...(attachmentResolution.skills ?? []), ...inlineSkillNames]),
-    ];
+    const declaredAndInlineSkills = await AgentExpander.resolveEffectiveSkills(
+      resolvedProperties?.skills,
+      resolvedProperties?.agent,
+      workspaceRoot,
+      inlineSkillNames
+    );
+    const attachmentResolution = shouldFilterResumeAttachments
+      ? ResumeAttachmentResolver.resolve({
+          promptIndex,
+          allPrompts,
+          harness: resolvedProperties?.harness,
+          resumeSession: true,
+          resolvedSessionId,
+          agent: resolvedProperties?.agent,
+          skills: declaredAndInlineSkills,
+        })
+      : {
+          agent: resolvedProperties?.agent,
+          skills: declaredAndInlineSkills,
+        };
+    const effectiveSkills = attachmentResolution.skills ?? [];
     const effectiveSkillResolution =
       effectiveSkills.length > 0 ? effectiveSkills : undefined;
     const resolvedMcpServerIds = new Set(
@@ -339,10 +347,13 @@ export class CliPromptPreparer {
     const inlineCheck = this.makeInlineCheck(injectMode);
 
     if (!hasExtras && inlineCheck(outgoingSections.userPromptText)) {
-      return this.createInlinePlan(
-        outgoingSections.userPromptText,
-        promptDiagnostics
-      );
+      return {
+        ...this.createInlinePlan(
+          outgoingSections.userPromptText,
+          promptDiagnostics
+        ),
+        attachedSkills: [...effectiveSkills],
+      };
     }
 
     // Built once here so the disclosure count (§6) reads the actual copy
@@ -377,15 +388,18 @@ export class CliPromptPreparer {
         harnessId,
         sourceRuntimeCopyMutations
       );
-      return this.withDiagnostics(
-        this.withSourceRuntimeDisclosure(
-          plan,
-          outgoingSections.sourceRuntimeReadReferences,
-          copiedSourceRuntimeCopies,
-          harnessId
+      return {
+        ...this.withDiagnostics(
+          this.withSourceRuntimeDisclosure(
+            plan,
+            outgoingSections.sourceRuntimeReadReferences,
+            copiedSourceRuntimeCopies,
+            harnessId
+          ),
+          promptDiagnostics
         ),
-        promptDiagnostics
-      );
+        attachedSkills: [...effectiveSkills],
+      };
     }
 
     const contextItems = hasPriorContext
@@ -415,7 +429,8 @@ export class CliPromptPreparer {
       hasPriorContext,
       harnessId,
       sourceRuntimeCopyMutations,
-      secretNames
+      secretNames,
+      effectiveSkills
     );
     const planWithDiagnostics = this.withDiagnostics(
       this.withSourceRuntimeDisclosure(
@@ -467,6 +482,7 @@ export class CliPromptPreparer {
       promptWithInstruction: plan.promptWithInstruction,
       diagnostics: plan.diagnostics,
       imageFileRefs: plan.imageFileRefs,
+      attachedSkills: plan.attachedSkills,
     };
   }
 
@@ -500,6 +516,7 @@ export class CliPromptPreparer {
       },
       diagnostics: [...diagnostics],
       imageFileRefs: [],
+      attachedSkills: [],
     };
   }
 
@@ -589,6 +606,7 @@ export class CliPromptPreparer {
       },
       diagnostics,
       imageFileRefs: [...imageFileRefs],
+      attachedSkills: [],
     };
   }
 
@@ -599,7 +617,8 @@ export class CliPromptPreparer {
     hasPriorContext: boolean,
     harnessId: ResolvedProperties["harness"],
     sourceRuntimeCopyMutations: readonly PreparedMutation[],
-    secretNames: readonly string[]
+    secretNames: readonly string[],
+    effectiveSkills: readonly string[]
   ): Promise<PromptPreparationPlan> {
     const workspaceRoot = this.deps.getWorkspaceRoot();
     if (!workspaceRoot) {
@@ -868,6 +887,7 @@ export class CliPromptPreparer {
       },
       diagnostics,
       imageFileRefs: [...sections.imageFileRefs],
+      attachedSkills: [...effectiveSkills],
     };
   }
 

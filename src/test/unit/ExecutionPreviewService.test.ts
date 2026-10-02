@@ -105,7 +105,8 @@ function createCapabilities(): HarnessCapabilityRegistrySnapshot {
 }
 
 function createPromptPreparer(
-  buildPromptSections?: (prompt: PromptStep) => Promise<PromptSections>
+  buildPromptSections?: (prompt: PromptStep) => Promise<PromptSections>,
+  workspaceRoot?: string
 ): CliPromptPreparer {
   return new CliPromptPreparer({
     shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
@@ -125,7 +126,7 @@ function createPromptPreparer(
     extractLeadingSlashCommand: () => null,
     isSimplePrompt: () => true,
     buildPriorContextXmlFromItems: () => "",
-    getWorkspaceRoot: () => undefined,
+    getWorkspaceRoot: () => workspaceRoot,
     getTempFileSplitConfig: () => undefined,
     formatDirectFileRef: (value) => value,
     formatTempFileRef: (_manager, value) => value,
@@ -147,7 +148,7 @@ function createHarness(
   const provider = new ClaudeCliProvider();
   return {
     provider,
-    promptPreparer: createPromptPreparer(buildPromptSections),
+    promptPreparer: createPromptPreparer(buildPromptSections, workspaceRoot),
     executionPlanBuilder: new ExecutionPlanBuilder({
       provider,
       getWorkspaceRoot: () => workspaceRoot,
@@ -620,6 +621,15 @@ suite("ExecutionPreviewService", () => {
       path.join(agentDir, "skilled-preview.agent.md"),
       "---\nname: skilled-preview\nskills: [declared-skill, step-skill]\n---\nAgent body"
     );
+    const inlineSkillPath = path.join(
+      workspaceRoot,
+      ".ctrlyoke",
+      "skills",
+      "inline-preview",
+      "SKILL.md"
+    );
+    await fsPromises.mkdir(path.dirname(inlineSkillPath), { recursive: true });
+    await fsPromises.writeFile(inlineSkillPath, "# Inline preview skill");
 
     const preview = await createService(workspaceRoot).build({
       workflow: {
@@ -631,6 +641,7 @@ suite("ExecutionPreviewService", () => {
           },
           { prompt: "agent only", agent: "skilled-preview", skills: null },
           { prompt: "no agent", skills: ["step-skill"] },
+          { prompt: "use /skill:inline-preview" },
         ],
       },
     });
@@ -641,6 +652,7 @@ suite("ExecutionPreviewService", () => {
         ["step-skill", "declared-skill"],
         ["declared-skill", "step-skill"],
         ["step-skill"],
+        ["inline-preview"],
       ]
     );
   });

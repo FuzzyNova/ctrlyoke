@@ -2142,26 +2142,34 @@ suite("CliIntegration", () => {
         false
       );
 
-      const withStepSkills = await (integration as any).buildPromptSections(
-        { prompt: "Do it." } as PromptStep,
-        "skilled",
-        ["step-skill"]
-      );
+      const withEffectiveSkills = await (
+        integration as any
+      ).buildPromptSections({ prompt: "Do it." } as PromptStep, "skilled", [
+        "declared-skill",
+        "step-skill",
+      ]);
       assert.strictEqual(
-        withStepSkills.skillContent.match(/## Skill: step-skill/g)?.length,
+        withEffectiveSkills.skillContent.match(/## Skill: step-skill/g)?.length,
         1,
         "a skill both the step and the agent name is attached once"
       );
       assert.ok(
-        withStepSkills.skillContent.includes("## Skill: declared-skill")
+        withEffectiveSkills.skillContent.includes("## Skill: declared-skill")
       );
 
       const agentOnly = await (integration as any).buildPromptSections(
         { prompt: "Do it." } as PromptStep,
         "skilled",
-        undefined
+        ["declared-skill", "step-skill"]
       );
       assert.ok(agentOnly.skillContent.includes("## Skill: declared-skill"));
+
+      const noSkills = await (integration as any).buildPromptSections(
+        { prompt: "Do it." } as PromptStep,
+        "skilled",
+        undefined
+      );
+      assert.strictEqual(noSkills.skillContent, null);
 
       const noAgent = await (integration as any).buildPromptSections(
         { prompt: "Do it." } as PromptStep,
