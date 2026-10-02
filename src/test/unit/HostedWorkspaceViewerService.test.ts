@@ -97,6 +97,65 @@ suite("HostedWorkspaceViewerService", function () {
   // ── listDirectory ──────────────────────────────────────────────────────────
 
   suite("listDirectory", () => {
+    test("round-trips viewer paths when the workspace root is a symlink", async () => {
+      const container = createWorkspace();
+      const target = path.join(container, "real-workspace");
+      const linkedRoot = path.join(container, "workspace-link");
+      fs.mkdirSync(path.join(target, "src"), { recursive: true });
+      fs.writeFileSync(path.join(target, "src", "hello.txt"), "hello");
+      fs.symlinkSync(
+        target,
+        linkedRoot,
+        process.platform === "win32" ? "junction" : "dir"
+      );
+
+      const svc = new HostedWorkspaceViewerService(linkedRoot);
+      const rootListing = await svc.listDirectory({
+        path: "",
+        includeGitIgnored: true,
+      });
+      assert.strictEqual(rootListing.path, "");
+      assert.ok(
+        rootListing.entries.every((entry) => !entry.path.startsWith("..")),
+        "top-level entries should use workspace-relative paths"
+      );
+      assert.ok(rootListing.entries.some((entry) => entry.path === "src"));
+
+      const sourceListing = await svc.listDirectory({
+        path: "src",
+        includeGitIgnored: true,
+      });
+      assert.strictEqual(sourceListing.path, "src");
+      assert.ok(
+        sourceListing.entries.some((entry) => entry.path === "src/hello.txt")
+      );
+
+      const openedFile = await svc.readFile("src/hello.txt");
+      assert.strictEqual(openedFile.path, "src/hello.txt");
+      await svc.saveFile({ path: openedFile.path, content: "updated" });
+      assert.strictEqual(
+        fs.readFileSync(path.join(target, "src", "hello.txt"), "utf8"),
+        "updated"
+      );
+    });
+
+    test("rejects an in-root directory symlink that points outside the workspace", async () => {
+      const root = createWorkspace();
+      const outside = createWorkspace();
+      fs.writeFileSync(path.join(outside, "secret.txt"), "secret");
+      fs.symlinkSync(
+        outside,
+        path.join(root, "outside-link"),
+        process.platform === "win32" ? "junction" : "dir"
+      );
+
+      const result = await new HostedWorkspaceViewerService(root).readFile(
+        "outside-link/secret.txt"
+      );
+      assert.strictEqual(result.readOnly, true);
+      assert.strictEqual(result.reason, "Path not allowed");
+    });
+
     test("lists files and directories in workspace root", async () => {
       const root = createWorkspace();
       fs.writeFileSync(path.join(root, "hello.txt"), "hello");

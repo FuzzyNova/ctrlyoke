@@ -688,7 +688,40 @@ export class HostedWorkspaceViewerService {
    * `resolveAgainstRoots`.
    */
   private relativePath(absolutePath: string): string {
-    return toViewerPath(absolutePath, this.viewerContext);
+    return toViewerPath(
+      this.toLexicalViewerPath(absolutePath),
+      this.viewerContext
+    );
+  }
+
+  /**
+   * safeResolve() returns real paths for filesystem and git operations. Map
+   * those paths back onto the lexical workspace roots before exposing them to
+   * the viewer, whose paths must round-trip through resolveAgainstRoots().
+   */
+  private toLexicalViewerPath(absolutePath: string): string {
+    const viewerRoots = this.isMultiRoot
+      ? this.namedRoots.map((root) => path.resolve(root.fsPath))
+      : [path.resolve(this.workspaceRoot)];
+
+    // Prefer the narrowest matching root in case roots are nested.
+    const rootsBySpecificity = [...viewerRoots].sort(
+      (left, right) => right.length - left.length
+    );
+    for (const lexicalRoot of rootsBySpecificity) {
+      let realRoot: string;
+      try {
+        realRoot = fs.realpathSync(lexicalRoot);
+      } catch {
+        // Preserve paths for roots that do not exist yet.
+        realRoot = lexicalRoot;
+      }
+      if (!isPathWithinDirectory(absolutePath, realRoot)) continue;
+
+      const relative = path.relative(realRoot, absolutePath);
+      return relative ? path.resolve(lexicalRoot, relative) : lexicalRoot;
+    }
+    return absolutePath;
   }
 
   // ── Workspace search ────────────────────────────────────────────────────
