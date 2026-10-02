@@ -18,7 +18,7 @@ self.addEventListener("push", (event) => {
         icon: "__CTRLYOKE_NOTIFICATION_ICON_PATH__",
         badge: "__CTRLYOKE_NOTIFICATION_BADGE_PATH__",
         tag: payload.tag,
-        data: { url: payload.url || "/" },
+        data: { url: payload.url },
       }),
       safeIncrementBadgeCount(payload.id),
     ])
@@ -26,7 +26,8 @@ self.addEventListener("push", (event) => {
 });
 
 self.addEventListener("notificationclick", (event) => {
-  const targetUrl = event.notification?.data?.url || "/";
+  const targetUrl = event.notification?.data?.url;
+  const hasTargetUrl = typeof targetUrl === "string" && targetUrl.length > 0;
   event.notification?.close();
   event.waitUntil(
     Promise.all([
@@ -35,12 +36,12 @@ self.addEventListener("notificationclick", (event) => {
         .matchAll({ type: "window", includeUncontrolled: true })
         .then((clients) => {
           for (const client of clients) {
-            if ("focus" in client) {
-              client.navigate(targetUrl);
+            if (typeof client.focus === "function") {
+              if (hasTargetUrl) client.navigate(targetUrl);
               return client.focus();
             }
           }
-          return self.clients.openWindow(targetUrl);
+          return hasTargetUrl ? self.clients.openWindow(targetUrl) : undefined;
         }),
     ])
   );

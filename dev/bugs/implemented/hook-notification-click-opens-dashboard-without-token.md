@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), code-path review
 - **Area:** `src/core/harness/shared/HookEventMonitor.ts`, `src/server/CtrlYokeHostedServer.ts` (`dispatchCompletionNotification`), `src/server/ctrlyoke-service-worker.js`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -18,7 +18,13 @@ import {
   BROWSER_NOTIFICATION_MODES,
 } from "../../types/DashboardConstants";
 import { configService } from "../../config/CtrlYokeConfigService";
-import { buildTestNotificationEvent } from "../../ui/notifications/CompletionNotificationFactory";
+import {
+  buildHookNotificationEvent,
+  buildTestNotificationEvent,
+  type CtrlYokeNotificationEvent,
+  type HookArtifact,
+} from "../../ui/notifications/CompletionNotificationFactory";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import {
   REDACTION_MARKER,
   RunSecretRedactor,
@@ -667,10 +673,18 @@ interface HostedServerHeartbeatInternals {
 interface HostedServerFeedbackInternals {
   connections: Set<FakeHostedSocket>;
   notifiedEventIds: Set<string>;
+  publicUrl?: string;
+  webPushService: {
+    sendNotification(event: unknown): Promise<{
+      sent: number;
+      removed: number;
+      failed: number;
+    }>;
+  };
   broadcast(message: unknown): void;
   broadcastUserFeedback(message: unknown): void;
   dispatchCompletionNotification(
-    event: ReturnType<typeof buildTestNotificationEvent>
+    event: CtrlYokeNotificationEvent | undefined
   ): Promise<void>;
 }
 
@@ -867,6 +881,67 @@ suite("CtrlYokeHostedServer feedback transport", () => {
         JSON.parse(socket.sent[0]).type,
         MESSAGE_TYPES.NOTIFICATION_EVENT
       );
+    } finally {
+      configService.setCliOverlay({});
+    }
+  });
+
+  test("adds the authenticated public URL to hook event broadcast and push", async () => {
+    let broadcastPayload: unknown;
+    let pushedEvent: unknown;
+    const server = Object.create(
+      CtrlYokeHostedServer.prototype
+    ) as HostedServerFeedbackInternals;
+    server.connections = new Set();
+    server.notifiedEventIds = new Set();
+    server.publicUrl = "http://localhost:4312/?token=secret-token";
+    server.broadcast = (message) => {
+      broadcastPayload = message;
+    };
+    server.webPushService = {
+      async sendNotification(event) {
+        pushedEvent = event;
+        return { sent: 1, removed: 0, failed: 0 };
+      },
+    };
+
+    const artifact: HookArtifact = {
+      runId: "run-1",
+      timestamp: 123,
+      workflowId: "wf-hook",
+      workflowName: "Workflow",
+      promptIndex: 1,
+      promptName: "Prompt",
+      hookEvent: "notification",
+      nativeHookEvent: "Notification",
+      harnessId: "claude-cli",
+      rawHookData: {},
+    };
+    const notificationSettings = {
+      ...CTRLYOKE_SETTINGS_DEFAULTS.notifications,
+      events: {
+        ...CTRLYOKE_SETTINGS_DEFAULTS.notifications.events,
+        hookEvents: {
+          ...CTRLYOKE_SETTINGS_DEFAULTS.notifications.events.hookEvents,
+          notification: true,
+        },
+      },
+    };
+    const event = buildHookNotificationEvent(artifact, notificationSettings);
+    assert.ok(event);
+    assert.strictEqual(event.url, undefined);
+
+    try {
+      configService.setCliOverlay({
+        notifications: { browser: { mode: BROWSER_NOTIFICATION_MODES.PUSH } },
+      });
+      await server.dispatchCompletionNotification(event);
+
+      const broadcastEvent = (
+        broadcastPayload as { event: { url?: string } }
+      ).event;
+      assert.strictEqual(broadcastEvent.url, server.publicUrl);
+      assert.deepStrictEqual(pushedEvent, broadcastEvent);
     } finally {
       configService.setCliOverlay({});
     }

@@ -2127,14 +2127,21 @@ export class CtrlYokeHostedServer
     }
     this.notifiedEventIds.add(event.id);
 
+    const notificationEvent = {
+      ...event,
+      url: event.url ?? this.publicUrl,
+    };
+
     this.broadcast({
       type: MESSAGE_TYPES.NOTIFICATION_EVENT,
-      event,
+      event: notificationEvent,
     });
 
     if (notificationSettings.browser.mode === BROWSER_NOTIFICATION_MODES.PUSH) {
       try {
-        const result = await this.webPushService.sendNotification(event);
+        const result = await this.webPushService.sendNotification(
+          notificationEvent
+        );
         if (result.sent || result.removed || result.failed) {
           Log.debug(
             `[hosted-server] push notification ${event.id} sent=${result.sent} removed=${result.removed} failed=${result.failed}`
