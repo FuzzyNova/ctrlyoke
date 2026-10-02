@@ -19,6 +19,21 @@ export interface ResolverWorkspaceFolder {
 }
 
 /**
+ * Find the root addressed by a viewer/reference path segment. Display names
+ * take precedence across the full list; directory basenames are a fallback.
+ * `find` keeps duplicate display names first-wins, matching workspace order.
+ */
+export function findNamedRootBySegment(
+  segment: string,
+  namedRoots: readonly ResolverWorkspaceFolder[]
+): ResolverWorkspaceFolder | undefined {
+  return (
+    namedRoots.find((root) => root.name === segment) ??
+    namedRoots.find((root) => path.basename(root.fsPath) === segment)
+  );
+}
+
+/**
  * Inputs to {@link resolveWorkspaceRoot}. Every field is a plain value so the
  * resolution order can be exercised by unit tests without a `vscode` instance.
  */
@@ -263,11 +278,7 @@ function resolveWorkspaceOrNamedPath(
   if (namedRoots.length > 1 && firstSlash > 0) {
     const firstSegment = normalized.slice(0, firstSlash);
     const rest = normalized.slice(firstSlash + 1);
-    const match = namedRoots.find(
-      (root) =>
-        root.name === firstSegment ||
-        path.basename(root.fsPath) === firstSegment
-    );
+    const match = findNamedRootBySegment(firstSegment, namedRoots);
     if (match) {
       return {
         absolutePath: path.resolve(match.fsPath, rest),

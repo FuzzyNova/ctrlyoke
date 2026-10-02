@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (source review, reproduced against the resolver)
 - **Area:** `src/platform/WorkspaceRootResolver.ts`, `src/platform/WorkspaceViewerPath.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

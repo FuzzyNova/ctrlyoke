@@ -205,6 +205,21 @@ suite("WorkspaceRootResolver Tests", () => {
       );
     });
 
+    test("prefers an exact display name over an earlier basename match", () => {
+      const collidingRoots: ResolverWorkspaceFolder[] = [
+        { name: "frontend", fsPath: path.resolve("/repo1/app") },
+        { name: "app", fsPath: path.resolve("/repo2/app") },
+      ];
+      assert.strictEqual(
+        resolveNamedRelativePath(
+          "app/src/index.ts",
+          path.resolve("/repo1/app"),
+          collidingRoots
+        ),
+        path.resolve("/repo2/app/src/index.ts")
+      );
+    });
+
     test("unprefixed ref resolves against the primary root", () => {
       assert.strictEqual(
         resolveNamedRelativePath("src/index.ts", appFolder, folders),
