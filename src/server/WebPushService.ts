@@ -12,6 +12,12 @@ import type { CompletionNotificationEvent } from "../ui/notifications/Completion
 
 const PRIVATE_DIRECTORY_MODE = 0o700;
 const PRIVATE_FILE_MODE = 0o600;
+const PUSH_REQUEST_TIMEOUT_MS = 10_000;
+const PUSH_SEND_RESULT = {
+  SUCCESS: "success",
+  FAILURE: "failure",
+  REMOVED: "removed",
+} as const;
 export const PUSH_ACCESS_DENIED_MESSAGE =
   "Push-to-phone notifications are part of ctrlyoke Pro. Your localhost notifications remain free; start a trial or view Pro pricing at https://ctrlyoke.dev/pricing/.";
 
@@ -206,100 +212,147 @@ export class WebPushService {
     event: CompletionNotificationEvent
   ): Promise<{ sent: number; removed: number; failed: number }> {
     await this.assertRemoteAccess();
-    return this.withSerializedAccess(async () => {
-      return this.withSubscriptionFileLock(async () => {
+    // Keep the registry phases serialized in-process, but let other service
+    // operations run while network requests are in flight.
+    const subscriptions = await this.withSerializedAccess(() =>
+      this.withSubscriptionFileLock(async () => {
         const registry = await this.readSubscriptions();
-        if (!registry.subscriptions.some(isValidStoredSubscription)) {
-          return { sent: 0, removed: 0, failed: 0 };
+        return registry.subscriptions.filter(isValidStoredSubscription);
+      })
+    );
+    if (subscriptions.length === 0) {
+      return { sent: 0, removed: 0, failed: 0 };
+    }
+
+    const keys = await this.getOrCreateVapidKeys();
+    const payload = JSON.parse(
+      JSON.stringify(
+        secretRedactionService.redactValue({
+          id: event.id,
+          title: event.title,
+          body: event.body,
+          tag: event.tag,
+          severity: event.severity,
+          kind: event.kind,
+          url: event.url,
+        })
+      )
+    );
+
+    type SendResult =
+      | { kind: typeof PUSH_SEND_RESULT.SUCCESS }
+      | {
+          kind: typeof PUSH_SEND_RESULT.FAILURE;
+          statusCode?: number;
+          message: string;
+        }
+      | { kind: typeof PUSH_SEND_RESULT.REMOVED; statusCode: number };
+    const results = new Map<string, SendResult>();
+    let sent = 0;
+    let removed = 0;
+    let failed = 0;
+
+    for (const subscription of subscriptions) {
+      try {
+        const { endpoint, headers, body } = await buildPushHTTPRequest({
+          privateJWK: keys.privateJwk,
+          subscription: {
+            endpoint: subscription.endpoint,
+            keys: subscription.keys,
+          },
+          message: {
+            payload,
+            adminContact: this.vapidSubject,
+            options: { ttl: 60 },
+          },
+        });
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers,
+          body,
+          signal: AbortSignal.timeout(PUSH_REQUEST_TIMEOUT_MS),
+        });
+        if (!response.ok) {
+          throw new PushDeliveryError(
+            response.status,
+            await safeReadResponseText(response)
+          );
+        }
+        sent += 1;
+        results.set(subscription.endpointHash, {
+          kind: PUSH_SEND_RESULT.SUCCESS,
+        });
+      } catch (error) {
+        failed += 1;
+        const statusCode = getStatusCode(error);
+        const redactedHash = subscription.endpointHash.slice(0, 12);
+
+        if (statusCode === 404 || statusCode === 410) {
+          removed += 1;
+          results.set(subscription.endpointHash, {
+            kind: PUSH_SEND_RESULT.REMOVED,
+            statusCode,
+          });
+          Log.trace(
+            `[WebPushService] removed expired push subscription ${redactedHash} status=${statusCode}`
+          );
+          continue;
         }
 
-        const keys = await this.getOrCreateVapidKeys();
-        const payload = JSON.stringify(
-          secretRedactionService.redactValue({
-            id: event.id,
-            title: event.title,
-            body: event.body,
-            tag: event.tag,
-            severity: event.severity,
-            kind: event.kind,
-            url: event.url,
-          })
+        results.set(subscription.endpointHash, {
+          kind: PUSH_SEND_RESULT.FAILURE,
+          statusCode,
+          message: getErrorMessage(error),
+        });
+        Log.trace(
+          `[WebPushService] push send failed for ${redactedHash} status=${statusCode ?? "unknown"}`
         );
+      }
+    }
 
-        let sent = 0;
-        let removed = 0;
-        let failed = 0;
-        const survivors: unknown[] = [];
-
-        for (const subscription of registry.subscriptions) {
-          if (!isValidStoredSubscription(subscription)) {
-            survivors.push(subscription);
-            continue;
+    await this.withSerializedAccess(async () => {
+      await this.withSubscriptionFileLock(async () => {
+        const registry = await this.readSubscriptions();
+        registry.subscriptions = registry.subscriptions.flatMap((entry) => {
+          if (!isValidStoredSubscription(entry)) {
+            return [entry];
           }
-          try {
-            const { endpoint, headers, body } = await buildPushHTTPRequest({
-              privateJWK: keys.privateJwk,
-              subscription: {
-                endpoint: subscription.endpoint,
-                keys: subscription.keys,
-              },
-              message: {
-                payload: JSON.parse(payload),
-                adminContact: this.vapidSubject,
-                options: { ttl: 60 },
-              },
-            });
-            const response = await fetch(endpoint, {
-              method: "POST",
-              headers,
-              body,
-            });
-            if (!response.ok) {
-              throw new PushDeliveryError(
-                response.status,
-                await safeReadResponseText(response)
-              );
-            }
-            sent += 1;
-            survivors.push({
-              ...subscription,
-              lastSuccessAt: Date.now(),
-              lastFailureAt: undefined,
-              lastFailureStatus: undefined,
-              lastFailureMessage: undefined,
-              updatedAt: Date.now(),
-            });
-          } catch (error) {
-            failed += 1;
-            const statusCode = getStatusCode(error);
-            const redactedHash = subscription.endpointHash.slice(0, 12);
-
-            if (statusCode === 404 || statusCode === 410) {
-              removed += 1;
-              Log.trace(
-                `[WebPushService] removed expired push subscription ${redactedHash} status=${statusCode}`
-              );
-              continue;
-            }
-
-            Log.trace(
-              `[WebPushService] push send failed for ${redactedHash} status=${statusCode ?? "unknown"}`
-            );
-            survivors.push({
-              ...subscription,
-              lastFailureAt: Date.now(),
-              lastFailureStatus: statusCode,
-              lastFailureMessage: getErrorMessage(error),
-              updatedAt: Date.now(),
-            });
+          const result = results.get(entry.endpointHash);
+          if (!result) {
+            return [entry];
           }
-        }
+          if (result.kind === PUSH_SEND_RESULT.REMOVED) {
+            return [];
+          }
 
-        registry.subscriptions = survivors;
+          const updatedAt = Date.now();
+          if (result.kind === PUSH_SEND_RESULT.SUCCESS) {
+            return [
+              {
+                ...entry,
+                lastSuccessAt: updatedAt,
+                lastFailureAt: undefined,
+                lastFailureStatus: undefined,
+                lastFailureMessage: undefined,
+                updatedAt,
+              },
+            ];
+          }
+          return [
+            {
+              ...entry,
+              lastFailureAt: updatedAt,
+              lastFailureStatus: result.statusCode,
+              lastFailureMessage: result.message,
+              updatedAt,
+            },
+          ];
+        });
         await this.writeSubscriptions(registry);
-        return { sent, removed, failed };
       });
     });
+
+    return { sent, removed, failed };
   }
 
   private async assertRemoteAccess(): Promise<void> {

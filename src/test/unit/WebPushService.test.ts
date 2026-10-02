@@ -197,6 +197,70 @@ suite("WebPushService", () => {
     assert.strictEqual(storedRegistry.subscriptions.length, 0);
   });
 
+  test("preserves a subscription upserted while a push is in flight", async () => {
+    const service = new WebPushService();
+    await service.getPublicKey();
+    await service.upsertSubscription(await createValidSubscription(), {});
+
+    let resolveFetch!: (response: Response) => void;
+    let signal: AbortSignal | undefined;
+    let signalStarted!: () => void;
+    const fetchStarted = new Promise<void>((resolve) => {
+      signalStarted = resolve;
+    });
+    globalThis.fetch = async (_input, init = {}) => {
+      signal = init.signal as AbortSignal;
+      signalStarted();
+      return new Promise<Response>((resolve) => {
+        resolveFetch = resolve;
+      });
+    };
+
+    const sending = service.sendNotification(createEvent());
+    await fetchStarted;
+    const added = await service.upsertSubscription(
+      await createValidSubscription("https://example.com/push/concurrent"),
+      {}
+    );
+    resolveFetch(new Response(null, { status: 201 }));
+    const result = await sending;
+
+    const storedRegistry = JSON.parse(
+      await fs.promises.readFile(subscriptionsPath, "utf8")
+    ) as { subscriptions: Array<{ endpointHash: string }> };
+    assert.deepStrictEqual(result, { sent: 1, removed: 0, failed: 0 });
+    assert.ok(
+      storedRegistry.subscriptions.some(
+        (subscription) => subscription.endpointHash === added.endpointHash
+      )
+    );
+    assert.ok(signal);
+  });
+
+  test("does not hold the registry lock while sending a push", async () => {
+    const service = new WebPushService();
+    await service.getPublicKey();
+    await service.upsertSubscription(await createValidSubscription(), {});
+    let lockExistsDuringFetch = true;
+    let signal: AbortSignal | undefined;
+    globalThis.fetch = async (_input, init = {}) => {
+      signal = init.signal as AbortSignal;
+      lockExistsDuringFetch = await fs.promises
+        .access(`${subscriptionsPath}.lock`)
+        .then(
+          () => true,
+          () => false
+        );
+      return new Response(null, { status: 201 });
+    };
+
+    const result = await service.sendNotification(createEvent());
+
+    assert.deepStrictEqual(result, { sent: 1, removed: 0, failed: 0 });
+    assert.strictEqual(lockExistsDuringFetch, false);
+    assert.ok(signal);
+  });
+
   test("returns one stable public key when first-use servers initialize concurrently", async () => {
     const services = Array.from({ length: 8 }, () => new WebPushService());
     const publicKeys = await Promise.all(
@@ -232,7 +296,9 @@ function encodeBase64Url(value: Buffer): string {
     .replace(/=+$/g, "");
 }
 
-async function createValidSubscription(): Promise<WebPushSubscriptionPayload> {
+async function createValidSubscription(
+  endpoint = "https://example.com/push/123"
+): Promise<WebPushSubscriptionPayload> {
   const keyPair = await crypto.subtle.generateKey(
     {
       name: "ECDH",
@@ -246,10 +312,23 @@ async function createValidSubscription(): Promise<WebPushSubscriptionPayload> {
   );
 
   return {
-    endpoint: "https://example.com/push/123",
+    endpoint,
     keys: {
       p256dh: encodeBase64Url(rawPublicKey),
       auth: encodeBase64Url(Buffer.alloc(16, 0x66)),
     },
+  };
+}
+
+function createEvent() {
+  return {
+    id: "event-1",
+    title: "Done",
+    body: "Workflow complete",
+    tag: "workflow-1",
+    severity: COMPLETION_NOTIFICATION_SEVERITY.INFO,
+    kind: COMPLETION_NOTIFICATION_KINDS.WORKFLOW,
+    workflowId: "workflow-1",
+    url: "https://example.com",
   };
 }

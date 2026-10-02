@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (source review + lock-timeout repro)
 - **Area:** `src/server/WebPushService.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
