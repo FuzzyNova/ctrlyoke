@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli subagent), reproduced on Windows with `fs.watch(runDir)` standing in for VS Code's run-file watcher
 - **Area:** `src/core/orchestration/HistoryTrashRepository.ts` (`HistoryTrashBatch.moveRunDir`, `publishEntry` ~503-528, `movePath` ~102-142)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

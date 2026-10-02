@@ -189,10 +189,15 @@ export class WorkflowLineageRepository {
     workspaceRoot: string,
     workflowKey: WorkflowKey
   ): Promise<WorkflowLineageDescriptor> {
-    const content = await fs.promises.readFile(
-      WorkflowPaths.descriptorPath(workspaceRoot, workflowKey),
-      "utf8"
+    return this.readDescriptorFromPath(
+      WorkflowPaths.descriptorPath(workspaceRoot, workflowKey)
     );
+  }
+
+  async readDescriptorFromPath(
+    descriptorPath: string
+  ): Promise<WorkflowLineageDescriptor> {
+    const content = await fs.promises.readFile(descriptorPath, "utf8");
     return migrateToCurrent(
       PERSISTED_STORES.LINEAGE_DESCRIPTOR,
       JSON.parse(content)
@@ -494,7 +499,8 @@ export class WorkflowLineageRepository {
     workspaceRoot: string,
     workflowKey: WorkflowKey,
     workflowName: string,
-    moveIn: (lineageDir: string) => Promise<number[]>
+    moveIn: (lineageDir: string) => Promise<number[]>,
+    fallbackDescriptor?: WorkflowLineageDescriptor
   ): Promise<void> {
     const lineageDir = WorkflowPaths.lineageDir(workspaceRoot, workflowKey);
     await fs.promises.mkdir(lineageDir, { recursive: true });
@@ -510,13 +516,35 @@ export class WorkflowLineageRepository {
       )[0];
       const minimumNextRunId = Math.max(0, ...restoredRunIds) + 1;
       const now = Date.now();
-      const descriptor: WorkflowLineageDescriptor = existing
+      // A single-run restore can synthesize this exact minimal descriptor before
+      // a whole-lineage restore arrives. In that one case, the trashed descriptor
+      // is the only copy of its original metadata. Any descriptor with later edits
+      // or additional metadata is treated as live and remains the base.
+      const synthesizedDescriptor =
+        existing !== undefined &&
+        fallbackDescriptor !== undefined &&
+        existing.revision === 1 &&
+        existing.createdAt === existing.lastModifiedAt &&
+        !existing.isFavorite &&
+        existing.originalFile === undefined &&
+        existing.isSystemGenerated === undefined &&
+        existing.sourceWorkflowKey === undefined &&
+        existing.sourceRunRef === undefined &&
+        existing.sourceWorkflowName === undefined &&
+        existing.variantCreatedAt === undefined &&
+        existing.pendingEdit === undefined;
+      const base = synthesizedDescriptor ? fallbackDescriptor : existing;
+      const descriptor: WorkflowLineageDescriptor = base
         ? {
-            ...existing,
+            ...base,
             latestRunRef,
-            nextRunId: Math.max(existing.nextRunId, minimumNextRunId),
+            nextRunId: Math.max(
+              existing?.nextRunId ?? 0,
+              base.nextRunId,
+              minimumNextRunId
+            ),
             lastModifiedAt: now,
-            revision: existing.revision + 1,
+            revision: (existing?.revision ?? base.revision) + 1,
           }
         : {
             schemaVersion: DESCRIPTOR_SCHEMA_VERSION,

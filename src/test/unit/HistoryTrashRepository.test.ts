@@ -153,6 +153,60 @@ suite("HistoryTrashRepository", () => {
     assert.deepStrictEqual(await trash.list(30), []);
   });
 
+  test("restoring a run then its lineage keeps trashed metadata and draft", async () => {
+    const workflowKey = await createLineage("restore-order");
+    const originalFile = "src/original.ctrlyoke.json";
+    await lineages.updateDescriptor(workspace, workflowKey, (descriptor) => ({
+      ...descriptor,
+      originalFile,
+      isSystemGenerated: true,
+      isFavorite: true,
+    }));
+    const draftDir = WorkflowPaths.draftDir(workspace, workflowKey);
+    await fs.mkdir(draftDir, { recursive: true });
+    await fs.writeFile(
+      WorkflowPaths.draftFilePath(workspace, workflowKey),
+      JSON.stringify({ name: "preserved draft" })
+    );
+    const originalDescriptor = await lineages.readDescriptor(
+      workspace,
+      workflowKey
+    );
+    const firstRun = await addRun(workflowKey, 1);
+    const secondRun = await addRun(workflowKey, 2);
+
+    const runBatch = trash.begin(HISTORY_TRASH_ENTRY_KINDS.RUN, REQUESTER);
+    await new OutputHistoryManager(workspace).deleteRunByRef(
+      workflowKey,
+      firstRun,
+      runBatch
+    );
+    const runEntry = await runBatch.commit();
+    assert.ok(runEntry);
+    const lineageEntry = await trash.trashLineage(workflowKey, REQUESTER);
+    assert.ok(lineageEntry);
+
+    await trash.restore(runEntry.id);
+    await trash.restore(lineageEntry.id);
+
+    const restoredDescriptor = await lineages.readDescriptor(
+      workspace,
+      workflowKey
+    );
+    assert.strictEqual(restoredDescriptor.originalFile, originalFile);
+    assert.strictEqual(restoredDescriptor.isFavorite, true);
+    assert.strictEqual(restoredDescriptor.isSystemGenerated, true);
+    assert.strictEqual(
+      restoredDescriptor.createdAt,
+      originalDescriptor.createdAt
+    );
+    assert.strictEqual(restoredDescriptor.latestRunRef, secondRun);
+    assert.strictEqual(
+      await fs.readFile(WorkflowPaths.draftFilePath(workspace, workflowKey), "utf8"),
+      JSON.stringify({ name: "preserved draft" })
+    );
+  });
+
   test("deleteRunByRef without a batch still goes to Recently deleted", async () => {
     const workflowKey = await createLineage("own-entry");
     const runRef = await addRun(workflowKey, 1);
@@ -214,6 +268,41 @@ suite("HistoryTrashRepository", () => {
       assert.ok(entry);
       assert.deepStrictEqual(entry.items[0].runRefs, [runRef]);
       assert.deepStrictEqual(await lineages.listLineageKeys(workspace), []);
+    } finally {
+      watcher.close();
+    }
+  });
+
+  test("publishes and restores a deleted watched run on Windows", async function () {
+    if (process.platform !== "win32") this.skip();
+
+    const workflowKey = await createLineage("watched-single-run");
+    const runRef = await addRun(workflowKey, 1);
+    const watcher = fsSync.watch(
+      WorkflowPaths.runDir(workspace, workflowKey, runRef)
+    );
+    try {
+      const batch = trash.begin(HISTORY_TRASH_ENTRY_KINDS.RUN, REQUESTER);
+      await new OutputHistoryManager(workspace).deleteRunByRef(
+        workflowKey,
+        runRef,
+        batch
+      );
+      const entry = await batch.commit();
+
+      assert.ok(entry);
+      assert.deepStrictEqual(
+        (await trash.list(30)).map((listed) => listed.id),
+        [entry.id]
+      );
+      const restored = await trash.restore(entry.id);
+      assert.strictEqual(restored.restoredRuns, 1);
+      assert.deepStrictEqual(
+        await new OutputHistoryManager(workspace).getRunsForWorkflow(
+          workflowKey
+        ),
+        [runRef]
+      );
     } finally {
       watcher.close();
     }

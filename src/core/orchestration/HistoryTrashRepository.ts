@@ -499,7 +499,7 @@ export class HistoryTrashRepository {
     return preview;
   }
 
-  /** Writes `entry.json` and renames the pending directory into place. */
+  /** Writes `entry.json` and publishes the pending directory into place. */
   async publishEntry(
     pendingDir: string,
     entry: HistoryTrashEntry
@@ -520,10 +520,55 @@ export class HistoryTrashRepository {
       entryPath
     );
     await writeFileAtomic(entryPath, JSON.stringify(entry, null, 2));
-    await renameWithTransientRetry(pendingDir, target, {
-      budgetMs: MOVE_RENAME_BUDGET_MS,
-    });
-    await fs.promises.rm(path.join(target, OWNER_FILE_NAME), { force: true });
+    let renameRefused = false;
+    try {
+      await renameWithTransientRetry(pendingDir, target, {
+        budgetMs: MOVE_RENAME_BUDGET_MS,
+      });
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code ?? "";
+      if (!COPY_FALLBACK_ERROR_CODES.has(code)) throw error;
+      renameRefused = true;
+      Log.info(
+        `${LOG_PREFIX} pending entry rename refused (${code}); copying payload for publication: ${pendingDir}`
+      );
+    }
+    if (!renameRefused) {
+      await fs.promises.rm(path.join(target, OWNER_FILE_NAME), { force: true });
+      return;
+    }
+
+    // A watcher can sit inside one run directory and prevent renaming its
+    // ancestor. Keep the pending copy intact until the destination payload is
+    // complete; readers only recognize the destination after entry.json lands.
+    await fs.promises.mkdir(target, { recursive: false });
+    try {
+      await fs.promises.cp(
+        path.join(pendingDir, PAYLOAD_DIR_NAME),
+        path.join(target, PAYLOAD_DIR_NAME),
+        { recursive: true, errorOnExist: true, force: false }
+      );
+      await writeFileAtomic(
+        path.join(target, ENTRY_FILE_NAME),
+        JSON.stringify(entry, null, 2)
+      );
+      try {
+        await fs.promises.rm(pendingDir, { recursive: true, force: true });
+      } catch (error) {
+        // The published copy is complete. An open watcher can still prevent
+        // deleting the old copy; recovery removes it after the handle closes.
+        Log.warn(
+          `${LOG_PREFIX} published ${entry.id} but could not remove pending copy: ${getErrorMessage(error)}`
+        );
+      }
+    } catch (error) {
+      // Before entry.json, this destination is not a visible trash entry.
+      // The pending source remains authoritative and recoverable after a crash.
+      if (!(await pathExists(path.join(target, ENTRY_FILE_NAME)))) {
+        await fs.promises.rm(target, { recursive: true, force: true });
+      }
+      throw error;
+    }
   }
 
   private async readEntry(
@@ -566,6 +611,20 @@ export class HistoryTrashRepository {
         parsed.entryId
       );
       try {
+        const publishedDir = WorkflowPaths.trashEntryDir(
+          this.stateRoot,
+          parsed.entryId
+        );
+        if (await pathExists(publishedDir)) {
+          if (await this.readEntry(parsed.entryId)) {
+            // The copy-based publisher writes this marker after copying every
+            // payload file. A crash before pending cleanup leaves both copies.
+            await fs.promises.rm(pendingDir, { recursive: true, force: true });
+            continue;
+          }
+          // An interrupted payload copy has no marker and was never visible.
+          await fs.promises.rm(publishedDir, { recursive: true, force: true });
+        }
         const stats = await fs.promises.stat(pendingDir);
         const ownerPath = path.join(pendingDir, OWNER_FILE_NAME);
         if (await pathExists(ownerPath)) {
@@ -722,6 +781,21 @@ export class HistoryTrashRepository {
       // Either only some runs were deleted, or the lineage exists again:
       // merge the run directories back under the lineage lock.
       const restoredRunsBeforeItem = result.restoredRuns;
+      const fallbackDescriptor = item.wholeLineage
+        ? await this.lineageRepository
+            .readDescriptorFromPath(
+              path.join(
+                source,
+                path.basename(
+                  WorkflowPaths.descriptorPath(
+                    this.stateRoot,
+                    item.workflowKey
+                  )
+                )
+              )
+            )
+            .catch(() => undefined)
+        : undefined;
       await this.lineageRepository.restoreRuns(
         this.stateRoot,
         item.workflowKey,
@@ -739,8 +813,24 @@ export class HistoryTrashRepository {
             result.restoredRuns += 1;
             if (runId !== undefined) restoredRunIds.push(runId);
           }
+          const trashedDraftDir = path.join(
+            source,
+            path.basename(WorkflowPaths.draftDir(this.stateRoot, item.workflowKey))
+          );
+          const liveDraftDir = WorkflowPaths.draftDir(
+            this.stateRoot,
+            item.workflowKey
+          );
+          if (
+            item.wholeLineage &&
+            (await pathExists(trashedDraftDir)) &&
+            !(await pathExists(liveDraftDir))
+          ) {
+            await movePath(trashedDraftDir, liveDraftDir);
+          }
           return restoredRunIds;
-        }
+        },
+        fallbackDescriptor
       );
       // Include whole lineages whose descriptor was merged even if all runs
       // conflicted; otherwise include only lineages with a restored run.
@@ -751,8 +841,9 @@ export class HistoryTrashRepository {
         result.restoredWorkflowKeys.push(item.workflowKey);
       }
       if (item.wholeLineage) result.restoredLineages += 1;
-      // A whole lineage merged into an existing one leaves its own descriptor
-      // and draft behind; the live lineage's are the ones that count.
+      // For an existing lineage with real edits, its descriptor remains the
+      // metadata source and its draft wins. Restore consumed the trashed draft
+      // only when no live draft existed.
       if ((await listRunDirNames(source)).length === 0) {
         await fs.promises.rm(source, { recursive: true, force: true });
       }

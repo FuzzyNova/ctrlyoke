@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli subagent), reproduced with a tsx script
 - **Area:** `src/core/orchestration/HistoryTrashRepository.ts` (`restore`, ~690-760), `src/core/orchestration/WorkflowLineageRepository.ts` (`restoreRuns`, ~500-531)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
