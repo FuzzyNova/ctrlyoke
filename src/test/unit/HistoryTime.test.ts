@@ -19,6 +19,17 @@ suite("HistoryTime", () => {
       );
     });
 
+    test("uses the whole date for an end bound", () => {
+      assert.strictEqual(
+        parseHistoryTime("2024-06-15", now, "end"),
+        Date.parse("2024-06-15T23:59:59.999Z")
+      );
+      assert.strictEqual(
+        parseHistoryTime("2024-06-15", now, "start"),
+        Date.parse("2024-06-15T00:00:00.000Z")
+      );
+    });
+
     test("parses offset-less date-times as UTC", () => {
       assert.strictEqual(
         parseHistoryTime("2024-06-15T12:30", now),

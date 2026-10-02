@@ -362,7 +362,7 @@ function buildHistorySearchQuery(
     ? parseHistoryTime(options.since, now)
     : undefined;
   const until = options.until
-    ? parseHistoryTime(options.until, now)
+    ? parseHistoryTime(options.until, now, "end")
     : undefined;
 
   return {

@@ -40,6 +40,7 @@ import type {
   SecretSetOptions,
   TrustSecretGrantsOptions,
 } from "./SecretCommandDefinitions";
+import { resolveCliFileArgument } from "./CliFileArgument";
 
 export interface SecretCommandIo {
   writeOut(message: string): void;
@@ -185,7 +186,7 @@ export async function checkSecretsCommand(
     options.cwd,
     dependencies.workspaceRoot
   );
-  const filePath = path.resolve(workspaceRoot, file);
+  const filePath = resolveCliFileArgument(file);
   let workflow: PromptFile | null;
   try {
     workflow = dependencies.parseWorkflow
@@ -230,7 +231,7 @@ export async function trustSecretGrantsCommand(
     options.cwd,
     dependencies.workspaceRoot
   );
-  const filePath = path.resolve(workspaceRoot, file);
+  const filePath = resolveCliFileArgument(file);
   let workflow: PromptFile | null;
   try {
     workflow = dependencies.parseWorkflow

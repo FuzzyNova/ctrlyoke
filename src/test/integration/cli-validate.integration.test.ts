@@ -50,6 +50,46 @@ suite("ctrlyoke validate compatibility command", () => {
     assert.strictEqual(result.target, null);
   });
 
+  test("workflow file arguments stay relative to process cwd when --cwd differs", async function () {
+    this.timeout(60000);
+    const processRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-cli-file-cwd-")
+    );
+    temporaryRoots.push(processRoot);
+    const workspaceRoot = path.join(processRoot, "workspace");
+    await fs.mkdir(workspaceRoot);
+    await fs.writeFile(
+      path.join(processRoot, "workflow.ctrlyoke.yaml"),
+      "prompt: Check this workflow\n",
+      "utf8"
+    );
+
+    const checks = await runCli(
+      ["secret", "check", "workflow.ctrlyoke.yaml", "--cwd", workspaceRoot],
+      processRoot
+    );
+    assert.strictEqual(checks.code, 0, checks.stderr);
+
+    const grants = await runCli(
+      ["trust-secret-grants", "workflow.ctrlyoke.yaml", "--cwd", workspaceRoot],
+      processRoot
+    );
+    assert.strictEqual(grants.code, 0, grants.stderr);
+    assert.match(grants.stdout, /No pending secret grants/u);
+
+    const roots = await runCli(
+      [
+        "trust-workflow-external-roots",
+        "workflow.ctrlyoke.yaml",
+        "--cwd",
+        workspaceRoot,
+      ],
+      processRoot
+    );
+    assert.strictEqual(roots.code, 0, roots.stderr);
+    assert.match(roots.stdout, /No pending workflow external file roots/u);
+  });
+
   test("refuses newer workflow formats with exit 2 and a distinct JSON code", async function () {
     const root = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-validate-newer-")

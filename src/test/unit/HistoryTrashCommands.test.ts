@@ -95,9 +95,15 @@ suite("CLI history trash commands", () => {
 
   test("purge and empty refuse to run non-interactively without --yes", async () => {
     const io = new RecordingIo(false);
-    await purgeTrashCommand(entryId, {}, io, dependencies());
-    await emptyTrashCommand({}, io, dependencies());
-    assert.strictEqual(io.err.length, 2);
+    await assert.rejects(
+      purgeTrashCommand(entryId, {}, io, dependencies()),
+      /Refusing to delete permanently without --yes/
+    );
+    await assert.rejects(
+      emptyTrashCommand({}, io, dependencies()),
+      /Refusing to delete permanently without --yes/
+    );
+    assert.strictEqual(io.err.length, 0);
     assert.strictEqual(
       (await new HistoryTrashRepository(workspace).list(30)).length,
       1
@@ -108,6 +114,17 @@ suite("CLI history trash commands", () => {
     const io = new RecordingIo(true, false);
     await emptyTrashCommand({}, io, dependencies());
     assert.strictEqual(io.confirmed.length, 1);
+    assert.strictEqual(
+      (await new HistoryTrashRepository(workspace).list(30)).length,
+      1
+    );
+  });
+
+  test("an interactive purge decline keeps the entry", async () => {
+    const io = new RecordingIo(true, false);
+    await purgeTrashCommand(entryId, {}, io, dependencies());
+    assert.strictEqual(io.confirmed.length, 1);
+    assert.deepStrictEqual(io.out, []);
     assert.strictEqual(
       (await new HistoryTrashRepository(workspace).list(30)).length,
       1

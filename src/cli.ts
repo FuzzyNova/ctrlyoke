@@ -102,6 +102,7 @@ import {
 import { readWorkflowLockInspection } from "./utils/WorkflowLockInspector";
 import * as WorkflowPaths from "./utils/WorkflowPaths";
 import { resolveCliRunRefAtLineage } from "./cli/CliRunSelector";
+import { resolveCliFileArgument } from "./cli/CliFileArgument";
 import {
   applyCliAppendOverrides,
   parseCliPromptFile,
@@ -686,7 +687,7 @@ async function runCommand(
     process.exit(2);
   }
 
-  const resolvedFile = file ? path.resolve(file) : undefined;
+  const resolvedFile = file ? resolveCliFileArgument(file) : undefined;
   const workingDir = options.cwd ?? process.cwd();
 
   // Redirect all Log.* output to .ctrlyoke/logs/ctrlyoke-<timestamp>.log.
@@ -1981,7 +1982,7 @@ async function validateCommand(
   options: ValidateCommandOptions = {}
 ): Promise<void> {
   Log.initializeCli(process.cwd(), false);
-  const resolvedFile = path.resolve(file);
+  const resolvedFile = resolveCliFileArgument(file);
   const compatibilityRequested =
     options.harness !== undefined || options.allInstalledHarnesses === true;
 
@@ -2477,7 +2478,7 @@ async function trustWorkflowExternalRootsCommand(
   options: TrustWorkflowExternalRootsOptions
 ): Promise<void> {
   const workingDir = path.resolve(options.cwd ?? process.cwd());
-  const resolvedFile = path.resolve(workingDir, file);
+  const resolvedFile = resolveCliFileArgument(file);
   Log.initializeCli(workingDir, false);
 
   const userBackend = createUserConfigBackend();

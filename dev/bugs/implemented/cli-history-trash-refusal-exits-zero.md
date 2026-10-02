@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (Claude)
 - **Area:** `src/cli/HistoryTrashCommands.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

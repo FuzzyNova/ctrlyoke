@@ -439,7 +439,7 @@ ctrlyoke history search "EP.*RM" --regex
 | `--harness <id...>`   | Restrict to harnesses                                                                                                |
 | `--state <state...>`  | Restrict to run outcomes (`completed`, `error`, `stopped`, `paused`)                                                 |
 | `--path <substring>`  | Restrict to events touching a file path                                                                              |
-| `--since` / `--until` | Runs started at or after / before an ISO-8601 time (offset-less date-times are UTC) or a relative `7d`, `24h`, `30m` |
+| `--since` / `--until` | Runs started at or after / before an ISO-8601 time (`--until` date-only values include the whole day; offset-less date-times are UTC) or a relative `7d`, `24h`, `30m` |
 | `--deep`              | Re-read matching runs past the 2,000-character indexed text cap                                                      |
 | `--regex`             | Treat the query as a case-insensitive regular expression                                                             |
 | `--limit <n>`         | Maximum results (default 20, maximum 100)                                                                            |

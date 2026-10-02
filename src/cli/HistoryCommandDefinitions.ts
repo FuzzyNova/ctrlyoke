@@ -194,7 +194,7 @@ export function registerHistoryCommands(
     )
     .option(
       "--until <when>",
-      "Runs started at or before ISO-8601 (offset-less date-times are UTC) or relative 7d/24h/30m"
+      "Runs started at or before ISO-8601 (a date-only value includes the whole day; offset-less date-times are UTC) or relative 7d/24h/30m"
     )
     .option(
       "--deep",

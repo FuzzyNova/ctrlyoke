@@ -41,8 +41,7 @@ async function confirmDestructive(
 ): Promise<boolean> {
   if (yes) return true;
   if (!io.isInteractive) {
-    io.writeErr("Refusing to delete permanently without --yes.");
-    return false;
+    throw new Error("Refusing to delete permanently without --yes.");
   }
   return io.confirm(question);
 }

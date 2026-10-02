@@ -1,4 +1,3 @@
-import * as path from "node:path";
 import { PromptFileParser } from "../core/PromptFileParser";
 import {
   isScriptStep,
@@ -8,6 +7,7 @@ import {
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import type { UserFeedbackSink } from "../core/UserFeedbackSink";
 import type { HarnessId } from "../types/DashboardConstants";
+import { resolveCliFileArgument } from "./CliFileArgument";
 
 /** Parse a CLI-authored workflow source and preserve its useful failure reason. */
 export async function parseCliPromptFile(
@@ -16,7 +16,7 @@ export async function parseCliPromptFile(
   userFeedbackSink?: UserFeedbackSink
 ): Promise<ParsedPromptFile> {
   const parser = new PromptFileParser(platform, userFeedbackSink);
-  const parsed = await parser.parsePromptFile(path.resolve(file));
+  const parsed = await parser.parsePromptFile(resolveCliFileArgument(file));
   if (parsed) return parsed;
   throw new Error(
     parser.lastNewerSchemaError?.message ??

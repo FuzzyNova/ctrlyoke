@@ -16,7 +16,8 @@ const ISO_HISTORY_TIME_PATTERN =
 /** Parses an ISO timestamp or a duration ago such as `7d`, `24h`, or `30m`. */
 export function parseHistoryTime(
   value: string,
-  now: number = Date.now()
+  now: number = Date.now(),
+  bound: "start" | "end" = "start"
 ): number {
   const normalized = value.trim();
   const relativeMatch = /^(\d+)([dhm])$/.exec(normalized);
@@ -49,9 +50,12 @@ export function parseHistoryTime(
       );
     }
     const utcDateTime =
-      normalized.includes("T") && !/(?:Z|[+-]\d{2}:\d{2})$/.test(normalized)
-        ? `${normalized}Z`
-        : normalized;
+      normalized.length === 10
+        ? `${normalized}T${bound === "end" ? "23:59:59.999" : "00:00:00.000"}Z`
+        : normalized.includes("T") &&
+            !/(?:Z|[+-]\d{2}:\d{2})$/.test(normalized)
+          ? `${normalized}Z`
+          : normalized;
     const timestamp = Date.parse(utcDateTime);
     if (Number.isFinite(timestamp)) {
       return timestamp;

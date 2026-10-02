@@ -1,5 +1,5 @@
-import * as path from "node:path";
 import { parseCliPromptFile } from "./CliPromptFile";
+import { resolveCliFileArgument } from "./CliFileArgument";
 import { RunContinuationService } from "../core/orchestration/RunContinuationService";
 import { WorkflowLineageRepository } from "../core/orchestration/WorkflowLineageRepository";
 import { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
@@ -221,7 +221,7 @@ async function parseStepChange(
     throw new Error("Provide a file argument or --prompt <text>");
   }
 
-  const steps = await context.parseStepFile(path.resolve(file));
+  const steps = await context.parseStepFile(resolveCliFileArgument(file));
   if (steps.length !== 1) {
     throw new Error("Edit source must contain exactly one workflow step");
   }
