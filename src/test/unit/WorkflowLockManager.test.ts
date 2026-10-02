@@ -45,6 +45,74 @@ suite("WorkflowLockManager stale-run recovery", () => {
     }
   });
 
+  test("skips a malformed lock and still recovers later stale lineages", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-lock-malformed-")
+    );
+    const malformedKey = "a-bad" as WorkflowKey;
+    const recoverableKey = "b-good" as WorkflowKey;
+    const runRef = "run-2026-01-01T00-00-00-000Z" as RunRef;
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspaceRoot,
+      recoverableKey,
+      runRef
+    );
+    const malformedLockPath = WorkflowLockManager.getLockPath(
+      workspaceRoot,
+      malformedKey
+    );
+
+    try {
+      await fs.mkdir(path.dirname(malformedLockPath), { recursive: true });
+      await fs.writeFile(
+        malformedLockPath,
+        JSON.stringify({ workflowKey: malformedKey }),
+        "utf8"
+      );
+
+      await fs.mkdir(path.dirname(runFilePath), { recursive: true });
+      await fs.writeFile(
+        runFilePath,
+        JSON.stringify({
+          steps: [{ prompt: "recover this run" }],
+          _runtime: { currentIndex: 0, executionState: EXECUTION_STATES.RUNNING },
+        }),
+        "utf8"
+      );
+      await fs.writeFile(
+        WorkflowLockManager.getLockPath(workspaceRoot, recoverableKey),
+        JSON.stringify({
+          workflowKey: recoverableKey,
+          runRef,
+          pid: 999_999,
+          lastHeartbeat: 0,
+        }),
+        "utf8"
+      );
+
+      const result = await WorkflowLockManager.normalizeStaleLocks(
+        workspaceRoot,
+        [malformedKey, recoverableKey]
+      );
+      const recoveredRun = JSON.parse(await fs.readFile(runFilePath, "utf8")) as {
+        _runtime: { executionState: string };
+      };
+
+      assert.deepStrictEqual(result.activeRunFiles, []);
+      assert.deepStrictEqual(result.recoveredRunFiles, [runFilePath]);
+      assert.strictEqual(
+        recoveredRun._runtime.executionState,
+        EXECUTION_STATES.STOPPED
+      );
+      assert.deepStrictEqual(
+        JSON.parse(await fs.readFile(malformedLockPath, "utf8")),
+        { workflowKey: malformedKey }
+      );
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("leaves live VS Code-owned runs and locks untouched", async () => {
     const workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-lock-live-vscode-")

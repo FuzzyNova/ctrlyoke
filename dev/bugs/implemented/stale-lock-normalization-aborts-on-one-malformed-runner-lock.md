@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), reproduced with a tsx probe
 - **Area:** `src/utils/WorkflowLockManager.ts` (`normalizeStaleLocks` ~251-261)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

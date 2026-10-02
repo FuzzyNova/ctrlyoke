@@ -2,7 +2,6 @@ import * as fs from "fs";
 import * as path from "path";
 import {
   WorkflowRunnerLock,
-  type RunRef,
   type WorkflowKey,
   type WorkingFile,
 } from "../types/CtrlYokeTypes";
@@ -254,10 +253,19 @@ export class WorkflowLockManager {
         continue;
       }
 
+      try {
+        WorkflowPaths.assertValidRunRef(lock.runRef);
+      } catch {
+        Log.warn(
+          `[WorkflowLockManager] normalizeStaleLocks: skipping ${workflowKey} with invalid runRef: ${String(lock.runRef)}`
+        );
+        continue;
+      }
+
       const runFilePath = WorkflowPaths.runFilePath(
         workspaceRoot,
         workflowKey,
-        lock.runRef as RunRef
+        lock.runRef
       );
 
       let runningFile: WorkingFile;
