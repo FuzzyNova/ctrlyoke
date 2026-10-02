@@ -3,6 +3,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
+import * as AtomicFileUtils from "../../utils/AtomicFileUtils";
 import {
   BUNDLE_MANIFEST_FILE_NAME,
   BUNDLE_MANIFEST_VERSION,
@@ -279,18 +280,57 @@ suite("WorkflowBundleWriter", () => {
     try {
       const assets = path.join(workspace, "fix-tests.assets");
       const source = path.join(workspace, "source.txt");
-      await fs.mkdir(path.join(assets, BUNDLE_MANIFEST_FILE_NAME), {
-        recursive: true,
-      });
+      const oldAsset = path.join(assets, "old.png");
+      const newAsset = path.join(assets, "source.txt");
+      const manifestPath = path.join(assets, BUNDLE_MANIFEST_FILE_NAME);
+      await fs.mkdir(assets, { recursive: true });
       await fs.writeFile(source, "asset", "utf8");
+      await fs.writeFile(oldAsset, "old asset", "utf8");
+      await fs.writeFile(
+        manifestPath,
+        JSON.stringify({
+          version: BUNDLE_MANIFEST_VERSION,
+          owner: "fix-tests.ctrlyoke.yaml",
+          files: ["old.png"],
+        }),
+        "utf8"
+      );
 
-      const result = await writeWorkflowBundle({
-        workflowPath: path.join(workspace, "fix-tests.ctrlyoke.yaml"),
-        serializedWorkflow: "prompt: new\n",
-        plan: plan(assets, source, path.join(assets, "source.txt")),
-      });
+      const atomicFileUtils = require("../../utils/AtomicFileUtils") as {
+        writeFileAtomic: typeof AtomicFileUtils.writeFileAtomic;
+      };
+      const originalWriteFileAtomic = atomicFileUtils.writeFileAtomic;
+      atomicFileUtils.writeFileAtomic = async (filePath, contents, options) => {
+        if (filePath === manifestPath) {
+          throw new Error("simulated manifest write failure");
+        }
+        await originalWriteFileAtomic(filePath, contents, options);
+      };
+
+      let result: Awaited<ReturnType<typeof writeWorkflowBundle>>;
+      try {
+        result = await writeWorkflowBundle({
+          workflowPath: path.join(workspace, "fix-tests.ctrlyoke.yaml"),
+          serializedWorkflow: "prompt: new\n",
+          plan: plan(assets, source, newAsset, {
+            pruneCandidates: ["old.png"],
+          }),
+        });
+      } finally {
+        atomicFileUtils.writeFileAtomic = originalWriteFileAtomic;
+      }
 
       assert.ok(result.warnings.some((warning) => /manifest/i.test(warning)));
+      assert.strictEqual(await fs.readFile(oldAsset, "utf8"), "old asset");
+      assert.strictEqual(await fs.readFile(newAsset, "utf8"), "asset");
+      assert.deepStrictEqual(
+        JSON.parse(await fs.readFile(manifestPath, "utf8")),
+        {
+          version: BUNDLE_MANIFEST_VERSION,
+          owner: "fix-tests.ctrlyoke.yaml",
+          files: ["old.png"],
+        }
+      );
       assert.strictEqual(
         await fs.readFile(
           path.join(workspace, "fix-tests.ctrlyoke.yaml"),

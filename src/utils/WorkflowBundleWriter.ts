@@ -88,6 +88,7 @@ export async function writeWorkflowBundle(
         assetsDirectory,
         BUNDLE_MANIFEST_FILE_NAME
       );
+      let manifestWriteSucceeded = copies.length === 0;
       if (copies.length > 0) {
         await fs.mkdir(assetsDirectory, { recursive: true });
         const files = copies.map((copy) =>
@@ -108,6 +109,7 @@ export async function writeWorkflowBundle(
               2
             ) + "\n"
           );
+          manifestWriteSucceeded = true;
         } catch (error) {
           warnings.push(
             `Could not update bundle manifest "${manifestPath}": ${getErrorMessage(error)}. Existing and new assets were left in place.`
@@ -115,13 +117,15 @@ export async function writeWorkflowBundle(
         }
       }
 
-      await pruneManagedAssets(
-        assetsDirectory,
-        plan.pruneCandidates,
-        serializedWorkflow,
-        copies.map((copy) => copy.destinationPath),
-        warnings
-      );
+      if (manifestWriteSucceeded) {
+        await pruneManagedAssets(
+          assetsDirectory,
+          plan.pruneCandidates,
+          serializedWorkflow,
+          copies.map((copy) => copy.destinationPath),
+          warnings
+        );
+      }
 
       const hasInvalidManifest = plan.warnings.some(
         (warning) => warning.code === "invalid-assets-manifest"

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (source review + temp-dir repro)
 - **Area:** `src/utils/WorkflowBundleWriter.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
