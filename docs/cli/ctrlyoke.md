@@ -20,7 +20,7 @@ ctrlyoke history relink <oldPath> <newPath> [--yes]
 ctrlyoke history list [--cwd <path>] [--all] [--state <state...>] [--since <when>] [--limit <n>] [--json]
 ctrlyoke history runs --workflow <key> [--cwd <path>] [--json]
 ctrlyoke history steps --workflow <key> [--run <ref|runId>] [--json] [--full-prompts]
-ctrlyoke history show --workflow <key> [--run <ref|runId>] [--step <selector>] [--attempt <n|latest|all>] [--json]
+ctrlyoke history show --workflow <key> [--run <ref|runId>] [--step <selector>] [--attempt <n|latest|all>] [--json] [--summary|--events]
 ctrlyoke history search <query> [filters] [--json]
 ctrlyoke history trash list|restore <id>|purge <id>|empty [--yes]
 ctrlyoke step edit [file] --workflow <key> --run <ref|runId> --index <index> [--prompt <text>]
@@ -485,6 +485,22 @@ Pass `--json` to emit one raw attempt record per line as NDJSON. This is
 deliberately different from commands such as `validate --json`, which emit one
 versioned JSON document; NDJSON keeps large runs streamable and includes an
 `unterminated` marker for attempts interrupted before their terminal event.
+Agents should use `--json` when inspecting output: rendered text can contain
+nested ctrlyoke boxes copied from recorded tool output.
+
+Default records include the attempt's own `definition.step` and a
+`definitionRevision` number without repeating the full workflow snapshot.
+`--summary` emits only the target, run and attempt indices, state, timings,
+tokens, prompt, and response text; paging options such as `--limit` also bound
+`responseText`. `--events` emits one record per structured output event, with
+the attempt target and indices on every line. These projections require
+`--json` and are mutually exclusive.
+
+```bash
+ctrlyoke history show --workflow release --step 2 --json
+ctrlyoke history show --workflow release --step 2 --json --summary --limit 4000
+ctrlyoke history show --workflow release --step 2 --json --events
+```
 
 ## `ctrlyoke history search`
 

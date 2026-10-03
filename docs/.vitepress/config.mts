@@ -121,6 +121,10 @@ export default defineConfig({
           text: "Troubleshooting",
           items: [
             { text: "Overview", link: "/troubleshooting/" },
+            {
+              text: "Investigating a run",
+              link: "/troubleshooting/investigating-a-run",
+            },
             { text: "Common errors", link: "/troubleshooting/common-errors" },
             { text: "FAQ", link: "/troubleshooting/faq" },
           ],

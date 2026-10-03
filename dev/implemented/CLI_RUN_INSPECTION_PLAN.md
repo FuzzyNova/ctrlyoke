@@ -1,10 +1,22 @@
 # CLI Run Inspection Plan
 
-> **Status:** Phases 1–4 complete. Phase 5 remains proposed. Updated 2026-10-03.
+> **Status: Implemented.** Phases 1–5 are complete. Phase 5's default
+> `history show --json` projection removes repeated full workflow snapshots;
+> `--summary` and `--events` provide compact and event-stream forms. The CLI
+> docs include agent guidance and a run-investigation walkthrough.
 >
-> **Problem in one line:** `ctrlyoke history` can only show a run's output all at
-> once, so for a large run the only way to find out what it did is to download
-> tens of megabytes and write a parser.
+> **Size measurement:** the §1 pre-change measurement was 38 MB. After
+> `npm run compile:extension`, the referenced history emitted 40,899,443 bytes
+> (about 39.0 MiB). This is the current local history and may have grown since
+> the historical baseline; it is recorded as a point-in-time comparison, not a
+> controlled same-data before/after benchmark. The default output no longer
+> repeats each attempt's full workflow definition snapshot.
+>
+> Updated 2026-10-03.
+>
+> **Original problem:** before this plan, `ctrlyoke history` could only show a
+> run's output all at once, so inspecting a large run meant downloading tens
+> of megabytes and writing a parser.
 >
 > **Audience:** mostly agents. A person at a terminal can scroll and skim. An agent
 > pays for every byte, cannot skim, and stops at the first error it can't fix.
@@ -13,7 +25,7 @@
 
 ---
 
-## 1. What a large run looks like today
+## 1. Pre-change large-run measurements
 
 Measured on `more bug backlog2` (one run, running; 64 steps in its working
 file, 56 queue attempts and 11 `finalStep` review passes recorded, 7.5M tokens,
@@ -196,7 +208,11 @@ definition snapshot, repeated on every line), `prompt`, `output.structured`, and
 4. **`ctrlyoke status` — complete:** extracted `global_status` collection into
    `GlobalWorkflowStatusService` shared by MCP and CLI; CLI adds runner-lock
    liveness and text/JSON output.
-5. **JSON slimming:** drop repeated definition snapshots, then `--summary` and `--events`.
+5. **JSON slimming — complete:** default attempt NDJSON retains only the
+   attempt's `definition.step` and a top-level `definitionRevision`, not the
+   repeated full workflow snapshot. `--summary` emits compact per-attempt
+   records and honors output paging for `responseText`; `--events` emits one
+   NDJSON record per output event with its attempt target and indices.
 
 ## 6. Testing and docs
 
@@ -205,11 +221,13 @@ definition snapshot, repeated on every line), `prompt`, `output.structured`, and
   definition snapshots, a resumed pause, multiple `finalStep` passes, a retried
   step, and a pending step (the shapes that broke in §1).
 - A size regression test: `history steps --json` on a fixture with large outputs
-  must stay bounded by the working file, not by `events.jsonl`.
+  stays bounded by the working file, not by `events.jsonl` (covered in
+  `src/test/unit/HistoryInspectionCommands.test.ts`).
 - Update `docs/cli/ctrlyoke.md` and `docs/reference/commands.md`. Add an
   "investigating a run" walkthrough (`status` → `steps` → `show --step N --kind
 prompt response` → `show --step N --tail 4000`) aimed at agents, and link it from
-  `docs/troubleshooting/index.md`.
+  `docs/troubleshooting/index.md`. Done in
+  `docs/troubleshooting/investigating-a-run.md`; commands use compact JSON output.
 
 ## 7. Non-goals
 

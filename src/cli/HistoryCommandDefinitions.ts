@@ -41,6 +41,8 @@ export interface HistoryShowOptions {
   cursor?: string;
   tail?: string;
   maxEvents?: string;
+  summary?: boolean;
+  events?: boolean;
   json?: boolean;
   color?: boolean;
 }
@@ -218,8 +220,10 @@ export function registerHistoryCommands(
     )
     .option(
       "--json",
-      "Emit NDJSON (one JSON object per line) attempt records; history search --json emits one versioned JSON result blob"
+      "Emit NDJSON attempt records; combine with --summary or --events for compact projections"
     )
+    .option("--summary", "With --json, emit compact attempt summaries")
+    .option("--events", "With --json, emit one record per output event")
     .option("--no-color", "Disable color in formatted output")
     .action(async (options: HistoryShowOptions) => handlers.show(options));
 

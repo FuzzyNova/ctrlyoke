@@ -6,6 +6,7 @@ Use this section when a workflow does not start, does not resume, or does not sa
 
 - [Common errors](/troubleshooting/common-errors)
 - [FAQ](/troubleshooting/faq)
+- [Investigating a run](/troubleshooting/investigating-a-run)
 
 ## Quick checklist
 

@@ -43,6 +43,7 @@ import type {
   RunAttemptLifecycleEvent,
   RunOutputResolverAttemptEvent,
 } from "../../core/orchestration/RunOutputResolver";
+import { RunOutputResolver } from "../../core/orchestration/RunOutputResolver";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
 import {
   registerHistoryCommands,
@@ -751,6 +752,103 @@ suite("CLI history inspection command handlers", () => {
       }>;
       assert.ok(row.lastModifiedAt > 1_700_000_000_000);
       assert.strictEqual(row.latestRun.completedAt, null);
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("keeps history steps JSON bounded by the working file when output is large", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-history-steps-size-")
+    );
+    const key = "release" as WorkflowKey;
+    const runRef = "run-2026-09-29T10-00-00-000Z" as RunRef;
+    const workingFile = WorkflowPaths.runFilePath(workspaceRoot, key, runRef);
+    const eventsFile = WorkflowPaths.eventsPath(workspaceRoot, key, runRef);
+    try {
+      await fs.mkdir(path.dirname(workingFile), { recursive: true });
+      await fs.writeFile(
+        workingFile,
+        JSON.stringify({ steps: [{ name: "Inspect", prompt: "Review" }] })
+      );
+      const largeOutput = "output payload ".repeat(70_000);
+      const recorder = new TimelineRecorder();
+      const manifestPath = await recorder.initializeRunAt(
+        path.dirname(workingFile),
+        key,
+        3,
+        1,
+        EXECUTION_STATES.COMPLETED
+      );
+      const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+      await recorder.appendEvents(manifestPath, [
+        {
+          eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+          timestampMs: 1,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          definitionRevision: 1,
+          payload: { kind: "ai", startReason: "initial", prompt: "Review" },
+        },
+        {
+          eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+          timestampMs: 2,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          definitionRevision: 1,
+          responseKind: "ai",
+          payload: {
+            cliOutput: {
+              prompt: "Review",
+              response: largeOutput,
+              elapsed: 1,
+              isStreaming: false,
+            },
+          },
+        },
+      ]);
+      const workingBytes = (await fs.stat(workingFile)).size;
+      const eventsBytes = (await fs.stat(eventsFile)).size;
+      const manager = new TestHistoryManager(
+        new Map(),
+        new Map([
+          [
+            key,
+            [
+              {
+                workflowKey: key,
+                runRef,
+                runDirectory: path.dirname(workingFile),
+                runId: 3,
+                startedAt: 1,
+                executionState: EXECUTION_STATES.COMPLETED,
+                definitionRevision: 1,
+                stepCount: 1,
+                workingFileStepCount: 1,
+                hasFinalStep: false,
+                hasMixedHarnesses: false,
+                hasMixedModels: false,
+              },
+            ],
+          ],
+        ])
+      );
+      const io = new TestIo();
+      await stepsHistoryCommand(
+        { workflow: key, json: true },
+        io,
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          manager,
+          new RunOutputResolver(),
+          undefined,
+          workspaceRoot
+        )
+      );
+      assert.ok(eventsBytes > workingBytes * 100);
+      assert.ok(Buffer.byteLength(io.output[0]) < workingBytes + 512);
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
@@ -1515,6 +1613,98 @@ suite("CLI history inspection command handlers", () => {
     for (const line of io.output) {
       assert.doesNotThrow(() => JSON.parse(line));
     }
+  });
+
+  test("slims default JSON and supports summary and per-event projections", async () => {
+    const key = "release" as WorkflowKey;
+    const attempt = settledAttempt(
+      { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      {
+        runIndex: 2,
+        attemptIndex: 1,
+        prompt: "the prompt",
+        responseText: "the complete answer",
+        definition: {
+          definitionRevision: 7,
+          definition: {
+            steps: [{ prompt: "large workflow snapshot" }],
+          } as never,
+          step: { prompt: "the attempt step" } as never,
+        },
+        output: {
+          response: "the answer",
+          elapsed: 2,
+          timestampMs: 123,
+          tokens: { prompt: 4, completion: 5, total: 9 },
+          isStreaming: false,
+          structured: {
+            events: [
+              { type: "text", data: { text: "event one" } },
+              { type: "toolCall", data: { toolName: "Read" } },
+            ],
+          } as never,
+        },
+      }
+    );
+    const run = async (options: Omit<HistoryShowOptions, "workflow">) => {
+      const io = new TestIo();
+      await showHistoryCommand(
+        { workflow: key, run: "3", json: true, ...options },
+        io,
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          historyManagerForShow(key),
+          new TestRunOutputResolver([attempt])
+        )
+      );
+      return io.output.map((line) => JSON.parse(line));
+    };
+
+    const [full] = await run({});
+    assert.strictEqual(full.definitionRevision, 7);
+    assert.deepStrictEqual(full.definition, {
+      step: { prompt: "the attempt step" },
+    });
+    assert.strictEqual("steps" in full.definition, false);
+
+    const [summary] = await run({ summary: true, limit: "4" });
+    assert.deepStrictEqual(summary, {
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      runIndex: 2,
+      attemptIndex: 1,
+      state: "completed",
+      timings: { elapsed: 2, timestampMs: 123 },
+      tokens: { prompt: 4, completion: 5, total: 9 },
+      prompt: "the prompt",
+      responseText: "the ",
+    });
+
+    const events = await run({ events: true });
+    assert.strictEqual(events.length, 2);
+    assert.deepStrictEqual(
+      events.map(({ event }) => event.type),
+      ["text", "toolCall"]
+    );
+    assert.ok(events.every(({ target }) => target.stepIndex === 0));
+  });
+
+  test("requires JSON and disallows combining history show projections", async () => {
+    const key = "release" as WorkflowKey;
+    const invoke = (options: Omit<HistoryShowOptions, "workflow">) =>
+      showHistoryCommand(
+        { workflow: key, run: "3", ...options },
+        new TestIo(),
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          historyManagerForShow(key),
+          new TestRunOutputResolver([])
+        )
+      );
+    await assert.rejects(() => invoke({ summary: true }), /require --json/);
+    await assert.rejects(
+      () => invoke({ json: true, summary: true, events: true }),
+      /mutually exclusive/
+    );
   });
 
   test("renders and marks an unterminated attempt", async () => {

@@ -249,6 +249,14 @@ export async function showHistoryCommand(
   io: HistoryInspectionCommandIo,
   dependencies: HistoryInspectionCommandDependencies = {}
 ): Promise<void> {
+  if ((options.summary || options.events) && !options.json) {
+    throw new Error("history show: --summary and --events require --json");
+  }
+  if (options.summary && options.events) {
+    throw new Error(
+      "history show: --summary and --events are mutually exclusive"
+    );
+  }
   const workspace = await (
     dependencies.bootstrapCliWorkspace ?? bootstrapCliWorkspace
   )(options);
@@ -439,16 +447,88 @@ export async function showHistoryCommand(
         nextCursor = page.nextCursor;
       }
       if (options.json) {
-        io.writeOut(
-          JSON.stringify(
-            secretRedactionService.redactValue({
-              ...outputAttempt,
-              runRef,
-              unterminated: event.unterminated,
-              ...(nextCursor ? { nextCursor } : {}),
-            })
-          )
-        );
+        if (options.events) {
+          const outputEvents = outputAttempt.output?.structured?.events ?? [];
+          const events = outputEvents.length
+            ? outputEvents
+            : (outputAttempt.output?.response ?? outputAttempt.responseText)
+              ? [
+                  {
+                    type: CLI_EVENT_TYPES.TEXT,
+                    data: {
+                      text:
+                        outputAttempt.output?.response ??
+                        outputAttempt.responseText!,
+                    },
+                  },
+                ]
+              : [];
+          for (const outputEvent of events) {
+            io.writeOut(
+              JSON.stringify(
+                secretRedactionService.redactValue({
+                  target: outputAttempt.target,
+                  runIndex: outputAttempt.runIndex,
+                  attemptIndex: outputAttempt.attemptIndex,
+                  event: outputEvent,
+                  ...(event.unterminated ? { unterminated: true } : {}),
+                })
+              )
+            );
+          }
+        } else if (options.summary) {
+          const rawResponseText =
+            outputAttempt.responseText ?? outputAttempt.output?.response;
+          const responseText =
+            paging && rawResponseText !== undefined
+              ? pageOutputText(rawResponseText, paging).text
+              : rawResponseText;
+          io.writeOut(
+            JSON.stringify(
+              secretRedactionService.redactValue({
+                target: outputAttempt.target,
+                runIndex: outputAttempt.runIndex,
+                attemptIndex: outputAttempt.attemptIndex,
+                state: event.unterminated
+                  ? "unterminated"
+                  : (outputAttempt.terminalState ?? "unknown"),
+                timings: {
+                  ...(outputAttempt.output?.elapsed !== undefined
+                    ? { elapsed: outputAttempt.output.elapsed }
+                    : {}),
+                  ...(outputAttempt.output?.timestampMs !== undefined
+                    ? { timestampMs: outputAttempt.output.timestampMs }
+                    : {}),
+                },
+                ...(outputAttempt.output?.tokens
+                  ? { tokens: outputAttempt.output.tokens }
+                  : {}),
+                ...(outputAttempt.prompt !== undefined
+                  ? { prompt: outputAttempt.prompt }
+                  : {}),
+                ...(responseText !== undefined ? { responseText } : {}),
+              })
+            )
+          );
+        } else {
+          const { definition, ...attemptFields } = outputAttempt;
+          io.writeOut(
+            JSON.stringify(
+              secretRedactionService.redactValue({
+                ...attemptFields,
+                ...(definition
+                  ? {
+                      definitionRevision: definition.definitionRevision,
+                      definition: { step: definition.step },
+                    }
+                  : {}),
+                runRef,
+                unterminated: event.unterminated,
+                ...(nextCursor ? { nextCursor } : {}),
+              })
+            )
+          );
+        }
       } else {
         const allEvents = outputAttempt.output?.structured?.events;
         const omitted =
