@@ -50,6 +50,10 @@ import { useUiStore } from "@store/uiStore";
 import { workflowViewAddressKey } from "@utils/viewAddress";
 import { getTargetKey } from "@utils/outputProjection";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
+import {
+  getStepCapabilities,
+  getStepCapabilityDisabledReason,
+} from "@utils/stepCapabilities";
 
 const SHELL_WORKFLOW_ID = "_shell";
 const EMPTY_TARGET_KEYS: readonly string[] = [];
@@ -220,6 +224,20 @@ export function useStepContextMenu({
       }: OpenContextMenuParams
     ) => {
       const stepToggleLabel = step.enabled === false ? "Enable" : "Disable";
+      const capabilityContext = {
+        currentStep,
+        executionState,
+        pendingRewindBoundary: pendingRewind?.fromStepIndex,
+        isExternallyManaged,
+        isExecutionTargetLocked,
+        totalSteps,
+        parallelGroups,
+      };
+      const capabilities = getStepCapabilities(
+        step,
+        deleteIndex,
+        capabilityContext
+      );
       const pasteDisabledTitle = isExternallyManaged
         ? (externalReadOnlyLabel ?? "Read-only — external workflow")
         : executionState === EXECUTION_STATES.CANCELLING
@@ -233,8 +251,6 @@ export function useStepContextMenu({
       const queueLockedTitle = isExternallyManaged
         ? (externalReadOnlyLabel ?? "Read-only — external workflow")
         : "Cannot reorder steps while workflow is cancelling";
-      const queueLocked =
-        isExternallyManaged || executionState === EXECUTION_STATES.CANCELLING;
       // A running step stays pinned at pending position 0 (mirrors the drag
       // pinning in WorkflowStepsPanel/PromptChipRail): it can't move, and
       // nothing else can move into its slot.
@@ -242,30 +258,31 @@ export function useStepContextMenu({
         executionOwnsCurrentStep(executionState, finalStepPhase) &&
         pendingIndex - 1 === 0;
       const moveUpDisabled =
-        queueLocked ||
-        isExecutionTargetLocked ||
-        pendingIndex <= 0 ||
-        moveUpBlockedByPin;
-      const moveUpDisabledTitle = queueLocked
-        ? queueLockedTitle
-        : isExecutionTargetLocked
-          ? "Cannot move the currently executing step"
-          : pendingIndex <= 0
-            ? "Already at the top of the queue"
-            : moveUpBlockedByPin
-              ? "Cannot move above the currently executing step"
-              : undefined;
-      const moveDownDisabled =
-        queueLocked ||
-        isExecutionTargetLocked ||
-        pendingIndex >= pendingCount - 1;
-      const moveDownDisabledTitle = queueLocked
-        ? queueLockedTitle
-        : isExecutionTargetLocked
-          ? "Cannot move the currently executing step"
-          : pendingIndex >= pendingCount - 1
-            ? "Already at the bottom of the queue"
+        !capabilities.canReorder || pendingIndex <= 0 || moveUpBlockedByPin;
+      const moveUpDisabledTitle = !capabilities.canReorder
+        ? (getStepCapabilityDisabledReason(
+            capabilityContext,
+            "reorder",
+            deleteIndex,
+            step
+          ) ?? queueLockedTitle)
+        : pendingIndex <= 0
+          ? "Already at the top of the queue"
+          : moveUpBlockedByPin
+            ? "Cannot move above the currently executing step"
             : undefined;
+      const moveDownDisabled =
+        !capabilities.canReorder || pendingIndex >= pendingCount - 1;
+      const moveDownDisabledTitle = !capabilities.canReorder
+        ? (getStepCapabilityDisabledReason(
+            capabilityContext,
+            "reorder",
+            deleteIndex,
+            step
+          ) ?? queueLockedTitle)
+        : pendingIndex >= pendingCount - 1
+          ? "Already at the bottom of the queue"
+          : undefined;
       const targetKey = getTargetKey({
         kind: FINAL_STEP_PHASES.QUEUE,
         index: deleteIndex,
@@ -427,9 +444,17 @@ export function useStepContextMenu({
             label: stepToggleLabel,
             icon:
               step.enabled === false ? "codicon-check" : "codicon-circle-slash",
-            disabled: isExternallyManaged,
-            disabledTitle:
-              externalReadOnlyLabel ?? "Read-only — external workflow",
+            disabled: !capabilities.canToggleEnabled,
+            disabledTitle: capabilities.canToggleEnabled
+              ? undefined
+              : externalReadOnlyLabel && isExternallyManaged
+                ? externalReadOnlyLabel
+                : getStepCapabilityDisabledReason(
+                    capabilityContext,
+                    "toggle",
+                    deleteIndex,
+                    step
+                  ),
             onClick: () => {
               const enabled = step.enabled === false;
               const update = buildWorkflowStepEnabledUpdate(step, enabled);
@@ -445,10 +470,17 @@ export function useStepContextMenu({
           {
             label: "Delete",
             icon: "codicon-trash",
-            disabled: isExternallyManaged || isExecutionTargetLocked,
-            disabledTitle: isExternallyManaged
-              ? (externalReadOnlyLabel ?? "Read-only — external workflow")
-              : "Cannot delete the currently executing step",
+            disabled: !capabilities.canDelete,
+            disabledTitle: capabilities.canDelete
+              ? undefined
+              : externalReadOnlyLabel && isExternallyManaged
+                ? externalReadOnlyLabel
+                : getStepCapabilityDisabledReason(
+                    capabilityContext,
+                    "delete",
+                    deleteIndex,
+                    step
+                  ),
             onClick: () => handleDeleteStep(deleteIndex),
           },
         ],

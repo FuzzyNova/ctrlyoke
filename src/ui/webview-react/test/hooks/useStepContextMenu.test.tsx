@@ -132,7 +132,9 @@ describe("useStepContextMenu", () => {
       "Delete",
     ]);
     expect(screen.getAllByRole("separator")).toHaveLength(5);
-    expect(screen.getByRole("button", { name: "Reply to Step" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Reply to Step" })
+    ).toBeDisabled();
   });
 
   it("switches the output action to Show output when the step is hidden", () => {
@@ -174,6 +176,41 @@ describe("useStepContextMenu", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("disables mutation items for the executed prefix with a reason tooltip", () => {
+    render(
+      <TestHarness
+        step={{ prompt: "Completed", _runtime: { completedAt: Date.now() } }}
+        direction="rewind"
+        currentStep={1}
+        deleteIndex={0}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Delete" })).toHaveAttribute(
+      "title",
+      "Cannot change a completed step"
+    );
+    expect(screen.getByRole("button", { name: "Disable" })).toBeDisabled();
+  });
+
+  it("disables preserved-prefix deletion during a pending rewind", () => {
+    render(
+      <TestHarness
+        step={{ prompt: "Preserved" }}
+        pendingRewind={{ fromStepIndex: 1 }}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Delete" })).toHaveAttribute(
+      "title",
+      "Cannot change a preserved step while a continuation is pending"
+    );
+  });
+
   it("switches the content/toggle labels for disabled script steps", () => {
     render(
       <TestHarness
@@ -194,22 +231,24 @@ describe("useStepContextMenu", () => {
       screen.getByRole("button", { name: "Copy Script" })
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Enable" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Reply to Step" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Reply to Step" })).toHaveAttribute(
-      "title",
-      "Script steps have no AI session to reply to"
-    );
+    expect(
+      screen.getByRole("button", { name: "Reply to Step" })
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Reply to Step" })
+    ).toHaveAttribute("title", "Script steps have no AI session to reply to");
   });
 
   it("disables Reply to Step when no session ID is available", () => {
     render(<TestHarness step={{ prompt: "Original prompt" }} />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
-    expect(screen.getByRole("button", { name: "Reply to Step" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Reply to Step" })).toHaveAttribute(
-      "title",
-      "This step has no session to resume yet"
-    );
+    expect(
+      screen.getByRole("button", { name: "Reply to Step" })
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Reply to Step" })
+    ).toHaveAttribute("title", "This step has no session to resume yet");
   });
 
   it("replies with the step session and resolved properties in read-only, running, and history views", () => {

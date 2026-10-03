@@ -5,6 +5,7 @@ import {
   END_CONDITION_DEFAULTS,
 } from "@store/editorStore";
 import { useUiStore } from "@store/uiStore";
+import { useWorkflowStore } from "@store/workflowStore";
 import {
   FINAL_STEP_PHASES,
   PROMPT_EDITOR_INSERT_MODES,
@@ -744,5 +745,32 @@ describe("resetToDefaults", () => {
     expect(store().promptText).toBe("");
     expect(store().isDirty).toBe(false);
     expect(store().properties).toEqual(PROPERTY_DEFAULTS);
+  });
+});
+
+describe("multi-selection draft preservation", () => {
+  it("saves the active draft on entry and restores it when the selection collapses", () => {
+    const steps = [
+      makePromptStep({ prompt: "First" }),
+      makePromptStep({ prompt: "Second" }),
+      makePromptStep({ prompt: "Third" }),
+    ];
+    useWorkflowStore.getState().setPrompts(steps);
+    store().selectPrompt(1, steps[1]);
+    store().setPromptText("unsaved second step draft");
+
+    store().extendMultiSelectionByRange(2);
+
+    expect(store().multiSelection).toEqual({ indices: [1, 2], anchorIndex: 1 });
+    expect(store().pendingEdits["queue:1"].promptText).toBe(
+      "unsaved second step draft"
+    );
+    expect(store().selectionTarget.kind).toBe("newPrompt");
+
+    store().toggleMultiSelection(2);
+
+    expect(store().multiSelection).toBeNull();
+    expect(store().selectionTarget).toEqual({ kind: "queue", index: 1 });
+    expect(store().promptText).toBe("unsaved second step draft");
   });
 });

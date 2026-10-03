@@ -21,11 +21,7 @@ import type { PromptOverride } from "./WorkflowStep";
 import type { WorkflowStepComponentProps } from "./WorkflowStepRow";
 import { StatusIcon } from "./StatusIcon";
 import { ExecutingStepHighlight } from "./ExecutingStepHighlight";
-import {
-  getStatusLabel,
-  isStepExecuting,
-  isWorkflowActive,
-} from "@utils/status";
+import { getStatusLabel, isStepExecuting } from "@utils/status";
 import { resolveStepColor, type StepColorGroupMember } from "@utils/stepColor";
 import {
   DRAG_HANDLE_TOUCH_ACTION_STYLE,
@@ -36,6 +32,11 @@ import {
 import { Icon } from "../shared/Icon";
 import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
 import { SCHEMA_FIELD_META } from "@root/types/SchemaUiMetadata";
+import { isStepExecutionLocked } from "@utils/stepCapabilities";
+export {
+  isStepExecutionLocked,
+  hasTerminalStepRuntime,
+} from "@utils/stepCapabilities";
 
 export type ParallelGroupStatus =
   "running" | "failed" | "cancelled" | "completed" | "skipped" | "pending";
@@ -104,23 +105,6 @@ export function deriveParallelGroupStatus(
     return "completed";
   }
   return "pending";
-}
-
-export function hasTerminalStepRuntime(step: WorkflowStep): boolean {
-  return step._runtime?.completedAt !== undefined;
-}
-
-export function isStepExecutionLocked(
-  step: WorkflowStep,
-  index: number,
-  currentStep: number,
-  executionState: ExecutionState
-): boolean {
-  return (
-    isWorkflowActive(executionState) &&
-    index >= currentStep &&
-    hasTerminalStepRuntime(step)
-  );
 }
 
 type ParallelGroupPanelProps = {

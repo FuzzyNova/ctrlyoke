@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ParallelGroupPanel,
   deriveParallelGroupStatus,
-  isStepExecutionLocked,
 } from "@components/prompts/ParallelGroupPanel";
+import { isStepExecutionLocked } from "@utils/stepCapabilities";
 import { useSettingsStore } from "@store/settingsStore";
 import { EXECUTION_STATES, STEP_STATUS } from "@/types/messages";
 import { STEP_COLOR_MODES } from "@root/types/DashboardConstants";

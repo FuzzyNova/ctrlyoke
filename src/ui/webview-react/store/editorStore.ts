@@ -28,6 +28,14 @@ import type {
 } from "@root/types/WebviewMessageTypes";
 import { useUiStore } from "./uiStore";
 import { isStepContentEqual, type WorkflowStep } from "./workflowStore";
+import { useWorkflowStore } from "./workflowStore";
+import {
+  addStepRange,
+  collapseStepSelection,
+  selectAllSteps,
+  selectStepRange,
+  toggleStepIndex,
+} from "../utils/stepMultiSelection";
 
 /** Type guard for script steps (webview-local version) */
 function isScriptStep(step: WorkflowStep): step is ScriptStep {
@@ -163,6 +171,7 @@ export type EditorSelectionTarget =
 interface EditorState {
   // Editing mode
   selectionTarget: EditorSelectionTarget;
+  multiSelection: { indices: number[]; anchorIndex: number } | null;
   selectedPromptIndex: number | null; // null = new prompt mode, number = editing existing
   originalPromptData: WorkflowStep | null; // For Cancel/revert functionality
   savedNewPromptState: SavedNewStepState | null; // Saved state when switching to edit mode
@@ -305,6 +314,11 @@ interface EditorActions {
    * to the prompt and continue editing.
    */
   deselect: () => void;
+  extendMultiSelectionByRange: (index: number) => void;
+  toggleMultiSelection: (index: number) => void;
+  addMultiSelectionRange: (index: number) => void;
+  selectAllSteps: () => void;
+  clearMultiSelection: () => void;
 
   // Step type
   setStepType: (
@@ -395,6 +409,7 @@ interface EditorSelectors {
 
 const initialState: EditorState = {
   selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
+  multiSelection: null,
   selectedPromptIndex: null,
   originalPromptData: null,
   savedNewPromptState: null,
@@ -460,6 +475,7 @@ export const useEditorStore = create<
       } else {
         // Fallback if promptData not provided (shouldn't happen)
         set({
+          multiSelection: null,
           selectionTarget: {
             kind: FINAL_STEP_PHASES.QUEUE,
             index: resolvedIndex,
@@ -480,6 +496,7 @@ export const useEditorStore = create<
     if (savedNewPromptState) {
       // Restore saved new prompt state (from switching to edit mode), preserving step type
       set({
+        multiSelection: null,
         selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
         selectedPromptIndex: null,
         originalPromptData: null,
@@ -496,6 +513,7 @@ export const useEditorStore = create<
       if (!restored) {
         // No persisted state, reset to defaults
         set({
+          multiSelection: null,
           selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
@@ -521,6 +539,7 @@ export const useEditorStore = create<
       } else {
         // State was restored, just clear edit mode flags
         set({
+          multiSelection: null,
           selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
@@ -619,6 +638,7 @@ export const useEditorStore = create<
       };
 
       set({
+        multiSelection: null,
         selectionTarget: newTarget,
         selectedPromptIndex: isFinalStepTarget ? null : index,
         originalPromptData: promptData,
@@ -696,6 +716,7 @@ export const useEditorStore = create<
       };
 
       set({
+        multiSelection: null,
         selectionTarget: newTarget,
         selectedPromptIndex: isFinalStepTarget ? null : index,
         originalPromptData: promptData,
@@ -810,6 +831,7 @@ export const useEditorStore = create<
     const { savedNewPromptState } = state;
     if (savedNewPromptState) {
       set({
+        multiSelection: null,
         selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
         selectedPromptIndex: null,
         originalPromptData: null,
@@ -824,6 +846,7 @@ export const useEditorStore = create<
       const restored = get().restoreFromVsCodeState(vscode);
       if (!restored) {
         set({
+          multiSelection: null,
           selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
@@ -849,6 +872,7 @@ export const useEditorStore = create<
         });
       } else {
         set({
+          multiSelection: null,
           selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
@@ -872,6 +896,113 @@ export const useEditorStore = create<
       }
     }
   },
+
+  extendMultiSelectionByRange: (index) => {
+    const state = get();
+    const queueLength = useWorkflowStore.getState().steps.length;
+    const selectedIndex =
+      state.multiSelection?.anchorIndex ??
+      (state.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
+        ? state.selectionTarget.index
+        : index);
+    const indices = selectStepRange(selectedIndex, index, queueLength);
+    const selection = collapseStepSelection({
+      indices,
+      anchorIndex: selectedIndex,
+    });
+    if (!selection) {
+      if (indices.length === 1) {
+        const step = useWorkflowStore.getState().steps[indices[0]];
+        if (step) get().selectPrompt(indices[0], step);
+      }
+      set({ multiSelection: null });
+      return;
+    }
+    if (state.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
+      get().deselect();
+    }
+    set({ multiSelection: selection });
+  },
+
+  toggleMultiSelection: (index) => {
+    const state = get();
+    const steps = useWorkflowStore.getState().steps;
+    const baseIndices =
+      state.multiSelection?.indices ??
+      (state.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
+        ? [state.selectionTarget.index]
+        : []);
+    const indices = toggleStepIndex(baseIndices, index, steps.length);
+    const selection = collapseStepSelection({ indices, anchorIndex: index });
+    if (!selection) {
+      set({ multiSelection: null });
+      if (indices.length === 1) {
+        const step = steps[indices[0]];
+        if (step) get().selectPrompt(indices[0], step);
+      } else if (
+        state.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT
+      ) {
+        get().deselect();
+      }
+      return;
+    }
+    if (state.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
+      get().deselect();
+    }
+    set({ multiSelection: selection });
+  },
+
+  addMultiSelectionRange: (index) => {
+    const state = get();
+    const steps = useWorkflowStore.getState().steps;
+    const anchorIndex =
+      state.multiSelection?.anchorIndex ??
+      (state.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
+        ? state.selectionTarget.index
+        : index);
+    const indices = addStepRange(
+      state.multiSelection?.indices ??
+        (state.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
+          ? [state.selectionTarget.index]
+          : []),
+      anchorIndex,
+      index,
+      steps.length
+    );
+    const selection = collapseStepSelection({ indices, anchorIndex });
+    if (!selection) {
+      if (indices.length === 1) {
+        const step = steps[indices[0]];
+        if (step) get().selectPrompt(indices[0], step);
+      }
+      set({ multiSelection: null });
+      return;
+    }
+    if (state.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
+      get().deselect();
+    }
+    set({ multiSelection: selection });
+  },
+
+  selectAllSteps: () => {
+    const state = get();
+    const indices = selectAllSteps(useWorkflowStore.getState().steps.length);
+    const selection = collapseStepSelection({ indices, anchorIndex: 0 });
+    if (!selection) {
+      if (indices.length === 1) {
+        const step = useWorkflowStore.getState().steps[0];
+        if (step) get().selectPrompt(0, step);
+      }
+      set({ multiSelection: null });
+      return;
+    }
+    if (state.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
+      get().deselect();
+    }
+    set({ multiSelection: selection });
+  },
+
+  clearMultiSelection: () => set({ multiSelection: null }),
 
   // ============================================================================
   // STEP TYPE
@@ -1294,6 +1425,7 @@ export const useEditorStore = create<
   resetEditor: () =>
     set({
       selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
+      multiSelection: null,
       selectedPromptIndex: null,
       originalPromptData: null,
       savedNewPromptState: null,
@@ -1322,6 +1454,7 @@ export const useEditorStore = create<
 
   resetToDefaults: () =>
     set({
+      multiSelection: null,
       pendingEdits: {},
       stepType: STEP_TYPES.PROMPT,
       stepEnabled: true,
@@ -1470,3 +1603,12 @@ export const useEditorStore = create<
     );
   },
 }));
+
+/** Primitive selectors keep memoized step rows subscribed to only their own state. */
+export const useIsStepMultiSelected = (index: number): boolean =>
+  useEditorStore(
+    (state) => state.multiSelection?.indices.includes(index) ?? false
+  );
+
+export const useMultiSelectionCount = (): number =>
+  useEditorStore((state) => state.multiSelection?.indices.length ?? 0);

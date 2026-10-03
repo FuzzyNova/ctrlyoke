@@ -66,9 +66,9 @@ import {
 } from "./ExecutingStepHighlight";
 import {
   deriveParallelGroupStatus,
-  isStepExecutionLocked,
   PARALLEL_GROUP_RUNNING_STATUS,
 } from "./ParallelGroupPanel";
+import { isStepExecutionLocked } from "@utils/stepCapabilities";
 import { Icon } from "../shared/Icon";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

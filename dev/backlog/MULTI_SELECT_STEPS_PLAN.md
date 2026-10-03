@@ -289,7 +289,7 @@ interface StepCapabilities {
   canEditColor: boolean;       // true for every queue step, as today
   canToggleEnabled: boolean;   // false for completed/running/locked
   canDelete: boolean;
-  canReorder: boolean;         // pending, not in-flight, !isExecutionTargetLocked
+  canReorder: boolean;         // pending, not in-flight, and not cancelling
   canEditPromptProperties: boolean; // prompt step AND not locked
 }
 getStepCapabilities(step, index, ctx): StepCapabilities
@@ -309,6 +309,11 @@ getSelectionCapabilities(indices, steps, ctx): StepCapabilities // AND-reduce + 
   "Why allow locked steps", item 1.
 - The host stays authoritative. These capabilities only decide what the UI offers;
   every batch is re-validated atomically on the host (§4, §5).
+- The capability lock includes the host's executed prefix (`index < currentStep`),
+  any `_runtime.terminalStatus`, the pending-rewind preserved prefix, and the
+  currently executing target. This is stricter than the former single-step Delete
+  menu gate, which only checked the executing target. Color remains available for
+  every queue step because it uses the cosmetic update path.
 
 ### 3. Gestures
 
@@ -602,9 +607,9 @@ which is cheap once the predicate exists. Clicks there stay single-select in v1.
 > the host message must land first. Phase 4 is now purely the drawer/picker UI.
 
 1. **Selection model, capabilities and gestures.**
-   - 1a: pure selection helpers (`utils/stepMultiSelection.ts`, selection half), the
-     `multiSelection` slice, `stepCapabilities.ts`, and the single-step context menu
-     migrated onto it.
+   - [x] 1a: pure selection helpers (`utils/stepMultiSelection.ts`, selection half), the
+         `multiSelection` slice, `stepCapabilities.ts`, and the single-step context menu
+         migrated onto it (completed 2026-10-03).
    - 1b: modifier plumbing through the three row render sites, plus Ctrl+A and
      Escape. The context-menu selection items (Select All / Select to Here / Add /
      Remove / Clear), and the no-collapse right-click rule. The structural-change

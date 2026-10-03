@@ -39,10 +39,8 @@ import {
   WorkflowStepRowFrame,
   SortableWorkflowStepWrapper,
 } from "../prompts/WorkflowStepRow";
-import {
-  ParallelGroupPanel,
-  isStepExecutionLocked,
-} from "../prompts/ParallelGroupPanel";
+import { ParallelGroupPanel } from "../prompts/ParallelGroupPanel";
+import { isStepExecutionLocked } from "@utils/stepCapabilities";
 import {
   MESSAGE_TYPES,
   STEP_STATUS,
