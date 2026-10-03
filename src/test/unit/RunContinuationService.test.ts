@@ -5,6 +5,7 @@ import * as path from "path";
 import { afterEach, suite, test } from "mocha";
 import {
   EXECUTION_STATES,
+  FINAL_STEP_PHASES,
   PARALLEL_GROUP_ADMISSION,
   QUEUE_POSITION,
   RUNNER_IDS,
@@ -638,7 +639,8 @@ suite("RunContinuationService addressed step mutations", () => {
   async function seedRun(
     executionState: ExecutionState,
     currentIndex: number,
-    steps: Array<Record<string, unknown>>
+    steps: Array<Record<string, unknown>>,
+    finalStepPhase?: string
   ): Promise<void> {
     const descriptorPath = WorkflowPaths.descriptorPath(workspace, workflowKey);
     await fs.mkdir(path.dirname(descriptorPath), { recursive: true });
@@ -670,7 +672,11 @@ suite("RunContinuationService addressed step mutations", () => {
         startedAt: 0,
         definitionRevision: 1,
         steps,
-        _runtime: { currentIndex, executionState },
+        _runtime: {
+          currentIndex,
+          executionState,
+          ...(finalStepPhase ? { finalStep: { phase: finalStepPhase } } : {}),
+        },
       }),
       "utf8"
     );
@@ -897,6 +903,99 @@ suite("RunContinuationService addressed step mutations", () => {
       ),
       /currently executing|completed step/i
     );
+  });
+
+  test("allows mutations to steps appended by a running final step", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-final-step-mutations-")
+    );
+    const repository = new WorkflowLineageRepository();
+    const finalStepPhase = FINAL_STEP_PHASES.FINAL_STEP;
+
+    async function appendTwoSteps(): Promise<void> {
+      await seedRun(
+        EXECUTION_STATES.RUNNING,
+        1,
+        [{ prompt: "done", _runtime: { completedAt: 10 } }],
+        finalStepPhase
+      );
+      await RunContinuationService.appendStepsToRun(
+        workspace,
+        workflowKey,
+        runRef,
+        [{ prompt: "appended-a" }, { prompt: "appended-b" }],
+        1,
+        100,
+        repository,
+        true
+      );
+    }
+
+    await appendTwoSteps();
+    const edited = await RunContinuationService.editStepAtRun(
+      workspace,
+      workflowKey,
+      runRef,
+      1,
+      { updates: { prompt: "appended-a (edited)" } },
+      2,
+      repository,
+      true
+    );
+    assert.strictEqual(
+      (edited.workingFile.steps![1] as { prompt: string }).prompt,
+      "appended-a (edited)"
+    );
+
+    await appendTwoSteps();
+    const removed = await RunContinuationService.removeStepAtRun(
+      workspace,
+      workflowKey,
+      runRef,
+      1,
+      2,
+      repository,
+      true
+    );
+    assert.deepStrictEqual(
+      removed.workingFile.steps!.map(
+        (step) => (step as { prompt: string }).prompt
+      ),
+      ["done", "appended-b"]
+    );
+
+    await appendTwoSteps();
+    const reordered = await RunContinuationService.reorderStepsAtRun(
+      workspace,
+      workflowKey,
+      runRef,
+      [2, 1],
+      2,
+      repository,
+      undefined,
+      true
+    );
+    assert.deepStrictEqual(
+      reordered.workingFile.steps!.map(
+        (step) => (step as { prompt: string }).prompt
+      ),
+      ["done", "appended-b", "appended-a"]
+    );
+
+    await appendTwoSteps();
+    const appendedAtEnd = await RunContinuationService.appendStepsToRun(
+      workspace,
+      workflowKey,
+      runRef,
+      [{ prompt: "appended-at-end" }],
+      2,
+      100,
+      repository,
+      true,
+      3
+    );
+    assert.strictEqual(appendedAtEnd.insertIndex, 3);
+    assert.strictEqual(appendedAtEnd.workingFile.steps?.length, 4);
   });
 
   test("allows the paused current step because no step is in flight", async () => {

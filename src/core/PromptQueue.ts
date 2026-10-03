@@ -97,7 +97,10 @@ import {
   findStepIndexById,
   resetStepRuntimeForRewind,
 } from "./StepIdentity";
-import { hasStarted } from "../utils/StepStatusDerivation";
+import {
+  hasInFlightStep as isStepInFlight,
+  hasStarted,
+} from "../utils/StepStatusDerivation";
 import { settleInterruptedRun } from "../utils/InterruptedRunSettlement";
 import { appendResponseText } from "../utils/ResponseTextJoin";
 
@@ -3108,12 +3111,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    * the executor flips the phase back to QUEUE and claims it.
    */
   private get hasInFlightStep(): boolean {
-    const status = this.stateMachine.status;
-    return (
-      (status === EXECUTION_STATES.RUNNING ||
-        status === EXECUTION_STATES.PAUSING ||
-        status === EXECUTION_STATES.CANCELLING) &&
-      this.finalStepRuntime?.phase !== FINAL_STEP_PHASES.FINAL_STEP
+    return isStepInFlight(
+      this.stateMachine.status,
+      this.finalStepRuntime?.phase
     );
   }
 

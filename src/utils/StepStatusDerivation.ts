@@ -1,11 +1,29 @@
 import {
   EXECUTION_STATES,
+  FINAL_STEP_PHASES,
   IN_FLIGHT_EXECUTION_STATES,
   STEP_STATUS,
   type ExecutionState,
+  type FinalStepPhase,
   type PromptTerminalStatus,
   type StepStatus,
 } from "../types/DashboardConstants";
+
+/**
+ * Whether the queue position at `currentIndex` belongs to an executing step.
+ * A running final step sits after the queue, so steps appended at that
+ * position have not started until execution returns to the queue phase.
+ */
+export function hasInFlightStep(
+  executionState: ExecutionState | undefined,
+  finalStepPhase: FinalStepPhase | undefined
+): boolean {
+  return (
+    executionState !== undefined &&
+    IN_FLIGHT_EXECUTION_STATES.has(executionState) &&
+    finalStepPhase !== FINAL_STEP_PHASES.FINAL_STEP
+  );
+}
 
 /**
  * The only part of a step this derivation reads. Kept structurally minimal so

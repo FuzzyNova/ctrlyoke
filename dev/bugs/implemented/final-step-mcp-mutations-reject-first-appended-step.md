@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), reproduced with `npx tsx` against `RunContinuationService`
 - **Area:** `src/core/orchestration/RunContinuationService.ts` (`assertEditableDuringExecution` ~1151-1163, `reorderStepsAtRun` `isRunningHead` ~912, `assertPendingReorderIsSafe` ~1230-1237)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
