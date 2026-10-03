@@ -5,10 +5,10 @@ the authoritative option list of any command.
 
 ```text
 ctrlyoke run [file] [options]
-ctrlyoke status [--workflow <key>] [--run <ref>] [--cwd <path>] [--json]
-ctrlyoke rerun --workflow <key> [--from <ref|runId>] [options]
-ctrlyoke append [file] --workflow <key> --run <ref|runId> [--prompt <text>] [options]
-ctrlyoke continue --workflow <key> --run <ref|runId> [options]
+ctrlyoke status [--workflow <key-or-name>] [--run <ref>] [--cwd <path>] [--json]
+ctrlyoke rerun --workflow <key-or-name> [--from <ref|runId>] [options]
+ctrlyoke append [file] --workflow <key-or-name> --run <ref|runId> [--prompt <text>] [options]
+ctrlyoke continue --workflow <key-or-name> --run <ref|runId> [options]
 ctrlyoke validate <file> [--harness <id> | --all-installed-harnesses] [--strict <policy>] [--json]
 ctrlyoke commit [--model <model>] [--hint <text>] [--print-only] [--all] [--yes] [--cwd <path>]
 ctrlyoke about [--json]
@@ -19,14 +19,14 @@ ctrlyoke trust-workspace-settings [--yes] [--all] [--cwd <path>]
 ctrlyoke history prune [--yes]
 ctrlyoke history relink <oldPath> <newPath> [--yes]
 ctrlyoke history list [--cwd <path>] [--all] [--state <state...>] [--since <when>] [--sort latest|name] [--limit <n>] [--json]
-ctrlyoke history runs --workflow <key> [--cwd <path>] [--json]
-ctrlyoke history steps --workflow <key> [--run <ref|runId>] [--json] [--full-prompts]
-ctrlyoke history show --workflow <key> [--run <ref|runId>] [--step <selector>] [--attempt <n|latest|all>] [--json] [--summary|--events]
+ctrlyoke history runs --workflow <key-or-name> [--cwd <path>] [--json]
+ctrlyoke history steps --workflow <key-or-name> [--run <ref|runId>] [--json] [--full-prompts]
+ctrlyoke history show --workflow <key-or-name> [--run <ref|runId>] [--step <selector>] [--attempt <n|latest|all>] [--json] [--summary|--events]
 ctrlyoke history search <query> [filters] [--json]
 ctrlyoke history trash list|restore <id>|purge <id>|empty [--yes]
-ctrlyoke step edit [file] --workflow <key> --run <ref|runId> --index <index> [--prompt <text>]
-ctrlyoke step remove --workflow <key> --run <ref|runId> --index <index>
-ctrlyoke step reorder --workflow <key> --run <ref|runId> --order <indices>
+ctrlyoke step edit [file] --workflow <key-or-name> --run <ref|runId> --index <index> [--prompt <text>]
+ctrlyoke step remove --workflow <key-or-name> --run <ref|runId> --index <index>
+ctrlyoke step reorder --workflow <key-or-name> --run <ref|runId> --order <indices>
 ctrlyoke secret set <NAME> [--stdin] [--scope user|workspace] [--cwd <path>]
 ctrlyoke secret list [--cwd <path>]
 ctrlyoke secret rm <NAME> [--yes] [--scope user|workspace] [--cwd <path>]
@@ -40,6 +40,12 @@ The CLI treats its working directory (or `--cwd`) as the workspace root: it
 reads `<cwd>/.ctrlyoke/settings.json` on top of `~/.ctrlyoke/settings.json` and
 records run history for that directory. Run it from the directory that holds
 your `.ctrlyoke/` folder, or pass `--cwd`.
+
+Commands with a scalar `--workflow` option accept either a lineage key or an
+exact workflow name (case-insensitive). Exact keys take precedence. If a name
+matches one lineage, the CLI prints its key to stderr; ambiguous names list the
+matching keys and latest run dates. Use `ctrlyoke history list` to find a key
+when a name does not match.
 
 ## `ctrlyoke status`
 
@@ -595,7 +601,7 @@ ctrlyoke history search "EP.*RM" --regex
 
 | Option                | Meaning                                                                                                                                                                |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--workflow <key...>` | Restrict to workflow lineage keys                                                                                                                                      |
+| `--workflow <key...>` | Restrict to workflow lineage keys or exact workflow names                                                                                                              |
 | `--this-workflow`     | Restrict to the workflow named by `CTRLYOKE_WORKING_FILE` (set for harness and workflow-script processes)                                                              |
 | `--kind <kind...>`    | Restrict to event kinds, such as `prompt`, `response`, `thinking`, `bash`, `fileEdit`, `tool`, `script`                                                                |
 | `--harness <id...>`   | Restrict to harnesses                                                                                                                                                  |

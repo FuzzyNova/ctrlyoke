@@ -18,7 +18,7 @@ export function registerStatusCommand(
   program
     .command("status")
     .description("List executing workflows and runner liveness")
-    .option("--workflow <key>", "Restrict to a workflow lineage")
+    .option("--workflow <key>", "Workflow lineage key or exact name")
     .option("--run <ref>", "Restrict to a specific run (requires --workflow)")
     .option(
       "-d, --cwd <path>",

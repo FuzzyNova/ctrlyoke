@@ -10,8 +10,8 @@ import type {
   WorkflowStep,
 } from "../types/CtrlYokeTypes";
 import { RUNNER_IDS } from "../types/DashboardConstants";
-import * as WorkflowPaths from "../utils/WorkflowPaths";
 import {
+  resolveCliWorkflowKey,
   resolveCliRunRefAtLineage,
   parseCliStepIndex,
   type CliRunSummaryProvider,
@@ -32,6 +32,7 @@ const STEP_MUTATION_OPERATIONS = {
 
 export interface StepCommandIo {
   writeOut(message: string): void;
+  writeErr?(message: string): void;
 }
 
 export interface StepCommandContext {
@@ -66,7 +67,8 @@ export async function editStepCommand(
   const target = await resolveEditTarget(
     options.workflow,
     options.run,
-    context
+    context,
+    io
   );
   const edited = await RunContinuationService.editStepAtRun(
     context.workspaceRoot,
@@ -106,7 +108,8 @@ export async function removeStepCommand(
   const target = await resolveEditTarget(
     options.workflow,
     options.run,
-    context
+    context,
+    io
   );
   const removed = await RunContinuationService.removeStepAtRun(
     context.workspaceRoot,
@@ -145,7 +148,8 @@ export async function reorderStepsCommand(
   const target = await resolveEditTarget(
     options.workflow,
     options.run,
-    context
+    context,
+    io
   );
   const reordered = await RunContinuationService.reorderStepsAtRun(
     context.workspaceRoot,
@@ -179,15 +183,20 @@ export async function reorderStepsCommand(
 async function resolveEditTarget(
   workflow: string,
   selector: string,
-  context: StepCommandContext
+  context: StepCommandContext,
+  io: StepCommandIo
 ): Promise<{
   workflowKey: WorkflowKey;
   runRef: RunRef;
   definitionRevision: number;
   allowInterruptedRun: boolean;
 }> {
-  WorkflowPaths.assertValidWorkflowKey(workflow);
-  const workflowKey = workflow as WorkflowKey;
+  const workflowKey = await resolveCliWorkflowKey(
+    context.workspaceRoot,
+    context.lineageRepository,
+    workflow,
+    io.writeErr ?? ((message) => console.error(message))
+  );
   const runRef = await resolveCliRunRefAtLineage(
     context.workspaceRoot,
     context.outputHistoryManager,

@@ -18,7 +18,7 @@ step overview. It is sourced from the run's working file and stays small even
 when `events.jsonl` contains large outputs:
 
 ```bash
-ctrlyoke history steps --workflow <key> --run <ref> --json
+ctrlyoke history steps --workflow <key-or-name> --run <ref> --json
 ```
 
 Every step's `selector` (a zero-based index, or `final:N` for a final-step
@@ -26,7 +26,7 @@ pass) can be passed straight to `--step`. Read a selected step's prompt and
 answer first with a compact record:
 
 ```bash
-ctrlyoke history show --workflow <key> --run <ref> --step <N> --kind prompt response --json --summary
+ctrlyoke history show --workflow <key-or-name> --run <ref> --step <N> --kind prompt response --json --summary
 ```
 
 If you need more context, read the last 4,000 response characters. Paging
@@ -34,7 +34,7 @@ reads one attempt; for a retried step it reads the latest attempt unless you
 pass `--attempt <n>`:
 
 ```bash
-ctrlyoke history show --workflow <key> --run <ref> --step <N> --json --summary --tail 4000
+ctrlyoke history show --workflow <key-or-name> --run <ref> --step <N> --json --summary --tail 4000
 ```
 
 The page bounds the whole record, so the output stays near 4,000 characters

@@ -6,7 +6,8 @@ import {
   type GlobalWorkflowStatusRow,
   type GlobalWorkflowStatusWording,
 } from "../core/orchestration/GlobalWorkflowStatusService";
-import type { RunRef, WorkflowKey } from "../types/CtrlYokeTypes";
+import { resolveCliWorkflowKey } from "./CliRunSelector";
+import type { RunRef } from "../types/CtrlYokeTypes";
 import {
   CLI_STATUS_LIVENESS_REASONS,
   CLI_STATUS_LIVENESS_STATES,
@@ -26,6 +27,7 @@ import {
 
 export interface CliStatusCommandIo {
   writeOut(message: string): void;
+  writeErr?(message: string): void;
 }
 
 export interface CliStatusCommandDependencies {
@@ -67,12 +69,20 @@ export async function statusCommand(
   const workspace: CliWorkspaceBootstrap = await (
     dependencies.bootstrapCliWorkspace ?? bootstrapCliWorkspace
   )(options);
+  const workflowKey = options.workflow
+    ? await resolveCliWorkflowKey(
+        workspace.workspaceRoot,
+        workspace.createLineageRepository(),
+        options.workflow,
+        io.writeErr ?? ((message) => console.error(message))
+      )
+    : undefined;
   const result = await new GlobalWorkflowStatusService(
     workspace.workspaceRoot,
     workspace.createLineageRepository(),
     CLI_STATUS_WORDING
   ).getStatus({
-    ...(options.workflow && { workflowKey: options.workflow as WorkflowKey }),
+    ...(workflowKey && { workflowKey }),
     ...(options.run && { runRef: options.run as RunRef }),
   });
   const now = (dependencies.now ?? Date.now)();

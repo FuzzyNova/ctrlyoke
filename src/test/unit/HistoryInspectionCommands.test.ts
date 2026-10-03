@@ -75,6 +75,7 @@ import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import { Log } from "../../utils/Log";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import {
+  resolveCliWorkflowKey,
   parseHistoryShowAttempt,
   parseHistoryShowStep,
 } from "../../cli/CliRunSelector";
@@ -114,6 +115,14 @@ class TestLineageRepository implements HistoryInspectionLineageRepository {
     workflowKey: WorkflowKey
   ): Promise<WorkflowLineageDescriptor | undefined> {
     return this.descriptors.get(workflowKey);
+  }
+
+  async listRunRefs(
+    _workspaceRoot: string,
+    workflowKey: WorkflowKey
+  ): Promise<RunRef[]> {
+    const latestRunRef = this.descriptors.get(workflowKey)?.latestRunRef;
+    return latestRunRef ? [latestRunRef] : [];
   }
 
   async readWorkflowDisplayName(
@@ -1477,6 +1486,114 @@ suite("CLI history inspection command handlers", () => {
     assert.deepStrictEqual(manager.runSummaryCalls, [key]);
   });
 
+  test("an exact lineage key wins over another lineage's matching name", async () => {
+    const exactKey = "Release" as WorkflowKey;
+    const otherKey = "release-2026-09-20T12-00-00-000Z" as WorkflowKey;
+    const repository = new TestLineageRepository(
+      [exactKey, otherKey],
+      new Map([
+        [exactKey, descriptor(exactKey, { workflowName: "Other" })],
+        [otherKey, descriptor(otherKey, { workflowName: "Release" })],
+      ]),
+      new Map()
+    );
+    const errors: string[] = [];
+
+    assert.strictEqual(
+      await resolveCliWorkflowKey(
+        "/workspace",
+        repository,
+        "Release",
+        (message) => errors.push(message)
+      ),
+      exactKey
+    );
+    assert.deepStrictEqual(errors, []);
+  });
+
+  test("resolves a unique exact case-insensitive name with JSON stdout clean", async () => {
+    const key = "release-2026-09-20T12-00-00-000Z" as WorkflowKey;
+    const summary: RunSummary = {
+      workflowKey: key,
+      runRef: "run-2026-09-20T12-00-00-000Z" as RunRef,
+      runDirectory: "/workspace/run",
+      runId: 1,
+      startedAt: 1_700_000_000_000,
+      executionState: EXECUTION_STATES.COMPLETED,
+      definitionRevision: 1,
+      stepCount: 1,
+      hasMixedHarnesses: false,
+      hasMixedModels: false,
+    };
+    const manager = new TestHistoryManager(
+      new Map(),
+      new Map([[key, [summary]]])
+    );
+    const repository = new TestLineageRepository(
+      [key],
+      new Map([[key, descriptor(key, { workflowName: "Release Plan" })]]),
+      new Map()
+    );
+    const io = new TestIo();
+
+    await runsHistoryCommand(
+      { workflow: "rElEaSe PlAn", json: true },
+      io,
+      dependencies(repository, manager)
+    );
+
+    assert.deepStrictEqual(JSON.parse(io.output[0]), [summary]);
+    assert.deepStrictEqual(io.errors, [`Using lineage ${key}`]);
+    assert.deepStrictEqual(manager.runSummaryCalls, [key]);
+  });
+
+  test("rejects an ambiguous name with each key and latest run date", async () => {
+    const older = "release-2026-09-19T12-00-00-000Z" as WorkflowKey;
+    const newer = "release-2026-09-20T12-00-00-000Z" as WorkflowKey;
+    const repository = new TestLineageRepository(
+      [older, newer],
+      new Map([
+        [
+          older,
+          descriptor(older, {
+            workflowName: "Release",
+            latestRunRef: "run-2026-09-19T12-00-00-000Z" as RunRef,
+          }),
+        ],
+        [
+          newer,
+          descriptor(newer, {
+            workflowName: "release",
+            latestRunRef: "run-2026-09-20T12-00-00-000Z" as RunRef,
+          }),
+        ],
+      ]),
+      new Map()
+    );
+
+    await assert.rejects(
+      resolveCliWorkflowKey("/workspace", repository, "RELEASE", () => {}),
+      (error: Error) => {
+        assert.match(error.message, new RegExp(`${older}.*2026-09-19`));
+        assert.match(error.message, new RegExp(`${newer}.*2026-09-20`));
+        return true;
+      }
+    );
+  });
+
+  test("keeps the not-found error and suggests history list", async () => {
+    const key = "known" as WorkflowKey;
+    await assert.rejects(
+      resolveCliWorkflowKey(
+        "/workspace",
+        new TestLineageRepository([key], new Map(), new Map()),
+        "missing",
+        () => {}
+      ),
+      /Workflow lineage "missing" was not found\. Run `ctrlyoke history list` to find a lineage key\./
+    );
+  });
+
   test("rejects an unknown workflow key", async () => {
     const key = "known" as WorkflowKey;
     await assert.rejects(
@@ -2736,7 +2853,10 @@ suite("CLI history inspection command handlers", () => {
             new TestRunOutputResolver([])
           )
         ),
-        { message: 'Workflow lineage "missing" was not found.' }
+        {
+          message:
+            'Workflow lineage "missing" was not found. Run `ctrlyoke history list` to find a lineage key.',
+        }
       );
       await assert.rejects(
         command(

@@ -11,7 +11,7 @@ import type {
   HistorySearchOptions as HistorySearchCommandOptions,
 } from "./HistoryCommandDefinitions";
 import {
-  createWorkflowLineageNotFoundError,
+  resolveCliWorkflowKey,
   resolveCliRunRef,
   parseHistoryShowAttempt,
   parseHistoryShowStep,
@@ -125,7 +125,10 @@ export interface HistoryInspectionCommandIo {
 
 export interface HistoryInspectionLineageRepository extends Pick<
   WorkflowLineageRepository,
-  "listLineageKeys" | "tryReadDescriptor" | "readWorkflowDisplayName"
+  | "listLineageKeys"
+  | "listRunRefs"
+  | "tryReadDescriptor"
+  | "readWorkflowDisplayName"
 > {}
 
 export interface HistoryInspectionOutputHistoryManager extends Pick<
@@ -292,9 +295,13 @@ export async function runsHistoryCommand(
   const workspace = await (
     dependencies.bootstrapCliWorkspace ?? bootstrapCliWorkspace
   )(options);
-  const workflowKey = options.workflow as WorkflowKey;
+  const workflowKey = await resolveCliWorkflowKey(
+    workspace.workspaceRoot,
+    workspace.createLineageRepository(),
+    options.workflow,
+    (message) => io.writeErr(message)
+  );
   const lineageRepository = workspace.createLineageRepository();
-  await assertHistoryLineageExists(workspace, lineageRepository, workflowKey);
 
   const workflowName = await lineageRepository.readWorkflowDisplayName(
     workspace.workspaceRoot,
@@ -309,21 +316,8 @@ export async function runsHistoryCommand(
     return;
   }
 
-  io.writeOut(`Workflow: ${workflowName} (${options.workflow})`);
+  io.writeOut(`Workflow: ${workflowName} (${workflowKey})`);
   renderRunSummaries(summaries, io);
-}
-
-async function assertHistoryLineageExists(
-  workspace: HistoryInspectionWorkspace,
-  lineageRepository: HistoryInspectionLineageRepository,
-  workflowKey: WorkflowKey
-): Promise<void> {
-  const lineageKeys = await lineageRepository.listLineageKeys(
-    workspace.workspaceRoot
-  );
-  if (!lineageKeys.includes(workflowKey)) {
-    throw createWorkflowLineageNotFoundError(workflowKey);
-  }
 }
 
 /**
@@ -333,26 +327,34 @@ async function assertHistoryLineageExists(
  */
 async function resolveHistoryRun(
   workspace: HistoryInspectionWorkspace,
-  workflowKey: WorkflowKey,
+  io: HistoryInspectionCommandIo,
+  workflowKey: string,
   runSelector: string | undefined
-): Promise<{ runRef: RunRef; runSummary: RunSummary }> {
-  await assertHistoryLineageExists(
-    workspace,
+): Promise<{
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
+  runSummary: RunSummary;
+}> {
+  const resolvedWorkflowKey = await resolveCliWorkflowKey(
+    workspace.workspaceRoot,
     workspace.createLineageRepository(),
-    workflowKey
+    workflowKey,
+    (message) => io.writeErr(message)
   );
   const summaries = await workspace
     .createOutputHistoryManager()
-    .getRunSummaries(workflowKey);
+    .getRunSummaries(resolvedWorkflowKey);
   if (summaries.length === 0) {
-    throw new Error(`Workflow lineage "${workflowKey}" has no runs yet.`);
+    throw new Error(
+      `Workflow lineage "${resolvedWorkflowKey}" has no runs yet.`
+    );
   }
   const summaryProvider: CliRunSummaryProvider = {
     getRunSummaries: async () => summaries,
   };
   const runRef = await resolveCliRunRef(
     summaryProvider,
-    workflowKey,
+    resolvedWorkflowKey,
     runSelector,
     "--run"
   );
@@ -360,7 +362,7 @@ async function resolveHistoryRun(
   if (!runSummary) {
     throw new Error(`Run "${runRef}" was not found in history.`);
   }
-  return { runRef, runSummary };
+  return { workflowKey: resolvedWorkflowKey, runRef, runSummary };
 }
 
 /**
@@ -571,10 +573,10 @@ export async function showHistoryCommand(
   const workspace = await (
     dependencies.bootstrapCliWorkspace ?? bootstrapCliWorkspace
   )(options);
-  const workflowKey = options.workflow as WorkflowKey;
-  const { runRef, runSummary } = await resolveHistoryRun(
+  const { workflowKey, runRef, runSummary } = await resolveHistoryRun(
     workspace,
-    workflowKey,
+    io,
+    options.workflow,
     options.run
   );
   const workingDefinition = await readRunWorkingDefinition(
@@ -1184,10 +1186,10 @@ export async function stepsHistoryCommand(
   const workspace = await (
     dependencies.bootstrapCliWorkspace ?? bootstrapCliWorkspace
   )(options);
-  const workflowKey = options.workflow as WorkflowKey;
-  const { runRef } = await resolveHistoryRun(
+  const { workflowKey, runRef } = await resolveHistoryRun(
     workspace,
-    workflowKey,
+    io,
+    options.workflow,
     options.run
   );
   const definition = await readRunWorkingDefinition(
@@ -1374,11 +1376,27 @@ export async function searchHistoryCommand(
   dependencies: HistoryInspectionCommandDependencies = {}
 ): Promise<void> {
   CliTerminalFormatter.setColorEnabled(options.color !== false);
-  const request = buildHistorySearchQuery(query, options);
+  const normalizedQuery = query.trim();
+  if (normalizedQuery.length < HISTORY_SEARCH_MIN_QUERY_LENGTH) {
+    throw new Error(
+      `History search queries must contain at least ${HISTORY_SEARCH_MIN_QUERY_LENGTH} characters.`
+    );
+  }
   const snippetChars = requestSnippetChars(options);
   const workspace = await (
     dependencies.bootstrapCliWorkspace ?? bootstrapCliWorkspace
   )(options, { runs: { historySearchCacheMb: 0 } });
+  const workflowKeys = await Promise.all(
+    (options.workflow ?? []).map((workflow) =>
+      resolveCliWorkflowKey(
+        workspace.workspaceRoot,
+        workspace.createLineageRepository(),
+        workflow,
+        (message) => io.writeErr(message)
+      )
+    )
+  );
+  const request = buildHistorySearchQuery(query, options, workflowKeys);
   const service =
     dependencies.createHistorySearchService?.() ?? new HistorySearchService();
   const progress = createHistorySearchProgressReporter(io);
@@ -1483,7 +1501,9 @@ function createHistorySearchProgressReporter(io: HistoryInspectionCommandIo): {
 
 function buildHistorySearchQuery(
   query: string,
-  options: HistorySearchCommandOptions
+  options: HistorySearchCommandOptions,
+  resolvedWorkflowKeys: WorkflowKey[] = (options.workflow as WorkflowKey[]) ??
+    []
 ): HistorySearchQuery {
   const normalizedQuery = query.trim();
   if (normalizedQuery.length < HISTORY_SEARCH_MIN_QUERY_LENGTH) {
@@ -1492,7 +1512,7 @@ function buildHistorySearchQuery(
     );
   }
 
-  const workflowKeys = [...(options.workflow ?? [])];
+  const workflowKeys = [...resolvedWorkflowKeys];
   if (options.thisWorkflow) {
     const workingFile = process.env[CTRLYOKE_ENV_VARS.WORKING_FILE];
     if (!workingFile) {

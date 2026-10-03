@@ -103,7 +103,10 @@ import {
 } from "./core/PromptFileParser";
 import { readWorkflowLockInspection } from "./utils/WorkflowLockInspector";
 import * as WorkflowPaths from "./utils/WorkflowPaths";
-import { resolveCliRunRefAtLineage } from "./cli/CliRunSelector";
+import {
+  resolveCliRunRefAtLineage,
+  resolveCliWorkflowKey,
+} from "./cli/CliRunSelector";
 import { resolveCliFileArgument } from "./cli/CliFileArgument";
 import {
   applyCliAppendOverrides,
@@ -335,7 +338,10 @@ registerHistoryCommands(program, {
 registerStatusCommand(program, {
   status: (options) =>
     handleHistoryCommand(
-      statusCommand(options, { writeOut: (message) => console.log(message) })
+      statusCommand(options, {
+        writeOut: (message) => console.log(message),
+        writeErr: (message) => console.error(message),
+      })
     ),
 });
 
@@ -345,6 +351,7 @@ registerStepCommands(program, {
       prepareStepCommand(options).then((context) =>
         editStepCommand(file, options, context, {
           writeOut: (message) => console.log(message),
+          writeErr: (message) => console.error(message),
         })
       ),
       options.json === true
@@ -354,6 +361,7 @@ registerStepCommands(program, {
       prepareStepCommand(options).then((context) =>
         removeStepCommand(options, context, {
           writeOut: (message) => console.log(message),
+          writeErr: (message) => console.error(message),
         })
       ),
       options.json === true
@@ -363,6 +371,7 @@ registerStepCommands(program, {
       prepareStepCommand(options).then((context) =>
         reorderStepsCommand(options, context, {
           writeOut: (message) => console.log(message),
+          writeErr: (message) => console.error(message),
         })
       ),
       options.json === true
@@ -1867,8 +1876,12 @@ async function executeAddressedCliOperation(
   userFeedbackSink: ConsoleUserFeedbackSink,
   onWorkflowLoaded: () => void
 ): Promise<void> {
-  const workflowKey = operation.workflow;
-  WorkflowPaths.assertValidWorkflowKey(workflowKey);
+  const workflowKey = await resolveCliWorkflowKey(
+    workspaceRoot,
+    new WorkflowLineageRepository(),
+    operation.workflow,
+    (message) => console.error(message)
+  );
   const history = new OutputHistoryManager(workspaceRoot);
   const lineageRepository = new WorkflowLineageRepository();
   const warnIfNeeded = async (): Promise<void> => {
