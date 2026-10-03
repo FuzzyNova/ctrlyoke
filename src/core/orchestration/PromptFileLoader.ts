@@ -401,14 +401,21 @@ export class PromptFileLoader {
         Log.trace(
           `[PromptFileLoader] Merging prompts from working file (state: ${queueState.status}, mode: ${mode})`
         );
+        const revisionBeforeMerge = queueState.definitionRevision;
         const newStepsCount = await this.promptQueue.mergeStepsFromDisk();
+        // The merge also adopts another writer's newer revision (an MCP
+        // edit/reorder adds no steps but still supersedes the client's
+        // revision), so republish whenever either changed.
+        const revisionAdvanced =
+          this.promptQueue.getState().definitionRevision !==
+          revisionBeforeMerge;
 
         const mergeDashboard = this.getDashboard();
-        if (newStepsCount > 0 && mergeDashboard) {
+        if ((newStepsCount > 0 || revisionAdvanced) && mergeDashboard) {
           // Get updated state after merge
           const updatedState = this.promptQueue.getState();
           Log.info(
-            `[PromptFileLoader] Queue extended by ${newStepsCount} steps (total: ${updatedState.steps.length}). Sending STEPS_EXTENDED to dashboard.`
+            `[PromptFileLoader] Queue extended by ${newStepsCount} steps (total: ${updatedState.steps.length}, definitionRevision: ${updatedState.definitionRevision}). Sending STEPS_EXTENDED to dashboard.`
           );
 
           // send STEPS_EXTENDED message with updated step list

@@ -861,10 +861,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     let restoredCount = 0;
     while (restoredCount < limit) {
       const status = previousResults[restoredCount].status;
-      if (
-        status !== STEP_STATUS.COMPLETED &&
-        status !== STEP_STATUS.SKIPPED
-      ) {
+      if (status !== STEP_STATUS.COMPLETED && status !== STEP_STATUS.SKIPPED) {
         break;
       }
       this.state.results[restoredCount].status = status;
@@ -1059,14 +1056,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       const workingFilePath = this.state.workingFilePath;
       if (workingFilePath) {
         const workingFile = await this.readWorkingFile(workingFilePath);
-        const diskSteps = workingFile.steps ?? [];
-        const diskDefinitionRevision = workingFile.definitionRevision ?? 1;
-        const newStepsFromDisk = this.mergeDiskSteps(
-          diskSteps,
-          workingFile.parallelGroups
-        );
+        const newStepsFromDisk = this.mergeDiskDefinition(workingFile);
         if (newStepsFromDisk.length > 0) {
-          this.state.definitionRevision = diskDefinitionRevision;
           this.onDiskStepsMergedEmitter.fire(newStepsFromDisk);
           this.emitStateChange();
         }
@@ -1109,12 +1100,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       const workingFilePath = this.state.workingFilePath;
       if (workingFilePath) {
         const workingFile = await this.readWorkingFile(workingFilePath);
-        const newStepsFromDisk = this.mergeDiskSteps(
-          workingFile.steps ?? [],
-          workingFile.parallelGroups
-        );
+        const newStepsFromDisk = this.mergeDiskDefinition(workingFile);
         if (newStepsFromDisk.length > 0) {
-          this.state.definitionRevision = workingFile.definitionRevision ?? 1;
           this.emitStateChange();
         }
       }
@@ -1900,16 +1887,11 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       const workingFile = await this.readWorkingFile(
         this.state.workingFilePath
       );
-      const diskSteps = workingFile.steps || [];
-
       Log.trace(
-        `[PromptQueue] mergeStepsFromDisk: Disk has ${diskSteps.length} steps, memory has ${this.state.steps.length} steps`
+        `[PromptQueue] mergeStepsFromDisk: Disk has ${workingFile.steps?.length ?? 0} steps, memory has ${this.state.steps.length} steps`
       );
 
-      const newStepsFromDisk = this.mergeDiskSteps(
-        diskSteps,
-        workingFile.parallelGroups
-      );
+      const newStepsFromDisk = this.mergeDiskDefinition(workingFile);
 
       if (newStepsFromDisk.length === 0) {
         Log.trace("[PromptQueue] mergeStepsFromDisk: No new steps found");
@@ -2014,7 +1996,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         `[PromptQueue] appendSteps: preserving runtime ownership (current: ${this.stateMachine.status}, completed count: ${this.state.completedIndices.size})`
       );
 
-      this.bumpDefinitionRevision();
+      const baseDefinitionRevision = this.bumpDefinitionRevision();
       this.workflowFile = this.workflowFile
         ? {
             ...this.workflowFile,
@@ -2027,7 +2009,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       // This is an intentional local definition mutation. The in-memory queue
       // already contains the append, so do not reconcile against the stale
       // pre-append disk snapshot and let disk-authoritative merge replace it.
-      await this.workingFileManager.updateWorkingFileDirect(true);
+      await this.persistDefinitionMutation(baseDefinitionRevision);
       Log.info(
         `[PromptQueue] Working file updated. Appended ${steps.length} steps from: ${source} at position: ${position}`
       );
@@ -2160,7 +2142,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
           })
         );
       }
-      this.bumpDefinitionRevision();
+      const baseDefinitionRevision = this.bumpDefinitionRevision();
       this.workflowFile = this.workflowFile
         ? {
             ...this.workflowFile,
@@ -2169,7 +2151,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
           }
         : this.workflowFile;
       this.emitStateChange();
-      await this.workingFileManager.updateWorkingFileDirect(true);
+      await this.persistDefinitionMutation(baseDefinitionRevision);
       Log.info(
         `[PromptQueue] ${operation} at index ${insertIndex} (definitionRevision=${this.state.definitionRevision})`
       );
@@ -2260,7 +2242,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         this.state.completedIndices = updated;
       }
 
-      this.bumpDefinitionRevision();
+      const baseDefinitionRevision = this.bumpDefinitionRevision();
       this.workflowFile = this.workflowFile
         ? {
             ...this.workflowFile,
@@ -2273,7 +2255,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       // The merge in `updateWorkingFileDirect` is disk-authoritative for order
       // and topology, so letting it run here would rebuild the queue from the
       // pre-insert disk snapshot and drop the step that was just inserted.
-      await this.workingFileManager.updateWorkingFileDirect(true);
+      await this.persistDefinitionMutation(baseDefinitionRevision);
       Log.info(
         `[PromptQueue] Inserted step from ${source} after index ${afterIndex} (insertIndex=${insertIndex})`
       );
@@ -2626,12 +2608,49 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   }
 
   /**
-   * Bump the in-memory definition revision counter. Call from every step-definition
-   * mutation (append/insert/replace/delete/reorder/property edit) — never for pure
-   * runtime persistence (completion, pause/resume, session metadata).
+   * Bump the in-memory definition revision counter and return the revision the
+   * mutation was based on. Call from every step-definition mutation
+   * (append/insert/replace/delete/reorder) — never for pure runtime persistence
+   * (completion, pause/resume, session metadata) — and hand the returned base
+   * to {@link persistDefinitionMutation} in the same queued operation.
    */
-  private bumpDefinitionRevision(): void {
-    this.state.definitionRevision = (this.state.definitionRevision ?? 1) + 1;
+  private bumpDefinitionRevision(): number {
+    const baseDefinitionRevision = this.state.definitionRevision ?? 1;
+    this.state.definitionRevision = baseDefinitionRevision + 1;
+    return baseDefinitionRevision;
+  }
+
+  /**
+   * Persist a local definition mutation. The write is checked against disk
+   * under the working-file lock: if another process moved the definition past
+   * `baseDefinitionRevision`, the mutation is rejected and the queue resyncs
+   * from disk instead of overwriting (and silently dropping) that change.
+   */
+  private async persistDefinitionMutation(
+    baseDefinitionRevision: number
+  ): Promise<void> {
+    await this.workingFileManager.persistDefinitionMutationDirect(
+      baseDefinitionRevision
+    );
+  }
+
+  /**
+   * Disk-authoritative merge that also adopts the disk definition revision.
+   * Merging another writer's steps without its revision leaves memory holding
+   * a superseded number that is then republished to clients (their next edit
+   * conflicts spuriously) and handed to the timeline as the definition the
+   * merged steps belong to (so their snapshot is never committed).
+   */
+  private mergeDiskDefinition(workingFile: WorkingFile): WorkflowStep[] {
+    const newStepsFromDisk = this.mergeDiskSteps(
+      workingFile.steps ?? [],
+      workingFile.parallelGroups
+    );
+    this.state.definitionRevision = Math.max(
+      this.state.definitionRevision ?? 1,
+      workingFile.definitionRevision ?? 1
+    );
+    return newStepsFromDisk;
   }
 
   /**
@@ -2644,48 +2663,52 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     index: number,
     updates: Partial<WorkflowStep>
   ): Promise<void> {
-    if (index < 0 || index >= this.state.steps.length) {
-      throw new Error(`Invalid prompt index: ${index}`);
-    }
-    this.assertPendingRewindSuffixIndex(index, "update");
-    this.assertEditableDuringExecution(index, "edit");
+    // Mutation and write run as one serialized operation, so no other
+    // queued write can persist (or disk-merge away) the half-applied state.
+    await this.workingFileManager.runInQueue(async () => {
+      if (index < 0 || index >= this.state.steps.length) {
+        throw new Error(`Invalid prompt index: ${index}`);
+      }
+      this.assertPendingRewindSuffixIndex(index, "update");
+      this.assertEditableDuringExecution(index, "edit");
 
-    // Merge updates into existing step
-    const nextTopology = replaceParallelGroupStep(
-      {
-        steps: this.state.steps,
-        parallelGroups: this.state.parallelGroups,
-      },
-      index,
-      {
-        ...this.state.steps[index],
-        ...updates,
-      } as WorkflowStep
-    );
-    assertStartedStepPositionsPreserved(
-      this.state.steps,
-      nextTopology.steps,
-      "edit"
-    );
-    this.state.steps = nextTopology.steps;
-    this.state.parallelGroups = nextTopology.parallelGroups;
-    this.workflowFile = this.workflowFile
-      ? {
-          ...this.workflowFile,
-          steps: [...this.state.steps],
+      // Merge updates into existing step
+      const nextTopology = replaceParallelGroupStep(
+        {
+          steps: this.state.steps,
           parallelGroups: this.state.parallelGroups,
-        }
-      : this.workflowFile;
+        },
+        index,
+        {
+          ...this.state.steps[index],
+          ...updates,
+        } as WorkflowStep
+      );
+      assertStartedStepPositionsPreserved(
+        this.state.steps,
+        nextTopology.steps,
+        "edit"
+      );
+      this.state.steps = nextTopology.steps;
+      this.state.parallelGroups = nextTopology.parallelGroups;
+      this.workflowFile = this.workflowFile
+        ? {
+            ...this.workflowFile,
+            steps: [...this.state.steps],
+            parallelGroups: this.state.parallelGroups,
+          }
+        : this.workflowFile;
 
-    this.bumpDefinitionRevision();
+      const baseDefinitionRevision = this.bumpDefinitionRevision();
 
-    // Persist to working file (skip merge to avoid undoing the update)
-    await this.updateWorkingFile(true);
+      // Persist to working file (skip merge to avoid undoing the update)
+      await this.persistDefinitionMutation(baseDefinitionRevision);
 
-    // Emit state change
-    this.emitStateChange();
+      // Emit state change
+      this.emitStateChange();
 
-    Log.debug(`[PromptQueue] Updated prompt at index ${index}`);
+      Log.debug(`[PromptQueue] Updated prompt at index ${index}`);
+    });
   }
 
   /**
@@ -2697,42 +2720,46 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    * @throws Error if index is out of range
    */
   public async replaceStep(index: number, step: WorkflowStep): Promise<void> {
-    if (index < 0 || index >= this.state.steps.length) {
-      throw new Error(`Invalid prompt index: ${index}`);
-    }
-    this.assertPendingRewindSuffixIndex(index, "replace");
-    this.assertEditableDuringExecution(index, "replace");
-    const existingStepId = this.state.steps[index]._runtime?.stepId;
-    const replacement: WorkflowStep =
-      existingStepId === undefined
-        ? step
-        : { ...step, _runtime: { stepId: existingStepId } };
-    const nextTopology = replaceParallelGroupStep(
-      {
-        steps: this.state.steps,
-        parallelGroups: this.state.parallelGroups,
-      },
-      index,
-      replacement
-    );
-    assertStartedStepPositionsPreserved(
-      this.state.steps,
-      nextTopology.steps,
-      "replace"
-    );
-    this.state.steps = nextTopology.steps;
-    this.state.parallelGroups = nextTopology.parallelGroups;
-    this.workflowFile = this.workflowFile
-      ? {
-          ...this.workflowFile,
-          steps: [...this.state.steps],
+    // Mutation and write run as one serialized operation, so no other
+    // queued write can persist (or disk-merge away) the half-applied state.
+    await this.workingFileManager.runInQueue(async () => {
+      if (index < 0 || index >= this.state.steps.length) {
+        throw new Error(`Invalid prompt index: ${index}`);
+      }
+      this.assertPendingRewindSuffixIndex(index, "replace");
+      this.assertEditableDuringExecution(index, "replace");
+      const existingStepId = this.state.steps[index]._runtime?.stepId;
+      const replacement: WorkflowStep =
+        existingStepId === undefined
+          ? step
+          : { ...step, _runtime: { stepId: existingStepId } };
+      const nextTopology = replaceParallelGroupStep(
+        {
+          steps: this.state.steps,
           parallelGroups: this.state.parallelGroups,
-        }
-      : this.workflowFile;
-    this.bumpDefinitionRevision();
-    await this.updateWorkingFile(true);
-    this.emitStateChange();
-    Log.debug(`[PromptQueue] Replaced step at index ${index}`);
+        },
+        index,
+        replacement
+      );
+      assertStartedStepPositionsPreserved(
+        this.state.steps,
+        nextTopology.steps,
+        "replace"
+      );
+      this.state.steps = nextTopology.steps;
+      this.state.parallelGroups = nextTopology.parallelGroups;
+      this.workflowFile = this.workflowFile
+        ? {
+            ...this.workflowFile,
+            steps: [...this.state.steps],
+            parallelGroups: this.state.parallelGroups,
+          }
+        : this.workflowFile;
+      const baseDefinitionRevision = this.bumpDefinitionRevision();
+      await this.persistDefinitionMutation(baseDefinitionRevision);
+      this.emitStateChange();
+      Log.debug(`[PromptQueue] Replaced step at index ${index}`);
+    });
   }
 
   /**
@@ -2743,78 +2770,82 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    *   the running step is deletable mid-run.
    */
   public async deletePrompt(index: number): Promise<void> {
-    if (index < 0 || index >= this.state.steps.length) {
-      throw new Error(`Invalid prompt index: ${index}`);
-    }
-    this.assertPendingRewindSuffixIndex(index, "delete");
-    // While executing, only steps after the running step may be deleted;
-    // completed steps and the running step stay locked.
-    this.assertEditableDuringExecution(index, "delete");
-
-    this.state.steps.forEach((step, stepIndex) => {
-      this.archiveStepRuntime(step, stepIndex, "deletePrompt");
-    });
-
-    const previousSteps = this.state.steps;
-    const nextTopology = deleteParallelGroupStep(
-      {
-        steps: this.state.steps,
-        parallelGroups: this.state.parallelGroups,
-      },
-      index
-    );
-    if (this.isExecutionActive) {
-      assertStartedStepPositionsPreserved(
-        previousSteps,
-        nextTopology.steps,
-        "delete"
-      );
-    }
-    this.state.steps = nextTopology.steps;
-    this.state.parallelGroups = nextTopology.parallelGroups;
-    this.workflowFile = this.workflowFile
-      ? {
-          ...this.workflowFile,
-          steps: [...this.state.steps],
-          parallelGroups: this.state.parallelGroups,
-        }
-      : this.workflowFile;
-
-    // Update currentIndex if deletion affects it
-    if (index < this.state.currentIndex) {
-      this.state.currentIndex--;
-    }
-
-    // Update completedIndices to reflect the removed slot:
-    // remove the deleted index and shift down all higher indices by 1.
-    if (this.state.completedIndices.size > 0) {
-      const updated = new Set<string>();
-      for (const entry of this.state.completedIndices) {
-        const n = parseInt(entry);
-        if (n < index) {
-          updated.add(entry);
-        } else if (n > index) {
-          updated.add(String(n - 1));
-        }
-        // n === index is dropped (the deleted prompt)
+    // Mutation and write run as one serialized operation, so no other
+    // queued write can persist (or disk-merge away) the half-applied state.
+    await this.workingFileManager.runInQueue(async () => {
+      if (index < 0 || index >= this.state.steps.length) {
+        throw new Error(`Invalid prompt index: ${index}`);
       }
-      this.state.completedIndices = updated;
-    }
+      this.assertPendingRewindSuffixIndex(index, "delete");
+      // While executing, only steps after the running step may be deleted;
+      // completed steps and the running step stay locked.
+      this.assertEditableDuringExecution(index, "delete");
 
-    // Update results array to match
-    if (this.state.results.length > index) {
-      this.state.results.splice(index, 1);
-    }
+      this.state.steps.forEach((step, stepIndex) => {
+        this.archiveStepRuntime(step, stepIndex, "deletePrompt");
+      });
 
-    this.bumpDefinitionRevision();
+      const previousSteps = this.state.steps;
+      const nextTopology = deleteParallelGroupStep(
+        {
+          steps: this.state.steps,
+          parallelGroups: this.state.parallelGroups,
+        },
+        index
+      );
+      if (this.isExecutionActive) {
+        assertStartedStepPositionsPreserved(
+          previousSteps,
+          nextTopology.steps,
+          "delete"
+        );
+      }
+      this.state.steps = nextTopology.steps;
+      this.state.parallelGroups = nextTopology.parallelGroups;
+      this.workflowFile = this.workflowFile
+        ? {
+            ...this.workflowFile,
+            steps: [...this.state.steps],
+            parallelGroups: this.state.parallelGroups,
+          }
+        : this.workflowFile;
 
-    // Persist to working file (skip merge to avoid undoing the delete)
-    await this.updateWorkingFile(true);
+      // Update currentIndex if deletion affects it
+      if (index < this.state.currentIndex) {
+        this.state.currentIndex--;
+      }
 
-    // Emit state change
-    this.emitStateChange();
+      // Update completedIndices to reflect the removed slot:
+      // remove the deleted index and shift down all higher indices by 1.
+      if (this.state.completedIndices.size > 0) {
+        const updated = new Set<string>();
+        for (const entry of this.state.completedIndices) {
+          const n = parseInt(entry);
+          if (n < index) {
+            updated.add(entry);
+          } else if (n > index) {
+            updated.add(String(n - 1));
+          }
+          // n === index is dropped (the deleted prompt)
+        }
+        this.state.completedIndices = updated;
+      }
 
-    Log.debug(`[PromptQueue] Deleted prompt at index ${index}`);
+      // Update results array to match
+      if (this.state.results.length > index) {
+        this.state.results.splice(index, 1);
+      }
+
+      const baseDefinitionRevision = this.bumpDefinitionRevision();
+
+      // Persist to working file (skip merge to avoid undoing the delete)
+      await this.persistDefinitionMutation(baseDefinitionRevision);
+
+      // Emit state change
+      this.emitStateChange();
+
+      Log.debug(`[PromptQueue] Deleted prompt at index ${index}`);
+    });
   }
 
   /**
@@ -2907,7 +2938,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
             parallelGroups: this.state.parallelGroups,
           }
         : this.workflowFile;
-      this.bumpDefinitionRevision();
+      const baseDefinitionRevision = this.bumpDefinitionRevision();
       this.emitStateChange();
       // Intentional local definition mutation — same reasoning as `appendSteps`.
       // A reorder is expressed entirely in memory, and the merge in
@@ -2915,7 +2946,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       // order and parallel-group topology, so running it here would restore
       // the pre-reorder disk snapshot and silently discard the move (and any
       // group the reorder created).
-      await this.workingFileManager.updateWorkingFileDirect(true);
+      await this.persistDefinitionMutation(baseDefinitionRevision);
     });
   }
 
@@ -2958,9 +2989,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
             parallelGroups: this.state.parallelGroups,
           }
         : this.workflowFile;
-      this.bumpDefinitionRevision();
+      const baseDefinitionRevision = this.bumpDefinitionRevision();
       this.emitStateChange();
-      await this.workingFileManager.updateWorkingFileDirect(true);
+      await this.persistDefinitionMutation(baseDefinitionRevision);
       rolledBack = true;
     });
     return rolledBack;
@@ -2976,98 +3007,107 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     newSteps: WorkflowStep[],
     parallelGroups?: import("../types/CtrlYokeTypes").ParallelGroupDefinition[]
   ): Promise<void> {
-    const nextParallelGroups = parallelGroups ?? this.state.parallelGroups;
-    this.assertPendingRewindUndoRedoSuffix(newSteps, nextParallelGroups);
-    let restoredFromArchive = 0;
-    const incomingWithRuntime = newSteps.filter((step) => step._runtime).length;
+    // Mutation and write run as one serialized operation, so no other
+    // queued write can persist (or disk-merge away) the half-applied state.
+    await this.workingFileManager.runInQueue(async () => {
+      const nextParallelGroups = parallelGroups ?? this.state.parallelGroups;
+      this.assertPendingRewindUndoRedoSuffix(newSteps, nextParallelGroups);
+      let restoredFromArchive = 0;
+      const incomingWithRuntime = newSteps.filter(
+        (step) => step._runtime
+      ).length;
 
-    this.state.steps.forEach((step, index) => {
-      this.archiveStepRuntime(step, index, "syncStepsForUndoRedo");
-    });
+      this.state.steps.forEach((step, index) => {
+        this.archiveStepRuntime(step, index, "syncStepsForUndoRedo");
+      });
 
-    // Preserve _runtime from existing steps when available, but also accept
-    // _runtime from the restored undo/redo snapshot. That matters for redo after
-    // undo removed a completed prompt: the deleted step has no same-index live
-    // counterpart, so its runtime must come from the redo snapshot.
-    const nextTopology = normalizeParallelGroupTopology({
-      steps: newSteps,
-      parallelGroups: nextParallelGroups,
-    });
-    const identifiedSteps = ensureStepIds(nextTopology.steps, this.state.steps);
-    this.state.steps = identifiedSteps.map((newStep, i) => {
-      const persistableStep = stripViewOnlyWorkflowStepFields(newStep);
-      const suppressSuffixRuntime =
-        this.state.pendingRewind !== undefined &&
-        i >= this.state.pendingRewind.fromStepIndex;
-      const runtimeSafeStep = suppressSuffixRuntime
-        ? resetStepRuntimeForRewind(persistableStep)
-        : persistableStep;
-      const existing = this.state.steps[i];
-      const existingRuntime =
-        !suppressSuffixRuntime &&
-        existing &&
-        this.getStepIdentityKey(existing) ===
-          this.getStepIdentityKey(runtimeSafeStep)
-          ? existing._runtime
-          : undefined;
-      const archivedRuntime = suppressSuffixRuntime
-        ? undefined
-        : this.getArchivedRuntime(runtimeSafeStep, i);
-      const runtime = this.mergeRuntimeMetadata(
-        archivedRuntime,
-        suppressSuffixRuntime ? undefined : runtimeSafeStep._runtime,
-        existingRuntime
+      // Preserve _runtime from existing steps when available, but also accept
+      // _runtime from the restored undo/redo snapshot. That matters for redo after
+      // undo removed a completed prompt: the deleted step has no same-index live
+      // counterpart, so its runtime must come from the redo snapshot.
+      const nextTopology = normalizeParallelGroupTopology({
+        steps: newSteps,
+        parallelGroups: nextParallelGroups,
+      });
+      const identifiedSteps = ensureStepIds(
+        nextTopology.steps,
+        this.state.steps
       );
-      const persistableRuntime =
-        this.stripHistoryOnlyRuntimeFieldsForUndoRedo(runtime);
-      if (!existingRuntime && !runtimeSafeStep._runtime && archivedRuntime) {
-        restoredFromArchive++;
-      }
-      if (persistableRuntime) {
-        return { ...runtimeSafeStep, _runtime: persistableRuntime };
-      }
-      return runtimeSafeStep;
-    });
-    this.state.parallelGroups = nextTopology.parallelGroups;
-    this.workflowFile = this.workflowFile
-      ? {
-          ...this.workflowFile,
-          steps: [...this.state.steps],
-          parallelGroups: this.state.parallelGroups,
+      this.state.steps = identifiedSteps.map((newStep, i) => {
+        const persistableStep = stripViewOnlyWorkflowStepFields(newStep);
+        const suppressSuffixRuntime =
+          this.state.pendingRewind !== undefined &&
+          i >= this.state.pendingRewind.fromStepIndex;
+        const runtimeSafeStep = suppressSuffixRuntime
+          ? resetStepRuntimeForRewind(persistableStep)
+          : persistableStep;
+        const existing = this.state.steps[i];
+        const existingRuntime =
+          !suppressSuffixRuntime &&
+          existing &&
+          this.getStepIdentityKey(existing) ===
+            this.getStepIdentityKey(runtimeSafeStep)
+            ? existing._runtime
+            : undefined;
+        const archivedRuntime = suppressSuffixRuntime
+          ? undefined
+          : this.getArchivedRuntime(runtimeSafeStep, i);
+        const runtime = this.mergeRuntimeMetadata(
+          archivedRuntime,
+          suppressSuffixRuntime ? undefined : runtimeSafeStep._runtime,
+          existingRuntime
+        );
+        const persistableRuntime =
+          this.stripHistoryOnlyRuntimeFieldsForUndoRedo(runtime);
+        if (!existingRuntime && !runtimeSafeStep._runtime && archivedRuntime) {
+          restoredFromArchive++;
         }
-      : this.workflowFile;
+        if (persistableRuntime) {
+          return { ...runtimeSafeStep, _runtime: persistableRuntime };
+        }
+        return runtimeSafeStep;
+      });
+      this.state.parallelGroups = nextTopology.parallelGroups;
+      this.workflowFile = this.workflowFile
+        ? {
+            ...this.workflowFile,
+            steps: [...this.state.steps],
+            parallelGroups: this.state.parallelGroups,
+          }
+        : this.workflowFile;
 
-    const restoredCurrentIndex = this.getCurrentIndexFromRuntime(
-      this.state.steps
-    );
-    this.state.currentIndex = restoredCurrentIndex;
-    this.state.completedIndices = new Set<string>(
-      this.state.steps
-        .map((step, index) =>
-          step._runtime?.completedAt !== undefined ? String(index) : undefined
-        )
-        .filter((index): index is string => index !== undefined)
-    );
+      const restoredCurrentIndex = this.getCurrentIndexFromRuntime(
+        this.state.steps
+      );
+      this.state.currentIndex = restoredCurrentIndex;
+      this.state.completedIndices = new Set<string>(
+        this.state.steps
+          .map((step, index) =>
+            step._runtime?.completedAt !== undefined ? String(index) : undefined
+          )
+          .filter((index): index is string => index !== undefined)
+      );
 
-    this.state.results = this.state.steps.map((step, index) => ({
-      prompt: isScriptStep(step) ? step.script : step.prompt,
-      status: this.getResultStatusFromRuntime(
-        step,
-        index,
-        restoredCurrentIndex
-      ),
-      timestamp: new Date(),
-    }));
+      this.state.results = this.state.steps.map((step, index) => ({
+        prompt: isScriptStep(step) ? step.script : step.prompt,
+        status: this.getResultStatusFromRuntime(
+          step,
+          index,
+          restoredCurrentIndex
+        ),
+        timestamp: new Date(),
+      }));
 
-    this.bumpDefinitionRevision();
+      const baseDefinitionRevision = this.bumpDefinitionRevision();
 
-    // Persist to working file (skip merge — we know exactly what we want)
-    await this.updateWorkingFile(true);
+      // Persist to working file (skip merge — we know exactly what we want)
+      await this.persistDefinitionMutation(baseDefinitionRevision);
 
-    Log.debug(
-      `[PromptQueue] syncStepsForUndoRedo: ${newSteps.length} steps, currentIndex=${restoredCurrentIndex}, ` +
-        `incomingRuntime=${incomingWithRuntime}, restoredFromArchive=${restoredFromArchive}, archiveSize=${this.runtimeArchive.size}`
-    );
+      Log.debug(
+        `[PromptQueue] syncStepsForUndoRedo: ${newSteps.length} steps, currentIndex=${restoredCurrentIndex}, ` +
+          `incomingRuntime=${incomingWithRuntime}, restoredFromArchive=${restoredFromArchive}, archiveSize=${this.runtimeArchive.size}`
+      );
+    });
   }
 
   private getCurrentIndexFromRuntime(steps: WorkflowStep[]): number {

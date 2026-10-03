@@ -12,7 +12,8 @@ import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLine
 import { HistorySearchService } from "../../core/orchestration/HistorySearchService";
 import { getSharedHistorySearchIndexService } from "../../core/orchestration/HistorySearchIndexServiceRegistry";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
-import type { IWorkingFileQueueAccess } from "../../core/WorkingFileManager";
+import { PromptQueue } from "../../core/PromptQueue";
+import { buildDefinitionSnapshot } from "../../core/WorkflowStepSanitizer";
 import { RunContinuationService } from "../../core/orchestration/RunContinuationService";
 import { clearRunSummaryCache } from "../../core/orchestration/RunSummaryCache";
 import {
@@ -22,6 +23,7 @@ import {
   FINAL_STEP_PHASES,
   HARNESS_IDS,
   OUTPUT_HISTORY_KINDS,
+  PROMPT_TERMINAL_STATUS,
   SNAPSHOT_BASE_SOURCES,
   SNAPSHOT_STRATEGIES,
 } from "../../types/DashboardConstants";
@@ -42,6 +44,7 @@ import type {
   WorkflowKey,
   WorkflowTokenTotals,
   WorkflowStep,
+  WorkingFile,
 } from "../../types/CtrlYokeTypes";
 
 let nextTestRunOrdinal = 0;
@@ -2132,20 +2135,25 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       historyInit.workflowKey,
       historyInit.runRef
     );
-    const initialStep = { prompt: "initial step" };
     await fs.writeFile(
       runFilePath,
       JSON.stringify({
         startedAt: 1,
         definitionRevision: 1,
-        steps: [initialStep],
+        steps: [{ prompt: "initial step" }],
         _runtime: {
           currentIndex: 0,
           executionState: EXECUTION_STATES.RUNNING,
         },
       })
     );
+    const queue = new PromptQueue();
+    await queue.restoreFromWorkingFile(runFilePath, true);
+    assert.strictEqual(queue.getState().definitionRevision, 1);
+    const readRunFile = async () =>
+      JSON.parse(await fs.readFile(runFilePath, "utf8")) as WorkingFile;
 
+    // The MCP server appends from another process...
     const append = await RunContinuationService.appendStepsToRun(
       tempWorkspace,
       historyInit.workflowKey,
@@ -2156,35 +2164,38 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       undefined,
       true
     );
-    let queueRevision = 1;
-    const queueAccess = {
-      getWorkingFilePath: () => runFilePath,
-      getSteps: () => append.workingFile.steps ?? [],
-      getCurrentIndex: () => 0,
-      getStatus: () => EXECUTION_STATES.RUNNING,
-      getDefinitionRevision: () => queueRevision,
-      setDefinitionRevision: (revision: number) => {
-        queueRevision = revision;
-      },
-      getWorkflowName: () => "wf-mcp-append-runtime-write",
-      mergeDiskSteps: () => [],
-      emitStateChange: () => undefined,
-      getFinalStepRuntime: () => undefined,
-      updateWorkflowProperty: () => undefined,
-    } as unknown as IWorkingFileQueueAccess;
+    assert.strictEqual(append.definitionRevision, 2);
 
-    // This is the in-process runtime flush after the cross-process append. The
-    // queue already has the appended steps, but its revision is still stale.
-    await new WorkingFileManager(queueAccess).updateWorkingFileDirect(true);
-    const persisted = JSON.parse(
-      await fs.readFile(runFilePath, "utf8")
-    ) as { definitionRevision: number; steps: WorkflowStep[] };
-    assert.ok(persisted.definitionRevision >= append.definitionRevision);
+    // ...and the working-file watcher merges it into the live queue. The
+    // merge must adopt the append's revision along with its steps.
+    assert.strictEqual(await queue.mergeStepsFromDisk(), 1);
     assert.strictEqual(
-      (persisted.steps[1] as { prompt: string }).prompt,
+      queue.getState().definitionRevision,
+      append.definitionRevision
+    );
+
+    // Runtime writes that find nothing new to merge (the outcome commit and a
+    // session-ID flush) must not roll the append's revision back.
+    await queue.markStepAsSent(0);
+    await queue.commitStepOutcomeAndAdvance({
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      status: PROMPT_TERMINAL_STATUS.COMPLETED,
+    });
+    await queue.persistRuntimeMetadata(1, { sessionId: "appended-session" });
+    const persisted = await readRunFile();
+    assert.strictEqual(persisted.definitionRevision, append.definitionRevision);
+    assert.strictEqual(
+      queue.getState().definitionRevision,
+      persisted.definitionRevision
+    );
+    assert.strictEqual(
+      (persisted.steps?.[1] as { prompt: string }).prompt,
       "appended by MCP"
     );
 
+    // Same inputs as WorkflowInstance.getDefinitionRevisionContext(): the
+    // live queue, not a snapshot taken at run start.
+    const state = queue.getState();
     const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 } as const;
     await manager.saveExecutionOutput(
       historyInit.filePath,
@@ -2200,19 +2211,22 @@ suite("OutputHistoryManager timeline-backed storage", () => {
         },
       ],
       {
-        definitionRevision: persisted.definitionRevision,
-        definition: {
-          workflowName: "wf-mcp-append-runtime-write",
-          steps: persisted.steps,
-        },
+        definitionRevision: state.definitionRevision,
+        definition: buildDefinitionSnapshot(
+          state.workflowName ?? "",
+          state.steps,
+          undefined,
+          queue.getWorkflowFile().finalStep,
+          queue.getWorkflowFile().worktree,
+          state.parallelGroups
+        ),
       }
     );
 
     const events = await recorder.readEvents(historyInit.filePath);
     const committedIndex = events.findIndex(
       (event) =>
-        event.eventType ===
-        TIMELINE_EVENT_TYPES.DEFINITION_REVISION_COMMITTED
+        event.eventType === TIMELINE_EVENT_TYPES.DEFINITION_REVISION_COMMITTED
     );
     const outputIndex = events.findIndex(
       (event) =>
@@ -2226,6 +2240,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     assert.ok(
       committed?.eventType ===
         TIMELINE_EVENT_TYPES.DEFINITION_REVISION_COMMITTED &&
+        committed.payload.definitionRevision === append.definitionRevision &&
         committed.payload.definition.steps.some(
           (step) => "prompt" in step && step.prompt === "appended by MCP"
         )

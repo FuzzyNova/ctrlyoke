@@ -2018,16 +2018,84 @@ export class WorkingFileManager {
     skipMerge: boolean = false,
     alreadyLocked: boolean = false
   ): Promise<void> {
+    await this.writeQueueState({ skipMerge, alreadyLocked });
+  }
+
+  /**
+   * Persist a local definition mutation the queue has already applied in
+   * memory. Must run inside the operation queue (`runInQueue`) in the same
+   * serialized operation as the mutation, so no other queued write can observe
+   * the half-applied state first.
+   *
+   * `baseDefinitionRevision` is the queue revision the mutation was applied to
+   * (before its bump). Under the working-file lock the write is rejected when
+   * disk has moved past that base — another process (an MCP append/edit)
+   * changed the definition the mutation never saw, and writing memory would
+   * drop that change under a fresh revision number. On rejection the queue is
+   * re-synchronized from disk (discarding the unpersisted local mutation), so
+   * memory and disk agree again. On success the written revision is strictly
+   * greater than the one on disk it replaces.
+   */
+  public async persistDefinitionMutationDirect(
+    baseDefinitionRevision: number,
+    alreadyLocked: boolean = false
+  ): Promise<void> {
+    await this.writeQueueState({
+      skipMerge: true,
+      alreadyLocked,
+      definitionBase: baseDefinitionRevision,
+    });
+  }
+
+  /**
+   * Discard an unpersisted local definition mutation by adopting disk's
+   * definition and revision. `mergeDiskSteps` is disk-authoritative for step
+   * definitions, order and topology, so memory-only edits are dropped while the
+   * queue's runtime metadata survives.
+   */
+  private resyncQueueFromDisk(workingFile: WorkingFile): void {
+    const newStepsFromDisk = this.queueAccess.mergeDiskSteps(
+      workingFile.steps ?? [],
+      workingFile.parallelGroups
+    );
+    this.queueAccess.setDefinitionRevision(workingFile.definitionRevision ?? 1);
+    if (newStepsFromDisk.length > 0) {
+      this.queueAccess.onDiskStepsMerged?.(newStepsFromDisk);
+    }
+    this.queueAccess.emitStateChange();
+  }
+
+  private async writeQueueState(options: {
+    skipMerge: boolean;
+    alreadyLocked: boolean;
+    definitionBase?: number;
+  }): Promise<void> {
+    const { skipMerge, alreadyLocked, definitionBase } = options;
     const workingFilePath = this.queueAccess.getWorkingFilePath();
     if (!workingFilePath) {
       return; // No working file to update
     }
+    const isDefinitionMutation = definitionBase !== undefined;
 
     const update = async () => {
       // Read current working file from disk
       const workingFile = await this.readWorkingFile(workingFilePath);
-      this.assertExpectedDefinitionRevision(workingFile);
       const diskDefinitionRevision = workingFile.definitionRevision ?? 1;
+      try {
+        this.assertExpectedDefinitionRevision(workingFile);
+        if (isDefinitionMutation && diskDefinitionRevision > definitionBase) {
+          Log.warn(
+            `[WorkingFileManager] Rejecting local definition mutation based on revision ${definitionBase}: ` +
+              `${workingFilePath} is at revision ${diskDefinitionRevision} (changed by another writer)`
+          );
+          assertDefinitionRevision(definitionBase, diskDefinitionRevision);
+        }
+      } catch (error) {
+        if (isDefinitionMutation) {
+          this.resyncQueueFromDisk(workingFile);
+        }
+        throw error;
+      }
       // CRITICAL FIX: Merge steps from disk instead of blindly overwriting
       // This preserves MCP-appended steps that may have been added while we were running
       // BUT: Skip merge for intentional writes (delete/update) to avoid undoing changes
@@ -2041,11 +2109,6 @@ export class WorkingFileManager {
 
         // If disk has new steps, log and emit state change
         if (newStepsFromDisk.length > 0) {
-          // An MCP tail append is a definition mutation made by another process.
-          // Keep its disk-authoritative revision in memory before this runtime
-          // flush writes the merged queue back, otherwise a stale local revision
-          // would erase the append's optimistic-concurrency boundary.
-          this.queueAccess.setDefinitionRevision(diskDefinitionRevision);
           Log.info(
             `[WorkingFileManager] updateWorkingFile - Detected ${newStepsFromDisk.length} steps added externally (likely via MCP), merging into queue`
           );
@@ -2057,14 +2120,23 @@ export class WorkingFileManager {
         }
       } // End skipMerge check
 
-      // Runtime-only writes can follow an earlier disk merge that already put
-      // the appended steps in memory. In that case mergeDiskSteps reports no
-      // new members, but the queue's revision may still be stale. Never let a
-      // runtime flush move the durable optimistic-concurrency revision back.
-      const definitionRevision = Math.max(
-        diskDefinitionRevision,
-        this.queueAccess.getDefinitionRevision()
-      );
+      // A runtime write carries forward the newer of disk and memory: memory
+      // can lag an out-of-process append it has not merged yet, and a runtime
+      // flush must never roll that append's revision back. A definition
+      // mutation (already checked against disk above) must land strictly
+      // above the disk revision it replaces, or a different definition would
+      // share a revision number an MCP append already reported (ABA).
+      // Deliberate rollbacks (`discardPendingRewind`) are static writers that
+      // never pass through here.
+      const definitionRevision = isDefinitionMutation
+        ? Math.max(
+            diskDefinitionRevision + 1,
+            this.queueAccess.getDefinitionRevision()
+          )
+        : Math.max(
+            diskDefinitionRevision,
+            this.queueAccess.getDefinitionRevision()
+          );
       this.queueAccess.setDefinitionRevision(definitionRevision);
 
       // Now write back the steps array (merged or direct from memory)
@@ -2109,8 +2181,6 @@ export class WorkingFileManager {
           `_runtime: ${stepsWithRuntime}/${workingFile.steps.length} steps`
       );
 
-      // Definition mutations advance the queue revision; runtime persistence
-      // carries forward whichever revision is newer on disk or in memory.
       workingFile.definitionRevision = definitionRevision;
 
       // Update workflow-level runtime state

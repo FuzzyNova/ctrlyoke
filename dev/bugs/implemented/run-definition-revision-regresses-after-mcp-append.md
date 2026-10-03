@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by Claude (claude-cli), inspecting the live `more bug backlog2` run with `ctrlyoke history`; the exact writer that rolls it back was not pinned down
 - **Area:** `src/core/orchestration/RunContinuationService.ts` (`appendStepsToRun`), `src/core/PromptQueue.ts` (disk merge + `updateWorkingFileDirect` writes), `src/core/orchestration/TimelineRecorder.ts` (`commitDefinitionRevisionIfNewer`)
-- **Resolution:** fixed in this commit
+- **Resolution:** runtime-write rollback fixed in 68608cafd; the merge, definition-write (ABA / dropped append) and client-republish defects fixed in this commit
 
 ## Symptom
 
@@ -53,25 +53,51 @@ The extension session log for this run (`ctrlyoke-1790978827576.log`) shows 187
 
 ## Root Cause
 
-Confirmed. `WorkingFileManager.updateWorkingFileDirect` read the current working
-file under its lock, but it serialized `queueAccess.getDefinitionRevision()`
-without comparing it to the disk revision. The normal merge path only copied the
-disk revision into queue state when `mergeDiskSteps` returned newly discovered
-steps. Once a prior merge had already put the appended steps into memory, a later
-runtime write found no new steps; the outcome and parallel-group settlement paths
-also use `skipMerge=true`. Either path could therefore write the queue's old
-revision over the append's newer revision while retaining the appended step list.
-The timeline writer was behaving as designed: `commitDefinitionRevisionIfNewer`
-does not emit an event for a revision the manifest already reflects, so a rolled
-back working-file revision supplied no newer definition snapshot to commit before
-the appended step's first output.
+Confirmed; three defects in the in-process queue's handling of an
+out-of-process definition change:
 
-## Suggested Fix
+1. **Merges adopted steps without their revision.**
+   `PromptQueue.mergeStepsFromDisk` (the working-file watcher merge behind the
+   `Found N new steps from disk` log line) never copied the disk `definitionRevision`, and the outcome /
+   parallel-settlement merges copied it only when they themselves found new
+   steps. Memory stayed on the superseded number; `PromptFileLoader` published
+   it to the dashboard via `STEPS_EXTENDED` (the client's next edit then
+   conflicted), and `WorkflowInstance.getDefinitionRevisionContext` handed it to
+   `commitDefinitionRevisionIfNewer`, which correctly ignored a revision the
+   manifest already had — so the appended steps' definition was never committed.
+2. **Runtime writes serialized the stale memory counter.**
+   `WorkingFileManager.updateWorkingFileDirect` wrote
+   `queueAccess.getDefinitionRevision()` without looking at disk, so the next
+   outcome/session flush rolled the append's revision back.
+3. **Local definition mutations bumped the stale counter outside the lock.**
+   `bumpDefinitionRevision` ran on memory before a `skipMerge` write, so with
+   memory at `m` and disk at `d > m` an edit produced `m + 1`: either a
+   regression, or (once writes took `max`) a different definition stored under
+   a revision an MCP append had already reported (ABA). Because the write
+   serialized memory's step list, it also silently dropped the MCP-appended
+   steps memory had not merged yet. Unguarded callers (e.g.
+   `WorkflowInstance`'s append-from-file, which arms no expected revision) had
+   no other protection.
 
-- Make every in-process working-file write take `max(diskRevision, state.definitionRevision)`
-  under the working-file lock, or have runtime-only writes never write
-  `definitionRevision` at all.
-- Add a regression test: an out-of-process `appendStepsToRun` between two
-  in-process step-outcome writes must leave the on-disk revision at least as high
-  as the append's result, and must produce a `DEFINITION_REVISION_COMMITTED` event
-  before the appended step's first output.
+## Fix
+
+- Every in-process disk merge goes through `PromptQueue.mergeDiskDefinition`,
+  which adopts `max(memory, disk)` along with the steps; `PromptFileLoader`
+  republishes `STEPS_EXTENDED` whenever the merge changed the revision, even
+  with no new steps.
+- Runtime writes persist `max(disk, memory)` under the working-file lock.
+- Local definition mutations run mutation + write as one `runInQueue`
+  operation and persist through `WorkingFileManager.persistDefinitionMutationDirect(base)`.
+  Under the lock it rejects with `Definition revision conflict` and resyncs the
+  queue from disk when disk is past `base` (the edit was built on a definition
+  it never saw); otherwise it writes `max(disk + 1, memory)`, strictly above the
+  revision it replaces. Rejection was chosen over merging the disk-only steps:
+  local edits are index-addressed against the caller's view and `mergeDiskSteps`
+  is disk-authoritative, so a rebase could apply an edit to the wrong step.
+- `discardPendingRewind` still restores the base snapshot's lower revision; it
+  is a static writer outside this path.
+
+Regression tests: `promptQueue.test.ts` ("definition revision vs out-of-process
+writers") and `OutputHistoryManager.test.ts` ("an out-of-process append
+survives a runtime write and is committed before its first output"), both on a
+real `PromptQueue` and asserting the file read back from disk.

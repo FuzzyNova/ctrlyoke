@@ -23,6 +23,8 @@ import {
 } from "../types/CtrlYokeTypes";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { RunContinuationService } from "../core/orchestration/RunContinuationService";
+import { WorkflowLineageRepository } from "../core/orchestration/WorkflowLineageRepository";
+import { WorkingFileManager } from "../core/WorkingFileManager";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { withFileLock } from "../utils/FileLockUtils";
 
@@ -2041,6 +2043,215 @@ suite("PromptQueue State Machine Tests", () => {
 
       assert.strictEqual(queue.getState().status, EXECUTION_STATES.PAUSED);
       assert.strictEqual(queue.getState().currentIndex, 1);
+    });
+  });
+
+  suite("definition revision vs out-of-process writers", () => {
+    let workspace: string;
+
+    setup(async () => {
+      workspace = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-prompt-queue-revision-")
+      );
+    });
+
+    teardown(async () => {
+      await fs.rm(workspace, { recursive: true, force: true });
+    });
+
+    async function promoteRun(steps: PromptStep[]) {
+      const draftPath = await queue.createWorkingFile(
+        "revision-workflow",
+        steps,
+        workspace
+      );
+      queue.loadPrompts({ steps }, draftPath);
+      const promotion = await queue.promoteToNewRun(workspace, 100);
+      assert.ok(promotion);
+      const workflowKey = queue.getState().workflowKey!;
+      return {
+        workflowKey,
+        runRef: promotion.runRef,
+        runFilePath: promotion.workingFilePath,
+        readRunFile: async () =>
+          JSON.parse(
+            await fs.readFile(promotion.workingFilePath, "utf8")
+          ) as WorkingFile,
+        appendFromMcp: (prompt: string, expectedRevision: number) =>
+          RunContinuationService.appendStepsToRun(
+            workspace,
+            workflowKey,
+            promotion.runRef,
+            [{ prompt }],
+            expectedRevision,
+            100,
+            undefined,
+            true
+          ),
+      };
+    }
+
+    const promptsOf = (steps: readonly unknown[] | undefined) =>
+      (steps ?? []).map((step) => (step as PromptStep).prompt);
+
+    test("a local append on a stale queue is rejected instead of dropping the MCP append", async () => {
+      const run = await promoteRun([{ prompt: "s0" }, { prompt: "s1" }]);
+      const startRevision = queue.getState().definitionRevision;
+      const mcp = await run.appendFromMcp("mcp", startRevision);
+
+      // The queue has not merged the MCP append yet, so this edit was built
+      // on the superseded definition. No client expectation is armed: the
+      // append-from-file path in WorkflowInstance calls appendSteps bare.
+      await assert.rejects(
+        () => queue.appendSteps([{ prompt: "local" }]),
+        new RegExp(
+          `Definition revision conflict: expected ${startRevision}, found ${mcp.definitionRevision}`
+        )
+      );
+      let persisted = await run.readRunFile();
+      assert.strictEqual(persisted.definitionRevision, mcp.definitionRevision);
+      assert.deepStrictEqual(promptsOf(persisted.steps), ["s0", "s1", "mcp"]);
+      // The rejection resynchronizes memory with disk.
+      assert.strictEqual(
+        queue.getState().definitionRevision,
+        mcp.definitionRevision
+      );
+      assert.deepStrictEqual(promptsOf(queue.getState().steps), [
+        "s0",
+        "s1",
+        "mcp",
+      ]);
+
+      // Retrying against the synchronized queue lands strictly above the
+      // MCP append's revision, so no two definitions share a number.
+      await queue.appendSteps([{ prompt: "local" }]);
+      persisted = await run.readRunFile();
+      assert.strictEqual(
+        persisted.definitionRevision,
+        mcp.definitionRevision + 1
+      );
+      assert.deepStrictEqual(promptsOf(persisted.steps), [
+        "s0",
+        "s1",
+        "mcp",
+        "local",
+      ]);
+      assert.strictEqual(
+        queue.getState().definitionRevision,
+        persisted.definitionRevision
+      );
+    });
+
+    test("a local edit on a stale queue is rejected and resyncs the edited step", async () => {
+      const run = await promoteRun([{ prompt: "s0" }, { prompt: "s1" }]);
+      const mcp = await run.appendFromMcp(
+        "mcp",
+        queue.getState().definitionRevision
+      );
+
+      await assert.rejects(
+        () => queue.updatePrompt(1, { prompt: "edited" }),
+        /Definition revision conflict/
+      );
+      let persisted = await run.readRunFile();
+      assert.strictEqual(persisted.definitionRevision, mcp.definitionRevision);
+      assert.deepStrictEqual(promptsOf(persisted.steps), ["s0", "s1", "mcp"]);
+      assert.deepStrictEqual(promptsOf(queue.getState().steps), [
+        "s0",
+        "s1",
+        "mcp",
+      ]);
+
+      await queue.updatePrompt(1, { prompt: "edited" });
+      persisted = await run.readRunFile();
+      assert.ok(persisted.definitionRevision! > mcp.definitionRevision);
+      assert.deepStrictEqual(promptsOf(persisted.steps), [
+        "s0",
+        "edited",
+        "mcp",
+      ]);
+      assert.strictEqual(
+        queue.getState().definitionRevision,
+        persisted.definitionRevision
+      );
+    });
+
+    test("a local edit after the watcher merge advances past the MCP append's revision", async () => {
+      const run = await promoteRun([{ prompt: "s0" }, { prompt: "s1" }]);
+      const mcp = await run.appendFromMcp(
+        "mcp",
+        queue.getState().definitionRevision
+      );
+      assert.strictEqual(await queue.mergeStepsFromDisk(), 1);
+      assert.strictEqual(
+        queue.getState().definitionRevision,
+        mcp.definitionRevision
+      );
+
+      await queue.deletePrompt(1);
+      const persisted = await run.readRunFile();
+      assert.strictEqual(
+        persisted.definitionRevision,
+        mcp.definitionRevision + 1
+      );
+      assert.deepStrictEqual(promptsOf(persisted.steps), ["s0", "mcp"]);
+    });
+
+    test("discarding a pending continuation still restores the lower base revision", async () => {
+      const run = await promoteRun([{ prompt: "s0" }, { prompt: "s1" }]);
+      const mcp = await run.appendFromMcp(
+        "mcp",
+        queue.getState().definitionRevision
+      );
+      await queue.mergeStepsFromDisk();
+      const lineage = new WorkflowLineageRepository();
+      const descriptor = await lineage.readDescriptor(
+        workspace,
+        run.workflowKey
+      );
+      const rewind = await WorkingFileManager.beginPendingRewind(
+        workspace,
+        run.workflowKey,
+        run.runRef,
+        1,
+        mcp.definitionRevision,
+        descriptor.revision,
+        lineage
+      );
+      queue.applyPendingRewind(
+        1,
+        mcp.definitionRevision,
+        rewind.definitionRevision,
+        false
+      );
+      await queue.updatePrompt(1, { prompt: "edited suffix" });
+      const edited = await run.readRunFile();
+      assert.strictEqual(
+        edited.definitionRevision,
+        rewind.definitionRevision + 1
+      );
+
+      const discarded = await WorkingFileManager.discardPendingRewind(
+        workspace,
+        run.workflowKey,
+        run.runRef,
+        edited.definitionRevision!,
+        rewind.descriptorRevision,
+        true,
+        lineage
+      );
+      assert.ok(discarded.discarded);
+      assert.strictEqual(discarded.definitionRevision, mcp.definitionRevision);
+      const restored = await run.readRunFile();
+      assert.strictEqual(restored.definitionRevision, mcp.definitionRevision);
+      assert.deepStrictEqual(promptsOf(restored.steps), ["s0", "s1", "mcp"]);
+
+      const reloaded = new PromptQueue();
+      await reloaded.restoreFromWorkingFile(run.runFilePath);
+      assert.strictEqual(
+        reloaded.getState().definitionRevision,
+        mcp.definitionRevision
+      );
     });
   });
 
