@@ -26,6 +26,7 @@ import {
 } from "@root/types/DashboardConstants";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { getExternalReadOnlyLabel } from "@utils/externalRunner";
+import { formatSessionIdPreview } from "@utils/stepOverrideChips";
 import { useActiveWorkflowExternalOwner } from "@hooks/useActiveWorkflowExternalOwner";
 import { Icon } from "../shared/Icon";
 
@@ -186,7 +187,7 @@ const EditorSectionInner: React.FC = () => {
 
   const replySessionId = replyContext && (
     <span title={replyContext.sessionId}>
-      {replyContext.sessionId.slice(0, 8)}…
+      {formatSessionIdPreview(replyContext.sessionId)}
     </span>
   );
 

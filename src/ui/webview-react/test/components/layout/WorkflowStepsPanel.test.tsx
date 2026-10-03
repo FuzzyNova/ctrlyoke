@@ -169,7 +169,7 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
     );
   });
 
-  it("shows execution mode badges only for explicit step overrides", () => {
+  it("shows execution mode badges only for overrides that differ from the inherited mode", () => {
     resetStores();
     useWorkflowStore.getState().loadWorkflow({
       fileName: "test.prompt.md",
@@ -179,17 +179,19 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
         { prompt: "Headless mode", executionMode: "headless" },
       ],
     });
+    useSettingsStore
+      .getState()
+      .setWorkflowProperties({ executionMode: "interactive" });
 
     render(<WorkflowStepsPanel />);
 
     expect(
       screen.queryByTitle("executionMode: undefined")
     ).not.toBeInTheDocument();
-
-    const interactiveBadge = screen.getByTitle("executionMode: interactive");
+    // Matches the inherited mode, so the explicit value changes nothing.
     expect(
-      interactiveBadge.querySelector(".codicon-debug-console")
-    ).not.toBeNull();
+      screen.queryByTitle("executionMode: interactive")
+    ).not.toBeInTheDocument();
 
     const headlessBadge = screen.getByTitle("executionMode: headless");
     expect(headlessBadge.querySelector(".codicon-terminal")).not.toBeNull();

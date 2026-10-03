@@ -6,13 +6,7 @@ import React, {
   useState,
 } from "react";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
-import {
-  KEYBOARD_KEYS,
-  MCP_SERVER_IDS,
-  STEP_TYPES,
-} from "@root/types/DashboardConstants";
-import { PERMISSION_MODE_OPTIONS_META } from "@root/types/SchemaUiMetadata";
-import { priorContextBadge } from "../shared/tabBadgeUtils";
+import { KEYBOARD_KEYS, STEP_TYPES } from "@root/types/DashboardConstants";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import { useUiStore } from "@store/uiStore";
@@ -53,7 +47,6 @@ import {
   MESSAGE_TYPES,
   STEP_STATUS,
   EXECUTION_STATES,
-  EXECUTION_MODES,
   FINAL_STEP_PHASES,
   type StepStatus,
 } from "../../types/messages";
@@ -73,7 +66,6 @@ import {
 import { SortableContext, arrayMove } from "@dnd-kit/sortable";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { WebviewLog } from "@utils/logger";
-import { schemaTitle } from "@utils/schemaPropertyLabels";
 import { ExitButton } from "../shared";
 import {
   executionOwnsCurrentStep,
@@ -92,6 +84,7 @@ import {
   writeClipboardText,
 } from "@utils/stepClipboard";
 import { isParallelGroupTopologyLocked } from "@utils/stepContextMenuItems";
+import { buildStepOverrideChips } from "@utils/stepOverrideChips";
 import {
   PENDING_TAIL_DRAG_ID,
   absoluteIndexFromStepDragId,
@@ -925,204 +918,13 @@ const WorkflowStepsPanelInner: React.FC<{
     [globalSettings, workflowProperties]
   );
 
-  // Compute the step-level property overrides to surface as chips.
-  //
-  // A property is shown when it is explicitly set at the step level AND
-  // it meaningfully differs from (or adds to) the inherited workflow/global
-  // default. Redundant chips — e.g. "ec: disabled" when the workflow is
-  // already disabled — are suppressed so overrides reflect actual differences.
+  // Step-level property overrides to surface as chips. Recomputed whenever
+  // workflow or global settings change, so a pinned value that stops matching
+  // the inherited one gets its chip back.
   const getStepOverrides = useCallback(
-    (step: (typeof steps)[0]): PromptOverride[] => {
-      const result: PromptOverride[] = [];
-
-      if (step.executionMode !== undefined) {
-        result.push({
-          label:
-            step.executionMode === EXECUTION_MODES.INTERACTIVE
-              ? "Interactive"
-              : "Headless",
-          title: `executionMode: ${step.executionMode}`,
-          icon:
-            step.executionMode === EXECUTION_MODES.INTERACTIVE
-              ? "debug-console"
-              : "terminal",
-        });
-      }
-
-      if (isScriptStep(step)) return result;
-
-      // agent — show basename only, or explicit none when disabled
-      if (step.agent === null) {
-        result.push({
-          label: "agent: none",
-          title: "agent explicitly disabled",
-        });
-      } else if (step.agent != null) {
-        const basename = step.agent.replace(/.*[\\/]/, "");
-        result.push({
-          label: `agent: ${basename}`,
-          title: `agent: ${step.agent}`,
-        });
-      }
-
-      // skills — show count, or explicit none when disabled
-      if (step.skills === null) {
-        result.push({
-          label: "skills: none",
-          title: "skills explicitly disabled",
-        });
-      } else if (step.skills != null && step.skills.length > 0) {
-        result.push({
-          label: `skills: ${step.skills.length}`,
-          title: step.skills.join(", "),
-        });
-      }
-
-      // mcpServers — show whenever explicitly set
-      if (step.mcpServers !== undefined) {
-        if (step.mcpServers === null) {
-          result.push({
-            label: "MCP: none",
-            title: "MCP servers explicitly disabled",
-          });
-        } else if (Array.isArray(step.mcpServers)) {
-          const count = step.mcpServers.length;
-          const hasCtrlYoke = step.mcpServers.some(
-            (s) => typeof s === "string" && s === MCP_SERVER_IDS.CTRLYOKE
-          );
-          const serverIds = step.mcpServers.map((s) =>
-            typeof s === "string" ? s : ((s as { id?: string }).id ?? "custom")
-          );
-          if (count === 0) {
-            result.push({
-              label: "MCP: 0",
-              title: "MCP servers explicitly set to empty",
-            });
-          } else if (hasCtrlYoke && count === 1) {
-            result.push({ label: "MCP[ctrlyoke]", title: "MCP: ctrlyoke" });
-          } else if (hasCtrlYoke) {
-            result.push({
-              label: `MCP[ctrlyoke]+${count - 1}`,
-              title: serverIds.join(", "),
-            });
-          } else {
-            result.push({
-              label: `MCP: ${count}`,
-              title: serverIds.join(", "),
-            });
-          }
-        }
-      }
-
-      // hooks — show when explicitly set
-      if (step.hooks !== undefined) {
-        if (step.hooks === null) {
-          result.push({ label: "hooks: none" });
-        } else if (Array.isArray(step.hooks) && step.hooks.length > 0) {
-          result.push({ label: `hooks: ${step.hooks.length}` });
-        }
-      }
-
-      // resumeSession — show whenever explicitly set
-      if (step.resumeSession !== undefined) {
-        result.push({
-          label: step.resumeSession ? "resume" : "no resume",
-        });
-      }
-
-      // priorContext — show whenever explicitly set
-      if (step.priorContext !== undefined) {
-        result.push(priorContextBadge(step.priorContext));
-      }
-
-      // endCondition — only show "ec: disabled" if the workflow actually has an
-      // active end condition to override. If the workflow is already disabled/unset,
-      // the chip is redundant (the step value matches the inherited default).
-      if (step.endCondition !== undefined) {
-        if (step.endCondition === null) {
-          const workflowHasActiveEndCondition =
-            workflowProperties.endCondition != null &&
-            Boolean(workflowProperties.endCondition.script);
-          if (workflowHasActiveEndCondition) {
-            result.push({ label: "ec: disabled" });
-          }
-        } else if (step.endCondition.script) {
-          const script = step.endCondition.script;
-          const basename = script.replace(/.*[\\/]/, "");
-          const short =
-            basename.length > 30 ? basename.substring(0, 30) + "…" : basename;
-          result.push({
-            label: `ec: ${short}`,
-            title: `endCondition: ${script}`,
-          });
-        }
-      }
-
-      // preCondition — only show "pc: disabled" if the workflow has an active
-      // pre-condition to override. If the workflow has none, the chip is redundant.
-      if (step.preCondition !== undefined) {
-        if (step.preCondition === null) {
-          const workflowHasActivePreCondition =
-            workflowProperties.preCondition != null &&
-            Boolean(workflowProperties.preCondition.script);
-          if (workflowHasActivePreCondition) {
-            result.push({ label: "pc: disabled" });
-          }
-        } else if (step.preCondition.script) {
-          const script = step.preCondition.script;
-          const basename = script.replace(/.*[\\/]/, "");
-          const short =
-            basename.length > 30 ? basename.substring(0, 30) + "…" : basename;
-          result.push({
-            label: `pc: ${short}`,
-            title: `preCondition: ${script}`,
-          });
-        }
-      }
-
-      // additionalArgs — show when explicitly set or disabled
-      if (step.additionalArgs !== undefined) {
-        if (step.additionalArgs === null) {
-          result.push({
-            label: "args: none",
-            title: "additionalArgs explicitly disabled",
-          });
-        } else {
-          const short =
-            step.additionalArgs.length > 20
-              ? step.additionalArgs.substring(0, 20) + "…"
-              : step.additionalArgs;
-          result.push({
-            label: `args: ${short}`,
-            title: `additionalArgs: ${step.additionalArgs}`,
-          });
-        }
-      }
-
-      // toolPermissions — show when explicitly set or disabled
-      if (step.toolPermissions !== undefined) {
-        if (step.toolPermissions === null) {
-          result.push({
-            label: "perms: none",
-            title: schemaTitle("toolPermissions", null),
-          });
-        } else if (step.toolPermissions.mode) {
-          const short =
-            PERMISSION_MODE_OPTIONS_META[step.toolPermissions.mode]?.short ??
-            step.toolPermissions.mode;
-          result.push({
-            label: `perms: ${short}`,
-            title: schemaTitle(
-              "toolPermissions.mode",
-              step.toolPermissions.mode
-            ),
-          });
-        }
-      }
-
-      return result;
-    },
-    [workflowProperties]
+    (step: (typeof steps)[0]): PromptOverride[] =>
+      buildStepOverrideChips(step, workflowProperties, globalSettings),
+    [globalSettings, workflowProperties]
   );
 
   // Handle clicking a step to edit it (disabled in CLI watch mode)
