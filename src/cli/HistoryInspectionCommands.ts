@@ -29,6 +29,7 @@ import { isScriptStep } from "../types/CtrlYokeTypes";
 import type { RunSummary } from "../types/WorkflowTimelineTypes";
 import {
   EXECUTION_STATES,
+  CLI_EVENT_TYPES,
   CTRLYOKE_ENV_VARS,
   FINAL_STEP_PHASES,
   HARNESS_IDS,
@@ -53,6 +54,10 @@ import {
   type ResolvedRunAttemptValue,
   RunOutputResolver,
 } from "../core/orchestration/RunOutputResolver";
+import {
+  pageOutputText,
+  parseOutputTextPaging,
+} from "../core/orchestration/OutputTextPaging";
 import type { RunAttemptLifecycleEvent } from "../core/orchestration/RunOutputResolver";
 import {
   TIMELINE_ATTEMPT_KINDS,
@@ -279,6 +284,24 @@ export async function showHistoryCommand(
     );
   }
   const attemptFilter = parseHistoryShowAttempt(options.attempt);
+  const showKinds = parseHistorySearchValues(
+    options.kind,
+    Object.values(HISTORY_EVENT_KINDS),
+    "--kind"
+  );
+  const pagingArgs = {
+    ...(options.cursor !== undefined ? { cursor: options.cursor } : {}),
+    ...(options.limit !== undefined
+      ? { limit: parseHistoryInteger(options.limit, "--limit", 1, 1) }
+      : {}),
+    ...(options.tail !== undefined
+      ? { tail: parseHistoryInteger(options.tail, "--tail", 0, 0) }
+      : {}),
+  };
+  const maxEvents =
+    options.maxEvents === undefined
+      ? undefined
+      : parseHistoryInteger(options.maxEvents, "--max-events", 1, 1);
   if (targetFilter) {
     if (targetFilter.kind === FINAL_STEP_PHASES.QUEUE) {
       for (const index of targetFilter.stepIndices) {
@@ -353,6 +376,12 @@ export async function showHistoryCommand(
   CliTerminalFormatter.setColorEnabled(options.color !== false);
   if (!options.json) io.writeErr(`Run: ${runRef}`);
   let renderedAttempts = 0;
+  let paging: ReturnType<typeof parseOutputTextPaging>;
+  let hasPaging =
+    options.cursor !== undefined ||
+    options.limit !== undefined ||
+    options.tail !== undefined;
+  let nextCursor: string | undefined;
   for await (const event of resolver.streamAttempts(manifestPath)) {
     if (event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED) {
       const attempt = event.attempt;
@@ -385,19 +414,72 @@ export async function showHistoryCommand(
       ) {
         continue;
       }
+      const projected = projectHistoryAttempt(attempt, showKinds, options.path);
+      if (!projected) continue;
       renderedAttempts++;
+      if (hasPaging) {
+        paging = parseOutputTextPaging(
+          pagingArgs,
+          renderedAttempts,
+          "history show",
+          "exactly one selected attempt"
+        );
+        if (renderedAttempts > 1)
+          throw new Error(
+            "history show: cursor, limit, and tail require exactly one selected attempt"
+          );
+      }
+      let outputAttempt = projected;
+      if (paging && typeof projected.output?.response === "string") {
+        const page = pageOutputText(projected.output.response, paging);
+        outputAttempt = {
+          ...projected,
+          output: { ...projected.output, response: page.text },
+        };
+        nextCursor = page.nextCursor;
+      }
       if (options.json) {
         io.writeOut(
           JSON.stringify(
             secretRedactionService.redactValue({
-              ...attempt,
+              ...outputAttempt,
               runRef,
               unterminated: event.unterminated,
+              ...(nextCursor ? { nextCursor } : {}),
             })
           )
         );
       } else {
-        renderHistoryAttempt(attempt, event.unterminated, workingDefinition);
+        const allEvents = outputAttempt.output?.structured?.events;
+        const omitted =
+          maxEvents !== undefined && allEvents
+            ? Math.max(0, allEvents.length - maxEvents)
+            : 0;
+        const boundedAttempt =
+          omitted > 0
+            ? {
+                ...outputAttempt,
+                output: {
+                  ...outputAttempt.output!,
+                  structured: {
+                    ...outputAttempt.output!.structured!,
+                    events: allEvents!.slice(0, maxEvents),
+                  },
+                },
+              }
+            : outputAttempt;
+        renderHistoryAttempt(
+          boundedAttempt,
+          event.unterminated,
+          workingDefinition
+        );
+        if (nextCursor)
+          io.writeOut(`… more output (use --cursor ${nextCursor})`);
+        if (omitted > 0) {
+          const cursor =
+            nextCursor ?? String((projected.output?.response ?? "").length);
+          io.writeOut(`… ${omitted} more events (use --cursor ${cursor})`);
+        }
       }
       continue;
     }
@@ -413,6 +495,15 @@ export async function showHistoryCommand(
         historyExecutionStateSeverity(event.executionState)
       );
     }
+  }
+
+  if (hasPaging && renderedAttempts !== 1) {
+    parseOutputTextPaging(
+      pagingArgs,
+      renderedAttempts,
+      "history show",
+      "exactly one selected attempt"
+    );
   }
 
   if (
@@ -438,6 +529,100 @@ export async function showHistoryCommand(
         JSON.stringify({ runRef, step: index, status: state, message: line })
       );
     }
+  }
+}
+
+function projectHistoryAttempt(
+  attempt: ResolvedRunAttemptValue,
+  kinds: readonly string[] | undefined,
+  pathFilter: string | undefined
+): ResolvedRunAttemptValue | undefined {
+  if (!kinds && pathFilter === undefined) return attempt;
+  const kindSet = kinds ? new Set(kinds) : undefined;
+  const pathNeedle = pathFilter?.replace(/\\/g, "/").toLocaleLowerCase();
+  const sourceKind = attempt.output?.source
+    ? attempt.output.source === SCRIPT_OUTPUT_SOURCES.END_CONDITION
+      ? HISTORY_EVENT_KINDS.END_CONDITION
+      : attempt.output.source === SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP
+        ? HISTORY_EVENT_KINDS.PRE_CONDITION
+        : HISTORY_EVENT_KINDS.SCRIPT
+    : undefined;
+  const promptAllowed =
+    pathNeedle === undefined &&
+    (!kindSet || kindSet.has(sourceKind ?? HISTORY_EVENT_KINDS.PROMPT));
+  const responseAllowed =
+    pathNeedle === undefined &&
+    (!kindSet || kindSet.has(sourceKind ?? HISTORY_EVENT_KINDS.RESPONSE));
+  const events = attempt.output?.structured?.events ?? [];
+  const matchingEvents = events.filter((event) => {
+    const eventKind = historyCliEventKind(event.type);
+    if (!eventKind || (kindSet && !kindSet.has(eventKind))) return false;
+    if (pathNeedle === undefined) return true;
+    const data = event.data as { path?: unknown };
+    return (
+      typeof data.path === "string" &&
+      data.path.replace(/\\/g, "/").toLocaleLowerCase().includes(pathNeedle)
+    );
+  });
+  const hasPromptOrResponse =
+    (promptAllowed &&
+      (attempt.prompt !== undefined ||
+        attempt.output?.response !== undefined)) ||
+    (responseAllowed && attempt.output?.response !== undefined);
+  if (pathNeedle !== undefined && matchingEvents.length === 0) return undefined;
+  if (
+    !hasPromptOrResponse &&
+    matchingEvents.length === 0 &&
+    attempt.output?.structured?.events?.length
+  )
+    return undefined;
+  return {
+    ...attempt,
+    ...(promptAllowed ? {} : { prompt: "" }),
+    output: attempt.output
+      ? {
+          ...attempt.output,
+          ...(!responseAllowed ? { response: "" } : {}),
+          ...(attempt.output.structured
+            ? {
+                structured: {
+                  ...attempt.output.structured,
+                  events: matchingEvents,
+                },
+              }
+            : {}),
+        }
+      : undefined,
+  };
+}
+
+function historyCliEventKind(type: string): string | undefined {
+  switch (type) {
+    case CLI_EVENT_TYPES.TEXT:
+      return HISTORY_EVENT_KINDS.RESPONSE;
+    case CLI_EVENT_TYPES.THINKING:
+      return HISTORY_EVENT_KINDS.THINKING;
+    case CLI_EVENT_TYPES.BASH_COMMAND:
+      return HISTORY_EVENT_KINDS.BASH;
+    case CLI_EVENT_TYPES.FILE_READ:
+      return HISTORY_EVENT_KINDS.FILE_READ;
+    case CLI_EVENT_TYPES.FILE_WRITE:
+      return HISTORY_EVENT_KINDS.FILE_WRITE;
+    case CLI_EVENT_TYPES.FILE_EDIT:
+      return HISTORY_EVENT_KINDS.FILE_EDIT;
+    case CLI_EVENT_TYPES.FILE_DELETE:
+      return HISTORY_EVENT_KINDS.FILE_DELETE;
+    case CLI_EVENT_TYPES.MCP_TOOL_CALL:
+      return HISTORY_EVENT_KINDS.MCP_TOOL;
+    case CLI_EVENT_TYPES.TOOL_CALL:
+    case CLI_EVENT_TYPES.TOOL_RESULT:
+      return HISTORY_EVENT_KINDS.TOOL;
+    case CLI_EVENT_TYPES.WEB_SEARCH:
+      return HISTORY_EVENT_KINDS.WEB_SEARCH;
+    case CLI_EVENT_TYPES.COMPACTION:
+      return HISTORY_EVENT_KINDS.COMPACTION;
+    default:
+      return undefined;
   }
 }
 

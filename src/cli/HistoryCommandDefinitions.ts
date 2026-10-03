@@ -35,6 +35,12 @@ export interface HistoryShowOptions {
   run?: string;
   step?: string;
   attempt?: string;
+  kind?: string[];
+  path?: string;
+  limit?: string;
+  cursor?: string;
+  tail?: string;
+  maxEvents?: string;
   json?: boolean;
   color?: boolean;
 }
@@ -188,6 +194,24 @@ export function registerHistoryCommands(
       "Select indices/ranges, final[:pass], running, or latest"
     )
     .option("--attempt <n|latest|all>", "Select an attempt (default: all)")
+    .option(
+      "--kind <kind...>",
+      `Restrict output kinds (valid values: ${Object.values(HISTORY_EVENT_KINDS).join(", ")})`
+    )
+    .option(
+      "--path <substring>",
+      "Restrict output to events touching a file path"
+    )
+    .option("--limit <chars>", "Maximum response characters to return")
+    .option(
+      "--cursor <opaque>",
+      "Resume a character page using its returned cursor"
+    )
+    .option("--tail <chars>", "Return the last response characters")
+    .option(
+      "--max-events <n>",
+      "Maximum structured events rendered in text output"
+    )
     .option(
       "-d, --cwd <path>",
       "Working directory (default: current directory)"

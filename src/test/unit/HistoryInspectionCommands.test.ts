@@ -59,6 +59,10 @@ import type {
 } from "../../types/WorkflowTimelineTypes";
 import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import { HistorySearchService } from "../../core/orchestration/HistorySearchService";
+import {
+  pageOutputText,
+  parseOutputTextPaging,
+} from "../../core/orchestration/OutputTextPaging";
 import { MAX_INDEXED_TEXT_LENGTH } from "../../core/orchestration/HistorySearchIndexService";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import { Log } from "../../utils/Log";
@@ -285,6 +289,7 @@ suite("CLI history inspection command parser", () => {
       list?: HistoryListOptions;
       runs?: HistoryRunsOptions;
       steps?: HistoryStepsOptions;
+      show?: HistoryShowOptions;
     } = {};
     const program = new Command();
     program.exitOverride();
@@ -301,7 +306,9 @@ suite("CLI history inspection command parser", () => {
       runs: async (options) => {
         calls.runs = options;
       },
-      show: async () => {},
+      show: async (options) => {
+        calls.show = options;
+      },
       search: async () => {},
       trash: NOOP_TRASH_HANDLERS,
     });
@@ -346,6 +353,36 @@ suite("CLI history inspection command parser", () => {
     assert.deepStrictEqual(calls.steps, {
       workflow: "release",
       fullPrompts: true,
+    });
+
+    await program.parseAsync(
+      [
+        "history",
+        "show",
+        "--workflow",
+        "release",
+        "--kind",
+        "prompt",
+        "response",
+        "--path",
+        "src/",
+        "--limit",
+        "500",
+        "--cursor",
+        "0",
+        "--max-events",
+        "12",
+      ],
+      { from: "user" }
+    );
+    assert.deepStrictEqual(calls.show, {
+      workflow: "release",
+      kind: ["prompt", "response"],
+      path: "src/",
+      limit: "500",
+      cursor: "0",
+      maxEvents: "12",
+      color: true,
     });
   });
 
@@ -447,6 +484,64 @@ suite("CLI history inspection command parser", () => {
 });
 
 suite("CLI history inspection command handlers", () => {
+  test("shares character paging behavior and surrogate-safe cursors", () => {
+    const paging = parseOutputTextPaging({ limit: 3 }, 1, "history show")!;
+    assert.deepStrictEqual(pageOutputText("AB😀CD", paging), {
+      text: "AB",
+      nextCursor: "2",
+    });
+    assert.deepStrictEqual(
+      pageOutputText(
+        "AB😀CD",
+        parseOutputTextPaging({ cursor: "3" }, 1, "history show")!
+      ),
+      { text: "CD" }
+    );
+    assert.throws(
+      () => parseOutputTextPaging({ tail: 2, limit: 1 }, 1, "history show"),
+      /tail is mutually exclusive/
+    );
+    assert.throws(
+      () => parseOutputTextPaging({ limit: 2 }, 2, "history show"),
+      /exactly one step/
+    );
+  });
+
+  test("pages one selected show attempt and returns the shared next cursor", async () => {
+    const key = "release" as WorkflowKey;
+    const io = new TestIo();
+    const chunks: string[] = [];
+    const originalChunk = CliTerminalFormatter.renderStreamingChunk;
+    CliTerminalFormatter.renderStreamingChunk = ((chunk) =>
+      chunks.push(chunk)) as typeof originalChunk;
+    try {
+      await showHistoryCommand(
+        { workflow: key, run: "3", step: "0", limit: "5" },
+        io,
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          historyManagerForShow(key),
+          new TestRunOutputResolver([
+            settledAttempt(
+              { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+              {
+                output: {
+                  response: "abcdefgh",
+                  elapsed: 1,
+                  isStreaming: false,
+                },
+              }
+            ),
+          ])
+        )
+      );
+    } finally {
+      CliTerminalFormatter.renderStreamingChunk = originalChunk;
+    }
+    assert.deepStrictEqual(chunks, ["abcde"]);
+    assert.match(io.output.join("\n"), /use --cursor 5/);
+  });
+
   test("shows working-file steps and counts retry and final-step lifecycle events", async () => {
     const workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-history-steps-")

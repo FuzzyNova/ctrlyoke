@@ -70,6 +70,11 @@ import {
   type ResolvedParallelItem,
 } from "./core/ParallelGroupTopology";
 import { RunOutputResolver } from "./core/orchestration/RunOutputResolver";
+import {
+  pageOutputText,
+  parseOutputTextPaging,
+  type OutputTextPaging,
+} from "./core/orchestration/OutputTextPaging";
 import type { RunRef, WorkflowKey } from "./types/CtrlYokeTypes";
 import { formatArgString } from "./utils/CliArgParser";
 import { claimPathForCompare } from "./utils/CoordinationClaimPath";
@@ -144,28 +149,6 @@ import { PromptFileParser } from "./core/PromptFileParser";
 import type { WorkflowValidationWarning } from "./types/CtrlYokeTypes";
 
 export { MCP_TOOL_DEFINITIONS } from "./utils/McpToolDefinitions";
-
-interface ReadOutputPaging {
-  cursor?: string;
-  limit?: number;
-  tail?: number;
-}
-
-function startsInsideSurrogatePair(text: string, index: number): boolean {
-  if (index <= 0 || index >= text.length) return false;
-  const preceding = text.charCodeAt(index - 1);
-  const current = text.charCodeAt(index);
-  return (
-    preceding >= 0xd800 &&
-    preceding <= 0xdbff &&
-    current >= 0xdc00 &&
-    current <= 0xdfff
-  );
-}
-
-function movePastSurrogateBoundary(text: string, index: number): number {
-  return startsInsideSurrogatePair(text, index) ? index + 1 : index;
-}
 
 export interface McpToolCallingContext {
   readonly attested: boolean;
@@ -1610,41 +1593,11 @@ export class CtrlYokeMCPServer {
           return baseOutput;
         }
 
-        if (paging.tail !== undefined) {
-          const tailStart = movePastSurrogateBoundary(
-            fullResponseText,
-            Math.max(0, fullResponseText.length - paging.tail)
-          );
-          return {
-            ...baseOutput,
-            responseText:
-              paging.tail === 0 ? "" : fullResponseText.slice(tailStart),
-          };
-        }
-
-        const requestedOffset =
-          paging.cursor === undefined ? 0 : Number(paging.cursor);
-        const offset = movePastSurrogateBoundary(
-          fullResponseText,
-          requestedOffset
-        );
-        const requestedEnd =
-          paging.limit === undefined ? undefined : offset + paging.limit;
-        const end =
-          requestedEnd !== undefined &&
-          startsInsideSurrogatePair(fullResponseText, requestedEnd)
-            ? requestedEnd - 1 > offset
-              ? requestedEnd - 1
-              : requestedEnd + 1
-            : requestedEnd;
-        const responseText = fullResponseText.slice(offset, end);
-        const hasNextCursor =
-          paging.limit !== undefined && end! < fullResponseText.length;
-
+        const page = pageOutputText(fullResponseText, paging);
         return {
           ...baseOutput,
-          responseText,
-          ...(hasNextCursor ? { nextCursor: String(end) } : {}),
+          responseText: page.text,
+          ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
         };
       });
 
@@ -1670,72 +1623,21 @@ export class CtrlYokeMCPServer {
     args: McpReadOutputArguments,
     requestedIndices: readonly number[],
     allSteps: readonly WorkflowStep[]
-  ): ReadOutputPaging | undefined {
-    const hasCursor = args.cursor !== undefined;
-    const hasLimit = args.limit !== undefined;
-    const hasTail = args.tail !== undefined;
-
-    if (!hasCursor && !hasLimit && !hasTail) {
-      return undefined;
-    }
-
-    if (hasTail && (hasCursor || hasLimit)) {
-      throw new Error(
-        "read_output: tail is mutually exclusive with cursor and limit"
-      );
-    }
-
-    const singleStepPagingError =
-      "read_output: cursor, limit, and tail require indices to name exactly one step";
-    const suppliedIndices = args.indices;
-    if (
-      suppliedIndices !== undefined &&
-      (!Array.isArray(suppliedIndices) ||
-        suppliedIndices.length !== 1 ||
-        !Number.isSafeInteger(suppliedIndices[0]))
-    ) {
-      throw new Error(singleStepPagingError);
-    }
+  ): OutputTextPaging | undefined {
+    const selectedItemCount =
+      args.indices !== undefined
+        ? args.indices.length === 1 && Number.isSafeInteger(args.indices[0])
+          ? 1
+          : args.indices.length
+        : requestedIndices.length;
     if (
       requestedIndices.length !== 1 ||
       requestedIndices[0] < 0 ||
       requestedIndices[0] >= allSteps.length
     ) {
-      throw new Error(singleStepPagingError);
+      return parseOutputTextPaging(args, 0, "read_output");
     }
-
-    let cursor: string | undefined;
-    if (hasCursor) {
-      if (
-        !/^\d+$/.test(args.cursor!) ||
-        !Number.isSafeInteger(Number(args.cursor))
-      ) {
-        throw new Error(
-          "read_output: cursor must be a non-negative integer cursor returned by read_output"
-        );
-      }
-      cursor = args.cursor;
-    }
-
-    const parseCount = (name: "limit" | "tail"): number | undefined => {
-      const count = args[name];
-      if (count === undefined) {
-        return undefined;
-      }
-      const isLimit = name === "limit";
-      if (!Number.isSafeInteger(count) || count < (isLimit ? 1 : 0)) {
-        throw new Error(
-          `read_output: ${name} must be a ${isLimit ? "positive" : "non-negative"} integer`
-        );
-      }
-      return count;
-    };
-
-    return {
-      ...(cursor !== undefined ? { cursor } : {}),
-      ...(hasLimit ? { limit: parseCount("limit")! } : {}),
-      ...(hasTail ? { tail: parseCount("tail")! } : {}),
-    };
+    return parseOutputTextPaging(args, selectedItemCount, "read_output");
   }
 
   /**

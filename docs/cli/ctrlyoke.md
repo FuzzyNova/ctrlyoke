@@ -443,6 +443,22 @@ ctrlyoke history show --workflow release --step running
 ctrlyoke history show --workflow release --step 2
 ```
 
+`history show` also accepts `--kind <kind...>` and `--path <substring>` to
+filter recorded content using the same event-kind vocabulary and path matching
+as `history search`. Use `--limit <chars>` with an optional `--cursor <opaque>`
+to read a forward character page, or `--tail <chars>` to read the end. Paging
+requires exactly one selected attempt; `--tail` cannot be combined with
+`--cursor` or `--limit`. A forward page prints a `use --cursor X` continuation
+when more response text remains. `--max-events <n>` bounds structured events in
+text output and reports how many remain with a cursor hint.
+
+```bash
+ctrlyoke history show --workflow release --step 2 --kind prompt response
+ctrlyoke history show --workflow release --step 2 --path src/core --limit 4000
+ctrlyoke history show --workflow release --step 2 --tail 4000
+ctrlyoke history show --workflow release --step 2 --max-events 20
+```
+
 When a valid queue step has no attempt, text output reports its state from the
 run's working file, such as `Step 57 has not started (pending)` or
 `Step 57 was skipped`. A pause is rendered as `Run paused`.

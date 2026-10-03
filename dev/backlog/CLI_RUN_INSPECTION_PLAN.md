@@ -1,6 +1,6 @@
 # CLI Run Inspection Plan
 
-> **Status:** Phases 1–2 complete. Phases 3–5 remain proposed. Updated 2026-10-02.
+> **Status:** Phases 1–3 complete. Phases 4–5 remain proposed. Updated 2026-10-03.
 >
 > **Problem in one line:** `ctrlyoke history` can only show a run's output all at
 > once, so for a large run the only way to find out what it did is to download
@@ -191,8 +191,8 @@ definition snapshot, repeated on every line), `prompt`, `output.structured`, and
    per-step tokens remain out for the reason above.
 2. **Selectors — complete:** step lists/ranges, `final:N`/`final:latest`,
    `--attempt`, `--step running|latest`, and shared CLI step-selector parsing.
-3. **Filters and paging on `show`:** `--kind`, `--path`, shared paging helper
-   with MCP `read_output`.
+3. **Filters and paging on `show` — complete:** `--kind`, `--path`, character
+   paging shared with MCP `read_output`, and bounded text event rendering.
 4. **`ctrlyoke status`:** extract `global_status` collection into core, add liveness.
 5. **JSON slimming:** drop repeated definition snapshots, then `--summary` and `--events`.
 
