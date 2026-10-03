@@ -3828,6 +3828,28 @@ describe("STEPS_EXTENDED", () => {
     );
   });
 
+  it("keeps multi-selection across runtime-only STEPS_EXTENDED updates", () => {
+    renderHook(() => useMessageHandler());
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "wf.yaml",
+        steps: [makePrompt("Step 0"), makePrompt("Step 1")],
+      });
+    });
+    useEditorStore.getState().selectAllSteps();
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.STEPS_EXTENDED, {
+        steps: [
+          { ...makePrompt("Step 0"), _runtime: { sessionId: "session-0" } },
+          makePrompt("Step 1"),
+        ],
+      });
+    });
+
+    expect(useEditorStore.getState().multiSelection?.indices).toEqual([0, 1]);
+  });
+
   it("records a step insert that arrives alongside a piggybacked executionState", () => {
     renderHook(() => useMessageHandler());
 

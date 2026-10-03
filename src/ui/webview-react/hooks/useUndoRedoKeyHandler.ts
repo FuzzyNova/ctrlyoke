@@ -8,6 +8,7 @@ import {
 } from "../types/messages";
 import { getVsCodeApi } from "./useVsCodeApi";
 import { postUndoRedoSync } from "../utils/undoRedoSync";
+import { useEditorStore } from "../store/editorStore";
 
 type RuntimeDecoratedStep = WorkflowStep & {
   status?: StepStatus;
@@ -211,6 +212,7 @@ export function useUndoRedoKeyHandler() {
 
       if (isUndo) temporal.undo();
       else temporal.redo();
+      useEditorStore.getState().clearMultiSelection();
 
       const after = useWorkflowStore.temporal.getState();
       WebviewLog.debug(

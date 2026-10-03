@@ -456,6 +456,7 @@ function applyWorkflowChange(options?: {
   useUiStore.getState().setFinalStepFooterExpanded(false);
 
   const editorStore = useEditorStore.getState();
+  editorStore.clearMultiSelection();
   editorStore.clearAllPendingEdits();
   if (editorStore.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
     // Was editing an existing prompt from the old workflow — cancel the edit so
@@ -1050,6 +1051,16 @@ export function createMessageHandlers(
         status: existingStep?.status || STEP_STATUS.PENDING,
       };
     });
+    const stepIdentityChanged =
+      newSteps.length !== currentSteps.length ||
+      newSteps.some(
+        (step: WorkflowStep, index: number) =>
+          index >= currentSteps.length ||
+          !isStepContentEqual(step, currentSteps[index] as WorkflowStep)
+      );
+    if (stepIdentityChanged) {
+      useEditorStore.getState().clearMultiSelection();
+    }
     useEditorStore.getState().remapStepTargets(currentSteps, newSteps);
 
     WebviewLog.debug(
@@ -1135,6 +1146,7 @@ export function createMessageHandlers(
       adoptPushedDefinitionRevision(message.definitionRevision);
     }
     const workflowStore = useWorkflowStore.getState();
+    useEditorStore.getState().clearMultiSelection();
     useEditorStore
       .getState()
       .remapStepTargets(workflowStore.steps, message.steps || []);
@@ -1162,6 +1174,7 @@ export function createMessageHandlers(
       adoptPushedDefinitionRevision(message.definitionRevision);
     }
     const workflowStore = useWorkflowStore.getState();
+    useEditorStore.getState().clearMultiSelection();
 
     rememberUndoRedoRuntime(workflowStore.steps);
     useEditorStore

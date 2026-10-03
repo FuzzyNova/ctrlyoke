@@ -610,11 +610,11 @@ which is cheap once the predicate exists. Clicks there stay single-select in v1.
    - [x] 1a: pure selection helpers (`utils/stepMultiSelection.ts`, selection half), the
          `multiSelection` slice, `stepCapabilities.ts`, and the single-step context menu
          migrated onto it (completed 2026-10-03).
-   - 1b: modifier plumbing through the three row render sites, plus Ctrl+A and
-     Escape. The context-menu selection items (Select All / Select to Here / Add /
-     Remove / Clear), and the no-collapse right-click rule. The structural-change
-     remap/clear rules, including the existing staleness fix. Row highlighting,
-     `PromptCounter` and chip-rail rendering.
+   - [x] 1b: modifier plumbing through the three row render sites, plus Ctrl+A and
+         Escape. The context-menu selection items (Select All / Select to Here / Add /
+         Remove / Clear), and the no-collapse right-click rule. The structural-change
+         remap/clear rules, including the existing staleness fix. Row highlighting,
+         `PromptCounter` and chip-rail rendering (completed 2026-10-03).
 2. **Array protocol, `UPDATE_STEPS`, and bulk delete / enable.**
    - 2a: `DELETE_PROMPT` and `UPDATE_STEP_COLOR` move to `indices`, end to end
      (queue, instance, orchestrator, WorkingFileManager/RunContinuationService,

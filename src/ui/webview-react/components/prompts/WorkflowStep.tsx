@@ -22,6 +22,8 @@ import { resolveEffectiveContextWindow } from "@utils/tokenUtils";
 import { getStepKindIconClass } from "@utils/status";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 import { Icon } from "../shared/Icon";
+import { detectPlatform } from "@utils/platform";
+import { UI_PLATFORMS } from "@root/types/DashboardConstants";
 import {
   DRAG_HANDLE_TOUCH_ACTION_STYLE,
   type WorkflowStepDragHandleProps,
@@ -36,6 +38,16 @@ export interface StepDetails {
   duration?: number;
   endConditionResult?: EndConditionResult;
   message?: string;
+}
+
+export type StepClickModifiers = { range: boolean; toggle: boolean };
+
+function getStepClickModifiers(event: React.MouseEvent): StepClickModifiers {
+  const isMac = detectPlatform() === UI_PLATFORMS.MAC;
+  return {
+    range: event.shiftKey,
+    toggle: isMac ? event.metaKey : event.ctrlKey,
+  };
 }
 
 interface WorkflowStepProps {
@@ -60,7 +72,7 @@ interface WorkflowStepProps {
   /** Whether this prompt is selected for editing */
   isSelected?: boolean;
   /** Click handler for selection */
-  onClick?: () => void;
+  onClick?: (modifiers: StepClickModifiers) => void;
   /** Harness ID for the icon shown before the harness label */
   harnessId?: HarnessId;
   /** Harness display name (e.g. "Claude Code") */
@@ -163,10 +175,14 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
   onContextMenu,
   dragHandleProps,
 }) => {
+  const longPressTriggeredAtRef = React.useRef<number | null>(null);
   const showCostEstimates = useSettingsStore(
     (state) => state.fullGlobalSettings?.settings.ui.showCostEstimates !== false
   );
-  const longPressHandlers = useLongPress(onContextMenu);
+  const longPressHandlers = useLongPress((x, y) => {
+    longPressTriggeredAtRef.current = Date.now();
+    onContextMenu?.(x, y);
+  });
 
   // Derive context window percentage from live data only while this row is the
   // running step. After completion, the CLI output/runtime metadata is durable
@@ -227,7 +243,16 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
     <div
       className={containerClasses.join(" ")}
       data-prompt-index={index}
-      onClick={onClick}
+      onClick={(event) => {
+        if (
+          longPressTriggeredAtRef.current !== null &&
+          Date.now() - longPressTriggeredAtRef.current < 1000
+        ) {
+          longPressTriggeredAtRef.current = null;
+          return;
+        }
+        onClick?.(getStepClickModifiers(event));
+      }}
       onContextMenu={
         onContextMenu
           ? (e) => {
@@ -245,7 +270,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
       onKeyDown={(e) => {
         if (e.key === KEYBOARD_KEYS.ENTER || e.key === " ") {
           e.preventDefault();
-          onClick?.();
+          onClick?.({ range: false, toggle: false });
         }
       }}
     >

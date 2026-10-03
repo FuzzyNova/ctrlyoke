@@ -11,7 +11,7 @@
 import React, { useCallback, useMemo } from "react";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
-import { useEditorStore } from "@store/editorStore";
+import { useEditorStore, useIsStepMultiSelected } from "@store/editorStore";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { sendMessage } from "@hooks/useMessageHandler";
@@ -178,12 +178,13 @@ function ChipContent({
   onChipClick,
   onOpenContextMenu,
 }: ChipProps) {
+  const isMultiSelected = useIsStepMultiSelected(stepIndex);
   const longPressHandlers = useLongPress(onOpenContextMenu);
   return (
     <button
       type="button"
       data-workflow-chip-index={stepIndex}
-      className="relative flex w-full appearance-none flex-col border-0 border-b border-panel-border bg-transparent px-1 py-1 text-left font-inherit text-inherit transition-colors hover:bg-toolbar-hover-bg"
+      className={`relative flex w-full appearance-none flex-col border-0 border-b border-panel-border px-1 py-1 text-left font-inherit text-inherit transition-colors hover:bg-toolbar-hover-bg ${isMultiSelected ? "bg-list-active-bg text-list-active-fg" : "bg-transparent"}`}
       onClick={onChipClick}
       onContextMenu={(e) => {
         e.preventDefault();

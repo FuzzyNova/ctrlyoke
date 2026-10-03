@@ -116,6 +116,7 @@ describe("useStepContextMenu", () => {
       .map((button) => button.textContent?.trim());
 
     expect(labels).toEqual([
+      "Select All",
       "Copy Step",
       "Copy Prompt",
       "Copy Output",
@@ -131,10 +132,61 @@ describe("useStepContextMenu", () => {
       "Disable",
       "Delete",
     ]);
-    expect(screen.getAllByRole("separator")).toHaveLength(5);
+    expect(screen.getAllByRole("separator")).toHaveLength(6);
     expect(
       screen.getByRole("button", { name: "Reply to Step" })
     ).toBeDisabled();
+  });
+
+  it("offers selection actions and preserves the current selection when opening on another row", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "One" }, { prompt: "Two" }],
+    });
+    useEditorStore
+      .getState()
+      .selectPrompt(
+        { kind: "queue", index: 1 },
+        useWorkflowStore.getState().steps[1]
+      );
+    render(<TestHarness step={{ prompt: "One" }} deleteIndex={0} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    expect(
+      screen.getByRole("button", { name: "Select All" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Select to Here" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add to Selection" })
+    ).toBeInTheDocument();
+    expect(useEditorStore.getState().selectionTarget).toEqual({
+      kind: "queue",
+      index: 1,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Add to Selection" }));
+    expect(useEditorStore.getState().multiSelection?.indices).toEqual([0, 1]);
+  });
+
+  it("offers remove and clear actions only for a multi-selection", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "One" }, { prompt: "Two" }, { prompt: "Three" }],
+    });
+    useEditorStore.getState().selectAllSteps();
+    render(<TestHarness step={{ prompt: "One" }} deleteIndex={0} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove from Selection" })
+    );
+    expect(useEditorStore.getState().multiSelection?.indices).toEqual([1, 2]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear Selection" }));
+    expect(useEditorStore.getState().multiSelection).toBeNull();
   });
 
   it("switches the output action to Show output when the step is hidden", () => {

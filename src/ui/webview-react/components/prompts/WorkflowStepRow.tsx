@@ -11,6 +11,7 @@ import {
   WorkflowStepItem,
   type PromptOverride,
   type StepDetails,
+  type StepClickModifiers,
 } from "./WorkflowStep";
 import type { WorkflowStep } from "@store/workflowStore";
 import {
@@ -80,7 +81,7 @@ export type WorkflowStepRowProps = {
     status: StepStatus
   ) => StepHarnessModel;
   getStepOverrides: (step: WorkflowStep) => PromptOverride[];
-  onStepClick: (index: number) => void;
+  onStepClick: (index: number, modifiers: StepClickModifiers) => void;
   onSetStartPosition: (index: number) => void;
   onOpenContextMenu: (
     x: number,
@@ -190,7 +191,7 @@ export const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
         isDisabled={step.enabled === false}
         isCurrent={isCurrent}
         isSelected={isSelected}
-        onClick={() => onStepClick(index)}
+        onClick={(modifiers) => onStepClick(index, modifiers)}
         harnessId={harnessModel.harnessId}
         harnessLabel={harnessModel.harnessLabel}
         harnessIsDefault={harnessModel.harnessIsDefault}

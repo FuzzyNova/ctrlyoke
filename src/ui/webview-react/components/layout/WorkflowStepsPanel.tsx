@@ -29,7 +29,10 @@ import {
 } from "@hooks/index";
 import { getHarnessDisplayName } from "../../types/messages";
 import type { HarnessId } from "../../types/messages";
-import { type PromptOverride } from "../prompts/WorkflowStep";
+import {
+  type PromptOverride,
+  type StepClickModifiers,
+} from "../prompts/WorkflowStep";
 import { FinalStepFooter } from "../prompts/FinalStepFooter";
 import { PromptCounter } from "../prompts/PromptCounter";
 import { PromptChipRail } from "../prompts/PromptChipRail";
@@ -802,6 +805,19 @@ const WorkflowStepsPanelInner: React.FC<{
     isViewingDeletedWorkflow || isSystemGeneratedWorkflow;
   const { selectionTarget, selectPrompt, selectFinalStep, deselect } =
     useEditorStore();
+  const multiSelectionIndices = useEditorStore(
+    (state) => state.multiSelection?.indices
+  );
+  const selectedStepIndices = useMemo(
+    () =>
+      new Set([
+        ...(selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
+          ? [selectionTarget.index]
+          : []),
+        ...(multiSelectionIndices ?? []),
+      ]),
+    [multiSelectionIndices, selectionTarget]
+  );
   const { workflowProperties, globalSettings } = useSettingsStore();
   const [headerRef, isHeaderNarrow] = useElementNarrow<HTMLDivElement>(200);
   // Determine if workflow is running
@@ -927,9 +943,9 @@ const WorkflowStepsPanelInner: React.FC<{
 
   // Handle clicking a step to edit it (disabled in CLI watch mode)
   const handleStepClick = useCallback(
-    (index: number) => {
+    (index: number, modifiers: StepClickModifiers) => {
       if (isExternallyManaged) return;
-      stepClickHandler(index);
+      stepClickHandler(index, modifiers);
     },
     [isExternallyManaged, stepClickHandler]
   );
@@ -1174,11 +1190,7 @@ const WorkflowStepsPanelInner: React.FC<{
           )}
         retryStates={retryStates}
         liveContextWindow={liveContextWindow ?? {}}
-        selectedIndex={
-          selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
-            ? selectionTarget.index
-            : undefined
-        }
+        selectedIndices={selectedStepIndices}
         canSetStartPosition={canChangeStartPosition}
         getLatestOutput={getLatestOutput}
         getStepHarnessModel={getStepHarnessModel}
@@ -1229,7 +1241,7 @@ const WorkflowStepsPanelInner: React.FC<{
       liveContextWindow,
       openContextMenu,
       retryStates,
-      selectionTarget,
+      selectedStepIndices,
       steps,
     ]
   );
@@ -1721,6 +1733,7 @@ const WorkflowStepsPanelInner: React.FC<{
           // Deselect the current step when clicking blank space in the list.
           // Only fire when the click target is this container itself (not a child).
           if (e.target === e.currentTarget) {
+            useEditorStore.getState().clearMultiSelection();
             deselect();
           }
         }}
@@ -1733,7 +1746,20 @@ const WorkflowStepsPanelInner: React.FC<{
         {...bgLongPressHandlers}
         onKeyDown={(e) => {
           if (e.key === KEYBOARD_KEYS.ESCAPE) {
+            useEditorStore.getState().clearMultiSelection();
             deselect();
+            return;
+          }
+
+          if (
+            (e.ctrlKey || e.metaKey) &&
+            !e.altKey &&
+            !e.shiftKey &&
+            e.key.toLowerCase() === "a" &&
+            !isEditableClipboardTarget(e.target)
+          ) {
+            e.preventDefault();
+            useEditorStore.getState().selectAllSteps();
             return;
           }
 
@@ -1830,9 +1856,7 @@ const WorkflowStepsPanelInner: React.FC<{
                 const status = getPromptStatus(step, index);
                 const retryState = retryStates[index];
                 const latestOutput = getLatestOutput(index);
-                const isSelected =
-                  selectionTarget.kind === FINAL_STEP_PHASES.QUEUE &&
-                  selectionTarget.index === index;
+                const isSelected = selectedStepIndices.has(index);
                 const isExecutionTargetLocked =
                   isStepExecutionLocked(
                     step,
@@ -1949,9 +1973,7 @@ const WorkflowStepsPanelInner: React.FC<{
                         activeStepIndices,
                         finalStepPhase
                       );
-                      const isSelected =
-                        selectionTarget.kind === FINAL_STEP_PHASES.QUEUE &&
-                        selectionTarget.index === index;
+                      const isSelected = selectedStepIndices.has(index);
                       const setPositionTarget = index;
                       // From the live preview's own numbering (see
                       // `computeDisplaySlots`) — the row's current rendered

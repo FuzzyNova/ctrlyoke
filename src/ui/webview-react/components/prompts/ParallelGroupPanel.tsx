@@ -10,6 +10,7 @@ import {
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import type { HarnessColorSettings } from "@root/types/CtrlYokeSettings";
 import type { WorkflowStep } from "@store/workflowStore";
+import type { StepClickModifiers } from "./WorkflowStep";
 import {
   WorkflowStepRow,
   WorkflowStepRowFrame,
@@ -120,7 +121,7 @@ type ParallelGroupPanelProps = {
     number,
     WorkflowStepComponentProps["liveContextWindow"]
   >;
-  selectedIndex?: number;
+  selectedIndices?: ReadonlySet<number>;
   canSetStartPosition: boolean;
   getLatestOutput: (
     index: number
@@ -130,7 +131,7 @@ type ParallelGroupPanelProps = {
     status: StepStatus
   ) => StepHarnessModel;
   getStepOverrides: (step: WorkflowStep) => PromptOverride[];
-  onStepClick: (index: number) => void;
+  onStepClick: (index: number, modifiers: StepClickModifiers) => void;
   onSetStartPosition: (index: number) => void;
   onOpenContextMenu: (
     x: number,
@@ -164,7 +165,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
   statuses,
   retryStates,
   liveContextWindow,
-  selectedIndex,
+  selectedIndices,
   canSetStartPosition,
   getLatestOutput,
   getStepHarnessModel,
@@ -352,7 +353,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
                   latestOutput={getLatestOutput(index)}
                   liveContextWindow={liveContextWindow[index]}
                   isCurrent={isStepActive(index)}
-                  isSelected={selectedIndex === index}
+                  isSelected={selectedIndices?.has(index) ?? false}
                   canSetStartPosition={canSetStartPosition}
                   startPositionDirection={
                     index < currentStep ? "rewind" : "forward"
@@ -418,7 +419,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
                     latestOutput={getLatestOutput(index)}
                     liveContextWindow={liveContextWindow[index]}
                     isCurrent={isStepActive(index)}
-                    isSelected={selectedIndex === index}
+                    isSelected={selectedIndices?.has(index) ?? false}
                     canSetStartPosition={canSetStartPosition}
                     startPositionDirection={
                       index < currentStep ? "rewind" : "forward"

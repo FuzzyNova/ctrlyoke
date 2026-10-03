@@ -238,6 +238,69 @@ export function useStepContextMenu({
         deleteIndex,
         capabilityContext
       );
+      const editorSelection = useEditorStore.getState();
+      const selectedIndices =
+        editorSelection.multiSelection?.indices ??
+        (editorSelection.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
+          ? [editorSelection.selectionTarget.index]
+          : []);
+      const hasQueueSelection = selectedIndices.length > 0;
+      const isPressedStepSelected = selectedIndices.includes(deleteIndex);
+      const hasMultiSelection = selectedIndices.length > 1;
+      const selectionMenuItems = [
+        {
+          label: "Select All",
+          icon: "codicon-check-all",
+          disabled: false,
+          onClick: () => useEditorStore.getState().selectAllSteps(),
+        },
+        ...(hasQueueSelection &&
+        !(selectedIndices.length === 1 && isPressedStepSelected)
+          ? [
+              {
+                label: "Select to Here",
+                icon: "codicon-selection",
+                disabled: false,
+                onClick: () =>
+                  useEditorStore
+                    .getState()
+                    .extendMultiSelectionByRange(deleteIndex),
+              },
+            ]
+          : []),
+        ...(hasQueueSelection && !isPressedStepSelected
+          ? [
+              {
+                label: "Add to Selection",
+                icon: "codicon-add",
+                disabled: false,
+                onClick: () =>
+                  useEditorStore.getState().toggleMultiSelection(deleteIndex),
+              },
+            ]
+          : []),
+        ...(hasMultiSelection && isPressedStepSelected
+          ? [
+              {
+                label: "Remove from Selection",
+                icon: "codicon-remove",
+                disabled: false,
+                onClick: () =>
+                  useEditorStore.getState().toggleMultiSelection(deleteIndex),
+              },
+            ]
+          : []),
+        ...(hasMultiSelection
+          ? [
+              {
+                label: "Clear Selection",
+                icon: "codicon-clear-all",
+                disabled: false,
+                onClick: () => useEditorStore.getState().clearMultiSelection(),
+              },
+            ]
+          : []),
+      ];
       const pasteDisabledTitle = isExternallyManaged
         ? (externalReadOnlyLabel ?? "Read-only — external workflow")
         : executionState === EXECUTION_STATES.CANCELLING
@@ -329,6 +392,8 @@ export function useStepContextMenu({
         x,
         y,
         items: [
+          ...selectionMenuItems,
+          { type: "divider" },
           ...buildStepCopyMenuItems({
             step,
             slotNumber: deleteIndex + 1,

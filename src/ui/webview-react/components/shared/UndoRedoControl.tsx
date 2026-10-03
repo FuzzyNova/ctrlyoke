@@ -5,6 +5,7 @@ import {
   useWorkflowTemporalStore,
 } from "@store/workflowStore";
 import type { UndoableWorkflowState, WorkflowStep } from "@store/workflowStore";
+import { useEditorStore } from "@store/editorStore";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import {
@@ -413,6 +414,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
     };
     rememberUndoRedoRuntime(previousState.steps);
     useWorkflowStore.temporal.getState().undo();
+    useEditorStore.getState().clearMultiSelection();
     normalizeAfterHistoryAction(previousState);
     syncToVsCode();
   }, [canUndo, editingDisabled, normalizeAfterHistoryAction, syncToVsCode]);
@@ -425,6 +427,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
     };
     rememberUndoRedoRuntime(previousState.steps);
     useWorkflowStore.temporal.getState().redo();
+    useEditorStore.getState().clearMultiSelection();
     normalizeAfterHistoryAction(previousState);
     syncToVsCode();
   }, [canRedo, editingDisabled, normalizeAfterHistoryAction, syncToVsCode]);
@@ -445,6 +448,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
           temporal.undo();
         }
       }
+      useEditorStore.getState().clearMultiSelection();
       normalizeAfterHistoryAction(previousState);
       syncToVsCode();
       setIsOpen(false);
