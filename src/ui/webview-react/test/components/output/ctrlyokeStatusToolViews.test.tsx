@@ -227,6 +227,40 @@ describe("status and output ctrlyoke tool views", () => {
     expect(screen.getByText("future-cli")).toBeInTheDocument();
   });
 
+  it("names a workflow_status step by its name, with the prompt preview on hover", () => {
+    const namedWorkflow = {
+      ...workflow,
+      steps: [
+        {
+          index: 0,
+          name: "Fix hosted auth",
+          prompt: "Fix three hosted-server security bugs",
+          promptTruncated: true,
+          status: "completed",
+        },
+      ],
+    };
+    expect(
+      parseWorkflowStatusResultText(JSON.stringify(namedWorkflow))
+    ).toBeDefined();
+    expect(
+      parseWorkflowStatusResultText(
+        JSON.stringify({
+          ...namedWorkflow,
+          steps: [{ ...namedWorkflow.steps[0], promptTruncated: "yes" }],
+        })
+      )
+    ).toBeUndefined();
+    render(
+      <WorkflowStatusBody
+        {...props(MCP_WORKFLOW_STATUS_TOOL_NAME, namedWorkflow)}
+      />
+    );
+    expect(
+      screen.getByTitle("Fix three hosted-server security bugs").textContent
+    ).toBe("Fix hosted auth");
+  });
+
   it("validates and renders global_status state chips and truncation", () => {
     expect(parseGlobalStatusParams(undefined)).toBeUndefined();
     expect(parseGlobalStatusParams({ workflowKey: 2 })).toBeUndefined();

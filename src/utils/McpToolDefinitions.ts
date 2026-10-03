@@ -306,7 +306,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: MCP_WORKFLOW_STATUS_TOOL_NAME,
     description:
-      "See each workflow step's status: completed, failed, cancelled, skipped, running, or pending.",
+      "See each workflow step's status: completed, failed, cancelled, skipped, running, or pending. Each step's prompt is shortened to its first line (promptTruncated marks a shortened one); call read_output with a step's index to read its full prompt.",
     inputSchema: { type: "object", properties: {} },
   },
   {
@@ -447,7 +447,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: MCP_READ_OUTPUT_TOOL_NAME,
     description:
-      "Read what earlier steps in your workflow produced. Use this to build on a previous step's conclusions instead of repeating its work; for a large output, page one selected step with limit and cursor or inspect its tail.",
+      "Read the full prompt of any step in your workflow, and what earlier steps produced. Use this to build on a previous step's conclusions instead of repeating its work, or to see exactly what a step was asked to do; for a large output, page one selected step with limit and cursor or inspect its tail.",
     inputSchema: {
       type: "object",
       properties: {

@@ -1,6 +1,7 @@
 import type { ToolResult } from "../../../types/cliEvents";
 import { getToolResultText } from "../../../utils/toolResultText";
 import type { RowFindDecoration } from "../../../utils/outputFind";
+import { promptFirstLinePreview } from "@root/utils/TextUtils";
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -26,10 +27,7 @@ export const TOOL_VIEW_PROMPT_PREVIEW_MAX_CHARS = 160;
 
 /** First line of a prompt, capped so one huge single-line prompt cannot dominate a view. */
 export function toolViewPromptPreview(prompt: string): string {
-  const firstLine = prompt.split(/\r?\n/, 1)[0] ?? "";
-  return firstLine.length > TOOL_VIEW_PROMPT_PREVIEW_MAX_CHARS
-    ? `${firstLine.slice(0, TOOL_VIEW_PROMPT_PREVIEW_MAX_CHARS).trimEnd()}…`
-    : firstLine;
+  return promptFirstLinePreview(prompt, TOOL_VIEW_PROMPT_PREVIEW_MAX_CHARS);
 }
 
 /** True when the preview hides part of the prompt (extra lines or characters). */
