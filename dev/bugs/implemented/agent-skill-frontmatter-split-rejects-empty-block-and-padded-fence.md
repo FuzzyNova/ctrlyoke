@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (Claude)
 - **Area:** `src/utils/DiscoveryUtils.ts` (`splitMarkdownFrontmatter`), consumers `src/utils/AgentDiscovery.ts`, `src/utils/AgentExpander.ts`, `src/utils/SkillDiscovery.ts`; duplicate regex in `src/core/PromptFileParser.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

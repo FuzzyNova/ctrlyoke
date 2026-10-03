@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (Claude)
 - **Area:** `src/ui/webview-react/components/settings/stats/StatusLinePreview.tsx` (`previewPayload`, Claude branch ~lines 170-178)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

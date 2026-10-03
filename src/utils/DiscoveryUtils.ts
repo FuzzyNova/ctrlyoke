@@ -16,15 +16,16 @@ export function splitMarkdownFrontmatter(
   content: string
 ): MarkdownFrontmatter | null {
   const normalizedContent = stripLeadingBom(content);
-  const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u.exec(
-    normalizedContent
-  );
+  const match =
+    /^---\r?\n(?:(?=---[ \t]*(?:\r?\n|$))|([\s\S]*?)\r?\n)---[ \t]*(?:\r?\n|$)/u.exec(
+      normalizedContent
+    );
   if (!match) {
     return null;
   }
 
   return {
-    frontmatter: match[1],
+    frontmatter: match[1] ?? "",
     body: normalizedContent.slice(match[0].length),
   };
 }

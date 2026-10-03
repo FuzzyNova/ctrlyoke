@@ -28,6 +28,28 @@ Agent instructions`);
     );
   });
 
+  test("parses frontmatter with an empty block or padded closing fence", () => {
+    assert.deepStrictEqual(parseAgentFrontmatter("---\n---\nAgent body"), {});
+
+    const paddedFence = parseAgentFrontmatter(
+      "---\nname: Padded Agent\ndescription: discovered\n--- \nAgent body"
+    );
+    assert.strictEqual(paddedFence.name, "Padded Agent");
+    assert.strictEqual(paddedFence.description, "discovered");
+
+    assert.strictEqual(
+      AgentExpander.stripFrontmatter("---\n---\nAgent body", "empty"),
+      "Agent body"
+    );
+    assert.strictEqual(
+      AgentExpander.stripFrontmatter(
+        "---\nname: Padded Agent\nmodel: ignored\n---\t\nAgent body",
+        "padded"
+      ),
+      "Agent body"
+    );
+  });
+
   test("reads declared skills as a YAML list or a comma-separated string", () => {
     assert.deepStrictEqual(
       parseAgentFrontmatter("---\nskills: [alpha, beta, alpha]\n---\nBody")

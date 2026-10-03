@@ -25,6 +25,7 @@ import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { stripLegacyWorkingFileLineageMetadata } from "../utils/WorkingFileMetadata";
 import { Log } from "../utils/Log";
 import { stripLeadingBom } from "../utils/TextUtils";
+import { splitMarkdownFrontmatter } from "../utils/DiscoveryUtils";
 import { getVariableKeyErrors } from "../utils/KeyValueKeyKinds";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
@@ -568,12 +569,10 @@ export class PromptFileParser {
     try {
       const content = await this.readWorkflowFileContent(filePath);
 
-      const frontmatterMatch = /^---\r?\n(?:(?=---[ \t]*(?:\r?\n|$))|([\s\S]*?)\r?\n)---[ \t]*(?:\r?\n|$)/u.exec(
-        content
-      );
+      const frontmatterSplit = splitMarkdownFrontmatter(content);
       let promptContent = content;
-      if (frontmatterMatch) {
-        const frontmatterText = frontmatterMatch[1] ?? "";
+      if (frontmatterSplit) {
+        const frontmatterText = frontmatterSplit.frontmatter;
         const frontmatter = frontmatterText.trim()
           ? yaml.load(frontmatterText, {
               filename: filePath,
@@ -597,7 +596,7 @@ export class PromptFileParser {
         if (frontmatter !== null && frontmatter !== undefined) {
           migrateToCurrent(PERSISTED_STORES.WORKFLOW_DEFINITION, frontmatter);
         }
-        promptContent = content.slice(frontmatterMatch[0].length);
+        promptContent = frontmatterSplit.body;
       }
 
       // Trim whitespace but preserve the prompt text as-is.

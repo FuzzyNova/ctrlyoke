@@ -742,6 +742,43 @@ suite("PromptFileParser Tests", () => {
       }
     });
 
+    test("parses empty frontmatter and closing fences with trailing whitespace", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-parser-markdown-frontmatter-shapes-")
+      );
+
+      try {
+        const emptyFrontmatterPath = path.join(tempDir, "empty.prompt.md");
+        await fs.writeFile(
+          emptyFrontmatterPath,
+          "---\n---\nEmpty metadata body",
+          "utf8"
+        );
+        const emptyFrontmatterResult =
+          await parser.parsePromptFile(emptyFrontmatterPath);
+        assertValidResult(emptyFrontmatterResult);
+        assert.strictEqual(
+          (emptyFrontmatterResult.steps[0] as PromptStep).prompt,
+          "Empty metadata body"
+        );
+
+        const paddedFencePath = path.join(tempDir, "padded.prompt.md");
+        await fs.writeFile(
+          paddedFencePath,
+          "---\nschemaVersion: 1\n--- \t\nPadded metadata body",
+          "utf8"
+        );
+        const paddedFenceResult = await parser.parsePromptFile(paddedFencePath);
+        assertValidResult(paddedFenceResult);
+        assert.strictEqual(
+          (paddedFenceResult.steps[0] as PromptStep).prompt,
+          "Padded metadata body"
+        );
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
     test("should parse .prompt.md file as single prompt", async () => {
       const filePath = path.join(fixturesPath, "simple.prompt.md");
       const result = await parser.parsePromptFile(filePath);
