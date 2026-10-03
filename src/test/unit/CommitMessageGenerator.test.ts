@@ -10,6 +10,7 @@ import {
   buildCommitWorkflowOverrides,
   CommitMessageGenerator,
   CommitMessageGenerationError,
+  getCommitMessageStatePaths,
   MAX_DIFF_BYTES,
 } from "../../git/CommitMessageGenerator";
 import { parseSecretReferences } from "../../utils/SecretReferenceParser";
@@ -33,6 +34,25 @@ import type {
 const execFileAsync = promisify(execFile);
 
 suite("CommitMessageGenerator", () => {
+  test("keeps commit state under state root while retaining repository cwd", () => {
+    const repositoryRoot = path.join(os.tmpdir(), "repo-b");
+    const stateRoot = path.join(os.tmpdir(), "workspace-state");
+
+    assert.deepStrictEqual(
+      getCommitMessageStatePaths(repositoryRoot, stateRoot),
+      {
+        cwd: repositoryRoot,
+        stateRoot,
+        tempDir: path.join(stateRoot, ".ctrlyoke", "temp"),
+      }
+    );
+    assert.deepStrictEqual(getCommitMessageStatePaths(repositoryRoot), {
+      cwd: repositoryRoot,
+      stateRoot: repositoryRoot,
+      tempDir: path.join(repositoryRoot, ".ctrlyoke", "temp"),
+    });
+  });
+
   test("keeps references inside a staged Markdown code block inert in the prompt", async () => {
     const cwd = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-commit-prompt-fence-")

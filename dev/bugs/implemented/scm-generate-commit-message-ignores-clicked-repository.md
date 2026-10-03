@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), code reading
 - **Area:** `src/scm/ScmCommitCommand.ts`, `src/extension.ts` (`VSCODE_COMMANDS.GENERATE_COMMIT_MESSAGE` registration)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
