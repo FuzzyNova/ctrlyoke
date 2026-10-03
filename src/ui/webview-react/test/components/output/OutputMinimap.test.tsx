@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from "vitest";
 import { FINAL_STEP_PHASES } from "@root/types/DashboardConstants";
 import {
   OutputMinimap,
-  computeDeclutteredTopsPx,
   type MinimapStep,
 } from "@components/output/OutputMinimap";
 
@@ -340,54 +339,144 @@ describe("OutputMinimap diff bars", () => {
   });
 });
 
-describe("computeDeclutteredTopsPx", () => {
-  it("keeps markers at their raw position when they are already spaced apart", () => {
-    const steps = [
-      makeStep({ key: "queue:0", scrollFraction: 0.1 }),
-      makeStep({ key: "queue:1", scrollFraction: 0.9 }),
-    ];
+describe("OutputMinimap grouped markers", () => {
+  function renderOnMeasuredRail(
+    steps: MinimapStep[],
+    props: Partial<ComponentProps<typeof OutputMinimap>> = {}
+  ) {
+    const clientHeight = vi
+      .spyOn(HTMLElement.prototype, "clientHeight", "get")
+      .mockReturnValue(200);
+    const result = renderMinimap(steps, props);
+    return { ...result, restore: () => clientHeight.mockRestore() };
+  }
 
-    expect(computeDeclutteredTopsPx(steps, 200)).toEqual([20, 180]);
-  });
+  const closeSteps = () => [
+    makeStep({
+      key: "queue:2",
+      stepIndex: 2,
+      label: "plan",
+      scrollFraction: 0.5,
+    }),
+    makeStep({
+      key: "queue:3",
+      stepIndex: 3,
+      label: "build",
+      scrollFraction: 0.505,
+    }),
+  ];
 
-  it("pushes two close markers apart by at least the pill button's own footprint", () => {
-    // Two step anchors landing within a few pixels of each other in
-    // scroll-fraction space is the exact condition that let one step's
-    // always-in-layout pill button silently steal clicks meant for its
-    // neighbor.
-    const steps = [
-      makeStep({ key: "queue:0", scrollFraction: 0.5 }),
-      makeStep({ key: "queue:1", scrollFraction: 0.51 }),
-    ];
+  it("mounts a marker's popup only while it is hovered or pinned", () => {
+    const { restore } = renderOnMeasuredRail([makeStep()]);
+    try {
+      expect(
+        screen.queryByRole("button", { name: "Hide step 3 output" })
+      ).not.toBeInTheDocument();
 
-    const tops = computeDeclutteredTopsPx(steps, 200);
-    expect(tops[1] - tops[0]).toBeGreaterThanOrEqual(16);
-  });
+      const group = screen.getByRole("group", { name: "Step research-db" });
+      fireEvent.mouseEnter(group);
+      expect(
+        screen.getByRole("button", { name: "Hide step 3 output" })
+      ).toBeInTheDocument();
 
-  it("preserves original step order regardless of scrollFraction order", () => {
-    const steps = [
-      makeStep({ key: "queue:0", scrollFraction: 0.8 }),
-      makeStep({ key: "queue:1", scrollFraction: 0.2 }),
-    ];
-
-    const tops = computeDeclutteredTopsPx(steps, 200);
-    expect(tops[1]).toBeLessThan(tops[0]);
-  });
-
-  it("compresses back within the rail when many close markers would overrun it", () => {
-    const steps = Array.from({ length: 5 }, (_, i) =>
-      makeStep({ key: `queue:${i}`, scrollFraction: 0.95 + i * 0.001 })
-    );
-
-    const tops = computeDeclutteredTopsPx(steps, 60);
-    expect(Math.max(...tops)).toBeLessThanOrEqual(57);
-    for (let i = 1; i < tops.length; i++) {
-      expect(tops[i]).toBeGreaterThan(tops[i - 1]);
+      fireEvent.mouseLeave(group);
+      expect(
+        screen.queryByRole("button", { name: "Hide step 3 output" })
+      ).not.toBeInTheDocument();
+    } finally {
+      restore();
     }
   });
 
-  it("returns zeros when the rail has not been measured yet", () => {
-    const steps = [makeStep()];
-    expect(computeDeclutteredTopsPx(steps, 0)).toEqual([0]);
+  it("shares one marker between steps too close to tell apart, with one popup row each", () => {
+    const onStepClick = vi.fn();
+    const onStepToggle = vi.fn();
+    const steps = closeSteps();
+    const { restore } = renderOnMeasuredRail(steps, {
+      onStepClick,
+      onStepToggle,
+    });
+    try {
+      const marker = screen.getByRole("button", {
+        name: "2 steps: plan – build",
+      });
+      expect(screen.queryByRole("button", { name: "plan" })).toBeNull();
+
+      fireEvent.click(marker);
+      // The marker itself jumps to the group's first step.
+      expect(onStepClick).toHaveBeenCalledWith(steps[0]);
+      expect(screen.getByText("2 steps")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Go to build" }));
+      expect(onStepClick).toHaveBeenLastCalledWith(steps[1]);
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "Hide step 4 output" })
+      );
+      expect(onStepToggle).toHaveBeenCalledWith(steps[1]);
+    } finally {
+      restore();
+    }
+  });
+
+  it("solos one member from its popup row on Alt-click", () => {
+    const onStepSolo = vi.fn();
+    const steps = closeSteps();
+    const { restore } = renderOnMeasuredRail(steps, {
+      onStepSolo,
+      onStepClick: vi.fn(),
+    });
+    try {
+      fireEvent.click(
+        screen.getByRole("button", { name: "2 steps: plan – build" })
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Go to plan" }), {
+        altKey: true,
+      });
+      expect(onStepSolo).toHaveBeenCalledWith(steps[0]);
+    } finally {
+      restore();
+    }
+  });
+
+  it("colors a grouped marker by its most important member and dims it only when all are hidden", () => {
+    const [plan, build] = closeSteps();
+    const { restore } = renderOnMeasuredRail([
+      { ...plan, hidden: true },
+      { ...build, selected: true },
+    ]);
+    try {
+      const marker = screen.getByRole("button", {
+        name: "2 steps: plan – build",
+      });
+      expect(marker).toHaveClass("text-focus-border");
+      expect(marker.closest('[role="group"]')).not.toHaveClass("opacity-60");
+    } finally {
+      restore();
+    }
+  });
+
+  it("keeps every marker of a long run on the rail", () => {
+    const steps = Array.from({ length: 400 }, (_, i) =>
+      makeStep({
+        key: `queue:${i}`,
+        stepIndex: i,
+        label: `step-${i}`,
+        scrollFraction: i / 400,
+      })
+    );
+    const { restore } = renderOnMeasuredRail(steps);
+    try {
+      const groups = screen.getAllByRole("group");
+      expect(groups.length).toBeLessThan(400);
+      for (const group of groups) {
+        const top = parseFloat(group.style.top);
+        const height = parseFloat(group.style.height);
+        expect(top).toBeGreaterThanOrEqual(0);
+        expect(top + height).toBeLessThanOrEqual(200);
+      }
+    } finally {
+      restore();
+    }
   });
 });
