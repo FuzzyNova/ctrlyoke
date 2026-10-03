@@ -147,9 +147,15 @@ expectedDescriptorRevision}`, `hooks/useMessageHandler.ts:~213`). Therefore
     running, the completed prefix and the in-flight step are locked.
   - On the run-addressed path, `RunContinuationService` keeps executed-prefix and
     `terminalStatus` steps immutable even after the run stops (commit 337ea9ed).
-  - In the UI, `isStepExecutionLocked` (`ParallelGroupPanel.tsx:112`) plus the busy
+  - In the UI, `isStepExecutionLocked` (`ParallelGroupPanel.tsx:113`) plus the busy
     current step decide which rows are locked. The Delete menu item's own gate is in
-    `useStepContextMenu.tsx:~431`.
+    `useStepContextMenu.tsx:~446`. **Note:** today that gate only disables the
+    _executing_ step (`isExternallyManaged || isExecutionTargetLocked`), so the
+    menu still offers Delete on completed steps and relies on the host to reject
+    it. `getStepCapabilities` must encode the host's real rules (executed prefix,
+    `terminalStatus`, pending-rewind prefix), not copy the looser menu gate.
+  - The single-step context-menu Enable/Disable item sends `UPDATE_PROMPT` built by
+    `buildWorkflowStepEnabledUpdate`. Bulk enable uses `UPDATE_STEPS` instead.
   - Editing a _completed_ nonzero step goes through `rewindCompletedStep` →
     `updateCompletedPromptInQueue`, which starts a pending continuation. That is a
     single-step design.
@@ -591,28 +597,35 @@ which is cheap once the predicate exists. Clicks there stay single-select in v1.
 
 ## Phasing
 
+> Phasing note (orchestrator review, 2026-10-03): `UPDATE_STEPS` moved from phase 4
+> to phase 2b. Bulk enable/disable (phase 3 and the context-menu items) needs it, so
+> the host message must land first. Phase 4 is now purely the drawer/picker UI.
+
 1. **Selection model, capabilities and gestures.**
-   - The `multiSelection` slice.
-   - `stepCapabilities.ts`, with the single-step context menu migrated onto it.
-   - Modifier plumbing through the three row render sites, plus Ctrl+A and Escape.
-   - The context-menu selection items (Select All / Select to Here / Add / Remove /
-     Clear), and the no-collapse right-click rule.
-   - The structural-change remap/clear rules, including the existing staleness fix.
-   - Row highlighting.
-2. **Array protocol and bulk delete.**
-   - `DELETE_PROMPT` and `UPDATE_STEP_COLOR` move to `indices`, end to end (queue,
-     instance, orchestrator, WorkingFileManager/RunContinuationService, handler,
-     router, MCP tool).
-   - The Delete key, the bulk context-menu Delete, and the "delete N steps" modal.
+   - 1a: pure selection helpers (`utils/stepMultiSelection.ts`, selection half), the
+     `multiSelection` slice, `stepCapabilities.ts`, and the single-step context menu
+     migrated onto it.
+   - 1b: modifier plumbing through the three row render sites, plus Ctrl+A and
+     Escape. The context-menu selection items (Select All / Select to Here / Add /
+     Remove / Clear), and the no-collapse right-click rule. The structural-change
+     remap/clear rules, including the existing staleness fix. Row highlighting,
+     `PromptCounter` and chip-rail rendering.
+2. **Array protocol, `UPDATE_STEPS`, and bulk delete / enable.**
+   - 2a: `DELETE_PROMPT` and `UPDATE_STEP_COLOR` move to `indices`, end to end
+     (queue, instance, orchestrator, WorkingFileManager/RunContinuationService,
+     handler, router, MCP tool).
+   - 2b: `UPDATE_STEPS` end to end on the host, with the exported bulk-editable key
+     constant. The Delete key, the bulk context-menu Delete, the "delete N steps"
+     modal, and the context-menu bulk Enable/Disable.
 3. **Editor bulk mode and patch draft.**
    - Placeholder `Compartment` and state-specific placeholders.
    - The `bulkPatch` slice with MIXED display and the `setProperty`/`setStepEnabled`
      redirect.
-   - Bulk color (reusing phase 2's message) and bulk enable/disable, including the
-     context-menu items.
+   - Bulk color and enable/disable from the editor header, committed through Update
+     (`UPDATE_STEP_COLOR` for color-only, otherwise `UPDATE_STEPS`).
 4. **Bulk prompt properties.**
-   - `UPDATE_STEPS` end to end.
    - The harness cascade helper, harness-dependent gating, and drawer page gating.
+   - MIXED rendering and the "(mixed)" option in the drawer and footer pickers.
 5. **Bulk reorder.**
    - Block-move pure helpers and bulk Move Up/Down.
    - Multi-drag in the live preview, with no parallel groups.
