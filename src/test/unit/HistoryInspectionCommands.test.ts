@@ -15,7 +15,12 @@ import {
   HISTORY_EVENT_KINDS,
   HISTORY_MATCH_FIELDS,
   RUN_OUTPUT_RESOLVER_EVENT_KINDS,
+  SCRIPT_OUTPUT_SOURCES,
+  HISTORY_SEARCH_INDEX_STATES,
+  CLI_EVENT_TYPES,
 } from "../../types/DashboardConstants";
+import type { CliEvent, UniversalCliOutput } from "../../types/CliOutputTypes";
+import { SCRIPT_EVENT_KIND_BY_SOURCE } from "../../core/orchestration/HistoryCandidateExtractor";
 import type {
   RunRef,
   WorkflowKey,
@@ -63,6 +68,7 @@ import { HistorySearchService } from "../../core/orchestration/HistorySearchServ
 import {
   pageOutputText,
   parseOutputTextPaging,
+  READ_OUTPUT_PAGING_WORDING,
 } from "../../core/orchestration/OutputTextPaging";
 import { MAX_INDEXED_TEXT_LENGTH } from "../../core/orchestration/HistorySearchIndexService";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
@@ -141,14 +147,23 @@ class TestHistoryManager implements HistoryInspectionOutputHistoryManager {
 }
 
 class TestRunOutputResolver implements HistoryInspectionRunOutputResolver {
+  lifecycleReads = 0;
+  attemptReads = 0;
+
+  /**
+   * Without explicit lifecycle events, the lifecycle stream is derived from
+   * the settled attempts the way the real timeline records them: one start
+   * per attempt, and a termination unless the attempt is unterminated.
+   */
   constructor(
     private readonly events: RunOutputResolverAttemptEvent[],
-    private readonly lifecycleEvents: RunAttemptLifecycleEvent[] = []
+    private readonly lifecycleEvents?: RunAttemptLifecycleEvent[]
   ) {}
 
   async *streamAttempts(
     _manifestPath: string
   ): AsyncGenerator<RunOutputResolverAttemptEvent, void, undefined> {
+    this.attemptReads++;
     yield* this.events;
   }
 
@@ -157,7 +172,37 @@ class TestRunOutputResolver implements HistoryInspectionRunOutputResolver {
     void,
     undefined
   > {
-    yield* this.lifecycleEvents;
+    this.lifecycleReads++;
+    if (this.lifecycleEvents) {
+      yield* this.lifecycleEvents;
+      return;
+    }
+    for (const event of this.events) {
+      if (event.kind !== RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED) {
+        continue;
+      }
+      const { target, runIndex, attemptIndex, phase } = event.attempt;
+      const identity = {
+        target,
+        runIndex,
+        attemptIndex,
+        ...(phase !== undefined ? { phase } : {}),
+      };
+      yield {
+        eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+        ...identity,
+        timestampMs: 1_000,
+        attemptKind: event.attempt.kind ?? "ai",
+      };
+      if (!event.unterminated) {
+        yield {
+          eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED,
+          ...identity,
+          timestampMs: 2_000,
+          terminalState: event.attempt.terminalState ?? "completed",
+        };
+      }
+    }
   }
 }
 
@@ -264,6 +309,50 @@ function settledAttempt(
       ...overrides,
     },
     unterminated: false,
+  };
+}
+
+function structuredEvents(events: CliEvent[]): UniversalCliOutput {
+  return { events, metadata: {} };
+}
+
+function lifecycleStarted(
+  target: OutputExecutionTarget,
+  overrides: Partial<
+    Extract<
+      RunAttemptLifecycleEvent,
+      { eventType: typeof TIMELINE_EVENT_TYPES.ATTEMPT_STARTED }
+    >
+  > = {}
+): RunAttemptLifecycleEvent {
+  return {
+    eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+    target,
+    runIndex: 0,
+    attemptIndex: 0,
+    timestampMs: 1_000,
+    attemptKind: "ai",
+    ...overrides,
+  };
+}
+
+function lifecycleTerminated(
+  target: OutputExecutionTarget,
+  overrides: Partial<
+    Extract<
+      RunAttemptLifecycleEvent,
+      { eventType: typeof TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED }
+    >
+  > = {}
+): RunAttemptLifecycleEvent {
+  return {
+    eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED,
+    target,
+    runIndex: 0,
+    attemptIndex: 0,
+    timestampMs: 2_000,
+    terminalState: "completed",
+    ...overrides,
   };
 }
 
@@ -486,25 +575,76 @@ suite("CLI history inspection command parser", () => {
 
 suite("CLI history inspection command handlers", () => {
   test("shares character paging behavior and surrogate-safe cursors", () => {
-    const paging = parseOutputTextPaging({ limit: 3 }, 1, "history show")!;
+    const paging = parseOutputTextPaging({ limit: 3 }, 1)!;
     assert.deepStrictEqual(pageOutputText("AB😀CD", paging), {
       text: "AB",
       nextCursor: "2",
     });
     assert.deepStrictEqual(
-      pageOutputText(
-        "AB😀CD",
-        parseOutputTextPaging({ cursor: "3" }, 1, "history show")!
-      ),
+      pageOutputText("AB😀CD", parseOutputTextPaging({ cursor: "3" }, 1)!),
       { text: "CD" }
     );
-    assert.throws(
-      () => parseOutputTextPaging({ tail: 2, limit: 1 }, 1, "history show"),
-      /tail is mutually exclusive/
+  });
+
+  test("keeps MCP read_output paging errors byte-identical", () => {
+    // These strings are part of the MCP tool contract; the CLI's wording is
+    // supplied separately and must never leak into them.
+    for (const wording of [undefined, READ_OUTPUT_PAGING_WORDING]) {
+      assert.throws(
+        () => parseOutputTextPaging({ tail: 2, limit: 1 }, 1, wording),
+        {
+          message:
+            "read_output: tail is mutually exclusive with cursor and limit",
+        }
+      );
+      assert.throws(() => parseOutputTextPaging({ limit: 2 }, 2, wording), {
+        message:
+          "read_output: cursor, limit, and tail require indices to name exactly one step",
+      });
+      assert.throws(() => parseOutputTextPaging({ cursor: "x" }, 1, wording), {
+        message:
+          "read_output: cursor must be a non-negative integer cursor returned by read_output",
+      });
+      assert.throws(() => parseOutputTextPaging({ limit: 0 }, 1, wording), {
+        message: "read_output: limit must be a positive integer",
+      });
+      assert.throws(() => parseOutputTextPaging({ tail: -1 }, 1, wording), {
+        message: "read_output: tail must be a non-negative integer",
+      });
+    }
+  });
+
+  test("names CLI flags and history show in its paging errors", async () => {
+    const key = "release" as WorkflowKey;
+    await assert.rejects(
+      showHistoryCommand(
+        { workflow: key, run: "3", step: "0", cursor: "x" },
+        new TestIo(),
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          historyManagerForShow(key),
+          new TestRunOutputResolver([])
+        )
+      ),
+      {
+        message:
+          "history show: --cursor must be a non-negative integer cursor returned by history show",
+      }
     );
-    assert.throws(
-      () => parseOutputTextPaging({ limit: 2 }, 2, "history show"),
-      /exactly one step/
+    await assert.rejects(
+      showHistoryCommand(
+        { workflow: key, run: "3", step: "0", tail: "3", limit: "4" },
+        new TestIo(),
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          historyManagerForShow(key),
+          new TestRunOutputResolver([])
+        )
+      ),
+      {
+        message:
+          "history show: --tail is mutually exclusive with --cursor and --limit",
+      }
     );
   });
 
@@ -613,29 +753,39 @@ suite("CLI history inspection command handlers", () => {
           ],
         ])
       );
+      const step0 = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+      const step1 = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 } as const;
+      const pass1 = {
+        kind: FINAL_STEP_PHASES.FINAL_STEP,
+        loopIndex: 0,
+      } as const;
+      const pass2 = {
+        kind: FINAL_STEP_PHASES.FINAL_STEP,
+        loopIndex: 1,
+      } as const;
       const resolver = new TestRunOutputResolver(
         [],
         [
-          {
-            eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
-            target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
-          },
-          {
-            eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
-            target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
-          },
-          {
-            eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
-            target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
-          },
-          {
-            eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
-            target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
-          },
-          {
-            eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
-            target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 1 },
-          },
+          // A pre-condition and an end-condition share the AI attempt
+          // indices; neither is an attempt of the step.
+          lifecycleStarted(step0, {
+            attemptKind: "condition",
+            phase: "preCondition",
+          }),
+          lifecycleTerminated(step0, { phase: "preCondition" }),
+          lifecycleStarted(step0),
+          lifecycleTerminated(step0, { terminalState: "failed" }),
+          lifecycleStarted(step0, {
+            attemptKind: "condition",
+            phase: "endCondition",
+          }),
+          lifecycleTerminated(step0, { phase: "endCondition" }),
+          lifecycleStarted(step0, { attemptIndex: 1 }),
+          lifecycleTerminated(step0, { attemptIndex: 1 }),
+          lifecycleStarted(step1),
+          lifecycleStarted(pass1, { timestampMs: 10_000 }),
+          lifecycleTerminated(pass1, { timestampMs: 14_500 }),
+          lifecycleStarted(pass2, { timestampMs: 20_000 }),
         ]
       );
       const io = new TestIo();
@@ -656,13 +806,14 @@ suite("CLI history inspection command handlers", () => {
         runRef: string;
         steps: Array<{
           selector: string;
-          name: string;
+          name: string | null;
           state: string;
+          harness: string | null;
           attempts: number;
           prompt: string;
-          elapsed: string;
+          elapsedSeconds: number | null;
         }>;
-        finalStep: { selector: string; passes: number };
+        finalStep: unknown;
       };
       assert.strictEqual(value.runRef, runRef);
       assert.deepStrictEqual(
@@ -670,7 +821,7 @@ suite("CLI history inspection command handlers", () => {
         ["0", "1", "2"]
       );
       assert.strictEqual(value.steps[0].attempts, 2);
-      assert.strictEqual(value.steps[0].elapsed, "2m5s");
+      assert.strictEqual(value.steps[0].elapsedSeconds, 125);
       assert.strictEqual(
         value.steps[1].name,
         "Appended step with no definition snapshot"
@@ -678,6 +829,9 @@ suite("CLI history inspection command handlers", () => {
       assert.strictEqual(value.steps[1].state, "running");
       assert.strictEqual(value.steps[1].attempts, 1);
       assert.strictEqual(value.steps[2].state, "pending");
+      assert.strictEqual(value.steps[2].name, null);
+      assert.strictEqual(value.steps[2].harness, null);
+      assert.strictEqual(value.steps[2].elapsedSeconds, null);
       assert.strictEqual(value.steps[0].prompt, "First line");
       assert.deepStrictEqual(value.finalStep, {
         selector: "final",
@@ -685,10 +839,51 @@ suite("CLI history inspection command handlers", () => {
         state: "completed",
         harness: "claude-cli",
         model: "opus",
-        elapsed: "—",
-        passes: 2,
+        elapsedSeconds: null,
+        passes: [
+          {
+            selector: "final:1",
+            pass: 1,
+            state: "completed",
+            attempts: 1,
+            startedAt: 10_000,
+            completedAt: 14_500,
+            elapsedSeconds: 4.5,
+          },
+          {
+            selector: "final:2",
+            pass: 2,
+            state: "running",
+            attempts: 1,
+            startedAt: 20_000,
+            completedAt: null,
+            elapsedSeconds: null,
+          },
+        ],
         prompt: "Review all changes",
       });
+
+      const textIo = new TestIo();
+      await stepsHistoryCommand(
+        { workflow: key },
+        textIo,
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          manager,
+          resolver,
+          undefined,
+          workspaceRoot
+        )
+      );
+      const [header, ...rows] = textIo.output;
+      assert.match(header, /^# +NAME +STATE +HARNESS/);
+      // Columns line up: every row STATE starts where the header STATE does.
+      const stateColumn = header.indexOf("STATE");
+      for (const row of rows) {
+        assert.match(row.slice(stateColumn), /^(completed|running|pending) /);
+      }
+      assert.match(rows[2], /^2 +— +pending/);
+      assert.match(rows[3], /^final +review +completed .* 2 passes +Review/);
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
@@ -854,6 +1049,128 @@ suite("CLI history inspection command handlers", () => {
     }
   });
 
+  test("counts only step attempts from a recorded timeline with condition scripts", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-history-steps-conditions-")
+    );
+    const key = "release" as WorkflowKey;
+    const runRef = "run-2026-09-29T10-00-00-000Z" as RunRef;
+    const workingFile = WorkflowPaths.runFilePath(workspaceRoot, key, runRef);
+    try {
+      await fs.mkdir(path.dirname(workingFile), { recursive: true });
+      await fs.writeFile(
+        workingFile,
+        JSON.stringify({ steps: [{ name: "Guarded", prompt: "Say hi" }] })
+      );
+      const recorder = new TimelineRecorder();
+      const manifestPath = await recorder.initializeRunAt(
+        path.dirname(workingFile),
+        key,
+        3,
+        1,
+        EXECUTION_STATES.COMPLETED
+      );
+      const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+      const attempt = (
+        sequence: number,
+        kind: "ai" | "condition",
+        phase?: "preCondition" | "endCondition"
+      ) => [
+        {
+          eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+          timestampMs: sequence,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          ...(phase ? { phase } : {}),
+          definitionRevision: 1,
+          payload: { kind, startReason: "initial" as const, prompt: "p" },
+        },
+        {
+          eventType: TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED,
+          timestampMs: sequence + 1,
+          target,
+          runIndex: 0,
+          attemptIndex: 0,
+          ...(phase ? { phase } : {}),
+          definitionRevision: 1,
+          payload: { terminalState: "completed" as const },
+        },
+      ];
+      await recorder.appendEvents(manifestPath, [
+        ...attempt(10, "condition", "preCondition"),
+        ...attempt(20, "ai"),
+        ...attempt(30, "condition", "endCondition"),
+      ]);
+      const lifecycle: RunAttemptLifecycleEvent[] = [];
+      for await (const event of new RunOutputResolver().streamAttemptLifecycle(
+        manifestPath
+      )) {
+        lifecycle.push(event);
+      }
+      assert.deepStrictEqual(
+        lifecycle
+          .filter(
+            (event) => event.eventType === TIMELINE_EVENT_TYPES.ATTEMPT_STARTED
+          )
+          .map((event) => [
+            event.eventType === TIMELINE_EVENT_TYPES.ATTEMPT_STARTED
+              ? event.attemptKind
+              : undefined,
+            event.phase,
+          ]),
+        [
+          ["condition", "preCondition"],
+          ["ai", undefined],
+          ["condition", "endCondition"],
+        ]
+      );
+
+      const manager = new TestHistoryManager(
+        new Map(),
+        new Map([
+          [
+            key,
+            [
+              {
+                workflowKey: key,
+                runRef,
+                runDirectory: path.dirname(workingFile),
+                runId: 3,
+                startedAt: 1,
+                executionState: EXECUTION_STATES.COMPLETED,
+                definitionRevision: 1,
+                stepCount: 1,
+                workingFileStepCount: 1,
+                hasFinalStep: false,
+                hasMixedHarnesses: false,
+                hasMixedModels: false,
+              },
+            ],
+          ],
+        ])
+      );
+      const io = new TestIo();
+      await stepsHistoryCommand(
+        { workflow: key, json: true },
+        io,
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          manager,
+          new RunOutputResolver(),
+          undefined,
+          workspaceRoot
+        )
+      );
+      const value = JSON.parse(io.output[0]) as {
+        steps: Array<{ attempts: number }>;
+      };
+      assert.strictEqual(value.steps[0].attempts, 1);
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("uses one navigation-manifest read per lineage instead of every run summary", async () => {
     const key = "release-2026-09-20T12-00-00Z" as WorkflowKey;
     const manager = new TestHistoryManager(
@@ -1004,9 +1321,11 @@ suite("CLI history inspection command handlers", () => {
       dependencies(repository, manager)
     );
     const rows = JSON.parse(allIo.output[0]) as Array<{ workflowName: string }>;
+    // Neither lineage has run, so the default latest-run order falls back
+    // to the workflow key.
     assert.deepStrictEqual(
       rows.map((row) => row.workflowName),
-      ["User workflow", "System workflow"]
+      ["System workflow", "User workflow"]
     );
   });
 
@@ -1143,6 +1462,20 @@ suite("CLI history inspection command handlers", () => {
         /Invalid --attempt value/
       );
     }
+    // Parts are trimmed like `step reorder`, and duplicates are counted once
+    // against the size cap.
+    assert.deepStrictEqual(parseHistoryShowStep(" 3, 4 ,3-4"), {
+      kind: FINAL_STEP_PHASES.QUEUE,
+      stepIndices: [3, 4],
+    });
+    assert.strictEqual(
+      parseHistoryShowStep("0-9999,0-9999")?.kind,
+      FINAL_STEP_PHASES.QUEUE
+    );
+    assert.throws(() => parseHistoryShowStep("0-10000"), {
+      message:
+        'Invalid --step value "0-10000"; the selection is too large (more than 10000 distinct step indices)',
+    });
   });
 
   test("filters queue attempts, final passes, running, latest, and retries", async () => {
@@ -1280,7 +1613,7 @@ suite("CLI history inspection command handlers", () => {
           workspaceRoot
         )
       );
-      assert.deepStrictEqual(statuses, ["Step 2 has not started (pending)"]);
+      assert.deepStrictEqual(statuses, ["--step 1 has not started (pending)"]);
 
       statuses.length = 0;
       await fs.writeFile(
@@ -1300,7 +1633,7 @@ suite("CLI history inspection command handlers", () => {
           workspaceRoot
         )
       );
-      assert.deepStrictEqual(statuses, ["Step 2 was skipped"]);
+      assert.deepStrictEqual(statuses, ["--step 1 was skipped"]);
 
       statuses.length = 0;
       await showHistoryCommand(
@@ -1666,7 +1999,20 @@ suite("CLI history inspection command handlers", () => {
       step: { prompt: "the attempt step" },
     });
     assert.strictEqual("steps" in full.definition, false);
+    // Each text appears once: top-level prompt/responseText, no output copies.
+    assert.strictEqual(full.prompt, "the prompt");
+    assert.strictEqual(full.responseText, "the complete answer");
+    assert.strictEqual("prompt" in full.output, false);
+    assert.strictEqual("response" in full.output, false);
+    assert.strictEqual(full.output.structured.events.length, 2);
 
+    const [unpaged] = await run({ summary: true });
+    assert.strictEqual(unpaged.prompt, "the prompt");
+    assert.strictEqual(unpaged.responseText, "the complete answer");
+    assert.strictEqual("nextCursor" in unpaged, false);
+
+    // A page is bounded by --limit, so it carries the page and a cursor but
+    // not the unpaged prompt.
     const [summary] = await run({ summary: true, limit: "4" });
     assert.deepStrictEqual(summary, {
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
@@ -1675,8 +2021,8 @@ suite("CLI history inspection command handlers", () => {
       state: "completed",
       timings: { elapsed: 2, timestampMs: 123 },
       tokens: { prompt: 4, completion: 5, total: 9 },
-      prompt: "the prompt",
       responseText: "the ",
+      nextCursor: "4",
     });
 
     const events = await run({ events: true });
@@ -1739,6 +2085,629 @@ suite("CLI history inspection command handlers", () => {
     assert.deepStrictEqual(statuses, [
       "Attempt did not terminate before the recorded history ended",
     ]);
+  });
+  test("reports each unrendered index of a --step list on its own line", async () => {
+    const key = "release" as WorkflowKey;
+    const statuses: string[] = [];
+    const originalStatus = CliTerminalFormatter.renderStatusMessage;
+    const originalHeader = CliTerminalFormatter.renderPromptHeader;
+    const headers: Array<string | undefined> = [];
+    CliTerminalFormatter.renderStatusMessage = ((message) => {
+      statuses.push(message);
+    }) as typeof originalStatus;
+    CliTerminalFormatter.renderPromptHeader = ((data) => {
+      headers.push(data.stepSelector);
+    }) as typeof originalHeader;
+    const resolver = new TestRunOutputResolver([
+      settledAttempt({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 }),
+    ]);
+    const deps = dependencies(
+      new TestLineageRepository([key], new Map(), new Map()),
+      historyManagerForShow(key),
+      resolver
+    );
+    try {
+      await showHistoryCommand(
+        { workflow: key, run: "3", step: "0, 1" },
+        new TestIo(),
+        deps
+      );
+    } finally {
+      CliTerminalFormatter.renderStatusMessage = originalStatus;
+      CliTerminalFormatter.renderPromptHeader = originalHeader;
+    }
+    assert.deepStrictEqual(headers, ["0"]);
+    assert.deepStrictEqual(statuses, [
+      "Attempt completed",
+      "--step 1 has not started (pending)",
+    ]);
+
+    const io = new TestIo();
+    await showHistoryCommand(
+      { workflow: key, run: "3", step: "0-1", json: true },
+      io,
+      deps
+    );
+    assert.strictEqual(io.output.length, 2);
+    assert.deepStrictEqual(JSON.parse(io.output[1]), {
+      runRef: "run-2026-09-20T12-00-00-000Z",
+      selector: "1",
+      step: 1,
+      status: "pending",
+      message: "--step 1 has not started (pending)",
+    });
+  });
+
+  test("rejects an --attempt beyond the recorded attempts before writing", async () => {
+    const key = "release" as WorkflowKey;
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const io = new TestIo();
+    await assert.rejects(
+      showHistoryCommand(
+        { workflow: key, run: "3", step: "0", attempt: "3" },
+        io,
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          historyManagerForShow(key),
+          new TestRunOutputResolver([
+            settledAttempt(target),
+            settledAttempt(target, { attemptIndex: 1 }),
+          ])
+        )
+      ),
+      {
+        message:
+          'Invalid --attempt value "3" for --step 0; valid attempts are 1 to 2',
+      }
+    );
+    assert.deepStrictEqual(io.output, []);
+    assert.deepStrictEqual(io.errors, []);
+  });
+
+  test("says no events matched when --kind or --path filters out an attempt", async () => {
+    const key = "release" as WorkflowKey;
+    const statuses: string[] = [];
+    const originalStatus = CliTerminalFormatter.renderStatusMessage;
+    CliTerminalFormatter.renderStatusMessage = ((message) => {
+      statuses.push(message);
+    }) as typeof originalStatus;
+    try {
+      await showHistoryCommand(
+        { workflow: key, run: "3", step: "0", kind: ["bash"], path: "src" },
+        new TestIo(),
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          historyManagerForShow(key),
+          new TestRunOutputResolver([
+            settledAttempt({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 }),
+          ])
+        )
+      );
+    } finally {
+      CliTerminalFormatter.renderStatusMessage = originalStatus;
+    }
+    assert.deepStrictEqual(statuses, [
+      "No events in --step 0 matched --kind bash and --path src",
+    ]);
+  });
+
+  test("classifies script output for --kind with the history search map", async () => {
+    const key = "release" as WorkflowKey;
+    const scriptAttempt = (
+      source: (typeof SCRIPT_OUTPUT_SOURCES)[keyof typeof SCRIPT_OUTPUT_SOURCES]
+    ) =>
+      settledAttempt(
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        {
+          kind: "script",
+          output: {
+            response: `${source} output`,
+            elapsed: 1,
+            isStreaming: false,
+            source,
+          },
+        }
+      );
+    const show = async (
+      source: (typeof SCRIPT_OUTPUT_SOURCES)[keyof typeof SCRIPT_OUTPUT_SOURCES],
+      kind: string
+    ): Promise<string[]> => {
+      const io = new TestIo();
+      await showHistoryCommand(
+        { workflow: key, run: "3", step: "0", kind: [kind], json: true },
+        io,
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          historyManagerForShow(key),
+          new TestRunOutputResolver([scriptAttempt(source)])
+        )
+      );
+      return io.output.map(
+        (line) =>
+          (JSON.parse(line) as { responseText?: string; message?: string })
+            .responseText ?? "no match"
+      );
+    };
+    for (const [source, kind] of Object.entries(SCRIPT_EVENT_KIND_BY_SOURCE)) {
+      assert.deepStrictEqual(
+        await show(source as keyof typeof SCRIPT_EVENT_KIND_BY_SOURCE, kind),
+        [`${source} output`],
+        `${source} should be selected by --kind ${kind}`
+      );
+    }
+    assert.deepStrictEqual(
+      await show(
+        SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP,
+        HISTORY_EVENT_KINDS.PRE_CONDITION
+      ),
+      ["no match"]
+    );
+    assert.deepStrictEqual(
+      await show(
+        SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
+        HISTORY_EVENT_KINDS.SCRIPT
+      ),
+      ["no match"]
+    );
+  });
+
+  test("keeps text excluded by --kind out of every JSON field and filters --path like search", async () => {
+    const key = "release" as WorkflowKey;
+    const attempt = settledAttempt(
+      { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      {
+        prompt: "SECRET PROMPT",
+        responseText: "SECRET RESPONSE",
+        output: {
+          prompt: "SECRET PROMPT",
+          response: "SECRET RESPONSE",
+          elapsed: 1,
+          isStreaming: false,
+          structured: structuredEvents([
+            { type: "text", data: { text: "SECRET RESPONSE" } },
+            {
+              type: CLI_EVENT_TYPES.BASH_COMMAND,
+              data: { command: "npm test" },
+            },
+            {
+              type: CLI_EVENT_TYPES.FILE_EDIT,
+              data: { path: "C:\\repo\\src\\core\\a.ts" },
+            },
+            { type: CLI_EVENT_TYPES.FILE_EDIT, data: { path: "docs/b.md" } },
+          ]),
+        },
+      }
+    );
+    const run = async (options: Partial<HistoryShowOptions>) => {
+      const io = new TestIo();
+      await showHistoryCommand(
+        { workflow: key, run: "3", step: "0", json: true, ...options },
+        io,
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          historyManagerForShow(key),
+          new TestRunOutputResolver([attempt])
+        )
+      );
+      return io.output;
+    };
+
+    const [bashOnly] = await run({ kind: ["bash"] });
+    assert.doesNotMatch(bashOnly, /SECRET/);
+    const parsed = JSON.parse(bashOnly) as {
+      output: { structured: { events: Array<{ type: string }> } };
+    };
+    assert.deepStrictEqual(
+      parsed.output.structured.events.map((event) => event.type),
+      [CLI_EVENT_TYPES.BASH_COMMAND]
+    );
+
+    const [summary] = await run({ kind: ["bash"], summary: true });
+    assert.doesNotMatch(summary, /SECRET/);
+
+    const [byPath] = await run({ path: "  SRC/Core " });
+    const pathEvents = (
+      JSON.parse(byPath) as {
+        output: { structured: { events: Array<{ data: { path: string } }> } };
+      }
+    ).output.structured.events;
+    assert.deepStrictEqual(
+      pathEvents.map((event) => event.data.path),
+      ["C:\\repo\\src\\core\\a.ts"]
+    );
+    assert.doesNotMatch(byPath, /SECRET/);
+  });
+
+  test("bounds everything a paged show emits, events and script output included", async () => {
+    const key = "release" as WorkflowKey;
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const hugeCommandOutput = "x".repeat(50_000);
+    const aiAttempt = settledAttempt(target, {
+      prompt: "P".repeat(10_000),
+      responseText: "0123456789",
+      output: {
+        prompt: "P".repeat(10_000),
+        response: "0123456789",
+        elapsed: 1,
+        isStreaming: false,
+        structured: structuredEvents([
+          { type: "text", data: { text: "0123456789" } },
+          {
+            type: CLI_EVENT_TYPES.BASH_COMMAND,
+            data: { command: "build", output: hugeCommandOutput },
+          },
+        ]),
+      },
+    });
+    const deps = (attempt: RunOutputResolverAttemptEvent) =>
+      dependencies(
+        new TestLineageRepository([key], new Map(), new Map()),
+        historyManagerForShow(key),
+        new TestRunOutputResolver([attempt])
+      );
+
+    // Text: the page replaces the structured events and the prompt preview.
+    const chunks: string[] = [];
+    let renderedEvents = 0;
+    const prompts: string[] = [];
+    const originalChunk = CliTerminalFormatter.renderStreamingChunk;
+    const originalEvents = CliTerminalFormatter.renderEvents;
+    const originalHeader = CliTerminalFormatter.renderPromptHeader;
+    CliTerminalFormatter.renderStreamingChunk = ((chunk) =>
+      chunks.push(chunk)) as typeof originalChunk;
+    CliTerminalFormatter.renderEvents = (() => {
+      renderedEvents++;
+    }) as typeof originalEvents;
+    CliTerminalFormatter.renderPromptHeader = ((data) => {
+      prompts.push(data.promptText);
+    }) as typeof originalHeader;
+    const textIo = new TestIo();
+    try {
+      await showHistoryCommand(
+        { workflow: key, run: "3", step: "0", tail: "4" },
+        textIo,
+        deps(aiAttempt)
+      );
+    } finally {
+      CliTerminalFormatter.renderStreamingChunk = originalChunk;
+      CliTerminalFormatter.renderEvents = originalEvents;
+      CliTerminalFormatter.renderPromptHeader = originalHeader;
+    }
+    assert.deepStrictEqual(chunks, ["6789"]);
+    assert.strictEqual(renderedEvents, 0);
+    assert.deepStrictEqual(prompts, [""]);
+
+    // JSON default, summary, and events: one page, a cursor, no events.
+    for (const mode of [{}, { summary: true }, { events: true }]) {
+      const io = new TestIo();
+      await showHistoryCommand(
+        { workflow: key, run: "3", step: "0", json: true, limit: "4", ...mode },
+        io,
+        deps(aiAttempt)
+      );
+      const total = io.output.join("\n");
+      assert.ok(
+        total.length < 1_000,
+        `${JSON.stringify(mode)} emitted ${total.length} chars`
+      );
+      assert.strictEqual(io.output.length, 1);
+      const record = JSON.parse(io.output[0]) as {
+        responseText?: string;
+        nextCursor?: string;
+        event?: { data: { text: string } };
+      };
+      assert.strictEqual(record.nextCursor, "4");
+      assert.strictEqual(
+        record.responseText ?? record.event?.data.text,
+        "0123"
+      );
+    }
+
+    // --kind under paging pages the matching events as text.
+    const kindIo = new TestIo();
+    await showHistoryCommand(
+      {
+        workflow: key,
+        run: "3",
+        step: "0",
+        json: true,
+        kind: ["bash"],
+        limit: "8",
+        summary: true,
+      },
+      kindIo,
+      deps(aiAttempt)
+    );
+    const kindPage = JSON.parse(kindIo.output[0]) as {
+      responseText: string;
+      nextCursor: string;
+    };
+    assert.strictEqual(kindPage.responseText, "build\nxx");
+    assert.strictEqual(kindPage.nextCursor, "8");
+
+    // Script attempts page their combined stdout and stderr.
+    const scriptAttempt = settledAttempt(target, {
+      kind: "script",
+      responseText: "ignored",
+      output: {
+        response: "ignored",
+        elapsed: 1,
+        isStreaming: false,
+        source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
+      },
+      scriptOutput: {
+        command: "run.sh",
+        stdout: "y".repeat(20_000),
+        stderr: "boom",
+        exitCode: 1,
+      },
+    });
+    const scriptIo = new TestIo();
+    await showHistoryCommand(
+      { workflow: key, run: "3", step: "0", json: true, tail: "6" },
+      scriptIo,
+      deps(scriptAttempt)
+    );
+    const scriptRecord = JSON.parse(scriptIo.output[0]) as {
+      responseText: string;
+      scriptOutput: Record<string, unknown>;
+    };
+    assert.strictEqual(scriptRecord.responseText, "y\nboom");
+    assert.deepStrictEqual(scriptRecord.scriptOutput, {
+      command: "run.sh",
+      exitCode: 1,
+    });
+    assert.ok(scriptIo.output[0].length < 1_000);
+  });
+
+  test("validates paging selections before writing anything", async () => {
+    const key = "release" as WorkflowKey;
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 } as const;
+    const retried = [
+      settledAttempt(target, {
+        output: { response: "first", elapsed: 1, isStreaming: false },
+      }),
+      settledAttempt(target, {
+        attemptIndex: 1,
+        output: { response: "second", elapsed: 1, isStreaming: false },
+      }),
+      settledAttempt({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 }),
+    ];
+    let headers = 0;
+    const originalHeader = CliTerminalFormatter.renderPromptHeader;
+    CliTerminalFormatter.renderPromptHeader = (() => {
+      headers++;
+    }) as typeof originalHeader;
+    try {
+      for (const options of [
+        { step: "0,1", limit: "100" },
+        { step: "0", attempt: "all", tail: "100" },
+      ]) {
+        const io = new TestIo();
+        await assert.rejects(
+          showHistoryCommand(
+            { workflow: key, run: "3", ...options },
+            io,
+            dependencies(
+              new TestLineageRepository([key], new Map(), new Map()),
+              historyManagerForShow(key),
+              new TestRunOutputResolver(retried)
+            )
+          ),
+          {
+            message:
+              "history show: --cursor, --limit, and --tail require exactly one selected attempt",
+          }
+        );
+        assert.deepStrictEqual(io.output, []);
+        assert.deepStrictEqual(io.errors, []);
+      }
+      assert.strictEqual(headers, 0);
+    } finally {
+      CliTerminalFormatter.renderPromptHeader = originalHeader;
+    }
+
+    // Without --attempt, paging a retried step reads its latest attempt.
+    const io = new TestIo();
+    await showHistoryCommand(
+      {
+        workflow: key,
+        run: "3",
+        step: "0",
+        json: true,
+        summary: true,
+        tail: "3",
+      },
+      io,
+      dependencies(
+        new TestLineageRepository([key], new Map(), new Map()),
+        historyManagerForShow(key),
+        new TestRunOutputResolver(retried)
+      )
+    );
+    assert.strictEqual(io.output.length, 1);
+    assert.strictEqual(
+      (JSON.parse(io.output[0]) as { responseText: string }).responseText,
+      "ond"
+    );
+  });
+
+  test("points the --max-events hint at a larger event budget", async () => {
+    const key = "release" as WorkflowKey;
+    const io = new TestIo();
+    const originalEvents = CliTerminalFormatter.renderEvents;
+    const rendered: number[] = [];
+    CliTerminalFormatter.renderEvents = ((events) => {
+      rendered.push(events.length);
+    }) as typeof originalEvents;
+    try {
+      await showHistoryCommand(
+        { workflow: key, run: "3", step: "0", maxEvents: "1" },
+        io,
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          historyManagerForShow(key),
+          new TestRunOutputResolver([
+            settledAttempt(
+              { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+              {
+                output: {
+                  response: "r",
+                  elapsed: 1,
+                  isStreaming: false,
+                  structured: structuredEvents([
+                    { type: "thinking", data: { text: "a" } },
+                    { type: "thinking", data: { text: "b" } },
+                    { type: "thinking", data: { text: "c" } },
+                  ]),
+                },
+              }
+            ),
+          ])
+        )
+      );
+    } finally {
+      CliTerminalFormatter.renderEvents = originalEvents;
+    }
+    assert.deepStrictEqual(rendered, [1]);
+    assert.deepStrictEqual(io.output, [
+      "… 2 more events (use --max-events 3 to show all)",
+    ]);
+  });
+
+  test("resolves latest from the lifecycle stream, reading output once", async () => {
+    const key = "release" as WorkflowKey;
+    const resolver = new TestRunOutputResolver([
+      settledAttempt({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 }),
+      settledAttempt({ kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 1 }),
+    ]);
+    const headers: Array<string | undefined> = [];
+    const originalHeader = CliTerminalFormatter.renderPromptHeader;
+    CliTerminalFormatter.renderPromptHeader = ((data) => {
+      headers.push(data.stepSelector);
+    }) as typeof originalHeader;
+    try {
+      await showHistoryCommand(
+        { workflow: key, run: "3", step: "latest" },
+        new TestIo(),
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          historyManagerForShow(key),
+          resolver
+        )
+      );
+    } finally {
+      CliTerminalFormatter.renderPromptHeader = originalHeader;
+    }
+    assert.strictEqual(resolver.attemptReads, 1);
+    assert.strictEqual(resolver.lifecycleReads, 1);
+    assert.deepStrictEqual(headers, ["final:2"]);
+  });
+
+  test("reports a missing lineage and a draft-only lineage like history runs", async () => {
+    const key = "release" as WorkflowKey;
+    for (const command of [showHistoryCommand, stepsHistoryCommand]) {
+      await assert.rejects(
+        command(
+          { workflow: "missing" },
+          new TestIo(),
+          dependencies(
+            new TestLineageRepository([key], new Map(), new Map()),
+            historyManagerForShow(key),
+            new TestRunOutputResolver([])
+          )
+        ),
+        { message: 'Workflow lineage "missing" was not found.' }
+      );
+      await assert.rejects(
+        command(
+          { workflow: key },
+          new TestIo(),
+          dependencies(
+            new TestLineageRepository([key], new Map(), new Map()),
+            new TestHistoryManager(new Map(), new Map()),
+            new TestRunOutputResolver([])
+          )
+        ),
+        { message: 'Workflow lineage "release" has no runs yet.' }
+      );
+    }
+  });
+
+  test("sorts history list by latest run before --limit and fails fast on bad flags", async () => {
+    const keys = ["a-old", "b-none", "c-new", "d-mid"] as WorkflowKey[];
+    const started = new Map<WorkflowKey, number>([
+      [keys[0], 1_000],
+      [keys[2], 3_000],
+      [keys[3], 2_000],
+    ]);
+    const manager = new TestHistoryManager(
+      new Map(
+        keys.map((key) => [
+          key,
+          started.has(key)
+            ? {
+                ...navigation(`run-${key}` as RunRef),
+                startedAt: started.get(key),
+              }
+            : { runCount: 0 },
+        ])
+      ),
+      new Map()
+    );
+    const repository = new TestLineageRepository(
+      keys,
+      new Map(keys.map((key) => [key, descriptor(key)])),
+      new Map([
+        [keys[0], "Zulu"],
+        [keys[1], "Alpha"],
+        [keys[2], "Mike"],
+        [keys[3], "Bravo"],
+      ])
+    );
+    const list = async (options: HistoryListOptions) => {
+      const io = new TestIo();
+      await listHistoryCommand(
+        { json: true, ...options },
+        io,
+        dependencies(repository, manager)
+      );
+      return (JSON.parse(io.output[0]) as Array<{ workflowKey: string }>).map(
+        (row) => row.workflowKey
+      );
+    };
+    assert.deepStrictEqual(await list({}), [
+      "c-new",
+      "d-mid",
+      "a-old",
+      "b-none",
+    ]);
+    assert.deepStrictEqual(await list({ limit: "2" }), ["c-new", "d-mid"]);
+    assert.deepStrictEqual(await list({ sort: "name" }), [
+      "b-none",
+      "d-mid",
+      "c-new",
+      "a-old",
+    ]);
+
+    for (const options of [
+      { sort: "newest" },
+      { state: ["runing"] },
+      { since: "yesterday-ish" },
+      { limit: "0" },
+    ] as HistoryListOptions[]) {
+      let bootstrapped = false;
+      await assert.rejects(
+        listHistoryCommand(options, new TestIo(), {
+          bootstrapCliWorkspace: async () => {
+            bootstrapped = true;
+            throw new Error("the scan must not start");
+          },
+        }),
+        (error: Error) => !/must not start/.test(error.message)
+      );
+      assert.strictEqual(bootstrapped, false, JSON.stringify(options));
+    }
   });
 });
 
@@ -1820,6 +2789,107 @@ suite("CLI history search command", () => {
     assert.doesNotMatch(io.output[0], /Rebuilding search index/);
     assert.doesNotMatch(io.output[0], /completed in/);
     assert.doesNotThrow(() => JSON.parse(io.output[0]));
+  });
+
+  test("reports a failed rebuild instead of completion when search falls back", async () => {
+    const io = new TestIo();
+    const service = new TestHistorySearchService(
+      { ...searchResponse(), indexState: HISTORY_SEARCH_INDEX_STATES.FALLBACK },
+      [
+        [0, 10],
+        [4, 10],
+      ]
+    );
+    await searchHistoryCommand(
+      "EPERM",
+      { json: true },
+      io,
+      dependencies(
+        new TestLineageRepository([], new Map(), new Map()),
+        new TestHistoryManager(new Map(), new Map()),
+        undefined,
+        service
+      )
+    );
+    assert.deepStrictEqual(io.errors, [
+      "Rebuilding search index (10 runs)…",
+      "Search index rebuild failed; used a disk scan.",
+    ]);
+  });
+
+  test("throttles TTY progress on the clock and redraws the final count", async () => {
+    let now = 0;
+    const ticks: Array<[number, number, number]> = [
+      // [clock ms, processed, total]
+      [0, 0, 10],
+      [100, 2, 10],
+      [249, 3, 10],
+      [250, 4, 10],
+      [400, 6, 10],
+      [499, 9, 10],
+    ];
+    const service: HistorySearchCommandService = {
+      search: async (_query, _root, onRebuildProgress) => {
+        for (const [at, processed, total] of ticks) {
+          now = at;
+          onRebuildProgress?.(processed, total);
+        }
+        return searchResponse();
+      },
+    };
+    const io = new TestIo();
+    io.isErrTty = true;
+    const originalNow = Date.now;
+    Date.now = () => now;
+    try {
+      await searchHistoryCommand(
+        "EPERM",
+        { json: true },
+        io,
+        dependencies(
+          new TestLineageRepository([], new Map(), new Map()),
+          new TestHistoryManager(new Map(), new Map()),
+          undefined,
+          service
+        )
+      );
+    } finally {
+      Date.now = originalNow;
+    }
+    assert.deepStrictEqual(io.progress, [
+      "\r\x1b[KRebuilding search index (0/10 runs)…",
+      "\r\x1b[KRebuilding search index (4/10 runs)…",
+      "\r\x1b[KRebuilding search index (9/10 runs)…",
+      "\n",
+    ]);
+  });
+
+  test("still ends the TTY progress line when search throws", async () => {
+    const service: HistorySearchCommandService = {
+      search: async (_query, _root, onRebuildProgress) => {
+        onRebuildProgress?.(1, 10);
+        throw new Error("index exploded");
+      },
+    };
+    const io = new TestIo();
+    io.isErrTty = true;
+    await assert.rejects(
+      searchHistoryCommand(
+        "EPERM",
+        { json: true },
+        io,
+        dependencies(
+          new TestLineageRepository([], new Map(), new Map()),
+          new TestHistoryManager(new Map(), new Map()),
+          undefined,
+          service
+        )
+      ),
+      /index exploded/
+    );
+    assert.strictEqual(io.progress[io.progress.length - 1], "\n");
+    assert.deepStrictEqual(io.errors, []);
+    assert.deepStrictEqual(io.output, []);
   });
 
   test("passes exact-count, deep, regex, cache, and fallback policies to the service", async () => {
@@ -2080,7 +3150,7 @@ suite("CLI history search command", () => {
 
     const output = io.output.join("\n");
     assert.match(output, /--workflow release --run run-queue --step 2/);
-    assert.match(output, /--workflow release --run run-final --step final/);
+    assert.match(output, /--workflow release --run run-final --step final:1$/m);
     assert.match(output, /one matching event or field, not one occurrence/);
     assert.match(output, /lower bound/);
     assert.match(output, /--deep/);

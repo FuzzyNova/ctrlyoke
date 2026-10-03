@@ -1,6 +1,9 @@
 import * as fs from "fs";
 import * as path from "path";
-import { HISTORY_SEARCH_COUNT_STATES } from "../../types/DashboardConstants";
+import {
+  HISTORY_SEARCH_COUNT_STATES,
+  HISTORY_SEARCH_INDEX_STATES,
+} from "../../types/DashboardConstants";
 import type { WorkflowKey } from "../../types/CtrlYokeTypes";
 import {
   type HistorySearchFilters,
@@ -167,7 +170,7 @@ export class HistorySearchService {
         totalCount: scanned.length,
         countState: HISTORY_SEARCH_COUNT_STATES.AT_LEAST,
         hasMore: scanned.length >= offset + request.limit,
-        indexState: "fallback",
+        indexState: HISTORY_SEARCH_INDEX_STATES.FALLBACK,
       };
     }
   }

@@ -4,6 +4,7 @@ import {
   EXECUTION_STATES,
   HARNESS_IDS,
   HISTORY_EVENT_KINDS,
+  HISTORY_LIST_SORT_ORDERS,
 } from "../types/DashboardConstants";
 
 export interface HistoryPruneOptions {
@@ -20,6 +21,7 @@ export interface HistoryListOptions {
   state?: string[];
   since?: string;
   limit?: string;
+  sort?: string;
   json?: boolean;
 }
 
@@ -157,6 +159,10 @@ export function registerHistoryCommands(
     .option(
       "--since <when>",
       "Runs started at or after ISO-8601 (offset-less date-times are UTC) or relative 7d/24h/30m"
+    )
+    .option(
+      "--sort <order>",
+      `Order lineages before --limit applies: ${HISTORY_LIST_SORT_ORDERS.LATEST} (newest latest run first; default) or ${HISTORY_LIST_SORT_ORDERS.NAME}`
     )
     .option("--limit <n>", "Maximum number of lineages")
     .option("--json", "Output as JSON")

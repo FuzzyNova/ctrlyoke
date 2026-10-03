@@ -15,6 +15,7 @@ import { Log } from "../../utils/Log";
 import { getFrozenRunHistoryLocation } from "../../utils/RunHistoryStoragePolicy";
 import {
   HISTORY_SEARCH_COUNT_STATES,
+  HISTORY_SEARCH_INDEX_STATES,
   HISTORY_SEARCH_REBUILD_MESSAGE_TYPES,
 } from "../../types/DashboardConstants";
 import { HistorySearchDocumentCache } from "./HistorySearchDocumentCache";
@@ -207,7 +208,10 @@ export class HistorySearchIndexService {
     );
     if (normalizedQuery.length < MIN_QUERY_LENGTH) {
       disposeHistorySearchMatcher(validationMatcher);
-      return this.emptyResponse(normalizedQuery, "ready");
+      return this.emptyResponse(
+        normalizedQuery,
+        HISTORY_SEARCH_INDEX_STATES.READY
+      );
     }
     disposeHistorySearchMatcher(validationMatcher);
 
@@ -345,7 +349,7 @@ export class HistorySearchIndexService {
       );
     } else {
       await this.loadIfPossible(workspaceFolderPath);
-      indexState = "building";
+      indexState = HISTORY_SEARCH_INDEX_STATES.BUILDING;
     }
     if (signal?.aborted) {
       throw new HistorySearchCancelledError();
@@ -899,8 +903,8 @@ export class HistorySearchIndexService {
     complete: boolean,
     totalCount: number = results.length,
     indexState: HistorySearchResponse["indexState"] = this.rebuildPromise
-      ? "building"
-      : "ready"
+      ? HISTORY_SEARCH_INDEX_STATES.BUILDING
+      : HISTORY_SEARCH_INDEX_STATES.READY
   ): HistorySearchResponse {
     const page = results.slice(offset, offset + limit);
     return {
@@ -979,7 +983,7 @@ export class HistorySearchIndexService {
         `[HistorySearchIndexService] freshness check: fresh=${fresh} durationMs=${Date.now() - freshnessStart}`
       );
       if (fresh) {
-        return "ready";
+        return HISTORY_SEARCH_INDEX_STATES.READY;
       }
     }
 
@@ -987,7 +991,7 @@ export class HistorySearchIndexService {
       Log.info(
         "[HistorySearchIndexService] index missing or stale; searching without synchronous rebuild"
       );
-      return "building";
+      return HISTORY_SEARCH_INDEX_STATES.BUILDING;
     }
 
     Log.info(
@@ -998,7 +1002,7 @@ export class HistorySearchIndexService {
     Log.info(
       `[HistorySearchIndexService] synchronous rebuild for search complete: durationMs=${Date.now() - rebuildStart}`
     );
-    return "ready";
+    return HISTORY_SEARCH_INDEX_STATES.READY;
   }
 
   private async loadIfPossible(workspaceFolderPath: string): Promise<void> {

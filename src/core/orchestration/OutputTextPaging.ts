@@ -15,13 +15,36 @@ export interface OutputTextPagingInput {
   tail?: number;
 }
 
+/**
+ * How one surface names its paging inputs in errors. The paging contract is
+ * shared; the vocabulary is not (MCP arguments are `cursor`, CLI flags are
+ * `--cursor`), so each caller supplies the words its users typed.
+ */
+export interface OutputTextPagingWording {
+  /** Prefix naming the surface, e.g. `read_output`. */
+  surface: string;
+  /** What must be selected before paging applies. */
+  selectionRequirement: string;
+  /** The command or tool whose responses carry cursors. */
+  cursorSource: string;
+  optionNames: Record<keyof OutputTextPagingInput, string>;
+}
+
+/** MCP `read_output` wording; its strings are part of the tool's contract. */
+export const READ_OUTPUT_PAGING_WORDING: OutputTextPagingWording = {
+  surface: "read_output",
+  selectionRequirement: "indices to name exactly one step",
+  cursorSource: "read_output",
+  optionNames: { cursor: "cursor", limit: "limit", tail: "tail" },
+};
+
 /** Parse the shared character paging contract used by CLI and MCP output readers. */
 export function parseOutputTextPaging(
   args: OutputTextPagingInput,
   selectedItemCount: number,
-  surface: string,
-  selectionRequirement = "indices to name exactly one step"
+  wording: OutputTextPagingWording = READ_OUTPUT_PAGING_WORDING
 ): OutputTextPaging | undefined {
+  const { surface, optionNames } = wording;
   const hasCursor = args.cursor !== undefined;
   const hasLimit = args.limit !== undefined;
   const hasTail = args.tail !== undefined;
@@ -29,12 +52,12 @@ export function parseOutputTextPaging(
 
   if (hasTail && (hasCursor || hasLimit)) {
     throw new Error(
-      `${surface}: tail is mutually exclusive with cursor and limit`
+      `${surface}: ${optionNames.tail} is mutually exclusive with ${optionNames.cursor} and ${optionNames.limit}`
     );
   }
   if (selectedItemCount !== 1) {
     throw new Error(
-      `${surface}: cursor, limit, and tail require ${selectionRequirement}`
+      `${surface}: ${optionNames.cursor}, ${optionNames.limit}, and ${optionNames.tail} require ${wording.selectionRequirement}`
     );
   }
   if (
@@ -42,7 +65,7 @@ export function parseOutputTextPaging(
     (!/^\d+$/.test(args.cursor!) || !Number.isSafeInteger(Number(args.cursor)))
   ) {
     throw new Error(
-      `${surface}: cursor must be a non-negative integer cursor returned by read_output`
+      `${surface}: ${optionNames.cursor} must be a non-negative integer cursor returned by ${wording.cursorSource}`
     );
   }
   const parseCount = (name: "limit" | "tail"): number | undefined => {
@@ -51,7 +74,7 @@ export function parseOutputTextPaging(
     const isLimit = name === "limit";
     if (!Number.isSafeInteger(count) || count < (isLimit ? 1 : 0)) {
       throw new Error(
-        `${surface}: ${name} must be a ${isLimit ? "positive" : "non-negative"} integer`
+        `${surface}: ${optionNames[name]} must be a ${isLimit ? "positive" : "non-negative"} integer`
       );
     }
     return count;

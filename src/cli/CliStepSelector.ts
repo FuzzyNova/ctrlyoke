@@ -5,6 +5,9 @@ import {
 } from "../types/DashboardConstants";
 import type { OutputExecutionTarget } from "../types/OutputHistoryTypes";
 
+/** Upper bound on distinct indices one `--step` list may name. */
+export const MAX_HISTORY_SHOW_STEP_INDICES = 10_000;
+
 export type CliHistoryShowStepSelector =
   | { kind: typeof FINAL_STEP_PHASES.QUEUE; stepIndices: number[] }
   | {
@@ -20,9 +23,10 @@ export type CliHistoryShowAttemptSelector =
   | { kind: typeof HISTORY_SHOW_ATTEMPT_SELECTORS.NUMBER; number: number };
 
 export function parseHistoryShowStep(
-  value: string | undefined
+  rawValue: string | undefined
 ): CliHistoryShowStepSelector | undefined {
-  if (value === undefined) return undefined;
+  if (rawValue === undefined) return undefined;
+  const value = rawValue.trim();
   if (value === HISTORY_SHOW_STEP_SELECTORS.FINAL) {
     return { kind: FINAL_STEP_PHASES.FINAL_STEP };
   }
@@ -35,7 +39,10 @@ export function parseHistoryShowStep(
   if (value.startsWith(`${HISTORY_SHOW_STEP_SELECTORS.FINAL}:`)) {
     const pass = value.slice(HISTORY_SHOW_STEP_SELECTORS.FINAL.length + 1);
     if (pass === HISTORY_SHOW_ATTEMPT_SELECTORS.LATEST) {
-      return { kind: FINAL_STEP_PHASES.FINAL_STEP, passNumber: "latest" };
+      return {
+        kind: FINAL_STEP_PHASES.FINAL_STEP,
+        passNumber: HISTORY_SHOW_ATTEMPT_SELECTORS.LATEST,
+      };
     }
     const passNumber = parsePositiveSafeInteger(pass);
     if (passNumber !== undefined) {
@@ -44,8 +51,10 @@ export function parseHistoryShowStep(
     throw invalidStepSelector(value);
   }
 
-  const stepIndices: number[] = [];
-  for (const part of value.split(",")) {
+  const stepIndices = new Set<number>();
+  // Parts are trimmed exactly as `ctrlyoke step reorder` trims its list, so
+  // "3, 4" means the same thing to both commands.
+  for (const part of value.split(",").map((item) => item.trim())) {
     const range = /^(\d+)(?:-(\d+))?$/.exec(part);
     if (!range) throw invalidStepSelector(value);
     const start = parseNonNegativeSafeInteger(range[1]);
@@ -55,14 +64,18 @@ export function parseHistoryShowStep(
       throw invalidStepSelector(value);
     }
     for (let index = start; index <= end; index++) {
-      stepIndices.push(index);
-      if (stepIndices.length > 10_000) throw invalidStepSelector(value);
+      stepIndices.add(index);
+      if (stepIndices.size > MAX_HISTORY_SHOW_STEP_INDICES) {
+        throw new Error(
+          `Invalid --step value "${value}"; the selection is too large (more than ${MAX_HISTORY_SHOW_STEP_INDICES} distinct step indices)`
+        );
+      }
     }
   }
-  if (!stepIndices.length) throw invalidStepSelector(value);
+  if (!stepIndices.size) throw invalidStepSelector(value);
   return {
     kind: FINAL_STEP_PHASES.QUEUE,
-    stepIndices: [...new Set(stepIndices)],
+    stepIndices: [...stepIndices],
   };
 }
 
@@ -124,10 +137,20 @@ export function formatCliStepSelector(index: number): string {
   return String(parseCliStepIndex(String(index)));
 }
 
-export function formatValidStepIndexRange(stepCount: number): string {
-  return stepCount > 0
-    ? `valid zero-based indices are 0 to ${stepCount - 1}`
-    : "there are no queue steps";
+/**
+ * The `--step` selector that names one recorded target: the zero-based queue
+ * index, or `final:N` with the 1-based final-step pass number.
+ */
+export function formatHistoryTargetSelector(
+  target: OutputExecutionTarget
+): string {
+  return target.kind === FINAL_STEP_PHASES.QUEUE
+    ? formatCliStepSelector(target.stepIndex)
+    : formatFinalPassSelector(target.loopIndex + 1);
+}
+
+export function formatFinalPassSelector(passNumber: number): string {
+  return `${HISTORY_SHOW_STEP_SELECTORS.FINAL}:${passNumber}`;
 }
 
 function parseNonNegativeSafeInteger(value: string): number | undefined {

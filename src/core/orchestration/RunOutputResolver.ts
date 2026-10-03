@@ -36,6 +36,8 @@ import {
   type WorkflowDefinitionSnapshot,
   type WorkflowRunManifest,
   type WorkflowTimelineEvent,
+  type AttemptStartedEvent,
+  type AttemptTerminatedEvent,
 } from "../../types/WorkflowTimelineTypes";
 import {
   CLI_EVENT_TYPES,
@@ -82,11 +84,42 @@ export interface ResolvedRunAttemptValue extends ResolvedRunAttempt {
   terminalReason?: string;
 }
 
-export interface RunAttemptLifecycleEvent {
-  eventType:
-    | typeof TIMELINE_EVENT_TYPES.ATTEMPT_STARTED
-    | typeof TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED;
-  target: OutputExecutionTarget;
+/** Identity and timing shared by both attempt lifecycle records. */
+interface RunAttemptLifecycleRecord extends ResolvedRunAttemptIdentity {
+  timestampMs: number;
+}
+
+/**
+ * A payload-free attempt lifecycle record. Pre/end-condition and worktree
+ * setup scripts record their own attempts under the step attempt's
+ * `runIndex`/`attemptIndex`, told apart by `phase`; see `isStepAttemptKind()`.
+ */
+export type RunAttemptLifecycleEvent =
+  | (RunAttemptLifecycleRecord & {
+      eventType: typeof TIMELINE_EVENT_TYPES.ATTEMPT_STARTED;
+      attemptKind: TimelineAttemptKind;
+    })
+  | (RunAttemptLifecycleRecord & {
+      eventType: typeof TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED;
+      terminalState: TimelineAttemptTerminalState;
+    });
+
+/** The identity fields of an attempt, without its definition snapshot. */
+export type ResolvedRunAttemptIdentity = Pick<
+  ResolvedRunAttempt,
+  "target" | "runIndex" | "attemptIndex" | "phase"
+>;
+
+/**
+ * Whether an attempt kind is one of a step's own executions (an AI prompt or
+ * a script step). Condition scripts and worktree setup run alongside a step
+ * attempt and share its indices, so they are not separate attempts of it.
+ */
+export function isStepAttemptKind(kind: TimelineAttemptKind): boolean {
+  return (
+    kind !== TIMELINE_ATTEMPT_KINDS.CONDITION &&
+    kind !== TIMELINE_ATTEMPT_KINDS.SETUP
+  );
 }
 
 export type RunFileChangeOperation = "created" | "modified" | "deleted";
@@ -267,11 +300,18 @@ export class RunOutputResolver {
     manifestPath: string
   ): AsyncGenerator<RunAttemptLifecycleEvent, void, undefined> {
     for await (const event of this.recorder.streamEvents(manifestPath)) {
-      if (
-        event.eventType === TIMELINE_EVENT_TYPES.ATTEMPT_STARTED ||
-        event.eventType === TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED
-      ) {
-        yield { eventType: event.eventType, target: event.target };
+      if (event.eventType === TIMELINE_EVENT_TYPES.ATTEMPT_STARTED) {
+        yield {
+          eventType: event.eventType,
+          ...lifecycleRecord(event),
+          attemptKind: event.payload.kind,
+        };
+      } else if (event.eventType === TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED) {
+        yield {
+          eventType: event.eventType,
+          ...lifecycleRecord(event),
+          terminalState: event.payload.terminalState,
+        };
       }
     }
   }
@@ -1351,6 +1391,18 @@ function toPortableRelativePath(root: string, candidate: string): string {
  */
 export function queueTargetKey(stepIndex: number): string {
   return `queue:${stepIndex}`;
+}
+
+function lifecycleRecord(
+  event: AttemptStartedEvent | AttemptTerminatedEvent
+): RunAttemptLifecycleRecord {
+  return {
+    target: event.target,
+    runIndex: event.runIndex,
+    attemptIndex: event.attemptIndex,
+    ...(event.phase !== undefined ? { phase: event.phase } : {}),
+    timestampMs: event.timestampMs,
+  };
 }
 
 function getTargetKey(target: OutputExecutionTarget): string {

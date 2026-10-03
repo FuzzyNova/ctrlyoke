@@ -118,6 +118,11 @@ import {
 import { registerHistoryCommands } from "./cli/HistoryCommandDefinitions";
 import { registerStatusCommand } from "./cli/StatusCommandDefinitions";
 import { statusCommand } from "./cli/CliStatusCommand";
+import {
+  CLI_CLOSED_PIPE_EXIT_CODE,
+  exitQuietlyOnClosedPipe,
+  isClosedPipeError,
+} from "./cli/CliClosedPipe";
 import { registerStepCommands } from "./cli/StepCommandDefinitions";
 import { registerSecretCommands } from "./cli/SecretCommandDefinitions";
 import {
@@ -1375,8 +1380,14 @@ async function runCommand(
   }
 }
 
+/**
+ * Run a history or status command. Their output is commonly piped into `head`
+ * or `grep -m`, so a reader closing stdout early ends the command quietly.
+ */
 function handleHistoryCommand(operation: Promise<void>): Promise<void> {
+  exitQuietlyOnClosedPipe();
   return operation.catch((error: unknown) => {
+    if (isClosedPipeError(error)) process.exit(CLI_CLOSED_PIPE_EXIT_CODE);
     const message = error instanceof Error ? error.message : String(error);
     console.error(chalk.red(`Error: ${message}`));
     process.exit(2);

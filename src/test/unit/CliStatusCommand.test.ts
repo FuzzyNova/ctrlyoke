@@ -18,7 +18,9 @@ suite("CliStatusCommand", () => {
   });
 
   async function createWorkspace(
-    withLock: boolean
+    withLock: boolean,
+    lockOverrides: Record<string, unknown> = {},
+    executionState: string = EXECUTION_STATES.RUNNING
   ): Promise<CliWorkspaceBootstrap> {
     if (root) await fs.rm(root, { recursive: true, force: true });
     root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-status-"));
@@ -49,7 +51,7 @@ suite("CliStatusCommand", () => {
         harness: "codex-cli",
         model: "gpt-6-luna",
         steps: [{ prompt: "fixture" }],
-        _runtime: { currentIndex: 0, executionState: EXECUTION_STATES.RUNNING },
+        _runtime: { currentIndex: 0, executionState },
       })
     );
     if (withLock) {
@@ -66,6 +68,7 @@ suite("CliStatusCommand", () => {
           ownerToken: "test-token",
           startedAt: 1_000,
           lastHeartbeat: 9_500,
+          ...lockOverrides,
         })
       );
     }
@@ -93,6 +96,7 @@ suite("CliStatusCommand", () => {
     assert.strictEqual(result.workflowCount, 1);
     assert.deepStrictEqual(result.workflows[0].liveness, {
       state: "alive",
+      reason: "active",
       heartbeatAgeMs: 500,
       pid: process.pid,
       lastHeartbeat: 9_500,
@@ -109,7 +113,90 @@ suite("CliStatusCommand", () => {
       { writeOut: (message) => output.push(message) },
       { bootstrapCliWorkspace: async () => workspace }
     );
-    assert.match(output[0], /WORKFLOW.*RUN.*STATE.*STEP.*HEARTBEAT.*LIVENESS/);
-    assert.match(output[0], /stale/);
+    assert.match(
+      output[0],
+      /WORKFLOW.*RUN.*STATE.*STEP.*PID.*HEARTBEAT.*LIVENESS/
+    );
+    assert.match(output[0], /stale \(absent\)/);
+  });
+
+  test("keeps a dead-PID lock's evidence and names why it is stale", async () => {
+    const workspace = await createWorkspace(true, { pid: 424242 });
+    const output: string[] = [];
+    await statusCommand(
+      { json: true },
+      { writeOut: (message) => output.push(message) },
+      {
+        bootstrapCliWorkspace: async () => workspace,
+        isProcessAlive: (pid) => pid !== 424242,
+        now: () => 10_000,
+      }
+    );
+    assert.deepStrictEqual(JSON.parse(output[0]).workflows[0].liveness, {
+      state: "stale",
+      reason: "stale-dead-pid",
+      heartbeatAgeMs: 500,
+      pid: 424242,
+      lastHeartbeat: 9_500,
+    });
+
+    const text: string[] = [];
+    await statusCommand(
+      {},
+      { writeOut: (message) => text.push(message) },
+      {
+        bootstrapCliWorkspace: async () => workspace,
+        isProcessAlive: (pid) => pid !== 424242,
+        now: () => 10_000,
+      }
+    );
+    assert.match(text[0], /424242/);
+    assert.match(text[0], /stale \(stale-dead-pid\)/);
+    assert.doesNotMatch(text[0], /NaN/);
+  });
+
+  test("reports a silent heartbeat separately from a dead process", async () => {
+    const workspace = await createWorkspace(true, { lastHeartbeat: 1_000 });
+    const output: string[] = [];
+    await statusCommand(
+      { json: true },
+      { writeOut: (message) => output.push(message) },
+      {
+        bootstrapCliWorkspace: async () => workspace,
+        isProcessAlive: () => true,
+        now: () => 100_000,
+      }
+    );
+    const liveness = JSON.parse(output[0]).workflows[0].liveness;
+    assert.strictEqual(liveness.reason, "stale-heartbeat");
+    assert.strictEqual(liveness.heartbeatAgeMs, 99_000);
+  });
+
+  test("text mode says when nothing is executing and prints the narrowing note", async () => {
+    const workspace = await createWorkspace(
+      false,
+      {},
+      EXECUTION_STATES.COMPLETED
+    );
+    const output: string[] = [];
+    await statusCommand(
+      { workflow: "status-workflow-2026-01-01T00-00-00" },
+      { writeOut: (message) => output.push(message) },
+      { bootstrapCliWorkspace: async () => workspace }
+    );
+    assert.match(output[0], /^No workflows are executing\./);
+    assert.match(output[0], /exists but is not executing \(state: completed\)/);
+  });
+
+  test("names CLI flags rather than MCP arguments in selector errors", async () => {
+    const workspace = await createWorkspace(false);
+    await assert.rejects(
+      statusCommand(
+        { run: "run-2026-01-01T00-00-00-000Z" },
+        { writeOut: () => {} },
+        { bootstrapCliWorkspace: async () => workspace }
+      ),
+      { message: "status: --run requires --workflow" }
+    );
   });
 });

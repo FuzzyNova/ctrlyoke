@@ -22,6 +22,7 @@ import {
   KEYBOARD_KEYS,
   HISTORY_EVENT_KINDS,
   HISTORY_SEARCH_COUNT_STATES,
+  HISTORY_SEARCH_INDEX_STATES,
   OUTPUT_TABS,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
@@ -322,7 +323,7 @@ export function HistorySearchDrawer() {
       setHistorySearchListingId(null);
       setHistorySearchResults([], false, {
         totalCount: 0,
-        indexState: "ready",
+        indexState: HISTORY_SEARCH_INDEX_STATES.READY,
       });
       return;
     }
@@ -926,9 +927,9 @@ export function HistorySearchDrawer() {
                 )}
               </span>
               <span>
-                {indexState === "building"
+                {indexState === HISTORY_SEARCH_INDEX_STATES.BUILDING
                   ? "Index updating"
-                  : indexState === "fallback"
+                  : indexState === HISTORY_SEARCH_INDEX_STATES.FALLBACK
                     ? "Using fallback search"
                     : ""}
               </span>

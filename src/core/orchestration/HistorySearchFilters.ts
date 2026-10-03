@@ -52,12 +52,8 @@ export function matchesFilters(
     return false;
   }
 
-  const pathContains = filters.pathContains?.trim();
-  if (
-    pathContains &&
-    (!document.filePath ||
-      !normalizePath(document.filePath).includes(normalizePath(pathContains)))
-  ) {
+  const pathNeedle = normalizeHistoryPathFilter(filters.pathContains);
+  if (pathNeedle && !historyPathMatches(document.filePath, pathNeedle)) {
     return false;
   }
 
@@ -104,4 +100,26 @@ export function normalizeHistorySearchQueryKey(
 
 function normalizePath(value: string): string {
   return value.replaceAll("\\", "/").toLowerCase();
+}
+
+/**
+ * Normalize a `--path` substring filter: trimmed, separator- and
+ * case-insensitive. Undefined when the filter is absent or blank, which
+ * means "do not filter by path".
+ */
+export function normalizeHistoryPathFilter(
+  value: string | undefined
+): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? normalizePath(trimmed) : undefined;
+}
+
+/** Whether a recorded file path contains a filter from `normalizeHistoryPathFilter()`. */
+export function historyPathMatches(
+  filePath: string | undefined,
+  normalizedFilter: string
+): boolean {
+  return (
+    filePath !== undefined && normalizePath(filePath).includes(normalizedFilter)
+  );
 }

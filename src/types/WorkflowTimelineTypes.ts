@@ -2,6 +2,7 @@ import {
   HISTORY_EVENT_KINDS,
   HISTORY_MATCH_FIELDS,
   HISTORY_SEARCH_COUNT_STATES,
+  HISTORY_SEARCH_INDEX_STATES,
   type ExecutionPhase,
   type ExecutionState,
 } from "./DashboardConstants";
@@ -166,7 +167,8 @@ export interface HistorySearchResult {
   filePath?: string;
 }
 
-export type HistorySearchIndexState = "ready" | "building" | "fallback";
+export type HistorySearchIndexState =
+  (typeof HISTORY_SEARCH_INDEX_STATES)[keyof typeof HISTORY_SEARCH_INDEX_STATES];
 
 /**
  * Whether `HistorySearchResponse.totalCount` is the true match count or a

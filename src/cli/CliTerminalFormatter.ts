@@ -155,6 +155,11 @@ export interface CliOutputTarget {
 export interface CliPromptHeaderData extends PromptStartData {
   harness?: HarnessId;
   model?: string;
+  /**
+   * Copyable `history show --step` value appended to the step label. Only
+   * history replay sets it; live `ctrlyoke run` output never does.
+   */
+  stepSelector?: string;
 }
 
 const DIFF_LINE_TYPES = {
@@ -1246,14 +1251,15 @@ export class CliTerminalFormatter {
       .filter((label) => label.length > 0)
       .join(" · ");
 
+    const stepLabel = `Step ${stepIndex + 1}/${totalSteps}${
+      data.stepSelector !== undefined ? ` (--step ${data.stepSelector})` : ""
+    } — ${stepName}`;
     if (executionLabel) {
       console.log(
-        `${border} ${chalk.yellow(`${executionLabel} — Step ${stepIndex + 1}/${totalSteps} — ${stepName}`)}`
+        `${border} ${chalk.yellow(`${executionLabel} — ${stepLabel}`)}`
       );
     } else {
-      console.log(
-        `${border} ${chalk.bold(`Step ${stepIndex + 1}/${totalSteps} — ${stepName}`)}`
-      );
+      console.log(`${border} ${chalk.bold(stepLabel)}`);
     }
 
     if (data.harness) {

@@ -2,12 +2,14 @@ import * as fs from "fs/promises";
 import type {
   WorkflowStep,
   WorkingFile,
+  WorkingFileWorktreeRuntime,
   RunRef,
   WorkflowKey,
 } from "../../types/CtrlYokeTypes";
 import {
   ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
+  type ExecutionState,
 } from "../../types/DashboardConstants";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import {
@@ -23,27 +25,74 @@ export interface GlobalWorkflowStatusSelector {
   runRef?: RunRef;
 }
 
+/** One executing workflow, as both MCP `global_status` and `ctrlyoke status` report it. */
+export interface GlobalWorkflowStatusRow {
+  workflowKey: WorkflowKey;
+  runRef: RunRef | null;
+  workflowName: string;
+  executionState: ExecutionState;
+  harness: string | null;
+  model: string | null;
+  /** 1-based position of the step being executed. */
+  currentStep: number;
+  totalSteps: number;
+  completedSteps: number;
+  startedAt: number | null;
+  lastModifiedAt: number | null;
+  workingFile: string;
+  runDirectory: string;
+  worktree?: Pick<
+    WorkingFileWorktreeRuntime,
+    "mode" | "branchName" | "worktreePath" | "lifecycleState" | "directoryState"
+  >;
+  worktreeNotice?: string;
+}
+
 export interface GlobalWorkflowStatusResult {
   workspaceRoot: string;
   workflowCount: number;
-  workflows: Array<Record<string, unknown>>;
+  workflows: GlobalWorkflowStatusRow[];
   truncated: boolean;
   omittedCount: number;
   note?: string;
 }
 
+/**
+ * Surface-specific wording for the errors this service raises. The service is
+ * shared, but each caller names its own inputs: MCP tool arguments are
+ * `workflowKey`/`runRef`, while the CLI's are `--workflow`/`--run`.
+ */
+export interface GlobalWorkflowStatusWording {
+  /** Prefix naming the surface, e.g. the MCP tool name. */
+  surface: string;
+  /** Error when a run is selected without its workflow. */
+  runRequiresWorkflow: string;
+  /** Sentence telling the caller how to list the workflow keys that exist. */
+  listWorkflowsHint: string;
+}
+
+/** MCP `global_status` wording; its strings are part of the tool's contract. */
+export const MCP_GLOBAL_STATUS_WORDING: GlobalWorkflowStatusWording = {
+  surface: "global_status",
+  runRequiresWorkflow: "runRef requires workflowKey",
+  listWorkflowsHint:
+    "Call global_status with no arguments to see the workflow keys that exist.",
+};
+
 /** Collects the read-only executing-workflow projection shared by MCP and CLI. */
 export class GlobalWorkflowStatusService {
   constructor(
     private readonly workspaceRoot: string,
-    private readonly lineageRepository = new WorkflowLineageRepository()
+    private readonly lineageRepository = new WorkflowLineageRepository(),
+    private readonly wording: GlobalWorkflowStatusWording = MCP_GLOBAL_STATUS_WORDING
   ) {}
 
   async getStatus(
     selector: GlobalWorkflowStatusSelector = {}
   ): Promise<GlobalWorkflowStatusResult> {
+    const { surface } = this.wording;
     if (selector.runRef !== undefined && selector.workflowKey === undefined) {
-      throw new Error("global_status: runRef requires workflowKey");
+      throw new Error(`${surface}: ${this.wording.runRequiresWorkflow}`);
     }
     if (selector.workflowKey !== undefined) {
       WorkflowPaths.assertValidWorkflowKey(selector.workflowKey);
@@ -86,7 +135,7 @@ export class GlobalWorkflowStatusService {
         } catch (error) {
           if (narrowed) {
             throw new Error(
-              `global_status: no workflow '${workflowKey}' was found under ${this.workspaceRoot} (${describeError(error)}). Call global_status with no arguments to see the workflow keys that exist.`
+              `${surface}: no workflow '${workflowKey}' was found under ${this.workspaceRoot} (${describeError(error)}). ${this.wording.listWorkflowsHint}`
             );
           }
           return null;
@@ -116,7 +165,7 @@ export class GlobalWorkflowStatusService {
           const completedCount = allSteps.filter(
             (step) => step._runtime?.completedAt !== undefined
           ).length;
-          return {
+          const row: GlobalWorkflowStatusRow = {
             workflowKey,
             runRef,
             workflowName: descriptor.workflowName,
@@ -149,10 +198,11 @@ export class GlobalWorkflowStatusService {
               ? { worktreeNotice: runtime.worktreeNotice }
               : {}),
           };
+          return row;
         } catch (error) {
           if (narrowed) {
             throw new Error(
-              `global_status: workflow '${workflowKey}'${runRef ? ` run '${runRef}'` : ""} could not be read from ${filePath} (${describeError(error)}).`
+              `${surface}: workflow '${workflowKey}'${runRef ? ` run '${runRef}'` : ""} could not be read from ${filePath} (${describeError(error)}).`
             );
           }
           return null;
@@ -160,7 +210,7 @@ export class GlobalWorkflowStatusService {
       })
     );
     const validWorkflows = workflows.filter(
-      (workflow): workflow is NonNullable<typeof workflow> => workflow !== null
+      (workflow): workflow is GlobalWorkflowStatusRow => workflow !== null
     );
     const omittedCount = Math.max(
       0,

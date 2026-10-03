@@ -13,34 +13,44 @@ import type {
 import {
   createWorkflowLineageNotFoundError,
   resolveCliRunRef,
-  matchesHistoryShowStep,
   parseHistoryShowAttempt,
   parseHistoryShowStep,
   formatCliStepSelector,
+  formatFinalPassSelector,
+  formatHistoryTargetSelector,
+  type CliHistoryShowAttemptSelector,
   type CliHistoryShowStepSelector,
+  type CliRunSummaryProvider,
 } from "./CliRunSelector";
 import { CliTerminalFormatter } from "./CliTerminalFormatter";
 import type {
   RunRef,
+  ScriptRuntimeOutput,
   WorkflowKey,
   WorkflowLineageDescriptor,
 } from "../types/CtrlYokeTypes";
 import { isScriptStep } from "../types/CtrlYokeTypes";
 import type { RunSummary } from "../types/WorkflowTimelineTypes";
 import {
+  EXECUTION_PHASES,
   EXECUTION_STATES,
   CLI_EVENT_TYPES,
   CTRLYOKE_ENV_VARS,
   FINAL_STEP_PHASES,
   HARNESS_IDS,
   HISTORY_EVENT_KINDS,
+  HISTORY_LIST_SORT_ORDERS,
   HISTORY_SEARCH_COUNT_STATES,
+  HISTORY_SEARCH_INDEX_STATES,
   HISTORY_STEP_STATES,
   HISTORY_SHOW_STEP_SELECTORS,
   HISTORY_SHOW_ATTEMPT_SELECTORS,
   PROMPT_TERMINAL_STATUS,
   RUN_OUTPUT_RESOLVER_EVENT_KINDS,
+  SCRIPT_OUTPUT_SOURCES,
   STATUS_MESSAGE_SEVERITY,
+  type HistoryListSortOrder,
+  type ScriptOutputSource,
 } from "../types/DashboardConstants";
 import type { OutputExecutionTarget } from "../types/OutputHistoryTypes";
 import type {
@@ -50,15 +60,19 @@ import type {
   HistorySearchResult,
 } from "../types/WorkflowTimelineTypes";
 import {
+  type RunAttemptLifecycleEvent,
   type RunOutputResolverAttemptEvent,
+  type ResolvedRunAttemptIdentity,
   type ResolvedRunAttemptValue,
+  isStepAttemptKind,
   RunOutputResolver,
 } from "../core/orchestration/RunOutputResolver";
 import {
   pageOutputText,
   parseOutputTextPaging,
+  type OutputTextPagingWording,
+  type PagedOutputText,
 } from "../core/orchestration/OutputTextPaging";
-import type { RunAttemptLifecycleEvent } from "../core/orchestration/RunOutputResolver";
 import {
   TIMELINE_ATTEMPT_KINDS,
   TIMELINE_ATTEMPT_TERMINAL_STATES,
@@ -68,7 +82,7 @@ import {
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { getLineageLastModifiedAt } from "../utils/WorkingFileMetadata";
 import type { CliOutput } from "../types/WebviewMessageTypes";
-import { SCRIPT_OUTPUT_SOURCES } from "../types/DashboardConstants";
+import type { CliEvent } from "../types/CliOutputTypes";
 import { secretRedactionService } from "../utils/SecretRedactionService";
 import { HistorySearchService } from "../core/orchestration/HistorySearchService";
 import {
@@ -80,6 +94,15 @@ import type {
   IndexRebuildProgressCallback,
   PartialSearchResultsCallback,
 } from "../core/orchestration/HistorySearchIndexService";
+import {
+  HistoryCandidateExtractor,
+  SCRIPT_EVENT_KIND_BY_SOURCE,
+  historyEventKindForCliEventType,
+} from "../core/orchestration/HistoryCandidateExtractor";
+import {
+  historyPathMatches,
+  normalizeHistoryPathFilter,
+} from "../core/orchestration/HistorySearchFilters";
 import type { PartialCtrlYokeSettings } from "../types/CtrlYokeSettings";
 import { parseHistoryTime } from "./HistoryTime";
 import {
@@ -163,11 +186,30 @@ interface HistoryListRow {
   } | null;
 }
 
+/** CLI wording for the paging contract shared with MCP `read_output`. */
+const HISTORY_SHOW_PAGING_WORDING: OutputTextPagingWording = {
+  surface: "history show",
+  selectionRequirement: "exactly one selected attempt",
+  cursorSource: "history show",
+  optionNames: { cursor: "--cursor", limit: "--limit", tail: "--tail" },
+};
+
 export async function listHistoryCommand(
   options: HistoryListOptions,
   io: HistoryInspectionCommandIo,
   dependencies: HistoryInspectionCommandDependencies = {}
 ): Promise<void> {
+  // Every filter is parsed before the lineage scan, which reads one manifest
+  // per lineage, so a mistyped flag fails at once instead of after it.
+  const states = parseHistoryStateFilter(options.state);
+  const since = parseHistorySince(options.since);
+  const limit = parseHistoryInteger(
+    options.limit,
+    "--limit",
+    1,
+    Number.MAX_SAFE_INTEGER
+  );
+  const sort = parseHistoryListSort(options.sort);
   const workspace = await (
     dependencies.bootstrapCliWorkspace ?? bootstrapCliWorkspace
   )(options);
@@ -178,14 +220,6 @@ export async function listHistoryCommand(
     options,
     lineageRepository,
     historyManager
-  );
-  const states = parseHistoryStateFilter(options.state);
-  const since = parseHistorySince(options.since);
-  const limit = parseHistoryInteger(
-    options.limit,
-    "--limit",
-    1,
-    Number.MAX_SAFE_INTEGER
   );
   const filteredRows = rows
     .filter(
@@ -198,6 +232,7 @@ export async function listHistoryCommand(
         since === undefined ||
         (row.latestRun && row.latestRun.startedAt >= since)
     )
+    .sort(historyListRowComparator(sort))
     .slice(0, limit);
 
   if (options.json) {
@@ -210,6 +245,40 @@ export async function listHistoryCommand(
   renderHistoryList(filteredRows, io);
 }
 
+function parseHistoryListSort(value: string | undefined): HistoryListSortOrder {
+  return (
+    parseHistorySearchValues(
+      value === undefined ? undefined : [value],
+      Object.values(HISTORY_LIST_SORT_ORDERS),
+      "--sort"
+    )?.[0] ?? HISTORY_LIST_SORT_ORDERS.LATEST
+  );
+}
+
+function historyListRowComparator(
+  sort: HistoryListSortOrder
+): (a: HistoryListRow, b: HistoryListRow) => number {
+  const byKey = (a: HistoryListRow, b: HistoryListRow): number =>
+    a.workflowKey < b.workflowKey ? -1 : a.workflowKey > b.workflowKey ? 1 : 0;
+  if (sort === HISTORY_LIST_SORT_ORDERS.NAME) {
+    return (a, b) =>
+      a.workflowName.localeCompare(b.workflowName) || byKey(a, b);
+  }
+  return (a, b) => {
+    const aStarted = a.latestRun?.startedAt;
+    const bStarted = b.latestRun?.startedAt;
+    if (aStarted === undefined || bStarted === undefined) {
+      // Lineages that have never run sort after every lineage that has.
+      return aStarted === bStarted
+        ? byKey(a, b)
+        : aStarted === undefined
+          ? 1
+          : -1;
+    }
+    return bStarted - aStarted || byKey(a, b);
+  };
+}
+
 export async function runsHistoryCommand(
   options: HistoryRunsOptions,
   io: HistoryInspectionCommandIo,
@@ -220,12 +289,7 @@ export async function runsHistoryCommand(
   )(options);
   const workflowKey = options.workflow as WorkflowKey;
   const lineageRepository = workspace.createLineageRepository();
-  const lineageKeys = await lineageRepository.listLineageKeys(
-    workspace.workspaceRoot
-  );
-  if (!lineageKeys.includes(workflowKey)) {
-    throw createWorkflowLineageNotFoundError(workflowKey);
-  }
+  await assertHistoryLineageExists(workspace, lineageRepository, workflowKey);
 
   const workflowName = await lineageRepository.readWorkflowDisplayName(
     workspace.workspaceRoot,
@@ -244,6 +308,220 @@ export async function runsHistoryCommand(
   renderRunSummaries(summaries, io);
 }
 
+async function assertHistoryLineageExists(
+  workspace: HistoryInspectionWorkspace,
+  lineageRepository: HistoryInspectionLineageRepository,
+  workflowKey: WorkflowKey
+): Promise<void> {
+  const lineageKeys = await lineageRepository.listLineageKeys(
+    workspace.workspaceRoot
+  );
+  if (!lineageKeys.includes(workflowKey)) {
+    throw createWorkflowLineageNotFoundError(workflowKey);
+  }
+}
+
+/**
+ * Resolve `--workflow`/`--run` for a command that reads one run. Every such
+ * command reports a missing lineage, and a lineage with only a draft, the
+ * same way `history runs` does.
+ */
+async function resolveHistoryRun(
+  workspace: HistoryInspectionWorkspace,
+  workflowKey: WorkflowKey,
+  runSelector: string | undefined
+): Promise<{ runRef: RunRef; runSummary: RunSummary }> {
+  await assertHistoryLineageExists(
+    workspace,
+    workspace.createLineageRepository(),
+    workflowKey
+  );
+  const summaries = await workspace
+    .createOutputHistoryManager()
+    .getRunSummaries(workflowKey);
+  if (summaries.length === 0) {
+    throw new Error(`Workflow lineage "${workflowKey}" has no runs yet.`);
+  }
+  const summaryProvider: CliRunSummaryProvider = {
+    getRunSummaries: async () => summaries,
+  };
+  const runRef = await resolveCliRunRef(
+    summaryProvider,
+    workflowKey,
+    runSelector,
+    "--run"
+  );
+  const runSummary = summaries.find((summary) => summary.runRef === runRef);
+  if (!runSummary) {
+    throw new Error(`Run "${runRef}" was not found in history.`);
+  }
+  return { runRef, runSummary };
+}
+
+/**
+ * One step attempt, independent of phase. A step's pre/end-condition and
+ * worktree-setup attempts share its `runIndex`/`attemptIndex`, so they are
+ * selected together with it.
+ */
+type HistoryAttemptIdentity = Pick<
+  ResolvedRunAttemptIdentity,
+  "target" | "runIndex" | "attemptIndex"
+>;
+
+interface HistoryTargetAttempts {
+  target: OutputExecutionTarget;
+  /** Step attempts (AI or script) started for this target. */
+  attempts: number;
+  /** Highest 1-based `--attempt` number recorded for this target. */
+  maxAttemptNumber: number;
+  latest: HistoryAttemptIdentity;
+  firstStartedAt: number;
+  /** Terminal state of `latest`'s own attempt, once it has one. */
+  latestTerminalState?: TimelineAttemptTerminalState;
+  latestTerminatedAt?: number;
+}
+
+/** Payload-free per-target attempt facts from one lifecycle scan. */
+interface HistoryAttemptIndex {
+  targets: Map<string, HistoryTargetAttempts>;
+  /** The most recently started step attempt in the run. */
+  latest?: HistoryAttemptIdentity;
+  /** Attempt identity keys with any phase that never terminated. */
+  running: Set<string>;
+  finalPassCount: number;
+}
+
+/**
+ * Scan attempt lifecycle records only. This is the cheap pre-pass that
+ * `latest`/`running`/`final:latest`, `--attempt`, and paging need before any
+ * output is written; it never parses or retains output payloads.
+ */
+async function collectHistoryAttemptIndex(
+  resolver: HistoryInspectionRunOutputResolver,
+  manifestPath: string
+): Promise<HistoryAttemptIndex> {
+  const targets = new Map<string, HistoryTargetAttempts>();
+  const openPhases = new Map<string, string>();
+  const stepAttemptPhases = new Set<string>();
+  let latest: HistoryAttemptIdentity | undefined;
+  let finalPassCount = 0;
+  for await (const event of resolver.streamAttemptLifecycle(manifestPath)) {
+    const identityKey = historyAttemptKey(event);
+    const phaseKey = `${identityKey}:phase:${event.phase ?? EXECUTION_PHASES.PROMPT}`;
+    const targetKey = historyAttemptTargetKey(event.target);
+    if (event.eventType === TIMELINE_EVENT_TYPES.ATTEMPT_STARTED) {
+      openPhases.set(phaseKey, identityKey);
+      if (!isStepAttemptKind(event.attemptKind)) continue;
+      stepAttemptPhases.add(phaseKey);
+      const identity: HistoryAttemptIdentity = {
+        target: event.target,
+        runIndex: event.runIndex,
+        attemptIndex: event.attemptIndex,
+      };
+      latest = identity;
+      if (event.target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
+        finalPassCount = Math.max(finalPassCount, event.target.loopIndex + 1);
+      }
+      const existing = targets.get(targetKey);
+      if (!existing) {
+        targets.set(targetKey, {
+          target: event.target,
+          attempts: 1,
+          maxAttemptNumber: event.attemptIndex + 1,
+          latest: identity,
+          firstStartedAt: event.timestampMs,
+        });
+        continue;
+      }
+      existing.attempts++;
+      existing.maxAttemptNumber = Math.max(
+        existing.maxAttemptNumber,
+        event.attemptIndex + 1
+      );
+      if (isLaterHistoryAttempt(identity, existing.latest)) {
+        existing.latest = identity;
+        existing.latestTerminalState = undefined;
+        existing.latestTerminatedAt = undefined;
+      }
+      continue;
+    }
+    openPhases.delete(phaseKey);
+    const entry = targets.get(targetKey);
+    if (
+      entry &&
+      stepAttemptPhases.has(phaseKey) &&
+      historyAttemptKey(entry.latest) === identityKey
+    ) {
+      entry.latestTerminalState = event.terminalState;
+      entry.latestTerminatedAt = event.timestampMs;
+    }
+  }
+  return {
+    targets,
+    ...(latest ? { latest } : {}),
+    running: new Set(openPhases.values()),
+    finalPassCount,
+  };
+}
+
+/** Resolved `--step`/`--attempt` selection, tested per settled attempt. */
+interface HistoryShowSelection {
+  target?: CliHistoryShowStepSelector;
+  attempt: CliHistoryShowAttemptSelector;
+  index?: HistoryAttemptIndex;
+}
+
+function matchesHistoryShowTarget(
+  attempt: HistoryAttemptIdentity,
+  selection: HistoryShowSelection
+): boolean {
+  const selector = selection.target;
+  if (!selector) return true;
+  const { target } = attempt;
+  switch (selector.kind) {
+    case FINAL_STEP_PHASES.QUEUE:
+      return (
+        target.kind === FINAL_STEP_PHASES.QUEUE &&
+        selector.stepIndices.includes(target.stepIndex)
+      );
+    case FINAL_STEP_PHASES.FINAL_STEP:
+      return (
+        target.kind === FINAL_STEP_PHASES.FINAL_STEP &&
+        (selector.passNumber === undefined ||
+          (typeof selector.passNumber === "number" &&
+            target.loopIndex === selector.passNumber - 1))
+      );
+    case HISTORY_SHOW_STEP_SELECTORS.LATEST:
+      return (
+        selection.index?.latest !== undefined &&
+        historyAttemptKey(attempt) === historyAttemptKey(selection.index.latest)
+      );
+    case HISTORY_SHOW_STEP_SELECTORS.RUNNING:
+      return selection.index?.running.has(historyAttemptKey(attempt)) === true;
+  }
+}
+
+function matchesHistoryShowAttempt(
+  attempt: HistoryAttemptIdentity,
+  selection: HistoryShowSelection
+): boolean {
+  switch (selection.attempt.kind) {
+    case HISTORY_SHOW_ATTEMPT_SELECTORS.ALL:
+      return true;
+    case HISTORY_SHOW_ATTEMPT_SELECTORS.NUMBER:
+      return attempt.attemptIndex + 1 === selection.attempt.number;
+    case HISTORY_SHOW_ATTEMPT_SELECTORS.LATEST: {
+      const latest = selection.index?.targets.get(
+        historyAttemptTargetKey(attempt.target)
+      )?.latest;
+      return (
+        latest !== undefined &&
+        historyAttemptKey(latest) === historyAttemptKey(attempt)
+      );
+    }
+  }
+}
+
 export async function showHistoryCommand(
   options: HistoryShowOptions,
   io: HistoryInspectionCommandIo,
@@ -257,23 +535,43 @@ export async function showHistoryCommand(
       "history show: --summary and --events are mutually exclusive"
     );
   }
+  const pagingArgs = {
+    ...(options.cursor !== undefined ? { cursor: options.cursor } : {}),
+    ...(options.limit !== undefined
+      ? { limit: parseHistoryInteger(options.limit, "--limit", 1, 1) }
+      : {}),
+    ...(options.tail !== undefined
+      ? { tail: parseHistoryInteger(options.tail, "--tail", 0, 0) }
+      : {}),
+  };
+  // Validates the paging flags themselves; how many attempts they select is
+  // checked once the selection is resolved, still before any output.
+  const paging = parseOutputTextPaging(
+    pagingArgs,
+    1,
+    HISTORY_SHOW_PAGING_WORDING
+  );
+  const maxEvents =
+    options.maxEvents === undefined
+      ? undefined
+      : parseHistoryInteger(options.maxEvents, "--max-events", 1, 1);
+  const parsedAttempt = parseHistoryShowAttempt(options.attempt);
+  const showKinds = parseHistorySearchValues(
+    options.kind,
+    Object.values(HISTORY_EVENT_KINDS),
+    "--kind"
+  );
+  const pathNeedle = normalizeHistoryPathFilter(options.path);
+
   const workspace = await (
     dependencies.bootstrapCliWorkspace ?? bootstrapCliWorkspace
   )(options);
   const workflowKey = options.workflow as WorkflowKey;
-  const historyManager = workspace.createOutputHistoryManager();
-  const runRef = await resolveCliRunRef(
-    historyManager,
+  const { runRef, runSummary } = await resolveHistoryRun(
+    workspace,
     workflowKey,
-    options.run,
-    "--run"
+    options.run
   );
-  const runSummary = (await historyManager.getRunSummaries(workflowKey)).find(
-    (summary) => summary.runRef === runRef
-  );
-  if (!runSummary) {
-    throw new Error(`Run "${runRef}" was not found in history.`);
-  }
   const workingDefinition = await readRunWorkingDefinition(
     workspace.workspaceRoot,
     workflowKey,
@@ -291,38 +589,25 @@ export async function showHistoryCommand(
       `${error instanceof Error ? error.message : String(error)}; ${formatValidStepIndexRange(stepCount)}`
     );
   }
-  const attemptFilter = parseHistoryShowAttempt(options.attempt);
-  const showKinds = parseHistorySearchValues(
-    options.kind,
-    Object.values(HISTORY_EVENT_KINDS),
-    "--kind"
-  );
-  const pagingArgs = {
-    ...(options.cursor !== undefined ? { cursor: options.cursor } : {}),
-    ...(options.limit !== undefined
-      ? { limit: parseHistoryInteger(options.limit, "--limit", 1, 1) }
-      : {}),
-    ...(options.tail !== undefined
-      ? { tail: parseHistoryInteger(options.tail, "--tail", 0, 0) }
-      : {}),
-  };
-  const maxEvents =
-    options.maxEvents === undefined
-      ? undefined
-      : parseHistoryInteger(options.maxEvents, "--max-events", 1, 1);
-  if (targetFilter) {
-    if (targetFilter.kind === FINAL_STEP_PHASES.QUEUE) {
-      for (const index of targetFilter.stepIndices) {
-        assertStepIndex(stepCount, index, "--step");
-      }
-    } else if (
-      targetFilter.kind === FINAL_STEP_PHASES.FINAL_STEP &&
-      runSummary.hasFinalStep === false
-    ) {
-      throw new Error(
-        `Invalid --step value "${options.step}". This run has no final step; ${formatValidStepIndexRange(stepCount)}.`
+  if (targetFilter?.kind === FINAL_STEP_PHASES.QUEUE) {
+    for (const index of targetFilter.stepIndices) {
+      assertStepIndex(stepCount, index, "--step");
+    }
+    if (paging) {
+      // Several steps can never be one attempt; refuse before reading.
+      parseOutputTextPaging(
+        pagingArgs,
+        targetFilter.stepIndices.length,
+        HISTORY_SHOW_PAGING_WORDING
       );
     }
+  } else if (
+    targetFilter?.kind === FINAL_STEP_PHASES.FINAL_STEP &&
+    runSummary.hasFinalStep === false
+  ) {
+    throw new Error(
+      `Invalid --step value "${options.step}". This run has no final step; ${formatValidStepIndexRange(stepCount)}.`
+    );
   }
   const manifestPath = WorkflowPaths.manifestPath(
     workspace.workspaceRoot,
@@ -332,234 +617,96 @@ export async function showHistoryCommand(
   const resolver =
     dependencies.createRunOutputResolver?.() ?? new RunOutputResolver();
 
-  const latestAttemptByTarget = new Map<string, ResolvedRunAttemptValue>();
-  const runningAttemptKeys = new Set<string>();
-  let latestAttemptKey: string | undefined;
-  let finalPassCount = 0;
+  // Paging reads one attempt; without an explicit --attempt it reads the
+  // selected step's latest, so a retried step pages like a single one.
+  const attemptFilter: CliHistoryShowAttemptSelector =
+    paging && options.attempt === undefined
+      ? { kind: HISTORY_SHOW_ATTEMPT_SELECTORS.LATEST }
+      : parsedAttempt;
   const needsAttemptIndex =
-    attemptFilter.kind === HISTORY_SHOW_ATTEMPT_SELECTORS.LATEST ||
+    paging !== undefined ||
+    attemptFilter.kind !== HISTORY_SHOW_ATTEMPT_SELECTORS.ALL ||
     targetFilter?.kind === HISTORY_SHOW_STEP_SELECTORS.RUNNING ||
     targetFilter?.kind === HISTORY_SHOW_STEP_SELECTORS.LATEST ||
     (targetFilter?.kind === FINAL_STEP_PHASES.FINAL_STEP &&
       targetFilter.passNumber !== undefined);
-  if (needsAttemptIndex) {
-    for await (const event of resolver.streamAttempts(manifestPath)) {
-      if (event.kind !== RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED)
-        continue;
-      const attempt = event.attempt;
-      const key = historyAttemptKey(attempt);
-      latestAttemptKey = key;
-      if (attempt.target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-        finalPassCount = Math.max(finalPassCount, attempt.target.loopIndex + 1);
-      }
-      const targetKey = historyAttemptTargetKey(attempt.target);
-      const latestForTarget = latestAttemptByTarget.get(targetKey);
-      if (!latestForTarget || isLaterHistoryAttempt(attempt, latestForTarget)) {
-        latestAttemptByTarget.set(targetKey, attempt);
-      }
-      if (event.unterminated) runningAttemptKeys.add(key);
+  const index = needsAttemptIndex
+    ? await collectHistoryAttemptIndex(resolver, manifestPath)
+    : undefined;
+
+  if (targetFilter?.kind === FINAL_STEP_PHASES.FINAL_STEP && index) {
+    if (
+      typeof targetFilter.passNumber === "number" &&
+      targetFilter.passNumber > index.finalPassCount
+    ) {
+      throw new Error(
+        `Invalid --step value "${options.step}"; valid final pass numbers are 1 to ${index.finalPassCount}`
+      );
+    }
+    if (
+      targetFilter.passNumber === HISTORY_SHOW_ATTEMPT_SELECTORS.LATEST &&
+      index.finalPassCount > 0
+    ) {
+      targetFilter = {
+        kind: FINAL_STEP_PHASES.FINAL_STEP,
+        passNumber: index.finalPassCount,
+      };
     }
   }
-
-  if (
-    targetFilter?.kind === FINAL_STEP_PHASES.FINAL_STEP &&
-    typeof targetFilter.passNumber === "number" &&
-    targetFilter.passNumber > finalPassCount
-  ) {
-    throw new Error(
-      `Invalid --step value "${options.step}"; valid final pass numbers are 1 to ${finalPassCount}`
-    );
-  }
-  if (
-    targetFilter?.kind === FINAL_STEP_PHASES.FINAL_STEP &&
-    targetFilter.passNumber === HISTORY_SHOW_ATTEMPT_SELECTORS.LATEST
-  ) {
-    // The latest final pass is resolved from the streamed attempt lifecycle below.
-    targetFilter = {
-      kind: FINAL_STEP_PHASES.FINAL_STEP,
-      passNumber: finalPassCount || "latest",
-    };
+  const selection: HistoryShowSelection = {
+    ...(targetFilter ? { target: targetFilter } : {}),
+    attempt: attemptFilter,
+    ...(index ? { index } : {}),
+  };
+  if (index) {
+    validateHistoryShowSelection(options, selection, index, pagingArgs);
   }
 
   CliTerminalFormatter.setColorEnabled(options.color !== false);
   if (!options.json) io.writeErr(`Run: ${runRef}`);
+  const matchedTargets = new Set<string>();
+  const selectedTargets = new Set<string>();
+  const renderedTargets = new Set<string>();
   let renderedAttempts = 0;
-  let paging: ReturnType<typeof parseOutputTextPaging>;
-  let hasPaging =
-    options.cursor !== undefined ||
-    options.limit !== undefined ||
-    options.tail !== undefined;
-  let nextCursor: string | undefined;
   for await (const event of resolver.streamAttempts(manifestPath)) {
     if (event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED) {
       const attempt = event.attempt;
-      const key = historyAttemptKey(attempt);
-      const latestForTarget = latestAttemptByTarget.get(
-        historyAttemptTargetKey(attempt.target)
-      );
-      const isRunning = runningAttemptKeys.has(key);
-      if (
-        !matchesHistoryShowStep(attempt.target, targetFilter, {
-          latest:
-            targetFilter?.kind === HISTORY_SHOW_STEP_SELECTORS.LATEST
-              ? key === latestAttemptKey
-              : latestForTarget !== undefined &&
-                key === historyAttemptKey(latestForTarget),
-          running: isRunning,
-        })
-      ) {
-        continue;
-      }
-      if (
-        attemptFilter.kind === HISTORY_SHOW_ATTEMPT_SELECTORS.NUMBER &&
-        attempt.attemptIndex + 1 !== attemptFilter.number
-      ) {
-        continue;
-      }
-      if (
-        attemptFilter.kind === HISTORY_SHOW_ATTEMPT_SELECTORS.LATEST &&
-        (!latestForTarget || key !== historyAttemptKey(latestForTarget))
-      ) {
-        continue;
-      }
-      const projected = projectHistoryAttempt(attempt, showKinds, options.path);
-      if (!projected) continue;
+      if (!matchesHistoryShowTarget(attempt, selection)) continue;
+      const targetKey = historyAttemptTargetKey(attempt.target);
+      matchedTargets.add(targetKey);
+      if (!matchesHistoryShowAttempt(attempt, selection)) continue;
+      // A page is cut from the step attempt's own text, never from the
+      // condition scripts recorded beside it.
+      if (paging && !isHistoryStepAttempt(attempt)) continue;
+      selectedTargets.add(targetKey);
+      const projection = projectHistoryAttempt(attempt, showKinds, pathNeedle);
+      if (!projection) continue;
+      renderedTargets.add(targetKey);
       renderedAttempts++;
-      if (hasPaging) {
-        paging = parseOutputTextPaging(
-          pagingArgs,
-          renderedAttempts,
-          "history show",
-          "exactly one selected attempt"
-        );
-        if (renderedAttempts > 1)
-          throw new Error(
-            "history show: cursor, limit, and tail require exactly one selected attempt"
-          );
-      }
-      let outputAttempt = projected;
-      if (paging && typeof projected.output?.response === "string") {
-        const page = pageOutputText(projected.output.response, paging);
-        outputAttempt = {
-          ...projected,
-          output: { ...projected.output, response: page.text },
-        };
-        nextCursor = page.nextCursor;
-      }
+      const page = paging
+        ? pageOutputText(
+            buildHistoryPageText(projection, showKinds, pathNeedle),
+            paging
+          )
+        : undefined;
       if (options.json) {
-        if (options.events) {
-          const outputEvents = outputAttempt.output?.structured?.events ?? [];
-          const events = outputEvents.length
-            ? outputEvents
-            : (outputAttempt.output?.response ?? outputAttempt.responseText)
-              ? [
-                  {
-                    type: CLI_EVENT_TYPES.TEXT,
-                    data: {
-                      text:
-                        outputAttempt.output?.response ??
-                        outputAttempt.responseText!,
-                    },
-                  },
-                ]
-              : [];
-          for (const outputEvent of events) {
-            io.writeOut(
-              JSON.stringify(
-                secretRedactionService.redactValue({
-                  target: outputAttempt.target,
-                  runIndex: outputAttempt.runIndex,
-                  attemptIndex: outputAttempt.attemptIndex,
-                  event: outputEvent,
-                  ...(event.unterminated ? { unterminated: true } : {}),
-                })
-              )
-            );
-          }
-        } else if (options.summary) {
-          const rawResponseText =
-            outputAttempt.responseText ?? outputAttempt.output?.response;
-          const responseText =
-            paging && rawResponseText !== undefined
-              ? pageOutputText(rawResponseText, paging).text
-              : rawResponseText;
-          io.writeOut(
-            JSON.stringify(
-              secretRedactionService.redactValue({
-                target: outputAttempt.target,
-                runIndex: outputAttempt.runIndex,
-                attemptIndex: outputAttempt.attemptIndex,
-                state: event.unterminated
-                  ? "unterminated"
-                  : (outputAttempt.terminalState ?? "unknown"),
-                timings: {
-                  ...(outputAttempt.output?.elapsed !== undefined
-                    ? { elapsed: outputAttempt.output.elapsed }
-                    : {}),
-                  ...(outputAttempt.output?.timestampMs !== undefined
-                    ? { timestampMs: outputAttempt.output.timestampMs }
-                    : {}),
-                },
-                ...(outputAttempt.output?.tokens
-                  ? { tokens: outputAttempt.output.tokens }
-                  : {}),
-                ...(outputAttempt.prompt !== undefined
-                  ? { prompt: outputAttempt.prompt }
-                  : {}),
-                ...(responseText !== undefined ? { responseText } : {}),
-              })
-            )
-          );
-        } else {
-          const { definition, ...attemptFields } = outputAttempt;
-          io.writeOut(
-            JSON.stringify(
-              secretRedactionService.redactValue({
-                ...attemptFields,
-                ...(definition
-                  ? {
-                      definitionRevision: definition.definitionRevision,
-                      definition: { step: definition.step },
-                    }
-                  : {}),
-                runRef,
-                unterminated: event.unterminated,
-                ...(nextCursor ? { nextCursor } : {}),
-              })
-            )
-          );
-        }
-      } else {
-        const allEvents = outputAttempt.output?.structured?.events;
-        const omitted =
-          maxEvents !== undefined && allEvents
-            ? Math.max(0, allEvents.length - maxEvents)
-            : 0;
-        const boundedAttempt =
-          omitted > 0
-            ? {
-                ...outputAttempt,
-                output: {
-                  ...outputAttempt.output!,
-                  structured: {
-                    ...outputAttempt.output!.structured!,
-                    events: allEvents!.slice(0, maxEvents),
-                  },
-                },
-              }
-            : outputAttempt;
-        renderHistoryAttempt(
-          boundedAttempt,
+        writeHistoryAttemptJson(
+          projection,
           event.unterminated,
-          workingDefinition
+          runRef,
+          page,
+          options,
+          io
         );
-        if (nextCursor)
-          io.writeOut(`… more output (use --cursor ${nextCursor})`);
-        if (omitted > 0) {
-          const cursor =
-            nextCursor ?? String((projected.output?.response ?? "").length);
-          io.writeOut(`… ${omitted} more events (use --cursor ${cursor})`);
-        }
+      } else {
+        renderHistoryAttempt(
+          projection,
+          event.unterminated,
+          workingDefinition,
+          page,
+          maxEvents,
+          io
+        );
       }
       continue;
     }
@@ -577,133 +724,449 @@ export async function showHistoryCommand(
     }
   }
 
-  if (hasPaging && renderedAttempts !== 1) {
-    parseOutputTextPaging(
-      pagingArgs,
-      renderedAttempts,
-      "history show",
-      "exactly one selected attempt"
-    );
+  const notices: Array<{ selector: string; step?: number; line: string }> = [];
+  if (showKinds || pathNeedle !== undefined) {
+    for (const targetKey of selectedTargets) {
+      if (renderedTargets.has(targetKey)) continue;
+      const selector = historySelectorForTargetKey(targetKey, index);
+      notices.push({
+        selector,
+        line: `No events in --step ${selector} matched ${describeHistoryShowFilters(options)}`,
+      });
+    }
   }
-
-  if (
+  if (targetFilter?.kind === FINAL_STEP_PHASES.QUEUE) {
+    for (const stepIndex of targetFilter.stepIndices) {
+      if (matchedTargets.has(historyAttemptTargetKey(queueTarget(stepIndex))))
+        continue;
+      const selector = formatCliStepSelector(stepIndex);
+      const state = historyWorkingStepState(
+        workingDefinition?.steps[stepIndex]?._runtime
+      );
+      notices.push({
+        selector,
+        step: stepIndex,
+        line:
+          state === PROMPT_TERMINAL_STATUS.SKIPPED
+            ? `--step ${selector} was skipped`
+            : state === HISTORY_STEP_STATES.PENDING
+              ? `--step ${selector} has not started (${HISTORY_STEP_STATES.PENDING})`
+              : `--step ${selector} is ${state} but has no recorded attempt`,
+      });
+    }
+  } else if (
+    targetFilter?.kind === HISTORY_SHOW_STEP_SELECTORS.RUNNING &&
     renderedAttempts === 0 &&
-    targetFilter?.kind === FINAL_STEP_PHASES.QUEUE
+    matchedTargets.size === 0
   ) {
-    const index = targetFilter.stepIndices[0];
-    const runtime = workingDefinition?.steps[index]?._runtime;
-    const state = historyWorkingStepState(runtime);
-    const line =
-      state === PROMPT_TERMINAL_STATUS.SKIPPED
-        ? `Step ${index + 1} was skipped`
-        : state === HISTORY_STEP_STATES.PENDING
-          ? `Step ${index + 1} has not started (${HISTORY_STEP_STATES.PENDING})`
-          : `Step ${index + 1} is ${state}`;
-    if (!options.json) {
-      CliTerminalFormatter.renderStatusMessage(
-        line,
-        STATUS_MESSAGE_SEVERITY.INFO
+    notices.push({
+      selector: HISTORY_SHOW_STEP_SELECTORS.RUNNING,
+      line: "No attempt is running in this run",
+    });
+  }
+  for (const notice of notices) {
+    if (options.json) {
+      io.writeOut(
+        JSON.stringify({
+          runRef,
+          selector: notice.selector,
+          ...(notice.step !== undefined
+            ? {
+                step: notice.step,
+                status: historyWorkingStepState(
+                  workingDefinition?.steps[notice.step]?._runtime
+                ),
+              }
+            : {}),
+          message: notice.line,
+        })
       );
     } else {
-      io.writeOut(
-        JSON.stringify({ runRef, step: index, status: state, message: line })
+      CliTerminalFormatter.renderStatusMessage(
+        notice.line,
+        STATUS_MESSAGE_SEVERITY.INFO
       );
     }
   }
 }
 
+/**
+ * Reject a selection that cannot be served, before anything is written: an
+ * `--attempt` number a selected step never reached, and paging that would
+ * cover more than one attempt.
+ */
+function validateHistoryShowSelection(
+  options: HistoryShowOptions,
+  selection: HistoryShowSelection,
+  index: HistoryAttemptIndex,
+  pagingArgs: Parameters<typeof parseOutputTextPaging>[0]
+): void {
+  const selectedTargets = [...index.targets.values()].filter((entry) =>
+    selectedTargetMatches(entry, selection, index)
+  );
+  if (selection.attempt.kind === HISTORY_SHOW_ATTEMPT_SELECTORS.NUMBER) {
+    const requested = selection.attempt.number;
+    for (const entry of selectedTargets) {
+      if (requested > entry.maxAttemptNumber) {
+        throw new Error(
+          `Invalid --attempt value "${options.attempt}" for --step ${formatHistoryTargetSelector(entry.target)}; valid attempts are 1 to ${entry.maxAttemptNumber}`
+        );
+      }
+    }
+  }
+  if (
+    pagingArgs.cursor === undefined &&
+    pagingArgs.limit === undefined &&
+    pagingArgs.tail === undefined
+  ) {
+    return;
+  }
+  const selectedAttempts = selectedTargets.reduce(
+    (count, entry) =>
+      count +
+      (selection.attempt.kind === HISTORY_SHOW_ATTEMPT_SELECTORS.ALL
+        ? entry.attempts
+        : 1),
+    0
+  );
+  // No attempt at all is reported as the step's state, not as a paging error.
+  if (selectedAttempts > 1) {
+    parseOutputTextPaging(
+      pagingArgs,
+      selectedAttempts,
+      HISTORY_SHOW_PAGING_WORDING
+    );
+  }
+}
+
+/** Whether any of a target's step attempts can satisfy the `--step` selector. */
+function selectedTargetMatches(
+  entry: HistoryTargetAttempts,
+  selection: HistoryShowSelection,
+  index: HistoryAttemptIndex
+): boolean {
+  switch (selection.target?.kind) {
+    case undefined:
+    case FINAL_STEP_PHASES.QUEUE:
+    case FINAL_STEP_PHASES.FINAL_STEP:
+      return matchesHistoryShowTarget(entry.latest, selection);
+    case HISTORY_SHOW_STEP_SELECTORS.LATEST:
+      return (
+        index.latest !== undefined &&
+        historyAttemptTargetKey(index.latest.target) ===
+          historyAttemptTargetKey(entry.target)
+      );
+    case HISTORY_SHOW_STEP_SELECTORS.RUNNING:
+      return [...index.running].some((key) =>
+        key.startsWith(`${historyAttemptTargetKey(entry.target)}:`)
+      );
+  }
+}
+
+function describeHistoryShowFilters(options: HistoryShowOptions): string {
+  return [
+    ...(options.kind?.length ? [`--kind ${options.kind.join(" ")}`] : []),
+    ...(options.path !== undefined ? [`--path ${options.path}`] : []),
+  ].join(" and ");
+}
+
+function historySelectorForTargetKey(
+  targetKey: string,
+  index: HistoryAttemptIndex | undefined
+): string {
+  const entry = index?.targets.get(targetKey);
+  if (entry) return formatHistoryTargetSelector(entry.target);
+  const [kind, value] = targetKey.split(":");
+  const number = Number(value);
+  return formatHistoryTargetSelector(
+    kind === FINAL_STEP_PHASES.QUEUE
+      ? queueTarget(number)
+      : { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: number }
+  );
+}
+
+function queueTarget(stepIndex: number): OutputExecutionTarget {
+  return { kind: FINAL_STEP_PHASES.QUEUE, stepIndex };
+}
+
+/** One settled attempt narrowed by `--kind`/`--path`. */
+interface HistoryAttemptProjection {
+  attempt: ResolvedRunAttemptValue;
+  /** Whether the attempt's prompt is part of the selected kinds. */
+  includePrompt: boolean;
+  /** Whether its response (or script output) is part of the selected kinds. */
+  includeResponse: boolean;
+}
+
+/**
+ * Apply `--kind` and `--path`. A script attempt's prompt and output are
+ * classified by the same source map history search indexes them under, and
+ * structured events by the same event-type map. Excluded text is removed
+ * from every field that carries it, not just blanked in one of them.
+ */
 function projectHistoryAttempt(
   attempt: ResolvedRunAttemptValue,
   kinds: readonly string[] | undefined,
-  pathFilter: string | undefined
-): ResolvedRunAttemptValue | undefined {
-  if (!kinds && pathFilter === undefined) return attempt;
-  const kindSet = kinds ? new Set(kinds) : undefined;
-  const pathNeedle = pathFilter?.replace(/\\/g, "/").toLocaleLowerCase();
-  const sourceKind = attempt.output?.source
-    ? attempt.output.source === SCRIPT_OUTPUT_SOURCES.END_CONDITION
-      ? HISTORY_EVENT_KINDS.END_CONDITION
-      : attempt.output.source === SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP
-        ? HISTORY_EVENT_KINDS.PRE_CONDITION
-        : HISTORY_EVENT_KINDS.SCRIPT
-    : undefined;
-  const promptAllowed =
+  pathNeedle: string | undefined
+): HistoryAttemptProjection | undefined {
+  if (!kinds && pathNeedle === undefined) {
+    return { attempt, includePrompt: true, includeResponse: true };
+  }
+  const kindSet = kinds ? new Set<string>(kinds) : undefined;
+  const source = historyScriptSource(attempt);
+  const scriptKind = source ? SCRIPT_EVENT_KIND_BY_SOURCE[source] : undefined;
+  const includePrompt =
     pathNeedle === undefined &&
-    (!kindSet || kindSet.has(sourceKind ?? HISTORY_EVENT_KINDS.PROMPT));
-  const responseAllowed =
+    (!kindSet || kindSet.has(scriptKind ?? HISTORY_EVENT_KINDS.PROMPT));
+  const includeResponse =
     pathNeedle === undefined &&
-    (!kindSet || kindSet.has(sourceKind ?? HISTORY_EVENT_KINDS.RESPONSE));
-  const events = attempt.output?.structured?.events ?? [];
-  const matchingEvents = events.filter((event) => {
-    const eventKind = historyCliEventKind(event.type);
-    if (!eventKind || (kindSet && !kindSet.has(eventKind))) return false;
-    if (pathNeedle === undefined) return true;
-    const data = event.data as { path?: unknown };
-    return (
-      typeof data.path === "string" &&
-      data.path.replace(/\\/g, "/").toLocaleLowerCase().includes(pathNeedle)
-    );
-  });
-  const hasPromptOrResponse =
-    (promptAllowed &&
-      (attempt.prompt !== undefined ||
-        attempt.output?.response !== undefined)) ||
-    (responseAllowed && attempt.output?.response !== undefined);
-  if (pathNeedle !== undefined && matchingEvents.length === 0) return undefined;
-  if (
-    !hasPromptOrResponse &&
-    matchingEvents.length === 0 &&
-    attempt.output?.structured?.events?.length
-  )
+    (!kindSet || kindSet.has(scriptKind ?? HISTORY_EVENT_KINDS.RESPONSE));
+  const matchingEvents = (attempt.output?.structured?.events ?? []).filter(
+    (event) => {
+      const eventKind = historyEventKindForCliEventType(event.type);
+      if (!eventKind || (kindSet && !kindSet.has(eventKind))) return false;
+      if (pathNeedle === undefined) return true;
+      const eventPath = (event.data as { path?: unknown }).path;
+      return historyPathMatches(
+        typeof eventPath === "string" ? eventPath : undefined,
+        pathNeedle
+      );
+    }
+  );
+  const hasPrompt = includePrompt && historyRecordedPrompt(attempt) !== "";
+  const hasResponse =
+    includeResponse && historyAttemptResponseText(attempt) !== "";
+  if (!hasPrompt && !hasResponse && matchingEvents.length === 0) {
     return undefined;
+  }
+  const { prompt, responseText, output, scriptOutput, ...identity } = attempt;
+  let projectedOutput: CliOutput | undefined;
+  if (output) {
+    projectedOutput = {
+      ...output,
+      // `response` is required on CliOutput, so an excluded one is emptied;
+      // the include flags keep it out of every surface that emits it.
+      response: includeResponse ? output.response : "",
+      ...(output.structured
+        ? { structured: { ...output.structured, events: matchingEvents } }
+        : {}),
+    };
+    if (!includePrompt) delete projectedOutput.prompt;
+  }
   return {
-    ...attempt,
-    ...(promptAllowed ? {} : { prompt: "" }),
-    output: attempt.output
-      ? {
-          ...attempt.output,
-          ...(!responseAllowed ? { response: "" } : {}),
-          ...(attempt.output.structured
-            ? {
-                structured: {
-                  ...attempt.output.structured,
-                  events: matchingEvents,
-                },
-              }
-            : {}),
-        }
-      : undefined,
+    includePrompt,
+    includeResponse,
+    attempt: {
+      ...identity,
+      ...(includePrompt && prompt !== undefined ? { prompt } : {}),
+      ...(includeResponse && responseText !== undefined
+        ? { responseText }
+        : {}),
+      ...(projectedOutput ? { output: projectedOutput } : {}),
+      ...(scriptOutput
+        ? {
+            scriptOutput: includeResponse
+              ? scriptOutput
+              : { ...scriptOutput, stdout: "", stderr: "" },
+          }
+        : {}),
+    },
   };
 }
 
-function historyCliEventKind(type: string): string | undefined {
-  switch (type) {
-    case CLI_EVENT_TYPES.TEXT:
-      return HISTORY_EVENT_KINDS.RESPONSE;
-    case CLI_EVENT_TYPES.THINKING:
-      return HISTORY_EVENT_KINDS.THINKING;
-    case CLI_EVENT_TYPES.BASH_COMMAND:
-      return HISTORY_EVENT_KINDS.BASH;
-    case CLI_EVENT_TYPES.FILE_READ:
-      return HISTORY_EVENT_KINDS.FILE_READ;
-    case CLI_EVENT_TYPES.FILE_WRITE:
-      return HISTORY_EVENT_KINDS.FILE_WRITE;
-    case CLI_EVENT_TYPES.FILE_EDIT:
-      return HISTORY_EVENT_KINDS.FILE_EDIT;
-    case CLI_EVENT_TYPES.FILE_DELETE:
-      return HISTORY_EVENT_KINDS.FILE_DELETE;
-    case CLI_EVENT_TYPES.MCP_TOOL_CALL:
-      return HISTORY_EVENT_KINDS.MCP_TOOL;
-    case CLI_EVENT_TYPES.TOOL_CALL:
-    case CLI_EVENT_TYPES.TOOL_RESULT:
-      return HISTORY_EVENT_KINDS.TOOL;
-    case CLI_EVENT_TYPES.WEB_SEARCH:
-      return HISTORY_EVENT_KINDS.WEB_SEARCH;
-    case CLI_EVENT_TYPES.COMPACTION:
-      return HISTORY_EVENT_KINDS.COMPACTION;
-    default:
-      return undefined;
+/**
+ * The text a page is cut from. Without `--kind`/`--path` it is the attempt's
+ * response (a script attempt's combined stdout and stderr). With them it is
+ * every selected item in order, separated by blank lines: the prompt, the
+ * response, then each matching structured event other than response text,
+ * which the response already contains.
+ */
+function buildHistoryPageText(
+  projection: HistoryAttemptProjection,
+  kinds: readonly string[] | undefined,
+  pathNeedle: string | undefined
+): string {
+  const { attempt } = projection;
+  if (!kinds && pathNeedle === undefined) {
+    return historyAttemptResponseText(attempt);
   }
+  const parts: string[] = [];
+  if (projection.includePrompt) parts.push(historyRecordedPrompt(attempt));
+  if (projection.includeResponse) {
+    parts.push(historyAttemptResponseText(attempt));
+  }
+  const extractor = new HistoryCandidateExtractor();
+  for (const event of attempt.output?.structured?.events ?? []) {
+    if (event.type === CLI_EVENT_TYPES.TEXT) continue;
+    parts.push(
+      extractor
+        .collectStructuredEventsCandidates([event])
+        .map((candidate) => candidate.text)
+        .join("\n")
+    );
+  }
+  return parts.filter((part) => part !== "").join("\n\n");
+}
+
+function writeHistoryAttemptJson(
+  projection: HistoryAttemptProjection,
+  unterminated: boolean,
+  runRef: RunRef,
+  page: PagedOutputText | undefined,
+  options: HistoryShowOptions,
+  io: HistoryInspectionCommandIo
+): void {
+  const { attempt } = projection;
+  // Each text is emitted once: the top-level `prompt` and `responseText`
+  // are authoritative, so their `output.prompt`/`output.response` copies go.
+  const prompt =
+    !page && projection.includePrompt
+      ? historyRecordedPrompt(attempt) || undefined
+      : undefined;
+  const responseText = page
+    ? page.text
+    : projection.includeResponse
+      ? (attempt.responseText ?? attempt.output?.response)
+      : undefined;
+  const nextCursor = page?.nextCursor;
+  const write = (value: unknown) =>
+    io.writeOut(JSON.stringify(secretRedactionService.redactValue(value)));
+
+  if (options.events) {
+    const events: CliEvent[] = page
+      ? [{ type: CLI_EVENT_TYPES.TEXT, data: { text: page.text } }]
+      : attempt.output?.structured?.events?.length
+        ? attempt.output.structured.events
+        : responseText
+          ? [{ type: CLI_EVENT_TYPES.TEXT, data: { text: responseText } }]
+          : [];
+    for (const outputEvent of events) {
+      write({
+        target: attempt.target,
+        runIndex: attempt.runIndex,
+        attemptIndex: attempt.attemptIndex,
+        event: outputEvent,
+        ...(unterminated ? { unterminated: true } : {}),
+        ...(nextCursor ? { nextCursor } : {}),
+      });
+    }
+    return;
+  }
+  if (options.summary) {
+    write({
+      target: attempt.target,
+      runIndex: attempt.runIndex,
+      attemptIndex: attempt.attemptIndex,
+      state: unterminated
+        ? HISTORY_STEP_STATES.UNTERMINATED
+        : (attempt.terminalState ?? HISTORY_STEP_STATES.UNKNOWN),
+      timings: {
+        ...(attempt.output?.elapsed !== undefined
+          ? { elapsed: attempt.output.elapsed }
+          : {}),
+        ...(attempt.output?.timestampMs !== undefined
+          ? { timestampMs: attempt.output.timestampMs }
+          : {}),
+      },
+      ...(attempt.output?.tokens ? { tokens: attempt.output.tokens } : {}),
+      ...(prompt !== undefined ? { prompt } : {}),
+      ...(responseText !== undefined ? { responseText } : {}),
+      ...(nextCursor ? { nextCursor } : {}),
+    });
+    return;
+  }
+  const {
+    definition,
+    output,
+    scriptOutput,
+    prompt: _prompt,
+    responseText: _responseText,
+    ...attemptFields
+  } = attempt;
+  write({
+    ...attemptFields,
+    ...(prompt !== undefined ? { prompt } : {}),
+    ...(responseText !== undefined ? { responseText } : {}),
+    ...(output
+      ? {
+          output: withoutOutputText(output, {
+            prompt: true,
+            response: true,
+            structured: page !== undefined,
+          }),
+        }
+      : {}),
+    ...(scriptOutput
+      ? {
+          scriptOutput:
+            page || !projection.includeResponse
+              ? withoutScriptStreams(scriptOutput)
+              : scriptOutput,
+        }
+      : {}),
+    ...(definition
+      ? {
+          definitionRevision: definition.definitionRevision,
+          definition: { step: definition.step },
+        }
+      : {}),
+    runRef,
+    unterminated,
+    ...(nextCursor ? { nextCursor } : {}),
+  });
+}
+
+function withoutOutputText(
+  output: CliOutput,
+  omit: { prompt?: boolean; response?: boolean; structured?: boolean }
+): Partial<CliOutput> {
+  const copy: Partial<CliOutput> = { ...output };
+  if (omit.prompt) delete copy.prompt;
+  if (omit.response) delete copy.response;
+  if (omit.structured) delete copy.structured;
+  return copy;
+}
+
+function withoutScriptStreams(
+  scriptOutput: ScriptRuntimeOutput
+): Partial<ScriptRuntimeOutput> {
+  const copy: Partial<ScriptRuntimeOutput> = { ...scriptOutput };
+  delete copy.stdout;
+  delete copy.stderr;
+  return copy;
+}
+
+interface HistoryStepRow {
+  selector: string;
+  index: number;
+  name: string | null;
+  state: string;
+  harness: string | null;
+  model: string | null;
+  elapsedSeconds: number | null;
+  attempts: number;
+  prompt: string;
+}
+
+interface HistoryFinalPassRow {
+  selector: string;
+  pass: number;
+  state: string;
+  attempts: number;
+  startedAt: number | null;
+  completedAt: number | null;
+  elapsedSeconds: number | null;
+}
+
+interface HistoryFinalStepRow {
+  selector: typeof HISTORY_SHOW_STEP_SELECTORS.FINAL;
+  name: string | null;
+  state: string;
+  harness: string | null;
+  model: string | null;
+  elapsedSeconds: number | null;
+  passes: HistoryFinalPassRow[];
+  prompt: string;
 }
 
 export async function stepsHistoryCommand(
@@ -715,17 +1178,11 @@ export async function stepsHistoryCommand(
     dependencies.bootstrapCliWorkspace ?? bootstrapCliWorkspace
   )(options);
   const workflowKey = options.workflow as WorkflowKey;
-  const historyManager = workspace.createOutputHistoryManager();
-  const runRef = await resolveCliRunRef(
-    historyManager,
+  const { runRef } = await resolveHistoryRun(
+    workspace,
     workflowKey,
-    options.run,
-    "--run"
+    options.run
   );
-  const runSummary = (await historyManager.getRunSummaries(workflowKey)).find(
-    (summary) => summary.runRef === runRef
-  );
-  if (!runSummary) throw new Error(`Run "${runRef}" was not found in history.`);
   const definition = await readRunWorkingDefinition(
     workspace.workspaceRoot,
     workflowKey,
@@ -735,47 +1192,36 @@ export async function stepsHistoryCommand(
     throw new Error(`Run "${runRef}" has no readable workflow working file.`);
   }
 
-  const steps = definition.steps.map((step, index) => ({
-    selector: formatCliStepSelector(index),
-    index,
-    name: step.name?.trim() || `Step ${index + 1}`,
-    state: historyWorkingStepState(step._runtime),
-    harness: step._runtime?.harness ?? "—",
-    model: step._runtime?.model ?? "—",
-    elapsed: formatElapsed(step._runtime?.elapsed),
-    attempts: 0,
-    prompt: formatStepPrompt(step, options.fullPrompts === true),
-  }));
-  const finalPassIndices = new Set<number>();
   const resolver =
     dependencies.createRunOutputResolver?.() ?? new RunOutputResolver();
-  for await (const event of resolver.streamAttemptLifecycle(
+  const index = await collectHistoryAttemptIndex(
+    resolver,
     WorkflowPaths.manifestPath(workspace.workspaceRoot, workflowKey, runRef)
-  )) {
-    const index =
-      event.target.kind === FINAL_STEP_PHASES.QUEUE
-        ? event.target.stepIndex
-        : undefined;
-    if (event.eventType === TIMELINE_EVENT_TYPES.ATTEMPT_STARTED) {
-      if (index !== undefined && steps[index]) steps[index].attempts++;
-      if (
-        index === undefined &&
-        definition.finalStep &&
-        event.target.kind === FINAL_STEP_PHASES.FINAL_STEP
-      ) {
-        finalPassIndices.add(event.target.loopIndex);
-      }
-    }
-  }
-  const finalStep = definition.finalStep
+  );
+  const steps: HistoryStepRow[] = definition.steps.map((step, stepIndex) => ({
+    selector: formatCliStepSelector(stepIndex),
+    index: stepIndex,
+    name: step.name?.trim() || null,
+    state: historyWorkingStepState(step._runtime),
+    harness: step._runtime?.harness ?? null,
+    model: step._runtime?.model ?? null,
+    elapsedSeconds: historyElapsedSeconds(step._runtime?.elapsed),
+    attempts:
+      index.targets.get(historyAttemptTargetKey(queueTarget(stepIndex)))
+        ?.attempts ?? 0,
+    prompt: formatStepPrompt(step, options.fullPrompts === true),
+  }));
+  const finalStep: HistoryFinalStepRow | null = definition.finalStep
     ? {
-        selector: "final",
-        name: definition.finalStep.name?.trim() || "Final Step",
+        selector: HISTORY_SHOW_STEP_SELECTORS.FINAL,
+        name: definition.finalStep.name?.trim() || null,
         state: historyWorkingStepState(definition.finalStep._runtime),
-        harness: definition.finalStep._runtime?.harness ?? "—",
-        model: definition.finalStep._runtime?.model ?? "—",
-        elapsed: formatElapsed(definition.finalStep._runtime?.elapsed),
-        passes: finalPassIndices.size,
+        harness: definition.finalStep._runtime?.harness ?? null,
+        model: definition.finalStep._runtime?.model ?? null,
+        elapsedSeconds: historyElapsedSeconds(
+          definition.finalStep._runtime?.elapsed
+        ),
+        passes: historyFinalPassRows(index),
         prompt: formatStepPrompt(
           definition.finalStep,
           options.fullPrompts === true
@@ -792,17 +1238,76 @@ export async function stepsHistoryCommand(
     return;
   }
   io.writeErr(`Run: ${runRef}`);
-  io.writeOut("#  NAME  STATE  HARNESS  MODEL  ELAPSED  ATTEMPTS  PROMPT");
-  for (const step of steps) {
-    io.writeOut(
-      `${step.index}  ${step.name}  ${step.state}  ${step.harness}  ${step.model}  ${step.elapsed}  ${step.attempts}  ${step.prompt}`
-    );
-  }
+  const headers = [
+    "#",
+    "NAME",
+    "STATE",
+    "HARNESS",
+    "MODEL",
+    "ELAPSED",
+    "ATTEMPTS",
+    "PROMPT",
+  ];
+  const values = steps.map((step) => [
+    step.selector,
+    step.name ?? "—",
+    step.state,
+    step.harness ?? "—",
+    step.model ?? "—",
+    formatElapsed(step.elapsedSeconds),
+    String(step.attempts),
+    step.prompt,
+  ]);
   if (finalStep) {
-    io.writeOut(
-      `F  ${finalStep.name}  ${finalStep.state}  ${finalStep.harness}  ${finalStep.model}  ${finalStep.elapsed}  ${finalStep.passes} passes  ${finalStep.prompt}`
-    );
+    values.push([
+      finalStep.selector,
+      finalStep.name ?? "—",
+      finalStep.state,
+      finalStep.harness ?? "—",
+      finalStep.model ?? "—",
+      formatElapsed(finalStep.elapsedSeconds),
+      `${finalStep.passes.length} pass${finalStep.passes.length === 1 ? "" : "es"}`,
+      finalStep.prompt,
+    ]);
   }
+  // The prompt column is last and unbounded with --full-prompts, so it is
+  // never padded; every other column is aligned.
+  const widths = headers.map((header, column) =>
+    column === headers.length - 1
+      ? 0
+      : Math.max(header.length, ...values.map((value) => value[column].length))
+  );
+  io.writeOut(formatTableRow(headers, widths));
+  for (const value of values) {
+    io.writeOut(formatTableRow(value, widths));
+  }
+}
+
+function historyFinalPassRows(
+  index: HistoryAttemptIndex
+): HistoryFinalPassRow[] {
+  const passes: HistoryFinalPassRow[] = [];
+  for (const entry of index.targets.values()) {
+    if (entry.target.kind !== FINAL_STEP_PHASES.FINAL_STEP) continue;
+    const pass = entry.target.loopIndex + 1;
+    const running = index.running.has(historyAttemptKey(entry.latest));
+    const completedAt = running ? null : (entry.latestTerminatedAt ?? null);
+    passes.push({
+      selector: formatFinalPassSelector(pass),
+      pass,
+      state: running
+        ? EXECUTION_STATES.RUNNING
+        : (entry.latestTerminalState ?? HISTORY_STEP_STATES.UNKNOWN),
+      attempts: entry.attempts,
+      startedAt: entry.firstStartedAt,
+      completedAt,
+      elapsedSeconds:
+        completedAt === null
+          ? null
+          : Math.max(0, (completedAt - entry.firstStartedAt) / 1000),
+    });
+  }
+  return passes.sort((a, b) => a.pass - b.pass);
 }
 
 const HISTORY_SEARCH_DEFAULT_LIMIT = 20;
@@ -827,7 +1332,8 @@ export async function searchHistoryCommand(
     dependencies.createHistorySearchService?.() ?? new HistorySearchService();
   const progress = createHistorySearchProgressReporter(io);
   let response: HistorySearchResponse;
-  let completed = false;
+  let outcome: HistorySearchProgressOutcome =
+    HISTORY_SEARCH_PROGRESS_OUTCOMES.FAILED;
   try {
     response = await service.search(
       request,
@@ -841,9 +1347,14 @@ export async function searchHistoryCommand(
         snippetChars,
       }
     );
-    completed = true;
+    // The service answers a failed index path with a disk scan instead of
+    // throwing, so returning normally does not prove the rebuild completed.
+    outcome =
+      response.indexState === HISTORY_SEARCH_INDEX_STATES.FALLBACK
+        ? HISTORY_SEARCH_PROGRESS_OUTCOMES.FALLBACK
+        : HISTORY_SEARCH_PROGRESS_OUTCOMES.COMPLETED;
   } finally {
-    progress.finish(completed);
+    progress.finish(outcome);
   }
 
   if (options.json) {
@@ -855,9 +1366,21 @@ export async function searchHistoryCommand(
 
 const HISTORY_SEARCH_PROGRESS_INTERVAL_MS = 250;
 
+const HISTORY_SEARCH_PROGRESS_OUTCOMES = {
+  COMPLETED: "completed",
+  FALLBACK: "fallback",
+  FAILED: "failed",
+} as const;
+
+type HistorySearchProgressOutcome =
+  (typeof HISTORY_SEARCH_PROGRESS_OUTCOMES)[keyof typeof HISTORY_SEARCH_PROGRESS_OUTCOMES];
+
+const HISTORY_SEARCH_REBUILD_FALLBACK_MESSAGE =
+  "Search index rebuild failed; used a disk scan.";
+
 function createHistorySearchProgressReporter(io: HistoryInspectionCommandIo): {
   onProgress: IndexRebuildProgressCallback;
-  finish(completed: boolean): void;
+  finish(outcome: HistorySearchProgressOutcome): void;
 } {
   let startedAt: number | undefined;
   let lastRenderedAt = Number.NEGATIVE_INFINITY;
@@ -886,7 +1409,7 @@ function createHistorySearchProgressReporter(io: HistoryInspectionCommandIo): {
       renderedMessage = latestMessage;
       lastRenderedAt = now;
     },
-    finish: (completed) => {
+    finish: (outcome) => {
       if (startedAt === undefined || latestMessage === undefined) {
         return;
       }
@@ -896,12 +1419,12 @@ function createHistorySearchProgressReporter(io: HistoryInspectionCommandIo): {
           io.writeErrProgress(`\r\x1b[K${latestMessage}`);
         }
         io.writeErrProgress("\n");
-        return;
-      }
-
-      if (completed) {
+      } else if (outcome === HISTORY_SEARCH_PROGRESS_OUTCOMES.COMPLETED) {
         const elapsedMs = Math.max(0, Date.now() - startedAt);
         io.writeErr(`Search index rebuild completed in ${elapsedMs} ms.`);
+      }
+      if (outcome === HISTORY_SEARCH_PROGRESS_OUTCOMES.FALLBACK) {
+        io.writeErr(HISTORY_SEARCH_REBUILD_FALLBACK_MESSAGE);
       }
     },
   };
@@ -1102,10 +1625,7 @@ function formatHistorySearchResult(
   result: HistorySearchResult,
   index: number
 ): string {
-  const step =
-    result.target.kind === FINAL_STEP_PHASES.FINAL_STEP
-      ? "final"
-      : String(result.target.stepIndex);
+  const step = formatHistoryTargetSelector(result.target);
   const lines = [
     `${index + 1}. ${result.workflowName} · run ${result.runId} · ${result.matchContext} · ${result.eventKind}/${result.matchField} · ${formatDate(result.startedAt)}`,
     `   --workflow ${result.workflowKey} --run ${result.runRef} --step ${step}`,
@@ -1123,13 +1643,13 @@ function historyAttemptTargetKey(target: OutputExecutionTarget): string {
     : `${FINAL_STEP_PHASES.FINAL_STEP}:${target.loopIndex}`;
 }
 
-function historyAttemptKey(attempt: ResolvedRunAttemptValue): string {
+function historyAttemptKey(attempt: HistoryAttemptIdentity): string {
   return `${historyAttemptTargetKey(attempt.target)}:run:${attempt.runIndex}:attempt:${attempt.attemptIndex}`;
 }
 
 function isLaterHistoryAttempt(
-  candidate: ResolvedRunAttemptValue,
-  current: ResolvedRunAttemptValue
+  candidate: HistoryAttemptIdentity,
+  current: HistoryAttemptIdentity
 ): boolean {
   return (
     candidate.runIndex > current.runIndex ||
@@ -1139,10 +1659,14 @@ function isLaterHistoryAttempt(
 }
 
 function renderHistoryAttempt(
-  attempt: ResolvedRunAttemptValue,
+  projection: HistoryAttemptProjection,
   unterminated: boolean,
-  workingDefinition?: RunWorkingDefinition
+  workingDefinition: RunWorkingDefinition | undefined,
+  page: PagedOutputText | undefined,
+  maxEvents: number | undefined,
+  io: HistoryInspectionCommandIo
 ): void {
+  const { attempt } = projection;
   const target = createHistoryOutputTarget(attempt);
   if (attempt.target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
     CliTerminalFormatter.renderFinalStepLabel(attempt.target.loopIndex);
@@ -1151,20 +1675,36 @@ function renderHistoryAttempt(
     stepIndex: target.stepIndex,
     totalSteps: workingDefinition?.steps.length ?? target.stepIndex + 1,
     stepName: historyStepName(attempt, workingDefinition),
-    promptText: historyAttemptPrompt(attempt),
+    // A page is bounded by its own size, so it carries no prompt preview.
+    promptText:
+      !page && projection.includePrompt ? historyAttemptPrompt(attempt) : "",
     attemptIndex: attempt.attemptIndex,
     runIndex: attempt.runIndex,
+    stepSelector: formatHistoryTargetSelector(attempt.target),
   });
 
+  let omittedEvents = 0;
+  let totalEvents = 0;
   const output = attempt.output;
-  if (isHistoryScriptAttempt(attempt)) {
-    CliTerminalFormatter.renderScriptOutput(
-      historyScriptOutput(attempt),
+  if (page) {
+    CliTerminalFormatter.renderStreamingChunk(page.text, target);
+  } else if (isHistoryScriptAttempt(attempt)) {
+    if (projection.includeResponse) {
+      CliTerminalFormatter.renderScriptOutput(
+        historyScriptOutput(attempt),
+        target
+      );
+    }
+  } else if (output?.structured?.events?.length) {
+    const events = output.structured.events;
+    totalEvents = events.length;
+    omittedEvents =
+      maxEvents === undefined ? 0 : Math.max(0, events.length - maxEvents);
+    CliTerminalFormatter.renderEvents(
+      omittedEvents > 0 ? events.slice(0, maxEvents) : events,
       target
     );
-  } else if (output?.structured?.events?.length) {
-    CliTerminalFormatter.renderEvents(output.structured.events, target);
-  } else if (output?.response) {
+  } else if (projection.includeResponse && output?.response) {
     CliTerminalFormatter.renderStreamingChunk(output.response, target);
   }
 
@@ -1180,6 +1720,16 @@ function renderHistoryAttempt(
     );
   } else {
     CliTerminalFormatter.flushStreamingBuffer(target);
+  }
+  if (page?.nextCursor) {
+    io.writeOut(`… more output (use --cursor ${page.nextCursor})`);
+  }
+  if (omittedEvents > 0) {
+    // --cursor pages characters, not events, so the way to see the rest of
+    // the events is a larger event budget.
+    io.writeOut(
+      `… ${omittedEvents} more events (use --max-events ${totalEvents} to show all)`
+    );
   }
 }
 
@@ -1220,42 +1770,70 @@ function historyStepName(
     : `Final Step Loop ${attempt.target.loopIndex + 1}`;
 }
 
+/** The prompt shown in a rendered header, falling back to the step's definition. */
 function historyAttemptPrompt(attempt: ResolvedRunAttemptValue): string {
-  if (attempt.prompt !== undefined) return attempt.prompt;
+  const recorded = historyRecordedPrompt(attempt);
+  if (recorded) return recorded;
   const step = attempt.definition?.step;
   if (!step) return "";
   return isScriptStep(step) ? step.script : step.prompt;
 }
 
+/** The prompt actually recorded for the attempt. */
+function historyRecordedPrompt(attempt: ResolvedRunAttemptValue): string {
+  return attempt.prompt ?? attempt.output?.prompt ?? "";
+}
+
+/** The attempt's response: a script attempt's stdout and stderr, else its response text. */
+function historyAttemptResponseText(attempt: ResolvedRunAttemptValue): string {
+  const scriptOutput = attempt.scriptOutput;
+  if (scriptOutput) {
+    return [scriptOutput.stdout, scriptOutput.stderr]
+      .filter(Boolean)
+      .join("\n");
+  }
+  return attempt.responseText ?? attempt.output?.response ?? "";
+}
+
+/** Which script produced an attempt, or undefined for an AI attempt. */
+function historyScriptSource(
+  attempt: ResolvedRunAttemptValue
+): ScriptOutputSource | undefined {
+  if (attempt.output?.source) return attempt.output.source;
+  switch (attempt.kind) {
+    case TIMELINE_ATTEMPT_KINDS.CONDITION:
+      return attempt.phase === EXECUTION_PHASES.PRE_CONDITION
+        ? SCRIPT_OUTPUT_SOURCES.PRE_CONDITION
+        : SCRIPT_OUTPUT_SOURCES.END_CONDITION;
+    case TIMELINE_ATTEMPT_KINDS.SETUP:
+      return SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP;
+    case TIMELINE_ATTEMPT_KINDS.SCRIPT:
+      return SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP;
+    default:
+      return attempt.scriptOutput
+        ? SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP
+        : undefined;
+  }
+}
+
 function isHistoryScriptAttempt(attempt: ResolvedRunAttemptValue): boolean {
-  return (
-    attempt.scriptOutput !== undefined ||
-    attempt.output?.source !== undefined ||
-    attempt.kind === TIMELINE_ATTEMPT_KINDS.SCRIPT ||
-    attempt.kind === TIMELINE_ATTEMPT_KINDS.CONDITION ||
-    attempt.kind === TIMELINE_ATTEMPT_KINDS.SETUP
-  );
+  return historyScriptSource(attempt) !== undefined;
+}
+
+/** Whether a settled attempt is the step's own execution, not a condition or setup script. */
+function isHistoryStepAttempt(attempt: ResolvedRunAttemptValue): boolean {
+  return attempt.kind === undefined || isStepAttemptKind(attempt.kind);
 }
 
 function historyScriptOutput(attempt: ResolvedRunAttemptValue): CliOutput {
   const output = attempt.output;
   const scriptOutput = attempt.scriptOutput;
-  const source =
-    output?.source ??
-    (attempt.kind === TIMELINE_ATTEMPT_KINDS.CONDITION
-      ? SCRIPT_OUTPUT_SOURCES.END_CONDITION
-      : attempt.kind === TIMELINE_ATTEMPT_KINDS.SETUP
-        ? SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP
-        : SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP);
-  const response = scriptOutput
-    ? [scriptOutput.stdout, scriptOutput.stderr].filter(Boolean).join("\n")
-    : (output?.response ?? "");
   return {
     ...(output ?? {}),
-    response,
+    response: historyAttemptResponseText(attempt),
     elapsed: output?.elapsed ?? 0,
     isStreaming: false,
-    source,
+    source: historyScriptSource(attempt) ?? SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP,
     ...(scriptOutput
       ? {
           cliCommand: scriptOutput.command,
@@ -1482,10 +2060,16 @@ function formatStepPrompt(
   return firstLine.length > 120 ? `${firstLine.slice(0, 117)}…` : firstLine;
 }
 
-function formatElapsed(elapsed: number | undefined): string {
-  if (elapsed === undefined || !Number.isFinite(elapsed) || elapsed < 0)
-    return "—";
-  const seconds = Math.round(elapsed);
+/** A working file's `_runtime.elapsed` (seconds), or null when absent or invalid. */
+function historyElapsedSeconds(elapsed: number | undefined): number | null {
+  return elapsed === undefined || !Number.isFinite(elapsed) || elapsed < 0
+    ? null
+    : elapsed;
+}
+
+function formatElapsed(elapsedSeconds: number | null): string {
+  if (elapsedSeconds === null) return "—";
+  const seconds = Math.round(elapsedSeconds);
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
@@ -1497,10 +2081,11 @@ function historyWorkingStepState(
 ): string {
   return (
     runtime?.terminalStatus ??
-    (runtime?.startedAt !== undefined
-      ? runtime.completedAt !== undefined
-        ? EXECUTION_STATES.COMPLETED
-        : EXECUTION_STATES.RUNNING
-      : HISTORY_STEP_STATES.PENDING)
+    // A final step's runtime can carry completedAt without startedAt.
+    (runtime?.completedAt !== undefined
+      ? EXECUTION_STATES.COMPLETED
+      : runtime?.startedAt !== undefined
+        ? EXECUTION_STATES.RUNNING
+        : HISTORY_STEP_STATES.PENDING)
   );
 }

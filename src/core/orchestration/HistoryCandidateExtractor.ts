@@ -22,15 +22,51 @@ export interface HistoryCandidateExtractorOptions {
   maxTextLength?: number;
 }
 
-const SCRIPT_EVENT_KIND_BY_SOURCE: Record<
-  ScriptOutputSource,
-  HistoryEventKind
+/**
+ * The history event kind of a script's output, by its source. Search indexes
+ * script output under these kinds and `history show --kind` filters by them,
+ * so both surfaces must read this one map.
+ */
+export const SCRIPT_EVENT_KIND_BY_SOURCE: Readonly<
+  Record<ScriptOutputSource, HistoryEventKind>
 > = {
   [SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP]: HISTORY_EVENT_KINDS.SCRIPT,
   [SCRIPT_OUTPUT_SOURCES.PRE_CONDITION]: HISTORY_EVENT_KINDS.PRE_CONDITION,
   [SCRIPT_OUTPUT_SOURCES.END_CONDITION]: HISTORY_EVENT_KINDS.END_CONDITION,
   [SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP]: HISTORY_EVENT_KINDS.SCRIPT,
 };
+
+const HISTORY_EVENT_KIND_BY_CLI_EVENT_TYPE: Readonly<
+  Partial<Record<string, HistoryEventKind>>
+> = {
+  [CLI_EVENT_TYPES.TEXT]: HISTORY_EVENT_KINDS.RESPONSE,
+  [CLI_EVENT_TYPES.THINKING]: HISTORY_EVENT_KINDS.THINKING,
+  [CLI_EVENT_TYPES.BASH_COMMAND]: HISTORY_EVENT_KINDS.BASH,
+  [CLI_EVENT_TYPES.FILE_READ]: HISTORY_EVENT_KINDS.FILE_READ,
+  [CLI_EVENT_TYPES.FILE_WRITE]: HISTORY_EVENT_KINDS.FILE_WRITE,
+  [CLI_EVENT_TYPES.FILE_EDIT]: HISTORY_EVENT_KINDS.FILE_EDIT,
+  [CLI_EVENT_TYPES.FILE_DELETE]: HISTORY_EVENT_KINDS.FILE_DELETE,
+  [CLI_EVENT_TYPES.MCP_TOOL_CALL]: HISTORY_EVENT_KINDS.MCP_TOOL,
+  [CLI_EVENT_TYPES.TOOL_CALL]: HISTORY_EVENT_KINDS.TOOL,
+  [CLI_EVENT_TYPES.TOOL_RESULT]: HISTORY_EVENT_KINDS.TOOL,
+  [CLI_EVENT_TYPES.WEB_SEARCH]: HISTORY_EVENT_KINDS.WEB_SEARCH,
+  [CLI_EVENT_TYPES.COMPACTION]: HISTORY_EVENT_KINDS.COMPACTION,
+};
+
+/**
+ * The history event kind a structured CLI event is indexed under, or
+ * undefined for event types search does not index.
+ */
+export function historyEventKindForCliEventType(
+  type: string
+): HistoryEventKind | undefined {
+  return Object.prototype.hasOwnProperty.call(
+    HISTORY_EVENT_KIND_BY_CLI_EVENT_TYPE,
+    type
+  )
+    ? HISTORY_EVENT_KIND_BY_CLI_EVENT_TYPE[type]
+    : undefined;
+}
 
 export class HistoryCandidateExtractor {
   constructor(
@@ -152,14 +188,7 @@ export class HistoryCandidateExtractor {
           structuredPatch?: unknown;
         };
         const filePath = this.getStringValue(data.path);
-        const eventKind =
-          event.type === CLI_EVENT_TYPES.FILE_READ
-            ? HISTORY_EVENT_KINDS.FILE_READ
-            : event.type === CLI_EVENT_TYPES.FILE_WRITE
-              ? HISTORY_EVENT_KINDS.FILE_WRITE
-              : event.type === CLI_EVENT_TYPES.FILE_EDIT
-                ? HISTORY_EVENT_KINDS.FILE_EDIT
-                : HISTORY_EVENT_KINDS.FILE_DELETE;
+        const eventKind = historyEventKindForCliEventType(event.type)!;
         candidates.push(
           ...this.toCandidate(
             eventKind,

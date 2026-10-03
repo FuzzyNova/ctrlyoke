@@ -942,6 +942,10 @@ export const EXECUTION_STATES = {
 /** Compact state labels for authored steps that have not started yet. */
 export const HISTORY_STEP_STATES = {
   PENDING: "pending",
+  /** The recorded history ended before the attempt's terminal event. */
+  UNTERMINATED: "unterminated",
+  /** A settled attempt whose terminal state was never recorded. */
+  UNKNOWN: "unknown",
 } as const;
 
 /** Selector words accepted by `ctrlyoke history show`. */
@@ -956,6 +960,16 @@ export const HISTORY_SHOW_ATTEMPT_SELECTORS = {
   LATEST: "latest",
   NUMBER: "number",
 } as const;
+
+/** Sort orders accepted by `ctrlyoke history list --sort`. */
+export const HISTORY_LIST_SORT_ORDERS = {
+  /** Newest latest-run start first; lineages without runs last. */
+  LATEST: "latest",
+  NAME: "name",
+} as const;
+
+export type HistoryListSortOrder =
+  (typeof HISTORY_LIST_SORT_ORDERS)[keyof typeof HISTORY_LIST_SORT_ORDERS];
 
 export type HistoryStepState =
   (typeof HISTORY_STEP_STATES)[keyof typeof HISTORY_STEP_STATES];
@@ -3172,6 +3186,17 @@ export const HISTORY_SEARCH_COUNT_STATES = {
   AT_LEAST: "atLeast",
 } as const;
 
+/**
+ * How `HistorySearchResponse.indexState` (see `WorkflowTimelineTypes.ts`) was
+ * answered: from a fresh index, from an index still being rebuilt, or from the
+ * disk-scan fallback after the indexed path failed.
+ */
+export const HISTORY_SEARCH_INDEX_STATES = {
+  READY: "ready",
+  BUILDING: "building",
+  FALLBACK: "fallback",
+} as const;
+
 // ============================================================================
 // EXECUTION PHASES - Identity dimension for prompt and condition attempts
 // ============================================================================
@@ -3426,6 +3451,32 @@ export const WORKFLOW_LOCK_LIVENESS = {
 
 export type WorkflowLockLiveness =
   (typeof WORKFLOW_LOCK_LIVENESS)[keyof typeof WORKFLOW_LOCK_LIVENESS];
+
+/** `ctrlyoke status` verdict on whether an executing run still has a runner. */
+export const CLI_STATUS_LIVENESS_STATES = {
+  ALIVE: "alive",
+  STALE: "stale",
+} as const;
+
+export type CliStatusLivenessState =
+  (typeof CLI_STATUS_LIVENESS_STATES)[keyof typeof CLI_STATUS_LIVENESS_STATES];
+
+/** Why `ctrlyoke status` reached its liveness verdict for one run. */
+export const CLI_STATUS_LIVENESS_REASONS = {
+  /** runner.json holds a live lock for this run. */
+  ACTIVE: "active",
+  /** No usable runner.json exists for the workflow. */
+  ABSENT: "absent",
+  /** runner.json names a process that is no longer running. */
+  STALE_DEAD_PID: "stale-dead-pid",
+  /** runner.json's process is alive but its heartbeat stopped. */
+  STALE_HEARTBEAT: "stale-heartbeat",
+  /** runner.json holds a live lock for a different run of the workflow. */
+  OTHER_RUN: "other-run",
+} as const;
+
+export type CliStatusLivenessReason =
+  (typeof CLI_STATUS_LIVENESS_REASONS)[keyof typeof CLI_STATUS_LIVENESS_REASONS];
 
 export const WORKFLOW_LOCK_LOCALITIES = {
   SELF: "self",

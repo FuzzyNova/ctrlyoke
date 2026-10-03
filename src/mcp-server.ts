@@ -73,6 +73,7 @@ import { RunOutputResolver } from "./core/orchestration/RunOutputResolver";
 import {
   pageOutputText,
   parseOutputTextPaging,
+  READ_OUTPUT_PAGING_WORDING,
   type OutputTextPaging,
 } from "./core/orchestration/OutputTextPaging";
 import type { RunRef, WorkflowKey } from "./types/CtrlYokeTypes";
@@ -1635,9 +1636,13 @@ export class CtrlYokeMCPServer {
       requestedIndices[0] < 0 ||
       requestedIndices[0] >= allSteps.length
     ) {
-      return parseOutputTextPaging(args, 0, "read_output");
+      return parseOutputTextPaging(args, 0, READ_OUTPUT_PAGING_WORDING);
     }
-    return parseOutputTextPaging(args, selectedItemCount, "read_output");
+    return parseOutputTextPaging(
+      args,
+      selectedItemCount,
+      READ_OUTPUT_PAGING_WORDING
+    );
   }
 
   /**
