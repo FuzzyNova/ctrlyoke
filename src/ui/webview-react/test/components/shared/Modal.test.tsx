@@ -132,4 +132,24 @@ describe("Modal", () => {
     );
     expect(screen.getByRole("button", { name: "Confirm" })).toBeInTheDocument();
   });
+
+  it("truncates the title by default and wraps it when asked", () => {
+    const { rerender } = render(
+      <Modal isOpen onClose={vi.fn()} title="A long approval title">
+        body
+      </Modal>
+    );
+    const heading = screen.getByRole("heading", {
+      name: "A long approval title",
+    });
+    expect(heading).toHaveClass("truncate");
+
+    rerender(
+      <Modal isOpen onClose={vi.fn()} title="A long approval title" wrapTitle>
+        body
+      </Modal>
+    );
+    expect(heading).not.toHaveClass("truncate");
+    expect(heading).toHaveClass("break-words");
+  });
 });

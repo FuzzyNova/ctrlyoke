@@ -54,6 +54,7 @@ export function BatchApprovalModal() {
       onClose={dismiss}
       title={request.title}
       size="sm"
+      wrapTitle
       footer={
         <div className="flex w-full items-center justify-end gap-2">
           <Button type="button" variant="secondary" onClick={dismiss}>

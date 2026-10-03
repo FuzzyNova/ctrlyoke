@@ -30,6 +30,11 @@ interface ModalProps {
   elevated?: boolean;
   /** Restore focus to the control that opened the modal when it closes. */
   restoreFocusOnClose?: boolean;
+  /**
+   * Wrap a long title onto more lines instead of truncating it. For titles
+   * that are sentences the user must read in full (e.g. approval prompts).
+   */
+  wrapTitle?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -46,6 +51,7 @@ export const Modal: React.FC<ModalProps> = ({
   bodyRef,
   elevated = false,
   restoreFocusOnClose = false,
+  wrapTitle = false,
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -140,10 +146,12 @@ export const Modal: React.FC<ModalProps> = ({
         >
           {/* Header */}
           <div className="flex-shrink-0 px-6 py-4 border-b border-panel-border">
-            <div className="flex items-center justify-between gap-2">
+            <div
+              className={`flex ${wrapTitle ? "items-start" : "items-center"} justify-between gap-2`}
+            >
               <h2
                 id={titleId}
-                className="min-w-0 truncate text-xl font-semibold text-foreground"
+                className={`min-w-0 ${wrapTitle ? "break-words" : "truncate"} text-xl font-semibold text-foreground`}
               >
                 {title}
               </h2>
