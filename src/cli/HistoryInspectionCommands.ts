@@ -1681,6 +1681,7 @@ function renderHistoryAttempt(
     attemptIndex: attempt.attemptIndex,
     runIndex: attempt.runIndex,
     stepSelector: formatHistoryTargetSelector(attempt.target),
+    includeStepPosition: attempt.target.kind === FINAL_STEP_PHASES.QUEUE,
   });
 
   let omittedEvents = 0;

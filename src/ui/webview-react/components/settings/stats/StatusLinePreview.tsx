@@ -1,4 +1,5 @@
 import {
+  CLAUDE_RATE_LIMIT_WINDOWS,
   formatBrandedStatusLine,
   parseAnsiStatusLine,
   STATUS_LINE_COLOR_SWATCHES,
@@ -169,12 +170,14 @@ function previewPayload(
       ...representativePayload,
       model: { id: "cached model" },
       rate_limits: Object.fromEntries(
-        windows
-          .slice(0, 2)
-          .map((window, index) => [
-            index === 0 ? "five_hour" : "seven_day",
-            { used_percentage: window.percentUsed ?? 0 },
-          ])
+        windows.flatMap((window) => {
+          const definition = CLAUDE_RATE_LIMIT_WINDOWS.find(
+            (candidate) => candidate.id === window.id
+          );
+          return definition
+            ? [[definition.key, { used_percentage: window.percentUsed ?? 0 }]]
+            : [];
+        })
       ),
     };
   }

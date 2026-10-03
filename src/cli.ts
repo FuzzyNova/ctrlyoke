@@ -31,7 +31,10 @@ import type {
   CliValidateStrictPolicy,
   HarnessId,
 } from "./types/DashboardConstants";
-import type { RunnerHostIdentity } from "./types/CtrlYokeTypes";
+import type {
+  FinalStepRuntimeState,
+  RunnerHostIdentity,
+} from "./types/CtrlYokeTypes";
 import type { CompatibilityDiagnostic } from "./types/CompatibilityTypes";
 import {
   isScriptStep,
@@ -204,8 +207,11 @@ if (cliBinDirectory) {
 }
 
 /** Determine a structured exit code from the final queue state. */
-function getExitCode(state: QueueState): number {
-  return getTypedExitCode(state);
+function getExitCode(
+  state: QueueState,
+  finalStepRuntime?: FinalStepRuntimeState
+): number {
+  return getTypedExitCode(state, finalStepRuntime);
 }
 
 const cliRunnerHostIdentity: RunnerHostIdentity = {
@@ -1307,7 +1313,10 @@ async function runCommand(
 
     const state = instance.promptQueue.getState();
     const schemaRefusal = runStateRefusals.first();
-    const exitCode = applyRunStateRefusal(getExitCode(state), schemaRefusal);
+    const exitCode = applyRunStateRefusal(
+      getExitCode(state, instance.promptQueue.getFinalStepRuntime()),
+      schemaRefusal
+    );
     const completed = exitCode === 0;
 
     if (options.json) {

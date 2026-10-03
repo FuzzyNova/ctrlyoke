@@ -50,6 +50,8 @@ function sourceForEntry(
       return { kind: DIFF_PAYLOAD_KINDS.IMAGE, image: entry.image };
     case DIFF_PAYLOAD_KINDS.BINARY:
       return { kind: DIFF_PAYLOAD_KINDS.BINARY };
+    case DIFF_PAYLOAD_KINDS.TOO_LARGE:
+      return { kind: DIFF_PAYLOAD_KINDS.TOO_LARGE };
   }
 }
 

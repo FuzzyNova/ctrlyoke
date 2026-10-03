@@ -1,6 +1,12 @@
 // Keep this standalone statusline module dependent only on import-free leaves.
 import { formatCompactTokenMagnitude } from "./CompactMagnitude";
 
+/** Claude rate-limit payload keys paired with normalized usage-window ids. */
+export const CLAUDE_RATE_LIMIT_WINDOWS = [
+  { key: "five_hour", id: "five-hour", windowMinutes: 5 * 60 },
+  { key: "seven_day", id: "seven-day", windowMinutes: 7 * 24 * 60 },
+] as const;
+
 /**
  * Version of the snapshot file the statusline scripts write for ctrlyoke's
  * sidecars (`_ctrlyoke.protocolVersion`). The scripts run from the shared
@@ -335,11 +341,6 @@ const STATUS_LINE_CONTEXT_BANDS = {
 type StatusLineContextBand =
   (typeof STATUS_LINE_CONTEXT_BANDS)[keyof typeof STATUS_LINE_CONTEXT_BANDS];
 
-const STATUS_LINE_CLAUDE_WINDOWS = [
-  { key: "five_hour", windowMinutes: 5 * 60 },
-  { key: "seven_day", windowMinutes: 7 * 24 * 60 },
-] as const;
-
 const ANSI_RESET = "\u001b[0m";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -477,7 +478,7 @@ function usageWindows(
   if (!isRecord(source)) return [];
 
   if (provider === STATUS_LINE_FORMAT_PROVIDERS.CLAUDE) {
-    return STATUS_LINE_CLAUDE_WINDOWS.map((definition) => {
+    return CLAUDE_RATE_LIMIT_WINDOWS.map((definition) => {
       const entry = source[definition.key];
       const value = isRecord(entry)
         ? finiteNumber(entry.used_percentage)

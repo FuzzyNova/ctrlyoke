@@ -160,6 +160,7 @@ export interface CliPromptHeaderData extends PromptStartData {
    * history replay sets it; live `ctrlyoke run` output never does.
    */
   stepSelector?: string;
+  includeStepPosition?: boolean;
 }
 
 const DIFF_LINE_TYPES = {
@@ -1227,6 +1228,7 @@ export class CliTerminalFormatter {
       attemptIndex,
       runIndex,
       cliCommand,
+      includeStepPosition = true,
     } = data;
 
     if (cliCommand !== undefined) {
@@ -1250,10 +1252,11 @@ export class CliTerminalFormatter {
     ]
       .filter((label) => label.length > 0)
       .join(" · ");
-
-    const stepLabel = `Step ${stepIndex + 1}/${totalSteps}${
-      data.stepSelector !== undefined ? ` (--step ${data.stepSelector})` : ""
-    } — ${stepName}`;
+    const selectorSuffix =
+      data.stepSelector !== undefined ? ` (--step ${data.stepSelector})` : "";
+    const stepLabel = includeStepPosition
+      ? `Step ${stepIndex + 1}/${totalSteps}${selectorSuffix} — ${stepName}`
+      : `${stepName}${selectorSuffix}`;
     if (executionLabel) {
       console.log(
         `${border} ${chalk.yellow(`${executionLabel} — ${stepLabel}`)}`

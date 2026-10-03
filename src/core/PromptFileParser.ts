@@ -25,6 +25,7 @@ import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { stripLegacyWorkingFileLineageMetadata } from "../utils/WorkingFileMetadata";
 import { Log } from "../utils/Log";
 import { stripLeadingBom } from "../utils/TextUtils";
+import { splitMarkdownFrontmatter } from "../utils/DiscoveryUtils";
 import { getVariableKeyErrors } from "../utils/KeyValueKeyKinds";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
@@ -568,22 +569,34 @@ export class PromptFileParser {
     try {
       const content = await this.readWorkflowFileContent(filePath);
 
-      const frontmatterMatch = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u.exec(
-        content
-      );
+      const frontmatterSplit = splitMarkdownFrontmatter(content);
       let promptContent = content;
-      if (frontmatterMatch) {
-        const frontmatter = yaml.load(frontmatterMatch[1], {
-          filename: filePath,
-          schema: yaml.CORE_SCHEMA,
-        });
+      if (frontmatterSplit) {
+        const frontmatterText = frontmatterSplit.frontmatter;
+        const frontmatter = frontmatterText.trim()
+          ? yaml.load(frontmatterText, {
+              filename: filePath,
+              schema: yaml.CORE_SCHEMA,
+            })
+          : {};
+        if (
+          frontmatter !== null &&
+          frontmatter !== undefined &&
+          (typeof frontmatter !== "object" || Array.isArray(frontmatter))
+        ) {
+          throw new Error(
+            "Markdown frontmatter must contain a YAML mapping or null"
+          );
+        }
         this.assertSupportedWorkflowSchema(
           frontmatter,
           filePath,
           "Markdown frontmatter"
         );
-        migrateToCurrent(PERSISTED_STORES.WORKFLOW_DEFINITION, frontmatter);
-        promptContent = content.slice(frontmatterMatch[0].length);
+        if (frontmatter !== null && frontmatter !== undefined) {
+          migrateToCurrent(PERSISTED_STORES.WORKFLOW_DEFINITION, frontmatter);
+        }
+        promptContent = frontmatterSplit.body;
       }
 
       // Trim whitespace but preserve the prompt text as-is.
@@ -616,6 +629,8 @@ export class PromptFileParser {
         });
         return null;
       }
+      this.lastParseError =
+        error instanceof Error ? error : new Error(String(error));
       Log.error(
         `[PromptFileParser] Failed to read markdown prompt file ${filePath}:`,
         error

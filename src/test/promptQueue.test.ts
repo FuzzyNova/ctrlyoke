@@ -2987,6 +2987,33 @@ suite("PromptQueue State Machine Tests", () => {
   );
 
   suite("syncStepsForUndoRedo", () => {
+    test("restores duplicate identical steps by stepId after deleting the first", async () => {
+      queue.loadPrompts(
+        createPromptFile([{ prompt: "X", _runtime: { stepId: "a" } }])
+      );
+      await queue.appendSteps([{ prompt: "X" }], "test");
+      const snapshot = queue.getState().steps.map((step) => ({
+        ...step,
+        _runtime: step._runtime ? { ...step._runtime } : undefined,
+      }));
+      const originalIds = snapshot.map((step) => step._runtime?.stepId);
+      assert.strictEqual(originalIds[0], "a");
+      assert.ok(originalIds[1]);
+      assert.notStrictEqual(originalIds[1], originalIds[0]);
+
+      await queue.deletePrompt(0);
+      await queue.syncStepsForUndoRedo(snapshot);
+
+      const restoredIds = queue
+        .getState()
+        .steps.map((step) => step._runtime?.stepId);
+      assert.deepStrictEqual(restoredIds, originalIds);
+      assert.strictEqual(new Set(restoredIds).size, 2);
+
+      await queue.appendSteps([{ prompt: "after undo" }], "test");
+      assert.strictEqual(queue.getState().steps.length, 3);
+    });
+
     test("does not restore archived or incoming suffix runtime during a pending rewind", async () => {
       queue.loadPrompts(
         createPromptFile([

@@ -239,6 +239,13 @@ export type WorkspaceDiffPayload =
       oldContent?: never;
       newContent?: never;
       image?: never;
+    }
+  | {
+      payloadKind: typeof DIFF_PAYLOAD_KINDS.TOO_LARGE;
+      language?: never;
+      oldContent?: never;
+      newContent?: never;
+      image?: never;
     };
 
 export type WorkspaceScmDiffResponse = WorkspaceScmDiffBase &

@@ -3690,6 +3690,8 @@ export class WorkflowExecutor {
         phase: FINAL_STEP_PHASES.FINAL_STEP,
         loopCount: target.loopIndex,
         status: STEP_STATUS.FAILED,
+        failureKind,
+        failureMessage: reason,
         startedAt:
           this.promptQueue.getFinalStepRuntime()?.startedAt ?? Date.now(),
         completedAt: Date.now(),
@@ -5345,7 +5347,11 @@ export class WorkflowExecutor {
       await persistFailureOutput();
 
       if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-        await this.promptQueue.failStep(target.stepIndex, failureReason);
+        await this.promptQueue.failStep(
+          target.stepIndex,
+          failureReason,
+          failureKind
+        );
         return { outcome: WORKFLOW_EXECUTION_OUTCOMES.CONTINUE };
       }
 
@@ -5353,6 +5359,8 @@ export class WorkflowExecutor {
         phase: FINAL_STEP_PHASES.FINAL_STEP,
         loopCount: target.loopIndex,
         status: STEP_STATUS.FAILED,
+        failureKind,
+        failureMessage: failureReason,
         startedAt:
           this.promptQueue.getFinalStepRuntime()?.startedAt ??
           attemptTimestampMs,
@@ -5382,6 +5390,8 @@ export class WorkflowExecutor {
         phase: FINAL_STEP_PHASES.FINAL_STEP,
         loopCount: target.loopIndex,
         status: STEP_STATUS.FAILED,
+        failureKind,
+        failureMessage: failureReason,
         startedAt:
           this.promptQueue.getFinalStepRuntime()?.startedAt ??
           attemptTimestampMs,

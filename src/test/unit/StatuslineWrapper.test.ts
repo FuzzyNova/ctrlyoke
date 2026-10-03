@@ -508,6 +508,52 @@ suite("Shared statusline wrappers", function () {
     }
   });
 
+  test("finds a normal repository branch from a nested cwd", async () => {
+    tempDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-statusline-nested-repo-")
+    );
+    const nestedDirectory = path.join(tempDirectory, "packages", "app");
+    await fs.mkdir(path.join(tempDirectory, ".git"));
+    await fs.mkdir(nestedDirectory, { recursive: true });
+    await fs.writeFile(
+      path.join(tempDirectory, ".git", "HEAD"),
+      "ref: refs/heads/nested-repo-branch\n"
+    );
+
+    assert.strictEqual(
+      shared.formatBrandedStatusLine(
+        shared.STATUSLINE_PROVIDERS.CLAUDE,
+        { cwd: nestedDirectory },
+        [{ type: "field", field: "branch" }]
+      ),
+      "nested-repo-branch"
+    );
+  });
+
+  test("finds a worktree branch from a nested cwd", async () => {
+    tempDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-statusline-nested-worktree-")
+    );
+    const nestedDirectory = path.join(tempDirectory, "packages", "app");
+    const redirectedGitDirectory = path.join(tempDirectory, "metadata");
+    await fs.mkdir(nestedDirectory, { recursive: true });
+    await fs.mkdir(redirectedGitDirectory);
+    await fs.writeFile(path.join(tempDirectory, ".git"), "gitdir: metadata\n");
+    await fs.writeFile(
+      path.join(redirectedGitDirectory, "HEAD"),
+      "ref: refs/heads/nested-worktree-branch\n"
+    );
+
+    assert.strictEqual(
+      shared.formatBrandedStatusLine(
+        shared.STATUSLINE_PROVIDERS.CLAUDE,
+        { cwd: nestedDirectory },
+        [{ type: "field", field: "branch" }]
+      ),
+      "nested-worktree-branch"
+    );
+  });
+
   test("renders new providers' unavailable usage fields as absent", () => {
     for (const provider of ["copilot", "qwen"] as const) {
       assert.strictEqual(

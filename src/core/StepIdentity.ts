@@ -129,6 +129,18 @@ export function findStepIndexById(
   return steps.findIndex((step) => step._runtime?.stepId === stepId);
 }
 
+/** Resolve a step by its durable identity, independent of its current position. */
+export function findStepById(
+  steps: readonly WorkflowStep[],
+  stepId: string | undefined
+): WorkflowStep | undefined {
+  if (stepId === undefined || stepId.length === 0) {
+    return undefined;
+  }
+  const index = findStepIndexById(steps, stepId);
+  return index === -1 ? undefined : steps[index];
+}
+
 /** Clear execution metadata during rewind without changing step identity. */
 export function resetStepRuntimeForRewind(step: WorkflowStep): WorkflowStep {
   const stepId = step._runtime?.stepId;

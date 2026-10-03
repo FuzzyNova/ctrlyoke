@@ -52,7 +52,11 @@ import {
 } from "./orchestration/RevisionPrecondition";
 import { RunContinuationService } from "./orchestration/RunContinuationService";
 import { TimelineRecorder } from "./orchestration/TimelineRecorder";
-import { ensureStepIds, resetStepRuntimeForRewind } from "./StepIdentity";
+import {
+  ensureStepIds,
+  findStepById,
+  resetStepRuntimeForRewind,
+} from "./StepIdentity";
 import {
   assertWritableSchema,
   isNewerSchemaError,
@@ -1620,10 +1624,10 @@ export class WorkingFileManager {
 
   /**
    * Addressed undo/redo step-array replace for an idle run. Preserves
-   * `_runtime` from the current on-disk step at the same index when the
-   * incoming step is otherwise identical, and otherwise trusts whatever
-   * `_runtime` the restored snapshot carries. This deliberately does not
-   * replicate `PromptQueue.syncStepsForUndoRedo`'s in-memory
+   * `_runtime` from the current on-disk step with the same `stepId`; for
+   * incoming steps without an ID, it falls back to the same index. Otherwise
+   * it trusts whatever `_runtime` the restored snapshot carries. This
+   * deliberately does not replicate `PromptQueue.syncStepsForUndoRedo`'s in-memory
    * `runtimeArchive` restoration: that archive is scoped to one live
    * instance's continuous editing session and was never persisted to disk,
    * so an addressed edit against an idle run (no live instance) has no
@@ -1668,9 +1672,20 @@ export class WorkingFileManager {
           if (hasExecutionRuntime) {
             return persistableStep;
           }
-          const existing = existingTopology.steps[index];
+          const stepId = persistableStep._runtime?.stepId;
+          const existing =
+            (stepId === undefined
+              ? undefined
+              : findStepById(existingTopology.steps, stepId)) ??
+            (stepId === undefined ? existingTopology.steps[index] : undefined);
           return existing?._runtime
-            ? { ...persistableStep, _runtime: existing._runtime }
+            ? {
+                ...persistableStep,
+                _runtime: {
+                  ...existing._runtime,
+                  ...(stepId === undefined ? {} : { stepId }),
+                },
+              }
             : persistableStep;
         });
         return {

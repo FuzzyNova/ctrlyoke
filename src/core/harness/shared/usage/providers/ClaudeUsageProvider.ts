@@ -12,6 +12,7 @@ import type {
   HarnessQuotaSnapshot,
   HarnessUsageWindow,
 } from "../../../../../types/UsageTypes";
+import { CLAUDE_RATE_LIMIT_WINDOWS } from "../../../../../utils/StatuslineFormat";
 import { normalizeUsageTimestamp } from "../UsageTimestampUtils";
 import type { IHarnessUsageProvider } from "../IHarnessUsageProvider";
 import { ObservedOnlyUsageProvider } from "../ObservedOnlyUsageProvider";
@@ -24,19 +25,6 @@ export interface ClaudeStatuslineSnapshot {
   };
   rate_limits?: unknown;
 }
-
-const CLAUDE_RATE_LIMIT_WINDOWS = [
-  {
-    key: "five_hour",
-    id: "five-hour",
-    windowMinutes: 5 * 60,
-  },
-  {
-    key: "seven_day",
-    id: "seven-day",
-    windowMinutes: 7 * 24 * 60,
-  },
-] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

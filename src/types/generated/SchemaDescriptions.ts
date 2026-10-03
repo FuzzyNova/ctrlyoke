@@ -41,6 +41,8 @@ export const SCHEMA_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "_runtime.finalStep.endCondition": "Latest end-condition evaluation retained for the final step's automation result projection",
   "_runtime.finalStep.endCondition.action": "Populated for pre-conditions, where it explains the gate decision.",
   "_runtime.finalStep.endCondition.operator": "How the compare source is compared against `expected`. Default: 'eq' (whole-value literal match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains' are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors.",
+  "_runtime.finalStep.failureKind": "Structured classification for the latest final-step failure",
+  "_runtime.finalStep.failureMessage": "Human-readable reason for the latest final-step failure",
   "_runtime.finalStep.loopCount": "0-based final step execution loop count",
   "_runtime.finalStep.phase": "Current workflow execution phase",
   "_runtime.finalStep.preCondition": "Latest pre-condition evaluation retained for the final step's automation result projection",
@@ -999,6 +1001,7 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "userCancelled",
     "processExit",
     "harnessError",
+    "harnessNotInstalled",
     "timeout",
     "unknown"
   ],
@@ -1020,6 +1023,14 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "matches",
     "isEmpty",
     "isNotEmpty"
+  ],
+  "_runtime.finalStep.failureKind": [
+    "userCancelled",
+    "processExit",
+    "harnessError",
+    "harnessNotInstalled",
+    "timeout",
+    "unknown"
   ],
   "_runtime.finalStep.phase": [
     "queue",
@@ -1444,6 +1455,7 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "userCancelled",
     "processExit",
     "harnessError",
+    "harnessNotInstalled",
     "timeout",
     "unknown"
   ],
@@ -1983,6 +1995,7 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "userCancelled",
     "processExit",
     "harnessError",
+    "harnessNotInstalled",
     "timeout",
     "unknown"
   ],
@@ -2199,6 +2212,7 @@ export const SCHEMA_ENUMS: Readonly<Record<string, readonly (string | number | b
     "userCancelled",
     "processExit",
     "harnessError",
+    "harnessNotInstalled",
     "timeout",
     "unknown"
   ],

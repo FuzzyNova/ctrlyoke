@@ -52,10 +52,15 @@ suite("CtrlYokeSlashTokens", () => {
   test("leaves the three-segment tool form untouched", () => {
     // `/mcp:<server>:<tool>` is a follow-on phase; until it ships it must not be
     // mistaken for a server reference with trailing text.
-    assert.deepStrictEqual(
-      scanCtrlYokeSlashTokens("/mcp:playwright:browser_hover"),
-      []
-    );
+    for (const text of [
+      "/mcp:my-server:tool",
+      "/mcp:github.com:search",
+      "/skill:foo.bar:baz",
+      "/mcp:server:tool",
+      "/mcp:playwright:browser_hover",
+    ]) {
+      assert.deepStrictEqual(scanCtrlYokeSlashTokens(text), [], text);
+    }
   });
 
   test("scans every occurrence with source locations", () => {

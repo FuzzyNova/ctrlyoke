@@ -1789,6 +1789,48 @@ suite("CLI history inspection command handlers", () => {
     assert.deepStrictEqual(finalLabels, [0, 1]);
   });
 
+  test("omits queue position from final-step attempt headers", async () => {
+    const key = "release" as WorkflowKey;
+    const manager = historyManagerForShow(key);
+    const headers: Array<{
+      stepIndex: number;
+      includeStepPosition?: boolean;
+    }> = [];
+    const originalHeader = CliTerminalFormatter.renderPromptHeader;
+    CliTerminalFormatter.renderPromptHeader = ((data) => {
+      headers.push({
+        stepIndex: data.stepIndex,
+        includeStepPosition: data.includeStepPosition,
+      });
+    }) as typeof originalHeader;
+    try {
+      await showHistoryCommand(
+        { workflow: key, run: "3" },
+        new TestIo(),
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          manager,
+          new TestRunOutputResolver([
+            settledAttempt({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 }),
+            settledAttempt({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 }),
+            settledAttempt({
+              kind: FINAL_STEP_PHASES.FINAL_STEP,
+              loopIndex: 0,
+            }),
+          ])
+        )
+      );
+    } finally {
+      CliTerminalFormatter.renderPromptHeader = originalHeader;
+    }
+
+    assert.deepStrictEqual(headers, [
+      { stepIndex: 0, includeStepPosition: true },
+      { stepIndex: 1, includeStepPosition: true },
+      { stepIndex: 0, includeStepPosition: false },
+    ]);
+  });
+
   test("rejects a queue step outside the resolved run's valid range", async () => {
     const key = "release" as WorkflowKey;
     await assert.rejects(
