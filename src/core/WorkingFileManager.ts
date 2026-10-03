@@ -2027,12 +2027,12 @@ export class WorkingFileManager {
       // Read current working file from disk
       const workingFile = await this.readWorkingFile(workingFilePath);
       this.assertExpectedDefinitionRevision(workingFile);
+      const diskDefinitionRevision = workingFile.definitionRevision ?? 1;
       // CRITICAL FIX: Merge steps from disk instead of blindly overwriting
       // This preserves MCP-appended steps that may have been added while we were running
       // BUT: Skip merge for intentional writes (delete/update) to avoid undoing changes
       if (!skipMerge) {
         const diskSteps = workingFile.steps || [];
-        const diskDefinitionRevision = workingFile.definitionRevision ?? 1;
 
         const newStepsFromDisk = this.queueAccess.mergeDiskSteps(
           diskSteps,
@@ -2056,6 +2056,16 @@ export class WorkingFileManager {
           this.queueAccess.emitStateChange();
         }
       } // End skipMerge check
+
+      // Runtime-only writes can follow an earlier disk merge that already put
+      // the appended steps in memory. In that case mergeDiskSteps reports no
+      // new members, but the queue's revision may still be stale. Never let a
+      // runtime flush move the durable optimistic-concurrency revision back.
+      const definitionRevision = Math.max(
+        diskDefinitionRevision,
+        this.queueAccess.getDefinitionRevision()
+      );
+      this.queueAccess.setDefinitionRevision(definitionRevision);
 
       // Now write back the steps array (merged or direct from memory)
       // CRITICAL: Preserve _runtime metadata during save (Phase 4: Per-Prompt Session Management)
@@ -2099,10 +2109,8 @@ export class WorkingFileManager {
           `_runtime: ${stepsWithRuntime}/${workingFile.steps.length} steps`
       );
 
-      const definitionRevision = this.queueAccess.getDefinitionRevision();
-      // Definition revision is bumped by the queue's definition-mutating methods
-      // (append/insert/replace/delete/reorder); this just serializes the current
-      // in-memory value.
+      // Definition mutations advance the queue revision; runtime persistence
+      // carries forward whichever revision is newer on disk or in memory.
       workingFile.definitionRevision = definitionRevision;
 
       // Update workflow-level runtime state

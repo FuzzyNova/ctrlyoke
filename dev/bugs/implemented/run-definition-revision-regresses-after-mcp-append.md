@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by Claude (claude-cli), inspecting the live `more bug backlog2` run with `ctrlyoke history`; the exact writer that rolls it back was not pinned down
 - **Area:** `src/core/orchestration/RunContinuationService.ts` (`appendStepsToRun`), `src/core/PromptQueue.ts` (disk merge + `updateWorkingFileDirect` writes), `src/core/orchestration/TimelineRecorder.ts` (`commitDefinitionRevisionIfNewer`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -53,14 +53,18 @@ The extension session log for this run (`ctrlyoke-1790978827576.log`) shows 187
 
 ## Root Cause
 
-Not confirmed. The likely shape: the in-process `PromptQueue` keeps its own
-`state.definitionRevision` and writes it back on runtime persistence
-(`updateWorkingFileDirect(true, true)` after each step outcome, and similar
-`_runtime` writes). It only adopts the disk revision when `mergeDiskSteps` finds new
-steps (`PromptQueue.ts` ~1060-1066 and ~1110-1114). A runtime write made after an
-out-of-process append, but before the next merge that adopts it, could persist the
-queue's older revision over the appended one. The steps survive because the merge
-restores them, but the revision does not.
+Confirmed. `WorkingFileManager.updateWorkingFileDirect` read the current working
+file under its lock, but it serialized `queueAccess.getDefinitionRevision()`
+without comparing it to the disk revision. The normal merge path only copied the
+disk revision into queue state when `mergeDiskSteps` returned newly discovered
+steps. Once a prior merge had already put the appended steps into memory, a later
+runtime write found no new steps; the outcome and parallel-group settlement paths
+also use `skipMerge=true`. Either path could therefore write the queue's old
+revision over the append's newer revision while retaining the appended step list.
+The timeline writer was behaving as designed: `commitDefinitionRevisionIfNewer`
+does not emit an event for a revision the manifest already reflects, so a rolled
+back working-file revision supplied no newer definition snapshot to commit before
+the appended step's first output.
 
 ## Suggested Fix
 

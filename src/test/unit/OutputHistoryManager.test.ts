@@ -12,6 +12,8 @@ import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLine
 import { HistorySearchService } from "../../core/orchestration/HistorySearchService";
 import { getSharedHistorySearchIndexService } from "../../core/orchestration/HistorySearchIndexServiceRegistry";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
+import type { IWorkingFileQueueAccess } from "../../core/WorkingFileManager";
+import { RunContinuationService } from "../../core/orchestration/RunContinuationService";
 import { clearRunSummaryCache } from "../../core/orchestration/RunSummaryCache";
 import {
   EXECUTION_PHASES,
@@ -2117,6 +2119,117 @@ suite("OutputHistoryManager timeline-backed storage", () => {
 
     const manifest = await recorder.readManifest(historyInit.filePath);
     assert.strictEqual(manifest.definitionRevision, 2);
+  });
+
+  test("an out-of-process append survives a runtime write and is committed before its first output", async () => {
+    const historyInit = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-mcp-append-runtime-write"
+    );
+    const runFilePath = WorkflowPaths.runFilePath(
+      tempWorkspace,
+      historyInit.workflowKey,
+      historyInit.runRef
+    );
+    const initialStep = { prompt: "initial step" };
+    await fs.writeFile(
+      runFilePath,
+      JSON.stringify({
+        startedAt: 1,
+        definitionRevision: 1,
+        steps: [initialStep],
+        _runtime: {
+          currentIndex: 0,
+          executionState: EXECUTION_STATES.RUNNING,
+        },
+      })
+    );
+
+    const append = await RunContinuationService.appendStepsToRun(
+      tempWorkspace,
+      historyInit.workflowKey,
+      historyInit.runRef,
+      [{ prompt: "appended by MCP" }],
+      1,
+      100,
+      undefined,
+      true
+    );
+    let queueRevision = 1;
+    const queueAccess = {
+      getWorkingFilePath: () => runFilePath,
+      getSteps: () => append.workingFile.steps ?? [],
+      getCurrentIndex: () => 0,
+      getStatus: () => EXECUTION_STATES.RUNNING,
+      getDefinitionRevision: () => queueRevision,
+      setDefinitionRevision: (revision: number) => {
+        queueRevision = revision;
+      },
+      getWorkflowName: () => "wf-mcp-append-runtime-write",
+      mergeDiskSteps: () => [],
+      emitStateChange: () => undefined,
+      getFinalStepRuntime: () => undefined,
+      updateWorkflowProperty: () => undefined,
+    } as unknown as IWorkingFileQueueAccess;
+
+    // This is the in-process runtime flush after the cross-process append. The
+    // queue already has the appended steps, but its revision is still stale.
+    await new WorkingFileManager(queueAccess).updateWorkingFileDirect(true);
+    const persisted = JSON.parse(
+      await fs.readFile(runFilePath, "utf8")
+    ) as { definitionRevision: number; steps: WorkflowStep[] };
+    assert.ok(persisted.definitionRevision >= append.definitionRevision);
+    assert.strictEqual(
+      (persisted.steps[1] as { prompt: string }).prompt,
+      "appended by MCP"
+    );
+
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 } as const;
+    await manager.saveExecutionOutput(
+      historyInit.filePath,
+      target,
+      [
+        {
+          prompt: "appended by MCP",
+          response: "first output",
+          elapsed: 1,
+          isStreaming: false,
+          timestampMs: 200,
+          attemptIndex: 0,
+        },
+      ],
+      {
+        definitionRevision: persisted.definitionRevision,
+        definition: {
+          workflowName: "wf-mcp-append-runtime-write",
+          steps: persisted.steps,
+        },
+      }
+    );
+
+    const events = await recorder.readEvents(historyInit.filePath);
+    const committedIndex = events.findIndex(
+      (event) =>
+        event.eventType ===
+        TIMELINE_EVENT_TYPES.DEFINITION_REVISION_COMMITTED
+    );
+    const outputIndex = events.findIndex(
+      (event) =>
+        event.eventType === TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED &&
+        event.target.kind === FINAL_STEP_PHASES.QUEUE &&
+        event.target.stepIndex === 1
+    );
+    assert.ok(committedIndex >= 0);
+    assert.ok(outputIndex > committedIndex);
+    const committed = events[committedIndex];
+    assert.ok(
+      committed?.eventType ===
+        TIMELINE_EVENT_TYPES.DEFINITION_REVISION_COMMITTED &&
+        committed.payload.definition.steps.some(
+          (step) => "prompt" in step && step.prompt === "appended by MCP"
+        )
+    );
   });
 });
 

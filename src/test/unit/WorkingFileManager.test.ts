@@ -406,6 +406,33 @@ suite("WorkingFileManager", () => {
       assert.strictEqual(parsed.definitionRevision, 3);
     });
 
+    test("runtime-only writes preserve a newer disk definition revision", async () => {
+      const workingFilePath = tempFile("runtime-write-after-append");
+      const appendedStep = { prompt: "appended by MCP" };
+      await writeTempJson(workingFilePath, {
+        ...makeMinimalWorkingFile(),
+        definitionRevision: 2,
+        steps: [{ prompt: "do the thing" }, appendedStep],
+      });
+
+      const access = makeMockAccess(workingFilePath);
+      access.setDefinitionRevision(1);
+      access.getSteps = () => [
+        { prompt: "do the thing" },
+        appendedStep,
+      ];
+      await new WorkingFileManager(access).updateWorkingFileDirect(true);
+
+      const persisted = JSON.parse(
+        await fs.readFile(workingFilePath, "utf-8")
+      ) as WorkingFile;
+      assert.ok(persisted.definitionRevision! >= 2);
+      assert.deepStrictEqual(persisted.steps, [
+        { prompt: "do the thing" },
+        appendedStep,
+      ]);
+    });
+
     test("updateWorkingFileDirect strips lineage fields from existing run files", async () => {
       const workingFilePath = tempFile("runtime-timestamp");
       await writeTempJson(workingFilePath, {
