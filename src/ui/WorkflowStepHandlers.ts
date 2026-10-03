@@ -22,6 +22,7 @@ import type {
   StartNewRunInsteadMessage,
   UpdatePromptMessage,
   UpdateStepColorMessage,
+  UpdateStepsMessage,
 } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
@@ -203,6 +204,30 @@ export class WorkflowStepHandlers {
       await this.mutationCoordinator.publishViewIdentity(ctx);
     } catch (error) {
       Log.error("[WorkflowStepHandlers] Failed to update step color:", error);
+    }
+  }
+
+  async handleUpdateSteps(
+    ctx: WebviewClientContext,
+    message: UpdateStepsMessage
+  ): Promise<void> {
+    const orchestrator = this.getOrchestrator();
+    if (!orchestrator) {
+      Log.error("[WorkflowStepHandlers] WorkflowOrchestrator not initialized");
+      return;
+    }
+    try {
+      await this.mutationCoordinator.prepareDefinitionMutation(ctx, message);
+      await orchestrator.updateStepsInQueue(
+        this.mutationCoordinator.asWorkflowDefinitionMutation(message),
+        message.indices,
+        message.properties,
+        message.clearProperties,
+        ctx.clientId
+      );
+      await this.mutationCoordinator.publishViewIdentity(ctx);
+    } catch (error) {
+      Log.error("[WorkflowStepHandlers] Failed to update steps:", error);
     }
   }
 

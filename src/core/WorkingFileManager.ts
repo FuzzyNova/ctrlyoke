@@ -36,6 +36,7 @@ import { invalidateRunSummaryFor } from "./orchestration/RunSummaryCache";
 import { stripLegacyWorkingFileLineageMetadata } from "../utils/WorkingFileMetadata";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import {
+  assertBulkWorkflowStepUpdateAllowed,
   buildDefinitionSnapshot,
   buildFinalStepUpdate,
   buildClearUpdates,
@@ -1465,6 +1466,69 @@ export class WorkingFileManager {
       // Content/type edits are safe inside the rewound suffix. Structural
       // insert/delete/reorder operations retain the stricter pending-edit
       // guard until their prefix-identity behavior is explicitly audited.
+      { lineageRepository, allowDuringPendingRewind: true }
+    );
+  }
+
+  /** Apply one sparse property patch to several editable steps in one run write. */
+  public static async updateStepsAtRun(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    indices: number[],
+    properties: Partial<WorkflowStep>,
+    expectedDefinitionRevision: number,
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
+    clearProperties?: string[]
+  ): Promise<{
+    workingFile: WorkingFile;
+    definitionRevision: number;
+    descriptorRevision: number;
+  }> {
+    return this.mutateRunDefinition(
+      workspaceFolderPath,
+      workflowKey,
+      runRef,
+      expectedDefinitionRevision,
+      (source) => {
+        const steps = source.steps ?? [];
+        const unique = [...new Set(indices)];
+        if (unique.length !== indices.length || unique.length === 0) {
+          throw new Error(
+            "Update indices must be a non-empty set of unique indices"
+          );
+        }
+        for (const index of unique) {
+          if (!Number.isInteger(index) || index < 0 || index >= steps.length) {
+            throw new Error(`Invalid prompt index: ${index}`);
+          }
+          const rewindBoundary = source._runtime?.pendingRewind?.fromStepIndex;
+          if (rewindBoundary !== undefined && index < rewindBoundary) {
+            throw new Error(
+              `Cannot update step ${index + 1} before pending rewind boundary ${rewindBoundary + 1}`
+            );
+          }
+          assertEditableDuringExecution(source, steps, index, "update");
+          assertBulkWorkflowStepUpdateAllowed(
+            steps[index],
+            index,
+            properties as Record<string, unknown>,
+            clearProperties
+          );
+        }
+        const nextSteps = [...steps];
+        for (const index of unique) {
+          nextSteps[index] = mergeWorkflowStepUpdate(
+            steps[index],
+            properties,
+            clearProperties
+          );
+        }
+        return {
+          workingFile: { ...source, steps: nextSteps },
+          result: undefined,
+        };
+      },
       { lineageRepository, allowDuringPendingRewind: true }
     );
   }

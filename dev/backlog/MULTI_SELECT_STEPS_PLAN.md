@@ -618,9 +618,12 @@ which is cheap once the predicate exists. Clicks there stay single-select in v1.
          with one host mutation, revision bump, persistence write and broadcast per
          batch. The MCP `remove_step` tool preserves its single-index schema and
          delegates through the batch delete path (completed 2026-10-03).
-   - 2b: `UPDATE_STEPS` end to end on the host, with the exported bulk-editable key
-     constant. The Delete key, the bulk context-menu Delete, the "delete N steps"
-     modal, and the context-menu bulk Enable/Disable.
+   - [x] 2b: `UPDATE_STEPS` end to end on the host, with one exported bulk-editable
+         prompt-key constant shared by host validation and webview imports. The Delete
+         key, bulk context-menu Delete and Enable/Disable, count-aware confirmation,
+         atomic completed/locked/key validation, and one-broadcast batch undo behavior
+         are implemented (completed 2026-10-03).
+
 3. **Editor bulk mode and patch draft.**
    - Placeholder `Compartment` and state-specific placeholders.
    - The `bulkPatch` slice with MIXED display and the `setProperty`/`setStepEnabled`

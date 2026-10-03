@@ -70,8 +70,8 @@ export function getStepCapabilities(
   const runtime = step._runtime;
   const terminalRuntime =
     runtime !== undefined &&
-    "terminalStatus" in runtime &&
-    runtime.terminalStatus !== undefined;
+    (("terminalStatus" in runtime && runtime.terminalStatus !== undefined) ||
+      runtime.completedAt !== undefined);
   // RunContinuationService permanently protects the executed prefix and terminal
   // statuses. PromptQueue also protects the completed prefix while executing.
   const hostLocked =

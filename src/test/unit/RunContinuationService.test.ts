@@ -11,7 +11,10 @@ import {
   RUNNER_IDS,
   type ExecutionState,
 } from "../../types/DashboardConstants";
-import { RunContinuationService } from "../../core/orchestration/RunContinuationService";
+import {
+  assertEditableDuringExecution,
+  RunContinuationService,
+} from "../../core/orchestration/RunContinuationService";
 import type { ParallelGroupTopology } from "../../core/ParallelGroupTopology";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
@@ -22,6 +25,27 @@ import type {
   WorkflowKey,
   WorkingFile,
 } from "../../types/CtrlYokeTypes";
+
+suite("RunContinuationService addressed step editability", () => {
+  test("rejects completed and started indices before an addressed batch writes", () => {
+    const source: WorkingFile = {
+      startedAt: 0,
+      definitionRevision: 1,
+      steps: [
+        { prompt: "done", _runtime: { startedAt: 1, completedAt: 2 } },
+        { prompt: "pending" },
+      ],
+      _runtime: { currentIndex: 1, executionState: EXECUTION_STATES.IDLE },
+    };
+    assert.throws(
+      () => assertEditableDuringExecution(source, source.steps!, 0, "update"),
+      /Cannot update a completed step/
+    );
+    assert.doesNotThrow(() =>
+      assertEditableDuringExecution(source, source.steps!, 1, "update")
+    );
+  });
+});
 
 /**
  * A run's definition may be edited while a *different* run of the same lineage

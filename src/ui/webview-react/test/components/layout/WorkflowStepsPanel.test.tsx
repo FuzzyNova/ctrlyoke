@@ -135,6 +135,38 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
     );
   });
 
+  it("deletes the selected steps from the Delete key through confirmation", async () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "One" }, { prompt: "Two" }],
+    });
+    useEditorStore.getState().selectAllSteps();
+    render(<WorkflowStepsPanel />);
+    const listbox = screen.getByRole("listbox");
+
+    fireEvent.keyDown(listbox, { key: "Delete" });
+    expect(screen.getAllByText("Delete 2 steps?")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() =>
+      expect(postMessage).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.DELETE_PROMPT,
+        indices: [0, 1],
+      })
+    );
+    expect(useEditorStore.getState().multiSelection).toBeNull();
+  });
+
+  it("does not intercept Delete from an editable target", () => {
+    render(<WorkflowStepsPanel />);
+    const input = document.createElement("textarea");
+    screen.getByRole("listbox").append(input);
+    fireEvent.keyDown(input, { key: "Delete" });
+    expect(postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: MESSAGE_TYPES.DELETE_PROMPT })
+    );
+  });
+
   it("does not intercept Ctrl+C from textarea targets inside the steps panel", () => {
     render(<WorkflowStepsPanel />);
     const listbox = screen.getByRole("listbox");

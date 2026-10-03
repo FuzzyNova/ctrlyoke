@@ -840,6 +840,7 @@ const WorkflowStepsPanelInner: React.FC<{
   );
   const {
     openContextMenu,
+    handleDeleteSelection,
     handleSetStartPosition,
     contextMenuPortal,
     setPositionModal,
@@ -1748,6 +1749,20 @@ const WorkflowStepsPanelInner: React.FC<{
           if (e.key === KEYBOARD_KEYS.ESCAPE) {
             useEditorStore.getState().clearMultiSelection();
             deselect();
+            return;
+          }
+
+          if (
+            e.key === KEYBOARD_KEYS.DELETE &&
+            !e.ctrlKey &&
+            !e.metaKey &&
+            !e.altKey &&
+            !e.shiftKey &&
+            !isEditableClipboardTarget(e.target)
+          ) {
+            if (isExternallyManaged || isLineageReadOnly) return;
+            e.preventDefault();
+            handleDeleteSelection();
             return;
           }
 

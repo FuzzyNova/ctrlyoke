@@ -16,7 +16,7 @@ import type {
   WorkflowKey,
   WorkflowTokenTotals,
 } from "../../types/CtrlYokeTypes";
-import { EXECUTION_STATES } from "../../types/DashboardConstants";
+import { EXECUTION_STATES, STEP_TYPES } from "../../types/DashboardConstants";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import {
   clearRunSummaryCache,
@@ -417,10 +417,7 @@ suite("WorkingFileManager", () => {
 
       const access = makeMockAccess(workingFilePath);
       access.setDefinitionRevision(1);
-      access.getSteps = () => [
-        { prompt: "do the thing" },
-        appendedStep,
-      ];
+      access.getSteps = () => [{ prompt: "do the thing" }, appendedStep];
       await new WorkingFileManager(access).updateWorkingFileDirect(true);
 
       const persisted = JSON.parse(
@@ -1960,7 +1957,10 @@ suite("WorkingFileManager", () => {
 
       assert.ok(result.workingFile.finalStep);
       assert.ok("prompt" in result.workingFile.finalStep);
-      assert.strictEqual(result.workingFile.finalStep.prompt, "updated final prompt");
+      assert.strictEqual(
+        result.workingFile.finalStep.prompt,
+        "updated final prompt"
+      );
       assert.strictEqual(result.workingFile.finalStep.name, undefined);
       const persisted = JSON.parse(
         await fs.readFile(runFilePath, "utf8")
@@ -2064,6 +2064,97 @@ suite("WorkingFileManager", () => {
       assert.deepStrictEqual(
         result.workingFile.steps?.map((step) => step.color),
         ["#abcdef", "#abcdef"]
+      );
+      assert.strictEqual(result.definitionRevision, 2);
+    });
+
+    test("updateStepsAtRun rejects invalid and completed indices atomically", async () => {
+      const { workflowKey, runRef, runFilePath } = await makeIdleRun(
+        EXECUTION_STATES.IDLE,
+        true
+      );
+      await assert.rejects(
+        WorkingFileManager.updateStepsAtRun(
+          workspace,
+          workflowKey,
+          runRef,
+          [0, 5],
+          { enabled: false },
+          1
+        ),
+        /Invalid prompt index/
+      );
+      const unchanged = JSON.parse(
+        await fs.readFile(runFilePath, "utf8")
+      ) as WorkingFile;
+      assert.strictEqual(unchanged.steps?.[0].enabled, undefined);
+      assert.strictEqual(unchanged.definitionRevision, 1);
+
+      const completed = {
+        ...unchanged,
+        _runtime: { currentIndex: 1, executionState: EXECUTION_STATES.IDLE },
+        steps: [
+          { prompt: "first", _runtime: { startedAt: 1, completedAt: 2 } },
+          { prompt: "second" },
+        ],
+      } as WorkingFile;
+      await fs.writeFile(runFilePath, JSON.stringify(completed), "utf8");
+      await assert.rejects(
+        WorkingFileManager.updateStepsAtRun(
+          workspace,
+          workflowKey,
+          runRef,
+          [0, 1],
+          { enabled: false },
+          1
+        ),
+        /Cannot update a completed step/
+      );
+      const stillUnchanged = JSON.parse(
+        await fs.readFile(runFilePath, "utf8")
+      ) as WorkingFile;
+      assert.strictEqual(stillUnchanged.steps?.[1].enabled, undefined);
+      assert.strictEqual(stillUnchanged.definitionRevision, 1);
+    });
+
+    test("updateStepsAtRun rejects prompt-only keys on script steps and bumps once", async () => {
+      const { workflowKey, runRef, runFilePath } = await makeIdleRun(
+        EXECUTION_STATES.IDLE,
+        true
+      );
+      const before = JSON.parse(
+        await fs.readFile(runFilePath, "utf8")
+      ) as WorkingFile;
+      before.steps![0] = { type: STEP_TYPES.SCRIPT, script: "echo one" };
+      await fs.writeFile(runFilePath, JSON.stringify(before), "utf8");
+      await assert.rejects(
+        WorkingFileManager.updateStepsAtRun(
+          workspace,
+          workflowKey,
+          runRef,
+          [0, 1],
+          { harness: "codex-cli" },
+          1
+        ),
+        /Cannot bulk update harness on script step 1/
+      );
+      const unchanged = JSON.parse(
+        await fs.readFile(runFilePath, "utf8")
+      ) as WorkingFile;
+      assert.strictEqual(unchanged.steps?.[1].enabled, undefined);
+      assert.strictEqual(unchanged.definitionRevision, 1);
+
+      const result = await WorkingFileManager.updateStepsAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        [0, 1],
+        { enabled: false },
+        1
+      );
+      assert.deepStrictEqual(
+        result.workingFile.steps?.map((step) => step.enabled),
+        [false, false]
       );
       assert.strictEqual(result.definitionRevision, 2);
     });

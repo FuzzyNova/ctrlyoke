@@ -21,6 +21,7 @@ function TestHarness({
   deleteIndex = 0,
   executionState = EXECUTION_STATES.IDLE,
   isExternallyManaged = false,
+  confirmDeleteOperations = false,
 }: {
   step: WorkflowStep;
   pendingRewind?: { fromStepIndex: number };
@@ -38,19 +39,21 @@ function TestHarness({
   deleteIndex?: number;
   executionState?: (typeof EXECUTION_STATES)[keyof typeof EXECUTION_STATES];
   isExternallyManaged?: boolean;
+  confirmDeleteOperations?: boolean;
 }) {
-  const { openContextMenu, contextMenuPortal } = useStepContextMenu({
-    isExternallyManaged,
-    canChangeStartPosition: true,
-    canPasteStep: true,
-    executionState,
-    confirmResetOperations: false,
-    confirmDeleteOperations: false,
-    totalSteps,
-    currentStep,
-    pendingRewind,
-    parallelGroups,
-  });
+  const { openContextMenu, contextMenuPortal, deleteModal } =
+    useStepContextMenu({
+      isExternallyManaged,
+      canChangeStartPosition: true,
+      canPasteStep: true,
+      executionState,
+      confirmResetOperations: false,
+      confirmDeleteOperations,
+      totalSteps,
+      currentStep,
+      pendingRewind,
+      parallelGroups,
+    });
 
   return (
     <>
@@ -72,6 +75,7 @@ function TestHarness({
         Open menu
       </button>
       {contextMenuPortal}
+      {deleteModal}
     </>
   );
 }
@@ -187,6 +191,74 @@ describe("useStepContextMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
     fireEvent.click(screen.getByRole("button", { name: "Clear Selection" }));
     expect(useEditorStore.getState().multiSelection).toBeNull();
+  });
+
+  it("offers bulk enable/disable and delete with counts for a selected row", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "One" }, { prompt: "Two", enabled: false }],
+    });
+    useEditorStore.getState().selectAllSteps();
+    render(<TestHarness step={{ prompt: "One" }} totalSteps={2} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    expect(
+      screen.getByRole("button", { name: "Disable 2 steps" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Delete 2 steps" })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Disable 2 steps" }));
+    expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.UPDATE_STEPS,
+      indices: [0, 1],
+      properties: { enabled: false },
+    });
+  });
+
+  it("shows the bulk delete confirmation with the selection count", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "One" }, { prompt: "Two" }],
+    });
+    useEditorStore.getState().selectAllSteps();
+    render(
+      <TestHarness
+        step={{ prompt: "One" }}
+        totalSteps={2}
+        confirmDeleteOperations={true}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete 2 steps" }));
+
+    expect(screen.getAllByText("Delete 2 steps?")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.DELETE_PROMPT,
+      indices: [0, 1],
+    });
+    expect(useEditorStore.getState().multiSelection).toBeNull();
+  });
+
+  it("disables bulk actions with a reason and selection fix", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [
+        { prompt: "Done", _runtime: { completedAt: Date.now() } },
+        { prompt: "Pending" },
+      ],
+    });
+    useEditorStore.getState().selectAllSteps();
+    render(<TestHarness step={{ prompt: "Done" }} totalSteps={2} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    for (const label of ["Disable 2 steps", "Delete 2 steps"]) {
+      expect(screen.getByRole("button", { name: label })).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: label }).getAttribute("title")
+      ).toContain("Remove completed or running steps from the selection");
+    }
   });
 
   it("switches the output action to Show output when the step is hidden", () => {

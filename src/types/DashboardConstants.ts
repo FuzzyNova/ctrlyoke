@@ -277,6 +277,7 @@ export const MESSAGE_TYPES = {
   EXECUTE_PROMPT_ERROR: "executePromptError", // Extension -> Webview: Notify failure so editor can restore content
   UPDATE_PROMPT: "updatePrompt", // Update existing prompt in queue
   UPDATE_STEP_COLOR: "updateStepColor", // Update only a step's authored identity color
+  UPDATE_STEPS: "updateSteps", // Apply one partial property patch to multiple editable steps
   INSERT_WORKFLOW_STEP: "insertWorkflowStep", // Insert a fully-shaped workflow step after a selected index
   CANCEL_EDIT: "cancelEdit", // Exit edit mode
   SELECT_PROMPT_FOR_EDIT: "selectPromptForEdit", // Load prompt into editor
@@ -687,6 +688,24 @@ export const MESSAGE_TYPES = {
   /** Webview -> Extension: native VS Code operational user feedback */
   SHOW_NATIVE_FEEDBACK: "showNativeFeedback",
 } as const;
+
+/** Prompt-step fields supported by bulk property updates. */
+export const BULK_EDITABLE_PROMPT_STEP_KEYS = [
+  "enabled",
+  "color",
+  "harness",
+  "model",
+  "executionMode",
+  "agent",
+  "mcpServers",
+  "hooks",
+  "errorBehavior",
+  "skills",
+  "secrets",
+  "priorContext",
+  "additionalArgs",
+  "toolPermissions",
+] as const;
 
 /** Stable action identifiers used by the license-management RPC responses. */
 export const LICENSE_ACTIONS = {
@@ -3801,6 +3820,7 @@ export type RunSummaryCacheStatus =
 // KEYBOARD KEYS - Shared browser keyboard event key values
 // ============================================================================
 export const KEYBOARD_KEYS = {
+  DELETE: "Delete",
   ENTER: "Enter",
   ESCAPE: "Escape",
   F3: "F3",

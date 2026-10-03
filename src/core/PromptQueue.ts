@@ -83,8 +83,10 @@ import { WorkingFileManager } from "./WorkingFileManager";
 import type { IWorkingFileQueueAccess } from "./WorkingFileManager";
 import { WorkflowStateMachine } from "./WorkflowStateMachine";
 import {
+  assertBulkWorkflowStepUpdateAllowed,
   stripStepRuntime,
   stripViewOnlyWorkflowStepFields,
+  mergeWorkflowStepUpdate,
 } from "./WorkflowStepSanitizer";
 import {
   RunContinuationService,
@@ -2743,6 +2745,66 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       this.state.steps = steps;
       this.workflowFile = this.workflowFile
         ? { ...this.workflowFile, steps: [...steps] }
+        : this.workflowFile;
+      const baseDefinitionRevision = this.bumpDefinitionRevision();
+      await this.persistDefinitionMutation(baseDefinitionRevision);
+      this.emitStateChange();
+    });
+  }
+
+  /** Atomically apply one sparse property patch to multiple editable steps. */
+  public async updateSteps(
+    indices: number[],
+    properties: Record<string, unknown>,
+    clearProperties?: string[]
+  ): Promise<void> {
+    await this.workingFileManager.runInQueue(async () => {
+      const unique = [...new Set(indices)];
+      if (unique.length !== indices.length || unique.length === 0) {
+        throw new Error(
+          "Update indices must be a non-empty set of unique indices"
+        );
+      }
+      for (const index of unique) {
+        if (
+          !Number.isInteger(index) ||
+          index < 0 ||
+          index >= this.state.steps.length
+        ) {
+          throw new Error(`Invalid prompt index: ${index}`);
+        }
+        this.assertPendingRewindSuffixIndex(index, "update");
+        const step = this.state.steps[index];
+        if (
+          this.stateMachine.status === EXECUTION_STATES.COMPLETED ||
+          index < this.state.currentIndex ||
+          this.state.completedIndices.has(String(index)) ||
+          step._runtime?.completedAt !== undefined ||
+          step._runtime?.terminalStatus !== undefined
+        ) {
+          throw new Error("Cannot update a completed step");
+        }
+        assertStepMutable(step, "update");
+        this.assertEditableDuringExecution(index, "update");
+        assertBulkWorkflowStepUpdateAllowed(
+          step,
+          index,
+          properties,
+          clearProperties
+        );
+      }
+
+      const nextSteps = [...this.state.steps];
+      for (const index of unique) {
+        nextSteps[index] = mergeWorkflowStepUpdate(
+          this.state.steps[index],
+          properties as Partial<WorkflowStep>,
+          clearProperties
+        );
+      }
+      this.state.steps = nextSteps;
+      this.workflowFile = this.workflowFile
+        ? { ...this.workflowFile, steps: [...nextSteps] }
         : this.workflowFile;
       const baseDefinitionRevision = this.bumpDefinitionRevision();
       await this.persistDefinitionMutation(baseDefinitionRevision);

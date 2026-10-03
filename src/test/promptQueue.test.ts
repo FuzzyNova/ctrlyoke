@@ -642,6 +642,56 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(queue.getState().definitionRevision, revision + 1);
     });
 
+    test("bulk updates validate every target and bump the revision once", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      const revision = queue.getState().definitionRevision;
+      await assert.rejects(
+        queue.updateSteps([0, 99], { enabled: false }),
+        /Invalid prompt index/
+      );
+      assert.deepStrictEqual(
+        queue.getState().steps.map((step) => step.enabled),
+        [undefined, undefined, undefined]
+      );
+      assert.strictEqual(queue.getState().definitionRevision, revision);
+
+      await queue.updateSteps([0, 2], { enabled: false });
+      assert.deepStrictEqual(
+        queue.getState().steps.map((step) => step.enabled),
+        [false, undefined, false]
+      );
+      assert.strictEqual(queue.getState().definitionRevision, revision + 1);
+    });
+
+    test("bulk updates reject prompt-only properties on script steps atomically", async () => {
+      queue.loadPrompts(
+        createPromptFile([
+          { type: STEP_TYPES.SCRIPT, script: "echo one" },
+          { prompt: "two" },
+        ] as PromptStep[])
+      );
+      const revision = queue.getState().definitionRevision;
+      await assert.rejects(
+        queue.updateSteps([0, 1], { harness: "codex-cli" }),
+        /Cannot bulk update harness on script step 1/
+      );
+      assert.strictEqual(queue.getState().steps[0].enabled, undefined);
+      assert.strictEqual(queue.getState().steps[1].enabled, undefined);
+      assert.strictEqual(queue.getState().definitionRevision, revision);
+    });
+
+    test("bulk updates reject completed steps", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      await markQueueCompleted(queue);
+      const revision = queue.getState().definitionRevision;
+      await assert.rejects(
+        queue.updateSteps([0, 1], { enabled: false }),
+        /Cannot update a completed step/
+      );
+      assert.strictEqual(queue.getState().steps[0].enabled, undefined);
+      assert.strictEqual(queue.getState().definitionRevision, revision);
+    });
+
     test("should not allow deleting the current prompt while pause is pending", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await startQueueExecution(queue);

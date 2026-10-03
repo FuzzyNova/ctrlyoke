@@ -3730,6 +3730,32 @@ describe("RETRY_ATTEMPT_CHANGED", () => {
 // ---------------------------------------------------------------------------
 
 describe("STEPS_EXTENDED", () => {
+  it("records one bulk enable as one undo entry and restores every step", () => {
+    renderHook(() => useMessageHandler());
+    const initial = [
+      makePrompt("first"),
+      makePrompt("second", { enabled: false }),
+      makePrompt("third", { enabled: false }),
+    ];
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "wf.yaml",
+        steps: initial,
+      });
+    });
+    act(() => {
+      dispatch(MESSAGE_TYPES.STEPS_EXTENDED, {
+        steps: initial.map((step) => ({ ...step, enabled: true })),
+      });
+    });
+
+    expect(useWorkflowStore.temporal.getState().pastStates).toHaveLength(1);
+    act(() => useWorkflowStore.temporal.getState().undo());
+    expect(
+      useWorkflowStore.getState().steps.map((step) => step.enabled)
+    ).toEqual([undefined, false, false]);
+  });
+
   it("adopts the appended definition revision before execution completes", () => {
     renderHook(() => useMessageHandler());
     useUiStore.setState({
@@ -4005,6 +4031,35 @@ describe("PROMPT_DELETED", () => {
 
     expect(useWorkflowStore.getState().steps).toHaveLength(1);
     expect(useUiStore.getState().appliedDefinitionRevision).toBe(8);
+  });
+
+  it("records one bulk delete as one undo entry and restores every deleted step", () => {
+    renderHook(() => useMessageHandler());
+    const initial = [
+      makePrompt("first"),
+      makePrompt("second"),
+      makePrompt("third"),
+    ];
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "wf.yaml",
+        steps: initial,
+      });
+    });
+    act(() => {
+      dispatch(MESSAGE_TYPES.PROMPT_DELETED, {
+        fileName: "wf.yaml",
+        steps: [],
+      });
+    });
+
+    expect(useWorkflowStore.temporal.getState().pastStates).toHaveLength(1);
+    act(() => useWorkflowStore.temporal.getState().undo());
+    expect(
+      useWorkflowStore
+        .getState()
+        .steps.map((step) => (step as PromptStep).prompt)
+    ).toEqual(["first", "second", "third"]);
   });
 
   it("ignores a delete for another workflow without adopting its revision", () => {

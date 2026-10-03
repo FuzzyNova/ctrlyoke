@@ -2878,6 +2878,23 @@ export class WorkflowInstance
     );
   }
 
+  async updateStepsInQueue(
+    indices: number[],
+    properties: Record<string, unknown>,
+    clearProperties?: string[]
+  ): Promise<void> {
+    await this.promptQueue.updateSteps(indices, properties, clearProperties);
+    const currentState = this.promptQueue.getState();
+    this.dashboardSink?.updateStepsExtended(
+      currentState.steps,
+      this.promptQueue.getWorkflowFile().finalStep ?? null,
+      undefined,
+      currentState.definitionRevision,
+      undefined,
+      currentState.parallelGroups
+    );
+  }
+
   async updateFinalStepInQueue(
     finalStep: WorkflowStep | null,
     clearProperties?: string[]

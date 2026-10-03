@@ -185,12 +185,18 @@ function sameWorkingFilePath(
 }
 
 function buildPromptStepChange(
-  text: string,
+  text: string | undefined,
   properties: unknown,
   promptName?: string,
   clearProperties?: string[]
 ): { replace: WorkflowStep; clearProperties?: string[] } {
   const props = properties as Record<string, unknown>;
+  if (text === undefined) {
+    return {
+      replace: buildPromptStepProperties(properties) as WorkflowStep,
+      clearProperties,
+    };
+  }
   return props?.type === STEP_TYPES.SCRIPT
     ? {
         replace: buildScriptStepFromProperties(text, props, promptName),
@@ -3656,6 +3662,49 @@ export class WorkflowOrchestrator {
           this.lineageRepository
         ).then((written) => written.definitionRevision),
       { kind: "stepColor", indices }
+    );
+  }
+
+  async updateStepsInQueue(
+    mutation: WorkflowDefinitionMutation | undefined,
+    indices: number[],
+    properties: Record<string, unknown>,
+    clearProperties?: string[],
+    clientId: string = this.PANEL_CLIENT_ID
+  ): Promise<void> {
+    const updateProperties = buildPromptStepChange(
+      undefined,
+      properties,
+      undefined,
+      clearProperties
+    ).replace as unknown as Record<string, unknown>;
+    if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
+      await this.getInstanceForClient(clientId).updateStepsInQueue(
+        indices,
+        updateProperties,
+        clearProperties
+      );
+      await this.recordDefinitionWrite(undefined, clientId);
+      return;
+    }
+    const runAddress = mutation.address;
+    await this.applyRunAddressedMutation(
+      runAddress,
+      clientId,
+      mutation.expectedDefinitionRevision,
+      (instance) =>
+        instance.updateStepsInQueue(indices, updateProperties, clearProperties),
+      (workspaceRoot) =>
+        WorkingFileManager.updateStepsAtRun(
+          workspaceRoot,
+          runAddress.workflowKey,
+          runAddress.runRef,
+          indices,
+          updateProperties as Partial<WorkflowStep>,
+          mutation.expectedDefinitionRevision,
+          this.lineageRepository,
+          clearProperties
+        ).then((written) => written.definitionRevision)
     );
   }
 

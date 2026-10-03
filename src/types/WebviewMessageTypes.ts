@@ -2299,6 +2299,15 @@ export interface UpdateStepColorMessage {
   mutation?: WorkflowDefinitionMutation;
 }
 
+/** Apply one property patch to several editable steps. */
+export interface UpdateStepsMessage {
+  type: typeof MESSAGE_TYPES.UPDATE_STEPS;
+  indices: number[];
+  properties: Record<string, unknown>;
+  clearProperties?: string[];
+  mutation?: WorkflowDefinitionMutation;
+}
+
 export interface DeletePromptMessage {
   type: typeof MESSAGE_TYPES.DELETE_PROMPT;
   indices: number[];

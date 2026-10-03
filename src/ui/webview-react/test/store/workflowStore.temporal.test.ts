@@ -308,6 +308,29 @@ describe("STEPS_EXTENDED handler simulation", () => {
 // Fix: setFinalStep paused in handler.
 // ---------------------------------------------------------------------------
 describe("PROMPT_DELETED handler simulation", () => {
+  it("one bulk delete creates one undo entry and restores every selected step", () => {
+    const original = [
+      makePrompt(),
+      makePrompt({ prompt: "second" }),
+      makePrompt({ prompt: "third" }),
+    ];
+    loadWorkflow(original);
+
+    // One PROMPT_DELETED broadcast carries the final batch result.
+    store().setPrompts([]);
+    temporal().pause();
+    store().setFinalStep(null);
+    temporal().resume();
+    expect(temporal().pastStates).toHaveLength(1);
+
+    temporal().undo();
+    expect(store().steps.map((step) => (step as any).prompt)).toEqual([
+      "hello world",
+      "second",
+      "third",
+    ]);
+  });
+
   it("records exactly 1 entry when a prompt is deleted", () => {
     loadWorkflow([makePrompt(), makePrompt({ prompt: "second" })]);
 
@@ -358,6 +381,27 @@ describe("PROMPT_DELETED handler simulation", () => {
 
     expect(store().steps).toHaveLength(2);
     expect((store().steps[1] as any)._runtime?.sessionId).toBe("s2");
+  });
+});
+
+describe("bulk enable STEPS_EXTENDED handler simulation", () => {
+  it("creates one undo entry and undo restores all selected enabled values", () => {
+    loadWorkflow([
+      makePrompt(),
+      makePrompt({ prompt: "second", enabled: false }),
+      makePrompt({ prompt: "third", enabled: false }),
+    ]);
+
+    store().setPrompts(
+      store().steps.map((step) => ({ ...step, enabled: true }))
+    );
+    expect(temporal().pastStates).toHaveLength(1);
+    temporal().undo();
+    expect(store().steps.map((step) => (step as any).enabled)).toEqual([
+      undefined,
+      false,
+      false,
+    ]);
   });
 });
 
