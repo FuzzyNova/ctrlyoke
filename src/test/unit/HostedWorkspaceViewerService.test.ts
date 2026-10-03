@@ -36,6 +36,10 @@ class BudgetedWorkspaceViewerService extends HostedWorkspaceViewerService {
   protected override readonly searchMaxFiles = BUDGETED_SEARCH_MAX_FILES;
 }
 
+class DiffCappedWorkspaceViewerService extends HostedWorkspaceViewerService {
+  protected override readonly diffSideMaxBytes = 8;
+}
+
 suite("HostedWorkspaceViewerService", function () {
   const tempRoots: string[] = [];
 
@@ -1508,6 +1512,55 @@ suite("HostedWorkspaceViewerService", function () {
   // ── diff payloads ─────────────────────────────────────────────────────────
 
   suite("diff payloads", () => {
+    test("reports oversized diff sides instead of presenting them as added text", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "large.txt", "0123456789abcdef\n", "Large file");
+      fs.writeFileSync(
+        path.join(root, "large.txt"),
+        "0123456789abcdef\nchange\n"
+      );
+
+      const result = await new DiffCappedWorkspaceViewerService(root).getDiff(
+        "large.txt"
+      );
+
+      assert.strictEqual(result.kind, "modified");
+      assert.strictEqual(result.payloadKind, DIFF_PAYLOAD_KINDS.TOO_LARGE);
+      assert.strictEqual("oldContent" in result, false);
+      assert.strictEqual("newContent" in result, false);
+    });
+
+    test("keeps genuinely absent sides for added and deleted files", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "removed.txt", "old\n", "Old file");
+      fs.unlinkSync(path.join(root, "removed.txt"));
+      fs.writeFileSync(path.join(root, "added.txt"), "new\n");
+      runGit(root, "add", "added.txt");
+      const svc = new HostedWorkspaceViewerService(root);
+
+      const [added, deleted] = await Promise.all([
+        svc.getDiff("added.txt"),
+        svc.getDiff("removed.txt"),
+      ]);
+
+      assert.strictEqual(added.kind, "added");
+      assert.strictEqual(added.payloadKind, DIFF_PAYLOAD_KINDS.TEXT);
+      if (added.payloadKind === DIFF_PAYLOAD_KINDS.TEXT) {
+        assert.strictEqual(added.oldContent, "");
+        assert.strictEqual(added.newContent, "new\n");
+      }
+      assert.strictEqual(deleted.kind, "deleted");
+      assert.strictEqual(deleted.payloadKind, DIFF_PAYLOAD_KINDS.TEXT);
+      if (deleted.payloadKind === DIFF_PAYLOAD_KINDS.TEXT) {
+        assert.strictEqual(deleted.oldContent, "old\n");
+        assert.strictEqual(deleted.newContent, "");
+      }
+    });
+
     test("returns image bytes as data URIs for a working-tree image diff", async () => {
       const root = createWorkspace();
       runGit(root, "init");

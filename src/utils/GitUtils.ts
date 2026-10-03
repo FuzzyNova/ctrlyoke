@@ -504,28 +504,60 @@ export async function getCommitDiff(
 export async function getBlobBytes(
   repoRoot: string,
   ref: string,
-  gitRelPath: string
+  gitRelPath: string,
+  maxBytes = GIT_MAX_BUFFER
 ): Promise<Buffer | null> {
+  const objectSpec = ref === ":" ? `:${gitRelPath}` : `${ref}:${gitRelPath}`;
+  let sizeResult: { stdout: string; stderr: string };
   try {
-    const result = await execFilePromisified(
+    sizeResult = await execFileAsync(
       "git",
-      [
-        "-C",
-        repoRoot,
-        "show",
-        ref === ":" ? `:${gitRelPath}` : `${ref}:${gitRelPath}`,
-      ],
-      {
-        timeout: GIT_TIMEOUT_MS,
-        maxBuffer: GIT_MAX_BUFFER,
-        encoding: "buffer",
-      }
+      ["-C", repoRoot, "cat-file", "-s", objectSpec],
+      { encoding: "buffer" }
     );
-    return Buffer.isBuffer(result.stdout)
-      ? result.stdout
-      : Buffer.from(result.stdout);
-  } catch {
-    return null;
+  } catch (error) {
+    const stderr =
+      error instanceof Error && "stderr" in error
+        ? String((error as NodeJS.ErrnoException & { stderr?: unknown }).stderr)
+        : "";
+    const missingPath =
+      stderr.includes("does not exist in") ||
+      stderr.includes("exists on disk, but not in");
+    const missingRootCommitParent =
+      ref.endsWith("^") && stderr.includes("invalid object name");
+    if (missingPath || missingRootCommitParent) return null;
+    throw error;
+  }
+
+  const size = Number(sizeResult.stdout.trim());
+  if (!Number.isSafeInteger(size) || size < 0) {
+    throw new Error(`Git returned an invalid blob size for ${objectSpec}`);
+  }
+  if (size > maxBytes) throw new GitBlobTooLargeError(size, maxBytes);
+
+  const result = await execFilePromisified(
+    "git",
+    ["-C", repoRoot, "show", objectSpec],
+    {
+      timeout: getGitTimeoutMs(),
+      maxBuffer: Math.min(GIT_MAX_BUFFER, maxBytes + 1),
+      encoding: "buffer",
+    }
+  );
+  return Buffer.isBuffer(result.stdout)
+    ? result.stdout
+    : Buffer.from(result.stdout);
+}
+
+export class GitBlobTooLargeError extends Error {
+  constructor(
+    readonly size: number,
+    readonly maxBytes: number
+  ) {
+    super(
+      `Git blob is ${size} bytes; the maximum diff side size is ${maxBytes}`
+    );
+    this.name = "GitBlobTooLargeError";
   }
 }
 

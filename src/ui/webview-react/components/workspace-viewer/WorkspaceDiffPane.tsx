@@ -74,6 +74,8 @@ export const WorkspaceDiffPane: React.FC = () => {
           return { kind: "image", image: file.image ?? {} };
         case DIFF_PAYLOAD_KINDS.BINARY:
           return { kind: "binary" };
+        case DIFF_PAYLOAD_KINDS.TOO_LARGE:
+          return { kind: DIFF_PAYLOAD_KINDS.TOO_LARGE };
         default:
           return {
             kind: "hunks",
@@ -115,6 +117,8 @@ export const WorkspaceDiffPane: React.FC = () => {
         return { kind: "image", image: diffImage ?? {} };
       case DIFF_PAYLOAD_KINDS.BINARY:
         return { kind: "binary" };
+      case DIFF_PAYLOAD_KINDS.TOO_LARGE:
+        return { kind: DIFF_PAYLOAD_KINDS.TOO_LARGE };
       default:
         return {
           kind: "content",

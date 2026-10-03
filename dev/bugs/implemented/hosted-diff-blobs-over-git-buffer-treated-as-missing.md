@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (Claude)
 - **Area:** `src/utils/GitUtils.ts` (`getBlobBytes`), `src/server/HostedWorkspaceViewerService.ts` (diff builders)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

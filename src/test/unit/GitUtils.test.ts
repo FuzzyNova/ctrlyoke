@@ -25,6 +25,7 @@ import {
   getBranchUpstream,
   isCommitAncestor,
   getBlobBytes,
+  GitBlobTooLargeError,
   getFileHistoryCommits,
   getStashFiles,
   getWorkingTreeDiff,
@@ -210,6 +211,30 @@ suite("GitUtils.gitRefExists", function () {
     assert.strictEqual(
       await getBlobBytes(workspaceRoot, "HEAD", "missing.png"),
       null
+    );
+  });
+
+  test("rejects oversized blobs before reading their contents", async () => {
+    await writeWorkspaceFile("large.txt", "0123456789");
+    runGit(["add", "large.txt"]);
+    runGit(["commit", "-m", "Add large blob"]);
+
+    await assert.rejects(
+      getBlobBytes(workspaceRoot, "HEAD", "large.txt", 4),
+      (error: unknown) =>
+        error instanceof GitBlobTooLargeError &&
+        error.size === 10 &&
+        error.maxBytes === 4
+    );
+  });
+
+  test("propagates Git errors that do not mean a missing path", async () => {
+    await assert.rejects(
+      getBlobBytes(
+        path.join(workspaceRoot, "missing-repository"),
+        "HEAD",
+        "missing.txt"
+      )
     );
   });
 

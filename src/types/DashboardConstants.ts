@@ -2822,6 +2822,7 @@ export const DIFF_PAYLOAD_KINDS = {
   TEXT: "text",
   IMAGE: "image",
   BINARY: "binary",
+  TOO_LARGE: "tooLarge",
 } as const;
 
 export type DiffPayloadKind =

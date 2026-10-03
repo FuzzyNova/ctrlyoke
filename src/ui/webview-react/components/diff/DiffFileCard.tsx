@@ -103,6 +103,8 @@ function detailToSource(
       return { kind: DIFF_PAYLOAD_KINDS.IMAGE, image: detail.image };
     case DIFF_PAYLOAD_KINDS.BINARY:
       return { kind: DIFF_PAYLOAD_KINDS.BINARY };
+    case DIFF_PAYLOAD_KINDS.TOO_LARGE:
+      return { kind: DIFF_PAYLOAD_KINDS.TOO_LARGE };
   }
 }
 
@@ -131,6 +133,7 @@ export interface DiffFileCardProps {
       }
     | { kind: typeof DIFF_PAYLOAD_KINDS.IMAGE; image: WorkspaceImageDiffSides }
     | { kind: typeof DIFF_PAYLOAD_KINDS.BINARY }
+    | { kind: typeof DIFF_PAYLOAD_KINDS.TOO_LARGE }
     | DeferredDiffFileSource;
 
   language?: string;
@@ -405,6 +408,12 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
               </p>
             )}
           </div>
+        );
+      case DIFF_PAYLOAD_KINDS.TOO_LARGE:
+        return (
+          <p className="my-1 border-t border-panel-border px-2.5 py-2 text-xs italic text-description-fg">
+            Diff preview unavailable: file too large to diff
+          </p>
         );
       case DIFF_FILE_SOURCE_KINDS.DEFERRED:
         return null;

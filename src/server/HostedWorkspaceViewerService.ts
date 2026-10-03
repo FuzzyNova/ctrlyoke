@@ -94,6 +94,7 @@ import {
   getCommitDiff,
   getCommitInfo,
   getBlobBytes,
+  GitBlobTooLargeError,
   getChangedFilesWithBinaryStatus,
   type GitChangedFile,
   getIgnoredEntryNames,
@@ -130,6 +131,7 @@ import {
 const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 10_000;
 export const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
+const DIFF_SIDE_TOO_LARGE = Symbol("diff-side-too-large");
 const BINARY_CHECK_BYTES = 8192;
 const WORKSPACE_TREE_STAT_CONCURRENCY = 8;
 const SEARCH_MAX_DURATION_MS = 3000;
@@ -447,6 +449,9 @@ export class HostedWorkspaceViewerService {
    * budget does not.
    */
   protected readonly searchMaxFiles: number = 5000;
+
+  /** Shared cap for blob and working-tree diff sides. */
+  protected readonly diffSideMaxBytes: number = MAX_FILE_SIZE;
 
   // ── Multi-root helpers ───────────────────────────────────────────────────
   //
@@ -1813,18 +1818,21 @@ export class HostedWorkspaceViewerService {
     );
     const kind: DiffKind = fileStatus?.kind ?? "modified";
 
-    const oldBytes = await getBlobBytes(repoRoot, "HEAD", gitPath);
-    let newBytes: Buffer | null = null;
+    const oldBytes = await this.readGitDiffBytes(repoRoot, "HEAD", gitPath);
+    let newBytes: Buffer | null | typeof DIFF_SIDE_TOO_LARGE = null;
 
     if (kind !== SCM_FILE_KINDS.DELETED) {
-      try {
-        newBytes = await fs.promises.readFile(resolved);
-      } catch {
-        newBytes = null;
-      }
+      newBytes = await this.readWorkingTreeFileDiffBytes(resolved);
     }
 
     const responsePath = fileStatus?.path ?? normalizedRelPath;
+    if (oldBytes === DIFF_SIDE_TOO_LARGE || newBytes === DIFF_SIDE_TOO_LARGE) {
+      return {
+        path: responsePath,
+        kind,
+        payloadKind: DIFF_PAYLOAD_KINDS.TOO_LARGE,
+      };
+    }
     if (isImageRefPath(resolved)) {
       const image = this.buildImageDiffSides(
         oldBytes,
@@ -1899,8 +1907,8 @@ export class HostedWorkspaceViewerService {
     repoRoot: string,
     newGitPath: string,
     oldGitPath: string,
-    oldBytes: Buffer | null,
-    newBytes: Buffer | null,
+    oldBytes: Buffer | null | typeof DIFF_SIDE_TOO_LARGE,
+    newBytes: Buffer | null | typeof DIFF_SIDE_TOO_LARGE,
     changeType: DiffChangeType,
     includeOldPath: boolean
   ): WorkspaceGitRefDiffEntry | null {
@@ -1922,6 +1930,10 @@ export class HostedWorkspaceViewerService {
         : {}),
       changeType,
     };
+
+    if (oldBytes === DIFF_SIDE_TOO_LARGE || newBytes === DIFF_SIDE_TOO_LARGE) {
+      return { ...entry, payloadKind: DIFF_PAYLOAD_KINDS.TOO_LARGE };
+    }
 
     if (isImageRefPath(newGitPath)) {
       const image = this.buildImageDiffSides(
@@ -2287,8 +2299,8 @@ export class HostedWorkspaceViewerService {
     }
 
     const [oldBytes, newBytes, commitInfo] = await Promise.all([
-      getBlobBytes(repoRoot, `${resolvedCommit}^`, parentPath),
-      getBlobBytes(repoRoot, resolvedCommit, commitPath),
+      this.readGitDiffBytes(repoRoot, `${resolvedCommit}^`, parentPath),
+      this.readGitDiffBytes(repoRoot, resolvedCommit, commitPath),
       getCommitInfo(repoRoot, resolvedCommit),
     ]);
     const changeType = this.diffChangeType(changedFile.status);
@@ -2757,12 +2769,40 @@ export class HostedWorkspaceViewerService {
     repoRoot: string,
     gitPath: string,
     changeType: DiffChangeType
-  ): Promise<Buffer | null> {
+  ): Promise<Buffer | null | typeof DIFF_SIDE_TOO_LARGE> {
     if (changeType === DIFF_CHANGE_TYPES.DELETED) return null;
+    return this.readWorkingTreeFileDiffBytes(path.join(repoRoot, gitPath));
+  }
+
+  private async readWorkingTreeFileDiffBytes(
+    absolutePath: string
+  ): Promise<Buffer | null | typeof DIFF_SIDE_TOO_LARGE> {
     try {
-      return await fs.promises.readFile(path.join(repoRoot, gitPath));
-    } catch {
-      return null;
+      const stat = await fs.promises.stat(absolutePath);
+      if (stat.size > this.diffSideMaxBytes) return DIFF_SIDE_TOO_LARGE;
+      return await fs.promises.readFile(absolutePath);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        "code" in error &&
+        (error as NodeJS.ErrnoException).code === "ENOENT"
+      ) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  private async readGitDiffBytes(
+    repoRoot: string,
+    ref: string,
+    gitPath: string
+  ): Promise<Buffer | null | typeof DIFF_SIDE_TOO_LARGE> {
+    try {
+      return await getBlobBytes(repoRoot, ref, gitPath, this.diffSideMaxBytes);
+    } catch (error) {
+      if (error instanceof GitBlobTooLargeError) return DIFF_SIDE_TOO_LARGE;
+      throw error;
     }
   }
 
@@ -2782,7 +2822,7 @@ export class HostedWorkspaceViewerService {
 
           const changeType = this.diffChangeType(file.status);
           const oldGitPath = file.oldPath ?? file.path;
-          const oldBytes = await getBlobBytes(
+          const oldBytes = await this.readGitDiffBytes(
             repoRoot,
             sources.baseRef,
             oldGitPath
@@ -2793,7 +2833,7 @@ export class HostedWorkspaceViewerService {
                 file.path,
                 changeType
               )
-            : await getBlobBytes(
+            : await this.readGitDiffBytes(
                 repoRoot,
                 sources.targetRef ?? "HEAD",
                 file.path
@@ -2802,6 +2842,18 @@ export class HostedWorkspaceViewerService {
           const viewerOldPath = file.oldPath
             ? this.relativePath(path.resolve(repoRoot, file.oldPath))
             : undefined;
+
+          if (
+            oldBytes === DIFF_SIDE_TOO_LARGE ||
+            newBytes === DIFF_SIDE_TOO_LARGE
+          ) {
+            return {
+              path: viewerPath,
+              oldPath: viewerOldPath,
+              changeType,
+              payloadKind: DIFF_PAYLOAD_KINDS.TOO_LARGE,
+            };
+          }
 
           if (isImageRefPath(file.path)) {
             const image = this.buildImageDiffSides(
@@ -2887,14 +2939,18 @@ export class HostedWorkspaceViewerService {
   ): Promise<WorkspaceGitRefDiffEntry | null> {
     const oldGitPath = file.oldPath ?? file.path;
     const [oldBytes, newBytes] = await Promise.all([
-      getBlobBytes(repoRoot, sources.baseRef, oldGitPath),
+      this.readGitDiffBytes(repoRoot, sources.baseRef, oldGitPath),
       sources.targetIsWorkingTree
         ? this.readWorkingTreeDiffBytes(
             repoRoot,
             file.path,
             this.diffChangeType(file.status)
           )
-        : getBlobBytes(repoRoot, sources.targetRef ?? "HEAD", file.path),
+        : this.readGitDiffBytes(
+            repoRoot,
+            sources.targetRef ?? "HEAD",
+            file.path
+          ),
     ]);
     return this.buildGitRefDiffEntry(
       repoRoot,
