@@ -116,6 +116,8 @@ import {
   type RunCommandOptions,
 } from "./cli/CliRunCommandDefinitions";
 import { registerHistoryCommands } from "./cli/HistoryCommandDefinitions";
+import { registerStatusCommand } from "./cli/StatusCommandDefinitions";
+import { statusCommand } from "./cli/CliStatusCommand";
 import { registerStepCommands } from "./cli/StepCommandDefinitions";
 import { registerSecretCommands } from "./cli/SecretCommandDefinitions";
 import {
@@ -309,6 +311,13 @@ registerHistoryCommands(program, {
         emptyTrashCommand(options, createHistoryCommandIo())
       ),
   },
+});
+
+registerStatusCommand(program, {
+  status: (options) =>
+    handleHistoryCommand(
+      statusCommand(options, { writeOut: (message) => console.log(message) })
+    ),
 });
 
 registerStepCommands(program, {

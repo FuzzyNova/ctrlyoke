@@ -5,6 +5,7 @@ the authoritative option list of any command.
 
 ```text
 ctrlyoke run [file] [options]
+ctrlyoke status [--workflow <key>] [--run <ref>] [--cwd <path>] [--json]
 ctrlyoke rerun --workflow <key> [--from <ref|runId>] [options]
 ctrlyoke append [file] --workflow <key> --run <ref|runId> [--prompt <text>] [options]
 ctrlyoke continue --workflow <key> --run <ref|runId> [options]
@@ -38,6 +39,23 @@ The CLI treats its working directory (or `--cwd`) as the workspace root: it
 reads `<cwd>/.ctrlyoke/settings.json` on top of `~/.ctrlyoke/settings.json` and
 records run history for that directory. Run it from the directory that holds
 your `.ctrlyoke/` folder, or pass `--cwd`.
+
+## `ctrlyoke status`
+
+List workflows whose latest run is executing. The command checks the runner
+lock's process and heartbeat so a persisted `running` state with a dead or
+silent runner is marked `stale`.
+
+```bash
+ctrlyoke status
+ctrlyoke status --workflow release
+ctrlyoke status --workflow release --run run-2026-10-03T12-00-00-000Z --json
+```
+
+Text output shows the workflow, run, execution state, current and total steps,
+harness, model, start time, heartbeat age, and liveness. JSON returns the same
+workflow fields as MCP `global_status`, plus a `liveness` object for each row.
+Use `--run` with `--workflow` to inspect a specific run.
 
 ## Exit codes
 

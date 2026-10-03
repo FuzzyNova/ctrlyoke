@@ -59,11 +59,11 @@ import {
 } from "./utils/QueueLimitUtils";
 import { isUnlimited } from "./utils/LimitUtils";
 import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
-import { deriveStepStatusesFromRuntime } from "./utils/StepStatusDerivation";
 import {
-  getLineageLastModifiedAt,
-  stripLegacyWorkingFileLineageMetadata,
-} from "./utils/WorkingFileMetadata";
+  GlobalWorkflowStatusService,
+  MAX_GLOBAL_STATUS_RESULTS,
+} from "./core/orchestration/GlobalWorkflowStatusService";
+import { deriveStepStatusesFromRuntime } from "./utils/StepStatusDerivation";
 import { RunContinuationService } from "./core/orchestration/RunContinuationService";
 import {
   flattenParallelItems,
@@ -338,7 +338,7 @@ function log(...args: any[]) {
  * Provides tools for AI agents to read and extend workflow queues
  */
 /** Hard response cap for the workspace-wide live execution radar. */
-export const MAX_GLOBAL_STATUS_RESULTS = 100;
+export { MAX_GLOBAL_STATUS_RESULTS };
 
 function toWorkflowStepUpdates(
   updates: McpEditStepArguments["updates"]
@@ -1654,142 +1654,10 @@ export class CtrlYokeMCPServer {
         args,
         MCP_GLOBAL_STATUS_TOOL_NAME
       );
-      const workflowKeys = selector.workflowKey
-        ? [selector.workflowKey]
-        : await lineageRepository.listLineageKeys(this.workspaceRoot);
-      log("Found lineages:", workflowKeys.length);
-
-      // A caller that named a workflow is asking about that workflow, so
-      // "not found", "unreadable", and "found but idle" have to stay
-      // distinguishable. Folded into an empty listing they all read as "no
-      // such workflow", which is only one of the three.
-      const narrowed = selector.workflowKey !== undefined;
-      const notes: string[] = [];
-
-      const workflows = await Promise.all(
-        workflowKeys.map(async (workflowKey) => {
-          let filePath: string;
-          let runRef: RunRef | null;
-          try {
-            if (selector.runRef) {
-              filePath = WorkflowPaths.runFilePath(
-                this.workspaceRoot,
-                workflowKey,
-                selector.runRef
-              );
-              runRef = selector.runRef;
-            } else {
-              const descriptor = await lineageRepository.readDescriptor(
-                this.workspaceRoot,
-                workflowKey
-              );
-              runRef = descriptor.latestRunRef ?? null;
-              filePath = runRef
-                ? WorkflowPaths.runFilePath(
-                    this.workspaceRoot,
-                    workflowKey,
-                    runRef
-                  )
-                : WorkflowPaths.draftFilePath(this.workspaceRoot, workflowKey);
-            }
-          } catch (error) {
-            if (narrowed) {
-              throw new Error(
-                `${MCP_GLOBAL_STATUS_TOOL_NAME}: no workflow '${workflowKey}' was found under ${this.workspaceRoot} (${describeError(error)}). Call ${MCP_GLOBAL_STATUS_TOOL_NAME} with no arguments to see the workflow keys that exist.`
-              );
-            }
-            return null;
-          }
-          try {
-            const content = await fs.readFile(filePath, "utf8");
-            const data = stripLegacyWorkingFileLineageMetadata(
-              JSON.parse(content) as WorkingFile
-            );
-            const runtime = data._runtime || {
-              currentIndex: 0,
-              executionState: EXECUTION_STATES.IDLE,
-            };
-            if (!ACTIVE_EXECUTION_STATES.has(runtime.executionState)) {
-              if (narrowed) {
-                notes.push(
-                  `${workflowKey}${runRef ? `/${runRef}` : " (never run)"} exists but is not executing (state: ${runtime.executionState}), so it is not listed here.`
-                );
-              }
-              return null;
-            }
-            const allSteps = (data.steps || []) as WorkflowStep[];
-            const descriptor = await lineageRepository.readDescriptor(
-              this.workspaceRoot,
-              workflowKey
-            );
-            const completedCount = allSteps.filter(
-              (p) => p._runtime?.completedAt !== undefined
-            ).length;
-
-            return {
-              workflowKey,
-              runRef,
-              workflowName: descriptor.workflowName,
-              executionState: runtime.executionState,
-              harness: data.harness ?? null,
-              model: data.model ?? null,
-              currentStep: runtime.currentIndex + 1,
-              totalSteps: allSteps.length,
-              completedSteps: completedCount,
-              startedAt: data.startedAt ?? null,
-              lastModifiedAt: await getLineageLastModifiedAt(
-                this.workspaceRoot,
-                workflowKey,
-                descriptor.lastModifiedAt
-              ),
-              workingFile: filePath,
-              runDirectory: WorkflowPaths.runDirectoryForWorkingFile(filePath),
-              ...(runtime.worktree
-                ? {
-                    worktree: {
-                      mode: runtime.worktree.mode,
-                      branchName: runtime.worktree.branchName,
-                      worktreePath: runtime.worktree.worktreePath,
-                      lifecycleState: runtime.worktree.lifecycleState,
-                      directoryState: runtime.worktree.directoryState,
-                    },
-                  }
-                : {}),
-              ...(runtime.worktreeNotice
-                ? { worktreeNotice: runtime.worktreeNotice }
-                : {}),
-            };
-          } catch (error) {
-            if (narrowed) {
-              throw new Error(
-                `${MCP_GLOBAL_STATUS_TOOL_NAME}: workflow '${workflowKey}'${runRef ? ` run '${runRef}'` : ""} could not be read from ${filePath} (${describeError(error)}).`
-              );
-            }
-            return null;
-          }
-        })
-      );
-
-      const validWorkflows = workflows.filter(
-        (w): w is NonNullable<typeof w> => w !== null
-      );
-      const omittedCount = Math.max(
-        0,
-        validWorkflows.length - MAX_GLOBAL_STATUS_RESULTS
-      );
-      const limitedWorkflows = validWorkflows.slice(
-        0,
-        MAX_GLOBAL_STATUS_RESULTS
-      );
-
-      const response = {
-        workspaceRoot: this.workspaceRoot,
-        workflowCount: limitedWorkflows.length,
-        workflows: limitedWorkflows,
-        truncated: omittedCount > 0,
-        omittedCount,
-        ...(notes.length > 0 ? { note: notes.join(" ") } : {}),
-      };
+      const response = await new GlobalWorkflowStatusService(
+        this.workspaceRoot,
+        lineageRepository
+      ).getStatus(selector);
 
       return {
         content: [

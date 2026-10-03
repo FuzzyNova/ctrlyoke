@@ -3,6 +3,14 @@
 These are the user-facing commands the extension contributes to VS Code. Run them from the
 Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) unless the table says they live in a menu.
 
+## Standalone CLI
+
+The CLI's run-history inspection commands are documented in the
+[`ctrlyoke` CLI reference](../cli/ctrlyoke.md). To list executing workflows and
+check whether their runner processes are alive, use `ctrlyoke status`; pass
+`--workflow <key>` and `--run <ref>` to narrow the result, or `--json` for
+machine-readable output.
+
 ## Dashboard and execution
 
 | Command                             | What it does                                        |
