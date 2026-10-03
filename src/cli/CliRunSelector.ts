@@ -4,6 +4,19 @@ import type { RunSummary } from "../types/WorkflowTimelineTypes";
 import { withFileLock } from "../utils/FileLockUtils";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 
+export {
+  formatCliStepSelector,
+  formatValidStepIndexRange,
+  matchesHistoryShowStep,
+  parseCliStepIndex,
+  parseHistoryShowAttempt,
+  parseHistoryShowStep,
+} from "./CliStepSelector";
+export type {
+  CliHistoryShowAttemptSelector,
+  CliHistoryShowStepSelector,
+} from "./CliStepSelector";
+
 /**
  * Resolve one CLI run selector to its durable RunRef exactly once. Numeric
  * selectors are manifest display IDs, never positions in a run list.

@@ -19,7 +19,7 @@ ctrlyoke history relink <oldPath> <newPath> [--yes]
 ctrlyoke history list [--cwd <path>] [--all] [--state <state...>] [--since <when>] [--limit <n>] [--json]
 ctrlyoke history runs --workflow <key> [--cwd <path>] [--json]
 ctrlyoke history steps --workflow <key> [--run <ref|runId>] [--json] [--full-prompts]
-ctrlyoke history show --workflow <key> [--run <ref|runId>] [--step <index|final>] [--json]
+ctrlyoke history show --workflow <key> [--run <ref|runId>] [--step <selector>] [--attempt <n|latest|all>] [--json]
 ctrlyoke history search <query> [filters] [--json]
 ctrlyoke history trash list|restore <id>|purge <id>|empty [--yes]
 ctrlyoke step edit [file] --workflow <key> --run <ref|runId> --index <index> [--prompt <text>]
@@ -427,16 +427,25 @@ attempt lifecycle records.
 ## `ctrlyoke history show`
 
 Print the recorded output for one run. `--run` accepts either the numeric run
-ID or its stable reference, and `--step` accepts a zero-based queue-step index
-or `final` to show every final-step loop. Omitting `--run` selects the latest
-run:
+ID or its stable reference. `--step` accepts zero-based queue indices and
+inclusive ranges (`3,7,10-12`), `final` for every final-step pass, `final:N` for
+one 1-based final-step pass, `final:latest`, `running`, or `latest`. `--attempt`
+accepts a 1-based attempt number, `latest`, or `all` (the default). Omitting
+`--run` selects the latest run:
 
 ```bash
 ctrlyoke history show --workflow release --run 7
 ctrlyoke history show --workflow release --run run-2026-09-20T12-00-00-000Z --step 2
 ctrlyoke history show --workflow release --run 7 --step final --no-color
+ctrlyoke history show --workflow release --step 3,7,10-12 --attempt latest
+ctrlyoke history show --workflow release --step final:3
+ctrlyoke history show --workflow release --step running
 ctrlyoke history show --workflow release --step 2
 ```
+
+When a valid queue step has no attempt, text output reports its state from the
+run's working file, such as `Step 57 has not started (pending)` or
+`Step 57 was skipped`. A pause is rendered as `Run paused`.
 
 Pass `--json` to emit one raw attempt record per line as NDJSON. This is
 deliberately different from commands such as `validate --json`, which emit one

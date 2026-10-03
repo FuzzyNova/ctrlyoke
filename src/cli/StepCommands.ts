@@ -13,6 +13,7 @@ import { RUNNER_IDS } from "../types/DashboardConstants";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import {
   resolveCliRunRefAtLineage,
+  parseCliStepIndex,
   type CliRunSummaryProvider,
 } from "./CliRunSelector";
 import type {
@@ -229,16 +230,7 @@ async function parseStepChange(
 }
 
 function parseStepIndex(value: string): number {
-  if (!/^\d+$/.test(value)) {
-    throw new Error(
-      `Invalid step index "${value}"; expected a non-negative integer`
-    );
-  }
-  const index = Number(value);
-  if (!Number.isSafeInteger(index)) {
-    throw new Error(`Invalid step index "${value}"; expected a safe integer`);
-  }
-  return index;
+  return parseCliStepIndex(value);
 }
 
 function parseStepOrder(value: string): number[] {

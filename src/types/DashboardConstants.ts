@@ -944,6 +944,19 @@ export const HISTORY_STEP_STATES = {
   PENDING: "pending",
 } as const;
 
+/** Selector words accepted by `ctrlyoke history show`. */
+export const HISTORY_SHOW_STEP_SELECTORS = {
+  FINAL: "final",
+  RUNNING: "running",
+  LATEST: "latest",
+} as const;
+
+export const HISTORY_SHOW_ATTEMPT_SELECTORS = {
+  ALL: "all",
+  LATEST: "latest",
+  NUMBER: "number",
+} as const;
+
 export type HistoryStepState =
   (typeof HISTORY_STEP_STATES)[keyof typeof HISTORY_STEP_STATES];
 

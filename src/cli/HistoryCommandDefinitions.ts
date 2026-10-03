@@ -34,6 +34,7 @@ export interface HistoryShowOptions {
   workflow: string;
   run?: string;
   step?: string;
+  attempt?: string;
   json?: boolean;
   color?: boolean;
 }
@@ -182,7 +183,11 @@ export function registerHistoryCommands(
     .description("Print a run's recorded output")
     .requiredOption("--workflow <key>", "Workflow lineage key")
     .option("--run <ref|runId>", "Target run (default: latest)")
-    .option("--step <index|final>", "Only show one step's attempts")
+    .option(
+      "--step <selector>",
+      "Select indices/ranges, final[:pass], running, or latest"
+    )
+    .option("--attempt <n|latest|all>", "Select an attempt (default: all)")
     .option(
       "-d, --cwd <path>",
       "Working directory (default: current directory)"

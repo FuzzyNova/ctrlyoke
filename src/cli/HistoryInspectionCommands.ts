@@ -13,6 +13,11 @@ import type {
 import {
   createWorkflowLineageNotFoundError,
   resolveCliRunRef,
+  matchesHistoryShowStep,
+  parseHistoryShowAttempt,
+  parseHistoryShowStep,
+  formatCliStepSelector,
+  type CliHistoryShowStepSelector,
 } from "./CliRunSelector";
 import { CliTerminalFormatter } from "./CliTerminalFormatter";
 import type {
@@ -30,6 +35,9 @@ import {
   HISTORY_EVENT_KINDS,
   HISTORY_SEARCH_COUNT_STATES,
   HISTORY_STEP_STATES,
+  HISTORY_SHOW_STEP_SELECTORS,
+  HISTORY_SHOW_ATTEMPT_SELECTORS,
+  PROMPT_TERMINAL_STATUS,
   RUN_OUTPUT_RESOLVER_EVENT_KINDS,
   STATUS_MESSAGE_SEVERITY,
 } from "../types/DashboardConstants";
@@ -247,7 +255,6 @@ export async function showHistoryCommand(
     options.run,
     "--run"
   );
-  const targetFilter = parseHistoryShowStep(options.step);
   const runSummary = (await historyManager.getRunSummaries(workflowKey)).find(
     (summary) => summary.runRef === runRef
   );
@@ -259,16 +266,30 @@ export async function showHistoryCommand(
     workflowKey,
     runRef
   );
+  const stepCount =
+    workingDefinition?.steps.length ??
+    runSummary.workingFileStepCount ??
+    runSummary.stepCount;
+  let targetFilter: CliHistoryShowStepSelector | undefined;
+  try {
+    targetFilter = parseHistoryShowStep(options.step);
+  } catch (error) {
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}; ${formatValidStepIndexRange(stepCount)}`
+    );
+  }
+  const attemptFilter = parseHistoryShowAttempt(options.attempt);
   if (targetFilter) {
-    const workingFileStepCount =
-      workingDefinition?.steps.length ??
-      runSummary.workingFileStepCount ??
-      runSummary.stepCount;
     if (targetFilter.kind === FINAL_STEP_PHASES.QUEUE) {
-      assertStepIndex(workingFileStepCount, targetFilter.stepIndex, "--step");
-    } else if (runSummary.hasFinalStep === false) {
+      for (const index of targetFilter.stepIndices) {
+        assertStepIndex(stepCount, index, "--step");
+      }
+    } else if (
+      targetFilter.kind === FINAL_STEP_PHASES.FINAL_STEP &&
+      runSummary.hasFinalStep === false
+    ) {
       throw new Error(
-        `Invalid --step value "final". This run has no final step; ${formatValidStepIndexRange(workingFileStepCount)}.`
+        `Invalid --step value "${options.step}". This run has no final step; ${formatValidStepIndexRange(stepCount)}.`
       );
     }
   }
@@ -280,40 +301,141 @@ export async function showHistoryCommand(
   const resolver =
     dependencies.createRunOutputResolver?.() ?? new RunOutputResolver();
 
+  const latestAttemptByTarget = new Map<string, ResolvedRunAttemptValue>();
+  const runningAttemptKeys = new Set<string>();
+  let latestAttemptKey: string | undefined;
+  let finalPassCount = 0;
+  const needsAttemptIndex =
+    attemptFilter.kind === HISTORY_SHOW_ATTEMPT_SELECTORS.LATEST ||
+    targetFilter?.kind === HISTORY_SHOW_STEP_SELECTORS.RUNNING ||
+    targetFilter?.kind === HISTORY_SHOW_STEP_SELECTORS.LATEST ||
+    (targetFilter?.kind === FINAL_STEP_PHASES.FINAL_STEP &&
+      targetFilter.passNumber !== undefined);
+  if (needsAttemptIndex) {
+    for await (const event of resolver.streamAttempts(manifestPath)) {
+      if (event.kind !== RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED)
+        continue;
+      const attempt = event.attempt;
+      const key = historyAttemptKey(attempt);
+      latestAttemptKey = key;
+      if (attempt.target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
+        finalPassCount = Math.max(finalPassCount, attempt.target.loopIndex + 1);
+      }
+      const targetKey = historyAttemptTargetKey(attempt.target);
+      const latestForTarget = latestAttemptByTarget.get(targetKey);
+      if (!latestForTarget || isLaterHistoryAttempt(attempt, latestForTarget)) {
+        latestAttemptByTarget.set(targetKey, attempt);
+      }
+      if (event.unterminated) runningAttemptKeys.add(key);
+    }
+  }
+
+  if (
+    targetFilter?.kind === FINAL_STEP_PHASES.FINAL_STEP &&
+    typeof targetFilter.passNumber === "number" &&
+    targetFilter.passNumber > finalPassCount
+  ) {
+    throw new Error(
+      `Invalid --step value "${options.step}"; valid final pass numbers are 1 to ${finalPassCount}`
+    );
+  }
+  if (
+    targetFilter?.kind === FINAL_STEP_PHASES.FINAL_STEP &&
+    targetFilter.passNumber === HISTORY_SHOW_ATTEMPT_SELECTORS.LATEST
+  ) {
+    // The latest final pass is resolved from the streamed attempt lifecycle below.
+    targetFilter = {
+      kind: FINAL_STEP_PHASES.FINAL_STEP,
+      passNumber: finalPassCount || "latest",
+    };
+  }
+
   CliTerminalFormatter.setColorEnabled(options.color !== false);
   if (!options.json) io.writeErr(`Run: ${runRef}`);
+  let renderedAttempts = 0;
   for await (const event of resolver.streamAttempts(manifestPath)) {
     if (event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED) {
-      if (!matchesHistoryShowStep(event.attempt.target, targetFilter)) {
+      const attempt = event.attempt;
+      const key = historyAttemptKey(attempt);
+      const latestForTarget = latestAttemptByTarget.get(
+        historyAttemptTargetKey(attempt.target)
+      );
+      const isRunning = runningAttemptKeys.has(key);
+      if (
+        !matchesHistoryShowStep(attempt.target, targetFilter, {
+          latest:
+            targetFilter?.kind === HISTORY_SHOW_STEP_SELECTORS.LATEST
+              ? key === latestAttemptKey
+              : latestForTarget !== undefined &&
+                key === historyAttemptKey(latestForTarget),
+          running: isRunning,
+        })
+      ) {
         continue;
       }
+      if (
+        attemptFilter.kind === HISTORY_SHOW_ATTEMPT_SELECTORS.NUMBER &&
+        attempt.attemptIndex + 1 !== attemptFilter.number
+      ) {
+        continue;
+      }
+      if (
+        attemptFilter.kind === HISTORY_SHOW_ATTEMPT_SELECTORS.LATEST &&
+        (!latestForTarget || key !== historyAttemptKey(latestForTarget))
+      ) {
+        continue;
+      }
+      renderedAttempts++;
       if (options.json) {
         io.writeOut(
           JSON.stringify(
             secretRedactionService.redactValue({
-              ...event.attempt,
+              ...attempt,
               runRef,
               unterminated: event.unterminated,
             })
           )
         );
       } else {
-        renderHistoryAttempt(
-          event.attempt,
-          event.unterminated,
-          workingDefinition
-        );
+        renderHistoryAttempt(attempt, event.unterminated, workingDefinition);
       }
       continue;
     }
 
     if (
+      !targetFilter &&
       !options.json &&
       event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUN_TERMINATED
     ) {
+      const isPaused = event.executionState === EXECUTION_STATES.PAUSED;
       CliTerminalFormatter.renderStatusMessage(
-        `Run terminated: ${event.executionState}`,
+        isPaused ? "Run paused" : `Run terminated: ${event.executionState}`,
         historyExecutionStateSeverity(event.executionState)
+      );
+    }
+  }
+
+  if (
+    renderedAttempts === 0 &&
+    targetFilter?.kind === FINAL_STEP_PHASES.QUEUE
+  ) {
+    const index = targetFilter.stepIndices[0];
+    const runtime = workingDefinition?.steps[index]?._runtime;
+    const state = historyWorkingStepState(runtime);
+    const line =
+      state === PROMPT_TERMINAL_STATUS.SKIPPED
+        ? `Step ${index + 1} was skipped`
+        : state === HISTORY_STEP_STATES.PENDING
+          ? `Step ${index + 1} has not started (${HISTORY_STEP_STATES.PENDING})`
+          : `Step ${index + 1} is ${state}`;
+    if (!options.json) {
+      CliTerminalFormatter.renderStatusMessage(
+        line,
+        STATUS_MESSAGE_SEVERITY.INFO
+      );
+    } else {
+      io.writeOut(
+        JSON.stringify({ runRef, step: index, status: state, message: line })
       );
     }
   }
@@ -349,7 +471,7 @@ export async function stepsHistoryCommand(
   }
 
   const steps = definition.steps.map((step, index) => ({
-    selector: String(index),
+    selector: formatCliStepSelector(index),
     index,
     name: step.name?.trim() || `Step ${index + 1}`,
     state: historyWorkingStepState(step._runtime),
@@ -730,44 +852,24 @@ function formatHistorySearchResult(
   return lines.join("\n");
 }
 
-type HistoryShowStepFilter =
-  | { kind: typeof FINAL_STEP_PHASES.QUEUE; stepIndex: number }
-  | { kind: typeof FINAL_STEP_PHASES.FINAL_STEP };
-
-function parseHistoryShowStep(
-  step: string | undefined
-): HistoryShowStepFilter | undefined {
-  if (step === undefined) {
-    return undefined;
-  }
-  if (step === "final") {
-    return { kind: FINAL_STEP_PHASES.FINAL_STEP };
-  }
-  if (!/^\d+$/.test(step)) {
-    throw new Error(
-      `Invalid --step value "${step}"; use a zero-based index or final`
-    );
-  }
-  const stepIndex = Number(step);
-  if (!Number.isSafeInteger(stepIndex)) {
-    throw new Error(
-      `Invalid --step value "${step}"; use a zero-based index or final`
-    );
-  }
-  return { kind: FINAL_STEP_PHASES.QUEUE, stepIndex };
+function historyAttemptTargetKey(target: OutputExecutionTarget): string {
+  return target.kind === FINAL_STEP_PHASES.QUEUE
+    ? `${FINAL_STEP_PHASES.QUEUE}:${target.stepIndex}`
+    : `${FINAL_STEP_PHASES.FINAL_STEP}:${target.loopIndex}`;
 }
 
-function matchesHistoryShowStep(
-  target: OutputExecutionTarget,
-  filter: HistoryShowStepFilter | undefined
+function historyAttemptKey(attempt: ResolvedRunAttemptValue): string {
+  return `${historyAttemptTargetKey(attempt.target)}:run:${attempt.runIndex}:attempt:${attempt.attemptIndex}`;
+}
+
+function isLaterHistoryAttempt(
+  candidate: ResolvedRunAttemptValue,
+  current: ResolvedRunAttemptValue
 ): boolean {
-  if (!filter) return true;
-  if (filter.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-    return target.kind === FINAL_STEP_PHASES.FINAL_STEP;
-  }
   return (
-    target.kind === FINAL_STEP_PHASES.QUEUE &&
-    target.stepIndex === filter.stepIndex
+    candidate.runIndex > current.runIndex ||
+    (candidate.runIndex === current.runIndex &&
+      candidate.attemptIndex > current.attemptIndex)
   );
 }
 

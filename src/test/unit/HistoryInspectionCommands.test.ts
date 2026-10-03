@@ -10,6 +10,8 @@ import {
   EXECUTION_STATES,
   type ExecutionState,
   FINAL_STEP_PHASES,
+  HISTORY_SHOW_ATTEMPT_SELECTORS,
+  HISTORY_SHOW_STEP_SELECTORS,
   HISTORY_EVENT_KINDS,
   HISTORY_MATCH_FIELDS,
   RUN_OUTPUT_RESOLVER_EVENT_KINDS,
@@ -61,6 +63,10 @@ import { MAX_INDEXED_TEXT_LENGTH } from "../../core/orchestration/HistorySearchI
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import { Log } from "../../utils/Log";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import {
+  parseHistoryShowAttempt,
+  parseHistoryShowStep,
+} from "../../cli/CliRunSelector";
 
 class TestIo implements HistoryInspectionCommandIo {
   readonly output: string[] = [];
@@ -896,6 +902,230 @@ suite("CLI history inspection command handlers", () => {
         ),
       /Workflow lineage "missing" was not found/
     );
+  });
+
+  test("parses every history show step and attempt selector form", () => {
+    assert.deepStrictEqual(parseHistoryShowStep("3,7,10-12"), {
+      kind: FINAL_STEP_PHASES.QUEUE,
+      stepIndices: [3, 7, 10, 11, 12],
+    });
+    assert.deepStrictEqual(parseHistoryShowStep("final"), {
+      kind: FINAL_STEP_PHASES.FINAL_STEP,
+    });
+    assert.deepStrictEqual(parseHistoryShowStep("final:3"), {
+      kind: FINAL_STEP_PHASES.FINAL_STEP,
+      passNumber: 3,
+    });
+    assert.deepStrictEqual(parseHistoryShowStep("final:latest"), {
+      kind: FINAL_STEP_PHASES.FINAL_STEP,
+      passNumber: HISTORY_SHOW_ATTEMPT_SELECTORS.LATEST,
+    });
+    assert.deepStrictEqual(parseHistoryShowStep("running"), {
+      kind: HISTORY_SHOW_STEP_SELECTORS.RUNNING,
+    });
+    assert.deepStrictEqual(parseHistoryShowStep("latest"), {
+      kind: HISTORY_SHOW_STEP_SELECTORS.LATEST,
+    });
+    assert.strictEqual(parseHistoryShowStep(undefined), undefined);
+    assert.deepStrictEqual(parseHistoryShowAttempt(undefined), { kind: "all" });
+    assert.deepStrictEqual(parseHistoryShowAttempt("2"), {
+      kind: HISTORY_SHOW_ATTEMPT_SELECTORS.NUMBER,
+      number: 2,
+    });
+    assert.deepStrictEqual(parseHistoryShowAttempt("latest"), {
+      kind: HISTORY_SHOW_ATTEMPT_SELECTORS.LATEST,
+    });
+    assert.deepStrictEqual(parseHistoryShowAttempt("all"), {
+      kind: HISTORY_SHOW_ATTEMPT_SELECTORS.ALL,
+    });
+    for (const selector of ["", "1-0", "final:0", "final:nope", "-1", "1,,2"]) {
+      assert.throws(
+        () => parseHistoryShowStep(selector),
+        /Invalid --step value/
+      );
+    }
+    for (const selector of ["0", "latestest", "1.5"]) {
+      assert.throws(
+        () => parseHistoryShowAttempt(selector),
+        /Invalid --attempt value/
+      );
+    }
+  });
+
+  test("filters queue attempts, final passes, running, latest, and retries", async () => {
+    const key = "release" as WorkflowKey;
+    const events = [
+      settledAttempt(
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        { attemptIndex: 0 }
+      ),
+      settledAttempt(
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        { attemptIndex: 1 }
+      ),
+      settledAttempt({ kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 }),
+      settledAttempt({ kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 1 }),
+      {
+        ...settledAttempt({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 }),
+        unterminated: true,
+      },
+    ];
+    const target: Array<{ stepIndex: number; attemptIndex: number }> = [];
+    const finalPasses: number[] = [];
+    const originalHeader = CliTerminalFormatter.renderPromptHeader;
+    const originalFinalLabel = CliTerminalFormatter.renderFinalStepLabel;
+    CliTerminalFormatter.renderPromptHeader = ((data) => {
+      target.push({
+        stepIndex: data.stepIndex,
+        attemptIndex: data.attemptIndex,
+      });
+    }) as typeof originalHeader;
+    CliTerminalFormatter.renderFinalStepLabel = ((pass) => {
+      finalPasses.push(pass);
+    }) as typeof originalFinalLabel;
+    const show = async (step?: string, attempt?: string) => {
+      target.length = 0;
+      finalPasses.length = 0;
+      await showHistoryCommand(
+        { workflow: key, run: "3", step, attempt },
+        new TestIo(),
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          historyManagerForShow(key),
+          new TestRunOutputResolver(events)
+        )
+      );
+      return { attempts: [...target], finalPasses: [...finalPasses] };
+    };
+    try {
+      assert.deepStrictEqual((await show("0,1")).attempts.length, 3);
+      assert.deepStrictEqual((await show("final")).finalPasses, [0, 1]);
+      assert.deepStrictEqual((await show("final:1")).finalPasses, [0]);
+      assert.deepStrictEqual((await show("final:latest")).finalPasses, [1]);
+      assert.deepStrictEqual((await show("running")).attempts, [
+        { stepIndex: 1, attemptIndex: 0 },
+      ]);
+      assert.deepStrictEqual(await show("latest"), {
+        attempts: [{ stepIndex: 1, attemptIndex: 0 }],
+        finalPasses: [],
+      });
+      assert.deepStrictEqual((await show("0", "2")).attempts, [
+        { stepIndex: 0, attemptIndex: 1 },
+      ]);
+      assert.deepStrictEqual((await show("0", "latest")).attempts, [
+        { stepIndex: 0, attemptIndex: 1 },
+      ]);
+      assert.deepStrictEqual((await show("0", "all")).attempts, [
+        { stepIndex: 0, attemptIndex: 0 },
+        { stepIndex: 0, attemptIndex: 1 },
+      ]);
+    } finally {
+      CliTerminalFormatter.renderPromptHeader = originalHeader;
+      CliTerminalFormatter.renderFinalStepLabel = originalFinalLabel;
+    }
+  });
+
+  test("reports pending and skipped steps without rendering run terminations", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-history-show-pending-step-")
+    );
+    const key = "release" as WorkflowKey;
+    const runRef = "run-2026-09-20T12-00-00-000Z" as RunRef;
+    const workingFile = WorkflowPaths.runFilePath(workspaceRoot, key, runRef);
+    await fs.mkdir(path.dirname(workingFile), { recursive: true });
+    const manager = new TestHistoryManager(
+      new Map(),
+      new Map([
+        [
+          key,
+          [
+            {
+              workflowKey: key,
+              runRef,
+              runDirectory: "/workspace/run-3",
+              runId: 3,
+              startedAt: 1,
+              executionState: EXECUTION_STATES.PAUSED,
+              definitionRevision: 1,
+              stepCount: 2,
+              workingFileStepCount: 2,
+              hasFinalStep: true,
+              hasMixedHarnesses: false,
+              hasMixedModels: false,
+            },
+          ],
+        ],
+      ])
+    );
+    const statuses: string[] = [];
+    const originalStatus = CliTerminalFormatter.renderStatusMessage;
+    CliTerminalFormatter.renderStatusMessage = ((message) => {
+      statuses.push(message);
+    }) as typeof originalStatus;
+    const pausedEvents: RunOutputResolverAttemptEvent[] = [
+      {
+        kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUN_TERMINATED,
+        executionState: EXECUTION_STATES.PAUSED,
+        stepCount: 1,
+      },
+      {
+        kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUN_TERMINATED,
+        executionState: EXECUTION_STATES.PAUSED,
+        stepCount: 1,
+      },
+    ];
+    try {
+      await fs.writeFile(workingFile, JSON.stringify({ steps: [{}, {}] }));
+      await showHistoryCommand(
+        { workflow: key, run: "3", step: "1" },
+        new TestIo(),
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          manager,
+          new TestRunOutputResolver(pausedEvents),
+          undefined,
+          workspaceRoot
+        )
+      );
+      assert.deepStrictEqual(statuses, ["Step 2 has not started (pending)"]);
+
+      statuses.length = 0;
+      await fs.writeFile(
+        workingFile,
+        JSON.stringify({
+          steps: [{}, { _runtime: { terminalStatus: "skipped" } }],
+        })
+      );
+      await showHistoryCommand(
+        { workflow: key, run: "3", step: "1" },
+        new TestIo(),
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          manager,
+          new TestRunOutputResolver(pausedEvents),
+          undefined,
+          workspaceRoot
+        )
+      );
+      assert.deepStrictEqual(statuses, ["Step 2 was skipped"]);
+
+      statuses.length = 0;
+      await showHistoryCommand(
+        { workflow: key, run: "3" },
+        new TestIo(),
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          manager,
+          new TestRunOutputResolver(pausedEvents),
+          undefined,
+          workspaceRoot
+        )
+      );
+      assert.deepStrictEqual(statuses, ["Run paused", "Run paused"]);
+    } finally {
+      CliTerminalFormatter.renderStatusMessage = originalStatus;
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
   });
 
   test("defaults show to latest and uses the working file for header totals and names", async () => {

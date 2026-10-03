@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by Claude (claude-cli), running `ctrlyoke history show` against the live `more bug backlog2` run
 - **Area:** `src/cli/HistoryInspectionCommands.ts` (`showHistoryCommand`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
