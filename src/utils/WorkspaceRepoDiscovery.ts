@@ -89,18 +89,27 @@ export async function discoverRepos(
  * every path→repo association: the client's prefix map
  * ({@link mapRootPrefixesToRepos}) and the server's repo-scoping
  * (`resolveRepoRoot`/`requireRepoRootForPath`) all resolve through here so they
- * can never disagree about which repo a file belongs to. Returns the first
- * match, matching how `fromViewerPath` resolves an ambiguous prefix.
+ * can never disagree about which repo a file belongs to. When repositories
+ * are nested, returns the deepest containing repo (the longest resolved root).
  */
 export function findRepoForPath(
   absolutePath: string,
   repos: readonly WorkspaceRepo[]
 ): WorkspaceRepo | undefined {
   const abs = path.resolve(absolutePath);
-  return repos.find((repo) => {
+  let deepestMatch: WorkspaceRepo | undefined;
+  let deepestRootLength = -1;
+  for (const repo of repos) {
     const repoRoot = path.resolve(repo.rootPath);
-    return abs === repoRoot || isPathWithinDirectory(abs, repoRoot);
-  });
+    if (
+      (abs === repoRoot || isPathWithinDirectory(abs, repoRoot)) &&
+      repoRoot.length > deepestRootLength
+    ) {
+      deepestMatch = repo;
+      deepestRootLength = repoRoot.length;
+    }
+  }
+  return deepestMatch;
 }
 
 /**
@@ -119,7 +128,7 @@ export function mapRootPrefixesToRepos(
 ): Record<string, string> {
   const map: Record<string, string> = {};
   for (const root of executionNamedRoots) {
-    if (root.name in map) continue;
+    if (Object.hasOwn(map, root.name)) continue;
     const repo = findRepoForPath(root.fsPath, repos);
     if (repo) {
       map[root.name] = repo.id;

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), reproduced by bundling the parser and running it on a sample patch
 - **Area:** `src/core/harness/shared/ApplyPatchParser.ts` (`parseFileEdits` ~171, `extractFirstPath` ~253)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

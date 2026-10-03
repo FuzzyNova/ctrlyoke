@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), reproduced with a script and with real git
 - **Area:** `src/utils/WorkspaceRepoDiscovery.ts` (`findRepoForPath` ~95, `mapRootPrefixesToRepos` ~116)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
