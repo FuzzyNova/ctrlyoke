@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (Claude)
 - **Area:** `src/core/PromptFileParser.ts` (`parseMarkdownPromptFile`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

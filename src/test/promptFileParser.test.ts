@@ -647,6 +647,101 @@ suite("PromptFileParser Tests", () => {
   });
 
   suite("parseMarkdownPromptFile", () => {
+    test("strips an empty leading frontmatter block", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-parser-markdown-empty-frontmatter-")
+      );
+      const filePath = path.join(tempDir, "workflow.prompt.md");
+
+      try {
+        await fs.writeFile(filePath, "---\n---\nHello world", "utf8");
+
+        const result = await parser.parsePromptFile(filePath);
+
+        assertValidResult(result);
+        assert.strictEqual(
+          (result.steps[0] as PromptStep).prompt,
+          "Hello world"
+        );
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("preserves prose after empty frontmatter before a later delimiter", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-parser-markdown-empty-frontmatter-")
+      );
+      const filePath = path.join(tempDir, "workflow.prompt.md");
+
+      try {
+        await fs.writeFile(
+          filePath,
+          "---\n---\nIntro text\n\n---\n\nMore text",
+          "utf8"
+        );
+
+        const result = await parser.parsePromptFile(filePath);
+
+        assertValidResult(result);
+        assert.strictEqual(
+          (result.steps[0] as PromptStep).prompt,
+          "Intro text\n\n---\n\nMore text"
+        );
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("rejects non-object frontmatter with a clear error", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-parser-markdown-invalid-frontmatter-")
+      );
+      const filePath = path.join(tempDir, "workflow.prompt.md");
+
+      try {
+        await fs.writeFile(
+          filePath,
+          "---\njust a scalar\n---\nHello world",
+          "utf8"
+        );
+
+        assert.strictEqual(await parser.parsePromptFile(filePath), null);
+        assert.match(
+          parser.lastParseError?.message ?? "",
+          /Markdown frontmatter must contain a YAML mapping or null/
+        );
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("continues to parse normal frontmatter", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-parser-markdown-frontmatter-")
+      );
+      const filePath = path.join(tempDir, "workflow.prompt.md");
+
+      try {
+        await fs.writeFile(
+          filePath,
+          "---\nschemaVersion: 1\n---\nMarkdown workflow",
+          "utf8"
+        );
+
+        const result = await parser.parsePromptFile(filePath);
+
+        assertValidResult(result);
+        assert.strictEqual(result.schemaVersion, 1);
+        assert.strictEqual(
+          (result.steps[0] as PromptStep).prompt,
+          "Markdown workflow"
+        );
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
     test("should parse .prompt.md file as single prompt", async () => {
       const filePath = path.join(fixturesPath, "simple.prompt.md");
       const result = await parser.parsePromptFile(filePath);

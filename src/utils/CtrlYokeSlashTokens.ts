@@ -9,10 +9,11 @@ import { NOT_AFTER_BOUNDARY } from "./ReferenceBoundary";
 // alphanumeric, so ordinary sentence punctuation is not swallowed into it:
 // "commit the changes using /skill:commit." references `commit`, not `commit.`.
 const TOKEN_NAME_PATTERN = "[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9])?";
-// Only a further `:` disqualifies a match, so the three-segment
-// `/mcp:<server>:<tool>` form (a follow-on phase) is left entirely alone rather
-// than being mistaken for a server reference with trailing text.
-const TOKEN_BOUNDARY_PATTERN = "[a-zA-Z0-9:]";
+// A following name character, colon, or internal name punctuation followed by
+// a name character/colon disqualifies a match. This prevents backtracking into
+// `/mcp:my-server:tool` while still allowing sentence punctuation such as the
+// final period in `/skill:commit.`.
+const TOKEN_BOUNDARY_PATTERN = "[a-zA-Z0-9:]|[._-][a-zA-Z0-9:]";
 const TOKEN_PATTERN = new RegExp(
   `${NOT_AFTER_BOUNDARY}(?<![\\/.:])\\/(${Object.values(CTRLYOKE_SLASH_TOKEN_KINDS).join("|")}):(${TOKEN_NAME_PATTERN})(?!${TOKEN_BOUNDARY_PATTERN})`,
   "g"

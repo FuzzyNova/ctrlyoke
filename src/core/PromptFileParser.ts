@@ -568,21 +568,35 @@ export class PromptFileParser {
     try {
       const content = await this.readWorkflowFileContent(filePath);
 
-      const frontmatterMatch = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u.exec(
+      const frontmatterMatch = /^---\r?\n(?:(?=---[ \t]*(?:\r?\n|$))|([\s\S]*?)\r?\n)---[ \t]*(?:\r?\n|$)/u.exec(
         content
       );
       let promptContent = content;
       if (frontmatterMatch) {
-        const frontmatter = yaml.load(frontmatterMatch[1], {
-          filename: filePath,
-          schema: yaml.CORE_SCHEMA,
-        });
+        const frontmatterText = frontmatterMatch[1] ?? "";
+        const frontmatter = frontmatterText.trim()
+          ? yaml.load(frontmatterText, {
+              filename: filePath,
+              schema: yaml.CORE_SCHEMA,
+            })
+          : {};
+        if (
+          frontmatter !== null &&
+          frontmatter !== undefined &&
+          (typeof frontmatter !== "object" || Array.isArray(frontmatter))
+        ) {
+          throw new Error(
+            "Markdown frontmatter must contain a YAML mapping or null"
+          );
+        }
         this.assertSupportedWorkflowSchema(
           frontmatter,
           filePath,
           "Markdown frontmatter"
         );
-        migrateToCurrent(PERSISTED_STORES.WORKFLOW_DEFINITION, frontmatter);
+        if (frontmatter !== null && frontmatter !== undefined) {
+          migrateToCurrent(PERSISTED_STORES.WORKFLOW_DEFINITION, frontmatter);
+        }
         promptContent = content.slice(frontmatterMatch[0].length);
       }
 
@@ -616,6 +630,8 @@ export class PromptFileParser {
         });
         return null;
       }
+      this.lastParseError =
+        error instanceof Error ? error : new Error(String(error));
       Log.error(
         `[PromptFileParser] Failed to read markdown prompt file ${filePath}:`,
         error
