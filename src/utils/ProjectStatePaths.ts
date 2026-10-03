@@ -1,7 +1,6 @@
-import { createHash } from "node:crypto";
 import * as os from "node:os";
 import * as path from "node:path";
-import { foldPathForCompare } from "./PathCasing";
+import { hashPathForCompare } from "./PathCasing";
 import type { RunHistoryLocation } from "../types/CtrlYokeSettings";
 
 const CTRLYOKE_DIR = ".ctrlyoke";
@@ -31,10 +30,7 @@ export function ctrlyokeStateHome(): string {
 export function projectKey(stateRoot: string): string {
   const resolvedStateRoot = path.resolve(stateRoot);
   const slug = sanitizeProjectSlug(path.basename(resolvedStateRoot));
-  const hash = createHash("sha256")
-    .update(foldPathForCompare(resolvedStateRoot))
-    .digest("hex")
-    .slice(0, HASH_LENGTH);
+  const hash = hashPathForCompare(resolvedStateRoot).slice(0, HASH_LENGTH);
 
   return `${slug}-${hash}`;
 }

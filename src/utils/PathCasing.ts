@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+import * as path from "node:path";
+
 /**
  * Single source of truth for Windows path-casing semantics.
  *
@@ -20,8 +23,8 @@
  *    runner attached and fails at `describe()` with "Vitest failed to find the
  *    runner". `c8` has the same sensitivity (see `test.instructions.md`).
  *
- * Deliberately dependency-free (only `node:path`) so it is safe for the CLI
- * bundle, the MCP server, and anything else that must stay `vscode`-free.
+ * Uses only Node built-ins so it is safe for the CLI bundle, the MCP server,
+ * and anything else that must stay `vscode`-free.
  */
 
 function isWindows(): boolean {
@@ -38,6 +41,13 @@ function isWindows(): boolean {
  */
 export function foldPathForCompare(value: string): string {
   return isWindows() ? value.toLowerCase() : value;
+}
+
+/** Hash a resolved path using the filesystem's path comparison semantics. */
+export function hashPathForCompare(value: string): string {
+  return createHash("sha256")
+    .update(foldPathForCompare(path.resolve(value)))
+    .digest("hex");
 }
 
 /**

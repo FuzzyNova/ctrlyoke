@@ -17,6 +17,7 @@ import { withFileLock } from "../../utils/FileLockUtils";
 import { Log } from "../../utils/Log";
 import { logMemoryUsage } from "../../utils/MemoryDiagnostics";
 import { initializeRunHistoryLocation } from "../../utils/RunHistoryStoragePolicy";
+import { hashPathForCompare } from "../../utils/PathCasing";
 import {
   renameWithTransientRetry,
   writeFileAtomic,
@@ -173,12 +174,14 @@ export async function computeHistorySearchIndexDiff(
 ): Promise<HistorySearchIndexDiff> {
   const currentRuns = await listRunSources(workspaceFolderPath);
   const currentManifestPaths = new Set(
-    currentRuns.map((run) => path.resolve(run.manifestPath))
+    currentRuns.map((run) => hashPath(run.manifestPath))
   );
-  const indexedManifestPaths = new Set(Object.keys(manifest.indexedRuns));
-  const removedManifestPaths = [...indexedManifestPaths].filter(
-    (manifestPath) => !currentManifestPaths.has(manifestPath)
-  );
+  const removedManifestPaths = Object.values(manifest.indexedRuns)
+    .filter(
+      (indexedRun) =>
+        !currentManifestPaths.has(hashPath(indexedRun.manifestPath))
+    )
+    .map((indexedRun) => indexedRun.manifestPath);
 
   const checkResults = await mapWithConcurrency(
     currentRuns,
@@ -190,7 +193,7 @@ export async function computeHistorySearchIndexDiff(
       | { kind: "changed"; source: WorkflowRunSource; reason: string }
       | { kind: "unchanged"; source: WorkflowRunSource }
     > => {
-      const key = path.resolve(source.manifestPath);
+      const key = hashPath(source.manifestPath);
       const indexedRun = manifest.indexedRuns[key];
       if (!indexedRun) {
         return {
@@ -236,7 +239,6 @@ export async function computeHistorySearchIndexDiff(
   const staleRuns: HistorySearchIndexStaleRun[] = [];
 
   for (const result of checkResults) {
-    const key = path.resolve(result.source.manifestPath);
     if (result.kind === "new") {
       newRuns.push(result.source);
       staleRuns.push({ source: result.source, reason: result.reason });
@@ -244,7 +246,7 @@ export async function computeHistorySearchIndexDiff(
       changedRuns.push(result.source);
       staleRuns.push({ source: result.source, reason: result.reason });
     } else {
-      unchangedManifestPaths.push(key);
+      unchangedManifestPaths.push(path.resolve(result.source.manifestPath));
     }
   }
 
@@ -500,7 +502,7 @@ export async function runHistorySearchRebuild(
         );
         documentCount += documents.length;
 
-        indexedRuns[path.resolve(source.manifestPath)] =
+        indexedRuns[hashPath(source.manifestPath)] =
           await buildIndexedRunEntry(source, manifest, overCapCandidateCount);
 
         processedRuns += 1;
@@ -582,7 +584,7 @@ async function runIncrementalHistorySearchRebuild(
 
   for (const source of [...diff.newRuns, ...diff.changedRuns]) {
     const runManifest = await readManifestSafe(source.manifestPath);
-    const manifestKey = path.resolve(source.manifestPath);
+    const manifestKey = hashPath(source.manifestPath);
     const shardPath = getDocumentsShardPath(indexDir, source.manifestPath);
     if (!runManifest) {
       await fs.promises.rm(shardPath, { force: true });
@@ -631,7 +633,7 @@ async function runIncrementalHistorySearchRebuild(
       removedManifestPath
     );
     await fs.promises.rm(removedShardPath, { force: true });
-    delete indexedRuns[removedManifestPath];
+    delete indexedRuns[hashPath(removedManifestPath)];
   }
 
   const indexManifest: HistorySearchIndexManifest = {
@@ -773,10 +775,7 @@ function getIndexManifestPath(
 }
 
 function hashPath(filePath: string): string {
-  return crypto
-    .createHash("sha256")
-    .update(path.resolve(filePath))
-    .digest("hex");
+  return hashPathForCompare(filePath);
 }
 
 /** The shard file name for a run, derived from its manifest path alone (no I/O). */

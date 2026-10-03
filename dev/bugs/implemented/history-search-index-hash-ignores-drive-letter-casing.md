@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by Claude (claude-cli), timing `ctrlyoke history search` on Windows while the extension was running
 - **Area:** `src/core/orchestration/historySearchRebuildWorker.ts` (`hashPath`, `getIndexCompatibilityReason`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

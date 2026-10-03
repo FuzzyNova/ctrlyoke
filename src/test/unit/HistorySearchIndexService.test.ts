@@ -14,6 +14,7 @@ import {
   DOCUMENTS_DIR_NAME,
   DOCUMENTS_SHARD_EXTENSION,
   getDocumentsShardPath,
+  getDocumentsShardFileName,
   MAX_INDEXED_TEXT_LENGTH,
   type HistorySearchIndexManifest,
   listRunSources,
@@ -35,6 +36,7 @@ import {
 } from "../../types/WorkflowTimelineTypes";
 import type { WorkflowKey } from "../../types/CtrlYokeTypes";
 import { Log } from "../../utils/Log";
+import { hashPathForCompare } from "../../utils/PathCasing";
 import { getFrozenRunHistoryLocation } from "../../utils/RunHistoryStoragePolicy";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
@@ -1221,6 +1223,56 @@ suite("HistorySearchIndexService", () => {
     assert.strictEqual(freshness.fresh, true);
   });
 
+  test("accepts drive-letter casing changes in workspace paths on Windows", async function () {
+    if (process.platform !== "win32") {
+      this.skip();
+    }
+
+    const workspaceWithOppositeDriveCase = workspaceRoot.replace(
+      /^([a-z]):/i,
+      (_match, driveLetter: string) => {
+        const oppositeCase =
+          driveLetter === driveLetter.toLowerCase()
+            ? driveLetter.toUpperCase()
+            : driveLetter.toLowerCase();
+        return `${oppositeCase}:`;
+      }
+    );
+    const manifest: HistorySearchIndexManifest = {
+      schemaVersion: INDEX_SCHEMA_VERSION,
+      builtAt: Date.now(),
+      workspaceRootHash: hashPathForCompare(workspaceRoot),
+      indexedRuns: {},
+    };
+
+    const freshness = await checkHistorySearchIndexFreshness(
+      workspaceWithOppositeDriveCase,
+      manifest
+    );
+
+    assert.deepStrictEqual(freshness, { fresh: true });
+  });
+
+  test("uses stable shard names for manifest paths with different casing on Windows", function () {
+    if (process.platform !== "win32") {
+      this.skip();
+    }
+
+    const lowerDrivePath = workspaceRoot.replace(
+      /^([A-Z]):/i,
+      (_match, driveLetter: string) => `${driveLetter.toLowerCase()}:`
+    );
+    const upperDrivePath = lowerDrivePath.replace(
+      /^([a-z]):/,
+      (_match, driveLetter: string) => `${driveLetter.toUpperCase()}:`
+    );
+
+    assert.strictEqual(
+      getDocumentsShardFileName(path.join(lowerDrivePath, "manifest.json")),
+      getDocumentsShardFileName(path.join(upperDrivePath, "manifest.json"))
+    );
+  });
+
   test("propagates a real worker failure to the rebuild caller", async () => {
     const runsRoot = WorkflowPaths.runsRoot(workspaceRoot);
     await fs.rm(runsRoot, { recursive: true, force: true });
@@ -1463,7 +1515,9 @@ suite("HistorySearchIndexService", () => {
     const manifest = JSON.parse(
       await fs.readFile(path.join(indexDir, "manifest.json"), "utf8")
     ) as HistorySearchIndexManifest;
-    assert.ok(!manifest.indexedRuns[path.resolve(removedSource.manifestPath)]);
+    assert.ok(
+      !manifest.indexedRuns[hashPathForCompare(removedSource.manifestPath)]
+    );
     const removedResponse = await index.search(
       { query: "incremental-removed-term", limit: 10 },
       workspaceRoot
@@ -1929,7 +1983,7 @@ suite("HistorySearchIndexService", () => {
         fs.stat(source.manifestPath),
         fs.stat(source.eventsPath),
       ]);
-      indexedRuns[path.resolve(source.manifestPath)] = {
+      indexedRuns[hashPathForCompare(source.manifestPath)] = {
         manifestPath: source.manifestPath,
         eventsPath: source.eventsPath,
         workflowId: runManifest.workflowId,
