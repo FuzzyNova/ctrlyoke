@@ -62,6 +62,7 @@ import {
   isCacheInputSubset,
 } from "../utils/TokenFormatting";
 import { secretRedactionService } from "../utils/SecretRedactionService";
+import { formatFinalPassLabel } from "./CliStepSelector";
 
 /** Maximum diff lines shown before truncating with a "… N more" message. */
 const MAX_DIFF_LINES = 60;
@@ -424,11 +425,11 @@ export class CliTerminalFormatter {
     );
   }
 
-  /** Renders the caption that starts one finalStep loop in the terminal stream. */
+  /** Renders the caption that starts one finalStep pass in the terminal stream. */
   static renderFinalStepLabel(loopIndex: number): void {
     console.log();
     console.log(
-      `${chalk.blue("│")} ${chalk.dim(`Final Step Loop ${loopIndex + 1}`)}`
+      `${chalk.blue("│")} ${chalk.dim(formatFinalPassLabel(loopIndex + 1))}`
     );
   }
 

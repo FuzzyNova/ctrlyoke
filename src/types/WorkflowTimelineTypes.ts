@@ -136,7 +136,9 @@ export interface RunSummary {
   workingFileStepCount?: number;
   /** Whether the run's persisted working definition includes a final step. */
   hasFinalStep?: boolean;
+  /** Harness used by the most non-script steps; ties go to the earliest step. */
   primaryHarness?: string;
+  /** Model used by the most non-script steps; ties go to the earliest step. */
   primaryModel?: string;
   hasMixedHarnesses: boolean;
   hasMixedModels: boolean;

@@ -1770,6 +1770,56 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     assert.strictEqual(summary?.completedAt, 9999);
   });
 
+  test("getRunSummaries reports the most-used harness and model as primary, ties to the earliest", async () => {
+    // A planner step on one harness followed by many worker steps on another
+    // used to report the planner's harness as "primary" just for running first.
+    const writeSteps = async (
+      name: string,
+      steps: Array<{ harness: string; model: string }>
+    ) => {
+      const { workflowKey, runRef } = await initTestRun(
+        manager,
+        tempWorkspace,
+        name
+      );
+      const runFilePath = WorkflowPaths.runFilePath(
+        tempWorkspace,
+        workflowKey,
+        runRef
+      );
+      await fs.mkdir(path.dirname(runFilePath), { recursive: true });
+      await fs.writeFile(
+        runFilePath,
+        JSON.stringify({
+          definitionRevision: 1,
+          steps: steps.map((step, index) => ({
+            prompt: `s${index}`,
+            _runtime: step,
+          })),
+        }),
+        "utf8"
+      );
+      const [summary] = await manager.getRunSummaries(workflowKey);
+      return summary;
+    };
+
+    const planned = await writeSteps("wf-primary-majority", [
+      { harness: HARNESS_IDS.CLAUDE_CLI, model: "opus" },
+      { harness: HARNESS_IDS.CODEX_CLI, model: "gpt-worker" },
+      { harness: HARNESS_IDS.CODEX_CLI, model: "gpt-worker" },
+    ]);
+    assert.strictEqual(planned?.primaryHarness, HARNESS_IDS.CODEX_CLI);
+    assert.strictEqual(planned?.primaryModel, "gpt-worker");
+    assert.strictEqual(planned?.hasMixedHarnesses, true);
+
+    const tied = await writeSteps("wf-primary-tie", [
+      { harness: HARNESS_IDS.CLAUDE_CLI, model: "opus" },
+      { harness: HARNESS_IDS.CODEX_CLI, model: "gpt-worker" },
+    ]);
+    assert.strictEqual(tied?.primaryHarness, HARNESS_IDS.CLAUDE_CLI);
+    assert.strictEqual(tied?.primaryModel, "opus");
+  });
+
   test("getRunSummaries falls back to the manifest when the run file is unreadable", async () => {
     const { workflowKey, filePath } = await initTestRun(
       manager,

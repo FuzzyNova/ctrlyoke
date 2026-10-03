@@ -1478,8 +1478,10 @@ export class OutputHistoryManager {
         finalStep?: unknown;
       };
 
-      const harnesses = new Set<string>();
-      const models = new Set<string>();
+      // Counts per value; Map iteration order keeps first-seen order, so the
+      // most-used value wins and ties go to the earliest step.
+      const harnesses = new Map<string, number>();
+      const models = new Map<string, number>();
       for (const step of workingFile.steps ?? []) {
         if (step.type === STEP_TYPES.SCRIPT) {
           continue;
@@ -1488,10 +1490,10 @@ export class OutputHistoryManager {
           step._runtime?.harness ?? step.harness ?? workingFile.harness;
         const model = step._runtime?.model ?? step.model ?? workingFile.model;
         if (harness) {
-          harnesses.add(harness);
+          harnesses.set(harness, (harnesses.get(harness) ?? 0) + 1);
         }
         if (model) {
-          models.add(model);
+          models.set(model, (models.get(model) ?? 0) + 1);
         }
       }
 
@@ -1501,8 +1503,8 @@ export class OutputHistoryManager {
         tokenTotals: workingFile._runtime?.tokenTotals,
         worktree: projectWorktreeRuntime(workingFile._runtime?.worktree),
         worktreeNotice: workingFile._runtime?.worktreeNotice,
-        primaryHarness: harnesses.values().next().value,
-        primaryModel: models.values().next().value,
+        primaryHarness: mostUsedValue(harnesses),
+        primaryModel: mostUsedValue(models),
         hasMixedHarnesses: harnesses.size > 1,
         hasMixedModels: models.size > 1,
         unstarted: isUnstartedRunFile(workingFile),
@@ -2005,4 +2007,19 @@ export class OutputHistoryManager {
   async flushPendingIndexRefresh(): Promise<void> {
     await this.pendingIndexRefresh;
   }
+}
+
+/** The key with the highest count; ties resolve to the first-inserted key. */
+function mostUsedValue(
+  counts: ReadonlyMap<string, number>
+): string | undefined {
+  let best: string | undefined;
+  let bestCount = 0;
+  for (const [value, count] of counts) {
+    if (count > bestCount) {
+      best = value;
+      bestCount = count;
+    }
+  }
+  return best;
 }

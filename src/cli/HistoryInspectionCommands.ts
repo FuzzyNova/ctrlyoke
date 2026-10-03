@@ -16,6 +16,7 @@ import {
   parseHistoryShowAttempt,
   parseHistoryShowStep,
   formatCliStepSelector,
+  formatFinalPassLabel,
   formatFinalPassSelector,
   formatHistoryTargetSelector,
   type CliHistoryShowAttemptSelector,
@@ -1768,7 +1769,7 @@ function historyStepName(
   }
   return attempt.target.kind === FINAL_STEP_PHASES.QUEUE
     ? `Step ${attempt.target.stepIndex + 1}`
-    : `Final Step Loop ${attempt.target.loopIndex + 1}`;
+    : formatFinalPassLabel(attempt.target.loopIndex + 1);
 }
 
 /** The prompt shown in a rendered header, falling back to the step's definition. */

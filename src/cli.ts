@@ -103,7 +103,10 @@ import {
 } from "./core/PromptFileParser";
 import { readWorkflowLockInspection } from "./utils/WorkflowLockInspector";
 import * as WorkflowPaths from "./utils/WorkflowPaths";
-import { resolveCliRunRefAtLineage } from "./cli/CliRunSelector";
+import {
+  formatFinalPassLabel,
+  resolveCliRunRefAtLineage,
+} from "./cli/CliRunSelector";
 import { resolveCliFileArgument } from "./cli/CliFileArgument";
 import {
   applyCliAppendOverrides,
@@ -608,7 +611,7 @@ function getCliOutputStepName(
     return step.script.split(/\s+/)[0] ?? "script";
   return target.kind === FINAL_STEP_PHASES.QUEUE
     ? `Step ${target.stepIndex + 1}`
-    : `Final Step Loop ${target.loopIndex + 1}`;
+    : formatFinalPassLabel(target.loopIndex + 1);
 }
 
 interface ValidateCommandOptions {

@@ -6,6 +6,7 @@ import * as WorkflowPaths from "../utils/WorkflowPaths";
 
 export {
   formatCliStepSelector,
+  formatFinalPassLabel,
   formatFinalPassSelector,
   formatHistoryTargetSelector,
   matchesHistoryShowStep,

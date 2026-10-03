@@ -447,12 +447,12 @@ CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_S
     assert.ok(output.includes("[Script step] script"));
   });
 
-  test("labels final-step loop iterations", () => {
+  test("labels final-step passes", () => {
     const output = runFormatterScript(
       `CliTerminalFormatter.renderFinalStepLabel(2);`
     );
 
-    assert.ok(output.includes("Final Step Loop 3"));
+    assert.ok(output.includes("Final Step Pass 3"));
   });
 
   test("shows per-attempt harness and model with a bounded prompt preview", () => {
