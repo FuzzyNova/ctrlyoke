@@ -228,7 +228,7 @@ Controls injection of prior prompt outputs into this prompt's text before sendin
 
 Accepted forms:
 
-- `"all" | "previous" | "none" | "finalStepAll" | "finalStepPrevious"` — Keyword shorthand: 'all' = all prior queue prompt outputs, 'previous' = immediately preceding queue prompt output, 'none' = no injection, 'finalStepAll' = all previous final step loop outputs, 'finalStepPrevious' = immediately preceding final step loop output
+- `"all" | "previous" | "none" | "finalStepAll" | "finalStepPrevious"` — Keyword shorthand: 'all' = all prior queue prompt outputs, 'previous' = immediately preceding queue prompt output, 'none' = no injection, 'finalStepAll' = all previous final-step pass outputs, 'finalStepPrevious' = immediately preceding final-step pass output
 - `integer[]` — Specific prior prompt numbers to include (1-based, e.g. [1, 3] includes prompts 1 and 3)
 - `{ previous }` — The last N queue prompt outputs before this prompt, oldest first (e.g. { previous: 3 }). Counted relative to the prompt, so it stays correct when steps are inserted or reordered. Like 'previous', steps that produced no output are skipped rather than counted; { previous: 1 } is the same as 'previous'. Inline equivalent: $previous:N.
 - [Run address](#run-address) — Import all resolved queue and final-step output from one completed run in this same workspace.

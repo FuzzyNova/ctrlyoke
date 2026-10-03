@@ -103,10 +103,7 @@ import {
 } from "./core/PromptFileParser";
 import { readWorkflowLockInspection } from "./utils/WorkflowLockInspector";
 import * as WorkflowPaths from "./utils/WorkflowPaths";
-import {
-  formatFinalPassLabel,
-  resolveCliRunRefAtLineage,
-} from "./cli/CliRunSelector";
+import { resolveCliRunRefAtLineage } from "./cli/CliRunSelector";
 import { resolveCliFileArgument } from "./cli/CliFileArgument";
 import {
   applyCliAppendOverrides,
@@ -201,6 +198,7 @@ import {
   selectCliValidationHarnesses,
   type CliValidationTarget,
 } from "./cli/CliValidation";
+import { formatFinalPassLabel } from "./utils/FinalStepLabels";
 
 // Mark this process as the standalone CLI binary before anything else runs.
 setRuntimeMode(RUNNER_IDS.CLI);

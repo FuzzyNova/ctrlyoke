@@ -158,6 +158,10 @@ import {
   type ParallelGroupPreflightOptions,
 } from "./ParallelGroupPreflight";
 import { ParallelGroupRun } from "./ParallelGroupRun";
+import {
+  formatFinalPassLabel,
+  formatFinalPassPhrase,
+} from "../utils/FinalStepLabels";
 
 export interface WorkflowExecutionContext {
   /** Immutable state/execution roots for this workflow run. */
@@ -4221,7 +4225,7 @@ export class WorkflowExecutor {
           promptStep.name?.trim() ||
           (target.kind === FINAL_STEP_PHASES.QUEUE
             ? `Step ${target.stepIndex + 1}`
-            : `Final Step Loop ${target.loopIndex + 1}`),
+            : formatFinalPassLabel(target.loopIndex + 1)),
         chunk,
       });
       if (
@@ -4269,7 +4273,7 @@ export class WorkflowExecutor {
           promptStep.name?.trim() ||
           (target.kind === FINAL_STEP_PHASES.QUEUE
             ? `Step ${target.stepIndex + 1}`
-            : `Final Step Loop ${target.loopIndex + 1}`),
+            : formatFinalPassLabel(target.loopIndex + 1)),
         events,
       });
       if (
@@ -5150,7 +5154,7 @@ export class WorkflowExecutor {
     const stepLabel =
       signedStepIndex >= 0
         ? `prompt ${signedStepIndex + 1}`
-        : `finalStep loop ${Math.abs(signedStepIndex)}`;
+        : formatFinalPassPhrase(Math.abs(signedStepIndex));
     notifyUserFeedback(
       this.userFeedbackSink,
       "error",

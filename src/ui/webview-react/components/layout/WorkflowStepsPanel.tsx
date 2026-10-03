@@ -1290,7 +1290,7 @@ const WorkflowStepsPanelInner: React.FC<{
   // selection outright.
   const finalStepSelectionIsReadOnly = isExternallyManaged || isLineageReadOnly;
 
-  // Get the latest CLI output for the current final step loop
+  // Get the latest CLI output for the current final-step pass
   const finalStepLatestOutput = useFinalStepLatestOutput();
   const finalStepOutputText = finalStepLatestOutput?.response as
     string | undefined;

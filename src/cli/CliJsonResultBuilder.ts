@@ -182,7 +182,7 @@ export interface CliJsonSummary {
   skipped: number;
 }
 
-export interface CliJsonFinalLoop {
+export interface CliJsonFinalPass {
   status: StepStatus | null;
   success: boolean | null;
   attempts: number;
@@ -203,7 +203,8 @@ export interface CliJsonFinalStep {
   executionMode: ExecutionMode | null;
   status: StepStatus | null;
   success: boolean | null;
-  loopCount: number;
+  /** Final-step passes run so far (1-based count; 0 before the first). */
+  passCount: number;
   attempts: number;
   startedAt: string | null;
   completedAt: string | null;
@@ -212,12 +213,13 @@ export interface CliJsonFinalStep {
   script?: CliJsonScriptOutput;
   failureKind: FailureKind | null;
   error: string | null;
-  lastLoop: CliJsonFinalLoop | null;
+  lastPass: CliJsonFinalPass | null;
 }
 
 export interface CliJsonError {
   step: number | "finalStep" | null;
-  loop: number | null;
+  /** 1-based final-step pass that failed, matching `--step final:N`. */
+  pass: number | null;
   message: string;
   attempt: number | null;
 }
@@ -314,12 +316,7 @@ export function buildCliJsonResult(input: CliJsonResultInput): CliJsonResult {
     summary: buildSummary(state.steps, state.results),
     steps,
     finalStep,
-    error: selectTopLevelError(
-      state,
-      steps,
-      finalStep,
-      input.finalStepRuntime
-    ),
+    error: selectTopLevelError(state, steps, finalStep, input.finalStepRuntime),
   });
 }
 
@@ -402,7 +399,7 @@ function buildFinalStep(
   const isScript = step.type === STEP_TYPES.SCRIPT;
   const stepRuntime = step._runtime;
   const status = runtime?.status ?? null;
-  const loopCount =
+  const passCount =
     projection?.loopCount ??
     (runtime
       ? runtime.phase === FINAL_STEP_PHASES.FINAL_STEP
@@ -413,8 +410,8 @@ function buildFinalStep(
     projection?.filesChanged ?? [],
     input.workspaceRoot
   );
-  const lastLoop = projection?.latestLoop
-    ? buildFinalLoop(step, runtime, projection.latestLoop)
+  const lastPass = projection?.latestLoop
+    ? buildFinalPass(step, runtime, projection.latestLoop)
     : null;
   const hasRun = Boolean(
     projection?.attempts ||
@@ -430,7 +427,7 @@ function buildFinalStep(
     ...metadata,
     status,
     success: getNullableStepSuccess(status),
-    loopCount,
+    passCount,
     attempts: projection?.attempts ?? 0,
     startedAt: toIso(runtime?.startedAt ?? stepRuntime?.startedAt),
     completedAt: toIso(runtime?.completedAt ?? stepRuntime?.completedAt),
@@ -451,15 +448,15 @@ function buildFinalStep(
       : {}),
     failureKind: runtime?.failureKind ?? stepRuntime?.failureKind ?? null,
     error: runtime?.failureMessage ?? stepRuntime?.failureMessage ?? null,
-    lastLoop,
+    lastPass,
   };
 }
 
-function buildFinalLoop(
+function buildFinalPass(
   step: WorkflowStep,
   runtime: FinalStepRuntimeState | undefined,
   projection: RunAttemptProjection
-): CliJsonFinalLoop {
+): CliJsonFinalPass {
   const isScript = step.type === STEP_TYPES.SCRIPT;
   const stepRuntime = step._runtime;
   const status = runtime?.status ?? null;
@@ -695,20 +692,17 @@ function selectTopLevelError(
     const failedStep = steps[terminalFailure.index];
     return {
       step: failedStep.index,
-      loop: null,
+      pass: null,
       message: failedStep.error ?? `Step ${failedStep.index} failed`,
       attempt: failedStep.lastAttempt?.number ?? null,
     };
   }
-  if (
-    terminalFailure?.kind === FINAL_STEP_PHASES.FINAL_STEP &&
-    finalStep
-  ) {
+  if (terminalFailure?.kind === FINAL_STEP_PHASES.FINAL_STEP && finalStep) {
     return {
       step: FINAL_STEP_PHASES.FINAL_STEP,
-      loop: finalStep.loopCount > 0 ? finalStep.loopCount - 1 : null,
+      pass: finalStep.passCount > 0 ? finalStep.passCount : null,
       message: finalStep.error ?? "Final step failed",
-      attempt: finalStep.lastLoop?.lastAttempt?.number ?? null,
+      attempt: finalStep.lastPass?.lastAttempt?.number ?? null,
     };
   }
   if (state.status !== EXECUTION_STATES.ERROR) {
@@ -716,7 +710,7 @@ function selectTopLevelError(
   }
   return {
     step: null,
-    loop: null,
+    pass: null,
     message: "Workflow ended with an error",
     attempt: null,
   };
@@ -725,7 +719,7 @@ function selectTopLevelError(
 function createSetupError(error: unknown): CliJsonError {
   return {
     step: null,
-    loop: null,
+    pass: null,
     message:
       error instanceof Error
         ? error.message

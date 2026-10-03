@@ -78,8 +78,8 @@ Exit code `3` means only that the harness's executable wasn't found.
 | `varNames`                 | Names of the workflow variables (never their values)                                                                                               |
 | `summary`                  | Step counts: `total`, `completed`, `failed`, `skipped`                                                                                             |
 | `steps[]`                  | Per step: `status`, `success`, `attempts`, `sessionId`, `preCondition`, `endCondition`, `filesChanged`, `script` output, `failureKind` and `error` |
-| `finalStep`                | The final step's result and its last loop, or `null`                                                                                               |
-| `error`                    | `{ step, loop, attempt, message }` for the failure that ended the run, or `null`                                                                   |
+| `finalStep`                | The final step's result, `passCount`, and its last pass (`lastPass`), or `null`                                                                    |
+| `error`                    | `{ step, pass, attempt, message }` for the failure that ended the run, or `null`; `pass` is the 1-based final-step pass (as in `--step final:N`)   |
 
 Secret values are redacted from the result. Check `success` rather than parsing `status` or
 `error.message`, since message text can change.

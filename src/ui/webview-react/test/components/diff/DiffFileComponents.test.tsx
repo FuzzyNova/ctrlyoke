@@ -205,11 +205,11 @@ describe("DiffFileCard", () => {
         changeType="modified"
         source={{ kind: "hunks", hunks: [], diffType: "modify" }}
         collapsed
-        note="Final Step Loop 1, Prompt 1, Prompt 2, Prompt 3, Prompt 4, Prompt 5"
+        note="Final Step Pass 1, Prompt 1, Prompt 2, Prompt 3, Prompt 4, Prompt 5"
       />
     );
 
-    const note = screen.getByText(/Final Step Loop 1, Prompt 1/);
+    const note = screen.getByText(/Final Step Pass 1, Prompt 1/);
     expect(note.className).not.toContain("shrink-0");
     expect(container.querySelector(".shrink-0.italic")).toBeNull();
   });

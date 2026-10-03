@@ -100,6 +100,7 @@ import type { DiffRenderPlan } from "./rdvAdapter";
 import { resolveStepColor } from "./stepColor";
 import type { HarnessColorSettings } from "@root/types/CtrlYokeSettings";
 import type { StepColorMode } from "@root/types/DashboardConstants";
+import { formatFinalPassLabel } from "@root/utils/FinalStepLabels";
 
 export interface OutputRowPromptUndoMeta {
   workspacePath: string;
@@ -2376,10 +2377,10 @@ export function buildOutputRows(
           rowKind: OUTPUT_ROW_KINDS.STEP_HIDDEN,
           target,
           stepLabel: isFinalStep
-            ? `Final Step Loop ${target.index + 1}`
+            ? formatFinalPassLabel(target.index + 1)
             : `Step ${target.index + 1}`,
           stepName: isFinalStep
-            ? getStepName(workflowStep, `Final Step Loop ${target.index + 1}`)
+            ? getStepName(workflowStep, formatFinalPassLabel(target.index + 1))
             : workflowStep?.name?.trim() || undefined,
           estimateSize: STEP_HIDDEN_ROW_HEIGHT,
         });
@@ -2390,7 +2391,7 @@ export function buildOutputRows(
           key: `${targetKey}:final-step-label`,
           rowKind: OUTPUT_ROW_KINDS.FINAL_STEP_LABEL,
           target,
-          label: `Final Step Loop ${target.index + 1}`,
+          label: formatFinalPassLabel(target.index + 1),
           estimateSize: 24,
         });
       }
@@ -2489,10 +2490,10 @@ export function buildOutputRows(
       ? input.finalStep
       : input.steps[target.index];
     const stepName = isFinalStep
-      ? getStepName(workflowStep, `Final Step Loop ${target.index + 1}`)
+      ? getStepName(workflowStep, formatFinalPassLabel(target.index + 1))
       : workflowStep?.name?.trim() || undefined;
     const stepLabel = isFinalStep
-      ? `Final Step Loop ${target.index + 1}`
+      ? formatFinalPassLabel(target.index + 1)
       : `Step ${target.index + 1}`;
     const attemptIndex = message.attemptIndex ?? 0;
     const runIndex = message.runIndex ?? output.runIndex ?? 0;

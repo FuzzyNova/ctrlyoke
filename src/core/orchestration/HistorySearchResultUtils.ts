@@ -11,6 +11,7 @@ import {
   createHistorySearchMatcher,
   type HistorySearchMatch,
 } from "./HistorySearchMatcher";
+import { formatFinalPassLabel } from "../../utils/FinalStepLabels";
 
 export const DEFAULT_HISTORY_SEARCH_SNIPPET_CHARS = 100;
 
@@ -41,7 +42,7 @@ export function projectHistorySearchResult(
     eventKind: document.eventKind,
     matchField: document.matchField,
     matchSnippet: extractSnippet(document.text, match, snippetChars),
-    matchContext: formatMatchContext(document.target, document.attemptIndex),
+    matchContext: formatMatchContext(document.target),
     filePath: document.filePath,
   };
 }
@@ -118,18 +119,11 @@ function resolveHistorySearchMatch(
   return createHistorySearchMatcher(matchOrQuery, false).find(text);
 }
 
-function formatMatchContext(
-  target: OutputExecutionTarget,
-  attemptIndex: number
-): string {
+function formatMatchContext(target: OutputExecutionTarget): string {
+  // Always the pass number: a retry is another attempt of the same pass, so
+  // the attempt index must never stand in for it.
   if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-    if (target.loopIndex > 0) {
-      return `Final Step Loop ${target.loopIndex + 1}`;
-    }
-    if (attemptIndex > 0) {
-      return `Final Step Loop ${attemptIndex}`;
-    }
-    return "Final Step";
+    return formatFinalPassLabel(target.loopIndex + 1);
   }
   return `Prompt ${target.stepIndex + 1}`;
 }

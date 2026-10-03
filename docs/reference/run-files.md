@@ -335,7 +335,7 @@ Current workflow execution phase
 - **Type:** `number`
 - **Required:** yes
 
-0-based final step execution loop count
+0-based index of the current final-step pass (pass N is loopCount N-1)
 
 ### `finalStep.status` {#workflow-runtime-finalstep-status}
 

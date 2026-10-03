@@ -200,7 +200,7 @@ suite("CliJsonResultBuilder", () => {
     assert.strictEqual(output.steps[0].failureKind, "timeout");
     assert.deepStrictEqual(output.error, {
       step: 0,
-      loop: null,
+      pass: null,
       message: "Harness timed out",
       attempt: 2,
     });
@@ -226,7 +226,7 @@ suite("CliJsonResultBuilder", () => {
 
     assert.deepStrictEqual(output.error, {
       step: 1,
-      loop: null,
+      pass: null,
       message: "terminal failure",
       attempt: 1,
     });
@@ -262,7 +262,7 @@ suite("CliJsonResultBuilder", () => {
         error: "Script step: timed out after 1033ms",
         topLevel: {
           step: "finalStep",
-          loop: 0,
+          pass: 1,
           message: "Script step: timed out after 1033ms",
           attempt: null,
         },
@@ -396,7 +396,7 @@ suite("CliJsonResultBuilder", () => {
     const parsed = JSON.parse(JSON.stringify(output)) as typeof output;
     assert.deepStrictEqual(parsed.error, {
       step: null,
-      loop: null,
+      pass: null,
       message: "parse failed",
       attempt: null,
     });
@@ -481,11 +481,11 @@ suite("CliJsonResultBuilder", () => {
 
     assert.strictEqual(output.steps.length, 1);
     assert.ok(output.finalStep);
-    assert.strictEqual(output.finalStep.loopCount, 2);
+    assert.strictEqual(output.finalStep.passCount, 2);
     assert.strictEqual(output.finalStep.attempts, 3);
-    assert.strictEqual(output.finalStep.lastLoop?.sessionId, "final-session");
+    assert.strictEqual(output.finalStep.lastPass?.sessionId, "final-session");
     assert.deepStrictEqual(
-      output.finalStep.lastLoop?.endCondition,
+      output.finalStep.lastPass?.endCondition,
       conditionJson(true, null)
     );
   });

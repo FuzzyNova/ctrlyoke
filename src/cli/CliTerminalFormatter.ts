@@ -62,7 +62,7 @@ import {
   isCacheInputSubset,
 } from "../utils/TokenFormatting";
 import { secretRedactionService } from "../utils/SecretRedactionService";
-import { formatFinalPassLabel } from "./CliStepSelector";
+import { formatFinalPassLabel } from "../utils/FinalStepLabels";
 
 /** Maximum diff lines shown before truncating with a "… N more" message. */
 const MAX_DIFF_LINES = 60;

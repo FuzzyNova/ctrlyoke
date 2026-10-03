@@ -110,7 +110,7 @@ export class SessionResolver {
     // 2. Use the supplied effective sessionId.
     const resolvedSessionId = resolved?.sessionId;
     if (resolvedSessionId !== undefined) {
-      // 2a. "finalStep" sentinel — resume the previous final step loop's session
+      // 2a. "finalStep" sentinel — resume the previous final-step pass's session
       if (resolvedSessionId === SESSION_ID_SENTINELS.FINAL_STEP) {
         if (finalStepSessionId) {
           Log.debug(

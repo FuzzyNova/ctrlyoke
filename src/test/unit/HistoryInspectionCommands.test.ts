@@ -3320,7 +3320,7 @@ function searchResponse(): HistorySearchResponse {
         eventKind: HISTORY_EVENT_KINDS.RESPONSE,
         matchField: HISTORY_MATCH_FIELDS.RESPONSE,
         matchSnippet: "EPERM was handled",
-        matchContext: "Final Step",
+        matchContext: "Final Step Pass 1",
       },
     ],
   };

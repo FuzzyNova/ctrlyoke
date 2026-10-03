@@ -32,6 +32,7 @@ import type {
   WorkspaceSnapshot,
   WorkflowRunMetadata,
 } from "@root/types/OutputHistoryTypes";
+import { formatFinalPassLabel } from "@root/utils/FinalStepLabels";
 
 type OutputHistoryView = {
   orderedEntries: OrderedHistoryEntry[];
@@ -204,7 +205,7 @@ export function useOutputMinimapModel({
               ? parallelGroup
               : undefined;
           const label = isFinalStep
-            ? getStepName(workflowStep, `Final Step Loop ${stepIndex + 1}`)
+            ? getStepName(workflowStep, formatFinalPassLabel(stepIndex + 1))
             : getStepName(
                 workflowStep,
                 getQueueStepFallbackName(workflowStep, stepIndex)

@@ -181,7 +181,7 @@ suite("HistorySearchService", () => {
       .results;
     assert.strictEqual(bashResults[0]?.eventKind, "bash");
     assert.strictEqual(bashResults[0]?.matchField, "command");
-    assert.strictEqual(bashResults[0]?.matchContext, "Final Step Loop 2");
+    assert.strictEqual(bashResults[0]?.matchContext, "Final Step Pass 2");
 
     const fileResults = (
       await service.search("src/history-search.ts", workspaceRoot)
@@ -208,6 +208,37 @@ suite("HistorySearchService", () => {
     assert.strictEqual(diffResults[0]?.eventKind, "fileEdit");
     assert.strictEqual(diffResults[0]?.matchField, "diff");
     assert.strictEqual(diffResults[0]?.filePath, "src/history-search.ts");
+  });
+
+  test("labels final-step matches by pass number, never by attempt number", async () => {
+    // A retried first pass is attempt 2 of pass 1. The context used to be
+    // built from the attempt index here, and pass 1 had no number at all.
+    const finalOutput = (term: string) => ({
+      prompt: "final prompt",
+      response: `${term} response`,
+      elapsed: 1,
+      isStreaming: false,
+    });
+    await createRun("final-pass-labels-2026-06-09T17-30-00", 1, 4000, [
+      createCliOutputDraft(
+        4100,
+        { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
+        finalOutput("first-pass-term")
+      ),
+      createCliOutputDraft(
+        4200,
+        { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
+        finalOutput("retried-pass-term"),
+        2
+      ),
+    ]);
+
+    const first = (await service.search("first-pass-term", workspaceRoot))
+      .results;
+    assert.strictEqual(first[0]?.matchContext, "Final Step Pass 1");
+    const retried = (await service.search("retried-pass-term", workspaceRoot))
+      .results;
+    assert.strictEqual(retried[0]?.matchContext, "Final Step Pass 1");
   });
 
   test("disk-scan fallback indexes structured events streamed via cliOutputEventsAppended", async () => {
@@ -889,13 +920,14 @@ suite("HistorySearchService", () => {
       elapsed: number;
       isStreaming: boolean;
       structured?: { events: CliEvent[]; metadata: Record<string, unknown> };
-    }
+    },
+    attemptIndex = 0
   ): WorkflowTimelineEventDraft {
     return {
       eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
       timestampMs,
       target,
-      attemptIndex: 0,
+      attemptIndex,
       payload: {
         cliOutput,
       },

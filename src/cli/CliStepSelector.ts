@@ -153,14 +153,6 @@ export function formatFinalPassSelector(passNumber: number): string {
   return `${HISTORY_SHOW_STEP_SELECTORS.FINAL}:${passNumber}`;
 }
 
-/**
- * Human-readable caption for one final-step pass, using the same "pass"
- * wording as the `final:N` selector and its validation errors.
- */
-export function formatFinalPassLabel(passNumber: number): string {
-  return `Final Step Pass ${passNumber}`;
-}
-
 function parseNonNegativeSafeInteger(value: string): number | undefined {
   if (!/^\d+$/.test(value)) return undefined;
   const number = Number(value);

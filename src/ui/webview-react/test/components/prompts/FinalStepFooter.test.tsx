@@ -21,17 +21,17 @@ function buildProps() {
 }
 
 describe("FinalStepFooter", () => {
-  it("shows the full loop label at regular widths", () => {
+  it("shows the full pass label at regular widths", () => {
     render(<FinalStepFooter {...buildProps()} />);
 
-    expect(screen.getByText("Loop 2")).toBeInTheDocument();
+    expect(screen.getByText("Pass 2")).toBeInTheDocument();
   });
 
-  it("uses a numeric loop badge with final-step context in its tooltip when narrow", () => {
+  it("uses a numeric pass badge with final-step context in its tooltip when narrow", () => {
     render(<FinalStepFooter {...buildProps()} isNarrow />);
 
     expect(screen.getByText("2")).toBeInTheDocument();
-    expect(screen.queryByText("Loop 2")).not.toBeInTheDocument();
+    expect(screen.queryByText("Pass 2")).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Final step" })
     ).toBeInTheDocument();

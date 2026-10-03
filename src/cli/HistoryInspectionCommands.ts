@@ -16,7 +16,6 @@ import {
   parseHistoryShowAttempt,
   parseHistoryShowStep,
   formatCliStepSelector,
-  formatFinalPassLabel,
   formatFinalPassSelector,
   formatHistoryTargetSelector,
   type CliHistoryShowAttemptSelector,
@@ -111,6 +110,7 @@ import {
   parseHistorySince,
   parseHistoryStateFilter,
 } from "./HistoryFilterParsing";
+import { formatFinalPassLabel } from "../utils/FinalStepLabels";
 
 export interface HistoryInspectionCommandIo {
   writeOut(message: string): void;

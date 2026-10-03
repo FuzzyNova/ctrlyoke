@@ -53,6 +53,7 @@ import { formatCliCommandDisplay } from "./outputCommandDisplay";
 import { isScriptOutput } from "./outputRenderUtils";
 import { formatTokenCount } from "@root/utils/TokenFormatting";
 import { fenceLiteral } from "@root/utils/FileReferenceParser";
+import { formatFinalPassLabel } from "@root/utils/FinalStepLabels";
 
 // ── Private helpers ────────────────────────────────────────────────────────────
 
@@ -449,7 +450,7 @@ export function generateMarkdownExport(
             ? getFirstWords(output.cliCommand, 3)
             : getFirstWords(output.prompt, 4));
         const stepLabel = isFinalStep
-          ? `Final Step Loop ${stepNum}${item.stepName ? `: ${item.stepName}` : ""}`
+          ? `${formatFinalPassLabel(stepNum)}${item.stepName ? `: ${item.stepName}` : ""}`
           : `Step ${stepNum}${stepDisplayName ? `: ${stepDisplayName}` : ""}`;
         lines.push(`## ${stepLabel} — ${executionLabel}`);
         lines.push("");

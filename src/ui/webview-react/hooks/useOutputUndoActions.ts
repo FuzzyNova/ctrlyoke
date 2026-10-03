@@ -51,6 +51,7 @@ import {
   useWorkspaceSnapshotContent,
 } from "@hooks/useWorkspaceSnapshotContent";
 import { WebviewLog } from "@utils/logger";
+import { formatFinalPassLabel } from "@root/utils/FinalStepLabels";
 
 type OutputHistoryView = {
   orderedEntries: OrderedHistoryEntry[];
@@ -205,7 +206,7 @@ export function useOutputUndoActions({
           ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: stepIndex }
           : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex };
         const label = isFinalStep
-          ? `Final Step Loop ${stepIndex + 1}`
+          ? formatFinalPassLabel(stepIndex + 1)
           : concurrentGroup
             ? `Parallel steps ${concurrentGroup.startIndex + 1}–${concurrentGroup.endIndex + 1}`
             : `Prompt ${stepIndex + 1}`;

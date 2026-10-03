@@ -7,6 +7,7 @@ import { type OutputMinimapMarkerGroup } from "@utils/outputMinimapMarkers";
 import { getPromptChangeLabelParts } from "@utils/promptUndo";
 import { Icon } from "../shared/Icon";
 import type { MinimapStep } from "./OutputMinimap";
+import { formatFinalPassPhrase } from "@root/utils/FinalStepLabels";
 
 interface MarkerTone {
   rank: number;
@@ -41,7 +42,7 @@ function getGroupMarkerTone(members: readonly MinimapStep[]): MarkerTone {
 
 function getStepNoun(step: MinimapStep): string {
   return step.kind === FINAL_STEP_PHASES.FINAL_STEP
-    ? `final step loop ${step.stepIndex + 1}`
+    ? formatFinalPassPhrase(step.stepIndex + 1)
     : `step ${step.stepIndex + 1}`;
 }
 

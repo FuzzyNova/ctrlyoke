@@ -918,7 +918,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     result.scriptOutput = summary.stdout;
   }
 
-  /** Record the latest pre-condition evaluation for the active final step loop. */
+  /** Record the latest pre-condition evaluation for the active final-step pass. */
   public recordFinalStepPreConditionSummary(
     summary: ConditionEvaluationSummary
   ): void {
@@ -931,7 +931,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     };
   }
 
-  /** Record the latest end-condition evaluation for the active final step loop. */
+  /** Record the latest end-condition evaluation for the active final-step pass. */
   public recordFinalStepEndConditionSummary(
     summary: ConditionEvaluationSummary
   ): void {

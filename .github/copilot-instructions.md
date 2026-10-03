@@ -7,6 +7,7 @@ ctrlyoke automates AI coding harnesses through structured YAML/JSON/Markdown wor
 <orientation>
 ## Terminology
 - Use **harness** for AI execution strategies. There are exactly six, and `HARNESS_IDS` in `src/types/DashboardConstants.ts` is the source of truth: `copilot-cli`, `claude-cli`, `codex-cli`, `opencode-cli`, `qwen-cli`, `antigravity-cli`. Reserve **provider** for VS Code API types such as `CompletionItemProvider` or `WebviewViewProvider`.
+- One execution of a workflow's `finalStep` is a **pass** (1-based, as in `--step final:N`); **loop** means only the whole queue → final step → appended steps cycle. Build every user-facing label from `src/utils/FinalStepLabels.ts`; internal `loopIndex`/`loopCount` names stay as they are (pass number = `loopIndex + 1`).
 - **There is no `copilot-chat` harness.** It was permanently removed before release for policy/legal reasons (see `dev/implemented/COPILOT_CHAT_ARCHIVAL_REMOVAL_PLAN.md`) and must never be reintroduced into code, schemas, docs, plans, or capability tables. Historical references survive in `dev/implemented/`, `dev/rejected/`, `dev/reference/`, and `dev/research/` as an accurate record of past work — do not treat those as evidence that the harness still exists.
 </orientation>
 

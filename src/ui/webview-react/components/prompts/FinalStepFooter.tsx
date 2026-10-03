@@ -15,6 +15,7 @@ import type { CliOutput, WorkflowStep } from "../../store/workflowStore";
 import { KEYBOARD_KEYS, STEP_TYPES } from "@root/types/DashboardConstants";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import { Icon } from "../shared/Icon";
+import { formatFinalPassBadge } from "@root/utils/FinalStepLabels";
 
 function isScriptStep(step: WorkflowStep): step is ScriptStep {
   return step.type === STEP_TYPES.SCRIPT;
@@ -52,7 +53,7 @@ interface FinalStepFooterProps {
   modelLabel?: string;
   /** True when model is inherited (not set at prompt level) */
   modelIsDefault?: boolean;
-  /** Latest CLI output for the current final step loop */
+  /** Latest CLI output for the current final step pass */
   latestOutput?: CliOutput | null;
   /** Prompt-level property overrides to display as compact chips */
   overrides?: PromptOverride[];
@@ -112,7 +113,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
     : "group-hover/final-step:bg-list-hover-bg text-foreground";
   const finalStepTooltip = hasFinalStep
     ? `Final Step — ${isDisabled ? "Disabled" : "Enabled"}${
-        loopCount > 0 ? ` — Loop ${loopCount + 1}` : ""
+        loopCount > 0 ? ` — ${formatFinalPassBadge(loopCount + 1)}` : ""
       }`
     : "Final Step — Not set";
 
@@ -258,7 +259,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
         ) : null}
         {loopCount > 0 && (
           <span className="ml-1 flex-shrink-0 whitespace-nowrap rounded bg-badge-bg px-1.5 py-px text-xxs text-badge-fg">
-            {isNarrow ? loopCount + 1 : `Loop ${loopCount + 1}`}
+            {isNarrow ? loopCount + 1 : formatFinalPassBadge(loopCount + 1)}
           </span>
         )}
         <div className="ml-auto flex items-center gap-1">

@@ -1433,7 +1433,7 @@ $defs:
             description: Current workflow execution phase
           loopCount:
             type: number
-            description: 0-based final step execution loop count
+            description: 0-based index of the current final-step pass (pass N is loopCount N-1)
           status:
             type: string
             enum:
@@ -1789,8 +1789,8 @@ $defs:
       - finalStepPrevious
     description: >-
       Keyword shorthand: 'all' = all prior queue prompt outputs, 'previous' = immediately preceding
-      queue prompt output, 'none' = no injection, 'finalStepAll' = all previous final step loop
-      outputs, 'finalStepPrevious' = immediately preceding final step loop output
+      queue prompt output, 'none' = no injection, 'finalStepAll' = all previous final-step pass
+      outputs, 'finalStepPrevious' = immediately preceding final-step pass output
   priorContextPromptNumbers:
     type: array
     items:

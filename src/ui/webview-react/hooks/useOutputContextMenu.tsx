@@ -10,6 +10,7 @@ import type { CliOutput as CliOutputType } from "../types/cliEvents";
 import { FINAL_STEP_PHASES } from "../types/messages";
 import { OUTPUT_MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import { getTargetKey } from "@utils/outputProjection";
+import { formatFinalPassLabel } from "@root/utils/FinalStepLabels";
 
 function buildCopyAllText(
   allMessages: OutputMessage[],
@@ -44,7 +45,7 @@ function buildCopyAllText(
     }
 
     const header = isFinalStep
-      ? `Final Step Loop ${target.index + 1}`
+      ? formatFinalPassLabel(target.index + 1)
       : `Step ${queueStepNum}`;
 
     const promptText = (output.prompt ?? output.cliCommand)?.trim();

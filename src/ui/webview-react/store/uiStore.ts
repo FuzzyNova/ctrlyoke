@@ -842,7 +842,7 @@ interface UiActions {
     target: OutputScrollTarget
   ) => void;
   toggleHiddenOutputTarget: (workflowKey: string, targetKey: string) => void;
-  /** Hide or show every key in `targetKeys` together (e.g. all final-step loops). */
+  /** Hide or show every key in `targetKeys` together (e.g. all final-step passes). */
   setOutputTargetsHidden: (
     workflowKey: string,
     targetKeys: readonly string[],
