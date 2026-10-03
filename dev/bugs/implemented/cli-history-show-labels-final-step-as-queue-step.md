@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-03 by bug-hunt final step (claude-cli); reproduced with the built CLI
 - **Area:** `src/cli/HistoryInspectionCommands.ts` (`renderHistoryAttempt` ~586-601, `createHistoryOutputTarget` ~631-647)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -469,20 +469,33 @@ function getGitHeadPath(currentDirectory) {
     return undefined;
   }
 
-  const gitPath = path.join(currentDirectory, ".git");
-  const gitStats = fs.statSync(gitPath);
-  if (gitStats.isDirectory()) {
-    return path.join(gitPath, "HEAD");
-  }
-  if (!gitStats.isFile()) {
-    return undefined;
-  }
+  let current = path.resolve(currentDirectory);
+  while (true) {
+    const gitPath = path.join(current, ".git");
+    try {
+      const gitStats = fs.statSync(gitPath);
+      if (gitStats.isDirectory()) {
+        return path.join(gitPath, "HEAD");
+      }
+      if (!gitStats.isFile()) {
+        return undefined;
+      }
 
-  const gitFile = fs.readFileSync(gitPath, "utf8").trim();
-  const gitDirectory = gitFile.match(/^gitdir:\s*(.+)$/i)?.[1]?.trim();
-  return gitDirectory
-    ? path.resolve(path.dirname(gitPath), gitDirectory, "HEAD")
-    : undefined;
+      const gitFile = fs.readFileSync(gitPath, "utf8").trim();
+      const gitDirectory = gitFile.match(/^gitdir:\s*(.+)$/i)?.[1]?.trim();
+      return gitDirectory
+        ? path.resolve(path.dirname(gitPath), gitDirectory, "HEAD")
+        : undefined;
+    } catch (error) {
+      if (error.code !== "ENOENT" && error.code !== "ENOTDIR") {
+        return undefined;
+      }
+    }
+
+    const parent = path.dirname(current);
+    if (parent === current) return undefined;
+    current = parent;
+  }
 }
 
 function getBranchName(payload) {

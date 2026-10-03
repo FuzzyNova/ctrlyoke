@@ -599,6 +599,7 @@ function renderHistoryAttempt(
     promptText: historyAttemptPrompt(attempt),
     attemptIndex: attempt.attemptIndex,
     runIndex: attempt.runIndex,
+    includeStepPosition: attempt.target.kind === FINAL_STEP_PHASES.QUEUE,
   });
 
   const output = attempt.output;

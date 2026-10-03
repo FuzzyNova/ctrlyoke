@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-03 by bug-hunt final step (claude-cli); reproduced by piping payloads into the built statusline script
 - **Area:** `src/scripts/ctrlyoke-statusline-wrapper.js` (`getGitHeadPath` ~467-486, `getBranchName` ~488-503)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
