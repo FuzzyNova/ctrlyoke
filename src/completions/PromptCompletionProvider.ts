@@ -128,15 +128,15 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
 
     // Route to appropriate handler based on trigger
     if (triggerChar === "@") {
-      return this.getAtCompletions(afterTrigger);
+      return this.getAtCompletions(afterTrigger, document);
     } else if (triggerChar === "#") {
-      return this.getHashCompletions(afterTrigger);
+      return this.getHashCompletions(afterTrigger, document);
     } else if (triggerChar === "~") {
-      return this.getTildeCompletions(afterTrigger);
+      return this.getTildeCompletions(afterTrigger, document);
     } else if (triggerChar === "!") {
-      return this.getSecretCompletions(afterTrigger);
+      return this.getSecretCompletions(afterTrigger, document);
     } else {
-      return this.getDollarCompletions(afterTrigger);
+      return this.getDollarCompletions(afterTrigger, document);
     }
   }
 
@@ -145,7 +145,8 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
    * CLI-native syntax for full file/directory attachment
    */
   private async getAtCompletions(
-    filterText: string
+    filterText: string,
+    document: vscode.TextDocument
   ): Promise<vscode.CompletionList> {
     // Use shared helper to get plain completions
     const plainItems = await getFileCompletions(filterText);
@@ -153,7 +154,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     // Convert to VS Code completion items with range for YAML compatibility
     const range = this.calculateCompletionRange("@");
     const items = plainItems.map((item) =>
-      toVSCodeCompletionItem(item, "@", range)
+      toVSCodeCompletionItem(item, "@", range, document)
     );
 
     return new vscode.CompletionList(items, true);
@@ -171,7 +172,8 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
    * - `#Fl` → Shows selections + symbols matching "Fl"
    */
   private async getHashCompletions(
-    filterText: string
+    filterText: string,
+    document: vscode.TextDocument
   ): Promise<vscode.CompletionList> {
     // Use shared helper to get plain completions
     const plainItems = await getHashCompletions(filterText);
@@ -179,7 +181,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     // Convert to VS Code completion items with range for YAML compatibility
     const range = this.calculateCompletionRange("#");
     const items = plainItems.map((item) =>
-      toVSCodeCompletionItem(item, "#", range)
+      toVSCodeCompletionItem(item, "#", range, document)
     );
 
     // CRITICAL: Must be true to get fresh symbol queries as user types
@@ -196,7 +198,8 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
    * Get completions for ~ trigger (git change context)
    */
   private async getTildeCompletions(
-    filterText: string
+    filterText: string,
+    document: vscode.TextDocument
   ): Promise<vscode.CompletionList> {
     const workspaceRoot = vscode.workspace.workspaceFolders?.length
       ? getVsCodeWorkspaceRoot()
@@ -205,24 +208,28 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
 
     const range = this.calculateCompletionRange("~");
     const items = plainItems.map((item) =>
-      toVSCodeCompletionItem(item, "~", range)
+      toVSCodeCompletionItem(item, "~", range, document)
     );
 
     return new vscode.CompletionList(items, true);
   }
 
-  private getDollarCompletions(filterText: string): vscode.CompletionList {
+  private getDollarCompletions(
+    filterText: string,
+    document: vscode.TextDocument
+  ): vscode.CompletionList {
     const plainItems = getPriorContextCompletions(filterText);
     const range = this.calculateCompletionRange("$");
     const items = plainItems.map((item) =>
-      toVSCodeCompletionItem(item, "$", range)
+      toVSCodeCompletionItem(item, "$", range, document)
     );
 
     return new vscode.CompletionList(items, true);
   }
 
   private async getSecretCompletions(
-    filterText: string
+    filterText: string,
+    document: vscode.TextDocument
   ): Promise<vscode.CompletionList> {
     const registry = this.getSecretRegistry?.();
     if (!registry || !vscode.workspace.workspaceFolders?.length) {
@@ -233,7 +240,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     const plainItems = getSecretCompletions(names, filterText);
     const range = this.calculateCompletionRange("!");
     const items = plainItems.map((item) =>
-      toVSCodeCompletionItem(item, "!", range)
+      toVSCodeCompletionItem(item, "!", range, document)
     );
     return new vscode.CompletionList(items, true);
   }
