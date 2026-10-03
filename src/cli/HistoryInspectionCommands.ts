@@ -30,6 +30,10 @@ import type {
   WorkflowLineageDescriptor,
 } from "../types/CtrlYokeTypes";
 import { isScriptStep } from "../types/CtrlYokeTypes";
+import {
+  promptFirstLinePreview,
+  STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS,
+} from "../utils/TextUtils";
 import type { RunSummary } from "../types/WorkflowTimelineTypes";
 import {
   EXECUTION_PHASES,
@@ -2057,9 +2061,9 @@ function formatStepPrompt(
   full: boolean
 ): string {
   const prompt = step.prompt ?? step.script ?? "";
-  if (full) return prompt;
-  const firstLine = prompt.split(/\r?\n/, 1)[0] ?? "";
-  return firstLine.length > 120 ? `${firstLine.slice(0, 117)}…` : firstLine;
+  return full
+    ? prompt
+    : promptFirstLinePreview(prompt, STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS);
 }
 
 /** A working file's `_runtime.elapsed` (seconds), or null when absent or invalid. */

@@ -13,11 +13,12 @@ import {
   workflowStatusRowPrefix,
   workflowStatusSearchText,
   workflowStatusStepName,
+  workflowStatusStepTitle,
   workflowStepStatus,
   type WorkflowStatusParams,
   type WorkflowStatusResult,
 } from "./workflowStatusModel";
-import { isToolViewPromptTruncated, sliceFindMatches } from "./shared";
+import { sliceFindMatches } from "./shared";
 
 export interface ToolViewBodyProps {
   params: unknown;
@@ -97,11 +98,7 @@ export const WorkflowStatusBody: React.FC<ToolViewBodyProps> = ({
                   </td>
                   <td
                     className="p-1 [overflow-wrap:anywhere]"
-                    title={
-                      isToolViewPromptTruncated(step.prompt)
-                        ? step.prompt
-                        : undefined
-                    }
+                    title={workflowStatusStepTitle(step)}
                   >
                     {highlightText(
                       name,

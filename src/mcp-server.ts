@@ -58,6 +58,10 @@ import {
   resolveEffectiveMaxSteps,
 } from "./utils/QueueLimitUtils";
 import { isUnlimited } from "./utils/LimitUtils";
+import {
+  promptFirstLinePreview,
+  STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS,
+} from "./utils/TextUtils";
 import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
 import {
   GlobalWorkflowStatusService,
@@ -981,7 +985,7 @@ export class CtrlYokeMCPServer {
 
   /**
    * Handle workflow_status tool invocation
-   * Returns comprehensive queue state including metadata and all prompts
+   * Returns queue metadata and a one-row summary per step
    */
   private async handleWorkflowStatus() {
     const selected = await this.resolveRun(MCP_WORKFLOW_STATUS_TOOL_NAME);
@@ -1025,12 +1029,24 @@ export class CtrlYokeMCPServer {
         // present; warnings are advisory and must not fail this read tool.
       }
     }
-    const steps = allSteps.map((p, index) => ({
-      index,
-      prompt: isScriptStep(p) ? `(script) ${p.script}` : p.prompt,
-      status: stepStatuses[index],
-      model: isScriptStep(p) ? undefined : p.model,
-    }));
+    // One row per step, so a long-running orchestrator's status stays small no
+    // matter how many steps it has appended. Full prompts are a read_output
+    // call away.
+    const steps = allSteps.map((p, index) => {
+      const prompt = isScriptStep(p) ? `(script) ${p.script}` : p.prompt;
+      const preview = promptFirstLinePreview(
+        prompt,
+        STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS
+      );
+      return {
+        index,
+        ...(p.name?.trim() ? { name: p.name.trim() } : {}),
+        prompt: preview,
+        ...(preview !== prompt ? { promptTruncated: true } : {}),
+        status: stepStatuses[index],
+        model: isScriptStep(p) ? undefined : p.model,
+      };
+    });
 
     const completedCount = allSteps.filter(
       (p) => p._runtime?.completedAt !== undefined

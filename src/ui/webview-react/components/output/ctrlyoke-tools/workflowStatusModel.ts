@@ -1,5 +1,6 @@
 import {
   isRecord,
+  isToolViewPromptTruncated,
   toolViewPromptPreview,
   tryParseJson,
   wrappedTextLines,
@@ -12,7 +13,10 @@ import {
 
 export interface WorkflowStatusStep {
   index: number;
+  name?: string;
+  /** The prompt's first line; `promptTruncated` marks a shortened one. */
   prompt: string;
+  promptTruncated?: boolean;
   status: string;
   model?: string;
 }
@@ -69,7 +73,10 @@ export function parseWorkflowStatusResultText(
         (step) =>
           isRecord(step) &&
           Number.isInteger(step.index) &&
+          (step.name === undefined || typeof step.name === "string") &&
           typeof step.prompt === "string" &&
+          (step.promptTruncated === undefined ||
+            typeof step.promptTruncated === "boolean") &&
           typeof step.status === "string" &&
           (step.model === undefined || typeof step.model === "string")
       )
@@ -102,7 +109,18 @@ export function workflowStatusSummary(
 }
 
 export function workflowStatusStepName(step: WorkflowStatusStep): string {
-  return toolViewPromptPreview(step.prompt) || `Step ${step.index + 1}`;
+  return (
+    step.name || toolViewPromptPreview(step.prompt) || `Step ${step.index + 1}`
+  );
+}
+
+/** Hover text for a step's row, when the row hides part of its prompt. */
+export function workflowStatusStepTitle(
+  step: WorkflowStatusStep
+): string | undefined {
+  return step.name || isToolViewPromptTruncated(step.prompt)
+    ? step.prompt
+    : undefined;
 }
 
 export function workflowStatusHarnessLabel(

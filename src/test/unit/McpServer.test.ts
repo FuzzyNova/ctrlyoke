@@ -11,6 +11,7 @@ import {
   type McpToolCallingContext,
 } from "../../mcp-server";
 import { getGlobalMaxSteps } from "../../utils/QueueLimitUtils";
+import { STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS } from "../../utils/TextUtils";
 import { parseArgString } from "../../utils/CliArgParser";
 import { ensureMcpStorageInitialized } from "../helpers/mcpStorage";
 import { removeTempDir } from "../helpers/tempWorkspace";
@@ -2918,6 +2919,50 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     const status = responseJson(await server.invokeTool("workflow_status", {}));
 
     assert.strictEqual(status.steps[0].status, STEP_STATUS.FAILED);
+  });
+
+  test("summarizes each step's prompt and leaves the full text to read_output", async () => {
+    const server = await setup();
+    const run = await createRun("status-summary", "2026-01-01T00-00-00-000Z", {
+      stepCount: 3,
+      executionState: EXECUTION_STATES.RUNNING,
+    });
+    const longPrompt = `Fix the bug\n${"Detailed instructions. ".repeat(500)}`;
+    const workingFile = JSON.parse(
+      await fs.readFile(run.runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.steps = [
+      { name: "  Fix bug  ", prompt: longPrompt },
+      { prompt: "x".repeat(STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS + 50) },
+      { prompt: "short" },
+    ];
+    await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const status = responseJson(await server.invokeTool("workflow_status", {}));
+
+    assert.deepStrictEqual(
+      status.steps.map(
+        (step: {
+          name?: string;
+          prompt: string;
+          promptTruncated?: boolean;
+        }) => [step.name, step.prompt, step.promptTruncated]
+      ),
+      [
+        ["Fix bug", "Fix the bug", true],
+        [
+          undefined,
+          `${"x".repeat(STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS)}…`,
+          true,
+        ],
+        [undefined, "short", undefined],
+      ]
+    );
+    const output = responseJson(
+      await server.invokeTool(MCP_READ_OUTPUT_TOOL_NAME, { indices: [0] })
+    );
+    assert.strictEqual(output.outputs[0].prompt, longPrompt);
   });
 
   test("returns the newer workflow format refusal as a tool error", async () => {
