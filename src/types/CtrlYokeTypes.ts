@@ -402,6 +402,10 @@ export interface FinalStepRuntimeState {
   phase: FinalStepPhase;
   loopCount: number;
   status?: StepStatus;
+  /** Structured classification for the latest final-step failure. */
+  failureKind?: FailureKind;
+  /** Human-readable reason for the latest final-step failure. */
+  failureMessage?: string;
   startedAt?: number;
   completedAt?: number;
   preCondition?: ConditionEvaluationSummary;

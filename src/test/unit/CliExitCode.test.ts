@@ -57,4 +57,64 @@ suite("CliExitCode", () => {
 
     assert.strictEqual(getExitCode(state), 4);
   });
+
+  test("uses the last failed result when later failure stopped the run", () => {
+    const state: Pick<QueueState, "status" | "results"> = {
+      status: EXECUTION_STATES.ERROR,
+      results: [
+        {
+          prompt: "continued harness failure",
+          status: STEP_STATUS.FAILED,
+          timestamp: new Date(),
+          failureKind: FAILURE_KINDS.HARNESS_ERROR,
+        },
+        {
+          prompt: "stopping missing harness",
+          status: STEP_STATUS.FAILED,
+          timestamp: new Date(),
+          failureKind: FAILURE_KINDS.HARNESS_NOT_INSTALLED,
+        },
+      ],
+    };
+
+    assert.strictEqual(getExitCode(state), 3);
+  });
+
+  test("does not use a continued missing-harness failure for a plain stop", () => {
+    const state: Pick<QueueState, "status" | "results"> = {
+      status: EXECUTION_STATES.ERROR,
+      results: [
+        {
+          prompt: "continued missing harness",
+          status: STEP_STATUS.FAILED,
+          timestamp: new Date(),
+          failureKind: FAILURE_KINDS.HARNESS_NOT_INSTALLED,
+        },
+        {
+          prompt: "plain stopping failure",
+          status: STEP_STATUS.FAILED,
+          timestamp: new Date(),
+        },
+      ],
+    };
+
+    assert.strictEqual(getExitCode(state), 1);
+  });
+
+  test("uses a failed final step as the terminal failure", () => {
+    const state: Pick<QueueState, "status" | "results"> = {
+      status: EXECUTION_STATES.ERROR,
+      results: [],
+    };
+
+    assert.strictEqual(
+      getExitCode(state, {
+        phase: "finalStep",
+        loopCount: 0,
+        status: STEP_STATUS.FAILED,
+        failureKind: FAILURE_KINDS.TIMEOUT,
+      }),
+      4
+    );
+  });
 });

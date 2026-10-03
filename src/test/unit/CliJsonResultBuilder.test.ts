@@ -206,6 +206,70 @@ suite("CliJsonResultBuilder", () => {
     });
   });
 
+  test("reports the last failed queue step as the terminal error", () => {
+    const earlier: WorkflowStep = { prompt: "continued failure" };
+    const terminal: WorkflowStep = { prompt: "stopping failure" };
+    const output = build({
+      steps: [earlier, terminal],
+      results: [
+        promptResult(earlier, STEP_STATUS.FAILED, {
+          error: "continued harness missing",
+          failureKind: "harnessNotInstalled",
+        }),
+        promptResult(terminal, STEP_STATUS.FAILED, {
+          error: "terminal failure",
+        }),
+      ],
+      status: EXECUTION_STATES.ERROR,
+      promptFile: { steps: [earlier, terminal] },
+    });
+
+    assert.deepStrictEqual(output.error, {
+      step: 1,
+      loop: null,
+      message: "terminal failure",
+      attempt: 1,
+    });
+  });
+
+  test("includes final-step timeout kind and reason in JSON", () => {
+    const finalStep: WorkflowStep = {
+      type: STEP_TYPES.SCRIPT,
+      script: "node slow-script.js",
+    };
+    const output = build({
+      steps: [],
+      results: [],
+      status: EXECUTION_STATES.ERROR,
+      promptFile: { steps: [], finalStep },
+      finalStepRuntime: {
+        phase: FINAL_STEP_PHASES.FINAL_STEP,
+        loopCount: 0,
+        status: STEP_STATUS.FAILED,
+        failureKind: "timeout",
+        failureMessage: "Script step: timed out after 1033ms",
+      },
+    });
+
+    assert.deepStrictEqual(
+      {
+        failureKind: output.finalStep?.failureKind,
+        error: output.finalStep?.error,
+        topLevel: output.error,
+      },
+      {
+        failureKind: "timeout",
+        error: "Script step: timed out after 1033ms",
+        topLevel: {
+          step: "finalStep",
+          loop: 0,
+          message: "Script step: timed out after 1033ms",
+          attempt: null,
+        },
+      }
+    );
+  });
+
   test("keeps skipped, pending, and disabled steps in queue order", () => {
     const skipped: WorkflowStep = { prompt: "skipped" };
     const pending: WorkflowStep = { prompt: "pending" };

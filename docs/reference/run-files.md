@@ -343,6 +343,18 @@ Current workflow execution phase
 
 Current final step status
 
+### `finalStep.failureKind` {#workflow-runtime-finalstep-failurekind}
+
+- **Type:** `"userCancelled" | "processExit" | "harnessError" | "harnessNotInstalled" | "timeout" | "unknown"`
+
+Structured classification for the latest final-step failure
+
+### `finalStep.failureMessage` {#workflow-runtime-finalstep-failuremessage}
+
+- **Type:** `string`
+
+Human-readable reason for the latest final-step failure
+
 ### `finalStep.startedAt` {#workflow-runtime-finalstep-startedat}
 
 - **Type:** `number`
@@ -423,7 +435,7 @@ Context window size in tokens, captured from the last completed output
 
 ### `failureKind` {#step-runtime-failurekind}
 
-- **Type:** `"userCancelled" | "processExit" | "harnessError" | "timeout" | "unknown"`
+- **Type:** `"userCancelled" | "processExit" | "harnessError" | "harnessNotInstalled" | "timeout" | "unknown"`
 
 Structured classification of the last harness/session failure for this prompt.
 

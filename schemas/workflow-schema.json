@@ -1241,6 +1241,7 @@
                 "userCancelled",
                 "processExit",
                 "harnessError",
+                "harnessNotInstalled",
                 "timeout",
                 "unknown"
               ],
@@ -1517,6 +1518,22 @@
                 "skipped"
               ],
               "description": "Current final step status"
+            },
+            "failureKind": {
+              "type": "string",
+              "enum": [
+                "userCancelled",
+                "processExit",
+                "harnessError",
+                "harnessNotInstalled",
+                "timeout",
+                "unknown"
+              ],
+              "description": "Structured classification for the latest final-step failure"
+            },
+            "failureMessage": {
+              "type": "string",
+              "description": "Human-readable reason for the latest final-step failure"
             },
             "startedAt": {
               "type": "number",

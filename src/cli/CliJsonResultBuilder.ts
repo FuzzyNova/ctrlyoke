@@ -43,6 +43,7 @@ import type { WorkflowExecutionPreview } from "../types/ExecutionPreviewTypes";
 import type { CompatibilityDiagnostic } from "../types/CompatibilityTypes";
 import { redactExecutionPreview } from "../types/PreviewRedactor";
 import { secretRedactionService } from "../utils/SecretRedactionService";
+import { selectTerminalFailure } from "./CliExitCode";
 
 /** Redact again at the standalone CLI serialization boundary. */
 export function buildCliPreviewJsonResult(
@@ -313,7 +314,12 @@ export function buildCliJsonResult(input: CliJsonResultInput): CliJsonResult {
     summary: buildSummary(state.steps, state.results),
     steps,
     finalStep,
-    error: selectTopLevelError(state, steps, finalStep),
+    error: selectTopLevelError(
+      state,
+      steps,
+      finalStep,
+      input.finalStepRuntime
+    ),
   });
 }
 
@@ -443,8 +449,8 @@ function buildFinalStep(
           ),
         }
       : {}),
-    failureKind: stepRuntime?.failureKind ?? null,
-    error: stepRuntime?.failureMessage ?? null,
+    failureKind: runtime?.failureKind ?? stepRuntime?.failureKind ?? null,
+    error: runtime?.failureMessage ?? stepRuntime?.failureMessage ?? null,
     lastLoop,
   };
 }
@@ -681,10 +687,12 @@ function getStepError(
 function selectTopLevelError(
   state: QueueState,
   steps: readonly CliJsonStepResult[],
-  finalStep: CliJsonFinalStep | null
+  finalStep: CliJsonFinalStep | null,
+  finalStepRuntime: FinalStepRuntimeState | undefined
 ): CliJsonError | null {
-  const failedStep = steps.find((step) => step.status === STEP_STATUS.FAILED);
-  if (failedStep) {
+  const terminalFailure = selectTerminalFailure(state, finalStepRuntime);
+  if (terminalFailure?.kind === "queue") {
+    const failedStep = steps[terminalFailure.index];
     return {
       step: failedStep.index,
       loop: null,
@@ -692,9 +700,12 @@ function selectTopLevelError(
       attempt: failedStep.lastAttempt?.number ?? null,
     };
   }
-  if (finalStep?.status === STEP_STATUS.FAILED) {
+  if (
+    terminalFailure?.kind === FINAL_STEP_PHASES.FINAL_STEP &&
+    finalStep
+  ) {
     return {
-      step: "finalStep",
+      step: FINAL_STEP_PHASES.FINAL_STEP,
       loop: finalStep.loopCount > 0 ? finalStep.loopCount - 1 : null,
       message: finalStep.error ?? "Final step failed",
       attempt: finalStep.lastLoop?.lastAttempt?.number ?? null,

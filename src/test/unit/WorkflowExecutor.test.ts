@@ -802,6 +802,30 @@ suite("WorkflowExecutor condition shell reporting", () => {
     ]);
   });
 
+  test("persists harness failure kind when the step continues", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    integration.harnessErrorFailure = true;
+    (integration as any).lastFailureReason = "harness returned an error";
+    integration.onSend = async () => ({ success: false });
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "continue after failure",
+          errorBehavior: { onError: CONDITION_ACTIONS.CONTINUE },
+        },
+      ],
+    });
+
+    await makeExecutor(queue).execute(integration, makeContext(integration));
+
+    assert.strictEqual(
+      queue.getState().results[0].failureKind,
+      FAILURE_KINDS.HARNESS_ERROR
+    );
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+  });
+
   test("re-sends an end-condition retry after a retry harness failure on fresh attempt indices", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
@@ -3277,6 +3301,39 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       FAILURE_KINDS.TIMEOUT
     );
     assert.strictEqual(getExitCode(queue.getState()), 4);
+  });
+
+  test("persists final-step timeout kind and reason", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new FixedEvaluationEvaluator(new MockPlatform(), {
+      passed: false,
+      actual: "",
+      errored: true,
+      stdout: "",
+      stderr: "",
+      result: "",
+      duration: 1_033,
+      error: "timed out after 1033ms",
+      timeout: true,
+    });
+    queue.loadPrompts({
+      steps: [{ prompt: "queue succeeds" }],
+      finalStep: { type: "script", script: "node slow-final-script.js" },
+    });
+
+    await makeExecutor(queue, evaluator).execute(
+      integration,
+      makeContext(integration)
+    );
+
+    const finalRuntime = queue.getFinalStepRuntime();
+    assert.strictEqual(finalRuntime?.failureKind, FAILURE_KINDS.TIMEOUT);
+    assert.strictEqual(
+      finalRuntime?.failureMessage,
+      "Script step: timed out after 1033ms"
+    );
+    assert.strictEqual(getExitCode(queue.getState(), finalRuntime), 4);
   });
 
   test("keeps ordinary script failures at CLI exit code 1", async () => {

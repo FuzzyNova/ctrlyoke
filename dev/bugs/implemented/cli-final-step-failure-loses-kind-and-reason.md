@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-03 by the more-bug-backlog2 workflow final step (claude-cli)
 - **Area:** `src/core/WorkflowExecutor.ts` (`failStepForInternalError` and `handleHarnessFailure`, final-step branches), `src/cli/CliExitCode.ts`, `src/cli/CliJsonResultBuilder.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
