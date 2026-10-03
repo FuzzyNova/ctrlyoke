@@ -7,6 +7,7 @@ export const ANTIGRAVITY_WIRE_VALUES = {
   GENERIC: "GENERIC",
   RUNNING: "RUNNING",
   DONE: "DONE",
+  ERROR: "ERROR",
 } as const;
 
 /**

@@ -601,10 +601,15 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     const isAskQuestionResult =
       entry.source === ANTIGRAVITY_WIRE_VALUES.MODEL &&
       entry.type === ANTIGRAVITY_ENTRY_TYPES.ASK_QUESTION;
+    const isFailedToolResult =
+      entry.source === ANTIGRAVITY_WIRE_VALUES.MODEL &&
+      this.isToolResultEntry(entry) &&
+      entry.status === ANTIGRAVITY_WIRE_VALUES.ERROR;
     if (
       entry.status !== ANTIGRAVITY_WIRE_VALUES.DONE &&
       !isBackgroundLaunch &&
-      !isAskQuestionResult
+      !isAskQuestionResult &&
+      !isFailedToolResult
     ) {
       return [];
     }

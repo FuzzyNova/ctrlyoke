@@ -53,7 +53,7 @@ export class AntigravityToolEventBuilder {
     const normalizedName = toolName.toLowerCase();
     const success = this.resultSucceeded(result);
     const error = success ? undefined : this.resultError(result);
-    const resultText = this.stringContent(result);
+    const resultText = error || this.stringContent(result);
     const id = taskId ?? eventId;
 
     if (result.type === ANTIGRAVITY_ENTRY_TYPES.ASK_QUESTION) {
@@ -492,6 +492,12 @@ export class AntigravityToolEventBuilder {
   }
 
   private static resultSucceeded(entry: AntigravityTranscriptEntry): boolean {
+    if (
+      entry.status === ANTIGRAVITY_WIRE_VALUES.ERROR ||
+      (typeof entry.error === "string" && entry.error.trim())
+    ) {
+      return false;
+    }
     const explicit = entry.success;
     if (typeof explicit === "boolean") {
       return explicit;

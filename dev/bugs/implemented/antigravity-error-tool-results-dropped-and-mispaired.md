@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), reproduced by replaying a real agy `transcript_full.jsonl` through the parser
 - **Area:** `src/core/harness/antigravity/AntigravityLogParser.ts` (`mapTranscriptRecord` ~604-610, `toolCallMatchesResult` GENERIC case ~854-861), `src/core/harness/antigravity/AntigravityToolEventBuilder.ts` (`resultSucceeded` ~493)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
