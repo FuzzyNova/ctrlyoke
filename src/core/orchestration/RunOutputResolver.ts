@@ -82,6 +82,13 @@ export interface ResolvedRunAttemptValue extends ResolvedRunAttempt {
   terminalReason?: string;
 }
 
+export interface RunAttemptLifecycleEvent {
+  eventType:
+    | typeof TIMELINE_EVENT_TYPES.ATTEMPT_STARTED
+    | typeof TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED;
+  target: OutputExecutionTarget;
+}
+
 export type RunFileChangeOperation = "created" | "modified" | "deleted";
 export type RunFileChangeScope =
   (typeof RUN_FILE_CHANGE_SCOPES)[keyof typeof RUN_FILE_CHANGE_SCOPES];
@@ -249,6 +256,24 @@ export class RunOutputResolver {
       manifest,
       this.recorder.streamEvents(manifestPath)
     );
+  }
+
+  /**
+   * Read only attempt lifecycle records for compact history projections.
+   * JSONL is still scanned sequentially, but output payloads are discarded
+   * before any attempt reconstruction or response aggregation.
+   */
+  async *streamAttemptLifecycle(
+    manifestPath: string
+  ): AsyncGenerator<RunAttemptLifecycleEvent, void, undefined> {
+    for await (const event of this.recorder.streamEvents(manifestPath)) {
+      if (
+        event.eventType === TIMELINE_EVENT_TYPES.ATTEMPT_STARTED ||
+        event.eventType === TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED
+      ) {
+        yield { eventType: event.eventType, target: event.target };
+      }
+    }
   }
 
   /**

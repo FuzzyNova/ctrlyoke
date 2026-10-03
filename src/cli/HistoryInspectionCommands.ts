@@ -1,4 +1,5 @@
 import type { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
+import * as fs from "node:fs/promises";
 import type { WorkflowLineageRepository } from "../core/orchestration/WorkflowLineageRepository";
 import type { RunNavigationSummary } from "../core/orchestration/OutputHistoryManager";
 import { bootstrapCliWorkspace } from "./CliWorkspaceBootstrap";
@@ -6,6 +7,7 @@ import type {
   HistoryListOptions,
   HistoryRunsOptions,
   HistoryShowOptions,
+  HistoryStepsOptions,
   HistorySearchOptions as HistorySearchCommandOptions,
 } from "./HistoryCommandDefinitions";
 import {
@@ -27,6 +29,7 @@ import {
   HARNESS_IDS,
   HISTORY_EVENT_KINDS,
   HISTORY_SEARCH_COUNT_STATES,
+  HISTORY_STEP_STATES,
   RUN_OUTPUT_RESOLVER_EVENT_KINDS,
   STATUS_MESSAGE_SEVERITY,
 } from "../types/DashboardConstants";
@@ -42,9 +45,11 @@ import {
   type ResolvedRunAttemptValue,
   RunOutputResolver,
 } from "../core/orchestration/RunOutputResolver";
+import type { RunAttemptLifecycleEvent } from "../core/orchestration/RunOutputResolver";
 import {
   TIMELINE_ATTEMPT_KINDS,
   TIMELINE_ATTEMPT_TERMINAL_STATES,
+  TIMELINE_EVENT_TYPES,
   type TimelineAttemptTerminalState,
 } from "../types/WorkflowTimelineTypes";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
@@ -64,6 +69,11 @@ import type {
 } from "../core/orchestration/HistorySearchIndexService";
 import type { PartialCtrlYokeSettings } from "../types/CtrlYokeSettings";
 import { parseHistoryTime } from "./HistoryTime";
+import {
+  parseHistoryInteger,
+  parseHistorySince,
+  parseHistoryStateFilter,
+} from "./HistoryFilterParsing";
 
 export interface HistoryInspectionCommandIo {
   writeOut(message: string): void;
@@ -86,6 +96,9 @@ export interface HistoryInspectionRunOutputResolver {
   streamAttempts(
     manifestPath: string
   ): AsyncGenerator<RunOutputResolverAttemptEvent, void, undefined>;
+  streamAttemptLifecycle(
+    manifestPath: string
+  ): AsyncGenerator<RunAttemptLifecycleEvent, void, undefined>;
 }
 
 export interface HistoryInspectionWorkspace {
@@ -100,6 +113,7 @@ export interface HistoryInspectionCommandDependencies {
       | HistoryListOptions
       | HistoryRunsOptions
       | HistoryShowOptions
+      | HistoryStepsOptions
       | HistorySearchCommandOptions,
       "cwd"
     >,
@@ -152,13 +166,35 @@ export async function listHistoryCommand(
     lineageRepository,
     historyManager
   );
+  const states = parseHistoryStateFilter(options.state);
+  const since = parseHistorySince(options.since);
+  const limit = parseHistoryInteger(
+    options.limit,
+    "--limit",
+    1,
+    Number.MAX_SAFE_INTEGER
+  );
+  const filteredRows = rows
+    .filter(
+      (row) =>
+        !states ||
+        (row.latestRun && states.includes(row.latestRun.executionState))
+    )
+    .filter(
+      (row) =>
+        since === undefined ||
+        (row.latestRun && row.latestRun.startedAt >= since)
+    )
+    .slice(0, limit);
 
   if (options.json) {
-    io.writeOut(JSON.stringify(secretRedactionService.redactValue(rows)));
+    io.writeOut(
+      JSON.stringify(secretRedactionService.redactValue(filteredRows))
+    );
     return;
   }
 
-  renderHistoryList(rows, io);
+  renderHistoryList(filteredRows, io);
 }
 
 export async function runsHistoryCommand(
@@ -212,15 +248,22 @@ export async function showHistoryCommand(
     "--run"
   );
   const targetFilter = parseHistoryShowStep(options.step);
+  const runSummary = (await historyManager.getRunSummaries(workflowKey)).find(
+    (summary) => summary.runRef === runRef
+  );
+  if (!runSummary) {
+    throw new Error(`Run "${runRef}" was not found in history.`);
+  }
+  const workingDefinition = await readRunWorkingDefinition(
+    workspace.workspaceRoot,
+    workflowKey,
+    runRef
+  );
   if (targetFilter) {
-    const runSummary = (await historyManager.getRunSummaries(workflowKey)).find(
-      (summary) => summary.runRef === runRef
-    );
-    if (!runSummary) {
-      throw new Error(`Run "${runRef}" was not found in history.`);
-    }
     const workingFileStepCount =
-      runSummary.workingFileStepCount ?? runSummary.stepCount;
+      workingDefinition?.steps.length ??
+      runSummary.workingFileStepCount ??
+      runSummary.stepCount;
     if (targetFilter.kind === FINAL_STEP_PHASES.QUEUE) {
       assertStepIndex(workingFileStepCount, targetFilter.stepIndex, "--step");
     } else if (runSummary.hasFinalStep === false) {
@@ -238,6 +281,7 @@ export async function showHistoryCommand(
     dependencies.createRunOutputResolver?.() ?? new RunOutputResolver();
 
   CliTerminalFormatter.setColorEnabled(options.color !== false);
+  if (!options.json) io.writeErr(`Run: ${runRef}`);
   for await (const event of resolver.streamAttempts(manifestPath)) {
     if (event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_SETTLED) {
       if (!matchesHistoryShowStep(event.attempt.target, targetFilter)) {
@@ -248,12 +292,17 @@ export async function showHistoryCommand(
           JSON.stringify(
             secretRedactionService.redactValue({
               ...event.attempt,
+              runRef,
               unterminated: event.unterminated,
             })
           )
         );
       } else {
-        renderHistoryAttempt(event.attempt, event.unterminated);
+        renderHistoryAttempt(
+          event.attempt,
+          event.unterminated,
+          workingDefinition
+        );
       }
       continue;
     }
@@ -267,6 +316,105 @@ export async function showHistoryCommand(
         historyExecutionStateSeverity(event.executionState)
       );
     }
+  }
+}
+
+export async function stepsHistoryCommand(
+  options: HistoryStepsOptions,
+  io: HistoryInspectionCommandIo,
+  dependencies: HistoryInspectionCommandDependencies = {}
+): Promise<void> {
+  const workspace = await (
+    dependencies.bootstrapCliWorkspace ?? bootstrapCliWorkspace
+  )(options);
+  const workflowKey = options.workflow as WorkflowKey;
+  const historyManager = workspace.createOutputHistoryManager();
+  const runRef = await resolveCliRunRef(
+    historyManager,
+    workflowKey,
+    options.run,
+    "--run"
+  );
+  const runSummary = (await historyManager.getRunSummaries(workflowKey)).find(
+    (summary) => summary.runRef === runRef
+  );
+  if (!runSummary) throw new Error(`Run "${runRef}" was not found in history.`);
+  const definition = await readRunWorkingDefinition(
+    workspace.workspaceRoot,
+    workflowKey,
+    runRef
+  );
+  if (!definition) {
+    throw new Error(`Run "${runRef}" has no readable workflow working file.`);
+  }
+
+  const steps = definition.steps.map((step, index) => ({
+    selector: String(index),
+    index,
+    name: step.name?.trim() || `Step ${index + 1}`,
+    state: historyWorkingStepState(step._runtime),
+    harness: step._runtime?.harness ?? "—",
+    model: step._runtime?.model ?? "—",
+    elapsed: formatElapsed(step._runtime?.elapsed),
+    attempts: 0,
+    prompt: formatStepPrompt(step, options.fullPrompts === true),
+  }));
+  const finalPassIndices = new Set<number>();
+  const resolver =
+    dependencies.createRunOutputResolver?.() ?? new RunOutputResolver();
+  for await (const event of resolver.streamAttemptLifecycle(
+    WorkflowPaths.manifestPath(workspace.workspaceRoot, workflowKey, runRef)
+  )) {
+    const index =
+      event.target.kind === FINAL_STEP_PHASES.QUEUE
+        ? event.target.stepIndex
+        : undefined;
+    if (event.eventType === TIMELINE_EVENT_TYPES.ATTEMPT_STARTED) {
+      if (index !== undefined && steps[index]) steps[index].attempts++;
+      if (
+        index === undefined &&
+        definition.finalStep &&
+        event.target.kind === FINAL_STEP_PHASES.FINAL_STEP
+      ) {
+        finalPassIndices.add(event.target.loopIndex);
+      }
+    }
+  }
+  const finalStep = definition.finalStep
+    ? {
+        selector: "final",
+        name: definition.finalStep.name?.trim() || "Final Step",
+        state: historyWorkingStepState(definition.finalStep._runtime),
+        harness: definition.finalStep._runtime?.harness ?? "—",
+        model: definition.finalStep._runtime?.model ?? "—",
+        elapsed: formatElapsed(definition.finalStep._runtime?.elapsed),
+        passes: finalPassIndices.size,
+        prompt: formatStepPrompt(
+          definition.finalStep,
+          options.fullPrompts === true
+        ),
+      }
+    : null;
+
+  if (options.json) {
+    io.writeOut(
+      JSON.stringify(
+        secretRedactionService.redactValue({ runRef, steps, finalStep })
+      )
+    );
+    return;
+  }
+  io.writeErr(`Run: ${runRef}`);
+  io.writeOut("#  NAME  STATE  HARNESS  MODEL  ELAPSED  ATTEMPTS  PROMPT");
+  for (const step of steps) {
+    io.writeOut(
+      `${step.index}  ${step.name}  ${step.state}  ${step.harness}  ${step.model}  ${step.elapsed}  ${step.attempts}  ${step.prompt}`
+    );
+  }
+  if (finalStep) {
+    io.writeOut(
+      `F  ${finalStep.name}  ${finalStep.state}  ${finalStep.harness}  ${finalStep.model}  ${finalStep.elapsed}  ${finalStep.passes} passes  ${finalStep.prompt}`
+    );
   }
 }
 
@@ -412,15 +560,9 @@ function buildHistorySearchQuery(
     Object.values(HARNESS_IDS),
     "--harness"
   );
-  const executionStates = parseHistorySearchValues(
-    options.state,
-    Object.values(EXECUTION_STATES),
-    "--state"
-  );
+  const executionStates = parseHistoryStateFilter(options.state);
   const now = Date.now();
-  const since = options.since
-    ? parseHistoryTime(options.since, now)
-    : undefined;
+  const since = parseHistorySince(options.since);
   const until = options.until
     ? parseHistoryTime(options.until, now, "end")
     : undefined;
@@ -486,21 +628,7 @@ function parseHistorySearchInteger(
   minimum: number,
   whenMissing: number
 ): number {
-  if (value === undefined) {
-    return whenMissing;
-  }
-  if (!/^\d+$/.test(value)) {
-    throw new Error(
-      `Invalid ${optionName} value "${value}"; expected an integer.`
-    );
-  }
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed < minimum) {
-    throw new Error(
-      `Invalid ${optionName} value "${value}"; expected an integer of at least ${minimum}.`
-    );
-  }
-  return parsed;
+  return parseHistoryInteger(value, optionName, minimum, whenMissing);
 }
 
 function requestSnippetChars(options: HistorySearchCommandOptions): number {
@@ -645,7 +773,8 @@ function matchesHistoryShowStep(
 
 function renderHistoryAttempt(
   attempt: ResolvedRunAttemptValue,
-  unterminated: boolean
+  unterminated: boolean,
+  workingDefinition?: RunWorkingDefinition
 ): void {
   const target = createHistoryOutputTarget(attempt);
   if (attempt.target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
@@ -653,9 +782,8 @@ function renderHistoryAttempt(
   }
   CliTerminalFormatter.renderPromptHeader({
     stepIndex: target.stepIndex,
-    totalSteps:
-      attempt.definition?.definition.steps.length ?? target.stepIndex + 1,
-    stepName: historyStepName(attempt),
+    totalSteps: workingDefinition?.steps.length ?? target.stepIndex + 1,
+    stepName: historyStepName(attempt, workingDefinition),
     promptText: historyAttemptPrompt(attempt),
     attemptIndex: attempt.attemptIndex,
     runIndex: attempt.runIndex,
@@ -706,9 +834,17 @@ function createHistoryOutputTarget(attempt: ResolvedRunAttemptValue): {
   };
 }
 
-function historyStepName(attempt: ResolvedRunAttemptValue): string {
+function historyStepName(
+  attempt: ResolvedRunAttemptValue,
+  workingDefinition?: RunWorkingDefinition
+): string {
   const step = attempt.definition?.step;
   if (step?.name?.trim()) return step.name.trim();
+  if (attempt.target.kind === FINAL_STEP_PHASES.QUEUE) {
+    const workingName =
+      workingDefinition?.steps[attempt.target.stepIndex]?.name;
+    if (workingName?.trim()) return workingName.trim();
+  }
   if (step && isScriptStep(step)) {
     return step.script.split(/\s+/)[0] ?? "script";
   }
@@ -892,7 +1028,7 @@ function renderRunSummaries(
     summary.runRef,
     formatDate(summary.startedAt),
     summary.executionState,
-    String(summary.stepCount),
+    String(summary.workingFileStepCount ?? summary.stepCount),
     summary.hasMixedHarnesses ? "mixed" : (summary.primaryHarness ?? "—"),
     formatTokens(summary.tokenTotals?.total),
   ]);
@@ -927,4 +1063,77 @@ function formatDate(timestamp: number | null | undefined): string {
 
 function formatTokens(tokens: number | undefined): string {
   return tokens === undefined ? "—" : tokens.toLocaleString("en-US");
+}
+
+interface RunWorkingDefinition {
+  steps: Array<{
+    name?: string;
+    prompt?: string;
+    script?: string;
+    _runtime?: {
+      harness?: string;
+      model?: string;
+      startedAt?: number;
+      completedAt?: number;
+      elapsed?: number;
+      terminalStatus?: string;
+    };
+  }>;
+  finalStep?: RunWorkingDefinition["steps"][number];
+}
+
+async function readRunWorkingDefinition(
+  workspaceRoot: string,
+  workflowKey: WorkflowKey,
+  runRef: RunRef
+): Promise<RunWorkingDefinition | undefined> {
+  try {
+    const raw: unknown = JSON.parse(
+      await fs.readFile(
+        WorkflowPaths.runFilePath(workspaceRoot, workflowKey, runRef),
+        "utf8"
+      )
+    );
+    if (!raw || typeof raw !== "object") return undefined;
+    const candidate = raw as Partial<RunWorkingDefinition>;
+    return Array.isArray(candidate.steps)
+      ? (candidate as RunWorkingDefinition)
+      : undefined;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  }
+}
+
+function formatStepPrompt(
+  step: NonNullable<RunWorkingDefinition["finalStep"]>,
+  full: boolean
+): string {
+  const prompt = step.prompt ?? step.script ?? "";
+  if (full) return prompt;
+  const firstLine = prompt.split(/\r?\n/, 1)[0] ?? "";
+  return firstLine.length > 120 ? `${firstLine.slice(0, 117)}…` : firstLine;
+}
+
+function formatElapsed(elapsed: number | undefined): string {
+  if (elapsed === undefined || !Number.isFinite(elapsed) || elapsed < 0)
+    return "—";
+  const seconds = Math.round(elapsed);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return remainingSeconds ? `${minutes}m${remainingSeconds}s` : `${minutes}m`;
+}
+
+function historyWorkingStepState(
+  runtime: RunWorkingDefinition["steps"][number]["_runtime"]
+): string {
+  return (
+    runtime?.terminalStatus ??
+    (runtime?.startedAt !== undefined
+      ? runtime.completedAt !== undefined
+        ? EXECUTION_STATES.COMPLETED
+        : EXECUTION_STATES.RUNNING
+      : HISTORY_STEP_STATES.PENDING)
+  );
 }

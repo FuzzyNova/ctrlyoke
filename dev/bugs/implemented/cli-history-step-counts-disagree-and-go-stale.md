@@ -50,3 +50,5 @@ reading the working file itself.
   when the attempt's snapshot lacks the step.
 - Fixing the revision bug removes the missing-definition half. The display should
   still not depend on it.
+
+**Resolution:** fixed in this commit

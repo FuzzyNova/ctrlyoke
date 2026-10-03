@@ -160,6 +160,7 @@ suite("CLI history trash command parser", () => {
       list: noop,
       runs: noop,
       show: noop,
+      steps: noop,
       search: noop,
       trash: {
         list: async (options) => {

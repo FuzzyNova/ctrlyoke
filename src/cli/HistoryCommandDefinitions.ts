@@ -17,6 +17,9 @@ export interface HistoryRelinkOptions {
 export interface HistoryListOptions {
   cwd?: string;
   all?: boolean;
+  state?: string[];
+  since?: string;
+  limit?: string;
   json?: boolean;
 }
 
@@ -29,10 +32,18 @@ export interface HistoryRunsOptions {
 export interface HistoryShowOptions {
   cwd?: string;
   workflow: string;
-  run: string;
+  run?: string;
   step?: string;
   json?: boolean;
   color?: boolean;
+}
+
+export interface HistoryStepsOptions {
+  cwd?: string;
+  workflow: string;
+  run?: string;
+  json?: boolean;
+  fullPrompts?: boolean;
 }
 
 export interface HistorySearchOptions {
@@ -93,6 +104,7 @@ export interface HistoryCommandHandlers {
   list(options: HistoryListOptions): Promise<void>;
   runs(options: HistoryRunsOptions): Promise<void>;
   show(options: HistoryShowOptions): Promise<void>;
+  steps(options: HistoryStepsOptions): Promise<void>;
   search(query: string, options: HistorySearchOptions): Promise<void>;
   trash: HistoryTrashCommandHandlers;
 }
@@ -129,8 +141,30 @@ export function registerHistoryCommands(
       "Working directory (default: current directory)"
     )
     .option("--all", "Include system-generated lineages")
+    .option(
+      "--state <state...>",
+      `Restrict to latest run outcomes (valid values: ${Object.values(EXECUTION_STATES).join(", ")})`
+    )
+    .option(
+      "--since <when>",
+      "Runs started at or after ISO-8601 (offset-less date-times are UTC) or relative 7d/24h/30m"
+    )
+    .option("--limit <n>", "Maximum number of lineages")
     .option("--json", "Output as JSON")
     .action(async (options: HistoryListOptions) => handlers.list(options));
+
+  history
+    .command("steps")
+    .description("Show a compact overview of a run's workflow steps")
+    .requiredOption("--workflow <key>", "Workflow lineage key")
+    .option("--run <ref|runId>", "Target run (default: latest)")
+    .option(
+      "-d, --cwd <path>",
+      "Working directory (default: current directory)"
+    )
+    .option("--json", "Output as JSON")
+    .option("--full-prompts", "Print full prompts instead of their first lines")
+    .action(async (options: HistoryStepsOptions) => handlers.steps(options));
 
   history
     .command("runs")
@@ -147,10 +181,7 @@ export function registerHistoryCommands(
     .command("show")
     .description("Print a run's recorded output")
     .requiredOption("--workflow <key>", "Workflow lineage key")
-    .requiredOption(
-      "--run <ref|runId>",
-      "Target run reference or numeric run ID"
-    )
+    .option("--run <ref|runId>", "Target run (default: latest)")
     .option("--step <index|final>", "Only show one step's attempts")
     .option(
       "-d, --cwd <path>",

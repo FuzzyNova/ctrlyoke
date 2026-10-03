@@ -16,9 +16,10 @@ ctrlyoke trust-workflow-external-roots <file> [--yes] [--cwd <path>]
 ctrlyoke trust-secret-grants <file> [--yes] [--cwd <path>]
 ctrlyoke history prune [--yes]
 ctrlyoke history relink <oldPath> <newPath> [--yes]
-ctrlyoke history list [--cwd <path>] [--all] [--json]
+ctrlyoke history list [--cwd <path>] [--all] [--state <state...>] [--since <when>] [--limit <n>] [--json]
 ctrlyoke history runs --workflow <key> [--cwd <path>] [--json]
-ctrlyoke history show --workflow <key> --run <ref|runId> [--step <index|final>] [--json]
+ctrlyoke history steps --workflow <key> [--run <ref|runId>] [--json] [--full-prompts]
+ctrlyoke history show --workflow <key> [--run <ref|runId>] [--step <index|final>] [--json]
 ctrlyoke history search <query> [filters] [--json]
 ctrlyoke history trash list|restore <id>|purge <id>|empty [--yes]
 ctrlyoke step edit [file] --workflow <key> --run <ref|runId> --index <index> [--prompt <text>]
@@ -383,12 +384,16 @@ the other history and execution commands:
 ctrlyoke history list
 ctrlyoke history list --all
 ctrlyoke history list --json
+ctrlyoke history list --state running paused --since 7d --limit 10
 ```
 
 System-generated lineages are hidden by default. The text output shows each
 lineage's key, name, run count, newest run time, and newest manifest state.
 `--json` emits an array containing descriptor metadata and the newest run
 summary.
+`--state` filters by the latest run's outcome, `--since` filters by its start
+time (ISO-8601 or a relative value such as `7d`, `24h`, or `30m`), and `--limit`
+caps the returned lineages.
 
 ## `ctrlyoke history runs`
 
@@ -403,16 +408,34 @@ The text output includes each run's numeric ID and stable reference, which can
 be passed to commands that accept `--run` or `--from`. The JSON form is an
 array of the stable `RunSummary` records used by the dashboard.
 
+## `ctrlyoke history steps`
+
+Show a compact overview sourced from the run's current workflow working file.
+The default prompt column contains only the first line; `--full-prompts` prints
+complete prompts. `--run` defaults to the lineage's latest run.
+
+```bash
+ctrlyoke history steps --workflow release
+ctrlyoke history steps --workflow release --run 7 --json
+```
+
+JSON output is one object with `runRef`, `steps[]`, and `finalStep`. Each queue
+step carries its zero-based `selector` for `history show --step`; the final step
+uses `selector: "final"`. Attempt and final-pass counts come from streamed
+attempt lifecycle records.
+
 ## `ctrlyoke history show`
 
 Print the recorded output for one run. `--run` accepts either the numeric run
 ID or its stable reference, and `--step` accepts a zero-based queue-step index
-or `final` to show every final-step loop:
+or `final` to show every final-step loop. Omitting `--run` selects the latest
+run:
 
 ```bash
 ctrlyoke history show --workflow release --run 7
 ctrlyoke history show --workflow release --run run-2026-09-20T12-00-00-000Z --step 2
 ctrlyoke history show --workflow release --run 7 --step final --no-color
+ctrlyoke history show --workflow release --step 2
 ```
 
 Pass `--json` to emit one raw attempt record per line as NDJSON. This is

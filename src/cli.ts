@@ -133,6 +133,7 @@ import {
   listHistoryCommand,
   runsHistoryCommand,
   searchHistoryCommand,
+  stepsHistoryCommand,
   showHistoryCommand,
   type HistoryInspectionCommandIo,
 } from "./cli/HistoryInspectionCommands";
@@ -277,6 +278,10 @@ registerHistoryCommands(program, {
   show: (options) =>
     handleHistoryCommand(
       showHistoryCommand(options, createHistoryInspectionCommandIo())
+    ),
+  steps: (options) =>
+    handleHistoryCommand(
+      stepsHistoryCommand(options, createHistoryInspectionCommandIo())
     ),
   search: (query, options) =>
     handleHistoryCommand(

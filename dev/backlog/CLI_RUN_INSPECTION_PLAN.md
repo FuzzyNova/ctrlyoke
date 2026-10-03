@@ -1,6 +1,6 @@
 # CLI Run Inspection Plan
 
-> **Status:** Proposed. Not implemented. Written 2026-10-02 against current code.
+> **Status:** Phase 1 complete. Phases 2–5 remain proposed. Updated 2026-10-02.
 >
 > **Problem in one line:** `ctrlyoke history` can only show a run's output all at
 > once, so for a large run the only way to find out what it did is to download
@@ -97,15 +97,15 @@ ctrlyoke history steps --workflow K [--run R] [--json]
 
 - **Source:** the run's `workflow.ctrlyoke.json` (190 KB here) carries each step's
   `name`, `prompt`, and `_runtime` (`harness`, `model`, `startedAt`, `completedAt`,
-  `elapsed`, `terminalStatus`, `sessionId`). That is enough for every column except
-  per-step tokens and attempt/pass counts. This makes the command O(working file),
-  not O(events.jsonl), and keeps it correct for steps whose definition snapshot is missing.
-- **Tokens and pass counts:** either stream only the `attemptStarted`/
-  `attemptTerminated` timeline events (cheap prefix match, no output
-  materialization), or record per-step token totals and the `finalStep` loop count
-  in the manifest when an attempt settles. The manifest option is preferable if
-  `RunOutputResolver` cannot skip `cliOutputEventsAppended` lines cheaply. Decide
-  after measuring a filtered stream over the 86 MB file.
+  `elapsed`, `terminalStatus`, `sessionId`). That supplies the step rows in
+  O(working-file) time and keeps them correct when a definition snapshot is
+  missing. Attempt/pass counts use the bounded-memory lifecycle scan below.
+- **Phase 1 decision — counts and tokens:** `RunOutputResolver.streamAttemptLifecycle`
+  scanned the 86 MB event log in 1,781 ms in the CLI smoke run (13,364 output
+  bytes), emits no output payloads, and supplies queue attempt and final-loop
+  counts. Per-step tokens are omitted: attempt lifecycle records contain no
+  token usage, so counting tokens would require a separate output projection or
+  new persisted aggregates.
 - Prompt column is the first line, truncated. `--full-prompts` prints each in full.
 - Every row is a valid selector for §3.4. `--json` emits one object with
   `steps[]` and `finalStep` (with `passes[]`), each carrying the exact `--step` value.
@@ -185,9 +185,10 @@ definition snapshot, repeated on every line), `prompt`, `output.structured`, and
 
 ## 5. Phasing
 
-1. **Overview and defaults:** `history steps`, `--run` defaulting to latest,
-   `history list --state/--limit/--since`. Biggest payoff for the least code; no
-   change to the output format.
+1. **Overview and defaults — complete:** `history steps`, `--run` defaulting to
+   latest, `history list --state/--limit/--since`, and live step totals/name
+   fallbacks in history output. Step counts use a filtered lifecycle stream;
+   per-step tokens remain out for the reason above.
 2. **Selectors:** step lists/ranges, `final:N`/`final:latest`, `--attempt`,
    `--step running|latest`.
 3. **Filters and paging on `show`:** `--kind`, `--path`, shared paging helper

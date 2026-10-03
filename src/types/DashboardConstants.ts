@@ -939,6 +939,14 @@ export const EXECUTION_STATES = {
   ERROR: "error",
 } as const;
 
+/** Compact state labels for authored steps that have not started yet. */
+export const HISTORY_STEP_STATES = {
+  PENDING: "pending",
+} as const;
+
+export type HistoryStepState =
+  (typeof HISTORY_STEP_STATES)[keyof typeof HISTORY_STEP_STATES];
+
 /** Parallel groups may fan out up to the configured global queue width. */
 export const PARALLEL_GROUP_FAN_OUT_ENABLED = true;
 

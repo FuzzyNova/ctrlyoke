@@ -25,6 +25,7 @@ import {
   listHistoryCommand,
   runsHistoryCommand,
   searchHistoryCommand,
+  stepsHistoryCommand,
   showHistoryCommand,
   type HistorySearchCommandService,
   type HistoryInspectionCommandDependencies,
@@ -37,6 +38,7 @@ import {
 import { CliTerminalFormatter } from "../../cli/CliTerminalFormatter";
 import type {
   ResolvedRunAttemptValue,
+  RunAttemptLifecycleEvent,
   RunOutputResolverAttemptEvent,
 } from "../../core/orchestration/RunOutputResolver";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
@@ -45,6 +47,7 @@ import {
   type HistoryListOptions,
   type HistoryRunsOptions,
   type HistorySearchOptions,
+  type HistoryStepsOptions,
   type HistoryShowOptions,
   type HistoryTrashCommandHandlers,
 } from "../../cli/HistoryCommandDefinitions";
@@ -127,12 +130,23 @@ class TestHistoryManager implements HistoryInspectionOutputHistoryManager {
 }
 
 class TestRunOutputResolver implements HistoryInspectionRunOutputResolver {
-  constructor(private readonly events: RunOutputResolverAttemptEvent[]) {}
+  constructor(
+    private readonly events: RunOutputResolverAttemptEvent[],
+    private readonly lifecycleEvents: RunAttemptLifecycleEvent[] = []
+  ) {}
 
   async *streamAttempts(
     _manifestPath: string
   ): AsyncGenerator<RunOutputResolverAttemptEvent, void, undefined> {
     yield* this.events;
+  }
+
+  async *streamAttemptLifecycle(): AsyncGenerator<
+    RunAttemptLifecycleEvent,
+    void,
+    undefined
+  > {
+    yield* this.lifecycleEvents;
   }
 }
 
@@ -264,6 +278,7 @@ suite("CLI history inspection command parser", () => {
     const calls: {
       list?: HistoryListOptions;
       runs?: HistoryRunsOptions;
+      steps?: HistoryStepsOptions;
     } = {};
     const program = new Command();
     program.exitOverride();
@@ -274,6 +289,9 @@ suite("CLI history inspection command parser", () => {
       list: async (options) => {
         calls.list = options;
       },
+      steps: async (options) => {
+        calls.steps = options;
+      },
       runs: async (options) => {
         calls.runs = options;
       },
@@ -283,12 +301,29 @@ suite("CLI history inspection command parser", () => {
     });
 
     await program.parseAsync(
-      ["history", "list", "--cwd", "workspace", "--all", "--json"],
+      [
+        "history",
+        "list",
+        "--cwd",
+        "workspace",
+        "--all",
+        "--state",
+        "running",
+        "paused",
+        "--since",
+        "7d",
+        "--limit",
+        "12",
+        "--json",
+      ],
       { from: "user" }
     );
     assert.deepStrictEqual(calls.list, {
       cwd: "workspace",
       all: true,
+      state: ["running", "paused"],
+      since: "7d",
+      limit: "12",
       json: true,
     });
 
@@ -297,6 +332,15 @@ suite("CLI history inspection command parser", () => {
       { from: "user" }
     );
     assert.deepStrictEqual(calls.runs, { workflow: "release", json: true });
+
+    await program.parseAsync(
+      ["history", "steps", "--workflow", "release", "--full-prompts"],
+      { from: "user" }
+    );
+    assert.deepStrictEqual(calls.steps, {
+      workflow: "release",
+      fullPrompts: true,
+    });
   });
 
   test("registers show with its selector and NDJSON options", async () => {
@@ -312,6 +356,7 @@ suite("CLI history inspection command parser", () => {
       show: async (options) => {
         showOptions = options;
       },
+      steps: async () => {},
       search: async () => {},
       trash: NOOP_TRASH_HANDLERS,
     });
@@ -353,6 +398,7 @@ suite("CLI history inspection command parser", () => {
       list: async () => {},
       runs: async () => {},
       show: async () => {},
+      steps: async () => {},
       search: async (query, options) => {
         searchQuery = query;
         searchOptions = options;
@@ -395,6 +441,157 @@ suite("CLI history inspection command parser", () => {
 });
 
 suite("CLI history inspection command handlers", () => {
+  test("shows working-file steps and counts retry and final-step lifecycle events", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-history-steps-")
+    );
+    const key = "release" as WorkflowKey;
+    const runRef = "run-2026-09-20T12-00-00-000Z" as RunRef;
+    try {
+      const workingFile = WorkflowPaths.runFilePath(workspaceRoot, key, runRef);
+      await fs.mkdir(path.dirname(workingFile), { recursive: true });
+      await fs.writeFile(
+        workingFile,
+        JSON.stringify({
+          steps: [
+            {
+              name: "plan",
+              prompt: "First line\nsecond line",
+              _runtime: {
+                harness: "claude-cli",
+                model: "opus",
+                terminalStatus: "completed",
+                elapsed: 125,
+              },
+            },
+            {
+              name: "Appended step with no definition snapshot",
+              prompt: "A long-running prompt",
+              _runtime: {
+                harness: "codex-cli",
+                model: "gpt-6-luna",
+                startedAt: 10,
+              },
+            },
+            { prompt: "Pending prompt" },
+          ],
+          finalStep: {
+            name: "review",
+            prompt: "Review all changes",
+            _runtime: {
+              harness: "claude-cli",
+              model: "opus",
+              terminalStatus: "completed",
+            },
+          },
+          _runtime: { executionState: "paused" },
+        })
+      );
+      const manager = new TestHistoryManager(
+        new Map(),
+        new Map([
+          [
+            key,
+            [
+              {
+                workflowKey: key,
+                runRef,
+                runDirectory: path.dirname(workingFile),
+                runId: 3,
+                startedAt: 10,
+                executionState: EXECUTION_STATES.PAUSED,
+                definitionRevision: 1,
+                stepCount: 1,
+                workingFileStepCount: 3,
+                hasFinalStep: true,
+                hasMixedHarnesses: false,
+                hasMixedModels: false,
+              },
+            ],
+          ],
+        ])
+      );
+      const resolver = new TestRunOutputResolver(
+        [],
+        [
+          {
+            eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+            target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+          },
+          {
+            eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+            target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+          },
+          {
+            eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+            target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
+          },
+          {
+            eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+            target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
+          },
+          {
+            eventType: TIMELINE_EVENT_TYPES.ATTEMPT_STARTED,
+            target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 1 },
+          },
+        ]
+      );
+      const io = new TestIo();
+
+      await stepsHistoryCommand(
+        { workflow: key, json: true },
+        io,
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          manager,
+          resolver,
+          undefined,
+          workspaceRoot
+        )
+      );
+
+      const value = JSON.parse(io.output[0]) as {
+        runRef: string;
+        steps: Array<{
+          selector: string;
+          name: string;
+          state: string;
+          attempts: number;
+          prompt: string;
+          elapsed: string;
+        }>;
+        finalStep: { selector: string; passes: number };
+      };
+      assert.strictEqual(value.runRef, runRef);
+      assert.deepStrictEqual(
+        value.steps.map((step) => step.selector),
+        ["0", "1", "2"]
+      );
+      assert.strictEqual(value.steps[0].attempts, 2);
+      assert.strictEqual(value.steps[0].elapsed, "2m5s");
+      assert.strictEqual(
+        value.steps[1].name,
+        "Appended step with no definition snapshot"
+      );
+      assert.strictEqual(value.steps[1].state, "running");
+      assert.strictEqual(value.steps[1].attempts, 1);
+      assert.strictEqual(value.steps[2].state, "pending");
+      assert.strictEqual(value.steps[0].prompt, "First line");
+      assert.deepStrictEqual(value.finalStep, {
+        selector: "final",
+        name: "review",
+        state: "completed",
+        harness: "claude-cli",
+        model: "opus",
+        elapsed: "—",
+        passes: 2,
+        prompt: "Review all changes",
+      });
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("history list uses the activity time of an appended in-progress step", async () => {
     const workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-history-recency-")
@@ -483,6 +680,95 @@ suite("CLI history inspection command handlers", () => {
     assert.deepStrictEqual(manager.runSummaryCalls, []);
     assert.match(io.output[1], /3/);
     assert.match(io.output[1], /completed/);
+  });
+
+  test("filters history list by latest state, shared since parsing, and limit", async () => {
+    const keys = ["a", "b", "c"] as WorkflowKey[];
+    const current = 1_700_000_000_000;
+    const originalNow = Date.now;
+    Date.now = () => current;
+    try {
+      const manager = new TestHistoryManager(
+        new Map([
+          [
+            keys[0],
+            {
+              ...navigation("run-a" as RunRef, EXECUTION_STATES.PAUSED),
+              startedAt: current - 1_000,
+            },
+          ],
+          [
+            keys[1],
+            {
+              ...navigation("run-b" as RunRef, EXECUTION_STATES.RUNNING),
+              startedAt: current - 1_000,
+            },
+          ],
+          [
+            keys[2],
+            {
+              ...navigation("run-c" as RunRef, EXECUTION_STATES.PAUSED),
+              startedAt: current - 8 * 86_400_000,
+            },
+          ],
+        ]),
+        new Map()
+      );
+      const io = new TestIo();
+      await listHistoryCommand(
+        { state: ["paused"], since: "7d", limit: "1", json: true },
+        io,
+        dependencies(
+          new TestLineageRepository(keys, new Map(), new Map()),
+          manager
+        )
+      );
+      const rows = JSON.parse(io.output[0]) as Array<{ workflowKey: string }>;
+      assert.deepStrictEqual(
+        rows.map((row) => row.workflowKey),
+        [keys[0]]
+      );
+    } finally {
+      Date.now = originalNow;
+    }
+  });
+
+  test("history runs text uses the live working-file step count", async () => {
+    const key = "release" as WorkflowKey;
+    const manager = new TestHistoryManager(
+      new Map(),
+      new Map([
+        [
+          key,
+          [
+            {
+              workflowKey: key,
+              runRef: "run-2026-09-20T12-00-00-000Z" as RunRef,
+              runDirectory: "/workspace/run-3",
+              runId: 3,
+              startedAt: 1,
+              executionState: EXECUTION_STATES.COMPLETED,
+              definitionRevision: 1,
+              stepCount: 1,
+              workingFileStepCount: 4,
+              hasFinalStep: true,
+              hasMixedHarnesses: false,
+              hasMixedModels: false,
+            },
+          ],
+        ],
+      ])
+    );
+    const io = new TestIo();
+    await runsHistoryCommand(
+      { workflow: key },
+      io,
+      dependencies(
+        new TestLineageRepository([key], new Map(), new Map()),
+        manager
+      )
+    );
+    assert.match(io.output[2], /  4  /);
   });
 
   test("excludes system-generated lineages unless --all is supplied", async () => {
@@ -610,6 +896,78 @@ suite("CLI history inspection command handlers", () => {
         ),
       /Workflow lineage "missing" was not found/
     );
+  });
+
+  test("defaults show to latest and uses the working file for header totals and names", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-history-show-working-file-")
+    );
+    const key = "release" as WorkflowKey;
+    const runRef = "run-2026-09-20T12-00-00-000Z" as RunRef;
+    const manager = new TestHistoryManager(
+      new Map(),
+      new Map([
+        [
+          key,
+          [
+            {
+              workflowKey: key,
+              runRef,
+              runDirectory: "/workspace/run-3",
+              runId: 3,
+              startedAt: 1,
+              executionState: EXECUTION_STATES.PAUSED,
+              definitionRevision: 1,
+              stepCount: 1,
+              workingFileStepCount: 3,
+              hasFinalStep: true,
+              hasMixedHarnesses: false,
+              hasMixedModels: false,
+            },
+          ],
+        ],
+      ])
+    );
+    const workingFile = WorkflowPaths.runFilePath(workspaceRoot, key, runRef);
+    await fs.mkdir(path.dirname(workingFile), { recursive: true });
+    await fs.writeFile(
+      workingFile,
+      JSON.stringify({
+        steps: [
+          { prompt: "First" },
+          { prompt: "Second" },
+          { name: "Appended named step", prompt: "Third" },
+        ],
+      })
+    );
+    const headers: Array<{ totalSteps: number; stepName: string }> = [];
+    const originalHeader = CliTerminalFormatter.renderPromptHeader;
+    CliTerminalFormatter.renderPromptHeader = ((data) => {
+      headers.push({ totalSteps: data.totalSteps, stepName: data.stepName });
+    }) as typeof originalHeader;
+    const io = new TestIo();
+    try {
+      await showHistoryCommand(
+        { workflow: key },
+        io,
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          manager,
+          new TestRunOutputResolver([
+            settledAttempt({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 }),
+          ]),
+          undefined,
+          workspaceRoot
+        )
+      );
+    } finally {
+      CliTerminalFormatter.renderPromptHeader = originalHeader;
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+    assert.deepStrictEqual(headers, [
+      { totalSteps: 3, stepName: "Appended named step" },
+    ]);
+    assert.deepStrictEqual(io.errors, [`Run: ${runRef}`]);
   });
 
   test("--step final selects final-step loops rather than a queue step", async () => {
