@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), reproduced in a scratch Vitest with deferred `workspaceFile` responses
 - **Area:** `src/ui/webview-react/components/workspace-viewer/WorkspaceExplorerPane.tsx` (`openFile` ~268-293)
-- **Severity:** low-medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

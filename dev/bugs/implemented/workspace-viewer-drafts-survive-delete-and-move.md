@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), reproduced at store level in a scratch Vitest
 - **Area:** `src/ui/webview-react/hooks/useWorkspaceExplorerContextMenu.tsx` (`handleDelete` ~97, `handlePaste` after Cut ~112-128), `src/ui/webview-react/store/workspaceViewerStore.ts` (`fileDrafts`)
-- **Severity:** medium (can overwrite agent-written content on save)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

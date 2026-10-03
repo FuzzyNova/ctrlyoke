@@ -1,15 +1,37 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useWorkspaceExplorerContextMenu } from "@hooks/useWorkspaceExplorerContextMenu";
+import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import type { WorkspaceEntry } from "@root/types/HostedWorkspaceViewerTypes";
 
-function TestHarness({ entry }: { entry: WorkspaceEntry }) {
+const apiMocks = vi.hoisted(() => ({
+  workspaceCopyEntry: vi.fn(),
+  workspaceDeleteEntry: vi.fn(),
+  workspaceMoveEntry: vi.fn(),
+}));
+
+vi.mock("@utils/hostedApi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@utils/hostedApi")>()),
+  workspaceCopyEntry: apiMocks.workspaceCopyEntry,
+  workspaceDeleteEntry: apiMocks.workspaceDeleteEntry,
+  workspaceMoveEntry: apiMocks.workspaceMoveEntry,
+}));
+
+function TestHarness({
+  entry,
+  explorerPath = "src",
+  onOpenFile = vi.fn(),
+}: {
+  entry: WorkspaceEntry;
+  explorerPath?: string;
+  onOpenFile?: (path: string) => void;
+}) {
   const { openContextMenu, explorerContextMenuPortal } =
     useWorkspaceExplorerContextMenu({
-      explorerPath: "src",
+      explorerPath,
       isRootsList: false,
       onRefresh: vi.fn(),
-      onOpenFile: vi.fn(),
+      onOpenFile,
       onViewFileHistory: onViewFileHistory,
     });
 
@@ -26,6 +48,7 @@ const onViewFileHistory = vi.fn();
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  useWorkspaceViewerStore.getState().reset();
 });
 
 describe("useWorkspaceExplorerContextMenu file history", () => {
@@ -48,5 +71,71 @@ describe("useWorkspaceExplorerContextMenu file history", () => {
     expect(
       screen.queryByRole("button", { name: "View File History" })
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("useWorkspaceExplorerContextMenu file mutations", () => {
+  it("drops selected drafts after a successful delete", async () => {
+    apiMocks.workspaceDeleteEntry.mockResolvedValue(undefined);
+    useWorkspaceViewerStore.setState({
+      fileDrafts: { "src/file.ts": { content: "draft" } },
+    });
+    useWorkspaceViewerStore.getState().selectFile("src/file.ts");
+    useWorkspaceViewerStore
+      .getState()
+      .setLoadedFileContent("src/file.ts", "disk");
+    useWorkspaceViewerStore.getState().setFileContent("draft");
+    render(
+      <TestHarness
+        entry={{ name: "file.ts", path: "src/file.ts", kind: "file" }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await vi.waitFor(() =>
+      expect(useWorkspaceViewerStore.getState().selectedFilePath).toBeNull()
+    );
+    expect(useWorkspaceViewerStore.getState().fileDrafts).toEqual({});
+  });
+
+  it("re-keys selected drafts after a successful cut and paste", async () => {
+    apiMocks.workspaceMoveEntry.mockResolvedValue(undefined);
+    useWorkspaceViewerStore.setState({
+      fileDrafts: { "src/file.ts": { content: "draft" } },
+    });
+    useWorkspaceViewerStore.getState().selectFile("src/file.ts");
+    useWorkspaceViewerStore
+      .getState()
+      .setLoadedFileContent("src/file.ts", "disk");
+    useWorkspaceViewerStore.getState().setFileContent("draft");
+    const onOpenFile = vi.fn();
+    render(
+      <TestHarness
+        entry={{ name: "file.ts", path: "src/file.ts", kind: "file" }}
+        explorerPath="archive"
+        onOpenFile={onOpenFile}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cut" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Paste" }));
+
+    await vi.waitFor(() =>
+      expect(useWorkspaceViewerStore.getState().selectedFilePath).toBe(
+        "archive/file.ts"
+      )
+    );
+    expect(apiMocks.workspaceMoveEntry).toHaveBeenCalledWith({
+      sourcePath: "src/file.ts",
+      destDir: "archive",
+    });
+    expect(useWorkspaceViewerStore.getState().fileDrafts).toEqual({
+      "archive/file.ts": { content: "draft" },
+    });
+    expect(onOpenFile).toHaveBeenCalledWith("archive/file.ts");
   });
 });

@@ -195,6 +195,54 @@ describe("setPreviousBranch", () => {
   });
 });
 
+describe("workspace file path mutations", () => {
+  it("removes drafts under a deleted path and clears a selected descendant", () => {
+    useWorkspaceViewerStore.setState({
+      fileDrafts: {
+        "src/file.ts": { content: "draft" },
+        "src/nested/other.ts": { content: "nested draft" },
+        "src-other/file.ts": { content: "keep" },
+      },
+    });
+    store().selectFile("src/nested/other.ts");
+    store().setLoadedFileContent("src/nested/other.ts", "disk");
+    store().setFileContent("unsaved");
+
+    store().deleteFilePath("src");
+
+    expect(store().fileDrafts).toEqual({
+      "src-other/file.ts": { content: "keep" },
+    });
+    expect(store().selectedFilePath).toBeNull();
+    expect(store().fileContent).toBe("");
+    expect(store().fileDirty).toBe(false);
+  });
+
+  it("moves file and directory drafts and updates the selected file path", () => {
+    useWorkspaceViewerStore.setState({
+      fileDrafts: {
+        "src/file.ts": { content: "file draft" },
+        "src/nested/other.ts": { content: "nested draft" },
+        "src-other/file.ts": { content: "keep" },
+      },
+    });
+    store().selectFile("src/nested/other.ts");
+    store().setLoadedFileContent("src/nested/other.ts", "disk");
+    store().setFileContent("nested unsaved");
+
+    store().moveFilePath("src", "archive/src");
+
+    expect(store().fileDrafts).toEqual({
+      "archive/src/file.ts": { content: "file draft" },
+      "archive/src/nested/other.ts": { content: "nested unsaved" },
+      "src-other/file.ts": { content: "keep" },
+    });
+    expect(store().selectedFilePath).toBe("archive/src/nested/other.ts");
+    expect(store().fileContent).toBe("nested unsaved");
+    expect(store().fileDirty).toBe(true);
+  });
+});
+
 describe("selectDiff", () => {
   it("clears any active multi-file git-ref diff", () => {
     useWorkspaceViewerStore.setState({
