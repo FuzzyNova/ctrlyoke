@@ -31,9 +31,9 @@ import type {
 } from "../types/CtrlYokeTypes";
 import { isScriptStep } from "../types/CtrlYokeTypes";
 import {
-  promptFirstLinePreview,
   STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS,
 } from "../utils/TextUtils";
+import { formatFinalPassBadge } from "../utils/FinalStepLabels";
 import type { RunSummary } from "../types/WorkflowTimelineTypes";
 import {
   EXECUTION_PHASES,
@@ -1151,6 +1151,7 @@ interface HistoryStepRow {
   elapsedSeconds: number | null;
   attempts: number;
   prompt: string;
+  next?: true;
 }
 
 interface HistoryFinalPassRow {
@@ -1171,6 +1172,7 @@ interface HistoryFinalStepRow {
   model: string | null;
   elapsedSeconds: number | null;
   passes: HistoryFinalPassRow[];
+  nextPass: number | null;
   prompt: string;
 }
 
@@ -1203,30 +1205,50 @@ export async function stepsHistoryCommand(
     resolver,
     WorkflowPaths.manifestPath(workspace.workspaceRoot, workflowKey, runRef)
   );
-  const steps: HistoryStepRow[] = definition.steps.map((step, stepIndex) => ({
-    selector: formatCliStepSelector(stepIndex),
-    index: stepIndex,
-    name: step.name?.trim() || null,
-    state: historyWorkingStepState(step._runtime),
-    harness: step._runtime?.harness ?? null,
-    model: step._runtime?.model ?? null,
-    elapsedSeconds: historyElapsedSeconds(step._runtime?.elapsed),
-    attempts:
-      index.targets.get(historyAttemptTargetKey(queueTarget(stepIndex)))
-        ?.attempts ?? 0,
-    prompt: formatStepPrompt(step, options.fullPrompts === true),
-  }));
+  const currentIndex = definition._runtime?.currentIndex;
+  const isNonTerminalRun = !isTerminalHistoryState(
+    definition._runtime?.executionState
+  );
+  const steps: HistoryStepRow[] = definition.steps.map((step, stepIndex) => {
+    const isNext =
+      isNonTerminalRun && currentIndex === stepIndex;
+    return {
+      selector: formatCliStepSelector(stepIndex),
+      index: stepIndex,
+      name: step.name?.trim() || null,
+      state: historyWorkingStepState(step._runtime),
+      harness: step._runtime?.harness ?? null,
+      model: step._runtime?.model ?? null,
+      elapsedSeconds: historyElapsedSeconds(step._runtime?.elapsed),
+      attempts:
+        index.targets.get(historyAttemptTargetKey(queueTarget(stepIndex)))
+          ?.attempts ?? 0,
+      prompt: formatStepPrompt(step, options.fullPrompts === true),
+      ...(isNext ? { next: true as const } : {}),
+    };
+  });
+  const passes = historyFinalPassRows(index);
+  const nextPass =
+    definition.finalStep &&
+    isNonTerminalRun &&
+    currentIndex !== undefined &&
+    currentIndex >= definition.steps.length
+      ? passes.length + 1
+      : null;
+  const finalStepState =
+    nextPass === null ? undefined : HISTORY_STEP_STATES.PENDING;
   const finalStep: HistoryFinalStepRow | null = definition.finalStep
     ? {
         selector: HISTORY_SHOW_STEP_SELECTORS.FINAL,
         name: definition.finalStep.name?.trim() || null,
-        state: historyWorkingStepState(definition.finalStep._runtime),
+        state:
+          finalStepState ??
+          historyWorkingStepState(definition.finalStep._runtime),
         harness: definition.finalStep._runtime?.harness ?? null,
         model: definition.finalStep._runtime?.model ?? null,
-        elapsedSeconds: historyElapsedSeconds(
-          definition.finalStep._runtime?.elapsed
-        ),
-        passes: historyFinalPassRows(index),
+        elapsedSeconds: historyFinishedPassElapsedSeconds(passes),
+        passes,
+        nextPass,
         prompt: formatStepPrompt(
           definition.finalStep,
           options.fullPrompts === true
@@ -1256,7 +1278,7 @@ export async function stepsHistoryCommand(
   const values = steps.map((step) => [
     step.selector,
     step.name ?? "—",
-    step.state,
+    step.next ? `${step.state} (next)` : step.state,
     step.harness ?? "—",
     step.model ?? "—",
     formatElapsed(step.elapsedSeconds),
@@ -1267,11 +1289,15 @@ export async function stepsHistoryCommand(
     values.push([
       finalStep.selector,
       finalStep.name ?? "—",
-      finalStep.state,
+      finalStep.nextPass === null
+        ? finalStep.state
+        : `${finalStep.state} (${formatFinalPassBadge(finalStep.nextPass)} next)`,
       finalStep.harness ?? "—",
       finalStep.model ?? "—",
       formatElapsed(finalStep.elapsedSeconds),
-      `${finalStep.passes.length} pass${finalStep.passes.length === 1 ? "" : "es"}`,
+      finalStep.nextPass === null
+        ? `${finalStep.passes.length} pass${finalStep.passes.length === 1 ? "" : "es"}`
+        : `${finalStep.passes.length} pass${finalStep.passes.length === 1 ? "" : "es"}, ${finalStep.nextPass} next`,
       finalStep.prompt,
     ]);
   }
@@ -1313,6 +1339,26 @@ function historyFinalPassRows(
     });
   }
   return passes.sort((a, b) => a.pass - b.pass);
+}
+
+function historyFinishedPassElapsedSeconds(
+  passes: readonly HistoryFinalPassRow[]
+): number | null {
+  const finishedPasses = passes.filter((pass) => pass.completedAt !== null);
+  return finishedPasses.length === 0
+    ? null
+    : finishedPasses.reduce(
+        (total, pass) => total + (pass.elapsedSeconds ?? 0),
+        0
+      );
+}
+
+function isTerminalHistoryState(state: string | undefined): boolean {
+  return (
+    state === EXECUTION_STATES.COMPLETED ||
+    state === EXECUTION_STATES.STOPPED ||
+    state === EXECUTION_STATES.ERROR
+  );
 }
 
 const HISTORY_SEARCH_DEFAULT_LIMIT = 20;
@@ -1947,7 +1993,7 @@ function renderHistoryList(
   const headers = ["KEY", "NAME", "RUNS", "LATEST", "STATE"];
   const values = rows.map((row) => [
     row.workflowKey,
-    row.workflowName,
+    truncateCell(row.workflowName, 48),
     String(row.runCount),
     formatDate(row.latestRun?.startedAt),
     row.latestRun?.executionState ?? "—",
@@ -2017,6 +2063,10 @@ function formatTokens(tokens: number | undefined): string {
 }
 
 interface RunWorkingDefinition {
+  _runtime?: {
+    currentIndex?: number;
+    executionState?: string;
+  };
   steps: Array<{
     name?: string;
     prompt?: string;
@@ -2061,9 +2111,16 @@ function formatStepPrompt(
   full: boolean
 ): string {
   const prompt = step.prompt ?? step.script ?? "";
-  return full
-    ? prompt
-    : promptFirstLinePreview(prompt, STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS);
+  if (full) return prompt;
+  const firstLine = prompt.split(/\r?\n/, 1)[0] ?? "";
+  return truncateCell(
+    firstLine,
+    STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS + 1
+  );
+}
+
+function truncateCell(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 }
 
 /** A working file's `_runtime.elapsed` (seconds), or null when absent or invalid. */

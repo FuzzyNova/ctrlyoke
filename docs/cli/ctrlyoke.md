@@ -439,6 +439,8 @@ ctrlyoke history list --state running paused --since 7d --limit 10
 
 System-generated lineages are hidden by default. The text output shows each
 lineage's key, name, run count, newest run time, and newest manifest state.
+Text names are capped at 48 characters and end in `…` when shortened; JSON
+names remain complete.
 `--json` emits an array containing descriptor metadata and the newest run
 summary.
 `--state` filters by the latest run's outcome, `--since` filters by its start
@@ -480,11 +482,15 @@ not counted as attempts of their own.
 
 JSON output is one object with `runRef`, `steps[]`, and `finalStep`. Each queue
 step carries its `selector`, `index`, `name`, `state`, `harness`, `model`,
-`elapsedSeconds`, `attempts`, and `prompt`; absent values are `null`.
+`elapsedSeconds`, `attempts`, and `prompt`; a queue step that will run next in a
+non-terminal run also has `next: true`. Absent values are `null`.
 `finalStep` uses `selector: "final"` and lists `passes[]`, one per final-step
 pass, each with its own `selector` (`final:1`, `final:2`, …), `pass`, `state`,
 `attempts`, `startedAt`, `completedAt`, and `elapsedSeconds`. Attempt and pass
 facts come from streamed attempt lifecycle records, not output payloads.
+`finalStep.elapsedSeconds` is the sum of finished passes' elapsed time, or
+`null` when none have finished. A pending next final-step pass is reported as
+`finalStep.nextPass` (otherwise `null`); text output marks it as next too.
 
 ## `ctrlyoke history show`
 

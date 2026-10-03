@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-03 by Claude (claude-cli) while manually testing the CLI history commands
 - **Area:** `src/cli/HistoryInspectionCommands.ts` (`renderHistoryList`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

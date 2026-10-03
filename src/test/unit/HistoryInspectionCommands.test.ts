@@ -726,7 +726,7 @@ suite("CLI history inspection command handlers", () => {
               terminalStatus: "completed",
             },
           },
-          _runtime: { executionState: "paused" },
+          _runtime: { executionState: EXECUTION_STATES.PAUSED, currentIndex: 1 },
         })
       );
       const manager = new TestHistoryManager(
@@ -812,8 +812,13 @@ suite("CLI history inspection command handlers", () => {
           attempts: number;
           prompt: string;
           elapsedSeconds: number | null;
+          next?: true;
         }>;
-        finalStep: unknown;
+        finalStep: {
+          elapsedSeconds: number | null;
+          nextPass: number | null;
+          passes: Array<{ elapsedSeconds: number | null }>;
+        };
       };
       assert.strictEqual(value.runRef, runRef);
       assert.deepStrictEqual(
@@ -827,6 +832,7 @@ suite("CLI history inspection command handlers", () => {
         "Appended step with no definition snapshot"
       );
       assert.strictEqual(value.steps[1].state, "running");
+      assert.strictEqual(value.steps[1].next, true);
       assert.strictEqual(value.steps[1].attempts, 1);
       assert.strictEqual(value.steps[2].state, "pending");
       assert.strictEqual(value.steps[2].name, null);
@@ -839,7 +845,8 @@ suite("CLI history inspection command handlers", () => {
         state: "completed",
         harness: "claude-cli",
         model: "opus",
-        elapsedSeconds: null,
+        elapsedSeconds: 4.5,
+        nextPass: null,
         passes: [
           {
             selector: "final:1",
@@ -883,7 +890,51 @@ suite("CLI history inspection command handlers", () => {
         assert.match(row.slice(stateColumn), /^(completed|running|pending) /);
       }
       assert.match(rows[2], /^2 +— +pending/);
+      assert.match(rows[1], /running \(next\)/);
       assert.match(rows[3], /^final +review +completed .* 2 passes +Review/);
+
+      await fs.writeFile(
+        workingFile,
+        JSON.stringify({
+          steps: [{ prompt: "Queue" }],
+          finalStep: { name: "review", prompt: "Review" },
+          _runtime: {
+            executionState: EXECUTION_STATES.PAUSED,
+            currentIndex: 1,
+          },
+        })
+      );
+      const pendingIo = new TestIo();
+      await stepsHistoryCommand(
+        { workflow: key, json: true },
+        pendingIo,
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          manager,
+          new TestRunOutputResolver([], []),
+          undefined,
+          workspaceRoot
+        )
+      );
+      const pendingValue = JSON.parse(pendingIo.output[0]) as {
+        finalStep: { state: string; nextPass: number | null };
+      };
+      assert.strictEqual(pendingValue.finalStep.state, "pending");
+      assert.strictEqual(pendingValue.finalStep.nextPass, 1);
+      const pendingTextIo = new TestIo();
+      await stepsHistoryCommand(
+        { workflow: key },
+        pendingTextIo,
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          manager,
+          new TestRunOutputResolver([], []),
+          undefined,
+          workspaceRoot
+        )
+      );
+      assert.match(pendingTextIo.output[2], /pending \(Pass 1 next\)/);
+      assert.match(pendingTextIo.output[2], /0 passes, 1 next/);
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
@@ -1196,6 +1247,32 @@ suite("CLI history inspection command handlers", () => {
     assert.deepStrictEqual(manager.runSummaryCalls, []);
     assert.match(io.output[1], /3/);
     assert.match(io.output[1], /completed/);
+  });
+
+  test("caps history list names in text while preserving full JSON names", async () => {
+    const key = "release" as WorkflowKey;
+    const longName = "A".repeat(70);
+    const repository = new TestLineageRepository(
+      [key],
+      new Map([[key, descriptor(key)]]),
+      new Map([[key, longName]])
+    );
+    const dependenciesForList = dependencies(
+      repository,
+      new TestHistoryManager(new Map(), new Map())
+    );
+    const textIo = new TestIo();
+    await listHistoryCommand({}, textIo, dependenciesForList);
+    const nameCell = textIo.output[1].split(/\s{2,}/)[1];
+    assert.strictEqual(nameCell.length, 48);
+    assert.ok(nameCell.endsWith("…"));
+
+    const jsonIo = new TestIo();
+    await listHistoryCommand({ json: true }, jsonIo, dependenciesForList);
+    const [row] = JSON.parse(jsonIo.output[0]) as Array<{
+      workflowName: string;
+    }>;
+    assert.strictEqual(row.workflowName, longName);
   });
 
   test("filters history list by latest state, shared since parsing, and limit", async () => {
