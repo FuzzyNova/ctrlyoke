@@ -208,7 +208,7 @@ suite("WorkflowStepHandlers — success-path client echo", () => {
       coordinator
     );
 
-    await handlers.handleDeletePrompt(makeCtx(), { index: 0 } as any);
+    await handlers.handleDeletePrompt(makeCtx(), { indices: [0] } as any);
 
     assert.deepStrictEqual(coordinator.calls, [
       "prepareDefinitionMutation",

@@ -405,12 +405,12 @@ export class WorkflowTaggedSink implements IDashboardSink {
   }
 
   updateStepColor(
-    index: number,
+    indices: number[],
     color: string | null,
     definitionRevision?: number
   ): void {
     this.inner.updateStepColor(
-      index,
+      indices,
       color,
       definitionRevision,
       this.workflowId

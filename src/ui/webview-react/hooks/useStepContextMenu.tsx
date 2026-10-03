@@ -161,7 +161,7 @@ export function useStepContextMenu({
   const handleDeleteStep = useCallback(
     (index: number) => {
       if (!confirmDeleteOperations) {
-        sendMessage(MESSAGE_TYPES.DELETE_PROMPT, { index });
+        sendMessage(MESSAGE_TYPES.DELETE_PROMPT, { indices: [index] });
         return;
       }
       setPendingDeleteIndex(index);
@@ -584,7 +584,7 @@ export function useStepContextMenu({
 
   const handleDeleteConfirm = useCallback(() => {
     if (pendingDeleteIndex === null) return;
-    sendMessage(MESSAGE_TYPES.DELETE_PROMPT, { index: pendingDeleteIndex });
+    sendMessage(MESSAGE_TYPES.DELETE_PROMPT, { indices: [pendingDeleteIndex] });
     setPendingDeleteIndex(null);
   }, [pendingDeleteIndex]);
 

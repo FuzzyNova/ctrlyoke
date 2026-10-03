@@ -1127,9 +1127,16 @@ export function createMessageHandlers(
       adoptPushedDefinitionRevision(message.definitionRevision);
     }
 
-    useWorkflowStore
-      .getState()
-      .updatePrompt(message.index, { color: message.color ?? undefined });
+    useWorkflowStore.getState().setStepsAndParallelGroups(
+      useWorkflowStore
+        .getState()
+        .steps.map((step, index) =>
+          message.indices.includes(index)
+            ? { ...step, color: message.color ?? undefined }
+            : step
+        ),
+      useWorkflowStore.getState().parallelGroups
+    );
   };
 
   // --------------------------------------------------------------------------

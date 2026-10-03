@@ -271,6 +271,46 @@ suite("RunContinuationService topology append transaction", () => {
     }
   });
 
+  test("removeStepsAtRun rejects an invalid batch without writing, then removes in one revision", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-remove-batch-")
+    );
+    await seedRun([
+      { prompt: "zero" },
+      { prompt: "one" },
+      { prompt: "two" },
+      { prompt: "three" },
+    ]);
+    const filePath = WorkflowPaths.runFilePath(workspace, workflowKey, runRef);
+    await assert.rejects(
+      RunContinuationService.removeStepsAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        [1, 9],
+        1,
+        new WorkflowLineageRepository()
+      ),
+      /remove index/i
+    );
+    let file = JSON.parse(await fs.readFile(filePath, "utf8")) as WorkingFile;
+    assert.strictEqual(file.steps?.length, 4);
+    const removed = await RunContinuationService.removeStepsAtRun(
+      workspace,
+      workflowKey,
+      runRef,
+      [1, 3],
+      1,
+      new WorkflowLineageRepository()
+    );
+    file = removed.workingFile;
+    assert.deepStrictEqual(
+      file.steps?.map((step) => (step as { prompt: string }).prompt),
+      ["zero", "two"]
+    );
+    assert.strictEqual(removed.definitionRevision, 2);
+  });
+
   test("persists a container batch in one revision with absolute ranges", async () => {
     workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-topology-append-")
@@ -948,11 +988,11 @@ suite("RunContinuationService addressed step mutations", () => {
     );
 
     await appendTwoSteps();
-    const removed = await RunContinuationService.removeStepAtRun(
+    const removed = await RunContinuationService.removeStepsAtRun(
       workspace,
       workflowKey,
       runRef,
-      1,
+      [1],
       2,
       repository,
       true
@@ -1054,11 +1094,11 @@ suite("RunContinuationService addressed step mutations", () => {
       /completed step/i
     );
     await assert.rejects(
-      RunContinuationService.removeStepAtRun(
+      RunContinuationService.removeStepsAtRun(
         workspace,
         workflowKey,
         runRef,
-        0,
+        [0],
         1,
         repository
       ),
@@ -1087,11 +1127,11 @@ suite("RunContinuationService addressed step mutations", () => {
       /completed step/i
     );
     await assert.rejects(
-      RunContinuationService.removeStepAtRun(
+      RunContinuationService.removeStepsAtRun(
         workspace,
         workflowKey,
         runRef,
-        0,
+        [0],
         1,
         repository
       ),
@@ -1119,11 +1159,11 @@ suite("RunContinuationService addressed step mutations", () => {
       (edited.workingFile.steps![1] as { script: string }).script,
       "exit 2"
     );
-    const removed = await RunContinuationService.removeStepAtRun(
+    const removed = await RunContinuationService.removeStepsAtRun(
       workspace,
       workflowKey,
       runRef,
-      1,
+      [1],
       2,
       repository
     );

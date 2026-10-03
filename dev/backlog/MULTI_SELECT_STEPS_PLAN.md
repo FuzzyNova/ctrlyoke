@@ -106,33 +106,31 @@ There is no blocker to allowing them. The costs are:
   (`useMessageHandler.ts:1056-1118`) don't touch selection at all. **So the existing
   single selection can already go stale after a context-menu delete.**
 
-### Every step mutation is single-index, and revision-guarded
+### Step mutations are revision-guarded
 
-- `DELETE_PROMPT { index }`, `UPDATE_STEP_COLOR { index, color }` and
-  `UPDATE_PROMPT { index, text, properties, clearProperties, promptName,
-rewindCompletedStep? }` (`src/types/WebviewMessageTypes.ts:~2148-2170`). They route
-  through `WorkflowStepHandlers` (`src/ui/WorkflowStepHandlers.ts:121, 184, 265`) to
-  `WorkflowOrchestrator.{updatePromptInQueue, updateStepColorInQueue,
-deletePromptFromQueue}` (`WorkflowOrchestrator.ts:3609, ~3655, 3856`). Each has two
+- `DELETE_PROMPT { indices }` and `UPDATE_STEP_COLOR { indices, color }` are
+  batch protocols. `UPDATE_PROMPT { index, text, properties, clearProperties,
+promptName, rewindCompletedStep? }` (`src/types/WebviewMessageTypes.ts`). They route
+  through `WorkflowStepHandlers` to `WorkflowOrchestrator` and have two
   persistence branches:
-  - **Instance-bound:** `WorkflowInstance` → `PromptQueue.updatePrompt` /
-    `deletePrompt` (`PromptQueue.ts:2706, 2808`).
-  - **Run-addressed static write:** `applyRunAddressedMutation` →
-    `WorkingFileManager.updateStepAtRun` / `deleteStepAtRun`
-    (`WorkingFileManager.ts:1401, 1520`) → `RunContinuationService`.
+  - **Instance-bound:** `WorkflowInstance` → `PromptQueue.updatePrompt`,
+    `deletePrompts` or `updatePromptColors`.
+  - **Run-addressed static write:** `applyRunAddressedMutation` → one
+    `WorkingFileManager`/`RunContinuationService` batch write. Deletes validate
+    every index before mutation and compute parallel topology from the final set.
 - **`UPDATE_STEP_COLOR` exists precisely so a cosmetic edit bypasses completed-step
   rewind classification.** Its payload deliberately cannot carry content or
   properties (doc comment at `WebviewMessageTypes.ts:~2159`). The run-addressed write
-  passes a `StepColorInvalidation { kind: "stepColor", index }`
+  passes a `StepColorInvalidation { kind: "stepColor", indices }`
   (`core/orchestration/RunViewPublisher.ts:35`) so the view refresh stays narrow.
   This is why completed steps can already be recolored, and it is the path bulk color
   must reuse.
 - **The webview's `sendMessage` stamps every definition mutation with a
   `WorkflowDefinitionMutation`** (`{address, expectedDefinitionRevision,
 expectedDescriptorRevision}`, `hooks/useMessageHandler.ts:~213`). Therefore
-  **N back-to-back single-index messages cannot implement a bulk op**. They all
-  carry the same expected revision, so the first write succeeds and the rest are
-  rejected as stale. The same race is documented for `UPDATE_PROMPT` +
+  **N back-to-back messages cannot implement a bulk op**. They all carry the same
+  expected revision, so the first write succeeds and the rest are rejected as
+  stale. The same race is documented for `UPDATE_PROMPT` +
   `SET_START_POSITION` at `WorkflowStepHandlers.ts:137`, which is why
   `updateCompletedPromptInQueue` exists. Bulk ops need **one message → one
   host-side mutation → one revision bump**.
@@ -406,15 +404,15 @@ delete path) in sync.
 - Apply, then bump the revision once, write the working file once, and emit one
   broadcast. That gives one undo entry.
 - **Delete** (`PromptQueue.deletePrompts`): delete in **descending** index order.
-  Refactor today's `deletePrompt` body into a private `removeStepAt(index)` so the
-  topology and bookkeeping (`deleteParallelGroupStep`; `currentIndex`,
-  `completedIndices` and `results` shifting) have one source. **Parallel-group
+  Its private `removeStepAt(index)` handles the `currentIndex`,
+  `completedIndices` and `results` shifts. `deleteParallelGroupSteps` computes
+  topology for the complete selection. **Parallel-group
   edge case:** removing two members of a started three-member group passes a
   per-step check on the first and throws on the second, after the first was
   already applied in memory. So compute the next topology for the whole batch
   first, then commit it.
-  - Run-addressed: `WorkingFileManager.deleteStepsAtRun` → a batch remove in
-    `RunContinuationService`.
+  - Run-addressed: `WorkingFileManager.deleteStepsAtRun` and
+    `RunContinuationService.removeStepsAtRun` validate and commit the whole batch.
 - **Color** (`updateStepColorInQueue(indices, color)`): keeps its deliberate property:
   it **cannot carry anything but color**, so it stays legal on completed steps and
   never triggers rewind classification. It skips the editability guards exactly as
@@ -616,9 +614,10 @@ which is cheap once the predicate exists. Clicks there stay single-select in v1.
          remap/clear rules, including the existing staleness fix. Row highlighting,
          `PromptCounter` and chip-rail rendering (completed 2026-10-03).
 2. **Array protocol, `UPDATE_STEPS`, and bulk delete / enable.**
-   - 2a: `DELETE_PROMPT` and `UPDATE_STEP_COLOR` move to `indices`, end to end
-     (queue, instance, orchestrator, WorkingFileManager/RunContinuationService,
-     handler, router, MCP tool).
+   - [x] 2a: `DELETE_PROMPT` and `UPDATE_STEP_COLOR` use `indices` end to end,
+         with one host mutation, revision bump, persistence write and broadcast per
+         batch. The MCP `remove_step` tool preserves its single-index schema and
+         delegates through the batch delete path (completed 2026-10-03).
    - 2b: `UPDATE_STEPS` end to end on the host, with the exported bulk-editable key
      constant. The Delete key, the bulk context-menu Delete, the "delete N steps"
      modal, and the context-menu bulk Enable/Disable.

@@ -344,14 +344,14 @@ export class PostMessageDashboardSink implements IDashboardSink {
   }
 
   updateStepColor(
-    index: number,
+    indices: number[],
     color: string | null,
     definitionRevision?: number,
     workflowId?: string
   ): void {
     this.send({
       type: MESSAGE_TYPES.STEP_COLOR_UPDATED,
-      index,
+      indices,
       color,
       ...(definitionRevision !== undefined ? { definitionRevision } : {}),
       ...(workflowId !== undefined ? { workflowId } : {}),

@@ -3169,9 +3169,8 @@ describe("undo record update messages", () => {
     };
 
     act(() => {
-      const handler = createMessageHandlers(false)[
-        MESSAGE_TYPES.UNDO_RECORD_UPDATED
-      ];
+      const handler =
+        createMessageHandlers(false)[MESSAGE_TYPES.UNDO_RECORD_UPDATED];
       handler({
         type: MESSAGE_TYPES.UNDO_RECORD_UPDATED,
         ...message,
@@ -4226,7 +4225,7 @@ describe("narrow content pushes adopt their definition revision", () => {
     },
     {
       type: MESSAGE_TYPES.STEP_COLOR_UPDATED,
-      payload: { index: 0, color: "#123456" },
+      payload: { indices: [0], color: "#123456" },
     },
     {
       type: MESSAGE_TYPES.REORDER_PROMPTS_CONFIRMED,

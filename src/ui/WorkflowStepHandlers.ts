@@ -10,6 +10,7 @@ import type {
   AppendAndContinueRunMessage,
   ContinueRunMessage,
   DiscardContinuationMessage,
+  DeletePromptMessage,
   ExecuteDraftMessage,
   InsertWorkflowStepMessage,
   RunExecutionControlMessage,
@@ -195,7 +196,7 @@ export class WorkflowStepHandlers {
       await this.mutationCoordinator.prepareDefinitionMutation(ctx, message);
       await orchestrator.updateStepColorInQueue(
         this.mutationCoordinator.asWorkflowDefinitionMutation(message),
-        message.index,
+        message.indices,
         message.color,
         ctx.clientId
       );
@@ -264,7 +265,7 @@ export class WorkflowStepHandlers {
 
   async handleDeletePrompt(
     ctx: WebviewClientContext,
-    message: any
+    message: DeletePromptMessage
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
     if (!orchestrator) {
@@ -274,12 +275,10 @@ export class WorkflowStepHandlers {
 
     await this.mutationCoordinator.prepareDefinitionMutation(ctx, message);
 
-    const { index } = message;
-
     try {
       await orchestrator.deletePromptFromQueue(
         this.mutationCoordinator.asWorkflowDefinitionMutation(message),
-        index,
+        message.indices,
         ctx.clientId
       );
       // Identity-only — see the comment in handleUpdatePrompt above; the

@@ -2803,7 +2803,7 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
             expectedDefinitionRevision,
             expectedDescriptorRevision: descriptor.revision,
           },
-          index,
+          [index],
           color,
           "client-a"
         );
@@ -2857,12 +2857,9 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
     try {
       const sourceManager = new WorkingFileManager({
         getWorkingFilePath: () => undefined,
-        getSteps: () => [
-          { prompt: "keep", _runtime: { startedAt: 1 } },
-          { prompt: "delete-me", _runtime: { startedAt: 2 } },
-        ],
-        getCurrentIndex: () => 2,
-        getStatus: () => EXECUTION_STATES.COMPLETED,
+        getSteps: () => [{ prompt: "keep" }, { prompt: "delete-me" }],
+        getCurrentIndex: () => 0,
+        getStatus: () => EXECUTION_STATES.IDLE,
         getDefinitionRevision: () => 1,
         setDefinitionRevision: () => undefined,
         getWorkflowName: () => "Source",
@@ -2918,7 +2915,7 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
           expectedDefinitionRevision: 1,
           expectedDescriptorRevision: descriptor.revision,
         },
-        1,
+        [1],
         "client-a"
       );
 
@@ -3000,7 +2997,7 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
           expectedDefinitionRevision: 1,
           expectedDescriptorRevision: 1,
         },
-        0,
+        [0],
         "client-a"
       );
 

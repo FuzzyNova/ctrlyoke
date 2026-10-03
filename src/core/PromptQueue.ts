@@ -53,7 +53,7 @@ import {
 import {
   PARALLEL_GROUP_INSERT_POSITIONS,
   appendParallelGroupMember,
-  deleteParallelGroupStep,
+  deleteParallelGroupSteps,
   insertParallelGroupTopology,
   insertParallelGroupSteps,
   normalizeParallelGroupTopology,
@@ -2712,6 +2712,44 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     });
   }
 
+  /** Update only authored colors. Color is legal on completed steps. */
+  public async updatePromptColors(
+    indices: number[],
+    color: string | null
+  ): Promise<void> {
+    await this.workingFileManager.runInQueue(async () => {
+      const unique = [...new Set(indices)];
+      if (unique.length !== indices.length || unique.length === 0) {
+        throw new Error(
+          "Color indices must be a non-empty set of unique indices"
+        );
+      }
+      for (const index of unique) {
+        if (
+          !Number.isInteger(index) ||
+          index < 0 ||
+          index >= this.state.steps.length
+        ) {
+          throw new Error(`Invalid prompt index: ${index}`);
+        }
+      }
+      const steps = [...this.state.steps];
+      for (const index of unique) {
+        steps[index] = {
+          ...steps[index],
+          color: color ?? undefined,
+        } as WorkflowStep;
+      }
+      this.state.steps = steps;
+      this.workflowFile = this.workflowFile
+        ? { ...this.workflowFile, steps: [...steps] }
+        : this.workflowFile;
+      const baseDefinitionRevision = this.bumpDefinitionRevision();
+      await this.persistDefinitionMutation(baseDefinitionRevision);
+      this.emitStateChange();
+    });
+  }
+
   /**
    * Replace a step in the queue entirely (no merge).
    * Use this when the step type changes (e.g. PromptStep → ScriptStep) so stale
@@ -2770,36 +2808,46 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    *   the running step or an already-completed step — only the pending tail after
    *   the running step is deletable mid-run.
    */
-  public async deletePrompt(index: number): Promise<void> {
+  public async deletePrompts(indices: number[]): Promise<void> {
     // Mutation and write run as one serialized operation, so no other
     // queued write can persist (or disk-merge away) the half-applied state.
     await this.workingFileManager.runInQueue(async () => {
-      if (index < 0 || index >= this.state.steps.length) {
-        throw new Error(`Invalid prompt index: ${index}`);
+      const unique = [...new Set(indices)];
+      if (unique.length !== indices.length || unique.length === 0) {
+        throw new Error(
+          "Delete indices must be a non-empty set of unique indices"
+        );
       }
-      this.assertPendingRewindSuffixIndex(index, "delete");
-      // While executing, only steps after the running step may be deleted;
-      // completed steps and the running step stay locked.
-      this.assertEditableDuringExecution(index, "delete");
-
-      this.state.steps.forEach((step, stepIndex) => {
-        this.archiveStepRuntime(step, stepIndex, "deletePrompt");
-      });
-
-      const previousSteps = this.state.steps;
-      const nextTopology = deleteParallelGroupStep(
-        {
-          steps: this.state.steps,
-          parallelGroups: this.state.parallelGroups,
-        },
-        index
+      for (const index of unique) {
+        if (
+          !Number.isInteger(index) ||
+          index < 0 ||
+          index >= this.state.steps.length
+        ) {
+          throw new Error(`Invalid prompt index: ${index}`);
+        }
+        this.assertPendingRewindSuffixIndex(index, "delete");
+        this.assertEditableDuringExecution(index, "delete");
+      }
+      // Derive and validate the final group topology before changing runtime or
+      // queue state. This allows deleting several members as one atomic edit.
+      const nextTopology = deleteParallelGroupSteps(
+        { steps: this.state.steps, parallelGroups: this.state.parallelGroups },
+        unique
       );
+      const previousSteps = this.state.steps;
       if (this.isExecutionActive) {
         assertStartedStepPositionsPreserved(
           previousSteps,
           nextTopology.steps,
           "delete"
         );
+      }
+      for (const index of unique) {
+        this.archiveStepRuntime(this.state.steps[index], index, "deletePrompt");
+      }
+      for (const index of [...unique].sort((a, b) => b - a)) {
+        this.removeStepAt(index);
       }
       this.state.steps = nextTopology.steps;
       this.state.parallelGroups = nextTopology.parallelGroups;
@@ -2811,32 +2859,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
           }
         : this.workflowFile;
 
-      // Update currentIndex if deletion affects it
-      if (index < this.state.currentIndex) {
-        this.state.currentIndex--;
-      }
-
-      // Update completedIndices to reflect the removed slot:
-      // remove the deleted index and shift down all higher indices by 1.
-      if (this.state.completedIndices.size > 0) {
-        const updated = new Set<string>();
-        for (const entry of this.state.completedIndices) {
-          const n = parseInt(entry);
-          if (n < index) {
-            updated.add(entry);
-          } else if (n > index) {
-            updated.add(String(n - 1));
-          }
-          // n === index is dropped (the deleted prompt)
-        }
-        this.state.completedIndices = updated;
-      }
-
-      // Update results array to match
-      if (this.state.results.length > index) {
-        this.state.results.splice(index, 1);
-      }
-
       const baseDefinitionRevision = this.bumpDefinitionRevision();
 
       // Persist to working file (skip merge to avoid undoing the delete)
@@ -2845,8 +2867,23 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       // Emit state change
       this.emitStateChange();
 
-      Log.debug(`[PromptQueue] Deleted prompt at index ${index}`);
+      Log.debug(
+        `[PromptQueue] Deleted prompts at indices ${unique.join(", ")}`
+      );
     });
+  }
+
+  private removeStepAt(index: number): void {
+    this.state.steps.splice(index, 1);
+    if (index < this.state.currentIndex) this.state.currentIndex--;
+    const updated = new Set<string>();
+    for (const entry of this.state.completedIndices) {
+      const n = Number.parseInt(entry, 10);
+      if (n < index) updated.add(entry);
+      else if (n > index) updated.add(String(n - 1));
+    }
+    this.state.completedIndices = updated;
+    if (this.state.results.length > index) this.state.results.splice(index, 1);
   }
 
   /**

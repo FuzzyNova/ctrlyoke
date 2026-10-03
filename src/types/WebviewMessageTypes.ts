@@ -903,7 +903,7 @@ export interface StepsExtendedMessage {
 /** A narrow addressed update for the only currently cosmetic step field. */
 export interface StepColorUpdatedMessage {
   type: typeof MESSAGE_TYPES.STEP_COLOR_UPDATED;
-  index: number;
+  indices: number[];
   /** `null` removes the authored override and restores inherited color. */
   color: string | null;
   definitionRevision?: number;
@@ -2293,9 +2293,15 @@ export interface UpdatePromptMessage {
  */
 export interface UpdateStepColorMessage {
   type: typeof MESSAGE_TYPES.UPDATE_STEP_COLOR;
-  index: number;
+  indices: number[];
   /** `null` removes the authored override and restores inherited color. */
   color: string | null;
+  mutation?: WorkflowDefinitionMutation;
+}
+
+export interface DeletePromptMessage {
+  type: typeof MESSAGE_TYPES.DELETE_PROMPT;
+  indices: number[];
   mutation?: WorkflowDefinitionMutation;
 }
 

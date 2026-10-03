@@ -1186,7 +1186,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       ) {
         postWorkflowDefinitionMutation(vscode, {
           type: MESSAGE_TYPES.UPDATE_STEP_COLOR,
-          index: selectionTarget.index,
+          indices: [selectionTarget.index],
           color: submittedStep.color ?? null,
         });
       } else {
@@ -1366,7 +1366,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       if (selectionTarget.kind === FINAL_STEP_PHASES.QUEUE) {
         postWorkflowDefinitionMutation(vscode, {
           type: MESSAGE_TYPES.DELETE_PROMPT,
-          index: selectionTarget.index,
+          indices: [selectionTarget.index],
         });
       } else {
         postWorkflowDefinitionMutation(vscode, {
@@ -1392,7 +1392,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     if (selectionTarget.kind === FINAL_STEP_PHASES.QUEUE) {
       postWorkflowDefinitionMutation(vscode, {
         type: MESSAGE_TYPES.DELETE_PROMPT,
-        index: selectionTarget.index,
+        indices: [selectionTarget.index],
       });
     } else {
       postWorkflowDefinitionMutation(vscode, {

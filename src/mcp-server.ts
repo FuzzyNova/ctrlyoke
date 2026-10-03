@@ -1319,11 +1319,11 @@ export class CtrlYokeMCPServer {
       "edit",
       true
     );
-    const removed = await RunContinuationService.removeStepAtRun(
+    const removed = await RunContinuationService.removeStepsAtRun(
       this.workspaceRoot,
       selected.workflowKey,
       selected.runRef,
-      index,
+      [index],
       target.definitionRevision,
       lineageRepository,
       target.allowInterruptedRun

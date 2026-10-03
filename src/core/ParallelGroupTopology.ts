@@ -374,51 +374,52 @@ export function insertParallelGroupTopology(
   return result;
 }
 
-export function deleteParallelGroupStep(
+/** Delete step positions against one final topology. */
+export function deleteParallelGroupSteps(
   topology: ParallelGroupTopology,
-  index: number
+  indices: number[]
 ): ParallelGroupTopology {
   const normalized = normalizeParallelGroupTopology(topology);
-  assertIndex(index, "Delete index");
-  if (index < 0 || index >= normalized.steps.length) {
-    throw new Error(`Delete index ${index} is out of bounds`);
+  const removed = new Set(indices);
+  if (removed.size !== indices.length) {
+    throw new Error("Delete indices must be unique");
   }
-
-  const containing = normalized.parallelGroups.find(
-    (group) => index >= group.startIndex && index <= group.endIndex
-  );
-  const result: ParallelGroupTopology = {
-    steps: normalized.steps.filter((_, stepIndex) => stepIndex !== index),
-    parallelGroups: normalized.parallelGroups
-      .filter(
-        (group) =>
-          group !== containing || group.endIndex - group.startIndex + 1 > 2
-      )
-      .map((group) => {
-        if (group === containing) {
-          return { ...group, endIndex: group.endIndex - 1 };
-        }
-        if (group.startIndex > index) {
-          return {
-            ...group,
-            startIndex: group.startIndex - 1,
-            endIndex: group.endIndex - 1,
-          };
-        }
-        return { ...group };
-      }),
-  };
-  if (
-    containing &&
-    containing.endIndex - containing.startIndex + 1 === 2 &&
-    normalized.steps
-      .slice(containing.startIndex, containing.endIndex + 1)
-      .some(hasStarted)
-  ) {
-    throw new Error(
-      `Cannot shrink active parallel group ${containing.id} from two members to one`
+  for (const index of removed) {
+    assertIndex(index, "Delete index");
+    if (index < 0 || index >= normalized.steps.length) {
+      throw new Error(`Delete index ${index} is out of bounds`);
+    }
+  }
+  const groups: ParallelGroupDefinition[] = [];
+  for (const group of normalized.parallelGroups) {
+    const groupIndices = Array.from(
+      { length: group.endIndex - group.startIndex + 1 },
+      (_, offset) => group.startIndex + offset
     );
+    const remaining = groupIndices.filter((index) => !removed.has(index));
+    if (
+      remaining.length === 1 &&
+      groupIndices.some((index) => hasStarted(normalized.steps[index]))
+    ) {
+      throw new Error(
+        `Cannot shrink active parallel group ${group.id} from two members to one`
+      );
+    }
+    if (remaining.length >= 2) {
+      const startIndex =
+        remaining[0] -
+        [...removed].filter((index) => index < remaining[0]).length;
+      groups.push({
+        ...group,
+        startIndex,
+        endIndex: startIndex + remaining.length - 1,
+      });
+    }
   }
+  const result = {
+    steps: normalized.steps.filter((_, index) => !removed.has(index)),
+    parallelGroups: groups,
+  };
   validateParallelGroupTopology(result);
   return result;
 }

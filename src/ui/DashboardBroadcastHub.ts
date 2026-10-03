@@ -375,13 +375,13 @@ export class DashboardBroadcastHub
   }
 
   updateStepColor(
-    index: number,
+    indices: number[],
     color: string | null,
     definitionRevision?: number,
     workflowId?: string
   ): void {
     for (const client of this.clients) {
-      client.updateStepColor?.(index, color, definitionRevision, workflowId);
+      client.updateStepColor?.(indices, color, definitionRevision, workflowId);
     }
   }
 

@@ -410,7 +410,7 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
     expect(colorMessages).toHaveLength(1);
     expect(colorMessages[0]).toMatchObject({
       type: MESSAGE_TYPES.UPDATE_STEP_COLOR,
-      index: 0,
+      indices: [0],
       color: "#abcdef",
       mutation: {
         address: {

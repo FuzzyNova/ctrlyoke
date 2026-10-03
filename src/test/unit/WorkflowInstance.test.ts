@@ -2665,7 +2665,7 @@ suite("WorkflowInstance append-and-continue", () => {
     await markQueueCompleted(instance);
     (instance.promptQueue as any).state.currentIndex = 2;
 
-    await instance.deletePromptFromQueue(1);
+    await instance.deletePromptFromQueue([1]);
 
     assert.strictEqual(
       instance.promptQueue.getRuntimeStateMachine().status,
@@ -2707,7 +2707,7 @@ suite("WorkflowInstance append-and-continue", () => {
       executionEndTime: undefined,
     });
 
-    await instance.deletePromptFromQueue(1);
+    await instance.deletePromptFromQueue([1]);
 
     assert.strictEqual(runtime.status, EXECUTION_STATES.STOPPED);
   });

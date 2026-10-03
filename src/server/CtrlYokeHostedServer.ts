@@ -753,12 +753,12 @@ export class CtrlYokeHostedServer
     );
   }
   updateStepColor(
-    index: number,
+    indices: number[],
     color: string | null,
     definitionRevision?: number,
     workflowId?: string
   ): void {
-    this.sink.updateStepColor(index, color, definitionRevision, workflowId);
+    this.sink.updateStepColor(indices, color, definitionRevision, workflowId);
   }
   updatePromptDeleted(
     fileName: string,

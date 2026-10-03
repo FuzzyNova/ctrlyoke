@@ -166,7 +166,7 @@ export interface IDashboardSink {
   ): void;
 
   updateStepColor(
-    index: number,
+    indices: number[],
     color: string | null,
     definitionRevision?: number,
     workflowId?: string

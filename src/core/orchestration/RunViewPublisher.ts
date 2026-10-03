@@ -42,7 +42,7 @@ export interface DefinitionRollbackInvalidation {
 
 export interface StepColorInvalidation {
   kind: "stepColor";
-  index: number;
+  indices: number[];
 }
 
 /** The instance/view state consumed by the addressed-view read path. */
@@ -643,7 +643,7 @@ export class RunViewPublisher implements RunLifecycleViewPort {
   async invalidateRunViewStepColor(
     workflowKey: WorkflowKey,
     runRef: RunRef,
-    index: number
+    indices: number[]
   ): Promise<void> {
     const targets = [
       ...this.host.registry.getViewAddressRegistry().entries(),
@@ -663,12 +663,12 @@ export class RunViewPublisher implements RunLifecycleViewPort {
       const workingFile = JSON.parse(
         await fs.promises.readFile(filePath, "utf-8")
       ) as WorkingFile;
-      const color = workingFile.steps?.[index]?.color ?? null;
+      const color = workingFile.steps?.[indices[0]]?.color ?? null;
       const definitionRevision = workingFile.definitionRevision;
       for (const [clientId] of targets) {
         this.host.registry.getViewMessageSinks().get(clientId)?.({
           type: MESSAGE_TYPES.STEP_COLOR_UPDATED,
-          index,
+          indices,
           color,
           ...(definitionRevision !== undefined ? { definitionRevision } : {}),
         });

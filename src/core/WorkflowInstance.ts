@@ -2866,15 +2866,13 @@ export class WorkflowInstance
   }
 
   async updateStepColorInQueue(
-    index: number,
+    indices: number[],
     color: string | null
   ): Promise<void> {
-    await this.promptQueue.updatePrompt(index, {
-      color: color ?? undefined,
-    });
+    await this.promptQueue.updatePromptColors(indices, color);
     const currentState = this.promptQueue.getState();
     this.dashboardSink?.updateStepColor(
-      index,
+      indices,
       color,
       currentState.definitionRevision
     );
@@ -2932,8 +2930,8 @@ export class WorkflowInstance
     );
   }
 
-  async deletePromptFromQueue(index: number): Promise<void> {
-    await this.promptQueue.deletePrompt(index);
+  async deletePromptFromQueue(indices: number[]): Promise<void> {
+    await this.promptQueue.deletePrompts(indices);
     if (this.dashboardSink) {
       const currentState = this.promptQueue.getState();
       const fileName = this.currentPromptFile
@@ -2948,7 +2946,7 @@ export class WorkflowInstance
       );
     }
     await this.reconcileExecutionStateAfterStepChange();
-    Log.debug(`[WorkflowInstance] Deleted prompt ${index}`);
+    Log.debug(`[WorkflowInstance] Deleted prompts ${indices.join(", ")}`);
   }
 
   /**
