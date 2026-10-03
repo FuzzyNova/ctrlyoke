@@ -9,9 +9,11 @@ The CLI's run-history inspection commands are documented in the
 [`ctrlyoke` CLI reference](../cli/ctrlyoke.md). To list executing workflows and
 check whether their runner processes are alive, use `ctrlyoke status`; pass
 `--workflow <key>` and `--run <ref>` to narrow the result, or `--json` for
-machine-readable output. For recorded run output, `history show --json` emits
-NDJSON; `--summary` keeps attempt records compact and `--events` emits one line
-per output event. Agents should use these JSON forms because recorded tool
+machine-readable output; each row's liveness names why a run is `stale`. For
+recorded run output, `history show --json` emits NDJSON; `--summary` keeps
+attempt records compact, `--events` emits one line per output event, and
+`--limit`/`--cursor`/`--tail` bound everything a read emits to one page of one
+attempt. Agents should use these JSON forms because recorded tool
 output can contain nested ctrlyoke boxes that make rendered text ambiguous.
 
 ## Dashboard and execution

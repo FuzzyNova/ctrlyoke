@@ -17,7 +17,7 @@ ctrlyoke trust-workflow-external-roots <file> [--yes] [--cwd <path>]
 ctrlyoke trust-secret-grants <file> [--yes] [--cwd <path>]
 ctrlyoke history prune [--yes]
 ctrlyoke history relink <oldPath> <newPath> [--yes]
-ctrlyoke history list [--cwd <path>] [--all] [--state <state...>] [--since <when>] [--limit <n>] [--json]
+ctrlyoke history list [--cwd <path>] [--all] [--state <state...>] [--since <when>] [--sort latest|name] [--limit <n>] [--json]
 ctrlyoke history runs --workflow <key> [--cwd <path>] [--json]
 ctrlyoke history steps --workflow <key> [--run <ref|runId>] [--json] [--full-prompts]
 ctrlyoke history show --workflow <key> [--run <ref|runId>] [--step <selector>] [--attempt <n|latest|all>] [--json] [--summary|--events]
@@ -53,8 +53,19 @@ ctrlyoke status --workflow release --run run-2026-10-03T12-00-00-000Z --json
 ```
 
 Text output shows the workflow, run, execution state, current and total steps,
-harness, model, start time, heartbeat age, and liveness. JSON returns the same
-workflow fields as MCP `global_status`, plus a `liveness` object for each row.
+harness, model, start time, the runner lock's PID and heartbeat age, and
+liveness. It says `No workflows are executing.` when nothing is, and prints the
+same notes and omitted-row count as the JSON. JSON returns the same workflow
+fields as MCP `global_status`, plus a `liveness` object for each row:
+
+- `state`: `alive` or `stale`.
+- `reason`: `active` (the lock is live and held for this run), `absent` (no
+  usable `runner.json`), `stale-dead-pid` (the lock's process has exited),
+  `stale-heartbeat` (the process is alive but stopped heartbeating), or
+  `other-run` (a live lock is held for a different run, named in `lockRunRef`).
+- `pid`, `lastHeartbeat`, `heartbeatAgeMs`: taken from `runner.json` whenever it
+  exists, including stale locks; `null` when it has none.
+
 Use `--run` with `--workflow` to inspect a specific run.
 
 ## Exit codes
@@ -411,7 +422,10 @@ lineage's key, name, run count, newest run time, and newest manifest state.
 summary.
 `--state` filters by the latest run's outcome, `--since` filters by its start
 time (ISO-8601 or a relative value such as `7d`, `24h`, or `30m`), and `--limit`
-caps the returned lineages.
+caps the returned lineages. Rows are sorted before `--limit` applies:
+`--sort latest` (the default) puts the newest latest run first and lineages that
+have never run last; `--sort name` orders by workflow name. Invalid filter values
+fail before any history is read.
 
 ## `ctrlyoke history runs`
 
@@ -437,19 +451,32 @@ ctrlyoke history steps --workflow release
 ctrlyoke history steps --workflow release --run 7 --json
 ```
 
+Every `#` value in the text output is a valid `history show --step` selector:
+queue steps use their zero-based index and the final step row is `final`.
+Unnamed steps show `—`. `ATTEMPTS` counts the step's own AI or script attempts;
+pre/end-condition scripts and worktree setup run alongside an attempt and are
+not counted as attempts of their own.
+
 JSON output is one object with `runRef`, `steps[]`, and `finalStep`. Each queue
-step carries its zero-based `selector` for `history show --step`; the final step
-uses `selector: "final"`. Attempt and final-pass counts come from streamed
-attempt lifecycle records.
+step carries its `selector`, `index`, `name`, `state`, `harness`, `model`,
+`elapsedSeconds`, `attempts`, and `prompt`; absent values are `null`.
+`finalStep` uses `selector: "final"` and lists `passes[]`, one per final-step
+pass, each with its own `selector` (`final:1`, `final:2`, …), `pass`, `state`,
+`attempts`, `startedAt`, `completedAt`, and `elapsedSeconds`. Attempt and pass
+facts come from streamed attempt lifecycle records, not output payloads.
 
 ## `ctrlyoke history show`
 
 Print the recorded output for one run. `--run` accepts either the numeric run
 ID or its stable reference. `--step` accepts zero-based queue indices and
-inclusive ranges (`3,7,10-12`), `final` for every final-step pass, `final:N` for
-one 1-based final-step pass, `final:latest`, `running`, or `latest`. `--attempt`
-accepts a 1-based attempt number, `latest`, or `all` (the default). Omitting
-`--run` selects the latest run:
+inclusive ranges (`3,7,10-12`; spaces after commas are ignored), `final` for
+every final-step pass, `final:N` for one 1-based final-step pass,
+`final:latest`, `running`, or `latest`. `--attempt` accepts a 1-based attempt
+number, `latest`, or `all` (the default); a number beyond a selected step's
+recorded attempts fails with exit code `2` and names the valid range. An
+attempt's pre/end-condition output is shown with it. Each rendered step header
+ends with the selector that reproduces it, such as `Step 70/70 (--step 69)` or
+`(--step final:3)`. Omitting `--run` selects the latest run:
 
 ```bash
 ctrlyoke history show --workflow release --run 7
@@ -462,13 +489,31 @@ ctrlyoke history show --workflow release --step 2
 ```
 
 `history show` also accepts `--kind <kind...>` and `--path <substring>` to
-filter recorded content using the same event-kind vocabulary and path matching
-as `history search`. Use `--limit <chars>` with an optional `--cursor <opaque>`
-to read a forward character page, or `--tail <chars>` to read the end. Paging
-requires exactly one selected attempt; `--tail` cannot be combined with
-`--cursor` or `--limit`. A forward page prints a `use --cursor X` continuation
-when more response text remains. `--max-events <n>` bounds structured events in
-text output and reports how many remain with a cursor hint.
+filter recorded content using the same event-kind vocabulary, script-source
+classification, and path matching as `history search`. Text a filter excludes
+is left out of every field, including JSON `prompt` and `responseText`. When a
+filter leaves nothing from an attempt, the command prints
+`No events in --step N matched …` and exits `0`.
+
+Use `--limit <chars>` with an optional `--cursor <opaque>` to read a forward
+character page, or `--tail <chars>` to read the end; `--tail` cannot be
+combined with `--cursor` or `--limit`. Paging reads exactly one attempt: without
+`--attempt` it reads the selected step's latest attempt, and a selection that
+covers several steps or attempts fails with exit code `2` before anything is
+printed. The page bounds everything the command emits:
+
+- Without `--kind` or `--path`, the page is cut from the attempt's response
+  text (a script attempt's combined stdout and stderr), read once.
+- With `--kind` or `--path`, it is cut from the selected items joined by blank
+  lines: the prompt, the response, then the text of each other matching event.
+- Structured events, the prompt preview, the JSON `prompt`, and script
+  `stdout`/`stderr` are not emitted beside a page. Use `--kind prompt` to page
+  the prompt.
+
+A forward page prints `… more output (use --cursor X)` in text, and JSON records
+carry `nextCursor` in every projection, when more text remains.
+`--max-events <n>` bounds structured events in text output and reports how many
+remain with the `--max-events` value that would show them all.
 
 ```bash
 ctrlyoke history show --workflow release --step 2 --kind prompt response
@@ -477,9 +522,12 @@ ctrlyoke history show --workflow release --step 2 --tail 4000
 ctrlyoke history show --workflow release --step 2 --max-events 20
 ```
 
-When a valid queue step has no attempt, text output reports its state from the
-run's working file, such as `Step 57 has not started (pending)` or
-`Step 57 was skipped`. A pause is rendered as `Run paused`.
+When a selected queue step has no attempt at all, the command reports its
+state from the run's working file, one line per such step, such as
+`--step 57 has not started (pending)` or `--step 57 was skipped`; with `--json`
+each is an object with `runRef`, `selector`, `step`, `status`, and `message`.
+`--step 3,57` prints step 3 and then the line for step 57. A pause is rendered
+as `Run paused`.
 
 Pass `--json` to emit one raw attempt record per line as NDJSON. This is
 deliberately different from commands such as `validate --json`, which emit one
@@ -489,12 +537,17 @@ Agents should use `--json` when inspecting output: rendered text can contain
 nested ctrlyoke boxes copied from recorded tool output.
 
 Default records include the attempt's own `definition.step` and a
-`definitionRevision` number without repeating the full workflow snapshot.
+`definitionRevision` number without repeating the full workflow snapshot. The
+prompt and response appear once, as top-level `prompt` and `responseText`;
+`output` keeps the remaining output fields without copies of them.
 `--summary` emits only the target, run and attempt indices, state, timings,
-tokens, prompt, and response text; paging options such as `--limit` also bound
-`responseText`. `--events` emits one record per structured output event, with
-the attempt target and indices on every line. These projections require
-`--json` and are mutually exclusive.
+tokens, prompt, and response text. `--events` emits one record per structured
+output event, with the attempt target and indices on every line; with paging it
+emits one text record carrying the page. These projections require `--json`
+and are mutually exclusive.
+
+History and status output can be piped into `head` or similar readers; when
+the reader closes early the command stops quietly with exit code `0`.
 
 ```bash
 ctrlyoke history show --workflow release --step 2 --json
@@ -513,23 +566,23 @@ ctrlyoke history search "permission" --since 7d --json
 ctrlyoke history search "EP.*RM" --regex
 ```
 
-| Option                | Meaning                                                                                                              |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `--workflow <key...>` | Restrict to workflow lineage keys                                                                                    |
-| `--this-workflow`     | Restrict to the workflow named by `CTRLYOKE_WORKING_FILE` (set for harness and workflow-script processes)            |
-| `--kind <kind...>`    | Restrict to event kinds, such as `prompt`, `response`, `thinking`, `bash`, `fileEdit`, `tool`, `script`              |
-| `--harness <id...>`   | Restrict to harnesses                                                                                                |
-| `--state <state...>`  | Restrict to run outcomes (`completed`, `error`, `stopped`, `paused`)                                                 |
-| `--path <substring>`  | Restrict to events touching a file path                                                                              |
+| Option                | Meaning                                                                                                                                                                |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--workflow <key...>` | Restrict to workflow lineage keys                                                                                                                                      |
+| `--this-workflow`     | Restrict to the workflow named by `CTRLYOKE_WORKING_FILE` (set for harness and workflow-script processes)                                                              |
+| `--kind <kind...>`    | Restrict to event kinds, such as `prompt`, `response`, `thinking`, `bash`, `fileEdit`, `tool`, `script`                                                                |
+| `--harness <id...>`   | Restrict to harnesses                                                                                                                                                  |
+| `--state <state...>`  | Restrict to run outcomes (`completed`, `error`, `stopped`, `paused`)                                                                                                   |
+| `--path <substring>`  | Restrict to events touching a file path                                                                                                                                |
 | `--since` / `--until` | Runs started at or after / before an ISO-8601 time (`--until` date-only values include the whole day; offset-less date-times are UTC) or a relative `7d`, `24h`, `30m` |
-| `--deep`              | Re-read matching runs past the 2,000-character indexed text cap                                                      |
-| `--regex`             | Treat the query as a case-insensitive regular expression                                                             |
-| `--limit <n>`         | Maximum results (default 20, maximum 100)                                                                            |
-| `--offset <n>`        | Absolute result offset                                                                                               |
-| `--snippet <chars>`   | Context characters around each match                                                                                 |
-| `--exact-count`       | Scan the whole history for an exact total                                                                            |
-| `--no-rebuild`        | Search the existing index without rebuilding it                                                                      |
-| `--no-fallback`       | Fail rather than serve results from the unindexed disk scan                                                          |
+| `--deep`              | Re-read matching runs past the 2,000-character indexed text cap                                                                                                        |
+| `--regex`             | Treat the query as a case-insensitive regular expression                                                                                                               |
+| `--limit <n>`         | Maximum results (default 20, maximum 100)                                                                                                                              |
+| `--offset <n>`        | Absolute result offset                                                                                                                                                 |
+| `--snippet <chars>`   | Context characters around each match                                                                                                                                   |
+| `--exact-count`       | Scan the whole history for an exact total                                                                                                                              |
+| `--no-rebuild`        | Search the existing index without rebuilding it                                                                                                                        |
+| `--no-fallback`       | Fail rather than serve results from the unindexed disk scan                                                                                                            |
 
 `ctrlyoke history search --help` lists every valid `--kind`, `--harness`, and
 `--state` value.

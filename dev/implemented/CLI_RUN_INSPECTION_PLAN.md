@@ -5,12 +5,16 @@
 > `--summary` and `--events` provide compact and event-stream forms. The CLI
 > docs include agent guidance and a run-investigation walkthrough.
 >
-> **Size measurement:** the §1 pre-change measurement was 38 MB. After
-> `npm run compile:extension`, the referenced history emitted 40,899,443 bytes
-> (about 39.0 MiB). This is the current local history and may have grown since
-> the historical baseline; it is recorded as a point-in-time comparison, not a
-> controlled same-data before/after benchmark. The default output no longer
-> repeats each attempt's full workflow definition snapshot.
+> **Size measurement:** the §1 pre-change measurement was 38 MB. The full
+> workflow definition snapshot was not where that size was: on the same run
+> (2026-10-03, 86 attempt lines) the default `history show --json` emits
+> 40,084,245 bytes, of which structured events are 36.9 MB (92%), `responseText`
+> 2.6 MB, prompts 0.2 MB, and `definition.step` 0.09 MB. Dropping the repeated
+> snapshot saved little; the review follow-up removed the `output.prompt` and
+> `output.response` copies of `prompt` and `responseText` (about 2.8 MB per
+> full read). The run keeps growing, so these are point-in-time numbers, not a
+> same-data benchmark. Reads that must stay small use paging (§3.5), which now
+> bounds the whole record: `--step 3 --tail 2000` emits about 2.3 KB.
 >
 > Updated 2026-10-03.
 >
@@ -92,6 +96,16 @@ Also add `history list --state <state...>` (reusing the `--state` vocabulary and
 validation from `history search`) plus `--limit`, `--since`, and `--sort latest`.
 Then `history list --state running stopped error --since 7d` replaces today's 300 KB scan.
 
+**As built:** `--sort latest|name` defaults to `latest` (newest latest-run start
+first, never-run lineages last) and is applied before `--limit`, so
+`--limit 5` returns the five most recent lineages rather than the first five
+keys alphabetically. Filters are validated before the lineage scan. `status`
+liveness reports `pid`/`lastHeartbeat` whenever `runner.json` exists and names
+its verdict in `reason` (`active`, `absent`, `stale-dead-pid`,
+`stale-heartbeat`, `other-run`). `GlobalWorkflowStatusService` takes
+surface-specific error wording, so the CLI says `--run requires --workflow`
+while MCP keeps `runRef requires workflowKey`.
+
 ### 3.2 `history steps`: the overview (highest priority)
 
 Illustrative output (column values are mock-ups, not measured):
@@ -121,6 +135,14 @@ ctrlyoke history steps --workflow K [--run R] [--json]
 - Prompt column is the first line, truncated. `--full-prompts` prints each in full.
 - Every row is a valid selector for §3.4. `--json` emits one object with
   `steps[]` and `finalStep` (with `passes[]`), each carrying the exact `--step` value.
+- **As built:** the text label of the final row is `final` (a valid selector),
+  unnamed steps show `—`, and JSON uses `null` for absent values and numeric
+  `elapsedSeconds`. `finalStep.passes[]` carries each pass's `final:N`
+  selector, state, attempt count, and lifecycle timestamps. `ATTEMPTS` counts
+  AI and script-step attempts only: pre/end-condition scripts and worktree
+  setup record their own attempts under the step attempt's indices (told apart
+  by `phase`), so counting them reported 3 attempts for a step with one AI
+  attempt. `RunOutputResolver.isStepAttemptKind()` is the shared rule.
 - Optional: `ctrlyoke step list` as an alias, since `step edit/remove/reorder`
   already address the same indices.
 
@@ -145,6 +167,16 @@ Today `--step` takes one index or `final`, and `final` means every pass.
   is the thing someone watching a live run asks for most.
 - Out-of-range and not-yet-started selectors: see the pending-step bug. A valid
   selector with no output yet prints its state and exits 0, without stray run events.
+- **As built — numbering:** CLI messages name the zero-based selector the user
+  typed (`--step 69 has not started (pending)`), and JSON keeps `step: 69`.
+  Rendered `Step N/M` headers stay 1-based, matching `ctrlyoke run`, but in
+  history output they end with the copyable selector (`Step 70/70 (--step 69)`,
+  `(--step final:3)`); live `run` output is unchanged. Every unrendered index of
+  a `--step` list gets its own status line. A status line appears only for a
+  step with no attempts at all; `--attempt N` beyond the recorded attempts exits
+  `2` with the valid range, and filters that match nothing on an existing
+  attempt print `No events in --step N matched …`. The `latest`/`running`/
+  `final:latest`/`--attempt` pre-pass reads only the attempt lifecycle stream.
 
 ### 3.5 Filtering and bounding what `show` prints
 
@@ -159,6 +191,19 @@ Today `--step` takes one index or `final`, and `final` means every pass.
   into a shared core helper so both surfaces page identically.
 - `--max-events <n>` / `--head`/`--tail` on events for the text renderer, with
   a trailing `… N more events (use --cursor X)` line rather than silent truncation.
+- **As built — paging rule:** a page bounds everything emitted, not only
+  `output.response`. Paging reads exactly one attempt (without `--attempt`, the
+  selected step's latest), and the selection is validated against the
+  lifecycle pre-pass before anything is written. The paged text is the
+  attempt's response (a script attempt's combined stdout and stderr) read once;
+  with `--kind`/`--path` it is the selected prompt, response, and matching
+  event texts joined by blank lines. Structured events, the prompt preview,
+  JSON `prompt`, and script `stdout`/`stderr` are not emitted beside a page,
+  and every JSON projection carries `nextCursor`. `--max-events` hints point at
+  a larger `--max-events`, since `--cursor` pages characters. Paging errors use
+  CLI flag names via `OutputTextPagingWording`; MCP `read_output` keeps its
+  exact strings. `--kind` classifies script output with search's
+  `SCRIPT_EVENT_KIND_BY_SOURCE`, and `--path` uses search's normalizer.
 
 ### 3.6 A `--json` shape an agent can afford
 
@@ -174,6 +219,10 @@ definition snapshot, repeated on every line), `prompt`, `output.structured`, and
   `head`, `grep`, and streaming consumers work on bounded lines.
 - Text output stays human-oriented. Document that agents should use `--json`,
   because rendered text can contain nested ctrlyoke boxes from recorded tool output.
+- **As built:** default records emit each text once, as top-level `prompt` and
+  `responseText`; `output` no longer repeats them as `output.prompt` and
+  `output.response`. History and status commands exit quietly with code `0`
+  when a reader such as `head` closes stdout (`src/cli/CliClosedPipe.ts`).
 
 ## 4. Single-source notes
 
