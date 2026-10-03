@@ -45,3 +45,7 @@ exactly (case-insensitively):
 
 Resolve the key once in a shared helper so every `--workflow` option behaves the same. Update
 the option help text from `Workflow lineage key` to `Workflow lineage key or exact name`.
+
+## Decision
+
+Decided 2026-10-03 (obvious, no input needed): adopt the suggested fix in one shared resolver used by every `--workflow` option. An exact lineage key always wins. Otherwise try an exact, case-insensitive `workflowName` match. One match: use it and print `Using lineage <key>` on stderr (never stdout). Several matches: exit 2 and list each candidate key with its latest run date. No match: keep the error and add the `ctrlyoke history list` hint. Change the help text to `Workflow lineage key or exact name`.

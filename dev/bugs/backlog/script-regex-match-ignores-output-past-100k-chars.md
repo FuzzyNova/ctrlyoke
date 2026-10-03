@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (Claude)
 - **Area:** `src/utils/ScriptComparison.ts` (`compareRegex`)
-- **Severity:** medium (needs a design decision)
+- **Severity:** medium
 
 ## Symptom
 
@@ -37,3 +37,7 @@ This needs a decision, because the guard itself is load-bearing. Options:
   head, and document the window in the `operator` schema description.
 - At minimum, document the cap and surface "output truncated for regex" in
   the verdict.
+
+## Decision
+
+Decided 2026-10-03 by Nathan: use a worker with a timeout. Output at or below the current cap keeps the inline regex. Longer output is matched against the **full** text in a `worker_thread` with a timeout. A timeout fails the comparison with a clear reason ("regex timed out after Ns on N chars"). This keeps the ReDoS guard and makes `matches` see the same text as `contains`. Describe the timeout behaviour in the `operator` schema description, then run `npm run schema:update`.

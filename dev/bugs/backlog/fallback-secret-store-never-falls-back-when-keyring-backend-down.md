@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), reproduced with a tsx probe using an injected `runCommand`
 - **Area:** `src/platform/FallbackSecretStore.ts` (`probe` ~46-57), `src/platform/OsCredentialStore.ts` (`get`/`keys` error mapping)
-- **Severity:** medium (fixing it needs a behaviour change)
+- **Severity:** medium
 
 ## Symptom
 
@@ -36,3 +36,7 @@ classify backend-unreachable failures (D-Bus autolaunch errors, a locked keychai
 over SSH) as `SecretStoreUnavailableError` so `FallbackSecretStore` switches
 stores, including on the first failing write. Both change when and how secrets
 move between stores, so this needs a design decision.
+
+## Decision
+
+Decided 2026-10-03 by Nathan: classify errors, with no write probe. `OsCredentialStore` maps backend-unreachable failures (D-Bus autolaunch failure, no Secret Service, a locked keychain over SSH) to `SecretStoreUnavailableError` on reads, `keys()` and writes. A real "not found" still returns `undefined`. `FallbackSecretStore` switches to the fallback store on that error, including on the first failing write (which is then retried against the fallback), and calls `onFallback`. The keyring is never written just to probe it.

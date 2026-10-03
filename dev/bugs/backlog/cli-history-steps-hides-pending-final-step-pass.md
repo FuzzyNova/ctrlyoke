@@ -40,3 +40,7 @@ pending: show its state as `pending` (or `paused`) with a note such as `17 passe
 Add the same information to the JSON (e.g. `finalStep.nextPass: 18`). Apply the same rule to
 queue rows: a non-terminal run whose `currentIndex` points at a step should label that step as
 next.
+
+## Decision
+
+Decided 2026-10-03 (obvious, no input needed): adopt the suggested fix. When the run is not terminal and `_runtime.currentIndex >= steps.length`, the `final` row's state is `pending` and its note reads `N passes, N+1 next`. JSON gains `finalStep.nextPass` (`null` when no pass is pending). When a non-terminal run's `currentIndex` points at a queue step, that row is labelled as next, both in the table and with a `next: true` flag in JSON. Use the existing state constants, not new string literals.

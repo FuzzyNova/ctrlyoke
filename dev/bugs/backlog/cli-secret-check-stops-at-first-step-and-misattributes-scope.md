@@ -35,3 +35,13 @@ unapproved grants separately with no step scope. Use a typed error, not
 message-text matching, so `secret check` and `run` use the same exit code. Not
 queued: this needs a decision on the intended exit-code contract for
 `secret check`.
+
+## Decision
+
+Decided 2026-10-03 by Nathan. Exit-code contract for `secret check`:
+
+- **0**: every declared secret resolves.
+- **1**: the only problem is missing environment values. Collect the names across **all** steps and report each one with its correct step scope.
+- **2**: unapproved grants, or any other config or usage error. This matches `run`. Report unapproved grants once at workflow scope, with their own wording, not "is missing".
+
+Replace message-text matching (`isMissingSecretPreflightError`) with typed errors, for example `MissingSecretsError` and `UnapprovedSecretGrantsError`, so `secret check` and `run` classify the same condition the same way. When both problems exist, report both and exit 2.

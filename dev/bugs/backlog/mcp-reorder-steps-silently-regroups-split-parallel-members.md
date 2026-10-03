@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (Claude)
 - **Area:** `src/core/orchestration/RunContinuationService.ts` (`reorderStepsAtRun` ~887-956), `src/core/ParallelGroupTopology.ts` (~627-665), `src/mcp-server.ts` (`mutationResponse` ~1399-1413)
-- **Severity:** low (needs a decision: reject or report the effective order)
+- **Severity:** low
 
 ## Symptom
 
@@ -37,3 +37,7 @@ Choose one:
 
 Either way, emit the "already matched" note only when the request really
 matched. Not queued, because this is a behaviour decision.
+
+## Decision
+
+Decided 2026-10-03 by Nathan: reject. `reorderStepsAtRun` refuses an order that puts any other step between a parallel group's members, with an error that names the group and its member indices, and changes nothing. A valid order that moves a whole group stays allowed. Show `mutationResponse`'s "already matched" note only when the requested order equals the current order, not just because the revision is unchanged. CLI and dashboard reorder paths that send explicit group ranges keep their current behaviour, and they should go through the same validation.

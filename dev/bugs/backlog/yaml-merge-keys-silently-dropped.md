@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (Claude)
 - **Area:** `src/core/PromptFileParser.ts` (YAML and frontmatter loads use `yaml.CORE_SCHEMA`)
-- **Severity:** low (needs a decision: support or reject loudly)
+- **Severity:** low
 
 ## Symptom
 
@@ -28,3 +28,7 @@ and the unknown-property pass deletes it.
 Either extend the schema used for workflow YAML with js-yaml's merge type
 everywhere workflow YAML is loaded, or reject `<<` with a specific error. Not
 queued: product decision.
+
+## Decision
+
+Decided 2026-10-03 (obvious, no input needed): support merge keys. Define one shared js-yaml schema (`CORE_SCHEMA` extended with the `merge` type) and use it for every workflow YAML load: `.ctrlyoke.yaml/.yml`, `.prompt.md` frontmatter, and `TemplateManager.createWorkflow`. A template and a workflow file then parse the same way. Merge keys are standard YAML 1.1, commonly used for DRY step defaults, and safe (they only copy already-parsed mappings). Add parser tests for a step built from `<<: *anchor` plus overrides.

@@ -30,3 +30,7 @@ Before monitoring for completion, resolve the session ID from the run-ID-scoped
 session-start notification (as the extension path does), or have the monitor
 filter Stop files by `CTRLYOKE_RUN_ID` when no session ID is known. Reproduce
 first with two concurrent interactive runs to confirm.
+
+## Decision
+
+Decided 2026-10-03 (obvious, no input needed): reproduce first. If it is confirmed, reuse the extension path's approach rather than adding a parallel mechanism. Before calling `monitorForCompletion`, resolve the session ID from the session-start notification scoped to this run's `CTRLYOKE_RUN_ID`, sharing that logic with the VS Code interactive path. If the session ID can't be learned, the monitor must filter Stop files by `CTRLYOKE_RUN_ID` and never accept an unscoped "any newer Stop file" match.

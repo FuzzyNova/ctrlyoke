@@ -32,3 +32,7 @@ pass's `elapsedSeconds`. Leave it `null` only when no pass has finished. Keep th
 values in JSON unchanged. Also consider whether the executor should write `_runtime.elapsed`
 for the final step like it does for queue steps, so the dashboard and the CLI agree. Check
 `src/core/WorkflowExecutor.ts` before choosing which side to fix.
+
+## Decision
+
+Decided 2026-10-03 (obvious, no input needed): fix it in the CLI. Set the final row's `elapsedSeconds` to the sum of the finished passes' `elapsedSeconds` from `historyFinalPassRows`, and leave it `null` only when no pass has finished. The per-pass records stay the single source, so the executor should not also write an aggregate `_runtime.elapsed` for the final step. That second copy could drift from the passes. Per-pass JSON is unchanged.

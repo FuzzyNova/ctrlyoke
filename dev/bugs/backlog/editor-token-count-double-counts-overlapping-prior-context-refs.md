@@ -28,3 +28,7 @@ request, reusing the runtime's merge rules rather than re-implementing them. At
 minimum, have `formatInlinePriorContextBody` write `{ count: 1 }` as `previous`
 so equivalent spellings share a key. It's only an estimate, so this is low
 priority.
+
+## Decision
+
+Decided 2026-10-03 (obvious, no input needed): single-source the merge rules. Move the runtime's prior-context merge (the largest N across references, minus duplicate items) out of `RunOutputResolver.resolvePriorContextItems` into a pure helper that the webview can import. `useAttachmentTokenCount` uses it to build one combined preview request per prompt instead of one per reference. This also makes `$previous` and `$previous:1` share a key. Low priority.

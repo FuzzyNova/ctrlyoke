@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (Claude)
 - **Area:** `src/utils/FileReferenceParser.ts` (`findFencedBlockRanges`)
-- **Severity:** low (design trade-off)
+- **Severity:** low
 
 ## Symptom
 
@@ -30,3 +30,7 @@ fences. Not queued: the scan is shared by editor chips, secrets, slash tokens
 and generated literal fences (`LITERAL_FENCE_INFO`), and single-line inline
 prompts may rely on run-anywhere matching, so this needs a deliberate design
 pass.
+
+## Decision
+
+Decided 2026-10-03 by Nathan: line-start fences plus same-line pairs. In `findFencedBlockRanges`, a run of 3+ backticks opens or closes a block fence only at line start (after up to three spaces, as in CommonMark). A run elsewhere on a line is masked only when a run of the same length closes it on that same line (an inline span). An unpaired run in prose is ignored. Generated `fenceLiteral` output is always emitted at line start, so the `LITERAL_FENCE_INFO` handling keeps working. Add tests for the prose-mention case, a single-line inline span, and generated literal fences, covering the secret and slash-token parsers that share this scan.

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli), reproduced against the compiled MCP server
 - **Area:** `src/core/orchestration/RunContinuationService.ts` (`appendStepsToRun` ~407-416, `removeStepAtRun` ~857, `reorderStepsWithOrder` ~988), dashboard insert/delete/drag-reorder paths, `ExecutionPreviewService.ts` (~805-818)
-- **Severity:** medium (needs a design decision before fixing)
+- **Severity:** medium
 
 ## Symptom
 
@@ -40,3 +40,7 @@ Choose one:
 Either way, apply it in one shared helper used by the MCP, CLI `step`, and
 dashboard mutation paths, and consider exposing `sessionId` in
 `workflow_status`. Not queued: this needs a design decision.
+
+## Decision
+
+Decided 2026-10-03 by Nathan: option (a), renumber on edit. One shared helper, called by every structural queue edit (MCP `append_step`/`remove_step`/`reorder_steps`, CLI `step`, dashboard insert/delete/drag-reorder), rewrites numeric `sessionId` references so they keep pointing at the same step. Apply the same rule to numeric `priorContext` references. Removing a step that another unstarted step references by number is **refused**, with an error naming the referencing step(s). Expose `sessionId` in `workflow_status`.

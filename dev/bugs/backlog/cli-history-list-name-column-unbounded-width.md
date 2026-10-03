@@ -33,3 +33,7 @@ truncates inline (`slice(0, 117)` + `…`), so move that into a small shared hel
 both places rather than copying it. Do not
 truncate `--json` output. Alternatively, move NAME to the last column and leave it unpadded, as
 `history steps` does with PROMPT; either way the fixed-width columns stay aligned.
+
+## Decision
+
+Decided 2026-10-03 (obvious, no input needed): cap NAME at 48 characters and end truncated names with `…`. Keep NAME where it is, because moving it to the end would push the identifying text past KEY and the state columns. Extract `formatStepPrompt`'s inline truncation into one shared helper (e.g. `truncateCell(text, max)`) and use it for both the PROMPT and NAME columns. `--json` keeps full names.
