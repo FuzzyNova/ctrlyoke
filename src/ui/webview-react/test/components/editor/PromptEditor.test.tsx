@@ -220,6 +220,29 @@ describe("PromptEditor prior-context parallel-group boundary", () => {
 });
 
 describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
+  it("clears an empty prompt-mode final-step name in the update message", async () => {
+    const user = userEvent.setup();
+    useEditorStore.getState().selectFinalStep({
+      prompt: "old final prompt",
+      name: "Wrap-up",
+    });
+    useEditorStore.getState().setPromptText("updated final prompt");
+    useEditorStore.getState().setPromptName("   ");
+
+    render(<PromptEditor />);
+    await user.click(screen.getByRole("button", { name: "Update" }));
+
+    const message = postMessageSpy.mock.calls.find(
+      ([msg]) =>
+        (msg as { type?: string }).type === MESSAGE_TYPES.UPDATE_FINAL_PROMPT
+    )?.[0] as Record<string, unknown> | undefined;
+    expect(message).toMatchObject({
+      type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
+      finalStep: { prompt: "updated final prompt" },
+    });
+    expect(message?.clearProperties).toContain("name");
+  });
+
   it("attaches the displayed run mutation to a prompt submission", async () => {
     const user = userEvent.setup();
     useEditorStore.getState().setPromptText("append to the viewed run");

@@ -196,6 +196,9 @@ function cloneMcpServerConfig(value: unknown): McpServerConfig | undefined {
 
   return {
     id: value.id,
+    ...(typeof value.description === "string" && {
+      description: value.description,
+    }),
     ...(typeof value.command === "string" && { command: value.command }),
     ...(args && { args }),
     ...(env && { env }),

@@ -232,7 +232,9 @@ export const FILE_EDIT_ACTION_LABEL = "Edited";
 
 /** `Wrote (1.5 KB)` — the completed file-write header label, shared with its estimator. */
 export function fileWriteActionLabel(content?: string): string {
-  return content ? `Wrote (${formatBytes(content.length)})` : "Wrote";
+  return content
+    ? `Wrote (${formatBytes(new TextEncoder().encode(content).length)})`
+    : "Wrote";
 }
 
 /**

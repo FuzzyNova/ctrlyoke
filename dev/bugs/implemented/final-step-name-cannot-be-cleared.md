@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli subagent), reproduced against `mergeWorkflowStepUpdate`
 - **Area:** `src/ui/webview-react/components/editor/PromptEditor.tsx` (final-step branches of the save and `persistPromptFileReference` paths), `src/core/WorkflowStepSanitizer.ts` (`buildFinalStepUpdate`, `mergeWorkflowStepUpdate`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

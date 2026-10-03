@@ -196,6 +196,25 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
     });
   });
 
+  test("preserves inline MCP server descriptions through clipboard round trips", () => {
+    const step = {
+      prompt: "use the server",
+      mcpServers: [
+        {
+          id: "github",
+          description: "GitHub issues",
+          command: "npx",
+          args: ["-y", "gh-mcp"],
+        },
+      ],
+    } as any;
+
+    assert.deepStrictEqual(
+      parseClipboardWorkflowStep(serializeWorkflowStepForClipboard(step)),
+      step
+    );
+  });
+
   test("drops invalid executionMode values instead of persisting them", () => {
     assert.deepStrictEqual(
       buildPromptStepProperties({ executionMode: "sideways" }),

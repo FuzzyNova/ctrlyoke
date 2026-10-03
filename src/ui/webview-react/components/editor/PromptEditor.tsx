@@ -81,6 +81,16 @@ interface PromptEditorProps {
   onPromptFileActionChange?: (action: PromptFileAction | null) => void;
 }
 
+function includeEmptyPromptNameClear(
+  clearProperties: string[],
+  promptName: string
+): string[] {
+  if (promptName.trim() || clearProperties.includes("name")) {
+    return clearProperties;
+  }
+  return [...clearProperties, "name"];
+}
+
 export interface PromptFileAction {
   icon: "file-symlink-file" | "go-to-file";
   tooltip: string;
@@ -727,7 +737,10 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             ...(promptName.trim() ? { name: promptName.trim() } : {}),
             prompt: reference,
           },
-          clearProperties,
+          clearProperties: includeEmptyPromptNameClear(
+            clearProperties,
+            promptName
+          ),
         });
       }
     },
@@ -1309,7 +1322,10 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           ...(promptName.trim() ? { name: promptName.trim() } : {}),
           prompt: text,
         },
-        clearProperties,
+        clearProperties: includeEmptyPromptNameClear(
+          clearProperties,
+          promptName
+        ),
       });
     } else {
       return;

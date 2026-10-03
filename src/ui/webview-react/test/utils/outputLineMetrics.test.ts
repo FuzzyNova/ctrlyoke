@@ -131,6 +131,10 @@ describe("file-operation header", () => {
     expect(fileWriteActionLabel(undefined)).toBe("Wrote");
   });
 
+  it("counts UTF-8 bytes for multibyte file content", () => {
+    expect(fileWriteActionLabel("日本語".repeat(1_000))).toBe("Wrote (8.8 KB)");
+  });
+
   it("keeps a short path beside the label on a wide row", () => {
     expect(estimateFileOperationHeaderLines(label, "a.md", 800, fontSize)).toBe(
       1

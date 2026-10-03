@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), reproduced with `formatBytes`
 - **Area:** `src/ui/webview-react/utils/outputLineMetrics.ts` (`fileWriteActionLabel`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

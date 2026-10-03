@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli subagent), reproduced with `parseClipboardWorkflowStep(serializeWorkflowStepForClipboard(...))`
 - **Area:** `src/core/WorkflowStepSanitizer.ts` (`cloneMcpServerConfig`, ~181-210)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
