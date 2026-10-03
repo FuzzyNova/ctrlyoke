@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli); verified against `~/.qwen/projects` on this machine
 - **Area:** `src/core/harness/qwen/QwenLogParser.ts` (`getQwenProjectDirectory` ~1236-1245)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

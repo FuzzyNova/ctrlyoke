@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), reproduced by calling the mapper
 - **Area:** `src/core/harness/qwen/QwenToolPermissionMapper.ts` (~264-269)
-- **Severity:** medium (permission rules enforce the wrong tool)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

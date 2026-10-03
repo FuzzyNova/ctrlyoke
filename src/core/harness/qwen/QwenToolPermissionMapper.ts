@@ -23,6 +23,12 @@ const QWEN_PERMISSION_VERIFICATION = {
 const QWEN_PERMISSION_TOOL_NAMES = {
   DELETE: "delete",
   SEARCH: "search",
+  WEB_SEARCH: "web_search",
+  WEBSEARCH: "websearch",
+  WEB_FETCH: "web_fetch",
+  WEBFETCH: "webfetch",
+  QWEN_WEB_SEARCH: "WebSearch",
+  QWEN_WEB_FETCH: "WebFetch",
 } as const;
 
 const QWEN_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
@@ -262,11 +268,16 @@ export class QwenToolPermissionMapper
         );
         onLossyPattern?.();
       } else if (
-        normalizedToolName === "web_search" ||
-        normalizedToolName === QWEN_PERMISSION_TOOL_NAMES.SEARCH ||
-        normalizedToolName === "web_fetch"
+        normalizedToolName === QWEN_PERMISSION_TOOL_NAMES.WEB_SEARCH ||
+        normalizedToolName === QWEN_PERMISSION_TOOL_NAMES.WEBSEARCH ||
+        normalizedToolName === QWEN_PERMISSION_TOOL_NAMES.SEARCH
       ) {
-        qwenTools.add("WebFetch");
+        qwenTools.add(QWEN_PERMISSION_TOOL_NAMES.QWEN_WEB_SEARCH);
+      } else if (
+        normalizedToolName === QWEN_PERMISSION_TOOL_NAMES.WEB_FETCH ||
+        normalizedToolName === QWEN_PERMISSION_TOOL_NAMES.WEBFETCH
+      ) {
+        qwenTools.add(QWEN_PERMISSION_TOOL_NAMES.QWEN_WEB_FETCH);
       } else if (normalizedToolName === TOOL_PERMISSION_CATEGORIES.MCP) {
         // MCP tools: preserve full pattern for server-level or tool-level matching.
         // Qwen supports: mcp__server (all tools) and mcp__server__tool (specific).

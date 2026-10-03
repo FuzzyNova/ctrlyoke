@@ -10,7 +10,10 @@ import { CopilotCliProvider } from "../../../core/harness/copilot/CopilotCliProv
 import { CodexLogParser } from "../../../core/harness/codex/CodexLogParser";
 import { OpenCodeLogParser } from "../../../core/harness/opencode/OpenCodeLogParser";
 import { QwenCliProvider } from "../../../core/harness/qwen/QwenCliProvider";
-import { QwenLogParser } from "../../../core/harness/qwen/QwenLogParser";
+import {
+  QwenLogParser,
+  sanitizeQwenProjectPath,
+} from "../../../core/harness/qwen/QwenLogParser";
 import { AntigravityLogParser } from "../../../core/harness/antigravity/AntigravityLogParser";
 import {
   UniversalCliOutput,
@@ -6247,6 +6250,19 @@ suite("OpenCodeLogParser", () => {
 // ============================================================================
 
 suite("QwenLogParser", () => {
+  suite("sanitizeQwenProjectPath", () => {
+    test("replaces dots, underscores, and spaces with dashes", () => {
+      const user = process.platform === "win32" ? "user" : "User";
+      for (const [projectPath, expected] of [
+        ["/home/User/my.project", `-home-${user}-my-project`],
+        ["/home/User/my_project", `-home-${user}-my-project`],
+        ["/home/User/my project", `-home-${user}-my-project`],
+      ]) {
+        assert.strictEqual(sanitizeQwenProjectPath(projectPath), expected);
+      }
+    });
+  });
+
   test("unwraps Qwen's MCP tool_call envelope and pairs its result", () => {
     const parser = new QwenLogParser();
     const output = parser.extractResponse([
