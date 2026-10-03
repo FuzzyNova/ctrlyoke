@@ -1382,6 +1382,8 @@ function createHistoryInspectionCommandIo(): HistoryInspectionCommandIo {
   return {
     writeOut: (message) => console.log(message),
     writeErr: (message) => console.error(message),
+    writeErrProgress: (message) => process.stderr.write(message),
+    isErrTty: !!process.stderr.isTTY,
   };
 }
 

@@ -68,6 +68,8 @@ import { parseHistoryTime } from "./HistoryTime";
 export interface HistoryInspectionCommandIo {
   writeOut(message: string): void;
   writeErr(message: string): void;
+  writeErrProgress(message: string): void;
+  isErrTty: boolean;
 }
 
 export interface HistoryInspectionLineageRepository extends Pick<
@@ -288,28 +290,86 @@ export async function searchHistoryCommand(
   )(options, { runs: { historySearchCacheMb: 0 } });
   const service =
     dependencies.createHistorySearchService?.() ?? new HistorySearchService();
-  const response = await service.search(
-    request,
-    workspace.workspaceRoot,
-    (processedRuns, totalRuns) => {
-      io.writeErr(
-        `Rebuilding search index (${processedRuns}/${totalRuns} runs)…`
-      );
-    },
-    undefined,
-    undefined,
-    {
-      allowRebuild: options.rebuild !== false,
-      allowLegacyFallback: options.fallback !== false,
-      snippetChars,
-    }
-  );
+  const progress = createHistorySearchProgressReporter(io);
+  let response: HistorySearchResponse;
+  let completed = false;
+  try {
+    response = await service.search(
+      request,
+      workspace.workspaceRoot,
+      progress.onProgress,
+      undefined,
+      undefined,
+      {
+        allowRebuild: options.rebuild !== false,
+        allowLegacyFallback: options.fallback !== false,
+        snippetChars,
+      }
+    );
+    completed = true;
+  } finally {
+    progress.finish(completed);
+  }
 
   if (options.json) {
     renderHistorySearchJson(request, response, io);
     return;
   }
   renderHistorySearchText(request, response, io);
+}
+
+const HISTORY_SEARCH_PROGRESS_INTERVAL_MS = 250;
+
+function createHistorySearchProgressReporter(io: HistoryInspectionCommandIo): {
+  onProgress: IndexRebuildProgressCallback;
+  finish(completed: boolean): void;
+} {
+  let startedAt: number | undefined;
+  let lastRenderedAt = Number.NEGATIVE_INFINITY;
+  let latestMessage: string | undefined;
+  let renderedMessage: string | undefined;
+  let nonTtyStarted = false;
+
+  return {
+    onProgress: (processedRuns, totalRuns) => {
+      const now = Date.now();
+      startedAt ??= now;
+      latestMessage = `Rebuilding search index (${processedRuns}/${totalRuns} runs)…`;
+
+      if (!io.isErrTty) {
+        if (!nonTtyStarted) {
+          io.writeErr(`Rebuilding search index (${totalRuns} runs)…`);
+          nonTtyStarted = true;
+        }
+        return;
+      }
+
+      if (now - lastRenderedAt < HISTORY_SEARCH_PROGRESS_INTERVAL_MS) {
+        return;
+      }
+      io.writeErrProgress(`\r\x1b[K${latestMessage}`);
+      renderedMessage = latestMessage;
+      lastRenderedAt = now;
+    },
+    finish: (completed) => {
+      if (startedAt === undefined || latestMessage === undefined) {
+        return;
+      }
+
+      if (io.isErrTty) {
+        if (latestMessage !== renderedMessage) {
+          io.writeErrProgress(`\r\x1b[K${latestMessage}`);
+        }
+        io.writeErrProgress("\n");
+        return;
+      }
+
+      if (completed) {
+        const elapsedMs = Math.max(0, Date.now() - startedAt);
+        io.writeErr(`Search index rebuild completed in ${elapsedMs} ms.`);
+      }
+    },
+  };
 }
 
 function buildHistorySearchQuery(

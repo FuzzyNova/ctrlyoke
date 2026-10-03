@@ -62,6 +62,8 @@ import * as WorkflowPaths from "../../utils/WorkflowPaths";
 class TestIo implements HistoryInspectionCommandIo {
   readonly output: string[] = [];
   readonly errors: string[] = [];
+  readonly progress: string[] = [];
+  isErrTty = false;
 
   writeOut(message: string): void {
     this.output.push(message);
@@ -69,6 +71,10 @@ class TestIo implements HistoryInspectionCommandIo {
 
   writeErr(message: string): void {
     this.errors.push(message);
+  }
+
+  writeErrProgress(message: string): void {
+    this.progress.push(message);
   }
 }
 
@@ -134,18 +140,24 @@ class TestHistorySearchService implements HistorySearchCommandService {
   request?: string | HistorySearchQuery;
   options?: Parameters<HistorySearchCommandService["search"]>[5];
 
-  constructor(private readonly response: HistorySearchResponse) {}
+  constructor(
+    private readonly response: HistorySearchResponse,
+    private readonly progressTicks: Array<[number, number]> = []
+  ) {}
 
   async search(
     query: string | HistorySearchQuery,
     _workspaceFolderPath: string,
-    _onRebuildProgress?: Parameters<HistorySearchCommandService["search"]>[2],
+    onRebuildProgress?: Parameters<HistorySearchCommandService["search"]>[2],
     _signal?: AbortSignal,
     _onPartialResults?: Parameters<HistorySearchCommandService["search"]>[4],
     options?: Parameters<HistorySearchCommandService["search"]>[5]
   ): Promise<HistorySearchResponse> {
     this.request = query;
     this.options = options;
+    for (const [processedRuns, totalRuns] of this.progressTicks) {
+      onRebuildProgress?.(processedRuns, totalRuns);
+    }
     return this.response;
   }
 }
@@ -858,6 +870,85 @@ suite("CLI history inspection command handlers", () => {
 });
 
 suite("CLI history search command", () => {
+  test("rewrites throttled TTY progress in place and terminates the line", async () => {
+    const io = new TestIo();
+    io.isErrTty = true;
+    const service = new TestHistorySearchService(searchResponse(), [
+      [0, 10],
+      [1, 10],
+      [3, 10],
+      [10, 10],
+    ]);
+    const originalNow = Date.now;
+    Date.now = () => 1_000;
+    try {
+      await searchHistoryCommand(
+        "EPERM",
+        { json: true },
+        io,
+        dependencies(
+          new TestLineageRepository([], new Map(), new Map()),
+          new TestHistoryManager(new Map(), new Map()),
+          undefined,
+          service
+        )
+      );
+    } finally {
+      Date.now = originalNow;
+    }
+
+    assert.deepStrictEqual(io.progress, [
+      "\r\x1b[KRebuilding search index (0/10 runs)…",
+      "\r\x1b[KRebuilding search index (10/10 runs)…",
+      "\n",
+    ]);
+    assert.deepStrictEqual(io.errors, []);
+    assert.strictEqual(io.output.length, 1);
+    assert.deepStrictEqual(JSON.parse(io.output[0]), {
+      schemaVersion: 1,
+      query: "EPERM",
+      offset: 0,
+      limit: 20,
+      deep: false,
+      regex: false,
+      totalCount: 4,
+      countState: "atLeast",
+      hasMore: true,
+      indexState: "ready",
+      results: searchResponse().results,
+    });
+  });
+
+  test("limits non-TTY progress to a start and elapsed-time completion line", async () => {
+    const io = new TestIo();
+    const service = new TestHistorySearchService(searchResponse(), [
+      [0, 10],
+      [1, 10],
+      [3, 10],
+      [10, 10],
+    ]);
+    await searchHistoryCommand(
+      "EPERM",
+      { json: true },
+      io,
+      dependencies(
+        new TestLineageRepository([], new Map(), new Map()),
+        new TestHistoryManager(new Map(), new Map()),
+        undefined,
+        service
+      )
+    );
+
+    assert.strictEqual(io.errors.length, 2);
+    assert.strictEqual(io.errors[0], "Rebuilding search index (10 runs)…");
+    assert.match(io.errors[1], /^Search index rebuild completed in \d+ ms\.$/);
+    assert.deepStrictEqual(io.progress, []);
+    assert.strictEqual(io.output.length, 1);
+    assert.doesNotMatch(io.output[0], /Rebuilding search index/);
+    assert.doesNotMatch(io.output[0], /completed in/);
+    assert.doesNotThrow(() => JSON.parse(io.output[0]));
+  });
+
   test("passes exact-count, deep, regex, cache, and fallback policies to the service", async () => {
     const service = new TestHistorySearchService(searchResponse());
     const io = new TestIo();

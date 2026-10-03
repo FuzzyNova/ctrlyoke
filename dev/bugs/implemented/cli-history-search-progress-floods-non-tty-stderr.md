@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by Claude (claude-cli), running `ctrlyoke history search` with output piped
 - **Area:** `src/cli/HistoryInspectionCommands.ts` (`searchHistoryCommand`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
