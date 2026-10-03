@@ -86,6 +86,17 @@ suite("WorkspaceViewerPath Tests", () => {
       assert.strictEqual(rootForViewerPath("a.ts", multiRoots), undefined);
       assert.strictEqual(rootForViewerPath("nope/a.ts", multiRoots), undefined);
     });
+
+    test("prefers an exact display name over an earlier basename match", () => {
+      const collidingRoots: ResolverWorkspaceFolder[] = [
+        { name: "frontend", fsPath: path.resolve("/repo1/app") },
+        { name: "app", fsPath: path.resolve("/repo2/app") },
+      ];
+      assert.strictEqual(
+        rootForViewerPath("app/src/index.ts", collidingRoots)?.fsPath,
+        path.resolve("/repo2/app")
+      );
+    });
   });
 
   suite("single-root conversions", () => {
@@ -148,6 +159,24 @@ suite("WorkspaceViewerPath Tests", () => {
           abs
         );
       }
+    });
+
+    test("round-trips when an earlier basename matches a later display name", () => {
+      const collidingRoots: ResolverWorkspaceFolder[] = [
+        { name: "frontend", fsPath: path.resolve("/repo1/app") },
+        { name: "app", fsPath: path.resolve("/repo2/app") },
+      ];
+      const ctx: ViewerRootContext = {
+        primaryRoot: collidingRoots[0].fsPath,
+        namedRoots: collidingRoots,
+      };
+      const absolute = path.join(collidingRoots[1].fsPath, "src", "index.ts");
+
+      assert.strictEqual(toViewerPath(absolute, ctx), "app/src/index.ts");
+      assert.strictEqual(
+        fromViewerPath(toViewerPath(absolute, ctx), ctx),
+        absolute
+      );
     });
   });
 });

@@ -224,6 +224,37 @@ suite("TemplateManager variable metadata", () => {
         "condition-output reference is not a template variable"
       );
     });
+
+    test("does not extract runtime double-brace workflow variables", () => {
+      const tm = makeManager();
+      assert.deepStrictEqual(tm.extractVariables("Use {{var}} here"), []);
+    });
+
+    test("extracts single-brace variables alongside runtime variables", () => {
+      const tm = makeManager();
+      assert.deepStrictEqual(
+        tm.extractVariables("Use {{a}} and {b}"),
+        [{ name: "b" }]
+      );
+    });
+  });
+
+  suite("replaceVariables", () => {
+    test("preserves runtime double-brace variables verbatim", () => {
+      const tm = makeManager();
+      assert.strictEqual(
+        tm.replaceVariables("Use {{var}} here", { var: "value" }),
+        "Use {{var}} here"
+      );
+    });
+
+    test("replaces single-brace variables beside runtime variables", () => {
+      const tm = makeManager();
+      assert.strictEqual(
+        tm.replaceVariables("Use {{a}} and {b}", { a: "one", b: "two" }),
+        "Use {{a}} and two"
+      );
+    });
   });
 
   suite("custom template ID scope encoding", () => {

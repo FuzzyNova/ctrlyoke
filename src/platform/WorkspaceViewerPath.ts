@@ -1,6 +1,9 @@
 import * as path from "path";
 import type { ResolverWorkspaceFolder } from "./WorkspaceRootResolver";
-import { resolveNamedRelativePath } from "./WorkspaceRootResolver";
+import {
+  findNamedRootBySegment,
+  resolveNamedRelativePath,
+} from "./WorkspaceRootResolver";
 import { isPathWithinDirectory } from "../utils/PathSecurity";
 
 /**
@@ -81,9 +84,7 @@ export function rootForViewerPath(
   namedRoots: readonly ResolverWorkspaceFolder[]
 ): ResolverWorkspaceFolder | undefined {
   const segment = firstViewerSegment(viewerPath);
-  return namedRoots.find(
-    (root) => root.name === segment || path.basename(root.fsPath) === segment
-  );
+  return findNamedRootBySegment(segment, namedRoots);
 }
 
 // ── Absolute ⇄ viewer ───────────────────────────────────────────────────────

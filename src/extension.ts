@@ -103,6 +103,10 @@ import {
   registerInstallCliCommand,
 } from "./ui/CtrlyokeCliCommands";
 
+interface ScmSourceControlCommandArgument {
+  rootUri?: { fsPath: string };
+}
+
 let workflowOrchestrator: WorkflowOrchestrator;
 let webviewProvider: CtrlYokeWebviewProvider;
 let licenseService: LicenseService;
@@ -1433,7 +1437,8 @@ function registerCommands(
   );
   const generateCommitMessageCommand = vscode.commands.registerCommand(
     VSCODE_COMMANDS.GENERATE_COMMIT_MESSAGE,
-    () => scmCommitCommand.execute(context)
+    (sourceControl?: ScmSourceControlCommandArgument) =>
+      scmCommitCommand.execute(context, sourceControl?.rootUri?.fsPath)
   );
   const cancelCommitMessageGenerationCommand = vscode.commands.registerCommand(
     VSCODE_COMMANDS.CANCEL_COMMIT_MESSAGE_GENERATION,

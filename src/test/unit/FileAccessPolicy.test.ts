@@ -27,6 +27,57 @@ suite("FileAccessPolicy", () => {
     assert.strictEqual(decision.matchedRoot, externalRoot);
   });
 
+  test("resolves approved external roots containing a parent segment", () => {
+    const rootWithParentSegment = `${path.dirname(externalRoot)}${path.sep}unused${path.sep}..${path.sep}${path.basename(externalRoot)}`;
+    const decision = evaluateFileAccess(path.join(externalRoot, "debug.log"), {
+      workspaceRoots: [workspaceRoot],
+      approvedExternalRoots: [rootWithParentSegment],
+    });
+
+    assert.strictEqual(decision.allowed, true);
+    assert.strictEqual(decision.reason, "trustedExternalRoot");
+    assert.strictEqual(decision.matchedRoot, externalRoot);
+  });
+
+  test("allows the external root itself when its spelling has a trailing separator", () => {
+    const rootWithTrailingSeparator = `${externalRoot}${path.sep}`;
+    const decision = evaluateFileAccess(externalRoot, {
+      workspaceRoots: [workspaceRoot],
+      approvedExternalRoots: [rootWithTrailingSeparator],
+    });
+
+    assert.strictEqual(decision.allowed, true);
+    assert.strictEqual(decision.reason, "trustedExternalRoot");
+    assert.strictEqual(decision.matchedRoot, externalRoot);
+  });
+
+  if (process.platform === "win32") {
+    test("resolves a forward-slash Windows external root", () => {
+      const candidate = "C:\\Users\\natha\\shared\\a.md";
+      const decision = evaluateFileAccess(candidate, {
+        workspaceRoots: ["C:\\dev\\ws"],
+        approvedExternalRoots: ["C:/Users/natha/shared"],
+      });
+
+      assert.strictEqual(decision.allowed, true);
+      assert.strictEqual(decision.reason, "trustedExternalRoot");
+      assert.strictEqual(decision.matchedRoot, path.resolve("C:/Users/natha/shared"));
+    });
+
+    test("does not widen a normalized Windows root to a sibling prefix", () => {
+      const decision = evaluateFileAccess(
+        "C:\\Users\\natha\\shared-evil\\a.md",
+        {
+          workspaceRoots: ["C:\\dev\\ws"],
+          approvedExternalRoots: ["C:/Users/natha/shared"],
+        }
+      );
+
+      assert.strictEqual(decision.allowed, false);
+      assert.strictEqual(decision.reason, "outsideTrustedRoots");
+    });
+  }
+
   test("allows a UI read inside its own state root without trusting that root as workspace", () => {
     const ownStateRoot = path.resolve(
       "/home/tester/.ctrlyoke/projects/frontend"

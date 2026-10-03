@@ -1,0 +1,2 @@
+{"type":"tool_use","timestamp":1000,"sessionID":"ses_failed_tools","part":{"type":"tool","tool":"write","callID":"call_write_failed","state":{"status":"error","input":{"filePath":"src/generated.ts","content":"export const generated = true;"},"error":"Permission denied writing file"}}}
+{"type":"tool_use","timestamp":1001,"sessionID":"ses_failed_tools","part":{"type":"tool","tool":"bash","callID":"call_bash_failed","state":{"status":"error","input":{"command":"npm run build"},"error":"Build command failed"}}}

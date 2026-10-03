@@ -39,6 +39,7 @@ disabled steps; it does not count `finalStep` iterations or retries.
 Use `ctrlyoke` in the `finalStep` so the harness can review the current run and append follow-up tasks. After the queue finishes, the final step runs; if it appended new steps, those run and the final step runs again. The loop ends when a final step appends nothing.
 
 ```yaml
+steps: []
 maxSteps: 30
 finalStep:
   prompt: Review the implementation and append any missing follow-up work.

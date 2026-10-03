@@ -19,14 +19,17 @@ interface GitExtension {
   getAPI(version: 1): { repositories: GitRepository[] };
 }
 
-function getGitInputBox(cwd: string): { value: string } | undefined {
+function getGitInputBox(
+  cwd: string,
+  allowFallback: boolean
+): { value: string } | undefined {
   try {
     const gitExt =
       vscode.extensions.getExtension<GitExtension>("vscode.git")?.exports;
     const api = gitExt?.getAPI(1);
-    const repo =
-      api?.repositories.find((r) => pathsEqual(r.rootUri.fsPath, cwd)) ??
-      api?.repositories[0];
+    const repo = api?.repositories.find((r) =>
+      pathsEqual(r.rootUri.fsPath, cwd)
+    ) ?? (allowFallback ? api?.repositories[0] : undefined);
     return repo?.inputBox;
   } catch {
     return undefined;
@@ -51,7 +54,10 @@ export class ScmCommitCommand {
     this.activeAbortController?.abort();
   }
 
-  async execute(context: vscode.ExtensionContext): Promise<void> {
+  async execute(
+    context: vscode.ExtensionContext,
+    repositoryRoot?: string
+  ): Promise<void> {
     void context; // ExtensionContext reserved for future use (e.g., secrets, storage)
 
     if (this.activeAbortController) {
@@ -67,7 +73,8 @@ export class ScmCommitCommand {
       return;
     }
 
-    const cwd = getVsCodeWorkspaceRoot();
+    const stateRoot = getVsCodeWorkspaceRoot();
+    const cwd = repositoryRoot ?? stateRoot;
     this.activeAbortController = new AbortController();
     await vscode.commands.executeCommand(
       "setContext",
@@ -88,7 +95,7 @@ export class ScmCommitCommand {
           token.onCancellationRequested(() => abortController.abort());
 
           try {
-            const inputBox = getGitInputBox(cwd);
+            const inputBox = getGitInputBox(cwd, repositoryRoot === undefined);
             const existingText = inputBox?.value.trim() || undefined;
 
             const diffResult = await this.generator.getDiff(cwd);
@@ -104,7 +111,8 @@ export class ScmCommitCommand {
                 diffResult.diff,
                 cwd,
                 abortController.signal,
-                existingText
+                existingText,
+                stateRoot
               );
 
             commitMessageGenerationTracker.setLastRecord({

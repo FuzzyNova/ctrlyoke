@@ -1,0 +1,1 @@
+{"type":"error","timestamp":3000,"sessionID":"ses_error","error":{"name":"ProviderAuthError","data":{"message":"The provider rejected the API key"}}}

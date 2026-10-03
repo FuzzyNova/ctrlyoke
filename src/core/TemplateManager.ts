@@ -26,6 +26,8 @@ export type TemplateScope =
   (typeof TEMPLATE_SCOPES)[keyof typeof TEMPLATE_SCOPES];
 
 const TEMPLATE_STARTER_ID = "template-starter";
+const TEMPLATE_VARIABLE_PATTERN =
+  /(?<!\{)\{(?:(file|text):)?([a-z][a-zA-Z0-9]*)\}(?!\})/g;
 const CUSTOM_TEMPLATE_EXTENSIONS = [
   ".ctrlyoke.yaml",
   ".ctrlyoke.yml",
@@ -470,14 +472,12 @@ export class TemplateManager {
    * Duplicate names are deduplicated; first occurrence wins.
    */
   extractVariables(content: string): TemplateVariable[] {
-    // Matches optional type prefix: {file:name}, {text:name}, or plain {name}
-    const pattern = /\{(?:(file|text):)?([a-z][a-zA-Z0-9]*)\}/g;
     const reserved = new Set<string>(Object.values(RETRY_PROMPT_PLACEHOLDERS));
     const seen = new Set<string>();
     const variables: TemplateVariable[] = [];
 
     let match;
-    while ((match = pattern.exec(content)) !== null) {
+    while ((match = TEMPLATE_VARIABLE_PATTERN.exec(content)) !== null) {
       const [, typePrefix, name] = match;
       if (!reserved.has(name) && !seen.has(name)) {
         seen.add(name);
@@ -501,8 +501,9 @@ export class TemplateManager {
    */
   replaceVariables(content: string, variables: Record<string, string>): string {
     return content.replace(
-      /\{(?:file:|text:)?([a-z][a-zA-Z0-9]*)\}/g,
-      (placeholder, name: string) => variables[name] ?? placeholder
+      TEMPLATE_VARIABLE_PATTERN,
+      (placeholder, _typePrefix, name: string) =>
+        variables[name] ?? placeholder
     );
   }
 

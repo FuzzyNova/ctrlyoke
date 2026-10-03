@@ -1,8 +1,5 @@
 import { UnifiedDiffHunk } from "../../../types/CliOutputTypes";
-import {
-  APPLY_PATCH_FILE_EDIT_KINDS,
-  type ApplyPatchFileEditKind,
-} from "../../../types/DashboardConstants";
+import type { ApplyPatchFileEditKind } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 
 export interface ApplyPatchFileEdit {
@@ -168,16 +165,12 @@ export class ApplyPatchParser {
           break;
         }
 
-        const fileMatch = line.match(/\*\*\* (?:Add|Update|Delete) File: (.+)/);
+        const fileMatch = line.match(/^\*\*\* (Add|Update|Delete) File: (.+)/);
         if (fileMatch) {
           flushFile();
-          const kind = line.startsWith("*** Add File:")
-            ? APPLY_PATCH_FILE_EDIT_KINDS.ADD
-            : line.startsWith("*** Delete File:")
-              ? APPLY_PATCH_FILE_EDIT_KINDS.DELETE
-              : APPLY_PATCH_FILE_EDIT_KINDS.UPDATE;
+          const kind = fileMatch[1].toLowerCase() as ApplyPatchFileEditKind;
           currentFile = {
-            path: fileMatch[1].trim(),
+            path: fileMatch[2].trim(),
             kind,
             hunks: [],
           };
@@ -250,7 +243,7 @@ export class ApplyPatchParser {
 
   static extractFirstPath(patchInput: string): string | undefined {
     const fileMatch = patchInput.match(
-      /\*\*\* (?:Add|Update|Delete) File: (.+)/
+      /^\*\*\* (?:Add|Update|Delete) File: (.+)/m
     );
     return fileMatch?.[1]?.trim();
   }

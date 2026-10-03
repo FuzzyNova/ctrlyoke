@@ -1908,6 +1908,35 @@ suite("WorkingFileManager", () => {
       });
     });
 
+    test("updateFinalStepAtRun clears a prompt final-step name", async () => {
+      const { workflowKey, runRef, runFilePath } = await makeIdleRun();
+      const seeded = JSON.parse(
+        await fs.readFile(runFilePath, "utf8")
+      ) as WorkingFile;
+      seeded.finalStep = { prompt: "final prompt", name: "Wrap-up" };
+      await fs.writeFile(runFilePath, JSON.stringify(seeded, null, 2), "utf8");
+
+      const result = await WorkingFileManager.updateFinalStepAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        { prompt: "updated final prompt" },
+        ["name"],
+        1
+      );
+
+      assert.ok(result.workingFile.finalStep);
+      assert.ok("prompt" in result.workingFile.finalStep);
+      assert.strictEqual(result.workingFile.finalStep.prompt, "updated final prompt");
+      assert.strictEqual(result.workingFile.finalStep.name, undefined);
+      const persisted = JSON.parse(
+        await fs.readFile(runFilePath, "utf8")
+      ) as WorkingFile;
+      assert.deepStrictEqual(persisted.finalStep, {
+        prompt: "updated final prompt",
+      });
+    });
+
     test("updateFinalStepAtRun deletes the final step on null", async () => {
       const { workflowKey, runRef, runFilePath } = await makeIdleRun();
       const seeded = JSON.parse(

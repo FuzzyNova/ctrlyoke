@@ -1325,6 +1325,87 @@ suite("AntigravityLogParser", () => {
   });
 
   suite("rich transcript tool mapping", () => {
+    test("pairs ERROR tool results with their calls and preserves failure output", async () => {
+      await withTemporaryHome(async (homeDir) => {
+        const parser = new AntigravityLogParser();
+        const sessionId = "55555555-5555-4555-8555-555555555555";
+        const logDir = path.join(homeDir, ".gemini", "antigravity-cli", "log");
+        const logPath = path.join(logDir, "cli-20261002_120000.log");
+        const transcriptDir = path.join(
+          homeDir,
+          ".gemini",
+          "antigravity-cli",
+          "brain",
+          sessionId,
+          ".system_generated",
+          "logs"
+        );
+        const transcriptPath = path.join(
+          transcriptDir,
+          "transcript_full.jsonl"
+        );
+        const fixturePath = path.resolve(
+          __dirname,
+          "../../../src/test/fixtures/antigravity/transcript-error-tool-result.jsonl"
+        );
+
+        fs.mkdirSync(logDir, { recursive: true });
+        fs.writeFileSync(
+          logPath,
+          `Starting conversation update stream for ${sessionId}\n`,
+          "utf8"
+        );
+        await parser.readNewLines(logPath);
+        fs.mkdirSync(transcriptDir, { recursive: true });
+        fs.copyFileSync(fixturePath, transcriptPath);
+
+        const rawEvents = await parser.readNewLines(logPath);
+        const output = parser.extractResponse(rawEvents);
+        const toolCalls = output.events
+          .filter((event) => event.type === CLI_EVENT_TYPES.TOOL_CALL)
+          .map((event) => {
+            const data = event.data as {
+              name: string;
+              parameters: Record<string, unknown>;
+              result?: { success?: boolean; output?: string };
+            };
+            return {
+              ...data,
+              result: data.result
+                ? {
+                    success: data.result.success,
+                    output: data.result.output,
+                  }
+                : undefined,
+            };
+          });
+
+        assert.deepStrictEqual(
+          toolCalls.map(({ name, result }) => ({ name, result })),
+          [
+            {
+              name: "first_custom_tool",
+              result: {
+                success: false,
+                output: "post_note.text is required",
+              },
+            },
+            {
+              name: "second_custom_tool",
+              result: { success: true, output: "README contents" },
+            },
+          ]
+        );
+        assert.deepStrictEqual(
+          toolCalls.map(({ parameters }) => parameters),
+          [
+            { request: "first" },
+            { request: "second" },
+          ]
+        );
+      });
+    });
+
     test("maps adjacent calls/results in file order and preserves identities", async () => {
       await withTemporaryHome(async (homeDir) => {
         const parser = new AntigravityLogParser();

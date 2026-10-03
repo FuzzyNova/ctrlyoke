@@ -115,6 +115,9 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const fileReadOnlyReason = useWorkspaceViewerStore(
     (s) => s.fileReadOnlyReason
   );
+  const fileReadOnlyContentAvailable = useWorkspaceViewerStore(
+    (s) => s.fileReadOnlyContentAvailable
+  );
   const fileImageDataUri = useWorkspaceViewerStore((s) => s.fileImageDataUri);
   const mobileEditorVisible = useWorkspaceViewerStore(
     (s) => s.mobileEditorVisible
@@ -123,6 +126,9 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const setFileContent = useWorkspaceViewerStore((s) => s.setFileContent);
   const setLoadedFileContent = useWorkspaceViewerStore(
     (s) => s.setLoadedFileContent
+  );
+  const setLoadedReadOnlyFileContent = useWorkspaceViewerStore(
+    (s) => s.setLoadedReadOnlyFileContent
   );
   const setLoadedImage = useWorkspaceViewerStore((s) => s.setLoadedImage);
   const discardFileDraft = useWorkspaceViewerStore((s) => s.discardFileDraft);
@@ -142,6 +148,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
   );
 
   const selectionRequestSeqRef = useRef(0);
+  const fileLoadRequestSeqRef = useRef(0);
 
   const workspacePath = useSettingsStore((s) => s.globalSettings.workspaceRoot);
   const hideGitIgnoredFiles = useSettingsStore(
@@ -267,10 +274,16 @@ export const WorkspaceExplorerPane: React.FC = () => {
 
   const openFile = useCallback(
     async (filePath: string, external = false) => {
+      const requestSeq = ++fileLoadRequestSeqRef.current;
       const relPath = external
         ? filePath
         : toWorkspaceRelative(filePath, workspacePath);
+      let selectedPath = relPath;
+      const isCurrentRequest = () =>
+        requestSeq === fileLoadRequestSeqRef.current &&
+        useWorkspaceViewerStore.getState().selectedFilePath === selectedPath;
       setFileLoading(true);
+      setError(null);
       selectFile(relPath, external);
       if (isMobile) setMobileEditorVisible(true);
       try {
@@ -279,18 +292,30 @@ export const WorkspaceExplorerPane: React.FC = () => {
         // selectedFilePath is self-corrected even if relPath was an absolute
         // path that failed stripping (e.g. due to workspacePath being empty).
         const canonicalPath = result.path.replace(/\\/g, "/");
+        if (!isCurrentRequest()) return;
+        selectedPath = canonicalPath;
         if (result.imageDataUri) {
           setLoadedImage(canonicalPath, result.imageDataUri);
         } else if (result.readOnly) {
-          setFileReadOnly(true, result.reason);
+          if (typeof result.content === "string") {
+            setLoadedReadOnlyFileContent(
+              canonicalPath,
+              result.content,
+              result.reason
+            );
+          } else {
+            setFileReadOnly(true, result.reason);
+          }
         } else {
           setFileReadOnly(false);
           setLoadedFileContent(canonicalPath, result.content);
         }
       } catch (err) {
-        setError(String(err));
+        if (isCurrentRequest()) setError(String(err));
       } finally {
-        setFileLoading(false);
+        if (isCurrentRequest()) {
+          setFileLoading(false);
+        }
       }
     },
     [
@@ -299,6 +324,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
       selectFile,
       setFileLoading,
       setLoadedFileContent,
+      setLoadedReadOnlyFileContent,
       setLoadedImage,
       setFileReadOnly,
       setMobileEditorVisible,
@@ -454,24 +480,41 @@ export const WorkspaceExplorerPane: React.FC = () => {
 
   const handleDiscardUnsaved = useCallback(async () => {
     if (!selectedFilePath) return;
+    const requestSeq = ++fileLoadRequestSeqRef.current;
+    const path = selectedFilePath;
+    let selectedPath = path;
+    const isCurrentRequest = () =>
+      requestSeq === fileLoadRequestSeqRef.current &&
+      useWorkspaceViewerStore.getState().selectedFilePath === selectedPath;
     setFileLoading(true);
     try {
-      const result = await workspaceFile(selectedFilePath);
-      if (result.readOnly) {
+      const result = await workspaceFile(path);
+      if (!isCurrentRequest()) return;
+      if (result.readOnly && typeof result.content === "string") {
+        selectedPath = result.path.replace(/\\/g, "/");
+        setLoadedReadOnlyFileContent(
+          selectedPath,
+          result.content,
+          result.reason
+        );
+      } else if (result.readOnly) {
         setFileReadOnly(true, result.reason);
       } else {
         setFileReadOnly(false);
-        discardFileDraft(selectedFilePath, result.content);
+        discardFileDraft(path, result.content);
       }
     } catch (err) {
-      setError(String(err));
+      if (isCurrentRequest()) setError(String(err));
     } finally {
-      setFileLoading(false);
+      if (isCurrentRequest()) {
+        setFileLoading(false);
+      }
     }
   }, [
     selectedFilePath,
     setFileLoading,
     setFileReadOnly,
+    setLoadedReadOnlyFileContent,
     discardFileDraft,
     setError,
   ]);
@@ -837,7 +880,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
               <Icon name="loading" className="animate-spin" />
               <span className="text-sm">Loading file…</span>
             </div>
-          ) : fileReadOnly ? (
+          ) : fileReadOnly && !fileReadOnlyContentAvailable ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-2 text-editor-fg opacity-70">
               <Icon name="info" className="text-2xl" />
               <p className="text-sm">
@@ -846,6 +889,14 @@ export const WorkspaceExplorerPane: React.FC = () => {
             </div>
           ) : (
             <div className="relative flex min-h-0 flex-1 overflow-hidden">
+              {fileReadOnly && (
+                <div
+                  role="status"
+                  className="absolute inset-x-0 top-0 z-10 border-b border-panel-border bg-panel-bg px-3 py-2 text-xs text-editor-fg"
+                >
+                  {fileReadOnlyReason ?? "This file cannot be edited"}
+                </div>
+              )}
               {/* Editor stays mounted while previewing so undo history and
                   scroll position survive toggling back to edit mode. */}
               <div
@@ -862,6 +913,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                   filePath={selectedFilePath}
                   content={fileContent}
                   imageDataUri={fileImageDataUri ?? undefined}
+                  readOnly={fileReadOnly}
                   onChange={(newContent) => setFileContent(newContent)}
                   onSave={handleSave}
                   saving={fileSaving}

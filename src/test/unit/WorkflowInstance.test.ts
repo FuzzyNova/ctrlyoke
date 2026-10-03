@@ -1688,6 +1688,40 @@ suite("WorkflowInstance runtime transitions", () => {
 });
 
 suite("WorkflowInstance eager working file creation", () => {
+  test("updateFinalStepInQueue clears a prompt final-step name", async () => {
+    const platform = new MockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      undefined,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+    let updatedFinalStep: unknown;
+
+    (instance as any).ensureEphemeralWorkingFile = async () => {};
+    (instance.promptQueue as any).getWorkflowFile = () => ({
+      finalStep: { prompt: "final prompt", name: "Wrap-up" },
+    });
+    (instance.promptQueue as any).updateWorkflowProperty = (
+      property: string,
+      value: unknown
+    ) => {
+      if (property === "finalStep") updatedFinalStep = value;
+    };
+    (instance.promptQueue as any).updateWorkingFileProperties = async () => {};
+
+    await instance.updateFinalStepInQueue(
+      { prompt: "updated final prompt" },
+      ["name"]
+    );
+
+    assert.strictEqual((updatedFinalStep as any).prompt, "updated final prompt");
+    assert.strictEqual((updatedFinalStep as any).name, undefined);
+  });
+
   test("deduplicates concurrent ensureEphemeralWorkingFile calls", async () => {
     const platform = new MockPlatform();
 

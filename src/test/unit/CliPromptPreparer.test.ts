@@ -3,6 +3,11 @@ import * as fs from "fs";
 import * as path from "path";
 import { suite, test } from "mocha";
 import { CliPromptPreparer } from "../../core/harness/shared/CliPromptPreparer";
+import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
+import {
+  HarnessIntegration,
+  HarnessStatus,
+} from "../../core/HarnessIntegration";
 import { ContextExpander } from "../../utils/ContextExpander";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
 import type { PromptSections } from "../../core/HarnessIntegration";
@@ -25,6 +30,40 @@ import {
   TEMP_FILE_CATEGORIES,
 } from "../../types/DashboardConstants";
 
+class SimplePromptTestIntegration extends HarnessIntegration {
+  isSimple(promptText: string): boolean {
+    return this.isSimplePrompt(promptText);
+  }
+
+  async initialize(): Promise<void> {}
+
+  async sendPrompt(): Promise<boolean> {
+    return true;
+  }
+
+  getStatus(): { available: boolean; message: string; strategy: string } {
+    return { available: true, message: "ready", strategy: "test" };
+  }
+
+  isIntegrationAvailable(): boolean {
+    return true;
+  }
+
+  getIntegrationMode(): string {
+    return HARNESS_IDS.CLAUDE_CLI;
+  }
+
+  getInitializationStatus(): HarnessStatus {
+    return HarnessStatus.Ready;
+  }
+
+  isReady(): boolean {
+    return true;
+  }
+
+  protected async cancelImplementation(): Promise<void> {}
+}
+
 function createSections(overrides?: Partial<PromptSections>): PromptSections {
   return {
     skillContent: null,
@@ -41,6 +80,42 @@ function createSections(overrides?: Partial<PromptSections>): PromptSections {
 }
 
 suite("CliPromptPreparer", () => {
+  test("routes dash-prefixed prompts through temp files and out of argv", async () => {
+    const integration = new SimplePromptTestIntegration(undefined, false);
+    assert.strictEqual(integration.isSimple("- fix the tests"), false);
+    assert.strictEqual(integration.isSimple("--help"), false);
+    assert.strictEqual(integration.isSimple("fix the - tests"), true);
+
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async (prompt) =>
+        createSections({ userPromptText: prompt.prompt }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: (promptText) => integration.isSimple(promptText),
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+    });
+    const prepared = await preparer.planPrompt(
+      { prompt: "- fix the tests" },
+      undefined,
+      undefined,
+      undefined
+    );
+    const argv = new ClaudeCliProvider().buildHeadlessArgs(
+      [],
+      prepared.promptWithInstruction
+    );
+
+    assert.strictEqual(prepared.tempFilePaths.length, 1);
+    assert.ok(prepared.promptWithInstruction.startsWith("@"));
+    assert.ok(!argv.includes("- fix the tests"));
+    assert.ok(!argv.some((argument) => argument.startsWith("- fix")));
+  });
+
   test("gives same-step plans unique categorized temp paths and applies those paths", async () => {
     const workspaceRoot = makeTempDir("ctrlyoke-plan-id-");
     const preparer = new CliPromptPreparer({

@@ -4,6 +4,7 @@ import {
   type StepContextMenuState,
 } from "@components/shared/StepContextMenu";
 import { useEditorStore } from "@store/editorStore";
+import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import {
   workspaceCopyEntry,
   workspaceDeleteEntry,
@@ -98,6 +99,7 @@ export function useWorkspaceExplorerContextMenu({
     async (path: string) => {
       try {
         await workspaceDeleteEntry({ path });
+        useWorkspaceViewerStore.getState().deleteFilePath(path);
         onRefresh(path);
       } catch (err) {
         WebviewLog.error(
@@ -115,6 +117,12 @@ export function useWorkspaceExplorerContextMenu({
     try {
       if (clipboard.operation === CLIPBOARD_OPERATIONS.CUT) {
         await workspaceMoveEntry({ sourcePath: clipboard.path, destDir });
+        useWorkspaceViewerStore
+          .getState()
+          .moveFilePath(
+            clipboard.path,
+            buildPastedFilePath(clipboard.path, destDir)
+          );
         setClipboard(null);
       } else {
         await workspaceCopyEntry({ sourcePath: clipboard.path, destDir });

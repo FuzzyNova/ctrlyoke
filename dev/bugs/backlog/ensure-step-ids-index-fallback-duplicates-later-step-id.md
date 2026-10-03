@@ -13,7 +13,7 @@
 ## When it can happen
 
 Only when an incoming step array mixes steps that have IDs with a step that has
-none, placed *before* existing steps. Examples are a hand-edited run working file
+none, placed _before_ existing steps. Examples are a hand-edited run working file
 where a new step is inserted mid-queue while the run is executing (picked up by
 `mergeDiskSteps`), or an undo/redo snapshot with an ID-less step. Normal MCP, CLI,
 and dashboard insert paths assign IDs first, so I couldn't find a supported path
@@ -21,7 +21,7 @@ that triggers it, hence low confidence.
 
 ## Root Cause
 
-`usedIds` only contains the IDs of *earlier* steps. The fallback check
+`usedIds` only contains the IDs of _earlier_ steps. The fallback check
 `!usedIds.has(fallbackId)` doesn't consider IDs that appear later in `steps`.
 
 ## Suggested Fix

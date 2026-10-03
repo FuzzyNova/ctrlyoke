@@ -35,6 +35,14 @@ import { getQwenContextWindowSize } from "../../../utils/ModelConstants";
 import { BaseToolBuilder } from "../shared/BaseToolBuilder";
 import { QWEN_EVENT_TYPES, QWEN_TOOL_NAMES } from "./QwenProtocolConstants";
 
+/** Match Qwen's `sanitizeCwd` naming for directories under `~/.qwen/projects`. */
+export function sanitizeQwenProjectPath(projectPath: string): string {
+  return (process.platform === "win32" ? projectPath.toLowerCase() : projectPath).replace(
+    /[^a-zA-Z0-9]/g,
+    "-"
+  );
+}
+
 /**
  * Qwen Code CLI Log Parser
  *
@@ -1226,9 +1234,8 @@ export class QwenLogParser extends BaseLogParser {
    *
    * @remarks
    * **Path Sanitization:**
-   * - Lowercases the path
-   * - Replaces all path separators (/ \ :) with dashes
-   * - Strips any remaining non-alphanumeric, non-dash characters
+   * - Lowercases the path on Windows only
+   * - Replaces every non-alphanumeric character with a dash, matching Qwen
    * - Example: `/home/user/dev/ctrlyoke` → `-home-user-dev-ctrlyoke`
    * - Windows: `C:\dev\ctrlyoke` → `c--dev-ctrlyoke`
    */
@@ -1236,13 +1243,9 @@ export class QwenLogParser extends BaseLogParser {
     // Use stored workspaceRoot (set by CliIntegration) or fall back to process.cwd()
     const workspacePath = this.workspaceRoot || process.cwd();
 
-    // Sanitize workspace path for Qwen's naming convention.
-    // All path separators (/ \ :) become dashes; other non-alphanumeric chars are stripped.
-    // Example: /home/user/dev/ctrlyoke → -home-user-dev-ctrlyoke
-    const sanitizedPath = workspacePath
-      .toLowerCase()
-      .replace(/[:\\/]/g, "-")
-      .replace(/[^a-z0-9-]/g, "");
+    // Match Qwen's sanitizeCwd: lowercase only on Windows, then replace every
+    // non-alphanumeric character (including separators) with a dash.
+    const sanitizedPath = sanitizeQwenProjectPath(workspacePath);
 
     const baseDir = path.join(os.homedir(), ".qwen", "projects");
     const projectDir = path.join(baseDir, sanitizedPath);

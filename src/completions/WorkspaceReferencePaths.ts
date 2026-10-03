@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { isMultiRootWorkspace } from "../platform/VsCodeWorkspaceRoot";
 import { normalizeReferencePath } from "./ContextReferenceBuilder";
 
 export function toWorkspaceRelativeReferencePath(
@@ -9,5 +10,7 @@ export function toWorkspaceRelativeReferencePath(
     return null;
   }
 
-  return normalizeReferencePath(vscode.workspace.asRelativePath(uri, false));
+  return normalizeReferencePath(
+    vscode.workspace.asRelativePath(uri, isMultiRootWorkspace())
+  );
 }

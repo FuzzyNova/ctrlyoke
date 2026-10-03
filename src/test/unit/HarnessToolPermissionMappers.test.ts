@@ -837,6 +837,34 @@ suite("HarnessToolPermissionMappers", () => {
         assert.ok(toolsArg.includes("Read"));
       });
 
+      test("web search and fetch aliases map to their distinct Qwen tools", async () => {
+        const aliases = [
+          ["web_search", "WebSearch"],
+          ["websearch", "WebSearch"],
+          ["search", "WebSearch"],
+          ["web_fetch", "WebFetch"],
+          ["webfetch", "WebFetch"],
+        ] as const;
+
+        for (const [alias, qwenTool] of aliases) {
+          const allowArgs = await mapperArgs(
+            mapper,
+            cfg(PERMISSION_MODES.CUSTOM, [alias])
+          );
+          assert.deepStrictEqual(argsAfterFlag(allowArgs, "--allowed-tools"), [
+            qwenTool,
+          ]);
+
+          const denyArgs = await mapperArgs(
+            mapper,
+            cfg(PERMISSION_MODES.CUSTOM, [], [alias])
+          );
+          assert.deepStrictEqual(argsAfterFlag(denyArgs, "--exclude-tools"), [
+            qwenTool,
+          ]);
+        }
+      });
+
       test("unknown tools pass through as-is", async () => {
         const args = await mapperArgs(
           mapper,

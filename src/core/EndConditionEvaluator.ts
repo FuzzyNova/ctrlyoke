@@ -1020,11 +1020,8 @@ export class EndConditionEvaluator {
         break;
 
       case END_CONDITION_SCRIPT_TYPES.SHELL:
-        templateFileName =
-          process.platform === "win32"
-            ? "check_condition.bat"
-            : "check_condition.sh";
-        defaultDestinationFileName = templateFileName;
+        templateFileName = "check_condition.sh";
+        defaultDestinationFileName = "check_condition.sh";
         break;
 
       case END_CONDITION_SCRIPT_TYPES.POWERSHELL:
@@ -1049,6 +1046,16 @@ export class EndConditionEvaluator {
       );
     }
 
+    if (scriptType === END_CONDITION_SCRIPT_TYPES.SHELL) {
+      const destinationExtension = path
+        .extname(destinationFileName)
+        .toLowerCase();
+      templateFileName =
+        destinationExtension === ".bat" || destinationExtension === ".cmd"
+          ? "check_condition.bat"
+          : "check_condition.sh";
+    }
+
     // Get template file path from extension directory
     const templatePath = path.join(
       this.platform.getExtensionPath(),
@@ -1063,10 +1070,15 @@ export class EndConditionEvaluator {
       const templateContent = await fs.promises.readFile(templatePath);
 
       // Write to destination
-      await fs.promises.writeFile(destinationPath, templateContent);
+      await fs.promises.writeFile(destinationPath, templateContent, {
+        flag: "wx",
+      });
 
       // Make script executable on Unix systems
-      if (process.platform !== "win32" && scriptType === "shell") {
+      if (
+        process.platform !== "win32" &&
+        templateFileName === "check_condition.sh"
+      ) {
         try {
           spawn("chmod", ["+x", destinationPath]);
         } catch {
@@ -1079,6 +1091,16 @@ export class EndConditionEvaluator {
       );
       return destinationPath;
     } catch (error) {
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        error.code === "EEXIST"
+      ) {
+        throw new Error(
+          `A script named "${destinationFileName}" already exists in .ctrlyoke/scripts. Choose a different name.`
+        );
+      }
       Log.error(
         "[EndConditionEvaluator] Failed to create sample script from template:",
         error

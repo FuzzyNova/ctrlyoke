@@ -43,6 +43,7 @@ import {
   VSCODE_COMMANDS,
   WORKSPACE_ENTRY_KINDS,
   VSCODE_URI_SCHEMES,
+  PROMPT_FILE_LANGUAGE_IDS,
   type WorkspaceFileTreeEntryKind,
 } from "../types/DashboardConstants";
 
@@ -1441,12 +1442,18 @@ export function getPriorContextCompletions(
 export function toVSCodeCompletionItem(
   item: PlainCompletionItem,
   _triggerChar: "@" | "#" | "~" | "$" | "/" | "!",
-  range?: vscode.Range
+  range?: vscode.Range,
+  document?: vscode.TextDocument
 ): vscode.CompletionItem {
   const vscodeItem = new vscode.CompletionItem(item.label, item.kind);
-  vscodeItem.insertText = item.captureId
+  const insertText = item.captureId
     ? CAPTURING_OUTPUT_PLACEHOLDER
     : item.insertText;
+  vscodeItem.insertText =
+    document?.languageId === PROMPT_FILE_LANGUAGE_IDS.JSON ||
+    document?.languageId === PROMPT_FILE_LANGUAGE_IDS.JSONC
+      ? insertText.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+      : insertText;
   vscodeItem.detail = item.detail;
 
   if (item.captureId) {

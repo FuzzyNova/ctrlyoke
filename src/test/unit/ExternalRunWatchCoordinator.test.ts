@@ -291,6 +291,50 @@ suite("ExternalRunWatchCoordinator dashboard state", () => {
     }
   });
 
+  test("atomically normalizes a running external working file on finish", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-coordinator-normalize-")
+    );
+    const originalStart = ExternalRunWatchSession.prototype.start;
+    ExternalRunWatchSession.prototype.start = async () => undefined;
+    try {
+      const run = await createLiveRun(
+        workspace,
+        RUNNER_IDS.CLI,
+        "external-normalize"
+      );
+      const { coordinator, host } = createCoordinator(workspace);
+      assert.strictEqual(
+        await coordinator.startExternalRunWatchSessionIfExternal(
+          run.filePath,
+          workspace
+        ),
+        true
+      );
+
+      coordinator.handleExternalRunFinished(
+        run.workflowKey,
+        run.filePath,
+        "lock-deleted"
+      );
+      for (let i = 0; i < 100 && !host.broadcast.dismissed; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+
+      const normalized = JSON.parse(
+        await fs.readFile(run.filePath, "utf8")
+      ) as { _runtime?: { executionState?: string } };
+      assert.strictEqual(
+        normalized._runtime?.executionState,
+        EXECUTION_STATES.STOPPED
+      );
+      assert.ok(host.broadcast.dismissed);
+    } finally {
+      ExternalRunWatchSession.prototype.start = originalStart;
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("omits the definition revision for external replays", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-coordinator-revision-")

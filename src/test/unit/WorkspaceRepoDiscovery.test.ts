@@ -32,6 +32,15 @@ suite("WorkspaceRepoDiscovery.mapRootPrefixesToRepos Tests", () => {
     assert.deepStrictEqual(map, { alpha: "alpha", beta: "beta" });
   });
 
+  test("maps a root named constructor", () => {
+    const map = mapRootPrefixesToRepos(
+      [root("constructor", "/ws/constructor")],
+      [repo("constructor", "/ws/constructor")]
+    );
+    assert.strictEqual(Object.hasOwn(map, "constructor"), true);
+    assert.strictEqual(map.constructor, "constructor");
+  });
+
   test("maps a root nested below its git toplevel (prefix ≠ repo id)", () => {
     // The workspace folder "frontend" lives inside the "monorepo" toplevel, so
     // its viewer-path prefix ("frontend") differs from the repo id ("monorepo").
@@ -95,6 +104,17 @@ suite("WorkspaceRepoDiscovery.mapRootPrefixesToRepos Tests", () => {
       assert.strictEqual(
         findRepoForPath(path.resolve("/ws/alpha/src/x.ts"), repos)?.id,
         "alpha"
+      );
+    });
+
+    test("chooses a nested repo over its containing outer repo", () => {
+      const nestedRepos = [
+        repo("app", "/ws/app"),
+        repo("lib", "/ws/app/vendor/lib"),
+      ];
+      assert.strictEqual(
+        findRepoForPath("/ws/app/vendor/lib/src/x.ts", nestedRepos)?.id,
+        "lib"
       );
     });
 

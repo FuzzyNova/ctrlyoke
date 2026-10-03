@@ -73,7 +73,11 @@ vi.mock("@hooks/useWorkspaceExplorerContextMenu", () => ({
 }));
 
 vi.mock("@components/workspace-viewer/WorkspaceFileEditor", () => ({
-  WorkspaceFileEditor: () => <div data-testid="file-editor" />,
+  WorkspaceFileEditor: (props: { content: string; readOnly?: boolean }) => (
+    <div data-testid="file-editor" data-readonly={props.readOnly}>
+      {props.content}
+    </div>
+  ),
 }));
 
 vi.mock("@components/output/MarkdownText", () => ({
@@ -479,5 +483,102 @@ describe("WorkspaceExplorerPane pagination", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /file-0\.ts/ }));
     await waitFor(() => expect(mocks.workspaceFile).toHaveBeenCalledOnce());
+  });
+
+  it("shows read-only file content and its reason while keeping Save unavailable", async () => {
+    mocks.workspaceFile.mockResolvedValue({
+      content: "TOKEN=[REDACTED]",
+      path: "file-0.ts",
+      readOnly: true,
+      reason: "File contains secrets and cannot be edited in the hosted viewer",
+    });
+    render(<WorkspaceExplorerPane />);
+    await screen.findByText("file-0.ts");
+
+    fireEvent.click(screen.getByRole("button", { name: /file-0\.ts/ }));
+
+    expect(await screen.findByTestId("file-editor")).toHaveTextContent(
+      "TOKEN=[REDACTED]"
+    );
+    expect(screen.getByTestId("file-editor")).toHaveAttribute(
+      "data-readonly",
+      "true"
+    );
+    expect(
+      screen.getByText(
+        "File contains secrets and cannot be edited in the hosted viewer"
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save file" })).toBeNull();
+    expect(useWorkspaceViewerStore.getState().fileDirty).toBe(false);
+  });
+
+  it("keeps the placeholder for read-only responses without content", async () => {
+    mocks.workspaceFile.mockResolvedValue({
+      path: "file-0.ts",
+      readOnly: true,
+      reason: "Binary file",
+    });
+    render(<WorkspaceExplorerPane />);
+    await screen.findByText("file-0.ts");
+    fireEvent.click(screen.getByRole("button", { name: /file-0\.ts/ }));
+
+    expect(await screen.findByText("Binary file")).toBeInTheDocument();
+    expect(screen.queryByTestId("file-editor")).not.toBeInTheDocument();
+  });
+
+  it("ignores an older file response and its loading completion", async () => {
+    const slowFile = deferred<{
+      path: string;
+      content: string;
+      readOnly: boolean;
+      reason: string;
+    }>();
+    const fastFile = deferred<{ path: string; content: string }>();
+    mocks.workspaceTree.mockImplementation(async (request) =>
+      "listingId" in request
+        ? response(request.listingId, request.offset, 2, [
+            { ...entry(0), name: "a.ts", path: "a.ts" },
+            { ...entry(1), name: "b.ts", path: "b.ts" },
+          ])
+        : response("two-files", 0, 2, [
+            { ...entry(0), name: "a.ts", path: "a.ts" },
+            { ...entry(1), name: "b.ts", path: "b.ts" },
+          ])
+    );
+    mocks.workspaceFile
+      .mockReturnValueOnce(slowFile.promise)
+      .mockReturnValueOnce(fastFile.promise);
+    render(<WorkspaceExplorerPane />);
+    await screen.findByText("a.ts");
+
+    fireEvent.click(screen.getByRole("button", { name: /a\.ts/ }));
+    fireEvent.click(screen.getByRole("button", { name: /b\.ts/ }));
+
+    await act(async () => {
+      fastFile.resolve({ path: "b.ts", content: "newer contents" });
+      await fastFile.promise;
+    });
+    expect(screen.getByTestId("file-editor")).toHaveTextContent(
+      "newer contents"
+    );
+    expect(useWorkspaceViewerStore.getState().fileLoading).toBe(false);
+
+    await act(async () => {
+      slowFile.resolve({
+        path: "a.ts",
+        content: "old contents",
+        readOnly: true,
+        reason: "Binary file",
+      });
+      await slowFile.promise;
+    });
+
+    expect(useWorkspaceViewerStore.getState().selectedFilePath).toBe("b.ts");
+    expect(screen.getByTestId("file-editor")).toHaveTextContent(
+      "newer contents"
+    );
+    expect(screen.queryByText("Binary file")).not.toBeInTheDocument();
+    expect(useWorkspaceViewerStore.getState().fileLoading).toBe(false);
   });
 });

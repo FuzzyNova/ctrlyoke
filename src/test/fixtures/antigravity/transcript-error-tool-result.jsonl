@@ -1,0 +1,4 @@
+{"step_index":1,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","created_at":"2026-10-02T12:00:00.000Z","tool_calls":[{"name":"first_custom_tool","args":{"request":"first"}}]}
+{"step_index":2,"source":"MODEL","type":"GENERIC","status":"ERROR","created_at":"2026-10-02T12:00:01.000Z","content":"Tool failed","error":"post_note.text is required"}
+{"step_index":3,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","created_at":"2026-10-02T12:00:02.000Z","tool_calls":[{"name":"second_custom_tool","args":{"request":"second"}}]}
+{"step_index":4,"source":"MODEL","type":"GENERIC","status":"DONE","created_at":"2026-10-02T12:00:03.000Z","content":"README contents"}

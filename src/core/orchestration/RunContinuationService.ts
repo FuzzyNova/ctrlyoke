@@ -64,7 +64,7 @@ import {
   ensureStepIds,
   findStepIndexById,
 } from "../StepIdentity";
-import { hasStarted } from "../../utils/StepStatusDerivation";
+import { hasInFlightStep, hasStarted } from "../../utils/StepStatusDerivation";
 import { prepareRunFileForWrite } from "../../utils/PersistedSchemaGuard";
 import { assertStepIndex } from "./StepIndexValidation";
 
@@ -903,8 +903,9 @@ export class RunContinuationService {
         if (absoluteOrder.some((index) => !Number.isInteger(index))) {
           throw new Error("Reorder indices must be integers");
         }
-        const executionIsInFlight = isInFlightExecutionState(
-          source._runtime?.executionState
+        const executionIsInFlight = hasInFlightStep(
+          source._runtime?.executionState,
+          source._runtime?.finalStep?.phase
         );
         const fixedIndices = new Set<number>();
         const movableIndices: number[] = [];
@@ -990,7 +991,10 @@ export class RunContinuationService {
           currentIndex,
           newPendingOrder,
           pendingGroups,
-          isInFlightExecutionState(source._runtime?.executionState)
+          hasInFlightStep(
+            source._runtime?.executionState,
+            source._runtime?.finalStep?.phase
+          )
         );
         assertStartedStepPositionsPreserved(
           topology.steps,
@@ -1150,7 +1154,10 @@ function assertEditableDuringExecution(
   assertStepMutable(step, operation);
   if (
     index === currentIndex &&
-    isInFlightExecutionState(source._runtime?.executionState)
+    hasInFlightStep(
+      source._runtime?.executionState,
+      source._runtime?.finalStep?.phase
+    )
   ) {
     // Legacy working files may predate per-step claim metadata. Keep the
     // execution-head boundary as a compatibility backstop until they claim.
@@ -1228,7 +1235,10 @@ function assertPendingReorderIsSafe(
   // every started step. This preflight only retains the legacy current-index
   // boundary for files that have not yet been claimed by ID.
   if (
-    isInFlightExecutionState(source._runtime?.executionState) &&
+    hasInFlightStep(
+      source._runtime?.executionState,
+      source._runtime?.finalStep?.phase
+    ) &&
     newPendingOrder.length > 0 &&
     !hasStarted(steps[currentIndex]) &&
     newPendingOrder[0] !== 0

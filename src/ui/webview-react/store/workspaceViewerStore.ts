@@ -95,6 +95,7 @@ interface WorkspaceViewerState {
   fileSaving: boolean;
   fileReadOnly: boolean;
   fileReadOnlyReason: string | undefined;
+  fileReadOnlyContentAvailable: boolean;
   /** `data:` URI for a known image file, rendered as an inline <img> instead of the text editor. Null for non-image files. */
   fileImageDataUri: string | null;
   fileDrafts: Record<string, CachedFileDraft>;
@@ -198,6 +199,13 @@ interface WorkspaceViewerActions {
   setFileLoading(loading: boolean): void;
   setFileSaving(saving: boolean): void;
   setFileReadOnly(readOnly: boolean, reason?: string): void;
+  setLoadedReadOnlyFileContent(
+    path: string,
+    content: string,
+    reason?: string
+  ): void;
+  deleteFilePath(path: string): void;
+  moveFilePath(sourcePath: string, destinationPath: string): void;
   clearFile(): void;
 
   // Mobile editor visibility
@@ -278,6 +286,7 @@ const INITIAL_STATE: WorkspaceViewerState = {
   fileSaving: false,
   fileReadOnly: false,
   fileReadOnlyReason: undefined,
+  fileReadOnlyContentAvailable: false,
   fileImageDataUri: null,
   fileDrafts: {},
 
@@ -408,6 +417,7 @@ export const useWorkspaceViewerStore = create<
           fileDirty: draft !== undefined,
           fileReadOnly: false,
           fileReadOnlyReason: undefined,
+          fileReadOnlyContentAvailable: false,
           fileImageDataUri: null,
         });
       },
@@ -448,7 +458,96 @@ export const useWorkspaceViewerStore = create<
           originalFileContent: content,
           fileDirty,
           fileDrafts: nextDrafts,
+          fileReadOnly: false,
+          fileReadOnlyReason: undefined,
+          fileReadOnlyContentAvailable: false,
           fileImageDataUri: null,
+        });
+      },
+
+      setLoadedReadOnlyFileContent(path, content, reason) {
+        const fileDrafts = { ...get().fileDrafts };
+        delete fileDrafts[path];
+        set({
+          selectedFilePath: path,
+          fileContent: content,
+          originalFileContent: content,
+          fileDirty: false,
+          fileDrafts,
+          fileReadOnly: true,
+          fileReadOnlyReason: reason,
+          fileReadOnlyContentAvailable: true,
+          fileImageDataUri: null,
+        });
+      },
+
+      deleteFilePath(path) {
+        const normalizedPath = normalizeWorkspacePath(path).replace(/\/$/, "");
+        const isWithinPath = (candidate: string) => {
+          const normalizedCandidate = normalizeWorkspacePath(candidate);
+          return (
+            normalizedCandidate === normalizedPath ||
+            normalizedCandidate.startsWith(`${normalizedPath}/`)
+          );
+        };
+        const { selectedFilePath, fileDrafts } = get();
+        const nextDrafts = Object.fromEntries(
+          Object.entries(fileDrafts).filter(
+            ([draftPath]) => !isWithinPath(draftPath)
+          )
+        );
+        const clearSelected =
+          selectedFilePath !== null && isWithinPath(selectedFilePath);
+        set({
+          fileDrafts: nextDrafts,
+          ...(clearSelected
+            ? {
+                selectedFilePath: null,
+                selectedFileExternal: false,
+                fileContent: "",
+                originalFileContent: "",
+                fileDirty: false,
+                fileLoading: false,
+                fileSaving: false,
+                fileReadOnly: false,
+                fileReadOnlyReason: undefined,
+                fileReadOnlyContentAvailable: false,
+                fileImageDataUri: null,
+              }
+            : {}),
+        });
+      },
+
+      moveFilePath(sourcePath, destinationPath) {
+        const source = normalizeWorkspacePath(sourcePath).replace(/\/$/, "");
+        const destination = normalizeWorkspacePath(destinationPath).replace(
+          /\/$/,
+          ""
+        );
+        const remapPath = (path: string) => {
+          const normalizedPath = normalizeWorkspacePath(path);
+          if (normalizedPath === source) return destination;
+          return normalizedPath.startsWith(`${source}/`)
+            ? `${destination}${normalizedPath.slice(source.length)}`
+            : null;
+        };
+        const { fileDrafts, selectedFilePath } = get();
+        const nextDrafts = { ...fileDrafts };
+        for (const [draftPath, draft] of Object.entries(fileDrafts)) {
+          const movedPath = remapPath(draftPath);
+          if (movedPath !== null) {
+            delete nextDrafts[draftPath];
+            nextDrafts[movedPath] = draft;
+          }
+        }
+        const movedSelectedPath = selectedFilePath
+          ? remapPath(selectedFilePath)
+          : null;
+        set({
+          fileDrafts: nextDrafts,
+          ...(movedSelectedPath !== null
+            ? { selectedFilePath: movedSelectedPath }
+            : {}),
         });
       },
 
@@ -460,6 +559,7 @@ export const useWorkspaceViewerStore = create<
           fileDirty: false,
           fileReadOnly: false,
           fileReadOnlyReason: undefined,
+          fileReadOnlyContentAvailable: false,
           fileImageDataUri: imageDataUri,
         });
       },
@@ -476,6 +576,9 @@ export const useWorkspaceViewerStore = create<
           fileContent: diskContent,
           originalFileContent: diskContent,
           fileDirty: false,
+          fileReadOnly: false,
+          fileReadOnlyReason: undefined,
+          fileReadOnlyContentAvailable: false,
           fileDrafts: nextDrafts,
           fileImageDataUri: null,
         });
@@ -513,6 +616,7 @@ export const useWorkspaceViewerStore = create<
         set({
           fileReadOnly: readOnly,
           fileReadOnlyReason: readOnly ? reason : undefined,
+          fileReadOnlyContentAvailable: false,
         });
       },
 
@@ -525,6 +629,7 @@ export const useWorkspaceViewerStore = create<
           fileDirty: false,
           fileReadOnly: false,
           fileReadOnlyReason: undefined,
+          fileReadOnlyContentAvailable: false,
           fileImageDataUri: null,
         });
       },

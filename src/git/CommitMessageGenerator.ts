@@ -117,6 +117,21 @@ export function getMaxDiffSizeLabel(): string {
   return `${Math.floor(MAX_DIFF_BYTES / 1024)} KB`;
 }
 
+export function getCommitMessageStatePaths(
+  cwd: string,
+  stateRoot: string = cwd
+): { cwd: string; stateRoot: string; tempDir: string } {
+  return {
+    cwd,
+    stateRoot,
+    tempDir: path.join(
+      stateRoot,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
+      PATH_CONSTANTS.TEMP_DIR
+    ),
+  };
+}
+
 function truncateUtf8(value: string, maxBytes: number): string {
   const buffer = Buffer.from(value, "utf8");
   if (buffer.length <= maxBytes) {
@@ -427,7 +442,8 @@ export class CommitMessageGenerator {
     diff: string,
     cwd: string,
     token?: AbortSignal,
-    instructions?: string
+    instructions?: string,
+    stateRoot: string = cwd
   ): Promise<{
     message: string;
     prompt: string;
@@ -469,11 +485,8 @@ export class CommitMessageGenerator {
       "mcp-server.js"
     );
     const ctrlyokeMcpMode = ConfigurationUtils.getCtrlYokeMcpMode();
-    const tempDir = path.join(
-      cwd,
-      PATH_CONSTANTS.CTRLYOKE_DIR,
-      PATH_CONSTANTS.TEMP_DIR
-    );
+    const roots = getCommitMessageStatePaths(cwd, stateRoot);
+    const { tempDir } = roots;
     const commitOutputPath = path.join(
       tempDir,
       `commit-output-${Date.now()}.txt`
@@ -514,7 +527,7 @@ export class CommitMessageGenerator {
           command: "node",
           args: [mcpServerPath.replace(/\\/g, "/")],
           env: {
-            CTRLYOKE_WORKSPACE: cwd.replace(/\\/g, "/"),
+            CTRLYOKE_WORKSPACE: roots.stateRoot.replace(/\\/g, "/"),
             CTRLYOKE_COMMIT_OUTPUT: commitOutputPath.replace(/\\/g, "/"),
           },
           autoApprove: true,
@@ -528,8 +541,9 @@ export class CommitMessageGenerator {
       );
     }
 
-    const stateRoot = cwd;
-    const existingWorkflowKey = await readCommitMessageLineageKey(stateRoot);
+    const existingWorkflowKey = await readCommitMessageLineageKey(
+      roots.stateRoot
+    );
 
     const factory = new IntegrationFactory(platform);
     const detectorIntegration = factory.createForExecution(harness);
@@ -543,7 +557,7 @@ export class CommitMessageGenerator {
         () => detectorIntegration,
         () => {},
         () => {},
-        cwd,
+        roots.stateRoot,
         true,
         false,
         undefined,
@@ -555,7 +569,7 @@ export class CommitMessageGenerator {
       );
     instance.setMcpToolSkillContext({
       mcpServerPath,
-      workspaceRoot: stateRoot,
+      workspaceRoot: roots.stateRoot,
       commitOutputPath,
     });
 
@@ -595,7 +609,7 @@ export class CommitMessageGenerator {
 
       const resolvedWorkflowKey = instance.promptQueue.getState().workflowKey;
       if (resolvedWorkflowKey && existingWorkflowKey === undefined) {
-        await writeCommitMessageLineageKey(stateRoot, resolvedWorkflowKey);
+        await writeCommitMessageLineageKey(roots.stateRoot, resolvedWorkflowKey);
       }
 
       // Captured directly from the integration rather than read back from a

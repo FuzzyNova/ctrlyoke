@@ -26,6 +26,18 @@ class RecordingPromptEditorInsertSink implements ContextMenuPromptEditorInsertSi
   }
 }
 
+class MockWorkspaceFolder implements vscode.WorkspaceFolder {
+  constructor(
+    readonly uri: vscode.Uri,
+    readonly name: string,
+    readonly index: number
+  ) {}
+
+  toResource(relativePath: string): vscode.Uri {
+    return vscode.Uri.joinPath(this.uri, relativePath);
+  }
+}
+
 class MockOutputEditor implements Pick<
   vscode.TextEditor,
   "document" | "selection"
@@ -370,6 +382,107 @@ suite("ContextMenuReferenceCommands", () => {
     assert.deepStrictEqual(sink.requests[0].references, [
       "@context-menu-regression.ts",
     ]);
+  });
+
+  test("includes the workspace folder name for targets in a multi-root workspace", async () => {
+    const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+    const originalGetWorkspaceFolder = vscode.workspace.getWorkspaceFolder;
+    const originalAsRelativePath = vscode.workspace.asRelativePath;
+    const firstRoot = vscode.Uri.file("/workspace/frontend");
+    const secondRoot = vscode.Uri.file("/workspace/backend");
+    const folders: vscode.WorkspaceFolder[] = [
+      new MockWorkspaceFolder(firstRoot, "frontend", 0),
+      new MockWorkspaceFolder(secondRoot, "backend", 1),
+    ];
+    let includeWorkspaceFolder: boolean | undefined;
+    Object.defineProperty(vscode.workspace, "workspaceFolders", {
+      configurable: true,
+      value: folders,
+    });
+    Object.defineProperty(vscode.workspace, "getWorkspaceFolder", {
+      configurable: true,
+      value: (uri: vscode.Uri) =>
+        uri.fsPath.startsWith(secondRoot.fsPath) ? folders[1] : undefined,
+    });
+    Object.defineProperty(vscode.workspace, "asRelativePath", {
+      configurable: true,
+      value: (_uri: vscode.Uri, includeFolder?: boolean) => {
+        includeWorkspaceFolder = includeFolder;
+        return includeFolder ? "backend/src/app.ts" : "src/app.ts";
+      },
+    });
+
+    try {
+      const sink = new RecordingPromptEditorInsertSink();
+      await createCommands(sink, secondRoot.fsPath).addFileToPromptEditor(
+        vscode.Uri.file("/workspace/backend/src/app.ts")
+      );
+
+      assert.strictEqual(includeWorkspaceFolder, true);
+      assert.deepStrictEqual(sink.requests[0].references, [
+        "@backend/src/app.ts",
+      ]);
+    } finally {
+      Object.defineProperty(vscode.workspace, "workspaceFolders", {
+        configurable: true,
+        value: originalWorkspaceFolders,
+      });
+      Object.defineProperty(vscode.workspace, "getWorkspaceFolder", {
+        configurable: true,
+        value: originalGetWorkspaceFolder,
+      });
+      Object.defineProperty(vscode.workspace, "asRelativePath", {
+        configurable: true,
+        value: originalAsRelativePath,
+      });
+    }
+  });
+
+  test("keeps workspace-relative references unprefixed in a single-root workspace", async () => {
+    const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+    const originalGetWorkspaceFolder = vscode.workspace.getWorkspaceFolder;
+    const originalAsRelativePath = vscode.workspace.asRelativePath;
+    const root = vscode.Uri.file("/workspace/project");
+    const folder = new MockWorkspaceFolder(root, "project", 0);
+    let includeWorkspaceFolder: boolean | undefined;
+    Object.defineProperty(vscode.workspace, "workspaceFolders", {
+      configurable: true,
+      value: [folder],
+    });
+    Object.defineProperty(vscode.workspace, "getWorkspaceFolder", {
+      configurable: true,
+      value: () => folder,
+    });
+    Object.defineProperty(vscode.workspace, "asRelativePath", {
+      configurable: true,
+      value: (_uri: vscode.Uri, includeFolder?: boolean) => {
+        includeWorkspaceFolder = includeFolder;
+        return includeFolder ? "project/src/app.ts" : "src/app.ts";
+      },
+    });
+
+    try {
+      const sink = new RecordingPromptEditorInsertSink();
+      await createCommands(sink, root.fsPath).addFileToPromptEditor(
+        vscode.Uri.file("/workspace/project/src/app.ts")
+      );
+
+      assert.strictEqual(includeWorkspaceFolder, false);
+      assert.deepStrictEqual(sink.requests[0].references, ["@src/app.ts"]);
+    } finally {
+      Object.defineProperty(vscode.workspace, "workspaceFolders", {
+        configurable: true,
+        value: originalWorkspaceFolders,
+      });
+      Object.defineProperty(vscode.workspace, "getWorkspaceFolder", {
+        configurable: true,
+        value: originalGetWorkspaceFolder,
+      });
+      Object.defineProperty(vscode.workspace, "asRelativePath", {
+        configurable: true,
+        value: originalAsRelativePath,
+      });
+    }
   });
 
   test("captures the active output selection with a 1-based line range", async () => {

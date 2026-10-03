@@ -10,7 +10,10 @@ import { CopilotCliProvider } from "../../../core/harness/copilot/CopilotCliProv
 import { CodexLogParser } from "../../../core/harness/codex/CodexLogParser";
 import { OpenCodeLogParser } from "../../../core/harness/opencode/OpenCodeLogParser";
 import { QwenCliProvider } from "../../../core/harness/qwen/QwenCliProvider";
-import { QwenLogParser } from "../../../core/harness/qwen/QwenLogParser";
+import {
+  QwenLogParser,
+  sanitizeQwenProjectPath,
+} from "../../../core/harness/qwen/QwenLogParser";
 import { AntigravityLogParser } from "../../../core/harness/antigravity/AntigravityLogParser";
 import {
   UniversalCliOutput,
@@ -5605,6 +5608,58 @@ suite("OpenCodeLogParser", () => {
     parser = new OpenCodeLogParser();
   });
 
+  test("surfaces failed write and bash tool outcomes from stdout fixtures", () => {
+    const fixturePath = path.join(
+      __dirname,
+      "../../../../src/test/fixtures/opencode/failed-tool-events.stdout.jsonl"
+    );
+    const events = fs
+      .readFileSync(fixturePath, "utf8")
+      .trim()
+      .split(/\r?\n/)
+      .map((line) => JSON.parse(line) as BaseCliEvent);
+    const response = parser.extractResponse(events);
+
+    const write = response.events.find(
+      (event) => event.type === CLI_EVENT_TYPES.FILE_WRITE
+    )?.data as FileWriteData;
+    const bash = response.events.find(
+      (event) => event.type === CLI_EVENT_TYPES.BASH_COMMAND
+    )?.data as BashCommandData;
+
+    assert.strictEqual(write.success, false);
+    assert.strictEqual(write.status, OPERATION_STATUS.FAILED);
+    assert.strictEqual(write.error, "Permission denied writing file");
+    assert.strictEqual(bash.status, OPERATION_STATUS.FAILED);
+    assert.strictEqual(bash.error, "Build command failed");
+    assert.strictEqual(bash.output, "Build command failed");
+  });
+
+  test("surfaces error stream events as response and failure text", () => {
+    const fixturePath = path.join(
+      __dirname,
+      "../../../../src/test/fixtures/opencode/error-event.stdout.jsonl"
+    );
+    const event = JSON.parse(
+      fs.readFileSync(fixturePath, "utf8").trim()
+    ) as BaseCliEvent;
+    const response = parser.extractResponse([event]);
+    const streamed = parser.extractStructuredEventsFromEvent(event);
+
+    assert.strictEqual(
+      response.metadata.error,
+      "The provider rejected the API key"
+    );
+    assert.strictEqual(
+      (response.events[0].data as TextData).text,
+      "The provider rejected the API key"
+    );
+    assert.strictEqual(
+      (streamed[0].data as TextData).text,
+      "The provider rejected the API key"
+    );
+  });
+
   test("parses the captured hyphenated MCP server name as one normalized row", () => {
     const fixturePath = path.join(
       __dirname,
@@ -6012,6 +6067,29 @@ suite("OpenCodeLogParser", () => {
       );
     });
 
+    test("should emit failed tool parts from an export fixture", async () => {
+      const fixturePath = path.join(
+        __dirname,
+        "../../../../src/test/fixtures/opencode/failed-tool-export.json"
+      );
+      const fixtureText = fs.readFileSync(fixturePath, "utf8");
+      const parserWithExportRunner = new OpenCodeLogParser(
+        () => undefined,
+        async () => fixtureText
+      );
+      const events = await parserWithExportRunner.readNewLines(
+        "ses_export_failed"
+      );
+
+      assert.strictEqual(events.length, 1);
+      assert.strictEqual(events[0].type, OPENCODE_EVENT_TYPES.TOOL_USE);
+      const response = parserWithExportRunner.extractResponse(events);
+      const write = response.events[0].data as FileWriteData;
+      assert.strictEqual(write.success, false);
+      assert.strictEqual(write.status, OPERATION_STATUS.FAILED);
+      assert.strictEqual(write.error, "OpenCode export write failed");
+    });
+
     test("should pick up a tool part on the next poll once it transitions to completed", () => {
       const pendingExport = makeExport([
         {
@@ -6172,6 +6250,19 @@ suite("OpenCodeLogParser", () => {
 // ============================================================================
 
 suite("QwenLogParser", () => {
+  suite("sanitizeQwenProjectPath", () => {
+    test("replaces dots, underscores, and spaces with dashes", () => {
+      const user = process.platform === "win32" ? "user" : "User";
+      for (const [projectPath, expected] of [
+        ["/home/User/my.project", `-home-${user}-my-project`],
+        ["/home/User/my_project", `-home-${user}-my-project`],
+        ["/home/User/my project", `-home-${user}-my-project`],
+      ]) {
+        assert.strictEqual(sanitizeQwenProjectPath(projectPath), expected);
+      }
+    });
+  });
+
   test("unwraps Qwen's MCP tool_call envelope and pairs its result", () => {
     const parser = new QwenLogParser();
     const output = parser.extractResponse([

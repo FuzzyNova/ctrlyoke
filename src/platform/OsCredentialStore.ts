@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { SecretStoreUnavailableError, type SecretStore } from "./SecretStore";
 
@@ -387,7 +388,8 @@ class WindowsCredentialBackend implements CredentialBackend {
       return first;
     }
 
-    const count = await this.readChunkCount(key);
+    const chunkMetadata = await this.readChunkMetadata(key);
+    const { count } = chunkMetadata;
     if (count <= 1) {
       return first;
     }
@@ -406,7 +408,17 @@ class WindowsCredentialBackend implements CredentialBackend {
           `${missingIndex + 1} is missing. Re-store the secret to repair it.`
       );
     }
-    return [first, ...continuations].join("");
+    const value = [first, ...continuations].join("");
+    if (
+      chunkMetadata.integrityTag !== undefined &&
+      createIntegrityTag(value) !== chunkMetadata.integrityTag
+    ) {
+      throw new Error(
+        `CredMan credential "${key}" failed its integrity check. ` +
+          "Re-store the secret to repair it."
+      );
+    }
+    return value;
   }
 
   async store(key: string, value: string): Promise<void> {
@@ -423,14 +435,25 @@ class WindowsCredentialBackend implements CredentialBackend {
     if (chunks.length > 1) {
       await this.writeCredential(
         `${key}${WINDOWS_CHUNK_COUNT_SUFFIX}`,
-        String(chunks.length)
+        `${chunks.length}:${createIntegrityTag(value)}`
       );
-    } else if (previousCount > 1) {
-      await this.deleteCredential(`${key}${WINDOWS_CHUNK_COUNT_SUFFIX}`);
-    }
-
-    for (const [index, chunk] of chunks.entries()) {
-      await this.writeCredential(chunkKey(key, index), chunk);
+      for (const [index, chunk] of chunks.entries()) {
+        await this.writeCredential(chunkKey(key, index), chunk);
+      }
+    } else {
+      // Keep a chunked integrity record while replacing chunk 0. Updating its
+      // tag first makes a failed write detectable; the old chunks cannot
+      // accidentally pass as the requested replacement.
+      if (previousCount > 1) {
+        await this.writeCredential(
+          `${key}${WINDOWS_CHUNK_COUNT_SUFFIX}`,
+          `${previousCount}:${createIntegrityTag(value)}`
+        );
+      }
+      await this.writeCredential(chunkKey(key, 0), chunks[0]);
+      if (previousCount > 1) {
+        await this.deleteCredential(`${key}${WINDOWS_CHUNK_COUNT_SUFFIX}`);
+      }
     }
 
     for (let index = chunks.length; index < previousCount; index++) {
@@ -450,14 +473,23 @@ class WindowsCredentialBackend implements CredentialBackend {
 
   /** The chunk count, or 1 for a plain single-credential value. */
   private async readChunkCount(key: string): Promise<number> {
+    return (await this.readChunkMetadata(key)).count;
+  }
+
+  private async readChunkMetadata(
+    key: string
+  ): Promise<{ count: number; integrityTag?: string }> {
     const raw = await this.readCredential(
       `${key}${WINDOWS_CHUNK_COUNT_SUFFIX}`
     );
     if (raw === undefined) {
-      return 1;
+      return { count: 1 };
     }
-    const parsed = Number.parseInt(raw.trim(), 10);
-    return Number.isInteger(parsed) && parsed > 1 ? parsed : 1;
+    const [countText, integrityTag] = raw.trim().split(":", 2);
+    const parsed = Number.parseInt(countText, 10);
+    return Number.isInteger(parsed) && parsed > 1
+      ? { count: parsed, ...(integrityTag ? { integrityTag } : {}) }
+      : { count: 1 };
   }
 
   private async readCredential(key: string): Promise<string | undefined> {
@@ -516,6 +548,10 @@ $target = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${targetV
         : Buffer.from(value, "utf8").toString("base64")
     );
   }
+}
+
+function createIntegrityTag(value: string): string {
+  return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
 /** Chunk 0 keeps the plain key so unchunked values stay readable as-is. */
