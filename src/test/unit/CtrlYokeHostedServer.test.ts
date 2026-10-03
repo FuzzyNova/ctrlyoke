@@ -3,6 +3,7 @@ import * as fs from "fs";
 import { request as httpRequest } from "http";
 import * as path from "path";
 import { suite, test } from "mocha";
+import { WebSocket } from "ws";
 import { DashboardBroadcastHub } from "../../ui/DashboardBroadcastHub";
 import { createHostedHarnessStatusUpdate } from "../../server/HostedServerMessageFactory";
 import {
@@ -322,6 +323,106 @@ suite("CtrlYokeHostedServer workspace file redaction", () => {
         fs.readFileSync(path.join(root, "notes.txt"), "utf8"),
         "updated\n"
       );
+    });
+  });
+});
+
+suite("CtrlYokeHostedServer WebSocket security", () => {
+  async function withServer(
+    testBody: (
+      port: number,
+      token: string,
+      wasConnectionObserved: () => boolean
+    ) => Promise<void>
+  ): Promise<void> {
+    const token = "0123456789abcdef0123456789abcdef";
+    const workspaceRoot = makeTempDir("ctrlyoke-hosted-websocket-");
+    let connectionObserved = false;
+    const webviewProvider = {
+      postMessage: () => {
+        connectionObserved = true;
+      },
+      unregisterBrowserClient: () => undefined,
+      routeExternalMessage: async () => undefined,
+    };
+    const server = new CtrlYokeHostedServer(
+      new DashboardBroadcastHub(),
+      webviewProvider as never,
+      (() => ({})) as never,
+      0,
+      workspaceRoot,
+      [],
+      token
+    );
+    try {
+      const serverUrl = await server.listen();
+      if (!serverUrl) throw new Error("Hosted server did not start");
+      await testBody(
+        Number(new URL(serverUrl).port),
+        token,
+        () => connectionObserved
+      );
+    } finally {
+      server.dispose();
+      removeTempDir(workspaceRoot);
+    }
+  }
+
+  function rejectedUpgradeStatus(url: string): Promise<number | undefined> {
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(url);
+      const timeout = setTimeout(() => {
+        ws.terminate();
+        reject(new Error("WebSocket upgrade was not refused"));
+      }, 3000);
+      ws.on("error", () => undefined);
+      ws.on("unexpected-response", (_request, response) => {
+        clearTimeout(timeout);
+        response.resume();
+        resolve(response.statusCode);
+      });
+      ws.on("open", () => {
+        clearTimeout(timeout);
+        ws.terminate();
+        reject(new Error("WebSocket upgrade unexpectedly succeeded"));
+      });
+    });
+  }
+
+  test("refuses WebSocket upgrades without the correct token before connection", async () => {
+    await withServer(async (port, token, wasConnectionObserved) => {
+      const baseUrl = `ws://127.0.0.1:${port}/ws`;
+      assert.strictEqual(await rejectedUpgradeStatus(baseUrl), 401);
+      assert.strictEqual(
+        await rejectedUpgradeStatus(`${baseUrl}?token=wrong-token`),
+        401
+      );
+      assert.strictEqual(wasConnectionObserved(), false);
+
+      const valid = new WebSocket(`${baseUrl}?token=${token}`);
+      await new Promise<void>((resolve, reject) => {
+        valid.once("open", resolve);
+        valid.once("error", reject);
+      });
+      assert.strictEqual(wasConnectionObserved(), true);
+      valid.close();
+    });
+  });
+
+  test("closes a WebSocket that sends a frame over maxPayload", async () => {
+    await withServer(async (port, token) => {
+      const ws = new WebSocket(
+        `ws://127.0.0.1:${port}/ws?token=${token}`
+      );
+      await new Promise<void>((resolve, reject) => {
+        ws.once("open", resolve);
+        ws.once("error", reject);
+      });
+      const closed = new Promise<number>((resolve) => {
+        ws.once("close", (code) => resolve(code));
+      });
+      ws.send(Buffer.alloc(24 * 1024 * 1024 + 1));
+      assert.strictEqual(await closed, 1009);
     });
   });
 });

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (Claude)
 - **Area:** `src/server/CtrlYokeHostedServer.ts` (`new WebSocketServer` ~line 311, `setupWebSocket` ~line 2170)
-- **Severity:** high (security: unauthenticated memory exhaustion of the extension host)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

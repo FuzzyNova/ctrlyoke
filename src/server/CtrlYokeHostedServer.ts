@@ -110,6 +110,10 @@ import { isLoopbackBindAddress } from "../utils/NetworkUtils";
 const THEME_VAR_KEY_PATTERN = /^--[A-Za-z0-9_-]+$/;
 const SIBLING_SERVER_PROBE_TIMEOUT_MS = 1000;
 const DEFAULT_JSON_BODY_LIMIT = "64kb";
+// SAVE_PASTED_IMAGE allows 15 MiB of decoded image data. Its base64 JSON
+// message is about 20 MiB; 24 MiB leaves room for the message envelope while
+// bounding inbound WebSocket buffering well below ws's 100 MiB default.
+const HOSTED_WEBSOCKET_MAX_PAYLOAD_BYTES = 24 * 1024 * 1024;
 const JSON_STRING_MAX_BYTE_EXPANSION_FACTOR = 6;
 const WORKSPACE_FILE_JSON_METADATA_HEADROOM_BYTES = 4 * 1024;
 const WORKSPACE_FILE_JSON_BODY_LIMIT_BYTES =
@@ -308,8 +312,27 @@ export class CtrlYokeHostedServer
     this.httpServer.on("error", (err: NodeJS.ErrnoException) => {
       Log.warn(`[CtrlYokeHostedServer] ctrlyoke server error: ${err.message}`);
     });
-    this.wss = new WebSocketServer({ server: this.httpServer, path: "/ws" });
-    // ws re-emits httpServer errors onto wss — add a handler to prevent crashes.
+    this.wss = new WebSocketServer({
+      noServer: true,
+      maxPayload: HOSTED_WEBSOCKET_MAX_PAYLOAD_BYTES,
+    });
+    this.httpServer.on("upgrade", (req, socket, head) => {
+      const url = new URL(req.url ?? "", "http://localhost");
+      if (url.pathname !== "/ws") {
+        socket.write("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
+        socket.destroy();
+        return;
+      }
+      if (!timingSafeStringEqual(url.searchParams.get("token"), this.token)) {
+        socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
+        socket.destroy();
+        return;
+      }
+      this.wss.handleUpgrade(req, socket, head, (ws) => {
+        this.wss.emit("connection", ws, req);
+      });
+    });
+    // ws server errors are handled to prevent unhandled error crashes.
     this.wss.on("error", (err: Error) => {
       Log.warn(
         `[CtrlYokeHostedServer] ctrlyoke WebSocket server error: ${err.message}`
