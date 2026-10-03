@@ -319,6 +319,36 @@ suite("CommitMessageGenerator", () => {
     }
   });
 
+  test("lists untracked files from the repository root when cwd is a subdirectory", async () => {
+    const repositoryRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "cy-commit-subdirectory-")
+    );
+    const subdirectory = path.join(repositoryRoot, "sub");
+    try {
+      await fs.mkdir(subdirectory);
+      await execFileAsync("git", ["init"], { cwd: repositoryRoot });
+      await fs.writeFile(path.join(repositoryRoot, "root-new.txt"), "root\n");
+      await fs.writeFile(path.join(subdirectory, "sub-new.txt"), "sub\n");
+
+      const result = await new CommitMessageGenerator().getDiff(subdirectory);
+
+      assert.ok(result);
+      assert.strictEqual(result.includesUntrackedFiles, true);
+      assert.ok(
+        result.diff.includes("diff --git a/root-new.txt b/root-new.txt"),
+        result.diff
+      );
+      assert.ok(
+        result.diff.includes("diff --git a/sub/sub-new.txt b/sub/sub-new.txt"),
+        result.diff
+      );
+    } finally {
+      await fs
+        .rm(repositoryRoot, { recursive: true, force: true, maxRetries: 5 })
+        .catch(() => {});
+    }
+  });
+
   test("bounds an oversized untracked file by the diff budget", async () => {
     const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "cy-commit-large-untracked-"));
     try {

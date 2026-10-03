@@ -23,6 +23,7 @@ import { fenceLiteral } from "../utils/FileReferenceParser";
 import {
   GIT_DIFF_NO_EXT_DIFF_OPTION,
   parseGitNulSeparatedPaths,
+  repoToplevel,
 } from "../utils/GitUtils";
 import {
   CLI_EVENT_TYPES,
@@ -297,6 +298,7 @@ export class CommitMessageGenerator {
     ];
     let includesUntrackedFiles = false;
     let hasStagedChanges = false;
+    const repositoryRoot = (await repoToplevel(cwd)) ?? cwd;
     try {
       if (stagedDiff.trim()) {
         hasStagedChanges = true;
@@ -363,7 +365,7 @@ export class CommitMessageGenerator {
       const { stdout: untrackedOut } = await execFileAsync(
         "git",
         ["ls-files", "--others", "--exclude-standard", "-z"],
-        { cwd, encoding: "utf8", maxBuffer: GIT_DIFF_MAX_BUFFER }
+        { cwd: repositoryRoot, encoding: "utf8", maxBuffer: GIT_DIFF_MAX_BUFFER }
       );
       const untrackedFiles = parseGitNulSeparatedPaths(untrackedOut);
       includesUntrackedFiles = untrackedFiles.length > 0;
@@ -374,7 +376,7 @@ export class CommitMessageGenerator {
           break;
         }
         try {
-          const absolutePath = path.join(cwd, filePath);
+          const absolutePath = path.join(repositoryRoot, filePath);
           const stat = await fs.lstat(absolutePath);
           if (!stat.isFile()) {
             continue;

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-03 by the more-bug-backlog2 workflow final step (claude-cli)
 - **Area:** `src/git/CommitMessageGenerator.ts` (`getDiff`, untracked-file section), `src/git/GitCommitter.ts`, `src/cli/CommitCommand.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

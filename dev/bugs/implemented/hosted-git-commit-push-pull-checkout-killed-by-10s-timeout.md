@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-03 by the more-bug-backlog2 workflow final step (claude-cli)
 - **Area:** `src/server/HostedWorkspaceViewerService.ts` (`GIT_TIMEOUT_MS`, `commit`, `push`, `pull`, `checkoutCommit`, `checkoutBranch`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

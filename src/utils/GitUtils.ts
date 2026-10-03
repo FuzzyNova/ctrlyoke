@@ -37,6 +37,11 @@ function getGitTimeoutMs(mutation = false): number {
     : (gitTimeoutOverrides.shortTimeoutMs ?? GIT_TIMEOUT_MS);
 }
 
+/** Return the shared timeout for Git commands that mutate a repository. */
+export function getGitMutationTimeoutMs(): number {
+  return getGitTimeoutMs(true);
+}
+
 function gitCommandName(args: readonly string[]): string {
   const commandStart = args[0] === "-C" ? 2 : 0;
   const command = args[commandStart] ?? "";

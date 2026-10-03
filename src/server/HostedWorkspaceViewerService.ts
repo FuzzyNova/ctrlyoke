@@ -101,6 +101,8 @@ import {
   getGitTrackedFiles,
   getGitIgnoredFiles,
   getDiffBetweenRefs,
+  GIT_COMMAND_TIMEOUT_MS,
+  getGitMutationTimeoutMs,
 } from "../utils/GitUtils";
 import {
   DIFF_CHANGE_TYPES,
@@ -129,7 +131,6 @@ import {
 } from "./WorkspaceTreeErrors";
 
 const execFileAsync = promisify(execFile);
-const GIT_TIMEOUT_MS = 10_000;
 export const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
 const DIFF_SIDE_TOO_LARGE = Symbol("diff-side-too-large");
 const BINARY_CHECK_BYTES = 8192;
@@ -1657,7 +1658,7 @@ export class HostedWorkspaceViewerService {
           "--porcelain=v1",
           "-z",
         ],
-        { timeout: GIT_TIMEOUT_MS }
+        { timeout: GIT_COMMAND_TIMEOUT_MS }
       ),
       this.getSyncCounts(repoRoot),
     ]);
@@ -1703,7 +1704,7 @@ export class HostedWorkspaceViewerService {
           "--count",
           "@{upstream}...HEAD",
         ],
-        { timeout: GIT_TIMEOUT_MS }
+        { timeout: GIT_COMMAND_TIMEOUT_MS }
       );
       const [incomingRaw, outgoingRaw] = stdout.trim().split(/\s+/);
       return {
@@ -1975,7 +1976,7 @@ export class HostedWorkspaceViewerService {
     const repoRoot = await this.requireRepoRootForPath(resolved);
     const relPath = toGitPath(this.relativeToRepo(resolved, repoRoot));
     await execFileAsync("git", ["-C", repoRoot, "add", "--", relPath], {
-      timeout: GIT_TIMEOUT_MS,
+      timeout: GIT_COMMAND_TIMEOUT_MS,
     });
   }
 
@@ -1987,7 +1988,7 @@ export class HostedWorkspaceViewerService {
     await execFileAsync(
       "git",
       ["-C", repoRoot, "restore", "--staged", "--", relPath],
-      { timeout: GIT_TIMEOUT_MS }
+      { timeout: GIT_COMMAND_TIMEOUT_MS }
     );
   }
 
@@ -2024,7 +2025,7 @@ export class HostedWorkspaceViewerService {
         "--",
         toGitPath(this.relativeToRepo(resolved, repoRoot)),
       ],
-      { timeout: GIT_TIMEOUT_MS }
+      { timeout: GIT_COMMAND_TIMEOUT_MS }
     );
   }
 
@@ -2034,7 +2035,7 @@ export class HostedWorkspaceViewerService {
     if (!message.trim()) throw new Error("Commit message is required");
     const repoRoot = await this.resolveRepoRoot(repoId);
     await execFileAsync("git", ["-C", repoRoot, "commit", "-m", message], {
-      timeout: GIT_TIMEOUT_MS,
+      timeout: getGitMutationTimeoutMs(),
     });
   }
 
@@ -2047,7 +2048,7 @@ export class HostedWorkspaceViewerService {
       this.currentRemote(repoRoot),
     ]);
     await execFileAsync("git", ["-C", repoRoot, "push"], {
-      timeout: GIT_TIMEOUT_MS,
+      timeout: getGitMutationTimeoutMs(),
     });
     return { branch, remote };
   }
@@ -2104,7 +2105,7 @@ export class HostedWorkspaceViewerService {
       this.currentRemote(repoRoot),
     ]);
     await execFileAsync("git", ["-C", repoRoot, "pull"], {
-      timeout: GIT_TIMEOUT_MS,
+      timeout: getGitMutationTimeoutMs(),
     });
     return { branch, remote };
   }
@@ -2116,7 +2117,7 @@ export class HostedWorkspaceViewerService {
       const { stdout } = await execFileAsync(
         "git",
         ["-C", repoRoot, "branch", "--show-current"],
-        { timeout: GIT_TIMEOUT_MS }
+        { timeout: GIT_COMMAND_TIMEOUT_MS }
       );
       return stdout.trim() || "HEAD";
     } catch {
@@ -2129,7 +2130,7 @@ export class HostedWorkspaceViewerService {
       const { stdout } = await execFileAsync(
         "git",
         ["-C", repoRoot, "remote"],
-        { timeout: GIT_TIMEOUT_MS }
+        { timeout: GIT_COMMAND_TIMEOUT_MS }
       );
       return stdout.trim().split("\n")[0] ?? "origin";
     } catch {
@@ -2469,7 +2470,7 @@ export class HostedWorkspaceViewerService {
       const { stdout } = await execFileAsync(
         "git",
         ["-C", repoRoot, "rev-list", "--no-walk", `@{upstream}..${headHash}`],
-        { timeout: GIT_TIMEOUT_MS }
+        { timeout: GIT_COMMAND_TIMEOUT_MS }
       );
       return new Set(stdout.trim().split("\n").filter(Boolean));
     } catch {
@@ -2590,15 +2591,15 @@ export class HostedWorkspaceViewerService {
     const [branchName, headHashResult, upstreamCommitsResult] =
       await Promise.allSettled([
         execFileAsync("git", ["-C", repoRoot, "branch", "--show-current"], {
-          timeout: GIT_TIMEOUT_MS,
+          timeout: GIT_COMMAND_TIMEOUT_MS,
         }),
         execFileAsync("git", ["-C", repoRoot, "rev-parse", "HEAD"], {
-          timeout: GIT_TIMEOUT_MS,
+          timeout: GIT_COMMAND_TIMEOUT_MS,
         }),
         execFileAsync(
           "git",
           ["-C", repoRoot, "rev-list", "--no-walk", "@{upstream}..HEAD"],
-          { timeout: GIT_TIMEOUT_MS }
+          { timeout: GIT_COMMAND_TIMEOUT_MS }
         ),
       ]);
 
@@ -2647,7 +2648,7 @@ export class HostedWorkspaceViewerService {
           "--quiet",
           `refs/heads/${name}`,
         ],
-        { timeout: GIT_TIMEOUT_MS }
+        { timeout: GIT_COMMAND_TIMEOUT_MS }
       );
       return name;
     } catch {
@@ -2666,10 +2667,10 @@ export class HostedWorkspaceViewerService {
     await execFileAsync(
       "git",
       ["-C", repoRoot, "cat-file", "-e", `${hash}^{commit}`],
-      { timeout: GIT_TIMEOUT_MS }
+      { timeout: GIT_COMMAND_TIMEOUT_MS }
     );
     await execFileAsync("git", ["-C", repoRoot, "checkout", hash], {
-      timeout: GIT_TIMEOUT_MS,
+      timeout: getGitMutationTimeoutMs(),
     });
     return { detached: true };
   }
@@ -2688,7 +2689,7 @@ export class HostedWorkspaceViewerService {
       throw new Error("Branch does not exist");
     }
     await execFileAsync("git", ["-C", repoRoot, "checkout", localBranch], {
-      timeout: GIT_TIMEOUT_MS,
+      timeout: getGitMutationTimeoutMs(),
     });
     return { branch: localBranch };
   }
