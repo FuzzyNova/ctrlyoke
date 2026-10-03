@@ -94,6 +94,7 @@ import {
   assertStartedStepPositionsPreserved,
   assertStepMutable,
   ensureStepIds,
+  findStepById,
   findStepIndexById,
   resetStepRuntimeForRewind,
 } from "./StepIdentity";
@@ -2995,6 +2996,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     });
     const identifiedSteps = ensureStepIds(nextTopology.steps, this.state.steps);
     this.state.steps = identifiedSteps.map((newStep, i) => {
+      const incomingStepId = nextTopology.steps[i]._runtime?.stepId;
+      const incomingHasStepId =
+        incomingStepId !== undefined && incomingStepId.length > 0;
       const persistableStep = stripViewOnlyWorkflowStepFields(newStep);
       const suppressSuffixRuntime =
         this.state.pendingRewind !== undefined &&
@@ -3002,24 +3006,38 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       const runtimeSafeStep = suppressSuffixRuntime
         ? resetStepRuntimeForRewind(persistableStep)
         : persistableStep;
-      const existing = this.state.steps[i];
+      const existing =
+        incomingHasStepId && incomingStepId !== undefined
+          ? findStepById(this.state.steps, incomingStepId)
+          : this.state.steps[i];
       const existingRuntime =
         !suppressSuffixRuntime &&
         existing &&
-        this.getStepIdentityKey(existing) ===
-          this.getStepIdentityKey(runtimeSafeStep)
+        (incomingHasStepId ||
+          this.getStepIdentityKey(existing) ===
+            this.getStepIdentityKey(runtimeSafeStep))
           ? existing._runtime
           : undefined;
       const archivedRuntime = suppressSuffixRuntime
         ? undefined
-        : this.getArchivedRuntime(runtimeSafeStep, i);
+        : this.getArchivedRuntime(runtimeSafeStep, i, incomingHasStepId);
       const runtime = this.mergeRuntimeMetadata(
         archivedRuntime,
-        suppressSuffixRuntime ? undefined : runtimeSafeStep._runtime,
+        suppressSuffixRuntime
+          ? undefined
+          : incomingHasStepId
+            ? runtimeSafeStep._runtime
+            : { ...runtimeSafeStep._runtime, stepId: undefined },
         existingRuntime
       );
-      const persistableRuntime =
-        this.stripHistoryOnlyRuntimeFieldsForUndoRedo(runtime);
+      const persistableRuntime = this.stripHistoryOnlyRuntimeFieldsForUndoRedo(
+        runtime && incomingHasStepId && incomingStepId !== undefined
+          ? { ...runtime, stepId: incomingStepId }
+          : {
+              ...runtime,
+              stepId: runtime?.stepId ?? runtimeSafeStep._runtime?.stepId,
+            }
+      );
       if (!existingRuntime && !runtimeSafeStep._runtime && archivedRuntime) {
         restoredFromArchive++;
       }
@@ -3210,7 +3228,12 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     index: number
   ): string[] {
     const identity = this.getStepIdentityKey(step);
-    return [`${index}\0${identity}`, identity];
+    const stepId = step._runtime?.stepId;
+    return [
+      ...(stepId === undefined ? [] : [`stepId\0${stepId}`]),
+      `${index}\0${identity}`,
+      identity,
+    ];
   }
 
   private archiveStepRuntime(
@@ -3233,13 +3256,21 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
   private getArchivedRuntime(
     step: WorkflowStep,
-    index: number
+    index: number,
+    matchByStepId: boolean
   ): PromptRuntimeMetadata | undefined {
     const boundary = this.state.pendingRewind?.fromStepIndex;
     if (boundary !== undefined && index >= boundary) {
       return undefined;
     }
-    for (const key of this.getStepRuntimeArchiveKeys(step, index)) {
+    const stepId = matchByStepId ? step._runtime?.stepId : undefined;
+    const archiveKeys =
+      stepId === undefined
+        ? this.getStepRuntimeArchiveKeys(step, index).filter(
+            (key) => !key.startsWith("stepId\0")
+          )
+        : [`stepId\0${stepId}`];
+    for (const key of archiveKeys) {
       const runtime = this.runtimeArchive.get(key);
       if (runtime) {
         return { ...runtime };

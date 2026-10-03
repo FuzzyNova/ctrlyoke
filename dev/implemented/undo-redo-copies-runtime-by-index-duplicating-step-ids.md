@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-03 by bug-hunt final step (claude-cli); both paths reproduced against the compiled modules with a `vscode` stub
 - **Area:** `src/core/WorkingFileManager.ts` (`syncStepsForUndoRedoAtRun`, ~1632-1680), `src/core/PromptQueue.ts` (`syncStepsForUndoRedo`, ~2975-3030)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

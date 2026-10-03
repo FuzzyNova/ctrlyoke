@@ -2069,6 +2069,102 @@ suite("WorkingFileManager", () => {
       assert.ok(result.workingFile.steps![1]._runtime?.completedAt);
     });
 
+    test("syncStepsForUndoRedoAtRun restores runtime by stepId after deleting a middle pending step", async () => {
+      workspace = await fs.mkdtemp(path.join(os.tmpdir(), "cy-ws-undo-id-"));
+      const sourceSteps: PromptStep[] = [
+        {
+          prompt: "done",
+          _runtime: { sessionId: "session-done", startedAt: 1, completedAt: 2 },
+        },
+        { prompt: "A" },
+        {
+          prompt: "B",
+          _runtime: {
+            sessionId: "session-b",
+            startedAt: 10,
+            completedAt: 20,
+          },
+        },
+      ];
+      const draft = new WorkingFileManager(makeMockAccess());
+      const { workflowKey } = await draft.createWorkingFile(
+        "undo-id-source",
+        sourceSteps,
+        workspace,
+        "Undo ID source"
+      );
+      const access = makeMockAccess();
+      access.getSteps = () => sourceSteps;
+      access.getCurrentIndex = () => 1;
+      const promoted = await new WorkingFileManager(access).promoteToNewRun(
+        workspace,
+        workflowKey,
+        Date.now()
+      );
+      const before = JSON.parse(
+        await fs.readFile(promoted.workingFilePath, "utf8")
+      ) as WorkingFile;
+      const [doneStep, stepA, stepB] = before.steps!;
+      assert.ok(doneStep._runtime?.stepId);
+      assert.ok(stepA._runtime?.stepId);
+      assert.ok(stepB._runtime?.stepId);
+
+      const deleted = await WorkingFileManager.deleteStepAtRun(
+        workspace,
+        workflowKey,
+        promoted.runRef,
+        1,
+        before.definitionRevision!
+      );
+      const restored = await WorkingFileManager.syncStepsForUndoRedoAtRun(
+        workspace,
+        workflowKey,
+        promoted.runRef,
+        [
+          {
+            prompt: "done",
+            _runtime: {
+              ...doneStep._runtime!,
+            },
+          },
+          { prompt: "A", _runtime: { stepId: stepA._runtime!.stepId } },
+          { prompt: "B", _runtime: { stepId: stepB._runtime!.stepId } },
+        ],
+        deleted.definitionRevision
+      );
+
+      assert.deepStrictEqual(
+        restored.workingFile.steps!.map((step) => step._runtime?.stepId),
+        [
+          doneStep._runtime!.stepId,
+          stepA._runtime!.stepId,
+          stepB._runtime!.stepId,
+        ]
+      );
+      assert.strictEqual(
+        restored.workingFile.steps![1]._runtime?.completedAt,
+        undefined
+      );
+      assert.strictEqual(
+        restored.workingFile.steps![1]._runtime?.sessionId,
+        undefined
+      );
+      assert.strictEqual(
+        restored.workingFile.steps![2]._runtime?.sessionId,
+        "session-b"
+      );
+
+      const inserted = await WorkingFileManager.insertStepAtRun(
+        workspace,
+        workflowKey,
+        promoted.runRef,
+        1,
+        { prompt: "inserted" },
+        restored.definitionRevision
+      );
+      assert.strictEqual(inserted.workingFile.steps!.length, 4);
+    });
+
     test("updatePropertiesAtRun applies a diff and updateWorkflowNameAtRun renames", async () => {
       const { workflowKey, runRef } = await makeIdleRun();
 
