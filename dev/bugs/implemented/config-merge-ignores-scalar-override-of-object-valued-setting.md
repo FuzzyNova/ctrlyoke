@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (Claude)
 - **Area:** `src/config/CtrlYokeConfigService.ts` (`deepMerge`)
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

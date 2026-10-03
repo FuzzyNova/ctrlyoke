@@ -189,8 +189,10 @@ function deepMerge<T extends Record<string, unknown>>(
     const sourceVal = source[key];
     const targetVal = result[key];
     const settingPath = prefix ? `${prefix}.${String(key)}` : String(key);
+    const settingDefault = getSettingDefault(settingPath);
+    const isObjectSection = isPlainObject(settingDefault);
     if (
-      isPlainObject(targetVal) &&
+      isObjectSection &&
       !isPlainObject(sourceVal) &&
       !(
         sourceVal === null &&
@@ -200,6 +202,7 @@ function deepMerge<T extends Record<string, unknown>>(
       continue;
     }
     if (
+      isObjectSection &&
       isPlainObject(sourceVal) &&
       isPlainObject(targetVal)
     ) {
@@ -212,10 +215,10 @@ function deepMerge<T extends Record<string, unknown>>(
       isPlainObject(sourceVal) &&
       targetVal === null &&
       schemaAllowsNull(getSettingSchema(settingPath) ?? {}) &&
-      isPlainObject(getSettingDefault(settingPath))
+      isObjectSection
     ) {
       result[key] = deepMerge(
-        getSettingDefault(settingPath) as Record<string, unknown>,
+        settingDefault as Record<string, unknown>,
         sourceVal,
         settingPath
       ) as T[keyof T];

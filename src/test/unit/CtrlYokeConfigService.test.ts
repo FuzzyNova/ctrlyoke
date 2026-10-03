@@ -137,6 +137,73 @@ suite("CtrlYokeConfigService", () => {
     );
   });
 
+  test("higher scopes replace union-valued object leaves wholesale", () => {
+    const cases: Array<{
+      name: string;
+      setting: "worktree" | "priorContext";
+      user: PartialCtrlYokeSettings;
+      workspace: PartialCtrlYokeSettings;
+      expected: unknown;
+    }> = [
+      {
+        name: "worktree object with false",
+        setting: "worktree",
+        user: { defaults: { worktree: { mode: "managed", merge: true } } },
+        workspace: { defaults: { worktree: false } },
+        expected: false,
+      },
+      {
+        name: "worktree object with shorthand string",
+        setting: "worktree",
+        user: { defaults: { worktree: { mode: "managed" } } },
+        workspace: { defaults: { worktree: "feature-x" } },
+        expected: "feature-x",
+      },
+      {
+        name: "worktree object with another object variant",
+        setting: "worktree",
+        user: {
+          defaults: { worktree: { mode: "managed", merge: true, keep: true } },
+        },
+        workspace: { defaults: { worktree: { mode: "named", branch: "dev" } } },
+        expected: { mode: "named", branch: "dev" },
+      },
+      {
+        name: "priorContext object with keyword string",
+        setting: "priorContext",
+        user: { defaults: { priorContext: { previous: 2 } } },
+        workspace: { defaults: { priorContext: "none" } },
+        expected: "none",
+      },
+      {
+        name: "priorContext object with number array",
+        setting: "priorContext",
+        user: { defaults: { priorContext: { previous: 2 } } },
+        workspace: { defaults: { priorContext: [1, 3] } },
+        expected: [1, 3],
+      },
+    ];
+
+    for (const testCase of cases) {
+      const caseService = new CtrlYokeConfigService();
+      caseService.setUserBackend(makeBackend(testCase.user));
+      caseService.setWorkspaceBackend(makeBackend(testCase.workspace));
+
+      assert.deepStrictEqual(
+        caseService.get("defaults")[testCase.setting],
+        testCase.expected,
+        testCase.name
+      );
+      const resolved = caseService.resolve("defaults");
+      assert.strictEqual(resolved.source, "workspace", testCase.name);
+      assert.deepStrictEqual(
+        resolved.value,
+        caseService.get("defaults"),
+        testCase.name
+      );
+    }
+  });
+
   test("keeps schema-nullable toolPermissions null from user and workspace scopes", () => {
     service.setUserBackend(
       makeBackend({ defaults: { toolPermissions: null } })
