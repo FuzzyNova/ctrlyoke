@@ -968,7 +968,9 @@ $defs:
     properties:
       script:
         type: string
-        description: Shell command or path to script. Resolved relative to workspace root or .ctrlyoke/.
+        description: >-
+          Shell command or path to script. Relative paths are checked in this order: execution
+          directory, workspace root, `.ctrlyoke/`, then `~/.ctrlyoke/scripts/`.
       env:
         type: object
         additionalProperties:
@@ -1028,8 +1030,8 @@ $defs:
           match on trimmed text; numeric when compareSource is exitCode). 'contains'/'notContains'
           are substring tests. 'gte'/'gt'/'lte'/'lt' are numeric and fail when either side is not a
           number. 'matches' treats `expected` as an unanchored regular expression — add ^ and $ to
-          require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Word tokens only:
-          `operator: >=` is a YAML parse error and `operator: !=` silently parses as a YAML tag.
+          require a full match. 'isEmpty'/'isNotEmpty' take no `expected`. Use word tokens such as
+          `gte` and `ne`; `operator: >=` and `operator: !=` are YAML parse errors.
       expected:
         type:
           - string

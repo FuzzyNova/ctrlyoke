@@ -79,7 +79,7 @@ recipe: keep working while the condition passes, and advance once it fails.
 | `operator`             | How to compare: `eq` (default), `ne`, `contains`, `notContains`, `gte`, `gt`, `lte`, `lt`, `matches`, `isEmpty`, `isNotEmpty`                                                                        |
 | `expected`             | Value to compare against. Omit it to pass on exit code 0                                                                                                                                             |
 | `ignoreCase`           | Case-insensitive text compare (string operators only)                                                                                                                                                |
-| `maxRetries`           | Shared retry limit across pass and failure retries. `0` = none, `-1` = unlimited, max `100`. Unset: `1` when `onPass`/`onFail` is `retry`, else the `defaults.endCondition.maxRetries` setting (`0`) |
+| `maxRetries`           | Shared retry limit across pass and failure retries. `0` = none, `-1` = unlimited, max `100`. Unset: `1` when `onPass`/`onFail` is `retry`; otherwise the configured default applies only when this condition has its own `retryPrompt`, and the limit is `0` without one |
 | `retryPrompt`          | Optional template sent after validation failure; `onFail: retry` uses a fallback prompt when no template is configured                                                                               |
 | `passRetryPrompt`      | Template sent after validation passes with `onPass: retry`                                                                                                                                           |
 | `resumeSessionOnRetry` | Whether retries stay in the same conversation (default `true`)                                                                                                                                       |
@@ -130,10 +130,9 @@ Three things worth knowing:
   interactive script execution. The sanitized stdout/stderr are also used by
   `$endCondition:*` and `$preCondition:*` output references.
 
-Operators are word tokens (`gte`, not `>=`) because symbols are not usable as
-YAML values — `operator: >=` is a parse error, and `operator: !=` parses as a YAML
-tag and silently becomes an empty string. The dashboard still shows you `>=`
-and `!=`.
+Operators are word tokens (`gte`, not `>=`). Both `operator: >=` and
+`operator: !=` are YAML parse errors. The dashboard still shows you `>=` and
+`!=`.
 
 ## Pre-condition
 

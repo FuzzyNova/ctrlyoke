@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli subagent), verified against code and `ctrlyoke validate`
 - **Area:** `docs/workflows/end-conditions.md`, `docs/workflows/dynamic-queue.md`, `schemas/workflow-schema.json` (feeds the generated `docs/reference/workflow-schema.md`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
