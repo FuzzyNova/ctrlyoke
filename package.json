@@ -99,6 +99,11 @@
         "category": "ctrlyoke"
       },
       {
+        "command": "ctrlyoke.reviewWorkspaceSettingsTrust",
+        "title": "Review Workspace Settings That Run Programs",
+        "category": "ctrlyoke"
+      },
+      {
         "command": "ctrlyoke.showGettingStarted",
         "title": "Show Getting Started",
         "category": "ctrlyoke"

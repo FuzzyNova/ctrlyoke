@@ -52,7 +52,11 @@ export class FileConfigBackend implements ConfigBackend {
   private newerSchemaVersion?: number;
   private hasInvalidContent = false;
 
-  constructor(private readonly configPath: string) {
+  constructor(
+    private readonly configPath: string,
+    /** Set for a workspace-scope backend; see `ConfigBackend.workspaceRoot`. */
+    readonly workspaceRoot?: string
+  ) {
     this.state = getBackendState(configPath);
   }
 
@@ -99,11 +103,7 @@ export class FileConfigBackend implements ConfigBackend {
           `Cannot update settings file because it contains invalid JSON: ${this.configPath}`
         );
       }
-      this.setNestedValue(
-        current as Record<string, unknown>,
-        pathParts,
-        value
-      );
+      this.setNestedValue(current as Record<string, unknown>, pathParts, value);
       await this.save(current);
       this.state.cache = undefined;
     });
@@ -228,5 +228,5 @@ export function createWorkspaceConfigBackend(
   workspaceRoot: string
 ): FileConfigBackend {
   const configPath = path.join(workspaceRoot, ".ctrlyoke", "settings.json");
-  return new FileConfigBackend(configPath);
+  return new FileConfigBackend(configPath, workspaceRoot);
 }

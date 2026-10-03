@@ -77,7 +77,11 @@ export class McpManagerService {
   private async emitManagedRegistryServers(
     ctx: WebviewClientContext
   ): Promise<void> {
-    const servers = await this.getRegistryFileManager().readAll();
+    // The manager edits the registry files as written, including workspace
+    // entries still awaiting approval; execution paths read them gated.
+    const servers = await this.getRegistryFileManager().readAll({
+      includeUntrustedWorkspaceServers: true,
+    });
     ctx.emit({
       type: MESSAGE_TYPES.MCP_REGISTRY_SERVERS_UPDATE,
       servers,

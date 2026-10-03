@@ -93,7 +93,7 @@
         },
         "additionalArgs": {
           "type": "object",
-          "description": "The default additional CLI arguments for each harness for new workflows.",
+          "description": "The default additional CLI arguments for each harness for new workflows. A workspace-scope value takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies.",
           "properties": {
             "copilot-cli": {
               "type": "string"
@@ -159,7 +159,7 @@
         },
         "mcpServers": {
           "type": "array",
-          "description": "Default MCP servers to attach to each prompt execution.",
+          "description": "Default MCP servers to attach to each prompt execution. A workspace-scope entry that launches a command takes effect only after you approve that exact entry on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies.",
           "items": {
             "$ref": "workflow.json#/$defs/mcpServerEntry"
           },
@@ -167,7 +167,7 @@
         },
         "hooks": {
           "type": "array",
-          "description": "User-defined hooks to run at various execution lifecycle points.",
+          "description": "User-defined hooks to run at various execution lifecycle points. A workspace-scope hook takes effect only after you approve that exact hook on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies.",
           "items": {
             "$ref": "workflow.json#/$defs/userHookConfig"
           },
@@ -217,12 +217,12 @@
         },
         "endCondition": {
           "$ref": "workflow.json#/$defs/endConditionDefault",
-          "description": "Default end condition for new workflows. `null` (the default) means new workflows have no end condition.",
+          "description": "Default end condition for new workflows. `null` (the default) means new workflows have no end condition. A workspace-scope value takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies.",
           "default": null
         },
         "preCondition": {
           "$ref": "workflow.json#/$defs/preConditionDefault",
-          "description": "Default pre-condition for new workflows. `null` (the default) means new workflows have no pre-condition.",
+          "description": "Default pre-condition for new workflows. `null` (the default) means new workflows have no pre-condition. A workspace-scope value takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies.",
           "default": null
         },
         "worktree": {
@@ -586,7 +586,7 @@
         },
         "shellExecutable": {
           "type": "string",
-          "description": "Override the shell spawned for user terminal sessions. Empty means auto-detect.",
+          "description": "Override the shell spawned for user terminal sessions and for inline script text. Empty means auto-detect. A workspace-scope value takes effect only after you approve that exact value on this machine, through the VS Code prompt or `ctrlyoke trust-workspace-settings`; until then the user value applies.",
           "default": ""
         },
         "mobileControlBar": {

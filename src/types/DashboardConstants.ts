@@ -1746,7 +1746,21 @@ export const SETTING_PATHS = {
   DIAGNOSTICS_LOG_RAW_CLI_OUTPUT: "diagnostics.logRawCliOutput",
   USAGE_TRACKING_ENABLED: "usageTracking.enabled",
   USAGE_TRACKING_PERCENT_DIRECTION: "usageTracking.percentDirection",
+  TERMINAL_SHELL_EXECUTABLE: "terminal.shellExecutable",
+  DEFAULTS_ADDITIONAL_ARGS: "defaults.additionalArgs",
+  DEFAULTS_HOOKS: "defaults.hooks",
+  DEFAULTS_MCP_SERVERS: "defaults.mcpServers",
+  DEFAULTS_END_CONDITION: "defaults.endCondition",
+  DEFAULTS_PRE_CONDITION: "defaults.preCondition",
 } as const;
+
+/**
+ * Pseudo setting path under which workspace MCP registry entries are
+ * recorded in the workspace-settings trust store. The registry is its own
+ * file, not a setting, but a stdio entry there names a command exactly like
+ * `defaults.mcpServers` does.
+ */
+export const WORKSPACE_MCP_REGISTRY_TRUST_PATH = "mcpRegistry";
 
 // ============================================================================
 // HARNESS INFO - Display names and labels per harness
@@ -4408,6 +4422,7 @@ export type RetryPromptPlaceholder =
 export const VSCODE_COMMANDS = {
   RESOLVE_OUTPUT_CAPTURE: "ctrlyoke.resolveOutputCapture",
   OPEN_SECRETS_SETTINGS: "ctrlyoke.openSecretsSettings",
+  REVIEW_WORKSPACE_SETTINGS_TRUST: "ctrlyoke.reviewWorkspaceSettingsTrust",
   ENABLE_SERVER: "ctrlyoke.enableServer",
   DISABLE_SERVER: "ctrlyoke.disableServer",
   REGENERATE_SERVER_TOKEN: "ctrlyoke.regenerateServerToken",

@@ -6,7 +6,19 @@ import {
   MCP_TRANSPORTS,
   SETTING_SCOPES,
   SPECIAL_TARGET_IDS,
+  TRUST_DECISIONS,
 } from "../types/DashboardConstants";
+import {
+  collectWorkspaceMcpRegistryRequests,
+  workspaceSensitiveSettingRequestKey,
+  type WorkspaceSensitiveSettingRequest,
+} from "../config/WorkspaceSensitiveSettings";
+import {
+  WorkspaceSettingsTrustStore,
+  workspaceSettingsTrustStore,
+  type WorkspaceSettingsTrustDecisions,
+} from "../config/WorkspaceSettingsTrustStore";
+import type { WorkspaceSensitiveSettingState } from "../config/CtrlYokeConfigService";
 import type { McpServerConfig } from "../types/CtrlYokeTypes";
 import type { ManagedMcpServer } from "../types/WebviewMessageTypes";
 import { Log } from "./Log";
@@ -99,11 +111,10 @@ async function writeJsonFileAtomic(
   await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
   const tempPath = uniqueAtomicTempPath(filePath);
   try {
-    await fs.promises.writeFile(
-      tempPath,
-      JSON.stringify(data, null, 2),
-      { encoding: "utf-8", flag: "wx" }
-    );
+    await fs.promises.writeFile(tempPath, JSON.stringify(data, null, 2), {
+      encoding: "utf-8",
+      flag: "wx",
+    });
     await fs.promises.rename(tempPath, filePath);
   } catch (error) {
     await fs.promises.unlink(tempPath).catch(() => undefined);
@@ -169,16 +180,36 @@ function hasServerId(entry: unknown, id: string): boolean {
   );
 }
 
-export class McpRegistryFileManager {
-  constructor(private readonly workspaceRoot?: string) {}
+export interface McpRegistryReadOptions {
+  /**
+   * Include workspace entries that launch a command the user has not
+   * approved. Only for showing the registry files as written (the MCP
+   * manager); anything that attaches servers must leave this off.
+   */
+  includeUntrustedWorkspaceServers?: boolean;
+}
 
-  async readAll(): Promise<ManagedMcpServer[]> {
+export class McpRegistryFileManager {
+  constructor(
+    private readonly workspaceRoot?: string,
+    private readonly trust: WorkspaceSettingsTrustDecisions = workspaceSettingsTrustStore
+  ) {}
+
+  async readAll(
+    options: McpRegistryReadOptions = {}
+  ): Promise<ManagedMcpServer[]> {
     const workspacePath = this.getScopePath(SETTING_SCOPES.WORKSPACE);
     const userPath = this.getScopePath(SETTING_SCOPES.USER);
-    const [workspaceServers, userServers] = await Promise.all([
+    const [requestedWorkspaceServers, userServers] = await Promise.all([
       this.readScope(SETTING_SCOPES.WORKSPACE),
       this.readScope(SETTING_SCOPES.USER),
     ]);
+    const workspaceServers = options.includeUntrustedWorkspaceServers
+      ? requestedWorkspaceServers
+      : this.withholdUntrustedWorkspaceServers(
+          requestedWorkspaceServers,
+          userServers
+        );
 
     const byId = new Map<string, ManagedMcpServer>();
 
@@ -255,6 +286,22 @@ export class McpRegistryFileManager {
     return servers;
   }
 
+  /**
+   * Workspace registry entries that launch a command, with the user's
+   * recorded decision (`undefined` = not yet decided). Entries identical
+   * to the user's own registry entry are not listed.
+   */
+  async getWorkspaceTrustStates(): Promise<WorkspaceSensitiveSettingState[]> {
+    const identity = this.getWorkspaceTrustIdentity();
+    const requests = await this.readWorkspaceTrustRequests();
+    return requests.map((request) => ({
+      request,
+      decision: identity
+        ? this.trust.getDecision(identity, request)
+        : undefined,
+    }));
+  }
+
   async addOrUpdate(
     server: McpServerConfig,
     scope: SettingWriteScope
@@ -264,6 +311,10 @@ export class McpRegistryFileManager {
     }
 
     const filePath = this.getRequiredScopePath(scope);
+    const requestedBefore =
+      scope === SETTING_SCOPES.WORKSPACE
+        ? await this.readWorkspaceTrustRequests()
+        : undefined;
     await serializeMutation(filePath, async () => {
       const next = await readRawArrayForMutation(filePath);
       const existingIndex = next.findIndex((entry) =>
@@ -278,6 +329,9 @@ export class McpRegistryFileManager {
 
       await writeJsonFileAtomic(filePath, next);
     });
+    if (requestedBefore) {
+      await this.approveNewWorkspaceServers(requestedBefore);
+    }
   }
 
   async remove(id: string, scope: SettingWriteScope): Promise<void> {
@@ -287,6 +341,67 @@ export class McpRegistryFileManager {
       const next = current.filter((entry) => !hasServerId(entry, id));
       await writeJsonFileAtomic(filePath, next);
     });
+  }
+
+  private getWorkspaceTrustIdentity(): string | undefined {
+    return this.workspaceRoot
+      ? WorkspaceSettingsTrustStore.canonicalizeWorkspace(this.workspaceRoot)
+      : undefined;
+  }
+
+  private async readWorkspaceTrustRequests(): Promise<
+    WorkspaceSensitiveSettingRequest[]
+  > {
+    const [workspaceServers, userServers] = await Promise.all([
+      this.readScope(SETTING_SCOPES.WORKSPACE),
+      this.readScope(SETTING_SCOPES.USER),
+    ]);
+    return collectWorkspaceMcpRegistryRequests(workspaceServers, userServers);
+  }
+
+  /**
+   * Drop workspace entries that launch an unapproved command, so a
+   * same-ID user entry keeps applying. Undecided ones are reported so a host
+   * can ask the user.
+   */
+  private withholdUntrustedWorkspaceServers(
+    workspaceServers: McpServerConfig[],
+    userServers: McpServerConfig[]
+  ): McpServerConfig[] {
+    const identity = this.getWorkspaceTrustIdentity();
+    const undecided: WorkspaceSensitiveSettingRequest[] = [];
+    const trusted = workspaceServers.filter((server) => {
+      const [request] = collectWorkspaceMcpRegistryRequests(
+        [server],
+        userServers
+      );
+      if (!request) return true;
+      const decision = identity
+        ? this.trust.getDecision(identity, request)
+        : undefined;
+      if (decision === undefined) undecided.push(request);
+      return decision === TRUST_DECISIONS.ALLOW;
+    });
+    if (identity && undecided.length > 0) {
+      this.trust.reportUndecided(identity, undecided);
+    }
+    return trusted;
+  }
+
+  /** A workspace entry the user saved through ctrlyoke is their own choice. */
+  private async approveNewWorkspaceServers(
+    before: readonly WorkspaceSensitiveSettingRequest[]
+  ): Promise<void> {
+    const identity = this.getWorkspaceTrustIdentity();
+    if (!identity) return;
+    const previousKeys = new Set(
+      before.map((request) => workspaceSensitiveSettingRequestKey(request))
+    );
+    const added = (await this.readWorkspaceTrustRequests()).filter(
+      (request) =>
+        !previousKeys.has(workspaceSensitiveSettingRequestKey(request))
+    );
+    await this.trust.setDecisions(identity, added, TRUST_DECISIONS.ALLOW);
   }
 
   private getRequiredScopePath(scope: SettingWriteScope): string {

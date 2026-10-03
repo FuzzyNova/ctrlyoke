@@ -41,6 +41,7 @@ import type {
   TrustSecretGrantsOptions,
 } from "./SecretCommandDefinitions";
 import { resolveCliFileArgument } from "./CliFileArgument";
+import { promptYesNo } from "./CliPrompt";
 
 export interface SecretCommandIo {
   writeOut(message: string): void;
@@ -402,20 +403,6 @@ async function confirmMutation(
   if (yes) return true;
   if (!io.isInteractive) return false;
   return io.confirm(question);
-}
-
-async function promptYesNo(question: string): Promise<boolean> {
-  const readline = await import("node:readline/promises");
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stderr,
-  });
-  try {
-    const answer = await rl.question(question);
-    return answer.toLowerCase().startsWith("y");
-  } finally {
-    rl.close();
-  }
 }
 
 async function readSecretFromStdin(): Promise<string> {

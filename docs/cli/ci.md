@@ -113,7 +113,7 @@ Antigravity don't enforce allow and deny lists.
 
 ## Approvals on a fresh runner
 
-Trust decisions (external directory roots, secret grants) are recorded per machine, so a fresh
+Trust decisions (external directory roots, secret grants, workspace settings that run programs) are recorded per machine, so a fresh
 runner has none. `run` exits `2` and names the missing approval. Record approvals in the job
 before running, with `--yes`, and only for workflow files your repository controls:
 
@@ -121,6 +121,7 @@ before running, with `--yes`, and only for workflow files your repository contro
 ctrlyoke trust-external-roots --yes
 ctrlyoke trust-workflow-external-roots workflows/release.ctrlyoke.yaml --yes
 ctrlyoke trust-secret-grants workflows/release.ctrlyoke.yaml --yes
+ctrlyoke trust-workspace-settings --yes
 ```
 
 ## Secrets

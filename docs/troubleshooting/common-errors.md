@@ -40,6 +40,15 @@ has reviewed on this machine. Approve them when VS Code prompts you, or run
 that have not been approved yet" refers to a workflow's `trustedExternalRoots`; run
 `ctrlyoke trust-workflow-external-roots <file>`. Both block the run until approved.
 
+## "This workspace's settings choose programs for ctrlyoke to run"
+
+The workspace's `.ctrlyoke/settings.json` or MCP registry sets a shell, hook, MCP server, harness
+flag, or default script that nobody has reviewed on this machine. ctrlyoke ignores these values
+until you approve them. In a terminal, `ctrlyoke run` asks about each one. Without a terminal, it
+exits with code `2`. Run `ctrlyoke trust-workspace-settings` to review them. In VS Code, the
+dashboard asks when it opens. See
+[Settings that run programs](/reference/settings#settings-that-run-programs).
+
 ## "This workflow requests secret grants that have not been approved yet"
 
 Approve the workflow's secret grants from the ctrlyoke panel in VS Code or with

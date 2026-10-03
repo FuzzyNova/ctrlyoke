@@ -15,6 +15,7 @@ ctrlyoke about [--json]
 ctrlyoke trust-external-roots [--yes] [--cwd <path>]
 ctrlyoke trust-workflow-external-roots <file> [--yes] [--cwd <path>]
 ctrlyoke trust-secret-grants <file> [--yes] [--cwd <path>]
+ctrlyoke trust-workspace-settings [--yes] [--all] [--cwd <path>]
 ctrlyoke history prune [--yes]
 ctrlyoke history relink <oldPath> <newPath> [--yes]
 ctrlyoke history list [--cwd <path>] [--all] [--state <state...>] [--since <when>] [--sort latest|name] [--limit <n>] [--json]
@@ -177,6 +178,10 @@ ctrlyoke run review.ctrlyoke.yaml --dry-run
   reviewed: run `ctrlyoke trust-workflow-external-roots <file>`
 - the workflow declares secret grants that have not been approved: run
   `ctrlyoke trust-secret-grants <file>`
+- the workspace settings choose a program to run (a shell, hook, MCP server,
+  harness flag, or default script) that has not been reviewed, and there is no
+  terminal to ask in: run `ctrlyoke trust-workspace-settings`. In a terminal,
+  `run` asks about each value instead and then continues.
 
 ## `ctrlyoke rerun`
 
@@ -341,6 +346,22 @@ ctrlyoke trust-secret-grants deploy.ctrlyoke.yaml --yes
 ```
 
 Declining records a deny decision; the grants stay blocked until approved.
+
+## `ctrlyoke trust-workspace-settings`
+
+Review the workspace settings that choose a program for ctrlyoke to run. See
+[Settings that run programs](/reference/settings#settings-that-run-programs)
+for the list:
+
+```bash
+ctrlyoke trust-workspace-settings
+ctrlyoke trust-workspace-settings --all
+```
+
+The command asks about each value that has no decision yet. Answering no
+records a deny decision, and ctrlyoke uses your user value instead. `--all`
+also lists values you already answered, so you can change an answer. `--yes`
+allows every listed value without asking.
 
 ## `ctrlyoke secret`
 

@@ -8,9 +8,22 @@ import workflowSchema from "../../schemas/workflow-schema.json";
 import {
   SETTING_SCOPES,
   SETTING_PATHS,
+  TRUST_DECISIONS,
   type SettingScope,
   type SettingWriteScope,
 } from "../types/DashboardConstants";
+import {
+  collectWorkspaceSensitiveSettingRequests,
+  removeUntrustedWorkspaceSensitiveSettings,
+  workspaceSensitiveSettingRequestKey,
+  type WorkspaceSensitiveSettingRequest,
+} from "./WorkspaceSensitiveSettings";
+import {
+  WorkspaceSettingsTrustStore,
+  workspaceSettingsTrustStore,
+  type WorkspaceSettingTrustDecision,
+  type WorkspaceSettingsTrustDecisions,
+} from "./WorkspaceSettingsTrustStore";
 
 export type SettingSource = "cli" | SettingScope;
 
@@ -25,6 +38,19 @@ export interface ConfigBackend {
   /** Backing file path used in diagnostics when available. */
   readonly filePath?: string;
   readonly isReadOnly?: boolean;
+  /**
+   * Root of the workspace a workspace-scope backend belongs to. It is the
+   * identity the user's decisions about this workspace's sensitive settings
+   * are recorded under; without it, every sensitive workspace value is
+   * withheld.
+   */
+  readonly workspaceRoot?: string;
+}
+
+/** A sensitive workspace value together with the user's recorded decision. */
+export interface WorkspaceSensitiveSettingState {
+  request: WorkspaceSensitiveSettingRequest;
+  decision: WorkspaceSettingTrustDecision | undefined;
 }
 
 const WORKSPACE_FORBIDDEN_SETTING_ROOTS = [
@@ -77,16 +103,18 @@ function resolveSchemaRef(schema: JsonSchema): JsonSchema {
   const [document = "settings.json", pointer = ""] = schema.$ref.split("#");
   const root = SCHEMA_DOCUMENTS[document.split("/").pop() ?? document];
   if (!root || !pointer) return schema;
-  return pointer
-    .split("/")
-    .filter(Boolean)
-    .map((part) => part.replace(/~1/g, "/").replace(/~0/g, "~"))
-    .reduce<JsonSchema | undefined>((current, part) => {
-      const referenced = current?.[part];
-      return referenced && typeof referenced === "object"
-        ? (referenced as JsonSchema)
-        : undefined;
-    }, root) ?? schema;
+  return (
+    pointer
+      .split("/")
+      .filter(Boolean)
+      .map((part) => part.replace(/~1/g, "/").replace(/~0/g, "~"))
+      .reduce<JsonSchema | undefined>((current, part) => {
+        const referenced = current?.[part];
+        return referenced && typeof referenced === "object"
+          ? (referenced as JsonSchema)
+          : undefined;
+      }, root) ?? schema
+  );
 }
 
 function schemaAllowsNull(
@@ -125,12 +153,10 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 function getSettingDefault(settingPath: string): unknown {
-  return settingPath
-    .split(".")
-    .reduce<unknown>((current, part) => {
-      if (!isPlainObject(current)) return undefined;
-      return current[part];
-    }, CTRLYOKE_SETTINGS_DEFAULTS);
+  return settingPath.split(".").reduce<unknown>((current, part) => {
+    if (!isPlainObject(current)) return undefined;
+    return current[part];
+  }, CTRLYOKE_SETTINGS_DEFAULTS);
 }
 
 /** Remove forbidden and malformed workspace sections without mutating data. */
@@ -152,10 +178,7 @@ function filterWorkspaceSettings(
     if (
       isPlainObject(defaultValue) &&
       !isPlainObject(value) &&
-      !(
-        value === null &&
-        schemaAllowsNull(getSettingSchema(settingPath) ?? {})
-      )
+      !(value === null && schemaAllowsNull(getSettingSchema(settingPath) ?? {}))
     ) {
       continue;
     }
@@ -238,6 +261,14 @@ export class CtrlYokeConfigService {
     ConfigBackend,
     Set<string>
   >();
+  private workspaceSettingsTrust: WorkspaceSettingsTrustDecisions =
+    workspaceSettingsTrustStore;
+  private sensitiveRequestsMemo?: {
+    workspace: PartialCtrlYokeSettings;
+    user: PartialCtrlYokeSettings | undefined;
+    requests: WorkspaceSensitiveSettingRequest[];
+  };
+  private workspaceIdentityMemo?: { root: string; identity: string };
 
   setWorkspaceBackend(backend: ConfigBackend): void {
     this.workspaceBackend = backend;
@@ -249,6 +280,44 @@ export class CtrlYokeConfigService {
 
   setCliOverlay(overlay: PartialCtrlYokeSettings): void {
     this.cliOverlay = overlay;
+  }
+
+  /** Replace the trust-decision source (tests only; defaults to the user store). */
+  setWorkspaceSettingsTrust(trust: WorkspaceSettingsTrustDecisions): void {
+    this.workspaceSettingsTrust = trust;
+    this.sensitiveRequestsMemo = undefined;
+  }
+
+  /**
+   * Canonical identity of the active workspace for trust decisions, or
+   * `undefined` when no workspace backend (or no workspace root) is set.
+   */
+  getWorkspaceTrustIdentity(): string | undefined {
+    const root = this.workspaceBackend?.workspaceRoot;
+    if (!root) return undefined;
+    if (this.workspaceIdentityMemo?.root !== root) {
+      this.workspaceIdentityMemo = {
+        root,
+        identity: WorkspaceSettingsTrustStore.canonicalizeWorkspace(root),
+      };
+    }
+    return this.workspaceIdentityMemo.identity;
+  }
+
+  /**
+   * Every sensitive value the workspace settings file requests (see
+   * `WorkspaceSensitiveSettings.ts`) with the user's recorded decision;
+   * `undefined` means not yet decided. Values identical to the user's own
+   * setting are not listed — they never need approval.
+   */
+  getWorkspaceSensitiveSettingStates(): WorkspaceSensitiveSettingState[] {
+    const identity = this.getWorkspaceTrustIdentity();
+    return this.getWorkspaceSensitiveSettingRequests().map((request) => ({
+      request,
+      decision: identity
+        ? this.workspaceSettingsTrust.getDecision(identity, request)
+        : undefined,
+    }));
   }
 
   /** Absolute path of the active user-scope settings.json backend, when configured. */
@@ -401,8 +470,41 @@ export class CtrlYokeConfigService {
     if (!backend) {
       throw new Error(`No ${scope} backend configured`);
     }
+    const sensitiveBefore =
+      scope === SETTING_SCOPES.WORKSPACE
+        ? this.getWorkspaceSensitiveSettingRequests()
+        : undefined;
     await backend.set(path, value);
+    if (sensitiveBefore) {
+      await this.approveNewWorkspaceSensitiveValues(sensitiveBefore);
+    }
     this.notify();
+  }
+
+  /**
+   * A sensitive value the user just wrote at workspace scope through ctrlyoke
+   * itself is their own choice, so record it as allowed. Only values that
+   * were not already requested are approved: an unapproved value committed
+   * to the file by someone else stays pending even if this write touched the
+   * same setting.
+   */
+  private async approveNewWorkspaceSensitiveValues(
+    before: readonly WorkspaceSensitiveSettingRequest[]
+  ): Promise<void> {
+    const identity = this.getWorkspaceTrustIdentity();
+    if (!identity) return;
+    const previousKeys = new Set(
+      before.map((request) => workspaceSensitiveSettingRequestKey(request))
+    );
+    const added = this.getWorkspaceSensitiveSettingRequests().filter(
+      (request) =>
+        !previousKeys.has(workspaceSensitiveSettingRequestKey(request))
+    );
+    await this.workspaceSettingsTrust.setDecisions(
+      identity,
+      added,
+      TRUST_DECISIONS.ALLOW
+    );
   }
 
   /** Subscribe to config changes */
@@ -460,8 +562,66 @@ export class CtrlYokeConfigService {
     this.listeners.forEach((listener) => listener());
   }
 
-  /** Return workspace settings after removing forbidden user/machine paths. */
+  /**
+   * Sensitive values requested by the workspace file, memoized on the
+   * backends' cached objects (both return the same object until written).
+   */
+  private getWorkspaceSensitiveSettingRequests(): WorkspaceSensitiveSettingRequest[] {
+    if (!this.workspaceBackend) return [];
+    const workspace = this.workspaceBackend.getAll();
+    const user = this.userBackend?.getAll();
+    const memo = this.sensitiveRequestsMemo;
+    if (memo?.workspace === workspace && memo.user === user) {
+      return memo.requests;
+    }
+    const requests = collectWorkspaceSensitiveSettingRequests(
+      this.getForbiddenFilteredWorkspaceSettings(),
+      user ?? {}
+    );
+    this.sensitiveRequestsMemo = { workspace, user, requests };
+    return requests;
+  }
+
+  /**
+   * Workspace settings with forbidden paths removed and every sensitive value
+   * the user has not allowed withheld, so the user/default value applies.
+   * Undecided values are reported to the trust store so a host can ask.
+   */
   private getWorkspaceSettings(): PartialCtrlYokeSettings {
+    const settings = this.getForbiddenFilteredWorkspaceSettings();
+    const requests = this.getWorkspaceSensitiveSettingRequests();
+    if (requests.length === 0) {
+      return settings;
+    }
+
+    const identity = this.getWorkspaceTrustIdentity();
+    const allowedKeys = new Set<string>();
+    const undecided: WorkspaceSensitiveSettingRequest[] = [];
+    for (const request of requests) {
+      const decision = identity
+        ? this.workspaceSettingsTrust.getDecision(identity, request)
+        : undefined;
+      if (decision === TRUST_DECISIONS.ALLOW) {
+        allowedKeys.add(workspaceSensitiveSettingRequestKey(request));
+      } else if (decision === undefined) {
+        undecided.push(request);
+      }
+    }
+    if (identity && undecided.length > 0) {
+      this.workspaceSettingsTrust.reportUndecided(identity, undecided);
+    }
+    if (allowedKeys.size === requests.length) {
+      return settings;
+    }
+    return removeUntrustedWorkspaceSensitiveSettings(
+      settings,
+      this.userBackend?.getAll() ?? {},
+      (request) => allowedKeys.has(workspaceSensitiveSettingRequestKey(request))
+    );
+  }
+
+  /** Return workspace settings after removing forbidden user/machine paths. */
+  private getForbiddenFilteredWorkspaceSettings(): PartialCtrlYokeSettings {
     if (!this.workspaceBackend) {
       return {};
     }

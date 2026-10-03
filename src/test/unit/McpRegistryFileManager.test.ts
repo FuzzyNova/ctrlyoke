@@ -9,6 +9,9 @@ import {
   McpRegistryFileManager,
   resolveCtrlYokeMcpInvocation,
 } from "../../utils/McpRegistryFileManager";
+import { getCtrlYokeWorkspaceMcpRegistryPath } from "../../utils/McpConfigPaths";
+import { ExternalRootsTrustStore } from "../../config/ExternalRootsTrustStore";
+import { FakeWorkspaceSettingsTrust } from "../helpers/fakeWorkspaceSettingsTrust";
 
 suite("McpRegistryFileManager", () => {
   let tempRoot: string;
@@ -127,10 +130,13 @@ suite("McpRegistryFileManager", () => {
       SETTING_SCOPES.WORKSPACE
     );
 
-    assert.deepStrictEqual(JSON.parse(await fs.readFile(registryPath, "utf-8")), [
-      { id: "existing", command: "node" },
-      { id: "added", command: "python" },
-    ]);
+    assert.deepStrictEqual(
+      JSON.parse(await fs.readFile(registryPath, "utf-8")),
+      [
+        { id: "existing", command: "node" },
+        { id: "added", command: "python" },
+      ]
+    );
   });
 
   test("refuses to mutate trailing-comma JSON and leaves the file untouched", async () => {
@@ -169,10 +175,7 @@ suite("McpRegistryFileManager", () => {
     await fs.mkdir(path.dirname(registryPath), { recursive: true });
     await fs.writeFile(
       registryPath,
-      JSON.stringify([
-        { id: "old-name", command: "old" },
-        invalidEntry,
-      ]),
+      JSON.stringify([{ id: "old-name", command: "old" }, invalidEntry]),
       "utf-8"
     );
 
@@ -187,10 +190,10 @@ suite("McpRegistryFileManager", () => {
       SETTING_SCOPES.WORKSPACE
     );
 
-    assert.deepStrictEqual(JSON.parse(await fs.readFile(registryPath, "utf-8")), [
-      invalidEntry,
-      { id: "new-name", command: "new" },
-    ]);
+    assert.deepStrictEqual(
+      JSON.parse(await fs.readFile(registryPath, "utf-8")),
+      [invalidEntry, { id: "new-name", command: "new" }]
+    );
   });
 
   test("falls back to the remaining scope when removing one copy of a shared server", async () => {
@@ -216,5 +219,87 @@ suite("McpRegistryFileManager", () => {
       shared?.locations.map((location) => location.scope),
       [SETTING_SCOPES.USER]
     );
+  });
+
+  suite("workspace entries that launch a command", () => {
+    async function commitWorkspaceRegistry(entries: unknown[]): Promise<void> {
+      const registryPath = getCtrlYokeWorkspaceMcpRegistryPath(workspaceRoot);
+      await fs.mkdir(path.dirname(registryPath), { recursive: true });
+      await fs.writeFile(registryPath, JSON.stringify(entries));
+    }
+
+    test("an undecided workspace override does not replace the user's server", async () => {
+      const trust = new FakeWorkspaceSettingsTrust();
+      const manager = new McpRegistryFileManager(workspaceRoot, trust);
+      await manager.addOrUpdate(
+        { id: "github", command: "github-mcp" },
+        SETTING_SCOPES.USER
+      );
+      await commitWorkspaceRegistry([
+        { id: "github", command: "./evil.sh" },
+        { id: "docs", url: "https://example.test/mcp" },
+      ]);
+
+      const servers = await manager.readAll();
+      assert.strictEqual(
+        servers.find((server) => server.id === "github")?.config.command,
+        "github-mcp"
+      );
+      assert.ok(
+        servers.some((server) => server.id === "docs"),
+        "URL servers launch nothing and need no approval"
+      );
+      assert.strictEqual(trust.reported.length, 1);
+
+      const unfiltered = await manager.readAll({
+        includeUntrustedWorkspaceServers: true,
+      });
+      assert.strictEqual(
+        unfiltered.find((server) => server.id === "github")?.config.command,
+        "./evil.sh"
+      );
+    });
+
+    test("an allowed workspace entry applies", async () => {
+      const trust = new FakeWorkspaceSettingsTrust();
+      const manager = new McpRegistryFileManager(workspaceRoot, trust);
+      await commitWorkspaceRegistry([{ id: "local", command: "node" }]);
+      const [state] = await manager.getWorkspaceTrustStates();
+      assert.strictEqual(state?.decision, undefined);
+      assert.deepStrictEqual(await manager.readAll(), []);
+
+      await trust.setDecisions(
+        ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot),
+        [state!.request],
+        "allow"
+      );
+      const servers = await manager.readAll();
+      assert.deepStrictEqual(
+        servers.map((server) => server.id),
+        ["local"]
+      );
+    });
+
+    test("saving a workspace entry through ctrlyoke approves only that entry", async () => {
+      const trust = new FakeWorkspaceSettingsTrust();
+      const manager = new McpRegistryFileManager(workspaceRoot, trust);
+      await commitWorkspaceRegistry([{ id: "committed", command: "evil" }]);
+
+      await manager.addOrUpdate(
+        { id: "mine", command: "my-server" },
+        SETTING_SCOPES.WORKSPACE
+      );
+
+      const decisions = Object.fromEntries(
+        (await manager.getWorkspaceTrustStates()).map((state) => [
+          state.request.summary.split(":")[0],
+          state.decision,
+        ])
+      );
+      assert.deepStrictEqual(decisions, {
+        'MCP registry server "committed"': undefined,
+        'MCP registry server "mine"': "allow",
+      });
+    });
   });
 });

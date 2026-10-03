@@ -11,6 +11,7 @@ import { uniqueAtomicTempPath } from "../../config/AtomicFileWrite";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
 import { makeTempDir, removeTempDir } from "../helpers/tempWorkspace";
+import { FakeWorkspaceSettingsTrust } from "../helpers/fakeWorkspaceSettingsTrust";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -235,7 +236,10 @@ suite("CtrlYokeConfigService", () => {
   test("filters malformed workspace object sections before merge", () => {
     service.setWorkspaceBackend({
       getAll: () =>
-        ({ diagnostics: "invalid", defaults: { toolPermissions: [] } }) as unknown as PartialCtrlYokeSettings,
+        ({
+          diagnostics: "invalid",
+          defaults: { toolPermissions: [] },
+        }) as unknown as PartialCtrlYokeSettings,
       set: async () => {},
     });
 
@@ -244,7 +248,10 @@ suite("CtrlYokeConfigService", () => {
       service.get("defaults").toolPermissions?.mode,
       CTRLYOKE_SETTINGS_DEFAULTS.defaults.toolPermissions?.mode
     );
-    assert.strictEqual(service.getScoped("diagnostics", "workspace"), undefined);
+    assert.strictEqual(
+      service.getScoped("diagnostics", "workspace"),
+      undefined
+    );
   });
 
   test("workspace backend overrides user backend", () => {
@@ -562,6 +569,143 @@ suite("CtrlYokeConfigService", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Workspace sensitive-settings gate
+// ---------------------------------------------------------------------------
+
+suite("CtrlYokeConfigService workspace sensitive settings", () => {
+  let service: CtrlYokeConfigService;
+  let trust: FakeWorkspaceSettingsTrust;
+  let tempDir: string;
+
+  function workspaceBackend(data: PartialCtrlYokeSettings): ConfigBackend {
+    return { ...makeBackend(data), workspaceRoot: tempDir };
+  }
+
+  setup(() => {
+    tempDir = makeTempDir("ctrlyoke-sensitive-settings-");
+    service = new CtrlYokeConfigService();
+    trust = new FakeWorkspaceSettingsTrust();
+    service.setWorkspaceSettingsTrust(trust);
+    service.setUserBackend(
+      makeBackend({ terminal: { shellExecutable: "pwsh" } as never })
+    );
+  });
+
+  teardown(() => {
+    removeTempDir(tempDir);
+  });
+
+  test("withholds an undecided workspace shell and reports it", () => {
+    service.setWorkspaceBackend(
+      workspaceBackend({
+        terminal: { shellExecutable: "./tools/evil.exe" } as never,
+      })
+    );
+
+    assert.strictEqual(service.getAll().terminal.shellExecutable, "pwsh");
+    assert.strictEqual(trust.reported.length, 1);
+    assert.strictEqual(
+      trust.reported[0]!.identity,
+      service.getWorkspaceTrustIdentity()
+    );
+    assert.deepStrictEqual(
+      service.getWorkspaceSensitiveSettingStates().map((s) => s.decision),
+      [undefined]
+    );
+  });
+
+  test("applies an allowed value and ignores a denied one", async () => {
+    service.setWorkspaceBackend(
+      workspaceBackend({
+        terminal: { shellExecutable: "bash" } as never,
+        defaults: { hooks: [{ event: "stop", command: "./x.sh" }] } as never,
+      })
+    );
+    const [shell, hook] = service
+      .getWorkspaceSensitiveSettingStates()
+      .map((state) => state.request);
+    const identity = service.getWorkspaceTrustIdentity()!;
+    await trust.setDecisions(identity, [shell!], "allow");
+    await trust.setDecisions(identity, [hook!], "deny");
+
+    const all = service.getAll();
+    assert.strictEqual(all.terminal.shellExecutable, "bash");
+    assert.deepStrictEqual(all.defaults.hooks, []);
+    assert.strictEqual(service.resolve("terminal").source, "workspace");
+  });
+
+  test("withholds everything when the workspace backend has no root", () => {
+    service.setWorkspaceSettingsTrust(new FakeWorkspaceSettingsTrust(true));
+    service.setWorkspaceBackend(
+      makeBackend({ terminal: { shellExecutable: "./evil" } as never })
+    );
+    assert.strictEqual(service.getWorkspaceTrustIdentity(), undefined);
+    assert.strictEqual(service.getAll().terminal.shellExecutable, "pwsh");
+  });
+
+  test("a workspace value equal to the user's own needs no approval", () => {
+    service.setWorkspaceBackend(
+      workspaceBackend({ terminal: { shellExecutable: "pwsh" } as never })
+    );
+    assert.deepStrictEqual(service.getWorkspaceSensitiveSettingStates(), []);
+    assert.strictEqual(service.getAll().terminal.shellExecutable, "pwsh");
+  });
+
+  test("withholds the value from scoped reads and leaf sources too", () => {
+    service.setWorkspaceBackend(
+      workspaceBackend({ terminal: { shellExecutable: "./evil" } as never })
+    );
+    assert.strictEqual(
+      service.getScoped("terminal", "workspace")?.shellExecutable,
+      undefined
+    );
+    assert.strictEqual(
+      service.getLeafSources()["terminal.shellExecutable"],
+      "user",
+      "the user's own shell is what applies"
+    );
+  });
+
+  test("approves a value the user writes at workspace scope, but not one already pending", async () => {
+    const settingsFile = path.join(tempDir, ".ctrlyoke", "settings.json");
+    fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
+    fs.writeFileSync(
+      settingsFile,
+      JSON.stringify({
+        defaults: { hooks: [{ event: "stop", command: "./committed.sh" }] },
+      })
+    );
+    service.setWorkspaceBackend(new FileConfigBackend(settingsFile, tempDir));
+
+    await service.set("terminal.shellExecutable", "zsh", "workspace");
+    await service.set(
+      "defaults.hooks",
+      [
+        { event: "stop", command: "./committed.sh" },
+        { event: "stop", command: "./mine.sh" },
+      ],
+      "workspace"
+    );
+
+    const decisions = Object.fromEntries(
+      service
+        .getWorkspaceSensitiveSettingStates()
+        .map((state) => [state.request.summary, state.decision])
+    );
+    assert.deepStrictEqual(decisions, {
+      "terminal.shellExecutable: zsh": "allow",
+      'defaults.hooks: {"command":"./committed.sh","event":"stop"}': undefined,
+      'defaults.hooks: {"command":"./mine.sh","event":"stop"}': "allow",
+    });
+    assert.strictEqual(service.getAll().terminal.shellExecutable, "zsh");
+    assert.deepStrictEqual(
+      service.getAll().defaults.hooks.map((hook) => hook.command),
+      ["./mine.sh"]
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
 // FileConfigBackend tests
 // ---------------------------------------------------------------------------
 
@@ -630,14 +774,22 @@ suite("FileConfigBackend", () => {
   });
 
   test("rejects non-object roots without changing their bytes", async () => {
-    for (const [index, content] of ["null", "[]", '"settings"', "42"].entries()) {
+    for (const [index, content] of [
+      "null",
+      "[]",
+      '"settings"',
+      "42",
+    ].entries()) {
       const configPath = path.join(tmpDir, `root-${index}.json`);
       const original = Buffer.from(content, "utf-8");
       fs.writeFileSync(configPath, original);
       const backend = new FileConfigBackend(configPath);
 
       assert.deepStrictEqual(backend.getAll(), {});
-      await assert.rejects(backend.set("ui.showCostEstimates", false), /invalid JSON/);
+      await assert.rejects(
+        backend.set("ui.showCostEstimates", false),
+        /invalid JSON/
+      );
       assert.deepStrictEqual(fs.readFileSync(configPath), original);
     }
   });
@@ -646,7 +798,10 @@ suite("FileConfigBackend", () => {
     const service = new CtrlYokeConfigService();
     service.setUserBackend({
       getAll: () =>
-        ({ diagnostics: null, defaults: { toolPermissions: 7 } }) as unknown as PartialCtrlYokeSettings,
+        ({
+          diagnostics: null,
+          defaults: { toolPermissions: 7 },
+        }) as unknown as PartialCtrlYokeSettings,
       set: async () => {},
     });
 

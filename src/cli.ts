@@ -4,7 +4,6 @@ ensureMinFsThreadpoolSize(64);
 import { Command } from "commander";
 import chalk from "chalk";
 import * as path from "path";
-import * as readline from "readline";
 import { access, readFile } from "fs/promises";
 
 import { CliAdapter } from "./platform/CliAdapter";
@@ -169,6 +168,14 @@ import {
 } from "./cli/SecretCommands";
 import { getWorkflowSecretGrants } from "./utils/SecretResolver";
 import { resolveCliExecutionMode } from "./cli/CliExecutionMode";
+import { promptYesNo } from "./cli/CliPrompt";
+import {
+  TRUST_WORKSPACE_SETTINGS_COMMAND,
+  createWorkspaceSettingsTrustIo,
+  ensureWorkspaceSettingsDecided,
+  trustWorkspaceSettingsCommand,
+  type TrustWorkspaceSettingsOptions,
+} from "./cli/WorkspaceSettingsTrustCommands";
 import { bootstrapCliWorkspace } from "./cli/CliWorkspaceBootstrap";
 import { ExecutionPreviewService } from "./core/ExecutionPreviewService";
 import { HarnessCapabilityRegistry } from "./core/HarnessCapabilityRegistry";
@@ -477,6 +484,28 @@ program
   .option("-y, --yes", "Approve all pending roots without prompting")
   .action(async (file: string, options: TrustWorkflowExternalRootsOptions) => {
     await trustWorkflowExternalRootsCommand(file, options);
+  });
+
+program
+  .command(TRUST_WORKSPACE_SETTINGS_COMMAND)
+  .description(
+    "Review this workspace's settings that choose a program to run (shell, hooks, MCP servers, harness flags, default scripts)"
+  )
+  .option("-d, --cwd <path>", "Working directory (default: current directory)")
+  .option("-y, --yes", "Allow every listed value without prompting")
+  .option("--all", "Also list values already allowed or denied")
+  .action(async (options: TrustWorkspaceSettingsOptions) => {
+    const workingDir = options.cwd ? path.resolve(options.cwd) : process.cwd();
+    Log.initializeCli(workingDir, false);
+    configService.setUserBackend(createUserConfigBackend());
+    configService.setWorkspaceBackend(createWorkspaceConfigBackend(workingDir));
+    process.exit(
+      await trustWorkspaceSettingsCommand(
+        workingDir,
+        options,
+        createWorkspaceSettingsTrustIo()
+      )
+    );
   });
 
 program
@@ -840,6 +869,17 @@ async function runCommand(
       )
     );
     process.exit(2);
+  }
+
+  // Workspace settings that choose a program to run (shell, hooks, MCP
+  // servers, harness flags, default scripts) need a decision before the
+  // workflow loads, because loading copies settings defaults into the run.
+  const workspaceSettingsExitCode = await ensureWorkspaceSettingsDecided(
+    workingDir,
+    createWorkspaceSettingsTrustIo()
+  );
+  if (workspaceSettingsExitCode !== undefined) {
+    process.exit(workspaceSettingsExitCode);
   }
 
   const platform = new CliAdapter(config);
@@ -2411,18 +2451,6 @@ function formatCompatibilityConsumer(
 }
 
 /** Ask a y/N question on stderr (keeps stdout pipe-friendly). */
-async function promptYesNo(question: string): Promise<boolean> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stderr,
-  });
-  const answer = await new Promise<string>((resolve) => {
-    rl.question(question, resolve);
-  });
-  rl.close();
-  return answer.toLowerCase().startsWith("y");
-}
-
 interface TrustExternalRootsOptions {
   cwd?: string;
   yes?: boolean;

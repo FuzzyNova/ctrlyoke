@@ -103,6 +103,12 @@ import {
   registerInstallCliCommand,
 } from "./ui/CtrlyokeCliCommands";
 
+import {
+  WORKSPACE_SETTINGS_TRUST_PROMPT_RESULTS,
+  WorkspaceSettingsTrustPrompter,
+} from "./ui/WorkspaceSettingsTrustPrompt";
+import { workspaceSettingsTrustStore } from "./config/WorkspaceSettingsTrustStore";
+
 interface ScmSourceControlCommandArgument {
   rootUri?: { fsPath: string };
 }
@@ -113,6 +119,7 @@ let licenseService: LicenseService;
 let hostedServer: CtrlYokeHostedServer | undefined;
 let memoryWatchdog: MemoryWatchdog | undefined;
 let notificationManager: NotificationManager | undefined;
+let workspaceSettingsTrustPrompter: WorkspaceSettingsTrustPrompter | undefined;
 // Exempts the running server's own connection token from heuristic secret
 // redaction (see secretRedactionService.protectValue) for as long as the
 // server is up; cleared on stop/regenerate/deactivate.
@@ -381,6 +388,41 @@ export async function activate(context: vscode.ExtensionContext) {
           );
         });
     }
+
+    // Workspace settings that pick a program to run (shell, hooks, MCP
+    // servers, harness flags, default scripts) are withheld until approved.
+    // Ask once the dashboard can show the prompt, again when VS Code grants
+    // workspace trust, and whenever a settings read meets a new value.
+    const trustPrompter = new WorkspaceSettingsTrustPrompter(
+      () =>
+        vscode.workspace.workspaceFolders?.length
+          ? getVsCodeWorkspaceRoot()
+          : undefined,
+      async () => {
+        await webviewProvider.awaitPanelReady();
+        return webviewProvider.getUserInteractionPort();
+      },
+      () => vscode.workspace.isTrusted
+    );
+    workspaceSettingsTrustPrompter = trustPrompter;
+    const promptForWorkspaceSettingsTrust = (): void => {
+      void trustPrompter.prompt().catch((error) => {
+        Log.warn(
+          `[Extension] ctrlyoke: Workspace settings approval failed: ${getErrorMessage(error)}`
+        );
+      });
+    };
+    promptForWorkspaceSettingsTrust();
+    context.subscriptions.push(
+      vscode.workspace.onDidGrantWorkspaceTrust(
+        promptForWorkspaceSettingsTrust
+      ),
+      {
+        dispose: workspaceSettingsTrustStore.onUndecided(
+          promptForWorkspaceSettingsTrust
+        ),
+      }
+    );
 
     // Initialize PTY process manager (must be after webviewProvider is created).
     // The globalState-backed persistence seeds the cold-start fallback size so new
@@ -717,6 +759,39 @@ function registerCommands(
     async () => {
       await workflowOrchestrator.openPanel();
       webviewProvider.openGlobalSettingsTab("secrets");
+    }
+  );
+
+  const reviewWorkspaceSettingsTrustCommand = vscode.commands.registerCommand(
+    VSCODE_COMMANDS.REVIEW_WORKSPACE_SETTINGS_TRUST,
+    async () => {
+      const reportInfo = (message: string): void =>
+        notifyUserFeedback(
+          workflowOrchestrator.getUserFeedbackSink(),
+          USER_FEEDBACK_SEVERITY.INFO,
+          message
+        );
+      if (!vscode.workspace.workspaceFolders?.length) {
+        reportInfo("Open a workspace folder to review its settings.");
+        return;
+      }
+      if (!vscode.workspace.isTrusted) {
+        reportInfo(
+          "Trust this workspace in VS Code first; its ctrlyoke settings are not read until then."
+        );
+        return;
+      }
+      await workflowOrchestrator.openPanel();
+      const result = await workspaceSettingsTrustPrompter?.prompt({
+        includeDecided: true,
+      });
+      if (
+        result === WORKSPACE_SETTINGS_TRUST_PROMPT_RESULTS.NOTHING_TO_REVIEW
+      ) {
+        reportInfo(
+          "This workspace's settings don't choose any programs to run."
+        );
+      }
     }
   );
 
@@ -1656,6 +1731,7 @@ function registerCommands(
     openUnseenFailedRunCommand,
     retryHarnessDetectionCommand,
     openSecretsSettingsCommand,
+    reviewWorkspaceSettingsTrustCommand,
     showGettingStartedCommand,
     registerInstallCliCommand(context),
     activateProCommand,
