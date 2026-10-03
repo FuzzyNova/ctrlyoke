@@ -1,0 +1,132 @@
+schemaVersion: 1
+_templateMeta:
+  name: bug-hunt-loop
+  description: Never-ending final-step-only loop. Each pass reviews the last round of bug fixes, files at least two new high-confidence bugs, and queues their fixes. Stop it manually or with maxSteps.
+  variables:
+    orchestratorHarness:
+      type: harness
+      default: claude-cli
+      description: Harness that runs the bug hunter (the final step).
+    orchestratorModel:
+      type: text
+      default: opus
+      description: Bug hunter model, as named by the orchestrator harness.
+    implementerHarness:
+      type: harness
+      default: codex-cli
+      description: Harness that runs every queued bug-fix step.
+    implementerModel:
+      type: text
+      default: gpt-6-luna
+      description: Implementer model, as named by the implementer harness.
+
+# Queued fix steps inherit these workflow defaults, so the implementer
+# harness/model live here and the orchestrator overrides them on finalStep.
+# Every queued step is a fresh, self-contained session.
+resumeSession: false
+priorContext: none
+harness: "{implementerHarness}"
+model: "{implementerModel}"
+executionMode: headless
+agent: null
+skills:
+  - commit
+
+# No up-front steps: the first pass finds an empty history, skips the review,
+# and goes straight to hunting. The loop only ends when a pass queues nothing,
+# so in practice it runs until you stop it or it hits maxSteps.
+steps: []
+
+finalStep:
+  name: hunt-bugs
+  harness: "{orchestratorHarness}"
+  model: "{orchestratorModel}"
+  executionMode: headless
+  agent: spec-orchestrator
+  mcpServers:
+    - ctrlyoke
+  # Each pass is a fresh session; the previous pass's output is attached so
+  # it can pick a different area to hunt in or follow up on the last round.
+  resumeSession: false
+  priorContext: finalStepPrevious
+  prompt: |
+    Your goal is to review the bugs fixed since the previous final-step pass, then find
+    and file at least two new bugs in ctrlyoke and queue their fixes.
+
+    You run as this workflow's final step. Every pass is a new session, so you have no
+    memory of earlier passes; the previous pass's output (if any) is attached above. Use
+    it to hunt in a different part of the codebase, or to queue follow-up work if the
+    last round of fixes needs it. Use workflow_status and read_output for more detail.
+
+    ## 1. Review the last round of fixes
+
+    Use workflow_status to find the steps that ran since the previous final-step pass. If
+    there are none, skip to section 2. Steps named like "merge from main" are merges I
+    added to bring in fixes made on main, so you don't re-fix a bug that's already fixed
+    there; don't review them as bug fixes, but do account for what they brought in.
+
+    Review every bug fix that landed in that window (git log and the diffs). Confirm each
+    one actually fixes its bug, didn't introduce a regression, has test coverage, and
+    moved its bug doc to dev/bugs/implemented/. Fix the problems you find and commit
+    them. If a follow-up is too big for this session, use append_step to queue it.
+
+    ## 2. Hunt for new bugs
+
+    Find at least two new high-confidence bugs. Ways to find them:
+    - Read the source code.
+    - Start the dev host (`npm run dev:host:start`) and drive the dashboard with
+      Playwright.
+    - Exercise the ctrlyoke MCP server or the ctrlyoke skills.
+    - Run the CLI.
+    - Look for documentation errors in the landing/ and docs/ folders.
+    - Read recent git history. Recently landed changes have had the least testing, so
+      they're the most likely to contain bugs.
+    - Look for security vulnerabilities.
+
+    If you run a real harness (from the dashboard or the CLI), keep this run cheap: use
+    cheap or free models. The opencode-cli harness with the opencode/big-pickle model is
+    free and a good choice for testing.
+
+    Before you file anything:
+    - Check @dev/bugs/backlog/ and dev/bugs/rejected/ so you don't file a duplicate or
+      something already rejected.
+    - Rule out intended behavior. Some things look like bugs but are documented design
+      choices or load-bearing trade-offs. For example, Pause doesn't stop a workflow
+      immediately: it lets the current step finish and then pauses. Stop is what halts a
+      workflow mid-step. Check the docs, the instruction files, and dev/implemented/
+      before calling something a bug.
+    - If a bug is low confidence, try to raise your confidence by writing a failing test
+      or reproducing it with Playwright.
+
+    ## 3. File and queue
+
+    File each bug in dev/bugs/backlog/ following dev/bugs/README.md, then decide whether
+    to queue a fix:
+    - High-confidence bugs with a clear fix: use append_step to queue a step that fixes
+      the bug, adds or updates tests, passes `npm test`, git mv's the bug doc to
+      dev/bugs/implemented/ with "Resolution: fixed in this commit", and commits its own
+      work. Group closely related bugs into one step when that's simpler. Every queued
+      step runs in a fresh session, so make it self-contained.
+    - Security vulnerabilities with a straightforward fix: file and queue as above.
+    - Security vulnerabilities whose fix requires a behavior change: file the bug, but
+      don't queue a fix. Flag it in your summary.
+    - Low-confidence bugs, and bugs whose fix needs a major design change: file them, but
+      don't queue a fix. Flag each one in your summary as low confidence or needing a
+      design change.
+
+    Commit the bug docs you filed before you end your turn.
+
+    In the rare case that you find no high-confidence bugs and truly believe this part of
+    the codebase is bug-free, say so and end your turn without queuing anything (that
+    ends the workflow).
+
+    End with a short summary: what you reviewed and fixed, which bugs you filed and
+    queued, and everything flagged for me (security issues needing a behavior change,
+    low-confidence bugs, design-change bugs).
+
+    Note: you are running headless, so you can't ask questions. Use your best judgment,
+    and if you truly need my input, say so in your summary and end your turn without
+    queuing steps. When your turn ends your process stops and kills any subprocesses you
+    started, so don't end your turn to wait on a task; block on long-running commands
+    such as `npm test` instead. If you started the dev host, stop it
+    (`npm run dev:host:stop`) before you end your turn.
