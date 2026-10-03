@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-03 by bug-hunt final step (claude-cli); reproduced by running `extractExtensionsFromGlobs` and reading the modal's matcher
 - **Area:** `src/utils/fileFilterUtils.ts` (`extractExtensionsFromGlobs`), `src/ui/webview-react/components/workflow/FileBrowserModal.tsx` (`filterExts` / `matchesFilter`, ~84-102), `src/ui/WorkflowSerializer.ts` (native dialog filters, ~1099-1104)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

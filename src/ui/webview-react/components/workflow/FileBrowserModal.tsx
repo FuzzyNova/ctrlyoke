@@ -96,9 +96,8 @@ export const FileBrowserModal: React.FC = () => {
   const matchesFilter = useCallback(
     (entry: WorkspaceTreeEntry): boolean => {
       if (!filterExts) return true;
-      const dot = entry.name.lastIndexOf(".");
-      if (dot < 0) return false;
-      return filterExts.includes(entry.name.slice(dot + 1).toLowerCase());
+      const name = entry.name.toLowerCase();
+      return filterExts.some((ext) => name.endsWith(`.${ext}`));
     },
     [filterExts]
   );

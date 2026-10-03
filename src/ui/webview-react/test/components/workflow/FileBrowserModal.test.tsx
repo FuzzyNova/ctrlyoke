@@ -575,6 +575,68 @@ describe("FileBrowserModal — file mode", () => {
     expect(screen.getByRole("button", { name: "Select File" })).toBeDisabled();
   });
 
+  it("matches compound extensions in fileFilter", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    workspaceTreeMock.mockImplementation(() =>
+      Promise.resolve(
+        pageResponse(
+          ROOT_LISTING,
+          "",
+          [
+            entry(0, WORKSPACE_ENTRY_KINDS.FILE, "x.prompt.md"),
+            entry(1, WORKSPACE_ENTRY_KINDS.FILE, "a.md"),
+          ],
+          2
+        )
+      )
+    );
+    openPicker({
+      mode: WORKSPACE_ENTRY_KINDS.FILE,
+      fileFilter: ["**/*.prompt.md"],
+      onSelect,
+    });
+    render(<FileBrowserModal />);
+
+    const matchingFile = await screen.findByText("x.prompt.md");
+    expect(
+      screen.getByRole("button", { name: /x\.prompt\.md/ })
+    ).toBeEnabled();
+    expect(screen.getByRole("button", { name: /a\.md/ })).toBeDisabled();
+
+    await user.click(matchingFile);
+    await user.click(screen.getByRole("button", { name: "Select File" }));
+    expect(onSelect).toHaveBeenCalledWith("x.prompt.md");
+  });
+
+  it("matches brace alternatives in fileFilter", async () => {
+    workspaceTreeMock.mockImplementation(() =>
+      Promise.resolve(
+        pageResponse(
+          ROOT_LISTING,
+          "",
+          [
+            entry(0, WORKSPACE_ENTRY_KINDS.FILE, "readme.md"),
+            entry(1, WORKSPACE_ENTRY_KINDS.FILE, "notes.txt"),
+            entry(2, WORKSPACE_ENTRY_KINDS.FILE, "image.png"),
+          ],
+          3
+        )
+      )
+    );
+    openPicker({
+      mode: WORKSPACE_ENTRY_KINDS.FILE,
+      fileFilter: ["**/*.{md,txt}"],
+      onSelect: vi.fn(),
+    });
+    render(<FileBrowserModal />);
+
+    await screen.findByText("readme.md");
+    expect(screen.getByRole("button", { name: /readme\.md/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /notes\.txt/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /image\.png/ })).toBeDisabled();
+  });
+
   it("loads and selects a file on a later page without loading file contents", async () => {
     const user = userEvent.setup();
     const entries = Array.from({ length: 1_205 }, (_, index) => entry(index));
