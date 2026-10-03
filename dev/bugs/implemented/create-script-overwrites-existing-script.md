@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), code reading
 - **Area:** `src/core/EndConditionEvaluator.ts` (`createSampleScript`), `src/ui/webview-react/components/shared/CreateScriptModal.tsx`, `src/ui/WebviewMessageRouter.ts`
-- **Severity:** medium (silent data loss of user-authored scripts)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

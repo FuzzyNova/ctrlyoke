@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli); reproduced by running the template content under Git Bash
 - **Area:** `src/core/EndConditionEvaluator.ts` (`createSampleScript`), `src/ui/webview-react/components/shared/CreateScriptModal.tsx`
-- **Severity:** medium (the generated sample condition always fails on Windows)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
