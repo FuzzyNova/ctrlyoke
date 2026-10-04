@@ -72,6 +72,9 @@ export interface McpAppendStepResult {
   runRef: RunRef;
   definitionRevision: number;
   descriptorRevision: number;
+  /** Grants in the appended steps that this workspace has not approved. */
+  unapprovedSecretGrants?: string[];
+  warning?: string;
 }
 
 export type McpStepUpdateArguments = Omit<

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-03 by Nathan, investigating run `bug-drain1-2026-10-03T21-29-10-807/run-2026-10-03T21-29-40-257Z` with Claude
 - **Area:** `src/core/WorkflowExecutor.ts` (`resolveGrantedSecretValues`), `src/utils/SecretResolver.ts` (`assertSecretGrantTrust`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

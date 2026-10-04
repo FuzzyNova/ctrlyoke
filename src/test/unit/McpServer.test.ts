@@ -2206,6 +2206,38 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.strictEqual(status.metadata.remainingSteps, "unlimited");
   });
 
+  test("reports unapproved secret grants in appended steps", async () => {
+    const server = await setup();
+    const run = await createRun(
+      "unapproved-grant",
+      "2026-01-01T00-00-00-000Z",
+      { executionState: EXECUTION_STATES.RUNNING }
+    );
+    process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
+
+    const flagged = responseJson(
+      await server.invokeTool("append_step", {
+        position: "end",
+        steps: [
+          { prompt: "Check `!MCP_APPEND_UNAPPROVED_TEST_SECRET` handling" },
+        ],
+      })
+    );
+    const clean = responseJson(
+      await server.invokeTool("append_step", {
+        position: "end",
+        steps: [{ prompt: "```\n!MCP_APPEND_FENCED_TEST_SECRET\n```" }],
+      })
+    );
+
+    assert.deepStrictEqual(flagged.unapprovedSecretGrants, [
+      "MCP_APPEND_UNAPPROVED_TEST_SECRET",
+    ]);
+    assert.match(flagged.warning, /MCP_APPEND_UNAPPROVED_TEST_SECRET/u);
+    assert.strictEqual("unapprovedSecretGrants" in clean, false);
+    assert.strictEqual("warning" in clean, false);
+  });
+
   test("accepts an append whose prompt matches a completed step", async () => {
     const server = await setup();
     const run = await createRun(

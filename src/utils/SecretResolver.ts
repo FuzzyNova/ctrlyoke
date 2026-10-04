@@ -77,19 +77,75 @@ export function formatUnapprovedSecretGrantError(
     .join(" ");
 }
 
+/** Names (deduplicated) whose workspace trust decision is not "allow". */
+export function findUnapprovedSecretGrants(
+  names: readonly string[],
+  workspaceRoot: string,
+  trustedNames: readonly string[] = [],
+  trustStore: Pick<
+    SecretGrantsTrustStore,
+    "getDecision"
+  > = secretGrantsTrustStore
+): string[] {
+  const trusted = new Set(trustedNames);
+  return [...new Set(names)].filter(
+    (name) =>
+      !trusted.has(name) &&
+      trustStore.getDecision(workspaceRoot, name) !== TRUST_DECISIONS.ALLOW
+  );
+}
+
+/**
+ * Unapproved grants declared by `steps`, evaluated against `workflow`'s
+ * inherited `secrets`/process maps. Used to tell an agent appending steps
+ * mid-run about grants that would otherwise only surface at dispatch.
+ */
+export function findUnapprovedStepSecretGrants(
+  steps: readonly WorkflowStep[],
+  workflow: PromptFile,
+  workspaceRoot: string,
+  trustStore: Pick<
+    SecretGrantsTrustStore,
+    "getDecision"
+  > = secretGrantsTrustStore
+): string[] {
+  return findUnapprovedSecretGrants(
+    steps.flatMap((step) => getDeclaredSecretGrants(step, workflow)),
+    workspaceRoot,
+    [],
+    trustStore
+  );
+}
+
+/** Advisory text for appended steps whose grants are not yet approved. */
+export function formatAppendedUnapprovedSecretGrantsWarning(
+  names: readonly string[]
+): string {
+  const plural = names.length > 1;
+  return (
+    `Appended step${plural ? "s grant" : " grants"} secret${plural ? "s" : ""} ` +
+    `not approved for this workspace: ${names.join(", ")}. If a value exists, ` +
+    `the step fails at dispatch until the grant is approved with ` +
+    `"ctrlyoke trust-secret-grants <file>"; if the "!NAME" text was not meant ` +
+    `as a grant, put it in a fenced code block or remove the "!".`
+  );
+}
+
 export function assertSecretGrantTrust(
   names: readonly string[],
   workspaceRoot: string,
   trustedNames: readonly string[] = [],
-  trustStore: Pick<SecretGrantsTrustStore, "getDecision"> =
-    secretGrantsTrustStore,
+  trustStore: Pick<
+    SecretGrantsTrustStore,
+    "getDecision"
+  > = secretGrantsTrustStore,
   scope = "step"
 ): void {
-  const trusted = new Set(trustedNames);
-  const unapproved = [...new Set(names)].filter(
-    (name) =>
-      !trusted.has(name) &&
-      trustStore.getDecision(workspaceRoot, name) !== TRUST_DECISIONS.ALLOW
+  const unapproved = findUnapprovedSecretGrants(
+    names,
+    workspaceRoot,
+    trustedNames,
+    trustStore
   );
   if (unapproved.length > 0) {
     throw new Error(formatUnapprovedSecretGrantError(unapproved, scope));

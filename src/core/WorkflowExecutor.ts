@@ -96,6 +96,7 @@ import {
   getProcessMapSecretNames,
   getDeclaredSecretGrants,
   assertSecretGrantTrust,
+  findUnapprovedSecretGrants,
   MissingSecretError,
   resolveSecretEnvironment,
 } from "../utils/SecretResolver";
@@ -3469,6 +3470,12 @@ export class WorkflowExecutor {
    * to interpolate it (e.g. `expandSecretInterpolations`), so a step that
    * genuinely needs the credential still fails — just at the point of use,
    * not at preflight.
+   *
+   * The trust check runs only on names that resolve: a grant with no value
+   * hands the step nothing, so there is nothing for approval to protect, and
+   * an unapproved-but-missing name takes the missing-secret path above (its
+   * warning also notes the missing approval). This matters most for steps
+   * appended mid-run, which never pass the start-time approval prompt.
    */
   private async resolveGrantedSecretValues(
     names: readonly string[],
@@ -3486,18 +3493,19 @@ export class WorkflowExecutor {
         ? workflow.finalStep?.name?.trim() || "final step"
         : workflow.steps?.[target.stepIndex]?.name?.trim() ||
           `step ${target.stepIndex + 1}`;
-    assertSecretGrantTrust(
-      names,
-      workspaceRoot,
-      trustedNames,
-      this.secretGrantTrustStore,
-      scope
-    );
     const resolutionContext = {
       workspaceRoot,
       secretStore: this.platform.getSecretStore?.(),
     };
     const missing = await findMissingSecretNames(names, resolutionContext);
+    const resolvable = names.filter((name) => !missing.includes(name));
+    assertSecretGrantTrust(
+      resolvable,
+      workspaceRoot,
+      trustedNames,
+      this.secretGrantTrustStore,
+      scope
+    );
     if (missing.length > 0) {
       if (
         ConfigurationUtils.getContextResolutionFailureMode() ===
@@ -3505,16 +3513,31 @@ export class WorkflowExecutor {
       ) {
         throw new MissingSecretError(missing[0], missing);
       }
+      const unapprovedMissing = findUnapprovedSecretGrants(
+        missing,
+        workspaceRoot,
+        trustedNames,
+        this.secretGrantTrustStore
+      );
+      const approvalNote =
+        unapprovedMissing.length > 0
+          ? ` The grant${
+              unapprovedMissing.length > 1 ? "s" : ""
+            } for ${unapprovedMissing.join(", ")} ${
+              unapprovedMissing.length > 1 ? "are" : "is"
+            } also not approved for this workspace; approve ${
+              unapprovedMissing.length > 1 ? "them" : "it"
+            } once a value is set.`
+          : "";
       await this.trackStatusMessage(
         context,
         target,
         `Context resolution warning: declared secret${
           missing.length > 1 ? "s are" : " is"
-        } not available: ${missing.join(", ")}.`,
+        } not available: ${missing.join(", ")}.${approvalNote}`,
         STATUS_MESSAGE_SEVERITY.WARNING
       );
     }
-    const resolvable = names.filter((name) => !missing.includes(name));
     return resolveSecretEnvironment(resolvable, resolutionContext);
   }
 

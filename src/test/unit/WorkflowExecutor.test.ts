@@ -10,6 +10,10 @@ import {
 import { PromptQueue } from "../../core/PromptQueue";
 import { RecordedTargetFailureError } from "../../core/RecordedTargetFailureError";
 import {
+  MissingSecretError,
+  UnapprovedSecretGrantError,
+} from "../../utils/SecretResolver";
+import {
   EndConditionEvaluator,
   type EvaluationResult,
 } from "../../core/EndConditionEvaluator";
@@ -2376,6 +2380,105 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       );
     } finally {
       configService.setCliOverlay({});
+    }
+  });
+
+  test("an unapproved grant with no value takes the missing-secret path instead of the trust check", async () => {
+    const promptText = "Use !UNAPPROVED_MISSING_TEST_SECRET for auth";
+    const untrusted = { getDecision: () => undefined };
+
+    const warnQueue = new PromptQueue();
+    warnQueue.loadPrompts({ steps: [{ prompt: promptText }] });
+    const warnIntegration = new MockHarnessIntegration(undefined, false);
+    const warnStatusMessages: string[] = [];
+    const dashboardProvider = new Proxy(
+      {
+        updateStatusMessage: (_stepIndex: number, message: string) =>
+          warnStatusMessages.push(message),
+      },
+      {
+        get: (target, property) =>
+          Reflect.get(target, property) ?? (() => undefined),
+      }
+    );
+    configService.setCliOverlay({
+      execution: {
+        contextResolutionFailure: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
+      },
+    });
+    try {
+      const warnContext = makeContext(warnIntegration);
+      warnContext.dashboardProvider = dashboardProvider as any;
+      await makeExecutor(warnQueue, undefined, untrusted).execute(
+        warnIntegration,
+        warnContext
+      );
+      assert.deepStrictEqual(warnIntegration.sentPrompts, [promptText]);
+      const warning = warnStatusMessages.find((message) =>
+        message.includes("UNAPPROVED_MISSING_TEST_SECRET")
+      );
+      assert.ok(warning, "expected a warning naming the unresolved secret");
+      assert.match(warning, /also not approved for this workspace/u);
+    } finally {
+      configService.setCliOverlay({});
+    }
+
+    const failQueue = new PromptQueue();
+    failQueue.loadPrompts({ steps: [{ prompt: promptText }] });
+    const failIntegration = new MockHarnessIntegration(undefined, false);
+    configService.setCliOverlay({
+      execution: {
+        contextResolutionFailure: CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
+      },
+    });
+    try {
+      await assert.rejects(
+        makeExecutor(failQueue, undefined, untrusted).execute(
+          failIntegration,
+          makeContext(failIntegration)
+        ),
+        (error: unknown) => {
+          const cause =
+            error instanceof RecordedTargetFailureError ? error.cause : error;
+          assert.ok(cause instanceof MissingSecretError);
+          assert.ok(!(cause instanceof UnapprovedSecretGrantError));
+          assert.doesNotMatch(String(error), /has not been approved/u);
+          return true;
+        }
+      );
+      assert.strictEqual(failIntegration.sentPrompts.length, 0);
+    } finally {
+      configService.setCliOverlay({});
+    }
+  });
+
+  test("an unapproved grant whose value resolves still hard-fails in warn mode", async () => {
+    const secretName = "CTRLYOKE_TEST_UNAPPROVED_RESOLVABLE_SECRET";
+    const previousValue = process.env[secretName];
+    process.env[secretName] = "resolvable-value";
+    const queue = new PromptQueue();
+    queue.loadPrompts({ steps: [{ prompt: `Use !${secretName}` }] });
+    const integration = new MockHarnessIntegration(undefined, false);
+    configService.setCliOverlay({
+      execution: {
+        contextResolutionFailure: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
+      },
+    });
+    try {
+      await assert.rejects(
+        makeExecutor(queue, undefined, {
+          getDecision: () => undefined,
+        }).execute(integration, makeContext(integration)),
+        /has not been approved for this workspace/u
+      );
+      assert.strictEqual(integration.sentPrompts.length, 0);
+    } finally {
+      configService.setCliOverlay({});
+      if (previousValue === undefined) {
+        delete process.env[secretName];
+      } else {
+        process.env[secretName] = previousValue;
+      }
     }
   });
 

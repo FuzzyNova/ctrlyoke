@@ -81,6 +81,10 @@ import {
   type OutputTextPaging,
 } from "./core/orchestration/OutputTextPaging";
 import type { RunRef, WorkflowKey } from "./types/CtrlYokeTypes";
+import {
+  findUnapprovedStepSecretGrants,
+  formatAppendedUnapprovedSecretGrantsWarning,
+} from "./utils/SecretResolver";
 import { formatArgString } from "./utils/CliArgParser";
 import { claimPathForCompare } from "./utils/CoordinationClaimPath";
 import { isPathWithinDirectory } from "./utils/PathSecurity";
@@ -1163,6 +1167,7 @@ export class CtrlYokeMCPServer {
     );
 
     let response: McpAppendStepResult | null = null;
+    let updatedWorkingFile: WorkingFile | null = null;
 
     const globalMaxSteps = getGlobalMaxSteps();
     if (position === QUEUE_POSITION.PARALLEL_WITH_CURRENT) {
@@ -1178,6 +1183,7 @@ export class CtrlYokeMCPServer {
           position,
           getMaxParallelSteps()
         );
+      updatedWorkingFile = joined.workingFile;
       response = {
         success: true,
         destination: "activeParallelGroup",
@@ -1212,6 +1218,7 @@ export class CtrlYokeMCPServer {
         position
       );
 
+      updatedWorkingFile = appended.workingFile;
       response = {
         success: true,
         destination: "queue",
@@ -1236,8 +1243,23 @@ export class CtrlYokeMCPServer {
       };
     }
 
-    if (!response) {
+    if (!response || !updatedWorkingFile) {
       throw new Error("Failed to append steps: no response generated");
+    }
+
+    // Steps appended mid-run never pass the start-time approval prompt, so
+    // tell the appending agent now instead of letting the step fail at
+    // dispatch with nobody listening.
+    const unapprovedSecretGrants = findUnapprovedStepSecretGrants(
+      flattened.topology.steps,
+      updatedWorkingFile,
+      this.workspaceRoot
+    );
+    if (unapprovedSecretGrants.length > 0) {
+      response.unapprovedSecretGrants = unapprovedSecretGrants;
+      response.warning = formatAppendedUnapprovedSecretGrantsWarning(
+        unapprovedSecretGrants
+      );
     }
 
     return {

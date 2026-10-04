@@ -166,7 +166,11 @@ import {
   setSecretCommand,
   trustSecretGrantsCommand,
 } from "./cli/SecretCommands";
-import { getWorkflowSecretGrants } from "./utils/SecretResolver";
+import {
+  findUnapprovedStepSecretGrants,
+  formatAppendedUnapprovedSecretGrantsWarning,
+  getWorkflowSecretGrants,
+} from "./utils/SecretResolver";
 import { resolveCliExecutionMode } from "./cli/CliExecutionMode";
 import { promptYesNo } from "./cli/CliPrompt";
 import {
@@ -1953,6 +1957,18 @@ async function executeAddressedCliOperation(
       lineageRepository,
       target.allowInterruptedRun
     );
+    const unapprovedGrants = findUnapprovedStepSecretGrants(
+      tail,
+      appended.workingFile,
+      workspaceRoot
+    );
+    if (unapprovedGrants.length > 0) {
+      console.error(
+        chalk.yellow(
+          formatAppendedUnapprovedSecretGrantsWarning(unapprovedGrants)
+        )
+      );
+    }
     await instance.executeContinuationAtRun(
       workflowKey,
       runRef,
