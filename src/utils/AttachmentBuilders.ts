@@ -1,4 +1,4 @@
-import * as vscode from "vscode";
+import { promises as fs } from "fs";
 import * as path from "path";
 import { Log } from "./Log";
 import { isPathWithinAnyDirectory } from "./PathSecurity";
@@ -14,14 +14,14 @@ import {
 /**
  * Build a directory tree structure as a string
  *
- * @param dirUri The directory URI to scan
+ * @param dirPath Absolute path of the directory to scan
  * @param maxDepth Maximum depth to scan (default: 3)
  * @param currentDepth Internal recursion tracker
  * @param prefix Internal line prefix for tree formatting
  * @returns Formatted directory tree string
  */
 async function buildDirectoryTree(
-  dirUri: vscode.Uri,
+  dirPath: string,
   maxDepth: number = 3,
   currentDepth: number = 0,
   prefix: string = ""
@@ -31,34 +31,36 @@ async function buildDirectoryTree(
   }
 
   try {
-    const entries = await vscode.workspace.fs.readDirectory(dirUri);
+    // Symlinks are listed but never followed (a link's Dirent is not a
+    // directory), so a link cycle cannot recurse.
+    const entries = await fs.readdir(dirPath, { withFileTypes: true });
 
     // Sort: directories first, then files, alphabetically
     entries.sort((a, b) => {
-      const aIsDir = a[1] === vscode.FileType.Directory;
-      const bIsDir = b[1] === vscode.FileType.Directory;
+      const aIsDir = a.isDirectory();
+      const bIsDir = b.isDirectory();
 
       if (aIsDir && !bIsDir) return -1;
       if (!aIsDir && bIsDir) return 1;
-      return a[0].localeCompare(b[0]);
+      return a.name.localeCompare(b.name);
     });
 
     let tree = "";
     const lastIndex = entries.length - 1;
 
     for (let i = 0; i < entries.length; i++) {
-      const [name, type] = entries[i];
+      const entry = entries[i];
+      const name = entry.name;
       const isLast = i === lastIndex;
       const connector = isLast ? "└── " : "├── ";
       const childPrefix = isLast ? "    " : "│   ";
 
-      if (type === vscode.FileType.Directory) {
+      if (entry.isDirectory()) {
         tree += `${prefix}${connector}${name}/\n`;
 
         // Recurse into subdirectory
-        const subDirUri = vscode.Uri.joinPath(dirUri, name);
         const subTree = await buildDirectoryTree(
-          subDirUri,
+          path.join(dirPath, name),
           maxDepth,
           currentDepth + 1,
           prefix + childPrefix
@@ -72,7 +74,7 @@ async function buildDirectoryTree(
     return tree;
   } catch (error) {
     Log.warn(
-      `[AttachmentBuilders] Failed to read directory ${dirUri.fsPath}; returning partial tree:`,
+      `[AttachmentBuilders] Failed to read directory ${dirPath}; returning partial tree:`,
       error
     );
     return `${prefix}[Error reading directory]\n`;
@@ -132,12 +134,10 @@ Directory reference is outside the workspace and was blocked: ${normalizedPath}
 </attachment>`;
   }
 
-  const dirUri = vscode.Uri.file(absolutePath);
-
   // Check if directory exists
   try {
-    const stat = await vscode.workspace.fs.stat(dirUri);
-    if (stat.type !== vscode.FileType.Directory) {
+    const stat = await fs.stat(absolutePath);
+    if (!stat.isDirectory()) {
       throw new Error("Path is not a directory");
     }
   } catch (error) {
@@ -148,7 +148,7 @@ Directory not found: ${normalizedPath}
   }
 
   // Build tree
-  const tree = await buildDirectoryTree(dirUri);
+  const tree = await buildDirectoryTree(absolutePath);
   const fileCount = (tree.match(/\n/g) || []).length;
 
   const displayPath = effectiveAbsolute ? absolutePath : normalizedPath;
@@ -159,31 +159,4 @@ Directory structure: ${displayPath}/ (${fileCount} items)
 ${displayPath}/
 ${tree}
 </attachment>`;
-}
-
-/**
- * Get all workspace symbols matching a query
- * Used for completion provider
- *
- * @param query Search query, passed to every provider verbatim (each
- *   provider decides what matches; VS Code itself filters nothing)
- * @returns Array of symbol information from all file types, in provider order
- */
-export async function getWorkspaceSymbols(
-  query: string = ""
-): Promise<vscode.SymbolInformation[]> {
-  try {
-    const allSymbols = (await vscode.commands.executeCommand(
-      "vscode.executeWorkspaceSymbolProvider",
-      query
-    )) as vscode.SymbolInformation[];
-
-    return allSymbols ?? [];
-  } catch (error) {
-    Log.warn(
-      "[AttachmentBuilders] Failed to get workspace symbols; returning no symbols:",
-      error
-    );
-    return [];
-  }
 }

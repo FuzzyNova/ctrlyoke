@@ -188,6 +188,7 @@ import {
 import { WorkflowStateMachine } from "./WorkflowStateMachine";
 import type { ExternalRunWatchInstance } from "./orchestration/ExternalRunWatchCoordinator";
 import type { RunLifecycleInstancePort } from "./orchestration/RunLifecycleService";
+import type { FileWatcherFactory } from "./HostPorts";
 import type { RunViewPublisherInstance } from "./orchestration/RunViewPublisher";
 import {
   buildTerminalEndedMessage,
@@ -544,7 +545,9 @@ export class WorkflowInstance
       workflow: PromptFile,
       workspaceRoot: string
     ) => Promise<void>,
-    runnerHostIdentity?: RunnerHostIdentity
+    runnerHostIdentity?: RunnerHostIdentity,
+    /** Host file watcher for the working file; headless hosts poll instead. */
+    fileWatcherFactory?: FileWatcherFactory
   ) {
     const resolvedRunnerHostIdentity = runnerHostIdentity ?? {
       runner: isCli() ? RUNNER_IDS.CLI : RUNNER_IDS.VSCODE,
@@ -671,7 +674,9 @@ export class WorkflowInstance
     );
     this.promptFileWatcher = new PromptFileWatcher(
       this.promptQueue,
-      () => this.dashboardSink
+      () => this.dashboardSink,
+      fileWatcherFactory,
+      () => this.platform.getNamedWorkspaceRoots().map((root) => root.fsPath)
     );
 
     const bufferCallbacks: OutputCaptureCallbacks = {

@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { PromptQueue } from "../PromptQueue";
@@ -6,6 +5,8 @@ import { EXECUTION_STATES } from "../../types/CtrlYokeTypes";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import { Log } from "../../utils/Log";
 import { pathsEqual } from "../../utils/PathCasing";
+import { isPathWithinAnyDirectory } from "../../utils/PathSecurity";
+import type { FileWatcher, FileWatcherFactory } from "../HostPorts";
 
 /**
  * PromptFileWatcher
@@ -13,13 +14,14 @@ import { pathsEqual } from "../../utils/PathCasing";
  * RESPONSIBILITY: File System Monitoring & Live Reload
  *
  * Handles file watching for working files including:
- * - Setting up FileSystemWatcher for specific files
+ * - Setting up a host file watcher for specific files, with a stat-polling
+ *   fallback wherever native watching is unavailable or unreliable
  * - Handling file change events (MCP appends, user edits)
  * - Handling file deletion events
  * - Cleanup and disposal of watchers
  */
 export class PromptFileWatcher {
-  private watcher?: vscode.FileSystemWatcher;
+  private watcher?: FileWatcher;
   private pollingInterval?: ReturnType<typeof setInterval>;
   private pollingFilePath?: string;
   private pollingFileSignature?: string;
@@ -31,7 +33,17 @@ export class PromptFileWatcher {
 
   constructor(
     private promptQueue: PromptQueue,
-    private getDashboard: () => IDashboardSink | undefined = () => undefined
+    private getDashboard: () => IDashboardSink | undefined = () => undefined,
+    /**
+     * Host file watcher. Omitted by headless hosts (the CLI), which then rely
+     * on polling alone.
+     */
+    private readonly fileWatcherFactory?: FileWatcherFactory,
+    /**
+     * Roots under which the host watcher is trusted to deliver events. A file
+     * outside every root (e.g. user-scoped run storage) is polled as well.
+     */
+    private readonly getNativelyWatchedRoots: () => readonly string[] = () => []
   ) {}
 
   /**
@@ -75,17 +87,26 @@ export class PromptFileWatcher {
   private watchFile(filePath: string): void {
     this.disposeWatcher();
 
+    this.watchFileNatively(filePath);
+    Log.trace(`[PromptFileWatcher] Set up file watcher for ${filePath}`);
+    this.watchedFilePath = filePath;
+    this.startPollingIfNeeded(filePath);
+  }
+
+  private watchFileNatively(filePath: string): void {
+    if (!this.fileWatcherFactory) {
+      return;
+    }
+
     // Create watcher for this specific file (working file)
-    const pattern = new vscode.RelativePattern(
+    this.watcher = this.fileWatcherFactory.create(
       path.dirname(filePath),
       path.basename(filePath)
     );
 
-    this.watcher = vscode.workspace.createFileSystemWatcher(pattern);
-
-    this.watcher.onDidChange(async (uri) => {
+    this.watcher.onDidChange(async (changedPath) => {
       if (this.onFileChangedCallback) {
-        await this.onFileChanged(uri, this.onFileChangedCallback);
+        await this.onFileChanged(changedPath, this.onFileChangedCallback);
       }
     });
 
@@ -93,28 +114,24 @@ export class PromptFileWatcher {
     // (used by the working-file atomic write) fires onDidCreate instead of
     // onDidChange, so queue appends would otherwise be missed until the next
     // natural queue write.
-    this.watcher.onDidCreate(async (uri) => {
+    this.watcher.onDidCreate(async (createdPath) => {
       if (this.onFileChangedCallback) {
-        await this.onFileChanged(uri, this.onFileChangedCallback);
+        await this.onFileChanged(createdPath, this.onFileChangedCallback);
       }
     });
 
-    this.watcher.onDidDelete((uri) => {
+    this.watcher.onDidDelete((deletedPath) => {
       if (this.onFileDeletedCallback) {
-        this.onFileDeleted(uri, this.onFileDeletedCallback);
+        this.onFileDeleted(deletedPath, this.onFileDeletedCallback);
       }
     });
-
-    Log.trace(`[PromptFileWatcher] Set up file watcher for ${filePath}`);
-    this.watchedFilePath = filePath;
-    this.startExternalFilePolling(filePath);
   }
 
-  private startExternalFilePolling(filePath: string): void {
-    const isExternalFile =
-      vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath)) ===
-      undefined;
-    if (!isExternalFile) {
+  private startPollingIfNeeded(filePath: string): void {
+    const nativelyWatched =
+      this.watcher !== undefined &&
+      isPathWithinAnyDirectory(filePath, this.getNativelyWatchedRoots());
+    if (nativelyWatched) {
       return;
     }
 
@@ -147,10 +164,7 @@ export class PromptFileWatcher {
       }
       this.pollingFileSignature = signature;
       if (this.onFileChangedCallback) {
-        await this.onFileChanged(
-          vscode.Uri.file(filePath),
-          this.onFileChangedCallback
-        );
+        await this.onFileChanged(filePath, this.onFileChangedCallback);
       }
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
@@ -169,11 +183,11 @@ export class PromptFileWatcher {
    * Handle file change events
    * Only reloads during active execution states to support MCP appends
    *
-   * @param uri Changed file URI
+   * @param filePath Changed file path
    * @param onReload Callback to reload queue from file
    */
   private async onFileChanged(
-    uri: vscode.Uri,
+    filePath: string,
     onReload: (filePath: string) => Promise<void>
   ): Promise<void> {
     // Reload during active execution states (RUNNING, PAUSED, CANCELLING) to support MCP appends
@@ -186,9 +200,9 @@ export class PromptFileWatcher {
 
     if (shouldReload) {
       Log.trace(
-        `[PromptFileWatcher] Working file changed during execution, reloading queue: ${uri.fsPath}`
+        `[PromptFileWatcher] Working file changed during execution, reloading queue: ${filePath}`
       );
-      await onReload(uri.fsPath);
+      await onReload(filePath);
     } else {
       Log.trace(
         `[PromptFileWatcher] Working file changed but ignoring reload (state: ${state.status}) to preserve dashboard view`
@@ -199,14 +213,14 @@ export class PromptFileWatcher {
   /**
    * Handle file deletion events
    *
-   * @param uri Deleted file URI
+   * @param filePath Deleted file path
    * @param onDelete Callback to cleanup file references
    */
   private onFileDeleted(
-    uri: vscode.Uri,
+    filePath: string,
     onDelete: (filePath: string) => void
   ): void {
-    Log.trace(`[PromptFileWatcher] Working file deleted: ${uri.fsPath}`);
+    Log.trace(`[PromptFileWatcher] Working file deleted: ${filePath}`);
 
     // A promoted draft is moved, not lost: `WorkingFileManager.finalizeRun`
     // removes `draft/workflow.ctrlyoke.json` once its content lives on in
@@ -219,7 +233,7 @@ export class PromptFileWatcher {
     // permanently stop the watcher from following `workingFilePath`,
     // reinstating the exact defect that subscription exists to fix.
     const activeWorkingFile = this.promptQueue.getState().workingFilePath;
-    if (activeWorkingFile && !pathsEqual(activeWorkingFile, uri.fsPath)) {
+    if (activeWorkingFile && !pathsEqual(activeWorkingFile, filePath)) {
       Log.trace(
         `[PromptFileWatcher] Ignoring delete for superseded working file (active: ${activeWorkingFile})`
       );
@@ -227,7 +241,7 @@ export class PromptFileWatcher {
     }
 
     // Cleanup file references
-    onDelete(uri.fsPath);
+    onDelete(filePath);
 
     // The watched file really is gone. Drop the watcher and its polling
     // fallback, but keep the state subscription so a later working-file change

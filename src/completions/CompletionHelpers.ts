@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import * as crypto from "crypto";
-import { getWorkspaceSymbols } from "../utils/AttachmentBuilders";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import { configService } from "../config/CtrlYokeConfigService";
@@ -963,6 +962,33 @@ export async function getPathSuggestions(
  * noise.
  */
 const SYMBOL_CANDIDATE_PREFIX_LENGTH = 3;
+
+/**
+ * Get all workspace symbols matching a query from VS Code's workspace symbol
+ * providers.
+ *
+ * @param query Search query, passed to every provider verbatim (each
+ *   provider decides what matches; VS Code itself filters nothing)
+ * @returns Array of symbol information from all file types, in provider order
+ */
+async function getWorkspaceSymbols(
+  query: string
+): Promise<vscode.SymbolInformation[]> {
+  try {
+    const allSymbols = (await vscode.commands.executeCommand(
+      "vscode.executeWorkspaceSymbolProvider",
+      query
+    )) as vscode.SymbolInformation[] | undefined;
+
+    return allSymbols ?? [];
+  } catch (error) {
+    Log.warn(
+      "[CompletionHelpers] Failed to get workspace symbols; returning no symbols:",
+      error
+    );
+    return [];
+  }
+}
 
 /**
  * Workspace symbols for the full query plus its short prefix (see

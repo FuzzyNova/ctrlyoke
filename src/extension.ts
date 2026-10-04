@@ -18,6 +18,10 @@ import {
 import { ServerTokenStore } from "./platform/ServerTokenStore";
 import { VsCodeAdapter } from "./platform/VsCodeAdapter";
 import { VsCodeFileWatcherFactory } from "./platform/VsCodeFileWatcher";
+import {
+  initializeVsCodeLogging,
+  showLogOutputChannel,
+} from "./platform/VsCodeLogOutputChannel";
 import { VsCodeSecretStore } from "./platform/VsCodeSecretStore";
 import { OsCredentialStore } from "./platform/OsCredentialStore";
 import { FallbackSecretStore } from "./platform/FallbackSecretStore";
@@ -50,7 +54,8 @@ import { initializeModelRegistry } from "./utils/ModelRegistry";
 import { TempFileManager } from "./utils/TempFileManager";
 import { pathsEqual } from "./utils/PathCasing";
 import { IS_DEV_MODE, BUILD_DATE } from "./utils/BuildConfig";
-import { initTelemetry, disposeTelemetry } from "./utils/TelemetryReporter";
+import { disposeTelemetry } from "./utils/TelemetryReporter";
+import { initVsCodeTelemetry } from "./platform/VsCodeTelemetry";
 import {
   reportExtensionActivationFailed,
   getErrorTypeName,
@@ -192,7 +197,7 @@ export async function activate(context: vscode.ExtensionContext) {
     Log.debug(`[Extension] Development mode enabled (Build: ${BUILD_DATE})`);
   }
 
-  initTelemetry();
+  initVsCodeTelemetry();
 
   const runnerHostIdentity: RunnerHostIdentity = {
     runner: RUNNER_IDS.VSCODE,
@@ -202,9 +207,9 @@ export async function activate(context: vscode.ExtensionContext) {
   const platform = new VsCodeAdapter(context);
 
   try {
-    // Initialize config service with file-based backends BEFORE Log.initialize()
-    // so isDiagnosticLogsEnabled() reads the correct user/workspace value when
-    // deciding whether to open the log file.
+    // Initialize config service with file-based backends BEFORE
+    // initializeVsCodeLogging() so isDiagnosticLogsEnabled() reads the correct
+    // user/workspace value when deciding whether to open the log file.
     const workspaceFolders = vscode.workspace.workspaceFolders;
     const userConfigBackend = createUserConfigBackend();
     configService.setUserBackend(userConfigBackend);
@@ -235,7 +240,7 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     // Initialize logging system early (creates output channel)
-    Log.initialize(
+    initializeVsCodeLogging(
       context,
       workspaceFolders?.length ? getVsCodeWorkspaceRoot() : undefined
     );
@@ -1114,7 +1119,7 @@ function registerCommands(
   const showOutputPanelCommand = vscode.commands.registerCommand(
     "ctrlyoke.showOutputPanel",
     () => {
-      Log.getOutputChannel().show();
+      showLogOutputChannel();
     }
   );
 

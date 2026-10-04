@@ -99,7 +99,7 @@ export class CtrlYokeWebviewProvider
   private reconnectRetrySession = 0;
   private outputHistoryManager?: OutputHistoryManager;
   private hub?: DashboardBroadcastHub;
-  private modelsLoadedDisposable?: vscode.Disposable;
+  private modelsLoadedDisposable?: { dispose(): void };
   private configServiceUnsubscribe?: () => void;
   private commitMessageGenerationUnsubscribe?: () => void;
   private licenseEntitlementSubscription?: { dispose(): void };

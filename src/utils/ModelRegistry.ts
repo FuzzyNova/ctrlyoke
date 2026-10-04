@@ -17,7 +17,6 @@
  * Falls back to static model lists from ModelConstants when queries fail.
  */
 
-import * as vscode from "vscode";
 import * as os from "os";
 import * as path from "path";
 import { exec, spawn } from "child_process";
@@ -29,6 +28,7 @@ import {
   ANTIGRAVITY_CLI_MODELS,
 } from "./ModelConstants";
 import { Log } from "./Log";
+import { TypedEmitter } from "./TypedEmitter";
 import { retryWithBackoff, stopRetrying } from "./RetryUtils";
 import { attachStreamTextDecoder } from "./StreamTextDecoder";
 import { CLI_VERSION_CHECK_TIMEOUT_MS } from "../core/harness/shared/interfaces/ICliProvider";
@@ -36,7 +36,7 @@ import { CLI_VERSION_CHECK_TIMEOUT_MS } from "../core/harness/shared/interfaces/
 const execAsync = promisify(exec);
 
 // Event emitter for model registry changes
-const modelsLoadedEmitter = new vscode.EventEmitter<void>();
+const modelsLoadedEmitter = new TypedEmitter<void>();
 
 /**
  * Event that fires when model registry has finished loading

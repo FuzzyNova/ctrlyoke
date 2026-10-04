@@ -1,7 +1,9 @@
 import * as assert from "assert";
 import { suite, test, setup, teardown } from "mocha";
-import type { TelemetryReporter } from "@vscode/extension-telemetry";
-import { setTelemetryReporterForTests } from "../../utils/TelemetryReporter";
+import {
+  setTelemetrySink,
+  type TelemetrySink,
+} from "../../utils/TelemetryReporter";
 import {
   TELEMETRY_EVENTS,
   reportWorkflowStarted,
@@ -21,17 +23,9 @@ interface RecordedCall {
 }
 
 /** Records every call so assertions can inspect event name + properties. */
-class FakeTelemetryReporter implements TelemetryReporter {
+class FakeTelemetryReporter implements TelemetrySink {
   calls: RecordedCall[] = [];
   throwOnSend = false;
-  telemetryLevel: TelemetryReporter["telemetryLevel"] = "all";
-  onDidChangeTelemetryLevel: TelemetryReporter["onDidChangeTelemetryLevel"] =
-    () => ({ dispose: () => {} });
-
-  setContextTag(): void {}
-  getContextTag(): string | undefined {
-    return undefined;
-  }
 
   sendTelemetryEvent(
     eventName: string,
@@ -42,9 +36,6 @@ class FakeTelemetryReporter implements TelemetryReporter {
     }
     this.calls.push({ method: "sendTelemetryEvent", eventName, properties });
   }
-
-  sendRawTelemetryEvent(): void {}
-  sendDangerousTelemetryEvent(): void {}
 
   sendTelemetryErrorEvent(
     eventName: string,
@@ -60,9 +51,6 @@ class FakeTelemetryReporter implements TelemetryReporter {
     });
   }
 
-  sendDangerousTelemetryErrorEvent(): void {}
-  sendDangerousTelemetryException(): void {}
-
   dispose(): Promise<void> {
     return Promise.resolve();
   }
@@ -73,11 +61,11 @@ suite("TelemetryEvents", () => {
 
   setup(() => {
     fake = new FakeTelemetryReporter();
-    setTelemetryReporterForTests(fake);
+    setTelemetrySink(fake);
   });
 
   teardown(() => {
-    setTelemetryReporterForTests(undefined);
+    setTelemetrySink(undefined);
   });
 
   test("reportWorkflowStarted sends stringified properties", () => {
@@ -212,7 +200,7 @@ suite("TelemetryEvents", () => {
   });
 
   test("does nothing when no reporter is configured", () => {
-    setTelemetryReporterForTests(undefined);
+    setTelemetrySink(undefined);
     assert.doesNotThrow(() => reportCliNotFound(HARNESS_IDS.CLAUDE_CLI));
     assert.strictEqual(fake.calls.length, 0);
   });

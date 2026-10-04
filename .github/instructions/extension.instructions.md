@@ -14,7 +14,7 @@ Keep them focused on startup/shutdown wiring, cross-subsystem handoff, and proce
 <extensionActivation>
 `activate()` has a meaningful order. Preserve these dependencies when editing startup:
 
-1. Configure `configService` backends **before** `Log.initialize(context)` so startup logging sees the real file-backed settings.
+1. Configure `configService` backends **before** `initializeVsCodeLogging(context, …)` so startup logging sees the real file-backed settings.
 2. Kick off `initializeModelRegistry()` early, but do not block activation on it.
 3. Workspace bootstrap happens before orchestrator creation:
    - initialized workspace: fire-and-forget `WorkspaceInitializer.initializeIfNeeded()` and `TempFileManager.cleanupOrphanedFiles()`

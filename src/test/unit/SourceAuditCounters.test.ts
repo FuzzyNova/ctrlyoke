@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import * as fs from "fs";
+import { builtinModules } from "module";
 import * as path from "path";
 import * as ts from "typescript";
 import { suite, test } from "mocha";
@@ -53,17 +54,16 @@ const TOAST_NAMES = new Set(["showToast", "enqueueToast"]);
 // those capabilities are injected by extension.ts, and its workspace-folder
 // resolver is now injected as a path callback. Its runner watcher is now
 // supplied by the FileWatcherFactory port.
-const vscodeImportersReachableFromOrchestrator = 8;
+// Shrunk from 8 to 4: the files the standalone CLI also loads (Log,
+// ModelRegistry, AttachmentBuilders, PromptFileWatcher) were decoupled so the
+// CLI runtime graph never loads vscode; see the src/cli.ts guard below.
+const vscodeImportersReachableFromOrchestrator = 4;
 
 const vscodeImporterFilesReachableFromOrchestrator = [
   "src/core/orchestration/ExecutionRootCoordinationWatchSession.ts",
   "src/core/orchestration/ExternalRunWatchSession.ts",
-  "src/core/orchestration/PromptFileWatcher.ts",
   "src/core/orchestration/WorkflowCommandHandler.ts",
   "src/ui/ExternalFileTrustPrompt.ts",
-  "src/utils/AttachmentBuilders.ts",
-  "src/utils/Log.ts",
-  "src/utils/ModelRegistry.ts",
 ] as const;
 
 // Phase 1 item 9 removes the orchestrator's direct vscode import.
@@ -212,8 +212,14 @@ interface ParsedProductionSource {
 let parsedProductionSources:
   { repoRoot: string; sources: ParsedProductionSource[] } | undefined;
 
-let orchestratorValueImportGraph:
-  { repoRoot: string; files: readonly ParsedProductionSource[] } | undefined;
+interface ValueImportGraph {
+  /** Production sources reachable through runtime (non-type) edges. */
+  files: readonly ParsedProductionSource[];
+  /** Bare (package) specifiers imported at runtime anywhere in the graph. */
+  packageSpecifiers: readonly string[];
+}
+
+const valueImportGraphs = new Map<string, ValueImportGraph>();
 
 function getParsedProductionSources(
   repoRoot: string
@@ -280,11 +286,46 @@ function isValueImport(node: ts.ImportDeclaration): boolean {
   return false;
 }
 
-function getOrchestratorValueImportGraph(
-  repoRoot: string
-): readonly ParsedProductionSource[] {
-  if (orchestratorValueImportGraph?.repoRoot === repoRoot) {
-    return orchestratorValueImportGraph.files;
+/**
+ * The module specifier of a runtime import edge — a value `import`, a value
+ * `export … from`, or a dynamic `import()` — or `undefined` for any other
+ * node, including type-only imports and re-exports, which are erased.
+ */
+function getRuntimeImportSpecifier(node: ts.Node): string | undefined {
+  if (
+    ts.isImportDeclaration(node) &&
+    isValueImport(node) &&
+    ts.isStringLiteral(node.moduleSpecifier)
+  ) {
+    return node.moduleSpecifier.text;
+  }
+  if (
+    ts.isExportDeclaration(node) &&
+    !node.isTypeOnly &&
+    node.moduleSpecifier &&
+    ts.isStringLiteral(node.moduleSpecifier)
+  ) {
+    return node.moduleSpecifier.text;
+  }
+  if (
+    ts.isCallExpression(node) &&
+    node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+    node.arguments.length === 1 &&
+    ts.isStringLiteral(node.arguments[0])
+  ) {
+    return node.arguments[0].text;
+  }
+  return undefined;
+}
+
+function getValueImportGraph(
+  repoRoot: string,
+  entryRelativeFile: string
+): ValueImportGraph {
+  const cacheKey = `${repoRoot}\0${entryRelativeFile}`;
+  const cached = valueImportGraphs.get(cacheKey);
+  if (cached) {
+    return cached;
   }
 
   const sources = getParsedProductionSources(repoRoot);
@@ -294,36 +335,35 @@ function getOrchestratorValueImportGraph(
       source,
     ])
   );
-  const orchestrator = sources.find(
-    (source) => source.relativeFile === "src/core/WorkflowOrchestrator.ts"
+  const entry = sources.find(
+    (source) => source.relativeFile === entryRelativeFile
   );
-  if (!orchestrator) {
-    throw new Error("WorkflowOrchestrator.ts was not found");
+  if (!entry) {
+    throw new Error(`${entryRelativeFile} was not found`);
   }
 
-  const reachable = new Set<ParsedProductionSource>([orchestrator]);
-  const pending = [orchestrator];
+  const reachable = new Set<ParsedProductionSource>([entry]);
+  const packageSpecifiers = new Set<string>();
+  const pending = [entry];
   while (pending.length > 0) {
     const source = pending.pop();
     if (!source) continue;
     const currentSource = source;
 
     function visit(node: ts.Node): void {
-      if (
-        ts.isImportDeclaration(node) &&
-        isValueImport(node) &&
-        ts.isStringLiteral(node.moduleSpecifier) &&
-        node.moduleSpecifier.text.startsWith(".")
-      ) {
+      const specifier = getRuntimeImportSpecifier(node);
+      if (specifier?.startsWith(".")) {
         const imported = resolveRelativeProductionImport(
           currentSource,
-          node.moduleSpecifier.text,
+          specifier,
           sourceByPath
         );
         if (imported && !reachable.has(imported)) {
           reachable.add(imported);
           pending.push(imported);
         }
+      } else if (specifier) {
+        packageSpecifiers.add(specifier);
       }
       ts.forEachChild(node, visit);
     }
@@ -331,11 +371,107 @@ function getOrchestratorValueImportGraph(
     visit(source.sourceFile);
   }
 
-  const files = [...reachable].sort((left, right) =>
-    left.relativeFile.localeCompare(right.relativeFile)
+  const graph: ValueImportGraph = {
+    files: [...reachable].sort((left, right) =>
+      left.relativeFile.localeCompare(right.relativeFile)
+    ),
+    packageSpecifiers: [...packageSpecifiers].sort(),
+  };
+  valueImportGraphs.set(cacheKey, graph);
+  return graph;
+}
+
+function getOrchestratorValueImportGraph(
+  repoRoot: string
+): readonly ParsedProductionSource[] {
+  return getValueImportGraph(repoRoot, "src/core/WorkflowOrchestrator.ts")
+    .files;
+}
+
+const NODE_BUILTIN_MODULES = new Set(builtinModules);
+
+function isNodeBuiltinSpecifier(specifier: string): boolean {
+  return (
+    specifier.startsWith("node:") ||
+    NODE_BUILTIN_MODULES.has(specifier.split("/")[0])
   );
-  orchestratorValueImportGraph = { repoRoot, files };
-  return files;
+}
+
+/**
+ * Walk the installed JavaScript that `packageSpecifier` loads through static
+ * `require()` calls and return the chain to the first `require("vscode")`,
+ * or `undefined` when the package never loads it. Packages such as
+ * `@vscode/extension-telemetry` require `vscode` internally, which no
+ * source-level import scan can see.
+ */
+function findPackageVscodeRequireChain(
+  repoRoot: string,
+  packageSpecifier: string
+): string[] | undefined {
+  let entry: string;
+  try {
+    entry = require.resolve(packageSpecifier, { paths: [repoRoot] });
+  } catch {
+    // Not installed (e.g. an optional native dependency); nothing to walk.
+    return undefined;
+  }
+
+  const parents = new Map<string, string | undefined>([[entry, undefined]]);
+  const pending = [entry];
+  const requirePattern = /\brequire\(\s*["']([^"']+)["']\s*\)/g;
+  const chainTo = (file: string): string[] => {
+    const chain: string[] = [];
+    for (let at: string | undefined = file; at; at = parents.get(at)) {
+      chain.unshift(path.relative(repoRoot, at).split(path.sep).join("/"));
+    }
+    return [packageSpecifier, ...chain];
+  };
+
+  while (pending.length > 0) {
+    const file = pending.pop();
+    if (!file || !/\.c?js$/.test(file)) continue;
+    const text = fs.readFileSync(file, "utf8");
+    for (const match of text.matchAll(requirePattern)) {
+      const required = match[1];
+      if (required === "vscode") {
+        return chainTo(file);
+      }
+      if (isNodeBuiltinSpecifier(required)) continue;
+      let resolved: string;
+      try {
+        resolved = require.resolve(required, { paths: [path.dirname(file)] });
+      } catch {
+        continue;
+      }
+      if (!parents.has(resolved)) {
+        parents.set(resolved, file);
+        pending.push(resolved);
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Every way the runtime graph rooted at `entryRelativeFile` loads `vscode`:
+ * project files that import it, and packages that require it internally.
+ */
+function collectVscodeLoadsReachableFrom(
+  repoRoot: string,
+  entryRelativeFile: string
+): string[] {
+  const graph = getValueImportGraph(repoRoot, entryRelativeFile);
+  const loads = graph.files
+    .filter(importsVscode)
+    .map((source) => source.relativeFile);
+  for (const specifier of graph.packageSpecifiers) {
+    if (specifier === "vscode" || isNodeBuiltinSpecifier(specifier)) continue;
+    const chain = findPackageVscodeRequireChain(repoRoot, specifier);
+    if (chain) {
+      loads.push(chain.join(" -> "));
+    }
+  }
+  return loads.sort();
 }
 
 function importsVscode(source: ParsedProductionSource): boolean {
@@ -545,6 +681,26 @@ suite("SourceAuditCounters", () => {
       vscodeImporterFilesReachableFromOrchestrator
     );
   });
+
+  for (const entry of ["src/cli.ts", "src/mcp-server.ts"]) {
+    test(`${entry} never loads vscode at runtime`, function () {
+      // Shares the parsed-source cache with the orchestrator graph test, but
+      // also walks installed package JavaScript.
+      this.timeout(60_000);
+      // The esbuild bundle aliases `vscode` to vscode-shim.ts, but the same
+      // entry is also run from plain `tsc` output (compile-tests emits it
+      // first), where any reachable `vscode` load is a hard crash:
+      // "Cannot find module 'vscode'". The standalone binaries must not
+      // depend on VS Code at all.
+      assert.deepStrictEqual(
+        collectVscodeLoadsReachableFrom(repoRoot, entry),
+        [],
+        `${entry} reaches code that loads vscode. Move the VS Code-specific ` +
+          "part behind a host port implemented under src/platform/ and wired " +
+          "from extension.ts."
+      );
+    });
+  }
 
   test("holds the orchestrator direct VS Code boundary baselines", function () {
     assertShrinkOnlyCount(

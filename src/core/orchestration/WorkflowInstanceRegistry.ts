@@ -23,6 +23,7 @@ import type { IDashboardSink } from "../../types/IDashboardSink";
 import type { ActiveTerminalWorkflowRef } from "../../types/WebviewMessageTypes";
 import type { HarnessUsageSnapshot } from "../../types/UsageTypes";
 import type { UserFeedbackSink } from "../UserFeedbackSink";
+import type { FileWatcherFactory } from "../HostPorts";
 import type { UserInteractionPort } from "../../ui/UserInteractionPort";
 import { getPtyProcessManager } from "../harness/PtyProcessManager";
 import { Log } from "../../utils/Log";
@@ -94,6 +95,8 @@ export interface WorkflowInstanceRegistryBuildPort {
     workspaceRoot: string
   ) => Promise<void>;
   readonly runnerHostIdentity: RunnerHostIdentity;
+  /** Host file watcher for each instance's working file; omitted → polling. */
+  readonly fileWatcherFactory?: FileWatcherFactory;
 }
 
 export interface WorkflowInstanceRegistryBroadcastPort {
@@ -598,7 +601,8 @@ export class WorkflowInstanceRegistry
       (harnessId) => host.refreshHarnessUsage(harnessId),
       (workflow, workspaceRoot) =>
         host.approveSecretGrantsForWorkflow(workflow, workspaceRoot),
-      host.runnerHostIdentity
+      host.runnerHostIdentity,
+      host.fileWatcherFactory
     );
     Log.debug(
       `[WorkflowOrchestrator] buildWorkflowInstance: created inst:${instance.id.slice(0, 8)}`
