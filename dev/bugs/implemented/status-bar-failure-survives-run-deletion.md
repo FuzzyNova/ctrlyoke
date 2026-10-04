@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli), reviewing b2371ff1f (code reading only, not reproduced)
 - **Area:** `src/core/orchestration/WorkflowActivityTracker.ts`, `src/core/orchestration/RunLifecycleService.ts`, `WorkflowOrchestrator.openUnseenFailedRun`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -13,6 +13,7 @@ import type {
   WorkflowActivityEntry,
   WorkflowActivitySummary,
 } from "../HostPorts";
+import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 import { isExecutionOwnerState } from "./WorkflowInstanceRegistry";
 
 /** How long the status bar shows a completed run before returning to idle. */
@@ -111,6 +112,21 @@ export class WorkflowActivityTracker {
   /** The failure the status bar click opens. */
   getOldestUnseenFailure(): FailedWorkflowActivity | undefined {
     return this.unseenFailures.values().next().value;
+  }
+
+  /** Remove unseen failures for a deleted run, or every run in its lineage. */
+  forgetRun(workflowKey: WorkflowKey, runRef?: RunRef): boolean {
+    let changed = false;
+    for (const [id, failure] of this.unseenFailures) {
+      if (
+        failure.workflowKey === workflowKey &&
+        (runRef === undefined || failure.runRef === runRef)
+      ) {
+        this.unseenFailures.delete(id);
+        changed = true;
+      }
+    }
+    return changed;
   }
 
   buildSummary(

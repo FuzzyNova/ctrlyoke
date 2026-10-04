@@ -150,6 +150,10 @@ export interface RunLifecycleServiceHost {
   readonly getExternalExecutionRunRef: (
     workflowKey: WorkflowKey
   ) => RunRef | undefined;
+  readonly forgetRunActivity: (
+    workflowKey: WorkflowKey,
+    runRef?: RunRef
+  ) => void;
 }
 
 export type SetStartPositionResult =
@@ -184,6 +188,17 @@ export interface ExplicitContinuationValidation {
 /** Owns addressed run identity decisions and run lifecycle actions. */
 export class RunLifecycleService {
   constructor(private readonly host: RunLifecycleServiceHost) {}
+
+  async runAddressExists(
+    address: Extract<WorkflowViewAddress, { kind: "run" }>
+  ): Promise<boolean> {
+    const workspaceRoot = this.host.getWorkspaceRoot();
+    if (!workspaceRoot) return false;
+    const summaries = await new OutputHistoryManager(
+      workspaceRoot
+    ).getRunSummaries(address.workflowKey);
+    return summaries.some((summary) => summary.runRef === address.runRef);
+  }
 
   async setStartPositionAtRun(
     address: { workflowKey: WorkflowKey; runRef: RunRef },
@@ -540,12 +555,20 @@ export class RunLifecycleService {
       this.host.registry.getViewAddressRegistry().set(clientId, address);
       return;
     }
+    const previousAddress =
+      this.host.registry.getViewAddressRegistry().get(clientId) ?? null;
     try {
       await this.host.views.loadRunViewForClient(address, send, clientId);
     } catch (error) {
       Log.warn(
         `[WorkflowOrchestrator] Failed to switch ${clientId} to run ${address.runRef}: ${getErrorMessage(error)}`
       );
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        this.host.registry
+          .getViewAddressRegistry()
+          .set(clientId, previousAddress);
+        return;
+      }
       this.host.registry.getViewAddressRegistry().set(clientId, address);
     }
   }
@@ -1069,6 +1092,7 @@ export class RunLifecycleService {
       trashed = await trash.commit();
     }
     if (trashed) send(toHistoryTrashedMessage(trashed));
+    this.host.forgetRunActivity(address.workflowKey, address.runRef);
     const remaining = await historyManager.getRunSummaries(address.workflowKey);
     const fallback: WorkflowViewAddress = remaining[0]
       ? {
@@ -1137,6 +1161,15 @@ export class RunLifecycleService {
     }
     const trashed = await trash.commit();
     if (trashed) send(toHistoryTrashedMessage(trashed));
+    for (const item of trashed?.items ?? []) {
+      if (item.wholeLineage) {
+        this.host.forgetRunActivity(item.workflowKey);
+      } else {
+        for (const runRef of item.runRefs) {
+          this.host.forgetRunActivity(item.workflowKey, runRef);
+        }
+      }
+    }
     const remaining = await historyManager.getRunSummaries(workflowKey);
     const fallback: WorkflowViewAddress = remaining[0]
       ? {
@@ -1173,9 +1206,11 @@ export class RunLifecycleService {
         ([, address]) => address?.workflowKey === workflowKey
       );
       const latestRunRef = resolveAddress
-        ? (await new OutputHistoryManager(
-            this.requireWorkspaceRoot()
-          ).getRunSummaries(workflowKey))[0]?.runRef
+        ? (
+            await new OutputHistoryManager(
+              this.requireWorkspaceRoot()
+            ).getRunSummaries(workflowKey)
+          )[0]?.runRef
         : undefined;
       await Promise.all(
         targets.map(async ([targetClientId, currentAddress]) => {

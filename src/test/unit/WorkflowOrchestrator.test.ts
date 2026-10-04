@@ -89,6 +89,45 @@ const TEST_RUNNER_HOST_IDENTITY: RunnerHostIdentity = {
   pid: process.pid,
 };
 
+suite("WorkflowOrchestrator unseen failed runs", () => {
+  test("opening a missing failed run acknowledges it without changing the view", async () => {
+    const orchestrator = createTestOrchestrator();
+    const internal = orchestrator as any;
+    internal.openPanel = async () => undefined;
+    const currentAddress = {
+      workflowKey: "current-lineage" as never,
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+    };
+    internal.viewAddressRegistry = new Map([[PANEL_CLIENT_ID, currentAddress]]);
+    const failedSummary = {
+      id: "failed-instance",
+      workflowKey: "missing-lineage" as never,
+      runRef: "missing-run" as never,
+      workflowName: "Missing",
+      executionState: EXECUTION_STATES.RUNNING,
+      currentStep: 0,
+      totalSteps: 1,
+      finalStepRunning: false,
+    };
+    internal.observeWorkflowActivity(failedSummary);
+    internal.observeWorkflowActivity({
+      ...failedSummary,
+      executionState: EXECUTION_STATES.ERROR,
+    });
+
+    await orchestrator.openUnseenFailedRun();
+
+    assert.deepStrictEqual(
+      internal.getWorkflowActivityTracker().buildSummary([]).unseenFailures,
+      []
+    );
+    assert.deepStrictEqual(
+      internal.viewAddressRegistry.get(PANEL_CLIENT_ID),
+      currentAddress
+    );
+  });
+});
+
 function createTestOrchestrator(
   overrides: Partial<WorkflowOrchestratorDependencies> = {}
 ): WorkflowOrchestrator {
@@ -1932,6 +1971,25 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       internal.lineageRepository = {
         readDescriptor: async () => ({ revision: 1, lastModifiedAt: 123 }),
       };
+      const failedSummary = {
+        id: "failed-instance",
+        workflowKey,
+        runRef: older.runRef,
+        workflowName: "Delete non-viewed",
+        executionState: EXECUTION_STATES.RUNNING,
+        currentStep: 0,
+        totalSteps: 1,
+        finalStepRunning: false,
+      };
+      internal.observeWorkflowActivity(failedSummary);
+      internal.observeWorkflowActivity({
+        ...failedSummary,
+        executionState: EXECUTION_STATES.ERROR,
+      });
+      assert.strictEqual(
+        internal.getWorkflowActivityTracker().getOldestUnseenFailure()?.runRef,
+        older.runRef
+      );
       const pushed: Array<{ type?: string; runSummaries?: unknown[] }> = [];
       const feedbackCalls: Array<{ severity: string; message: string }> = [];
       internal.userFeedbackSink = {
@@ -1948,6 +2006,10 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       const remaining = await history.getRunSummaries(workflowKey);
       assert.strictEqual(remaining.length, 1);
       assert.strictEqual(remaining[0].runRef, newer.runRef);
+      assert.deepStrictEqual(
+        internal.getWorkflowActivityTracker().buildSummary([]).unseenFailures,
+        []
+      );
 
       // The requester is told the run went to Recently deleted (its Undo
       // toast) and, not being a registered viewer of this lineage, gets only
