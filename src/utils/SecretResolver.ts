@@ -105,7 +105,7 @@ export function formatUnapprovedSecretGrantError(
   return names
     .map(
       (name) =>
-        `Secret grant "${name}" has not been approved for this workspace (workflow scope). ` +
+        `Secret grant "${name}" has not been approved for this workspace. ` +
         `Approve it with ` +
         `"ctrlyoke trust-secret-grants <file>" (or from the ctrlyoke panel in ` +
         `VS Code), then re-run.`
@@ -118,8 +118,7 @@ export function assertSecretGrantTrust(
   workspaceRoot: string,
   trustedNames: readonly string[] = [],
   trustStore: Pick<SecretGrantsTrustStore, "getDecision"> =
-    secretGrantsTrustStore,
-  _scope = "step"
+    secretGrantsTrustStore
 ): void {
   const trusted = new Set(trustedNames);
   const unapproved = [...new Set(names)].filter(

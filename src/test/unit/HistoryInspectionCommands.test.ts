@@ -944,6 +944,75 @@ suite("CLI history inspection command handlers", () => {
       );
       assert.match(pendingTextIo.output[2], /pending \(Pass 1 next\)/);
       assert.match(pendingTextIo.output[2], /0 passes, 1 next/);
+
+      await fs.writeFile(
+        workingFile,
+        JSON.stringify({
+          steps: [{ prompt: "Queue" }],
+          finalStep: {
+            name: "review",
+            prompt: "Review",
+            _runtime: { startedAt: 30_000 },
+          },
+          _runtime: {
+            executionState: EXECUTION_STATES.RUNNING,
+            currentIndex: 1,
+          },
+        })
+      );
+      const runningPassIo = new TestIo();
+      await stepsHistoryCommand(
+        { workflow: key, json: true },
+        runningPassIo,
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          manager,
+          new TestRunOutputResolver(
+            [],
+            [
+              lifecycleStarted(
+                { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 2 },
+                { timestampMs: 30_000 }
+              ),
+            ]
+          ),
+          undefined,
+          workspaceRoot
+        )
+      );
+      const runningPassValue = JSON.parse(runningPassIo.output[0]) as {
+        finalStep: {
+          state: string;
+          nextPass: number | null;
+          passes: Array<{ state: string }>;
+        };
+      };
+      assert.strictEqual(runningPassValue.finalStep.state, "running");
+      assert.strictEqual(runningPassValue.finalStep.nextPass, null);
+      assert.strictEqual(runningPassValue.finalStep.passes[0].state, "running");
+
+      const runningPassTextIo = new TestIo();
+      await stepsHistoryCommand(
+        { workflow: key },
+        runningPassTextIo,
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          manager,
+          new TestRunOutputResolver(
+            [],
+            [
+              lifecycleStarted(
+                { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 2 },
+                { timestampMs: 30_000 }
+              ),
+            ]
+          ),
+          undefined,
+          workspaceRoot
+        )
+      );
+      assert.match(runningPassTextIo.output[2], /^final +review +running /);
+      assert.doesNotMatch(runningPassTextIo.output[2], /Pass 4 next/);
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
     }

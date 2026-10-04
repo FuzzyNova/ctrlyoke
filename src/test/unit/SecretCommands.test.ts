@@ -409,9 +409,10 @@ suite("Secret command handlers", () => {
       );
       const beforeApprovalError = beforeApprovalIo.errors.join("\n");
       assert.strictEqual(beforeApproval, 2);
-      assert.match(beforeApprovalError, /Secret grant "A".*workflow scope/);
-      assert.match(beforeApprovalError, /Secret grant "B".*workflow scope/);
-      assert.match(beforeApprovalError, /Secret grant "C".*workflow scope/);
+      assert.match(beforeApprovalError, /Secret grant "A".*not been approved/);
+      assert.match(beforeApprovalError, /Secret grant "B".*not been approved/);
+      assert.match(beforeApprovalError, /Secret grant "C".*not been approved/);
+      assert.doesNotMatch(beforeApprovalError, /workflow scope/);
       assert.match(beforeApprovalError, /Secret "A" is missing for scope "workflow"/);
       assert.match(beforeApprovalError, /Secret "B" is missing for scope "prompt step"/);
       assert.match(beforeApprovalError, /Secret "C" is missing for scope "script step"/);

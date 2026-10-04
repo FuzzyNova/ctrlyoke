@@ -147,8 +147,7 @@ suite("SecretResolver", () => {
           ["WORKSPACE_MCP_TOKEN"],
           "C:\\workspace",
           [],
-          trustStore,
-          "step 1"
+          trustStore
         ),
       /has not been approved for this workspace/u
     );
@@ -739,7 +738,9 @@ suite("SecretResolver", () => {
         ),
         (error: unknown) =>
           error instanceof UnapprovedSecretGrantsError &&
-          /Secret grant "TRUSTED_TOKEN".*workflow scope/.test(error.message)
+          /Secret grant "TRUSTED_TOKEN" has not been approved/.test(
+            error.message
+          )
       );
     });
 
@@ -769,7 +770,7 @@ suite("SecretResolver", () => {
           { TRUSTED_TOKEN: "resolved" },
           { trustStore }
         ),
-        /Secret grant "TRUSTED_TOKEN".*workflow scope/
+        /Secret grant "TRUSTED_TOKEN" has not been approved/
       );
     });
 

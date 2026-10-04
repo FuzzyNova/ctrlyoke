@@ -3479,18 +3479,11 @@ export class WorkflowExecutor {
       return {};
     }
     const workspaceRoot = this.platform.getWorkspaceRoot();
-    const workflow = this.promptQueue.getWorkflowFile();
-    const scope =
-      target.kind === FINAL_STEP_PHASES.FINAL_STEP
-        ? workflow.finalStep?.name?.trim() || "final step"
-        : workflow.steps?.[target.stepIndex]?.name?.trim() ||
-          `step ${target.stepIndex + 1}`;
     assertSecretGrantTrust(
       names,
       workspaceRoot,
       trustedNames,
-      this.secretGrantTrustStore,
-      scope
+      this.secretGrantTrustStore
     );
     const resolutionContext = {
       workspaceRoot,

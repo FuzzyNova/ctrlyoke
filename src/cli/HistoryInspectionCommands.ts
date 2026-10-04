@@ -1,4 +1,7 @@
-import type { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
+import {
+  isTerminalExecutionState,
+  type OutputHistoryManager,
+} from "../core/orchestration/OutputHistoryManager";
 import * as fs from "node:fs/promises";
 import type { WorkflowLineageRepository } from "../core/orchestration/WorkflowLineageRepository";
 import type { RunNavigationSummary } from "../core/orchestration/OutputHistoryManager";
@@ -31,7 +34,9 @@ import type {
 } from "../types/CtrlYokeTypes";
 import { isScriptStep } from "../types/CtrlYokeTypes";
 import {
+  promptFirstLinePreview,
   STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS,
+  truncateText,
 } from "../utils/TextUtils";
 import { formatFinalPassBadge } from "../utils/FinalStepLabels";
 import type { RunSummary } from "../types/WorkflowTimelineTypes";
@@ -1208,7 +1213,7 @@ export async function stepsHistoryCommand(
     WorkflowPaths.manifestPath(workspace.workspaceRoot, workflowKey, runRef)
   );
   const currentIndex = definition._runtime?.currentIndex;
-  const isNonTerminalRun = !isTerminalHistoryState(
+  const isNonTerminalRun = !isTerminalExecutionState(
     definition._runtime?.executionState
   );
   const steps: HistoryStepRow[] = definition.steps.map((step, stepIndex) => {
@@ -1234,7 +1239,8 @@ export async function stepsHistoryCommand(
     definition.finalStep &&
     isNonTerminalRun &&
     currentIndex !== undefined &&
-    currentIndex >= definition.steps.length
+    currentIndex >= definition.steps.length &&
+    passes[passes.length - 1]?.state !== EXECUTION_STATES.RUNNING
       ? passes.length + 1
       : null;
   const finalStepState =
@@ -1355,14 +1361,6 @@ function historyFinishedPassElapsedSeconds(
       );
 }
 
-function isTerminalHistoryState(state: string | undefined): boolean {
-  return (
-    state === EXECUTION_STATES.COMPLETED ||
-    state === EXECUTION_STATES.STOPPED ||
-    state === EXECUTION_STATES.ERROR
-  );
-}
-
 const HISTORY_SEARCH_DEFAULT_LIMIT = 20;
 const HISTORY_SEARCH_MAX_LIMIT = 100;
 const HISTORY_SEARCH_DEFAULT_SNIPPET_CHARS = 100;
@@ -1376,12 +1374,6 @@ export async function searchHistoryCommand(
   dependencies: HistoryInspectionCommandDependencies = {}
 ): Promise<void> {
   CliTerminalFormatter.setColorEnabled(options.color !== false);
-  const normalizedQuery = query.trim();
-  if (normalizedQuery.length < HISTORY_SEARCH_MIN_QUERY_LENGTH) {
-    throw new Error(
-      `History search queries must contain at least ${HISTORY_SEARCH_MIN_QUERY_LENGTH} characters.`
-    );
-  }
   const snippetChars = requestSnippetChars(options);
   const workspace = await (
     dependencies.bootstrapCliWorkspace ?? bootstrapCliWorkspace
@@ -1502,8 +1494,7 @@ function createHistorySearchProgressReporter(io: HistoryInspectionCommandIo): {
 function buildHistorySearchQuery(
   query: string,
   options: HistorySearchCommandOptions,
-  resolvedWorkflowKeys: WorkflowKey[] = (options.workflow as WorkflowKey[]) ??
-    []
+  resolvedWorkflowKeys: WorkflowKey[]
 ): HistorySearchQuery {
   const normalizedQuery = query.trim();
   if (normalizedQuery.length < HISTORY_SEARCH_MIN_QUERY_LENGTH) {
@@ -2013,7 +2004,7 @@ function renderHistoryList(
   const headers = ["KEY", "NAME", "RUNS", "LATEST", "STATE"];
   const values = rows.map((row) => [
     row.workflowKey,
-    truncateCell(row.workflowName, 48),
+    truncateText(row.workflowName, 47),
     String(row.runCount),
     formatDate(row.latestRun?.startedAt),
     row.latestRun?.executionState ?? "—",
@@ -2132,15 +2123,10 @@ function formatStepPrompt(
 ): string {
   const prompt = step.prompt ?? step.script ?? "";
   if (full) return prompt;
-  const firstLine = prompt.split(/\r?\n/, 1)[0] ?? "";
-  return truncateCell(
-    firstLine,
-    STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS + 1
+  return promptFirstLinePreview(
+    prompt,
+    STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS
   );
-}
-
-function truncateCell(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 }
 
 /** A working file's `_runtime.elapsed` (seconds), or null when absent or invalid. */

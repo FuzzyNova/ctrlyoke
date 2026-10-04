@@ -18,7 +18,12 @@ export function promptFirstLinePreview(
   maxChars: number
 ): string {
   const firstLine = prompt.split(/\r?\n/, 1)[0] ?? "";
-  return firstLine.length > maxChars
-    ? `${firstLine.slice(0, maxChars).trimEnd()}\u2026`
-    : firstLine;
+  return truncateText(firstLine, maxChars);
+}
+
+/** Truncate text to maxChars characters before adding an ellipsis. */
+export function truncateText(text: string, maxChars: number): string {
+  return text.length > maxChars
+    ? `${text.slice(0, maxChars).trimEnd()}\u2026`
+    : text;
 }

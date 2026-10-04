@@ -108,7 +108,9 @@ import {
  */
 const RUN_SUMMARY_READ_BATCH_SIZE = 32;
 
-function isTerminalExecutionState(state: ExecutionState): boolean {
+export function isTerminalExecutionState(
+  state: string | undefined
+): boolean {
   return (
     state === EXECUTION_STATES.COMPLETED ||
     state === EXECUTION_STATES.STOPPED ||
