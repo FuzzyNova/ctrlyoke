@@ -1,5 +1,5 @@
 import { isRecord, tryParseJson } from "./shared";
-import { HARNESS_IDS } from "@root/types/DashboardConstants";
+import { HARNESS_IDS } from "../../types/DashboardConstants";
 export interface HarnessModel {
   id: string;
   displayName: string;
@@ -63,36 +63,4 @@ export function listHarnessesSearchText(
       )
       .join("\n"),
   ];
-}
-export function estimateListHarnessesHeight(
-  _params: ListHarnessesParams | undefined,
-  result: ListHarnessesResult,
-  width: number | undefined,
-  fontSize: number,
-  modelsExpanded = false,
-  rawHeight = 0
-): number {
-  const availableWidth = Math.max(160, width ?? 640);
-  const chips = allHarnesses(result).map((harness) =>
-    Math.ceil(
-      `${harness.displayName} · ${harness.available ? "available" : "unavailable"}`
-        .length *
-        fontSize *
-        0.58 +
-        32
-    )
-  );
-  let rows = 1;
-  let rowWidth = 0;
-  for (const chipWidth of chips) {
-    if (rowWidth > 0 && rowWidth + chipWidth > availableWidth) {
-      rows++;
-      rowWidth = 0;
-    }
-    rowWidth += chipWidth + 8;
-  }
-  const models = modelsExpanded
-    ? result.harnesses.reduce((n, h) => n + (h.models?.length ?? 0), 0)
-    : 0;
-  return 38 + rows * fontSize * 1.8 + models * fontSize * 1.4 + rawHeight;
 }

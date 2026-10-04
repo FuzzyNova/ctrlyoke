@@ -59,21 +59,3 @@ export function releasePathsSearchText(
     ].join("\n"),
   ];
 }
-
-export function estimateReleasePathsHeight(
-  _params: ReleasePathsParams | undefined,
-  result: ReleasePathsResult,
-  width: number | undefined,
-  fontSize: number,
-  rawHeight = 0
-): number {
-  const charsPerLine = Math.max(
-    24,
-    Math.floor((width ?? 640) / (fontSize * 0.58))
-  );
-  const lines = releasePathsSearchText(undefined, result).reduce(
-    (total, line) => total + Math.max(1, Math.ceil(line.length / charsPerLine)),
-    0
-  );
-  return 34 + lines * fontSize * 1.55 + rawHeight;
-}

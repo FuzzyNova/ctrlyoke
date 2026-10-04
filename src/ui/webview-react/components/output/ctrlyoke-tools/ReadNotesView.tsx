@@ -1,7 +1,7 @@
 import React from "react";
 import type { ToolResult } from "../../../types/cliEvents";
 import { COORDINATION_ENTRY_KINDS } from "@root/types/DashboardConstants";
-import { COORDINATION_UNTRUSTED_LABEL } from "@utils/coordinationPresentation";
+import { COORDINATION_UNTRUSTED_LABEL } from "@root/utils/ctrlyokeToolViews/coordinationPresentation";
 import { RawToolCallSection } from "./RawToolCallSection";
 import { MarkdownText } from "@components/output/MarkdownText";
 import type {
@@ -9,9 +9,12 @@ import type {
   ToolCallExpansionState,
 } from "@utils/toolCallLayout";
 import type { RowFindDecoration } from "@utils/outputFind";
-import type { ReadNotesParams, ReadNotesResult } from "./readNotesModel";
-import { readNotesEntryText } from "./readNotesModel";
-import { coordinationEntrySearchText } from "@utils/coordinationPresentation";
+import type {
+  ReadNotesParams,
+  ReadNotesResult,
+} from "@root/utils/ctrlyokeToolViews/readNotesModel";
+import { readNotesEntryText } from "@root/utils/ctrlyokeToolViews/readNotesModel";
+import { coordinationEntrySearchText } from "@root/utils/ctrlyokeToolViews/coordinationPresentation";
 import { sliceFindMatches } from "./shared";
 
 export const ReadNotesBody: React.FC<{

@@ -2,13 +2,16 @@ import React from "react";
 import type { ToolResult } from "../../../types/cliEvents";
 import type { RowFindDecoration } from "@utils/outputFind";
 import { MarkdownText } from "@components/output/MarkdownText";
-import { COORDINATION_UNTRUSTED_LABEL } from "@utils/coordinationPresentation";
+import { COORDINATION_UNTRUSTED_LABEL } from "@root/utils/ctrlyokeToolViews/coordinationPresentation";
 import { RawToolCallSection } from "./RawToolCallSection";
 import type {
   ToolCallExpansionSection,
   ToolCallExpansionState,
 } from "@utils/toolCallLayout";
-import type { PostNoteParams, PostNoteResult } from "./postNoteModel";
+import type {
+  PostNoteParams,
+  PostNoteResult,
+} from "@root/utils/ctrlyokeToolViews/postNoteModel";
 
 export interface PostNoteBodyProps {
   params: PostNoteParams | undefined;

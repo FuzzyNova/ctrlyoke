@@ -20,33 +20,35 @@ import {
 } from "@root/types/DashboardConstants";
 import type { OutputRenderRow } from "@utils/outputRows";
 import { OutputRow } from "@components/output/OutputRow";
-import { estimatePostNoteHeight } from "@components/output/ctrlyoke-tools/postNoteModel";
 import { AppendStepBody } from "@components/output/ctrlyoke-tools/AppendStepView";
 import { ClaimPathsBody } from "@components/output/ctrlyoke-tools/ClaimPathsView";
 import { ReleasePathsBody } from "@components/output/ctrlyoke-tools/ReleasePathsView";
 import { ReadNotesBody } from "@components/output/ctrlyoke-tools/ReadNotesView";
 import {
-  estimateClaimPathsHeight,
   parseClaimPathsParams,
   parseClaimPathsResultText,
-} from "@components/output/ctrlyoke-tools/claimPathsModel";
+} from "@root/utils/ctrlyokeToolViews/claimPathsModel";
 import {
-  estimateReleasePathsHeight,
   parseReleasePathsParams,
   parseReleasePathsResultText,
-} from "@components/output/ctrlyoke-tools/releasePathsModel";
+} from "@root/utils/ctrlyokeToolViews/releasePathsModel";
 import {
-  estimateReadNotesHeight,
   parseReadNotesParams,
   parseReadNotesResultText,
-} from "@components/output/ctrlyoke-tools/readNotesModel";
+} from "@root/utils/ctrlyokeToolViews/readNotesModel";
 import {
   appendStepPromptPreview,
   appendStepSearchText,
-  estimateAppendStepHeight,
   parseAppendStepParams,
   parseAppendStepResultText,
-} from "@components/output/ctrlyoke-tools/appendStepModel";
+} from "@root/utils/ctrlyokeToolViews/appendStepModel";
+import {
+  estimateAppendStepHeight,
+  estimateClaimPathsHeight,
+  estimatePostNoteHeight,
+  estimateReadNotesHeight,
+  estimateReleasePathsHeight,
+} from "@components/output/ctrlyoke-tools/heightEstimators";
 
 vi.mock("@hooks/useVsCodeApi", () => ({
   getVsCodeApi: () => ({ postMessage: vi.fn() }),

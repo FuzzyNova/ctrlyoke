@@ -8,15 +8,19 @@ import type {
   ToolCallExpansionState,
 } from "@utils/toolCallLayout";
 import type { RowFindDecoration } from "@utils/outputFind";
-import type { AppendStepParams, AppendStepResult } from "./appendStepModel";
-import { isToolViewPromptTruncated, sliceFindMatches } from "./shared";
+import type {
+  AppendStepParams,
+  AppendStepResult,
+} from "@root/utils/ctrlyokeToolViews/appendStepModel";
+import { isToolViewPromptTruncated } from "@root/utils/ctrlyokeToolViews/shared";
+import { sliceFindMatches } from "./shared";
 import {
   appendStepHarnessModelLabel,
   appendStepParallelGroupLine,
   appendStepPromptPreview,
   appendStepRowLine,
   appendStepSearchText,
-} from "./appendStepModel";
+} from "@root/utils/ctrlyokeToolViews/appendStepModel";
 
 export interface AppendStepBodyProps {
   params: AppendStepParams | undefined;

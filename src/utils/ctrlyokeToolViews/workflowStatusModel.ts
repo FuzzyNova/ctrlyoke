@@ -3,13 +3,12 @@ import {
   isToolViewPromptTruncated,
   toolViewPromptPreview,
   tryParseJson,
-  wrappedTextLines,
 } from "./shared";
 import {
   getHarnessDisplayName,
   getHarnessShortName,
   STEP_STATUS,
-} from "@root/types/DashboardConstants";
+} from "../../types/DashboardConstants";
 
 export interface WorkflowStatusStep {
   index: number;
@@ -135,7 +134,7 @@ export function workflowStatusRowPrefix(step: WorkflowStatusStep): string {
   return `${step.index + 1} · ${step.status} · `;
 }
 
-function workflowStatusRowLine(
+export function workflowStatusRowLine(
   step: WorkflowStatusStep,
   result: WorkflowStatusResult
 ): string {
@@ -153,37 +152,6 @@ export function workflowStatusSearchText(
       .concat(result.schemaWarnings.map((warning) => warning.message))
       .join("\n"),
   ];
-}
-
-function wrappedLines(text: string, width: number, fontSize: number): number {
-  return wrappedTextLines(text, width, fontSize, 16);
-}
-
-export function estimateWorkflowStatusHeight(
-  _params: WorkflowStatusParams | undefined,
-  result: WorkflowStatusResult,
-  width: number | undefined,
-  fontSize: number,
-  rawHeight = 0
-): number {
-  const available = Math.max(160, width ?? 640);
-  const tableLines = result.steps.reduce(
-    (sum, step) =>
-      sum +
-      wrappedLines(workflowStatusRowLine(step, result), available, fontSize),
-    0
-  );
-  const warnings = result.schemaWarnings.reduce(
-    (sum, warning) => sum + wrappedLines(warning.message, available, fontSize),
-    0
-  );
-  return (
-    72 +
-    result.steps.length * 10 +
-    tableLines * fontSize * 1.45 +
-    warnings * fontSize * 1.45 +
-    rawHeight
-  );
 }
 
 export function workflowStatusProgress(result: WorkflowStatusResult): number {

@@ -24,16 +24,22 @@ import {
   estimateGenericToolCallHeight,
 } from "@utils/toolCallLayout";
 import {
-  estimateStepMutationHeight,
   parseEditStepParams,
   parseEditStepResultText,
+} from "@root/utils/ctrlyokeToolViews/editStepModel";
+import {
   parseRemoveStepParams,
   parseRemoveStepResultText,
+} from "@root/utils/ctrlyokeToolViews/removeStepModel";
+import {
   parseReorderStepsParams,
   parseReorderStepsResultText,
+} from "@root/utils/ctrlyokeToolViews/reorderStepsModel";
+import {
   parseSubmitCommitMessageParams,
   parseSubmitCommitMessageResultText,
-} from "@components/output/ctrlyoke-tools/stepMutationModel";
+} from "@root/utils/ctrlyokeToolViews/submitCommitMessageModel";
+import { estimateStepMutationHeight } from "@components/output/ctrlyoke-tools/heightEstimators";
 import type { McpToolCallData } from "../../../types/cliEvents";
 import { getOutputRowSearchSegments } from "@utils/outputFind";
 import {

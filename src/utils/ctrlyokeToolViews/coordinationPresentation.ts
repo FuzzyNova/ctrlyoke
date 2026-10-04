@@ -1,9 +1,9 @@
-import type { CoordinationEntry } from "@root/types/CtrlYokeTypes";
-import { COORDINATION_ENTRY_KINDS } from "@root/types/DashboardConstants";
+import type { CoordinationEntry } from "../../types/CtrlYokeTypes";
+import { COORDINATION_ENTRY_KINDS } from "../../types/DashboardConstants";
 import {
   getCoordinationAttribution,
   resolveCoordinationParticipantKind,
-} from "@root/utils/CoordinationAttribution";
+} from "../CoordinationAttribution";
 
 export const COORDINATION_UNTRUSTED_LABEL = "untrusted board content";
 

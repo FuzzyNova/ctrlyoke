@@ -7,7 +7,6 @@ import type { RowFindDecoration } from "@utils/outputFind";
 import { highlightText } from "@utils/outputFind";
 import type { McpToolCallData } from "../../../types/cliEvents";
 import {
-  estimateWorkflowStatusHeight,
   workflowStatusHarnessLabel,
   workflowStatusProgress,
   workflowStatusRowPrefix,
@@ -17,7 +16,7 @@ import {
   workflowStepStatus,
   type WorkflowStatusParams,
   type WorkflowStatusResult,
-} from "./workflowStatusModel";
+} from "@root/utils/ctrlyokeToolViews/workflowStatusModel";
 import { sliceFindMatches } from "./shared";
 
 export interface ToolViewBodyProps {
@@ -151,4 +150,3 @@ export const WorkflowStatusBody: React.FC<ToolViewBodyProps> = ({
     </div>
   );
 };
-export { estimateWorkflowStatusHeight };

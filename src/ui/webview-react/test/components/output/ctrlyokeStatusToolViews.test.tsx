@@ -13,33 +13,35 @@ import { GlobalStatusBody } from "@components/output/ctrlyoke-tools/GlobalStatus
 import { ReadOutputBody } from "@components/output/ctrlyoke-tools/ReadOutputView";
 import { ListHarnessesBody } from "@components/output/ctrlyoke-tools/ListHarnessesView";
 import {
-  estimateWorkflowStatusHeight,
   parseWorkflowStatusParams,
   parseWorkflowStatusResultText,
   workflowStatusSearchText,
-} from "@components/output/ctrlyoke-tools/workflowStatusModel";
+} from "@root/utils/ctrlyokeToolViews/workflowStatusModel";
 import {
-  estimateGlobalStatusHeight,
   parseGlobalStatusParams,
   parseGlobalStatusResultText,
   globalStatusSearchText,
-} from "@components/output/ctrlyoke-tools/globalStatusModel";
+} from "@root/utils/ctrlyokeToolViews/globalStatusModel";
 import {
-  estimateReadOutputHeight,
   parseReadOutputParams,
   parseReadOutputResultText,
   readOutputSearchText,
-} from "@components/output/ctrlyoke-tools/readOutputModel";
+} from "@root/utils/ctrlyokeToolViews/readOutputModel";
 import {
-  estimateListHarnessesHeight,
   parseListHarnessesParams,
   parseListHarnessesResultText,
   listHarnessesSearchText,
-} from "@components/output/ctrlyoke-tools/listHarnessesModel";
+} from "@root/utils/ctrlyokeToolViews/listHarnessesModel";
 import {
   TOOL_VIEW_PROMPT_PREVIEW_MAX_CHARS,
   toolViewPromptPreview,
-} from "@components/output/ctrlyoke-tools/shared";
+} from "@root/utils/ctrlyokeToolViews/shared";
+import {
+  estimateWorkflowStatusHeight,
+  estimateGlobalStatusHeight,
+  estimateReadOutputHeight,
+  estimateListHarnessesHeight,
+} from "@components/output/ctrlyoke-tools/heightEstimators";
 import { DEFAULT_TOOL_CALL_EXPANSION_STATE } from "@utils/toolCallLayout";
 import { OUTPUT_FIND_ACTIVE_ATTRIBUTE } from "@utils/outputFind";
 import type { McpToolCallData } from "../../../types/cliEvents";

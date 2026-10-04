@@ -55,25 +55,3 @@ export function postNoteSearchText(
 ): string[] {
   return [postNoteSummary(params, result), result.text];
 }
-
-export function estimatePostNoteHeight(
-  params: PostNoteParams | undefined,
-  result: PostNoteResult,
-  width: number | undefined,
-  fontSize: number,
-  rawHeight = 0
-): number {
-  const text = `${postNoteSummary(params, result)}\n${result.text}`;
-  const charsPerLine = Math.max(
-    24,
-    Math.floor((width ?? 640) / (fontSize * 0.58))
-  );
-  const lines = text
-    .split("\n")
-    .reduce(
-      (total, line) =>
-        total + Math.max(1, Math.ceil(line.length / charsPerLine)),
-      0
-    );
-  return 34 + lines * fontSize * 1.55 + (result.text ? 10 : 0) + rawHeight;
-}

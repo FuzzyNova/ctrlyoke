@@ -2,7 +2,7 @@ import { isRecord, tryParseJson } from "./shared";
 import {
   EXECUTION_STATES,
   getHarnessDisplayName,
-} from "@root/types/DashboardConstants";
+} from "../../types/DashboardConstants";
 
 export interface GlobalStatusWorkflow {
   workflowKey: string;
@@ -114,24 +114,4 @@ export function globalStatusSearchText(
     lines.push(`Truncated · ${result.omittedCount} omitted`);
   if (result.note) lines.push(result.note);
   return [globalStatusSummary(params, result), lines.join("\n")];
-}
-
-function lines(text: string, width: number, fontSize: number): number {
-  const chars = Math.max(16, Math.floor(width / (fontSize * 0.58)));
-  return text
-    .split("\n")
-    .reduce((n, line) => n + Math.max(1, Math.ceil(line.length / chars)), 0);
-}
-export function estimateGlobalStatusHeight(
-  _params: GlobalStatusParams | undefined,
-  result: GlobalStatusResult,
-  width: number | undefined,
-  fontSize: number,
-  rawHeight = 0
-): number {
-  const available = Math.max(160, width ?? 640);
-  const rows = globalStatusSearchText(undefined, result)[1]
-    .split("\n")
-    .reduce((sum, line) => sum + lines(line, available, fontSize), 0);
-  return 52 + rows * fontSize * 1.5 + rawHeight;
 }

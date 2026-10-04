@@ -3,13 +3,16 @@ import type { ToolResult } from "../../../types/cliEvents";
 import { ATOMIC_REFERENCE_KINDS } from "@root/types/DashboardConstants";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { openContextReference } from "@utils/contextReferenceActions";
-import { coordinationParticipantAttribution } from "@utils/coordinationPresentation";
+import { coordinationParticipantAttribution } from "@root/utils/ctrlyokeToolViews/coordinationPresentation";
 import { RawToolCallSection } from "./RawToolCallSection";
 import type {
   ToolCallExpansionSection,
   ToolCallExpansionState,
 } from "@utils/toolCallLayout";
-import type { ClaimPathsParams, ClaimPathsResult } from "./claimPathsModel";
+import type {
+  ClaimPathsParams,
+  ClaimPathsResult,
+} from "@root/utils/ctrlyokeToolViews/claimPathsModel";
 
 export const ClaimPathsBody: React.FC<{
   params?: ClaimPathsParams;

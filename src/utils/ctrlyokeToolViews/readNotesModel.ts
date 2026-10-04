@@ -1,12 +1,12 @@
 import { isRecord, tryParseJson } from "./shared";
 import { parseCoordinationParticipant } from "./coordinationParticipantParser";
-import type { CoordinationEntry } from "@root/types/CtrlYokeTypes";
-import { COORDINATION_ENTRY_KINDS } from "@root/types/DashboardConstants";
+import type { CoordinationEntry } from "../../types/CtrlYokeTypes";
+import { COORDINATION_ENTRY_KINDS } from "../../types/DashboardConstants";
 import {
   coordinationEntrySearchText,
   coordinationEntrySummary,
   coordinationParticipantAttribution,
-} from "@utils/coordinationPresentation";
+} from "./coordinationPresentation";
 
 export interface ReadNotesParams {
   since?: number;
@@ -110,31 +110,4 @@ export function readNotesSearchText(
 
 export function readNotesEntryText(entry: CoordinationEntry): string {
   return `${coordinationParticipantAttribution(entry.from)}: ${coordinationEntrySummary(entry)}`;
-}
-
-export function estimateReadNotesHeight(
-  _params: ReadNotesParams | undefined,
-  result: ReadNotesResult,
-  width: number | undefined,
-  fontSize: number,
-  rawHeight = 0
-): number {
-  const charsPerLine = Math.max(
-    24,
-    Math.floor((width ?? 640) / (fontSize * 0.58))
-  );
-  const text = readNotesSearchText(undefined, result);
-  const lines = text.reduce(
-    (total, line) => total + Math.max(1, Math.ceil(line.length / charsPerLine)),
-    0
-  );
-  const bodyLines = result.entries.reduce(
-    (total, entry) =>
-      total +
-      (entry.kind === COORDINATION_ENTRY_KINDS.NOTE && entry.text
-        ? Math.max(1, Math.ceil(entry.text.length / charsPerLine))
-        : 0),
-    0
-  );
-  return 34 + (lines + bodyLines) * fontSize * 1.55 + rawHeight;
 }

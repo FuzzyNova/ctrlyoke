@@ -6,7 +6,7 @@ import {
   globalStatusSearchText,
   type GlobalStatusParams,
   type GlobalStatusResult,
-} from "./globalStatusModel";
+} from "@root/utils/ctrlyokeToolViews/globalStatusModel";
 import type { ToolViewBodyProps } from "./WorkflowStatusView";
 import { sliceFindMatches } from "./shared";
 export const GlobalStatusBody: React.FC<ToolViewBodyProps> = ({

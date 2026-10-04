@@ -1,14 +1,9 @@
-import {
-  isRecord,
-  toolViewPromptPreview,
-  tryParseJson,
-  wrappedTextLines,
-} from "./shared";
-import type { ParallelGroupInsertPlacement } from "../../../../../core/ParallelGroupTopology";
+import { isRecord, toolViewPromptPreview, tryParseJson } from "./shared";
+import type { ParallelGroupInsertPlacement } from "../../core/ParallelGroupTopology";
 import {
   getHarnessShortName,
   QUEUE_POSITION,
-} from "@root/types/DashboardConstants";
+} from "../../types/DashboardConstants";
 
 export interface AppendStepInput {
   prompt: string;
@@ -217,43 +212,4 @@ export function appendStepSearchText(
     }
   }
   return [summary, lines.join("\n")];
-}
-
-function wrappedLines(text: string, width: number, fontSize: number): number {
-  return wrappedTextLines(text, width, fontSize, 12);
-}
-
-export function estimateAppendStepHeight(
-  params: AppendStepParams | undefined,
-  result: AppendStepResult,
-  width: number | undefined,
-  fontSize: number,
-  promptsExpanded = false,
-  rawHeight = 0
-): number {
-  const availableWidth = Math.max(160, width ?? 640);
-  let height = 38;
-  if (params) {
-    for (const item of params.steps) {
-      const grouped = "parallel" in item;
-      const steps = grouped ? item.parallel : [item];
-      if (grouped) height += 30;
-      for (const step of steps) {
-        const prompt = promptsExpanded
-          ? step.prompt
-          : appendStepPromptPreview(step);
-        const detail = `${formatIndex(result.insertIndex)} ${step.name ?? "Step"} ${appendStepHarnessModelLabel(step)}`;
-        height +=
-          Math.max(1, wrappedLines(detail, availableWidth, fontSize)) *
-          fontSize *
-          1.55;
-        height +=
-          Math.max(1, wrappedLines(prompt, availableWidth, fontSize)) *
-          fontSize *
-          1.45;
-        height += 12;
-      }
-    }
-  }
-  return height + rawHeight;
 }

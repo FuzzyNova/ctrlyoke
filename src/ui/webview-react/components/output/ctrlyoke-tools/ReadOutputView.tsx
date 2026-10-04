@@ -8,7 +8,7 @@ import {
   readOutputItemSearchText,
   type ReadOutputParams,
   type ReadOutputResult,
-} from "./readOutputModel";
+} from "@root/utils/ctrlyokeToolViews/readOutputModel";
 import type { ToolViewBodyProps } from "./WorkflowStatusView";
 export const ReadOutputBody: React.FC<ToolViewBodyProps> = ({
   params,

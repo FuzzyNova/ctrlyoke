@@ -1,7 +1,7 @@
 import { isRecord, tryParseJson } from "./shared";
-import type { CoordinationParticipant } from "@root/types/CtrlYokeTypes";
-import { coordinationParticipantAttribution } from "@utils/coordinationPresentation";
-import { resolveCoordinationParticipantKind } from "@root/utils/CoordinationAttribution";
+import type { CoordinationParticipant } from "../../types/CtrlYokeTypes";
+import { coordinationParticipantAttribution } from "./coordinationPresentation";
+import { resolveCoordinationParticipantKind } from "../CoordinationAttribution";
 import { parseCoordinationParticipant } from "./coordinationParticipantParser";
 
 export interface ClaimPathsOwner {
@@ -101,23 +101,4 @@ export function claimPathsSearchText(
       ),
     ].join("\n"),
   ];
-}
-
-export function estimateClaimPathsHeight(
-  _params: ClaimPathsParams | undefined,
-  result: ClaimPathsResult,
-  width: number | undefined,
-  fontSize: number,
-  rawHeight = 0
-): number {
-  const charsPerLine = Math.max(
-    24,
-    Math.floor((width ?? 640) / (fontSize * 0.58))
-  );
-  const text = claimPathsSearchText(undefined, result);
-  const lines = text.reduce(
-    (total, line) => total + Math.max(1, Math.ceil(line.length / charsPerLine)),
-    0
-  );
-  return 34 + lines * fontSize * 1.55 + rawHeight;
 }

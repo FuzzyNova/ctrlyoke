@@ -6,7 +6,7 @@ import { openContextReference } from "@utils/contextReferenceActions";
 import {
   coordinationEntrySummary,
   coordinationParticipantAttribution,
-} from "@utils/coordinationPresentation";
+} from "@root/utils/ctrlyokeToolViews/coordinationPresentation";
 import { ActionButton } from "../shared/ActionButton";
 
 /**

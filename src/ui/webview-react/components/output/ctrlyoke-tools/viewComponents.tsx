@@ -8,10 +8,16 @@ import type { McpToolCallData } from "../../../types/cliEvents";
 import type { RowFindDecoration } from "../../../utils/outputFind";
 import type { ToolCallExpansionState } from "../../../utils/toolCallLayout";
 import { PostNoteBody } from "./PostNoteView";
-import type { PostNoteParams, PostNoteResult } from "./postNoteModel";
+import type {
+  PostNoteParams,
+  PostNoteResult,
+} from "@root/utils/ctrlyokeToolViews/postNoteModel";
 import { MCP_APPEND_STEP_TOOL_NAME } from "@root/utils/McpToolDefinitions";
 import { AppendStepBody } from "./AppendStepView";
-import type { AppendStepParams, AppendStepResult } from "./appendStepModel";
+import type {
+  AppendStepParams,
+  AppendStepResult,
+} from "@root/utils/ctrlyokeToolViews/appendStepModel";
 import {
   MCP_CLAIM_PATHS_TOOL_NAME,
   MCP_RELEASE_PATHS_TOOL_NAME,
@@ -26,14 +32,20 @@ import {
   MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME,
 } from "@root/utils/McpToolDefinitions";
 import { ClaimPathsBody } from "./ClaimPathsView";
-import type { ClaimPathsParams, ClaimPathsResult } from "./claimPathsModel";
+import type {
+  ClaimPathsParams,
+  ClaimPathsResult,
+} from "@root/utils/ctrlyokeToolViews/claimPathsModel";
 import { ReleasePathsBody } from "./ReleasePathsView";
 import type {
   ReleasePathsParams,
   ReleasePathsResult,
-} from "./releasePathsModel";
+} from "@root/utils/ctrlyokeToolViews/releasePathsModel";
 import { ReadNotesBody } from "./ReadNotesView";
-import type { ReadNotesParams, ReadNotesResult } from "./readNotesModel";
+import type {
+  ReadNotesParams,
+  ReadNotesResult,
+} from "@root/utils/ctrlyokeToolViews/readNotesModel";
 import { WorkflowStatusBody } from "./WorkflowStatusView";
 import { GlobalStatusBody } from "./GlobalStatusView";
 import { ReadOutputBody } from "./ReadOutputView";

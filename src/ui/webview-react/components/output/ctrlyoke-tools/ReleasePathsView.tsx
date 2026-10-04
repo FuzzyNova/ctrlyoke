@@ -11,7 +11,7 @@ import type {
 import type {
   ReleasePathsParams,
   ReleasePathsResult,
-} from "./releasePathsModel";
+} from "@root/utils/ctrlyokeToolViews/releasePathsModel";
 
 export const ReleasePathsBody: React.FC<{
   params?: ReleasePathsParams;

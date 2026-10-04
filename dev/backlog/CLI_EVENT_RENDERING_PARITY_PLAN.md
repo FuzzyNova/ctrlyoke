@@ -28,6 +28,11 @@ run`, but not for `history show` replaying a dashboard run that was steered; see
   `FILE_READ` headers, bounded `FILE_WRITE` previews, and the missing-diff
   `FILE_EDIT` placeholder. The dashboard still uses the function-form
   normalizer and its output filtering is unchanged.
+- **Phase 3, item 1 complete.** Moved ctrlyoke MCP tool parsing and summaries to
+  `src/utils/ctrlyokeToolViews/`, including an exhaustive neutral registry for
+  all 13 tools. Kept height estimation and find-match slicing in the webview,
+  and moved the shared coordination presentation helpers with their parsers.
+  `npm run typecheck`, `npm run lint`, `npm run compile`, and `npm test` passed.
 
 ## Problem
 

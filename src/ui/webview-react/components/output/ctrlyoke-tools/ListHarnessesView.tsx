@@ -1,7 +1,10 @@
 import React from "react";
 import { RawToolCallSection } from "./RawToolCallSection";
 import { TOOL_CALL_EXPANSION_SECTIONS } from "@root/types/DashboardConstants";
-import { allHarnesses, type ListHarnessesResult } from "./listHarnessesModel";
+import {
+  allHarnesses,
+  type ListHarnessesResult,
+} from "@root/utils/ctrlyokeToolViews/listHarnessesModel";
 import type { ToolViewBodyProps } from "./WorkflowStatusView";
 export const ListHarnessesBody: React.FC<ToolViewBodyProps> = ({
   result,

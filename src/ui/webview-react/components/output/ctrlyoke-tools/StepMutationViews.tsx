@@ -11,18 +11,22 @@ import type { CtrlYokeToolBodyProps } from "./viewComponents";
 import {
   editStepChangedFields,
   editStepSummary,
+} from "@root/utils/ctrlyokeToolViews/editStepModel";
+import {
   reorderStepPairs,
   reorderStepsSummary,
-  STEP_MUTATION_PROMPT_FIELD,
-} from "./stepMutationModel";
+} from "@root/utils/ctrlyokeToolViews/reorderStepsModel";
+import { STEP_MUTATION_PROMPT_FIELD } from "@root/utils/ctrlyokeToolViews/stepMutationShared";
 import type {
   EditStepParams,
   EditStepResult,
-  RemoveStepResult,
+} from "@root/utils/ctrlyokeToolViews/editStepModel";
+import type { RemoveStepResult } from "@root/utils/ctrlyokeToolViews/removeStepModel";
+import type {
   ReorderStepsParams,
   ReorderStepsResult,
-  SubmitCommitMessageParams,
-} from "./stepMutationModel";
+} from "@root/utils/ctrlyokeToolViews/reorderStepsModel";
+import type { SubmitCommitMessageParams } from "@root/utils/ctrlyokeToolViews/submitCommitMessageModel";
 
 function RawToggle({
   data,

@@ -110,39 +110,3 @@ export function readOutputItemSearchText(
     .join(" · ");
   return `${readOutputHeading(output)}${output.responseText ? `\n${output.responseText}` : ""}${footer ? `\n${footer}` : ""}`;
 }
-function wrapped(text: string, width: number, fontSize: number): number {
-  const chars = Math.max(20, Math.floor(width / (fontSize * 0.58)));
-  return text
-    .split("\n")
-    .reduce(
-      (total, line) => total + Math.max(1, Math.ceil(line.length / chars)),
-      0
-    );
-}
-export function estimateReadOutputHeight(
-  _params: ReadOutputParams | undefined,
-  result: ReadOutputResult,
-  width: number | undefined,
-  fontSize: number,
-  expanded: Readonly<Record<string, boolean>> = {},
-  rawHeight = 0
-): number {
-  const available = Math.max(160, width ?? 640);
-  const body = result.outputs.reduce(
-    (sum, output) =>
-      sum +
-      wrapped(readOutputHeading(output), available, fontSize) *
-        fontSize *
-        1.45 +
-      (expanded[String(output.index)] && output.responseText
-        ? wrapped(output.responseText, available, fontSize) * fontSize * 1.45
-        : 24),
-    0
-  );
-  return (
-    38 +
-    body +
-    (result.outputs.some((o) => !!o.nextCursor) ? fontSize * 1.5 : 0) +
-    rawHeight
-  );
-}
