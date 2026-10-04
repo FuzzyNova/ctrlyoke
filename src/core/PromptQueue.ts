@@ -104,6 +104,7 @@ import {
 } from "../utils/StepStatusDerivation";
 import { settleInterruptedRun } from "../utils/InterruptedRunSettlement";
 import { appendResponseText } from "../utils/ResponseTextJoin";
+import { renumberStepReferences } from "./StepReferenceRenumbering";
 
 /** Resolver-derived, in-memory execution cache restored for an active run. */
 export interface ResolvedRuntimeOutputCacheEntry {
@@ -2215,7 +2216,11 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         nextTopology.steps,
         "insert"
       );
-      this.state.steps = nextTopology.steps;
+      const renumbered = renumberStepReferences(
+        previousSteps,
+        nextTopology.steps
+      );
+      this.state.steps = renumbered.steps;
       this.state.parallelGroups = nextTopology.parallelGroups;
       this.state.results.splice(insertIndex, 0, {
         prompt: isScriptStep(identifiedStep)
@@ -2782,10 +2787,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       // completed steps and the running step stay locked.
       this.assertEditableDuringExecution(index, "delete");
 
-      this.state.steps.forEach((step, stepIndex) => {
-        this.archiveStepRuntime(step, stepIndex, "deletePrompt");
-      });
-
       const previousSteps = this.state.steps;
       const nextTopology = deleteParallelGroupStep(
         {
@@ -2794,6 +2795,18 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         },
         index
       );
+      const renumbered = renumberStepReferences(
+        previousSteps,
+        nextTopology.steps
+      );
+      if (renumbered.refusals.length > 0) {
+        throw new Error(
+          `Cannot remove step ${index + 1}: referenced by ${renumbered.refusals.join(", ")}`
+        );
+      }
+      previousSteps.forEach((step, stepIndex) => {
+        this.archiveStepRuntime(step, stepIndex, "deletePrompt");
+      });
       if (this.isExecutionActive) {
         assertStartedStepPositionsPreserved(
           previousSteps,
@@ -2801,7 +2814,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
           "delete"
         );
       }
-      this.state.steps = nextTopology.steps;
+      this.state.steps = renumbered.steps;
       this.state.parallelGroups = nextTopology.parallelGroups;
       this.workflowFile = this.workflowFile
         ? {
@@ -2921,6 +2934,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         nextTopology.steps,
         "reorder"
       );
+      const renumbered = renumberStepReferences(
+        previousSteps,
+        nextTopology.steps
+      );
       const newPending = nextTopology.steps.slice(currentIndex);
       const newPendingResults = newPending.map((step) => {
         const sourceIndex = pendingPrompts.indexOf(step);
@@ -2929,7 +2946,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         }
         return pendingResults[sourceIndex];
       });
-      this.state.steps = nextTopology.steps;
+      this.state.steps = renumbered.steps;
       this.state.parallelGroups = nextTopology.parallelGroups;
       this.state.results = [...doneResults, ...newPendingResults];
       this.workflowFile = this.workflowFile

@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli), reproduced against the compiled MCP server
 - **Area:** `src/core/orchestration/RunContinuationService.ts` (`appendStepsToRun` ~407-416, `removeStepAtRun` ~857, `reorderStepsWithOrder` ~988), dashboard insert/delete/drag-reorder paths, `ExecutionPreviewService.ts` (~805-818)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -56,8 +56,9 @@ mentions these fields. Helper tests cover insert-before-target, reorder,
 refusal to remove a referenced target, and renumbering after removing an
 unrelated step.
 
-Part 2 remains: wire the resident dashboard's in-memory insert, delete, and
-drag-reorder paths to the helper. The `$step:N` form is used in generated
-context/output handling, but prompt text is not parsed as a structured step
-reference, so arbitrary prompt text containing `$step:N` is intentionally not
-rewritten.
+Part 2 complete: resident dashboard insert, delete, and drag-reorder paths
+use `PromptQueue` and the shared helper. A refused delete is reported through
+the dashboard action-failure notification. The `$step:N` form is used in
+generated context/output handling, but prompt text is not parsed as a
+structured step reference, so arbitrary prompt text containing `$step:N` is
+intentionally not rewritten.
