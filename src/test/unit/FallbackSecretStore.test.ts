@@ -121,6 +121,28 @@ suite("FallbackSecretStore", () => {
     assert.strictEqual(fallback.callCount, 0);
   });
 
+  test("probes again after a transient probe failure", async () => {
+    const primary = new InMemorySecretStore();
+    let failNextProbe = true;
+    const flaky: SecretStore = {
+      get: (key) => primary.get(key),
+      store: (key, value) => primary.store(key, value),
+      delete: (key) => primary.delete(key),
+      keys: () => {
+        if (failNextProbe) {
+          failNextProbe = false;
+          return Promise.reject(new Error("prompt dismissed"));
+        }
+        return primary.keys();
+      },
+    };
+    const store = new FallbackSecretStore(flaky, new InMemorySecretStore());
+
+    await assert.rejects(store.get("key"), /prompt dismissed/);
+    await store.store("key", "value");
+    assert.strictEqual(await store.get("key"), "value");
+  });
+
   test("retries the first failed write in fallback and notifies once", async () => {
     let commandCount = 0;
     const primary = new OsCredentialStore({
@@ -135,7 +157,8 @@ suite("FallbackSecretStore", () => {
         return {
           exitCode: 1,
           stdout: "",
-          stderr: "secret-tool: Cannot autolaunch a dbus-daemon without a $DISPLAY for X11",
+          stderr:
+            "secret-tool: Cannot autolaunch a dbus-daemon without a $DISPLAY for X11",
         };
       },
     });

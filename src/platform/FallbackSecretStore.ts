@@ -39,7 +39,12 @@ export class FallbackSecretStore implements SecretStore {
 
   private resolveStore(): Promise<SecretStore> {
     if (!this.resolvedStore) {
-      this.resolvedStore = this.probe();
+      // A transient probe failure (e.g. a dismissed keychain prompt) must not
+      // poison every later call, so forget it and probe again next time.
+      this.resolvedStore = this.probe().catch((error: unknown) => {
+        this.resolvedStore = undefined;
+        throw error;
+      });
     }
     return this.resolvedStore;
   }
@@ -56,12 +61,17 @@ export class FallbackSecretStore implements SecretStore {
     }
   }
 
-  private async run<T>(operation: (store: SecretStore) => Thenable<T>): Promise<T> {
+  private async run<T>(
+    operation: (store: SecretStore) => Thenable<T>
+  ): Promise<T> {
     const store = await this.resolveStore();
     try {
       return await operation(store);
     } catch (error) {
-      if (store !== this.primary || !(error instanceof SecretStoreUnavailableError)) {
+      if (
+        store !== this.primary ||
+        !(error instanceof SecretStoreUnavailableError)
+      ) {
         throw error;
       }
       return operation(await this.switchToFallback(error));

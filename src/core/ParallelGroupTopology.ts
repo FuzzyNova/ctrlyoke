@@ -580,7 +580,10 @@ export function assertParallelGroupsRemainContiguousAfterReorder(
     ...newPendingOrder.map((index) => currentIndex + index),
   ];
   const requestedPositions = new Map(
-    requestedAbsoluteOrder.map((sourceIndex, position) => [sourceIndex, position])
+    requestedAbsoluteOrder.map((sourceIndex, position) => [
+      sourceIndex,
+      position,
+    ])
   );
 
   for (const group of topology.parallelGroups) {
@@ -596,9 +599,8 @@ export function assertParallelGroupsRemainContiguousAfterReorder(
     );
     if (
       presentPositions.length !== memberIndices.length ||
-      Math.max(...presentPositions) -
-        Math.min(...presentPositions) +
-        1 !== memberIndices.length
+      Math.max(...presentPositions) - Math.min(...presentPositions) + 1 !==
+        memberIndices.length
     ) {
       throw new Error(
         `Cannot split parallel group ${group.id} (members at indices ${memberIndices.join(", ")}) when reordering`
@@ -625,11 +627,15 @@ export function reorderParallelGroupPendingSteps(
     throw new Error(`Current index ${currentIndex} is out of bounds`);
   }
   assertPendingOrder(normalized.steps.length - currentIndex, newPendingOrder);
-  assertParallelGroupsRemainContiguousAfterReorder(
-    normalized,
-    currentIndex,
-    newPendingOrder
-  );
+  // Explicit pendingGroups describe the intended new grouping (dashboard drag
+  // into/out of a group), so only an order-only reorder must keep groups whole.
+  if (pendingGroups === undefined) {
+    assertParallelGroupsRemainContiguousAfterReorder(
+      normalized,
+      currentIndex,
+      newPendingOrder
+    );
+  }
 
   const crossingGroup = normalized.parallelGroups.find(
     (group) => group.startIndex < currentIndex && group.endIndex >= currentIndex

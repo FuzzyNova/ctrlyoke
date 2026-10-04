@@ -37,6 +37,7 @@
 !bin/ctrlyoke-mcp.cmd
 !out/historySearchRebuildWorker.js
 !out/historySearchMatcherWorker.js
+!out/scriptRegexWorker.js
 
 # Runtime assets copied by the production build.
 !out/templates/**

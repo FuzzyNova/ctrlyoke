@@ -22,17 +22,23 @@ function resolveRegexWorkerPath(): string {
     : path.resolve(__dirname, "../scriptRegexWorker.js");
 }
 
+interface RegexWorkerResult {
+  passed: boolean;
+  timedOut: boolean;
+  /** Set when the worker failed to produce a verdict at all. */
+  failure?: string;
+}
+
 function compareRegexInWorker(
   actual: string,
   pattern: string
-): Promise<{ passed: boolean; timedOut: boolean }> {
+): Promise<RegexWorkerResult> {
   return new Promise((resolve) => {
-    const worker = new Worker(
-      resolveRegexWorkerPath(),
-      { workerData: { actual, pattern } }
-    );
+    const worker = new Worker(resolveRegexWorkerPath(), {
+      workerData: { actual, pattern },
+    });
     let settled = false;
-    const finish = (result: { passed: boolean; timedOut: boolean }) => {
+    const finish = (result: RegexWorkerResult) => {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
@@ -46,8 +52,16 @@ function compareRegexInWorker(
     worker.once("message", (passed: unknown) =>
       finish({ passed: passed === true, timedOut: false })
     );
-    worker.once("error", () => finish({ passed: false, timedOut: false }));
-    worker.once("exit", () => finish({ passed: false, timedOut: false }));
+    worker.once("error", (error: Error) =>
+      finish({ passed: false, timedOut: false, failure: error.message })
+    );
+    worker.once("exit", (code: number) =>
+      finish({
+        passed: false,
+        timedOut: false,
+        failure: `regex worker exited with code ${code} before reporting a result`,
+      })
+    );
   });
 }
 
@@ -67,10 +81,19 @@ export async function compareScriptOutputAsync(
   }
 
   const result = await compareRegexInWorker(actual, expected);
-  if (!result.timedOut) return { passed: result.passed, actual };
-  return {
-    passed: false,
-    actual,
-    reason: `regex timed out after ${REGEX_WORKER_TIMEOUT_MS / 1000}s on ${actual.length} chars`,
-  };
+  if (result.timedOut) {
+    return {
+      passed: false,
+      actual,
+      reason: `regex timed out after ${REGEX_WORKER_TIMEOUT_MS / 1000}s on ${actual.length} chars`,
+    };
+  }
+  if (result.failure !== undefined) {
+    return {
+      passed: false,
+      actual,
+      reason: `regex worker failed: ${result.failure}`,
+    };
+  }
+  return { passed: result.passed, actual };
 }
