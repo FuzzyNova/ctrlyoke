@@ -1,4 +1,3 @@
-import * as fs from "fs";
 import * as path from "path";
 import { Worker } from "worker_threads";
 import { SCRIPT_OPERATORS } from "../types/DashboardConstants";
@@ -11,15 +10,19 @@ import {
   type ScriptComparisonInput,
   type ScriptComparisonResult,
 } from "./ScriptComparison";
+import { findExistingWorkerPath } from "./WorkerPath";
 
 /** Maximum time a long-output regex may occupy a worker thread. */
 export const REGEX_WORKER_TIMEOUT_MS = 2_000;
 
 function resolveRegexWorkerPath(): string {
-  const bundledPath = path.resolve(__dirname, "scriptRegexWorker.js");
-  return fs.existsSync(bundledPath)
-    ? bundledPath
-    : path.resolve(__dirname, "../scriptRegexWorker.js");
+  const candidates = [
+    path.resolve(__dirname, "scriptRegexWorker.js"),
+    path.resolve(__dirname, "../scriptRegexWorker.js"),
+  ];
+  // Preserve the fallback path so Worker reports the existing missing-file
+  // error if neither build layout contains the worker.
+  return findExistingWorkerPath(candidates) ?? candidates[1];
 }
 
 interface RegexWorkerResult {

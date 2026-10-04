@@ -272,7 +272,7 @@ export function describeComparison(config: ScriptComparisonConfig): string {
 
 /**
  * Whether a comparison names a source or operator but has no value to compare
- * against. `compareScriptOutput` resolves that state deterministically — it
+ * against. `compareScriptOutputInline` resolves that state deterministically — it
  * falls back to "the script exited 0" and never applies the stated comparison —
  * so it is legal and runnable, just almost certainly not what was authored.
  * Every surface that reports it (the drawer, `validateWorkflowSteps`, and
@@ -325,7 +325,7 @@ export function formatComparison(config: ScriptComparisonConfig): string {
     return subject;
   }
   if (expected === undefined) {
-    // No `expected` means `compareScriptOutput` fell back to "the script exited
+    // No `expected` means `compareScriptOutputInline` fell back to "the script exited
     // 0" whatever source and operator were configured, so print the rule that
     // actually ran — `stdout contains 0` would describe a comparison nobody made.
     return `exit code ${SCRIPT_OPERATOR_OPTIONS_META[DEFAULT_SCRIPT_OPERATOR].label.toLowerCase()} 0`;

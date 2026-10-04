@@ -1,17 +1,15 @@
-import {
-  buildPriorContextXmlFromItems,
-  refToPriorContext,
-} from "../core/HarnessIntegration";
+import { buildPriorContextXmlFromItems } from "../core/HarnessIntegration";
 import { type WorkflowStep } from "../types/CtrlYokeTypes";
 import { RunOutputResolver } from "../core/orchestration/RunOutputResolver";
 import { parseInlinePriorContextBody } from "./FileReferenceParser";
 import { parseMergedPriorContextBody } from "./PriorContextMerge";
+import { inlinePriorContextRefToPriorContext } from "./PriorContextMerge";
 
 /**
  * Builds the exact XML preview a user will see in the editor when they
  * Ctrl+click an inline $prior-context reference ($previous, $step:N, etc.).
  *
- * Uses the same body parser, `refToPriorContext` mapping, and
+ * Uses the same body parser, inline-reference mapping, and
  * `buildPriorContextXmlFromItems` function as live harness injection — if
  * any of those change, the preview changes too.
  */
@@ -34,15 +32,18 @@ export class PriorContextPreviewBuilder {
   ): Promise<string> {
     const mergedContexts = parseMergedPriorContextBody(ref);
     const parsed = parseInlinePriorContextBody(ref);
-    const contexts = mergedContexts ?? (parsed ? [refToPriorContext(parsed.ref)] : []);
-    const items = contexts.length > 0
-      ? await resolver.resolvePriorContextItems(
-          manifestPath,
-          contexts,
-          steps,
-          stepCount
-        )
-      : [];
+    const contexts =
+      mergedContexts ??
+      (parsed ? [inlinePriorContextRefToPriorContext(parsed.ref)] : []);
+    const items =
+      contexts.length > 0
+        ? await resolver.resolvePriorContextItems(
+            manifestPath,
+            contexts,
+            steps,
+            stepCount
+          )
+        : [];
 
     if (items.length === 0) {
       return `<!-- $${ref}: no prior context available at this step position (step output may not have run yet) -->`;

@@ -45,9 +45,10 @@ suite("FileReferenceParser", () => {
 
     test("does not let an inserted literal opener close an authored fence", () => {
       const prompt = "```text\n@src/x.ts\n```` text\n@src/y.ts\n````";
-      const masked = maskCodeRanges(prompt);
-      assert.ok(masked.includes("\x00src\x00x.ts"));
-      assert.ok(masked.includes("\x00src\x00y.ts"));
+      assert.deepStrictEqual(
+        parseAtReferences(prompt).map((reference) => reference.path),
+        ["src/x.ts"]
+      );
     });
   });
 
@@ -800,6 +801,24 @@ suite("FileReferenceParser", () => {
 
       const prose = `Run \`x\` output:\n${fenceLiteral(value, LITERAL_FENCE_INFO)}\n$all`;
       assert.deepStrictEqual(liveTokens(prose), ["$all"]);
+    });
+
+    test("a generated fence does not close an unclosed authored fence", () => {
+      const authored =
+        "```\nReview @src/a.ts\n$endCondition:stdout\nReview @src/b.ts\n$preCondition:stdout";
+      const withEndCondition = authored.replace(
+        "$endCondition:stdout",
+        fenceLiteral("end condition output", LITERAL_FENCE_INFO, authored)
+      );
+      const substituted = withEndCondition.replace(
+        "$preCondition:stdout",
+        fenceLiteral("pre condition output", LITERAL_FENCE_INFO, authored)
+      );
+
+      assert.deepStrictEqual(
+        parseAtReferences(substituted).map((reference) => reference.path),
+        ["src/a.ts", "src/b.ts"]
+      );
     });
 
     test("fencesOnly leaves inline spans unmasked", () => {

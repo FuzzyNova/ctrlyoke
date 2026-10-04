@@ -1,5 +1,6 @@
 import {
   type PriorContext,
+  isPreviousStepsPriorContext,
 } from "../types/CtrlYokeTypes";
 import {
   PRIOR_CONTEXT_KEYWORDS,
@@ -22,7 +23,7 @@ export interface PriorContextMerge {
 
 /** Remove repeated queue/final-step items while preserving the first item. */
 export function deduplicatePriorContextItems<
-  T extends { index: number; type?: string }
+  T extends { index: number; type?: string },
 >(items: readonly T[]): T[] {
   const seen = new Set<string>();
   return items.filter((item) => {
@@ -73,7 +74,7 @@ export function mergePriorContextReferences(
     const requestedPrevious =
       context === PRIOR_CONTEXT_KEYWORDS.PREVIOUS
         ? 1
-        : isPreviousCount(context)
+        : isPreviousStepsPriorContext(context)
           ? context.previous
           : 0;
 
@@ -130,18 +131,6 @@ export function mergePriorContextReferences(
   };
 }
 
-function isPreviousCount(
-  context: PriorContext
-): context is { previous: number } {
-  return (
-    typeof context === "object" &&
-    context !== null &&
-    !Array.isArray(context) &&
-    "previous" in context &&
-    typeof context.previous === "number"
-  );
-}
-
 const MERGED_PRIOR_CONTEXT_PREFIX = "merged:";
 
 /** Encode merged contexts inside the existing opaque token-count reference. */
@@ -152,7 +141,9 @@ export function formatMergedPriorContextBody(
 }
 
 /** Decode only bodies produced by {@link formatMergedPriorContextBody}. */
-export function parseMergedPriorContextBody(body: string): PriorContext[] | null {
+export function parseMergedPriorContextBody(
+  body: string
+): PriorContext[] | null {
   if (!body.startsWith(MERGED_PRIOR_CONTEXT_PREFIX)) return null;
   try {
     const value: unknown = JSON.parse(

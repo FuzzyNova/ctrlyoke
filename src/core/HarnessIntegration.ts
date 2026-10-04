@@ -1,6 +1,5 @@
 import {
   PromptStep,
-  PriorContext,
   ScriptRuntimeOutput,
   type FailureKind,
 } from "../types/CtrlYokeTypes";
@@ -36,8 +35,6 @@ import {
   type TerminalEndReason,
 } from "../types/DashboardConstants";
 import { ctrlYokeDeniedToolNames } from "../types/ExecutionPropertyResolver";
-import type { InlinePriorContextRef } from "../utils/FileReferenceParser";
-import { inlinePriorContextRefToPriorContext } from "../utils/PriorContextMerge";
 import { scanCtrlYokeSlashTokens } from "../utils/CtrlYokeSlashTokens";
 import type { CtrlYokeNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
 import { CliProviderUtils } from "./harness/shared/CliProviderUtils";
@@ -78,10 +75,6 @@ function mcpToolSkillContextForPrompt(
     ...context,
     deniedTools: ctrlYokeDeniedToolNames(workflowContext.resolvedProperties),
   };
-}
-
-export function refToPriorContext(ref: InlinePriorContextRef): PriorContext {
-  return inlinePriorContextRefToPriorContext(ref);
 }
 
 /**

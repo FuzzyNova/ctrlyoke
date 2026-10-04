@@ -131,6 +131,27 @@ function findBlockFenceEnd(
       return index;
     }
 
+    // A generated literal fence can appear before the authored fence has a
+    // real closer. In that case it must not make the authored opener live:
+    // substitution must preserve the references that were live beforehand.
+    // Skip the generated block, then require a later authored closer before
+    // treating this generated opener as part of a masked authored block.
+    const generatedCloseIndex = findFenceCloseIndex(
+      lines,
+      index + 1,
+      run[1].length
+    );
+    if (
+      generatedCloseIndex === undefined ||
+      findAuthoredFenceCloseIndex(
+        lines,
+        generatedCloseIndex + 1,
+        openerLength
+      ) === undefined
+    ) {
+      return undefined;
+    }
+
     // The generated fence is longer than every run in the authored text and
     // substituted value. End the authored block here, then scan the
     // generated literal as its own block so backticks in the value cannot
@@ -144,6 +165,49 @@ function findBlockFenceEnd(
   // generated block itself is never closed; scanning resumes after it.
   ranges.push(...blockRanges);
   return generatedOpenerIndex;
+}
+
+function findFenceCloseIndex(
+  lines: ReadonlyArray<{ text: string; start: number }>,
+  fromIndex: number,
+  minimumLength: number
+): number | undefined {
+  for (let index = fromIndex; index < lines.length; index += 1) {
+    const run = BLOCK_FENCE_RUN.exec(lines[index].text);
+    if (run && run[1].length >= minimumLength) {
+      return index;
+    }
+  }
+  return undefined;
+}
+
+function findAuthoredFenceCloseIndex(
+  lines: ReadonlyArray<{ text: string; start: number }>,
+  fromIndex: number,
+  minimumLength: number
+): number | undefined {
+  for (let index = fromIndex; index < lines.length; index += 1) {
+    const run = BLOCK_FENCE_RUN.exec(lines[index].text);
+    if (!run || run[1].length < minimumLength) {
+      continue;
+    }
+    if (lines[index].text.slice(run[0].length).trim() !== LITERAL_FENCE_INFO) {
+      return index;
+    }
+
+    // A later generated block is no more an authored closer than the current
+    // one. Skip its payload and keep looking for a real authored close.
+    const generatedCloseIndex = findFenceCloseIndex(
+      lines,
+      index + 1,
+      run[1].length
+    );
+    if (generatedCloseIndex === undefined) {
+      return undefined;
+    }
+    index = generatedCloseIndex;
+  }
+  return undefined;
 }
 
 /** Record the inline code spans on one line (see {@link findCodeRanges}). */

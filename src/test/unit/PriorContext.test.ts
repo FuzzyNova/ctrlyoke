@@ -1,10 +1,8 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import {
-  buildPriorContextXmlFromItems,
-  refToPriorContext,
-} from "../../core/HarnessIntegration";
+import { buildPriorContextXmlFromItems } from "../../core/HarnessIntegration";
 import { PRIOR_CONTEXT_ITEM_TYPES } from "../../types/DashboardConstants";
+import { inlinePriorContextRefToPriorContext } from "../../utils/PriorContextMerge";
 
 suite("prior-context XML", () => {
   test("formats queue, script, and final-loop values supplied by the resolver", () => {
@@ -39,16 +37,22 @@ suite("prior-context XML", () => {
   });
 
   test("maps inline references to the resolver's canonical context selectors", () => {
-    assert.strictEqual(refToPriorContext({ kind: "previous" }), "previous");
-    assert.deepStrictEqual(refToPriorContext({ kind: "previous", count: 3 }), {
-      previous: 3,
-    });
     assert.strictEqual(
-      refToPriorContext({ kind: "finalStep" }),
+      inlinePriorContextRefToPriorContext({ kind: "previous" }),
+      "previous"
+    );
+    assert.deepStrictEqual(
+      inlinePriorContextRefToPriorContext({ kind: "previous", count: 3 }),
+      {
+        previous: 3,
+      }
+    );
+    assert.strictEqual(
+      inlinePriorContextRefToPriorContext({ kind: "finalStep" }),
       "finalStepPrevious"
     );
     assert.deepStrictEqual(
-      refToPriorContext({ kind: "step", indices: [1, 3] }),
+      inlinePriorContextRefToPriorContext({ kind: "step", indices: [1, 3] }),
       [1, 3]
     );
   });

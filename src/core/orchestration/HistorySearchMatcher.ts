@@ -1,6 +1,6 @@
-import * as fs from "fs";
 import * as path from "path";
 import { Worker } from "worker_threads";
+import { findExistingWorkerPath } from "../../utils/WorkerPath";
 
 export interface HistorySearchMatch {
   index: number;
@@ -381,7 +381,7 @@ function getMatcherWorkerScriptPath(): string {
     path.join(__dirname, "..", "..", "historySearchMatcherWorker.js"),
     path.join(__dirname, "historySearchMatcherWorker.js"),
   ];
-  const workerPath = candidates.find((candidate) => fs.existsSync(candidate));
+  const workerPath = findExistingWorkerPath(candidates);
   if (!workerPath) {
     throw new Error(
       `Unable to locate compiled history search matcher worker; checked ${candidates.join(", ")}`
