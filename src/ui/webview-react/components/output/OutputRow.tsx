@@ -83,8 +83,8 @@ import {
 } from "@utils/outputUtils";
 import { formatMcpToolLabel } from "@root/utils/formatMcpToolLabel";
 import { getToolResultText } from "@root/utils/toolResultText";
+import { getFileReadHeaderText } from "@root/utils/FileReadHeaderText";
 import {
-  getFileReadHeaderText,
   getOutputRowSearchSegments,
   highlightText,
   sliceDecorationMatches,

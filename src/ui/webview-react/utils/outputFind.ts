@@ -29,7 +29,7 @@ import { buildAskUserQuestionSearchSegments } from "./askUserQuestionLayout";
 import { getGenericToolCallParamsText } from "./toolCallLayout";
 import { resolveCtrlYokeToolView } from "../components/output/ctrlyoke-tools/registry";
 import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
-import { buildSelectionReferenceText } from "@root/completions/ContextReferenceBuilder";
+import { getFileReadHeaderText } from "@root/utils/FileReadHeaderText";
 import { formatMcpToolLabel } from "@root/utils/formatMcpToolLabel";
 import { getToolResultText } from "@root/utils/toolResultText";
 
@@ -120,18 +120,6 @@ function getStructuredPatchText(event: CliEvent): string {
   )
     .map((line) => line.content)
     .join("\n");
-}
-
-/**
- * Canonical header text for a FILE_READ row's "filePath" search segment.
- * A segment read is shown as a `#selection:path:start-end` reference instead
- * of the bare path (see FileOperationOutput's FileReadOutput), so the search
- * corpus must match that same text for find highlighting/expansion to align.
- */
-export function getFileReadHeaderText(data: FileReadData): string {
-  return data.lineStart !== undefined && data.lineEnd !== undefined
-    ? buildSelectionReferenceText(data.path, data.lineStart, data.lineEnd)
-    : data.path;
 }
 
 function createSegments(
@@ -269,7 +257,10 @@ export function getOutputRowSearchSegments(
             ]);
           }
           return createSegments([
-            { field: "toolLabel", text: formatMcpToolLabel(data.server, data.tool) },
+            {
+              field: "toolLabel",
+              text: formatMcpToolLabel(data.server, data.tool),
+            },
             {
               field: "params",
               text: getGenericToolCallParamsText(data.parameters),

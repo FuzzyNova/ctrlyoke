@@ -15,6 +15,7 @@ import type {
   StructuredEventRow,
 } from "@utils/outputRows";
 import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
+import { getFileReadHeaderText } from "@root/utils/FileReadHeaderText";
 
 const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
 
@@ -163,6 +164,16 @@ function makeVerdictRow(): ScriptVerdictRow {
 }
 
 describe("outputFind", () => {
+  it("formats file-read line ranges through the shared header helper", () => {
+    expect(
+      getFileReadHeaderText({
+        path: "src/example.ts",
+        lineStart: 12,
+        lineEnd: 40,
+      })
+    ).toBe("#selection:src/example.ts:12-40");
+  });
+
   describe("findOutputMatches", () => {
     it("returns empty for an empty query", () => {
       expect(findOutputMatches([makePromptRow("hello")], "", false)).toEqual(

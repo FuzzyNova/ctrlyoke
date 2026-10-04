@@ -66,6 +66,7 @@ import { secretRedactionService } from "../utils/SecretRedactionService";
 import { formatFinalPassLabel } from "../utils/FinalStepLabels";
 import { getToolResultText } from "../utils/toolResultText";
 import { formatMcpToolLabel } from "../utils/formatMcpToolLabel";
+import { getFileReadHeaderText } from "../utils/FileReadHeaderText";
 import { CliEventStream } from "./CliEventStream";
 
 /** Maximum diff lines shown before truncating with a "… N more" message. */
@@ -96,6 +97,41 @@ interface ScriptStreamingState {
 function countOutputLines(text: string): number {
   if (!text) return 0;
   return text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
+}
+
+function boundBashOutput(text: string): string {
+  if (!text) return text;
+  let bounded = text;
+  let omittedChars = 0;
+  let omittedLines = 0;
+
+  if (bounded.length > MAX_SCRIPT_OUTPUT_CHARS) {
+    omittedChars = bounded.length - MAX_SCRIPT_OUTPUT_CHARS;
+    bounded = bounded.slice(0, MAX_SCRIPT_OUTPUT_CHARS);
+  }
+
+  if (countOutputLines(bounded) > MAX_SCRIPT_OUTPUT_LINES) {
+    const lines = bounded.split("\n");
+    omittedLines = countOutputLines(bounded) - MAX_SCRIPT_OUTPUT_LINES;
+    bounded = lines.slice(0, MAX_SCRIPT_OUTPUT_LINES).join("\n");
+  }
+
+  if (omittedChars || omittedLines) {
+    const details = [
+      omittedLines ? `${omittedLines} more lines` : "",
+      omittedChars ? `${omittedChars} more characters` : "",
+    ].filter(Boolean);
+    bounded += `${bounded.endsWith("\n") ? "" : "\n"}${formatTruncationNotice(details.join(", "))}`;
+  }
+  return bounded;
+}
+
+function hasFileEditDiff(data: FileEditData): boolean {
+  return (
+    (data.structuredPatch !== undefined && data.structuredPatch.length > 0) ||
+    data.oldContent !== undefined ||
+    data.newContent !== undefined
+  );
 }
 
 function countNewOutputLines(text: string, endsWithNewline: boolean): number {
@@ -945,7 +981,9 @@ export class CliTerminalFormatter {
         break;
       case CLI_EVENT_TYPES.FILE_READ:
         console.log(
-          chalk.dim(`~ ${String(data.path ?? "")}${running ? " …" : ""}`)
+          chalk.dim(
+            `~ ${getFileReadHeaderText(event.data as FileReadData)}${running ? " …" : ""}`
+          )
         );
         break;
       case CLI_EVENT_TYPES.MCP_TOOL_CALL:
@@ -981,12 +1019,14 @@ export class CliTerminalFormatter {
     if (includeHeader && data.command)
       console.log(chalk.yellow("$ " + data.command));
     if (data.output) {
-      process.stdout.write(data.output);
-      if (!data.output.endsWith("\n")) process.stdout.write("\n");
+      const output = boundBashOutput(data.output);
+      process.stdout.write(output);
+      if (!output.endsWith("\n")) process.stdout.write("\n");
     }
     if (data.error) {
-      process.stdout.write(chalk.red(data.error));
-      if (!data.error.endsWith("\n")) process.stdout.write("\n");
+      const error = boundBashOutput(data.error);
+      process.stdout.write(chalk.red(error));
+      if (!error.endsWith("\n")) process.stdout.write("\n");
     }
     if (data.exitCode !== undefined && data.exitCode !== 0) {
       console.log(chalk.red("✗ exit " + data.exitCode));
@@ -1006,7 +1046,11 @@ export class CliTerminalFormatter {
       console.log();
     } else {
       if (includeHeader) console.log(chalk.cyan("~ " + data.path));
-      renderDiffBlock(data);
+      if (hasFileEditDiff(data)) {
+        renderDiffBlock(data);
+      } else {
+        console.log(chalk.dim("  (no diff recorded)"));
+      }
       console.log();
     }
   }
@@ -1029,6 +1073,14 @@ export class CliTerminalFormatter {
         console.log(chalk.yellow(`$ ${String(data.command ?? "")}`));
       } else if (headerEvent.type === CLI_EVENT_TYPES.FILE_EDIT) {
         console.log(chalk.cyan(`~ ${String(data.path ?? "")}`));
+      } else if (headerEvent.type === CLI_EVENT_TYPES.FILE_WRITE) {
+        console.log(chalk.green(`+ ${String(data.path ?? "")}`));
+      } else if (headerEvent.type === CLI_EVENT_TYPES.FILE_READ) {
+        console.log(
+          chalk.dim(
+            `~ ${getFileReadHeaderText(headerEvent.data as FileReadData)}`
+          )
+        );
       } else {
         CliTerminalFormatter.renderStreamHeader(
           headerEvent,
@@ -1049,6 +1101,29 @@ export class CliTerminalFormatter {
         completionEvent.data as FileEditData,
         false
       );
+    } else if (headerEvent.type === CLI_EVENT_TYPES.FILE_WRITE) {
+      const data = completionEvent.data as FileWriteData;
+      if (data.status === OPERATION_STATUS.FAILED) {
+        const errDetail = data.error ? chalk.dim(" — " + data.error) : "";
+        console.log(chalk.red("✗ Write failed: " + data.path) + errDetail);
+        console.log();
+      } else {
+        renderDiffBlock({
+          path: data.path,
+          oldContent: "",
+          newContent: data.content,
+        });
+        console.log();
+      }
+    } else if (headerEvent.type === CLI_EVENT_TYPES.FILE_READ) {
+      const data = completionEvent.data as FileReadData;
+      if (data.status === OPERATION_STATUS.FAILED) {
+        const errDetail = data.error ? chalk.dim(" — " + data.error) : "";
+        console.log(
+          chalk.red("✗ Read failed: " + getFileReadHeaderText(data)) + errDetail
+        );
+        console.log();
+      }
     } else {
       CliTerminalFormatter.renderEvent(completionEvent, target);
     }
@@ -1163,10 +1238,12 @@ export class CliTerminalFormatter {
           console.log(chalk.red("✗ Write failed: " + data.path) + errDetail);
           console.log();
         } else {
-          const sizeInfo = data.content
-            ? chalk.dim(` (${data.content.length} bytes)`)
-            : "";
-          console.log(chalk.green("+ " + data.path) + sizeInfo);
+          console.log(chalk.green("+ " + data.path));
+          renderDiffBlock({
+            path: data.path,
+            oldContent: "",
+            newContent: data.content,
+          });
           console.log();
         }
         break;
@@ -1174,15 +1251,17 @@ export class CliTerminalFormatter {
 
       case CLI_EVENT_TYPES.FILE_READ: {
         const data = event.data as FileReadData;
-        // Skip INITIATED — too noisy during streaming
-        if (!data.path || data.status === OPERATION_STATUS.INITIATED) break;
+        if (!data.path) break;
         CliTerminalFormatter.beginEventOutput(target);
         if (data.status === OPERATION_STATUS.FAILED) {
           const errDetail = data.error ? chalk.dim(" — " + data.error) : "";
-          console.log(chalk.red("✗ Read failed: " + data.path) + errDetail);
+          console.log(
+            chalk.red("✗ Read failed: " + getFileReadHeaderText(data)) +
+              errDetail
+          );
           console.log();
         } else {
-          console.log(chalk.dim("  " + data.path));
+          console.log(chalk.dim("~ " + getFileReadHeaderText(data)));
         }
         break;
       }

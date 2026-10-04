@@ -592,6 +592,55 @@ CliTerminalFormatter.renderEvent({ type: CLI_EVENT_TYPES.TOOL_RESULT, data: { re
     );
   });
 
+  test("bounds Bash output at 200 lines and points to the event log", () => {
+    const output = runFormatterScript(`
+CliTerminalFormatter.renderEvent({
+  type: CLI_EVENT_TYPES.BASH_COMMAND,
+  data: { command: "large command", output: Array.from({ length: 201 }, (_, index) => "line " + index).join("\\n") },
+});`);
+
+    assert.ok(output.includes("line 199"));
+    assert.ok(!output.includes("line 200"));
+    assert.ok(
+      output.includes("… 1 more lines (see .ctrlyoke/.runs/…/events.jsonl)")
+    );
+  });
+
+  test("prints a ranged FILE_READ header", () => {
+    const output = runFormatterScript(`
+CliTerminalFormatter.renderEvent({
+  type: CLI_EVENT_TYPES.FILE_READ,
+  data: { path: "src/example.ts", lineStart: 12, lineEnd: 40, status: OPERATION_STATUS.COMPLETED },
+});`);
+
+    assert.ok(output.includes("#selection:src/example.ts:12-40"));
+  });
+
+  test("renders bounded FILE_WRITE content as added diff lines", () => {
+    const output = runFormatterScript(`
+CliTerminalFormatter.renderEvent({
+  type: CLI_EVENT_TYPES.FILE_WRITE,
+  data: { path: "created.txt", content: Array.from({ length: 70 }, (_, index) => "added " + index).join("\\n"), status: OPERATION_STATUS.COMPLETED },
+});`);
+
+    assert.ok(output.includes("+ added 0"));
+    assert.ok(output.includes("+ added 59"));
+    assert.ok(!output.includes("+ added 60"));
+    assert.ok(
+      output.includes("… 10 more lines (see .ctrlyoke/.runs/…/events.jsonl)")
+    );
+  });
+
+  test("prints a placeholder when FILE_EDIT has no recorded diff", () => {
+    const output = runFormatterScript(`
+CliTerminalFormatter.renderEvent({
+  type: CLI_EVENT_TYPES.FILE_EDIT,
+  data: { path: "src/unknown.ts", status: OPERATION_STATUS.COMPLETED },
+});`);
+
+    assert.ok(output.includes("(no diff recorded)"));
+  });
+
   test("prints errors from failed tool results and web searches", () => {
     const output = runFormatterScript(`
 CliTerminalFormatter.renderEvent({
