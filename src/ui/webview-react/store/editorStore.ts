@@ -91,6 +91,63 @@ export interface PropertyValues {
   toolPermissions?: ToolPermissionsOverride | null; // undefined = inherit workflow, null = none (omit flags), object = override
 }
 
+/** Returned by bulk display selectors when selected steps have unlike values. */
+export const MIXED_VALUE: unique symbol = Symbol("editor-bulk-mixed");
+export type MixedValue = typeof MIXED_VALUE;
+
+function valuesEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (left === null || right === null || typeof left !== "object" || typeof right !== "object") return false;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left) && Array.isArray(right) && left.length === right.length && left.every((value, index) => valuesEqual(value, right[index]));
+  }
+  const leftRecord = left as Record<string, unknown>;
+  const rightRecord = right as Record<string, unknown>;
+  const leftKeys = Object.keys(leftRecord).sort();
+  const rightKeys = Object.keys(rightRecord).sort();
+  return leftKeys.length === rightKeys.length && leftKeys.every((key, index) => key === rightKeys[index] && valuesEqual(leftRecord[key], rightRecord[key]));
+}
+
+function originalBulkValue(
+  step: WorkflowStep,
+  key: keyof PropertyValues | "enabled"
+): unknown {
+  if (key === PROMPT_PROPERTIES.ENABLED) return step.enabled !== false;
+  return step[key as keyof WorkflowStep];
+}
+
+/** Resolve the stable display value for one sparse bulk-edit field. */
+export function getBulkDisplayValue<K extends keyof PropertyValues>(
+  state: Pick<EditorState, "bulkPatch" | "multiSelection">,
+  steps: readonly WorkflowStep[],
+  key: K
+): PropertyValues[K] | MixedValue;
+export function getBulkDisplayValue(
+  state: Pick<EditorState, "bulkPatch" | "multiSelection">,
+  steps: readonly WorkflowStep[],
+  key: "enabled"
+): boolean | MixedValue;
+export function getBulkDisplayValue(
+  state: Pick<EditorState, "bulkPatch" | "multiSelection">,
+  steps: readonly WorkflowStep[],
+  key: keyof PropertyValues | "enabled"
+): unknown {
+  if (Object.prototype.hasOwnProperty.call(state.bulkPatch, key)) {
+    return state.bulkPatch[key];
+  }
+  const indices = state.multiSelection?.indices ?? [];
+  if (indices.length === 0) return MIXED_VALUE;
+  const first = steps[indices[0]];
+  if (!first) return MIXED_VALUE;
+  const original = originalBulkValue(first, key);
+  return indices.every((index) => {
+    const step = steps[index];
+    return step !== undefined && valuesEqual(originalBulkValue(step, key), original);
+  })
+    ? original
+    : MIXED_VALUE;
+}
+
 export interface ReplyContextInput {
   properties: PropertyValues;
   sessionId: string;
@@ -172,6 +229,8 @@ interface EditorState {
   // Editing mode
   selectionTarget: EditorSelectionTarget;
   multiSelection: { indices: number[]; anchorIndex: number } | null;
+  /** Sparse, shared edits staged while a multi-selection is active. */
+  bulkPatch: Partial<PropertyValues & { enabled: boolean }>;
   selectedPromptIndex: number | null; // null = new prompt mode, number = editing existing
   originalPromptData: WorkflowStep | null; // For Cancel/revert functionality
   savedNewPromptState: SavedNewStepState | null; // Saved state when switching to edit mode
@@ -347,6 +406,7 @@ interface EditorActions {
     value: PropertyValues[K]
   ) => void;
   setProperties: (properties: Partial<PropertyValues>) => void;
+  clearBulkPatchField: (key: keyof PropertyValues | "enabled") => void;
   resetProperties: () => void;
 
   // End condition management
@@ -410,6 +470,7 @@ interface EditorSelectors {
 const initialState: EditorState = {
   selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
   multiSelection: null,
+  bulkPatch: {},
   selectedPromptIndex: null,
   originalPromptData: null,
   savedNewPromptState: null,
@@ -476,6 +537,7 @@ export const useEditorStore = create<
         // Fallback if promptData not provided (shouldn't happen)
         set({
           multiSelection: null,
+          bulkPatch: {},
           selectionTarget: {
             kind: FINAL_STEP_PHASES.QUEUE,
             index: resolvedIndex,
@@ -497,6 +559,7 @@ export const useEditorStore = create<
       // Restore saved new prompt state (from switching to edit mode), preserving step type
       set({
         multiSelection: null,
+        bulkPatch: {},
         selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
         selectedPromptIndex: null,
         originalPromptData: null,
@@ -514,6 +577,7 @@ export const useEditorStore = create<
         // No persisted state, reset to defaults
         set({
           multiSelection: null,
+          bulkPatch: {},
           selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
@@ -540,6 +604,7 @@ export const useEditorStore = create<
         // State was restored, just clear edit mode flags
         set({
           multiSelection: null,
+          bulkPatch: {},
           selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
@@ -639,6 +704,7 @@ export const useEditorStore = create<
 
       set({
         multiSelection: null,
+        bulkPatch: {},
         selectionTarget: newTarget,
         selectedPromptIndex: isFinalStepTarget ? null : index,
         originalPromptData: promptData,
@@ -717,6 +783,7 @@ export const useEditorStore = create<
 
       set({
         multiSelection: null,
+        bulkPatch: {},
         selectionTarget: newTarget,
         selectedPromptIndex: isFinalStepTarget ? null : index,
         originalPromptData: promptData,
@@ -832,6 +899,7 @@ export const useEditorStore = create<
     if (savedNewPromptState) {
       set({
         multiSelection: null,
+        bulkPatch: {},
         selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
         selectedPromptIndex: null,
         originalPromptData: null,
@@ -847,6 +915,7 @@ export const useEditorStore = create<
       if (!restored) {
         set({
           multiSelection: null,
+          bulkPatch: {},
           selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
@@ -873,6 +942,7 @@ export const useEditorStore = create<
       } else {
         set({
           multiSelection: null,
+          bulkPatch: {},
           selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
@@ -915,7 +985,7 @@ export const useEditorStore = create<
         const step = useWorkflowStore.getState().steps[indices[0]];
         if (step) get().selectPrompt(indices[0], step);
       }
-      set({ multiSelection: null });
+      set({ multiSelection: null, bulkPatch: {}, isDirty: false });
       return;
     }
     if (state.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
@@ -935,7 +1005,7 @@ export const useEditorStore = create<
     const indices = toggleStepIndex(baseIndices, index, steps.length);
     const selection = collapseStepSelection({ indices, anchorIndex: index });
     if (!selection) {
-      set({ multiSelection: null });
+      set({ multiSelection: null, bulkPatch: {}, isDirty: false });
       if (indices.length === 1) {
         const step = steps[indices[0]];
         if (step) get().selectPrompt(indices[0], step);
@@ -975,7 +1045,7 @@ export const useEditorStore = create<
         const step = steps[indices[0]];
         if (step) get().selectPrompt(indices[0], step);
       }
-      set({ multiSelection: null });
+      set({ multiSelection: null, bulkPatch: {}, isDirty: false });
       return;
     }
     if (state.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
@@ -993,7 +1063,7 @@ export const useEditorStore = create<
         const step = useWorkflowStore.getState().steps[0];
         if (step) get().selectPrompt(0, step);
       }
-      set({ multiSelection: null });
+      set({ multiSelection: null, bulkPatch: {}, isDirty: false });
       return;
     }
     if (state.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
@@ -1002,7 +1072,15 @@ export const useEditorStore = create<
     set({ multiSelection: selection });
   },
 
-  clearMultiSelection: () => set({ multiSelection: null }),
+  clearMultiSelection: () =>
+    set((state) => ({
+      multiSelection: null,
+      bulkPatch: {},
+      isDirty:
+        state.selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT
+          ? isNewStepDraftDirty(captureNewStepDraft(state))
+          : state.isDirty,
+    })),
 
   // ============================================================================
   // STEP TYPE
@@ -1020,9 +1098,23 @@ export const useEditorStore = create<
   },
 
   setStepEnabled: (enabled) =>
-    set({
-      stepEnabled: enabled,
-      isDirty: true,
+    set((state) => {
+      if (state.multiSelection) {
+        const steps = useWorkflowStore.getState().steps;
+        const original = getBulkDisplayValue(
+          { ...state, bulkPatch: {} },
+          steps,
+          PROMPT_PROPERTIES.ENABLED
+        );
+        const bulkPatch = { ...state.bulkPatch };
+        if (original !== MIXED_VALUE && valuesEqual(original, enabled)) {
+          delete bulkPatch.enabled;
+        } else {
+          bulkPatch.enabled = enabled;
+        }
+        return { bulkPatch, isDirty: Object.keys(bulkPatch).length > 0 };
+      }
+      return { stepEnabled: enabled, isDirty: true };
     }),
 
   setScriptCommand: (command) =>
@@ -1113,15 +1205,26 @@ export const useEditorStore = create<
 
   setProperty: (key, value) =>
     set((state) => {
-      const properties: PropertyValues = {
-        ...state.properties,
-        [key]:
-          key === PROMPT_PROPERTIES.ERROR_BEHAVIOR
-            ? normalizePromptErrorBehavior(
-                value as PropertyValues["errorBehavior"]
-              )
-            : value,
-      };
+      const normalizedValue =
+        key === PROMPT_PROPERTIES.ERROR_BEHAVIOR
+          ? normalizePromptErrorBehavior(value as PropertyValues["errorBehavior"])
+          : value;
+      if (state.multiSelection) {
+        const steps = useWorkflowStore.getState().steps;
+        const original = getBulkDisplayValue(
+          { ...state, bulkPatch: {} },
+          steps,
+          key
+        );
+        const bulkPatch = { ...state.bulkPatch };
+        if (original !== MIXED_VALUE && valuesEqual(original, normalizedValue)) {
+          delete bulkPatch[key];
+        } else {
+          Object.assign(bulkPatch, { [key]: normalizedValue });
+        }
+        return { bulkPatch, isDirty: Object.keys(bulkPatch).length > 0 };
+      }
+      const properties: PropertyValues = { ...state.properties, [key]: normalizedValue };
       return {
         properties,
         replyContext: replyContextAfterPropertyChange(
@@ -1143,6 +1246,13 @@ export const useEditorStore = create<
         ),
         isDirty: true,
       };
+    }),
+
+  clearBulkPatchField: (key) =>
+    set((state) => {
+      const bulkPatch = { ...state.bulkPatch };
+      delete bulkPatch[key];
+      return { bulkPatch, isDirty: Object.keys(bulkPatch).length > 0 };
     }),
 
   resetProperties: () =>
@@ -1426,6 +1536,7 @@ export const useEditorStore = create<
     set({
       selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
       multiSelection: null,
+      bulkPatch: {},
       selectedPromptIndex: null,
       originalPromptData: null,
       savedNewPromptState: null,
@@ -1455,6 +1566,7 @@ export const useEditorStore = create<
   resetToDefaults: () =>
     set({
       multiSelection: null,
+      bulkPatch: {},
       pendingEdits: {},
       stepType: STEP_TYPES.PROMPT,
       stepEnabled: true,

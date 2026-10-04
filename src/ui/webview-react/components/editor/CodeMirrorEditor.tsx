@@ -25,7 +25,7 @@ import {
   type ContextReferenceMatch,
   type SymbolIconResolver,
 } from "@utils/atomicReferences";
-import { EditorState } from "@codemirror/state";
+import { Compartment, EditorState } from "@codemirror/state";
 import { minimalSetup } from "codemirror";
 import {
   autocompletion,
@@ -688,6 +688,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const hasPreConditionRef = useRef(props.hasPreCondition ?? false);
   const modeRef = useRef<CodeMirrorEditorMode>(mode);
   const placeholderText = props.placeholder || EDITOR_PLACEHOLDER_TEXT.DEFAULT;
+  const placeholderCompartmentRef = useRef(new Compartment());
 
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -1493,7 +1494,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           // is nothing to accept — preventing Tab from moving DOM focus away.
           { key: "Tab", run: insertTab },
         ]),
-        placeholder(placeholderText),
+        placeholderCompartmentRef.current.of(placeholder(placeholderText)),
         createThemeExtension(surface),
         createPromptDecorationThemeExtension(),
         createLinterThemeExtension(),
@@ -1678,7 +1679,6 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    placeholderText,
     customCompletions,
     pathCompletions,
     validateContextReferences,
@@ -1688,6 +1688,15 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     atomicContextReferences,
     isMultiRootWorkspace,
   ]);
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: placeholderCompartmentRef.current.reconfigure(
+        placeholder(placeholderText)
+      ),
+    });
+  }, [placeholderText, viewReady]);
   // `value` is intentionally omitted — the setup effect initializes the editor
   // once; value changes are handled by the separate effect below.
   // `vscode` is a stable singleton — never changes.

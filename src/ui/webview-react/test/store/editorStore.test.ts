@@ -3,6 +3,8 @@ import {
   useEditorStore,
   PROPERTY_DEFAULTS,
   END_CONDITION_DEFAULTS,
+  getBulkDisplayValue,
+  MIXED_VALUE,
 } from "@store/editorStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
@@ -772,5 +774,58 @@ describe("multi-selection draft preservation", () => {
     expect(store().multiSelection).toBeNull();
     expect(store().selectionTarget).toEqual({ kind: "queue", index: 1 });
     expect(store().promptText).toBe("unsaved second step draft");
+  });
+});
+
+describe("bulk edit patch", () => {
+  const steps = [
+    makePromptStep({ prompt: "one", color: "#111111", enabled: true }),
+    makePromptStep({ prompt: "two", color: "#222222", enabled: false }),
+    makePromptStep({ prompt: "three", color: "#111111", enabled: true }),
+  ];
+
+  beforeEach(() => {
+    useWorkflowStore.getState().setPrompts(steps);
+    useEditorStore.setState({
+      multiSelection: { indices: [0, 1], anchorIndex: 0 },
+      bulkPatch: {},
+      isDirty: false,
+    });
+  });
+
+  it("redirects field writes to the sparse patch and derives mixed values", () => {
+    store().setProperty("color", "#abcdef");
+    expect(store().properties.color).toBeUndefined();
+    expect(store().bulkPatch.color).toBe("#abcdef");
+    expect(getBulkDisplayValue(store(), steps, "color")).toBe("#abcdef");
+    expect(getBulkDisplayValue(store(), steps, "enabled")).toBe(MIXED_VALUE);
+  });
+
+  it("normalizes a change back to the common original and clears dirty state", () => {
+    useEditorStore.setState({
+      multiSelection: { indices: [0, 2], anchorIndex: 0 },
+    });
+    store().setProperty("color", "#abcdef");
+    expect(store().isDirty).toBe(true);
+    store().setProperty("color", "#111111");
+    expect(store().bulkPatch).toEqual({});
+    expect(store().isDirty).toBe(false);
+  });
+
+  it("keeps the patch when the selection changes and discards it when cleared", () => {
+    store().setProperty("color", "#abcdef");
+    store().extendMultiSelectionByRange(2);
+    expect(store().multiSelection?.indices).toEqual([0, 1, 2]);
+    expect(store().bulkPatch.color).toBe("#abcdef");
+    store().clearMultiSelection();
+    expect(store().bulkPatch).toEqual({});
+    expect(store().isDirty).toBe(false);
+  });
+
+  it("redirects enabled changes into the patch", () => {
+    store().setStepEnabled(false);
+    expect(store().stepEnabled).toBe(true);
+    expect(store().bulkPatch.enabled).toBe(false);
+    expect(store().isDirty).toBe(true);
   });
 });

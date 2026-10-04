@@ -624,12 +624,16 @@ which is cheap once the predicate exists. Clicks there stay single-select in v1.
          atomic completed/locked/key validation, and one-broadcast batch undo behavior
          are implemented (completed 2026-10-03).
 
-3. **Editor bulk mode and patch draft.**
-   - Placeholder `Compartment` and state-specific placeholders.
-   - The `bulkPatch` slice with MIXED display and the `setProperty`/`setStepEnabled`
-     redirect.
+3. **Editor bulk mode and patch draft** (completed 2026-10-03).
+   - Placeholder `Compartment`, state-specific placeholders, and an empty read-only
+     editor without changing the single-step draft.
+   - The `bulkPatch` slice with derived MIXED display, normalized writes, selection
+     persistence, and the `setProperty`/`setStepEnabled` redirect.
    - Bulk color and enable/disable from the editor header, committed through Update
-     (`UPDATE_STEP_COLOR` for color-only, otherwise `UPDATE_STEPS`).
+     (`UPDATE_STEP_COLOR` for color-only, otherwise `UPDATE_STEPS`). The editor's own
+     Delete action and run/queue actions are unavailable in bulk mode.
+   - Tri-state property mapping is shared with single-step updates. Prompt property
+     pickers and drawer pages remain gated for phase 4.
 4. **Bulk prompt properties.**
    - The harness cascade helper, harness-dependent gating, and drawer page gating.
    - MIXED rendering and the "(mixed)" option in the drawer and footer pickers.

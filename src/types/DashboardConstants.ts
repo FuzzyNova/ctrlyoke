@@ -2378,6 +2378,12 @@ export const EDITOR_PLACEHOLDER_TEXT = {
   /** Extended hint for the Final Step editor, explaining its loop-back behavior */
   FINAL_PROMPT:
     "Use @ for files/folders, # for selections/symbols, ~ for git changes, $ for prior context, / for skills and mcps\n\nNote: The Final Step runs after all other prompts complete. If it appends new prompts, it will run again once those finish.",
+  BULK_PROMPTS: (count: number) =>
+    `${count} prompts selected — use the prompt properties drawer to change the properties for all selected prompts`,
+  BULK_STEPS: (count: number) =>
+    `${count} steps selected — color, enable/disable, reorder and delete apply to all selected steps. Select only prompts to edit prompt properties.`,
+  BULK_LOCKED: (count: number) =>
+    `${count} steps selected — cannot edit properties for completed or running steps. Remove them from the selection to edit properties. Color can still be changed.`,
 } as const;
 
 // ============================================================================

@@ -6,6 +6,7 @@ import React, {
   useState,
 } from "react";
 import { useEditorStore } from "../../store/editorStore";
+import type { PropertyValues } from "../../store/editorStore";
 import {
   useWorkflowStore,
   isStepContentEqual,
@@ -49,6 +50,7 @@ import {
 import {
   KEYBOARD_KEYS,
   STEP_TYPES,
+  PROMPT_PROPERTIES,
   PERMISSION_CAPABILITY_KEYS,
   PROMPT_INPUT_CAPABILITY_KEYS,
   PROPERTY_EDITOR_MODES,
@@ -69,13 +71,17 @@ import {
   toFieldDiagnostic,
 } from "@utils/compatibilityDiagnostics";
 import { FieldDiagnostic } from "../shared/FieldDiagnostic";
-import { filterExplicitSecretGrants } from "../shared/useSecretGrantOptions";
-import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
+
+import { buildPropertyUpdateValues } from "@utils/promptPropertyValues";
 import { Icon } from "../shared/Icon";
 
 interface PromptEditorProps {
   /** When true, the editor is in CLI watch mode — all editing is disabled. */
   isExternallyManaged?: boolean;
+  isBulkMode?: boolean;
+  bulkPlaceholder?: string;
+  canBulkUpdate?: boolean;
+  bulkUpdateDisabledReason?: string;
   externalReadOnlyLabel?: string;
   /** Supplies the header action without moving its state out of the editor. */
   onPromptFileActionChange?: (action: PromptFileAction | null) => void;
@@ -89,6 +95,11 @@ function includeEmptyPromptNameClear(
     return clearProperties;
   }
   return [...clearProperties, "name"];
+}
+
+function ignoreBulkEditorChange(_value: string): void {
+  // The read-only bulk editor displays an empty document without changing the
+  // single-step draft that will be restored when the selection clears.
 }
 
 export interface PromptFileAction {
@@ -123,11 +134,17 @@ function isOnlyColorChange(
  */
 export const PromptEditor: React.FC<PromptEditorProps> = ({
   isExternallyManaged = false,
+  isBulkMode = false,
+  bulkPlaceholder,
+  canBulkUpdate = true,
+  bulkUpdateDisabledReason,
   externalReadOnlyLabel,
   onPromptFileActionChange,
 }) => {
   const {
     selectionTarget,
+    multiSelection,
+    bulkPatch,
     promptText,
     promptName,
     setPromptText,
@@ -410,189 +427,13 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [propertiesDrawerOpen, closePropertiesDrawer]);
 
-  // Get property values for sending to extension
-  // includeNullsForDefaults: if true, send null for default values to clear overrides
-  // Returns two separate collections:
-  //   properties    — values to set in PromptStep (null is stored as-is, e.g. additionalArgs: null)
-  //   clearProperties — keys to delete from PromptStep (set to undefined), used when the user
-  //                     switches a property back to "Default / inherit from workflow"
-  //
-  // This separation is required because null has distinct meanings for three-state properties:
-  //   - null in `properties`    → "explicitly none/disabled" (stored as null in PromptStep)
-  //   - key in `clearProperties` → "inherit from workflow/settings" (key removed from PromptStep)
   const getPropertyValues = useCallback(
-    (includeNullsForDefaults = false) => {
-      const result: Record<string, unknown> = {};
-      const clearProperties: string[] = [];
-
-      // Harness
-      if (properties.harness !== undefined) {
-        result.harness = properties.harness;
-      } else if (includeNullsForDefaults) {
-        clearProperties.push("harness");
-      }
-
-      // Model
-      if (properties.model !== undefined) {
-        result.model = properties.model;
-      } else if (includeNullsForDefaults) {
-        clearProperties.push("model");
-      }
-
-      // Execution mode — undefined inherits from the workflow/global setting.
-      if (properties.executionMode !== undefined) {
-        result.executionMode = properties.executionMode;
-      } else if (includeNullsForDefaults) {
-        clearProperties.push("executionMode");
-      }
-
-      // Step color — undefined inherits from the harness/script default.
-      if (properties.color !== undefined) {
-        result.color = properties.color;
-      } else if (includeNullsForDefaults) {
-        clearProperties.push("color");
-      }
-
-      // Agent
-      if (properties.agent === null) {
-        result.agent = null;
-      } else if (typeof properties.agent === "string" && properties.agent) {
-        result.agent = properties.agent;
-      } else if (includeNullsForDefaults) {
-        clearProperties.push("agent");
-      }
-
-      // Resume Session
-      if (properties.resumeSession !== undefined) {
-        result.resumeSession = properties.resumeSession;
-      } else if (includeNullsForDefaults) {
-        clearProperties.push("resumeSession");
-      }
-
-      // Session ID - Parse as number if it's a numeric reference
-      if (properties.sessionId && properties.sessionId.trim()) {
-        const trimmed = properties.sessionId.trim();
-        // If it's a pure number, convert to number (for prompt references)
-        if (/^\d+$/.test(trimmed)) {
-          result.sessionId = parseInt(trimmed, 10);
-        } else {
-          result.sessionId = trimmed;
-        }
-      } else if (includeNullsForDefaults) {
-        clearProperties.push("sessionId");
-      }
-
-      // MCP Servers
-      if (properties.mcpServers !== undefined) {
-        result.mcpServers = properties.mcpServers;
-      } else if (includeNullsForDefaults) {
-        clearProperties.push("mcpServers");
-      }
-
-      // Hooks
-      if (properties.hooks !== undefined) {
-        result.hooks = properties.hooks;
-      } else if (includeNullsForDefaults) {
-        clearProperties.push("hooks");
-      }
-
-      // Skills
-      if (properties.skills === null) {
-        result.skills = null;
-      } else if (Array.isArray(properties.skills)) {
-        result.skills = properties.skills.length > 0 ? properties.skills : null;
-      } else if (includeNullsForDefaults) {
-        clearProperties.push("skills");
-      }
-
-      // Secrets — tri-state, matching skills. Inline !NAME references are
-      // filtered by the drawer before this value reaches the editor.
-      if (properties.secrets === null) {
-        result.secrets = null;
-      } else if (Array.isArray(properties.secrets)) {
-        const inlineSecretNames = parseSecretReferences(promptText).map(
-          (reference) => reference.name
-        );
-        const explicitSecrets = filterExplicitSecretGrants(
-          properties.secrets,
-          inlineSecretNames
-        );
-        result.secrets = explicitSecrets.length > 0 ? explicitSecrets : null;
-      } else if (includeNullsForDefaults) {
-        clearProperties.push("secrets");
-      }
-
-      // Prior Context
-      if (properties.priorContext !== undefined) {
-        result.priorContext = properties.priorContext;
-      } else if (includeNullsForDefaults) {
-        clearProperties.push("priorContext");
-      }
-
-      // Additional Args — three-state:
-      //   null   → "explicitly none" (stored as null, stops three-tier resolution)
-      //   string → custom args
-      //   key in clearProperties → "Default / inherit" (key removed from PromptStep)
-      if (properties.additionalArgs === null) {
-        result.additionalArgs = null;
-      } else if (properties.additionalArgs) {
-        result.additionalArgs = properties.additionalArgs;
-      } else if (includeNullsForDefaults) {
-        clearProperties.push("additionalArgs");
-      }
-
-      // End Condition — three-state:
-      //   object  → specific end condition
-      //   null in properties → checked but empty (treated as "clear" via coerce on backend)
-      //   key in clearProperties → unchecked, clear back to inherit
-      if (properties.endCondition !== undefined) {
-        const script = properties.endCondition?.script?.trim() || "";
-        const returns = properties.endCondition?.returns?.trim() || "";
-        result.endCondition =
-          !script || !returns ? null : properties.endCondition;
-      } else if (includeNullsForDefaults) {
-        clearProperties.push("endCondition");
-      }
-
-      // Error Behavior:
-      //   object → specific harness failure policy
-      //   key in clearProperties → inherit from workflow/settings
-      if (properties.errorBehavior !== undefined) {
-        result.errorBehavior = properties.errorBehavior;
-      } else if (includeNullsForDefaults) {
-        clearProperties.push("errorBehavior");
-      }
-
-      // Pre-Condition — three-state:
-      //   object  → specific pre-condition
-      //   null    → explicitly none (overrides inherited)
-      //   key in clearProperties → inherit from workflow/settings
-      if (properties.preCondition !== undefined) {
-        result.preCondition = properties.preCondition;
-      } else if (includeNullsForDefaults) {
-        clearProperties.push("preCondition");
-      }
-
-      // Tool Permissions — three-state:
-      //   null   → "explicitly none" (inject no permission flags for this prompt)
-      //   object → permission override (mode, allowedTools, deniedTools)
-      //   key in clearProperties → "Default / inherit" (key removed from PromptStep)
-      if (properties.toolPermissions === null) {
-        result.toolPermissions = null;
-      } else if (properties.toolPermissions !== undefined) {
-        result.toolPermissions = properties.toolPermissions;
-      } else if (includeNullsForDefaults) {
-        clearProperties.push("toolPermissions");
-      }
-
-      if (!stepEnabled) {
-        result.enabled = false;
-      } else if (includeNullsForDefaults) {
-        clearProperties.push("enabled");
-      }
-
-      return { properties: result, clearProperties };
-    },
+    (includeNullsForDefaults = false) =>
+      buildPropertyUpdateValues(properties, {
+        includeNullsForDefaults,
+        promptText,
+        enabled: stepEnabled,
+      }),
     [properties, promptText, stepEnabled]
   );
 
@@ -1176,6 +1017,34 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
 
   // Update existing prompt
   const handleUpdate = useCallback(() => {
+    if (isBulkMode && multiSelection) {
+      const keys = Object.keys(bulkPatch);
+      if (keys.length === 0 || !canBulkUpdate) return;
+      if (keys.length === 1 && keys[0] === PROMPT_PROPERTIES.COLOR) {
+        postWorkflowDefinitionMutation(vscode, {
+          type: MESSAGE_TYPES.UPDATE_STEP_COLOR,
+          indices: multiSelection.indices,
+          color: bulkPatch.color ?? null,
+        });
+      } else {
+        const propertyKeys = new Set(
+          keys.filter((key) => key !== PROMPT_PROPERTIES.ENABLED) as Array<keyof PropertyValues>
+        );
+        const update = buildPropertyUpdateValues(bulkPatch, {
+          includeNullsForDefaults: true,
+          keys: propertyKeys,
+          enabled: bulkPatch.enabled,
+        });
+        postWorkflowDefinitionMutation(vscode, {
+          type: MESSAGE_TYPES.UPDATE_STEPS,
+          indices: multiSelection.indices,
+          properties: update.properties,
+          clearProperties: update.clearProperties,
+        });
+      }
+      useEditorStore.getState().clearMultiSelection();
+      return;
+    }
     const submitQueueUpdate = (
       submittedStep: WorkflowStep,
       fullMessage: Record<string, unknown>
@@ -1334,6 +1203,10 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     // Return to new prompt mode
     cancelEdit();
   }, [
+    isBulkMode,
+    multiSelection,
+    bulkPatch,
+    canBulkUpdate,
     isScriptMode,
     scriptCommand,
     scriptTimeoutSec,
@@ -1357,6 +1230,14 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     isPromptCompleted,
     originalPromptData,
   ]);
+
+  const handleCancel = useCallback(() => {
+    if (isBulkMode) {
+      useEditorStore.getState().clearMultiSelection();
+      return;
+    }
+    cancelEdit();
+  }, [cancelEdit, isBulkMode]);
 
   // Delete prompt - shows confirmation modal (or deletes immediately when confirmDeleteOperations is false)
   const handleDeleteClick = useCallback(() => {
@@ -1525,14 +1406,12 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         // scroll position left for that behavior to move into.
         <div className="prompt-editor-wrapper flex flex-col flex-1 min-h-0 overflow-clip relative isolate">
           <CodeMirrorEditor
-            value={promptText}
-            onChange={handleTextChange}
-            placeholder={
-              isFinalStep ? EDITOR_PLACEHOLDER_TEXT.FINAL_PROMPT : undefined
-            }
+            value={isBulkMode ? "" : promptText}
+            onChange={isBulkMode ? ignoreBulkEditorChange : handleTextChange}
+            placeholder={bulkPlaceholder ?? (isFinalStep ? EDITOR_PLACEHOLDER_TEXT.FINAL_PROMPT : undefined)}
             affUri={affUri}
             dicUri={dicUri}
-            readOnly={isExternallyManaged}
+            readOnly={isExternallyManaged || isBulkMode}
             onRun={handleEditorRun}
             onQueue={handleEditorQueue}
             stepCount={stepCount}
@@ -1556,7 +1435,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       {/* Script step fields (script mode only) */}
       {isScriptMode && (
         <div className="flex flex-col flex-1 min-h-0 overflow-auto px-3 py-3 bg-editor-bg">
-          <ScriptConditionEditor
+          {!isBulkMode && <ScriptConditionEditor
             variant="scriptStep"
             schemaPath="steps[]"
             value={{
@@ -1576,7 +1455,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             scriptLabel="Script command"
             disabled={isExternallyManaged}
             idPrefix="script-step"
-          />
+          />}
           <div className="mt-4 space-y-4 rounded border border-panel-border p-3">
             {globalSettings.stepColorMode !== STEP_COLOR_MODES.NONE && (
               <StepColorField idPrefix="script-step" />
@@ -1675,7 +1554,10 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
 
       {/* Editor Footer with actions (outside wrapper, not covered by drawer) */}
       <EditorFooter
-        isEditMode={isEditMode}
+        isEditMode={isEditMode || isBulkMode}
+        isBulkMode={isBulkMode}
+        canBulkUpdate={canBulkUpdate && Object.keys(bulkPatch).length > 0}
+        bulkUpdateDisabledReason={bulkUpdateDisabledReason}
         isFinalStepMode={selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP}
         isPromptCompleted={isPromptCompleted}
         isPromptBeingSent={isPromptBeingSent}
@@ -1699,7 +1581,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         onQueue={() => executePrompt(ACTION_TYPES.QUEUE)}
         onUpdate={handleUpdate}
         onDelete={handleDeleteClick}
-        onCancel={cancelEdit}
+        onCancel={handleCancel}
         onToggleProperties={togglePropertiesDrawer}
         propertiesOpen={propertiesDrawerOpen}
         isExternallyManaged={isExternallyManaged}
