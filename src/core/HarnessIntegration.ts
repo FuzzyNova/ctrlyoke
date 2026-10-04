@@ -31,14 +31,13 @@ import {
 import { stripAnsiCodes } from "../utils/TerminalOutputSanitizer";
 import { SplitConfig } from "../utils/PromptFileSplitter";
 import {
-  PRIOR_CONTEXT_KEYWORDS,
-  PRIOR_CONTEXT_REFERENCE_KINDS,
   STEP_TYPES,
   PriorContextItemType,
   type TerminalEndReason,
 } from "../types/DashboardConstants";
 import { ctrlYokeDeniedToolNames } from "../types/ExecutionPropertyResolver";
 import type { InlinePriorContextRef } from "../utils/FileReferenceParser";
+import { inlinePriorContextRefToPriorContext } from "../utils/PriorContextMerge";
 import { scanCtrlYokeSlashTokens } from "../utils/CtrlYokeSlashTokens";
 import type { CtrlYokeNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
 import { CliProviderUtils } from "./harness/shared/CliProviderUtils";
@@ -82,20 +81,7 @@ function mcpToolSkillContextForPrompt(
 }
 
 export function refToPriorContext(ref: InlinePriorContextRef): PriorContext {
-  switch (ref.kind) {
-    case PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS:
-      return ref.count === undefined
-        ? PRIOR_CONTEXT_KEYWORDS.PREVIOUS
-        : { previous: ref.count };
-    case PRIOR_CONTEXT_REFERENCE_KINDS.ALL:
-      return PRIOR_CONTEXT_KEYWORDS.ALL;
-    case PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP:
-      return PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS;
-    case PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP:
-      return PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL;
-    case PRIOR_CONTEXT_REFERENCE_KINDS.STEP:
-      return ref.indices;
-  }
+  return inlinePriorContextRefToPriorContext(ref);
 }
 
 /**

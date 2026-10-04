@@ -13,16 +13,21 @@ import { countTokens } from "../utils/tokenizer";
 import { sendMessage } from "./useMessageHandler";
 import { useUiStore } from "@store/uiStore";
 import { workflowViewAddressKey } from "@utils/viewAddress";
+import type { PriorContext } from "@root/types/CtrlYokeTypes";
 import { decodePriorContextTokenRef } from "@root/utils/FileReferenceParser";
 import {
   parseAtReferences,
   parseSelectionReferences,
   parseSymbolReferences,
   parseGitChangeReferences,
-  formatInlinePriorContextBody,
   parseInlinePriorContextRefs,
   encodePriorContextTokenRef,
 } from "@root/utils/FileReferenceParser";
+import {
+  formatMergedPriorContextBody,
+  inlinePriorContextRefToPriorContext,
+  mergePriorContextReferences,
+} from "@root/utils/PriorContextMerge";
 
 // ============================================================================
 // Module-level cache (persists across renders and re-mounts)
@@ -94,6 +99,7 @@ function ensureGlobalListener(): void {
  */
 function extractRawReferences(promptText: string, stepCount: number): string[] {
   const refs: string[] = [];
+  const priorContexts: PriorContext[] = [];
 
   for (const ref of parseAtReferences(promptText)) {
     if (ref.startOffset !== undefined && ref.endOffset !== undefined) {
@@ -120,14 +126,18 @@ function extractRawReferences(promptText: string, stepCount: number): string[] {
   }
 
   for (const match of parseInlinePriorContextRefs(promptText)) {
-    // Canonical body ("previous:3", "step:1,3"), so equivalent spellings
-    // share one cached count.
-    refs.push(
-      encodePriorContextTokenRef(
-        formatInlinePriorContextBody(match.ref),
-        stepCount
-      )
-    );
+    priorContexts.push(inlinePriorContextRefToPriorContext(match.ref));
+  }
+  if (priorContexts.length > 0) {
+    const merged = mergePriorContextReferences(priorContexts, stepCount);
+    if (merged.contexts.length > 0) {
+      refs.push(
+        encodePriorContextTokenRef(
+          formatMergedPriorContextBody(merged.contexts),
+          stepCount
+        )
+      );
+    }
   }
 
   // Deduplicate while preserving order

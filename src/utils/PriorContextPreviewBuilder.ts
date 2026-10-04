@@ -5,6 +5,7 @@ import {
 import { type WorkflowStep } from "../types/CtrlYokeTypes";
 import { RunOutputResolver } from "../core/orchestration/RunOutputResolver";
 import { parseInlinePriorContextBody } from "./FileReferenceParser";
+import { parseMergedPriorContextBody } from "./PriorContextMerge";
 
 /**
  * Builds the exact XML preview a user will see in the editor when they
@@ -31,11 +32,13 @@ export class PriorContextPreviewBuilder {
     resolver: RunOutputResolver,
     manifestPath: string
   ): Promise<string> {
+    const mergedContexts = parseMergedPriorContextBody(ref);
     const parsed = parseInlinePriorContextBody(ref);
-    const items = parsed
+    const contexts = mergedContexts ?? (parsed ? [refToPriorContext(parsed.ref)] : []);
+    const items = contexts.length > 0
       ? await resolver.resolvePriorContextItems(
           manifestPath,
-          [refToPriorContext(parsed.ref)],
+          contexts,
           steps,
           stepCount
         )

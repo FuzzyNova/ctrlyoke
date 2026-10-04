@@ -1,0 +1,34 @@
+import * as assert from "assert";
+import { suite, test } from "mocha";
+import {
+  deduplicatePriorContextItems,
+  mergePriorContextReferences,
+} from "../../utils/PriorContextMerge";
+
+suite("PriorContextMerge", () => {
+  test("merges previous counts and unions explicit step indices", () => {
+    const merged = mergePriorContextReferences(
+      ["previous", { previous: 3 }, [2, 3, 3], [4]],
+      4
+    );
+
+    assert.deepStrictEqual(merged.contexts, [{ previous: 3 }, [2, 3, 4]]);
+    assert.deepStrictEqual(merged.queueIndices, [0, 1, 2, 3]);
+    assert.deepStrictEqual(merged.explicitQueueIndices, [1, 2, 3]);
+    assert.strictEqual(merged.previousCount, 3);
+  });
+
+  test("deduplicates queue and final-step items by their distinct identities", () => {
+    const items = [
+      { index: 1, text: "queue" },
+      { index: 1, text: "duplicate queue" },
+      { index: 1, type: "finalStep", text: "final" },
+      { index: 1, type: "finalStep", text: "duplicate final" },
+    ];
+
+    assert.deepStrictEqual(deduplicatePriorContextItems(items), [
+      items[0],
+      items[2],
+    ]);
+  });
+});
