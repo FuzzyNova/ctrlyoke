@@ -399,4 +399,49 @@ suite("notification hook scripts", () => {
       assert.deepStrictEqual(await readJsonFiles(notifyDir), []);
     }
   });
+
+  test("includes the run ID in harness error notification files", async () => {
+    const cases = [
+      {
+        harness: "claude" as const,
+        hookArgs: [] as string[],
+        payload: {
+          hook_event_name: "StopFailure",
+          session_id: "claude-error-session",
+          error: "failed",
+        },
+        fileName: "claude-error-session-error.json",
+      },
+      {
+        harness: "copilot" as const,
+        hookArgs: ["errorOccurred"],
+        payload: {
+          sessionId: "copilot-error-session",
+          error: "failed",
+        },
+        fileName: "copilot-error-session-error.json",
+      },
+    ];
+
+    for (const errorCase of cases) {
+      const runId = `run-${errorCase.harness}-error`;
+      const notifyDir = path.join(tempDirectory, `${errorCase.harness}-error`);
+      const result = await runHook(
+        errorCase.harness,
+        notifyDir,
+        errorCase.hookArgs,
+        errorCase.payload,
+        hookEnvironment(runId, "")
+      );
+
+      assert.strictEqual(result.code, 0, result.stderr);
+      assert.deepStrictEqual(await readJsonFiles(notifyDir), [
+        errorCase.fileName,
+      ]);
+      assert.strictEqual(
+        (await readArtifact(notifyDir, errorCase.fileName)).runId,
+        runId
+      );
+    }
+  });
 });

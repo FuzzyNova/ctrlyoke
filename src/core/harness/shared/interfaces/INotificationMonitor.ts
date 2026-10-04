@@ -44,6 +44,13 @@ export interface NotificationResult {
   data?: any;
 }
 
+function matchesRunId(
+  data: { runId?: string } | null | undefined,
+  runId?: string
+): boolean {
+  return !runId || data?.runId === runId;
+}
+
 /** Hook configuration format discriminants returned by notification monitors. */
 export const HOOK_CONFIG_TYPES = {
   JSON: "json",
@@ -250,8 +257,8 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
    * or detect a harness failure via {sessionId}-error.json.
    *
    * When sessionId is provided: polls {sessionId}-stop.json directly.
-   * When sessionId is undefined, scans newer Stop files. If runId is provided,
-   * a file must carry the same runId to keep standalone runs isolated.
+   * When sessionId is undefined, scans newer Stop and error files. If runId is
+   * provided, a file must carry the same runId to keep standalone runs isolated.
    *
    * Deletes the stop file when completion is confirmed.
    */
@@ -285,7 +292,10 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
           if (await this.isFileNewerThan(errorFile, startTime)) {
             const data = await this.readNotificationFile(errorFile);
 
-            if (data?.status === NOTIFICATION_OUTCOME_KINDS.ERROR) {
+            if (
+              data?.status === NOTIFICATION_OUTCOME_KINDS.ERROR &&
+              matchesRunId(data, runId)
+            ) {
               Log.warn(
                 `[NotificationMonitorBase] Harness error detected via notification hook (session: ${sessionId})`
               );
@@ -345,7 +355,10 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
             if (await this.isFileNewerThan(file, startTime)) {
               const data = await this.readNotificationFile(file);
 
-              if (data?.status === NOTIFICATION_OUTCOME_KINDS.ERROR) {
+              if (
+                data?.status === NOTIFICATION_OUTCOME_KINDS.ERROR &&
+                matchesRunId(data, runId)
+              ) {
                 Log.warn(
                   `[NotificationMonitorBase] Harness error detected via notification hook (file: ${file})`
                 );
@@ -381,7 +394,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
               if (
                 data?.hookEvent === NOTIFICATION_HOOK_EVENTS.STOP &&
                 data?.status === STEP_STATUS.COMPLETED &&
-                (!runId || data?.runId === runId)
+                matchesRunId(data, runId)
               ) {
                 Log.info(
                   `[NotificationMonitorBase] Completion detected via Stop hook (file: ${file})`

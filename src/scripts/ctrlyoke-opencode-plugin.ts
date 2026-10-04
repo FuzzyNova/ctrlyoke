@@ -248,6 +248,7 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
         errorFile,
         JSON.stringify({
           hookEvent,
+          runId: RUN_ID,
           sessionId,
           status: "error",
           timestamp: Date.now(),

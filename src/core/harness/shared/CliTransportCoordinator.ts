@@ -42,6 +42,7 @@ import {
 } from "./HeadlessLogTail";
 import { splitCompleteLines } from "../../../utils/TextLines";
 import { StreamingSecretRedactor } from "../../../utils/SecretRedactionService";
+import { getCliInteractiveStartupTimeouts } from "./CliInteractiveStartupCoordinator";
 
 interface CliTransportCoordinatorCommandInfo {
   promptArgument: string;
@@ -203,13 +204,17 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
           notificationMonitor.supportsSessionStart &&
           notificationMonitor.waitForSessionStart
         ) {
+          const startupTimeouts = getCliInteractiveStartupTimeouts();
           // Use the same run-scoped SessionStart file that the VS Code
           // interactive startup path reads before monitoring completion.
           const startResult = await notificationMonitor.waitForSessionStart(
             {
               directory: notifyDir,
-              timeoutMs: Math.min(timeoutMs, 60_000),
-              pollMs: 100,
+              timeoutMs: Math.min(
+                timeoutMs,
+                startupTimeouts.sessionStartSoftTimeoutMs
+              ),
+              pollMs: startupTimeouts.sessionStartPollMs,
             },
             startTime,
             runId,
