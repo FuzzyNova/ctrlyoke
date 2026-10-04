@@ -202,7 +202,7 @@ only harness processes. Measured VSIX size: 16.1 MB (was 14.1 MB).
 - Check what telemetry, if any, the CLI sends and how to opt out without VS Code. Document it on
   the `guide/privacy.md` page from the docs plan.
 
-**Done 2026-09-25.** The CLI sends no telemetry: `initTelemetry()` is called only from
+**Done 2026-09-25.** The CLI sends no telemetry: `initVsCodeTelemetry()` is called only from
 `extension.ts`, and neither `out/cli.js` nor `out/mcp-server.js` imports `http`, `https` or
 `net`, or calls `fetch`. (The `telemetry` strings in `cli.js` come from a bundled tokenizer
 vocabulary.) `LICENSE.md` already names the CLI and MCP server in the Free Tier and allows CI/CD

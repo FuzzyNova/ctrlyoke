@@ -52,7 +52,7 @@ Standalone `ctrlyoke` CLI entrypoint plus terminal-only formatting. `src/cli.ts`
 
 ## Constraints
 
-- Never depend on the real `vscode` module from CLI code. The CLI bundle aliases it to `src/platform/vscode-shim.ts`.
+- Never depend on the real `vscode` module from anything `cli.ts` reaches, directly or through a package. The bundle's alias to `src/platform/vscode-shim.ts` does not make that safe: the unbundled `tsc` output of `cli.js` loads every module for real. `SourceAuditCounters.test.ts` enforces an empty `vscode` load set for `src/cli.ts` and `src/mcp-server.ts`.
 - CLI builds produce `out/cli.js` with a shebang and `IS_DEV_MODE=false`; keep code Node-safe and independent of extension-host services.
 - Preserve structured exit semantics when adding failure paths: `0` success, `1` workflow failure, `2` usage/parse/unexpected error, `3` harness/tool availability issues, `4` timeout, `5` interrupted.
 

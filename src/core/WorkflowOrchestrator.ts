@@ -315,6 +315,9 @@ export class WorkflowOrchestrator {
       get runnerHostIdentity() {
         return orchestrator.runnerHostIdentity;
       },
+      get fileWatcherFactory() {
+        return orchestrator.fileWatcherFactory;
+      },
       get panelClientId() {
         return orchestrator.PANEL_CLIENT_ID;
       },

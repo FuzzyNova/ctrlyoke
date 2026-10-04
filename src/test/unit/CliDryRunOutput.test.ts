@@ -185,6 +185,22 @@ CliTerminalFormatter.flushStreamingBuffer();`
     assert.ok(output.includes("[3 unit-tests] done"));
   });
 
+  test("writes the target prefix only for events that print output", () => {
+    // Copilot CLI emits a display-only userSteer before the reply text; an
+    // eagerly written prefix for it doubled the prefix on the text line.
+    const output = runFormatterScript(
+      `const target = { stepIndex: 1, stepName: "recall-info" };
+CliTerminalFormatter.renderEvents([
+  { type: CLI_EVENT_TYPES.USER_STEER, data: { text: "What is my favorite color?" } },
+  { type: CLI_EVENT_TYPES.FILE_READ, data: { path: "notes.md", status: OPERATION_STATUS.INITIATED } },
+  { type: CLI_EVENT_TYPES.TEXT, data: { text: "Orange." } },
+], target);
+CliTerminalFormatter.flushStreamingBuffer();`
+    );
+
+    assert.strictEqual(output, "[2 recall-info] Orange.\n\n");
+  });
+
   test("renders status messages on a new line after streamed text", () => {
     const output = runFormatterScript(
       `CliTerminalFormatter.renderStreamingChunk("the response");

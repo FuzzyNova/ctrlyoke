@@ -109,6 +109,43 @@ suite("HeadlessLogTail", () => {
     assert.strictEqual(fake.getReadCount() >= 2, true);
   });
 
+  test("attributes the echoed prompt to dispatch instead of a human steer", async () => {
+    const echoed = { type: "user", text: "prompt" };
+    const typed = { type: "user", text: "typed mid-turn" };
+    const fake = createParser({ reads: [[echoed, typed]] });
+    Object.assign(fake.parser, {
+      classifyUserEvent: (
+        event: BaseCliEvent,
+        ctx: { dispatchedPromptText?: string }
+      ) =>
+        event.text === ctx.dispatchedPromptText
+          ? "injected-prompt"
+          : "human-steer",
+      extractUserSteerText: (event: BaseCliEvent) => String(event.text),
+    });
+    const streamed: CliEvent[] = [];
+    const tail = new HeadlessLogTail({
+      parser: fake.parser,
+      promptText: "prompt",
+      startTime: new Date(),
+      onStreamingEvents: (events) => streamed.push(...events),
+      idlePollIntervalMs: 1000,
+      drainDeadlineMs: 2,
+      drainPollIntervalMs: 1,
+    });
+
+    await tail.start();
+    tail.onStdoutChunk("stdout tick");
+    await tail.finish();
+
+    assert.deepStrictEqual(
+      streamed
+        .filter((event) => event.type === CLI_EVENT_TYPES.USER_STEER)
+        .map((event) => (event.data as { text: string }).text),
+      ["typed mid-turn"]
+    );
+  });
+
   test("captures a Codex session ID split across stdout chunks", async () => {
     const provider = new CodexCliProvider();
     const fake = createParser({ discoveries: [null, "session.log"] });

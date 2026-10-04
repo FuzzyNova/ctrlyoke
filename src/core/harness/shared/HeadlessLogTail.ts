@@ -154,6 +154,7 @@ export class HeadlessLogTail {
       model: options.model ?? "",
       onStreamingEvents: options.onStreamingEvents,
       onContextWindowUpdate: options.onContextWindowUpdate,
+      dispatchedPromptText: options.promptText,
     });
   }
 

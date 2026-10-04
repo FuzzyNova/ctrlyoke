@@ -1,37 +1,36 @@
-import { TelemetryReporter } from "@vscode/extension-telemetry";
-import { TELEMETRY_CONNECTION_STRING } from "./BuildConfig";
-
-let reporter: TelemetryReporter | undefined;
-
 /**
- * Creates the singleton telemetry reporter. No-op (returns undefined) when
- * no connection string was injected at build time — see BuildConfig.ts.
- * The reporter itself still respects `vscode.env.isTelemetryEnabled` and the
- * user's `telemetry.telemetryLevel` setting before sending anything.
+ * Host-neutral telemetry destination. The VS Code extension installs one
+ * backed by `@vscode/extension-telemetry` (`src/platform/VsCodeTelemetry.ts`);
+ * the standalone CLI installs none, so every report is a no-op there.
+ *
+ * This module must stay free of `@vscode/extension-telemetry`: that package
+ * requires `vscode` at load time, and shared code that reports events is
+ * loaded by the CLI in plain Node.
  */
-export function initTelemetry(): TelemetryReporter | undefined {
-  if (!TELEMETRY_CONNECTION_STRING) {
-    return undefined;
-  }
-  reporter = new TelemetryReporter(TELEMETRY_CONNECTION_STRING);
-  return reporter;
+export interface TelemetrySink {
+  sendTelemetryEvent(
+    eventName: string,
+    properties?: Record<string, string>
+  ): void;
+  sendTelemetryErrorEvent(
+    eventName: string,
+    properties?: Record<string, string>
+  ): void;
+  dispose(): Promise<unknown> | void;
 }
 
-export function getTelemetry(): TelemetryReporter | undefined {
+let reporter: TelemetrySink | undefined;
+
+/** Install (or, with `undefined`, clear) the host's telemetry sink. */
+export function setTelemetrySink(sink: TelemetrySink | undefined): void {
+  reporter = sink;
+}
+
+export function getTelemetry(): TelemetrySink | undefined {
   return reporter;
 }
 
 export function disposeTelemetry(): void {
-  reporter?.dispose();
+  void reporter?.dispose();
   reporter = undefined;
-}
-
-/**
- * Test-only seam: inject a fake reporter, bypassing initTelemetry()'s real
- * Application Insights client. Call with undefined to reset between tests.
- */
-export function setTelemetryReporterForTests(
-  fake: TelemetryReporter | undefined
-): void {
-  reporter = fake;
 }

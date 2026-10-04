@@ -292,11 +292,11 @@ without warning. They can ship ahead of phase 1.
 with files first, then symbols) gets its symbols from the host, not the browser.
 Today three host call sites depend on VS Code for symbols:
 
-| Call site                                                                           | Uses                                                                   | Purpose                                                     |
-| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `CompletionHelpers.getSymbolCompletions` → `AttachmentBuilders.getWorkspaceSymbols` | `vscode.executeWorkspaceSymbolProvider`                                | `#sym:` completion items                                    |
-| `CompletionHelpers.findSymbolKindForReference`                                      | `executeDocumentSymbolProvider`, then `executeWorkspaceSymbolProvider` | the symbol-kind icon on an already-inserted `#sym:` chip    |
-| `ContextMenuReferenceCommands.ts`                                                   | `executeDocumentSymbolProvider`                                        | VS Code editor context menu (a boundary file; stays native) |
+| Call site                                                                          | Uses                                                                   | Purpose                                                     |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `CompletionHelpers.getSymbolCompletions` → `CompletionHelpers.getWorkspaceSymbols` | `vscode.executeWorkspaceSymbolProvider`                                | `#sym:` completion items                                    |
+| `CompletionHelpers.findSymbolKindForReference`                                     | `executeDocumentSymbolProvider`, then `executeWorkspaceSymbolProvider` | the symbol-kind icon on an already-inserted `#sym:` chip    |
+| `ContextMenuReferenceCommands.ts`                                                  | `executeDocumentSymbolProvider`                                        | VS Code editor context menu (a boundary file; stays native) |
 
 In standalone none of these exist. `STANDALONE_SERVER_PLAN.md` Phase 8 planned a
 regex heuristic plus an optional one-off `LspSymbolClient`. This plan replaces both

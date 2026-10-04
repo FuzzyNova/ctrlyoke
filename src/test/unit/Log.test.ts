@@ -1,7 +1,8 @@
 import * as assert from "assert";
 import { setup, suite, test } from "mocha";
 import * as vscode from "vscode";
-import { LogLevel, SafeLogOutputChannel } from "../../utils/Log";
+import { LogLevel } from "../../utils/Log";
+import { SafeLogOutputChannel } from "../../platform/VsCodeLogOutputChannel";
 
 /**
  * Stand-in for the channel `vscode.window.createOutputChannel(name, { log: true })`

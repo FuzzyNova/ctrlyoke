@@ -24,6 +24,11 @@ import { RUNNER_IDS, STEP_TYPES } from "../../types/DashboardConstants";
 import type { ActiveExternalLockInspection } from "../../core/orchestration/ExternalExecutionResolver";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import { VsCodeFileWatcherFactory } from "../../platform/VsCodeFileWatcher";
+import type {
+  Disposable,
+  FileWatcher,
+  FileWatcherFactory,
+} from "../../core/HostPorts";
 
 function makeInspection(
   workflowKey: WorkflowKey,
@@ -64,8 +69,53 @@ function getBasePath(pattern: vscode.RelativePattern): string {
   return pattern.baseUri.fsPath;
 }
 
+type WatchListener = (filePath: string) => unknown;
+
+/** One watcher created by {@link RecordingFileWatcherFactory}. */
+class RecordingFileWatcher implements FileWatcher {
+  readonly createListeners: WatchListener[] = [];
+  readonly changeListeners: WatchListener[] = [];
+  readonly deleteListeners: WatchListener[] = [];
+  disposed = false;
+
+  constructor(
+    readonly basePath: string,
+    readonly glob: string
+  ) {}
+
+  onDidCreate(listener: WatchListener): Disposable {
+    this.createListeners.push(listener);
+    return { dispose: () => undefined };
+  }
+
+  onDidChange(listener: WatchListener): Disposable {
+    this.changeListeners.push(listener);
+    return { dispose: () => undefined };
+  }
+
+  onDidDelete(listener: WatchListener): Disposable {
+    this.deleteListeners.push(listener);
+    return { dispose: () => undefined };
+  }
+
+  dispose(): void {
+    this.disposed = true;
+  }
+}
+
+/** Host-neutral watcher factory that records every watcher it creates. */
+class RecordingFileWatcherFactory implements FileWatcherFactory {
+  readonly watchers: RecordingFileWatcher[] = [];
+
+  create(basePath: string, glob: string): RecordingFileWatcher {
+    const watcher = new RecordingFileWatcher(basePath, glob);
+    this.watchers.push(watcher);
+    return watcher;
+  }
+}
+
 suite("external watcher patterns", () => {
-  test("reloads an atomic rename through the external-path polling fallback", async () => {
+  test("reloads an atomic rename through polling when the host has no file watcher", async () => {
     const externalRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-prompt-watcher-rename-")
     );
@@ -144,27 +194,16 @@ suite("external watcher patterns", () => {
 
     const queue = new PromptQueue();
     await queue.restoreFromWorkingFile(workingFilePath);
-    const originalCreateFileSystemWatcher =
-      vscode.workspace.createFileSystemWatcher;
-    let onDidCreate: ((uri: vscode.Uri) => unknown) | undefined;
-    const disposable = { dispose: () => undefined };
-    Object.defineProperty(vscode.workspace, "createFileSystemWatcher", {
-      configurable: true,
-      value: () =>
-        ({
-          onDidCreate: (handler: (uri: vscode.Uri) => unknown) => {
-            onDidCreate = handler;
-            return disposable;
-          },
-          onDidChange: () => disposable,
-          onDidDelete: () => disposable,
-          dispose: () => undefined,
-        }) as unknown as vscode.FileSystemWatcher,
-    });
+    const watcherFactory = new RecordingFileWatcherFactory();
 
     let promptWatcher: PromptFileWatcher | undefined;
     try {
-      promptWatcher = new PromptFileWatcher(queue);
+      promptWatcher = new PromptFileWatcher(
+        queue,
+        () => undefined,
+        watcherFactory,
+        () => [externalRoot]
+      );
       let reloadCount = 0;
       promptWatcher.setupFileWatcher(
         workingFilePath,
@@ -173,6 +212,8 @@ suite("external watcher patterns", () => {
         },
         () => undefined
       );
+      assert.strictEqual(watcherFactory.watchers.length, 1);
+      const [onDidCreate] = watcherFactory.watchers[0].createListeners;
       assert.ok(onDidCreate);
       const replacementPath = `${workingFilePath}.tmp`;
       await fs.writeFile(
@@ -182,14 +223,10 @@ suite("external watcher patterns", () => {
         })
       );
       await fs.rename(replacementPath, workingFilePath);
-      await onDidCreate(vscode.Uri.file(workingFilePath));
+      await onDidCreate(workingFilePath);
       assert.strictEqual(reloadCount, 1);
     } finally {
       promptWatcher?.dispose();
-      Object.defineProperty(vscode.workspace, "createFileSystemWatcher", {
-        configurable: true,
-        value: originalCreateFileSystemWatcher,
-      });
       await fs.rm(externalRoot, { recursive: true, force: true });
     }
   });
@@ -198,20 +235,11 @@ suite("external watcher patterns", () => {
     const workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-prompt-watcher-promotion-")
     );
-    const originalCreateFileSystemWatcher =
-      vscode.workspace.createFileSystemWatcher;
-    const patterns: vscode.RelativePattern[] = [];
+    const watcherFactory = new RecordingFileWatcherFactory();
+    const watchers = watcherFactory.watchers;
     const steps: WorkflowStep[] = [
       { type: STEP_TYPES.PROMPT, prompt: "run this" },
     ];
-
-    Object.defineProperty(vscode.workspace, "createFileSystemWatcher", {
-      configurable: true,
-      value: (pattern: vscode.GlobPattern) => {
-        patterns.push(pattern as vscode.RelativePattern);
-        return createFakeWatcher();
-      },
-    });
 
     let promptWatcher: PromptFileWatcher | undefined;
     try {
@@ -223,7 +251,11 @@ suite("external watcher patterns", () => {
       );
       queue.loadPrompts({ steps }, draftPath);
 
-      promptWatcher = new PromptFileWatcher(queue);
+      promptWatcher = new PromptFileWatcher(
+        queue,
+        () => undefined,
+        watcherFactory
+      );
       promptWatcher.setupFileWatcher(
         draftPath,
         async () => undefined,
@@ -232,24 +264,18 @@ suite("external watcher patterns", () => {
 
       const promoted = await queue.promoteToNewRun(workspaceRoot, Date.now());
       assert.ok(promoted);
-      assert.strictEqual(patterns.length, 2);
-      assert.ok(pathsEqual(getBasePath(patterns[0]), path.dirname(draftPath)));
+      assert.strictEqual(watchers.length, 2);
+      assert.ok(pathsEqual(watchers[0].basePath, path.dirname(draftPath)));
+      assert.ok(watchers[0].disposed);
       assert.ok(
-        pathsEqual(
-          getBasePath(patterns[1]),
-          path.dirname(promoted.workingFilePath)
-        )
+        pathsEqual(watchers[1].basePath, path.dirname(promoted.workingFilePath))
       );
       assert.strictEqual(
-        patterns[1].pattern,
+        watchers[1].glob,
         path.basename(promoted.workingFilePath)
       );
     } finally {
       promptWatcher?.dispose();
-      Object.defineProperty(vscode.workspace, "createFileSystemWatcher", {
-        configurable: true,
-        value: originalCreateFileSystemWatcher,
-      });
       await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
   });
@@ -258,30 +284,11 @@ suite("external watcher patterns", () => {
     const workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-prompt-watcher-stale-delete-")
     );
-    const originalCreateFileSystemWatcher =
-      vscode.workspace.createFileSystemWatcher;
-    const patterns: vscode.RelativePattern[] = [];
-    const deleteHandlers: ((uri: vscode.Uri) => unknown)[] = [];
+    const watcherFactory = new RecordingFileWatcherFactory();
+    const watchers = watcherFactory.watchers;
     const steps: WorkflowStep[] = [
       { type: STEP_TYPES.PROMPT, prompt: "run this" },
     ];
-    const disposable = { dispose: () => undefined };
-
-    Object.defineProperty(vscode.workspace, "createFileSystemWatcher", {
-      configurable: true,
-      value: (pattern: vscode.GlobPattern) => {
-        patterns.push(pattern as vscode.RelativePattern);
-        return {
-          onDidCreate: () => disposable,
-          onDidChange: () => disposable,
-          onDidDelete: (handler: (uri: vscode.Uri) => unknown) => {
-            deleteHandlers.push(handler);
-            return disposable;
-          },
-          dispose: () => undefined,
-        } as unknown as vscode.FileSystemWatcher;
-      },
-    });
 
     let promptWatcher: PromptFileWatcher | undefined;
     try {
@@ -301,7 +308,8 @@ suite("external watcher patterns", () => {
             updateFileSelected: () => {
               fileSelectedCleared += 1;
             },
-          }) as unknown as IDashboardSink
+          }) as unknown as IDashboardSink,
+        watcherFactory
       );
 
       let deletedPaths: string[] = [];
@@ -315,14 +323,17 @@ suite("external watcher patterns", () => {
 
       const promoted = await queue.promoteToNewRun(workspaceRoot, Date.now());
       assert.ok(promoted);
-      assert.strictEqual(patterns.length, 2);
+      assert.strictEqual(watchers.length, 2);
 
       // finalizeRun deletes the promoted draft, and that event can arrive after
       // the queue already switched to the run file. It must be ignored: it is
       // not the active working file.
+      const deleteHandlers = watchers.flatMap(
+        (watcher) => watcher.deleteListeners
+      );
       assert.ok(deleteHandlers.length >= 1);
       for (const handler of deleteHandlers) {
-        handler(vscode.Uri.file(draftPath));
+        handler(draftPath);
       }
       assert.deepStrictEqual(
         deletedPaths,
@@ -343,22 +354,18 @@ suite("external watcher patterns", () => {
       );
       assert.ok(secondPromotion);
       assert.strictEqual(
-        patterns.length,
+        watchers.length,
         3,
         "watcher must still follow workingFilePath after a superseded delete"
       );
       assert.ok(
         pathsEqual(
-          getBasePath(patterns[2]),
+          watchers[2].basePath,
           path.dirname(secondPromotion.workingFilePath)
         )
       );
     } finally {
       promptWatcher?.dispose();
-      Object.defineProperty(vscode.workspace, "createFileSystemWatcher", {
-        configurable: true,
-        value: originalCreateFileSystemWatcher,
-      });
       await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
   });

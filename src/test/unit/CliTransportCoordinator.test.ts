@@ -387,12 +387,22 @@ line two`,
 
   test("should stream migrated stdout events through the log parser mapping", async () => {
     const streamedEvents: string[] = [];
+    const classifiedPrompts: (string | undefined)[] = [];
     const parser = {
       extractStructuredEventsFromEvent: (event: { type: string }) => [
         { type: "text", data: { text: event.type } },
       ],
       trackBackgroundWorkState: () => {},
       extractLiveContextWindow: () => null,
+      // Without the dispatched prompt, a harness that echoes it back (Copilot's
+      // user.message) cannot tell it from a human steer.
+      classifyUserEvent: (
+        _event: unknown,
+        ctx: { dispatchedPromptText?: string }
+      ) => {
+        classifiedPrompts.push(ctx.dispatchedPromptText);
+        return "other";
+      },
     } as any;
     const source: HeadlessStreamingSource = {
       parser,
@@ -472,6 +482,7 @@ line two`,
 
     assert.strictEqual(success, true);
     assert.deepStrictEqual(streamedEvents, ["log-event"]);
+    assert.deepStrictEqual(classifiedPrompts, ["prompt"]);
   });
 
   for (const providerFactory of stdoutProviderFactories) {
