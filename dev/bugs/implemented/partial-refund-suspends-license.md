@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-04 by Claude while deciding the refund policy ([`dev/backlog/REFUND_POLICY.md`](../../backlog/REFUND_POLICY.md))
 - **Area:** `netlify/functions/ls-webhook.ts`
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

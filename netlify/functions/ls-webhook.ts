@@ -4,11 +4,16 @@
 // order_created -> create a Keygen license (idempotent on the LS order id), email
 //                  the key. Routes to the Pro or Enterprise Keygen policy based on
 //                  which LS product/variant was purchased (see KEYGEN_POLICY_BY_LS_VARIANT).
-// order_refunded -> suspend the Keygen license issued for that order.
+// order_refunded -> on a full refund, suspend the Keygen license issued for that
+//                  order. Partial refunds (goodwill credits, tax-only refunds) are
+//                  ignored — the buyer still holds a paid license.
 // subscription_created -> link the LS subscription id onto the license created by
 //                  order_created, so later renewal events can find it.
 // subscription_payment_success -> on a "renewal" invoice (not "initial"/"updated"),
 //                  extend the license's expiry via Keygen's renew action.
+// subscription_payment_refunded -> on a full refund of an "initial" or "renewal"
+//                  invoice, suspend the subscription's license; otherwise a refunded
+//                  renewal would leave the license extended for another year.
 // subscription_cancelled / subscription_expired -> deliberate no-op; every
 //                  subscription policy uses Restrict Access expiration, so the
 //                  license already locks itself out at term end.
@@ -51,6 +56,7 @@ const LS_EVENT = {
   ORDER_REFUNDED: "order_refunded",
   SUBSCRIPTION_CREATED: "subscription_created",
   SUBSCRIPTION_PAYMENT_SUCCESS: "subscription_payment_success",
+  SUBSCRIPTION_PAYMENT_REFUNDED: "subscription_payment_refunded",
   SUBSCRIPTION_CANCELLED: "subscription_cancelled",
   SUBSCRIPTION_EXPIRED: "subscription_expired",
 } as const;
@@ -86,6 +92,8 @@ interface LemonSqueezyOrderPayload {
       user_email: string;
       user_name: string;
       status: string;
+      /** True only for a full refund; a partial refund leaves this false. */
+      refunded: boolean;
       first_order_item: {
         product_id: number;
         variant_id: number;
@@ -113,13 +121,19 @@ interface LemonSqueezySubscriptionPayload {
 }
 
 interface LemonSqueezySubscriptionInvoicePayload {
-  meta: { event_name: typeof LS_EVENT.SUBSCRIPTION_PAYMENT_SUCCESS };
+  meta: {
+    event_name:
+      | typeof LS_EVENT.SUBSCRIPTION_PAYMENT_SUCCESS
+      | typeof LS_EVENT.SUBSCRIPTION_PAYMENT_REFUNDED;
+  };
   data: {
     id: string;
     attributes: {
       subscription_id: number;
       billing_reason: string;
       status: string;
+      /** True only for a full refund; a partial refund leaves this false. */
+      refunded: boolean;
     };
   };
 }
@@ -234,12 +248,16 @@ async function createLicense(
   return body.data;
 }
 
-async function suspendLicensesForOrder(orderId: string): Promise<void> {
-  const license = await findLicenseByMetadata(
-    LICENSE_METADATA_KEY.LS_ORDER_ID,
-    orderId
-  );
-  if (!license) return; // refund for an order that never issued a license — nothing to do
+/**
+ * Look up the license correlated with a refunded LS order/subscription and
+ * suspend it. A refund for a purchase that never issued a license is a no-op.
+ */
+async function suspendLicenseByMetadata(
+  metadataKey: string,
+  value: string
+): Promise<void> {
+  const license = await findLicenseByMetadata(metadataKey, value);
+  if (!license) return;
   const res = await keygenFetch(`/licenses/${license.id}/actions/suspend`, {
     method: "POST",
   });
@@ -399,8 +417,15 @@ export default async (req: Request): Promise<Response> => {
         return new Response("OK", { status: 200 });
       }
       case LS_EVENT.ORDER_REFUNDED: {
+        // Fires for full *and* partial refunds; only a full refund revokes.
         const payload = rawPayload as LemonSqueezyOrderPayload;
-        await suspendLicensesForOrder(payload.data.id);
+        if (!payload.data.attributes.refunded) {
+          return new Response("Ignored (partial refund)", { status: 200 });
+        }
+        await suspendLicenseByMetadata(
+          LICENSE_METADATA_KEY.LS_ORDER_ID,
+          payload.data.id
+        );
         return new Response("OK", { status: 200 });
       }
       case LS_EVENT.SUBSCRIPTION_CREATED: {
@@ -428,6 +453,28 @@ export default async (req: Request): Promise<Response> => {
         await renewLicenseForSubscription(
           String(subscriptionId),
           payload.data.id
+        );
+        return new Response("OK", { status: 200 });
+      }
+      case LS_EVENT.SUBSCRIPTION_PAYMENT_REFUNDED: {
+        const payload = rawPayload as LemonSqueezySubscriptionInvoicePayload;
+        const {
+          subscription_id: subscriptionId,
+          billing_reason: billingReason,
+          refunded,
+        } = payload.data.attributes;
+        if (!refunded) {
+          return new Response("Ignored (partial refund)", { status: 200 });
+        }
+        if (billingReason === LS_BILLING_REASON.UPDATED) {
+          // Refunding a plan-change proration doesn't undo the paid term.
+          return new Response("Ignored (proration refund)", { status: 200 });
+        }
+        // An initial-invoice refund may also arrive as order_refunded; the
+        // suspend is idempotent, so handling both is harmless.
+        await suspendLicenseByMetadata(
+          LICENSE_METADATA_KEY.LS_SUBSCRIPTION_ID,
+          String(subscriptionId)
         );
         return new Response("OK", { status: 200 });
       }

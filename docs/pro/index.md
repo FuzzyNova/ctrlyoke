@@ -44,7 +44,9 @@ working for free; only remote reach requires Pro.
 ## Buy Pro
 
 ctrlyoke Pro costs **$59 USD one time**. It is a perpetual license that includes
-future Pro features and activates on up to 10 machines.
+future Pro features and activates on up to 10 machines. It comes with a 30-day
+money-back guarantee: email `billing@ctrlyoke.dev` within 30 days of purchase for
+a full refund, and the license is deactivated when the refund is processed.
 
 [**Get ctrlyoke Pro →**](https://ctrlyoke.dev/pricing/)
 

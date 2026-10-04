@@ -6,7 +6,7 @@
 **Related:** [`../implemented/PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md) (the
 LS → Netlify → Keygen pipeline), [`../../ENTERPRISE_TERMS.md`](../../ENTERPRISE_TERMS.md) §6–7,
 [`../../LICENSE.md`](../../LICENSE.md) §6(e),
-[`../bugs/backlog/partial-refund-suspends-license.md`](../bugs/backlog/partial-refund-suspends-license.md).
+[`../bugs/implemented/partial-refund-suspends-license.md`](../bugs/implemented/partial-refund-suspends-license.md).
 
 ---
 
@@ -123,15 +123,15 @@ Enterprise Terms), not support@ — it keeps money requests out of the support q
 
 ### Code (small)
 
-- [ ] Fix [`partial-refund-suspends-license`](../bugs/backlog/partial-refund-suspends-license.md):
+- [x] Fix [`partial-refund-suspends-license`](../bugs/implemented/partial-refund-suspends-license.md):
       suspend only on a **full** refund. Needed before any goodwill partial refund (or an LS
       tax-only refund) is ever issued.
-- [ ] Enterprise renewal refunds: handle `subscription_payment_refunded` by suspending the
+- [x] Enterprise renewal refunds: handle `subscription_payment_refunded` by suspending the
       subscription's license (look up by `lsSubscriptionId`). Without it, refunding a renewal
       invoice leaves the license extended for another year. Low priority given the no-refund
       policy — the manual alternative is suspending the license in the Keygen dashboard after
       issuing such a refund.
-- [ ] Pricing FAQ entry + Pro card line; `docs/pro/index.md` sentence (copy above).
+- [x] Pricing FAQ entry + Pro card line; `docs/pro/index.md` sentence (copy above).
 
 Do **not** automate refunds through the LS API (would need an LS API key in Netlify, an
 abuse-prone self-serve endpoint, and buys nothing at this volume).
@@ -142,10 +142,10 @@ Nothing has to be switched on to allow refunds. To launch the policy:
 
 1. **ctrlyoke Pro → edit product:** add the refund line to the description and the
    confirmation-modal / receipt copy (the same field that already explains the separate key email).
-2. **Webhooks (live mode):** confirm the live-mode webhook includes `order_refunded`, and add
-   `subscription_payment_refunded` if the Enterprise handler above is built.
+2. **Webhooks (test and live mode):** confirm the webhook includes `order_refunded`, and add
+   `subscription_payment_refunded` (the handler now exists; without the subscription the event never arrives).
 3. **Test mode:** run the Phase 12 refund check — refund a test order, confirm the Keygen license
-   is suspended; then a partial refund, confirm it is **not** (after the bug fix).
+   is suspended; then a partial refund, confirm it is **not**.
 
 ### Per-request runbook (Pro)
 
