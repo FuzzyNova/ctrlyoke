@@ -65,6 +65,7 @@ import {
   findStepIndexById,
 } from "../StepIdentity";
 import { hasInFlightStep, hasStarted } from "../../utils/StepStatusDerivation";
+import { renumberStepReferences } from "../StepReferenceRenumbering";
 import { prepareRunFileForWrite } from "../../utils/PersistedSchemaGuard";
 import { assertStepIndex } from "./StepIndexValidation";
 
@@ -414,6 +415,10 @@ export class RunContinuationService {
           requestedIndex,
           sanitizedIncomingTopology
         );
+        const renumbered = renumberStepReferences(
+          sourceTopology.steps,
+          nextTopology.steps
+        );
         const incomingGroupIds = new Set(
           sanitizedIncomingTopology.parallelGroups.map((group) => group.id)
         );
@@ -423,7 +428,7 @@ export class RunContinuationService {
         const workingFile: WorkingFile = {
           ...source,
           definitionRevision: sourceRevision + 1,
-          steps: nextTopology.steps,
+          steps: renumbered.steps,
           parallelGroups: nextTopology.parallelGroups,
           _runtime: {
             currentIndex: source._runtime?.currentIndex ?? 0,
@@ -855,6 +860,15 @@ export class RunContinuationService {
         assertStepIndex(topology.steps.length, index, "remove");
         assertEditableDuringExecution(source, topology.steps, index, "remove");
         const nextTopology = deleteParallelGroupStep(topology, index);
+        const renumbered = renumberStepReferences(
+          topology.steps,
+          nextTopology.steps
+        );
+        if (renumbered.refusals.length > 0) {
+          throw new Error(
+            `Cannot remove step ${index + 1}: referenced by ${renumbered.refusals.join(", ")}`
+          );
+        }
         if (isExecutionActiveState(source._runtime?.executionState)) {
           assertStartedStepPositionsPreserved(
             topology.steps,
@@ -866,7 +880,7 @@ export class RunContinuationService {
         return {
           workingFile: {
             ...source,
-            steps: nextTopology.steps,
+            steps: renumbered.steps,
             parallelGroups: nextTopology.parallelGroups,
             _runtime: source._runtime
               ? {
@@ -1001,10 +1015,14 @@ export class RunContinuationService {
           nextTopology.steps,
           "reorder"
         );
+        const renumbered = renumberStepReferences(
+          topology.steps,
+          nextTopology.steps
+        );
         return {
           workingFile: {
             ...source,
-            steps: nextTopology.steps,
+            steps: renumbered.steps,
             parallelGroups: nextTopology.parallelGroups,
           },
           result: undefined,

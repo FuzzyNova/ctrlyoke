@@ -1073,6 +1073,8 @@ export class CtrlYokeMCPServer {
         ...(preview !== prompt ? { promptTruncated: true } : {}),
         status: stepStatuses[index],
         model: isScriptStep(p) ? undefined : p.model,
+        sessionId: isScriptStep(p) ? null : (p.sessionId ?? null),
+        resumeSession: isScriptStep(p) ? false : (p.resumeSession ?? false),
       };
     });
 

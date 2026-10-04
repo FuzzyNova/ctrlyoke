@@ -79,6 +79,7 @@ import {
   PARALLEL_GROUP_INSERT_POSITIONS,
   type ParallelGroupInsertPlacement,
 } from "./ParallelGroupTopology";
+import { renumberStepReferences } from "./StepReferenceRenumbering";
 
 function normalizeWorkflowPropertyValue(key: string, value: unknown): unknown {
   return key === PROMPT_PROPERTIES.AGENT &&
@@ -1377,6 +1378,10 @@ export class WorkingFileManager {
           requestedIndex,
           [ensureStepIds([...topology.steps, step]).at(-1)!]
         );
+        const renumbered = renumberStepReferences(
+          topology.steps,
+          nextTopology.steps
+        );
         const currentIndex = source._runtime?.currentIndex ?? 0;
         // Strict `<`, matching `PromptQueue.insertStepAfterIndex`: an insert at
         // `currentIndex` becomes the next step to run rather than being shifted
@@ -1386,7 +1391,7 @@ export class WorkingFileManager {
         return {
           workingFile: {
             ...source,
-            steps: nextTopology.steps,
+            steps: renumbered.steps,
             parallelGroups: nextTopology.parallelGroups,
             _runtime: source._runtime
               ? { ...source._runtime, currentIndex: nextCurrentIndex }
@@ -1550,13 +1555,22 @@ export class WorkingFileManager {
           throw new Error(`Invalid prompt index: ${index}`);
         }
         const nextTopology = deleteParallelGroupStep(topology, index);
+        const renumbered = renumberStepReferences(
+          topology.steps,
+          nextTopology.steps
+        );
+        if (renumbered.refusals.length > 0) {
+          throw new Error(
+            `Cannot remove step ${index + 1}: referenced by ${renumbered.refusals.join(", ")}`
+          );
+        }
         const currentIndex = source._runtime?.currentIndex ?? 0;
         const nextCurrentIndex =
           index < currentIndex ? currentIndex - 1 : currentIndex;
         return {
           workingFile: {
             ...source,
-            steps: nextTopology.steps,
+            steps: renumbered.steps,
             parallelGroups: nextTopology.parallelGroups,
             _runtime: source._runtime
               ? { ...source._runtime, currentIndex: nextCurrentIndex }
@@ -1609,10 +1623,14 @@ export class WorkingFileManager {
             source._runtime?.executionState as ExecutionState
           )
         );
+        const renumbered = renumberStepReferences(
+          topology.steps,
+          nextTopology.steps
+        );
         return {
           workingFile: {
             ...source,
-            steps: nextTopology.steps,
+            steps: renumbered.steps,
             parallelGroups: nextTopology.parallelGroups,
           },
           result: undefined,

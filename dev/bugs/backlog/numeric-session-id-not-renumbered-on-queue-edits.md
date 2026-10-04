@@ -44,3 +44,20 @@ dashboard mutation paths, and consider exposing `sessionId` in
 ## Decision
 
 Decided 2026-10-03 by Nathan: option (a), renumber on edit. One shared helper, called by every structural queue edit (MCP `append_step`/`remove_step`/`reorder_steps`, CLI `step`, dashboard insert/delete/drag-reorder), rewrites numeric `sessionId` references so they keep pointing at the same step. Apply the same rule to numeric `priorContext` references. Removing a step that another unstarted step references by number is **refused**, with an error naming the referencing step(s). Expose `sessionId` in `workflow_status`.
+
+## Implementation tracking
+
+Part 1 complete: `StepReferenceRenumbering` is used by `RunContinuationService`
+append/insert, remove, and reorder edits, which cover MCP and CLI queue
+mutations. Static `WorkingFileManager` append routes through that service;
+static insert, delete, and reorder use the helper. `workflow_status` now
+reports `sessionId` and `resumeSession` on each step, and its tool description
+mentions these fields. Helper tests cover insert-before-target, reorder,
+refusal to remove a referenced target, and renumbering after removing an
+unrelated step.
+
+Part 2 remains: wire the resident dashboard's in-memory insert, delete, and
+drag-reorder paths to the helper. The `$step:N` form is used in generated
+context/output handling, but prompt text is not parsed as a structured step
+reference, so arbitrary prompt text containing `$step:N` is intentionally not
+rewritten.

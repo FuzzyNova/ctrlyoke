@@ -1,0 +1,105 @@
+import { isScriptStep, type WorkflowStep } from "../types/CtrlYokeTypes";
+import { hasStarted } from "../utils/StepStatusDerivation";
+
+export interface StepReferenceRenumberingResult {
+  steps: WorkflowStep[];
+  refusals: string[];
+}
+
+/**
+ * Rewrites structured positional references after a queue topology change.
+ * Existing steps are matched by their stable runtime stepId; newly inserted
+ * steps keep the numbers authored for their position in the new queue.
+ */
+export function renumberStepReferences(
+  oldSteps: readonly WorkflowStep[],
+  newSteps: readonly WorkflowStep[]
+): StepReferenceRenumberingResult {
+  const oldIndexById = buildStepIndex(oldSteps);
+  const newIndexById = buildStepIndex(newSteps);
+  const refusals: string[] = [];
+
+  const steps = newSteps.map((step) => {
+    if (isScriptStep(step)) return step;
+    const stepId = step._runtime?.stepId;
+    const oldIndex = findStepIndex(step, stepId, oldIndexById);
+    if (oldIndex === undefined) return step;
+
+    let sessionId = step.sessionId;
+    if (typeof sessionId === "number") {
+      const target = oldSteps[sessionId - 1];
+      const targetId = target?._runtime?.stepId;
+      const targetNewIndex = target
+        ? findStepIndex(target, targetId, newIndexById)
+        : undefined;
+      if (target && targetNewIndex === undefined) {
+        if (!hasStarted(step)) {
+          refusals.push(describeReferencingStep(step, oldIndex));
+        } else {
+          sessionId = undefined;
+        }
+      } else if (targetNewIndex !== undefined) {
+        sessionId = targetNewIndex + 1;
+      }
+    }
+
+    let priorContext = step.priorContext;
+    if (Array.isArray(priorContext)) {
+      priorContext = priorContext.flatMap((reference) => {
+        const target = oldSteps[reference - 1];
+        const targetId = target?._runtime?.stepId;
+        const targetNewIndex = target
+          ? findStepIndex(target, targetId, newIndexById)
+          : undefined;
+        if (target && targetNewIndex === undefined) {
+          if (!hasStarted(step)) {
+            refusals.push(describeReferencingStep(step, oldIndex));
+            return [reference];
+          }
+          return [];
+        }
+        return targetNewIndex === undefined ? [reference] : [targetNewIndex + 1];
+      });
+    }
+
+    return {
+      ...step,
+      ...(sessionId !== undefined ? { sessionId } : {}),
+      ...(priorContext !== undefined ? { priorContext } : {}),
+    } as WorkflowStep;
+  });
+
+  return { steps, refusals: [...new Set(refusals)] };
+}
+
+interface StepIndex {
+  byId: Map<string, number>;
+  byObject: WeakMap<WorkflowStep, number>;
+}
+
+function buildStepIndex(steps: readonly WorkflowStep[]): StepIndex {
+  const byId = new Map<string, number>();
+  const byObject = new WeakMap<WorkflowStep, number>();
+  steps.forEach((step, index) => {
+    const stepId = step._runtime?.stepId;
+    if (stepId) {
+      byId.set(stepId, index);
+    }
+    byObject.set(step, index);
+  });
+  return { byId, byObject };
+}
+
+function findStepIndex(
+  step: WorkflowStep,
+  stepId: string | undefined,
+  index: StepIndex
+): number | undefined {
+  return stepId ? index.byId.get(stepId) : index.byObject.get(step);
+}
+
+function describeReferencingStep(step: WorkflowStep, index: number): string {
+  return step.name?.trim()
+    ? `Step ${index + 1} ("${step.name.trim()}")`
+    : `Step ${index + 1}`;
+}
