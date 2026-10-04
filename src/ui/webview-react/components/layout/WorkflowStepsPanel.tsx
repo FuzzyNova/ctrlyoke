@@ -43,7 +43,10 @@ import {
   SortableWorkflowStepWrapper,
 } from "../prompts/WorkflowStepRow";
 import { ParallelGroupPanel } from "../prompts/ParallelGroupPanel";
-import { isStepExecutionLocked } from "@utils/stepCapabilities";
+import {
+  getSelectionCapabilities,
+  isStepExecutionLocked,
+} from "@utils/stepCapabilities";
 import {
   MESSAGE_TYPES,
   STEP_STATUS,
@@ -96,6 +99,7 @@ import {
   stepDragId,
 } from "@utils/dndKit";
 import { Icon } from "../shared/Icon";
+import { remapIndicesThroughPermutation } from "@utils/stepMultiSelection";
 
 type PendingDragContainer = {
   id: string;
@@ -114,6 +118,7 @@ const PENDING_DROP_TARGET_KINDS = {
   /** A position inside one parallel group. */
   MEMBER: "member",
 } as const;
+const EMPTY_STEP_INDICES: readonly number[] = [];
 
 /**
  * Where a drop lands, resolved from the id dnd-kit reports as `over`.
@@ -226,7 +231,9 @@ export function straddlingParallelGroup(
 export function buildPendingDragState(
   steps: WorkflowStep[],
   currentStep: number,
-  parallelGroups: ParallelGroupDefinition[]
+  parallelGroups: ParallelGroupDefinition[],
+  selectedIndices: readonly number[] = [],
+  activeId?: string
 ): PendingDragState {
   const order: string[] = [];
   const containers: Record<string, PendingDragContainer> = {};
@@ -262,6 +269,35 @@ export function buildPendingDragState(
       const id = stepDragId(index);
       order.push(id);
       containers[id] = { id, items: [id] };
+    }
+  }
+  const activeIndex =
+    activeId && isStepDragId(activeId)
+      ? absoluteIndexFromStepDragId(activeId)
+      : -1;
+  const selectedPending = [...new Set(selectedIndices)]
+    .filter((index) => index >= currentStep && index < steps.length)
+    .sort((a, b) => a - b);
+  if (
+    activeIndex >= 0 &&
+    selectedPending.length > 1 &&
+    selectedPending.includes(activeIndex) &&
+    selectedPending.every((index) => !groupedIndices.has(index))
+  ) {
+    const itemIds = selectedPending.map(stepDragId);
+    const firstItem = itemIds[0];
+    const insertionIndex = order.findIndex((id) => id === firstItem);
+    if (insertionIndex >= 0) {
+      for (const itemId of itemIds) {
+        order.splice(order.indexOf(itemId), 1);
+        delete containers[itemId];
+      }
+      const blockContainerId = stepDragId(activeIndex);
+      order.splice(insertionIndex, 0, blockContainerId);
+      containers[blockContainerId] = {
+        id: blockContainerId,
+        items: itemIds,
+      };
     }
   }
   return { order, containers };
@@ -320,6 +356,26 @@ export function movePendingDragItem(
     // A standalone step dropped on its own slot has not moved. A *member*
     // dropped on its group's slot has: it leaves the group and takes that slot.
     return state;
+  }
+
+  // A multi-selection is represented as one loose container whose items are
+  // the selected positional ids. Move that container as a block and keep its
+  // member order intact.
+  if (!source.groupId && source.items.length > 1) {
+    const fromIndex = state.order.indexOf(sourceId);
+    if (fromIndex < 0) return state;
+    const next = clonePendingDragState(state);
+    next.order.splice(fromIndex, 1);
+    const targetIndex =
+      target.kind === PENDING_DROP_TARGET_KINDS.MEMBER
+        ? next.order.indexOf(target.containerId)
+        : target.orderIndex;
+    const insertAt = Math.min(
+      targetIndex < 0 ? next.order.length : targetIndex,
+      next.order.length
+    );
+    next.order.splice(insertAt, 0, sourceId);
+    return next;
   }
 
   const next = clonePendingDragState(state);
@@ -1021,6 +1077,8 @@ const WorkflowStepsPanelInner: React.FC<{
     useState<PendingDragState | null>(null);
   const [prevCommittedDragState, setPrevCommittedDragState] =
     useState(committedDragState);
+  /** The step or group currently being dragged, or `null` when idle. */
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
   if (committedDragState !== prevCommittedDragState) {
     setPrevCommittedDragState(committedDragState);
     if (optimisticDragState !== null) {
@@ -1028,7 +1086,54 @@ const WorkflowStepsPanelInner: React.FC<{
     }
   }
 
-  const baselineDragState = optimisticDragState ?? committedDragState;
+  const multiSelectionForDrag = useEditorStore(
+    (state) => state.multiSelection?.indices ?? EMPTY_STEP_INDICES
+  );
+  const multiSelectionCapabilities = getSelectionCapabilities(
+    multiSelectionForDrag,
+    steps,
+    {
+      currentStep,
+      executionState,
+      pendingRewindBoundary: pendingRewind?.fromStepIndex,
+      isExternallyManaged: isExternallyManaged || isLineageReadOnly,
+      isExecutionTargetLocked:
+        executionOwnsCurrentStep(executionState, finalStepPhase) &&
+        multiSelectionForDrag.includes(currentStep),
+      totalSteps: steps.length,
+      parallelGroups,
+    }
+  );
+  const multiDragAllowed =
+    canReorder &&
+    multiSelectionForDrag.length > 1 &&
+    multiSelectionCapabilities.canReorder &&
+    multiSelectionForDrag.every((index) => index >= currentStep) &&
+    !(
+      executionOwnsCurrentStep(executionState, finalStepPhase) &&
+      multiSelectionForDrag.includes(currentStep)
+    );
+  const baselineDragState = useMemo(() => {
+    if (optimisticDragState) return optimisticDragState;
+    if (!activeDragId || !canReorder) return committedDragState;
+    return buildPendingDragState(
+      steps,
+      currentStep,
+      parallelGroups,
+      multiDragAllowed ? multiSelectionForDrag : EMPTY_STEP_INDICES,
+      activeDragId
+    );
+  }, [
+    activeDragId,
+    canReorder,
+    committedDragState,
+    currentStep,
+    multiSelectionForDrag,
+    multiDragAllowed,
+    optimisticDragState,
+    parallelGroups,
+    steps,
+  ]);
 
   /**
    * Where the pending list's numbering starts — `currentStep`, unless a group
@@ -1071,8 +1176,6 @@ const WorkflowStepsPanelInner: React.FC<{
     );
   }, [committedDragState, pendingBaseIndex]);
 
-  /** The step or group currently being dragged, or `null` when idle. */
-  const [activeDragId, setActiveDragId] = useState<string | null>(null);
   /** What the pointer is currently over, or `null` before the first measurement. */
   const [overDragId, setOverDragId] = useState<string | null>(null);
 
@@ -1527,6 +1630,27 @@ const WorkflowStepsPanelInner: React.FC<{
       sendMessage(MESSAGE_TYPES.REORDER_PROMPTS, outcome.payload);
 
       const editorStore = useEditorStore.getState();
+      const selected = editorStore.multiSelection;
+      if (selected) {
+        const absoluteOrder = outcome.payload.newPendingOrder.map(
+          (offset) => offset + currentStep
+        );
+        const indices = remapIndicesThroughPermutation(
+          selected.indices,
+          absoluteOrder,
+          currentStep
+        );
+        const anchor = remapIndicesThroughPermutation(
+          [selected.anchorIndex],
+          absoluteOrder,
+          currentStep
+        )[0];
+        if (anchor !== undefined) {
+          useEditorStore.setState({
+            multiSelection: { indices, anchorIndex: anchor },
+          });
+        }
+      }
       if (editorStore.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE) {
         editorStore.cancelEdit();
       }
@@ -1613,8 +1737,9 @@ const WorkflowStepsPanelInner: React.FC<{
       groupMembers: colorGroupMembers,
     });
 
+    const companionCount = container?.items.length ?? 1;
     return (
-      <div className="overflow-hidden rounded border border-panel-border bg-editor-bg shadow-lg">
+      <div className="relative overflow-hidden rounded border border-panel-border bg-editor-bg shadow-lg">
         <WorkflowStepRowFrame
           index={index}
           slotNumber={slotNumber}
@@ -1645,6 +1770,11 @@ const WorkflowStepsPanelInner: React.FC<{
             onOpenContextMenu={() => {}}
           />
         </WorkflowStepRowFrame>
+        {companionCount > 1 && (
+          <span className="absolute right-1 top-1 rounded-full bg-badge-bg px-1.5 text-xxs font-semibold text-badge-fg">
+            +{companionCount - 1}
+          </span>
+        )}
       </div>
     );
   }
@@ -1972,7 +2102,10 @@ const WorkflowStepsPanelInner: React.FC<{
                         return group ? renderParallelGroup(group, true) : null;
                       }
 
-                      const id = container.items[0];
+                      const id =
+                        activeDragId && container.items.includes(activeDragId)
+                          ? activeDragId
+                          : container.items[0];
                       if (!id) return null;
                       const index = absoluteIndexFromStepDragId(id);
                       const step = steps[index];

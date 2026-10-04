@@ -288,6 +288,68 @@ describe("useStepContextMenu", () => {
     ).not.toBeDisabled();
   });
 
+  it("moves a selected block up once and remaps its indices", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "bulk-reorder.prompt.md",
+      steps: [
+        { prompt: "One" },
+        { prompt: "Two" },
+        { prompt: "Three" },
+        { prompt: "Four" },
+      ],
+    });
+    useEditorStore.setState({
+      multiSelection: { indices: [1, 3], anchorIndex: 3 },
+    });
+    render(
+      <TestHarness step={{ prompt: "Two" }} totalSteps={4} deleteIndex={1} />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Move Up" }));
+
+    expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.REORDER_PROMPTS,
+        newPendingOrder: [1, 3, 0, 2],
+      })
+    );
+    expect(useEditorStore.getState().multiSelection).toEqual({
+      indices: [0, 1],
+      anchorIndex: 1,
+    });
+  });
+
+  it("moves a selected block down once and remaps its indices", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "bulk-reorder.prompt.md",
+      steps: [
+        { prompt: "One" },
+        { prompt: "Two" },
+        { prompt: "Three" },
+        { prompt: "Four" },
+      ],
+    });
+    useEditorStore.setState({
+      multiSelection: { indices: [0, 2], anchorIndex: 0 },
+    });
+    render(
+      <TestHarness step={{ prompt: "Three" }} totalSteps={4} deleteIndex={2} />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Move Down" }));
+
+    expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.REORDER_PROMPTS,
+        newPendingOrder: [1, 0, 2, 3],
+      })
+    );
+    expect(useEditorStore.getState().multiSelection).toEqual({
+      indices: [1, 2],
+      anchorIndex: 1,
+    });
+  });
+
   it("omits Move Up/Down for a rewind-direction (done) step", () => {
     render(<TestHarness step={{ prompt: "Done prompt" }} direction="rewind" />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));

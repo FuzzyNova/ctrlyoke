@@ -55,6 +55,10 @@ import {
   getStepCapabilities,
   getStepCapabilityDisabledReason,
 } from "@utils/stepCapabilities";
+import {
+  remapIndicesThroughPermutation,
+  shiftSelectedBlock,
+} from "@utils/stepMultiSelection";
 
 const SHELL_WORKFLOW_ID = "_shell";
 const EMPTY_TARGET_KEYS: readonly string[] = [];
@@ -190,23 +194,72 @@ export function useStepContextMenu({
   // items — a keyboard/tap-friendly alternative to drag-to-reorder, notably
   // for PromptChipRail which has no drag surface of its own.
   const moveQueueStep = useCallback(
-    (pendingIndex: number, targetPendingIndex: number) => {
+    (
+      pendingIndex: number,
+      targetPendingIndex: number,
+      selectedIndices?: number[]
+    ) => {
       const pendingCount = totalSteps - currentStep;
       if (targetPendingIndex < 0 || targetPendingIndex >= pendingCount) return;
+      let newPendingOrder = buildAdjacentSwapOrder(
+        pendingCount,
+        pendingIndex,
+        targetPendingIndex
+      );
+      if (selectedIndices && selectedIndices.length > 1) {
+        newPendingOrder = shiftSelectedBlock(
+          Array.from({ length: pendingCount }, (_, index) => index),
+          selectedIndices.map((index) => index - currentStep),
+          targetPendingIndex < pendingIndex ? "up" : "down"
+        );
+      }
+      const absolutePermutation = newPendingOrder.map(
+        (index) => index + currentStep
+      );
+      const nextPendingGroups = pendingGroups.map((pendingGroup) => {
+        const group = parallelGroups.find(
+          (candidate) => candidate.id === pendingGroup.id
+        );
+        if (!group) return pendingGroup;
+        const remapped = remapIndicesThroughPermutation(
+          Array.from(
+            { length: group.endIndex - group.startIndex + 1 },
+            (_, offset) => group.startIndex + offset
+          ),
+          absolutePermutation,
+          currentStep
+        );
+        return {
+          ...pendingGroup,
+          start: Math.min(...remapped) - currentStep,
+          end: Math.max(...remapped) - currentStep,
+        };
+      });
       sendMessage(MESSAGE_TYPES.REORDER_PROMPTS, {
-        newPendingOrder: buildAdjacentSwapOrder(
-          pendingCount,
-          pendingIndex,
-          targetPendingIndex
-        ),
-        pendingGroups,
+        newPendingOrder,
+        pendingGroups: nextPendingGroups,
       });
       const editorStore = useEditorStore.getState();
+      if (editorStore.multiSelection) {
+        const indices = remapIndicesThroughPermutation(
+          editorStore.multiSelection.indices,
+          absolutePermutation,
+          currentStep
+        );
+        const anchorIndex = remapIndicesThroughPermutation(
+          [editorStore.multiSelection.anchorIndex],
+          absolutePermutation,
+          currentStep
+        )[0];
+        if (anchorIndex !== undefined) {
+          useEditorStore.setState({ multiSelection: { indices, anchorIndex } });
+        }
+      }
       if (editorStore.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE) {
         editorStore.cancelEdit();
       }
     },
-    [currentStep, pendingGroups, totalSteps]
+    [currentStep, parallelGroups, pendingGroups, totalSteps]
   );
 
   const openContextMenu = useCallback(
@@ -359,8 +412,23 @@ export function useStepContextMenu({
       const moveUpBlockedByPin =
         executionOwnsCurrentStep(executionState, finalStepPhase) &&
         pendingIndex - 1 === 0;
-      const moveUpDisabled =
-        !capabilities.canReorder || pendingIndex <= 0 || moveUpBlockedByPin;
+      const bulkMove =
+        hasMultiSelection &&
+        isPressedStepSelected &&
+        bulkCapabilities.canReorder;
+      const selectedPendingIndices = selectedIndices.map(
+        (index) => index - currentStep
+      );
+      const bulkMoveUpDisabled =
+        selectedPendingIndices.length === 0 ||
+        Math.min(...selectedPendingIndices) <=
+          (executionOwnsCurrentStep(executionState, finalStepPhase) ? 1 : 0);
+      const bulkMoveDownDisabled =
+        selectedPendingIndices.length === 0 ||
+        Math.max(...selectedPendingIndices) >= pendingCount - 1;
+      const moveUpDisabled = bulkMove
+        ? bulkMoveUpDisabled
+        : !capabilities.canReorder || pendingIndex <= 0 || moveUpBlockedByPin;
       const moveUpDisabledTitle = !capabilities.canReorder
         ? (getStepCapabilityDisabledReason(
             capabilityContext,
@@ -373,8 +441,9 @@ export function useStepContextMenu({
           : moveUpBlockedByPin
             ? "Cannot move above the currently executing step"
             : undefined;
-      const moveDownDisabled =
-        !capabilities.canReorder || pendingIndex >= pendingCount - 1;
+      const moveDownDisabled = bulkMove
+        ? bulkMoveDownDisabled
+        : !capabilities.canReorder || pendingIndex >= pendingCount - 1;
       const moveDownDisabledTitle = !capabilities.canReorder
         ? (getStepCapabilityDisabledReason(
             capabilityContext,
@@ -529,14 +598,24 @@ export function useStepContextMenu({
                   icon: "codicon-arrow-up",
                   disabled: moveUpDisabled,
                   disabledTitle: moveUpDisabledTitle,
-                  onClick: () => moveQueueStep(pendingIndex, pendingIndex - 1),
+                  onClick: () =>
+                    moveQueueStep(
+                      pendingIndex,
+                      pendingIndex - 1,
+                      bulkMove ? selectedIndices : undefined
+                    ),
                 },
                 {
                   label: "Move Down",
                   icon: "codicon-arrow-down",
                   disabled: moveDownDisabled,
                   disabledTitle: moveDownDisabledTitle,
-                  onClick: () => moveQueueStep(pendingIndex, pendingIndex + 1),
+                  onClick: () =>
+                    moveQueueStep(
+                      pendingIndex,
+                      pendingIndex + 1,
+                      bulkMove ? selectedIndices : undefined
+                    ),
                 },
               ]
             : []),

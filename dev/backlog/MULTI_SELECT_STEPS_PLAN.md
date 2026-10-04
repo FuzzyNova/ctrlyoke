@@ -1,5 +1,7 @@
 # Multi-Select Steps Plan
 
+**Status: v1 complete (2026-10-03).**
+
 ## Goal
 
 Let the user select more than one step in `WorkflowStepsPanel` and act on all of them
@@ -641,7 +643,7 @@ which is cheap once the predicate exists. Clicks there stay single-select in v1.
      permission options depend on the effective harness and are gated when selected
      prompts differ and no harness patch exists. Prior context, MCP servers, hooks,
      and secrets use workflow/global or workspace options and are not harness-scoped.
-5. **Bulk reorder.**
+5. **Bulk reorder** (completed 2026-10-03).
    - Block-move pure helpers and bulk Move Up/Down.
    - Multi-drag in the live preview, with no parallel groups.
 6. **Follow-ups:**
