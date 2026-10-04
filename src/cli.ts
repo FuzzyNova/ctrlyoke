@@ -583,8 +583,7 @@ function resolveCliRunHarnessAndModel(
 ): { harness: HarnessId; model?: string } {
   const harness = workflow?.harness ?? defaultHarness;
   const model =
-    workflow?.model ??
-    ConfigurationUtils.getModelForHarness(harness);
+    workflow?.model ?? ConfigurationUtils.getModelForHarness(harness);
   return { harness, ...(model ? { model } : {}) };
 }
 
@@ -802,10 +801,7 @@ async function runCommand(
     executionMode,
     hostCanProvidePty,
     supportsConcurrentInteractiveSessions,
-  } = resolveCliExecutionMode(
-    !!process.stdout.isTTY,
-    !!process.stdin.isTTY
-  );
+  } = resolveCliExecutionMode(!!process.stdout.isTTY, !!process.stdin.isTTY);
 
   const config: ResolvedCliConfig = {
     harness: options.harness || HARNESS_IDS.COPILOT_CLI,

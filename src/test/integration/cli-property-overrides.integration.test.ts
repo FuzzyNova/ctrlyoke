@@ -74,7 +74,11 @@ suite("CLI workflow property overrides", () => {
 
     for (const [index, scenario] of cases.entries()) {
       const workflowPath = path.join(root, `workflow-${index}.ctrlyoke.json`);
-      await fs.writeFile(workflowPath, JSON.stringify(scenario.definition), "utf8");
+      await fs.writeFile(
+        workflowPath,
+        JSON.stringify(scenario.definition),
+        "utf8"
+      );
       const args = [
         "run",
         workflowPath,
@@ -91,7 +95,11 @@ suite("CLI workflow property overrides", () => {
         root,
         env
       );
-      assert.strictEqual(preview.code, 0, `${scenario.name}: ${preview.stderr}`);
+      assert.strictEqual(
+        preview.code,
+        0,
+        `${scenario.name}: ${preview.stderr}`
+      );
       const previewJson = JSON.parse(preview.stdout) as {
         steps: Array<{ resolvedProperties: { harnessId: string } }>;
       };
@@ -140,7 +148,10 @@ suite("CLI workflow property overrides", () => {
       { CTRLYOKE_HOME: path.join(root, "state") }
     );
     assert.strictEqual(result.code, 2);
-    assert.match(result.stderr, /--session-id cannot be used with --no-resume-session/u);
+    assert.match(
+      result.stderr,
+      /--session-id cannot be used with --no-resume-session/u
+    );
   });
 
   test("--force harness overrides a step-level harness in the real CLI preview", async () => {
@@ -199,7 +210,7 @@ suite("CLI workflow property overrides", () => {
       const executable = path.join(bin, "copilot");
       await fs.writeFile(
         executable,
-        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'fake version'; else echo '{\"type\":\"result\",\"sessionId\":\"fake-session\",\"content\":\"ok\"}'; fi\n",
+        '#!/bin/sh\nif [ "$1" = "--version" ]; then echo \'fake version\'; else echo \'{"type":"result","sessionId":"fake-session","content":"ok"}\'; fi\n',
         "utf8"
       );
       await fs.chmod(executable, 0o755);
@@ -207,7 +218,9 @@ suite("CLI workflow property overrides", () => {
     const workflowPath = path.join(root, "workflow.ctrlyoke.json");
     await fs.writeFile(
       workflowPath,
-      JSON.stringify({ steps: [{ prompt: "run", executionMode: "interactive" }] }),
+      JSON.stringify({
+        steps: [{ prompt: "run", executionMode: "interactive" }],
+      }),
       "utf8"
     );
 
@@ -232,7 +245,10 @@ suite("CLI workflow property overrides", () => {
     const logDir = path.join(root, ".ctrlyoke", "logs");
     const logNames = await fs.readdir(logDir);
     const log = await fs.readFile(
-      path.join(logDir, logNames.find((name) => name.startsWith("ctrlyoke-cli-"))!),
+      path.join(
+        logDir,
+        logNames.find((name) => name.startsWith("ctrlyoke-cli-"))!
+      ),
       "utf8"
     );
     assert.match(

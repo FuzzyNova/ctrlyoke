@@ -11,10 +11,7 @@ import {
   type PermissionMode,
 } from "../types/DashboardConstants";
 import { getVariableKeyErrors } from "../utils/KeyValueKeyKinds";
-import {
-  FORCE_ALL_KEYWORD,
-  ForceableFlag,
-} from "./CliPropertyOverrides";
+import { FORCE_ALL_KEYWORD, ForceableFlag } from "./CliPropertyOverrides";
 
 const WORKFLOW_PROPERTY_SCOPE_DESCRIPTION =
   " (workflow level; add `--force <flag>` to apply to every step)";
@@ -170,11 +167,17 @@ export function registerRunScopedCommands(
       .option("--from <ref|runId>", "Source run reference or numeric run ID")
       .option(
         "-H, --harness <harness>",
-        workflowPropertyDescription("Override harness for the newly seeded run", true)
+        workflowPropertyDescription(
+          "Override harness for the newly seeded run",
+          true
+        )
       )
       .option(
         "-m, --model <model>",
-        workflowPropertyDescription("Override model for the newly seeded run", true)
+        workflowPropertyDescription(
+          "Override model for the newly seeded run",
+          true
+        )
       )
       .option(
         "--force <flags>",
@@ -222,10 +225,7 @@ export function registerRunScopedCommands(
   ).action(async (options: ContinueOptions) => handlers.continue(options));
 }
 
-function addExecutionOptions(
-  command: Command,
-  allowForce = false
-): Command {
+function addExecutionOptions(command: Command, allowForce = false): Command {
   return command
     .option(
       "-d, --cwd <path>",

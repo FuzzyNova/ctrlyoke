@@ -12,7 +12,11 @@ import {
   resolveSessionId,
 } from "../../types/ExecutionPropertyResolver";
 import { resolveCliExecutionMode } from "../../cli/CliExecutionMode";
-import type { PromptFile, PromptStep, ScriptStep } from "../../types/CtrlYokeTypes";
+import type {
+  PromptFile,
+  PromptStep,
+  ScriptStep,
+} from "../../types/CtrlYokeTypes";
 
 suite("CLI property overrides", () => {
   test("--force all applies each passed forceable flag to prompts and scripts", () => {
@@ -22,7 +26,10 @@ suite("CLI property overrides", () => {
           prompt: "one",
           model: "old",
           sessionId: "old-session",
-          toolPermissions: { allowedTools: ["old-allow"], deniedTools: ["old-deny"] },
+          toolPermissions: {
+            allowedTools: ["old-allow"],
+            deniedTools: ["old-deny"],
+          },
           preCondition: { script: "true" },
           endCondition: { script: "true" },
         },
@@ -68,7 +75,10 @@ suite("CLI property overrides", () => {
     assert.strictEqual(workflow.steps![1].executionMode, "headless");
     assert.strictEqual((workflow.steps![1] as ScriptStep).timeoutSec, 17);
     assert.strictEqual(workflow.finalStep?.executionMode, "headless");
-    assert.strictEqual((workflow.finalStep as PromptStep).sessionId, "forced-session");
+    assert.strictEqual(
+      (workflow.finalStep as PromptStep).sessionId,
+      "forced-session"
+    );
   });
 
   test("--force resume-session false removes step session IDs", () => {
@@ -93,7 +103,12 @@ suite("CLI property overrides", () => {
       [["model"], "requires --model"],
     ] as const) {
       assert.throws(
-        () => buildCliPropertyOverrides({ allowTool: [], denyTool: [], force: [...force] }),
+        () =>
+          buildCliPropertyOverrides({
+            allowTool: [],
+            denyTool: [],
+            force: [...force],
+          }),
         new RegExp(expected, "u")
       );
     }
@@ -104,9 +119,17 @@ suite("CLI property overrides", () => {
       harness: HARNESS_IDS.CLAUDE_CLI,
       steps: [
         { prompt: "inherits", model: "sonnet" },
-        { prompt: "explicit", harness: HARNESS_IDS.OPENCODE_CLI, model: "old-model" },
+        {
+          prompt: "explicit",
+          harness: HARNESS_IDS.OPENCODE_CLI,
+          model: "old-model",
+        },
       ],
-      finalStep: { prompt: "final", harness: HARNESS_IDS.CLAUDE_CLI, model: "old-final" },
+      finalStep: {
+        prompt: "final",
+        harness: HARNESS_IDS.CLAUDE_CLI,
+        model: "old-final",
+      },
     };
     const notices = applyCliPropertyOverrides(
       workflow,
@@ -299,27 +322,18 @@ suite("CLI property overrides", () => {
       resumeSession: false,
     };
     assert.strictEqual(
-      resolveSessionId(
-        workflow.steps![0] as PromptStep,
-        workflow,
-        defaults
-      ).value,
+      resolveSessionId(workflow.steps![0] as PromptStep, workflow, defaults)
+        .value,
       "literal-42"
     );
     assert.strictEqual(
-      resolveSessionId(
-        workflow.steps![1] as PromptStep,
-        workflow,
-        defaults
-      ).value,
+      resolveSessionId(workflow.steps![1] as PromptStep, workflow, defaults)
+        .value,
       "step-session"
     );
     assert.strictEqual(
-      resolveSessionId(
-        workflow.steps![2] as PromptStep,
-        workflow,
-        defaults
-      ).value,
+      resolveSessionId(workflow.steps![2] as PromptStep, workflow, defaults)
+        .value,
       "literal-42"
     );
   });
@@ -348,10 +362,7 @@ suite("CLI property overrides", () => {
       (workflow.steps?.[1] as PromptStep).sessionId,
       "keep-two"
     );
-    assert.strictEqual(
-      (workflow.steps?.[1] as PromptStep).resumeSession,
-      true
-    );
+    assert.strictEqual((workflow.steps?.[1] as PromptStep).resumeSession, true);
   });
 
   test("execution mode flags override the workflow while steps retain precedence", () => {

@@ -1,8 +1,5 @@
 import type { PromptFile, ExecutionProperties } from "../types/CtrlYokeTypes";
-import {
-  EXECUTION_MODES,
-  type HarnessId,
-} from "../types/DashboardConstants";
+import { EXECUTION_MODES, type HarnessId } from "../types/DashboardConstants";
 import { isScriptStep, type WorkflowStep } from "../types/CtrlYokeTypes";
 import type { CliExecutionOptions } from "./CliRunCommandDefinitions";
 
@@ -139,7 +136,14 @@ export function applyCliPropertyOverrides(
 
   for (const step of getWorkflowSteps(workflow)) {
     for (const flag of overrides.forced) {
-      applyForcedFlagToStep(step, flag, workflow, overrides, oldHarness, notices);
+      applyForcedFlagToStep(
+        step,
+        flag,
+        workflow,
+        overrides,
+        oldHarness,
+        notices
+      );
     }
   }
 
@@ -147,20 +151,23 @@ export function applyCliPropertyOverrides(
     const harnessSteps = new Map<HarnessId | undefined, string[]>();
     for (const step of getWorkflowSteps(workflow)) {
       if (isScriptStep(step)) continue;
-      const harness = step.harness ?? workflow.harness ?? overrides.effectiveHarness;
+      const harness =
+        step.harness ?? workflow.harness ?? overrides.effectiveHarness;
       const labels = harnessSteps.get(harness) ?? [];
       labels.push(getStepLabel(step, workflow));
       harnessSteps.set(harness, labels);
     }
     if (harnessSteps.size > 1) {
       const conflicts = [...harnessSteps.entries()]
-        .map(([harness, labels]) =>
-          (harness ?? "default harness") + ": " + labels.join(", ")
+        .map(
+          ([harness, labels]) =>
+            (harness ?? "default harness") + ": " + labels.join(", ")
         )
         .join("; ");
       throw new Error(
         "--force model cannot apply one model across steps using multiple harnesses (" +
-          conflicts + "); add --force harness"
+          conflicts +
+          "); add --force harness"
       );
     }
   }
@@ -189,8 +196,12 @@ function applyForcedFlagToStep(
           const droppedModel = step.model;
           delete step.model;
           notices.push(
-            'step ' + getStepLabel(step, workflow) + ' model "' + droppedModel +
-              '" dropped: it was set for ' + (priorHarness ?? "the prior harness")
+            "step " +
+              getStepLabel(step, workflow) +
+              ' model "' +
+              droppedModel +
+              '" dropped: it was set for ' +
+              (priorHarness ?? "the prior harness")
           );
         }
       }
@@ -220,8 +231,10 @@ function applyForcedFlagToStep(
         if (isScriptStep(step)) {
           step.timeoutSec = overrides.scriptTimeout;
         } else {
-          if (step.preCondition) step.preCondition.timeoutSec = overrides.scriptTimeout;
-          if (step.endCondition) step.endCondition.timeoutSec = overrides.scriptTimeout;
+          if (step.preCondition)
+            step.preCondition.timeoutSec = overrides.scriptTimeout;
+          if (step.endCondition)
+            step.endCondition.timeoutSec = overrides.scriptTimeout;
         }
       }
       return;
@@ -254,8 +267,12 @@ function parseAndValidateForcedFlags(
   );
   if (unknown.length) {
     throw new Error(
-      "--force cannot include " + unknown.map((name) => '"' + name + '"').join(", ") +
-        "; choose from " + [...valid].join(", ") + ", " + FORCE_ALL_KEYWORD
+      "--force cannot include " +
+        unknown.map((name) => '"' + name + '"').join(", ") +
+        "; choose from " +
+        [...valid].join(", ") +
+        ", " +
+        FORCE_ALL_KEYWORD
     );
   }
   const passed = new Map<ForceableFlag, boolean>([
@@ -286,14 +303,17 @@ function parseAndValidateForcedFlags(
 }
 
 function getWorkflowSteps(workflow: PromptFile): WorkflowStep[] {
-  return [...(workflow.steps ?? []), ...(workflow.finalStep ? [workflow.finalStep] : [])];
+  return [
+    ...(workflow.steps ?? []),
+    ...(workflow.finalStep ? [workflow.finalStep] : []),
+  ];
 }
 
 function getStepLabel(step: WorkflowStep, workflow: PromptFile): string {
   if (step === workflow.finalStep) return "finalStep";
   const index = workflow.steps?.indexOf(step) ?? -1;
   return step.name
-    ? 'step ' + (index + 1) + ' ("' + step.name + '")'
+    ? "step " + (index + 1) + ' ("' + step.name + '")'
     : "step " + (index + 1);
 }
 
@@ -302,11 +322,17 @@ function applyForcedPromptProperty(
   flag: ForceableFlag,
   overrides: CliPropertyOverrides
 ): void {
-  if (flag === ForceableFlag.RESUME_SESSION && overrides.workflow.resumeSession !== undefined) {
+  if (
+    flag === ForceableFlag.RESUME_SESSION &&
+    overrides.workflow.resumeSession !== undefined
+  ) {
     step.resumeSession = overrides.workflow.resumeSession;
     if (!overrides.workflow.resumeSession) delete step.sessionId;
   }
-  if (flag === ForceableFlag.SESSION_ID && typeof overrides.workflow.sessionId === "string") {
+  if (
+    flag === ForceableFlag.SESSION_ID &&
+    typeof overrides.workflow.sessionId === "string"
+  ) {
     step.sessionId = overrides.workflow.sessionId;
     step.resumeSession = true;
   }
@@ -316,7 +342,10 @@ function applyForcedPromptProperty(
   if (flag === ForceableFlag.PERMISSION_MODE && supplied.mode !== undefined) {
     permissions.mode = supplied.mode;
   }
-  if (flag === ForceableFlag.ALLOW_TOOL && supplied.allowedTools !== undefined) {
+  if (
+    flag === ForceableFlag.ALLOW_TOOL &&
+    supplied.allowedTools !== undefined
+  ) {
     permissions.allowedTools = [...supplied.allowedTools];
   }
   if (flag === ForceableFlag.DENY_TOOL && supplied.deniedTools !== undefined) {

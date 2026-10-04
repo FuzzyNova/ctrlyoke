@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-04 by Claude (claude-cli), while auditing CLI flag scopes with the user
 - **Area:** `src/cli.ts`, `src/utils/PropertyResolver.ts`, `src/types/ExecutionPropertyResolver.ts`
-**Resolution:** fixed in this commit
+- **Resolution:** fixed in efee65853
 
 ## Symptom
 
