@@ -1,5 +1,9 @@
 import { Command } from "commander";
 import {
+  CLI_WORKFLOW_OPTION_DESCRIPTION,
+  CLI_WORKFLOW_OPTION_FLAGS,
+} from "./CliWorkflowOption";
+import {
   CTRLYOKE_ENV_VARS,
   EXECUTION_STATES,
   HARNESS_IDS,
@@ -171,7 +175,7 @@ export function registerHistoryCommands(
   history
     .command("steps")
     .description("Show a compact overview of a run's workflow steps")
-    .requiredOption("--workflow <key>", "Workflow lineage key or exact name")
+    .requiredOption(CLI_WORKFLOW_OPTION_FLAGS, CLI_WORKFLOW_OPTION_DESCRIPTION)
     .option("--run <ref|runId>", "Target run (default: latest)")
     .option(
       "-d, --cwd <path>",
@@ -184,7 +188,7 @@ export function registerHistoryCommands(
   history
     .command("runs")
     .description("List runs within a workflow lineage")
-    .requiredOption("--workflow <key>", "Workflow lineage key or exact name")
+    .requiredOption(CLI_WORKFLOW_OPTION_FLAGS, CLI_WORKFLOW_OPTION_DESCRIPTION)
     .option(
       "-d, --cwd <path>",
       "Working directory (default: current directory)"
@@ -195,7 +199,7 @@ export function registerHistoryCommands(
   history
     .command("show")
     .description("Print a run's recorded output")
-    .requiredOption("--workflow <key>", "Workflow lineage key or exact name")
+    .requiredOption(CLI_WORKFLOW_OPTION_FLAGS, CLI_WORKFLOW_OPTION_DESCRIPTION)
     .option("--run <ref|runId>", "Target run (default: latest)")
     .option(
       "--step <selector>",

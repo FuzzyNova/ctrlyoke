@@ -1,4 +1,8 @@
 import { Command } from "commander";
+import {
+  CLI_WORKFLOW_OPTION_DESCRIPTION,
+  CLI_WORKFLOW_OPTION_FLAGS,
+} from "./CliWorkflowOption";
 
 export interface StepEditOptions {
   workflow: string;
@@ -43,7 +47,7 @@ export function registerStepCommands(
   step
     .command("edit [file]")
     .description("Edit one pending step's prompt or configuration")
-    .requiredOption("--workflow <key>", "Workflow lineage key or exact name")
+    .requiredOption(CLI_WORKFLOW_OPTION_FLAGS, CLI_WORKFLOW_OPTION_DESCRIPTION)
     .requiredOption(
       "--run <ref|runId>",
       "Target run reference or numeric run ID"
@@ -68,7 +72,7 @@ export function registerStepCommands(
   step
     .command("remove")
     .description("Remove one pending step")
-    .requiredOption("--workflow <key>", "Workflow lineage key or exact name")
+    .requiredOption(CLI_WORKFLOW_OPTION_FLAGS, CLI_WORKFLOW_OPTION_DESCRIPTION)
     .requiredOption(
       "--run <ref|runId>",
       "Target run reference or numeric run ID"
@@ -87,7 +91,7 @@ export function registerStepCommands(
   step
     .command("reorder")
     .description("Reorder all pending steps")
-    .requiredOption("--workflow <key>", "Workflow lineage key or exact name")
+    .requiredOption(CLI_WORKFLOW_OPTION_FLAGS, CLI_WORKFLOW_OPTION_DESCRIPTION)
     .requiredOption(
       "--run <ref|runId>",
       "Target run reference or numeric run ID"

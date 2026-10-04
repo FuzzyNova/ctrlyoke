@@ -712,7 +712,8 @@ suite("CLI history inspection command handlers", () => {
                 harness: "claude-cli",
                 model: "opus",
                 terminalStatus: "completed",
-                elapsed: 125,
+                // Over an hour, so the text ELAPSED column renders hours.
+                elapsed: 3725,
               },
             },
             {
@@ -735,7 +736,10 @@ suite("CLI history inspection command handlers", () => {
               terminalStatus: "completed",
             },
           },
-          _runtime: { executionState: EXECUTION_STATES.PAUSED, currentIndex: 1 },
+          _runtime: {
+            executionState: EXECUTION_STATES.PAUSED,
+            currentIndex: 1,
+          },
         })
       );
       const manager = new TestHistoryManager(
@@ -835,7 +839,7 @@ suite("CLI history inspection command handlers", () => {
         ["0", "1", "2"]
       );
       assert.strictEqual(value.steps[0].attempts, 2);
-      assert.strictEqual(value.steps[0].elapsedSeconds, 125);
+      assert.strictEqual(value.steps[0].elapsedSeconds, 3725);
       assert.strictEqual(
         value.steps[1].name,
         "Appended step with no definition snapshot"
@@ -898,6 +902,8 @@ suite("CLI history inspection command handlers", () => {
       for (const row of rows) {
         assert.match(row.slice(stateColumn), /^(completed|running|pending) /);
       }
+      assert.match(rows[0], / 1h2m /);
+      assert.match(rows[3], / 5s /);
       assert.match(rows[2], /^2 +— +pending/);
       assert.match(rows[1], /running \(next\)/);
       assert.match(rows[3], /^final +review +completed .* 2 passes +Review/);
@@ -942,8 +948,14 @@ suite("CLI history inspection command handlers", () => {
           workspaceRoot
         )
       );
-      assert.match(pendingTextIo.output[2], /pending \(Pass 1 next\)/);
-      assert.match(pendingTextIo.output[2], /0 passes, 1 next/);
+      // The "(next)" marker matches queue rows and appears once per row;
+      // the pass number stays explicit in --json as nextPass.
+      assert.match(
+        pendingTextIo.output[2],
+        /^final +review +pending \(next\) /
+      );
+      assert.match(pendingTextIo.output[2], / 0 passes /);
+      assert.doesNotMatch(pendingTextIo.output[2], /1 next/);
 
       await fs.writeFile(
         workingFile,
@@ -1012,7 +1024,7 @@ suite("CLI history inspection command handlers", () => {
         )
       );
       assert.match(runningPassTextIo.output[2], /^final +review +running /);
-      assert.doesNotMatch(runningPassTextIo.output[2], /Pass 4 next/);
+      assert.doesNotMatch(runningPassTextIo.output[2], /\(next\)/);
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
     }

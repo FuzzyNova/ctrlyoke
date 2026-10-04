@@ -38,7 +38,6 @@ import {
   STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS,
   truncateText,
 } from "../utils/TextUtils";
-import { formatFinalPassBadge } from "../utils/FinalStepLabels";
 import type { RunSummary } from "../types/WorkflowTimelineTypes";
 import {
   EXECUTION_PHASES,
@@ -1217,8 +1216,7 @@ export async function stepsHistoryCommand(
     definition._runtime?.executionState
   );
   const steps: HistoryStepRow[] = definition.steps.map((step, stepIndex) => {
-    const isNext =
-      isNonTerminalRun && currentIndex === stepIndex;
+    const isNext = isNonTerminalRun && currentIndex === stepIndex;
     return {
       selector: formatCliStepSelector(stepIndex),
       index: stepIndex,
@@ -1297,15 +1295,14 @@ export async function stepsHistoryCommand(
     values.push([
       finalStep.selector,
       finalStep.name ?? "—",
+      // Same "(next)" marker as a queue row; nextPass stays explicit in --json.
       finalStep.nextPass === null
         ? finalStep.state
-        : `${finalStep.state} (${formatFinalPassBadge(finalStep.nextPass)} next)`,
+        : `${finalStep.state} (next)`,
       finalStep.harness ?? "—",
       finalStep.model ?? "—",
       formatElapsed(finalStep.elapsedSeconds),
-      finalStep.nextPass === null
-        ? `${finalStep.passes.length} pass${finalStep.passes.length === 1 ? "" : "es"}`
-        : `${finalStep.passes.length} pass${finalStep.passes.length === 1 ? "" : "es"}, ${finalStep.nextPass} next`,
+      `${finalStep.passes.length} pass${finalStep.passes.length === 1 ? "" : "es"}`,
       finalStep.prompt,
     ]);
   }
@@ -2123,10 +2120,7 @@ function formatStepPrompt(
 ): string {
   const prompt = step.prompt ?? step.script ?? "";
   if (full) return prompt;
-  return promptFirstLinePreview(
-    prompt,
-    STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS
-  );
+  return promptFirstLinePreview(prompt, STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS);
 }
 
 /** A working file's `_runtime.elapsed` (seconds), or null when absent or invalid. */
@@ -2142,7 +2136,13 @@ function formatElapsed(elapsedSeconds: number | null): string {
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
-  return remainingSeconds ? `${minutes}m${remainingSeconds}s` : `${minutes}m`;
+  if (minutes < 60) {
+    return remainingSeconds ? `${minutes}m${remainingSeconds}s` : `${minutes}m`;
+  }
+  // Seconds stop mattering past an hour; keep the column short.
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes ? `${hours}h${remainingMinutes}m` : `${hours}h`;
 }
 
 function historyWorkingStepState(

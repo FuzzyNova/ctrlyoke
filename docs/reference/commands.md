@@ -8,7 +8,7 @@ Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) unless the table says they live
 The CLI's run-history inspection commands are documented in the
 [`ctrlyoke` CLI reference](../cli/ctrlyoke.md). To list executing workflows and
 check whether their runner processes are alive, use `ctrlyoke status`; pass
-`--workflow <key>` and `--run <ref>` to narrow the result, or `--json` for
+`--workflow <key-or-name>` and `--run <ref>` to narrow the result, or `--json` for
 machine-readable output; each row's liveness names why a run is `stale`. For
 recorded run output, `history show --json` emits NDJSON; `--summary` keeps
 attempt records compact, `--events` emits one line per output event, and

@@ -1,4 +1,8 @@
 import { Command, InvalidArgumentError } from "commander";
+import {
+  CLI_WORKFLOW_OPTION_DESCRIPTION,
+  CLI_WORKFLOW_OPTION_FLAGS,
+} from "./CliWorkflowOption";
 import chalk from "chalk";
 import {
   PERMISSION_MODES,
@@ -116,7 +120,10 @@ export function registerRunScopedCommands(
     program
       .command("rerun")
       .description("Seed and execute a new run from an existing workflow run")
-      .requiredOption("--workflow <key>", "Workflow lineage key or exact name")
+      .requiredOption(
+        CLI_WORKFLOW_OPTION_FLAGS,
+        CLI_WORKFLOW_OPTION_DESCRIPTION
+      )
       .option("--from <ref|runId>", "Source run reference or numeric run ID")
       .option(
         "-H, --harness <harness>",
@@ -129,7 +136,10 @@ export function registerRunScopedCommands(
     program
       .command("append [file]")
       .description("Append steps to one run and continue it")
-      .requiredOption("--workflow <key>", "Workflow lineage key or exact name")
+      .requiredOption(
+        CLI_WORKFLOW_OPTION_FLAGS,
+        CLI_WORKFLOW_OPTION_DESCRIPTION
+      )
       .requiredOption(
         "--run <ref|runId>",
         "Target run reference or numeric run ID"
@@ -147,7 +157,10 @@ export function registerRunScopedCommands(
     program
       .command("continue")
       .description("Continue unchanged pending work in one run")
-      .requiredOption("--workflow <key>", "Workflow lineage key or exact name")
+      .requiredOption(
+        CLI_WORKFLOW_OPTION_FLAGS,
+        CLI_WORKFLOW_OPTION_DESCRIPTION
+      )
       .requiredOption(
         "--run <ref|runId>",
         "Target run reference or numeric run ID"

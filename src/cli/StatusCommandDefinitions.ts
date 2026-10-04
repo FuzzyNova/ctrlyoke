@@ -1,4 +1,8 @@
 import { Command } from "commander";
+import {
+  CLI_WORKFLOW_OPTION_DESCRIPTION,
+  CLI_WORKFLOW_OPTION_FLAGS,
+} from "./CliWorkflowOption";
 
 export interface StatusOptions {
   cwd?: string;
@@ -18,7 +22,7 @@ export function registerStatusCommand(
   program
     .command("status")
     .description("List executing workflows and runner liveness")
-    .option("--workflow <key>", "Workflow lineage key or exact name")
+    .option(CLI_WORKFLOW_OPTION_FLAGS, CLI_WORKFLOW_OPTION_DESCRIPTION)
     .option("--run <ref>", "Restrict to a specific run (requires --workflow)")
     .option(
       "-d, --cwd <path>",
