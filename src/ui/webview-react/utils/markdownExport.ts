@@ -43,6 +43,7 @@ import {
   normalizeStructuredPatch,
 } from "./diffUtils";
 import { redactPreviewText } from "@root/types/PreviewRedactor";
+import { formatMcpToolLabel } from "@root/utils/formatMcpToolLabel";
 import { useSettingsStore } from "@store/settingsStore";
 import {
   extractKeyParameters,
@@ -265,7 +266,7 @@ function renderStructuredEventsToMarkdown(
         const data = event.data as McpToolCallData;
         lines.push(
           formatToolCallForMarkdown(
-            `MCP: ${data.server}.${data.tool}`,
+            formatMcpToolLabel(data.server, data.tool),
             data.parameters
           )
         );

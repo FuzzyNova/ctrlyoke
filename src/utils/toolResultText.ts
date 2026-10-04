@@ -1,4 +1,4 @@
-import type { ToolResult } from "../types/cliEvents";
+import type { ToolResult } from "../types/CliOutputTypes";
 
 /** Text shown by the generic tool-call row and searched by output find. */
 export function getToolResultText(result: ToolResult | undefined): string {

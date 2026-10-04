@@ -30,9 +30,8 @@ import { getGenericToolCallParamsText } from "./toolCallLayout";
 import { resolveCtrlYokeToolView } from "../components/output/ctrlyoke-tools/registry";
 import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
 import { buildSelectionReferenceText } from "@root/completions/ContextReferenceBuilder";
-import { getToolResultText } from "./toolResultText";
-
-export { getToolResultText } from "./toolResultText";
+import { formatMcpToolLabel } from "@root/utils/formatMcpToolLabel";
+import { getToolResultText } from "@root/utils/toolResultText";
 
 type OutputFindField =
   | "header"
@@ -270,7 +269,7 @@ export function getOutputRowSearchSegments(
             ]);
           }
           return createSegments([
-            { field: "toolLabel", text: `MCP: ${data.server}.${data.tool}` },
+            { field: "toolLabel", text: formatMcpToolLabel(data.server, data.tool) },
             {
               field: "params",
               text: getGenericToolCallParamsText(data.parameters),

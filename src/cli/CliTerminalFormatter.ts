@@ -20,6 +20,7 @@ import type {
   CompactionData,
   FollowUpResumedData,
   BackgroundWorkHoldData,
+  UserSteerData,
 } from "../types/CliOutputTypes";
 import {
   getBackgroundTaskLabel,
@@ -63,6 +64,8 @@ import {
 } from "../utils/TokenFormatting";
 import { secretRedactionService } from "../utils/SecretRedactionService";
 import { formatFinalPassLabel } from "../utils/FinalStepLabels";
+import { getToolResultText } from "../utils/toolResultText";
+import { formatMcpToolLabel } from "../utils/formatMcpToolLabel";
 
 /** Maximum diff lines shown before truncating with a "… N more" message. */
 const MAX_DIFF_LINES = 60;
@@ -314,7 +317,8 @@ function writeBoundedEventDetail(
   text: string,
   maxLines: number,
   indentation: string,
-  border: (text: string) => string = chalk.cyan
+  border: (text: string) => string = chalk.cyan,
+  textColor: (text: string) => string = chalk.dim
 ): void {
   const lines = text.split(/\r?\n/);
   const displayedLines = lines.slice(0, maxLines);
@@ -322,9 +326,7 @@ function writeBoundedEventDetail(
   for (const line of displayedLines) {
     if (line.length > MAX_EVENT_DETAIL_LINE_LENGTH) {
       writeEventLine(
-        chalk.dim(
-          `${indentation}${line.slice(0, MAX_EVENT_DETAIL_LINE_LENGTH)}…`
-        ),
+        textColor(`${indentation}${line.slice(0, MAX_EVENT_DETAIL_LINE_LENGTH)}…`),
         border
       );
       writeEventLine(
@@ -334,7 +336,7 @@ function writeBoundedEventDetail(
         border
       );
     } else {
-      writeEventLine(chalk.dim(`${indentation}${line}`), border);
+      writeEventLine(textColor(`${indentation}${line}`), border);
     }
   }
 
@@ -1034,15 +1036,13 @@ export class CliTerminalFormatter {
             ? truncateEventText(JSON.stringify(data.parameters), 80)
             : "";
           console.log(
-            chalk.magenta("⚙ " + data.server + ":" + data.tool) +
+            chalk.magenta(formatMcpToolLabel(data.server, data.tool)) +
               (params ? " " + chalk.dim(params) : "")
           );
           if (data.result) {
-            const text = data.result.success
-              ? truncateEventText(data.result.output ?? "Success", 100)
-              : truncateEventText(data.result.error ?? "Failed", 200);
+            const text = getToolResultText(data.result);
             const color = data.result.success ? chalk.dim : chalk.red;
-            console.log(color("  ⎿  " + text));
+            writeBoundedEventDetail(text, MAX_EVENT_DETAIL_LINES, "  ⎿  ", color, color);
           }
           console.log();
         }
@@ -1053,7 +1053,18 @@ export class CliTerminalFormatter {
         const data = event.data as WebSearchData;
         if (data.query) {
           CliTerminalFormatter.beginEventOutput(target);
-          console.log(chalk.blue('⌕ "' + data.query + '"'));
+          if (data.error) {
+            writeEventLine(chalk.red(`✗ "${data.query}"`), chalk.red);
+            writeBoundedEventDetail(
+              data.error,
+              MAX_EVENT_DETAIL_LINES,
+              "  ",
+              chalk.red,
+              chalk.red
+            );
+          } else {
+            console.log(chalk.blue('⌕ "' + data.query + '"'));
+          }
           console.log();
         }
         break;
@@ -1071,11 +1082,9 @@ export class CliTerminalFormatter {
               (params ? " " + chalk.dim(params) : "")
           );
           if (data.result) {
-            const text = data.result.success
-              ? truncateEventText(data.result.output ?? "Success", 100)
-              : truncateEventText(data.result.error ?? "Failed", 200);
+            const text = getToolResultText(data.result);
             const color = data.result.success ? chalk.dim : chalk.red;
-            console.log(color("  ⎿  " + text));
+            writeBoundedEventDetail(text, MAX_EVENT_DETAIL_LINES, "  ⎿  ", color, color);
           }
           console.log();
         }
@@ -1084,11 +1093,11 @@ export class CliTerminalFormatter {
 
       case CLI_EVENT_TYPES.TOOL_RESULT: {
         const data = event.data as ToolResultData;
-        if (data.result?.output) {
+        if (data.result) {
           CliTerminalFormatter.beginEventOutput(target);
-          console.log(
-            chalk.dim("  ⎿  " + truncateEventText(data.result.output, 100))
-          );
+          const text = getToolResultText(data.result);
+          const color = data.result.success ? chalk.dim : chalk.red;
+          writeBoundedEventDetail(text, MAX_EVENT_DETAIL_LINES, "  ⎿  ", color, color);
         }
         break;
       }
@@ -1231,8 +1240,23 @@ export class CliTerminalFormatter {
         break;
       }
 
-      // USER_STEER is display-only and CONTEXT_WINDOW_SYNC is invisible on both
-      // sides, so these event types are intentionally left unhandled.
+      case CLI_EVENT_TYPES.USER_STEER: {
+        CliTerminalFormatter.beginEventOutput(target);
+        const data = event.data as UserSteerData;
+        writeEventLine(chalk.blue("● User message"), chalk.blue);
+        writeBoundedEventDetail(data.text, MAX_PREVIEW_LINES, "  ");
+        console.log();
+        break;
+      }
+
+      case CLI_EVENT_TYPES.CONTEXT_WINDOW_SYNC:
+        break;
+
+      default: {
+        const exhaustiveCheck: never = event.type;
+        void exhaustiveCheck;
+        break;
+      }
     }
   }
 

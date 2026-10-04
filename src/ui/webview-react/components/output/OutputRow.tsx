@@ -81,10 +81,11 @@ import {
   getFirstWords,
   isUserStoppedMessage,
 } from "@utils/outputUtils";
+import { formatMcpToolLabel } from "@root/utils/formatMcpToolLabel";
+import { getToolResultText } from "@root/utils/toolResultText";
 import {
   getFileReadHeaderText,
   getOutputRowSearchSegments,
-  getToolResultText,
   highlightText,
   sliceDecorationMatches,
   OUTPUT_FIND_TOOL_CONTENT_FIELD,
@@ -1142,7 +1143,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             }
             showLabel={row.showParamsLabel}
             labelContent={highlightText(
-              `MCP: ${data.server}.${data.tool}`,
+              formatMcpToolLabel(data.server, data.tool),
               getFieldMatches("toolLabel")
             )}
             expansion={row.toolCall?.expansion}

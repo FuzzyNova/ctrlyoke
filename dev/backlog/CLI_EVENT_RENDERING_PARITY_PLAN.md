@@ -15,6 +15,12 @@ run`, but not for `history show` replaying a dashboard run that was steered; see
 > [`CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md`](../implemented/CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md)
 > deferred under "Out of scope".
 
+## Progress
+
+- **Phase 1 complete.** Added CLI user-steer rendering and exhaustive event handling,
+  shared tool-result text and MCP label utilities, and failed tool/web-search detail
+  rendering. No deviations from the phase scope.
+
 ## Problem
 
 Headless `ctrlyoke run` and `ctrlyoke history show` print a step's output through

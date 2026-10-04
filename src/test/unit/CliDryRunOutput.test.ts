@@ -185,9 +185,7 @@ CliTerminalFormatter.flushStreamingBuffer();`
     assert.ok(output.includes("[3 unit-tests] done"));
   });
 
-  test("writes the target prefix only for events that print output", () => {
-    // Copilot CLI emits a display-only userSteer before the reply text; an
-    // eagerly written prefix for it doubled the prefix on the text line.
+  test("renders user steers once and preserves event order without dangling prefixes", () => {
     const output = runFormatterScript(
       `const target = { stepIndex: 1, stepName: "recall-info" };
 CliTerminalFormatter.renderEvents([
@@ -198,7 +196,15 @@ CliTerminalFormatter.renderEvents([
 CliTerminalFormatter.flushStreamingBuffer();`
     );
 
-    assert.strictEqual(output, "[2 recall-info] Orange.\n\n");
+    assert.strictEqual(
+      (output.match(/What is my favorite color\?/g) ?? []).length,
+      1
+    );
+    assert.ok(output.includes("[2 recall-info]"));
+    assert.ok(output.indexOf("[2 recall-info]") < output.indexOf("User message"));
+    assert.ok(output.indexOf("User message") < output.indexOf("Orange."));
+    assert.ok(output.includes("[2 recall-info] Orange."));
+    assert.strictEqual((output.match(/\[2 recall-info\]/g) ?? []).length, 2);
   });
 
   test("renders status messages on a new line after streamed text", () => {
@@ -223,7 +229,7 @@ CliTerminalFormatter.renderStatusMessage("Attempt completed", "info");`
 });`
     );
 
-    assert.ok(output.includes("⚙ queue:append"));
+    assert.ok(output.includes("MCP: queue.append"));
     assert.ok(output.includes('{"prompt":"terminal parameter output"}'));
     assert.ok(output.includes("⎿  terminal result output"));
   });
@@ -485,7 +491,7 @@ CliTerminalFormatter.renderPromptHeader({ stepIndex: 0, totalSteps: 1, stepName:
     );
   });
 
-  test("adds full-record notices to diff, MCP parameter, and tool-result truncation", () => {
+  test("bounds tool detail by lines while retaining full short result text", () => {
     const output = runFormatterScript(`
 CliTerminalFormatter.renderEvent({
   type: CLI_EVENT_TYPES.FILE_EDIT,
@@ -498,9 +504,24 @@ CliTerminalFormatter.renderEvent({ type: CLI_EVENT_TYPES.TOOL_RESULT, data: { re
     assert.ok(
       output.includes("… 10 more lines (see .ctrlyoke/.runs/…/events.jsonl)")
     );
-    assert.ok(
-      (output.match(/more characters \(see \.ctrlyoke/g) ?? []).length >= 2
-    );
+    assert.ok(output.includes("x".repeat(150)));
+    assert.ok(output.includes("more characters (see .ctrlyoke/.runs/…/events.jsonl)"));
+  });
+
+  test("prints errors from failed tool results and web searches", () => {
+    const output = runFormatterScript(`
+CliTerminalFormatter.renderEvent({
+  type: CLI_EVENT_TYPES.TOOL_RESULT,
+  data: { result: { success: false, error: "tool failed with useful detail" } },
+});
+CliTerminalFormatter.renderEvent({
+  type: CLI_EVENT_TYPES.WEB_SEARCH,
+  data: { query: "current release", error: "search service unavailable" },
+});`);
+
+    assert.ok(output.includes("tool failed with useful detail"));
+    assert.ok(output.includes('✗ "current release"'));
+    assert.ok(output.includes("search service unavailable"));
   });
 
   test("renders parallel-group tally transitions, including a failed branch", () => {

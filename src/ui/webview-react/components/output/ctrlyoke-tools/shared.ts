@@ -1,5 +1,5 @@
 import type { ToolResult } from "../../../types/cliEvents";
-import { getToolResultText } from "../../../utils/toolResultText";
+import { getToolResultText } from "@root/utils/toolResultText";
 import type { RowFindDecoration } from "../../../utils/outputFind";
 import { promptFirstLinePreview } from "@root/utils/TextUtils";
 
