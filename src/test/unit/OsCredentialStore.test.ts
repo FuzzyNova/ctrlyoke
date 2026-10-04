@@ -358,4 +358,46 @@ suite("OsCredentialStore", () => {
         /env passthrough/i.test(error.message)
     );
   });
+
+  test("classifies D-Bus failure while reading the key index", async () => {
+    const store = new OsCredentialStore({
+      platform: "linux",
+      runCommand: async () => ({
+        exitCode: 1,
+        stdout: "",
+        stderr:
+          "secret-tool: Error spawning command line ‘dbus-launch --autolaunch=abc’: Child process exited with code 1",
+      }),
+    });
+
+    await assert.rejects(
+      store.keys(),
+      (error: unknown) => error instanceof SecretStoreUnavailableError
+    );
+  });
+
+  test("treats an empty secret-tool lookup miss as not found", async () => {
+    const store = new OsCredentialStore({
+      platform: "linux",
+      runCommand: async () => ({ exitCode: 1, stdout: "", stderr: "" }),
+    });
+
+    assert.strictEqual(await store.get("missing"), undefined);
+  });
+
+  test("classifies a locked macOS keychain", async () => {
+    const store = new OsCredentialStore({
+      platform: "darwin",
+      runCommand: async () => ({
+        exitCode: 1,
+        stdout: "",
+        stderr: "security: SecKeychainSearchCopyNext: User interaction is not allowed.",
+      }),
+    });
+
+    await assert.rejects(
+      store.get("license"),
+      (error: unknown) => error instanceof SecretStoreUnavailableError
+    );
+  });
 });
