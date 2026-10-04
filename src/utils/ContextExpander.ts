@@ -192,8 +192,8 @@ export class ContextExpander {
    */
   async expandContext(promptText: string): Promise<string> {
     try {
-      // Every reference parser below masks triple-backtick fenced blocks
-      // internally (see FileReferenceParser.maskFencedCodeBlocks) — no local
+      // Every reference parser below masks fenced blocks and inline code
+      // spans internally (see FileReferenceParser.maskCodeRanges) — no local
       // masking needed here.
       const fileReferences = parseAllFileReferences(promptText);
       const gitRefs = parseGitChangeReferences(promptText);

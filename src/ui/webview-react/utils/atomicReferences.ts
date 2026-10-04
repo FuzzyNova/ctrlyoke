@@ -33,7 +33,7 @@ import {
 import { formatRangeNotation } from "../../../utils/RangeNotationParser";
 import {
   formatInlinePriorContextBody,
-  findFencedBlockRanges as findSharedFencedBlockRanges,
+  findCodeRanges as findSharedCodeRanges,
   scanInlinePriorContextRefs,
   type InlinePriorContextRef,
 } from "../../../utils/FileReferenceParser";
@@ -712,7 +712,7 @@ export function findAtomicReferences(
   getSymbolIcon?: SymbolIconResolver,
   getValidity?: (referenceToken: string) => boolean | undefined
 ): AtomicReferenceChip[] {
-  const fencedRanges = getFencedBlockRanges(docText);
+  const codeRanges = getCodeRanges(docText);
   const candidates: Array<{
     from: number;
     to: number;
@@ -748,7 +748,7 @@ export function findAtomicReferences(
       describe: () => describeSlashTokenChip(token),
     })),
   ]
-    .filter((ref) => !isInFencedBlock(ref.from, ref.to, fencedRanges))
+    .filter((ref) => !isInCodeRange(ref.from, ref.to, codeRanges))
     .sort((a, b) => a.from - b.from || b.to - a.to);
 
   const chips: AtomicReferenceChip[] = [];
@@ -887,18 +887,18 @@ export function findContextReferenceMatches(
   ].sort((a, b) => a.from - b.from);
 }
 
-export function getFencedBlockRanges(
+export function getCodeRanges(
   text: string
 ): Array<{ from: number; to: number }> {
-  return findSharedFencedBlockRanges(text);
+  return findSharedCodeRanges(text);
 }
 
-export function isInFencedBlock(
+export function isInCodeRange(
   from: number,
   to: number,
-  fencedRanges: Array<{ from: number; to: number }>
+  codeRanges: Array<{ from: number; to: number }>
 ): boolean {
-  return fencedRanges.some((r) => from >= r.from && to <= r.to);
+  return codeRanges.some((r) => from >= r.from && to <= r.to);
 }
 
 export function findInlinePriorContextRefs(

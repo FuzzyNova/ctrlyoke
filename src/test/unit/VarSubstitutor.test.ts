@@ -53,7 +53,7 @@ suite("VarSubstitutor Tests", () => {
     test("finds unique unresolved placeholders outside fenced blocks", () => {
       assert.deepStrictEqual(
         VarSubstitutor.findUnresolvedVariables(
-          "{{missing}} {{missing}} {{resolved}} ```\n{{fenced}}\n```",
+          "{{missing}} {{missing}} {{resolved}}\n```\n{{fenced}}\n```",
           { resolved: "yes" }
         ),
         ["{{missing}}"]
@@ -65,6 +65,19 @@ suite("VarSubstitutor Tests", () => {
       assert.strictEqual(
         VarSubstitutor.substitute(text, { resolved: "yes" }),
         text
+      );
+    });
+
+    test("substitutes placeholders inside inline code spans", () => {
+      // Vars reach script text, where backticks are shell command
+      // substitution, so only block fences keep a placeholder literal.
+      assert.strictEqual(
+        VarSubstitutor.substitute("echo `cat {{file}}`", { file: "a.txt" }),
+        "echo `cat a.txt`"
+      );
+      assert.deepStrictEqual(
+        VarSubstitutor.findUnresolvedVariables("`{{missing}}`", {}),
+        ["{{missing}}"]
       );
     });
 

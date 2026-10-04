@@ -34,23 +34,23 @@ For example: "I fixed the expiry check in #sym:src/auth/login.ts:validateToken:4
 
 ## Writing prompts ctrlyoke will run
 
-| Token                          | What the AI receives                                                                                                                                     |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@src/app.ts`                  | The file path; the AI reads the file from disk.                                                                                                          |
-| `@src/components/`             | A tree listing of the directory (names only, no contents).                                                                                               |
-| `#selection:src/app.ts:10-25`  | Lines 10–25 embedded with their line numbers.                                                                                                            |
-| `#sym:src/app.ts:main:10-25`   | Lines 10–25 embedded, labelled with the symbol name. The range is what counts, so it goes stale if the file changes.                                     |
-| `~diff` / `~staged`            | Working-tree (with untracked file names) / staged diff.                                                                                                  |
-| `~stash:0` / `~3f9c2a1`        | That stash entry's diff / that commit's diff.                                                                                                            |
-| `$previous`                    | Output of the most recent earlier step that produced any.                                                                                                |
-| `$previous:3`                  | Output of the last 3 earlier steps that produced any, oldest first; counted back from this prompt, so it stays correct when steps move.                  |
-| `$all` / `$step:1,3-5`         | Output of every earlier step / of steps 1, 3, 4 and 5 (1-based; only earlier steps).                                                                     |
-| `$finalStep` / `$allFinalStep` | Output of the latest / every `finalStep` loop pass.                                                                                                      |
-| `$preCondition:stdout`         | Replaced in place by that script output. Fields: `stdout`, `stderr`, `exitCode`, `expected`, `actual`, `compareSource`. Works in step and retry prompts. |
-| `$endCondition:stderr`         | Same fields, for the end-condition script. Only available in a `retryPrompt`.                                                                            |
-| `/skill:commit`                | Attaches that skill, as if listed under `skills:`.                                                                                                       |
-| `/mcp:ctrlyoke`                | Enables that registered MCP server for the step.                                                                                                         |
-| `!API_TOKEN`                   | Grants the step the managed secret `API_TOKEN` as an environment variable. The value never appears in the prompt. Names are uppercase.                   |
+| Token                          | What the AI receives                                                                                                                                                                                               |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@src/app.ts`                  | The file path; the AI reads the file from disk.                                                                                                                                                                    |
+| `@src/components/`             | A tree listing of the directory (names only, no contents).                                                                                                                                                         |
+| `#selection:src/app.ts:10-25`  | Lines 10–25 embedded with their line numbers.                                                                                                                                                                      |
+| `#sym:src/app.ts:main:10-25`   | Lines 10–25 embedded, labelled with the symbol name. The range is what counts, so it goes stale if the file changes.                                                                                               |
+| `~diff` / `~staged`            | Working-tree (with untracked file names) / staged diff.                                                                                                                                                            |
+| `~stash:0` / `~3f9c2a1`        | That stash entry's diff / that commit's diff.                                                                                                                                                                      |
+| `$previous`                    | Output of the most recent earlier step that produced any.                                                                                                                                                          |
+| `$previous:3`                  | Output of the last 3 earlier steps that produced any, oldest first; counted back from this prompt, so it stays correct when steps move.                                                                            |
+| `$all` / `$step:1,3-5`         | Output of every earlier step / of steps 1, 3, 4 and 5 (1-based; only earlier steps).                                                                                                                               |
+| `$finalStep` / `$allFinalStep` | Output of the latest / every `finalStep` loop pass.                                                                                                                                                                |
+| `$preCondition:stdout`         | Replaced in place by that script output. Fields: `stdout`, `stderr`, `exitCode`, `expected`, `actual`, `compareSource`. Works in step and retry prompts.                                                           |
+| `$endCondition:stderr`         | Same fields, for the end-condition script. Only available in a `retryPrompt`.                                                                                                                                      |
+| `/skill:commit`                | Attaches that skill, as if listed under `skills:`.                                                                                                                                                                 |
+| `/mcp:ctrlyoke`                | Enables that registered MCP server for the step.                                                                                                                                                                   |
+| `!API_TOKEN`                   | Grants the step the managed secret `API_TOKEN` as an environment variable. The value never appears in the prompt. Names are uppercase. A grant not yet approved for the workspace stops the workflow at that step. |
 
 Path rules for file, directory, line-range and symbol references:
 
@@ -60,6 +60,7 @@ Path rules for file, directory, line-range and symbol references:
 
 Writing about the syntax without triggering it:
 
-- Only a fenced code block (three or more backticks) stops expansion. **Single-backtick inline code is still expanded**, so put literal examples in a fenced block.
+- Inline code (single backticks) and fenced code blocks both keep tokens literal, so wrap a token in backticks to write about it without triggering it.
+- A secret grant written in plain prompt text is real. A grant not yet approved for the workspace stops the workflow when that step starts.
 - A token directly after a letter, digit, or filename character is not a reference (`price$previous`, `user@example.com`).
 - Slash references are recognized only at a word start, outside URL and path segments.

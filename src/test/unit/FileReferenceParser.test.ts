@@ -12,8 +12,12 @@ import {
   parseInlinePriorContextRefs,
   encodePriorContextTokenRef,
   decodePriorContextTokenRef,
-  maskFencedCodeBlocks,
+  maskCodeRanges,
+  fenceLiteral,
+  LITERAL_FENCE_INFO,
 } from "../../utils/FileReferenceParser";
+import { parseSecretReferences } from "../../utils/SecretReferenceParser";
+import { scanCtrlYokeSlashTokens } from "../../utils/CtrlYokeSlashTokens";
 import {
   buildFileReference,
   buildSelectionReference,
@@ -21,10 +25,10 @@ import {
 } from "../../completions/ContextReferenceBuilder";
 
 suite("FileReferenceParser", () => {
-  suite("maskFencedCodeBlocks", () => {
+  suite("maskCodeRanges", () => {
     test("keeps a three-backtick block inside a four-backtick fence masked", () => {
       const prompt = "````markdown\n```html\n@src/x.ts $previous\n```\n````";
-      const masked = maskFencedCodeBlocks(prompt);
+      const masked = maskCodeRanges(prompt);
 
       assert.ok(masked.includes("\x00src\x00x.ts \x00previous"));
       assert.strictEqual(masked.match(/`+/g)?.length, 4);
@@ -34,14 +38,14 @@ suite("FileReferenceParser", () => {
       const prompt = "```text\n@src/x.ts\n``` then @src/y.ts";
 
       assert.strictEqual(
-        maskFencedCodeBlocks(prompt),
+        maskCodeRanges(prompt),
         "```text\n\x00src\x00x.ts\n``` then @src/y.ts"
       );
     });
 
     test("does not let an inserted literal opener close an authored fence", () => {
       const prompt = "```text\n@src/x.ts\n```` text\n@src/y.ts\n````";
-      const masked = maskFencedCodeBlocks(prompt);
+      const masked = maskCodeRanges(prompt);
       assert.ok(masked.includes("\x00src\x00x.ts"));
       assert.ok(masked.includes("\x00src\x00y.ts"));
     });
@@ -143,8 +147,8 @@ suite("FileReferenceParser", () => {
       );
     });
 
-    test("strips trailing backticks from inline-code @path references", () => {
-      const refs = parseAtReferences("Check `@src/file.ts` in the prompt");
+    test("strips a trailing unpaired backtick from an @path reference", () => {
+      const refs = parseAtReferences("Check @src/file.ts` in the prompt");
       assert.strictEqual(refs.length, 1);
       assert.strictEqual(refs[0].path, "src/file.ts");
     });
@@ -638,8 +642,8 @@ suite("FileReferenceParser", () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Every parser here masks triple-backtick fenced blocks internally
-  // (FileReferenceParser.maskFencedCodeBlocks), so a trigger char that only
+  // Every parser here masks fenced blocks and inline code spans internally
+  // (FileReferenceParser.maskCodeRanges), so a trigger char that only
   // appears as literal pasted text inside a fence is never treated as a live
   // reference — regardless of which of the many call sites invokes the
   // parser directly (e.g. the editor's token-count hook, which never masks
@@ -695,16 +699,115 @@ suite("FileReferenceParser", () => {
         ["$step:1"]
       );
     });
+  });
 
-    test("leaves single-backtick inline code unaffected", () => {
-      const text = "Check `@src/inline.ts` and $previous here.";
+  // ──────────────────────────────────────────────────────────────────────────
+  // Fenced blocks and inline code spans are both literal. Each case runs
+  // through every trigger parser that shares the scan, so they cannot drift.
+  suite("code range suppression across parsers", () => {
+    const LIVE = "@src/a.ts !TOKEN_A /skill:alpha $previous";
+    const ALL_LIVE = ["!TOKEN_A", "$previous", "/skill:alpha", "@src/a.ts"];
+    const FENCE = "```";
+
+    function liveTokens(text: string): string[] {
+      return [
+        ...parseAtReferences(text).map((ref) =>
+          text.slice(ref.startOffset, ref.endOffset)
+        ),
+        ...parseSecretReferences(text).map((ref) =>
+          text.slice(ref.startOffset, ref.endOffset)
+        ),
+        ...scanCtrlYokeSlashTokens(text).map((token) => token.raw),
+        ...parseInlinePriorContextRefs(text).map((match) => match.token),
+      ].sort();
+    }
+
+    test("a mid-line triple backtick in prose does not shift a later fence", () => {
       assert.deepStrictEqual(
-        parseAtReferences(text).map((r) => r.path),
-        ["src/inline.ts"]
+        parseAtReferences(
+          "Use ``` fences for code. Review @src/a.ts now.\n```\nexample @x/y.ts\n```\n"
+        ).map((ref) => ref.path),
+        ["src/a.ts"]
       );
       assert.deepStrictEqual(
-        parseInlinePriorContextRefs(text).map((m) => m.token),
-        ["$previous"]
+        liveTokens(
+          `Use ${FENCE} fences. Review ${LIVE} now.\n${FENCE}\nexample @x/y.ts !TOKEN_B /skill:beta $all\n${FENCE}\n`
+        ),
+        ALL_LIVE
+      );
+    });
+
+    test("a single-backtick span keeps every token literal", () => {
+      assert.deepStrictEqual(liveTokens(`Quote \`${LIVE}\` then @src/b.ts`), [
+        "@src/b.ts",
+      ]);
+    });
+
+    test("a double-backtick span may contain a single backtick", () => {
+      assert.deepStrictEqual(
+        liveTokens(`Quote \`\`a \` ${LIVE}\`\` then !TOKEN_B`),
+        ["!TOKEN_B"]
+      );
+    });
+
+    test("an unpaired backtick masks nothing on its line or after it", () => {
+      assert.deepStrictEqual(
+        liveTokens("It's a ` stray @src/a.ts !TOKEN_A\n/skill:alpha $previous"),
+        ALL_LIVE
+      );
+    });
+
+    test("a span cannot close on a later line", () => {
+      assert.deepStrictEqual(
+        liveTokens("Open `@src/a.ts !TOKEN_A\nclose /skill:alpha` $previous"),
+        ALL_LIVE
+      );
+    });
+
+    test("an escaped backtick is not a delimiter", () => {
+      assert.deepStrictEqual(
+        liveTokens(`Escaped \\\` ${LIVE} \\\` and \`!TOKEN_B\``),
+        ALL_LIVE
+      );
+    });
+
+    test("a fence may be indented up to three spaces", () => {
+      assert.deepStrictEqual(
+        liveTokens(`   ${FENCE}\n${LIVE}\n   ${FENCE}\n@src/b.ts`),
+        ["@src/b.ts"]
+      );
+    });
+
+    test("a four-space-indented run is not a fence", () => {
+      assert.deepStrictEqual(
+        liveTokens(`    ${FENCE}\n${LIVE}\n    ${FENCE}\n`),
+        ALL_LIVE
+      );
+    });
+
+    test("an unclosed fence masks nothing", () => {
+      assert.deepStrictEqual(liveTokens(`${FENCE}\n${LIVE}`), ALL_LIVE);
+    });
+
+    test("a generated literal fence keeps a backtick-laden value inert", () => {
+      const value = `x \` y\n${FENCE}\n${LIVE}\n${FENCE}`;
+      const authored = `${FENCE}\nlog:\nOUTPUT\n${FENCE}\nthen @src/b.ts`;
+      const text = authored.replace(
+        "OUTPUT",
+        fenceLiteral(value, LITERAL_FENCE_INFO, authored)
+      );
+      assert.deepStrictEqual(liveTokens(text), ["@src/b.ts"]);
+
+      const prose = `Run \`x\` output:\n${fenceLiteral(value, LITERAL_FENCE_INFO)}\n$all`;
+      assert.deepStrictEqual(liveTokens(prose), ["$all"]);
+    });
+
+    test("fencesOnly leaves inline spans unmasked", () => {
+      assert.strictEqual(
+        maskCodeRanges(`\`@src/a.ts\`\n${FENCE}\n@src/b.ts\n${FENCE}`, {
+          fencesOnly: true,
+        }),
+        `\`@src/a.ts\`\n${FENCE}\n\x00src\x00b.ts\n${FENCE}`
       );
     });
   });

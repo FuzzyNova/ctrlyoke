@@ -106,10 +106,24 @@ instead.
 
 ## Writing references literally
 
-References inside a triple-backtick fenced block are not expanded. Use a fence
-when you paste logs, examples, or earlier ctrlyoke instructions that contain
-`@`, `#`, `~`, `$`, `!`, or `/skill:` text. Single-backtick inline code does
-**not** suppress expansion.
+References inside inline code (single backticks) or a fenced code block are
+not expanded. Wrap a token in backticks to write about it, and use a fence when
+you paste logs, examples, or earlier ctrlyoke instructions that contain `@`,
+`#`, `~`, `$`, `!`, or `/skill:` text.
+
+A fence starts with three or more backticks at the beginning of a line (up to
+three spaces of indentation) and ends at a line that starts with at least as
+many. Inline code must open and close on the same line with the same number of
+backticks; a backtick with no partner on its line is plain text and does not
+hide anything after it.
+
+A secret grant written in plain prompt text is real. A grant not yet approved
+for the workspace stops the workflow when that step starts.
+
+Workflow <code v-pre>{{name}}</code> placeholders are the exception: they are
+substituted inside inline code too, because the same substitution runs on
+script text, where backticks are shell command substitution. Only a fenced
+block keeps a placeholder literal.
 
 ## References in replies
 

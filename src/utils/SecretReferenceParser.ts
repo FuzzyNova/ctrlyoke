@@ -1,7 +1,7 @@
 import { isValidSecretName } from "../platform/SecretKey";
 import type { WorkflowStep } from "../types/CtrlYokeTypes";
 import { NOT_AFTER_BOUNDARY, NOT_BEFORE_BOUNDARY } from "./ReferenceBoundary";
-import { maskFencedCodeBlocks } from "./FileReferenceParser";
+import { maskCodeRanges } from "./FileReferenceParser";
 
 /** A valid inline secret grant found in prompt text. */
 export interface SecretReference {
@@ -21,14 +21,15 @@ export interface SecretReference {
  * makes markdown image syntax (`![alt](url)`) fail closed without creating a
  * second copy of the managed-name rule.
  *
- * Triple-backtick fenced blocks are masked first, matching every other
- * reference trigger (`@`/`#`/`~`) — literal pasted text like `<!DOCTYPE>`
- * inside a fenced code/log excerpt must never be mistaken for a secret grant,
- * since an unresolvable name here hard-fails the whole run at preflight.
+ * Fenced code blocks and inline code spans are masked first, matching every
+ * other reference trigger (`@`/`#`/`~`) — literal text like `<!DOCTYPE>`
+ * inside a code/log excerpt, or a grant quoted in backticks, must never be
+ * mistaken for a secret grant, since an unresolvable name here hard-fails the
+ * whole run at preflight.
  */
 export function parseSecretReferences(text: string): SecretReference[] {
   const references: SecretReference[] = [];
-  const maskedText = maskFencedCodeBlocks(text);
+  const maskedText = maskCodeRanges(text);
   const regex = new RegExp(
     `${NOT_AFTER_BOUNDARY}!([A-Z0-9_]*)${NOT_BEFORE_BOUNDARY}`,
     "g"

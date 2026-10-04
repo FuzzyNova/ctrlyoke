@@ -863,17 +863,19 @@ suite("ContextExpander.expandContextSplit", () => {
       assert.strictEqual(result.excerptBlocks, "");
     });
 
-    test("does not suppress references inside single-backtick inline code", async () => {
+    test("suppresses references inside single-backtick inline code", async () => {
       const root = freshWorkspace();
-      const filePath = path.join(root, "inline.ts");
-      fs.writeFileSync(filePath, "export const inline = true;\n");
+      const inlinePath = path.join(root, "inline.ts");
+      const livePath = path.join(root, "live.ts");
+      fs.writeFileSync(inlinePath, "export const inline = true;\n");
+      fs.writeFileSync(livePath, "export const live = true;\n");
 
       const expander = new ContextExpander({ workspaceRoot: root });
       const result = await expander.expandContextSplit(
-        "Check `@inline.ts` while reviewing this change."
+        "Check `@inline.ts` while reviewing @live.ts."
       );
 
-      assert.deepStrictEqual(result.directFileRefs, [filePath]);
+      assert.deepStrictEqual(result.directFileRefs, [livePath]);
       assert.strictEqual(result.excerptBlocks, "");
     });
   });

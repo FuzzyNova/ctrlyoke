@@ -543,6 +543,58 @@ describe("atomic reference presentation", () => {
     expect(findAtomicReferences(doc)).toEqual([]);
   });
 
+  describe("code ranges shared with the runtime parsers", () => {
+    const LIVE = "@src/a.ts !TOKEN_A /skill:alpha $previous";
+    const FENCE = "```";
+    const chipTexts = (doc: string) =>
+      findAtomicReferences(doc).map((chip) => doc.slice(chip.from, chip.to));
+    const ALL_LIVE = ["@src/a.ts", "!TOKEN_A", "/skill:alpha", "$previous"];
+
+    it("does not let a mid-line triple backtick shift a later fence", () => {
+      expect(
+        chipTexts(
+          `Use ${FENCE} fences. Review ${LIVE} now.\n${FENCE}\nexample @x/y.ts !TOKEN_B\n${FENCE}\n`
+        )
+      ).toEqual(ALL_LIVE);
+    });
+
+    it("keeps every token in a single-backtick span inert", () => {
+      expect(chipTexts(`Quote \`${LIVE}\` then @src/b.ts`)).toEqual([
+        "@src/b.ts",
+      ]);
+    });
+
+    it("lets a double-backtick span contain a single backtick", () => {
+      expect(chipTexts(`Quote \`\`a \` ${LIVE}\`\` then !TOKEN_B`)).toEqual([
+        "!TOKEN_B",
+      ]);
+    });
+
+    it("treats an unpaired or cross-line backtick as plain text", () => {
+      expect(
+        chipTexts("It's a ` stray @src/a.ts !TOKEN_A\n/skill:alpha $previous")
+      ).toEqual(ALL_LIVE);
+      expect(
+        chipTexts("Open `@src/a.ts !TOKEN_A\nclose /skill:alpha` $previous")
+      ).toEqual(ALL_LIVE);
+    });
+
+    it("does not treat an escaped backtick as a delimiter", () => {
+      expect(chipTexts(`Escaped \\\` ${LIVE} \\\` and \`!TOKEN_B\``)).toEqual(
+        ALL_LIVE
+      );
+    });
+
+    it("accepts a fence indented up to three spaces, not four", () => {
+      expect(chipTexts(`   ${FENCE}\n${LIVE}\n   ${FENCE}\n@src/b.ts`)).toEqual(
+        ["@src/b.ts"]
+      );
+      expect(chipTexts(`    ${FENCE}\n${LIVE}\n    ${FENCE}\n`)).toEqual(
+        ALL_LIVE
+      );
+    });
+  });
+
   it("does not decorate prior-context text that continues with an underscore", () => {
     expect(findAtomicReferences("$previous_output")).toEqual([]);
   });
