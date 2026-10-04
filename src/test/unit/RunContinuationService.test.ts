@@ -854,6 +854,70 @@ suite("RunContinuationService addressed step mutations", () => {
     );
   });
 
+  test("rejects split parallel-group orders without writing and allows whole-group moves", async () => {
+    workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-step-reorder-group-split-")
+    );
+    await seedRun(EXECUTION_STATES.RUNNING, 1, [
+      { prompt: "done", _runtime: { completedAt: 10 } },
+      { prompt: "inflight", _runtime: { startedAt: 11 } },
+      { prompt: "g1" },
+      { prompt: "g2" },
+      { prompt: "tail" },
+    ]);
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspace,
+      workflowKey,
+      runRef
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(runFilePath, "utf8")
+    ) as WorkingFile;
+    workingFile.parallelGroups = [
+      { id: "G", startIndex: 2, endIndex: 3, failFast: true },
+    ];
+    await fs.writeFile(runFilePath, JSON.stringify(workingFile), "utf8");
+    const before = await fs.readFile(runFilePath, "utf8");
+    const repository = new WorkflowLineageRepository();
+
+    for (const order of [[2, 4, 3], [3, 4, 2]]) {
+      await assert.rejects(
+        RunContinuationService.reorderStepsAtRun(
+          workspace,
+          workflowKey,
+          runRef,
+          order,
+          1,
+          repository,
+          undefined,
+          true
+        ),
+        /parallel group G .*indices 2, 3/i
+      );
+      assert.strictEqual(await fs.readFile(runFilePath, "utf8"), before);
+    }
+
+    const reordered = await RunContinuationService.reorderStepsAtRun(
+      workspace,
+      workflowKey,
+      runRef,
+      [4, 2, 3],
+      1,
+      repository,
+      undefined,
+      true
+    );
+    assert.deepStrictEqual(
+      reordered.workingFile.steps!.map(
+        (step) => (step as { prompt: string }).prompt
+      ),
+      ["done", "inflight", "tail", "g1", "g2"]
+    );
+    assert.deepStrictEqual(reordered.workingFile.parallelGroups, [
+      { id: "G", startIndex: 3, endIndex: 4, failFast: true },
+    ]);
+  });
+
   test("explains that a run with no pending steps cannot be reordered", async () => {
     workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-step-reorder-empty-")

@@ -566,6 +566,48 @@ function assertPendingOrder(
 }
 
 /**
+ * Rejects reorder requests that place unrelated steps between members of an
+ * existing parallel group. The requested order is relative to the pending
+ * suffix, while group ranges use absolute workflow indices.
+ */
+export function assertParallelGroupsRemainContiguousAfterReorder(
+  topology: ParallelGroupTopology,
+  currentIndex: number,
+  newPendingOrder: number[]
+): void {
+  const requestedAbsoluteOrder = [
+    ...Array.from({ length: currentIndex }, (_, index) => index),
+    ...newPendingOrder.map((index) => currentIndex + index),
+  ];
+  const requestedPositions = new Map(
+    requestedAbsoluteOrder.map((sourceIndex, position) => [sourceIndex, position])
+  );
+
+  for (const group of topology.parallelGroups) {
+    const memberIndices = Array.from(
+      { length: group.endIndex - group.startIndex + 1 },
+      (_, offset) => group.startIndex + offset
+    );
+    const memberPositions = memberIndices.map((index) =>
+      requestedPositions.get(index)
+    );
+    const presentPositions = memberPositions.filter(
+      (position): position is number => position !== undefined
+    );
+    if (
+      presentPositions.length !== memberIndices.length ||
+      Math.max(...presentPositions) -
+        Math.min(...presentPositions) +
+        1 !== memberIndices.length
+    ) {
+      throw new Error(
+        `Cannot split parallel group ${group.id} (members at indices ${memberIndices.join(", ")}) when reordering`
+      );
+    }
+  }
+}
+
+/**
  * Reorders the pending tail while keeping every complete parallel group
  * contiguous. Members of a group may be reordered within that group; a group
  * move is represented by the first member encountered in the requested order.
@@ -583,6 +625,11 @@ export function reorderParallelGroupPendingSteps(
     throw new Error(`Current index ${currentIndex} is out of bounds`);
   }
   assertPendingOrder(normalized.steps.length - currentIndex, newPendingOrder);
+  assertParallelGroupsRemainContiguousAfterReorder(
+    normalized,
+    currentIndex,
+    newPendingOrder
+  );
 
   const crossingGroup = normalized.parallelGroups.find(
     (group) => group.startIndex < currentIndex && group.endIndex >= currentIndex
