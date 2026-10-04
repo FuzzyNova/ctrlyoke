@@ -9,15 +9,11 @@ import {
   type RunCommandOptions,
 } from "../../cli/CliRunCommandDefinitions";
 import { PERMISSION_MODES } from "../../types/DashboardConstants";
-import { configService } from "../../config/CtrlYokeConfigService";
-import type { ConfigBackend } from "../../config/CtrlYokeConfigService";
 import {
-  CTRLYOKE_SETTINGS_DEFAULTS,
-  type PartialCtrlYokeSettings,
-} from "../../types/CtrlYokeSettings";
-import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import { applyCliToolPermissionOptions } from "../../cli/CliToolPermissionOverlay";
-import { QwenToolPermissionMapper } from "../../core/harness/qwen/QwenToolPermissionMapper";
+  applyCliPropertyOverrides,
+  buildCliPropertyOverrides,
+  ForceableFlag,
+} from "../../cli/CliPropertyOverrides";
 
 function createProgram(calls: {
   rerun?: RerunOptions;
@@ -67,6 +63,8 @@ suite("CLI run-scoped command parser", () => {
         "codex-cli",
         "--model",
         "gpt-5",
+        "--force",
+        "harness",
       ],
       { from: "user" }
     );
@@ -75,6 +73,148 @@ suite("CLI run-scoped command parser", () => {
     assert.strictEqual(calls.rerun?.from, "9");
     assert.strictEqual(calls.rerun?.harness, "codex-cli");
     assert.strictEqual(calls.rerun?.model, "gpt-5");
+    assert.deepStrictEqual(calls.rerun?.force, [ForceableFlag.HARNESS]);
+  });
+
+  test("execution overrides are shared by append and continue, but force is rerun-only", async () => {
+    const appendCalls: {
+      append?: { file: string | undefined; options: AppendOptions };
+    } = {};
+    await createProgram(appendCalls).parseAsync(
+      [
+        "append",
+        "tail.yaml",
+        "--workflow",
+        "release",
+        "--run",
+        "7",
+        "--headless",
+        "--permission-mode",
+        "none",
+        "--allow-tool",
+        "read",
+      ],
+      { from: "user" }
+    );
+    assert.strictEqual(appendCalls.append?.options.headless, true);
+    assert.strictEqual(appendCalls.append?.options.permissionMode, "none");
+    assert.deepStrictEqual(appendCalls.append?.options.allowTool, ["read"]);
+    const continueCalls: { continue?: ContinueOptions } = {};
+    await createProgram(continueCalls).parseAsync(
+      [
+        "continue",
+        "--workflow",
+        "release",
+        "--run",
+        "7",
+        "--interactive",
+        "--deny-tool",
+        "exec",
+      ],
+      { from: "user" }
+    );
+    assert.strictEqual(continueCalls.continue?.interactive, true);
+    assert.deepStrictEqual(continueCalls.continue?.denyTool, ["exec"]);
+    await assert.rejects(
+      createProgram({}).parseAsync(
+        ["continue", "--workflow", "release", "--run", "7", "--force", "all"],
+        { from: "user" }
+      ),
+      /unknown option '--force'/
+    );
+  });
+
+  test("rerun applies harness and model overrides through the workflow override path", async () => {
+    const calls: { rerun?: RerunOptions } = {};
+    await createProgram(calls).parseAsync(
+      [
+        "rerun",
+        "--workflow",
+        "release",
+        "--harness",
+        "codex-cli",
+        "--model",
+        "gpt-5",
+        "--force",
+        "harness",
+      ],
+      { from: "user" }
+    );
+    const workflow = {
+      harness: "claude-cli" as const,
+      model: "sonnet",
+      steps: [
+        { prompt: "workflow inherited" },
+        { prompt: "explicit harness", harness: "opencode-cli" as const },
+      ],
+    };
+    applyCliPropertyOverrides(
+      workflow,
+      buildCliPropertyOverrides(calls.rerun!)
+    );
+    assert.strictEqual(workflow.harness, "codex-cli");
+    assert.strictEqual(workflow.model, "gpt-5");
+    assert.deepStrictEqual(
+      workflow.steps.map((step) => step.harness),
+      ["codex-cli", "codex-cli"]
+    );
+  });
+
+  test("append and continue execution flags update workflow defaults and preserve step values", async () => {
+    const workflow = {
+      executionMode: "interactive" as const,
+      toolPermissions: { allowedTools: ["workflow-tool"] },
+      steps: [
+        { prompt: "completed", executionMode: "interactive" as const },
+        {
+          prompt: "pending",
+          toolPermissions: { deniedTools: ["step-tool"] },
+        },
+      ],
+    };
+    const commonOptions = {
+      headless: true,
+      permissionMode: PERMISSION_MODES.NONE,
+      allowTool: [],
+      denyTool: [],
+    };
+    applyCliPropertyOverrides(workflow, buildCliPropertyOverrides(commonOptions));
+    assert.strictEqual(workflow.executionMode, "headless");
+    assert.deepStrictEqual(workflow.toolPermissions, {
+      allowedTools: ["workflow-tool"],
+      mode: PERMISSION_MODES.NONE,
+    });
+    assert.strictEqual(workflow.steps[0].executionMode, "interactive");
+    assert.deepStrictEqual(workflow.steps[1].toolPermissions, {
+      deniedTools: ["step-tool"],
+    });
+  });
+
+  test("property help describes workflow scope and forceable names", () => {
+    const runHelp = createRunProgram({})
+      .commands[0]
+      .helpInformation()
+      .replace(/\s+/gu, " ");
+    const command = createProgram({});
+    const rerunHelp = command.commands[0]
+      .helpInformation()
+      .replace(/\s+/gu, " ");
+    const appendHelp = command.commands[1]
+      .helpInformation()
+      .replace(/\s+/gu, " ");
+    for (const description of [runHelp, rerunHelp]) {
+      assert.match(
+        description,
+        /workflow level; add `--force <flag>` to apply to every step/u
+      );
+    }
+    assert.match(rerunHelp, /--force <flags>/u);
+    assert.doesNotMatch(appendHelp, /--force <flags>/u);
+    for (const flag of Object.values(ForceableFlag)) {
+      assert.ok(rerunHelp.includes(flag), `rerun help lists ${flag}`);
+    }
+    assert.match(runHelp, /--permission-mode.*workflow tool permission mode/u);
+    assert.doesNotMatch(runHelp, /overrides the defaults\.toolPermissions\.mode setting/u);
   });
 
   test("parses append and continue only with explicit run targets", async () => {
@@ -326,7 +466,7 @@ suite("CLI run command parser", () => {
     );
   });
 
-  test("applies --permission-mode over nullable settings with complete mapper config", async () => {
+  test("applies permission flags to a nullable workflow permission object", async () => {
     const calls: {
       run?: { file: string | undefined; options: RunCommandOptions };
     } = {};
@@ -335,29 +475,14 @@ suite("CLI run command parser", () => {
       { from: "user" }
     );
 
-    const emptyBackend: ConfigBackend = {
-      getAll: () => ({ defaults: { toolPermissions: null } }),
-      set: async () => {},
-    };
-    configService.setUserBackend(emptyBackend);
-    configService.setWorkspaceBackend(emptyBackend);
-    const overlay: PartialCtrlYokeSettings = {};
-    applyCliToolPermissionOptions(overlay, calls.run!.options);
-    configService.setCliOverlay(overlay);
-
-    try {
-      const resolved = ConfigurationUtils.resolveSpawnToolPermissions(undefined);
-      assert.deepStrictEqual(resolved, {
-        ...CTRLYOKE_SETTINGS_DEFAULTS.defaults.toolPermissions,
-        mode: PERMISSION_MODES.CUSTOM,
-      });
-      assert.ok(resolved);
-      await new QwenToolPermissionMapper().prepare(resolved, {});
-    } finally {
-      configService.setUserBackend({ getAll: () => ({}), set: async () => {} });
-      configService.setWorkspaceBackend({ getAll: () => ({}), set: async () => {} });
-      configService.setCliOverlay({});
-    }
+    const workflow = { toolPermissions: null, steps: [] };
+    applyCliPropertyOverrides(
+      workflow,
+      buildCliPropertyOverrides(calls.run!.options)
+    );
+    assert.deepStrictEqual(workflow.toolPermissions, {
+      mode: PERMISSION_MODES.CUSTOM,
+    });
   });
 
   test("no longer accepts the removed --add-dir flag", async () => {

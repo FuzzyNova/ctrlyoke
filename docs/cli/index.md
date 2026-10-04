@@ -94,8 +94,10 @@ own. Your harness CLIs talk to their providers as usual. See
 
 - no dashboard UI; headless output is formatted for the terminal, and
   interactive mode passes the harness's own terminal UI through
-- `--permission-mode`, `--allow-tool`, and `--deny-tool` override the settings
-  default for tool permissions for one run (see
+- CLI property flags set workflow values for one run; steps keep their own
+  values unless `--force <flag>` is used to apply the flag to every step. For
+  `append` and `continue`, shared execution flags affect pending work at
+  workflow scope (see
   [Tool permissions](/cli/ctrlyoke#tool-permissions))
 - structured exit codes and `--json` output for scripting and CI
 

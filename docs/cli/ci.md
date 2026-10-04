@@ -38,7 +38,10 @@ warnings for the chosen harness. See [`ctrlyoke validate`](/cli/ctrlyoke#ctrlyok
 
 ## Run headless
 
-Without a TTY, `ctrlyoke run` runs headless automatically; `--headless` makes that explicit.
+Without a TTY, `ctrlyoke run` runs headless automatically; `--headless` sets
+the workflow default explicitly. A step's own `executionMode` takes precedence
+in a TTY; without a TTY, interactive steps are clamped to headless. Use
+`--headless --force headless` to apply headless mode to every step.
 Add `--json` for one machine-readable result line on stdout:
 
 ```bash
@@ -103,8 +106,9 @@ The setting's default mode is `allowAll`: every tool is allowed except the deny 
 the agent can run any shell command you haven't denied, with the job's credentials. For CI:
 
 - Set `toolPermissions` in the workflow, so the file carries its own policy wherever it runs.
-- Or override the settings layer for one run with `--permission-mode`, `--allow-tool` and
-  `--deny-tool`. A workflow or step value still wins over these flags.
+- Or set workflow permissions for one run with `--permission-mode`, `--allow-tool` and
+  `--deny-tool`. Step-level permission values still take precedence; use
+  `--force <flag>` to apply a supplied permission flag to every step.
 - A mode that can still ask for approval can stall an unattended run on that prompt.
 
 See [Tool permissions](/cli/ctrlyoke#tool-permissions) and the

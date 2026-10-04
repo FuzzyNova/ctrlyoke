@@ -21,7 +21,10 @@ import type {
   ExecutionPropertyDefaults,
   ResolvedExecutionTarget,
 } from "../types/ExecutionPropertyResolver";
-import { resolveExecutionProperties } from "../types/ExecutionPropertyResolver";
+import {
+  RESOLUTION_SOURCES,
+  resolveExecutionProperties,
+} from "../types/ExecutionPropertyResolver";
 import type { ResolvedProperties } from "../types/ExecutionPropertyTypes";
 import { SessionResolver } from "../utils/SessionResolver";
 import { VarSubstitutor } from "../utils/VarSubstitutor";
@@ -89,6 +92,7 @@ export interface ParallelGroupPreflightOptions {
     member: ParallelGroupPreflightMember
   ) => Promise<unknown> | unknown;
   readonly finalStepSessionId?: string;
+  readonly workflowSessionIdFromOverride?: boolean;
 }
 
 export interface ParallelGroupMemberPreflightOptions extends ParallelGroupPreflightOptions {
@@ -246,10 +250,19 @@ export async function preflightParallelGroupMember(
       ...sessionOwners.map((owner) => owner.stepIndex),
       options.stepIndex,
     ];
+    const sessionIdComesFromWorkflowOverride =
+      options.workflowSessionIdFromOverride &&
+      workflow.sessionId === resolvedSessionId &&
+      (resolvedTarget.sources.sessionId === RESOLUTION_SOURCES.WORKFLOW ||
+        sessionOwners.some(
+          (owner) =>
+            owner.resolvedTarget.sources.sessionId ===
+            RESOLUTION_SOURCES.WORKFLOW
+        ));
     issues.push({
       code: PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.SESSION_COLLISION,
       memberIndices: indices,
-      message: `${memberList(workflow, indices)} resolve to the same ${resolvedProperties.harness} session "${resolvedSessionId}". Parallel members must use distinct sessions.`,
+      message: `${memberList(workflow, indices)} resolve to the same ${resolvedProperties.harness} session "${resolvedSessionId}". Parallel members must use distinct sessions.${sessionIdComesFromWorkflowOverride ? " Members inherit --session-id, so give those members their own sessionId or run without the flag." : ""}`,
     });
   }
 

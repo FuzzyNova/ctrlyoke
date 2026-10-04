@@ -11,6 +11,22 @@ import {
   type PermissionMode,
 } from "../types/DashboardConstants";
 import { getVariableKeyErrors } from "../utils/KeyValueKeyKinds";
+import { FORCE_ALL_KEYWORD, ForceableFlag } from "./CliPropertyOverrides";
+
+const WORKFLOW_PROPERTY_SCOPE_DESCRIPTION =
+  " (workflow level; add `--force <flag>` to apply to every step)";
+
+function workflowPropertyDescription(
+  description: string,
+  allowForce = false
+): string {
+  return (
+    description +
+    (allowForce
+      ? WORKFLOW_PROPERTY_SCOPE_DESCRIPTION
+      : " (workflow level; affects pending work)")
+  );
+}
 
 export interface CliExecutionOptions {
   harness?: string;
@@ -18,6 +34,7 @@ export interface CliExecutionOptions {
   cwd?: string;
   timeout?: number;
   scriptTimeout?: number;
+  force?: string[];
   headless?: boolean;
   interactive?: boolean;
   allowTool: string[];
@@ -80,21 +97,43 @@ export function registerRunCommand(
         // No Commander default: an omitted flag must stay distinguishable from
         // an explicit one, so the workflow's own `harness` and the
         // `defaults.harness` setting are not silently overridden by copilot-cli.
-        "AI harness: copilot-cli, claude-cli, codex-cli, antigravity-cli, qwen-cli, opencode-cli (default: the workflow's harness, then the defaults.harness setting)"
+        workflowPropertyDescription(
+          "AI harness: copilot-cli, claude-cli, codex-cli, antigravity-cli, qwen-cli, opencode-cli (default: the workflow's harness, then the defaults.harness setting)",
+          true
+        )
       )
-      .option("-m, --model <model>", "Model to use")
+      .option(
+        "-m, --model <model>",
+        workflowPropertyDescription("Model to use", true)
+      )
+      .option(
+        "--force <flags>",
+        "Apply passed flags to every step: " +
+          [...Object.values(ForceableFlag), FORCE_ALL_KEYWORD].join(", "),
+        collectRepeatable,
+        [] as string[]
+      )
       .option(
         "-p, --prompt <text>",
         "Inline prompt string (alternative to file)"
       )
       .option(
         "--session-id <id>",
-        "Session ID to resume (implies --resume-session)"
+        workflowPropertyDescription(
+          "Session ID to resume (implies --resume-session)",
+          true
+        )
       )
-      .option("--resume-session", "Force resume of the existing session")
+      .option(
+        "--resume-session",
+        workflowPropertyDescription("Resume the existing session", true)
+      )
       .option(
         "--no-resume-session",
-        "Force starting a new session, ignoring any existing session"
+        workflowPropertyDescription(
+          "Start a new session, ignoring any existing session",
+          true
+        )
       )
       .option(
         "--var <assignment>",
@@ -105,7 +144,8 @@ export function registerRunCommand(
       .option(
         "--dry-run",
         "Show the redacted execution preview without starting a harness"
-      )
+      ),
+    true
   ).action(async (file: string | undefined, options: RunCommandOptions) =>
     handler(file, options)
   );
@@ -127,9 +167,26 @@ export function registerRunScopedCommands(
       .option("--from <ref|runId>", "Source run reference or numeric run ID")
       .option(
         "-H, --harness <harness>",
-        "Override harness for the newly seeded run"
+        workflowPropertyDescription(
+          "Override harness for the newly seeded run",
+          true
+        )
       )
-      .option("-m, --model <model>", "Override model for the newly seeded run")
+      .option(
+        "-m, --model <model>",
+        workflowPropertyDescription(
+          "Override model for the newly seeded run",
+          true
+        )
+      )
+      .option(
+        "--force <flags>",
+        "Apply passed flags to every step: " +
+          [...Object.values(ForceableFlag), FORCE_ALL_KEYWORD].join(", "),
+        collectRepeatable,
+        [] as string[]
+      ),
+    true
   ).action(async (options: RerunOptions) => handlers.rerun(options));
 
   addExecutionOptions(
@@ -168,7 +225,7 @@ export function registerRunScopedCommands(
   ).action(async (options: ContinueOptions) => handlers.continue(options));
 }
 
-function addExecutionOptions(command: Command): Command {
+function addExecutionOptions(command: Command, allowForce = false): Command {
   return command
     .option(
       "-d, --cwd <path>",
@@ -184,26 +241,44 @@ function addExecutionOptions(command: Command): Command {
       `Override the ${SETTING_PATHS.EXECUTION_SCRIPT_TIMEOUT_SEC} setting for this run`,
       parseScriptTimeoutSeconds
     )
-    .option("--headless", "Force headless mode (CI/CD, no user interaction)")
+    .option(
+      "--headless",
+      workflowPropertyDescription(
+        "Force headless mode (CI/CD, no user interaction)",
+        allowForce
+      )
+    )
     .option(
       "--interactive",
-      "Force interactive mode (TUI passthrough, user controls session end)"
+      workflowPropertyDescription(
+        "Force interactive mode (TUI passthrough, user controls session end)",
+        allowForce
+      )
     )
     .option(
       "--allow-tool <pattern>",
-      "Allow specific tool pattern (repeatable)",
+      workflowPropertyDescription(
+        "Allow specific tool pattern (repeatable)",
+        allowForce
+      ),
       collectRepeatable,
       [] as string[]
     )
     .option(
       "--deny-tool <pattern>",
-      "Deny specific tool pattern (repeatable)",
+      workflowPropertyDescription(
+        "Deny specific tool pattern (repeatable)",
+        allowForce
+      ),
       collectRepeatable,
       [] as string[]
     )
     .option(
       "--permission-mode <mode>",
-      `Override the defaults.toolPermissions.mode setting for this run: ${Object.values(PERMISSION_MODES).join(", ")}`,
+      workflowPropertyDescription(
+        `Set the workflow tool permission mode for this run: ${Object.values(PERMISSION_MODES).join(", ")}`,
+        allowForce
+      ),
       parsePermissionMode
     )
 

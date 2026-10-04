@@ -85,6 +85,33 @@ suite("ParallelGroupPreflight", () => {
     assert.match(collision?.message ?? "", /Step 1.*Step 2/);
   });
 
+  test("adds the session flag hint for collisions inheriting its workflow ID", async () => {
+    const result = await preflightParallelGroup({
+      workflow: {
+        sessionId: "flag-session",
+        resumeSession: true,
+        steps: [{ prompt: "one" }, { prompt: "two" }],
+        parallelGroups: [{ ...group, startIndex: 0, endIndex: 1 }],
+      },
+      group: { ...group, startIndex: 0, endIndex: 1 },
+      defaults: defaults(),
+      hostCanProvidePty: true,
+      supportsConcurrentInteractiveSessions: true,
+      configuredWidth: 6,
+      fanOutEnabled: true,
+      workflowSessionIdFromOverride: true,
+    });
+    const collision = result.issues.find(
+      (issue) =>
+        issue.code ===
+        PARALLEL_GROUP_PREFLIGHT_DIAGNOSTIC_CODES.SESSION_COLLISION
+    );
+    assert.match(
+      collision?.message ?? "",
+      /Members inherit --session-id, so give those members their own sessionId or run without the flag\./
+    );
+  });
+
   test("finds same-harness auto-resume collisions and allows different harnesses", async () => {
     const before = {
       prompt: "before",

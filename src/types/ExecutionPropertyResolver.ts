@@ -236,7 +236,7 @@ function resolveHooks(
   return { value: [...eventMap.values()].flat(), source: "prompt" };
 }
 
-function resolveSessionId(
+export function resolveSessionId(
   prompt: PromptStep,
   workflow: PromptFile,
   defaults: ExecutionPropertyDefaults

@@ -190,6 +190,8 @@ export interface WorkflowExecutionContext {
   executionWorkspace: ExecutionWorkspace;
   /** Whether this host can provide a PTY for interactive execution. */
   hostCanProvidePty?: boolean;
+  /** The workflow session ID was supplied by a host-level run option. */
+  workflowSessionIdFromOverride?: boolean;
   /** Whether this host can multiplex concurrent interactive sessions. */
   supportsConcurrentInteractiveSessions?: boolean;
   workspaceFolderPath: string | undefined;
@@ -923,6 +925,7 @@ export class WorkflowExecutor {
         ),
       finalStepSessionId: workflow.finalStep?._runtime?.sessionId as
         string | undefined,
+      workflowSessionIdFromOverride: context.workflowSessionIdFromOverride,
     };
   }
 

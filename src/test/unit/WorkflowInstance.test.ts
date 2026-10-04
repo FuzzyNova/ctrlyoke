@@ -4125,6 +4125,17 @@ suite("WorkflowInstance executeSeededRun", () => {
       };
 
       let executionHistoryFilePath: string | undefined;
+      let preparedAtTimelineInitialization = false;
+      const outputHistoryManager = instance.getOutputHistoryManager();
+      const initializeRunAt = outputHistoryManager.initializeRunAt.bind(
+        outputHistoryManager
+      );
+      (outputHistoryManager as any).initializeRunAt = async (
+        ...args: unknown[]
+      ) => {
+        preparedAtTimelineInitialization = prepared;
+        return initializeRunAt(...(args as Parameters<typeof initializeRunAt>));
+      };
       (instance as any).startWorkflowExecution = async (
         _integration: unknown,
         historyFilePath: string
@@ -4152,6 +4163,7 @@ suite("WorkflowInstance executeSeededRun", () => {
         "executeSeededRun must not restart() the already-fresh seeded run"
       );
       assert.strictEqual(prepared, true);
+      assert.strictEqual(preparedAtTimelineInitialization, true);
       assert.deepStrictEqual(
         executionStartedArgs?.slice(1, 3),
         ["workflow.ctrlyoke.json", 1],

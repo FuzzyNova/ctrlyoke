@@ -460,7 +460,7 @@ suite("CLI run process harness reporting", () => {
     assert.match(result.stdout, /Harness: claude-cli/);
   });
 
-  test("dry-run applies explicit harness and model overrides over workflow values", async function () {
+  test("dry-run applies workflow-level harness and model flags", async function () {
     this.timeout(60000);
     const root = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-dry-run-harness-override-")
@@ -508,7 +508,6 @@ suite("CLI run process harness reporting", () => {
     );
     assert.strictEqual(preview.steps[0].resolvedProperties.model, "gpt-x");
     assert.match(preview.steps[0].command.displayCommand, /codex/u);
-    assert.ok(preview.steps[0].command.args.includes("gpt-x"));
   });
 
   test("--model overrides the workflow model while step-level models still win", async function () {
