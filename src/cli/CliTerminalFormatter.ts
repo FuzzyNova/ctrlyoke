@@ -589,6 +589,12 @@ export class CliTerminalFormatter {
     );
   }
 
+  /** Closes any live streaming block, then starts a target-prefixed event line. */
+  private static beginEventOutput(target?: CliOutputTarget): void {
+    CliTerminalFormatter.flushStreamingBuffer(target);
+    CliTerminalFormatter.writeTargetPrefix(target);
+  }
+
   /**
    * Returns the exact one-line status summary emitted by the script reporter.
    * The CLI uses it to collapse that status into the richer verdict block.
@@ -843,8 +849,7 @@ export class CliTerminalFormatter {
     const key = CliTerminalFormatter.targetKey(target);
     const existing = CliTerminalFormatter._streaming.get(key);
     if (!existing || existing.type !== CLI_EVENT_TYPES.TEXT) {
-      CliTerminalFormatter.flushStreamingBuffer(target);
-      CliTerminalFormatter.writeTargetPrefix(target);
+      CliTerminalFormatter.beginEventOutput(target);
       CliTerminalFormatter._streaming.set(key, {
         type: CLI_EVENT_TYPES.TEXT,
         endsWithNewline: false,
@@ -864,8 +869,10 @@ export class CliTerminalFormatter {
       event.type !== CLI_EVENT_TYPES.TEXT &&
       event.type !== CLI_EVENT_TYPES.THINKING
     ) {
+      // Close any live TEXT/THINKING block, but leave the target prefix to the
+      // branch that actually prints: USER_STEER and guarded no-op branches emit
+      // nothing, and an eager prefix would dangle into the next line.
       CliTerminalFormatter.flushStreamingBuffer(target);
-      CliTerminalFormatter.writeTargetPrefix(target);
     }
     switch (event.type) {
       case CLI_EVENT_TYPES.TEXT: {
@@ -874,8 +881,7 @@ export class CliTerminalFormatter {
         const s = CliTerminalFormatter._streaming.get(key);
         if (!s || s.type !== CLI_EVENT_TYPES.TEXT) {
           // End any prior THINKING block, then start streaming TEXT
-          CliTerminalFormatter.flushStreamingBuffer(target);
-          CliTerminalFormatter.writeTargetPrefix(target);
+          CliTerminalFormatter.beginEventOutput(target);
           CliTerminalFormatter._streaming.set(key, {
             type: CLI_EVENT_TYPES.TEXT,
             endsWithNewline: false,
@@ -898,8 +904,7 @@ export class CliTerminalFormatter {
           (s.label ?? "Thinking") !== label
         ) {
           // End any prior block, print header once, then start streaming this THINKING block
-          CliTerminalFormatter.flushStreamingBuffer(target);
-          CliTerminalFormatter.writeTargetPrefix(target);
+          CliTerminalFormatter.beginEventOutput(target);
           process.stdout.write(chalk.dim(`● ${label}\n  `));
           CliTerminalFormatter._streaming.set(key, {
             type: CLI_EVENT_TYPES.THINKING,
@@ -915,7 +920,7 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.BASH_COMMAND: {
-        CliTerminalFormatter.flushStreamingBuffer(target);
+        CliTerminalFormatter.beginEventOutput(target);
         const data = event.data as BashCommandData;
         if (data.command) {
           console.log(chalk.yellow("$ " + data.command));
@@ -938,9 +943,9 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.FILE_EDIT: {
-        CliTerminalFormatter.flushStreamingBuffer(target);
         const data = event.data as FileEditData;
         if (!data.path) break;
+        CliTerminalFormatter.beginEventOutput(target);
         if (data.status === OPERATION_STATUS.INITIATED) {
           console.log(chalk.dim("  ~ Editing " + data.path + "…"));
         } else if (data.status === OPERATION_STATUS.FAILED) {
@@ -956,9 +961,9 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.FILE_WRITE: {
-        CliTerminalFormatter.flushStreamingBuffer(target);
         const data = event.data as FileWriteData;
         if (!data.path) break;
+        CliTerminalFormatter.beginEventOutput(target);
         if (data.status === OPERATION_STATUS.INITIATED) {
           console.log(chalk.dim("  + Writing " + data.path + "…"));
         } else if (data.status === OPERATION_STATUS.FAILED) {
@@ -976,12 +981,11 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.FILE_READ: {
-        CliTerminalFormatter.flushStreamingBuffer(target);
         const data = event.data as FileReadData;
-        if (!data.path) break;
-        if (data.status === OPERATION_STATUS.INITIATED) {
-          // Skip — too noisy during streaming
-        } else if (data.status === OPERATION_STATUS.FAILED) {
+        // Skip INITIATED — too noisy during streaming
+        if (!data.path || data.status === OPERATION_STATUS.INITIATED) break;
+        CliTerminalFormatter.beginEventOutput(target);
+        if (data.status === OPERATION_STATUS.FAILED) {
           const errDetail = data.error ? chalk.dim(" — " + data.error) : "";
           console.log(chalk.red("✗ Read failed: " + data.path) + errDetail);
           console.log();
@@ -992,9 +996,9 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.FILE_DELETE: {
-        CliTerminalFormatter.flushStreamingBuffer(target);
         const data = event.data as FileDeleteData;
         if (!data.path) break;
+        CliTerminalFormatter.beginEventOutput(target);
         if (data.success === false) {
           const errDetail = data.error ? chalk.dim(" — " + data.error) : "";
           console.log(chalk.red("✗ Delete failed: " + data.path) + errDetail);
@@ -1006,9 +1010,9 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
-        CliTerminalFormatter.flushStreamingBuffer(target);
         const data = event.data as McpToolCallData;
         if (data.server && data.tool) {
+          CliTerminalFormatter.beginEventOutput(target);
           const params = data.parameters
             ? truncateEventText(JSON.stringify(data.parameters), 80)
             : "";
@@ -1029,9 +1033,9 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.WEB_SEARCH: {
-        CliTerminalFormatter.flushStreamingBuffer(target);
         const data = event.data as WebSearchData;
         if (data.query) {
+          CliTerminalFormatter.beginEventOutput(target);
           console.log(chalk.blue('⌕ "' + data.query + '"'));
           console.log();
         }
@@ -1039,9 +1043,9 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.TOOL_CALL: {
-        CliTerminalFormatter.flushStreamingBuffer(target);
         const data = event.data as ToolCall;
         if (data.name) {
+          CliTerminalFormatter.beginEventOutput(target);
           const params = data.parameters
             ? truncateEventText(JSON.stringify(data.parameters), 80)
             : "";
@@ -1062,9 +1066,9 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.TOOL_RESULT: {
-        CliTerminalFormatter.flushStreamingBuffer(target);
         const data = event.data as ToolResultData;
         if (data.result?.output) {
+          CliTerminalFormatter.beginEventOutput(target);
           console.log(
             chalk.dim("  ⎿  " + truncateEventText(data.result.output, 100))
           );
@@ -1073,7 +1077,7 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.ASK_USER_QUESTION: {
-        CliTerminalFormatter.flushStreamingBuffer(target);
+        CliTerminalFormatter.beginEventOutput(target);
         const data = event.data as AskUserQuestionData;
         const heading = data.declined
           ? formatAskUserQuestionDecline(data.declined)
@@ -1146,7 +1150,7 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.COMPACTION: {
-        CliTerminalFormatter.flushStreamingBuffer(target);
+        CliTerminalFormatter.beginEventOutput(target);
         const data = event.data as CompactionData;
         const tokenInfo =
           data.preTokens !== undefined && data.postTokens !== undefined
@@ -1171,7 +1175,7 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.FOLLOW_UP_RESUMED: {
-        CliTerminalFormatter.flushStreamingBuffer(target);
+        CliTerminalFormatter.beginEventOutput(target);
         const data = event.data as FollowUpResumedData;
         const timestamp = data.resumedAt
           ? new Date(data.resumedAt).toLocaleTimeString()
@@ -1186,7 +1190,7 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.BACKGROUND_WORK_HOLD: {
-        CliTerminalFormatter.flushStreamingBuffer(target);
+        CliTerminalFormatter.beginEventOutput(target);
         const data = event.data as BackgroundWorkHoldData;
         const timestamp = data.heldAt
           ? new Date(data.heldAt).toLocaleTimeString()
