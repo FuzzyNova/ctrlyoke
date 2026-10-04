@@ -1888,7 +1888,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       ? {
           ...pendingRewind,
           fromStepIndex: snapParallelGroupStartPosition(
-            { steps: this.state.steps, parallelGroups: this.state.parallelGroups },
+            {
+              steps: this.state.steps,
+              parallelGroups: this.state.parallelGroups,
+            },
             pendingRewind.fromStepIndex
           ),
         }
@@ -1917,29 +1920,11 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       )
     ) {
       this.state.completedIndices = new Set(
-        Array.from({ length: runtime.currentIndex }, (_, index) => String(index))
+        Array.from({ length: runtime.currentIndex }, (_, index) =>
+          String(index)
+        )
       );
     }
-    this.state.results = this.state.steps.map((step, index) => {
-      const terminal = step._runtime?.terminalStatus;
-      const status =
-        step._runtime?.completedAt !== undefined
-          ? terminal === PROMPT_TERMINAL_STATUS.SKIPPED
-            ? STEP_STATUS.SKIPPED
-            : terminal === PROMPT_TERMINAL_STATUS.CANCELLED
-              ? STEP_STATUS.CANCELLED
-              : terminal === PROMPT_TERMINAL_STATUS.FAILED
-                ? STEP_STATUS.FAILED
-                : STEP_STATUS.COMPLETED
-          : index === currentIndex && executionState === EXECUTION_STATES.RUNNING
-            ? STEP_STATUS.SENT
-            : STEP_STATUS.PENDING;
-      return {
-        prompt: isScriptStep(step) ? step.script : step.prompt,
-        status,
-        timestamp: new Date(),
-      };
-    });
     this.state.tokenTotals = runtime?.tokenTotals;
     this.finalStepRuntime = runtime?.finalStep;
     this.activeParallelGroupRuntime = runtime?.activeParallelGroup;
@@ -1951,6 +1936,11 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       totalPausedDuration: runtime?.totalPausedDuration ?? 0,
       executionEndTime: runtime?.executionEndTime,
     });
+    this.state.results = this.state.steps.map((step, index) => ({
+      prompt: isScriptStep(step) ? step.script : step.prompt,
+      status: this.getResultStatusFromRuntime(step, index, currentIndex),
+      timestamp: new Date(),
+    }));
   }
 
   /**

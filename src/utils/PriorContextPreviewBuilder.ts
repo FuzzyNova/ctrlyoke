@@ -2,8 +2,10 @@ import { buildPriorContextXmlFromItems } from "../core/HarnessIntegration";
 import { type WorkflowStep } from "../types/CtrlYokeTypes";
 import { RunOutputResolver } from "../core/orchestration/RunOutputResolver";
 import { parseInlinePriorContextBody } from "./FileReferenceParser";
-import { parseMergedPriorContextBody } from "./PriorContextMerge";
-import { inlinePriorContextRefToPriorContext } from "./PriorContextMerge";
+import {
+  inlinePriorContextRefToPriorContext,
+  parseMergedPriorContextBody,
+} from "./PriorContextMerge";
 
 /**
  * Builds the exact XML preview a user will see in the editor when they
