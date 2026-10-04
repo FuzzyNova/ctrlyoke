@@ -1,6 +1,6 @@
 # CLI Flag Override Scope — flags set the workflow level; `--force` extends them to steps
 
-> **Status:** Phases 1–2 complete; phases 3–4 queued. Audited 2026-10-04 against `src/cli.ts`,
+> **Status:** Phases 1–3 complete; phase 4 queued. Audited 2026-10-04 against `src/cli.ts`,
 > `src/cli/CliRunCommandDefinitions.ts`, `src/cli/CliPropertyOverrides.ts`,
 > `src/cli/CliExecutionMode.ts`, `src/types/ExecutionPropertyResolver.ts` and
 > `PromptFileLoader.populateSettingsDefaults`. The `--harness` finding was confirmed with a
@@ -238,6 +238,10 @@ from the help text.
    - Covers parsing and validation, step application including parallel members, `finalStep`
      and script steps, and the D5 refusal.
    - Tests: each forceable flag, `all`, error cases, and D4 clearing under `--force harness`.
+   - **Landed:** `--force` validates against the passed run flags, applies to prompt, script,
+     condition, parallel-member and final-step properties in the shared real/dry-run override
+     path, clears step models when a forced harness changes, and refuses forced models across
+     harnesses. Unit and CLI dry-run integration coverage passes.
 4. **Other commands and help text (D10, D11).**
 
 ## Not in scope

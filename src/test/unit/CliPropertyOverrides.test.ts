@@ -3,6 +3,8 @@ import { suite, test } from "mocha";
 import {
   applyCliPropertyOverrides,
   buildCliPropertyOverrides,
+  FORCE_ALL_KEYWORD,
+  ForceableFlag,
 } from "../../cli/CliPropertyOverrides";
 import { HARNESS_IDS, PERMISSION_MODES } from "../../types/DashboardConstants";
 import {
@@ -10,9 +12,138 @@ import {
   resolveSessionId,
 } from "../../types/ExecutionPropertyResolver";
 import { resolveCliExecutionMode } from "../../cli/CliExecutionMode";
-import type { PromptFile, PromptStep } from "../../types/CtrlYokeTypes";
+import type { PromptFile, PromptStep, ScriptStep } from "../../types/CtrlYokeTypes";
 
 suite("CLI property overrides", () => {
+  test("--force all applies each passed forceable flag to prompts and scripts", () => {
+    const workflow: PromptFile = {
+      steps: [
+        {
+          prompt: "one",
+          model: "old",
+          sessionId: "old-session",
+          toolPermissions: { allowedTools: ["old-allow"], deniedTools: ["old-deny"] },
+          preCondition: { script: "true" },
+          endCondition: { script: "true" },
+        },
+        { type: "script", script: "true", timeoutSec: 5 },
+      ],
+      finalStep: { prompt: "final" },
+    };
+    const overrides = buildCliPropertyOverrides({
+      harness: HARNESS_IDS.COPILOT_CLI,
+      model: "gpt-test",
+      headless: true,
+      permissionMode: PERMISSION_MODES.NONE,
+      allowTool: ["new-allow"],
+      denyTool: ["new-deny"],
+      resumeSession: true,
+      sessionId: "forced-session",
+      scriptTimeout: 17,
+      force: [FORCE_ALL_KEYWORD],
+    });
+
+    assert.deepStrictEqual(
+      overrides.forced,
+      new Set(
+        Object.values(ForceableFlag).filter(
+          (flag) => flag !== ForceableFlag.INTERACTIVE
+        )
+      )
+    );
+    applyCliPropertyOverrides(workflow, overrides);
+    const first = workflow.steps![0] as PromptStep;
+    assert.strictEqual(first.harness, HARNESS_IDS.COPILOT_CLI);
+    assert.strictEqual(first.model, "gpt-test");
+    assert.strictEqual(first.executionMode, "headless");
+    assert.strictEqual(first.resumeSession, true);
+    assert.strictEqual(first.sessionId, "forced-session");
+    assert.deepStrictEqual(first.toolPermissions, {
+      mode: PERMISSION_MODES.NONE,
+      allowedTools: ["new-allow"],
+      deniedTools: ["new-deny"],
+    });
+    assert.strictEqual(first.preCondition?.timeoutSec, 17);
+    assert.strictEqual(first.endCondition?.timeoutSec, 17);
+    assert.strictEqual(workflow.steps![1].executionMode, "headless");
+    assert.strictEqual((workflow.steps![1] as ScriptStep).timeoutSec, 17);
+    assert.strictEqual(workflow.finalStep?.executionMode, "headless");
+    assert.strictEqual((workflow.finalStep as PromptStep).sessionId, "forced-session");
+  });
+
+  test("--force resume-session false removes step session IDs", () => {
+    const workflow: PromptFile = {
+      steps: [{ prompt: "one", sessionId: "drop-me" }],
+    };
+    const overrides = buildCliPropertyOverrides({
+      allowTool: [],
+      denyTool: [],
+      resumeSession: false,
+      force: ["resume-session"],
+    });
+    applyCliPropertyOverrides(workflow, overrides);
+    assert.strictEqual((workflow.steps![0] as PromptStep).sessionId, undefined);
+    assert.strictEqual((workflow.steps![0] as PromptStep).resumeSession, false);
+  });
+
+  test("rejects unknown, non-forceable, and absent flag names", () => {
+    for (const [force, expected] of [
+      [["bogus"], "cannot include"],
+      [["var"], "cannot include"],
+      [["model"], "requires --model"],
+    ] as const) {
+      assert.throws(
+        () => buildCliPropertyOverrides({ allowTool: [], denyTool: [], force: [...force] }),
+        new RegExp(expected, "u")
+      );
+    }
+  });
+
+  test("--force harness clears models on steps whose harness changes", () => {
+    const workflow: PromptFile = {
+      harness: HARNESS_IDS.CLAUDE_CLI,
+      steps: [
+        { prompt: "inherits", model: "sonnet" },
+        { prompt: "explicit", harness: HARNESS_IDS.OPENCODE_CLI, model: "old-model" },
+      ],
+      finalStep: { prompt: "final", harness: HARNESS_IDS.CLAUDE_CLI, model: "old-final" },
+    };
+    const notices = applyCliPropertyOverrides(
+      workflow,
+      buildCliPropertyOverrides({
+        harness: HARNESS_IDS.COPILOT_CLI,
+        allowTool: [],
+        denyTool: [],
+        force: ["harness"],
+      })
+    );
+    assert.deepStrictEqual(
+      workflow.steps?.map((step) => (step as PromptStep).model),
+      [undefined, undefined]
+    );
+    assert.strictEqual((workflow.finalStep as PromptStep).model, undefined);
+    assert.strictEqual(notices.length, 3);
+    assert.ok(notices.every((notice) => notice.includes("model")));
+  });
+
+  test("--force model refuses steps resolving to different harnesses", () => {
+    const workflow: PromptFile = {
+      steps: [
+        { prompt: "one", harness: HARNESS_IDS.CLAUDE_CLI },
+        { prompt: "two", harness: HARNESS_IDS.COPILOT_CLI },
+      ],
+    };
+    const overrides = buildCliPropertyOverrides({
+      model: "shared-model",
+      allowTool: [],
+      denyTool: [],
+      force: ["model"],
+    });
+    assert.throws(
+      () => applyCliPropertyOverrides(workflow, overrides),
+      /step 1.*step 2.*--force harness/u
+    );
+  });
   test("builds workflow harness and model overrides", () => {
     const overrides = buildCliPropertyOverrides({
       harness: HARNESS_IDS.CODEX_CLI,

@@ -11,6 +11,10 @@ import {
   type PermissionMode,
 } from "../types/DashboardConstants";
 import { getVariableKeyErrors } from "../utils/KeyValueKeyKinds";
+import {
+  FORCE_ALL_KEYWORD,
+  ForceableFlag,
+} from "./CliPropertyOverrides";
 
 export interface CliExecutionOptions {
   harness?: string;
@@ -18,6 +22,7 @@ export interface CliExecutionOptions {
   cwd?: string;
   timeout?: number;
   scriptTimeout?: number;
+  force?: string[];
   headless?: boolean;
   interactive?: boolean;
   allowTool: string[];
@@ -83,6 +88,13 @@ export function registerRunCommand(
         "AI harness: copilot-cli, claude-cli, codex-cli, antigravity-cli, qwen-cli, opencode-cli (default: the workflow's harness, then the defaults.harness setting)"
       )
       .option("-m, --model <model>", "Model to use")
+      .option(
+        "--force <flags>",
+        "Apply passed flags to every step: " +
+          [...Object.values(ForceableFlag), FORCE_ALL_KEYWORD].join(", "),
+        collectRepeatable,
+        [] as string[]
+      )
       .option(
         "-p, --prompt <text>",
         "Inline prompt string (alternative to file)"

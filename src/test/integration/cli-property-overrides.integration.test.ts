@@ -143,6 +143,45 @@ suite("CLI workflow property overrides", () => {
     assert.match(result.stderr, /--session-id cannot be used with --no-resume-session/u);
   });
 
+  test("--force harness overrides a step-level harness in the real CLI preview", async () => {
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-force-harness-")
+    );
+    temporaryRoots.push(root);
+    const workflowPath = path.join(root, "workflow.ctrlyoke.json");
+    await fs.writeFile(
+      workflowPath,
+      JSON.stringify({
+        steps: [{ prompt: "run", harness: "opencode-cli" }],
+      }),
+      "utf8"
+    );
+    const result = await runCli(
+      [
+        "run",
+        workflowPath,
+        "--harness",
+        "copilot-cli",
+        "--force",
+        "harness",
+        "--dry-run",
+        "--json",
+        "--cwd",
+        root,
+      ],
+      root,
+      { CTRLYOKE_HOME: path.join(root, "state") }
+    );
+    assert.strictEqual(result.code, 0, result.stderr);
+    const preview = JSON.parse(result.stdout) as {
+      steps: Array<{ resolvedProperties: { harnessId: string } }>;
+    };
+    assert.strictEqual(
+      preview.steps[0].resolvedProperties.harnessId,
+      "copilot-cli"
+    );
+  });
+
   test("a no-TTY interactive request is clamped and reported", async () => {
     const root = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-no-tty-interactive-")
