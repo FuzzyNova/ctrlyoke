@@ -171,15 +171,17 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       let hookSessionId: string | undefined;
       let harnessError: string | undefined;
 
-      const spawnPromise = this.deps.processManager.spawnInteractive(
-        command.command,
-        command.args,
-        workingDir,
-        { ...interactiveEnv, ...env, ...secretEnv },
-        command.requiresShellVerbatimArgs
-      ).finally(() => {
-        processExited = true;
-      });
+      const spawnPromise = this.deps.processManager
+        .spawnInteractive(
+          command.command,
+          command.args,
+          workingDir,
+          { ...interactiveEnv, ...env, ...secretEnv },
+          command.requiresShellVerbatimArgs
+        )
+        .finally(() => {
+          processExited = true;
+        });
 
       const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
       let exit: InteractiveExitResult;
@@ -196,8 +198,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
 
         let monitorSessionId = resolvedSessionId;
         const runId = env?.CTRLYOKE_RUN_ID;
-        const notificationMonitor =
-          this.deps.provider.notificationMonitor;
+        const notificationMonitor = this.deps.provider.notificationMonitor;
         if (
           !monitorSessionId &&
           runId &&
@@ -529,6 +530,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
               parser: source.parser,
               model: source.model ?? "",
               onStreamingEvents: this.deps.hostCallbacks.onStreamingEvents,
+              dispatchedPromptText: promptArgument,
             })
           : undefined;
       let pendingStdout = "";
