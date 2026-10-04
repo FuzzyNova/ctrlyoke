@@ -86,7 +86,9 @@ snapshot, so there is still exactly one implementation. This works because the l
 `CliEventStream` (in `src/cli/`) owns one `CliEventNormalizer` and the per-slot print state.
 Live runs call `append(batch)` from the `onTargetStreamingEvents` subscription; history
 replay calls `append(allEvents)` once and then `finish()`. Same rules, same output, one code
-path — the history path no longer needs its own call to `getVisibleStructuredEvents`.
+path. (Today `renderHistoryAttempt` passes the raw, un-normalized `events.slice(0, maxEvents)`
+straight to `CliTerminalFormatter.renderEvents`; nothing on the CLI side calls
+`getVisibleStructuredEvents` or the normalizer.)
 
 **D3 — Each slot prints each part at most once, as soon as its data exists.** A slot's parts
 are its header line, running marker, body (Bash output, diff, write preview, tool result,
