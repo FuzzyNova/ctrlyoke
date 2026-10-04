@@ -276,15 +276,22 @@ suite("mixed-mode workflow execution", () => {
     );
     const executor = new WorkflowExecutor(queue, handler, evaluator, platform);
 
-    await executor.execute(
+    const context = createExecutionContext(
       integration,
-      createExecutionContext(integration, (stepIndex, stepEvents) => {
+      (stepIndex, stepEvents) => {
         capturedTimelineEvents.push({
           stepIndex,
           types: stepEvents.map((event) => event.type),
         });
-      })
+      }
     );
+    const streamedModes = new Map<number, ExecutionMode | undefined>();
+    context.onTargetStreamingEvents = ({ target, executionMode }) => {
+      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+        streamedModes.set(target.stepIndex, executionMode);
+      }
+    };
+    await executor.execute(integration, context);
 
     assert.deepStrictEqual(
       dispatches.map(({ mode }) => mode),
@@ -325,6 +332,16 @@ suite("mixed-mode workflow execution", () => {
         },
       ],
       "mixed headless/interactive attempts must render the same mapped event shape"
+    );
+    // The standalone CLI leaves out an interactive attempt's output, which its
+    // TUI already showed, and renders every headless attempt's.
+    assert.deepStrictEqual(
+      [...streamedModes.entries()],
+      [
+        [0, EXECUTION_MODES.HEADLESS],
+        [1, EXECUTION_MODES.INTERACTIVE],
+        [2, EXECUTION_MODES.HEADLESS],
+      ]
     );
   });
 });

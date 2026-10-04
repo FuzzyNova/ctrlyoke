@@ -425,6 +425,23 @@ export class CliTerminalFormatter {
     );
   }
 
+  /**
+   * Picks the stream back up after a harness TUI gives the terminal back:
+   * closes any text block the TUI interrupted, restores the cursor and
+   * attributes it may have left changed, and announces output held while it
+   * ran (see `CliTerminalOutputGate`).
+   */
+  static renderTerminalReturned(deferredCount: number): void {
+    CliTerminalFormatter.flushStreamingBuffer();
+    if (process.stdout.isTTY) {
+      process.stdout.write("\x1b[?25h\x1b[0m");
+    }
+    if (deferredCount > 0) {
+      console.log();
+      console.log(chalk.dim("Output held while the interactive session ran:"));
+    }
+  }
+
   /** Renders the caption that starts one finalStep pass in the terminal stream. */
   static renderFinalStepLabel(loopIndex: number): void {
     console.log();

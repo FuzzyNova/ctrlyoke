@@ -328,6 +328,43 @@ suite("CliLogMonitor", () => {
     });
   });
 
+  // The OpenCode plugin reports a failed prompt submission with the harness's
+  // own message; the generic notification error says nothing about the cause.
+  test("prefers the message an error notification carries", async () => {
+    await withZeroDrainDeadline(async () => {
+      const monitor = new CliLogMonitor({
+        logParser: createParser(),
+        notificationMonitor: createNotificationMonitor({
+          monitorForCompletion: async () => ({
+            completed: false,
+            kind: "error",
+            error: "Harness reported an error",
+            data: { rawHookData: { message: "could not submit the prompt" } },
+          }),
+        }),
+        runtimeState: {
+          getWorkspaceRoot: () => os.tmpdir(),
+          isCancelling: () => false,
+        },
+        hostCallbacks: {
+          onStreamingEvents: () => undefined,
+          onResponseComplete: () => undefined,
+          logResponse: () => undefined,
+        },
+      });
+
+      const result = await monitor.monitor(
+        "session.jsonl",
+        null,
+        new Date(0),
+        "test-model"
+      );
+
+      assert.strictEqual(result.failureKind, FAILURE_KINDS.HARNESS_ERROR);
+      assert.strictEqual(result.failureMessage, "could not submit the prompt");
+    });
+  });
+
   test("holds completion while background work is pending, then finalizes once it clears", async () => {
     await withZeroDrainDeadline(async () => {
       let pendingCheckCount = 0;

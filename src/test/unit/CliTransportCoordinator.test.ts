@@ -13,15 +13,10 @@ import {
   HEADLESS_SOURCE_MODES,
   FAILURE_KINDS,
   MESSAGE_TYPES,
-  NOTIFICATION_OUTCOME_KINDS,
   SESSION_KINDS,
   TERMINAL_END_REASONS,
   type TerminalEndReason,
 } from "../../types/DashboardConstants";
-import type {
-  NotificationConfig,
-  NotificationResult,
-} from "../../core/harness/shared/interfaces/INotificationMonitor";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import {
   REDACTION_MARKER,
@@ -1203,227 +1198,20 @@ line two`,
     ]);
   });
 
-  test("should run standalone interactive launch and stop-hook monitor", async () => {
+  test("starts a standalone interactive process without waiting for it to exit", async () => {
     let disposedProcess = false;
-    let responseCompleted: string | undefined;
+    let preparedCommand: string | undefined;
     const secretName = "CTRLYOKE_TEST_COORDINATOR_SECRET";
     const previousSecret = process.env[secretName];
     delete process.env[secretName];
     let concurrentSpawnSecret: string | undefined;
-
-    const coordinator = new CliTransportCoordinator({
-      provider: {
-        config: {
-          name: "test-cli",
-          displayName: "Test CLI",
-          terminalName: "Test",
-          installHint: "",
-          shouldStreamHeadlessOutput: false,
-          usesInteractiveNotificationMonitor: true,
-        },
-        notificationMonitor: {
-          supportsSessionIdInFilename: true,
-          supportsSessionStart: false,
-          monitorForCompletion: async () => ({
-            completed: true,
-            data: { sessionId: "hook-session" },
-          }),
-          buildHookConfig: () => ({ type: "none" as const }),
-          getNotificationDirectory: () => process.cwd(),
-          extractSessionId: () => "hook-session",
-        },
-        toolPermissionMapper: {},
-        buildCliArgs: async () => [],
-        buildHeadlessArgs: (baseArgs: string[], prompt: string) => [
-          ...baseArgs,
-          prompt,
-        ],
-        buildInteractiveArgs: (baseArgs: string[], promptText: string) => [
-          "--interactive",
-          promptText,
-          ...baseArgs,
-        ],
-        checkAvailability: async () => true,
-      } as unknown as ICliProvider,
-      processManager: {
-        spawnInteractive: async (
-          _command: string,
-          args: string[],
-          _cwd: string,
-          env: Record<string, string>
-        ) => {
-          assert.deepStrictEqual(args, ["--interactive", "prompt"]);
-          assert.strictEqual(env[secretName], "secret-value");
-          assert.strictEqual(env.HOOK_TOKEN, "hook-value");
-          assert.strictEqual(
-            process.env[secretName],
-            undefined,
-            "a granted value must stay out of the host environment"
-          );
-          const sibling = new CliTransportCoordinator({
-            provider: createHeadlessProvider(),
-            processManager: {
-              spawn: async (
-                _command: string,
-                _args: string[],
-                options?: { env?: Record<string, string> }
-              ) => {
-                concurrentSpawnSecret = options?.env?.[secretName];
-                return { stdout: "", stderr: "", exitCode: 0 };
-              },
-              isActive: () => false,
-            } as any,
-            resolveCliCommand: resolveCommand,
-            runtimeState: {
-              getWorkspaceRoot: () => process.cwd(),
-              isCancelling: () => false,
-            },
-            hostCallbacks: createHeadlessHostCallbacks(),
-          });
-          await sibling.executeHeadless([], "sibling", [], async () => true);
-          await new Promise((resolve) => setTimeout(resolve, 10));
-          return { exitCode: null, terminatedByManager: true };
-        },
-        disposeProcess: () => {
-          disposedProcess = true;
-        },
-      } as any,
-      resolveCliCommand: resolveCommand,
-      resolveSecretEnvironment: async (names) => {
-        assert.deepStrictEqual(names, [secretName]);
-        return { [secretName]: "secret-value" };
-      },
-      runtimeState: {
-        getWorkspaceRoot: () => process.cwd(),
-
-        isCancelling: () => false,
-      },
-      hostCallbacks: {
-        onBeforeInteractiveStart: () => {},
-        onCommandPrepared: () => {},
-        onStreamingChunk: () => {},
-        onStreamingEvents: () => {},
-        onResponseComplete: (response) => {
-          responseCompleted = response;
-        },
-        onPtyExit: () => {},
-        cleanupTempFiles: async () => {},
-      },
+    let exitProcess: (exit: InteractiveExitResult) => void = () => {};
+    const processExit = new Promise<InteractiveExitResult>((resolve) => {
+      exitProcess = resolve;
     });
 
-    const result = await coordinator.executeStandaloneInteractiveProcess(
-      [],
-      "prompt",
-      [],
-      undefined,
-      undefined,
-      { HOOK_TOKEN: "hook-value" },
-      [secretName]
-    );
-
-    assert.strictEqual(result.success, true);
-    assert.strictEqual(
-      concurrentSpawnSecret,
-      undefined,
-      "a concurrent child must not inherit another action's secret"
-    );
-    assert.strictEqual(process.env[secretName], undefined);
-    if (previousSecret !== undefined) {
-      process.env[secretName] = previousSecret;
-    }
-    assert.strictEqual(disposedProcess, true);
-    assert.strictEqual(responseCompleted, "Interactive session ended");
-  });
-
-  test("resolves the standalone run's session ID before monitoring completion", async () => {
-    let waitedRunId: string | undefined;
-    let monitoredSessionId: string | undefined;
-    let monitoredRunId: string | undefined;
-    const coordinator = new CliTransportCoordinator({
-      provider: {
-        config: {
-          name: "test-cli",
-          displayName: "Test CLI",
-          terminalName: "Test",
-          installHint: "",
-          shouldStreamHeadlessOutput: false,
-          usesInteractiveNotificationMonitor: true,
-        },
-        notificationMonitor: {
-          supportsSessionIdInFilename: true,
-          supportsSessionStart: true,
-          waitForSessionStart: async (
-            _config: NotificationConfig,
-            _startTime: Date,
-            runId?: string
-          ) => {
-            waitedRunId = runId;
-            return {
-              completed: true,
-              data: { sessionId: "session-for-this-run" },
-            };
-          },
-          monitorForCompletion: async (
-            _config: NotificationConfig,
-            sessionId: string | undefined,
-            _start: Date,
-            _cancel?: () => boolean,
-            runId?: string
-          ) => {
-            monitoredSessionId = sessionId;
-            monitoredRunId = runId;
-            return { completed: false };
-          },
-          extractSessionId: (data: { sessionId?: string }) => data.sessionId,
-          buildHookConfig: () => ({ type: "none" as const }),
-          getNotificationDirectory: () => process.cwd(),
-        },
-        buildInteractiveArgs: (_baseArgs: string[], promptText: string) => [
-          promptText,
-        ],
-      } as unknown as ICliProvider,
-      processManager: {
-        spawnInteractive: async () => ({
-          exitCode: 0,
-          terminatedByManager: false,
-        }),
-      } as unknown as CliProcessManager,
-      resolveCliCommand: resolveCommand,
-      runtimeState: {
-        getWorkspaceRoot: () => process.cwd(),
-        isCancelling: () => false,
-      },
-      hostCallbacks: createHeadlessHostCallbacks(),
-    });
-
-    const result = await coordinator.executeStandaloneInteractiveProcess(
-      [],
-      "prompt",
-      [],
-      undefined,
-      undefined,
-      { CTRLYOKE_RUN_ID: "run-standalone" }
-    );
-
-    assert.strictEqual(result.success, true);
-    assert.strictEqual(waitedRunId, "run-standalone");
-    assert.strictEqual(monitoredSessionId, "session-for-this-run");
-    assert.strictEqual(monitoredRunId, "run-standalone");
-  });
-
-  suite("standalone interactive exit", () => {
-    /**
-     * Minimal coordinator whose interactive CLI ends with `exit`, optionally
-     * after the Stop-hook monitor reports completion.
-     */
-    function createExitingCoordinator(options: {
-      exit: InteractiveExitResult;
-      stopHookFires: boolean;
-      /** Overrides the monitor outcome derived from `stopHookFires`. */
-      monitorOutcome?: NotificationResult;
-      onDisposeProcess?: () => void;
-    }): CliTransportCoordinator {
-      return new CliTransportCoordinator({
+    try {
+      const coordinator = new CliTransportCoordinator({
         provider: {
           config: {
             name: "test-cli",
@@ -1434,119 +1222,140 @@ line two`,
             usesInteractiveNotificationMonitor: true,
           },
           notificationMonitor: {
-            monitorForCompletion: async () =>
-              options.monitorOutcome ?? {
-                completed: options.stopHookFires,
-              },
+            monitorForCompletion: async () => {
+              throw new Error(
+                "completion belongs to the caller's log monitor, not the transport"
+              );
+            },
             getNotificationDirectory: () => process.cwd(),
           },
           buildInteractiveArgs: (baseArgs: string[], promptText: string) => [
+            "--interactive",
             promptText,
             ...baseArgs,
           ],
         } as unknown as ICliProvider,
         processManager: {
-          spawnInteractive: async () => {
-            await new Promise((resolve) => setTimeout(resolve, 10));
-            return options.exit;
+          spawnInteractive: async (
+            _command: string,
+            args: string[],
+            _cwd: string,
+            env: Record<string, string>
+          ) => {
+            assert.deepStrictEqual(args, ["--interactive", "prompt"]);
+            assert.strictEqual(env[secretName], "secret-value");
+            assert.strictEqual(env.HOOK_TOKEN, "hook-value");
+            assert.strictEqual(
+              process.env[secretName],
+              undefined,
+              "a granted value must stay out of the host environment"
+            );
+            const sibling = new CliTransportCoordinator({
+              provider: createHeadlessProvider(),
+              processManager: {
+                spawn: async (
+                  _command: string,
+                  _args: string[],
+                  options?: { env?: Record<string, string> }
+                ) => {
+                  concurrentSpawnSecret = options?.env?.[secretName];
+                  return { stdout: "", stderr: "", exitCode: 0 };
+                },
+                isActive: () => false,
+              } as any,
+              resolveCliCommand: resolveCommand,
+              runtimeState: {
+                getWorkspaceRoot: () => process.cwd(),
+                isCancelling: () => false,
+              },
+              hostCallbacks: createHeadlessHostCallbacks(),
+            });
+            await sibling.executeHeadless([], "sibling", [], async () => true);
+            return processExit;
           },
-          disposeProcess: () => options.onDisposeProcess?.(),
+          disposeProcess: () => {
+            disposedProcess = true;
+            exitProcess({ exitCode: null, terminatedByManager: true });
+          },
         } as unknown as CliProcessManager,
         resolveCliCommand: resolveCommand,
+        resolveSecretEnvironment: async (names) => {
+          assert.deepStrictEqual(names, [secretName]);
+          return { [secretName]: "secret-value" };
+        },
         runtimeState: {
           getWorkspaceRoot: () => process.cwd(),
           isCancelling: () => false,
         },
         hostCallbacks: {
-          onBeforeInteractiveStart: () => {},
-          onCommandPrepared: () => {},
-          onStreamingChunk: () => {},
-          onStreamingEvents: () => {},
-          onResponseComplete: () => {},
-          onPtyExit: () => {},
-          cleanupTempFiles: async () => {},
+          ...createHeadlessHostCallbacks(),
+          onCommandPrepared: ({ cliCommand }) => {
+            preparedCommand = cliCommand;
+          },
         },
       });
+
+      const started = await coordinator.startStandaloneInteractiveProcess(
+        [],
+        "prompt",
+        { HOOK_TOKEN: "hook-value" },
+        undefined,
+        [secretName]
+      );
+
+      assert.strictEqual(started.command, "test-cli");
+      assert.strictEqual(preparedCommand, "test-cli --interactive prompt");
+      assert.strictEqual(disposedProcess, false);
+      assert.deepStrictEqual(await started.terminate(), {
+        exitCode: null,
+        terminatedByManager: true,
+      });
+      assert.strictEqual(disposedProcess, true);
+      assert.strictEqual(
+        concurrentSpawnSecret,
+        undefined,
+        "a concurrent child must not inherit another action's secret"
+      );
+      assert.strictEqual(process.env[secretName], undefined);
+    } finally {
+      if (previousSecret !== undefined) {
+        process.env[secretName] = previousSecret;
+      }
     }
+  });
 
-    test("fails when the CLI exits non-zero before signalling completion", async () => {
-      // Codex 0.156 exits 1 ("stdin is not a terminal") without ever running;
-      // that used to be reported as a completed step.
-      const coordinator = createExitingCoordinator({
-        exit: { exitCode: 1, terminatedByManager: false },
-        stopHookFires: false,
-      });
-      await assert.rejects(
-        coordinator.executeStandaloneInteractiveProcess([], "prompt", []),
-        /exited with code 1 before signalling completion/
-      );
+  test("terminating an exited standalone process resolves with its own exit", async () => {
+    const exit: InteractiveExitResult = {
+      exitCode: 1,
+      terminatedByManager: false,
+    };
+    const coordinator = new CliTransportCoordinator({
+      provider: {
+        config: { name: "test-cli" },
+        buildInteractiveArgs: (_baseArgs: string[], promptText: string) => [
+          promptText,
+        ],
+      } as unknown as ICliProvider,
+      processManager: {
+        spawnInteractive: async () => exit,
+        // Disposing an already-exited process is a no-op in CliProcessManager.
+        disposeProcess: () => {},
+      } as unknown as CliProcessManager,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
     });
 
-    test("fails when the CLI cannot be started", async () => {
-      const coordinator = createExitingCoordinator({
-        exit: {
-          exitCode: null,
-          error: "spawn ENOENT",
-          terminatedByManager: false,
-        },
-        stopHookFires: false,
-      });
-      await assert.rejects(
-        coordinator.executeStandaloneInteractiveProcess([], "prompt", []),
-        /could not be started: spawn ENOENT/
-      );
-    });
+    const started = await coordinator.startStandaloneInteractiveProcess(
+      [],
+      "prompt"
+    );
 
-    test("succeeds when the user quits cleanly without a Stop hook", async () => {
-      const coordinator = createExitingCoordinator({
-        exit: { exitCode: 0, terminatedByManager: false },
-        stopHookFires: false,
-      });
-      const result = await coordinator.executeStandaloneInteractiveProcess(
-        [],
-        "prompt",
-        []
-      );
-      assert.strictEqual(result.success, true);
-    });
-
-    // A harness error leaves the TUI open, so the step must end it rather than
-    // wait on a process that will not exit (the OpenCode plugin reports a
-    // failed resumed-prompt submission this way).
-    test("terminates the session and fails when the harness reports an error", async () => {
-      let disposed = false;
-      const coordinator = createExitingCoordinator({
-        exit: { exitCode: 1, terminatedByManager: true },
-        stopHookFires: false,
-        monitorOutcome: {
-          completed: false,
-          kind: NOTIFICATION_OUTCOME_KINDS.ERROR,
-          error: "Harness reported an error",
-          data: { rawHookData: { message: "could not submit the prompt" } },
-        },
-        onDisposeProcess: () => {
-          disposed = true;
-        },
-      });
-      await assert.rejects(
-        coordinator.executeStandaloneInteractiveProcess([], "prompt", []),
-        /test-cli reported an error: could not submit the prompt/
-      );
-      assert.strictEqual(disposed, true);
-    });
-
-    test("ignores the exit code of a session ctrlyoke terminated after its Stop hook", async () => {
-      const coordinator = createExitingCoordinator({
-        exit: { exitCode: 1, terminatedByManager: true },
-        stopHookFires: true,
-      });
-      const result = await coordinator.executeStandaloneInteractiveProcess(
-        [],
-        "prompt",
-        []
-      );
-      assert.strictEqual(result.success, true);
-    });
+    assert.strictEqual(await started.exit, exit);
+    assert.strictEqual(await started.terminate(), exit);
   });
 
   test("should refuse to spawn when cancellation lands while the log tail starts", async () => {

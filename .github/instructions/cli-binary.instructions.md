@@ -36,7 +36,9 @@ Standalone `ctrlyoke` CLI entrypoint plus terminal-only formatting. `src/cli.ts`
 
 ## Interactive vs headless
 
-- Interactive mode is a passthrough for the underlying AI CLI TUI with only minimal ctrlyoke framing.
+- The run-level mode (`--interactive`, or a TTY) does not gate output: an interactive run still has headless steps (a step's own `executionMode` wins), scripts, verdicts and statuses, so `run` installs its render subscriptions whenever `!quiet && !json`. Only an interactive attempt's own harness output is skipped, by the `executionMode` on the `onTargetStreaming*` payloads, because its TUI already shows it.
+- **Every write `run` makes to stdout during execution must go through its `CliTerminalOutputGate`.** While a harness TUI holds the terminal (`CliProcessManager.spawnInteractive` holds `inheritedTerminalOwnership` until the child exits), a write lands on the TUI's screen. A parallel group's headless members run beside its one interactive member, so this happens in normal use. The gate defers render _calls_ (not captured text) and replays them in order after the TUI exits, which keeps `CliTerminalFormatter`'s per-step prefix state consistent.
+- The standalone interactive step records its attempt exactly like the VS Code PTY path: `CliExecutionRunner.executeInTerminal` differs only in the spawn, then runs session discovery and `CliLogMonitor`. The stop hook ends the turn, not the TUI, so the runner terminates the TUI only after the monitor has drained the log.
 - Headless mode renders prompt boundaries/status via `CliTerminalFormatter`, but raw streaming chunks still go straight to `stdout`.
 - `--quiet` and `--json` must suppress decorative output. Diagnostics should go through `Log.initializeCli()` so logs land in `.ctrlyoke/logs/` instead of contaminating terminal/JSON output.
 

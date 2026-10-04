@@ -57,6 +57,7 @@ import {
   type ConditionAction,
   type StatusMessageSeverity,
   type WorkflowExecutionOutcome,
+  type ExecutionMode,
 } from "../types/DashboardConstants";
 import type { CompatibilityDiagnostic } from "../types/CompatibilityTypes";
 import { PromptQueue } from "./PromptQueue";
@@ -165,6 +166,25 @@ import {
   formatFinalPassPhrase,
 } from "../utils/FinalStepLabels";
 
+/** Live harness output of one attempt, with the target that produced it. */
+interface TargetStreamingOutput {
+  target: WorkflowAttemptTarget;
+  stepName: string;
+  /**
+   * How the attempt runs. An interactive attempt's output is already on screen
+   * in its harness TUI, so a terminal renderer leaves it out.
+   */
+  executionMode?: ExecutionMode;
+}
+
+export interface TargetStreamingEventsData extends TargetStreamingOutput {
+  events: CliEvent[];
+}
+
+export interface TargetStreamingChunkData extends TargetStreamingOutput {
+  chunk: string;
+}
+
 export interface WorkflowExecutionContext {
   /** Immutable state/execution roots for this workflow run. */
   executionWorkspace: ExecutionWorkspace;
@@ -237,16 +257,8 @@ export interface WorkflowExecutionContext {
     message: string,
     severity: string
   ) => void;
-  onTargetStreamingEvents?: (data: {
-    target: WorkflowAttemptTarget;
-    stepName: string;
-    events: CliEvent[];
-  }) => void;
-  onTargetStreamingChunk?: (data: {
-    target: WorkflowAttemptTarget;
-    stepName: string;
-    chunk: string;
-  }) => void;
+  onTargetStreamingEvents?: (data: TargetStreamingEventsData) => void;
+  onTargetStreamingChunk?: (data: TargetStreamingChunkData) => void;
   /** Fires script command/output updates with the execution target that produced them. */
   onScriptOutput?: (target: OutputExecutionTarget, output: CliOutput) => void;
   /** Fires completed script output, including the structured verdict. */
@@ -4216,6 +4228,16 @@ export class WorkflowExecutor {
     let structuredStreamingDisposable: { dispose(): void } | undefined;
     let promptReadyDisposable: { dispose(): void } | undefined;
 
+    const streamingOutput: TargetStreamingOutput = {
+      target,
+      stepName:
+        promptStep.name?.trim() ||
+        (target.kind === FINAL_STEP_PHASES.QUEUE
+          ? `Step ${target.stepIndex + 1}`
+          : formatFinalPassLabel(target.loopIndex + 1)),
+      executionMode: sendOptions.resolvedProperties?.executionMode,
+    };
+
     promptReadyDisposable = integration.onPromptReady((data) => {
       const cliCommand = context.shouldShowCliCommand
         ? data.cliCommand
@@ -4237,12 +4259,7 @@ export class WorkflowExecutor {
 
     streamingDisposable = integration.onStreamingChunk((chunk) => {
       context.onTargetStreamingChunk?.({
-        target,
-        stepName:
-          promptStep.name?.trim() ||
-          (target.kind === FINAL_STEP_PHASES.QUEUE
-            ? `Step ${target.stepIndex + 1}`
-            : formatFinalPassLabel(target.loopIndex + 1)),
+        ...streamingOutput,
         chunk,
       });
       if (
@@ -4285,12 +4302,7 @@ export class WorkflowExecutor {
 
     structuredStreamingDisposable = integration.onStreamingEvents((events) => {
       context.onTargetStreamingEvents?.({
-        target,
-        stepName:
-          promptStep.name?.trim() ||
-          (target.kind === FINAL_STEP_PHASES.QUEUE
-            ? `Step ${target.stepIndex + 1}`
-            : formatFinalPassLabel(target.loopIndex + 1)),
+        ...streamingOutput,
         events,
       });
       if (

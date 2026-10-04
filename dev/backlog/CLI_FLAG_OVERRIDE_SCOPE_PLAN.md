@@ -137,10 +137,9 @@ So in a TTY, `--headless` makes the workflow headless while a step that says
 `executionMode: interactive` still opens its TUI. `--headless --force headless` restores
 today's "everything headless" behaviour.
 
-This depends on
-[`cli-interactive-run-hides-headless-step-output.md`](../bugs/backlog/cli-interactive-run-hides-headless-step-output.md):
-once a headless run can contain interactive steps, output gating must be decided per attempt,
-not by the run-level mode.
+This needed output gating to be decided per attempt, not by the run-level mode, once a
+headless run can contain interactive steps. That is now the case; see
+[`cli-interactive-run-hides-headless-step-output.md`](../bugs/implemented/cli-interactive-run-hides-headless-step-output.md).
 
 **D7 — `toolPermissions` flags merge into the workflow's object field by field.**
 

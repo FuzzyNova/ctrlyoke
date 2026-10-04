@@ -437,7 +437,7 @@ These are small, independent changes, each reusing a shared helper:
   later; this plan leaves its call sites alone.
 - Interactive (`--interactive`) mode, which passes the harness TUI through untouched.
 - `--json` / `--quiet` output, whose contract is unchanged. Every change stays inside the
-  existing headless `!options.quiet && !options.json` block, and `CliJsonResultBuilder` output
+  existing `!options.quiet && !options.json` block, and `CliJsonResultBuilder` output
   stays byte-identical.
 
 ## Implementation phases

@@ -21,7 +21,12 @@ import {
   type EvaluationResult,
 } from "./EndConditionEvaluator";
 import { EndConditionHandler } from "./EndConditionHandler";
-import { WorkflowExecutor, WorkflowExecutionContext } from "./WorkflowExecutor";
+import {
+  WorkflowExecutor,
+  WorkflowExecutionContext,
+  type TargetStreamingChunkData,
+  type TargetStreamingEventsData,
+} from "./WorkflowExecutor";
 import {
   PromptFile,
   PromptStep,
@@ -445,20 +450,14 @@ export class WorkflowInstance
   /** Fires plain-text chunks (Copilot) from the active execution integration. */
   public readonly onStreamingChunk = this._streamingChunkEmitter.event;
 
-  private readonly _targetedStreamingEventsEmitter = new TypedEmitter<{
-    target: WorkflowAttemptTarget;
-    stepName: string;
-    events: CliEvent[];
-  }>();
+  private readonly _targetedStreamingEventsEmitter =
+    new TypedEmitter<TargetStreamingEventsData>();
   /** Fires structured output with the execution target that produced it. */
   public readonly onTargetStreamingEvents =
     this._targetedStreamingEventsEmitter.event;
 
-  private readonly _targetedStreamingChunkEmitter = new TypedEmitter<{
-    target: WorkflowAttemptTarget;
-    stepName: string;
-    chunk: string;
-  }>();
+  private readonly _targetedStreamingChunkEmitter =
+    new TypedEmitter<TargetStreamingChunkData>();
   /** Fires plain-text output with the execution target that produced it. */
   public readonly onTargetStreamingChunk =
     this._targetedStreamingChunkEmitter.event;

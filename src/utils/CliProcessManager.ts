@@ -3,6 +3,7 @@ import kill from "tree-kill";
 import { canonicalizeDriveLetter } from "./PathCasing";
 import { withWorkingDirectoryEnv } from "./SpawnEnvironment";
 import { attachStreamTextDecoder } from "./StreamTextDecoder";
+import { inheritedTerminalOwnership } from "./InheritedTerminalOwnership";
 
 /**
  * Options for spawning a CLI process
@@ -294,6 +295,8 @@ export class CliProcessManager {
    *
    * Used exclusively in the standalone CLI binary (CliAdapter context).
    * The VS Code extension always uses createTerminal() instead.
+   * Until the child exits it holds `inheritedTerminalOwnership`, which is how
+   * the CLI's own output knows to wait instead of drawing over the TUI.
    *
    * @param command Executable path or command name
    * @param args Raw argv entries passed to the executable
@@ -322,6 +325,7 @@ export class CliProcessManager {
       });
 
       this.currentProcess = child;
+      const releaseTerminal = inheritedTerminalOwnership.acquire();
 
       let settled = false;
       const settle = (result: InteractiveExitResult): void => {
@@ -329,6 +333,7 @@ export class CliProcessManager {
           this.currentProcess = undefined;
         }
         this.clearKillTimeout(child);
+        releaseTerminal();
         if (!settled) {
           settled = true;
           resolve(result);

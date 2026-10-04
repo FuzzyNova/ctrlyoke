@@ -62,6 +62,14 @@ function mergeObservedSyntheticEvents(
   return { ...response, events };
 }
 
+/** The message an `{sessionId}-error.json` notification carries, when it carries one. */
+function describeHarnessError(
+  data: { rawHookData?: { message?: unknown } } | undefined
+): string | undefined {
+  const message = data?.rawHookData?.message;
+  return typeof message === "string" && message ? message : undefined;
+}
+
 /**
  * Result of log file monitoring.
  * Returned by `CliLogMonitor.monitor()` after completion or failure.
@@ -758,6 +766,7 @@ export class CliLogMonitor {
                 await resolveFailure({
                   failureKind: FAILURE_KINDS.HARNESS_ERROR,
                   failureMessage:
+                    describeHarnessError(result.data) ||
                     result.error ||
                     "Harness reported an error before completion",
                   sessionIdOverride: sessionIdFromNotification,

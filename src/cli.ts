@@ -53,6 +53,8 @@ import {
 import type { PartialCtrlYokeSettings } from "./types/CtrlYokeSettings";
 import type { QueueState } from "./types/CtrlYokeTypes";
 import type { OutputExecutionTarget } from "./types/OutputHistoryTypes";
+import { CliTerminalOutputGate } from "./cli/CliTerminalOutputGate";
+import { inheritedTerminalOwnership } from "./utils/InheritedTerminalOwnership";
 import {
   CliTerminalFormatter,
   type CliOutputTarget,
@@ -1012,16 +1014,21 @@ async function runCommand(
     cliRunnerHostIdentity
   );
 
-  // In headless mode, stream output to the terminal as events arrive.
-  // Subscriptions go on the instance (not detectorIntegration) because WorkflowInstance
-  // creates a fresh execution integration via the factory and forwards events from it.
-  // Interactive mode passes the AI CLI's stdout straight through — no subscription needed.
-  let releaseHeadlessOutputState = (): void => {};
-  if (
-    executionMode === EXECUTION_MODES.HEADLESS &&
-    !options.quiet &&
-    !options.json
-  ) {
+  // Stream output to the terminal as events arrive. Subscriptions go on the
+  // instance (not detectorIntegration) because WorkflowInstance creates a fresh
+  // execution integration via the factory and forwards events from it.
+  // The run-level mode does not decide this: an interactive run still has
+  // headless steps (a step's own `executionMode` wins), scripts, statuses and
+  // verdicts. Only an interactive attempt's harness output is left out, since
+  // its TUI already shows it, and anything rendered while a TUI owns the
+  // terminal waits for that TUI to exit.
+  let releaseLiveOutputState = (): void => {};
+  if (!options.quiet && !options.json) {
+    const outputGate = new CliTerminalOutputGate(
+      inheritedTerminalOwnership,
+      (deferredCount) =>
+        CliTerminalFormatter.renderTerminalReturned(deferredCount)
+    );
     // The script reporter emits a rich verdict and also sends the historical
     // one-line status message. Collapse the latter when its matching verdict
     // has already reached this terminal, while preserving unrelated statuses.
@@ -1095,166 +1102,185 @@ async function runCommand(
       );
     };
 
-    releaseHeadlessOutputState = (): void => {
+    releaseLiveOutputState = (): void => {
       if (released) {
         return;
       }
       released = true;
-      for (const attempt of attempts.values()) {
-        if (attempt.retried) {
-          CliTerminalFormatter.renderAttemptGroupSummary(
-            attempt.stepName,
-            attempt.attemptCount,
-            attempt.totalElapsed
-          );
+      outputGate.write(() => {
+        for (const attempt of attempts.values()) {
+          if (attempt.retried) {
+            CliTerminalFormatter.renderAttemptGroupSummary(
+              attempt.stepName,
+              attempt.attemptCount,
+              attempt.totalElapsed
+            );
+          }
         }
-      }
-      attempts.clear();
-      parallelGroups.clear();
-      renderedFinalStepLabels.clear();
-      pendingScriptStatusMessages.clear();
+        attempts.clear();
+        parallelGroups.clear();
+        renderedFinalStepLabels.clear();
+        pendingScriptStatusMessages.clear();
+      });
     };
 
-    instance.onPromptStart((data) => {
-      if (data.cliCommand !== undefined) {
-        CliTerminalFormatter.renderPromptHeader(data);
-        return;
-      }
+    instance.onPromptStart((data) =>
+      outputGate.write(() => {
+        if (data.cliCommand !== undefined) {
+          CliTerminalFormatter.renderPromptHeader(data);
+          return;
+        }
 
-      const attempt = attempts.get(data.stepIndex) ?? {
-        stepName: data.stepName,
-        attemptCount: 0,
-        totalElapsed: 0,
-        retried: false,
-        activeAttemptCompleted: false,
-      };
-      attempt.stepName = data.stepName;
-      attempt.attemptCount = Math.max(
-        attempt.attemptCount,
-        data.attemptIndex + 1
-      );
-      attempt.retried ||= data.attemptIndex > 0;
-      attempt.activeAttemptCompleted = false;
-      attempts.set(data.stepIndex, attempt);
+        const attempt = attempts.get(data.stepIndex) ?? {
+          stepName: data.stepName,
+          attemptCount: 0,
+          totalElapsed: 0,
+          retried: false,
+          activeAttemptCompleted: false,
+        };
+        attempt.stepName = data.stepName;
+        attempt.attemptCount = Math.max(
+          attempt.attemptCount,
+          data.attemptIndex + 1
+        );
+        attempt.retried ||= data.attemptIndex > 0;
+        attempt.activeAttemptCompleted = false;
+        attempts.set(data.stepIndex, attempt);
 
-      const state = getParallelGroup(data.parallelGroupId);
-      if (!state) {
+        const state = getParallelGroup(data.parallelGroupId);
+        if (!state) {
+          renderPromptHeader(data);
+          return;
+        }
+        if (!state.started.has(data.stepIndex)) {
+          state.started.add(data.stepIndex);
+          CliTerminalFormatter.renderParallelGroupHeader(
+            state.group,
+            state.memberCount
+          );
+        }
+        // A retry re-opens a branch that was tentatively settled by its prior
+        // attempt. The tally therefore remains truthful while branches stream
+        // concurrently into one linear terminal.
+        state.completed.delete(data.stepIndex);
+        state.failed.delete(data.stepIndex);
+        renderParallelGroupProgress(state);
         renderPromptHeader(data);
+      })
+    );
+    instance.onTargetScriptOutput((data) =>
+      outputGate.write(() => {
+        renderFinalStepLabel(data.target);
+        const statusSummary =
+          CliTerminalFormatter.getScriptVerdictStatusSummary(data.output);
+        if (statusSummary) {
+          pendingScriptStatusMessages.set(
+            statusSummary,
+            (pendingScriptStatusMessages.get(statusSummary) ?? 0) + 1
+          );
+        }
+        CliTerminalFormatter.renderScriptOutput(data.output, {
+          stepIndex:
+            data.target.kind === FINAL_STEP_PHASES.QUEUE
+              ? data.target.stepIndex
+              : data.target.loopIndex,
+          stepName: getCliOutputStepName(instance, data.target),
+          key:
+            data.target.kind === FINAL_STEP_PHASES.QUEUE
+              ? `queue:${data.target.stepIndex}`
+              : `final:${data.target.loopIndex}`,
+        });
+      })
+    );
+    instance.onTargetStreamingEvents((data) => {
+      if (data.executionMode === EXECUTION_MODES.INTERACTIVE) {
         return;
       }
-      if (!state.started.has(data.stepIndex)) {
-        state.started.add(data.stepIndex);
-        CliTerminalFormatter.renderParallelGroupHeader(
-          state.group,
-          state.memberCount
-        );
-      }
-      // A retry re-opens a branch that was tentatively settled by its prior
-      // attempt. The tally therefore remains truthful while branches stream
-      // concurrently into one linear terminal.
-      state.completed.delete(data.stepIndex);
-      state.failed.delete(data.stepIndex);
-      renderParallelGroupProgress(state);
-      renderPromptHeader(data);
-    });
-    instance.onTargetScriptOutput((data) => {
-      renderFinalStepLabel(data.target);
-      const statusSummary = CliTerminalFormatter.getScriptVerdictStatusSummary(
-        data.output
-      );
-      if (statusSummary) {
-        pendingScriptStatusMessages.set(
-          statusSummary,
-          (pendingScriptStatusMessages.get(statusSummary) ?? 0) + 1
-        );
-      }
-      CliTerminalFormatter.renderScriptOutput(data.output, {
-        stepIndex:
-          data.target.kind === FINAL_STEP_PHASES.QUEUE
-            ? data.target.stepIndex
-            : data.target.loopIndex,
-        stepName: getCliOutputStepName(instance, data.target),
-        key:
-          data.target.kind === FINAL_STEP_PHASES.QUEUE
-            ? `queue:${data.target.stepIndex}`
-            : `final:${data.target.loopIndex}`,
+      outputGate.write(() => {
+        renderFinalStepLabel(data.target);
+        CliTerminalFormatter.renderEvents(data.events, {
+          stepIndex:
+            data.target.kind === FINAL_STEP_PHASES.QUEUE
+              ? data.target.stepIndex
+              : data.target.loopIndex,
+          stepName: data.stepName,
+          key:
+            data.target.kind === FINAL_STEP_PHASES.QUEUE
+              ? `queue:${data.target.stepIndex}`
+              : `final:${data.target.loopIndex}`,
+        } satisfies CliOutputTarget);
       });
-    });
-    instance.onTargetStreamingEvents((data) => {
-      renderFinalStepLabel(data.target);
-      CliTerminalFormatter.renderEvents(data.events, {
-        stepIndex:
-          data.target.kind === FINAL_STEP_PHASES.QUEUE
-            ? data.target.stepIndex
-            : data.target.loopIndex,
-        stepName: data.stepName,
-        key:
-          data.target.kind === FINAL_STEP_PHASES.QUEUE
-            ? `queue:${data.target.stepIndex}`
-            : `final:${data.target.loopIndex}`,
-      } satisfies CliOutputTarget);
     });
     instance.onTargetStreamingChunk((data) => {
-      renderFinalStepLabel(data.target);
-      CliTerminalFormatter.renderStreamingChunk(data.chunk, {
-        stepIndex:
-          data.target.kind === FINAL_STEP_PHASES.QUEUE
-            ? data.target.stepIndex
-            : data.target.loopIndex,
-        stepName: data.stepName,
-        key:
-          data.target.kind === FINAL_STEP_PHASES.QUEUE
-            ? `queue:${data.target.stepIndex}`
-            : `final:${data.target.loopIndex}`,
-      } satisfies CliOutputTarget);
-    });
-    instance.onWorkflowStatusMessage((data) => {
-      if (data.severity === STATUS_MESSAGE_SEVERITY.ERROR) {
-        const state = getParallelGroup(
-          instance.promptQueue
-            .getState()
-            .parallelGroups.find(
-              (group) =>
-                data.stepIndex >= group.startIndex &&
-                data.stepIndex <= group.endIndex
-            )?.id
-        );
-        if (state?.started.has(data.stepIndex)) {
-          state.completed.delete(data.stepIndex);
-          state.failed.add(data.stepIndex);
-          renderParallelGroupProgress(state);
-        }
-      }
-      const pendingCount = pendingScriptStatusMessages.get(data.message) ?? 0;
-      if (pendingCount > 0) {
-        if (pendingCount === 1) {
-          pendingScriptStatusMessages.delete(data.message);
-        } else {
-          pendingScriptStatusMessages.set(data.message, pendingCount - 1);
-        }
+      if (data.executionMode === EXECUTION_MODES.INTERACTIVE) {
         return;
       }
-      CliTerminalFormatter.renderStatusMessage(data.message, data.severity);
-    });
-    instance.onPromptComplete((data) => {
-      const attempt = attempts.get(data.stepIndex);
-      if (attempt && !attempt.activeAttemptCompleted) {
-        attempt.totalElapsed += data.elapsed ?? 0;
-        attempt.activeAttemptCompleted = true;
-      }
-      const state = getParallelGroup(data.parallelGroupId);
-      if (state?.started.has(data.stepIndex)) {
-        if (!state.failed.has(data.stepIndex)) {
-          state.completed.add(data.stepIndex);
-          renderParallelGroupProgress(state);
-        }
-      }
-      CliTerminalFormatter.flushStreamingBuffer({
-        stepIndex: data.stepIndex,
-        stepName: data.stepName,
+      outputGate.write(() => {
+        renderFinalStepLabel(data.target);
+        CliTerminalFormatter.renderStreamingChunk(data.chunk, {
+          stepIndex:
+            data.target.kind === FINAL_STEP_PHASES.QUEUE
+              ? data.target.stepIndex
+              : data.target.loopIndex,
+          stepName: data.stepName,
+          key:
+            data.target.kind === FINAL_STEP_PHASES.QUEUE
+              ? `queue:${data.target.stepIndex}`
+              : `final:${data.target.loopIndex}`,
+        } satisfies CliOutputTarget);
       });
-      CliTerminalFormatter.renderStats(data);
     });
+    instance.onWorkflowStatusMessage((data) =>
+      outputGate.write(() => {
+        if (data.severity === STATUS_MESSAGE_SEVERITY.ERROR) {
+          const state = getParallelGroup(
+            instance.promptQueue
+              .getState()
+              .parallelGroups.find(
+                (group) =>
+                  data.stepIndex >= group.startIndex &&
+                  data.stepIndex <= group.endIndex
+              )?.id
+          );
+          if (state?.started.has(data.stepIndex)) {
+            state.completed.delete(data.stepIndex);
+            state.failed.add(data.stepIndex);
+            renderParallelGroupProgress(state);
+          }
+        }
+        const pendingCount = pendingScriptStatusMessages.get(data.message) ?? 0;
+        if (pendingCount > 0) {
+          if (pendingCount === 1) {
+            pendingScriptStatusMessages.delete(data.message);
+          } else {
+            pendingScriptStatusMessages.set(data.message, pendingCount - 1);
+          }
+          return;
+        }
+        CliTerminalFormatter.renderStatusMessage(data.message, data.severity);
+      })
+    );
+    instance.onPromptComplete((data) =>
+      outputGate.write(() => {
+        const attempt = attempts.get(data.stepIndex);
+        if (attempt && !attempt.activeAttemptCompleted) {
+          attempt.totalElapsed += data.elapsed ?? 0;
+          attempt.activeAttemptCompleted = true;
+        }
+        const state = getParallelGroup(data.parallelGroupId);
+        if (state?.started.has(data.stepIndex)) {
+          if (!state.failed.has(data.stepIndex)) {
+            state.completed.add(data.stepIndex);
+            renderParallelGroupProgress(state);
+          }
+        }
+        CliTerminalFormatter.flushStreamingBuffer({
+          stepIndex: data.stepIndex,
+          stepName: data.stepName,
+        });
+        CliTerminalFormatter.renderStats(data);
+      })
+    );
   }
 
   // Runner-lock acquire/heartbeat/release is owned entirely by
@@ -1271,7 +1297,7 @@ async function runCommand(
     await instance.shutdown();
     // Flush any pending retry aggregate so an interrupted run still reports the
     // attempts it made. Idempotent with the normal and error exit paths.
-    releaseHeadlessOutputState();
+    releaseLiveOutputState();
     process.exit(5);
   };
   process.on("SIGINT", () => {
@@ -1363,7 +1389,7 @@ async function runCommand(
       );
     }
 
-    releaseHeadlessOutputState();
+    releaseLiveOutputState();
 
     const state = instance.promptQueue.getState();
     const schemaRefusal = runStateRefusals.first();
@@ -1416,7 +1442,7 @@ async function runCommand(
 
     process.exit(exitCode);
   } catch (err) {
-    releaseHeadlessOutputState();
+    releaseLiveOutputState();
     const message = err instanceof Error ? err.message : String(err);
     if (options.json) {
       const state = instance.getQueueState();

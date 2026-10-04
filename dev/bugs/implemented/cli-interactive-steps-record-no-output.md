@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-04 by Claude (claude-cli), while auditing CLI output parity with the user
 - **Area:** `src/core/harness/shared/CliExecutionRunner.ts`, `src/core/harness/shared/CliTransportCoordinator.ts`
-- **Severity:** high
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

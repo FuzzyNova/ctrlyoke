@@ -27,7 +27,11 @@ import type { ICliProvider } from "./interfaces/ICliProvider";
 import { HookEventMonitor } from "./HookEventMonitor";
 import type { CtrlYokeNotificationEvent } from "../../../ui/notifications/CompletionNotificationFactory";
 import { configService } from "../../../config/CtrlYokeConfigService";
-import type { CliExecutionTransportCoordinator } from "./CliTransportCoordinator";
+import type {
+  CliExecutionTransportCoordinator,
+  StandaloneInteractiveProcess,
+} from "./CliTransportCoordinator";
+import type { InteractiveExitResult } from "../../../utils/CliProcessManager";
 import type { CliResolvedCommand } from "./CliLauncherResolver";
 import { AsyncMutex } from "./AsyncMutex";
 import { CliTransportError } from "./CliTransportError";
@@ -477,36 +481,6 @@ export class CliExecutionRunner {
     }
   }
 
-  private async executeInteractiveCliProcess(
-    args: string[],
-    session: CliExecutionSession,
-    resolvedCommand?: CliResolvedCommand
-  ): Promise<{ success: boolean; sessionId?: string }> {
-    try {
-      if (session.workflowContext && session.workflowContext.promptIndex > 0) {
-        Log.info(`[CliExecutionRunner] \n${"".repeat(52)}`);
-        Log.info(
-          `[CliExecutionRunner] Prompt ${session.workflowContext.promptIndex + 1} / ${session.workflowContext.allPrompts.length}`
-        );
-        Log.info("[CliExecutionRunner] \n");
-      }
-
-      return await this.deps.transportCoordinator.executeStandaloneInteractiveProcess(
-        args,
-        session.promptArgument,
-        session.tempFilePaths,
-        session.resolvedSessionId,
-        resolvedCommand,
-        this.buildHarnessProcessEnv(session).env,
-        session.resolvedProperties?.secrets
-      );
-    } catch (error) {
-      Log.error("[CliExecutionRunner] CLI interactive execution error", error);
-      this.deps.runtimeState.setFailureReason(getErrorMessage(error));
-      return { success: false };
-    }
-  }
-
   /**
    * Environment every harness process gets, whichever transport launches it.
    * Harnesses whose completion hook reads its notification directory from the
@@ -601,20 +575,27 @@ export class CliExecutionRunner {
     );
   }
 
+  /**
+   * Run one interactive turn. The two hosts differ only in how the harness TUI
+   * is launched: VS Code spawns it in an embedded PTY, the standalone CLI hands
+   * it the user's own terminal. Everything after the spawn (session-log
+   * discovery, session-ID persistence, and `CliLogMonitor`, which owns
+   * completion, the streamed events, the response and usage) is shared, so a
+   * CLI-run interactive step records the same attempt the dashboard does.
+   */
   private async executeInTerminal(
     args: string[],
     session: CliExecutionSession,
     resolvedCommand?: CliResolvedCommand
   ): Promise<{ success: boolean; sessionId?: string }> {
-    if (!this.deps.runtimeState.isVsCodeContext()) {
-      return this.executeInteractiveCliProcess(args, session, resolvedCommand);
-    }
+    const standalone = !this.deps.runtimeState.isVsCodeContext();
 
     // Hoisted so the `finally` block below can always stop it — an exception
     // thrown between start() and the previous inline stop() calls (e.g. from
     // startInteractiveProcess or resolveSession) used to leak this interval
     // forever, since the catch block never reached hookMonitor.stop().
     let hookMonitor: HookEventMonitor | null = null;
+    let standaloneProcess: StandaloneInteractiveProcess | undefined;
 
     try {
       if (!this.deps.provider.logParser) {
@@ -629,29 +610,7 @@ export class CliExecutionRunner {
         `[CliExecutionRunner] Recording start time: ${startTime.toISOString()}`
       );
 
-      if (session.resolvedSessionId && this.deps.provider.notificationMonitor) {
-        const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
-        if (workspaceRoot) {
-          const notifyDir =
-            this.deps.provider.notificationMonitor.getNotificationDirectory(
-              workspaceRoot
-            );
-          const staleStopFile = path.join(
-            notifyDir,
-            `${session.resolvedSessionId}-stop.json`
-          );
-          if (fs.existsSync(staleStopFile)) {
-            try {
-              fs.unlinkSync(staleStopFile);
-              Log.trace(
-                `[CliExecutionRunner] Cleaned up stale stop notification for session ${session.resolvedSessionId.substring(0, 8)}`
-              );
-            } catch {
-              // Ignore cleanup failures for stale stop files.
-            }
-          }
-        }
-      }
+      this.removeStaleStopNotification(session);
 
       const {
         runId,
@@ -670,13 +629,34 @@ export class CliExecutionRunner {
           : null;
       hookMonitor?.start();
 
-      await this.deps.transportCoordinator.startInteractiveProcess(
-        args,
-        session.promptArgument,
-        session.workflowContext,
-        terminalEnv,
-        resolvedCommand
-      );
+      if (standalone) {
+        standaloneProcess =
+          await this.deps.transportCoordinator.startStandaloneInteractiveProcess(
+            args,
+            session.promptArgument,
+            terminalEnv,
+            resolvedCommand,
+            session.resolvedProperties?.secrets
+          );
+        // The VS Code PTY reports its exit through CliIntegration's
+        // `onPtyExit`; an inherited process reports it here. Either way the
+        // failure tracker is what stops discovery and log monitoring when the
+        // TUI ends before signalling completion. A kill ctrlyoke requested is
+        // a teardown, not an exit to react to.
+        void standaloneProcess.exit.then((exit) => {
+          if (!exit.terminatedByManager) {
+            this.deps.failureTracker.capturePtyExit(exit.exitCode ?? -1, []);
+          }
+        });
+      } else {
+        await this.deps.transportCoordinator.startInteractiveProcess(
+          args,
+          session.promptArgument,
+          session.workflowContext,
+          terminalEnv,
+          resolvedCommand
+        );
+      }
 
       const startupCoordinator =
         this.deps.factories.createInteractiveStartupCoordinator();
@@ -691,13 +671,18 @@ export class CliExecutionRunner {
         return { success: false };
       }
 
-      // Capture context for potential inject-mode follow-up prompts.
-      this.lastInteractiveContext = {
-        logPath: discovery.logPath,
-        sessionId: discovery.sessionId,
-        spawnedWith: session.resolvedProperties,
-        spawnedWithSessionId: session.resolvedSessionId,
-      };
+      // Capture context for potential inject-mode follow-up prompts. A
+      // standalone TUI is ended after every turn, so it leaves nothing to
+      // inject into.
+      const injectContext: InteractiveInjectContext | undefined = standalone
+        ? undefined
+        : {
+            logPath: discovery.logPath,
+            sessionId: discovery.sessionId,
+            spawnedWith: session.resolvedProperties,
+            spawnedWithSessionId: session.resolvedSessionId,
+          };
+      this.lastInteractiveContext = injectContext;
 
       await this.persistResolvedSessionId(
         session,
@@ -709,20 +694,83 @@ export class CliExecutionRunner {
         startTime,
       });
 
-      // Keep lastInteractiveContext in sync with the latest session ID in case
+      // Keep the inject context in sync with the latest session ID in case
       // the log monitor extracted a new one during this run.
-      if (result.sessionId) {
-        this.lastInteractiveContext.sessionId = result.sessionId;
+      if (injectContext && result.sessionId) {
+        injectContext.sessionId = result.sessionId;
       }
 
       return result;
     } catch (error) {
       Log.error("[CliExecutionRunner] Interactive execution error", error);
       this.deps.runtimeState.setFailureReason(getErrorMessage(error));
+      if (standalone) {
+        return { success: false };
+      }
       throw error;
     } finally {
       hookMonitor?.stop();
+      if (standaloneProcess) {
+        // The stop hook ends the turn, not the TUI. End it here and wait, so
+        // the terminal is the CLI's again before the next step writes to it.
+        this.reportStandaloneLaunchFailure(
+          session,
+          standaloneProcess.command,
+          await standaloneProcess.terminate()
+        );
+      }
       await this.deps.factories.cleanupTempFiles(session.tempFilePaths);
+    }
+  }
+
+  /**
+   * A harness that could not be launched at all (spawn `ENOENT`) reaches
+   * discovery as a bare process exit. Name the real cause instead, as headless
+   * execution does.
+   */
+  private reportStandaloneLaunchFailure(
+    session: CliExecutionSession,
+    command: string,
+    exit: InteractiveExitResult
+  ): void {
+    if (exit.error === undefined || exit.terminatedByManager) {
+      return;
+    }
+    const message = `${command} could not be started: ${exit.error}`;
+    session.updateFailure(FAILURE_KINDS.HARNESS_NOT_INSTALLED, message);
+    this.deps.runtimeState.setFailureReason(
+      this.deps.failureTracker.markHarnessNotInstalled(message)
+    );
+  }
+
+  /**
+   * A resumed session's previous stop notification would otherwise read as
+   * this turn's completion as soon as monitoring starts.
+   */
+  private removeStaleStopNotification(session: CliExecutionSession): void {
+    if (!session.resolvedSessionId || !this.deps.provider.notificationMonitor) {
+      return;
+    }
+    const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      return;
+    }
+    const staleStopFile = path.join(
+      this.deps.provider.notificationMonitor.getNotificationDirectory(
+        workspaceRoot
+      ),
+      `${session.resolvedSessionId}-stop.json`
+    );
+    if (!fs.existsSync(staleStopFile)) {
+      return;
+    }
+    try {
+      fs.unlinkSync(staleStopFile);
+      Log.trace(
+        `[CliExecutionRunner] Cleaned up stale stop notification for session ${session.resolvedSessionId.substring(0, 8)}`
+      );
+    } catch {
+      // Ignore cleanup failures for stale stop files.
     }
   }
 

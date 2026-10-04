@@ -1,5 +1,5 @@
 import * as assert from "assert";
-import { suite, test } from "mocha";
+import { suite, teardown, test } from "mocha";
 import {
   CTRLYOKE_ENV_VARS,
   FAILURE_KINDS,
@@ -13,6 +13,7 @@ import {
 import { CliFailureTracker } from "../../core/harness/shared/CliFailureTracker";
 import { CliInteractiveStartupCoordinator } from "../../core/harness/shared/CliInteractiveStartupCoordinator";
 import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
+import type { InteractiveExitResult } from "../../utils/CliProcessManager";
 
 function createProvider(options?: {
   supportsSessionStart?: boolean;
@@ -93,6 +94,8 @@ function createRunner(options?: {
   writeToCurrentPtySession?: (text: string) => boolean;
   isCancelling?: boolean;
   isVsCodeContext?: boolean;
+  /** How the standalone TUI ends on its own; unset, it runs until terminated. */
+  standaloneExit?: InteractiveExitResult;
   collectedHeadlessResponse?: {
     success: boolean;
     error?: string;
@@ -103,21 +106,31 @@ function createRunner(options?: {
   let failureReason: string | undefined;
   let observedHeadlessEnv: Record<string, string> | undefined;
   let observedStandaloneEnv: Record<string, string> | undefined;
+  let standaloneTerminations = 0;
   const provider = createProvider(options);
 
   const runner = new CliExecutionRunner({
     provider,
     transportCoordinator: {
-      executeStandaloneInteractiveProcess: async (
-        _args,
-        _prompt,
-        _tempFiles,
-        _sessionId,
-        _command,
-        env
-      ) => {
+      startStandaloneInteractiveProcess: async (_args, _prompt, env) => {
         observedStandaloneEnv = env;
-        return { success: true };
+        let settle: (exit: InteractiveExitResult) => void = () => {};
+        const exit = new Promise<InteractiveExitResult>((resolve) => {
+          settle = resolve;
+        });
+        const ownExit = options?.standaloneExit;
+        if (ownExit) {
+          setTimeout(() => settle(ownExit), 0);
+        }
+        return {
+          command: "test",
+          exit,
+          terminate: () => {
+            standaloneTerminations++;
+            settle({ exitCode: null, terminatedByManager: true });
+            return exit;
+          },
+        };
       },
       startInteractiveProcess: async () => {
         failureTracker.capturePtyExit(0, []);
@@ -185,6 +198,7 @@ function createRunner(options?: {
     getFailureReason: () => failureReason,
     getHeadlessEnv: () => observedHeadlessEnv,
     getStandaloneEnv: () => observedStandaloneEnv,
+    getStandaloneTerminations: () => standaloneTerminations,
   };
 }
 
@@ -456,23 +470,159 @@ suite("CliExecutionRunner", () => {
     );
   });
 
-  // The OpenCode completion plugin reads its notification directory from the
-  // environment; without it a standalone `ctrlyoke run --interactive` step
-  // never sees the stop signal and waits until its timeout.
-  test("gives a standalone interactive process the notification environment", async () => {
-    const { runner, getStandaloneEnv } = createRunner({
-      isVsCodeContext: false,
+  suite("standalone interactive", () => {
+    const originalMonitor = CliLogMonitor.prototype.monitor;
+
+    teardown(() => {
+      CliLogMonitor.prototype.monitor = originalMonitor;
     });
 
-    assert.strictEqual(
-      await runner.executeInteractive(
-        new CliExecutionSession({ prompt: { prompt: "just say hi" } }),
-        []
-      ),
-      true
-    );
-    assert.strictEqual(getStandaloneEnv()?.CTRLYOKE_NOTIFY_DIR, process.cwd());
-    assert.ok(getStandaloneEnv()?.CTRLYOKE_RUN_ID);
+    // `ctrlyoke run --interactive` used to wait on the stop hook alone and
+    // record the placeholder "Interactive session ended" as the response, with
+    // no events or usage. It now runs the same discovery and log monitor as
+    // the VS Code PTY path.
+    test("records the session log's response, events and usage", async () => {
+      const { runner, getStandaloneEnv, getStandaloneTerminations } =
+        createRunner({
+          isVsCodeContext: false,
+          supportsSessionStart: false,
+          discoverSessionLog: async () => "session.jsonl",
+        });
+      const parsedOutput = {
+        events: [{ type: "text", data: { text: "the real answer" } }],
+        metadata: {
+          sessionId: "session-1",
+          usage: { inputTokens: 12, outputTokens: 3 },
+        },
+      };
+      let monitored:
+        { logPath: string; dispatchedPromptText?: string } | undefined;
+      let terminationsWhileMonitoring: number | undefined;
+      CliLogMonitor.prototype.monitor = async function (
+        logPath,
+        _sessionId,
+        _startTime,
+        _model,
+        dispatchedPromptText
+      ) {
+        monitored = { logPath, dispatchedPromptText };
+        terminationsWhileMonitoring = getStandaloneTerminations();
+        return {
+          success: true,
+          sessionId: "session-1",
+          parsedOutput: parsedOutput as never,
+          cliResult: {
+            success: true,
+            response: "the real answer",
+            statistics: "",
+            exitCode: 0,
+            sessionId: "session-1",
+          },
+        };
+      };
+      const session = new CliExecutionSession({
+        prompt: { prompt: "just say hi" },
+      });
+
+      assert.strictEqual(await runner.executeInteractive(session, []), true);
+
+      assert.deepStrictEqual(monitored, {
+        logPath: "session.jsonl",
+        dispatchedPromptText: session.promptArgument,
+      });
+      assert.strictEqual(session.result?.response, "the real answer");
+      assert.deepStrictEqual(session.parsedOutput, parsedOutput);
+      assert.strictEqual(session.effectiveSessionId, "session-1");
+      // The OpenCode completion plugin reads its notification directory from
+      // the environment; without it the step never sees its stop signal.
+      assert.strictEqual(
+        getStandaloneEnv()?.CTRLYOKE_NOTIFY_DIR,
+        process.cwd()
+      );
+      assert.ok(getStandaloneEnv()?.CTRLYOKE_RUN_ID);
+      // The TUI is ended only once the monitor has drained the session log.
+      assert.strictEqual(terminationsWhileMonitoring, 0);
+      assert.strictEqual(getStandaloneTerminations(), 1);
+      // Nothing is left running to inject a later step into.
+      assert.strictEqual(runner.hasInteractiveContext(), false);
+    });
+
+    // Codex 0.156 exits 1 ("stdin is not a terminal") without ever running.
+    test("fails when the TUI exits before the session starts", async () => {
+      const { runner, failureTracker, getFailureReason } = createRunner({
+        isVsCodeContext: false,
+        supportsSessionStart: false,
+        discoverSessionLog: () => new Promise(() => {}),
+        standaloneExit: { exitCode: 1, terminatedByManager: false },
+      });
+
+      assert.strictEqual(
+        await runner.executeInteractive(
+          new CliExecutionSession({ prompt: { prompt: "just say hi" } }),
+          []
+        ),
+        false
+      );
+      assert.strictEqual(failureTracker.wasLastFailureProcessExit(), true);
+      assert.match(
+        getFailureReason() ?? "",
+        /exited unexpectedly.*exit code 1/
+      );
+    });
+
+    test("names a harness that could not be launched", async () => {
+      const { runner, failureTracker, getFailureReason } = createRunner({
+        isVsCodeContext: false,
+        supportsSessionStart: false,
+        discoverSessionLog: () => new Promise(() => {}),
+        standaloneExit: {
+          exitCode: null,
+          error: "spawn ENOENT",
+          terminatedByManager: false,
+        },
+      });
+      const session = new CliExecutionSession({
+        prompt: { prompt: "just say hi" },
+      });
+
+      assert.strictEqual(await runner.executeInteractive(session, []), false);
+      assert.strictEqual(
+        failureTracker.getLastFailureKind(),
+        FAILURE_KINDS.HARNESS_NOT_INSTALLED
+      );
+      assert.strictEqual(
+        session.failureKind,
+        FAILURE_KINDS.HARNESS_NOT_INSTALLED
+      );
+      assert.strictEqual(
+        getFailureReason(),
+        "test could not be started: spawn ENOENT"
+      );
+    });
+
+    test("ends the TUI when the log monitor reports a harness error", async () => {
+      const { runner, failureTracker, getStandaloneTerminations } =
+        createRunner({
+          isVsCodeContext: false,
+          supportsSessionStart: false,
+          discoverSessionLog: async () => "session.jsonl",
+        });
+      CliLogMonitor.prototype.monitor = async () => ({
+        success: false,
+        failureKind: FAILURE_KINDS.HARNESS_ERROR,
+        failureMessage: "could not submit the prompt",
+      });
+
+      assert.strictEqual(
+        await runner.executeInteractive(
+          new CliExecutionSession({ prompt: { prompt: "just say hi" } }),
+          []
+        ),
+        false
+      );
+      assert.strictEqual(failureTracker.wasLastFailureHarnessError(), true);
+      assert.strictEqual(getStandaloneTerminations(), 1);
+    });
   });
 
   test("should classify log monitor timeouts without throwing", async () => {

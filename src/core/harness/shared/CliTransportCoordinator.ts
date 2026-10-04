@@ -3,7 +3,6 @@ import {
   EXECUTION_MODES,
   HEADLESS_SOURCE_MODES,
   MESSAGE_TYPES,
-  NOTIFICATION_OUTCOME_KINDS,
   SESSION_KINDS,
   TERMINAL_END_REASONS,
   TERMINAL_SESSION_STATUS,
@@ -42,7 +41,6 @@ import {
 } from "./HeadlessLogTail";
 import { splitCompleteLines } from "../../../utils/TextLines";
 import { StreamingSecretRedactor } from "../../../utils/SecretRedactionService";
-import { getCliInteractiveStartupTimeouts } from "./CliInteractiveStartupCoordinator";
 
 interface CliTransportCoordinatorCommandInfo {
   promptArgument: string;
@@ -65,11 +63,6 @@ interface CliTransportCoordinatorHostCallbacks {
   cleanupTempFiles: (tempFilePaths: string[]) => Promise<void>;
 }
 
-/** Fields of an `{sessionId}-error.json` notification read for its message. */
-interface ErrorNotificationData {
-  rawHookData?: { message?: unknown };
-}
-
 export interface CliTransportCoordinatorDeps {
   provider: ICliProvider;
   processManager: CliProcessManager;
@@ -86,16 +79,27 @@ export interface CliTransportCoordinatorDeps {
   ) => Promise<Record<string, string>>;
 }
 
+/** A harness TUI the standalone CLI launched on the user's own terminal. */
+export interface StandaloneInteractiveProcess {
+  /** Executable that was launched, for failure messages. */
+  readonly command: string;
+  /** Settles when the process exits, however it ends. */
+  readonly exit: Promise<InteractiveExitResult>;
+  /**
+   * End the TUI and wait for it to exit, so the terminal is restored before
+   * anything else writes to it.
+   */
+  terminate(): Promise<InteractiveExitResult>;
+}
+
 export interface CliExecutionTransportCoordinator {
-  executeStandaloneInteractiveProcess(
+  startStandaloneInteractiveProcess(
     args: string[],
     promptArgument: string,
-    tempFilePaths: string[],
-    resolvedSessionId?: string,
-    resolvedCommand?: CliResolvedCommand,
     env?: Record<string, string>,
+    resolvedCommand?: CliResolvedCommand,
     secretNames?: readonly string[]
-  ): Promise<{ success: boolean; sessionId?: string }>;
+  ): Promise<StandaloneInteractiveProcess>;
   startInteractiveProcess(
     args: string[],
     promptArgument: string,
@@ -137,175 +141,54 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
 
   constructor(private readonly deps: CliTransportCoordinatorDeps) {}
 
-  async executeStandaloneInteractiveProcess(
+  /**
+   * Launch the harness TUI on the user's own terminal (`stdio: "inherit"`) and
+   * return without waiting for it. Completion, session-log discovery and
+   * response capture belong to the caller, exactly as they do for the VS Code
+   * PTY started by `startInteractiveProcess`; only the spawn differs.
+   */
+  async startStandaloneInteractiveProcess(
     args: string[],
     promptArgument: string,
-    tempFilePaths: string[],
-    resolvedSessionId?: string,
-    resolvedCommand?: CliResolvedCommand,
     env?: Record<string, string>,
+    resolvedCommand?: CliResolvedCommand,
     secretNames?: readonly string[]
-  ): Promise<{ success: boolean; sessionId?: string }> {
-    try {
-      const command =
-        resolvedCommand ??
-        (await this.resolveProviderCommand(
-          this.deps.provider.buildInteractiveArgs(args, promptArgument)
-        ));
+  ): Promise<StandaloneInteractiveProcess> {
+    const command =
+      resolvedCommand ??
+      (await this.resolveProviderCommand(
+        this.deps.provider.buildInteractiveArgs(args, promptArgument)
+      ));
 
-      this.deps.hostCallbacks.onCommandPrepared({
-        promptArgument,
-        cliCommand: command.displayCommand,
-      });
+    this.deps.hostCallbacks.onCommandPrepared({
+      promptArgument,
+      cliCommand: command.displayCommand,
+    });
 
-      const startTime = new Date();
-      const workingDir =
-        this.deps.runtimeState.getWorkspaceRoot() || process.cwd();
-      const interactiveEnv =
-        this.deps.provider.getInteractiveSpawnEnv?.() ??
-        CliProviderUtils.buildProcessEnv();
-      const secretEnv = await this.resolveSecretEnvironment(secretNames);
+    const workingDir =
+      this.deps.runtimeState.getWorkspaceRoot() || process.cwd();
+    const interactiveEnv =
+      this.deps.provider.getInteractiveSpawnEnv?.() ??
+      CliProviderUtils.buildProcessEnv();
+    const secretEnv = await this.resolveSecretEnvironment(secretNames);
 
-      let processExited = false;
-      let completionSignalled = false;
-      let hookSessionId: string | undefined;
-      let harnessError: string | undefined;
+    const exit = this.deps.processManager.spawnInteractive(
+      command.command,
+      command.args,
+      workingDir,
+      { ...interactiveEnv, ...env, ...secretEnv },
+      command.requiresShellVerbatimArgs
+    );
 
-      const spawnPromise = this.deps.processManager
-        .spawnInteractive(
-          command.command,
-          command.args,
-          workingDir,
-          { ...interactiveEnv, ...env, ...secretEnv },
-          command.requiresShellVerbatimArgs
-        )
-        .finally(() => {
-          processExited = true;
-        });
-
-      const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
-      let exit: InteractiveExitResult;
-      if (
-        workspaceRoot &&
-        this.deps.provider.config.usesInteractiveNotificationMonitor
-      ) {
-        const notifyDir =
-          this.deps.provider.notificationMonitor.getNotificationDirectory(
-            workspaceRoot
-          );
-        const timeoutMs =
-          ConfigurationUtils.getMaxPromptExecutionTimeMs() ?? 3_600_000;
-
-        let monitorSessionId = resolvedSessionId;
-        const runId = env?.CTRLYOKE_RUN_ID;
-        const notificationMonitor = this.deps.provider.notificationMonitor;
-        if (
-          !monitorSessionId &&
-          runId &&
-          notificationMonitor.supportsSessionStart &&
-          notificationMonitor.waitForSessionStart
-        ) {
-          const startupTimeouts = getCliInteractiveStartupTimeouts();
-          // Use the same run-scoped SessionStart file that the VS Code
-          // interactive startup path reads before monitoring completion.
-          const startResult = await notificationMonitor.waitForSessionStart(
-            {
-              directory: notifyDir,
-              timeoutMs: Math.min(
-                timeoutMs,
-                startupTimeouts.sessionStartSoftTimeoutMs
-              ),
-              pollMs: startupTimeouts.sessionStartPollMs,
-            },
-            startTime,
-            runId,
-            () => this.deps.runtimeState.isCancelling() || processExited
-          );
-          if (startResult.completed) {
-            monitorSessionId =
-              notificationMonitor.extractSessionId?.(startResult.data) ??
-              startResult.data?.sessionId;
-          }
-        }
-
-        const monitorPromise = notificationMonitor
-          .monitorForCompletion(
-            { directory: notifyDir, timeoutMs },
-            monitorSessionId,
-            startTime,
-            () => this.deps.runtimeState.isCancelling() || processExited,
-            runId
-          )
-          .then((result) => {
-            if (result.completed && !processExited) {
-              completionSignalled = true;
-              hookSessionId =
-                this.deps.provider.notificationMonitor.extractSessionId?.(
-                  result.data
-                );
-              Log.info(
-                `[CliTransportCoordinator] Stop hook detected — terminating interactive session` +
-                  (hookSessionId ? ` (session: ${hookSessionId})` : "")
-              );
-              this.deps.processManager.disposeProcess();
-            } else if (
-              result.kind === NOTIFICATION_OUTCOME_KINDS.ERROR &&
-              !processExited
-            ) {
-              // The TUI stays open after a harness error, so without this
-              // the step would wait on a process that will never finish.
-              harnessError =
-                this.describeHarnessError(result.data) ?? result.error;
-              Log.warn(
-                `[CliTransportCoordinator] Harness error detected — terminating interactive session: ${harnessError}`
-              );
-              this.deps.processManager.disposeProcess();
-            }
-          });
-
-        [exit] = await Promise.all([spawnPromise, monitorPromise]);
-      } else {
-        exit = await spawnPromise;
-      }
-
-      if (harnessError !== undefined) {
-        throw new Error(
-          `${command.command} reported an error: ${harnessError}`
-        );
-      }
-
-      // A CLI that fails to start (Codex 0.156 exits 1 with "stdin is not a
-      // terminal" when stdin is not a TTY) ends the process on its own, with no
-      // completion signal. Reporting that as a finished step turned a launch
-      // failure into "Workflow completed successfully".
-      if (!completionSignalled && !exit.terminatedByManager) {
-        if (exit.error !== undefined) {
-          throw new Error(
-            `${command.command} could not be started: ${exit.error}`
-          );
-        }
-        if (exit.exitCode !== null && exit.exitCode !== 0) {
-          throw new Error(
-            `${command.command} exited with code ${exit.exitCode} before signalling completion`
-          );
-        }
-      }
-
-      this.deps.hostCallbacks.onResponseComplete("Interactive session ended");
-      return { success: true, sessionId: hookSessionId ?? resolvedSessionId };
-    } catch (error) {
-      throw error;
-    } finally {
-      await this.deps.hostCallbacks.cleanupTempFiles(tempFilePaths);
-    }
-  }
-
-  /** The message an error notification carries, when it carries one. */
-  private describeHarnessError(
-    data: ErrorNotificationData | undefined
-  ): string | undefined {
-    const message = data?.rawHookData?.message;
-    return typeof message === "string" && message ? message : undefined;
+    return {
+      command: command.command,
+      exit,
+      terminate: () => {
+        // A no-op once the process has exited on its own.
+        this.deps.processManager.disposeProcess();
+        return exit;
+      },
+    };
   }
 
   async startInteractiveProcess(
