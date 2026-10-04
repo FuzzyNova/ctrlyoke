@@ -1130,19 +1130,13 @@ async function runCommand(
     instance.onPromptStart((data) =>
       outputGate.write(() => {
         if (data.cliCommand === undefined) {
-          const queueTarget: CliOutputTarget = {
+          // onPromptStart fires only for queue steps; a finalStep pass streams
+          // under its own `final:<loopIndex>` key and so starts a fresh stream.
+          CliTerminalFormatter.replaceEventStream({
             stepIndex: data.stepIndex,
             stepName: data.stepName,
             key: `queue:${data.stepIndex}`,
-          };
-          CliTerminalFormatter.replaceEventStreamByKey(
-            queueTarget.key!,
-            queueTarget
-          );
-          CliTerminalFormatter.replaceEventStreamByKey(
-            `final:${data.stepIndex}`,
-            { ...queueTarget, key: `final:${data.stepIndex}` }
-          );
+          });
         }
         if (data.cliCommand !== undefined) {
           CliTerminalFormatter.renderPromptHeader(data);
@@ -1294,7 +1288,7 @@ async function runCommand(
             renderParallelGroupProgress(state);
           }
         }
-        CliTerminalFormatter.flushStreamingBuffer({
+        CliTerminalFormatter.finishEventStream({
           stepIndex: data.stepIndex,
           stepName: data.stepName,
         });
@@ -1439,7 +1433,8 @@ async function runCommand(
       } else {
         console.log(chalk.red("✗ Workflow ended: " + state.status));
       }
-      const workflowFile = instance.promptQueue.getWorkflowFile() as WorkingFile;
+      const workflowFile =
+        instance.promptQueue.getWorkflowFile() as WorkingFile;
       CliTerminalFormatter.renderRunSummary(
         state.runRef,
         state.tokenTotals,

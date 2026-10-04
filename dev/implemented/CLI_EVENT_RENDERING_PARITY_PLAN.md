@@ -48,6 +48,18 @@ run`, but not for `history show` replaying a dashboard run that was steered; see
   activity to the CLI from the exact event batch persisted in history, sharing
   target step-name formatting with the executor. Added coverage for the three
   D8 failure-reason paths. The requested typecheck, lint, and test gates pass.
+- **Review fixes.** `CliEventStream` now prints each slot's body exactly once (D3): an
+  adjacent duplicate completion no longer reprints it. A `FILE_EDIT` settled by its
+  `TOOL_RESULT` defers its body while the normalizer still awaits the semantic completion
+  (`CliEventNormalizer.isAwaitingSemanticCompletion`), so the late diff prints once,
+  without a preceding `(no diff recorded)` and even when both arrived in one batch.
+  `finish()` (`history show` and `onPromptComplete`) prints a body that never arrived.
+  The stream no longer copies every slot on each batch: it reads them through
+  `CliEventNormalizer.events`, and the superseded-Bash lookup checks only the touched
+  slots. `onPromptStart` (queue steps only) no longer disposes the unrelated
+  `final:<N>` stream. Resumed activity now carries the target's last streamed
+  `executionMode`, so `--interactive` does not print it a second time, and finalStep
+  follow-ups use the finalStep's name.
 
 ## Problem
 

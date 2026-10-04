@@ -149,9 +149,7 @@ suite("OutputCaptureBuffer", () => {
       );
       // Accumulate some data
       buffer.captureChunk(0, "partial response");
-      buffer.captureEvents(0, [
-        { type: "tool_call" } as unknown as CliEvent,
-      ]);
+      buffer.captureEvents(0, [{ type: "tool_call" } as unknown as CliEvent]);
       // Second init (cliCommand populated)
       buffer.captureOutputInit(
         0,

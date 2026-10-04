@@ -143,7 +143,7 @@ function boundBashOutput(text: string): string {
   return bounded;
 }
 
-function hasFileEditDiff(data: FileEditData): boolean {
+export function hasFileEditDiff(data: FileEditData): boolean {
   return (
     (data.structuredPatch !== undefined && data.structuredPatch.length > 0) ||
     data.oldContent !== undefined ||
@@ -560,7 +560,8 @@ export class CliTerminalFormatter {
     const tokenTotal = attempts.reduce(
       (sum, tokens) =>
         sum +
-        (resolveTokenTotal(tokens.total, tokens.prompt, tokens.completion) ?? 0),
+        (resolveTokenTotal(tokens.total, tokens.prompt, tokens.completion) ??
+          0),
       0
     );
     const tokenCount = attempts.length > 0 ? formatTokenCount(tokenTotal) : "";
@@ -579,7 +580,10 @@ export class CliTerminalFormatter {
     worktree: WorktreeRunProjection | undefined
   ): void {
     if (runRef) console.log(chalk.dim(`Run ID: ${runRef}`));
-    const tokenTotal = formatTokenTotal(tokenTotals?.total, tokenTotals?.coverage);
+    const tokenTotal = formatTokenTotal(
+      tokenTotals?.total,
+      tokenTotals?.coverage
+    );
     if (tokenTotal) console.log(chalk.dim(`Tokens: ${tokenTotal} total`));
     if (!worktree) return;
 
@@ -1068,16 +1072,21 @@ export class CliTerminalFormatter {
     return stream.slotCount;
   }
 
-  static replaceEventStream(target?: CliOutputTarget): void {
-    const key = CliTerminalFormatter.targetKey(target);
-    CliTerminalFormatter._eventStreams.get(key)?.dispose();
-    CliTerminalFormatter._eventStreams.set(
-      key,
-      new CliEventStream(key, target)
+  /**
+   * Settles a target's attempt output when its prompt completes. The stream
+   * itself stays alive so post-completion follow-up activity still pairs.
+   */
+  static finishEventStream(target: CliOutputTarget): void {
+    const stream = CliTerminalFormatter._eventStreams.get(
+      CliTerminalFormatter.targetKey(target)
     );
+    if (stream) stream.finish();
+    else CliTerminalFormatter.flushStreamingBuffer(target);
   }
 
-  static replaceEventStreamByKey(key: string, target?: CliOutputTarget): void {
+  /** Starts a fresh stream for a target's new attempt. */
+  static replaceEventStream(target: CliOutputTarget): void {
+    const key = CliTerminalFormatter.targetKey(target);
     CliTerminalFormatter._eventStreams.get(key)?.dispose();
     CliTerminalFormatter._eventStreams.set(
       key,

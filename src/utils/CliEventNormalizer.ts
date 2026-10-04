@@ -915,6 +915,23 @@ export class CliEventNormalizer {
     return [...changedSlots].sort((left, right) => left - right);
   }
 
+  /** The current slots in order, without copying. Callers must not mutate it. */
+  get events(): readonly CliEvent[] {
+    return this.output;
+  }
+
+  /**
+   * Whether a slot still waits for its semantic completion. A TOOL_RESULT merge
+   * keeps a semantic slot pending, so its status already reads completed while
+   * a later completion can still add the diff.
+   */
+  isAwaitingSemanticCompletion(index: number): boolean {
+    return this.pending.some(
+      (candidate) =>
+        candidate.index === index && candidate.kind === PENDING_KINDS.SEMANTIC
+    );
+  }
+
   snapshot(): NormalizedCliEvent[] {
     return this.output.map((event, index) => ({
       event,

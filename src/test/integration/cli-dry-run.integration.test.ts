@@ -397,7 +397,10 @@ suite("CLI run process harness reporting", () => {
       1,
       "--json stdout stays a single document without terminal summary lines"
     );
-    assert.doesNotMatch(json.stdout, /Run ID:|Tokens:|Workflow completed successfully/u);
+    assert.doesNotMatch(
+      json.stdout,
+      /Run ID:|Tokens:|Workflow completed successfully/u
+    );
     const result = JSON.parse(
       json.stdout.trim().split(/\r?\n/).pop() ?? ""
     ) as {

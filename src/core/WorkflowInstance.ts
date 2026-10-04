@@ -86,6 +86,7 @@ import {
   WORKTREE_MODES,
   DEFAULT_ERROR_BEHAVIOR_RETRIES,
   type ActionType,
+  type ExecutionMode,
   type QueuePosition,
   type WorkflowTelemetryOutcome,
 } from "../types/DashboardConstants";
@@ -451,6 +452,11 @@ export class WorkflowInstance
   /** Fires plain-text chunks (Copilot) from the active execution integration. */
   public readonly onStreamingChunk = this._streamingChunkEmitter.event;
 
+  /** Each target's last streamed execution mode, for its resumed activity. */
+  private readonly targetStreamingExecutionModes = new Map<
+    ReturnType<SessionActivityRecorder["getExecutionTargetRunKey"]>,
+    ExecutionMode | undefined
+  >();
   private readonly _targetedStreamingEventsEmitter =
     new TypedEmitter<TargetStreamingEventsData>();
   /** Fires structured output with the execution target that produced it. */
@@ -603,12 +609,16 @@ export class WorkflowInstance
           target,
           target.kind === FINAL_STEP_PHASES.QUEUE
             ? this.promptQueue.getState().steps[target.stepIndex]?.name
-            : undefined
+            : this.promptQueue.getWorkflowFile().finalStep?.name
         );
         this._targetedStreamingEventsEmitter.fire({
           target,
           stepName,
           events,
+          // An interactive attempt's follow-up is already in its harness TUI.
+          executionMode: this.targetStreamingExecutionModes.get(
+            this.getExecutionTargetRunKey(target)
+          ),
         });
       },
     });
@@ -1915,8 +1925,13 @@ export class WorkflowInstance
           severity,
         });
       },
-      onTargetStreamingEvents: (data) =>
-        this._targetedStreamingEventsEmitter.fire(data),
+      onTargetStreamingEvents: (data) => {
+        this.targetStreamingExecutionModes.set(
+          this.getExecutionTargetRunKey(data.target),
+          data.executionMode
+        );
+        this._targetedStreamingEventsEmitter.fire(data);
+      },
       onTargetStreamingChunk: (data) =>
         this._targetedStreamingChunkEmitter.fire(data),
       onScriptOutput: (target, output) =>
@@ -4205,16 +4220,17 @@ export class WorkflowInstance
                 onOutput,
                 windowsVerbatimArguments: invocation.windowsVerbatimArguments,
               });
-              const comparison = await this.endConditionEvaluator.evaluateResult(
-                {
-                  result: processResult.result,
-                  stdout: processResult.stdout,
-                  stderr: processResult.stderr,
-                  exitCode: processResult.exitCode,
-                  success: processResult.success,
-                },
-                { compareSource: COMPARE_SOURCES.EXIT_CODE }
-              );
+              const comparison =
+                await this.endConditionEvaluator.evaluateResult(
+                  {
+                    result: processResult.result,
+                    stdout: processResult.stdout,
+                    stderr: processResult.stderr,
+                    exitCode: processResult.exitCode,
+                    success: processResult.success,
+                  },
+                  { compareSource: COMPARE_SOURCES.EXIT_CODE }
+                );
               return {
                 ...comparison,
                 errored: processResult.errored ?? false,

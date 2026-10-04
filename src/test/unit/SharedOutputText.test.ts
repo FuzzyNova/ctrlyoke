@@ -9,13 +9,19 @@ suite("shared output text helpers", () => {
       getToolResultText({ success: false, error: "failed", output: "ignored" }),
       "failed"
     );
-    assert.strictEqual(getToolResultText({ success: true, output: "done" }), "done");
+    assert.strictEqual(
+      getToolResultText({ success: true, output: "done" }),
+      "done"
+    );
     assert.strictEqual(getToolResultText({ success: true }), "Success");
     assert.strictEqual(getToolResultText({ success: false }), "Failed");
     assert.strictEqual(getToolResultText(undefined), "");
   });
 
   test("formats MCP labels consistently", () => {
-    assert.strictEqual(formatMcpToolLabel("ctrlyoke", "append_step"), "MCP: ctrlyoke.append_step");
+    assert.strictEqual(
+      formatMcpToolLabel("ctrlyoke", "append_step"),
+      "MCP: ctrlyoke.append_step"
+    );
   });
 });

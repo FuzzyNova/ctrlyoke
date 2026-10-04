@@ -161,9 +161,7 @@ import {
 } from "./ParallelGroupPreflight";
 import { ParallelGroupRun } from "./ParallelGroupRun";
 import { RecordedTargetFailureError } from "./RecordedTargetFailureError";
-import {
-  formatFinalPassPhrase,
-} from "../utils/FinalStepLabels";
+import { formatFinalPassPhrase } from "../utils/FinalStepLabels";
 import { getTargetStreamingStepName } from "../utils/TargetStreamingStepName";
 
 /** Live harness output of one attempt, with the target that produced it. */

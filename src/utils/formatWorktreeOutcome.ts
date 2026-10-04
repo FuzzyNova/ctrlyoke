@@ -19,7 +19,9 @@ export interface WorktreeOutcome {
   text: string;
 }
 
-export function formatRelativeWorktreePath(worktree: WorktreeRunProjection): string {
+export function formatRelativeWorktreePath(
+  worktree: WorktreeRunProjection
+): string {
   const target = worktree.worktreePath.replace(/\\/g, "/").replace(/\/+$/, "");
   const source = worktree.sourceCheckoutRoot
     .replace(/\\/g, "/")

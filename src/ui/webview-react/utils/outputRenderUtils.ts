@@ -10,10 +10,7 @@ import type {
   CliOutput as CliOutputType,
   FileEditData,
 } from "../types/cliEvents";
-import {
-  CLI_EVENT_TYPES,
-  FINAL_STEP_PHASES,
-} from "../types/messages";
+import { CLI_EVENT_TYPES, FINAL_STEP_PHASES } from "../types/messages";
 import type { WorkspaceSnapshot } from "@root/types/OutputHistoryTypes";
 import { resolveSnapshotFileMatch } from "./promptUndo";
 import {

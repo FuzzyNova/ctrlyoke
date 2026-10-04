@@ -880,9 +880,7 @@ suite("WorkflowExecutor condition shell reporting", () => {
     }).execute(integration, makeContext(integration));
 
     assert.ok(
-      feedback.some((message) =>
-        message.includes("prompt transport rejected")
-      ),
+      feedback.some((message) => message.includes("prompt transport rejected")),
       "expected headless error feedback to include the failure reason"
     );
   });

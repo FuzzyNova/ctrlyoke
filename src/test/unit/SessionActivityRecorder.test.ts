@@ -347,9 +347,11 @@ suite("WorkflowInstance session activity forwarding", () => {
         ["Step 1", "Step 1"]
       );
       assert.strictEqual(
-        resumedActivityEvents.flatMap(({ events }) => events).filter(
-          (event: any) => event.type === CLI_EVENT_TYPES.FOLLOW_UP_RESUMED
-        ).length,
+        resumedActivityEvents
+          .flatMap(({ events }) => events)
+          .filter(
+            (event: any) => event.type === CLI_EVENT_TYPES.FOLLOW_UP_RESUMED
+          ).length,
         1
       );
     } finally {

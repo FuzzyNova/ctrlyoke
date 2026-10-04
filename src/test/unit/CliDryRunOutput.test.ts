@@ -351,6 +351,53 @@ CliTerminalFormatter.renderEvents([{ type: CLI_EVENT_TYPES.FILE_EDIT, data: {
     assert.ok(output.includes("- old"));
   });
 
+  test("keeps a late FILE_EDIT diff when TOOL_RESULT settled the slot in the same batch", () => {
+    const output = runFormatterScript(`
+const target = { stepIndex: 0, stepName: "edit", key: "queue:0" };
+CliTerminalFormatter.renderEvents([
+  { type: CLI_EVENT_TYPES.FILE_EDIT, data: { status: OPERATION_STATUS.INITIATED, path: "notes.md" } },
+  { type: CLI_EVENT_TYPES.TOOL_RESULT, data: { result: { success: true, output: "done" } } },
+], target);
+CliTerminalFormatter.renderEvents([{ type: CLI_EVENT_TYPES.FILE_EDIT, data: {
+  status: OPERATION_STATUS.COMPLETED, path: "notes.md",
+  structuredPatch: [{ oldStart: 1, newStart: 1, lines: ["-old", "+new"] }]
+} }], target);
+`);
+
+    assert.strictEqual((output.match(/\+ new/g) ?? []).length, 1);
+    assert.ok(!output.includes("(no diff recorded)"));
+  });
+
+  test("prints the no-diff line on finish when an edit's completion never arrives", () => {
+    const output = runFormatterScript(`
+const target = { stepIndex: 0, stepName: "edit", key: "queue:0" };
+CliTerminalFormatter.renderEvents([
+  { type: CLI_EVENT_TYPES.FILE_EDIT, data: { status: OPERATION_STATUS.INITIATED, path: "notes.md" } },
+  { type: CLI_EVENT_TYPES.TOOL_RESULT, data: { result: { success: true, output: "done" } } },
+], target);
+CliTerminalFormatter.finishEventStream(target);
+CliTerminalFormatter.finishEventStream(target);
+`);
+
+    assert.strictEqual((output.match(/\(no diff recorded\)/g) ?? []).length, 1);
+  });
+
+  test("prints a Bash body once when a duplicate completion merges into a settled slot", () => {
+    const output = runFormatterScript(`
+const target = { stepIndex: 0, stepName: "build", key: "queue:0" };
+const completed = { type: CLI_EVENT_TYPES.BASH_COMMAND, data: {
+  status: OPERATION_STATUS.COMPLETED, command: "npm run lint", output: "lint ok\\n", exitCode: 0, toolCallId: "lint"
+} };
+CliTerminalFormatter.renderEvents([{ type: CLI_EVENT_TYPES.BASH_COMMAND, data: {
+  status: OPERATION_STATUS.INITIATED, command: "npm run lint", toolCallId: "lint"
+} }], target);
+CliTerminalFormatter.renderEvents([completed], target);
+CliTerminalFormatter.renderEvents([{ ...completed, data: { ...completed.data, output: "lint ok\\nagain\\n" } }], target);
+`);
+
+    assert.strictEqual((output.match(/lint ok/g) ?? []).length, 1);
+  });
+
   test("renders ask-user-question prompts, options, and resolution", () => {
     const output = runFormatterScript(
       `CliTerminalFormatter.renderEvent({
@@ -735,7 +782,9 @@ CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_S
 
     assert.ok(output.includes("src/worktree> codex exec"));
     assert.ok(
-      output.includes("Prompt was injected into running terminal: the injected prompt")
+      output.includes(
+        "Prompt was injected into running terminal: the injected prompt"
+      )
     );
     assert.ok(output.includes("scripts> npm test"));
   });
@@ -772,7 +821,10 @@ for (const [mergeOutcome, landingOutcome, directoryState] of [
       "No changes",
       "Commit blocked — worktree kept at /workspace/.ctrlyoke/worktrees/run",
     ]) {
-      assert.ok(output.includes(outcome), `missing worktree outcome: ${outcome}`);
+      assert.ok(
+        output.includes(outcome),
+        `missing worktree outcome: ${outcome}`
+      );
     }
   });
 
