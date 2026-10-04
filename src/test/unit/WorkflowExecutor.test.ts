@@ -8,6 +8,7 @@ import {
   WorkflowExecutionContext,
 } from "../../core/WorkflowExecutor";
 import { PromptQueue } from "../../core/PromptQueue";
+import { RecordedTargetFailureError } from "../../core/RecordedTargetFailureError";
 import {
   EndConditionEvaluator,
   type EvaluationResult,
@@ -845,7 +846,10 @@ suite("WorkflowExecutor condition shell reporting", () => {
       shellEvaluationResult(true),
     ]);
     const scriptExecutionAttempts: number[] = [];
-    const attemptTerminals: Array<{ attemptIndex: number; terminalState: string }> = [];
+    const attemptTerminals: Array<{
+      attemptIndex: number;
+      terminalState: string;
+    }> = [];
     const outputHistoryManager = new Proxy(
       {
         recordScriptExecution: async (...args: unknown[]) => {
@@ -2270,6 +2274,43 @@ suite("WorkflowExecutor finalStep phase 2", () => {
         warnDiagnostics[0].code,
         PROMPT_DIAGNOSTIC_CODES.UNKNOWN_MCP_REFERENCE
       );
+    } finally {
+      configService.setCliOverlay({});
+    }
+  });
+
+  test("rethrows a terminal step failure tagged with the step it already failed", async () => {
+    const queue = new PromptQueue();
+    queue.loadPrompts({
+      steps: [
+        { prompt: "Use !MISSING_TEST_SECRET_XYZ for auth" },
+        { prompt: "never reached" },
+      ],
+    });
+    const integration = new MockHarnessIntegration(undefined, false);
+
+    configService.setCliOverlay({
+      execution: {
+        contextResolutionFailure: CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
+      },
+    });
+    try {
+      await assert.rejects(
+        makeExecutor(queue).execute(integration, makeContext(integration)),
+        (error: unknown) => {
+          assert.ok(error instanceof RecordedTargetFailureError);
+          assert.deepStrictEqual(error.target, {
+            kind: FINAL_STEP_PHASES.QUEUE,
+            stepIndex: 0,
+          });
+          assert.match(error.message, /MISSING_TEST_SECRET_XYZ/u);
+          assert.ok(error.cause instanceof Error);
+          return true;
+        }
+      );
+      const { results } = queue.getState();
+      assert.strictEqual(results[0].status, STEP_STATUS.FAILED);
+      assert.strictEqual(results[1].status, STEP_STATUS.PENDING);
     } finally {
       configService.setCliOverlay({});
     }

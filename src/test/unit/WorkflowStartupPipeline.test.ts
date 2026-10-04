@@ -23,6 +23,7 @@ import type {
 } from "../../types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
+  FINAL_STEP_PHASES,
   STEP_STATUS,
   WORKTREE_MODES,
   type HarnessId,
@@ -35,17 +36,22 @@ import type { WorktreeInfo } from "../../core/orchestration/WorktreeManager";
 import type { ExecutionLeaseHandle } from "../../core/orchestration/ExecutionRootLeaseManager";
 import type { DefinitionRevisionContext } from "../../core/orchestration/OutputHistoryManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import type { WorkflowEventTarget } from "../../core/orchestration/StatusMessageReporter";
+import { RecordedTargetFailureError } from "../../core/RecordedTargetFailureError";
 
 class TestStatus implements WorkflowStartupStatusPort {
   resetCalls = 0;
   reportCalls = 0;
+  readonly reports: Array<{ target: WorkflowEventTarget; message: string }> =
+    [];
 
   resetDedupeState(): void {
     this.resetCalls += 1;
   }
 
-  report(): void {
+  report(target: WorkflowEventTarget, message: string): void {
     this.reportCalls += 1;
+    this.reports.push({ target, message });
   }
 }
 
@@ -326,6 +332,55 @@ suite("WorkflowStartupPipeline", () => {
     assert.strictEqual(failedStepIndex, 0);
     assert.deepStrictEqual(reported, [0]);
     assert.strictEqual(port.queue.getState().currentIndex, 1);
+  });
+
+  // The executor fails the step, advances past it, and only then rethrows.
+  // Treating that rethrow as a startup failure used to fail the next,
+  // never-started step with the same message, putting error icons on two steps.
+  test("leaves the next step alone when the executor already recorded the failure", async () => {
+    const { pipeline, port } = createPipeline();
+    const steps = [{ prompt: "one" }, { prompt: "two" }];
+    (port.queue as PromptQueue).loadPrompts({ steps });
+    port.execution.currentPrompt = {
+      filePath: "workflow.prompt.md",
+      promptFile: { steps },
+    };
+    const state = (port.queue as any).state as QueueState;
+    port.execution.startWorkflowExecution = async () => {
+      state.results[0].status = STEP_STATUS.FAILED;
+      state.currentIndex = 1;
+      throw new RecordedTargetFailureError(
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        new Error('Secret "B" is missing')
+      );
+    };
+
+    await pipeline.execute();
+
+    assert.strictEqual(port.failed, true);
+    assert.strictEqual(state.results[1].status, STEP_STATUS.PENDING);
+    assert.strictEqual(port.queue.getState().currentIndex, 1);
+    assert.deepStrictEqual(port.status.reports.at(-1), {
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      message: 'Execution failed: Secret "B" is missing',
+    });
+  });
+
+  test("fails and reports the in-flight step for a startup failure", async () => {
+    const { pipeline, port } = createPipeline();
+    const state = (port.queue as any).state as QueueState;
+    port.execution.startWorkflowExecution = async () => {
+      state.results[0].status = STEP_STATUS.RUNNING;
+      throw new Error("EPERM");
+    };
+
+    await pipeline.execute();
+
+    assert.strictEqual(state.results[0].status, STEP_STATUS.FAILED);
+    assert.deepStrictEqual(port.status.reports.at(-1), {
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      message: "Execution failed: EPERM",
+    });
   });
 
   test("settles a provisioned managed worktree on an early failure", async () => {

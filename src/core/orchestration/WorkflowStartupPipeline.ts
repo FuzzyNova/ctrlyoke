@@ -40,6 +40,7 @@ import { Log } from "../../utils/Log";
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 import { ExecutionLeaseConflictError } from "./ExecutionRootLeaseManager";
+import { RecordedTargetFailureError } from "../RecordedTargetFailureError";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import { buildUsageSelectionWarning } from "../harness/shared/usage/UsageSelectionAssist";
 import type { HarnessUsageSnapshot } from "../../types/UsageTypes";
@@ -785,7 +786,9 @@ export class WorkflowStartupPipeline {
       Log.debug(
         `[WorkflowInstance] [APPEND-DEBUG] Reusing explicit history file for append continuation: ${this.historyFilePath}`
       );
-      await this.cacheHistoricalStepOutputs(classification.prevSettledStepCount);
+      await this.cacheHistoricalStepOutputs(
+        classification.prevSettledStepCount
+      );
     } else if (continueFromCurrent && workflowKey) {
       const runRef = currentQueueState.runRef;
       if (!runRef) {
@@ -1320,51 +1323,51 @@ export class WorkflowStartupPipeline {
       error
     );
     const failureMessage = getErrorMessage(error);
-    this.finalizeFailedStepBeforeStatusFlip(failureMessage);
+    // The executor already failed the step and advanced past it; finalizing
+    // the "in-flight" step here would fail the next, never-started one too.
+    const failureTarget: WorkflowAttemptTarget =
+      error instanceof RecordedTargetFailureError
+        ? error.target
+        : {
+            kind: FINAL_STEP_PHASES.QUEUE,
+            stepIndex:
+              this.finalizeFailedStepBeforeStatusFlip(failureMessage) ??
+              this.port.queue.getState().currentIndex,
+          };
+    const cause =
+      error instanceof RecordedTargetFailureError ? error.cause : error;
     this.port.failRuntime();
     await this.port.queue.commitRuntimeTransition();
     await this.settleProvisionedWorktreeAfterEarlyFailure();
     await this.releaseLineageLockAfterEarlyFailure();
     const runToFinalize = await this.finalizePromotedRunAfterEarlyFailure();
     const executionFailureMessage = this.port.execution.describeExecutionFailure
-      ? await this.port.execution.describeExecutionFailure(error)
-      : await this.describeExecutionFailure(error);
+      ? await this.port.execution.describeExecutionFailure(cause)
+      : await this.describeExecutionFailure(cause);
     notifyUserFeedback(
       this.port.userFeedbackSink,
       "error",
       `ctrlyoke: Execution failed: ${executionFailureMessage}`
     );
-    const executionFailureStatusMessage = `Execution failed: ${executionFailureMessage}`;
-    const executionFailureTimestampMs = Date.now();
-    const executionFailureStepIndex = this.port.queue.getState().currentIndex;
+    const reportExecutionFailure = () =>
+      this.port.status.report(
+        failureTarget,
+        `Execution failed: ${executionFailureMessage}`,
+        STATUS_MESSAGE_SEVERITY.ERROR,
+        { timestampMs: Date.now() }
+      );
     const resolvedHistoryFilePath =
       this.port.execution.getResolvedHistoryFilePath();
     if (runToFinalize && runToFinalize !== resolvedHistoryFilePath) {
       const previousActiveHistoryFilePath =
         this.port.execution.getActiveHistoryFilePath();
       this.port.execution.setActiveHistoryFilePath(runToFinalize);
-      this.port.status.report(
-        {
-          kind: FINAL_STEP_PHASES.QUEUE,
-          stepIndex: executionFailureStepIndex,
-        },
-        executionFailureStatusMessage,
-        STATUS_MESSAGE_SEVERITY.ERROR,
-        { timestampMs: executionFailureTimestampMs }
-      );
+      reportExecutionFailure();
       this.port.execution.setActiveHistoryFilePath(
         previousActiveHistoryFilePath
       );
     } else {
-      this.port.status.report(
-        {
-          kind: FINAL_STEP_PHASES.QUEUE,
-          stepIndex: executionFailureStepIndex,
-        },
-        executionFailureStatusMessage,
-        STATUS_MESSAGE_SEVERITY.ERROR,
-        { timestampMs: executionFailureTimestampMs }
-      );
+      reportExecutionFailure();
     }
   }
 }

@@ -158,6 +158,7 @@ import {
   type ParallelGroupPreflightOptions,
 } from "./ParallelGroupPreflight";
 import { ParallelGroupRun } from "./ParallelGroupRun";
+import { RecordedTargetFailureError } from "./RecordedTargetFailureError";
 import {
   formatFinalPassLabel,
   formatFinalPassPhrase,
@@ -1760,7 +1761,7 @@ export class WorkflowExecutor {
         const executionError = this.targetExecutionErrors.get(targetKey);
         this.targetExecutionErrors.delete(targetKey);
         if (executionError !== undefined) {
-          throw executionError;
+          throw new RecordedTargetFailureError(outcome.target, executionError);
         }
         return false;
       }
