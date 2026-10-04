@@ -507,14 +507,18 @@ export interface IWorkingFileQueueAccess {
   /** Merge disk steps into memory, returning newly added steps */
   mergeDiskSteps(
     diskSteps: WorkflowStep[],
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    options?: { authoritativeRuntime?: boolean }
   ): WorkflowStep[];
 
   /** Notify the execution owner that disk supplied new queue members. */
   onDiskStepsMerged?(steps: readonly WorkflowStep[]): void;
 
-  /** Clear a durable rewind marker after adopting an authoritative disk snapshot. */
-  clearPendingRewind?(): void;
+  /** Adopt the rewind marker present in the working file. */
+  setPendingRewind?(pendingRewind: WorkingFileRuntime["pendingRewind"]): void;
+
+  /** Adopt the queue position and runtime state from an authoritative snapshot. */
+  adoptDiskRuntime?(workingFile: WorkingFile): void;
 
   /** Emit state change notification to listeners */
   emitStateChange(): void;
@@ -2101,13 +2105,20 @@ export class WorkingFileManager {
    * definitions, order and topology, so memory-only edits are dropped while the
    * queue's runtime metadata survives.
    */
-  private resyncQueueFromWorkingFile(workingFile: WorkingFile): void {
+  private resyncQueueFromWorkingFile(
+    workingFile: WorkingFile,
+    authoritativeRuntime = false
+  ): void {
     const newStepsFromDisk = this.queueAccess.mergeDiskSteps(
       workingFile.steps ?? [],
-      workingFile.parallelGroups
+      workingFile.parallelGroups,
+      { authoritativeRuntime }
     );
     this.queueAccess.setDefinitionRevision(workingFile.definitionRevision ?? 1);
-    this.queueAccess.clearPendingRewind?.();
+    this.queueAccess.setPendingRewind?.(workingFile._runtime?.pendingRewind);
+    if (authoritativeRuntime) {
+      this.queueAccess.adoptDiskRuntime?.(workingFile);
+    }
     if (newStepsFromDisk.length > 0) {
       this.queueAccess.onDiskStepsMerged?.(newStepsFromDisk);
     }
@@ -2125,7 +2136,7 @@ export class WorkingFileManager {
 
     const operation = this.operationQueue.then(async () => {
       const workingFile = await this.readWorkingFile(workingFilePath);
-      this.resyncQueueFromWorkingFile(workingFile);
+      this.resyncQueueFromWorkingFile(workingFile, true);
     });
     this.operationQueue = operation.then(
       () => undefined,

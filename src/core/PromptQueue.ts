@@ -20,6 +20,7 @@ import {
   ActiveParallelGroupRuntime,
   ParallelGroupDefinition,
   WorkflowTokenTotals,
+  WorkingFileRuntime,
   type WorkingFileWorktreeRuntimePatch,
   type RunRef,
   type WorkflowLineageCreationOptions,
@@ -222,15 +223,18 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
           : undefined,
       mergeDiskSteps: (
         diskSteps: WorkflowStep[],
-        parallelGroups?: import("../types/CtrlYokeTypes").ParallelGroupDefinition[]
-      ) => this.mergeDiskSteps(diskSteps, parallelGroups),
+        parallelGroups?: import("../types/CtrlYokeTypes").ParallelGroupDefinition[],
+        options?: { authoritativeRuntime?: boolean }
+      ) => this.mergeDiskSteps(diskSteps, parallelGroups, options),
       onDiskStepsMerged: (steps) => this.onDiskStepsMergedEmitter.fire(steps),
       emitStateChange: () => this.emitStateChange(),
       getFinalStepRuntime: () => this.getFinalStepRuntime(),
       getFinalStepExecutionMetadata: () =>
         this.workflowFile?.finalStep?._runtime,
       getPendingRewind: () => this.state.pendingRewind,
-      clearPendingRewind: () => this.clearPendingRewind(),
+      setPendingRewind: (pendingRewind) =>
+        this.setPendingRewindFromDisk(pendingRewind),
+      adoptDiskRuntime: (workingFile) => this.adoptDiskRuntime(workingFile),
       updateWorkflowProperty: (key: string, value: unknown) =>
         this.updateWorkflowProperty(key, value),
       getDefinitionRevision: () => this.state.definitionRevision,
@@ -1755,7 +1759,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    */
   private mergeDiskSteps(
     diskSteps: WorkflowStep[],
-    parallelGroups: import("../types/CtrlYokeTypes").ParallelGroupDefinition[] = []
+    parallelGroups: import("../types/CtrlYokeTypes").ParallelGroupDefinition[] = [],
+    options: { authoritativeRuntime?: boolean } = {}
   ): WorkflowStep[] {
     const diskTopology = normalizeParallelGroupTopology({
       steps: diskSteps,
@@ -1828,7 +1833,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       }
       const memoryRuntime = memoryMatch.step._runtime;
       const diskRuntime = diskStep._runtime;
-      const runtime = memoryRuntime ?? diskRuntime;
+      const runtime = options.authoritativeRuntime
+        ? diskRuntime
+        : (memoryRuntime ?? diskRuntime);
       return runtime ? { ...diskStep, _runtime: runtime } : diskStep;
     });
 
@@ -1845,7 +1852,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     const newResults: PromptResult[] = identifiedDiskSteps.map(
       (step, index) => {
         const memoryMatch = memoryMatchFor(step, index);
-        if (memoryMatch?.result) {
+        if (memoryMatch?.result && !options.authoritativeRuntime) {
           return {
             ...memoryMatch.result,
             prompt: isScriptStep(step) ? step.script : step.prompt,
@@ -1872,6 +1879,78 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     }
     this.state.results = newResults;
     return newStepsFromDisk;
+  }
+
+  private setPendingRewindFromDisk(
+    pendingRewind: WorkingFileRuntime["pendingRewind"]
+  ): void {
+    this.state.pendingRewind = pendingRewind
+      ? {
+          ...pendingRewind,
+          fromStepIndex: snapParallelGroupStartPosition(
+            { steps: this.state.steps, parallelGroups: this.state.parallelGroups },
+            pendingRewind.fromStepIndex
+          ),
+        }
+      : undefined;
+  }
+
+  private adoptDiskRuntime(workingFile: WorkingFile): void {
+    const runtime = workingFile._runtime;
+    const executionState = runtime?.executionState ?? EXECUTION_STATES.IDLE;
+    const currentIndex =
+      this.state.pendingRewind?.fromStepIndex ?? runtime?.currentIndex ?? 0;
+    this.state.currentIndex = currentIndex;
+    this.state.completedIndices = new Set(
+      this.state.steps.flatMap((step, index) =>
+        step._runtime?.completedAt !== undefined ? [String(index)] : []
+      )
+    );
+    if (
+      this.state.completedIndices.size === 0 &&
+      runtime?.currentIndex !== undefined &&
+      runtime.currentIndex > 0 &&
+      !this.state.steps.some(
+        (step) =>
+          step._runtime?.startedAt !== undefined ||
+          step._runtime?.completedAt !== undefined
+      )
+    ) {
+      this.state.completedIndices = new Set(
+        Array.from({ length: runtime.currentIndex }, (_, index) => String(index))
+      );
+    }
+    this.state.results = this.state.steps.map((step, index) => {
+      const terminal = step._runtime?.terminalStatus;
+      const status =
+        step._runtime?.completedAt !== undefined
+          ? terminal === PROMPT_TERMINAL_STATUS.SKIPPED
+            ? STEP_STATUS.SKIPPED
+            : terminal === PROMPT_TERMINAL_STATUS.CANCELLED
+              ? STEP_STATUS.CANCELLED
+              : terminal === PROMPT_TERMINAL_STATUS.FAILED
+                ? STEP_STATUS.FAILED
+                : STEP_STATUS.COMPLETED
+          : index === currentIndex && executionState === EXECUTION_STATES.RUNNING
+            ? STEP_STATUS.SENT
+            : STEP_STATUS.PENDING;
+      return {
+        prompt: isScriptStep(step) ? step.script : step.prompt,
+        status,
+        timestamp: new Date(),
+      };
+    });
+    this.state.tokenTotals = runtime?.tokenTotals;
+    this.finalStepRuntime = runtime?.finalStep;
+    this.activeParallelGroupRuntime = runtime?.activeParallelGroup;
+    this.stateMachine.restore({
+      status: executionState,
+      stopped: executionState === EXECUTION_STATES.STOPPED,
+      startTime: runtime?.startTime,
+      pausedTime: runtime?.pausedTime,
+      totalPausedDuration: runtime?.totalPausedDuration ?? 0,
+      executionEndTime: runtime?.executionEndTime,
+    });
   }
 
   /**
