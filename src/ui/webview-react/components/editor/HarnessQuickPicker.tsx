@@ -1,5 +1,11 @@
 import React, { useEffect } from "react";
 import { useEditorStore } from "../../store/editorStore";
+import {
+  getBulkDisplayValue,
+  MIXED_VALUE,
+  BULK_MIXED_OPTION,
+} from "../../store/editorStore";
+import { useWorkflowStore } from "../../store/workflowStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
 import { type HarnessId } from "../../types/messages";
@@ -13,6 +19,7 @@ import {
   MESSAGE_TYPES,
 } from "@root/types/DashboardConstants";
 import { sendMessage } from "@hooks/useMessageHandler";
+import { buildHarnessChangeCascade } from "@utils/harnessChangeCascade";
 import {
   formatHarnessUsageTooltip,
   getHarnessAvailabilityPhrase,
@@ -23,15 +30,27 @@ interface HarnessQuickPickerProps {
   isNarrow: boolean;
   showLabel: boolean;
   disabled?: boolean;
+  disabledReason?: string;
 }
 
 export const HarnessQuickPicker: React.FC<HarnessQuickPickerProps> = ({
   isNarrow,
   showLabel,
   disabled = false,
+  disabledReason,
 }) => {
   const properties = useEditorStore((s) => s.properties);
-  const setProperty = useEditorStore((s) => s.setProperty);
+  const setHarnessCascade = useEditorStore((s) => s.setHarnessCascade);
+  const clearBulkPatchField = useEditorStore((s) => s.clearBulkPatchField);
+  const clearBulkCascadeCompanions = useEditorStore(
+    (s) => s.clearBulkCascadeCompanions
+  );
+  const multiSelection = useEditorStore((s) => s.multiSelection);
+  const bulkPatch = useEditorStore((s) => s.bulkPatch);
+  const steps = useWorkflowStore((s) => s.steps);
+  const harnessValue = multiSelection
+    ? getBulkDisplayValue({ multiSelection, bulkPatch }, steps, "harness")
+    : properties.harness;
   const globalSettings = useSettingsStore((s) => s.globalSettings);
   const workflowProperties = useSettingsStore((s) => s.workflowProperties);
   const harnessStatus = useSettingsStore((s) => s.harnessStatus);
@@ -47,23 +66,19 @@ export const HarnessQuickPicker: React.FC<HarnessQuickPickerProps> = ({
     globalSettings.harness) as HarnessId;
   const defaultHarnessLabel = `Inherit (${HARNESS_DISPLAY_NAMES[resolvedHarness] ?? resolvedHarness})`;
 
-  const valueLabel = properties.harness
-    ? (HARNESS_DISPLAY_NAMES[properties.harness as HarnessId] ??
-      properties.harness)
-    : (HARNESS_DISPLAY_NAMES[resolvedHarness] ?? resolvedHarness);
+  const valueLabel =
+    harnessValue === MIXED_VALUE
+      ? "(mixed)"
+      : harnessValue
+        ? (HARNESS_DISPLAY_NAMES[harnessValue as HarnessId] ?? harnessValue)
+        : (HARNESS_DISPLAY_NAMES[resolvedHarness] ?? resolvedHarness);
 
   const handleHarnessChange = (newHarness: string) => {
-    if (newHarness === INHERIT_DEFAULT_OPTION) {
-      setProperty("harness", undefined);
-      setProperty("model", undefined);
-      setProperty("additionalArgs", undefined);
+    if (newHarness === BULK_MIXED_OPTION) {
+      clearBulkPatchField("harness");
+      clearBulkCascadeCompanions();
     } else {
-      setProperty("harness", newHarness);
-      const defaultModel = globalSettings.harnessDefaultModels[newHarness];
-      setProperty("model", defaultModel || undefined);
-      const defaultArgs =
-        globalSettings.harnessDefaultAdditionalArgs[newHarness];
-      setProperty("additionalArgs", defaultArgs || null);
+      setHarnessCascade(buildHarnessChangeCascade(newHarness, globalSettings));
     }
     setFooterOpenPicker(null);
   };
@@ -113,10 +128,15 @@ export const HarnessQuickPicker: React.FC<HarnessQuickPickerProps> = ({
       heading="Harness"
       popupMinWidth="220px"
       disabled={disabled}
+      disabledReason={disabledReason}
     >
       <HarnessDropdown
         schemaPath="harness"
-        value={properties.harness ?? INHERIT_DEFAULT_OPTION}
+        value={
+          harnessValue === MIXED_VALUE
+            ? BULK_MIXED_OPTION
+            : (harnessValue ?? INHERIT_DEFAULT_OPTION)
+        }
         onChange={handleHarnessChange}
         showDefault={true}
         defaultLabel={defaultHarnessLabel}

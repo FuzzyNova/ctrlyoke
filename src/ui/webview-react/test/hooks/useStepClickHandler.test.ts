@@ -24,7 +24,7 @@ describe("useStepClickHandler", () => {
     resetStores();
     useWorkflowStore.getState().loadWorkflow({
       fileName: "test.prompt.md",
-      steps: [{ prompt: "Step 1" }],
+      steps: [{ prompt: "Step 1" }, { prompt: "Step 2" }, { prompt: "Step 3" }],
     });
 
     originalRequestAnimationFrame = window.requestAnimationFrame;
@@ -80,5 +80,42 @@ describe("useStepClickHandler", () => {
     });
 
     expect(scrollToTarget).not.toHaveBeenCalled();
+  });
+
+  it("scrolls after a toggle adds the clicked step", () => {
+    const scrollToTarget = vi.fn();
+    setActiveOutputNavigationController({
+      scrollToRowIndex: vi.fn(),
+      scrollToTarget,
+      getTargetScrollFraction: vi.fn(() => 0.25),
+    });
+    useEditorStore
+      .getState()
+      .selectPrompt(
+        { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+        useWorkflowStore.getState().steps[0]
+      );
+    const { result } = renderHook(() => useStepClickHandler());
+
+    act(() => result.current(2, { range: false, toggle: true }));
+
+    expect(scrollToTarget).toHaveBeenCalledTimes(1);
+    expect(useEditorStore.getState().multiSelection?.indices).toEqual([0, 2]);
+  });
+
+  it("does not scroll after a toggle removes the clicked step", () => {
+    const scrollToTarget = vi.fn();
+    setActiveOutputNavigationController({
+      scrollToRowIndex: vi.fn(),
+      scrollToTarget,
+      getTargetScrollFraction: vi.fn(() => 0.25),
+    });
+    useEditorStore.getState().selectAllSteps();
+    const { result } = renderHook(() => useStepClickHandler());
+
+    act(() => result.current(0, { range: false, toggle: true }));
+
+    expect(scrollToTarget).not.toHaveBeenCalled();
+    expect(useEditorStore.getState().multiSelection?.indices).toEqual([1, 2]);
   });
 });

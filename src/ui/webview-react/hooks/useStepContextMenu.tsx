@@ -50,6 +50,15 @@ import { useUiStore } from "@store/uiStore";
 import { workflowViewAddressKey } from "@utils/viewAddress";
 import { getTargetKey } from "@utils/outputProjection";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
+import {
+  getSelectionCapabilities,
+  getStepCapabilities,
+  getStepCapabilityDisabledReason,
+} from "@utils/stepCapabilities";
+import {
+  remapIndicesThroughPermutation,
+  shiftSelectedBlock,
+} from "@utils/stepMultiSelection";
 
 const SHELL_WORKFLOW_ID = "_shell";
 const EMPTY_TARGET_KEYS: readonly string[] = [];
@@ -133,6 +142,7 @@ export function useStepContextMenu({
   const isViewingHistory = useUiStore((s) => s.isViewingHistory);
   const liveOrderedEntries = useWorkflowStore((s) => s.liveOrderedEntries);
   const historyOutputs = useWorkflowStore((s) => s.historyOutputs);
+  const steps = useWorkflowStore((s) => s.steps);
   const finalStepPhase = useWorkflowStore((s) => s.finalStepPhase);
   const outputEntries = isViewingHistory
     ? (historyOutputs?.orderedEntries ?? EMPTY_ORDERED_ENTRIES)
@@ -150,17 +160,18 @@ export function useStepContextMenu({
     null
   );
   const [setPositionIndex, setSetPositionIndex] = useState<number | null>(null);
-  const [pendingDeleteIndex, setPendingDeleteIndex] = useState<number | null>(
-    null
-  );
+  const [pendingDeleteIndices, setPendingDeleteIndices] = useState<
+    number[] | null
+  >(null);
 
-  const handleDeleteStep = useCallback(
-    (index: number) => {
+  const handleDeleteSteps = useCallback(
+    (indices: number[]) => {
       if (!confirmDeleteOperations) {
-        sendMessage(MESSAGE_TYPES.DELETE_PROMPT, { index });
+        sendMessage(MESSAGE_TYPES.DELETE_PROMPT, { indices });
+        if (indices.length > 1) useEditorStore.getState().clearMultiSelection();
         return;
       }
-      setPendingDeleteIndex(index);
+      setPendingDeleteIndices(indices);
     },
     [confirmDeleteOperations]
   );
@@ -183,23 +194,72 @@ export function useStepContextMenu({
   // items — a keyboard/tap-friendly alternative to drag-to-reorder, notably
   // for PromptChipRail which has no drag surface of its own.
   const moveQueueStep = useCallback(
-    (pendingIndex: number, targetPendingIndex: number) => {
+    (
+      pendingIndex: number,
+      targetPendingIndex: number,
+      selectedIndices?: number[]
+    ) => {
       const pendingCount = totalSteps - currentStep;
       if (targetPendingIndex < 0 || targetPendingIndex >= pendingCount) return;
+      let newPendingOrder = buildAdjacentSwapOrder(
+        pendingCount,
+        pendingIndex,
+        targetPendingIndex
+      );
+      if (selectedIndices && selectedIndices.length > 1) {
+        newPendingOrder = shiftSelectedBlock(
+          Array.from({ length: pendingCount }, (_, index) => index),
+          selectedIndices.map((index) => index - currentStep),
+          targetPendingIndex < pendingIndex ? "up" : "down"
+        );
+      }
+      const absolutePermutation = newPendingOrder.map(
+        (index) => index + currentStep
+      );
+      const nextPendingGroups = pendingGroups.map((pendingGroup) => {
+        const group = parallelGroups.find(
+          (candidate) => candidate.id === pendingGroup.id
+        );
+        if (!group) return pendingGroup;
+        const remapped = remapIndicesThroughPermutation(
+          Array.from(
+            { length: group.endIndex - group.startIndex + 1 },
+            (_, offset) => group.startIndex + offset
+          ),
+          absolutePermutation,
+          currentStep
+        );
+        return {
+          ...pendingGroup,
+          start: Math.min(...remapped) - currentStep,
+          end: Math.max(...remapped) - currentStep,
+        };
+      });
       sendMessage(MESSAGE_TYPES.REORDER_PROMPTS, {
-        newPendingOrder: buildAdjacentSwapOrder(
-          pendingCount,
-          pendingIndex,
-          targetPendingIndex
-        ),
-        pendingGroups,
+        newPendingOrder,
+        pendingGroups: nextPendingGroups,
       });
       const editorStore = useEditorStore.getState();
+      if (editorStore.multiSelection) {
+        const indices = remapIndicesThroughPermutation(
+          editorStore.multiSelection.indices,
+          absolutePermutation,
+          currentStep
+        );
+        const anchorIndex = remapIndicesThroughPermutation(
+          [editorStore.multiSelection.anchorIndex],
+          absolutePermutation,
+          currentStep
+        )[0];
+        if (anchorIndex !== undefined) {
+          useEditorStore.setState({ multiSelection: { indices, anchorIndex } });
+        }
+      }
       if (editorStore.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE) {
         editorStore.cancelEdit();
       }
     },
-    [currentStep, pendingGroups, totalSteps]
+    [currentStep, parallelGroups, pendingGroups, totalSteps]
   );
 
   const openContextMenu = useCallback(
@@ -220,6 +280,119 @@ export function useStepContextMenu({
       }: OpenContextMenuParams
     ) => {
       const stepToggleLabel = step.enabled === false ? "Enable" : "Disable";
+      const capabilityContext = {
+        currentStep,
+        executionState,
+        pendingRewindBoundary: pendingRewind?.fromStepIndex,
+        isExternallyManaged,
+        isExecutionTargetLocked,
+        totalSteps,
+        parallelGroups,
+      };
+      const capabilities = getStepCapabilities(
+        step,
+        deleteIndex,
+        capabilityContext
+      );
+      const editorSelection = useEditorStore.getState();
+      const selectedIndices =
+        editorSelection.multiSelection?.indices ??
+        (editorSelection.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
+          ? [editorSelection.selectionTarget.index]
+          : []);
+      const hasQueueSelection = selectedIndices.length > 0;
+      const isPressedStepSelected = selectedIndices.includes(deleteIndex);
+      const hasMultiSelection = selectedIndices.length > 1;
+      const selectedExecutionTargetLocked =
+        executionOwnsCurrentStep(executionState, finalStepPhase) &&
+        selectedIndices.includes(currentStep);
+      const selectionCapabilityContext = {
+        ...capabilityContext,
+        isExecutionTargetLocked: selectedExecutionTargetLocked,
+      };
+      const bulkCapabilities = getSelectionCapabilities(
+        selectedIndices,
+        steps,
+        selectionCapabilityContext
+      );
+      const firstBulkLockedIndex = selectedIndices.find((index) => {
+        const selectedStep = steps[index];
+        return (
+          !selectedStep ||
+          !getStepCapabilities(selectedStep, index, selectionCapabilityContext)
+            .canDelete
+        );
+      });
+      const bulkDisabledReason =
+        firstBulkLockedIndex === undefined
+          ? undefined
+          : (getStepCapabilityDisabledReason(
+              selectionCapabilityContext,
+              "delete",
+              firstBulkLockedIndex,
+              steps[firstBulkLockedIndex]
+            ) ?? "Cannot change a completed or running step");
+      const bulkDisabledTitle = bulkDisabledReason
+        ? /completed|currently executing|preserved step/i.test(
+            bulkDisabledReason
+          )
+          ? `${bulkDisabledReason}. Remove completed or running steps from the selection to enable this action.`
+          : bulkDisabledReason
+        : undefined;
+      const selectionMenuItems = [
+        {
+          label: "Select All",
+          icon: "codicon-check-all",
+          disabled: false,
+          onClick: () => useEditorStore.getState().selectAllSteps(),
+        },
+        ...(hasQueueSelection &&
+        !(selectedIndices.length === 1 && isPressedStepSelected)
+          ? [
+              {
+                label: "Select to Here",
+                icon: "codicon-selection",
+                disabled: false,
+                onClick: () =>
+                  useEditorStore
+                    .getState()
+                    .extendMultiSelectionByRange(deleteIndex),
+              },
+            ]
+          : []),
+        ...(hasQueueSelection && !isPressedStepSelected
+          ? [
+              {
+                label: "Add to Selection",
+                icon: "codicon-add",
+                disabled: false,
+                onClick: () =>
+                  useEditorStore.getState().toggleMultiSelection(deleteIndex),
+              },
+            ]
+          : []),
+        ...(hasMultiSelection && isPressedStepSelected
+          ? [
+              {
+                label: "Remove from Selection",
+                icon: "codicon-remove",
+                disabled: false,
+                onClick: () =>
+                  useEditorStore.getState().toggleMultiSelection(deleteIndex),
+              },
+            ]
+          : []),
+        ...(hasMultiSelection
+          ? [
+              {
+                label: "Clear Selection",
+                icon: "codicon-clear-all",
+                disabled: false,
+                onClick: () => useEditorStore.getState().clearMultiSelection(),
+              },
+            ]
+          : []),
+      ];
       const pasteDisabledTitle = isExternallyManaged
         ? (externalReadOnlyLabel ?? "Read-only — external workflow")
         : executionState === EXECUTION_STATES.CANCELLING
@@ -233,39 +406,54 @@ export function useStepContextMenu({
       const queueLockedTitle = isExternallyManaged
         ? (externalReadOnlyLabel ?? "Read-only — external workflow")
         : "Cannot reorder steps while workflow is cancelling";
-      const queueLocked =
-        isExternallyManaged || executionState === EXECUTION_STATES.CANCELLING;
       // A running step stays pinned at pending position 0 (mirrors the drag
       // pinning in WorkflowStepsPanel/PromptChipRail): it can't move, and
       // nothing else can move into its slot.
       const moveUpBlockedByPin =
         executionOwnsCurrentStep(executionState, finalStepPhase) &&
         pendingIndex - 1 === 0;
-      const moveUpDisabled =
-        queueLocked ||
-        isExecutionTargetLocked ||
-        pendingIndex <= 0 ||
-        moveUpBlockedByPin;
-      const moveUpDisabledTitle = queueLocked
-        ? queueLockedTitle
-        : isExecutionTargetLocked
-          ? "Cannot move the currently executing step"
-          : pendingIndex <= 0
-            ? "Already at the top of the queue"
-            : moveUpBlockedByPin
-              ? "Cannot move above the currently executing step"
-              : undefined;
-      const moveDownDisabled =
-        queueLocked ||
-        isExecutionTargetLocked ||
-        pendingIndex >= pendingCount - 1;
-      const moveDownDisabledTitle = queueLocked
-        ? queueLockedTitle
-        : isExecutionTargetLocked
-          ? "Cannot move the currently executing step"
-          : pendingIndex >= pendingCount - 1
-            ? "Already at the bottom of the queue"
+      const bulkMove =
+        hasMultiSelection &&
+        isPressedStepSelected &&
+        bulkCapabilities.canReorder;
+      const selectedPendingIndices = selectedIndices.map(
+        (index) => index - currentStep
+      );
+      const bulkMoveUpDisabled =
+        selectedPendingIndices.length === 0 ||
+        Math.min(...selectedPendingIndices) <=
+          (executionOwnsCurrentStep(executionState, finalStepPhase) ? 1 : 0);
+      const bulkMoveDownDisabled =
+        selectedPendingIndices.length === 0 ||
+        Math.max(...selectedPendingIndices) >= pendingCount - 1;
+      const moveUpDisabled = bulkMove
+        ? bulkMoveUpDisabled
+        : !capabilities.canReorder || pendingIndex <= 0 || moveUpBlockedByPin;
+      const moveUpDisabledTitle = !capabilities.canReorder
+        ? (getStepCapabilityDisabledReason(
+            capabilityContext,
+            "reorder",
+            deleteIndex,
+            step
+          ) ?? queueLockedTitle)
+        : pendingIndex <= 0
+          ? "Already at the top of the queue"
+          : moveUpBlockedByPin
+            ? "Cannot move above the currently executing step"
             : undefined;
+      const moveDownDisabled = bulkMove
+        ? bulkMoveDownDisabled
+        : !capabilities.canReorder || pendingIndex >= pendingCount - 1;
+      const moveDownDisabledTitle = !capabilities.canReorder
+        ? (getStepCapabilityDisabledReason(
+            capabilityContext,
+            "reorder",
+            deleteIndex,
+            step
+          ) ?? queueLockedTitle)
+        : pendingIndex >= pendingCount - 1
+          ? "Already at the bottom of the queue"
+          : undefined;
       const targetKey = getTargetKey({
         kind: FINAL_STEP_PHASES.QUEUE,
         index: deleteIndex,
@@ -312,6 +500,8 @@ export function useStepContextMenu({
         x,
         y,
         items: [
+          ...selectionMenuItems,
+          { type: "divider" },
           ...buildStepCopyMenuItems({
             step,
             slotNumber: deleteIndex + 1,
@@ -408,14 +598,24 @@ export function useStepContextMenu({
                   icon: "codicon-arrow-up",
                   disabled: moveUpDisabled,
                   disabledTitle: moveUpDisabledTitle,
-                  onClick: () => moveQueueStep(pendingIndex, pendingIndex - 1),
+                  onClick: () =>
+                    moveQueueStep(
+                      pendingIndex,
+                      pendingIndex - 1,
+                      bulkMove ? selectedIndices : undefined
+                    ),
                 },
                 {
                   label: "Move Down",
                   icon: "codicon-arrow-down",
                   disabled: moveDownDisabled,
                   disabledTitle: moveDownDisabledTitle,
-                  onClick: () => moveQueueStep(pendingIndex, pendingIndex + 1),
+                  onClick: () =>
+                    moveQueueStep(
+                      pendingIndex,
+                      pendingIndex + 1,
+                      bulkMove ? selectedIndices : undefined
+                    ),
                 },
               ]
             : []),
@@ -423,34 +623,86 @@ export function useStepContextMenu({
             ? [{ type: "divider" as const }, ...groupingItems]
             : []),
           { type: "divider" },
-          {
-            label: stepToggleLabel,
-            icon:
-              step.enabled === false ? "codicon-check" : "codicon-circle-slash",
-            disabled: isExternallyManaged,
-            disabledTitle:
-              externalReadOnlyLabel ?? "Read-only — external workflow",
-            onClick: () => {
-              const enabled = step.enabled === false;
-              const update = buildWorkflowStepEnabledUpdate(step, enabled);
-              sendMessage(MESSAGE_TYPES.UPDATE_PROMPT, {
-                index: deleteIndex,
-                text: update.text,
-                properties: update.properties,
-                clearProperties: update.clearProperties,
-                promptName: update.promptName,
-              });
-            },
-          },
-          {
-            label: "Delete",
-            icon: "codicon-trash",
-            disabled: isExternallyManaged || isExecutionTargetLocked,
-            disabledTitle: isExternallyManaged
-              ? (externalReadOnlyLabel ?? "Read-only — external workflow")
-              : "Cannot delete the currently executing step",
-            onClick: () => handleDeleteStep(deleteIndex),
-          },
+          ...(hasMultiSelection && isPressedStepSelected
+            ? (() => {
+                const disable = selectedIndices.some(
+                  (index) => steps[index]?.enabled !== false
+                );
+                return [
+                  {
+                    label: `${disable ? "Disable" : "Enable"} ${selectedIndices.length} steps`,
+                    icon: disable ? "codicon-circle-slash" : "codicon-check",
+                    disabled: !bulkCapabilities.canToggleEnabled,
+                    disabledTitle: bulkCapabilities.canToggleEnabled
+                      ? undefined
+                      : bulkDisabledTitle,
+                    onClick: () =>
+                      sendMessage(MESSAGE_TYPES.UPDATE_STEPS, {
+                        indices: selectedIndices,
+                        properties: { enabled: !disable },
+                      }),
+                  },
+                  {
+                    label: `Delete ${selectedIndices.length} steps`,
+                    icon: "codicon-trash",
+                    disabled: !bulkCapabilities.canDelete,
+                    disabledTitle: bulkCapabilities.canDelete
+                      ? undefined
+                      : bulkDisabledTitle,
+                    onClick: () => handleDeleteSteps(selectedIndices),
+                  },
+                ];
+              })()
+            : [
+                {
+                  label: stepToggleLabel,
+                  icon:
+                    step.enabled === false
+                      ? "codicon-check"
+                      : "codicon-circle-slash",
+                  disabled: !capabilities.canToggleEnabled,
+                  disabledTitle: capabilities.canToggleEnabled
+                    ? undefined
+                    : externalReadOnlyLabel && isExternallyManaged
+                      ? externalReadOnlyLabel
+                      : getStepCapabilityDisabledReason(
+                          capabilityContext,
+                          "toggle",
+                          deleteIndex,
+                          step
+                        ),
+                  onClick: () => {
+                    const enabled = step.enabled === false;
+                    const update = buildWorkflowStepEnabledUpdate(
+                      step,
+                      enabled
+                    );
+                    sendMessage(MESSAGE_TYPES.UPDATE_PROMPT, {
+                      index: deleteIndex,
+                      text: update.text,
+                      properties: update.properties,
+                      clearProperties: update.clearProperties,
+                      promptName: update.promptName,
+                    });
+                  },
+                },
+                {
+                  label: "Delete",
+                  icon: "codicon-trash",
+                  disabled: !capabilities.canDelete,
+                  disabledTitle: capabilities.canDelete
+                    ? undefined
+                    : externalReadOnlyLabel && isExternallyManaged
+                      ? externalReadOnlyLabel
+                      : getStepCapabilityDisabledReason(
+                          capabilityContext,
+                          "delete",
+                          deleteIndex,
+                          step
+                        ),
+                  onClick: () => handleDeleteSteps([deleteIndex]),
+                },
+              ]),
         ],
       });
     },
@@ -460,7 +712,7 @@ export function useStepContextMenu({
       currentStep,
       executionState,
       finalStepPhase,
-      handleDeleteStep,
+      handleDeleteSteps,
       handleSetStartPosition,
       isExternallyManaged,
       externalReadOnlyLabel,
@@ -473,6 +725,7 @@ export function useStepContextMenu({
       totalSteps,
       toggleHiddenOutputTarget,
       parallelGroups,
+      steps,
     ]
   );
 
@@ -486,10 +739,46 @@ export function useStepContextMenu({
   }, [setPositionIndex]);
 
   const handleDeleteConfirm = useCallback(() => {
-    if (pendingDeleteIndex === null) return;
-    sendMessage(MESSAGE_TYPES.DELETE_PROMPT, { index: pendingDeleteIndex });
-    setPendingDeleteIndex(null);
-  }, [pendingDeleteIndex]);
+    if (pendingDeleteIndices === null) return;
+    sendMessage(MESSAGE_TYPES.DELETE_PROMPT, { indices: pendingDeleteIndices });
+    if (pendingDeleteIndices.length > 1) {
+      useEditorStore.getState().clearMultiSelection();
+    }
+    setPendingDeleteIndices(null);
+  }, [pendingDeleteIndices]);
+
+  const handleDeleteSelection = useCallback(() => {
+    const selection = useEditorStore.getState();
+    const indices =
+      selection.multiSelection?.indices ??
+      (selection.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
+        ? [selection.selectionTarget.index]
+        : []);
+    if (indices.length === 0) return;
+    const context = {
+      currentStep,
+      executionState,
+      pendingRewindBoundary: pendingRewind?.fromStepIndex,
+      isExternallyManaged,
+      isExecutionTargetLocked:
+        executionOwnsCurrentStep(executionState, finalStepPhase) &&
+        indices.includes(currentStep),
+      totalSteps,
+      parallelGroups,
+    };
+    if (!getSelectionCapabilities(indices, steps, context).canDelete) return;
+    handleDeleteSteps(indices);
+  }, [
+    currentStep,
+    executionState,
+    finalStepPhase,
+    handleDeleteSteps,
+    isExternallyManaged,
+    parallelGroups,
+    pendingRewind?.fromStepIndex,
+    steps,
+    totalSteps,
+  ]);
 
   const contextMenuPortal = contextMenu ? (
     <StepContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
@@ -520,19 +809,28 @@ export function useStepContextMenu({
       : null;
 
   const deleteModal =
-    pendingDeleteIndex !== null ? (
+    pendingDeleteIndices !== null ? (
       <DeleteConfirmModal
         isOpen={true}
-        title="Delete Prompt"
-        message={`Are you sure you want to delete prompt ${pendingDeleteIndex + 1}?`}
+        title={
+          pendingDeleteIndices.length > 1
+            ? `Delete ${pendingDeleteIndices.length} steps?`
+            : "Delete Prompt"
+        }
+        message={
+          pendingDeleteIndices.length > 1
+            ? `Delete ${pendingDeleteIndices.length} steps?`
+            : `Are you sure you want to delete prompt ${pendingDeleteIndices[0] + 1}?`
+        }
         detail="This action cannot be undone."
         onConfirm={handleDeleteConfirm}
-        onCancel={() => setPendingDeleteIndex(null)}
+        onCancel={() => setPendingDeleteIndices(null)}
       />
     ) : null;
 
   return {
     openContextMenu,
+    handleDeleteSelection,
     handleSetStartPosition,
     contextMenuPortal,
     setPositionModal,

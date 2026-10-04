@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { render } from "@testing-library/react";
 import { EditorView } from "@codemirror/view";
 import type { Completion } from "@codemirror/autocomplete";
 import { forEachDiagnostic, forceLinting } from "@codemirror/lint";
@@ -18,6 +19,7 @@ import {
   keyboardTooltipSpace,
   type CodeMirrorEditorMode,
 } from "@components/editor/CodeMirrorEditor";
+import { CodeMirrorEditor } from "@components/editor/CodeMirrorEditor";
 import { MESSAGE_TYPES, PROMPT_EDITOR_INSERT_MODES } from "@/types/messages";
 import {
   CAPTURING_OUTPUT_PLACEHOLDER,
@@ -25,6 +27,42 @@ import {
   SCRIPT_OUTPUT_SOURCES,
 } from "@root/types/DashboardConstants";
 import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
+import { EDITOR_PLACEHOLDER_TEXT } from "@root/types/DashboardConstants";
+
+describe("CodeMirrorEditor bulk placeholders", () => {
+  it.each([
+    EDITOR_PLACEHOLDER_TEXT.BULK_PROMPTS(3),
+    EDITOR_PLACEHOLDER_TEXT.BULK_STEPS(3),
+    EDITOR_PLACEHOLDER_TEXT.BULK_LOCKED(3),
+  ])("reconfigures placeholder without replacing EditorView: %s", (text) => {
+    const onChange = vi.fn();
+    const { container, rerender } = render(
+      <CodeMirrorEditor
+        value=""
+        onChange={onChange}
+        placeholder="first"
+        affUri=""
+        dicUri=""
+      />
+    );
+    const editor = container.querySelector(".cm-editor");
+    expect(editor).not.toBeNull();
+    const view = EditorView.findFromDOM(editor as HTMLElement);
+
+    rerender(
+      <CodeMirrorEditor
+        value=""
+        onChange={onChange}
+        placeholder={text}
+        affUri=""
+        dicUri=""
+      />
+    );
+
+    expect(EditorView.findFromDOM(editor as HTMLElement)).toBe(view);
+    expect(container.querySelector(".cm-placeholder")?.textContent).toBe(text);
+  });
+});
 
 async function getConditionOutputDiagnostics(
   doc: string,
@@ -231,7 +269,9 @@ describe("CodeMirrorEditor prior-context references", () => {
       forceLinting(view);
       await new Promise((resolve) => setTimeout(resolve, 350));
       const diagnostics: unknown[] = [];
-      forEachDiagnostic(view.state, (diagnostic) => diagnostics.push(diagnostic));
+      forEachDiagnostic(view.state, (diagnostic) =>
+        diagnostics.push(diagnostic)
+      );
 
       expect(view.dom.querySelector(".cm-atomic-ref")).toBeNull();
       expect(diagnostics).toEqual([]);

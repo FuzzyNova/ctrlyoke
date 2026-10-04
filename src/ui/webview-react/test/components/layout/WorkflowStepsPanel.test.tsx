@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -6,6 +7,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowStepsPanel } from "@components/layout/WorkflowStepsPanel";
 import {
@@ -27,7 +29,7 @@ import {
 } from "@utils/dndKit";
 import { verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { ExecutingStepHighlight } from "@components/prompts/ExecutingStepHighlight";
-import { useEditorStore } from "@store/editorStore";
+import { useEditorStore, useIsStepMultiSelected } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
@@ -133,6 +135,38 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
     );
   });
 
+  it("deletes the selected steps from the Delete key through confirmation", async () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "One" }, { prompt: "Two" }],
+    });
+    useEditorStore.getState().selectAllSteps();
+    render(<WorkflowStepsPanel />);
+    const listbox = screen.getByRole("listbox");
+
+    fireEvent.keyDown(listbox, { key: "Delete" });
+    expect(screen.getAllByText("Delete 2 steps?")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() =>
+      expect(postMessage).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.DELETE_PROMPT,
+        indices: [0, 1],
+      })
+    );
+    expect(useEditorStore.getState().multiSelection).toBeNull();
+  });
+
+  it("does not intercept Delete from an editable target", () => {
+    render(<WorkflowStepsPanel />);
+    const input = document.createElement("textarea");
+    screen.getByRole("listbox").append(input);
+    fireEvent.keyDown(input, { key: "Delete" });
+    expect(postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: MESSAGE_TYPES.DELETE_PROMPT })
+    );
+  });
+
   it("does not intercept Ctrl+C from textarea targets inside the steps panel", () => {
     render(<WorkflowStepsPanel />);
     const listbox = screen.getByRole("listbox");
@@ -146,6 +180,132 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
     });
 
     expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it("selects every queue step with Ctrl+A and leaves the final step out", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "One" }, { prompt: "Two" }, { prompt: "Three" }],
+      finalStep: { prompt: "Final" },
+    });
+    render(<WorkflowStepsPanel />);
+
+    fireEvent.keyDown(screen.getByRole("listbox"), {
+      key: "a",
+      ctrlKey: true,
+    });
+
+    expect(useEditorStore.getState().multiSelection?.indices).toEqual([
+      0, 1, 2,
+    ]);
+    expect(useEditorStore.getState().selectionTarget.kind).not.toBe(
+      FINAL_STEP_PHASES.FINAL_STEP
+    );
+    expect(screen.getByText("3 selected")).toBeInTheDocument();
+  });
+
+  it("ignores Ctrl+A from an editable target and clears multi-selection on Escape", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "One" }, { prompt: "Two" }],
+    });
+    useEditorStore.getState().selectAllSteps();
+    render(<WorkflowStepsPanel />);
+    const listbox = screen.getByRole("listbox");
+    const textarea = document.createElement("textarea");
+    listbox.appendChild(textarea);
+
+    fireEvent.keyDown(textarea, { key: "a", ctrlKey: true, bubbles: true });
+    expect(useEditorStore.getState().multiSelection?.indices).toEqual([0, 1]);
+
+    fireEvent.keyDown(listbox, { key: "Escape" });
+    expect(useEditorStore.getState().multiSelection).toBeNull();
+  });
+
+  it("supports Shift+Click and Ctrl+Click on pending rows", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "One" }, { prompt: "Two" }, { prompt: "Three" }],
+    });
+    render(<WorkflowStepsPanel />);
+    const rows = [1, 2, 3].map((slot) => screen.getByLabelText(`Step ${slot}`));
+
+    fireEvent.click(rows[0]);
+    fireEvent.click(rows[2], { shiftKey: true });
+    expect(useEditorStore.getState().multiSelection?.indices).toEqual([
+      0, 1, 2,
+    ]);
+    expect(rows[1]).toHaveClass("bg-list-active-bg");
+
+    fireEvent.click(rows[1], { ctrlKey: true });
+    expect(useEditorStore.getState().multiSelection?.indices).toEqual([0, 2]);
+  });
+
+  it("highlights a Shift+Click range across completed, grouped, and pending rows", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [
+        { prompt: "Completed" },
+        { prompt: "Group one" },
+        { prompt: "Group two" },
+        { prompt: "Pending" },
+      ],
+      parallelGroups: [
+        { id: "range-group", startIndex: 1, endIndex: 2, failFast: false },
+      ],
+      currentStep: 1,
+      results: [{ status: STEP_STATUS.COMPLETED }],
+    });
+    render(<WorkflowStepsPanel />);
+    const first = screen.getByLabelText("Step 1");
+    const last = screen.getByLabelText("Step 4");
+
+    fireEvent.click(first);
+    fireEvent.click(last, { shiftKey: true });
+
+    expect(useEditorStore.getState().multiSelection?.indices).toEqual([
+      0, 1, 2, 3,
+    ]);
+    for (const slot of [1, 2, 3, 4]) {
+      expect(screen.getByLabelText(`Step ${slot}`)).toHaveClass(
+        "bg-list-active-bg"
+      );
+    }
+  });
+
+  it("only re-renders rows whose selected state changes for a range selection", () => {
+    const renderCounts = Array.from({ length: 20 }, () => 0);
+    const ProbeRow = React.memo(({ index }: { index: number }) => {
+      const selected = useIsStepMultiSelected(index);
+      renderCounts[index]++;
+      return <div data-selected={selected} />;
+    });
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: Array.from({ length: 20 }, (_, index) => ({
+        prompt: `Step ${index}`,
+      })),
+    });
+    useEditorStore
+      .getState()
+      .selectPrompt(
+        { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+        useWorkflowStore.getState().steps[0]
+      );
+    render(
+      <>
+        {renderCounts.map((_, index) => (
+          <ProbeRow key={index} index={index} />
+        ))}
+      </>
+    );
+    renderCounts.fill(0);
+
+    // This is the store action the panel routes Shift+Click through.
+    act(() => useEditorStore.getState().extendMultiSelectionByRange(3));
+
+    expect(renderCounts.slice(0, 4)).toEqual([1, 1, 1, 1]);
+    expect(renderCounts.slice(4)).toEqual(Array(16).fill(0));
   });
 
   it("renders disabled steps and disabled final-step state without mutating status", () => {

@@ -28,6 +28,7 @@ import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useCompatibilityStore } from "@store/compatibilityStore";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
+import { useEditorStore } from "@store/editorStore";
 import { EXECUTION_STATES, FINAL_STEP_PHASES } from "@/types/messages";
 import {
   PREVIEW_SCOPES,
@@ -180,6 +181,16 @@ describe("dashboard mount smoke", () => {
     });
 
     mountDashboard("running run mount");
+  });
+
+  it("mounts with a multi-selection present", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "smoke.prompt.md",
+      steps: [{ prompt: "First" }, { prompt: "Second" }],
+    });
+    useEditorStore.getState().selectAllSteps();
+
+    mountDashboard("multi-selection mount");
   });
 
   it("mounts while viewing a historical run", () => {

@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useEditorStore } from "../../store/editorStore";
 import { useUiStore } from "../../store/uiStore";
 import { useWorkflowStore } from "../../store/workflowStore";
+import { useBulkSelectionGates } from "../../hooks/useBulkSelectionGates";
+import { getBulkDisplayValue, MIXED_VALUE } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useElementTier } from "../../hooks/useElementNarrow";
 import { useAttachmentTokenCount } from "../../hooks/useAttachmentTokenCount";
@@ -23,6 +25,9 @@ import {
   SETTING_SCOPES,
   STEP_COLOR_MODES,
   STEP_TYPES,
+  EDITOR_PLACEHOLDER_TEXT,
+  PROMPT_PROPERTIES,
+  BULK_EDIT_DISABLED_REASONS,
 } from "@root/types/DashboardConstants";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { getExternalReadOnlyLabel } from "@utils/externalRunner";
@@ -73,9 +78,11 @@ const EditorSectionInner: React.FC = () => {
     stepEnabled,
     setStepType,
     setStepEnabled,
+    multiSelection,
+    bulkPatch,
   } = useEditorStore();
   const { editorCollapsed, toggleEditorCollapse } = useUiStore();
-  const { steps } = useWorkflowStore();
+  const steps = useWorkflowStore((s) => s.steps);
   const { globalSettings } = useSettingsStore();
   const vscode = useVsCodeApi();
 
@@ -85,6 +92,47 @@ const EditorSectionInner: React.FC = () => {
   const externalReadOnlyLabel = getExternalReadOnlyLabel(activeExternalOwner);
 
   const isEditMode = selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT;
+  const bulkGates = useBulkSelectionGates();
+  const isBulkMode = multiSelection !== null;
+  const selectedIndices = bulkGates.indices;
+  const bulkCapabilities = bulkGates.capabilities;
+  const bulkHasLocked = bulkGates.hasLockedStep;
+  const bulkEnabled = isBulkMode
+    ? getBulkDisplayValue(
+        { multiSelection, bulkPatch },
+        steps,
+        PROMPT_PROPERTIES.ENABLED
+      )
+    : stepEnabled;
+  const bulkUpdateAllowed =
+    isBulkMode &&
+    Object.keys(bulkPatch).length > 0 &&
+    Object.keys(bulkPatch).every((key) =>
+      key === PROMPT_PROPERTIES.COLOR
+        ? Boolean(bulkCapabilities?.canEditColor)
+        : key === PROMPT_PROPERTIES.ENABLED
+          ? Boolean(bulkCapabilities?.canToggleEnabled)
+          : Boolean(bulkCapabilities?.canEditPromptProperties)
+    );
+  const bulkUpdateDisabledReason = bulkHasLocked
+    ? BULK_EDIT_DISABLED_REASONS.LOCKED_STEPS
+    : BULK_EDIT_DISABLED_REASONS.NO_EDITABLE_CHANGE;
+  const bulkPromptPropertyDisabledReason =
+    bulkGates.promptPropertyDisabledReason;
+  const bulkHarnessOptionsDisabled =
+    bulkGates.harnessScopedDisabledReason !== undefined;
+  const promptsSelected =
+    isBulkMode &&
+    selectedIndices.every((index) => steps[index]?.type !== STEP_TYPES.SCRIPT);
+  const bulkPlaceholder = !isBulkMode
+    ? undefined
+    : bulkHasLocked
+      ? EDITOR_PLACEHOLDER_TEXT.BULK_LOCKED(selectedIndices.length)
+      : promptsSelected
+        ? EDITOR_PLACEHOLDER_TEXT.BULK_PROMPTS(selectedIndices.length)
+        : EDITOR_PLACEHOLDER_TEXT.BULK_STEPS(selectedIndices.length);
+  const enabledMixed = bulkEnabled === MIXED_VALUE;
+  const bulkToggleDisabledReason = bulkGates.toggleDisabledReason;
   const totalPrompts = steps.length;
   const [promptFileAction, setPromptFileAction] =
     useState<PromptFileAction | null>(null);
@@ -163,11 +211,14 @@ const EditorSectionInner: React.FC = () => {
     isCompact &&
     !isExternallyManaged &&
     !isEditingName &&
+    !isBulkMode &&
     stepEnabled &&
     !isScriptMode;
 
   // Generate mode indicator text (includes name when set)
   const getModeText = () => {
+    if (isBulkMode)
+      return `${selectedIndices.length} ${promptsSelected ? "prompts" : "steps"} selected`;
     if (isEditMode) {
       if (promptName) return `Editing: ${promptName}`;
       if (selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP) {
@@ -274,29 +325,52 @@ const EditorSectionInner: React.FC = () => {
           {!isExternallyManaged && (
             <button
               type="button"
-              onClick={() => setStepEnabled(!stepEnabled)}
-              title={
-                stepEnabled
-                  ? "Step is enabled — click to disable"
-                  : "Step is disabled — click to enable"
+              onClick={() =>
+                setStepEnabled(enabledMixed ? false : !bulkEnabled)
               }
-              aria-label={stepEnabled ? "Disable step" : "Enable step"}
-              aria-pressed={!stepEnabled}
+              disabled={isBulkMode && !bulkCapabilities?.canToggleEnabled}
+              title={
+                bulkToggleDisabledReason ??
+                (enabledMixed
+                  ? "Steps have mixed enabled states — click to disable all"
+                  : bulkEnabled
+                    ? "Step is enabled — click to disable"
+                    : "Step is disabled — click to enable")
+              }
+              aria-label={
+                enabledMixed
+                  ? "Mixed step enabled state"
+                  : bulkEnabled
+                    ? "Disable step"
+                    : "Enable step"
+              }
+              aria-pressed={!enabledMixed && !bulkEnabled}
               className={`control-button flex items-center flex-shrink-0 px-0.5 bg-transparent border-none leading-none transition-colors ${
-                !stepEnabled
+                !enabledMixed && !bulkEnabled
                   ? "text-warning-fg hover:text-warning-fg cursor-pointer"
                   : "text-description-fg hover:text-foreground cursor-pointer"
               }`}
             >
               <Icon
-                name={stepEnabled ? "codicon-check" : "codicon-circle-slash"}
+                name={
+                  enabledMixed
+                    ? "remove"
+                    : bulkEnabled
+                      ? "codicon-check"
+                      : "codicon-circle-slash"
+                }
                 className="text-sm"
               />
             </button>
           )}
           {!isExternallyManaged &&
             globalSettings.stepColorMode !== STEP_COLOR_MODES.NONE && (
-              <StepColorQuickPicker />
+              <StepColorQuickPicker
+                disabled={
+                  isExternallyManaged ||
+                  (isBulkMode && !bulkCapabilities?.canEditColor)
+                }
+              />
             )}
           <span
             data-testid="editor-mode"
@@ -324,8 +398,9 @@ const EditorSectionInner: React.FC = () => {
             ) : (
               <button
                 type="button"
-                className={`max-w-full appearance-none truncate border-0 bg-transparent p-0 text-left font-inherit text-inherit transition-colors hover:text-foreground${!stepEnabled ? " italic" : ""}`}
-                onClick={startNameEditing}
+                className={`max-w-full appearance-none truncate border-0 bg-transparent p-0 text-left font-inherit text-inherit transition-colors hover:text-foreground${!isBulkMode && !stepEnabled ? " italic" : ""}`}
+                onClick={isBulkMode ? undefined : startNameEditing}
+                disabled={isBulkMode}
                 title="Click to set prompt name"
                 aria-label="Set prompt name"
               >
@@ -333,7 +408,7 @@ const EditorSectionInner: React.FC = () => {
               </button>
             )}
             {!isEditingName &&
-              (!stepEnabled ? (
+              (!isBulkMode && !stepEnabled ? (
                 <>
                   {" — "}
                   <span className="italic text-warning-fg">disabled</span>
@@ -415,6 +490,15 @@ const EditorSectionInner: React.FC = () => {
       <div className="prompt-editor-wrapper flex flex-1 min-h-0 overflow-hidden relative">
         <PromptEditor
           isExternallyManaged={isExternallyManaged}
+          isBulkMode={isBulkMode}
+          bulkPlaceholder={bulkPlaceholder}
+          canBulkUpdate={bulkUpdateAllowed}
+          bulkUpdateDisabledReason={bulkUpdateDisabledReason}
+          canBulkEditPromptProperties={Boolean(
+            bulkCapabilities?.canEditPromptProperties
+          )}
+          bulkPropertyDisabledReason={bulkPromptPropertyDisabledReason}
+          bulkHarnessOptionsDisabled={bulkHarnessOptionsDisabled}
           externalReadOnlyLabel={externalReadOnlyLabel}
           onPromptFileActionChange={setPromptFileAction}
         />

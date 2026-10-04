@@ -11,7 +11,10 @@ import type { DrawerPage } from "../../types/drawerPages";
 import type { HarnessId } from "../../types/messages";
 import type { TabIconOverride } from "../shared/tabBadgeUtils";
 import { useEditorStore } from "../../store/editorStore";
-import { STEP_TYPES } from "@root/types/DashboardConstants";
+import {
+  BULK_EDIT_DISABLED_REASONS,
+  STEP_TYPES,
+} from "@root/types/DashboardConstants";
 import { Icon } from "../shared/Icon";
 import { SplitButton } from "../shared/SplitButton";
 import type { RunDispatchTarget } from "../../hooks/useRunDispatchTargets";
@@ -21,6 +24,12 @@ export const EDITOR_FOOTER_HEIGHT_REM = 2.5;
 interface EditorFooterProps {
   isEditMode: boolean;
   isFinalStepMode?: boolean;
+  isBulkMode?: boolean;
+  canBulkUpdate?: boolean;
+  bulkUpdateDisabledReason?: string;
+  canBulkEditPromptProperties?: boolean;
+  bulkPropertyDisabledReason?: string;
+  bulkHarnessOptionsDisabled?: boolean;
   isPromptCompleted: boolean;
   /** True when the selected prompt's status is SENT or RUNNING (prevents Update) */
   isPromptBeingSent: boolean;
@@ -68,6 +77,12 @@ interface EditorFooterProps {
 export const EditorFooter: React.FC<EditorFooterProps> = ({
   isEditMode,
   isFinalStepMode = false,
+  isBulkMode = false,
+  canBulkUpdate = false,
+  bulkUpdateDisabledReason,
+  canBulkEditPromptProperties = false,
+  bulkPropertyDisabledReason,
+  bulkHarnessOptionsDisabled = false,
   isPromptCompleted,
   isPromptBeingSent,
   isPromptActivelyRunning,
@@ -110,6 +125,15 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
   );
   const stepType = useEditorStore((s) => s.stepType);
   const isScriptMode = stepType === STEP_TYPES.SCRIPT;
+  // Model, agent, skills and permissions all draw their options from the
+  // effective harness, so they share one gate.
+  const harnessScopedPickerDisabled =
+    isExternallyManaged ||
+    (isBulkMode &&
+      (!canBulkEditPromptProperties || bulkHarnessOptionsDisabled));
+  const harnessScopedPickerDisabledReason = bulkHarnessOptionsDisabled
+    ? BULK_EDIT_DISABLED_REASONS.HARNESS_REQUIRED
+    : bulkPropertyDisabledReason;
 
   return (
     <div
@@ -129,6 +153,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               : "hover:bg-list-hover-bg text-foreground"
           }`}
           onClick={onToggleProperties}
+          disabled={isBulkMode}
           title="Toggle prompt properties"
           aria-label="Toggle prompt properties"
         >
@@ -159,22 +184,29 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               <HarnessQuickPicker
                 isNarrow={isMediumWidth}
                 showLabel={!isMediumWidth}
-                disabled={isExternallyManaged}
+                disabled={
+                  isExternallyManaged ||
+                  (isBulkMode && !canBulkEditPromptProperties)
+                }
+                disabledReason={bulkPropertyDisabledReason}
               />
               <ModelQuickPicker
                 isNarrow={isMediumWidth}
                 showLabel={!isMediumWidth}
-                disabled={isExternallyManaged}
+                disabled={harnessScopedPickerDisabled}
+                disabledReason={harnessScopedPickerDisabledReason}
               />
               <AgentQuickPicker
                 isNarrow={isMediumWidth}
                 showLabel={!isMediumWidth}
-                disabled={isExternallyManaged}
+                disabled={harnessScopedPickerDisabled}
+                disabledReason={harnessScopedPickerDisabledReason}
               />
               <SkillsQuickPicker
                 isNarrow={isMediumWidth}
                 showLabel={!isMediumWidth}
-                disabled={isExternallyManaged}
+                disabled={harnessScopedPickerDisabled}
+                disabledReason={harnessScopedPickerDisabledReason}
               />
             </div>
             {!(isEditMode && isSmallWidth) && (
@@ -182,12 +214,17 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                 <PermissionsQuickPicker
                   isNarrow={isMediumWidth}
                   showLabel={!isMediumWidth}
-                  disabled={isExternallyManaged}
+                  disabled={harnessScopedPickerDisabled}
+                  disabledReason={harnessScopedPickerDisabledReason}
                 />
                 <ContextQuickPicker
                   isNarrow={isMediumWidth}
                   showLabel={!isMediumWidth}
-                  disabled={isExternallyManaged}
+                  disabled={isExternallyManaged || isBulkMode}
+                  disabledReason={
+                    bulkPropertyDisabledReason ??
+                    "Resume Session cannot be edited for multiple steps."
+                  }
                 />
               </div>
             )}
@@ -240,16 +277,22 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-update border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onUpdate}
-              disabled={isExternallyManaged || !hasContent || isPromptBeingSent}
+              disabled={
+                isExternallyManaged ||
+                (isBulkMode ? !canBulkUpdate : !hasContent || isPromptBeingSent)
+              }
               aria-label="Update"
               title={
                 isExternallyManaged
                   ? (externalReadOnlyLabel ?? "Read-only — external run")
-                  : isPromptBeingSent
-                    ? "Cannot update a prompt that is currently being sent"
-                    : isPromptCompleted
-                      ? "Update prompt and reset execution to this step"
-                      : "Update prompt in queue"
+                  : isBulkMode && !canBulkUpdate
+                    ? (bulkUpdateDisabledReason ??
+                      "Make an editable change before updating")
+                    : isPromptBeingSent
+                      ? "Cannot update a prompt that is currently being sent"
+                      : isPromptCompleted
+                        ? "Update prompt and reset execution to this step"
+                        : "Update prompt in queue"
               }
             >
               <Icon name="check" />
@@ -259,16 +302,20 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-delete border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-terminal-ansiRed text-terminal-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onDelete}
-              disabled={isExternallyManaged || isPromptActivelyRunning}
+              disabled={
+                isExternallyManaged || isBulkMode || isPromptActivelyRunning
+              }
               aria-label={isFinalStepMode ? "Disable" : "Delete"}
               title={
                 isExternallyManaged
                   ? (externalReadOnlyLabel ?? "Read-only — external run")
-                  : isFinalStepMode
-                    ? "Disable final step"
-                    : isPromptActivelyRunning
-                      ? "Cannot delete a prompt that is currently running"
-                      : "Delete prompt from queue"
+                  : isBulkMode
+                    ? "Delete steps from the context menu"
+                    : isFinalStepMode
+                      ? "Disable final step"
+                      : isPromptActivelyRunning
+                        ? "Cannot delete a prompt that is currently running"
+                        : "Delete prompt from queue"
               }
             >
               <Icon name="trash" />
@@ -285,7 +332,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-queue border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onQueue}
-              disabled={isExternallyManaged || !hasContent}
+              disabled={isExternallyManaged || isBulkMode || !hasContent}
               aria-label="Queue"
               title={
                 isExternallyManaged
@@ -313,7 +360,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                   ? (externalReadOnlyLabel ?? "Read-only — external run")
                   : runButtonTooltip
               }
-              disabled={isExternallyManaged || !hasContent}
+              disabled={isExternallyManaged || isBulkMode || !hasContent}
               mainClassName="btn-editor-run"
               dropdownClassName="btn-editor-run-menu"
               size="compact"

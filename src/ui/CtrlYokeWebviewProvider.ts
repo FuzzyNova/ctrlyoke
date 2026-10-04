@@ -792,12 +792,12 @@ export class CtrlYokeWebviewProvider
   }
 
   public updateStepColor(
-    index: number,
+    indices: number[],
     color: string | null,
     definitionRevision?: number,
     workflowId?: string
   ): void {
-    this.sink.updateStepColor(index, color, definitionRevision, workflowId);
+    this.sink.updateStepColor(indices, color, definitionRevision, workflowId);
   }
   public updatePromptDeleted(
     fileName: string,

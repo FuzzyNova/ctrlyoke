@@ -129,6 +129,44 @@ suite("WorkflowStepHandlers — steer messages", () => {
   });
 });
 
+suite("WorkflowStepHandlers — bulk step updates", () => {
+  test("routes one UPDATE_STEPS mutation and publishes the identity", async () => {
+    const coordinator = new RecordingMutationCoordinator();
+    const calls: unknown[][] = [];
+    const orchestrator = makeOrchestrator({
+      updateStepsInQueue: async (...args: unknown[]) => {
+        calls.push(args);
+      },
+    });
+    const handlers = new WorkflowStepHandlers(
+      () => orchestrator,
+      {} as WebviewSettingsSync,
+      coordinator
+    );
+    const message = {
+      type: MESSAGE_TYPES.UPDATE_STEPS,
+      indices: [1, 3],
+      properties: { enabled: false },
+      clearProperties: [],
+    };
+
+    await handlers.handleUpdateSteps(makeCtx(), message);
+
+    assert.strictEqual(calls.length, 1);
+    assert.deepStrictEqual(calls[0], [
+      undefined,
+      [1, 3],
+      { enabled: false },
+      [],
+      "panel",
+    ]);
+    assert.deepStrictEqual(coordinator.calls, [
+      "prepareDefinitionMutation",
+      "publishViewIdentity",
+    ]);
+  });
+});
+
 suite("WorkflowStepHandlers — success-path client echo", () => {
   test("handleUpdatePrompt uses publishViewIdentity, not refreshDefinitionMutationView", async () => {
     const coordinator = new RecordingMutationCoordinator();
@@ -208,7 +246,7 @@ suite("WorkflowStepHandlers — success-path client echo", () => {
       coordinator
     );
 
-    await handlers.handleDeletePrompt(makeCtx(), { index: 0 } as any);
+    await handlers.handleDeletePrompt(makeCtx(), { indices: [0] } as any);
 
     assert.deepStrictEqual(coordinator.calls, [
       "prepareDefinitionMutation",

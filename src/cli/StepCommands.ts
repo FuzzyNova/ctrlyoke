@@ -108,11 +108,11 @@ export async function removeStepCommand(
     options.run,
     context
   );
-  const removed = await RunContinuationService.removeStepAtRun(
+  const removed = await RunContinuationService.removeStepsAtRun(
     context.workspaceRoot,
     target.workflowKey,
     target.runRef,
-    index,
+    [index],
     target.definitionRevision,
     context.lineageRepository,
     target.allowInterruptedRun

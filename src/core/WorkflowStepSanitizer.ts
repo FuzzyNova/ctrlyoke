@@ -1,5 +1,6 @@
 import {
   STEP_TYPES,
+  BULK_EDITABLE_PROMPT_STEP_KEYS,
   CONDITION_ACTIONS,
   COMPARE_SOURCES,
   type ScriptOperator,
@@ -26,6 +27,36 @@ import {
 } from "../types/CtrlYokeTypes";
 import type { WorkflowDefinitionSnapshot } from "../types/WorkflowTimelineTypes";
 import { normalizeParallelGroupTopology } from "./ParallelGroupTopology";
+
+const BULK_EDITABLE_SCRIPT_STEP_KEYS = ["enabled", "color"] as const;
+
+/** Reject property patches unsupported by any selected step kind. */
+export function assertBulkWorkflowStepUpdateAllowed(
+  step: WorkflowStep,
+  index: number,
+  properties: Record<string, unknown>,
+  clearProperties?: string[]
+): void {
+  if (
+    !properties ||
+    typeof properties !== "object" ||
+    Array.isArray(properties)
+  ) {
+    throw new Error("Step properties must be an object");
+  }
+  const allowedKeys = new Set<string>(
+    isScriptStep(step)
+      ? BULK_EDITABLE_SCRIPT_STEP_KEYS
+      : BULK_EDITABLE_PROMPT_STEP_KEYS
+  );
+  for (const key of [...Object.keys(properties), ...(clearProperties ?? [])]) {
+    if (!allowedKeys.has(key)) {
+      throw new Error(
+        `Cannot bulk update ${key} on ${isScriptStep(step) ? "script" : "prompt"} step ${index + 1}`
+      );
+    }
+  }
+}
 
 /**
  * Empty-string agent selections are used by settings/UI controls to represent

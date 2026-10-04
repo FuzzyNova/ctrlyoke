@@ -21,6 +21,7 @@ function TestHarness({
   deleteIndex = 0,
   executionState = EXECUTION_STATES.IDLE,
   isExternallyManaged = false,
+  confirmDeleteOperations = false,
 }: {
   step: WorkflowStep;
   pendingRewind?: { fromStepIndex: number };
@@ -38,19 +39,21 @@ function TestHarness({
   deleteIndex?: number;
   executionState?: (typeof EXECUTION_STATES)[keyof typeof EXECUTION_STATES];
   isExternallyManaged?: boolean;
+  confirmDeleteOperations?: boolean;
 }) {
-  const { openContextMenu, contextMenuPortal } = useStepContextMenu({
-    isExternallyManaged,
-    canChangeStartPosition: true,
-    canPasteStep: true,
-    executionState,
-    confirmResetOperations: false,
-    confirmDeleteOperations: false,
-    totalSteps,
-    currentStep,
-    pendingRewind,
-    parallelGroups,
-  });
+  const { openContextMenu, contextMenuPortal, deleteModal } =
+    useStepContextMenu({
+      isExternallyManaged,
+      canChangeStartPosition: true,
+      canPasteStep: true,
+      executionState,
+      confirmResetOperations: false,
+      confirmDeleteOperations,
+      totalSteps,
+      currentStep,
+      pendingRewind,
+      parallelGroups,
+    });
 
   return (
     <>
@@ -72,6 +75,7 @@ function TestHarness({
         Open menu
       </button>
       {contextMenuPortal}
+      {deleteModal}
     </>
   );
 }
@@ -116,6 +120,7 @@ describe("useStepContextMenu", () => {
       .map((button) => button.textContent?.trim());
 
     expect(labels).toEqual([
+      "Select All",
       "Copy Step",
       "Copy Prompt",
       "Copy Output",
@@ -131,8 +136,129 @@ describe("useStepContextMenu", () => {
       "Disable",
       "Delete",
     ]);
-    expect(screen.getAllByRole("separator")).toHaveLength(5);
-    expect(screen.getByRole("button", { name: "Reply to Step" })).toBeDisabled();
+    expect(screen.getAllByRole("separator")).toHaveLength(6);
+    expect(
+      screen.getByRole("button", { name: "Reply to Step" })
+    ).toBeDisabled();
+  });
+
+  it("offers selection actions and preserves the current selection when opening on another row", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "One" }, { prompt: "Two" }],
+    });
+    useEditorStore
+      .getState()
+      .selectPrompt(
+        { kind: "queue", index: 1 },
+        useWorkflowStore.getState().steps[1]
+      );
+    render(<TestHarness step={{ prompt: "One" }} deleteIndex={0} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    expect(
+      screen.getByRole("button", { name: "Select All" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Select to Here" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add to Selection" })
+    ).toBeInTheDocument();
+    expect(useEditorStore.getState().selectionTarget).toEqual({
+      kind: "queue",
+      index: 1,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Add to Selection" }));
+    expect(useEditorStore.getState().multiSelection?.indices).toEqual([0, 1]);
+  });
+
+  it("offers remove and clear actions only for a multi-selection", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "One" }, { prompt: "Two" }, { prompt: "Three" }],
+    });
+    useEditorStore.getState().selectAllSteps();
+    render(<TestHarness step={{ prompt: "One" }} deleteIndex={0} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove from Selection" })
+    );
+    expect(useEditorStore.getState().multiSelection?.indices).toEqual([1, 2]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear Selection" }));
+    expect(useEditorStore.getState().multiSelection).toBeNull();
+  });
+
+  it("offers bulk enable/disable and delete with counts for a selected row", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "One" }, { prompt: "Two", enabled: false }],
+    });
+    useEditorStore.getState().selectAllSteps();
+    render(<TestHarness step={{ prompt: "One" }} totalSteps={2} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    expect(
+      screen.getByRole("button", { name: "Disable 2 steps" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Delete 2 steps" })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Disable 2 steps" }));
+    expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.UPDATE_STEPS,
+      indices: [0, 1],
+      properties: { enabled: false },
+    });
+  });
+
+  it("shows the bulk delete confirmation with the selection count", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "One" }, { prompt: "Two" }],
+    });
+    useEditorStore.getState().selectAllSteps();
+    render(
+      <TestHarness
+        step={{ prompt: "One" }}
+        totalSteps={2}
+        confirmDeleteOperations={true}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete 2 steps" }));
+
+    expect(screen.getAllByText("Delete 2 steps?")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.DELETE_PROMPT,
+      indices: [0, 1],
+    });
+    expect(useEditorStore.getState().multiSelection).toBeNull();
+  });
+
+  it("disables bulk actions with a reason and selection fix", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [
+        { prompt: "Done", _runtime: { completedAt: Date.now() } },
+        { prompt: "Pending" },
+      ],
+    });
+    useEditorStore.getState().selectAllSteps();
+    render(<TestHarness step={{ prompt: "Done" }} totalSteps={2} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    for (const label of ["Disable 2 steps", "Delete 2 steps"]) {
+      expect(screen.getByRole("button", { name: label })).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: label }).getAttribute("title")
+      ).toContain("Remove completed or running steps from the selection");
+    }
   });
 
   it("switches the output action to Show output when the step is hidden", () => {
@@ -162,6 +288,68 @@ describe("useStepContextMenu", () => {
     ).not.toBeDisabled();
   });
 
+  it("moves a selected block up once and remaps its indices", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "bulk-reorder.prompt.md",
+      steps: [
+        { prompt: "One" },
+        { prompt: "Two" },
+        { prompt: "Three" },
+        { prompt: "Four" },
+      ],
+    });
+    useEditorStore.setState({
+      multiSelection: { indices: [1, 3], anchorIndex: 3 },
+    });
+    render(
+      <TestHarness step={{ prompt: "Two" }} totalSteps={4} deleteIndex={1} />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Move Up" }));
+
+    expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.REORDER_PROMPTS,
+        newPendingOrder: [1, 3, 0, 2],
+      })
+    );
+    expect(useEditorStore.getState().multiSelection).toEqual({
+      indices: [0, 1],
+      anchorIndex: 1,
+    });
+  });
+
+  it("moves a selected block down once and remaps its indices", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "bulk-reorder.prompt.md",
+      steps: [
+        { prompt: "One" },
+        { prompt: "Two" },
+        { prompt: "Three" },
+        { prompt: "Four" },
+      ],
+    });
+    useEditorStore.setState({
+      multiSelection: { indices: [0, 2], anchorIndex: 0 },
+    });
+    render(
+      <TestHarness step={{ prompt: "Three" }} totalSteps={4} deleteIndex={2} />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Move Down" }));
+
+    expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.REORDER_PROMPTS,
+        newPendingOrder: [1, 0, 2, 3],
+      })
+    );
+    expect(useEditorStore.getState().multiSelection).toEqual({
+      indices: [1, 2],
+      anchorIndex: 1,
+    });
+  });
+
   it("omits Move Up/Down for a rewind-direction (done) step", () => {
     render(<TestHarness step={{ prompt: "Done prompt" }} direction="rewind" />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
@@ -172,6 +360,41 @@ describe("useStepContextMenu", () => {
     expect(
       screen.queryByRole("button", { name: "Move Down" })
     ).not.toBeInTheDocument();
+  });
+
+  it("disables mutation items for the executed prefix with a reason tooltip", () => {
+    render(
+      <TestHarness
+        step={{ prompt: "Completed", _runtime: { completedAt: Date.now() } }}
+        direction="rewind"
+        currentStep={1}
+        deleteIndex={0}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Delete" })).toHaveAttribute(
+      "title",
+      "Cannot change a completed step"
+    );
+    expect(screen.getByRole("button", { name: "Disable" })).toBeDisabled();
+  });
+
+  it("disables preserved-prefix deletion during a pending rewind", () => {
+    render(
+      <TestHarness
+        step={{ prompt: "Preserved" }}
+        pendingRewind={{ fromStepIndex: 1 }}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Delete" })).toHaveAttribute(
+      "title",
+      "Cannot change a preserved step while a continuation is pending"
+    );
   });
 
   it("switches the content/toggle labels for disabled script steps", () => {
@@ -194,22 +417,24 @@ describe("useStepContextMenu", () => {
       screen.getByRole("button", { name: "Copy Script" })
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Enable" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Reply to Step" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Reply to Step" })).toHaveAttribute(
-      "title",
-      "Script steps have no AI session to reply to"
-    );
+    expect(
+      screen.getByRole("button", { name: "Reply to Step" })
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Reply to Step" })
+    ).toHaveAttribute("title", "Script steps have no AI session to reply to");
   });
 
   it("disables Reply to Step when no session ID is available", () => {
     render(<TestHarness step={{ prompt: "Original prompt" }} />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
-    expect(screen.getByRole("button", { name: "Reply to Step" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Reply to Step" })).toHaveAttribute(
-      "title",
-      "This step has no session to resume yet"
-    );
+    expect(
+      screen.getByRole("button", { name: "Reply to Step" })
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Reply to Step" })
+    ).toHaveAttribute("title", "This step has no session to resume yet");
   });
 
   it("replies with the step session and resolved properties in read-only, running, and history views", () => {

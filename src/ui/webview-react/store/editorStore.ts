@@ -28,6 +28,14 @@ import type {
 } from "@root/types/WebviewMessageTypes";
 import { useUiStore } from "./uiStore";
 import { isStepContentEqual, type WorkflowStep } from "./workflowStore";
+import { useWorkflowStore } from "./workflowStore";
+import {
+  addStepRange,
+  collapseStepSelection,
+  selectAllSteps,
+  selectStepRange,
+  toggleStepIndex,
+} from "../utils/stepMultiSelection";
 
 /** Type guard for script steps (webview-local version) */
 function isScriptStep(step: WorkflowStep): step is ScriptStep {
@@ -81,6 +89,84 @@ export interface PropertyValues {
   priorContext?: PriorContext; // undefined = inherit/default
   additionalArgs: Disableable<string>; // undefined = inherit, null = none, string = custom args
   toolPermissions?: ToolPermissionsOverride | null; // undefined = inherit workflow, null = none (omit flags), object = override
+}
+
+/** Returned by bulk display selectors when selected steps have unlike values. */
+export const MIXED_VALUE: unique symbol = Symbol("editor-bulk-mixed");
+export type MixedValue = typeof MIXED_VALUE;
+export const BULK_MIXED_OPTION = "__bulk_mixed__";
+
+function valuesEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (
+    left === null ||
+    right === null ||
+    typeof left !== "object" ||
+    typeof right !== "object"
+  )
+    return false;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((value, index) => valuesEqual(value, right[index]))
+    );
+  }
+  const leftRecord = left as Record<string, unknown>;
+  const rightRecord = right as Record<string, unknown>;
+  const leftKeys = Object.keys(leftRecord).sort();
+  const rightKeys = Object.keys(rightRecord).sort();
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every(
+      (key, index) =>
+        key === rightKeys[index] &&
+        valuesEqual(leftRecord[key], rightRecord[key])
+    )
+  );
+}
+
+function originalBulkValue(
+  step: WorkflowStep,
+  key: keyof PropertyValues | "enabled"
+): unknown {
+  if (key === PROMPT_PROPERTIES.ENABLED) return step.enabled !== false;
+  return step[key as keyof WorkflowStep];
+}
+
+/** Resolve the stable display value for one sparse bulk-edit field. */
+export function getBulkDisplayValue<K extends keyof PropertyValues>(
+  state: Pick<EditorState, "bulkPatch" | "multiSelection">,
+  steps: readonly WorkflowStep[],
+  key: K
+): PropertyValues[K] | MixedValue;
+export function getBulkDisplayValue(
+  state: Pick<EditorState, "bulkPatch" | "multiSelection">,
+  steps: readonly WorkflowStep[],
+  key: "enabled"
+): boolean | MixedValue;
+export function getBulkDisplayValue(
+  state: Pick<EditorState, "bulkPatch" | "multiSelection">,
+  steps: readonly WorkflowStep[],
+  key: keyof PropertyValues | "enabled"
+): unknown {
+  if (Object.prototype.hasOwnProperty.call(state.bulkPatch, key)) {
+    return state.bulkPatch[key];
+  }
+  const indices = state.multiSelection?.indices ?? [];
+  if (indices.length === 0) return MIXED_VALUE;
+  const first = steps[indices[0]];
+  if (!first) return MIXED_VALUE;
+  const original = originalBulkValue(first, key);
+  return indices.every((index) => {
+    const step = steps[index];
+    return (
+      step !== undefined && valuesEqual(originalBulkValue(step, key), original)
+    );
+  })
+    ? original
+    : MIXED_VALUE;
 }
 
 export interface ReplyContextInput {
@@ -163,6 +249,11 @@ export type EditorSelectionTarget =
 interface EditorState {
   // Editing mode
   selectionTarget: EditorSelectionTarget;
+  multiSelection: { indices: number[]; anchorIndex: number } | null;
+  /** Sparse, shared edits staged while a multi-selection is active. */
+  bulkPatch: Partial<PropertyValues & { enabled: boolean }>;
+  /** Companion fields last written by the harness cascade, for reverting it. */
+  bulkCascadeCompanions: Array<"model" | "additionalArgs">;
   selectedPromptIndex: number | null; // null = new prompt mode, number = editing existing
   originalPromptData: WorkflowStep | null; // For Cancel/revert functionality
   savedNewPromptState: SavedNewStepState | null; // Saved state when switching to edit mode
@@ -305,6 +396,11 @@ interface EditorActions {
    * to the prompt and continue editing.
    */
   deselect: () => void;
+  extendMultiSelectionByRange: (index: number) => void;
+  toggleMultiSelection: (index: number) => void;
+  addMultiSelectionRange: (index: number) => void;
+  selectAllSteps: () => void;
+  clearMultiSelection: () => void;
 
   // Step type
   setStepType: (
@@ -333,6 +429,9 @@ interface EditorActions {
     value: PropertyValues[K]
   ) => void;
   setProperties: (properties: Partial<PropertyValues>) => void;
+  setHarnessCascade: (properties: Partial<PropertyValues>) => void;
+  clearBulkCascadeCompanions: () => void;
+  clearBulkPatchField: (key: keyof PropertyValues | "enabled") => void;
   resetProperties: () => void;
 
   // End condition management
@@ -395,6 +494,9 @@ interface EditorSelectors {
 
 const initialState: EditorState = {
   selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
+  multiSelection: null,
+  bulkPatch: {},
+  bulkCascadeCompanions: [],
   selectedPromptIndex: null,
   originalPromptData: null,
   savedNewPromptState: null,
@@ -460,6 +562,9 @@ export const useEditorStore = create<
       } else {
         // Fallback if promptData not provided (shouldn't happen)
         set({
+          multiSelection: null,
+          bulkPatch: {},
+          bulkCascadeCompanions: [],
           selectionTarget: {
             kind: FINAL_STEP_PHASES.QUEUE,
             index: resolvedIndex,
@@ -480,6 +585,9 @@ export const useEditorStore = create<
     if (savedNewPromptState) {
       // Restore saved new prompt state (from switching to edit mode), preserving step type
       set({
+        multiSelection: null,
+        bulkPatch: {},
+        bulkCascadeCompanions: [],
         selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
         selectedPromptIndex: null,
         originalPromptData: null,
@@ -496,6 +604,9 @@ export const useEditorStore = create<
       if (!restored) {
         // No persisted state, reset to defaults
         set({
+          multiSelection: null,
+          bulkPatch: {},
+          bulkCascadeCompanions: [],
           selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
@@ -521,6 +632,9 @@ export const useEditorStore = create<
       } else {
         // State was restored, just clear edit mode flags
         set({
+          multiSelection: null,
+          bulkPatch: {},
+          bulkCascadeCompanions: [],
           selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
@@ -619,6 +733,9 @@ export const useEditorStore = create<
       };
 
       set({
+        multiSelection: null,
+        bulkPatch: {},
+        bulkCascadeCompanions: [],
         selectionTarget: newTarget,
         selectedPromptIndex: isFinalStepTarget ? null : index,
         originalPromptData: promptData,
@@ -696,6 +813,9 @@ export const useEditorStore = create<
       };
 
       set({
+        multiSelection: null,
+        bulkPatch: {},
+        bulkCascadeCompanions: [],
         selectionTarget: newTarget,
         selectedPromptIndex: isFinalStepTarget ? null : index,
         originalPromptData: promptData,
@@ -810,6 +930,9 @@ export const useEditorStore = create<
     const { savedNewPromptState } = state;
     if (savedNewPromptState) {
       set({
+        multiSelection: null,
+        bulkPatch: {},
+        bulkCascadeCompanions: [],
         selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
         selectedPromptIndex: null,
         originalPromptData: null,
@@ -824,6 +947,9 @@ export const useEditorStore = create<
       const restored = get().restoreFromVsCodeState(vscode);
       if (!restored) {
         set({
+          multiSelection: null,
+          bulkPatch: {},
+          bulkCascadeCompanions: [],
           selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
@@ -849,6 +975,9 @@ export const useEditorStore = create<
         });
       } else {
         set({
+          multiSelection: null,
+          bulkPatch: {},
+          bulkCascadeCompanions: [],
           selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
@@ -873,6 +1002,142 @@ export const useEditorStore = create<
     }
   },
 
+  extendMultiSelectionByRange: (index) => {
+    const state = get();
+    const queueLength = useWorkflowStore.getState().steps.length;
+    const selectedIndex =
+      state.multiSelection?.anchorIndex ??
+      (state.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
+        ? state.selectionTarget.index
+        : index);
+    const indices = selectStepRange(selectedIndex, index, queueLength);
+    const selection = collapseStepSelection({
+      indices,
+      anchorIndex: selectedIndex,
+    });
+    if (!selection) {
+      if (indices.length === 1) {
+        const step = useWorkflowStore.getState().steps[indices[0]];
+        if (step) get().selectPrompt(indices[0], step);
+      }
+      set({
+        multiSelection: null,
+        bulkPatch: {},
+        bulkCascadeCompanions: [],
+        isDirty: false,
+      });
+      return;
+    }
+    if (state.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
+      get().deselect();
+    }
+    set({ multiSelection: selection });
+  },
+
+  toggleMultiSelection: (index) => {
+    const state = get();
+    const steps = useWorkflowStore.getState().steps;
+    const baseIndices =
+      state.multiSelection?.indices ??
+      (state.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
+        ? [state.selectionTarget.index]
+        : []);
+    const indices = toggleStepIndex(baseIndices, index, steps.length);
+    const selection = collapseStepSelection({ indices, anchorIndex: index });
+    if (!selection) {
+      set({
+        multiSelection: null,
+        bulkPatch: {},
+        bulkCascadeCompanions: [],
+        isDirty: false,
+      });
+      if (indices.length === 1) {
+        const step = steps[indices[0]];
+        if (step) get().selectPrompt(indices[0], step);
+      } else if (
+        state.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT
+      ) {
+        get().deselect();
+      }
+      return;
+    }
+    if (state.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
+      get().deselect();
+    }
+    set({ multiSelection: selection });
+  },
+
+  addMultiSelectionRange: (index) => {
+    const state = get();
+    const steps = useWorkflowStore.getState().steps;
+    const anchorIndex =
+      state.multiSelection?.anchorIndex ??
+      (state.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
+        ? state.selectionTarget.index
+        : index);
+    const indices = addStepRange(
+      state.multiSelection?.indices ??
+        (state.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
+          ? [state.selectionTarget.index]
+          : []),
+      anchorIndex,
+      index,
+      steps.length
+    );
+    const selection = collapseStepSelection({ indices, anchorIndex });
+    if (!selection) {
+      if (indices.length === 1) {
+        const step = steps[indices[0]];
+        if (step) get().selectPrompt(indices[0], step);
+      }
+      set({
+        multiSelection: null,
+        bulkPatch: {},
+        bulkCascadeCompanions: [],
+        isDirty: false,
+      });
+      return;
+    }
+    if (state.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
+      get().deselect();
+    }
+    set({ multiSelection: selection });
+  },
+
+  selectAllSteps: () => {
+    const state = get();
+    const indices = selectAllSteps(useWorkflowStore.getState().steps.length);
+    const selection = collapseStepSelection({ indices, anchorIndex: 0 });
+    if (!selection) {
+      if (indices.length === 1) {
+        const step = useWorkflowStore.getState().steps[0];
+        if (step) get().selectPrompt(0, step);
+      }
+      set({
+        multiSelection: null,
+        bulkPatch: {},
+        bulkCascadeCompanions: [],
+        isDirty: false,
+      });
+      return;
+    }
+    if (state.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
+      get().deselect();
+    }
+    set({ multiSelection: selection });
+  },
+
+  clearMultiSelection: () =>
+    set((state) => ({
+      multiSelection: null,
+      bulkPatch: {},
+      bulkCascadeCompanions: [],
+      isDirty:
+        state.selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT
+          ? isNewStepDraftDirty(captureNewStepDraft(state))
+          : state.isDirty,
+    })),
+
   // ============================================================================
   // STEP TYPE
   // ============================================================================
@@ -889,9 +1154,23 @@ export const useEditorStore = create<
   },
 
   setStepEnabled: (enabled) =>
-    set({
-      stepEnabled: enabled,
-      isDirty: true,
+    set((state) => {
+      if (state.multiSelection) {
+        const steps = useWorkflowStore.getState().steps;
+        const original = getBulkDisplayValue(
+          { ...state, bulkPatch: {} },
+          steps,
+          PROMPT_PROPERTIES.ENABLED
+        );
+        const bulkPatch = { ...state.bulkPatch };
+        if (original !== MIXED_VALUE && valuesEqual(original, enabled)) {
+          delete bulkPatch.enabled;
+        } else {
+          bulkPatch.enabled = enabled;
+        }
+        return { bulkPatch, isDirty: Object.keys(bulkPatch).length > 0 };
+      }
+      return { stepEnabled: enabled, isDirty: true };
     }),
 
   setScriptCommand: (command) =>
@@ -982,14 +1261,58 @@ export const useEditorStore = create<
 
   setProperty: (key, value) =>
     set((state) => {
+      const normalizedValue =
+        key === PROMPT_PROPERTIES.ERROR_BEHAVIOR
+          ? normalizePromptErrorBehavior(
+              value as PropertyValues["errorBehavior"]
+            )
+          : value;
+      if (state.multiSelection) {
+        const steps = useWorkflowStore.getState().steps;
+        const original = getBulkDisplayValue(
+          { ...state, bulkPatch: {} },
+          steps,
+          key
+        );
+        const bulkPatch = { ...state.bulkPatch };
+        let bulkCascadeCompanions = state.bulkCascadeCompanions;
+        if (
+          original !== MIXED_VALUE &&
+          valuesEqual(original, normalizedValue)
+        ) {
+          delete bulkPatch[key];
+          if (key === PROMPT_PROPERTIES.HARNESS) {
+            bulkCascadeCompanions = bulkCascadeCompanions.filter(
+              (companion) => {
+                if (
+                  Object.prototype.hasOwnProperty.call(bulkPatch, companion)
+                ) {
+                  delete bulkPatch[companion];
+                }
+                return false;
+              }
+            );
+          }
+        } else {
+          Object.assign(bulkPatch, { [key]: normalizedValue });
+          if (
+            key === PROMPT_PROPERTIES.MODEL ||
+            key === PROMPT_PROPERTIES.ADDITIONAL_ARGS
+          ) {
+            bulkCascadeCompanions = bulkCascadeCompanions.filter(
+              (companion) => companion !== key
+            );
+          }
+        }
+        return {
+          bulkPatch,
+          bulkCascadeCompanions,
+          isDirty: Object.keys(bulkPatch).length > 0,
+        };
+      }
       const properties: PropertyValues = {
         ...state.properties,
-        [key]:
-          key === PROMPT_PROPERTIES.ERROR_BEHAVIOR
-            ? normalizePromptErrorBehavior(
-                value as PropertyValues["errorBehavior"]
-              )
-            : value,
+        [key]: normalizedValue,
       };
       return {
         properties,
@@ -1011,6 +1334,77 @@ export const useEditorStore = create<
           properties
         ),
         isDirty: true,
+      };
+    }),
+
+  setHarnessCascade: (propertyUpdates) =>
+    set((state) => {
+      if (!state.multiSelection) {
+        const properties = { ...state.properties, ...propertyUpdates };
+        return {
+          properties,
+          replyContext: replyContextAfterPropertyChange(
+            state.replyContext,
+            properties
+          ),
+          isDirty: true,
+        };
+      }
+      const bulkPatch = { ...state.bulkPatch };
+      const originalHarness = getBulkDisplayValue(
+        { ...state, bulkPatch: {} },
+        useWorkflowStore.getState().steps,
+        "harness"
+      );
+      if (
+        originalHarness !== MIXED_VALUE &&
+        propertyUpdates.harness === originalHarness
+      ) {
+        delete bulkPatch.harness;
+        for (const key of state.bulkCascadeCompanions) delete bulkPatch[key];
+        return {
+          bulkPatch,
+          bulkCascadeCompanions: [],
+          isDirty: Object.keys(bulkPatch).length > 0,
+        };
+      }
+      Object.assign(bulkPatch, propertyUpdates);
+      const companions = ["model", "additionalArgs"] as const;
+      const bulkCascadeCompanions = companions.filter((key) =>
+        Object.prototype.hasOwnProperty.call(propertyUpdates, key)
+      );
+      return {
+        bulkPatch,
+        bulkCascadeCompanions,
+        isDirty: Object.keys(bulkPatch).length > 0,
+      };
+    }),
+
+  clearBulkCascadeCompanions: () =>
+    set((state) => {
+      const bulkPatch = { ...state.bulkPatch };
+      for (const key of state.bulkCascadeCompanions) delete bulkPatch[key];
+      return {
+        bulkPatch,
+        bulkCascadeCompanions: [],
+        isDirty: Object.keys(bulkPatch).length > 0,
+      };
+    }),
+
+  clearBulkPatchField: (key) =>
+    set((state) => {
+      const bulkPatch = { ...state.bulkPatch };
+      delete bulkPatch[key];
+      let bulkCascadeCompanions = state.bulkCascadeCompanions;
+      if (key === PROMPT_PROPERTIES.HARNESS) {
+        for (const companion of bulkCascadeCompanions)
+          delete bulkPatch[companion];
+        bulkCascadeCompanions = [];
+      }
+      return {
+        bulkPatch,
+        bulkCascadeCompanions,
+        isDirty: Object.keys(bulkPatch).length > 0,
       };
     }),
 
@@ -1294,6 +1688,9 @@ export const useEditorStore = create<
   resetEditor: () =>
     set({
       selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
+      multiSelection: null,
+      bulkPatch: {},
+      bulkCascadeCompanions: [],
       selectedPromptIndex: null,
       originalPromptData: null,
       savedNewPromptState: null,
@@ -1322,6 +1719,9 @@ export const useEditorStore = create<
 
   resetToDefaults: () =>
     set({
+      multiSelection: null,
+      bulkPatch: {},
+      bulkCascadeCompanions: [],
       pendingEdits: {},
       stepType: STEP_TYPES.PROMPT,
       stepEnabled: true,
@@ -1470,3 +1870,12 @@ export const useEditorStore = create<
     );
   },
 }));
+
+/** Primitive selectors keep memoized step rows subscribed to only their own state. */
+export const useIsStepMultiSelected = (index: number): boolean =>
+  useEditorStore(
+    (state) => state.multiSelection?.indices.includes(index) ?? false
+  );
+
+export const useMultiSelectionCount = (): number =>
+  useEditorStore((state) => state.multiSelection?.indices.length ?? 0);

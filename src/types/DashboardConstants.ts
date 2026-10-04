@@ -277,6 +277,7 @@ export const MESSAGE_TYPES = {
   EXECUTE_PROMPT_ERROR: "executePromptError", // Extension -> Webview: Notify failure so editor can restore content
   UPDATE_PROMPT: "updatePrompt", // Update existing prompt in queue
   UPDATE_STEP_COLOR: "updateStepColor", // Update only a step's authored identity color
+  UPDATE_STEPS: "updateSteps", // Apply one partial property patch to multiple editable steps
   INSERT_WORKFLOW_STEP: "insertWorkflowStep", // Insert a fully-shaped workflow step after a selected index
   CANCEL_EDIT: "cancelEdit", // Exit edit mode
   SELECT_PROMPT_FOR_EDIT: "selectPromptForEdit", // Load prompt into editor
@@ -687,6 +688,24 @@ export const MESSAGE_TYPES = {
   /** Webview -> Extension: native VS Code operational user feedback */
   SHOW_NATIVE_FEEDBACK: "showNativeFeedback",
 } as const;
+
+/** Prompt-step fields supported by bulk property updates. */
+export const BULK_EDITABLE_PROMPT_STEP_KEYS = [
+  "enabled",
+  "color",
+  "harness",
+  "model",
+  "executionMode",
+  "agent",
+  "mcpServers",
+  "hooks",
+  "errorBehavior",
+  "skills",
+  "secrets",
+  "priorContext",
+  "additionalArgs",
+  "toolPermissions",
+] as const;
 
 /** Stable action identifiers used by the license-management RPC responses. */
 export const LICENSE_ACTIONS = {
@@ -2359,6 +2378,22 @@ export const EDITOR_PLACEHOLDER_TEXT = {
   /** Extended hint for the Final Step editor, explaining its loop-back behavior */
   FINAL_PROMPT:
     "Use @ for files/folders, # for selections/symbols, ~ for git changes, $ for prior context, / for skills and mcps\n\nNote: The Final Step runs after all other prompts complete. If it appends new prompts, it will run again once those finish.",
+  BULK_PROMPTS: (count: number) =>
+    `${count} prompts selected — use the prompt properties drawer to change the properties for all selected prompts`,
+  BULK_STEPS: (count: number) =>
+    `${count} steps selected — color, enable/disable, reorder and delete apply to all selected steps. Select only prompts to edit prompt properties.`,
+  BULK_LOCKED: (count: number) =>
+    `${count} steps selected — cannot edit properties for completed or running steps. Remove them from the selection to edit properties. Color can still be changed.`,
+} as const;
+
+/** Tooltips for controls disabled by a multi-step selection's capabilities. */
+export const BULK_EDIT_DISABLED_REASONS = {
+  LOCKED_STEPS:
+    "Cannot edit properties for completed or running steps. Remove them from the selection to edit properties.",
+  PROMPTS_ONLY: "Select only prompt steps to edit prompt properties.",
+  HARNESS_REQUIRED:
+    "Set a harness to change the model for all selected prompts.",
+  NO_EDITABLE_CHANGE: "Make an editable change before updating",
 } as const;
 
 // ============================================================================
@@ -3801,6 +3836,7 @@ export type RunSummaryCacheStatus =
 // KEYBOARD KEYS - Shared browser keyboard event key values
 // ============================================================================
 export const KEYBOARD_KEYS = {
+  DELETE: "Delete",
   ENTER: "Enter",
   ESCAPE: "Escape",
   F3: "F3",

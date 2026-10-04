@@ -85,6 +85,44 @@ describe("PropertiesDrawer landmark", () => {
       screen.getByRole("region", { name: "Prompt Properties" })
     ).toHaveAttribute("aria-labelledby", "prompt-properties-heading");
   });
+
+  it("shows the prompt-property reason for a script selection", () => {
+    useWorkflowStore
+      .getState()
+      .setPrompts([{ type: "script", script: "true" } as never]);
+    useEditorStore.setState({
+      multiSelection: { indices: [0], anchorIndex: 0 },
+    });
+    renderHarnessDrawer();
+
+    expect(screen.getByLabelText(/^Harness/)).toBeDisabled();
+    expect(screen.getByLabelText(/^Harness/)).toHaveAttribute(
+      "title",
+      "Select only prompt steps to edit prompt properties."
+    );
+  });
+
+  it("disables harness-scoped options when selected prompts have different harnesses", () => {
+    useWorkflowStore
+      .getState()
+      .setPrompts([
+        { prompt: "one", harness: "claude-cli" } as never,
+        { prompt: "two", harness: "codex-cli" } as never,
+      ]);
+    useEditorStore.setState({
+      multiSelection: { indices: [0, 1], anchorIndex: 0 },
+    });
+    renderHarnessDrawer();
+
+    const model = screen.getByLabelText(/^Model/);
+    expect(model).toBeDisabled();
+    expect(model).toHaveAttribute(
+      "title",
+      expect.stringContaining(
+        "Set a harness to change the model for all selected prompts."
+      )
+    );
+  });
 });
 
 describe("PropertiesDrawer execution mode", () => {

@@ -15,7 +15,7 @@ import {
   ungroupParallelGroup,
   unwrapParallelGroup,
   validateParallelGroupTopology,
-  deleteParallelGroupStep,
+  deleteParallelGroupSteps,
   PARALLEL_GROUP_INSERT_POSITIONS,
   flattenParallelItems,
   promoteStepToParallelGroup,
@@ -456,14 +456,14 @@ suite("ParallelGroupTopology", () => {
     });
 
     test("shrinks a group on deletion and unwraps a two-member group", () => {
-      const result = deleteParallelGroupStep(topology(), 2);
+      const result = deleteParallelGroupSteps(topology(), [2]);
       assert.strictEqual(ranges(result), "g1:1-2");
-      const unwrapped = deleteParallelGroupStep(result, 1);
+      const unwrapped = deleteParallelGroupSteps(result, [1]);
       assert.deepStrictEqual(unwrapped.parallelGroups, []);
     });
 
     test("shifts groups after a deletion", () => {
-      const result = deleteParallelGroupStep(topology(), 0);
+      const result = deleteParallelGroupSteps(topology(), [0]);
       assert.strictEqual(ranges(result), "g1:0-2");
     });
   });
@@ -726,8 +726,23 @@ suite("ParallelGroupTopology", () => {
     });
   });
   suite("live group mutation rules", () => {
+    test("evaluates multiple removals against the final started-group topology", () => {
+      const value = liveGroupTopology(
+        ["b"],
+        ["before", "a", "b", "c", "after"],
+        [{ id: "g1", startIndex: 1, endIndex: 3, failFast: true }]
+      );
+      assert.throws(
+        () => deleteParallelGroupSteps(value, [1, 3]),
+        /Cannot shrink active parallel group g1 from two members to one/
+      );
+      const removedWholeGroup = deleteParallelGroupSteps(value, [1, 2, 3]);
+      assert.deepStrictEqual(names(removedWholeGroup), ["before", "after"]);
+      assert.strictEqual(ranges(removedWholeGroup), "");
+    });
+
     test("removes an unstarted member while started anchors keep their index", () => {
-      const result = deleteParallelGroupStep(liveGroupTopology(["b"]), 3);
+      const result = deleteParallelGroupSteps(liveGroupTopology(["b"]), [3]);
       assert.deepStrictEqual(names(result), ["a", "b", "c", "e"]);
       assert.strictEqual(ranges(result), "g1:1-2");
       assert.strictEqual(result.steps[1]._runtime?.stepId, "id-b");
@@ -740,7 +755,7 @@ suite("ParallelGroupTopology", () => {
         [{ id: "g1", startIndex: 1, endIndex: 2, failFast: true }]
       );
       assert.throws(
-        () => deleteParallelGroupStep(value, 2),
+        () => deleteParallelGroupSteps(value, [2]),
         /Cannot shrink active parallel group g1 from two members to one/
       );
     });
@@ -751,7 +766,7 @@ suite("ParallelGroupTopology", () => {
         ["a", "b", "c", "d"],
         [{ id: "g1", startIndex: 1, endIndex: 2, failFast: true }]
       );
-      const result = deleteParallelGroupStep(value, 2);
+      const result = deleteParallelGroupSteps(value, [2]);
       assert.deepStrictEqual(names(result), ["a", "b", "d"]);
       assert.strictEqual(ranges(result), "");
     });

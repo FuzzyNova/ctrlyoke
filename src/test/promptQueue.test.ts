@@ -267,11 +267,11 @@ suite("PromptQueue State Machine Tests", () => {
         const removedId = queue.getState().steps[0]._runtime?.stepId;
         assert.ok(removedId);
 
-        await RunContinuationService.removeStepAtRun(
+        await RunContinuationService.removeStepsAtRun(
           workspace,
           queue.getState().workflowKey!,
           promotion.runRef,
-          0,
+          [0],
           queue.getState().definitionRevision
         );
 
@@ -338,11 +338,11 @@ suite("PromptQueue State Machine Tests", () => {
               }
             }
             assert.ok(sawDescriptorLock);
-            const mutationPromise = RunContinuationService.removeStepAtRun(
+            const mutationPromise = RunContinuationService.removeStepsAtRun(
               workspace,
               workflowKey,
               promotion.runRef,
-              0,
+              [0],
               1
             );
             return { claimPromise, mutationPromise };
@@ -586,7 +586,112 @@ suite("PromptQueue State Machine Tests", () => {
     });
   });
 
-  suite("deletePrompt", () => {
+  suite("deletePrompts", () => {
+    test("rejects an invalid batch without changing queue state or revision", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      const before = queue.getState();
+      await assert.rejects(
+        () => queue.deletePrompts([1, 99]),
+        /Invalid prompt index/
+      );
+      assert.deepStrictEqual(queue.getState().steps, before.steps);
+      assert.strictEqual(
+        queue.getState().definitionRevision,
+        before.definitionRevision
+      );
+    });
+
+    test("deletes descending indices and shifts bookkeeping with one revision", async () => {
+      const prompts = ["zero", "one", "two", "three", "four"].map((prompt) => ({
+        prompt,
+      }));
+      queue.loadPrompts(createPromptFile(prompts));
+      const internal = (queue as any).state;
+      internal.currentIndex = 4;
+      internal.completedIndices = new Set(["0", "2", "4"]);
+      internal.results = prompts.map((prompt, index) => ({ prompt, index }));
+      const revision = queue.getState().definitionRevision;
+      await queue.deletePrompts([1, 3]);
+      const state = queue.getState();
+      assert.deepStrictEqual(
+        state.steps.map((step) => (step as PromptStep).prompt),
+        ["zero", "two", "four"]
+      );
+      assert.strictEqual(state.currentIndex, 2);
+      assert.deepStrictEqual([...state.completedIndices], ["0", "1", "2"]);
+      assert.deepStrictEqual(
+        (queue as any).state.results.map((result: any) => result.index),
+        [0, 2, 4]
+      );
+      assert.strictEqual(state.definitionRevision, revision + 1);
+    });
+
+    test("color batches range-check only and stay legal after completion", async () => {
+      const prompts = ["zero", "one", "two", "three", "four"].map((prompt) => ({
+        prompt,
+      }));
+      queue.loadPrompts(createPromptFile(prompts));
+      await markQueueCompleted(queue);
+      const revision = queue.getState().definitionRevision;
+      await queue.updatePromptColors([0, 2], "#abcdef");
+      assert.deepStrictEqual(
+        queue.getState().steps.map((step) => step.color),
+        ["#abcdef", undefined, "#abcdef", undefined, undefined]
+      );
+      assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+      assert.strictEqual(queue.getState().definitionRevision, revision + 1);
+    });
+
+    test("bulk updates validate every target and bump the revision once", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      const revision = queue.getState().definitionRevision;
+      await assert.rejects(
+        queue.updateSteps([0, 99], { enabled: false }),
+        /Invalid prompt index/
+      );
+      assert.deepStrictEqual(
+        queue.getState().steps.map((step) => step.enabled),
+        [undefined, undefined, undefined]
+      );
+      assert.strictEqual(queue.getState().definitionRevision, revision);
+
+      await queue.updateSteps([0, 2], { enabled: false });
+      assert.deepStrictEqual(
+        queue.getState().steps.map((step) => step.enabled),
+        [false, undefined, false]
+      );
+      assert.strictEqual(queue.getState().definitionRevision, revision + 1);
+    });
+
+    test("bulk updates reject prompt-only properties on script steps atomically", async () => {
+      queue.loadPrompts(
+        createPromptFile([
+          { type: STEP_TYPES.SCRIPT, script: "echo one" },
+          { prompt: "two" },
+        ] as PromptStep[])
+      );
+      const revision = queue.getState().definitionRevision;
+      await assert.rejects(
+        queue.updateSteps([0, 1], { harness: "codex-cli" }),
+        /Cannot bulk update harness on script step 1/
+      );
+      assert.strictEqual(queue.getState().steps[0].enabled, undefined);
+      assert.strictEqual(queue.getState().steps[1].enabled, undefined);
+      assert.strictEqual(queue.getState().definitionRevision, revision);
+    });
+
+    test("bulk updates reject completed steps", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      await markQueueCompleted(queue);
+      const revision = queue.getState().definitionRevision;
+      await assert.rejects(
+        queue.updateSteps([0, 1], { enabled: false }),
+        /Cannot update a completed step/
+      );
+      assert.strictEqual(queue.getState().steps[0].enabled, undefined);
+      assert.strictEqual(queue.getState().definitionRevision, revision);
+    });
+
     test("should not allow deleting the current prompt while pause is pending", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await startQueueExecution(queue);
@@ -595,7 +700,7 @@ suite("PromptQueue State Machine Tests", () => {
       await queue.commitRuntimeTransition();
 
       await assert.rejects(
-        queue.deletePrompt(0),
+        queue.deletePrompts([0]),
         /Cannot delete the currently executing step/
       );
     });
@@ -647,7 +752,7 @@ suite("PromptQueue State Machine Tests", () => {
       });
 
       test("shrinks and unwraps groups when members are deleted", async () => {
-        await queue.deletePrompt(2);
+        await queue.deletePrompts([2]);
         assert.deepStrictEqual(
           queue.getState().steps.map((step) => step.color),
           ["#111111", "#222222", "#444444", "#555555"]
@@ -655,7 +760,7 @@ suite("PromptQueue State Machine Tests", () => {
         assert.deepStrictEqual(queue.getState().parallelGroups, [
           { id: "group-1", startIndex: 1, endIndex: 2, failFast: false },
         ]);
-        await queue.deletePrompt(1);
+        await queue.deletePrompts([1]);
         assert.deepStrictEqual(queue.getState().parallelGroups, []);
       });
 
@@ -2188,7 +2293,7 @@ suite("PromptQueue State Machine Tests", () => {
         mcp.definitionRevision
       );
 
-      await queue.deletePrompt(1);
+      await queue.deletePrompts([1]);
       const persisted = await run.readRunFile();
       assert.strictEqual(
         persisted.definitionRevision,
@@ -2369,14 +2474,14 @@ suite("PromptQueue State Machine Tests", () => {
     test("delete rejects the running step and completed steps, allows pending", async () => {
       await runningAtStepOne(queue);
       await assert.rejects(
-        () => queue.deletePrompt(1),
+        () => queue.deletePrompts([1]),
         /currently executing step/i
       );
       await assert.rejects(
-        () => queue.deletePrompt(0),
+        () => queue.deletePrompts([0]),
         /completed step while the workflow is running/i
       );
-      await queue.deletePrompt(3);
+      await queue.deletePrompts([3]);
       const steps = queue.getState().steps as PromptStep[];
       assert.deepStrictEqual(
         steps.map((s) => s.prompt),
@@ -2432,7 +2537,7 @@ suite("PromptQueue State Machine Tests", () => {
       await queue.updatePrompt(1, { prompt: "edited s1" });
       await queue.reorderPendingPrompts([1, 0, 2, 3]);
       await queue.insertStepAfterIndex(0, { prompt: "inserted" });
-      await queue.deletePrompt(1);
+      await queue.deletePrompts([1]);
       assert.deepStrictEqual(
         (queue.getState().steps as PromptStep[]).map((s) => s.prompt),
         ["s0", "s2", "edited s1", "s3", "s4"]
@@ -2444,7 +2549,7 @@ suite("PromptQueue State Machine Tests", () => {
         status: STEP_STATUS.COMPLETED,
       });
       await assert.rejects(
-        () => queue.deletePrompt(1),
+        () => queue.deletePrompts([1]),
         /currently executing step/i
       );
     });
@@ -2479,7 +2584,7 @@ suite("PromptQueue State Machine Tests", () => {
 
     test("paused allows deleting the next step to run", async () => {
       await pausedAtStepTwo(queue);
-      await queue.deletePrompt(2);
+      await queue.deletePrompts([2]);
       const state = queue.getState();
       assert.deepStrictEqual(
         (state.steps as PromptStep[]).map((s) => s.prompt),
@@ -2516,7 +2621,7 @@ suite("PromptQueue State Machine Tests", () => {
       (queue as any).state.currentIndex = 2;
       // IDLE: nothing is executing, so any step may be edited/deleted.
       await queue.updatePrompt(0, { prompt: "edited idle" });
-      await queue.deletePrompt(1);
+      await queue.deletePrompts([1]);
       const steps = queue.getState().steps as PromptStep[];
       assert.strictEqual((steps[0] as PromptStep).prompt, "edited idle");
       assert.strictEqual(steps.length, 4);
@@ -3001,7 +3106,7 @@ suite("PromptQueue State Machine Tests", () => {
       assert.ok(originalIds[1]);
       assert.notStrictEqual(originalIds[1], originalIds[0]);
 
-      await queue.deletePrompt(0);
+      await queue.deletePrompts([0]);
       await queue.syncStepsForUndoRedo(snapshot);
 
       const restoredIds = queue
@@ -3131,7 +3236,7 @@ suite("PromptQueue State Machine Tests", () => {
       );
       (queue as any).state.currentIndex = 1;
 
-      await queue.deletePrompt(0);
+      await queue.deletePrompts([0]);
       await queue.syncStepsForUndoRedo([{ prompt: "p0" }]);
 
       const state = queue.getState();
@@ -3163,7 +3268,7 @@ suite("PromptQueue State Machine Tests", () => {
       );
       (queue as any).state.currentIndex = 2;
 
-      await queue.deletePrompt(0);
+      await queue.deletePrompts([0]);
       await queue.syncStepsForUndoRedo([{ prompt: "p0" }, { prompt: "p1" }]);
 
       const state = queue.getState();

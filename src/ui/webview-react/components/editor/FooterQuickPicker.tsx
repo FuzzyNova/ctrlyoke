@@ -34,6 +34,7 @@ interface FooterQuickPickerProps {
   popupMaxWidth?: string;
   /** When true, button and popup are disabled (CLI watch mode) */
   disabled?: boolean;
+  disabledReason?: string;
 }
 
 /**
@@ -62,6 +63,7 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
   popupMinWidth = "200px",
   popupMaxWidth,
   disabled = false,
+  disabledReason,
 }) => {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -83,7 +85,7 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
         type="button"
         onClick={disabled ? undefined : onToggle}
         disabled={disabled}
-        title={title}
+        title={disabled ? (disabledReason ?? title) : title}
         aria-label={title}
         className={`px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
           isOverride || isOpen

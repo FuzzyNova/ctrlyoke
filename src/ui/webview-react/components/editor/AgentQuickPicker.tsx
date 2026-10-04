@@ -4,6 +4,12 @@ import {
 } from "@root/types/DashboardConstants";
 import React from "react";
 import { useEditorStore } from "../../store/editorStore";
+import {
+  getBulkDisplayValue,
+  MIXED_VALUE,
+  BULK_MIXED_OPTION,
+} from "../../store/editorStore";
+import { useWorkflowStore } from "../../store/workflowStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
 import { DROPDOWN_NAMESPACES } from "../../types/dropdownNamespaces";
@@ -24,15 +30,24 @@ interface AgentQuickPickerProps {
   isNarrow: boolean;
   showLabel: boolean;
   disabled?: boolean;
+  disabledReason?: string;
 }
 
 export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
   isNarrow,
   showLabel,
   disabled = false,
+  disabledReason,
 }) => {
   const properties = useEditorStore((s) => s.properties);
   const setProperty = useEditorStore((s) => s.setProperty);
+  const multiSelection = useEditorStore((s) => s.multiSelection);
+  const bulkPatch = useEditorStore((s) => s.bulkPatch);
+  const clearBulkPatchField = useEditorStore((s) => s.clearBulkPatchField);
+  const steps = useWorkflowStore((s) => s.steps);
+  const agentValue = multiSelection
+    ? getBulkDisplayValue({ multiSelection, bulkPatch }, steps, "agent")
+    : properties.agent;
   const globalSettings = useSettingsStore((s) => s.globalSettings);
   const workflowProperties = useSettingsStore((s) => s.workflowProperties);
   const availableAgents = useSettingsStore((s) => s.availableAgents);
@@ -59,29 +74,31 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
   const defaultAgentLabel = `Inherit (${resolvedAgentName})`;
 
   const valueLabel =
-    properties.agent === undefined
-      ? resolvedAgentName
-      : properties.agent === null
-        ? "None"
-        : (() => {
-            const agent = availableAgents.find(
-              (a) => a.path === properties.agent || a.name === properties.agent
-            );
-            return agent ? getAgentDisplayName(agent) : properties.agent;
-          })();
+    agentValue === MIXED_VALUE
+      ? "(mixed)"
+      : agentValue === undefined
+        ? resolvedAgentName
+        : agentValue === null
+          ? "None"
+          : (() => {
+              const agent = availableAgents.find(
+                (a) => a.path === agentValue || a.name === agentValue
+              );
+              return agent ? getAgentDisplayName(agent) : agentValue;
+            })();
 
   return (
     <FooterQuickPicker
       isNarrow={isNarrow}
-      showLabel={showLabel && properties.agent !== undefined}
+      showLabel={showLabel && agentValue !== undefined}
       icon={
         <Icon
           name="agent"
-          className={`codicon-sm transition-opacity ${properties.agent !== undefined ? "text-focus-border" : "opacity-40"}`}
+          className={`codicon-sm transition-opacity ${agentValue !== undefined ? "text-focus-border" : "opacity-40"}`}
         />
       }
       valueLabel={valueLabel}
-      isOverride={properties.agent !== undefined}
+      isOverride={agentValue !== undefined}
       isOpen={isOpen}
       onToggle={() => setFooterOpenPicker(isOpen ? null : "agent")}
       onClose={() => setFooterOpenPicker(null)}
@@ -89,18 +106,23 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
       heading="Agent"
       popupMinWidth="220px"
       disabled={disabled}
+      disabledReason={disabledReason}
     >
       <CustomSelect
         schemaPath="agent"
         value={
-          properties.agent === undefined
-            ? INHERIT_DEFAULT_OPTION
-            : properties.agent === null
-              ? NONE_OPTION
-              : properties.agent
+          agentValue === MIXED_VALUE
+            ? BULK_MIXED_OPTION
+            : agentValue === undefined
+              ? INHERIT_DEFAULT_OPTION
+              : agentValue === null
+                ? NONE_OPTION
+                : agentValue
         }
         onChange={(v) => {
-          if (v === INHERIT_DEFAULT_OPTION) {
+          if (v === BULK_MIXED_OPTION) {
+            clearBulkPatchField("agent");
+          } else if (v === INHERIT_DEFAULT_OPTION) {
             setProperty("agent", undefined);
           } else if (v === NONE_OPTION) {
             setProperty("agent", null);
@@ -110,6 +132,9 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
           setFooterOpenPicker(null);
         }}
         options={[
+          ...(agentValue === MIXED_VALUE
+            ? [{ value: BULK_MIXED_OPTION, label: "(mixed)" }]
+            : []),
           ...toSelectOptions(AGENT_SELECTION_OPTIONS_META, "agent").map(
             (option) =>
               option.value === INHERIT_DEFAULT_OPTION

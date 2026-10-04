@@ -185,12 +185,18 @@ function sameWorkingFilePath(
 }
 
 function buildPromptStepChange(
-  text: string,
+  text: string | undefined,
   properties: unknown,
   promptName?: string,
   clearProperties?: string[]
 ): { replace: WorkflowStep; clearProperties?: string[] } {
   const props = properties as Record<string, unknown>;
+  if (text === undefined) {
+    return {
+      replace: buildPromptStepProperties(properties) as WorkflowStep,
+      clearProperties,
+    };
+  }
   return props?.type === STEP_TYPES.SCRIPT
     ? {
         replace: buildScriptStepFromProperties(text, props, promptName),
@@ -3196,7 +3202,7 @@ export class WorkflowOrchestrator {
         await this.invalidateRunViewStepColor(
           runAddress.workflowKey,
           runAddress.runRef,
-          invalidation.index
+          invalidation.indices
         );
       }
     } else {
@@ -3626,13 +3632,13 @@ export class WorkflowOrchestrator {
 
   async updateStepColorInQueue(
     mutation: WorkflowDefinitionMutation | undefined,
-    index: number,
+    indices: number[],
     color: string | null,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
     if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
       await this.getInstanceForClient(clientId).updateStepColorInQueue(
-        index,
+        indices,
         color
       );
       await this.recordDefinitionWrite(undefined, clientId);
@@ -3644,18 +3650,61 @@ export class WorkflowOrchestrator {
       runAddress,
       clientId,
       mutation.expectedDefinitionRevision,
-      (instance) => instance.updateStepColorInQueue(index, color),
+      (instance) => instance.updateStepColorInQueue(indices, color),
       (workspaceRoot) =>
-        WorkingFileManager.updateStepAtRun(
+        WorkingFileManager.updateStepColorsAtRun(
           workspaceRoot,
           runAddress.workflowKey,
           runAddress.runRef,
-          index,
-          { updates: { color: color ?? undefined } },
+          indices,
+          color,
           mutation.expectedDefinitionRevision,
           this.lineageRepository
         ).then((written) => written.definitionRevision),
-      { kind: "stepColor", index }
+      { kind: "stepColor", indices }
+    );
+  }
+
+  async updateStepsInQueue(
+    mutation: WorkflowDefinitionMutation | undefined,
+    indices: number[],
+    properties: Record<string, unknown>,
+    clearProperties?: string[],
+    clientId: string = this.PANEL_CLIENT_ID
+  ): Promise<void> {
+    const updateProperties = buildPromptStepChange(
+      undefined,
+      properties,
+      undefined,
+      clearProperties
+    ).replace as unknown as Record<string, unknown>;
+    if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
+      await this.getInstanceForClient(clientId).updateStepsInQueue(
+        indices,
+        updateProperties,
+        clearProperties
+      );
+      await this.recordDefinitionWrite(undefined, clientId);
+      return;
+    }
+    const runAddress = mutation.address;
+    await this.applyRunAddressedMutation(
+      runAddress,
+      clientId,
+      mutation.expectedDefinitionRevision,
+      (instance) =>
+        instance.updateStepsInQueue(indices, updateProperties, clearProperties),
+      (workspaceRoot) =>
+        WorkingFileManager.updateStepsAtRun(
+          workspaceRoot,
+          runAddress.workflowKey,
+          runAddress.runRef,
+          indices,
+          updateProperties as Partial<WorkflowStep>,
+          mutation.expectedDefinitionRevision,
+          this.lineageRepository,
+          clearProperties
+        ).then((written) => written.definitionRevision)
     );
   }
 
@@ -3827,11 +3876,11 @@ export class WorkflowOrchestrator {
 
   async deletePromptFromQueue(
     mutation: WorkflowDefinitionMutation | undefined,
-    index: number,
+    indices: number[],
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
     if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
-      await this.getInstanceForClient(clientId).deletePromptFromQueue(index);
+      await this.getInstanceForClient(clientId).deletePromptFromQueue(indices);
       await this.recordDefinitionWrite(undefined, clientId);
       return;
     }
@@ -3840,13 +3889,13 @@ export class WorkflowOrchestrator {
       runAddress,
       clientId,
       mutation.expectedDefinitionRevision,
-      (instance) => instance.deletePromptFromQueue(index),
+      (instance) => instance.deletePromptFromQueue(indices),
       (workspaceRoot) =>
-        WorkingFileManager.deleteStepAtRun(
+        RunContinuationService.removeStepsAtRun(
           workspaceRoot,
           runAddress.workflowKey,
           runAddress.runRef,
-          index,
+          indices,
           mutation.expectedDefinitionRevision,
           this.lineageRepository
         ).then((written) => written.definitionRevision)
@@ -4343,12 +4392,12 @@ export class WorkflowOrchestrator {
   private async invalidateRunViewStepColor(
     workflowKey: WorkflowKey,
     runRef: RunRef,
-    index: number
+    indices: number[]
   ): Promise<void> {
     await this.runViewPublisher.invalidateRunViewStepColor(
       workflowKey,
       runRef,
-      index
+      indices
     );
   }
 

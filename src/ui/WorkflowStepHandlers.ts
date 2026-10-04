@@ -10,6 +10,7 @@ import type {
   AppendAndContinueRunMessage,
   ContinueRunMessage,
   DiscardContinuationMessage,
+  DeletePromptMessage,
   ExecuteDraftMessage,
   InsertWorkflowStepMessage,
   RunExecutionControlMessage,
@@ -21,6 +22,7 @@ import type {
   StartNewRunInsteadMessage,
   UpdatePromptMessage,
   UpdateStepColorMessage,
+  UpdateStepsMessage,
 } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
@@ -195,13 +197,37 @@ export class WorkflowStepHandlers {
       await this.mutationCoordinator.prepareDefinitionMutation(ctx, message);
       await orchestrator.updateStepColorInQueue(
         this.mutationCoordinator.asWorkflowDefinitionMutation(message),
-        message.index,
+        message.indices,
         message.color,
         ctx.clientId
       );
       await this.mutationCoordinator.publishViewIdentity(ctx);
     } catch (error) {
       Log.error("[WorkflowStepHandlers] Failed to update step color:", error);
+    }
+  }
+
+  async handleUpdateSteps(
+    ctx: WebviewClientContext,
+    message: UpdateStepsMessage
+  ): Promise<void> {
+    const orchestrator = this.getOrchestrator();
+    if (!orchestrator) {
+      Log.error("[WorkflowStepHandlers] WorkflowOrchestrator not initialized");
+      return;
+    }
+    try {
+      await this.mutationCoordinator.prepareDefinitionMutation(ctx, message);
+      await orchestrator.updateStepsInQueue(
+        this.mutationCoordinator.asWorkflowDefinitionMutation(message),
+        message.indices,
+        message.properties,
+        message.clearProperties,
+        ctx.clientId
+      );
+      await this.mutationCoordinator.publishViewIdentity(ctx);
+    } catch (error) {
+      Log.error("[WorkflowStepHandlers] Failed to update steps:", error);
     }
   }
 
@@ -264,7 +290,7 @@ export class WorkflowStepHandlers {
 
   async handleDeletePrompt(
     ctx: WebviewClientContext,
-    message: any
+    message: DeletePromptMessage
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
     if (!orchestrator) {
@@ -274,12 +300,10 @@ export class WorkflowStepHandlers {
 
     await this.mutationCoordinator.prepareDefinitionMutation(ctx, message);
 
-    const { index } = message;
-
     try {
       await orchestrator.deletePromptFromQueue(
         this.mutationCoordinator.asWorkflowDefinitionMutation(message),
-        index,
+        message.indices,
         ctx.clientId
       );
       // Identity-only — see the comment in handleUpdatePrompt above; the

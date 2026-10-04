@@ -10,6 +10,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { EditorView } from "@codemirror/view";
 
 // Stub HarnessIcon so this test does not depend on `?raw` SVG asset
 // resolution from src/ui/icons (denied by Vite's fs allow-list when vitest is
@@ -122,6 +123,34 @@ describe("PromptEditor accessibility names", () => {
   });
 });
 
+describe("PromptEditor bulk mode draft isolation", () => {
+  it("shows an empty editor without changing prompt text or pending step drafts", async () => {
+    const steps = [{ prompt: "one" }, { prompt: "two" }];
+    useWorkflowStore.getState().setPrompts(steps);
+    useEditorStore.getState().selectPrompt(0, steps[0]);
+    useEditorStore.getState().setPromptText("unsaved selected-step draft");
+    useEditorStore.getState().extendMultiSelectionByRange(1);
+    const promptTextBefore = useEditorStore.getState().promptText;
+    const pendingEditsBefore = useEditorStore.getState().pendingEdits;
+
+    const { container } = render(
+      <PromptEditor isBulkMode bulkPlaceholder="2 prompts selected" />
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector(".cm-placeholder")?.textContent).toBe(
+        "2 prompts selected"
+      );
+    });
+    expect(useEditorStore.getState().promptText).toBe(promptTextBefore);
+    expect(useEditorStore.getState().pendingEdits).toEqual(pendingEditsBefore);
+    const editorElement = container.querySelector(".cm-editor");
+    expect(
+      EditorView.findFromDOM(editorElement as HTMLElement)?.state.doc.toString()
+    ).toBe("");
+  });
+});
+
 describe("PromptEditor workflow schema warnings", () => {
   it("renders schema warnings with the shared FieldDiagnostic component", () => {
     useWorkflowStore.setState({
@@ -153,10 +182,12 @@ describe("PromptEditor prior-context parallel-group boundary", () => {
         { id: "group-1", startIndex: 2, endIndex: 4, failFast: false },
       ],
     });
-    useEditorStore.getState().selectPrompt(
-      { kind: FINAL_STEP_PHASES.QUEUE, index: 4 },
-      { prompt: "$previous:3" }
-    );
+    useEditorStore
+      .getState()
+      .selectPrompt(
+        { kind: FINAL_STEP_PHASES.QUEUE, index: 4 },
+        { prompt: "$previous:3" }
+      );
 
     const { container } = render(<PromptEditor />);
     const priorContextChip = await waitFor(() => {
@@ -196,10 +227,12 @@ describe("PromptEditor prior-context parallel-group boundary", () => {
         { id: "group-1", startIndex: 1, endIndex: 2, failFast: false },
       ],
     });
-    useEditorStore.getState().selectPrompt(
-      { kind: FINAL_STEP_PHASES.QUEUE, index: 4 },
-      { prompt: "$previous:3" }
-    );
+    useEditorStore
+      .getState()
+      .selectPrompt(
+        { kind: FINAL_STEP_PHASES.QUEUE, index: 4 },
+        { prompt: "$previous:3" }
+      );
 
     const { container } = render(<PromptEditor />);
     const chip = container.querySelector<HTMLElement>(
@@ -410,7 +443,7 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
     expect(colorMessages).toHaveLength(1);
     expect(colorMessages[0]).toMatchObject({
       type: MESSAGE_TYPES.UPDATE_STEP_COLOR,
-      index: 0,
+      indices: [0],
       color: "#abcdef",
       mutation: {
         address: {
@@ -425,6 +458,80 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
     expect(colorMessages[0]).not.toHaveProperty("text");
     expect(colorMessages[0]).not.toHaveProperty("properties");
     expect(colorMessages[0]).not.toHaveProperty("rewindCompletedStep");
+  });
+
+  it("uses UPDATE_STEP_COLOR for a color-only bulk patch", async () => {
+    const user = userEvent.setup();
+    useWorkflowStore.setState({
+      steps: [{ prompt: "one" }, { prompt: "two" }],
+    });
+    useEditorStore.setState({
+      multiSelection: { indices: [0, 1], anchorIndex: 0 },
+      bulkPatch: { color: "#abcdef" },
+      isDirty: true,
+    });
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "wf-1" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: "run-1" as never,
+      },
+      displayedDefinitionRevision: 2,
+      displayedDescriptorRevision: 7,
+    });
+
+    render(<PromptEditor isBulkMode canBulkUpdate />);
+    await user.click(screen.getByRole("button", { name: "Update" }));
+
+    const messages = postMessageSpy.mock.calls.map(
+      ([message]) => message as Record<string, unknown>
+    );
+    expect(
+      messages.find(
+        (message) => message.type === MESSAGE_TYPES.UPDATE_STEP_COLOR
+      )
+    ).toMatchObject({
+      type: MESSAGE_TYPES.UPDATE_STEP_COLOR,
+      indices: [0, 1],
+      color: "#abcdef",
+    });
+    expect(
+      messages.some((message) => message.type === MESSAGE_TYPES.UPDATE_STEPS)
+    ).toBe(false);
+  });
+
+  it("uses UPDATE_STEPS for an enabled bulk patch", async () => {
+    const user = userEvent.setup();
+    useWorkflowStore.setState({
+      steps: [{ prompt: "one" }, { prompt: "two" }],
+    });
+    useEditorStore.setState({
+      multiSelection: { indices: [0, 1], anchorIndex: 0 },
+      bulkPatch: { enabled: false, harness: undefined, model: "gpt-5" },
+      isDirty: true,
+    });
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "wf-1" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: "run-1" as never,
+      },
+      displayedDefinitionRevision: 2,
+      displayedDescriptorRevision: 7,
+    });
+
+    render(<PromptEditor isBulkMode canBulkUpdate />);
+    await user.click(screen.getByRole("button", { name: "Update" }));
+
+    const message = postMessageSpy.mock.calls
+      .map(([candidate]) => candidate as Record<string, unknown>)
+      .find((candidate) => candidate.type === MESSAGE_TYPES.UPDATE_STEPS);
+    expect(message).toMatchObject({
+      type: MESSAGE_TYPES.UPDATE_STEPS,
+      indices: [0, 1],
+      properties: { enabled: false, model: "gpt-5" },
+      clearProperties: ["harness"],
+    });
   });
 
   it("omits the mutation when no persisted draft/run view is displayed", async () => {
@@ -536,8 +643,7 @@ describe("PromptEditor — Run in New Workflow", () => {
     await userEvent.setup().click(screen.getByRole("button", { name: "Run" }));
 
     const properties = findExecutePromptMessage()?.properties as
-      | Record<string, unknown>
-      | undefined;
+      Record<string, unknown> | undefined;
     expect(properties).toMatchObject({ type: STEP_TYPES.SCRIPT });
     expect(properties).not.toHaveProperty("harness");
     expect(properties).not.toHaveProperty("resumeSession");

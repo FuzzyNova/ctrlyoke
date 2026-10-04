@@ -36,6 +36,7 @@ import { invalidateRunSummaryFor } from "./orchestration/RunSummaryCache";
 import { stripLegacyWorkingFileLineageMetadata } from "../utils/WorkingFileMetadata";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import {
+  assertBulkWorkflowStepUpdateAllowed,
   buildDefinitionSnapshot,
   buildFinalStepUpdate,
   buildClearUpdates,
@@ -46,6 +47,7 @@ import {
   stripViewOnlyWorkflowStepFields,
 } from "./WorkflowStepSanitizer";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
+import { assertEditableDuringExecution } from "./orchestration/RunContinuationService";
 import {
   assertDefinitionRevision,
   assertDescriptorRevision,
@@ -68,7 +70,7 @@ import {
   refuseNewerSchema,
 } from "../utils/PersistedSchemaGuard";
 import {
-  deleteParallelGroupStep,
+  deleteParallelGroupSteps,
   insertParallelGroupSteps,
   normalizeParallelGroupTopology,
   reorderParallelGroupPendingSteps,
@@ -1468,6 +1470,69 @@ export class WorkingFileManager {
     );
   }
 
+  /** Apply one sparse property patch to several editable steps in one run write. */
+  public static async updateStepsAtRun(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    indices: number[],
+    properties: Partial<WorkflowStep>,
+    expectedDefinitionRevision: number,
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
+    clearProperties?: string[]
+  ): Promise<{
+    workingFile: WorkingFile;
+    definitionRevision: number;
+    descriptorRevision: number;
+  }> {
+    return this.mutateRunDefinition(
+      workspaceFolderPath,
+      workflowKey,
+      runRef,
+      expectedDefinitionRevision,
+      (source) => {
+        const steps = source.steps ?? [];
+        const unique = [...new Set(indices)];
+        if (unique.length !== indices.length || unique.length === 0) {
+          throw new Error(
+            "Update indices must be a non-empty set of unique indices"
+          );
+        }
+        for (const index of unique) {
+          if (!Number.isInteger(index) || index < 0 || index >= steps.length) {
+            throw new Error(`Invalid prompt index: ${index}`);
+          }
+          const rewindBoundary = source._runtime?.pendingRewind?.fromStepIndex;
+          if (rewindBoundary !== undefined && index < rewindBoundary) {
+            throw new Error(
+              `Cannot update step ${index + 1} before pending rewind boundary ${rewindBoundary + 1}`
+            );
+          }
+          assertEditableDuringExecution(source, steps, index, "update");
+          assertBulkWorkflowStepUpdateAllowed(
+            steps[index],
+            index,
+            properties as Record<string, unknown>,
+            clearProperties
+          );
+        }
+        const nextSteps = [...steps];
+        for (const index of unique) {
+          nextSteps[index] = mergeWorkflowStepUpdate(
+            steps[index],
+            properties,
+            clearProperties
+          );
+        }
+        return {
+          workingFile: { ...source, steps: nextSteps },
+          result: undefined,
+        };
+      },
+      { lineageRepository, allowDuringPendingRewind: true }
+    );
+  }
+
   /**
    * Addressed final-step update: merge same-kind edits against the disk head,
    * replace on a prompt/script type change, and delete on an explicit null.
@@ -1520,14 +1585,14 @@ export class WorkingFileManager {
   }
 
   /**
-   * Addressed step delete, mirroring `PromptQueue.deletePrompt`'s splice and
+   * Addressed step delete, mirroring `PromptQueue.deletePrompts`' splice and
    * `currentIndex` shift.
    */
-  public static async deleteStepAtRun(
+  public static async deleteStepsAtRun(
     workspaceFolderPath: string,
     workflowKey: WorkflowKey,
     runRef: RunRef,
-    index: number,
+    indices: number[],
     expectedDefinitionRevision: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
   ): Promise<{
@@ -1546,13 +1611,22 @@ export class WorkingFileManager {
           parallelGroups: source.parallelGroups,
         });
         const steps = topology.steps;
-        if (index < 0 || index >= steps.length) {
-          throw new Error(`Invalid prompt index: ${index}`);
+        const unique = [...new Set(indices)];
+        if (unique.length !== indices.length || unique.length === 0) {
+          throw new Error(
+            "Delete indices must be a non-empty set of unique indices"
+          );
         }
-        const nextTopology = deleteParallelGroupStep(topology, index);
+        for (const index of unique) {
+          if (!Number.isInteger(index) || index < 0 || index >= steps.length) {
+            throw new Error(`Invalid prompt index: ${index}`);
+          }
+          assertEditableDuringExecution(source, steps, index, "delete");
+        }
+        const nextTopology = deleteParallelGroupSteps(topology, unique);
         const currentIndex = source._runtime?.currentIndex ?? 0;
         const nextCurrentIndex =
-          index < currentIndex ? currentIndex - 1 : currentIndex;
+          currentIndex - unique.filter((index) => index < currentIndex).length;
         return {
           workingFile: {
             ...source,
@@ -1566,6 +1640,49 @@ export class WorkingFileManager {
         };
       },
       { lineageRepository }
+    );
+  }
+
+  public static async updateStepColorsAtRun(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    indices: number[],
+    color: string | null,
+    expectedDefinitionRevision: number,
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
+  ): Promise<{
+    workingFile: WorkingFile;
+    definitionRevision: number;
+    descriptorRevision: number;
+  }> {
+    return this.mutateRunDefinition(
+      workspaceFolderPath,
+      workflowKey,
+      runRef,
+      expectedDefinitionRevision,
+      (source) => {
+        const steps = [...(source.steps ?? [])];
+        const unique = [...new Set(indices)];
+        if (unique.length !== indices.length || unique.length === 0) {
+          throw new Error(
+            "Color indices must be a non-empty set of unique indices"
+          );
+        }
+        for (const index of unique) {
+          if (!Number.isInteger(index) || index < 0 || index >= steps.length) {
+            throw new Error(`Invalid prompt index: ${index}`);
+          }
+        }
+        for (const index of unique) {
+          steps[index] = {
+            ...steps[index],
+            color: color ?? undefined,
+          } as WorkflowStep;
+        }
+        return { workingFile: { ...source, steps }, result: undefined };
+      },
+      { lineageRepository, allowDuringPendingRewind: true }
     );
   }
 

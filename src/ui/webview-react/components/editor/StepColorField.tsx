@@ -1,6 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { PROMPT_PROPERTIES, STEP_TYPES } from "@root/types/DashboardConstants";
-import { useEditorStore } from "../../store/editorStore";
+import {
+  getBulkDisplayValue,
+  MIXED_VALUE,
+  useEditorStore,
+} from "../../store/editorStore";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { getInheritedStepColor } from "../../utils/stepColor";
@@ -15,11 +19,19 @@ interface StepColorInputState {
   setColor: (color: string) => void;
   commit: () => void;
   reset: () => void;
+  mixed: boolean;
 }
 
 export function useStepColorInput(): StepColorInputState {
-  const { properties, setProperty, stepType, selectedPromptIndex } =
-    useEditorStore();
+  const {
+    properties,
+    setProperty,
+    stepType,
+    selectedPromptIndex,
+    multiSelection,
+    bulkPatch,
+    clearBulkPatchField,
+  } = useEditorStore();
   const { steps } = useWorkflowStore();
   const { globalSettings, getEffectiveHarness } = useSettingsStore();
   const inheritedColor = getInheritedStepColor(
@@ -28,17 +40,26 @@ export function useStepColorInput(): StepColorInputState {
     globalSettings.stepColorMode,
     selectedPromptIndex ?? steps.length
   );
-  const hasOverride = properties.color !== undefined;
-  const [color, setColorState] = useState(properties.color ?? inheritedColor);
+  const displayColor = multiSelection
+    ? getBulkDisplayValue({ multiSelection, bulkPatch }, steps, "color")
+    : properties.color;
+  const mixed = displayColor === MIXED_VALUE;
+  const effectiveDisplayColor = mixed ? undefined : displayColor;
+  const hasOverride = multiSelection
+    ? Object.prototype.hasOwnProperty.call(bulkPatch, "color")
+    : properties.color !== undefined;
+  const [color, setColorState] = useState(
+    effectiveDisplayColor ?? inheritedColor
+  );
   // Tracks whether the user actually changed the value since the last
   // commit/reset, so closing the picker untouched doesn't turn an inherited
   // color into an explicit override of the same value.
   const touchedRef = useRef(false);
 
   useEffect(() => {
-    setColorState(properties.color ?? inheritedColor);
+    setColorState(effectiveDisplayColor ?? inheritedColor);
     touchedRef.current = false;
-  }, [inheritedColor, properties.color]);
+  }, [inheritedColor, effectiveDisplayColor]);
 
   const setColor = (next: string) => {
     touchedRef.current = true;
@@ -49,6 +70,7 @@ export function useStepColorInput(): StepColorInputState {
     color,
     inheritedColor,
     hasOverride,
+    mixed,
     setColor,
     commit: () => {
       if (!touchedRef.current) return;
@@ -58,7 +80,8 @@ export function useStepColorInput(): StepColorInputState {
     reset: () => {
       touchedRef.current = false;
       setColorState(inheritedColor);
-      setProperty(PROMPT_PROPERTIES.COLOR, undefined);
+      if (multiSelection) clearBulkPatchField("color");
+      else setProperty(PROMPT_PROPERTIES.COLOR, undefined);
     },
   };
 }
@@ -70,7 +93,7 @@ export interface StepColorFieldProps {
 
 /** Full step-color control for an all-properties editor surface. */
 export const StepColorField: React.FC<StepColorFieldProps> = ({ idPrefix }) => {
-  const { color, inheritedColor, hasOverride, setColor, commit, reset } =
+  const { color, inheritedColor, hasOverride, setColor, commit, reset, mixed } =
     useStepColorInput();
   const inputId = `${idPrefix}-color`;
   const fieldMeta = SCHEMA_FIELD_META.color;
@@ -101,30 +124,48 @@ export const StepColorField: React.FC<StepColorFieldProps> = ({ idPrefix }) => {
           <Icon name="clear-all" />
         </button>
       </div>
-      <input
-        id={inputId}
-        type="color"
-        value={color}
-        onChange={(event) => setColor(event.target.value)}
-        onBlur={commit}
-        className="h-8 w-full cursor-pointer rounded border border-input-border bg-input-bg p-0.5"
-        title={
-          hasOverride
-            ? schemaTitle(
-                fieldMeta.path,
-                color,
-                `Step color override: ${color}`
-              )
-            : schemaTitle(
-                fieldMeta.path,
-                color,
-                `Inherited step color: ${inheritedColor}`
-              )
-        }
-        aria-label={schemaAriaLabel(fieldMeta.label, fieldMeta.path, color)}
-      />
+      <div className="relative h-8">
+        {mixed && (
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 rounded border border-input-border"
+            style={{
+              background:
+                "repeating-linear-gradient(135deg, #808080 0 6px, #d0d0d0 6px 12px)",
+            }}
+          />
+        )}
+        <input
+          id={inputId}
+          type="color"
+          value={color}
+          onChange={(event) => setColor(event.target.value)}
+          onBlur={commit}
+          className={`relative h-8 w-full cursor-pointer rounded border border-input-border bg-input-bg p-0.5 ${mixed ? "opacity-0" : ""}`}
+          title={
+            mixed
+              ? "Selected steps have mixed colors"
+              : hasOverride
+                ? schemaTitle(
+                    fieldMeta.path,
+                    color,
+                    `Step color override: ${color}`
+                  )
+                : schemaTitle(
+                    fieldMeta.path,
+                    color,
+                    `Inherited step color: ${inheritedColor}`
+                  )
+          }
+          aria-label={schemaAriaLabel(fieldMeta.label, fieldMeta.path, color)}
+        />
+      </div>
       <p className="text-xs text-description-fg">
-        {hasOverride ? `Override: ${color}` : `Inherited: ${inheritedColor}`}
+        {mixed
+          ? "Mixed colors"
+          : hasOverride
+            ? `Override: ${color}`
+            : `Inherited: ${inheritedColor}`}
       </p>
     </div>
   );

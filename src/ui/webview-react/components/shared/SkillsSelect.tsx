@@ -41,6 +41,10 @@ interface SkillsSelectProps extends HideableProps {
   triggerAriaLabel?: string;
   /** Schema property represented by this selector. */
   schemaPath?: string;
+  disabled?: boolean;
+  disabledReason?: string;
+  mixed?: boolean;
+  onSelectMixed?: () => void;
 }
 
 /**
@@ -63,6 +67,10 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
   placeholder,
   dropdownMaxHeight = "60vh",
   inline = false,
+  disabled = false,
+  disabledReason,
+  mixed = false,
+  onSelectMixed,
   namespace,
   hiddenValues = [],
   onHideOption,
@@ -109,7 +117,9 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
   );
 
   let buttonLabel: string;
-  if (value === undefined) {
+  if (mixed) {
+    buttonLabel = "(mixed)";
+  } else if (value === undefined) {
     buttonLabel = defaultLabel ?? "Default";
   } else if (value === null) {
     buttonLabel = "None";
@@ -163,6 +173,20 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
 
   const listContent = (
     <div className="overflow-y-auto min-h-0 flex-1">
+      {mixed && (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => {
+            onSelectMixed?.();
+            setIsOpen(false);
+          }}
+          aria-label="(mixed), skills"
+          className="w-full px-2 py-1.5 text-xs text-left"
+        >
+          (mixed)
+        </button>
+      )}
       {toSelectOptions(SKILLS_SELECTION_OPTIONS_META, schemaPath).map(
         (option) => {
           const keyword = option.value;
@@ -179,6 +203,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
             <button
               key={keyword}
               type="button"
+              disabled={disabled}
               onClick={() => handleKeywordSelect(keyword)}
               aria-label={schemaAriaLabel(label, schemaPath, schemaValue)}
               title={schemaTitle(schemaPath, schemaValue)}
@@ -228,6 +253,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
               >
                 <button
                   type="button"
+                  disabled={disabled}
                   onClick={() => toggleSkill(skill.name)}
                   className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-none border-none bg-transparent cursor-pointer"
                 >
@@ -251,6 +277,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
                 {canHide(skill.name) && (
                   <button
                     type="button"
+                    disabled={disabled}
                     title="Hide this option"
                     aria-label="Hide this option"
                     onClick={(e) => {
@@ -279,6 +306,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
                   >
                     <button
                       type="button"
+                      disabled={disabled}
                       title="Unhide this option"
                       aria-label="Unhide this option"
                       onClick={(e) => {
@@ -291,6 +319,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
                     </button>
                     <button
                       type="button"
+                      disabled={disabled}
                       onClick={() => handleHiddenSkillSelect(skill.name)}
                       className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left text-description-fg focus:outline-none border-none bg-transparent cursor-pointer"
                     >
@@ -331,6 +360,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
         id={id}
         ref={buttonRef}
         type="button"
+        disabled={disabled}
         onClick={() =>
           setIsOpen((prev) => {
             if (prev) {
@@ -351,14 +381,18 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
               ? null
               : JSON.stringify(value)
         )}
-        title={schemaTitle(
-          schemaPath,
-          value === undefined
-            ? { omit: true }
-            : value === null
-              ? null
-              : JSON.stringify(value)
-        )}
+        title={
+          disabled && disabledReason
+            ? disabledReason
+            : schemaTitle(
+                schemaPath,
+                value === undefined
+                  ? { omit: true }
+                  : value === null
+                    ? null
+                    : JSON.stringify(value)
+              )
+        }
         className={`cy-select-trigger cy-dropdown-row ${dropdownBorderClass(warning)}`}
       >
         <span className="truncate">{buttonLabel}</span>

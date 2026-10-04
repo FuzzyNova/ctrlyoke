@@ -40,7 +40,7 @@ import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import { assertDefinitionRevision } from "./RevisionPrecondition";
 import {
   appendParallelGroupMembers,
-  deleteParallelGroupStep,
+  deleteParallelGroupSteps,
   insertParallelGroupTopology,
   normalizeParallelGroupTopology,
   reorderParallelGroupPendingSteps,
@@ -833,11 +833,11 @@ export class RunContinuationService {
   }
 
   /** Remove one explicitly addressed step. */
-  static async removeStepAtRun(
+  static async removeStepsAtRun(
     workspaceRoot: string,
     workflowKey: WorkflowKey,
     runRef: RunRef,
-    index: number,
+    indices: number[],
     expectedDefinitionRevision: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
     allowInterruptedRun = false
@@ -852,9 +852,22 @@ export class RunContinuationService {
           steps: source.steps ?? [],
           parallelGroups: source.parallelGroups,
         });
-        assertStepIndex(topology.steps.length, index, "remove");
-        assertEditableDuringExecution(source, topology.steps, index, "remove");
-        const nextTopology = deleteParallelGroupStep(topology, index);
+        const unique = [...new Set(indices)];
+        if (unique.length !== indices.length || unique.length === 0) {
+          throw new Error(
+            "Remove indices must be a non-empty set of unique indices"
+          );
+        }
+        for (const index of unique) {
+          assertStepIndex(topology.steps.length, index, "remove");
+          assertEditableDuringExecution(
+            source,
+            topology.steps,
+            index,
+            "remove"
+          );
+        }
+        const nextTopology = deleteParallelGroupSteps(topology, unique);
         if (isExecutionActiveState(source._runtime?.executionState)) {
           assertStartedStepPositionsPreserved(
             topology.steps,
@@ -872,7 +885,8 @@ export class RunContinuationService {
               ? {
                   ...source._runtime,
                   currentIndex:
-                    index < currentIndex ? currentIndex - 1 : currentIndex,
+                    currentIndex -
+                    unique.filter((index) => index < currentIndex).length,
                 }
               : source._runtime,
           },
@@ -1131,7 +1145,7 @@ function isExecutionActiveState(state: ExecutionState | undefined): boolean {
  * boundary. The persisted executed prefix and terminal step states remain
  * immutable after execution stops; only the in-flight head check is transient.
  */
-function assertEditableDuringExecution(
+export function assertEditableDuringExecution(
   source: WorkingFile,
   steps: WorkflowStep[],
   index: number,

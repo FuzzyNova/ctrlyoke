@@ -29,6 +29,10 @@ export { usePromptStatus } from "./usePromptStatus";
 export { useContextPct } from "./useContextPct";
 export { useStepClickHandler } from "./useStepClickHandler";
 export {
+  useBulkSelectionGates,
+  useStepCapabilityContext,
+} from "./useBulkSelectionGates";
+export {
   useStepContextMenu,
   usePasteToEndContextMenu,
 } from "./useStepContextMenu";

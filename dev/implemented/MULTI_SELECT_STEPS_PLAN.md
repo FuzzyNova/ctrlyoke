@@ -1,5 +1,15 @@
 # Multi-Select Steps Plan
 
+**Status: v1 complete (2026-10-03).**
+
+> Review note (2026-10-03): the bulk editor header, footer pickers, drawer and
+> multi-drag each built their own capability context, and some left out the
+> pending-rewind boundary, the read-only lineage flags or the executing-target
+> lock. They now all go through `useStepCapabilityContext` /
+> `useBulkSelectionGates` (`hooks/useBulkSelectionGates.ts`). The disabled-reason
+> tooltips are single-sourced in `BULK_EDIT_DISABLED_REASONS`
+> (`DashboardConstants.ts`).
+
 ## Goal
 
 Let the user select more than one step in `WorkflowStepsPanel` and act on all of them
@@ -106,33 +116,31 @@ There is no blocker to allowing them. The costs are:
   (`useMessageHandler.ts:1056-1118`) don't touch selection at all. **So the existing
   single selection can already go stale after a context-menu delete.**
 
-### Every step mutation is single-index, and revision-guarded
+### Step mutations are revision-guarded
 
-- `DELETE_PROMPT { index }`, `UPDATE_STEP_COLOR { index, color }` and
-  `UPDATE_PROMPT { index, text, properties, clearProperties, promptName,
-rewindCompletedStep? }` (`src/types/WebviewMessageTypes.ts:~2148-2170`). They route
-  through `WorkflowStepHandlers` (`src/ui/WorkflowStepHandlers.ts:121, 184, 265`) to
-  `WorkflowOrchestrator.{updatePromptInQueue, updateStepColorInQueue,
-deletePromptFromQueue}` (`WorkflowOrchestrator.ts:3609, ~3655, 3856`). Each has two
+- `DELETE_PROMPT { indices }` and `UPDATE_STEP_COLOR { indices, color }` are
+  batch protocols. `UPDATE_PROMPT { index, text, properties, clearProperties,
+promptName, rewindCompletedStep? }` (`src/types/WebviewMessageTypes.ts`). They route
+  through `WorkflowStepHandlers` to `WorkflowOrchestrator` and have two
   persistence branches:
-  - **Instance-bound:** `WorkflowInstance` → `PromptQueue.updatePrompt` /
-    `deletePrompt` (`PromptQueue.ts:2706, 2808`).
-  - **Run-addressed static write:** `applyRunAddressedMutation` →
-    `WorkingFileManager.updateStepAtRun` / `deleteStepAtRun`
-    (`WorkingFileManager.ts:1401, 1520`) → `RunContinuationService`.
+  - **Instance-bound:** `WorkflowInstance` → `PromptQueue.updatePrompt`,
+    `deletePrompts` or `updatePromptColors`.
+  - **Run-addressed static write:** `applyRunAddressedMutation` → one
+    `WorkingFileManager`/`RunContinuationService` batch write. Deletes validate
+    every index before mutation and compute parallel topology from the final set.
 - **`UPDATE_STEP_COLOR` exists precisely so a cosmetic edit bypasses completed-step
   rewind classification.** Its payload deliberately cannot carry content or
   properties (doc comment at `WebviewMessageTypes.ts:~2159`). The run-addressed write
-  passes a `StepColorInvalidation { kind: "stepColor", index }`
+  passes a `StepColorInvalidation { kind: "stepColor", indices }`
   (`core/orchestration/RunViewPublisher.ts:35`) so the view refresh stays narrow.
   This is why completed steps can already be recolored, and it is the path bulk color
   must reuse.
 - **The webview's `sendMessage` stamps every definition mutation with a
   `WorkflowDefinitionMutation`** (`{address, expectedDefinitionRevision,
 expectedDescriptorRevision}`, `hooks/useMessageHandler.ts:~213`). Therefore
-  **N back-to-back single-index messages cannot implement a bulk op**. They all
-  carry the same expected revision, so the first write succeeds and the rest are
-  rejected as stale. The same race is documented for `UPDATE_PROMPT` +
+  **N back-to-back messages cannot implement a bulk op**. They all carry the same
+  expected revision, so the first write succeeds and the rest are rejected as
+  stale. The same race is documented for `UPDATE_PROMPT` +
   `SET_START_POSITION` at `WorkflowStepHandlers.ts:137`, which is why
   `updateCompletedPromptInQueue` exists. Bulk ops need **one message → one
   host-side mutation → one revision bump**.
@@ -147,9 +155,15 @@ expectedDescriptorRevision}`, `hooks/useMessageHandler.ts:~213`). Therefore
     running, the completed prefix and the in-flight step are locked.
   - On the run-addressed path, `RunContinuationService` keeps executed-prefix and
     `terminalStatus` steps immutable even after the run stops (commit 337ea9ed).
-  - In the UI, `isStepExecutionLocked` (`ParallelGroupPanel.tsx:112`) plus the busy
+  - In the UI, `isStepExecutionLocked` (`ParallelGroupPanel.tsx:113`) plus the busy
     current step decide which rows are locked. The Delete menu item's own gate is in
-    `useStepContextMenu.tsx:~431`.
+    `useStepContextMenu.tsx:~446`. **Note:** today that gate only disables the
+    _executing_ step (`isExternallyManaged || isExecutionTargetLocked`), so the
+    menu still offers Delete on completed steps and relies on the host to reject
+    it. `getStepCapabilities` must encode the host's real rules (executed prefix,
+    `terminalStatus`, pending-rewind prefix), not copy the looser menu gate.
+  - The single-step context-menu Enable/Disable item sends `UPDATE_PROMPT` built by
+    `buildWorkflowStepEnabledUpdate`. Bulk enable uses `UPDATE_STEPS` instead.
   - Editing a _completed_ nonzero step goes through `rewindCompletedStep` →
     `updateCompletedPromptInQueue`, which starts a pending continuation. That is a
     single-step design.
@@ -283,7 +297,7 @@ interface StepCapabilities {
   canEditColor: boolean;       // true for every queue step, as today
   canToggleEnabled: boolean;   // false for completed/running/locked
   canDelete: boolean;
-  canReorder: boolean;         // pending, not in-flight, !isExecutionTargetLocked
+  canReorder: boolean;         // pending, not in-flight, and not cancelling
   canEditPromptProperties: boolean; // prompt step AND not locked
 }
 getStepCapabilities(step, index, ctx): StepCapabilities
@@ -303,6 +317,11 @@ getSelectionCapabilities(indices, steps, ctx): StepCapabilities // AND-reduce + 
   "Why allow locked steps", item 1.
 - The host stays authoritative. These capabilities only decide what the UI offers;
   every batch is re-validated atomically on the host (§4, §5).
+- The capability lock includes the host's executed prefix (`index < currentStep`),
+  any `_runtime.terminalStatus`, the pending-rewind preserved prefix, and the
+  currently executing target. This is stricter than the former single-step Delete
+  menu gate, which only checked the executing target. Color remains available for
+  every queue step because it uses the cosmetic update path.
 
 ### 3. Gestures
 
@@ -395,15 +414,15 @@ delete path) in sync.
 - Apply, then bump the revision once, write the working file once, and emit one
   broadcast. That gives one undo entry.
 - **Delete** (`PromptQueue.deletePrompts`): delete in **descending** index order.
-  Refactor today's `deletePrompt` body into a private `removeStepAt(index)` so the
-  topology and bookkeeping (`deleteParallelGroupStep`; `currentIndex`,
-  `completedIndices` and `results` shifting) have one source. **Parallel-group
+  Its private `removeStepAt(index)` handles the `currentIndex`,
+  `completedIndices` and `results` shifts. `deleteParallelGroupSteps` computes
+  topology for the complete selection. **Parallel-group
   edge case:** removing two members of a started three-member group passes a
   per-step check on the first and throws on the second, after the first was
   already applied in memory. So compute the next topology for the whole batch
   first, then commit it.
-  - Run-addressed: `WorkingFileManager.deleteStepsAtRun` → a batch remove in
-    `RunContinuationService`.
+  - Run-addressed: `WorkingFileManager.deleteStepsAtRun` and
+    `RunContinuationService.removeStepsAtRun` validate and commit the whole batch.
 - **Color** (`updateStepColorInQueue(indices, color)`): keeps its deliberate property:
   it **cannot carry anything but color**, so it stays legal on completed steps and
   never triggers rewind classification. It skips the editability guards exactly as
@@ -591,29 +610,48 @@ which is cheap once the predicate exists. Clicks there stay single-select in v1.
 
 ## Phasing
 
+> Phasing note (orchestrator review, 2026-10-03): `UPDATE_STEPS` moved from phase 4
+> to phase 2b. Bulk enable/disable (phase 3 and the context-menu items) needs it, so
+> the host message must land first. Phase 4 is now purely the drawer/picker UI.
+
 1. **Selection model, capabilities and gestures.**
-   - The `multiSelection` slice.
-   - `stepCapabilities.ts`, with the single-step context menu migrated onto it.
-   - Modifier plumbing through the three row render sites, plus Ctrl+A and Escape.
-   - The context-menu selection items (Select All / Select to Here / Add / Remove /
-     Clear), and the no-collapse right-click rule.
-   - The structural-change remap/clear rules, including the existing staleness fix.
-   - Row highlighting.
-2. **Array protocol and bulk delete.**
-   - `DELETE_PROMPT` and `UPDATE_STEP_COLOR` move to `indices`, end to end (queue,
-     instance, orchestrator, WorkingFileManager/RunContinuationService, handler,
-     router, MCP tool).
-   - The Delete key, the bulk context-menu Delete, and the "delete N steps" modal.
-3. **Editor bulk mode and patch draft.**
-   - Placeholder `Compartment` and state-specific placeholders.
-   - The `bulkPatch` slice with MIXED display and the `setProperty`/`setStepEnabled`
-     redirect.
-   - Bulk color (reusing phase 2's message) and bulk enable/disable, including the
-     context-menu items.
-4. **Bulk prompt properties.**
-   - `UPDATE_STEPS` end to end.
+   - [x] 1a: pure selection helpers (`utils/stepMultiSelection.ts`, selection half), the
+         `multiSelection` slice, `stepCapabilities.ts`, and the single-step context menu
+         migrated onto it (completed 2026-10-03).
+   - [x] 1b: modifier plumbing through the three row render sites, plus Ctrl+A and
+         Escape. The context-menu selection items (Select All / Select to Here / Add /
+         Remove / Clear), and the no-collapse right-click rule. The structural-change
+         remap/clear rules, including the existing staleness fix. Row highlighting,
+         `PromptCounter` and chip-rail rendering (completed 2026-10-03).
+2. **Array protocol, `UPDATE_STEPS`, and bulk delete / enable.**
+   - [x] 2a: `DELETE_PROMPT` and `UPDATE_STEP_COLOR` use `indices` end to end,
+         with one host mutation, revision bump, persistence write and broadcast per
+         batch. The MCP `remove_step` tool preserves its single-index schema and
+         delegates through the batch delete path (completed 2026-10-03).
+   - [x] 2b: `UPDATE_STEPS` end to end on the host, with one exported bulk-editable
+         prompt-key constant shared by host validation and webview imports. The Delete
+         key, bulk context-menu Delete and Enable/Disable, count-aware confirmation,
+         atomic completed/locked/key validation, and one-broadcast batch undo behavior
+         are implemented (completed 2026-10-03).
+
+3. **Editor bulk mode and patch draft** (completed 2026-10-03).
+   - Placeholder `Compartment`, state-specific placeholders, and an empty read-only
+     editor without changing the single-step draft.
+   - The `bulkPatch` slice with derived MIXED display, normalized writes, selection
+     persistence, and the `setProperty`/`setStepEnabled` redirect.
+   - Bulk color and enable/disable from the editor header, committed through Update
+     (`UPDATE_STEP_COLOR` for color-only, otherwise `UPDATE_STEPS`). The editor's own
+     Delete action and run/queue actions are unavailable in bulk mode.
+   - Tri-state property mapping is shared with single-step updates. Prompt property
+     pickers and drawer pages remain gated for phase 4.
+4. **Bulk prompt properties** (completed 2026-10-03).
    - The harness cascade helper, harness-dependent gating, and drawer page gating.
-5. **Bulk reorder.**
+   - MIXED rendering and the "(mixed)" option in the drawer and footer pickers.
+   - Drawer option-list audit: model, additional args, skills, agents, and tool
+     permission options depend on the effective harness and are gated when selected
+     prompts differ and no harness patch exists. Prior context, MCP servers, hooks,
+     and secrets use workflow/global or workspace options and are not harness-scoped.
+5. **Bulk reorder** (completed 2026-10-03).
    - Block-move pure helpers and bulk Move Up/Down.
    - Multi-drag in the live preview, with no parallel groups.
 6. **Follow-ups:**

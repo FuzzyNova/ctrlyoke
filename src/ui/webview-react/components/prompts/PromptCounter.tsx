@@ -3,6 +3,7 @@ import { useWorkflowStore } from "@store/workflowStore";
 import { usePromptStatus } from "@hooks/index";
 import { STEP_STATUS } from "@/types/messages";
 import { isWorkflowActive } from "@utils/status";
+import { useMultiSelectionCount } from "@store/editorStore";
 
 interface PromptCounterProps {
   className?: string;
@@ -22,6 +23,15 @@ export const PromptCounter: React.FC<PromptCounterProps> = ({
 }) => {
   const { steps: prompts, totalSteps, executionState } = useWorkflowStore();
   const getPromptStatus = usePromptStatus();
+  const selectedCount = useMultiSelectionCount();
+
+  if (selectedCount > 1) {
+    return (
+      <span className={`text-xs text-description-fg ${className}`}>
+        {selectedCount} selected
+      </span>
+    );
+  }
 
   const statusCounts = prompts.reduce(
     (counts, prompt, index) => {

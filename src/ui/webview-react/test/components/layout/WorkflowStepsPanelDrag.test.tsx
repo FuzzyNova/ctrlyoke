@@ -224,6 +224,87 @@ describe("WorkflowStepsPanel drag lifecycle", () => {
     expect(renderedOrder()).toEqual([0, 1, 2, 3]);
     expect(reorderMessages()).toEqual([]);
   });
+
+  it("moves a selected loose-step block and remaps the selection on drop", () => {
+    useEditorStore.setState({
+      multiSelection: { indices: [0, 2], anchorIndex: 0 },
+    });
+    render(<WorkflowStepsPanel />);
+
+    act(() => {
+      dnd.onDragStart?.({
+        active: {
+          id: "step-pending-0",
+          rect: {
+            current: {
+              initial: { top: 0, left: 0, width: 100 },
+              translated: null,
+            },
+          },
+        },
+        over: null,
+      });
+      dnd.onDragOver?.({
+        active: { id: "step-pending-0" },
+        over: { id: "step-pending-1" },
+      });
+    });
+
+    expect(renderedOrder()).toEqual([1, 0, 3, 0]);
+    expect(renderedOrder()).not.toContain(2);
+    expect(screen.getByText("+1")).toBeInTheDocument();
+
+    act(() => {
+      dnd.onDragEnd?.({
+        active: { id: "step-pending-0" },
+        over: { id: "step-pending-1" },
+      });
+    });
+    expect(reorderMessages()).toEqual([
+      expect.objectContaining({
+        type: MESSAGE_TYPES.REORDER_PROMPTS,
+        newPendingOrder: [1, 0, 2, 3],
+      }),
+    ]);
+    expect(useEditorStore.getState().multiSelection?.indices).toEqual([1, 2]);
+  });
+
+  it("falls back to a single-row drag when the selection contains a group member", () => {
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "grouped-drag.prompt.md",
+      steps: [
+        { prompt: "aaa" },
+        { prompt: "bbb" },
+        { prompt: "ccc" },
+        { prompt: "ddd" },
+      ],
+      parallelGroups: [
+        { id: "group-1", startIndex: 1, endIndex: 2, failFast: true },
+      ],
+    });
+    useEditorStore.setState({
+      multiSelection: { indices: [0, 1], anchorIndex: 0 },
+    });
+    render(<WorkflowStepsPanel />);
+
+    act(() => {
+      dnd.onDragStart?.({ active: mockActive("step-pending-0"), over: null });
+      dnd.onDragOver?.({
+        active: { id: "step-pending-0" },
+        over: { id: "step-pending-3" },
+      });
+    });
+
+    expect(screen.queryByText("+1")).not.toBeInTheDocument();
+    act(() => {
+      dnd.onDragEnd?.({
+        active: { id: "step-pending-0" },
+        over: { id: "step-pending-3" },
+      });
+    });
+    expect(reorderMessages()).toHaveLength(1);
+    expect(useEditorStore.getState().multiSelection?.indices).toEqual([0, 3]);
+  });
 });
 
 describe("WorkflowStepsPanel parallel group drag", () => {

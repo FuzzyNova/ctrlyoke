@@ -1240,7 +1240,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     // Shrink the group mid-run. A join that reused the fork-time endIndex
     // would advance currentIndex past "after" and silently skip it.
     first.onSend = async () => {
-      await queue.deletePrompt(2);
+      await queue.deletePrompts([2]);
       return { responseText: "first" };
     };
     const integrations = new Map<number, MockHarnessIntegration>([
