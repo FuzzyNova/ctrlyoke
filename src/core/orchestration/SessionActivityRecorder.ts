@@ -33,6 +33,10 @@ export interface SessionActivityRecorderPort {
   readonly outputHistoryManager: OutputHistoryManager;
   readonly resolveHistoryFilePath: () => string;
   readonly getDefinitionRevisionContext: () => DefinitionRevisionContext;
+  readonly onResumedActivityEvents: (
+    target: OutputExecutionTarget,
+    events: CliEvent[]
+  ) => void;
 }
 
 interface CompletedActivityTarget {
@@ -318,6 +322,8 @@ export class SessionActivityRecorder {
             ...contentEvents,
           ]
         : contentEvents;
+
+    this.port.onResumedActivityEvents(target, eventsToAppend);
 
     if (historyFilePath) {
       try {

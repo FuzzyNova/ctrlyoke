@@ -76,6 +76,6 @@ whether to render:
    member prints the headless members' output only after the interactive member exits.
 
 This fix and `CliEventStream` in
-[`CLI_EVENT_RENDERING_PARITY_PLAN.md`](../../backlog/CLI_EVENT_RENDERING_PARITY_PLAN.md)
+[`CLI_EVENT_RENDERING_PARITY_PLAN.md`](../../implemented/CLI_EVENT_RENDERING_PARITY_PLAN.md)
 both change the same subscriptions in `cli.ts`. Fix this first, so the plan builds on
 per-attempt gating instead of the run-level gate.

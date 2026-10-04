@@ -162,9 +162,9 @@ import {
 import { ParallelGroupRun } from "./ParallelGroupRun";
 import { RecordedTargetFailureError } from "./RecordedTargetFailureError";
 import {
-  formatFinalPassLabel,
   formatFinalPassPhrase,
 } from "../utils/FinalStepLabels";
+import { getTargetStreamingStepName } from "../utils/TargetStreamingStepName";
 
 /** Live harness output of one attempt, with the target that produced it. */
 interface TargetStreamingOutput {
@@ -4233,11 +4233,10 @@ export class WorkflowExecutor {
 
     const streamingOutput: TargetStreamingOutput = {
       target,
-      stepName:
-        promptStep.name?.trim() ||
-        (target.kind === FINAL_STEP_PHASES.QUEUE
-          ? `Step ${target.stepIndex + 1}`
-          : formatFinalPassLabel(target.loopIndex + 1)),
+      stepName: getTargetStreamingStepName(
+        this.toOutputExecutionTarget(target),
+        promptStep.name
+      ),
       executionMode: sendOptions.resolvedProperties?.executionMode,
     };
 

@@ -1,18 +1,18 @@
 # CLI Event Rendering Parity — print what the dashboard Output pane shows, filtered by the same code
 
-> **Status:** Ready to implement. Audit taken 2026-10-04 against `OutputPane.tsx` →
+> **Status:** Implemented. Audit taken 2026-10-04 against `OutputPane.tsx` →
 > `OutputRow.tsx` (dashboard) and `src/cli/CliTerminalFormatter.ts` + the headless
 > subscriptions in `src/cli.ts` (CLI), then re-verified against the code the same day; every
 > open question from the draft is decided below under [Decisions](#decisions).
 >
-> **Predecessor:** [`CLI_OUTPUT_PARITY_PLAN.md`](../implemented/CLI_OUTPUT_PARITY_PLAN.md)
+> **Predecessor:** [`CLI_OUTPUT_PARITY_PLAN.md`](./CLI_OUTPUT_PARITY_PLAN.md)
 > (implemented) wired script/condition output, verdicts, parallel-group and retry aggregates,
 > and the missing `ASK_USER_QUESTION`/`COMPACTION`/`FOLLOW_UP_RESUMED` cases into the CLI. It
 > deliberately left `USER_STEER` unrendered as "display-only". That holds for live `ctrlyoke
 run`, but not for `history show` replaying a dashboard run that was steered; see
 > [§1](#1-user-steers). This plan also picks up the CLI formatting of
 > ctrlyoke's own MCP tools that
-> [`CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md`](../implemented/CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md)
+> [`CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md`](./CTRLYOKE_MCP_TOOL_CALL_VIEWS_PLAN.md)
 > deferred under "Out of scope".
 
 ## Progress
@@ -44,6 +44,10 @@ run`, but not for `history show` replaying a dashboard run that was steered; see
   and worktree details in the CLI closing block. Quiet and JSON output remain
   outside the new rendering path. Focused formatter and CLI JSON checks pass;
   `npm run typecheck`, `npm run lint`, and `npm test` passed.
+- **Phase 4 complete (D9) and plan implemented.** Forwarded resumed session
+  activity to the CLI from the exact event batch persisted in history, sharing
+  target step-name formatting with the executor. Added coverage for the three
+  D8 failure-reason paths. The requested typecheck, lint, and test gates pass.
 
 ## Problem
 
@@ -62,7 +66,7 @@ misprints several things the Output pane shows:
   into its call before a row is built. The CLI prints every raw event as it arrives. A Bash
   command prints `$ cmd` once when it starts and again with its output, and Copilot's
   duplicate generic/MCP call rows print twice. The fix for those rows in
-  [`MCP_EVENT_PIPELINE_GAPS_PLAN.md`](../implemented/MCP_EVENT_PIPELINE_GAPS_PLAN.md) lives in
+  [`MCP_EVENT_PIPELINE_GAPS_PLAN.md`](./MCP_EVENT_PIPELINE_GAPS_PLAN.md) lives in
   the normalizer, which the CLI never calls — live or in `history show`.
 - **Detail is dropped inside events that do render.** A failed `TOOL_RESULT` with only `error`
   text prints nothing, web-search failures are invisible, file-read line ranges are lost,

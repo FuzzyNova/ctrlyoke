@@ -203,6 +203,7 @@ import {
   toPtySpawnArgs,
 } from "./harness/PtyProcessManager";
 import { getShellInvocationError } from "../utils/ShellCatalog";
+import { getTargetStreamingStepName } from "../utils/TargetStreamingStepName";
 export type {
   PromptStartData,
   PromptCompleteData,
@@ -597,6 +598,19 @@ export class WorkflowInstance
       outputHistoryManager: this.outputHistoryManager,
       resolveHistoryFilePath: () => this.resolveHistoryFilePath(),
       getDefinitionRevisionContext: () => this.getDefinitionRevisionContext(),
+      onResumedActivityEvents: (target, events) => {
+        const stepName = getTargetStreamingStepName(
+          target,
+          target.kind === FINAL_STEP_PHASES.QUEUE
+            ? this.promptQueue.getState().steps[target.stepIndex]?.name
+            : undefined
+        );
+        this._targetedStreamingEventsEmitter.fire({
+          target,
+          stepName,
+          events,
+        });
+      },
     });
     this.outputHistoryManager.setOutputActivityHandler((entry) =>
       this.publishOutputActivity(entry)

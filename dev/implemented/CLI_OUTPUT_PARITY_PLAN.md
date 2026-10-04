@@ -4,7 +4,7 @@
 > against the code on 2026-09-15 and three findings in the original draft were corrected — see
 > "Root cause (corrected)".
 >
-> **Follow-up:** [`CLI_EVENT_RENDERING_PARITY_PLAN.md`](../backlog/CLI_EVENT_RENDERING_PARITY_PLAN.md)
+> **Follow-up:** [`CLI_EVENT_RENDERING_PARITY_PLAN.md`](./CLI_EVENT_RENDERING_PARITY_PLAN.md)
 > renders recorded `USER_STEER` events in `history show` (live runs still never see a genuine
 > one) and covers event pairing, detail
 > gaps and ctrlyoke MCP tool views.

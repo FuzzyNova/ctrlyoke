@@ -188,6 +188,7 @@ suite("WorkflowInstance session activity forwarding", () => {
       path.join(os.tmpdir(), "cy-session-activity-history-")
     );
     let instance: WorkflowInstance | undefined;
+    let resumedActivityDisposable: { dispose(): void } | undefined;
 
     try {
       const platform = new MockPlatform();
@@ -199,6 +200,15 @@ suite("WorkflowInstance session activity forwarding", () => {
         () => {},
         () => {},
         tempWorkspace
+      );
+      const resumedActivityEvents: Array<{
+        stepName: string;
+        events: unknown[];
+      }> = [];
+      resumedActivityDisposable = instance.onTargetStreamingEvents(
+        ({ stepName, events }) => {
+          resumedActivityEvents.push({ stepName, events });
+        }
       );
 
       const historyInit = await initTestRun(
@@ -327,7 +337,23 @@ suite("WorkflowInstance session activity forwarding", () => {
           [CLI_EVENT_TYPES.USER_STEER],
         ]
       );
+      assert.strictEqual(resumedActivityEvents.length, 2);
+      assert.deepStrictEqual(
+        resumedActivityEvents.map(({ events }) => events),
+        followUpActivity.map((activity: any) => activity.events ?? [])
+      );
+      assert.deepStrictEqual(
+        resumedActivityEvents.map(({ stepName }) => stepName),
+        ["Step 1", "Step 1"]
+      );
+      assert.strictEqual(
+        resumedActivityEvents.flatMap(({ events }) => events).filter(
+          (event: any) => event.type === CLI_EVENT_TYPES.FOLLOW_UP_RESUMED
+        ).length,
+        1
+      );
     } finally {
+      resumedActivityDisposable?.dispose();
       await instance?.outputHistoryManager.flushPendingIndexRefresh();
       await fs.rm(tempWorkspace, { recursive: true, force: true });
     }

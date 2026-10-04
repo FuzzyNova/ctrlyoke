@@ -19,6 +19,7 @@ import {
 } from "../../core/EndConditionEvaluator";
 import { EndConditionHandler } from "../../core/EndConditionHandler";
 import { StatusMessageReporter } from "../../core/orchestration/StatusMessageReporter";
+import type { UserFeedbackSink } from "../../core/UserFeedbackSink";
 import {
   PromptFile,
   PromptStep,
@@ -158,7 +159,8 @@ function makeExecutor(
   evaluator?: EndConditionEvaluator,
   trustStore: Pick<SecretGrantsTrustStore, "getDecision"> = {
     getDecision: () => "allow",
-  }
+  },
+  userFeedbackSink?: UserFeedbackSink
 ): WorkflowExecutor {
   const platform = new MockPlatform();
   const conditionEvaluator = evaluator ?? new EndConditionEvaluator(platform);
@@ -175,7 +177,7 @@ function makeExecutor(
     handler,
     conditionEvaluator,
     platform,
-    undefined,
+    userFeedbackSink,
     trustStore
   );
 }
@@ -807,7 +809,7 @@ suite("WorkflowExecutor condition shell reporting", () => {
     ]);
   });
 
-  test("persists harness failure kind when the step continues", async () => {
+  test("prints harness failure reason when the step continues", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
     integration.harnessErrorFailure = true;
@@ -822,13 +824,67 @@ suite("WorkflowExecutor condition shell reporting", () => {
       ],
     });
 
-    await makeExecutor(queue).execute(integration, makeContext(integration));
+    const context = makeContext(integration);
+    const statusMessages: string[] = [];
+    context.onStatusMessage = (_stepIndex, message) => {
+      statusMessages.push(message);
+    };
+    await makeExecutor(queue).execute(integration, context);
 
     assert.strictEqual(
       queue.getState().results[0].failureKind,
       FAILURE_KINDS.HARNESS_ERROR
     );
     assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+    assert.ok(
+      statusMessages.some((message) =>
+        message.includes("harness returned an error")
+      ),
+      "expected the headless status output to include the failure reason"
+    );
+  });
+
+  test("prints harness failure reason when the workflow stops", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    integration.harnessErrorFailure = true;
+    (integration as any).lastFailureReason = "harness stopped unexpectedly";
+    integration.onSend = async () => ({ success: false });
+    queue.loadPrompts({ steps: [{ prompt: "stop on harness failure" }] });
+
+    const context = makeContext(integration);
+    const statusMessages: string[] = [];
+    context.onStatusMessage = (_stepIndex, message) => {
+      statusMessages.push(message);
+    };
+    await makeExecutor(queue).execute(integration, context);
+
+    assert.ok(
+      statusMessages.some((message) =>
+        message.includes("harness stopped unexpectedly")
+      ),
+      "expected the headless status output to include the failure reason"
+    );
+  });
+
+  test("prints non-harness prompt failure reason as user feedback", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    (integration as any).lastFailureReason = "prompt transport rejected";
+    integration.onSend = async () => ({ success: false });
+    queue.loadPrompts({ steps: [{ prompt: "fail prompt" }] });
+    const feedback: string[] = [];
+
+    await makeExecutor(queue, undefined, undefined, {
+      notify: (message) => feedback.push(message.message),
+    }).execute(integration, makeContext(integration));
+
+    assert.ok(
+      feedback.some((message) =>
+        message.includes("prompt transport rejected")
+      ),
+      "expected headless error feedback to include the failure reason"
+    );
   });
 
   test("re-sends an end-condition retry after a retry harness failure on fresh attempt indices", async () => {
