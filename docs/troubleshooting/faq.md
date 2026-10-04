@@ -10,7 +10,7 @@ No. ctrlyoke supports six harnesses: GitHub Copilot CLI (`copilot-cli`), Claude 
 
 ## Can I run workflows in CI?
 
-Yes. Use `ctrlyoke run <file> --headless --json`, check the [exit code](/cli/ctrlyoke#exit-codes), and provide secrets as environment variables. Tool permissions resolve the same way in headless mode as anywhere else (step, then workflow, then settings), so make sure the resolved mode will not stop to ask for approval. You can set it in the workflow, in the CI workspace's settings, or with `--permission-mode` for one run. See [Tool permissions](/cli/ctrlyoke#tool-permissions). The harness CLI must be installed and authenticated on the CI machine.
+Yes. Use `ctrlyoke run <file> --headless --json`, check the [exit code](/cli/ctrlyoke#exit-codes), and provide secrets as environment variables. Tool permissions resolve the same way in headless mode as anywhere else (step, workflow, then settings), so make sure the resolved mode will not stop to ask for approval. You can set it in the workflow, in the CI workspace's settings, or with `--permission-mode` for one run; the flag sets the workflow value and a step's own value still takes precedence. Add `--force permission-mode` to apply it to every step. See [Tool permissions](/cli/ctrlyoke#tool-permissions). The harness CLI must be installed and authenticated on the CI machine.
 
 ## Where is my run history?
 

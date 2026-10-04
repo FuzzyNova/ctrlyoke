@@ -2094,6 +2094,9 @@ export class WorkflowInstance
    * artifacts). Instead: load the seeded file, initialize ITS timeline directly, then
    * execute with `continueFromCurrent=true` so `executeLoadedPromptFile` treats it purely
    * as "run exactly what's loaded" — no restart, no re-promotion.
+   * `onPrepared` runs after binding the seeded run but before timeline
+   * initialization, so caller-applied overrides are included in its first
+   * immutable definition snapshot.
    */
   async executeSeededRun(
     seeded: {
@@ -2113,6 +2116,7 @@ export class WorkflowInstance
   ): Promise<void> {
     await this.closeRetainedTerminalsForFreshRun();
     await this.loadWorkingFile(seeded.workingFilePath);
+    await onPrepared?.();
     const historyInit = await this.outputHistoryManager.initializeRunAt(
       workflowKey,
       seeded.runRef,
@@ -2127,7 +2131,6 @@ export class WorkflowInstance
         `Failed to initialize timeline for seeded run ${workflowKey}/${seeded.runRef}`
       );
     }
-    await onPrepared?.();
     await this.executeLoadedPromptFile(
       harnessOverride,
       false,

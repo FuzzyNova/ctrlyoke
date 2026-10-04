@@ -1,6 +1,6 @@
 # CLI Flag Override Scope — flags set the workflow level; `--force` extends them to steps
 
-> **Status:** Phases 1–3 complete; phase 4 queued. Audited 2026-10-04 against `src/cli.ts`,
+> **Status:** Implemented 2026-10-04. Phases 1–4 (D10 and D11) are complete. Audited 2026-10-04 against `src/cli.ts`,
 > `src/cli/CliRunCommandDefinitions.ts`, `src/cli/CliPropertyOverrides.ts`,
 > `src/cli/CliExecutionMode.ts`, `src/types/ExecutionPropertyResolver.ts` and
 > `PromptFileLoader.populateSettingsDefaults`. The `--harness` finding was confirmed with a
@@ -243,6 +243,21 @@ from the help text.
      path, clears step models when a forced harness changes, and refuses forced models across
      harnesses. Unit and CLI dry-run integration coverage passes.
 4. **Other commands and help text (D10, D11).**
+   - **Implemented:** `rerun --harness/--model` uses `CliPropertyOverrides` on
+     the seeded run's workflow and supports `--force`. `append` and `continue`
+     apply shared mode and tool-permission flags at workflow scope to their
+     working copy before execution. `append --harness` remains specific to its
+     appended steps. `continue` still rejects `--harness`/`--model`.
+   - **`--force` is intentionally unavailable on `append` and `continue`.**
+     Those commands operate on a run that can contain completed steps; forcing
+     a flag across the whole definition could rewrite completed step values.
+     Their workflow defaults affect pending work while leaving completed step
+     properties intact.
+   - Help text identifies workflow scope and derives the rerun forceable names
+     from `ForceableFlag`. The run, CLI overview, CI, and FAQ docs describe the
+     same scope and session-flag boundary.
+   - Tests cover the addressed command parser, workflow override application,
+     and generated option help.
 
 ## Not in scope
 

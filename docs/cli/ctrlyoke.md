@@ -101,19 +101,20 @@ Pass either a file or `--prompt`, not both.
 
 | Option                       | Meaning                                                                                                                                                                              |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `-H, --harness <harness>`    | Harness override: `copilot-cli`, `claude-cli`, `codex-cli`, `opencode-cli`, `qwen-cli`, or `antigravity-cli`. Default: the workflow's `harness`, then the `defaults.harness` setting |
-| `-m, --model <model>`        | Override the workflow model for this run (step-level `model` values still take precedence)                                                                                           |
+| `-H, --harness <harness>`    | Harness override: `copilot-cli`, `claude-cli`, `codex-cli`, `opencode-cli`, `qwen-cli`, or `antigravity-cli`. Default: the workflow's `harness`, then the `defaults.harness` setting. Workflow level; add `--force harness` to apply to every step |
+| `-m, --model <model>`        | Model override at workflow level; step-level `model` values still take precedence. Add `--force model` to apply to every step                                                                                           |
+| `--force <flags>`            | Repeatable, comma-separated flag names (or `all`); apply the named passed flags to every step                                                                                          |
 | `-p, --prompt <text>`        | Run an inline prompt instead of a file                                                                                                                                               |
 | `--var <key=value>`          | Set a workflow variable (repeatable). CLI values override the workflow's own `vars`                                                                                                  |
-| `--session-id <id>`          | Resume this harness session in the first step (implies `--resume-session`)                                                                                                           |
-| `--resume-session`           | Force every AI step to resume its existing session                                                                                                                                   |
-| `--no-resume-session`        | Force every AI step to start a new session, ignoring any recorded session                                                                                                            |
+| `--session-id <id>`          | Resume this harness session by default (implies `--resume-session`); workflow level, add `--force session-id` to apply to every step                                                   |
+| `--resume-session`           | Resume the existing session by default; workflow level, add `--force resume-session` to apply to every step                                                                           |
+| `--no-resume-session`        | Start a new session by default, ignoring any existing session; workflow level, add `--force resume-session` to apply to every step                                                     |
 | `--dry-run`                  | Print the redacted execution preview and its diagnostics without starting a harness                                                                                                  |
-| `--headless`                 | Force headless mode (CI, no user interaction)                                                                                                                                        |
-| `--interactive`              | Force interactive mode (the harness TUI is passed through; you end the session)                                                                                                      |
-| `--permission-mode <mode>`   | Override the `defaults.toolPermissions.mode` setting: `dangerouslyAllowAll`, `allowAll`, `custom`, or `none`                                                                         |
-| `--allow-tool <pattern>`     | Allow a tool pattern (repeatable)                                                                                                                                                    |
-| `--deny-tool <pattern>`      | Deny a tool pattern (repeatable)                                                                                                                                                     |
+| `--headless`                 | Force headless mode at workflow level; add `--force headless` to apply to every step                                                                                                 |
+| `--interactive`              | Force interactive mode at workflow level; add `--force interactive` to apply to every step                                                                                            |
+| `--permission-mode <mode>`   | Set workflow tool permission mode: `dangerouslyAllowAll`, `allowAll`, `custom`, or `none`; add `--force permission-mode` to apply to every step                                      |
+| `--allow-tool <pattern>`     | Set workflow allowed tool patterns (repeatable); add `--force allow-tool` to apply to every step                                                                                      |
+| `--deny-tool <pattern>`      | Set workflow denied tool patterns (repeatable); add `--force deny-tool` to apply to every step                                                                                        |
 | `-d, --cwd <path>`           | Workspace directory (default: current directory)                                                                                                                                     |
 | `-t, --timeout <seconds>`    | Override the `execution.maxPromptTimeoutSec` setting for this run (`-1` = unlimited)                                                                                                 |
 | `--script-timeout <seconds>` | Override the `execution.scriptTimeoutSec` setting with a positive whole number of seconds; a condition's own `timeoutSec` still wins                                                    |
@@ -125,7 +126,10 @@ Pass either a file or `--prompt`, not both.
 ### Headless and interactive mode
 
 Without `--headless` or `--interactive`, the CLI runs interactively when both
-stdin and stdout are a TTY and headless otherwise (pipes, CI). Interactive mode
+stdin and stdout are a TTY and headless otherwise (pipes, CI). These flags set
+the workflow default, so a step's own `executionMode` still takes precedence.
+Without a TTY, interactive steps are clamped to headless. Use
+`--headless --force headless` to make every step headless. Interactive mode
 passes the harness's own terminal UI through with minimal ctrlyoke framing.
 Headless mode streams formatted output: step headers, streamed text, tool
 calls, diffs, script verdicts, and per-step statistics.
@@ -140,15 +144,16 @@ match wins:
 2. the workflow's `toolPermissions`
 3. `defaults.toolPermissions` from settings
 
-`--permission-mode`, `--allow-tool`, and `--deny-tool` override only the
-settings layer (step 3), taking precedence over the workspace and user settings
-files for this run. A workflow or step that sets its own `toolPermissions`
-still wins over them. `--allow-tool` and `--deny-tool` replace the settings
-allow and deny lists but leave the mode alone.
+`--permission-mode`, `--allow-tool`, and `--deny-tool` set the corresponding
+workflow `toolPermissions` fields for this run. A step that sets its own
+`toolPermissions` still wins. Use `--force permission-mode`, `--force
+allow-tool`, or `--force deny-tool` to apply the supplied field to every step.
+Allow and deny flags replace only their corresponding workflow lists and leave
+the other permission fields alone.
 
 An unattended run whose resolved mode can still prompt for approval may stall
-on that prompt. For CI, set the mode you want in the workflow or in the CI
-workspace's settings, or pass `--permission-mode`.
+on that prompt. For CI, set the mode you want in the workflow or pass
+`--permission-mode`.
 
 ### JSON output
 
@@ -199,10 +204,13 @@ ctrlyoke rerun --workflow release --from 7 --harness claude-cli
 ```
 
 `--from` accepts a numeric run ID or a stable run reference and defaults to the
-lineage's newest run. `--harness` and `--model` override the seeded run. It
+lineage's newest run. `--harness` and `--model` override the seeded run at
+workflow level, preserving step values; use `--force harness` or `--force
+model` to apply either override to every step. It
 refuses while another run in the same lineage is executing. `rerun` accepts the
 same execution options as `run` apart from `--prompt`, `--var`, the session
-flags, and `--dry-run`.
+flags, and `--dry-run`. Shared execution flags set workflow defaults for the
+new run.
 
 ## `ctrlyoke append`
 
@@ -217,7 +225,10 @@ The file must contain at least one workflow step; `--prompt` appends a single
 prompt step. The run's effective `maxSteps` cap applies to this append: the
 workflow's `maxSteps` when present, otherwise the global `queue.maxSteps`
 setting. A workflow value of `-1` removes the cap even when the global setting
-is numeric.
+is numeric. `--headless`, `--interactive`, and the tool permission flags set
+workflow defaults for pending work. They do not rewrite completed step
+properties. `append --harness` continues to select the harness for appended
+steps only.
 
 ## `ctrlyoke continue`
 
@@ -230,7 +241,14 @@ ctrlyoke continue --workflow release --run 7
 A run left `running` or `paused` by a process that no longer holds its runner
 lock can be adopted this way. `continue` refuses while the lineage has an
 unsaved draft or pending edit, while any run in the lineage is executing, or
-while the target run is pausing or cancelling.
+while the target run is pausing or cancelling. `--headless`, `--interactive`,
+and the tool permission flags set workflow defaults for pending work; they do
+not rewrite completed step properties. `continue` does not accept `--force`.
+
+Session options are available on `run` only. For `run`, property overrides set
+workflow values by default, and `--force <flag>` applies selected flags to
+every step. For `append` and `continue`, shared execution overrides affect
+pending work at workflow scope without `--force`.
 
 ## `ctrlyoke validate`
 

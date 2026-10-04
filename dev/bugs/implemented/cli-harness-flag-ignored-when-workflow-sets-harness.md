@@ -53,7 +53,7 @@ The three paths resolve the harness differently:
 Apply `--harness` at the workflow level, the same way `--model` is applied, through one
 shared function that the real run, dry-run and the run header all use. Then stop writing
 `overlay.defaults.harness` from the flag. This is phase 1 of
-[`CLI_FLAG_OVERRIDE_SCOPE_PLAN.md`](../../backlog/CLI_FLAG_OVERRIDE_SCOPE_PLAN.md), which
+[`CLI_FLAG_OVERRIDE_SCOPE_PLAN.md`](../../implemented/CLI_FLAG_OVERRIDE_SCOPE_PLAN.md), which
 generalizes the fix to every property flag.
 
 Add an integration test that runs a fake harness, not a dry-run, and asserts which harness

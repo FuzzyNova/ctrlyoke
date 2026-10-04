@@ -597,12 +597,16 @@ function getCliReportingWorkflow(
     return workflow;
   }
 
-  // Keep the existing reporting precedence for rerun/append/continue until
-  // those commands move their flags to the workflow in a later phase.
+  // Rerun's harness/model flags are workflow-scoped. Append's harness flag
+  // remains specific to the appended steps.
   return {
     ...workflow,
-    ...(options.harness ? { harness: options.harness as HarnessId } : {}),
-    ...(options.model ? { model: options.model } : {}),
+    ...(operation.kind === CLI_RUN_OPERATION_KINDS.RERUN && options.harness
+      ? { harness: options.harness as HarnessId }
+      : {}),
+    ...(operation.kind === CLI_RUN_OPERATION_KINDS.RERUN && options.model
+      ? { model: options.model }
+      : {}),
   };
 }
 
@@ -803,9 +807,6 @@ async function runCommand(
     !!process.stdin.isTTY
   );
 
-  // Run property flags are applied to the loaded workflow. Other run-scoped
-  // commands retain their existing settings-overlay behavior until their
-  // later migration phase.
   const config: ResolvedCliConfig = {
     harness: options.harness || HARNESS_IDS.COPILOT_CLI,
     model: options.model,
@@ -827,35 +828,6 @@ async function runCommand(
 
   // Build CLI overlay from explicitly provided flags only (not Commander defaults).
   const overlay: PartialCtrlYokeSettings = {};
-  if (operation.kind !== CLI_RUN_OPERATION_KINDS.RUN) {
-    if (options.harness) {
-      overlay.defaults = { harness: options.harness as HarnessId };
-    }
-    if (options.model) {
-      overlay.defaults = {
-        ...overlay.defaults,
-        models: { [config.harness as HarnessId]: options.model },
-      };
-    }
-    if (
-      options.permissionMode ||
-      options.allowTool?.length ||
-      options.denyTool?.length
-    ) {
-      overlay.defaults = {
-        ...overlay.defaults,
-        toolPermissions: {
-          ...(options.permissionMode ? { mode: options.permissionMode } : {}),
-          ...(options.allowTool?.length
-            ? { allowedTools: options.allowTool }
-            : {}),
-          ...(options.denyTool?.length
-            ? { deniedTools: options.denyTool }
-            : {}),
-        },
-      };
-    }
-  }
   // Keep the TTY-derived mode at settings tier as the default. Explicit mode
   // flags are applied to the workflow after it has loaded.
   overlay.defaults = { ...overlay.defaults, executionMode };
@@ -1923,10 +1895,7 @@ async function executeAddressedCliOperation(
       workspaceRoot,
       workflowKey,
       sourceRunRef,
-      {
-        ...(options.harness ? { harness: options.harness as HarnessId } : {}),
-        ...(options.model ? { model: options.model } : {}),
-      },
+      {},
       lineageRepository,
       {
         definitionRevision: source.definitionRevision ?? 1,
@@ -1938,8 +1907,16 @@ async function executeAddressedCliOperation(
     await instance.executeSeededRun(
       seeded,
       workflowKey,
-      options.harness as HarnessId | undefined,
-      warnIfNeeded
+      undefined,
+      async () => {
+        await applyAddressedCliPropertyOverrides(
+          instance,
+          options,
+          ConfigurationUtils.getIntegrationMode(),
+          true
+        );
+        await warnIfNeeded();
+      }
     );
     return;
   }
@@ -1991,7 +1968,15 @@ async function executeAddressedCliOperation(
       workflowKey,
       runRef,
       appended.definitionRevision,
-      warnIfNeeded
+      async () => {
+        await applyAddressedCliPropertyOverrides(
+          instance,
+          options,
+          ConfigurationUtils.getIntegrationMode(),
+          false
+        );
+        await warnIfNeeded();
+      }
     );
     return;
   }
@@ -2000,8 +1985,53 @@ async function executeAddressedCliOperation(
     workflowKey,
     runRef,
     target.definitionRevision,
-    warnIfNeeded
+    async () => {
+      await applyAddressedCliPropertyOverrides(
+        instance,
+        options,
+        ConfigurationUtils.getIntegrationMode(),
+        false
+      );
+      await warnIfNeeded();
+    }
   );
+}
+
+async function applyAddressedCliPropertyOverrides(
+  instance: WorkflowInstance,
+  options: RunOptions | RerunOptions | AppendOptions | ContinueOptions,
+  defaultHarness: HarnessId,
+  includeHarnessAndModel: boolean
+): Promise<void> {
+  const workflow = instance.promptQueue.getWorkflowFile();
+  const overrides = buildCliPropertyOverrides(
+    includeHarnessAndModel
+      ? options
+      : { ...options, harness: undefined, model: undefined },
+    defaultHarness
+  );
+  const originalModel = workflow.model;
+  const notices = applyCliPropertyOverrides(workflow, overrides);
+  const workflowProperties: Record<string, unknown> = {
+    ...overrides.workflow,
+  };
+  if (overrides.workflow.toolPermissions) {
+    workflowProperties.toolPermissions = workflow.toolPermissions;
+  }
+  if (originalModel !== undefined && workflow.model === undefined) {
+    workflowProperties.model = undefined;
+  }
+  if (Object.keys(workflowProperties).length > 0) {
+    await instance.promptQueue.updateWorkingFileProperties(workflowProperties, {
+      allowDeletes: true,
+    });
+  }
+  if (overrides.forced.size > 0) {
+    await instance.promptQueue.updateWorkingFile(true);
+  }
+  if (!options.quiet && !options.json) {
+    for (const notice of notices) console.log(chalk.yellow(notice));
+  }
 }
 
 async function parseAppendTail(
