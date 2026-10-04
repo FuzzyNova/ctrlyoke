@@ -7,7 +7,10 @@ import * as path from "path";
 import { access, readFile } from "fs/promises";
 
 import { CliAdapter } from "./platform/CliAdapter";
-import { applyCliToolPermissionOptions } from "./cli/CliToolPermissionOverlay";
+import {
+  applyCliPropertyOverrides,
+  buildCliPropertyOverrides,
+} from "./cli/CliPropertyOverrides";
 import { ConsoleUserFeedbackSink } from "./platform/ConsoleUserFeedbackSink";
 import type { ResolvedCliConfig } from "./platform/CliAdapter";
 import { registerCliAdapter } from "./platform/vscode-shim";
@@ -576,16 +579,31 @@ interface CliAttemptState {
  */
 function resolveCliRunHarnessAndModel(
   workflow: PromptFile | undefined,
-  explicitHarness: HarnessId | undefined,
-  defaultHarness: HarnessId,
-  explicitModel: string | undefined
+  defaultHarness: HarnessId
 ): { harness: HarnessId; model?: string } {
-  const harness = explicitHarness ?? workflow?.harness ?? defaultHarness;
+  const harness = workflow?.harness ?? defaultHarness;
   const model =
-    explicitModel ??
     workflow?.model ??
     ConfigurationUtils.getModelForHarness(harness);
   return { harness, ...(model ? { model } : {}) };
+}
+
+function getCliReportingWorkflow(
+  workflow: PromptFile | undefined,
+  operation: CliRunOperation,
+  options: RunCommandOptions | RerunOptions | AppendOptions | ContinueOptions
+): PromptFile | undefined {
+  if (operation.kind === CLI_RUN_OPERATION_KINDS.RUN || !workflow) {
+    return workflow;
+  }
+
+  // Keep the existing reporting precedence for rerun/append/continue until
+  // those commands move their flags to the workflow in a later phase.
+  return {
+    ...workflow,
+    ...(options.harness ? { harness: options.harness as HarnessId } : {}),
+    ...(options.model ? { model: options.model } : {}),
+  };
 }
 
 function getCliPromptExecutionDetails(
@@ -776,10 +794,9 @@ async function runCommand(
     !!process.stdin.isTTY
   );
 
-  // Tool permissions are not resolved here: --permission-mode/--allow-tool/
-  // --deny-tool only enter the settings overlay below, so they resolve per step
-  // like any other default (step > workflow > settings), independent of
-  // execution mode.
+  // Run property flags are applied to the loaded workflow. Other run-scoped
+  // commands retain their existing settings-overlay behavior until their
+  // later migration phase.
   const config: ResolvedCliConfig = {
     harness: options.harness || HARNESS_IDS.COPILOT_CLI,
     model: options.model,
@@ -803,15 +820,34 @@ async function runCommand(
 
   // Build CLI overlay from explicitly provided flags only (not Commander defaults).
   const overlay: PartialCtrlYokeSettings = {};
-  // --harness has no Commander default, so its presence is always explicit.
-  if (options.harness) {
-    overlay.defaults = { harness: options.harness as HarnessId };
-  }
-  if (options.model) {
-    overlay.defaults = {
-      ...overlay.defaults,
-      models: { [config.harness as HarnessId]: options.model },
-    };
+  if (operation.kind !== CLI_RUN_OPERATION_KINDS.RUN) {
+    if (options.harness) {
+      overlay.defaults = { harness: options.harness as HarnessId };
+    }
+    if (options.model) {
+      overlay.defaults = {
+        ...overlay.defaults,
+        models: { [config.harness as HarnessId]: options.model },
+      };
+    }
+    if (
+      options.permissionMode ||
+      options.allowTool?.length ||
+      options.denyTool?.length
+    ) {
+      overlay.defaults = {
+        ...overlay.defaults,
+        toolPermissions: {
+          ...(options.permissionMode ? { mode: options.permissionMode } : {}),
+          ...(options.allowTool?.length
+            ? { allowedTools: options.allowTool }
+            : {}),
+          ...(options.denyTool?.length
+            ? { deniedTools: options.denyTool }
+            : {}),
+        },
+      };
+    }
   }
   if (options.headless) {
     overlay.defaults = {
@@ -829,7 +865,6 @@ async function runCommand(
     // regardless of what the user's config file says.
     overlay.defaults = { ...overlay.defaults, executionMode };
   }
-  applyCliToolPermissionOptions(overlay, options);
   if (options.timeout !== undefined || options.scriptTimeout !== undefined) {
     overlay.execution = {
       ...(options.timeout !== undefined && {
@@ -903,11 +938,9 @@ async function runCommand(
   // Register the adapter with the vscode-shim for backward compatibility.
   registerCliAdapter(platform);
   const factory = new IntegrationFactory(platform, userFeedbackSink);
-  // The harness a workflow falls back to when neither a step nor the workflow
-  // names one: the explicit --harness flag, else the defaults.harness setting
-  // (which already carries the --harness overlay).
-  const explicitHarness = options.harness as HarnessId | undefined;
-  const harness = explicitHarness ?? ConfigurationUtils.getIntegrationMode();
+  // The default harness used only when neither a step nor the workflow names
+  // one. `run --harness` is applied to the workflow after it loads.
+  const harness = ConfigurationUtils.getIntegrationMode();
 
   if (
     operation.kind === CLI_RUN_OPERATION_KINDS.RUN &&
@@ -919,7 +952,6 @@ async function runCommand(
       options,
       config,
       harness,
-      explicitHarness,
       workingDir,
       hostCanProvidePty,
       supportsConcurrentInteractiveSessions,
@@ -957,10 +989,12 @@ async function runCommand(
     runHeaderPrinted = true;
     const { harness: runHarness, model: runModel } =
       resolveCliRunHarnessAndModel(
-        instance.promptQueue.getWorkflowFile(),
-        explicitHarness,
-        harness,
-        config.model
+        getCliReportingWorkflow(
+          instance.promptQueue.getWorkflowFile(),
+          operation,
+          options
+        ),
+        harness
       );
     if (options.verbose && !options.json) {
       console.log(chalk.dim(`[verbose] Harness: ${runHarness}`));
@@ -1323,9 +1357,19 @@ async function runCommand(
         );
       }
 
-      if (config.model) {
-        instance.promptQueue.updateWorkflowProperty("model", config.model);
+      const overrides = buildCliPropertyOverrides(options, harness);
+      const workflow = instance.promptQueue.getWorkflowFile();
+      const notices = applyCliPropertyOverrides(workflow, overrides);
+      for (const key of Object.keys(overrides.workflow) as Array<
+        keyof typeof overrides.workflow
+      >) {
+        instance.promptQueue.updateWorkflowProperty(key, workflow[key]);
+      }
+      if (Object.keys(overrides.workflow).length > 0) {
         await instance.promptQueue.updateWorkingFile(true);
+      }
+      if (!options.quiet && !options.json) {
+        for (const notice of notices) console.log(chalk.yellow(notice));
       }
 
       printRunHeader();
@@ -1373,9 +1417,7 @@ async function runCommand(
         }
       }
 
-      // Only an explicit --harness overrides the workflow's own `harness`;
-      // otherwise execution resolves it from the workflow, then settings.
-      await instance.executeLoadedPromptFile(explicitHarness);
+      await instance.executeLoadedPromptFile();
     } else {
       await executeAddressedCliOperation(
         operation,
@@ -1410,10 +1452,12 @@ async function runCommand(
         state,
         promptFile,
         ...resolveCliRunHarnessAndModel(
-          instance.promptQueue.getWorkflowFile(),
-          explicitHarness,
-          harness,
-          config.model
+          getCliReportingWorkflow(
+            instance.promptQueue.getWorkflowFile(),
+            operation,
+            options
+          ),
+          harness
         ),
         workflowFileReference: file,
         workspaceRoot: workingDir,
@@ -1450,10 +1494,12 @@ async function runCommand(
         state: undefined,
         promptFile: instance.promptQueue.getWorkflowFile(),
         ...resolveCliRunHarnessAndModel(
-          instance.promptQueue.getWorkflowFile(),
-          explicitHarness,
-          harness,
-          config.model
+          getCliReportingWorkflow(
+            instance.promptQueue.getWorkflowFile(),
+            operation,
+            options
+          ),
+          harness
         ),
         workflowFileReference: file,
         workspaceRoot: workingDir,
@@ -1636,7 +1682,6 @@ async function dryRunCommand(
   options: RunOptions,
   config: ResolvedCliConfig,
   harness: HarnessId,
-  explicitHarness: HarnessId | undefined,
   workingDir: string,
   hostCanProvidePty: boolean,
   supportsConcurrentInteractiveSessions: boolean,
@@ -1657,8 +1702,10 @@ async function dryRunCommand(
       );
     }
 
-    if (config.model) {
-      workflow.model = config.model;
+    const overrides = buildCliPropertyOverrides(options, harness);
+    const notices = applyCliPropertyOverrides(workflow, overrides);
+    if (!options.quiet && !options.json) {
+      for (const notice of notices) console.log(chalk.yellow(notice));
     }
 
     if (resolvedFile) {
@@ -1673,14 +1720,6 @@ async function dryRunCommand(
     assertSecretGrantsApproved(workflow, workingDir);
 
     const previewWorkflow = applyDryRunSessionOverrides(workflow, config);
-    if (explicitHarness) {
-      previewWorkflow.harness = resolveCliRunHarnessAndModel(
-        workflow,
-        explicitHarness,
-        harness,
-        config.model
-      ).harness;
-    }
     collectWorkflowHarnesses(previewWorkflow, harness);
     const capabilityRegistry = createCliCapabilityRegistry();
     let capabilities;
@@ -1695,10 +1734,7 @@ async function dryRunCommand(
     const defaults = {
       ...defaultsContext.defaults,
       harness,
-      modelsByHarness: {
-        ...defaultsContext.defaults.modelsByHarness,
-        ...(config.model ? { [harness]: config.model } : {}),
-      },
+      modelsByHarness: defaultsContext.defaults.modelsByHarness,
     };
     const integrations = new Map<
       HarnessId,

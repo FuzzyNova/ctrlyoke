@@ -9,15 +9,10 @@ import {
   type RunCommandOptions,
 } from "../../cli/CliRunCommandDefinitions";
 import { PERMISSION_MODES } from "../../types/DashboardConstants";
-import { configService } from "../../config/CtrlYokeConfigService";
-import type { ConfigBackend } from "../../config/CtrlYokeConfigService";
 import {
-  CTRLYOKE_SETTINGS_DEFAULTS,
-  type PartialCtrlYokeSettings,
-} from "../../types/CtrlYokeSettings";
-import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import { applyCliToolPermissionOptions } from "../../cli/CliToolPermissionOverlay";
-import { QwenToolPermissionMapper } from "../../core/harness/qwen/QwenToolPermissionMapper";
+  applyCliPropertyOverrides,
+  buildCliPropertyOverrides,
+} from "../../cli/CliPropertyOverrides";
 
 function createProgram(calls: {
   rerun?: RerunOptions;
@@ -326,7 +321,7 @@ suite("CLI run command parser", () => {
     );
   });
 
-  test("applies --permission-mode over nullable settings with complete mapper config", async () => {
+  test("applies permission flags to a nullable workflow permission object", async () => {
     const calls: {
       run?: { file: string | undefined; options: RunCommandOptions };
     } = {};
@@ -335,29 +330,14 @@ suite("CLI run command parser", () => {
       { from: "user" }
     );
 
-    const emptyBackend: ConfigBackend = {
-      getAll: () => ({ defaults: { toolPermissions: null } }),
-      set: async () => {},
-    };
-    configService.setUserBackend(emptyBackend);
-    configService.setWorkspaceBackend(emptyBackend);
-    const overlay: PartialCtrlYokeSettings = {};
-    applyCliToolPermissionOptions(overlay, calls.run!.options);
-    configService.setCliOverlay(overlay);
-
-    try {
-      const resolved = ConfigurationUtils.resolveSpawnToolPermissions(undefined);
-      assert.deepStrictEqual(resolved, {
-        ...CTRLYOKE_SETTINGS_DEFAULTS.defaults.toolPermissions,
-        mode: PERMISSION_MODES.CUSTOM,
-      });
-      assert.ok(resolved);
-      await new QwenToolPermissionMapper().prepare(resolved, {});
-    } finally {
-      configService.setUserBackend({ getAll: () => ({}), set: async () => {} });
-      configService.setWorkspaceBackend({ getAll: () => ({}), set: async () => {} });
-      configService.setCliOverlay({});
-    }
+    const workflow = { toolPermissions: null, steps: [] };
+    applyCliPropertyOverrides(
+      workflow,
+      buildCliPropertyOverrides(calls.run!.options)
+    );
+    assert.deepStrictEqual(workflow.toolPermissions, {
+      mode: PERMISSION_MODES.CUSTOM,
+    });
   });
 
   test("no longer accepts the removed --add-dir flag", async () => {

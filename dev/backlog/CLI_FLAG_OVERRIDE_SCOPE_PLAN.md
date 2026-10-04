@@ -1,11 +1,11 @@
 # CLI Flag Override Scope — flags set the workflow level; `--force` extends them to steps
 
-> **Status:** Ready to implement. Audited 2026-10-04 against `src/cli.ts`,
-> `src/cli/CliRunCommandDefinitions.ts`, `src/cli/CliToolPermissionOverlay.ts`,
+> **Status:** Phase 1 complete; phases 2–4 queued. Audited 2026-10-04 against `src/cli.ts`,
+> `src/cli/CliRunCommandDefinitions.ts`, `src/cli/CliPropertyOverrides.ts`,
 > `src/cli/CliExecutionMode.ts`, `src/types/ExecutionPropertyResolver.ts` and
 > `PromptFileLoader.populateSettingsDefaults`. The `--harness` finding was confirmed with a
 > real headless run; see
-> [`cli-harness-flag-ignored-when-workflow-sets-harness.md`](../bugs/backlog/cli-harness-flag-ignored-when-workflow-sets-harness.md).
+> [`cli-harness-flag-ignored-when-workflow-sets-harness.md`](../bugs/implemented/cli-harness-flag-ignored-when-workflow-sets-harness.md).
 
 ## The rule
 
@@ -21,11 +21,11 @@ different tiers depending on the flag; this plan puts every one of them on the w
 
 | Flag                                                                        | Lands on                                                                                                                        | Matches the rule?                                                                                    |
 | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `-m, --model`                                                               | Workflow (`promptQueue.updateWorkflowProperty("model")`)                                                                        | **Yes.** Steps with their own `model` keep it.                                                       |
-| `-H, --harness`                                                             | Settings tier (`overlay.defaults.harness`) for execution; workflow for dry-run; a third rule for the run header                 | **No — bug.** The workflow's own `harness` beats the flag in real runs. Steps keep theirs (correct). |
+| `-m, --model`                                                               | Workflow (`CliPropertyOverrides`)                                                                                                 | **Yes.** Steps with their own `model` keep it.                                                       |
+| `-H, --harness`                                                             | Workflow (`CliPropertyOverrides`)                                                                                                 | **Fixed in phase 1.** Steps keep their own harness.                                                  |
 | `--interactive`                                                             | Settings tier (`overlay.defaults.executionMode`)                                                                                | **No.** A workflow-level `executionMode` beats the flag.                                             |
 | `--headless`                                                                | Settings tier, plus `hostCanProvidePty = false`, which clamps **every** step to headless in `resolveExecutionMode`              | **No.** Too strong: it overrides steps that ask for `interactive`.                                   |
-| `--permission-mode`, `--allow-tool`, `--deny-tool`                          | Settings tier (`overlay.defaults.toolPermissions`), copied into the run only where the workflow leaves sub-fields unset         | **No.** A workflow-level `toolPermissions` beats the flags.                                          |
+| `--permission-mode`, `--allow-tool`, `--deny-tool`                          | Workflow (`CliPropertyOverrides`) for `run`                                                                                       | **Fixed in phase 1.** Fields merge independently; step values still win.                             |
 | `--resume-session` / `--no-resume-session`                                  | **Every step** (`cli.ts` mutates `step.resumeSession` on all steps; `--no-resume-session` also deletes each step's `sessionId`) | **No.** Too strong, and it destroys step-authored `sessionId`s.                                      |
 | `--session-id`                                                              | The first step only (`steps[0].sessionId` + `resumeSession`)                                                                    | **No.** Too narrow: later steps never see it (D3).                                                   |
 | `--var`                                                                     | Workflow `vars` (CLI values win)                                                                                                | **Yes.** `vars` is workflow-only, so there is no step level.                                         |
@@ -219,6 +219,10 @@ from the help text.
      on a test-only `PATH` (e.g. `claude.cmd`/`codex.cmd` on Windows plus a POSIX twin) that
      records its own name and exits. If the launcher resolver cannot be pointed at a stub
      without a production seam, add the smallest test-only seam and say so in this doc.
+   - Landed: the integration fixture uses `copilot`/`opencode` stubs on a test-only `PATH`;
+     no production seam was needed. These stdout-based harnesses keep the process test
+     independent of real session-log discovery. Unit coverage includes D4 and permission
+     merges. `rerun`, `append` and `continue` retain their pre-phase behavior.
 2. **Execution mode and session flags (D3, D6, D8).** Lands after the interactive-output bug
    fix. Tests:
    - TTY-forced runs with `--headless` keep a step's `interactive`; no-TTY runs still clamp
