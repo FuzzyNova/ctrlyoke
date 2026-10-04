@@ -37,6 +37,8 @@ import type {
   FinalStepRuntimeState,
   RunnerHostIdentity,
 } from "./types/CtrlYokeTypes";
+import { projectWorktreeRuntime } from "./types/CtrlYokeTypes";
+import type { TokenStats } from "./types/WebviewMessageTypes";
 import type { CompatibilityDiagnostic } from "./types/CompatibilityTypes";
 import {
   isScriptStep,
@@ -567,6 +569,7 @@ interface CliAttemptState {
   stepName: string;
   attemptCount: number;
   totalElapsed: number;
+  tokenStats: TokenStats[];
   retried: boolean;
   activeAttemptCompleted: boolean;
 }
@@ -1111,7 +1114,8 @@ async function runCommand(
             CliTerminalFormatter.renderAttemptGroupSummary(
               attempt.stepName,
               attempt.attemptCount,
-              attempt.totalElapsed
+              attempt.totalElapsed,
+              attempt.tokenStats
             );
           }
         }
@@ -1149,6 +1153,7 @@ async function runCommand(
           stepName: data.stepName,
           attemptCount: 0,
           totalElapsed: 0,
+          tokenStats: [],
           retried: false,
           activeAttemptCompleted: false,
         };
@@ -1279,6 +1284,7 @@ async function runCommand(
         const attempt = attempts.get(data.stepIndex);
         if (attempt && !attempt.activeAttemptCompleted) {
           attempt.totalElapsed += data.elapsed ?? 0;
+          if (data.tokens) attempt.tokenStats.push(data.tokens);
           attempt.activeAttemptCompleted = true;
         }
         const state = getParallelGroup(data.parallelGroupId);
@@ -1433,6 +1439,12 @@ async function runCommand(
       } else {
         console.log(chalk.red("✗ Workflow ended: " + state.status));
       }
+      const workflowFile = instance.promptQueue.getWorkflowFile() as WorkingFile;
+      CliTerminalFormatter.renderRunSummary(
+        state.runRef,
+        state.tokenTotals,
+        projectWorktreeRuntime(workflowFile._runtime?.worktree)
+      );
     }
     if (!completed && schemaRefusal) {
       // stderr in every mode: `--json` stdout stays one JSON document.

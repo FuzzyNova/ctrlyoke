@@ -38,6 +38,12 @@ run`, but not for `history show` replaying a dashboard run that was steered; see
   tone-aware bodies, with generic output retained for unrecognized or failed
   results. Added recorded-result model and child-process formatter coverage.
   `npm run typecheck`, `npm run lint`, and `npm test` passed.
+- **Phase 4, first three items complete (D14, D16, D17).** Moved command and
+  worktree-outcome formatting into shared utilities, added working-directory
+  command lines and retry token totals, and printed run identity, token totals,
+  and worktree details in the CLI closing block. Quiet and JSON output remain
+  outside the new rendering path. Focused formatter and CLI JSON checks pass;
+  `npm run typecheck`, `npm run lint`, and `npm test` passed.
 
 ## Problem
 

@@ -24,7 +24,7 @@ import {
 } from "./diffUtils";
 import type { OutputMessageTarget } from "./outputProjection";
 import type { OutputRenderRow } from "./outputRows";
-import { formatCliCommandDisplay } from "./outputCommandDisplay";
+import { formatCliCommandDisplay } from "../../../utils/outputCommandDisplay";
 import { buildAskUserQuestionSearchSegments } from "./askUserQuestionLayout";
 import { getGenericToolCallParamsText } from "./toolCallLayout";
 import { resolveCtrlYokeToolView } from "../components/output/ctrlyoke-tools/registry";

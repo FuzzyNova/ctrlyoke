@@ -50,7 +50,7 @@ import {
   formatExecutionBadge,
   getFirstWords,
 } from "./outputUtils";
-import { formatCliCommandDisplay } from "./outputCommandDisplay";
+import { formatCliCommandDisplay } from "../../../utils/outputCommandDisplay";
 import { isScriptOutput } from "./outputRenderUtils";
 import { formatTokenCount } from "@root/utils/TokenFormatting";
 import { fenceLiteral } from "@root/utils/FileReferenceParser";

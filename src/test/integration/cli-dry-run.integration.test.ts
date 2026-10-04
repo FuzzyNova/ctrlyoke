@@ -392,12 +392,19 @@ suite("CLI run process harness reporting", () => {
       root
     );
     assert.strictEqual(json.code, 0, json.stderr);
+    assert.strictEqual(
+      json.stdout.trim().split(/\r?\n/).length,
+      1,
+      "--json stdout stays a single document without terminal summary lines"
+    );
+    assert.doesNotMatch(json.stdout, /Run ID:|Tokens:|Workflow completed successfully/u);
     const result = JSON.parse(
       json.stdout.trim().split(/\r?\n/).pop() ?? ""
     ) as {
       harness: string;
       model: string;
     };
+    assert.strictEqual(json.stdout, `${JSON.stringify(result)}\n`);
     assert.strictEqual(result.harness, "opencode-cli");
     assert.strictEqual(result.model, "opencode/big-pickle");
   });

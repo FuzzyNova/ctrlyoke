@@ -79,6 +79,25 @@ function makeDashboardSink(): {
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 suite("OutputCaptureBuffer", () => {
+  test("includes the command working directory in prompt-start data", () => {
+    const { callbacks, promptStarts } = makeCallbacks();
+    const buffer = new OutputCaptureBuffer("tag", callbacks);
+
+    buffer.captureOutputInit(
+      0,
+      "prompt",
+      "codex exec",
+      false,
+      "/workspace/worktree",
+      100,
+      0,
+      false
+    );
+
+    assert.strictEqual(promptStarts[0].cliCommand, "codex exec");
+    assert.strictEqual(promptStarts[0].workingDirectory, "/workspace/worktree");
+  });
+
   suite("construction", () => {
     test("should create with default empty buffers", () => {
       const { callbacks } = makeCallbacks();

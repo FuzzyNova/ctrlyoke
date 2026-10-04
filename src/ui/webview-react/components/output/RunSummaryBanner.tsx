@@ -5,7 +5,6 @@ import {
   WORKTREE_BRANCH_STATES,
   WORKTREE_DIRECTORY_STATES,
   WORKTREE_LANDING_OUTCOMES,
-  WORKTREE_MERGE_OUTCOMES,
   WORKTREE_MODES,
 } from "@root/types/DashboardConstants";
 import {
@@ -20,6 +19,11 @@ import type {
   WorkflowTokenTotals,
   WorkspaceWorktreeOwnership,
 } from "@root/types/CtrlYokeTypes";
+import {
+  formatRelativeWorktreePath,
+  formatWorktreeOutcome,
+  type WorktreeOutcomeSeverity,
+} from "@root/utils/formatWorktreeOutcome";
 import { sendMessage } from "@hooks/useMessageHandler";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
@@ -28,13 +32,6 @@ import { Icon } from "../shared/Icon";
 /** Bordered pill styling shared by the worktree row's action buttons, so two adjacent buttons never read as one run-together label. */
 const WORKTREE_BUTTON_CLASS =
   "rounded border border-widget-border px-1.5 py-0.5 text-xs leading-none text-link-fg hover:bg-list-hover-bg focus:outline-none whitespace-nowrap";
-
-type WorktreeOutcomeSeverity = "success" | "warning" | "error";
-
-interface WorktreeOutcome {
-  severity: WorktreeOutcomeSeverity;
-  text: string;
-}
 
 const OUTCOME_TONE: Record<
   WorktreeOutcomeSeverity,
@@ -54,73 +51,6 @@ export interface RunBannerData {
   /** Persisted projection from the displayed run's `_runtime.worktree`. */
   worktree?: WorktreeRunProjection;
   address?: Extract<WorkflowViewAddress, { kind: "run" }>;
-}
-
-function formatRelativeWorktreePath(worktree: WorktreeRunProjection): string {
-  const target = worktree.worktreePath.replace(/\\/g, "/").replace(/\/+$/, "");
-  const source = worktree.sourceCheckoutRoot
-    .replace(/\\/g, "/")
-    .replace(/\/+$/, "");
-  const parentEnd = source.lastIndexOf("/");
-  if (parentEnd < 0) return target;
-
-  const parent = source.slice(0, parentEnd) || "/";
-  const comparable = (value: string) =>
-    /^[A-Za-z]:\//.test(value) ? value.toLowerCase() : value;
-  const comparableParent = comparable(parent);
-  const comparableTarget = comparable(target);
-  if (
-    comparableTarget === comparableParent ||
-    comparableTarget.startsWith(`${comparableParent}/`)
-  ) {
-    return target.slice(parent.length + (parent === "/" ? 0 : 1));
-  }
-  return target;
-}
-
-function formatWorktreeOutcome(
-  worktree: WorktreeRunProjection
-): WorktreeOutcome | undefined {
-  switch (worktree.mergeOutcome) {
-    case WORKTREE_MERGE_OUTCOMES.FAST_FORWARD:
-      return { severity: "success", text: "Merged (fast-forward)" };
-    case WORKTREE_MERGE_OUTCOMES.MERGE_COMMIT:
-      return { severity: "success", text: "Merged (merge commit)" };
-    case WORKTREE_MERGE_OUTCOMES.CONFLICT:
-      return { severity: "warning", text: "Merge conflict — branch preserved" };
-    case WORKTREE_MERGE_OUTCOMES.BLOCKED:
-    case WORKTREE_MERGE_OUTCOMES.ABORT_FAILED:
-      return {
-        severity: "error",
-        text: "Auto merge blocked — source branch changed or checkout is dirty",
-      };
-  }
-  if (worktree.directoryState === WORKTREE_DIRECTORY_STATES.REMOVE_FAILED) {
-    return {
-      severity: "warning",
-      text: "Worktree removal failed — branch safe, directory kept",
-    };
-  }
-  switch (worktree.landingOutcome) {
-    case WORKTREE_LANDING_OUTCOMES.LANDED:
-      return {
-        severity: "success",
-        text: `Branch ready — ${worktree.changedFileCount ?? 0} file${
-          worktree.changedFileCount === 1 ? "" : "s"
-        }`,
-      };
-    case WORKTREE_LANDING_OUTCOMES.NO_CHANGES:
-      return { severity: "success", text: "No changes" };
-    case WORKTREE_LANDING_OUTCOMES.BLOCKED:
-      return {
-        severity: "warning",
-        text: `Commit blocked — worktree kept at ${formatRelativeWorktreePath(
-          worktree
-        )}`,
-      };
-    default:
-      return undefined;
-  }
 }
 
 /**

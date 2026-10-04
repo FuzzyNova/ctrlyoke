@@ -32,6 +32,8 @@ export interface PromptStartData {
   cliCommand?: string;
   /** True when cliCommand is injected prompt text instead of a spawned command. */
   cliCommandWasInjected?: boolean;
+  /** Working directory used by the command, populated with the second fire. */
+  workingDirectory?: string;
 }
 
 /** Data carried by onPromptComplete after each prompt fully finishes (post session-ID extraction). */
@@ -233,6 +235,7 @@ export class OutputCaptureBuffer {
       parallelGroupId: this.callbacks.getParallelGroupId(stepIndex),
       cliCommand,
       cliCommandWasInjected,
+      workingDirectory,
     });
   }
 

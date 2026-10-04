@@ -107,7 +107,7 @@ function runFormatterScript(body: string): string {
     [
       "-e",
       `const { CliTerminalFormatter } = require(${requirePath("cli", "CliTerminalFormatter.js")});
-const { CLI_EVENT_TYPES, OPERATION_STATUS, COMPACTION_TRIGGERS, SCRIPT_OUTPUT_SOURCES } = require(${requirePath("types", "DashboardConstants.js")});
+const { CLI_EVENT_TYPES, OPERATION_STATUS, COMPACTION_TRIGGERS, SCRIPT_OUTPUT_SOURCES, WORKTREE_MERGE_OUTCOMES, WORKTREE_LANDING_OUTCOMES, WORKTREE_DIRECTORY_STATES, WORKFLOW_TOKEN_COVERAGE } = require(${requirePath("types", "DashboardConstants.js")});
 ${body}`,
     ],
     { encoding: "utf8", env: { ...process.env, FORCE_COLOR: "0" } }
@@ -719,6 +719,63 @@ CliTerminalFormatter.renderParallelGroupProgress("research", 0, 1, 1);`);
     assert.ok(output.includes("↻ compile: 3 attempts · 12.75s total"));
   });
 
+  test("includes the retry attempts' token total", () => {
+    const output = runFormatterScript(
+      `CliTerminalFormatter.renderAttemptGroupSummary("compile", 3, 12.75, [{ prompt: 150_000, completion: 50_000, total: 200_000 }, { prompt: 140_000, completion: 70_000, total: 210_000 }, { prompt: 0, completion: 0 }]);`
+    );
+
+    assert.ok(output.includes("3 attempts · 410k total · 12.75s total"));
+  });
+
+  test("renders shared command lines for prompts and scripts", () => {
+    const output = runFormatterScript(`
+CliTerminalFormatter.renderPromptHeader({ stepIndex: 0, totalSteps: 1, stepName: "command", promptText: "do work", attemptIndex: 0, runIndex: 0, cliCommand: "codex exec", workingDirectory: "src/worktree" });
+CliTerminalFormatter.renderPromptHeader({ stepIndex: 0, totalSteps: 1, stepName: "injected", promptText: "do work", attemptIndex: 0, runIndex: 0, cliCommand: "the injected prompt", cliCommandWasInjected: true });
+CliTerminalFormatter.renderScriptOutput({ source: SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP, response: "", elapsed: 0, isStreaming: true, cliCommand: "npm test", workingDirectory: "scripts" }, { stepIndex: 0, stepName: "script", key: "script-directory" });`);
+
+    assert.ok(output.includes("src/worktree> codex exec"));
+    assert.ok(
+      output.includes("Prompt was injected into running terminal: the injected prompt")
+    );
+    assert.ok(output.includes("scripts> npm test"));
+  });
+
+  test("prints run identity, token totals, worktree details and each outcome", () => {
+    const output = runFormatterScript(`
+const base = { mode: "managed", branchName: "feature/parity", worktreePath: "/workspace/.ctrlyoke/worktrees/run", sourceCheckoutRoot: "/workspace", directoryState: WORKTREE_DIRECTORY_STATES.PRESENT };
+CliTerminalFormatter.renderRunSummary("run-2026-10-04T12-00-00-000Z", { total: 123_000, coverage: WORKFLOW_TOKEN_COVERAGE.COMPLETE }, undefined);
+for (const [mergeOutcome, landingOutcome, directoryState] of [
+  [WORKTREE_MERGE_OUTCOMES.FAST_FORWARD, undefined, WORKTREE_DIRECTORY_STATES.PRESENT],
+  [WORKTREE_MERGE_OUTCOMES.MERGE_COMMIT, undefined, WORKTREE_DIRECTORY_STATES.PRESENT],
+  [WORKTREE_MERGE_OUTCOMES.CONFLICT, undefined, WORKTREE_DIRECTORY_STATES.PRESENT],
+  [WORKTREE_MERGE_OUTCOMES.BLOCKED, undefined, WORKTREE_DIRECTORY_STATES.PRESENT],
+  [WORKTREE_MERGE_OUTCOMES.ABORT_FAILED, undefined, WORKTREE_DIRECTORY_STATES.PRESENT],
+  [undefined, undefined, WORKTREE_DIRECTORY_STATES.REMOVE_FAILED],
+  [undefined, WORKTREE_LANDING_OUTCOMES.LANDED, WORKTREE_DIRECTORY_STATES.PRESENT],
+  [undefined, WORKTREE_LANDING_OUTCOMES.NO_CHANGES, WORKTREE_DIRECTORY_STATES.PRESENT],
+  [undefined, WORKTREE_LANDING_OUTCOMES.BLOCKED, WORKTREE_DIRECTORY_STATES.PRESENT],
+]) {
+  CliTerminalFormatter.renderRunSummary(undefined, undefined, { ...base, mergeOutcome, landingOutcome, directoryState, changedFileCount: 2 });
+}`);
+
+    assert.ok(output.includes("Run ID: run-2026-10-04T12-00-00-000Z"));
+    assert.ok(output.includes("Tokens: 123k total"));
+    assert.ok(output.includes("Worktree: /workspace/.ctrlyoke/worktrees/run"));
+    assert.ok(output.includes("Branch: feature/parity"));
+    for (const outcome of [
+      "Merged (fast-forward)",
+      "Merged (merge commit)",
+      "Merge conflict — branch preserved",
+      "Auto merge blocked — source branch changed or checkout is dirty",
+      "Worktree removal failed — branch safe, directory kept",
+      "Branch ready — 2 files",
+      "No changes",
+      "Commit blocked — worktree kept at /workspace/.ctrlyoke/worktrees/run",
+    ]) {
+      assert.ok(output.includes(outcome), `missing worktree outcome: ${outcome}`);
+    }
+  });
+
   test("keeps a single non-parallel, non-retried prompt byte-for-byte unchanged", () => {
     const output = runFormatterScript(`
 CliTerminalFormatter.renderPromptHeader({ stepIndex: 0, totalSteps: 1, stepName: "single", promptText: "do work", attemptIndex: 0, runIndex: 0 });
@@ -732,7 +789,7 @@ CliTerminalFormatter.renderPromptHeader({ stepIndex: 0, totalSteps: 1, stepName:
         "│ Step 1/1 — single",
         "│ do work",
         "",
-        "│ $ harness run",
+        "│ workspace> harness run",
         "",
         "",
       ].join("\n")

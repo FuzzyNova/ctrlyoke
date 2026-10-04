@@ -43,20 +43,25 @@ import {
   DEFAULT_SCRIPT_VERDICT_EXPECTED_TEXT,
   type ScriptVerdict,
 } from "../types/CtrlYokeTypes";
-import type { CliOutput } from "../types/WebviewMessageTypes";
+import type { CliOutput, TokenStats } from "../types/WebviewMessageTypes";
 import { formatVerdictSummary } from "../core/orchestration/ScriptExecutionReporter";
 import { formatComparison } from "../utils/ScriptComparison";
 import type {
   PromptCompleteData,
   PromptStartData,
 } from "../core/WorkflowInstance";
-import type { ParallelGroupDefinition } from "../types/CtrlYokeTypes";
+import type {
+  ParallelGroupDefinition,
+  WorkflowTokenTotals,
+  WorktreeRunProjection,
+} from "../types/CtrlYokeTypes";
 import type { WorkflowExecutionPreview } from "../types/ExecutionPreviewTypes";
 import {
   formatTokenBreakdown,
   formatCostLabel,
   formatCostSourcePhrase,
   formatTokenCount,
+  formatTokenTotal,
   resolveTokenTotal,
   TOKEN_USAGE_SCOPE_NOTE,
   TOKEN_TOTAL_CACHE_NETTED_NOTE,
@@ -73,6 +78,11 @@ import {
   type ToolTerminalLine,
 } from "../utils/ctrlyokeToolViews/shared";
 import { getFileReadHeaderText } from "../utils/FileReadHeaderText";
+import { formatCliCommandDisplay } from "../utils/outputCommandDisplay";
+import {
+  formatWorktreeOutcome,
+  WORKTREE_OUTCOME_SEVERITIES,
+} from "../utils/formatWorktreeOutcome";
 import { MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME } from "../utils/McpToolDefinitions";
 import { CliEventStream } from "./CliEventStream";
 
@@ -544,14 +554,49 @@ export class CliTerminalFormatter {
   static renderAttemptGroupSummary(
     stepName: string,
     attemptCount: number,
-    totalElapsed: number
+    totalElapsed: number,
+    attempts: TokenStats[] = []
   ): void {
+    const tokenTotal = attempts.reduce(
+      (sum, tokens) =>
+        sum +
+        (resolveTokenTotal(tokens.total, tokens.prompt, tokens.completion) ?? 0),
+      0
+    );
+    const tokenCount = attempts.length > 0 ? formatTokenCount(tokenTotal) : "";
     console.log();
     console.log(
       chalk.dim(
-        `↻ ${stepName}: ${attemptCount} attempts · ${totalElapsed}s total`
+        `↻ ${stepName}: ${attemptCount} attempts${tokenCount ? ` · ${tokenCount} total` : ""} · ${totalElapsed}s total`
       )
     );
+  }
+
+  /** Renders run identity and persisted run totals after the terminal status. */
+  static renderRunSummary(
+    runRef: string | undefined,
+    tokenTotals: WorkflowTokenTotals | undefined,
+    worktree: WorktreeRunProjection | undefined
+  ): void {
+    if (runRef) console.log(chalk.dim(`Run ID: ${runRef}`));
+    const tokenTotal = formatTokenTotal(tokenTotals?.total, tokenTotals?.coverage);
+    if (tokenTotal) console.log(chalk.dim(`Tokens: ${tokenTotal} total`));
+    if (!worktree) return;
+
+    console.log(chalk.dim(`Worktree: ${worktree.worktreePath}`));
+    console.log(chalk.dim(`Branch: ${worktree.branchName}`));
+    const outcome = formatWorktreeOutcome(worktree);
+    if (outcome) {
+      const color =
+        outcome.severity === WORKTREE_OUTCOME_SEVERITIES.SUCCESS
+          ? chalk.green
+          : outcome.severity === WORKTREE_OUTCOME_SEVERITIES.WARNING
+            ? chalk.yellow
+            : chalk.red;
+      const marker =
+        outcome.severity === WORKTREE_OUTCOME_SEVERITIES.ERROR ? "✗" : "⚠";
+      console.log(color(`${marker} ${outcome.text}`));
+    }
   }
 
   /**
@@ -777,7 +822,15 @@ export class CliTerminalFormatter {
     if (output.isStreaming) {
       CliTerminalFormatter.flushStreamingBuffer(target);
       if (output.cliCommand !== undefined) {
-        console.log(`${border} ${chalk.dim("$ " + output.cliCommand)}`);
+        console.log(
+          `${border} ${chalk.dim(
+            formatCliCommandDisplay(
+              output.cliCommand,
+              output.workingDirectory,
+              output.cliCommandWasInjected
+            )
+          )}`
+        );
         console.log();
       }
       if (output.response) {
@@ -1617,13 +1670,23 @@ export class CliTerminalFormatter {
       attemptIndex,
       runIndex,
       cliCommand,
+      workingDirectory,
+      cliCommandWasInjected,
       includeStepPosition = true,
     } = data;
 
     if (cliCommand !== undefined) {
       // Second fire — print the CLI command with a yellow left border (mirrors border-l-output-command-border)
       const cmdBorder = chalk.yellow("│");
-      console.log(`${cmdBorder} ${chalk.dim("$ " + cliCommand)}`);
+      console.log(
+        `${cmdBorder} ${chalk.dim(
+          formatCliCommandDisplay(
+            cliCommand,
+            workingDirectory,
+            cliCommandWasInjected
+          )
+        )}`
+      );
       console.log();
       return;
     }

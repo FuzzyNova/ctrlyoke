@@ -78,7 +78,7 @@ import {
   splitTextIntoLineSegments,
   takeTrailingLines,
 } from "./outputTruncation";
-import { formatCliCommandDisplay } from "./outputCommandDisplay";
+import { formatCliCommandDisplay } from "../../../utils/outputCommandDisplay";
 import { resolveCtrlYokeToolView } from "../components/output/ctrlyoke-tools/registry";
 import {
   OUTPUT_ROW_HORIZONTAL_PADDING,

@@ -105,7 +105,7 @@ import {
 } from "./outputStyles";
 import { ContextReference } from "./ContextReference";
 import { findAtomicReferences } from "@utils/atomicReferences";
-import { formatCliCommandDisplay } from "@utils/outputCommandDisplay";
+import { formatCliCommandDisplay } from "@root/utils/outputCommandDisplay";
 import { renderCommandTextWithFileLinks } from "@utils/cliCommandFileLinks";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
