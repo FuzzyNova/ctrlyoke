@@ -1,4 +1,5 @@
 import { isRecord, tryParseJson } from "./shared";
+import type { ToolTerminalLine } from "./shared";
 import {
   EXECUTION_STATES,
   getHarnessDisplayName,
@@ -114,4 +115,13 @@ export function globalStatusSearchText(
     lines.push(`Truncated · ${result.omittedCount} omitted`);
   if (result.note) lines.push(result.note);
   return [globalStatusSummary(params, result), lines.join("\n")];
+}
+
+export function globalStatusTerminalLines(
+  _params: GlobalStatusParams | undefined,
+  result: GlobalStatusResult
+): ToolTerminalLine[] {
+  return result.workflows.map((workflow) => ({
+    text: `${workflow.workflowName} · ${workflow.executionState} · ${globalStatusHarnessLabel(workflow)}`,
+  }));
 }

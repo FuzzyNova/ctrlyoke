@@ -2,6 +2,20 @@ import type { ToolResult } from "../../types/CliOutputTypes";
 import { getToolResultText } from "../toolResultText";
 import { promptFirstLinePreview } from "../TextUtils";
 
+export const TOOL_TERMINAL_TONES = {
+  warning: "warning",
+  muted: "muted",
+  untrusted: "untrusted",
+} as const;
+
+export type ToolTerminalTone =
+  (typeof TOOL_TERMINAL_TONES)[keyof typeof TOOL_TERMINAL_TONES];
+
+export interface ToolTerminalLine {
+  text: string;
+  tone?: ToolTerminalTone;
+}
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

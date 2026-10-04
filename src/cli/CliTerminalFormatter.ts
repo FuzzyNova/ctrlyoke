@@ -66,7 +66,14 @@ import { secretRedactionService } from "../utils/SecretRedactionService";
 import { formatFinalPassLabel } from "../utils/FinalStepLabels";
 import { getToolResultText } from "../utils/toolResultText";
 import { formatMcpToolLabel } from "../utils/formatMcpToolLabel";
+import { resolveCtrlYokeToolModel } from "../utils/ctrlyokeToolViews/registry";
+import { COORDINATION_UNTRUSTED_LABEL } from "../utils/ctrlyokeToolViews/coordinationPresentation";
+import {
+  TOOL_TERMINAL_TONES,
+  type ToolTerminalLine,
+} from "../utils/ctrlyokeToolViews/shared";
 import { getFileReadHeaderText } from "../utils/FileReadHeaderText";
+import { MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME } from "../utils/McpToolDefinitions";
 import { CliEventStream } from "./CliEventStream";
 
 /** Maximum diff lines shown before truncating with a "… N more" message. */
@@ -388,6 +395,87 @@ function writeBoundedEventDetail(
       border
     );
   }
+}
+
+function terminalToneColor(
+  tone: ToolTerminalLine["tone"]
+): (text: string) => string {
+  switch (tone) {
+    case TOOL_TERMINAL_TONES.warning:
+      return chalk.yellow;
+    case TOOL_TERMINAL_TONES.untrusted:
+    case TOOL_TERMINAL_TONES.muted:
+    default:
+      return chalk.dim;
+  }
+}
+
+function renderMcpToolBody(
+  data: McpToolCallData,
+  includeHeader: boolean
+): void {
+  if (includeHeader) {
+    const params = data.parameters
+      ? truncateEventText(JSON.stringify(data.parameters), 80)
+      : "";
+    console.log(
+      chalk.magenta(formatMcpToolLabel(data.server, data.tool)) +
+        (params ? " " + chalk.dim(params) : "")
+    );
+  }
+  if (!data.result) return;
+
+  const resolved = resolveCtrlYokeToolModel(data);
+  if (!resolved) {
+    const text = getToolResultText(data.result);
+    const color = data.result.success ? chalk.dim : chalk.red;
+    writeBoundedEventDetail(
+      text,
+      MAX_EVENT_DETAIL_LINES,
+      "  ⎿  ",
+      color,
+      color
+    );
+    console.log();
+    return;
+  }
+
+  writeEventLine(
+    chalk[resolved.warning ? "yellow" : "dim"](`  ⎿  ${resolved.summary}`),
+    resolved.warning ? chalk.yellow : chalk.cyan
+  );
+  const maxLines =
+    data.tool === MCP_SUBMIT_COMMIT_MESSAGE_TOOL_NAME
+      ? MAX_PREVIEW_LINES
+      : MAX_EVENT_DETAIL_LINES;
+  const lines = resolved.terminalLines.flatMap((line) =>
+    line.text.split(/\r?\n/u).map((text) => ({ ...line, text }))
+  );
+  if (lines.some((line) => line.tone === TOOL_TERMINAL_TONES.untrusted)) {
+    writeEventLine(chalk.dim(`  ${COORDINATION_UNTRUSTED_LABEL}`));
+  }
+  for (const line of lines.slice(0, maxLines)) {
+    const color = terminalToneColor(line.tone);
+    const truncated = line.text.length > MAX_EVENT_DETAIL_LINE_LENGTH;
+    const text = truncated
+      ? `${line.text.slice(0, MAX_EVENT_DETAIL_LINE_LENGTH)}…`
+      : line.text;
+    writeEventLine(color(`     ${text}`), color);
+    if (truncated) {
+      writeEventLine(
+        chalk.dim(
+          `     ${formatTruncationNotice(`${line.text.length - MAX_EVENT_DETAIL_LINE_LENGTH} more characters`)}`
+        )
+      );
+    }
+  }
+  const remaining = lines.length - maxLines;
+  if (remaining > 0) {
+    writeEventLine(
+      chalk.dim(`     ${formatTruncationNotice(`${remaining} more lines`)}`)
+    );
+  }
+  console.log();
 }
 
 function formatAskUserQuestionCount(count: number): string {
@@ -1124,6 +1212,8 @@ export class CliTerminalFormatter {
         );
         console.log();
       }
+    } else if (headerEvent.type === CLI_EVENT_TYPES.MCP_TOOL_CALL) {
+      renderMcpToolBody(completionEvent.data as McpToolCallData, false);
     } else {
       CliTerminalFormatter.renderEvent(completionEvent, target);
     }
@@ -1284,25 +1374,7 @@ export class CliTerminalFormatter {
         const data = event.data as McpToolCallData;
         if (data.server && data.tool) {
           CliTerminalFormatter.beginEventOutput(target);
-          const params = data.parameters
-            ? truncateEventText(JSON.stringify(data.parameters), 80)
-            : "";
-          console.log(
-            chalk.magenta(formatMcpToolLabel(data.server, data.tool)) +
-              (params ? " " + chalk.dim(params) : "")
-          );
-          if (data.result) {
-            const text = getToolResultText(data.result);
-            const color = data.result.success ? chalk.dim : chalk.red;
-            writeBoundedEventDetail(
-              text,
-              MAX_EVENT_DETAIL_LINES,
-              "  ⎿  ",
-              color,
-              color
-            );
-          }
-          console.log();
+          renderMcpToolBody(data, true);
         }
         break;
       }

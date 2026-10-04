@@ -1,4 +1,4 @@
-import { isRecord, tryParseJson } from "./shared";
+import { isRecord, tryParseJson, type ToolTerminalLine } from "./shared";
 
 export interface SubmitCommitMessageParams {
   message: string;
@@ -46,4 +46,11 @@ export function submitCommitMessageSearchText(
   return params
     ? [commitMessageSummary(params), params.message]
     : ["Submitted commit message"];
+}
+
+export function submitCommitMessageTerminalLines(
+  params: SubmitCommitMessageParams | undefined,
+  _result: SubmitCommitMessageResult
+): ToolTerminalLine[] {
+  return params ? [{ text: params.message }] : [];
 }

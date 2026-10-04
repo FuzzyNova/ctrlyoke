@@ -236,6 +236,41 @@ CliTerminalFormatter.renderStatusMessage("Attempt completed", "info");`
     assert.ok(output.includes("⎿  terminal result output"));
   });
 
+  test("renders ctrlyoke MCP summaries and terminal bodies from settled results", () => {
+    const output = runFormatterScript(`CliTerminalFormatter.renderEvents([
+  { type: CLI_EVENT_TYPES.MCP_TOOL_CALL, data: {
+    server: "ctrlyoke", tool: "post_note",
+    result: { success: true, output: JSON.stringify({ text: "Recorded note body" }) }
+  } },
+  { type: CLI_EVENT_TYPES.MCP_TOOL_CALL, data: {
+    server: "ctrlyoke", tool: "append_step", parameters: { steps: [{ prompt: "Implement feature", name: "Feature" }] },
+    result: { success: true, output: JSON.stringify({ success: true, stepsAdded: 1, insertIndex: 0, insertedEndIndex: 0, destination: "queue", placement: { insertedIndex: 0 }, parallelGroupsAdded: [] }) }
+  } },
+]);`);
+
+    assert.ok(output.includes("Note → all"));
+    assert.ok(output.includes("Recorded note body"));
+    assert.ok(output.includes("Appended 1 step at #1"));
+    assert.ok(output.includes("#1 · Feature"));
+  });
+
+  test("falls back to generic MCP results when parsing fails or the tool errors", () => {
+    const output = runFormatterScript(`CliTerminalFormatter.renderEvents([
+  { type: CLI_EVENT_TYPES.MCP_TOOL_CALL, data: {
+    server: "ctrlyoke", tool: "post_note", parameters: { text: "bad params" },
+    result: { success: true, output: "not valid result json" }
+  } },
+  { type: CLI_EVENT_TYPES.MCP_TOOL_CALL, data: {
+    server: "ctrlyoke", tool: "post_note", parameters: { text: "failed" },
+    result: { success: false, error: "Error: unavailable" }
+  } },
+]);`);
+
+    assert.ok(output.includes('MCP: ctrlyoke.post_note {"text":"bad params"}'));
+    assert.ok(output.includes("not valid result json"));
+    assert.ok(output.includes("Error: unavailable"));
+  });
+
   test("streams a Bash command once across initiated and completed batches", () => {
     const output = runFormatterScript(`
 const target = { stepIndex: 0, stepName: "build", key: "queue:0" };

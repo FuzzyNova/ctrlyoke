@@ -33,6 +33,11 @@ run`, but not for `history show` replaying a dashboard run that was steered; see
   all 13 tools. Kept height estimation and find-match slicing in the webview,
   and moved the shared coordination presentation helpers with their parsers.
   `npm run typecheck`, `npm run lint`, `npm run compile`, and `npm test` passed.
+- **Phase 3 complete.** Added neutral terminal-line models for all 13 ctrlyoke
+  MCP tools and wired the CLI formatter to render their summaries and bounded,
+  tone-aware bodies, with generic output retained for unrecognized or failed
+  results. Added recorded-result model and child-process formatter coverage.
+  `npm run typecheck`, `npm run lint`, and `npm test` passed.
 
 ## Problem
 

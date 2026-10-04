@@ -1,4 +1,9 @@
-import { isRecord, toolViewPromptPreview, tryParseJson } from "./shared";
+import {
+  isRecord,
+  toolViewPromptPreview,
+  tryParseJson,
+  type ToolTerminalLine,
+} from "./shared";
 import type { ParallelGroupInsertPlacement } from "../../core/ParallelGroupTopology";
 import {
   getHarnessShortName,
@@ -212,4 +217,16 @@ export function appendStepSearchText(
     }
   }
   return [summary, lines.join("\n")];
+}
+
+export function appendStepTerminalLines(
+  params: AppendStepParams | undefined,
+  result: AppendStepResult
+): ToolTerminalLine[] {
+  return params
+    ? appendStepSearchText(params, result)
+        .slice(1)
+        .flatMap((text) => text.split("\n"))
+        .map((text) => ({ text }))
+    : [];
 }

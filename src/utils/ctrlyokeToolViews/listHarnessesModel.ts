@@ -1,4 +1,4 @@
-import { isRecord, tryParseJson } from "./shared";
+import { isRecord, tryParseJson, type ToolTerminalLine } from "./shared";
 import { HARNESS_IDS } from "../../types/DashboardConstants";
 export interface HarnessModel {
   id: string;
@@ -63,4 +63,13 @@ export function listHarnessesSearchText(
       )
       .join("\n"),
   ];
+}
+
+export function listHarnessesTerminalLines(
+  _params: ListHarnessesParams | undefined,
+  result: ListHarnessesResult
+): ToolTerminalLine[] {
+  return allHarnesses(result).map((harness) => ({
+    text: `${harness.displayName} · ${harness.available ? "available" : "unavailable"}${harness.models?.length ? ` · ${harness.models.join(", ")}` : ""}`,
+  }));
 }

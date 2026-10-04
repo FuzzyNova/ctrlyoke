@@ -1,4 +1,4 @@
-import { isRecord, tryParseJson } from "./shared";
+import { isRecord, tryParseJson, type ToolTerminalLine } from "./shared";
 import { MCP_REORDER_STEPS_TOOL_NAME } from "../McpToolDefinitions";
 import { displayIndex, parseIndex } from "./stepMutationShared";
 
@@ -88,4 +88,11 @@ export function reorderStepsSearchText(
         reorderStepsSummary(params, result),
         reorderStepPairs(params, result).join("\n"),
       ];
+}
+
+export function reorderStepsTerminalLines(
+  params: ReorderStepsParams | undefined,
+  result: ReorderStepsResult
+): ToolTerminalLine[] {
+  return reorderStepPairs(params, result).map((text) => ({ text }));
 }

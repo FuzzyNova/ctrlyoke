@@ -1,4 +1,9 @@
-import { isRecord, toolViewPromptPreview, tryParseJson } from "./shared";
+import {
+  isRecord,
+  toolViewPromptPreview,
+  tryParseJson,
+  type ToolTerminalLine,
+} from "./shared";
 export interface ReadOutputParams {
   indices?: number[];
   cursor?: string;
@@ -109,4 +114,17 @@ export function readOutputItemSearchText(
     .filter(Boolean)
     .join(" · ");
   return `${readOutputHeading(output)}${output.responseText ? `\n${output.responseText}` : ""}${footer ? `\n${footer}` : ""}`;
+}
+
+export function readOutputTerminalLines(
+  _params: ReadOutputParams | undefined,
+  result: ReadOutputResult
+): ToolTerminalLine[] {
+  return result.outputs.flatMap((output) => [
+    { text: readOutputHeading(output) },
+    ...(output.responseText ? [{ text: output.responseText }] : []),
+    ...(output.nextCursor
+      ? [{ text: `Next cursor ${output.nextCursor}` }]
+      : []),
+  ]);
 }

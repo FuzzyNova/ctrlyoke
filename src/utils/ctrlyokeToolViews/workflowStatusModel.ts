@@ -3,6 +3,7 @@ import {
   isToolViewPromptTruncated,
   toolViewPromptPreview,
   tryParseJson,
+  type ToolTerminalLine,
 } from "./shared";
 import {
   getHarnessDisplayName,
@@ -163,6 +164,24 @@ export function workflowStatusProgress(result: WorkflowStatusResult): number {
       (result.metadata.completedSteps / result.metadata.totalSteps) * 100
     )
   );
+}
+
+export function workflowStatusTerminalLines(
+  _params: WorkflowStatusParams | undefined,
+  result: WorkflowStatusResult
+): ToolTerminalLine[] {
+  const progress = workflowStatusProgress(result);
+  return [
+    {
+      text: `${result.metadata.completedSteps}/${result.metadata.totalSteps} steps complete (${Math.round(progress)}%)`,
+    },
+    ...result.steps.map((step) => ({
+      text: workflowStatusRowLine(step, result),
+    })),
+    ...result.schemaWarnings.map((warning) => ({
+      text: `Warning: ${warning.message}`,
+    })),
+  ];
 }
 
 export function workflowStepStatus(

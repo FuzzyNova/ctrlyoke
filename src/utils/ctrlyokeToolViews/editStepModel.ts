@@ -1,4 +1,9 @@
-import { isRecord, tryParseJson } from "./shared";
+import {
+  isRecord,
+  toolViewPromptPreview,
+  tryParseJson,
+  type ToolTerminalLine,
+} from "./shared";
 import { MCP_EDIT_STEP_TOOL_NAME } from "../McpToolDefinitions";
 import {
   displayIndex,
@@ -130,4 +135,24 @@ export function editStepSearchText(
       .filter(Boolean)
       .join("\n"),
   ];
+}
+
+export function editStepTerminalLines(
+  params: EditStepParams | undefined,
+  result: EditStepResult
+): ToolTerminalLine[] {
+  if (result.changed === false)
+    return result.note ? [{ text: result.note }] : [];
+  const updates = params?.updates ?? result.updates ?? {};
+  const clears = params?.clearProperties?.length
+    ? params.clearProperties
+    : result.clearProperties;
+  const lines = Object.entries(updates)
+    .filter(([key]) => key !== STEP_MUTATION_PROMPT_FIELD)
+    .map(([key, value]) => `${key}: ${String(value)}`);
+  lines.push(...clears.map((key) => `${key}: inherited default`));
+  const prompt = updates.prompt;
+  if (typeof prompt === "string")
+    lines.push(`prompt: ${toolViewPromptPreview(prompt)}`);
+  return lines.map((text) => ({ text }));
 }

@@ -1,4 +1,5 @@
 import { isRecord, tryParseJson } from "./shared";
+import { TOOL_TERMINAL_TONES, type ToolTerminalLine } from "./shared";
 import { parseCoordinationParticipant } from "./coordinationParticipantParser";
 import type { CoordinationEntry } from "../../types/CtrlYokeTypes";
 import { COORDINATION_ENTRY_KINDS } from "../../types/DashboardConstants";
@@ -110,4 +111,14 @@ export function readNotesSearchText(
 
 export function readNotesEntryText(entry: CoordinationEntry): string {
   return `${coordinationParticipantAttribution(entry.from)}: ${coordinationEntrySummary(entry)}`;
+}
+
+export function readNotesTerminalLines(
+  _params: ReadNotesParams | undefined,
+  result: ReadNotesResult
+): ToolTerminalLine[] {
+  return result.entries.map((entry) => ({
+    text: readNotesEntryText(entry),
+    tone: TOOL_TERMINAL_TONES.untrusted,
+  }));
 }

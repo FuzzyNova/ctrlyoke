@@ -16,18 +16,20 @@ import {
 } from "../McpToolDefinitions";
 import { MCP_SERVER_IDS } from "../../types/DashboardConstants";
 import type { McpToolCallData } from "../../types/CliOutputTypes";
-import { unwrapCtrlYokeToolResultText } from "./shared";
+import { unwrapCtrlYokeToolResultText, type ToolTerminalLine } from "./shared";
 import {
   parsePostNoteParams,
   parsePostNoteResultText,
   postNoteSearchText,
   postNoteSummary,
+  postNoteTerminalLines,
 } from "./postNoteModel";
 import {
   appendStepSearchText,
   appendStepSummary,
   parseAppendStepParams,
   parseAppendStepResultText,
+  appendStepTerminalLines,
 } from "./appendStepModel";
 import {
   claimPathsSearchText,
@@ -35,42 +37,49 @@ import {
   parseClaimPathsParams,
   parseClaimPathsResultText,
   type ClaimPathsResult,
+  claimPathsTerminalLines,
 } from "./claimPathsModel";
 import {
   releasePathsSearchText,
   releasePathsSummary,
   parseReleasePathsParams,
   parseReleasePathsResultText,
+  releasePathsTerminalLines,
 } from "./releasePathsModel";
 import {
   parseReadNotesParams,
   parseReadNotesResultText,
   readNotesSearchText,
   readNotesSummary,
+  readNotesTerminalLines,
 } from "./readNotesModel";
 import {
   parseWorkflowStatusParams,
   parseWorkflowStatusResultText,
   workflowStatusSearchText,
   workflowStatusSummary,
+  workflowStatusTerminalLines,
 } from "./workflowStatusModel";
 import {
   parseGlobalStatusParams,
   parseGlobalStatusResultText,
   globalStatusSearchText,
   globalStatusSummary,
+  globalStatusTerminalLines,
 } from "./globalStatusModel";
 import {
   parseReadOutputParams,
   parseReadOutputResultText,
   readOutputSearchText,
   readOutputSummary,
+  readOutputTerminalLines,
 } from "./readOutputModel";
 import {
   parseListHarnessesParams,
   parseListHarnessesResultText,
   listHarnessesSearchText,
   listHarnessesSummary,
+  listHarnessesTerminalLines,
 } from "./listHarnessesModel";
 import {
   editStepSummary,
@@ -79,6 +88,7 @@ import {
   editStepSearchText,
   type EditStepParams,
   type EditStepResult,
+  editStepTerminalLines,
 } from "./editStepModel";
 import {
   parseRemoveStepParams,
@@ -87,6 +97,7 @@ import {
   removeStepSearchText,
   type RemoveStepParams,
   type RemoveStepResult,
+  removeStepTerminalLines,
 } from "./removeStepModel";
 import {
   parseReorderStepsParams,
@@ -95,6 +106,7 @@ import {
   reorderStepsSearchText,
   type ReorderStepsParams,
   type ReorderStepsResult,
+  reorderStepsTerminalLines,
 } from "./reorderStepsModel";
 import {
   parseSubmitCommitMessageParams,
@@ -103,6 +115,7 @@ import {
   submitCommitMessageSearchText,
   type SubmitCommitMessageParams,
   type SubmitCommitMessageResult,
+  submitCommitMessageTerminalLines,
 } from "./submitCommitMessageModel";
 
 export interface CtrlYokeToolModel<P, R> {
@@ -110,6 +123,7 @@ export interface CtrlYokeToolModel<P, R> {
   parseResultText(text: string): R | undefined;
   summary(params: P | undefined, result: R): string;
   searchText(params: P | undefined, result: R): string[];
+  terminalLines(params: P | undefined, result: R): ToolTerminalLine[];
   warning?(params: P | undefined, result: R): boolean;
 }
 
@@ -118,6 +132,7 @@ const editStepModel: CtrlYokeToolModel<EditStepParams, EditStepResult> = {
   parseResultText: parseEditStepResultText,
   summary: editStepSummary,
   searchText: editStepSearchText,
+  terminalLines: editStepTerminalLines,
   warning: (_params, result) => result.changed === false,
 };
 const removeStepModel: CtrlYokeToolModel<RemoveStepParams, RemoveStepResult> = {
@@ -125,6 +140,7 @@ const removeStepModel: CtrlYokeToolModel<RemoveStepParams, RemoveStepResult> = {
   parseResultText: parseRemoveStepResultText,
   summary: removeStepSummary,
   searchText: removeStepSearchText,
+  terminalLines: removeStepTerminalLines,
   warning: (_params, result) => result.changed === false,
 };
 const reorderStepsModel: CtrlYokeToolModel<
@@ -135,6 +151,7 @@ const reorderStepsModel: CtrlYokeToolModel<
   parseResultText: parseReorderStepsResultText,
   summary: reorderStepsSummary,
   searchText: reorderStepsSearchText,
+  terminalLines: reorderStepsTerminalLines,
   warning: (_params, result) => result.changed === false,
 };
 const submitCommitMessageModel: CtrlYokeToolModel<
@@ -145,6 +162,7 @@ const submitCommitMessageModel: CtrlYokeToolModel<
   parseResultText: parseSubmitCommitMessageResultText,
   summary: (params) => commitMessageSummary(params),
   searchText: submitCommitMessageSearchText,
+  terminalLines: submitCommitMessageTerminalLines,
 };
 
 export const CTRLYOKE_TOOL_MODELS: Record<
@@ -156,18 +174,21 @@ export const CTRLYOKE_TOOL_MODELS: Record<
     parseResultText: parsePostNoteResultText,
     summary: postNoteSummary,
     searchText: postNoteSearchText,
+    terminalLines: postNoteTerminalLines,
   } as CtrlYokeToolModel<unknown, unknown>,
   [MCP_APPEND_STEP_TOOL_NAME]: {
     parseParams: parseAppendStepParams,
     parseResultText: parseAppendStepResultText,
     summary: appendStepSummary,
     searchText: appendStepSearchText,
+    terminalLines: appendStepTerminalLines,
   } as CtrlYokeToolModel<unknown, unknown>,
   [MCP_CLAIM_PATHS_TOOL_NAME]: {
     parseParams: parseClaimPathsParams,
     parseResultText: parseClaimPathsResultText,
     summary: claimPathsSummary,
     searchText: claimPathsSearchText,
+    terminalLines: claimPathsTerminalLines,
     warning: (_params, result) =>
       (result as ClaimPathsResult).denied.length > 0,
   } as CtrlYokeToolModel<unknown, unknown>,
@@ -176,36 +197,42 @@ export const CTRLYOKE_TOOL_MODELS: Record<
     parseResultText: parseReleasePathsResultText,
     summary: releasePathsSummary,
     searchText: releasePathsSearchText,
+    terminalLines: releasePathsTerminalLines,
   } as CtrlYokeToolModel<unknown, unknown>,
   [MCP_READ_NOTES_TOOL_NAME]: {
     parseParams: parseReadNotesParams,
     parseResultText: parseReadNotesResultText,
     summary: readNotesSummary,
     searchText: readNotesSearchText,
+    terminalLines: readNotesTerminalLines,
   } as CtrlYokeToolModel<unknown, unknown>,
   [MCP_WORKFLOW_STATUS_TOOL_NAME]: {
     parseParams: parseWorkflowStatusParams,
     parseResultText: parseWorkflowStatusResultText,
     summary: workflowStatusSummary,
     searchText: workflowStatusSearchText,
+    terminalLines: workflowStatusTerminalLines,
   } as CtrlYokeToolModel<unknown, unknown>,
   [MCP_GLOBAL_STATUS_TOOL_NAME]: {
     parseParams: parseGlobalStatusParams,
     parseResultText: parseGlobalStatusResultText,
     summary: globalStatusSummary,
     searchText: globalStatusSearchText,
+    terminalLines: globalStatusTerminalLines,
   } as CtrlYokeToolModel<unknown, unknown>,
   [MCP_READ_OUTPUT_TOOL_NAME]: {
     parseParams: parseReadOutputParams,
     parseResultText: parseReadOutputResultText,
     summary: readOutputSummary,
     searchText: readOutputSearchText,
+    terminalLines: readOutputTerminalLines,
   } as CtrlYokeToolModel<unknown, unknown>,
   [MCP_LIST_HARNESSES_TOOL_NAME]: {
     parseParams: parseListHarnessesParams,
     parseResultText: parseListHarnessesResultText,
     summary: listHarnessesSummary,
     searchText: listHarnessesSearchText,
+    terminalLines: listHarnessesTerminalLines,
   } as CtrlYokeToolModel<unknown, unknown>,
   [MCP_EDIT_STEP_TOOL_NAME]: editStepModel as CtrlYokeToolModel<
     unknown,
@@ -230,6 +257,7 @@ export interface ResolvedCtrlYokeToolModel {
   summary: string;
   /** Ordered body text pieces, excluding the separately searched summary. */
   searchText: string[];
+  terminalLines: ToolTerminalLine[];
   warning: boolean;
 }
 
@@ -254,6 +282,7 @@ export function resolveCtrlYokeToolModel(
     result,
     summary: model.summary(params, result),
     searchText: model.searchText(params, result).slice(1),
+    terminalLines: model.terminalLines(params, result),
     warning: model.warning?.(params, result) ?? false,
   };
 }

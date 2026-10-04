@@ -1,4 +1,4 @@
-import { isRecord, tryParseJson } from "./shared";
+import { isRecord, tryParseJson, type ToolTerminalLine } from "./shared";
 import { MCP_REMOVE_STEP_TOOL_NAME } from "../McpToolDefinitions";
 import { displayIndex, parseIndex } from "./stepMutationShared";
 
@@ -70,4 +70,11 @@ export function removeStepSearchText(
   return result.changed === false
     ? ["No change", ...(result.note ? [result.note] : [])]
     : [removeStepSummary(params, result)];
+}
+
+export function removeStepTerminalLines(
+  _params: RemoveStepParams | undefined,
+  result: RemoveStepResult
+): ToolTerminalLine[] {
+  return result.changed === false && result.note ? [{ text: result.note }] : [];
 }

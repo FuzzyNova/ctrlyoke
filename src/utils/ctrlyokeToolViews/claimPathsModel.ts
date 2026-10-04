@@ -1,4 +1,5 @@
 import { isRecord, tryParseJson } from "./shared";
+import { TOOL_TERMINAL_TONES, type ToolTerminalLine } from "./shared";
 import type { CoordinationParticipant } from "../../types/CtrlYokeTypes";
 import { coordinationParticipantAttribution } from "./coordinationPresentation";
 import { resolveCoordinationParticipantKind } from "../CoordinationAttribution";
@@ -100,5 +101,18 @@ export function claimPathsSearchText(
           `${path} — denied to ${coordinationParticipantAttribution(owner)}`
       ),
     ].join("\n"),
+  ];
+}
+
+export function claimPathsTerminalLines(
+  _params: ClaimPathsParams | undefined,
+  result: ClaimPathsResult
+): ToolTerminalLine[] {
+  return [
+    ...result.granted.map((text) => ({ text })),
+    ...result.denied.map(({ path, owner }) => ({
+      text: `${path} — denied to ${coordinationParticipantAttribution(owner)}`,
+      tone: TOOL_TERMINAL_TONES.warning,
+    })),
   ];
 }

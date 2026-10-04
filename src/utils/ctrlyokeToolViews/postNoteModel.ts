@@ -1,4 +1,5 @@
 import { isRecord, tryParseJson } from "./shared";
+import { TOOL_TERMINAL_TONES, type ToolTerminalLine } from "./shared";
 
 export interface PostNoteParams {
   text?: string;
@@ -54,4 +55,11 @@ export function postNoteSearchText(
   result: PostNoteResult
 ): string[] {
   return [postNoteSummary(params, result), result.text];
+}
+
+export function postNoteTerminalLines(
+  _params: PostNoteParams | undefined,
+  result: PostNoteResult
+): ToolTerminalLine[] {
+  return [{ text: result.text, tone: TOOL_TERMINAL_TONES.untrusted }];
 }

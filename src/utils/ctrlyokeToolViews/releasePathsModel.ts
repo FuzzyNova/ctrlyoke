@@ -1,4 +1,4 @@
-import { isRecord, tryParseJson } from "./shared";
+import { isRecord, tryParseJson, type ToolTerminalLine } from "./shared";
 export interface ReleasePathsParams {
   paths?: string[];
 }
@@ -57,5 +57,17 @@ export function releasePathsSearchText(
         ? [`Not held: ${result.notHeld.join(", ")}`]
         : []),
     ].join("\n"),
+  ];
+}
+
+export function releasePathsTerminalLines(
+  _params: ReleasePathsParams | undefined,
+  result: ReleasePathsResult
+): ToolTerminalLine[] {
+  return [
+    ...result.released.map((text) => ({ text })),
+    ...(result.notHeld.length
+      ? [{ text: `Not held: ${result.notHeld.join(", ")}` }]
+      : []),
   ];
 }
