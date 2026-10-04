@@ -5,14 +5,15 @@
 //                  the key. Routes to the Pro or Enterprise Keygen policy based on
 //                  which LS product/variant was purchased (see KEYGEN_POLICY_BY_LS_VARIANT).
 // order_refunded -> on a full refund, suspend the Keygen license issued for that
-//                  order. Partial refunds (goodwill credits, tax-only refunds) are
+//                  order and email the buyer a refund confirmation. Partial refunds (goodwill credits, tax-only refunds) are
 //                  ignored — the buyer still holds a paid license.
 // subscription_created -> link the LS subscription id onto the license created by
 //                  order_created, so later renewal events can find it.
 // subscription_payment_success -> on a "renewal" invoice (not "initial"/"updated"),
 //                  extend the license's expiry via Keygen's renew action.
 // subscription_payment_refunded -> on a full refund of an "initial" or "renewal"
-//                  invoice, suspend the subscription's license; otherwise a refunded
+//                  invoice, suspend the subscription's license and email the
+//                  buyer; otherwise a refunded
 //                  renewal would leave the license extended for another year.
 // subscription_cancelled / subscription_expired -> deliberate no-op; every
 //                  subscription policy uses Restrict Access expiration, so the
@@ -33,6 +34,7 @@ const KEYGEN_ENTERPRISE_POLICY_ID = "1700d3bb-06b7-4087-96ce-e08aa6c6a817";
 const KEYGEN_API_BASE = `https://api.keygen.sh/v1/accounts/${KEYGEN_ACCOUNT_ID}`;
 
 const RESEND_FROM = "ctrlyoke <licensing@ctrlyoke.dev>";
+const BILLING_EMAIL = "billing@ctrlyoke.dev";
 
 // LS variant ids (Settings → Products → each product's default "Default" variant).
 // Route by variant_id rather than product_id: it's present directly on both the
@@ -78,6 +80,7 @@ const LICENSE_METADATA_KEY = {
   LS_ORDER_ID: "lsOrderId",
   LS_SUBSCRIPTION_ID: "lsSubscriptionId",
   LAST_RENEWED_INVOICE_ID: "lastRenewedInvoiceId",
+  REFUND_NOTIFIED_ID: "refundNotifiedId",
   BUYER_EMAIL: "buyerEmail",
   BUYER_NAME: "buyerName",
 } as const;
@@ -249,12 +252,18 @@ async function createLicense(
 }
 
 /**
- * Look up the license correlated with a refunded LS order/subscription and
- * suspend it. A refund for a purchase that never issued a license is a no-op.
+ * Look up the license correlated with a fully refunded LS order/subscription
+ * invoice, suspend it, and email the buyer a refund confirmation. A refund for
+ * a purchase that never issued a license is a no-op.
+ *
+ * `refundId` (the refunded order or invoice id) makes the email idempotent: it
+ * is recorded on the license only after a successful send, so a retried webhook
+ * re-suspends harmlessly and re-sends only if the earlier send failed.
  */
-async function suspendLicenseByMetadata(
+async function revokeRefundedLicense(
   metadataKey: string,
-  value: string
+  value: string,
+  refundId: string
 ): Promise<void> {
   const license = await findLicenseByMetadata(metadataKey, value);
   if (!license) return;
@@ -267,6 +276,16 @@ async function suspendLicenseByMetadata(
       `Keygen license suspend failed: ${res.status} ${await res.text()}`
     );
   }
+  const { metadata } = license.attributes;
+  if (metadata[LICENSE_METADATA_KEY.REFUND_NOTIFIED_ID] === refundId) return;
+  const email = metadata[LICENSE_METADATA_KEY.BUYER_EMAIL];
+  if (typeof email === "string" && email) {
+    const name = metadata[LICENSE_METADATA_KEY.BUYER_NAME];
+    await sendRefundEmail(email, typeof name === "string" ? name : "");
+  }
+  await updateLicenseMetadata(license, {
+    [LICENSE_METADATA_KEY.REFUND_NOTIFIED_ID]: refundId,
+  });
 }
 
 /**
@@ -326,10 +345,11 @@ async function renewLicenseForSubscription(
   });
 }
 
-async function sendLicenseEmail(
-  email: string,
-  name: string,
-  licenseKey: string
+async function sendEmail(
+  to: string,
+  subject: string,
+  html: string,
+  replyTo?: string
 ): Promise<void> {
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -339,19 +359,44 @@ async function sendLicenseEmail(
     },
     body: JSON.stringify({
       from: RESEND_FROM,
-      to: email,
-      subject: "Your ctrlyoke license key",
-      html: `<p>Hi ${name || "there"},</p>
-<p>Thanks for purchasing ctrlyoke! Your license key is:</p>
-<p style="font-size:1.2em;font-weight:bold;">${licenseKey}</p>
-<p>Activate it with the <strong>ctrlyoke: Activate Pro License</strong> command in VS Code
-(or <strong>ctrlyoke: Activate Offline (Air-Gapped) License</strong> if this machine has no network access).</p>
-<p>Need help? Reply to this email or reach out to support@ctrlyoke.dev.</p>`,
+      to,
+      subject,
+      html,
+      ...(replyTo && { reply_to: replyTo }),
     }),
   });
   if (!res.ok) {
     throw new Error(`Resend send failed: ${res.status} ${await res.text()}`);
   }
+}
+
+async function sendLicenseEmail(
+  email: string,
+  name: string,
+  licenseKey: string
+): Promise<void> {
+  await sendEmail(
+    email,
+    "Your ctrlyoke license key",
+    `<p>Hi ${name || "there"},</p>
+<p>Thanks for purchasing ctrlyoke! Your license key is:</p>
+<p style="font-size:1.2em;font-weight:bold;">${licenseKey}</p>
+<p>Activate it with the <strong>ctrlyoke: Activate Pro License</strong> command in VS Code
+(or <strong>ctrlyoke: Activate Offline (Air-Gapped) License</strong> if this machine has no network access).</p>
+<p>Need help? Reply to this email or reach out to support@ctrlyoke.dev.</p>`
+  );
+}
+
+async function sendRefundEmail(email: string, name: string): Promise<void> {
+  await sendEmail(
+    email,
+    "Your ctrlyoke refund has been processed",
+    `<p>Hi ${name || "there"},</p>
+<p>Your ctrlyoke refund has been processed. It can take up to 10 days to appear on your statement.</p>
+<p>The license key from this purchase has been deactivated. ctrlyoke's free features keep working as before.</p>
+<p>Questions about the refund? Reply to this email or reach out to ${BILLING_EMAIL}.</p>`,
+    BILLING_EMAIL
+  );
 }
 
 export default async (req: Request): Promise<Response> => {
@@ -422,8 +467,9 @@ export default async (req: Request): Promise<Response> => {
         if (!payload.data.attributes.refunded) {
           return new Response("Ignored (partial refund)", { status: 200 });
         }
-        await suspendLicenseByMetadata(
+        await revokeRefundedLicense(
           LICENSE_METADATA_KEY.LS_ORDER_ID,
+          payload.data.id,
           payload.data.id
         );
         return new Response("OK", { status: 200 });
@@ -471,10 +517,11 @@ export default async (req: Request): Promise<Response> => {
           return new Response("Ignored (proration refund)", { status: 200 });
         }
         // An initial-invoice refund may also arrive as order_refunded; the
-        // suspend is idempotent, so handling both is harmless.
-        await suspendLicenseByMetadata(
+        // suspend and email are idempotent, so handling both is harmless.
+        await revokeRefundedLicense(
           LICENSE_METADATA_KEY.LS_SUBSCRIPTION_ID,
-          String(subscriptionId)
+          String(subscriptionId),
+          payload.data.id
         );
         return new Response("OK", { status: 200 });
       }

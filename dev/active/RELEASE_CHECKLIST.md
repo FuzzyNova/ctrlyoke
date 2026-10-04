@@ -625,7 +625,7 @@ Confirm:
 - [x] Air-gapped license file import unlocks Pro with zero network calls — Nathan generated a signed license file from Keygen for one of the `dev/test_keys.md` licenses and imported it via `LicenseSection.tsx`'s "Import offline license file" flow; activation succeeded.
 - [ ] Self-serve offline license generator works end-to-end with a real Pro license key, and the resulting file imports successfully on an air-gapped machine.
 - [ ] Lemon Squeezy **test-mode** order → exactly one Keygen license created, webhook retry doesn't duplicate it.
-- [ ] Refund (test mode) → Keygen license suspended/revoked.
+- [ ] Refund (test mode) → Keygen license suspended/revoked and the buyer receives the refund confirmation email; a partial refund leaves the license active.
 - [ ] Pricing page checkout link points at the real, published, live-mode LS product.
 - [ ] README, docs, Marketplace listing, and website agree on support address, license terms, and pricing.
 

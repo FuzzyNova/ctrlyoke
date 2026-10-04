@@ -108,6 +108,9 @@ address.
 **Lemon Squeezy product description / confirmation copy (Pro):** append "30-day money-back
 guarantee — email billing@ctrlyoke.dev."
 
+**Refund confirmation email:** sent automatically by the webhook on a full refund (see the
+runbook below).
+
 **License-key email** (`sendLicenseEmail` in `ls-webhook.ts`): no change needed — keep that email
 about activation. (Optional one-liner if a buyer's first question tends to be "how do I get a
 refund".)
@@ -150,7 +153,8 @@ Nothing has to be switched on to allow refunds. To launch the policy:
 ### Per-request runbook (Pro)
 
 1. Request arrives at billing@ctrlyoke.dev → find the order in LS by email.
-2. Within 30 days → **Orders → ⋯ → Refund → full amount**. Reply confirming; mention the license
-   is now deactivated.
-3. Check Keygen shows the license **Suspended** (the webhook does this; suspend by hand if the
-   webhook failed).
+2. Within 30 days → **Orders → ⋯ → Refund → full amount**. That is the only manual step: the
+   webhook suspends the Keygen license and emails the buyer a refund confirmation (from
+   `sendRefundEmail`, reply-to billing@).
+3. If the buyer never got the confirmation, check the Netlify function log and the license in
+   Keygen (**Suspended**, `refundNotifiedId` set); suspend by hand if the webhook failed.
