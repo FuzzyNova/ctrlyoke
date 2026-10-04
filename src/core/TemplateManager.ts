@@ -20,6 +20,7 @@ import {
 } from "../types/DashboardConstants";
 import { PromptFileParser } from "./PromptFileParser";
 import type { PromptFile } from "../types/CtrlYokeTypes";
+import { WORKFLOW_YAML_SCHEMA } from "./WorkflowYamlSchema";
 
 /** Scope for a custom (non-built-in) template: where it's stored and read from. */
 export type TemplateScope =
@@ -144,7 +145,9 @@ export class TemplateManager {
    */
   private parseTemplateMeta(content: string): ParsedTemplateMeta {
     try {
-      const parsed = jsYaml.load(content) as Record<string, unknown> | null;
+      const parsed = jsYaml.load(content, {
+        schema: WORKFLOW_YAML_SCHEMA,
+      }) as Record<string, unknown> | null;
       if (!parsed || typeof parsed !== "object") return { variables: {} };
       const meta = parsed["_templateMeta"] as
         Record<string, unknown> | undefined;
@@ -576,7 +579,7 @@ export class TemplateManager {
     // scalar values so user input cannot change the template's YAML structure.
     // Strip _templateMeta — it's template-authoring metadata, not a workflow execution field.
     const parsed = this.substituteVariablesInValues(
-      jsYaml.load(templateContent),
+      jsYaml.load(templateContent, { schema: WORKFLOW_YAML_SCHEMA }),
       withDefaults
     ) as Record<string, unknown>;
     delete parsed["_templateMeta"];
@@ -683,7 +686,9 @@ export class TemplateManager {
       throw new Error(`Base template not found: ${baseTemplateId}`);
     }
     const baseContent = await this.getTemplateContent(baseTemplateId);
-    const parsed = jsYaml.load(baseContent);
+    const parsed = jsYaml.load(baseContent, {
+      schema: WORKFLOW_YAML_SCHEMA,
+    });
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       throw new Error(`Template has invalid content: ${baseTemplateId}`);
     }

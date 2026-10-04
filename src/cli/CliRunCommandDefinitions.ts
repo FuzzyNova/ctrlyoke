@@ -116,7 +116,7 @@ export function registerRunScopedCommands(
     program
       .command("rerun")
       .description("Seed and execute a new run from an existing workflow run")
-      .requiredOption("--workflow <key>", "Workflow lineage key")
+      .requiredOption("--workflow <key>", "Workflow lineage key or exact name")
       .option("--from <ref|runId>", "Source run reference or numeric run ID")
       .option(
         "-H, --harness <harness>",
@@ -129,7 +129,7 @@ export function registerRunScopedCommands(
     program
       .command("append [file]")
       .description("Append steps to one run and continue it")
-      .requiredOption("--workflow <key>", "Workflow lineage key")
+      .requiredOption("--workflow <key>", "Workflow lineage key or exact name")
       .requiredOption(
         "--run <ref|runId>",
         "Target run reference or numeric run ID"
@@ -147,7 +147,7 @@ export function registerRunScopedCommands(
     program
       .command("continue")
       .description("Continue unchanged pending work in one run")
-      .requiredOption("--workflow <key>", "Workflow lineage key")
+      .requiredOption("--workflow <key>", "Workflow lineage key or exact name")
       .requiredOption(
         "--run <ref|runId>",
         "Target run reference or numeric run ID"

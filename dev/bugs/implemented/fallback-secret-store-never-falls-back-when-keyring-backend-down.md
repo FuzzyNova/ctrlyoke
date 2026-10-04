@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), reproduced with a tsx probe using an injected `runCommand`
 - **Area:** `src/platform/FallbackSecretStore.ts` (`probe` ~46-57), `src/platform/OsCredentialStore.ts` (`get`/`keys` error mapping)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

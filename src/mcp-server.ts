@@ -67,8 +67,13 @@ import {
   GlobalWorkflowStatusService,
   MAX_GLOBAL_STATUS_RESULTS,
 } from "./core/orchestration/GlobalWorkflowStatusService";
-import { deriveStepStatusesFromRuntime } from "./utils/StepStatusDerivation";
-import { RunContinuationService } from "./core/orchestration/RunContinuationService";
+import {
+  deriveStepStatusesFromRuntime,
+} from "./utils/StepStatusDerivation";
+import {
+  getReorderableStepIndices,
+  RunContinuationService,
+} from "./core/orchestration/RunContinuationService";
 import {
   flattenParallelItems,
   type ResolvedParallelItem,
@@ -340,6 +345,17 @@ function log(...args: any[]) {
   } catch {
     // Ignore file write errors silently
   }
+}
+
+function requestedOrderMatchesCurrent(
+  workingFile: WorkingFile,
+  requestedOrder: number[]
+): boolean {
+  const currentOrder = getReorderableStepIndices(workingFile);
+  return (
+    currentOrder.length === requestedOrder.length &&
+    currentOrder.every((index, position) => index === requestedOrder[position])
+  );
 }
 
 /**
@@ -1049,6 +1065,8 @@ export class CtrlYokeMCPServer {
         ...(preview !== prompt ? { promptTruncated: true } : {}),
         status: stepStatuses[index],
         model: isScriptStep(p) ? undefined : p.model,
+        sessionId: isScriptStep(p) ? null : (p.sessionId ?? null),
+        resumeSession: isScriptStep(p) ? false : (p.resumeSession ?? false),
       };
     });
 
@@ -1391,17 +1409,16 @@ export class CtrlYokeMCPServer {
       selected,
       reordered,
       target.definitionRevision,
-      { indices }
+      { indices },
+      requestedOrderMatchesCurrent(reordered.workingFile, indices)
     );
   }
 
   /**
    * `RunContinuationService` skips the write when a transform reproduces the
-   * definition already on disk, so a mutation can legitimately succeed and
-   * change nothing. Reporting that as a bare `success: true` is the same false
-   * positive this server refuses elsewhere: the caller believes it applied an
-   * edit it did not. The revision is the evidence — it only advances on a real
-   * write — so derive `changed` from it rather than guessing.
+   * definition already on disk, so the revision is the evidence for `changed`.
+   * The no-op note is narrower: only an identical reorder request can say the
+   * requested step order already matched the current one.
    */
   private mutationResponse(
     operation: string,
@@ -1416,7 +1433,8 @@ export class CtrlYokeMCPServer {
       descriptorRevision: number;
     },
     priorDefinitionRevision: number,
-    details: Record<string, unknown>
+    details: Record<string, unknown>,
+    requestedOrderMatchesCurrent = false
   ) {
     const changed = mutation.definitionRevision !== priorDefinitionRevision;
     return {
@@ -1428,11 +1446,11 @@ export class CtrlYokeMCPServer {
               success: true,
               operation,
               changed,
-              ...(changed
-                ? {}
-                : {
+              ...(!changed && requestedOrderMatchesCurrent
+                ? {
                     note: `${operation} wrote nothing: the step list already matched what you asked for, so this call had no effect.`,
-                  }),
+                  }
+                : {}),
               ...details,
               newQueueSize: mutation.workingFile.steps?.length ?? 0,
               workingFile: selected.filePath,

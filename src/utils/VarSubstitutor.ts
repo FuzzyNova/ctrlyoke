@@ -5,7 +5,7 @@ import type {
   ScriptStep,
   ScriptProperties,
 } from "../types/CtrlYokeTypes";
-import { maskFencedCodeBlocks } from "./FileReferenceParser";
+import { maskCodeRanges } from "./FileReferenceParser";
 import { VARIABLE_NAME_PATTERN_SOURCE } from "./KeyValueKeyKinds";
 
 /**
@@ -45,10 +45,12 @@ export class VarSubstitutor {
   /**
    * Substitute all `{{key}}` placeholders in `text` using `vars`.
    * Unresolved placeholders and placeholders inside fenced code blocks remain
-   * literal. Resolved placeholders outside fences behave as before.
+   * literal. Inline code spans do not protect a placeholder: vars are also
+   * substituted into script text, where backticks are shell command
+   * substitution, and authors put vars inside inline code on purpose.
    */
   static substitute(text: string, vars: Record<string, string>): string {
-    const maskedText = maskFencedCodeBlocks(text);
+    const maskedText = maskCodeRanges(text, { fencesOnly: true });
     const substitutedSpans: Array<{ start: number; end: number; key: string }> =
       [];
     let outputLengthDelta = 0;
@@ -80,10 +82,7 @@ export class VarSubstitutor {
 
     const countSecretReferences = (value: string): number =>
       value.split(this.SECRET_REFERENCE_PREFIX).length - 1;
-    if (
-      countSecretReferences(substitutedText) >
-      countSecretReferences(text)
-    ) {
+    if (countSecretReferences(substitutedText) > countSecretReferences(text)) {
       const contributedKey = substitutedSpans.find(({ start, end }) => {
         let referenceOffset = substitutedText.indexOf(
           this.SECRET_REFERENCE_PREFIX
@@ -117,7 +116,7 @@ export class VarSubstitutor {
     text: string,
     vars: Record<string, string>
   ): string[] {
-    const maskedText = maskFencedCodeBlocks(text);
+    const maskedText = maskCodeRanges(text, { fencesOnly: true });
     const found = new Set<string>();
     this.PLACEHOLDER_RE.lastIndex = 0;
     let match: RegExpExecArray | null;

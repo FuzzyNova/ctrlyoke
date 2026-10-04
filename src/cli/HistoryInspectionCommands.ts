@@ -1,4 +1,7 @@
-import type { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
+import {
+  isTerminalExecutionState,
+  type OutputHistoryManager,
+} from "../core/orchestration/OutputHistoryManager";
 import * as fs from "node:fs/promises";
 import type { WorkflowLineageRepository } from "../core/orchestration/WorkflowLineageRepository";
 import type { RunNavigationSummary } from "../core/orchestration/OutputHistoryManager";
@@ -11,7 +14,7 @@ import type {
   HistorySearchOptions as HistorySearchCommandOptions,
 } from "./HistoryCommandDefinitions";
 import {
-  createWorkflowLineageNotFoundError,
+  resolveCliWorkflowKey,
   resolveCliRunRef,
   parseHistoryShowAttempt,
   parseHistoryShowStep,
@@ -33,7 +36,9 @@ import { isScriptStep } from "../types/CtrlYokeTypes";
 import {
   promptFirstLinePreview,
   STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS,
+  truncateText,
 } from "../utils/TextUtils";
+import { formatFinalPassBadge } from "../utils/FinalStepLabels";
 import type { RunSummary } from "../types/WorkflowTimelineTypes";
 import {
   EXECUTION_PHASES,
@@ -125,7 +130,10 @@ export interface HistoryInspectionCommandIo {
 
 export interface HistoryInspectionLineageRepository extends Pick<
   WorkflowLineageRepository,
-  "listLineageKeys" | "tryReadDescriptor" | "readWorkflowDisplayName"
+  | "listLineageKeys"
+  | "listRunRefs"
+  | "tryReadDescriptor"
+  | "readWorkflowDisplayName"
 > {}
 
 export interface HistoryInspectionOutputHistoryManager extends Pick<
@@ -292,9 +300,13 @@ export async function runsHistoryCommand(
   const workspace = await (
     dependencies.bootstrapCliWorkspace ?? bootstrapCliWorkspace
   )(options);
-  const workflowKey = options.workflow as WorkflowKey;
+  const workflowKey = await resolveCliWorkflowKey(
+    workspace.workspaceRoot,
+    workspace.createLineageRepository(),
+    options.workflow,
+    (message) => io.writeErr(message)
+  );
   const lineageRepository = workspace.createLineageRepository();
-  await assertHistoryLineageExists(workspace, lineageRepository, workflowKey);
 
   const workflowName = await lineageRepository.readWorkflowDisplayName(
     workspace.workspaceRoot,
@@ -309,21 +321,8 @@ export async function runsHistoryCommand(
     return;
   }
 
-  io.writeOut(`Workflow: ${workflowName} (${options.workflow})`);
+  io.writeOut(`Workflow: ${workflowName} (${workflowKey})`);
   renderRunSummaries(summaries, io);
-}
-
-async function assertHistoryLineageExists(
-  workspace: HistoryInspectionWorkspace,
-  lineageRepository: HistoryInspectionLineageRepository,
-  workflowKey: WorkflowKey
-): Promise<void> {
-  const lineageKeys = await lineageRepository.listLineageKeys(
-    workspace.workspaceRoot
-  );
-  if (!lineageKeys.includes(workflowKey)) {
-    throw createWorkflowLineageNotFoundError(workflowKey);
-  }
 }
 
 /**
@@ -333,26 +332,34 @@ async function assertHistoryLineageExists(
  */
 async function resolveHistoryRun(
   workspace: HistoryInspectionWorkspace,
-  workflowKey: WorkflowKey,
+  io: HistoryInspectionCommandIo,
+  workflowKey: string,
   runSelector: string | undefined
-): Promise<{ runRef: RunRef; runSummary: RunSummary }> {
-  await assertHistoryLineageExists(
-    workspace,
+): Promise<{
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
+  runSummary: RunSummary;
+}> {
+  const resolvedWorkflowKey = await resolveCliWorkflowKey(
+    workspace.workspaceRoot,
     workspace.createLineageRepository(),
-    workflowKey
+    workflowKey,
+    (message) => io.writeErr(message)
   );
   const summaries = await workspace
     .createOutputHistoryManager()
-    .getRunSummaries(workflowKey);
+    .getRunSummaries(resolvedWorkflowKey);
   if (summaries.length === 0) {
-    throw new Error(`Workflow lineage "${workflowKey}" has no runs yet.`);
+    throw new Error(
+      `Workflow lineage "${resolvedWorkflowKey}" has no runs yet.`
+    );
   }
   const summaryProvider: CliRunSummaryProvider = {
     getRunSummaries: async () => summaries,
   };
   const runRef = await resolveCliRunRef(
     summaryProvider,
-    workflowKey,
+    resolvedWorkflowKey,
     runSelector,
     "--run"
   );
@@ -360,7 +367,7 @@ async function resolveHistoryRun(
   if (!runSummary) {
     throw new Error(`Run "${runRef}" was not found in history.`);
   }
-  return { runRef, runSummary };
+  return { workflowKey: resolvedWorkflowKey, runRef, runSummary };
 }
 
 /**
@@ -571,10 +578,10 @@ export async function showHistoryCommand(
   const workspace = await (
     dependencies.bootstrapCliWorkspace ?? bootstrapCliWorkspace
   )(options);
-  const workflowKey = options.workflow as WorkflowKey;
-  const { runRef, runSummary } = await resolveHistoryRun(
+  const { workflowKey, runRef, runSummary } = await resolveHistoryRun(
     workspace,
-    workflowKey,
+    io,
+    options.workflow,
     options.run
   );
   const workingDefinition = await readRunWorkingDefinition(
@@ -1151,6 +1158,7 @@ interface HistoryStepRow {
   elapsedSeconds: number | null;
   attempts: number;
   prompt: string;
+  next?: true;
 }
 
 interface HistoryFinalPassRow {
@@ -1171,6 +1179,7 @@ interface HistoryFinalStepRow {
   model: string | null;
   elapsedSeconds: number | null;
   passes: HistoryFinalPassRow[];
+  nextPass: number | null;
   prompt: string;
 }
 
@@ -1182,10 +1191,10 @@ export async function stepsHistoryCommand(
   const workspace = await (
     dependencies.bootstrapCliWorkspace ?? bootstrapCliWorkspace
   )(options);
-  const workflowKey = options.workflow as WorkflowKey;
-  const { runRef } = await resolveHistoryRun(
+  const { workflowKey, runRef } = await resolveHistoryRun(
     workspace,
-    workflowKey,
+    io,
+    options.workflow,
     options.run
   );
   const definition = await readRunWorkingDefinition(
@@ -1203,30 +1212,51 @@ export async function stepsHistoryCommand(
     resolver,
     WorkflowPaths.manifestPath(workspace.workspaceRoot, workflowKey, runRef)
   );
-  const steps: HistoryStepRow[] = definition.steps.map((step, stepIndex) => ({
-    selector: formatCliStepSelector(stepIndex),
-    index: stepIndex,
-    name: step.name?.trim() || null,
-    state: historyWorkingStepState(step._runtime),
-    harness: step._runtime?.harness ?? null,
-    model: step._runtime?.model ?? null,
-    elapsedSeconds: historyElapsedSeconds(step._runtime?.elapsed),
-    attempts:
-      index.targets.get(historyAttemptTargetKey(queueTarget(stepIndex)))
-        ?.attempts ?? 0,
-    prompt: formatStepPrompt(step, options.fullPrompts === true),
-  }));
+  const currentIndex = definition._runtime?.currentIndex;
+  const isNonTerminalRun = !isTerminalExecutionState(
+    definition._runtime?.executionState
+  );
+  const steps: HistoryStepRow[] = definition.steps.map((step, stepIndex) => {
+    const isNext =
+      isNonTerminalRun && currentIndex === stepIndex;
+    return {
+      selector: formatCliStepSelector(stepIndex),
+      index: stepIndex,
+      name: step.name?.trim() || null,
+      state: historyWorkingStepState(step._runtime),
+      harness: step._runtime?.harness ?? null,
+      model: step._runtime?.model ?? null,
+      elapsedSeconds: historyElapsedSeconds(step._runtime?.elapsed),
+      attempts:
+        index.targets.get(historyAttemptTargetKey(queueTarget(stepIndex)))
+          ?.attempts ?? 0,
+      prompt: formatStepPrompt(step, options.fullPrompts === true),
+      ...(isNext ? { next: true as const } : {}),
+    };
+  });
+  const passes = historyFinalPassRows(index);
+  const nextPass =
+    definition.finalStep &&
+    isNonTerminalRun &&
+    currentIndex !== undefined &&
+    currentIndex >= definition.steps.length &&
+    passes[passes.length - 1]?.state !== EXECUTION_STATES.RUNNING
+      ? passes.length + 1
+      : null;
+  const finalStepState =
+    nextPass === null ? undefined : HISTORY_STEP_STATES.PENDING;
   const finalStep: HistoryFinalStepRow | null = definition.finalStep
     ? {
         selector: HISTORY_SHOW_STEP_SELECTORS.FINAL,
         name: definition.finalStep.name?.trim() || null,
-        state: historyWorkingStepState(definition.finalStep._runtime),
+        state:
+          finalStepState ??
+          historyWorkingStepState(definition.finalStep._runtime),
         harness: definition.finalStep._runtime?.harness ?? null,
         model: definition.finalStep._runtime?.model ?? null,
-        elapsedSeconds: historyElapsedSeconds(
-          definition.finalStep._runtime?.elapsed
-        ),
-        passes: historyFinalPassRows(index),
+        elapsedSeconds: historyFinishedPassElapsedSeconds(passes),
+        passes,
+        nextPass,
         prompt: formatStepPrompt(
           definition.finalStep,
           options.fullPrompts === true
@@ -1256,7 +1286,7 @@ export async function stepsHistoryCommand(
   const values = steps.map((step) => [
     step.selector,
     step.name ?? "—",
-    step.state,
+    step.next ? `${step.state} (next)` : step.state,
     step.harness ?? "—",
     step.model ?? "—",
     formatElapsed(step.elapsedSeconds),
@@ -1267,11 +1297,15 @@ export async function stepsHistoryCommand(
     values.push([
       finalStep.selector,
       finalStep.name ?? "—",
-      finalStep.state,
+      finalStep.nextPass === null
+        ? finalStep.state
+        : `${finalStep.state} (${formatFinalPassBadge(finalStep.nextPass)} next)`,
       finalStep.harness ?? "—",
       finalStep.model ?? "—",
       formatElapsed(finalStep.elapsedSeconds),
-      `${finalStep.passes.length} pass${finalStep.passes.length === 1 ? "" : "es"}`,
+      finalStep.nextPass === null
+        ? `${finalStep.passes.length} pass${finalStep.passes.length === 1 ? "" : "es"}`
+        : `${finalStep.passes.length} pass${finalStep.passes.length === 1 ? "" : "es"}, ${finalStep.nextPass} next`,
       finalStep.prompt,
     ]);
   }
@@ -1315,6 +1349,18 @@ function historyFinalPassRows(
   return passes.sort((a, b) => a.pass - b.pass);
 }
 
+function historyFinishedPassElapsedSeconds(
+  passes: readonly HistoryFinalPassRow[]
+): number | null {
+  const finishedPasses = passes.filter((pass) => pass.completedAt !== null);
+  return finishedPasses.length === 0
+    ? null
+    : finishedPasses.reduce(
+        (total, pass) => total + (pass.elapsedSeconds ?? 0),
+        0
+      );
+}
+
 const HISTORY_SEARCH_DEFAULT_LIMIT = 20;
 const HISTORY_SEARCH_MAX_LIMIT = 100;
 const HISTORY_SEARCH_DEFAULT_SNIPPET_CHARS = 100;
@@ -1328,11 +1374,21 @@ export async function searchHistoryCommand(
   dependencies: HistoryInspectionCommandDependencies = {}
 ): Promise<void> {
   CliTerminalFormatter.setColorEnabled(options.color !== false);
-  const request = buildHistorySearchQuery(query, options);
   const snippetChars = requestSnippetChars(options);
   const workspace = await (
     dependencies.bootstrapCliWorkspace ?? bootstrapCliWorkspace
   )(options, { runs: { historySearchCacheMb: 0 } });
+  const workflowKeys = await Promise.all(
+    (options.workflow ?? []).map((workflow) =>
+      resolveCliWorkflowKey(
+        workspace.workspaceRoot,
+        workspace.createLineageRepository(),
+        workflow,
+        (message) => io.writeErr(message)
+      )
+    )
+  );
+  const request = buildHistorySearchQuery(query, options, workflowKeys);
   const service =
     dependencies.createHistorySearchService?.() ?? new HistorySearchService();
   const progress = createHistorySearchProgressReporter(io);
@@ -1437,7 +1493,8 @@ function createHistorySearchProgressReporter(io: HistoryInspectionCommandIo): {
 
 function buildHistorySearchQuery(
   query: string,
-  options: HistorySearchCommandOptions
+  options: HistorySearchCommandOptions,
+  resolvedWorkflowKeys: WorkflowKey[]
 ): HistorySearchQuery {
   const normalizedQuery = query.trim();
   if (normalizedQuery.length < HISTORY_SEARCH_MIN_QUERY_LENGTH) {
@@ -1446,7 +1503,7 @@ function buildHistorySearchQuery(
     );
   }
 
-  const workflowKeys = [...(options.workflow ?? [])];
+  const workflowKeys = [...resolvedWorkflowKeys];
   if (options.thisWorkflow) {
     const workingFile = process.env[CTRLYOKE_ENV_VARS.WORKING_FILE];
     if (!workingFile) {
@@ -1947,7 +2004,7 @@ function renderHistoryList(
   const headers = ["KEY", "NAME", "RUNS", "LATEST", "STATE"];
   const values = rows.map((row) => [
     row.workflowKey,
-    row.workflowName,
+    truncateText(row.workflowName, 47),
     String(row.runCount),
     formatDate(row.latestRun?.startedAt),
     row.latestRun?.executionState ?? "—",
@@ -2017,6 +2074,10 @@ function formatTokens(tokens: number | undefined): string {
 }
 
 interface RunWorkingDefinition {
+  _runtime?: {
+    currentIndex?: number;
+    executionState?: string;
+  };
   steps: Array<{
     name?: string;
     prompt?: string;
@@ -2061,9 +2122,11 @@ function formatStepPrompt(
   full: boolean
 ): string {
   const prompt = step.prompt ?? step.script ?? "";
-  return full
-    ? prompt
-    : promptFirstLinePreview(prompt, STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS);
+  if (full) return prompt;
+  return promptFirstLinePreview(
+    prompt,
+    STEP_LISTING_PROMPT_PREVIEW_MAX_CHARS
+  );
 }
 
 /** A working file's `_runtime.elapsed` (seconds), or null when absent or invalid. */

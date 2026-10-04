@@ -1502,6 +1502,9 @@ export class WorkflowSerializer {
       ).trashAllLineages(clientId, this.isLineageExecuting);
       if (entry) {
         postMessage(toHistoryTrashedMessage(entry));
+        for (const item of entry.items) {
+          this.getManager()?.forgetRunActivity?.(item.workflowKey);
+        }
       }
       if (failed.length > 0) {
         this.sendActionFailure(
@@ -1577,6 +1580,7 @@ export class WorkflowSerializer {
       ).trashLineage(address.workflowKey, clientId, this.isLineageExecuting);
       if (entry) {
         postMessage(toHistoryTrashedMessage(entry));
+        this.getManager()?.forgetRunActivity?.(address.workflowKey);
       }
       return entry !== undefined;
     } catch (error) {

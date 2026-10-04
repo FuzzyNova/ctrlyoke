@@ -64,7 +64,7 @@ export function substituteConditionOutputRefs(
   formatValue: (value: string, authoredText: string) => string = (value) =>
     value
 ): ConditionOutputSubstitutionResult {
-  // parseConditionOutputRefs masks fenced blocks itself, and masking is a
+  // parseConditionOutputRefs masks code ranges itself, and masking is a
   // 1:1 character substitution — so its offsets index the original text.
   const matches = parseConditionOutputRefs(text);
   const unresolved: ConditionOutputSubstitutionResult["unresolved"] = [];

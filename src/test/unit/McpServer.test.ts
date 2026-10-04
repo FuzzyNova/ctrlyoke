@@ -1836,6 +1836,44 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     }
   });
 
+  test("reports an already-matched note only for an identical reorder order", async () => {
+    const server = await setup();
+    const { run, ownerToken } = await prepareActiveRun(
+      "identical-parallel-reorder"
+    );
+    try {
+      const workingFile = JSON.parse(
+        await fs.readFile(run.runFilePath, "utf8")
+      ) as WorkingFile;
+      workingFile.steps = [
+        ...(workingFile.steps ?? []).slice(0, 2),
+        { prompt: "g1" },
+        { prompt: "g2" },
+        { prompt: "tail" },
+      ];
+      workingFile.parallelGroups = [
+        {
+          id: "G",
+          startIndex: 2,
+          endIndex: 3,
+          failFast: true,
+        },
+      ];
+      await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
+
+      const result = responseJson(
+        await server.invokeTool(MCP_REORDER_STEPS_TOOL_NAME, {
+          indices: [2, 3, 4],
+        })
+      );
+
+      assert.strictEqual(result.changed, false);
+      assert.match(result.note, /already matched what you asked for/i);
+    } finally {
+      await releaseActiveRun(run, ownerToken);
+    }
+  });
+
   for (const [tool, args] of [
     [MCP_EDIT_STEP_TOOL_NAME, { index: 0, updates: { prompt: "blocked" } }],
     [MCP_REMOVE_STEP_TOOL_NAME, { index: 0 }],
@@ -2219,14 +2257,19 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       await server.invokeTool("append_step", {
         position: "end",
         steps: [
-          { prompt: "Check `!MCP_APPEND_UNAPPROVED_TEST_SECRET` handling" },
+          { prompt: "Check !MCP_APPEND_UNAPPROVED_TEST_SECRET handling" },
         ],
       })
     );
     const clean = responseJson(
       await server.invokeTool("append_step", {
         position: "end",
-        steps: [{ prompt: "```\n!MCP_APPEND_FENCED_TEST_SECRET\n```" }],
+        steps: [
+          {
+            prompt:
+              "Quote `!MCP_APPEND_INLINE_TEST_SECRET` and\n```\n!MCP_APPEND_FENCED_TEST_SECRET\n```",
+          },
+        ],
       })
     );
 
@@ -3084,7 +3127,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     );
     assert.strictEqual(unchanged.success, true);
     assert.strictEqual(unchanged.changed, false);
-    assert.match(unchanged.note, /wrote nothing/);
+    assert.strictEqual("note" in unchanged, false);
 
     const changed = responseJson(
       await server.invokeTool(MCP_EDIT_STEP_TOOL_NAME, {

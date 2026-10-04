@@ -170,6 +170,7 @@ function main() {
 
       const notifyData = {
         timestamp: Date.now(),
+        runId: process.env.CTRLYOKE_RUN_ID || undefined,
         sessionId: sessionId || null,
         status:
           hookType === "sessionStart"

@@ -25,6 +25,7 @@ import {
 import { collectSecretInterpolationNames } from "../utils/SecretResolver";
 import { parseSecretReferences } from "../utils/SecretReferenceParser";
 import { McpRegistryFileManager } from "../utils/McpRegistryFileManager";
+import { WORKFLOW_YAML_SCHEMA } from "../core/WorkflowYamlSchema";
 
 export interface SecretRegistryWorkflowReference {
   workflow: string;
@@ -171,7 +172,7 @@ async function readWorkflowReference(
     } else {
       const parsed = filePath.endsWith(".json")
         ? JSON.parse(content)
-        : yaml.load(content, { schema: yaml.CORE_SCHEMA });
+        : yaml.load(content, { schema: WORKFLOW_YAML_SCHEMA });
       collectWorkflowNames(parsed, names, mcpServers);
     }
 

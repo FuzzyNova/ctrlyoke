@@ -4,6 +4,8 @@ import { useAttachmentTokenCount } from "@hooks/useAttachmentTokenCount";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import { useUiStore } from "@store/uiStore";
+import { decodePriorContextTokenRef } from "@root/utils/FileReferenceParser";
+import { parseMergedPriorContextBody } from "@root/utils/PriorContextMerge";
 
 describe("useAttachmentTokenCount", () => {
   beforeEach(() => {
@@ -77,5 +79,23 @@ describe("useAttachmentTokenCount", () => {
       type: MESSAGE_TYPES.REQUEST_ATTACHMENT_TOKEN_COUNTS,
       references: [firstRequest.references[0]],
     });
+  });
+
+  it("combines overlapping previous references into one three-item preview request", () => {
+    renderHook(() => useAttachmentTokenCount("$previous $previous:3", 5));
+
+    act(() => {
+      vi.advanceTimersByTime(250);
+    });
+
+    const request = (
+      getVsCodeApi().postMessage as ReturnType<typeof vi.fn>
+    ).mock.calls[0][0] as { references: string[] };
+    expect(request.references).toHaveLength(1);
+    const decoded = decodePriorContextTokenRef(request.references[0]);
+    expect(decoded).not.toBeNull();
+    expect(parseMergedPriorContextBody(decoded!.body)).toEqual([
+      { previous: 3 },
+    ]);
   });
 });

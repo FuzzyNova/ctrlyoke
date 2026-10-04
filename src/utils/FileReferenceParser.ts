@@ -35,77 +35,245 @@ import {
 
 export const LITERAL_FENCE_INFO = "text";
 
+export interface CodeRangeOptions {
+  /**
+   * Find block fences only, skipping inline code spans. Workflow var
+   * substitution uses this: vars are substituted into script text, where
+   * backticks are shell command substitution rather than Markdown code.
+   */
+  fencesOnly?: boolean;
+}
+
+const BLOCK_FENCE_OPENER = /^ {0,3}(`{3,})[^`]*$/;
+const BLOCK_FENCE_RUN = /^ {0,3}(`{3,})/;
+
 /**
- * Mask every prompt-reference and variable trigger character inside
- * backtick-fenced blocks.
+ * Find every range of prompt text that is literal code: block fences and
+ * inline code spans.
  *
- * This is the single point that decides "is this inside a fence" for every
- * reference parser in the file (plus `SecretReferenceParser.parseSecretReferences`
- * and `CtrlYokeSlashTokens.scanCtrlYokeSlashTokens`, which both mask through
- * this same function) — each of those parsers calls it on its own input
- * rather than requiring every one of their many call sites to remember to
- * mask first. A pasted literal like `<!DOCTYPE>` or a `/mcp:` example inside
- * a fenced log/code excerpt must never be mistaken for a live reference:
- * `!NAME` hard-fails a run at secret preflight, and `$previous`/`/skill:`
- * silently inject real content the fence promised was inert. A trigger char
- * missing from this set is therefore a silent correctness bug, not just a
- * missed expansion — when a new trigger is added anywhere in the
- * prompt-reference system, it must be added here too.
+ * This is the single point that decides "is this literal" for every
+ * reference parser in this file (plus `SecretReferenceParser.parseSecretReferences`,
+ * `CtrlYokeSlashTokens.scanCtrlYokeSlashTokens`, and the dashboard's chips),
+ * each of which masks through {@link maskCodeRanges} on its own input rather
+ * than requiring every call site to remember to mask first. A pasted literal
+ * like `<!DOCTYPE>` or a `/mcp:` example inside code must never be mistaken
+ * for a live reference: `!NAME` hard-fails a run at secret preflight, and
+ * `$previous`/`/skill:` silently inject real content the code promised was
+ * inert.
+ *
+ * - A run of 3+ backticks opens a block fence only at line start (after up to
+ *   three spaces, as in CommonMark) with no backtick in the rest of the line.
+ *   It closes at a line-start run of at least its length. An opener that is
+ *   never closed masks nothing, so a stray fence cannot swallow the prompt.
+ * - Any other run of N backticks opens an inline span only when a run of
+ *   exactly N backticks closes it later on the same line. A run without that
+ *   partner is plain text, so a stray backtick never masks past its line.
+ * - Outside a span, a backslash-escaped backtick is not a delimiter.
  */
-export function findFencedBlockRanges(
-  text: string
+export function findCodeRanges(
+  text: string,
+  options: CodeRangeOptions = {}
 ): Array<{ from: number; to: number }> {
-  const fenceRuns = /`{3,}/g;
-  const ranges: Array<{ from: number; to: number }> = [];
-  let opening = fenceRuns.exec(text);
-
-  while (opening) {
-    const openingLength = opening[0].length;
-    let next: RegExpExecArray | null;
-    let restartedAtGeneratedOpener = false;
-
-    while ((next = fenceRuns.exec(text)) !== null) {
-      if (next[0].length < openingLength) {
-        continue;
-      }
-
-      const afterFence = next.index + next[0].length;
-      const lineEnd = text.indexOf("\n", afterFence);
-      const lineRemainder = text.slice(
-        afterFence,
-        lineEnd < 0 ? text.length : lineEnd
-      );
-      const isGeneratedOpener = lineRemainder.trim() === LITERAL_FENCE_INFO;
-
-      if (isGeneratedOpener) {
-        // The generated fence is longer than every run in the authored text
-        // and substituted value. End the authored block here, then scan the
-        // generated literal as its own block so backticks in the value cannot
-        // close the authored fence.
-        ranges.push({ from: opening.index, to: afterFence });
-        opening = next;
-        restartedAtGeneratedOpener = true;
-        break;
-      }
-
-      ranges.push({ from: opening.index, to: afterFence });
-      opening = fenceRuns.exec(text);
-      restartedAtGeneratedOpener = true;
-      break;
-    }
-
-    if (!restartedAtGeneratedOpener) {
-      break;
-    }
+  const lines: Array<{ text: string; start: number }> = [];
+  let lineStart = 0;
+  for (const line of text.split("\n")) {
+    lines.push({ text: line, start: lineStart });
+    lineStart += line.length + 1;
   }
 
+  const ranges: Array<{ from: number; to: number }> = [];
+  let index = 0;
+  while (index < lines.length) {
+    const closedAt = findBlockFenceEnd(lines, index, ranges);
+    if (closedAt !== undefined) {
+      index = closedAt + 1;
+      continue;
+    }
+    if (!options.fencesOnly) {
+      findInlineCodeSpans(lines[index].text, lines[index].start, ranges);
+    }
+    index += 1;
+  }
   return ranges;
 }
 
-/** Mask every prompt-reference trigger inside ranges found by the shared scan. */
-export function maskFencedCodeBlocks(text: string): string {
+/**
+ * When `lines[openerIndex]` opens a block fence that is closed later, record
+ * its range(s) and return the closing line's index; otherwise undefined.
+ */
+function findBlockFenceEnd(
+  lines: ReadonlyArray<{ text: string; start: number }>,
+  openerIndex: number,
+  ranges: Array<{ from: number; to: number }>
+): number | undefined {
+  const opener = BLOCK_FENCE_OPENER.exec(lines[openerIndex].text);
+  if (!opener) {
+    return undefined;
+  }
+
+  let openerFrom = lines[openerIndex].start + opener[0].indexOf(opener[1]);
+  let openerLength = opener[1].length;
+  let generatedOpenerIndex: number | undefined;
+  const blockRanges: Array<{ from: number; to: number }> = [];
+  for (let index = openerIndex + 1; index < lines.length; index += 1) {
+    const run = BLOCK_FENCE_RUN.exec(lines[index].text);
+    if (!run || run[1].length < openerLength) {
+      continue;
+    }
+
+    const runFrom = lines[index].start + run[0].indexOf(run[1]);
+    const runTo = runFrom + run[1].length;
+    blockRanges.push({ from: openerFrom, to: runTo });
+    const isGeneratedOpener =
+      lines[index].text.slice(run[0].length).trim() === LITERAL_FENCE_INFO;
+    if (!isGeneratedOpener) {
+      ranges.push(...blockRanges);
+      return index;
+    }
+
+    // A generated literal fence can appear before the authored fence has a
+    // real closer. In that case it must not make the authored opener live:
+    // substitution must preserve the references that were live beforehand.
+    // Skip the generated block, then require a later authored closer before
+    // treating this generated opener as part of a masked authored block.
+    const generatedCloseIndex = findFenceCloseIndex(
+      lines,
+      index + 1,
+      run[1].length
+    );
+    if (
+      generatedCloseIndex === undefined ||
+      findAuthoredFenceCloseIndex(
+        lines,
+        generatedCloseIndex + 1,
+        openerLength
+      ) === undefined
+    ) {
+      return undefined;
+    }
+
+    // The generated fence is longer than every run in the authored text and
+    // substituted value. End the authored block here, then scan the
+    // generated literal as its own block so backticks in the value cannot
+    // close the authored fence.
+    openerFrom = runFrom;
+    openerLength = run[1].length;
+    generatedOpenerIndex = index;
+  }
+
+  // An authored block ended by a generated opener stays masked even when the
+  // generated block itself is never closed; scanning resumes after it.
+  ranges.push(...blockRanges);
+  return generatedOpenerIndex;
+}
+
+function findFenceCloseIndex(
+  lines: ReadonlyArray<{ text: string; start: number }>,
+  fromIndex: number,
+  minimumLength: number
+): number | undefined {
+  for (let index = fromIndex; index < lines.length; index += 1) {
+    const run = BLOCK_FENCE_RUN.exec(lines[index].text);
+    if (run && run[1].length >= minimumLength) {
+      return index;
+    }
+  }
+  return undefined;
+}
+
+function findAuthoredFenceCloseIndex(
+  lines: ReadonlyArray<{ text: string; start: number }>,
+  fromIndex: number,
+  minimumLength: number
+): number | undefined {
+  for (let index = fromIndex; index < lines.length; index += 1) {
+    const run = BLOCK_FENCE_RUN.exec(lines[index].text);
+    if (!run || run[1].length < minimumLength) {
+      continue;
+    }
+    if (lines[index].text.slice(run[0].length).trim() !== LITERAL_FENCE_INFO) {
+      return index;
+    }
+
+    // A later generated block is no more an authored closer than the current
+    // one. Skip its payload and keep looking for a real authored close.
+    const generatedCloseIndex = findFenceCloseIndex(
+      lines,
+      index + 1,
+      run[1].length
+    );
+    if (generatedCloseIndex === undefined) {
+      return undefined;
+    }
+    index = generatedCloseIndex;
+  }
+  return undefined;
+}
+
+/** Record the inline code spans on one line (see {@link findCodeRanges}). */
+function findInlineCodeSpans(
+  line: string,
+  lineStart: number,
+  ranges: Array<{ from: number; to: number }>
+): void {
+  let index = 0;
+  while (index < line.length) {
+    if (line[index] === "\\") {
+      index += 2;
+      continue;
+    }
+    if (line[index] !== "`") {
+      index += 1;
+      continue;
+    }
+
+    const runEnd = backtickRunEnd(line, index);
+    const runLength = runEnd - index;
+    let closeEnd: number | undefined;
+    for (let cursor = runEnd; cursor < line.length;) {
+      if (line[cursor] !== "`") {
+        cursor += 1;
+        continue;
+      }
+      const candidateEnd = backtickRunEnd(line, cursor);
+      if (candidateEnd - cursor === runLength) {
+        closeEnd = candidateEnd;
+        break;
+      }
+      cursor = candidateEnd;
+    }
+
+    if (closeEnd === undefined) {
+      index = runEnd;
+      continue;
+    }
+    ranges.push({ from: lineStart + index, to: lineStart + closeEnd });
+    index = closeEnd;
+  }
+}
+
+function backtickRunEnd(line: string, start: number): number {
+  let end = start;
+  while (line[end] === "`") {
+    end += 1;
+  }
+  return end;
+}
+
+/**
+ * Mask every prompt-reference and variable trigger character inside the
+ * ranges found by {@link findCodeRanges}. Masking is a 1:1 character
+ * substitution, so offsets into the result index the original text. A trigger
+ * char missing from this set is a silent correctness bug, not just a missed
+ * expansion: when a new trigger is added anywhere in the prompt-reference
+ * system, it must be added here too.
+ */
+export function maskCodeRanges(
+  text: string,
+  options: CodeRangeOptions = {}
+): string {
   let masked = text;
-  for (const { from, to } of findFencedBlockRanges(text)) {
+  for (const { from, to } of findCodeRanges(text, options)) {
     const block = text.slice(from, to).replace(/[@#~!$/{}]/g, "\x00");
     masked = masked.slice(0, from) + block + masked.slice(to);
   }
@@ -190,7 +358,7 @@ export interface ConditionOutputMatch {
  */
 export function parseAtReferences(prompt: string): FileReference[] {
   const references: FileReference[] = [];
-  const maskedPrompt = maskFencedCodeBlocks(prompt);
+  const maskedPrompt = maskCodeRanges(prompt);
 
   // Regex to match @path or @"path with spaces"
   // Group 1: quoted path, Group 2: unquoted path
@@ -266,7 +434,7 @@ export function parseAtReferences(prompt: string): FileReference[] {
  */
 export function parseSelectionReferences(prompt: string): FileReference[] {
   const references: FileReference[] = [];
-  const maskedPrompt = maskFencedCodeBlocks(prompt);
+  const maskedPrompt = maskCodeRanges(prompt);
 
   // Match #selection:path:startLine-endLine for line ranges ONLY
   // Group 1: quoted path, Group 2: unquoted path, Group 3: startLine, Group 4: endLine
@@ -310,7 +478,7 @@ export function parseSelectionReferences(prompt: string): FileReference[] {
  */
 export function parseSymbolReferences(prompt: string): FileReference[] {
   const references: FileReference[] = [];
-  const maskedPrompt = maskFencedCodeBlocks(prompt);
+  const maskedPrompt = maskCodeRanges(prompt);
 
   // One pattern, quoted-or-bare per field — the same shape
   // parseSelectionReferences uses. Group 1: optional kind; groups 2/3:
@@ -490,12 +658,12 @@ export function scanInlinePriorContextRefs(
 
 /**
  * Parse inline prior-context references from prompt text, ignoring any inside
- * fenced code blocks. See {@link scanInlinePriorContextRefs} for the syntax.
+ * fenced code blocks or inline code spans. See {@link scanInlinePriorContextRefs} for the syntax.
  */
 export function parseInlinePriorContextRefs(
   text: string
 ): InlinePriorContextMatch[] {
-  return scanInlinePriorContextRefs(maskFencedCodeBlocks(text));
+  return scanInlinePriorContextRefs(maskCodeRanges(text));
 }
 
 /**
@@ -507,7 +675,7 @@ export function parseInlinePriorContextRefs(
  */
 export function parseConditionOutputRefs(text: string): ConditionOutputMatch[] {
   const matches: ConditionOutputMatch[] = [];
-  const maskedText = maskFencedCodeBlocks(text);
+  const maskedText = maskCodeRanges(text);
   const regex = createConditionOutputReferencePattern();
   let match: RegExpExecArray | null;
 
@@ -607,7 +775,7 @@ export interface GitChangeReference {
  */
 export function parseGitChangeReferences(text: string): GitChangeReference[] {
   const results: GitChangeReference[] = [];
-  const maskedText = maskFencedCodeBlocks(text);
+  const maskedText = maskCodeRanges(text);
 
   // ~diff  — exact keyword
   // ~staged — exact keyword

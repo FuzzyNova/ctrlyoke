@@ -101,6 +101,47 @@ function makeReporter(result: EvaluationResult, events: string[]) {
 }
 
 suite("ScriptExecutionReporter", () => {
+  test("surfaces comparison timeout reasons in the script verdict", async () => {
+    const events: string[] = [];
+    const { reporter, context } = makeReporter(
+      makeResult({
+        passed: false,
+        comparisonReason: "regex timed out after 2s on 100001 chars",
+      }),
+      events
+    );
+    const report = await reporter.report({
+      context,
+      source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
+      properties: resolveReportedScriptProperties({
+        script: "check.sh",
+        compareSource: "stdout",
+        operator: "matches",
+        expected: "(a+)+$",
+      }),
+      phase: EXECUTION_PHASES.PRE_CONDITION,
+      target: { kind: "queue", stepIndex: 0 },
+      signedStepIndex: 0,
+      runIndex: 0,
+      attemptIndex: 0,
+      timestampMs: 100,
+      onPass: "continue",
+      onFail: "stopWorkflow",
+      actionForErrored: "stopWorkflow",
+      evaluate: async () =>
+        makeResult({
+          passed: false,
+          comparisonReason: "regex timed out after 2s on 100001 chars",
+        }),
+    });
+
+    assert.strictEqual(
+      report.verdict.error,
+      "regex timed out after 2s on 100001 chars"
+    );
+    assert.strictEqual(report.verdict.outcome, "failed");
+  });
+
   test("redacts split streamed stdout and complete stderr before publishing", async () => {
     const secrets = new RunSecretRedactor();
     secrets.addResolvedValues({ TOKEN: "secret-value" });

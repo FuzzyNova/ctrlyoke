@@ -48,29 +48,65 @@ export class MissingSecretError extends Error {
   }
 }
 
-/**
- * A grant the workflow declares but whose workspace trust decision is not
- * "allow" (no decision yet, or explicitly denied) — distinct from a name
- * that is simply unresolvable. Extends MissingSecretError so existing
- * `instanceof MissingSecretError` / message-substring checks (e.g.
- * `isMissingSecretPreflightError` in SecretCommands.ts) keep matching.
- */
-export class UnapprovedSecretGrantError extends MissingSecretError {
-  constructor(name: string, names: readonly string[] = [name]) {
-    super(name, names);
-    this.name = "UnapprovedSecretGrantError";
+export interface ScopedMissingSecret {
+  name: string;
+  scope: string;
+}
+
+/** Missing workflow grants collected across every step during preflight. */
+export class MissingSecretsError extends Error {
+  readonly secretNames: readonly string[];
+  readonly missingSecrets: readonly ScopedMissingSecret[];
+
+  constructor(missingSecrets: readonly ScopedMissingSecret[]) {
+    const unique = [
+      ...new Map(missingSecrets.map((item) => [item.name, item])).values(),
+    ];
+    super(
+      unique
+        .map(
+          ({ name, scope }) =>
+            `Secret "${name}" is missing for scope "${scope}" (workspace/user or environment).`
+        )
+        .join(" ")
+    );
+    this.name = "MissingSecretsError";
+    this.missingSecrets = unique;
+    this.secretNames = unique.map(({ name }) => name);
+  }
+}
+
+/** Unapproved workflow grants, optionally accompanied by missing values. */
+export class UnapprovedSecretGrantsError extends Error {
+  readonly secretNames: readonly string[];
+  readonly missingSecrets: readonly ScopedMissingSecret[];
+
+  constructor(
+    names: readonly string[],
+    missingSecrets: readonly ScopedMissingSecret[] = []
+  ) {
+    super(
+      [
+        formatUnapprovedSecretGrantError(names),
+        ...(missingSecrets.length > 0
+          ? [new MissingSecretsError(missingSecrets).message]
+          : []),
+      ].join(" ")
+    );
+    this.name = "UnapprovedSecretGrantsError";
+    this.secretNames = [...new Set(names)];
+    this.missingSecrets = [...missingSecrets];
   }
 }
 
 export function formatUnapprovedSecretGrantError(
-  names: readonly string[],
-  scope: string
+  names: readonly string[]
 ): string {
   return names
     .map(
       (name) =>
-        `Secret "${name}" is missing for scope "${scope}" (workspace/user or environment) — ` +
-        `this grant has not been approved for this workspace. Approve it with ` +
+        `Secret grant "${name}" has not been approved for this workspace. ` +
+        `Approve it with ` +
         `"ctrlyoke trust-secret-grants <file>" (or from the ctrlyoke panel in ` +
         `VS Code), then re-run.`
     )
@@ -127,7 +163,7 @@ export function formatAppendedUnapprovedSecretGrantsWarning(
     `not approved for this workspace: ${names.join(", ")}. If a value exists, ` +
     `the step fails at dispatch until the grant is approved with ` +
     `"ctrlyoke trust-secret-grants <file>"; if the "!NAME" text was not meant ` +
-    `as a grant, put it in a fenced code block or remove the "!".`
+    `as a grant, wrap it in backticks or a fenced code block, or remove the "!".`
   );
 }
 
@@ -138,8 +174,7 @@ export function assertSecretGrantTrust(
   trustStore: Pick<
     SecretGrantsTrustStore,
     "getDecision"
-  > = secretGrantsTrustStore,
-  scope = "step"
+  > = secretGrantsTrustStore
 ): void {
   const unapproved = findUnapprovedSecretGrants(
     names,
@@ -148,7 +183,7 @@ export function assertSecretGrantTrust(
     trustStore
   );
   if (unapproved.length > 0) {
-    throw new Error(formatUnapprovedSecretGrantError(unapproved, scope));
+    throw new UnapprovedSecretGrantsError(unapproved);
   }
 }
 
@@ -469,7 +504,6 @@ export async function preflightWorkflowSecrets(
     trustStore?: Pick<SecretGrantsTrustStore, "getDecision">;
   } = {}
 ): Promise<string[]> {
-  const missingSecretNames = new Set<string>();
   const workflowGrants = getWorkflowSecretGrants(workflow);
   const unapprovedGrants = workflowGrants.filter(
     (name) =>
@@ -481,6 +515,7 @@ export async function preflightWorkflowSecrets(
   // so it is surfaced as a per-step advisory by WorkflowExecutor rather than
   // blocking the run. Env-map interpolation below is a different case: those
   // maps really do interpolate, so an ungranted name there stays an error.
+  const missingSecrets: ScopedMissingSecret[] = [];
   for (const { step, position } of stepsAwaitingExecution(workflow)) {
     const scope = step.name?.trim() || `step ${position}`;
     const grants = getDeclaredSecretGrants(step, workflow);
@@ -494,46 +529,27 @@ export async function preflightWorkflowSecrets(
         );
       }
     }
-    try {
-      if (unapprovedGrants.length > 0) {
-        for (const name of unapprovedGrants) {
-          missingSecretNames.add(name);
-        }
-        throw new UnapprovedSecretGrantError(
-          unapprovedGrants[0],
-          unapprovedGrants
-        );
-      }
-      if (grants.length > 0) {
-        const missing = await findMissingSecretNames(grants, {
-          workspaceRoot,
-          secretStore: platform.getSecretStore?.(),
-          environment,
-        });
-        if (missing.length > 0) {
-          if (failOnMissing) {
-            throw new MissingSecretError(missing[0], missing);
-          }
-          for (const name of missing) {
-            missingSecretNames.add(name);
-          }
+    if (grants.length > 0) {
+      const missing = await findMissingSecretNames(grants, {
+        workspaceRoot,
+        secretStore: platform.getSecretStore?.(),
+        environment,
+      });
+      for (const name of missing) {
+        const isWorkflowGrant =
+          step.secrets === undefined && (workflow.secrets ?? []).includes(name);
+        const missingScope = isWorkflowGrant ? "workflow" : scope;
+        if (!missingSecrets.some((item) => item.name === name)) {
+          missingSecrets.push({ name, scope: missingScope });
         }
       }
-    } catch (error) {
-      if (error instanceof UnapprovedSecretGrantError) {
-        throw new Error(
-          formatUnapprovedSecretGrantError(error.secretNames, scope)
-        );
-      }
-      if (error instanceof MissingSecretError) {
-        const missingNames = error.secretNames.map(
-          (name) =>
-            `Secret "${name}" is missing for scope "${scope}" (${error.scope}).`
-        );
-        throw new Error(missingNames.join(" "));
-      }
-      throw error;
     }
   }
-  return [...missingSecretNames];
+  if (unapprovedGrants.length > 0) {
+    throw new UnapprovedSecretGrantsError(unapprovedGrants, missingSecrets);
+  }
+  if (failOnMissing && missingSecrets.length > 0) {
+    throw new MissingSecretsError(missingSecrets);
+  }
+  return missingSecrets.map(({ name }) => name);
 }

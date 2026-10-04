@@ -19,8 +19,8 @@ import {
   findContextReferenceMatches,
   findInlinePriorContextRefs,
   findUnknownConditionOutputFields,
-  getFencedBlockRanges,
-  isInFencedBlock,
+  getCodeRanges,
+  isInCodeRange,
   type AtomicReferenceChip,
   type ContextReferenceMatch,
   type SymbolIconResolver,
@@ -1550,7 +1550,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
               }
             : {}),
         }),
-        createFencedBlockDecorationExtension(),
+        createCodeRangeDecorationExtension(),
         // In atomic mode, createAtomicReferenceExtension already covers every
         // range these would mark (same findContextReferenceMatches /
         // findInlinePriorContextRefs / scanCtrlYokeSlashTokens tokens) with a
@@ -1989,7 +1989,7 @@ export function createAtomicReferenceExtension(
   );
 }
 
-// Prompt-editor-specific decoration styles (link, file-ref, fenced-block, prior-context).
+// Prompt-editor-specific decoration styles (link, file-ref, code-range, prior-context).
 // Generic base theme (colours, gutter, cursor, autocomplete) lives in codemirrorTheme.ts.
 function createPromptDecorationThemeExtension() {
   return EditorView.baseTheme({
@@ -2006,7 +2006,7 @@ function createPromptDecorationThemeExtension() {
       textDecoration: "underline",
       fontFamily: "var(--vscode-editor-font-family)",
     },
-    ".cm-fenced-block": {
+    ".cm-code-range": {
       color: "var(--vscode-disabledForeground)",
       fontStyle: "italic",
     },
@@ -2240,8 +2240,8 @@ export function createContextReferenceLintExtension(
   return linter(
     async (view): Promise<Diagnostic[]> => {
       const allReferences: Array<ContextReferenceMatch & { id: string }> = [];
-      const fencedReferenceIds = new Set<string>();
-      const fencedRanges = getFencedBlockRanges(view.state.doc.toString());
+      const codeReferenceIds = new Set<string>();
+      const codeRanges = getCodeRanges(view.state.doc.toString());
 
       for (const { from, to } of view.visibleRanges) {
         const text = view.state.doc.sliceString(from, to);
@@ -2249,8 +2249,8 @@ export function createContextReferenceLintExtension(
         matches.forEach((match, index) => {
           const id = `${match.from}:${match.to}:${match.type}:${index}`;
           allReferences.push({ ...match, id });
-          if (isInFencedBlock(match.from, match.to, fencedRanges)) {
-            fencedReferenceIds.add(id);
+          if (isInCodeRange(match.from, match.to, codeRanges)) {
+            codeReferenceIds.add(id);
           }
         });
       }
@@ -2300,13 +2300,13 @@ export function createContextReferenceLintExtension(
       // Feed the atomic-chip validity map so an unresolvable reference's chip
       // shows the warning border (the chip's stand-in for the lint squiggle it
       // replaces). Keyed by the exact reference token, matching what
-      // findAtomicReferences looks up. Fenced references are skipped — they get
+      // findAtomicReferences looks up. References inside code are skipped — they get
       // no chip — and their "expansion suppressed" warning is a separate signal
       // that does not mean the reference itself is invalid.
       if (referenceValidity) {
         let validityChanged = false;
         for (const reference of allReferences) {
-          if (fencedReferenceIds.has(reference.id)) continue;
+          if (codeReferenceIds.has(reference.id)) continue;
           const result = resultById.get(reference.id);
           if (!result) continue;
           const token = view.state.doc.sliceString(
@@ -2327,9 +2327,9 @@ export function createContextReferenceLintExtension(
 
       return allReferences.flatMap((reference): Diagnostic[] => {
         const result = resultById.get(reference.id);
-        const inFenced = fencedReferenceIds.has(reference.id);
+        const inCode = codeReferenceIds.has(reference.id);
 
-        if (inFenced) {
+        if (inCode) {
           // Warn only when the reference points to something that actually exists —
           // the user may not realize expansion is silently suppressed.
           if (result?.exists) {
@@ -2339,7 +2339,7 @@ export function createContextReferenceLintExtension(
                 to: reference.to,
                 severity: "warning",
                 message:
-                  "Context expansion suppressed — this reference won't be expanded inside a backtick block",
+                  "Context expansion suppressed — this reference won't be expanded inside code",
               },
             ];
           }
@@ -2472,8 +2472,8 @@ function splitCamelCaseWord(
   return parts.length > 0 ? parts : [{ text: word, offset: 0 }];
 }
 
-// Apply disabled/italic styling to triple-backtick fenced blocks
-function createFencedBlockDecorationExtension() {
+// Apply disabled/italic styling to fenced blocks and inline code spans
+function createCodeRangeDecorationExtension() {
   return ViewPlugin.fromClass(
     class implements PluginValue {
       decorations;
@@ -2490,10 +2490,10 @@ function createFencedBlockDecorationExtension() {
 
       buildDecorations(view: EditorView) {
         const builder = new RangeSetBuilder<Decoration>();
-        const fencedRanges = getFencedBlockRanges(view.state.doc.toString());
+        const codeRanges = getCodeRanges(view.state.doc.toString());
 
         for (const { from, to } of view.visibleRanges) {
-          for (const range of fencedRanges) {
+          for (const range of codeRanges) {
             if (range.to <= from) continue;
             if (range.from >= to) break;
             const visFrom = Math.max(range.from, from);
@@ -2502,7 +2502,7 @@ function createFencedBlockDecorationExtension() {
               builder.add(
                 visFrom,
                 visTo,
-                Decoration.mark({ class: "cm-fenced-block" })
+                Decoration.mark({ class: "cm-code-range" })
               );
             }
           }
@@ -2545,14 +2545,14 @@ function createLinkDecorationExtension(
 
       buildDecorations(view: EditorView) {
         const builder = new RangeSetBuilder<Decoration>();
-        const fencedRanges = getFencedBlockRanges(view.state.doc.toString());
+        const codeRanges = getCodeRanges(view.state.doc.toString());
 
         for (const { from, to } of view.visibleRanges) {
           const text = view.state.doc.sliceString(from, to);
           const matches = findContextReferenceMatches(text, from);
 
           for (const linkMatch of matches) {
-            if (isInFencedBlock(linkMatch.from, linkMatch.to, fencedRanges))
+            if (isInCodeRange(linkMatch.from, linkMatch.to, codeRanges))
               continue;
 
             const attrs: Record<string, string> = {
@@ -2628,16 +2628,16 @@ export function createSlashTokenDecorationExtension() {
 
       buildDecorations(view: EditorView) {
         const builder = new RangeSetBuilder<Decoration>();
-        const fencedRanges = getFencedBlockRanges(view.state.doc.toString());
+        const codeRanges = getCodeRanges(view.state.doc.toString());
 
         for (const { from, to } of view.visibleRanges) {
           const text = view.state.doc.sliceString(from, to);
           for (const token of scanCtrlYokeSlashTokens(text)) {
             if (
-              isInFencedBlock(
+              isInCodeRange(
                 token.index + from,
                 token.index + from + token.length,
-                fencedRanges
+                codeRanges
               )
             ) {
               continue;
@@ -2753,12 +2753,12 @@ function createPriorContextDecorationExtension(
 
       buildDecorations(view: EditorView) {
         const builder = new RangeSetBuilder<Decoration>();
-        const fencedRanges = getFencedBlockRanges(view.state.doc.toString());
+        const codeRanges = getCodeRanges(view.state.doc.toString());
         for (const { from, to } of view.visibleRanges) {
           const text = view.state.doc.sliceString(from, to);
           const refs = findInlinePriorContextRefs(text, from);
           for (const ref of refs) {
-            if (isInFencedBlock(ref.from, ref.to, fencedRanges)) continue;
+            if (isInCodeRange(ref.from, ref.to, codeRanges)) continue;
             const attributes: Record<string, string> = {
               "data-type": ATOMIC_REFERENCE_KINDS.PRIOR_CONTEXT,
               "data-ref": formatInlinePriorContextBody(ref.ref),
@@ -2801,12 +2801,12 @@ function createConditionOutputDecorationExtension() {
 
       buildDecorations(view: EditorView) {
         const builder = new RangeSetBuilder<Decoration>();
-        const fencedRanges = getFencedBlockRanges(view.state.doc.toString());
+        const codeRanges = getCodeRanges(view.state.doc.toString());
         for (const { from, to } of view.visibleRanges) {
           const text = view.state.doc.sliceString(from, to);
           const refs = findConditionOutputRefs(text, from);
           for (const ref of refs) {
-            if (isInFencedBlock(ref.from, ref.to, fencedRanges)) continue;
+            if (isInCodeRange(ref.from, ref.to, codeRanges)) continue;
             builder.add(
               ref.from,
               ref.to,
@@ -2833,14 +2833,14 @@ export function createPriorContextLintExtension(
       const hasFinalStep = hasFinalStepRef.current ?? false;
       const diagnostics: Diagnostic[] = [];
       let validityChanged = false;
-      const fencedRanges = getFencedBlockRanges(view.state.doc.toString());
+      const codeRanges = getCodeRanges(view.state.doc.toString());
 
       for (const { from, to } of view.visibleRanges) {
         const text = view.state.doc.sliceString(from, to);
         const refs = findInlinePriorContextRefs(text, from);
 
         for (const ref of refs) {
-          if (isInFencedBlock(ref.from, ref.to, fencedRanges)) continue;
+          if (isInCodeRange(ref.from, ref.to, codeRanges)) continue;
 
           const parsed = ref.ref;
           let message: string | undefined;
@@ -2924,14 +2924,14 @@ export function createConditionOutputLintExtension(
       const hasPreCondition = hasPreConditionRef.current ?? false;
       const mode = modeRef.current ?? CODE_MIRROR_EDITOR_MODES.PROMPT;
       const diagnostics: Diagnostic[] = [];
-      const fencedRanges = getFencedBlockRanges(view.state.doc.toString());
+      const codeRanges = getCodeRanges(view.state.doc.toString());
 
       for (const { from, to } of view.visibleRanges) {
         const text = view.state.doc.sliceString(from, to);
         const refs = findConditionOutputRefs(text, from);
 
         for (const ref of refs) {
-          if (isInFencedBlock(ref.from, ref.to, fencedRanges)) continue;
+          if (isInCodeRange(ref.from, ref.to, codeRanges)) continue;
 
           if (
             ref.phase === SCRIPT_OUTPUT_SOURCES.PRE_CONDITION &&
@@ -2957,7 +2957,7 @@ export function createConditionOutputLintExtension(
         }
 
         for (const ref of findUnknownConditionOutputFields(text, from)) {
-          if (isInFencedBlock(ref.from, ref.to, fencedRanges)) continue;
+          if (isInCodeRange(ref.from, ref.to, codeRanges)) continue;
           const replacement = ref.suggestion
             ? `$${ref.phase}:${ref.suggestion}`
             : undefined;

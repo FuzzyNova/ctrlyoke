@@ -2669,7 +2669,7 @@ export class WorkflowExecutor {
         }
 
         const exitCode = ptyExitCode ?? 1;
-        const comparison = this.endConditionEvaluator.evaluateResult(
+        const comparison = await this.endConditionEvaluator.evaluateResult(
           {
             result: outputChunks.join(""),
             stdout: outputChunks.join(""),
@@ -3487,12 +3487,6 @@ export class WorkflowExecutor {
       return {};
     }
     const workspaceRoot = this.platform.getWorkspaceRoot();
-    const workflow = this.promptQueue.getWorkflowFile();
-    const scope =
-      target.kind === FINAL_STEP_PHASES.FINAL_STEP
-        ? workflow.finalStep?.name?.trim() || "final step"
-        : workflow.steps?.[target.stepIndex]?.name?.trim() ||
-          `step ${target.stepIndex + 1}`;
     const resolutionContext = {
       workspaceRoot,
       secretStore: this.platform.getSecretStore?.(),
@@ -3503,8 +3497,7 @@ export class WorkflowExecutor {
       resolvable,
       workspaceRoot,
       trustedNames,
-      this.secretGrantTrustStore,
-      scope
+      this.secretGrantTrustStore
     );
     if (missing.length > 0) {
       if (

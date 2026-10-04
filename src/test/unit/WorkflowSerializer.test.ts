@@ -12,6 +12,7 @@ import { CONFIG_KEYS } from "../../utils/ConfigurationUtils";
 import {
   CLEAR_HISTORY_CONFIRMATION_PHRASE,
   EMPTY_TRASH_CONFIRMATION_PHRASE,
+  EXECUTION_STATES,
   HISTORY_TRASH_ACTIONS,
   MESSAGE_TYPES,
   PROMPT_PROPERTIES,
@@ -23,6 +24,7 @@ import type {
   WorkflowKey,
 } from "../../types/CtrlYokeTypes";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
+import { WorkflowActivityTracker } from "../../core/orchestration/WorkflowActivityTracker";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { PromptFileResolver } from "../../core/PromptFileResolver";
 import { PromptFileParser } from "../../core/PromptFileParser";
@@ -1710,7 +1712,8 @@ suite("WorkflowSerializer", () => {
         send: (message: unknown) => void,
         clientId: string,
         preferLatestRunForDraft: boolean
-      ) => Promise<void>
+      ) => Promise<void>,
+      forgetRunActivity?: (workflowKey: WorkflowKey) => void
     ): WorkflowSerializer {
       return new WorkflowSerializer(
         (message) => messages.push(message),
@@ -1720,6 +1723,7 @@ suite("WorkflowSerializer", () => {
             isLineageExecuting,
             getWorkflowSummaries: () => [],
             refreshRunViewsForLineages,
+            forgetRunActivity,
           }) as unknown as WorkflowOrchestrator,
         () => undefined,
         fakeWorkspaceState()
@@ -1845,12 +1849,49 @@ suite("WorkflowSerializer", () => {
           "Restore"
         );
         const messages: any[] = [];
-        const serializer = createSerializer(messages);
+        const tracker = new WorkflowActivityTracker(() => undefined);
+        const activity = {
+          id: "failed-run-a",
+          workflowKey: lineage.workflowKey,
+          runRef: "run-a" as never,
+          workflowName: "Restore",
+          currentStep: 0,
+          totalSteps: 1,
+          finalStepRunning: false,
+        };
+        tracker.observe({
+          ...activity,
+          executionState: EXECUTION_STATES.RUNNING,
+        });
+        tracker.observe({
+          ...activity,
+          executionState: EXECUTION_STATES.ERROR,
+        });
+        tracker.observe({
+          ...activity,
+          id: "failed-run-b",
+          runRef: "run-b" as never,
+          executionState: EXECUTION_STATES.RUNNING,
+        });
+        tracker.observe({
+          ...activity,
+          id: "failed-run-b",
+          runRef: "run-b" as never,
+          executionState: EXECUTION_STATES.ERROR,
+        });
+        const serializer = createSerializer(
+          messages,
+          () => false,
+          undefined,
+          (workflowKey) => tracker.forgetRun(workflowKey)
+        );
         try {
-          await serializer.handleRemoveWorkflowHistory({
+          const removed = await serializer.handleRemoveWorkflowHistory({
             workflowKey: lineage.workflowKey,
             kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
           });
+          assert.strictEqual(removed, true);
+          assert.deepStrictEqual(tracker.buildSummary([]).unseenFailures, []);
           const trashed = messages.find(
             (message) => message.type === MESSAGE_TYPES.HISTORY_TRASHED
           );
@@ -1877,6 +1918,7 @@ suite("WorkflowSerializer", () => {
           assert.strictEqual(messages[0].ok, true);
           assert.deepStrictEqual(messages[2].entries, []);
         } finally {
+          tracker.dispose();
           await cleanUpStateRoot(workspaceRoot);
         }
       });

@@ -29,8 +29,6 @@ import {
 import {
   createFileReferenceChip,
   findAtomicReferences,
-  getFencedBlockRanges,
-  isInFencedBlock,
   referenceBasename,
   type AtomicReferenceChip as AtomicReferenceDescriptor,
 } from "@utils/atomicReferences";
@@ -228,20 +226,10 @@ function isReplyContextReference(ref: AtomicReferenceDescriptor): boolean {
  * mdast positions continue to address the original Markdown source.
  */
 function shieldReferenceEmphasis(markdown: string): string {
-  const inlineCodeRanges: Array<{ from: number; to: number }> = [];
-  const inlineCode = /(`+)([^\n]*?)\1/g;
-  let codeMatch: RegExpExecArray | null;
-  while ((codeMatch = inlineCode.exec(markdown))) {
-    inlineCodeRanges.push({
-      from: codeMatch.index,
-      to: codeMatch.index + codeMatch[0].length,
-    });
-  }
-
-  const codeRanges = [...getFencedBlockRanges(markdown), ...inlineCodeRanges];
-  const protectedRanges = findAtomicReferences(markdown)
-    .filter(isReplyContextReference)
-    .filter((ref) => !isInFencedBlock(ref.from, ref.to, codeRanges));
+  // findAtomicReferences already skips fenced blocks and inline code spans.
+  const protectedRanges = findAtomicReferences(markdown).filter(
+    isReplyContextReference
+  );
   if (protectedRanges.length === 0) return markdown;
 
   const chars = markdown.split("");
@@ -315,7 +303,10 @@ function remarkContextReferences() {
         // A text node's value is unescaped, so an escape earlier in the node
         // shifts its offsets against the source; re-anchor on the raw token.
         let start = nodeStart + ref.from;
-        if (source && sourceForSearch.slice(start, start + raw.length) !== raw) {
+        if (
+          source &&
+          sourceForSearch.slice(start, start + raw.length) !== raw
+        ) {
           const found = sourceForSearch.indexOf(
             raw,
             Math.max(nodeStart, previousEnd)

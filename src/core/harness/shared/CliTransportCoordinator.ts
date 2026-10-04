@@ -42,6 +42,7 @@ import {
 } from "./HeadlessLogTail";
 import { splitCompleteLines } from "../../../utils/TextLines";
 import { StreamingSecretRedactor } from "../../../utils/SecretRedactionService";
+import { getCliInteractiveStartupTimeouts } from "./CliInteractiveStartupCoordinator";
 
 interface CliTransportCoordinatorCommandInfo {
   promptArgument: string;
@@ -193,12 +194,46 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         const timeoutMs =
           ConfigurationUtils.getMaxPromptExecutionTimeMs() ?? 3_600_000;
 
-        const monitorPromise = this.deps.provider.notificationMonitor
+        let monitorSessionId = resolvedSessionId;
+        const runId = env?.CTRLYOKE_RUN_ID;
+        const notificationMonitor =
+          this.deps.provider.notificationMonitor;
+        if (
+          !monitorSessionId &&
+          runId &&
+          notificationMonitor.supportsSessionStart &&
+          notificationMonitor.waitForSessionStart
+        ) {
+          const startupTimeouts = getCliInteractiveStartupTimeouts();
+          // Use the same run-scoped SessionStart file that the VS Code
+          // interactive startup path reads before monitoring completion.
+          const startResult = await notificationMonitor.waitForSessionStart(
+            {
+              directory: notifyDir,
+              timeoutMs: Math.min(
+                timeoutMs,
+                startupTimeouts.sessionStartSoftTimeoutMs
+              ),
+              pollMs: startupTimeouts.sessionStartPollMs,
+            },
+            startTime,
+            runId,
+            () => this.deps.runtimeState.isCancelling() || processExited
+          );
+          if (startResult.completed) {
+            monitorSessionId =
+              notificationMonitor.extractSessionId?.(startResult.data) ??
+              startResult.data?.sessionId;
+          }
+        }
+
+        const monitorPromise = notificationMonitor
           .monitorForCompletion(
             { directory: notifyDir, timeoutMs },
-            resolvedSessionId,
+            monitorSessionId,
             startTime,
-            () => this.deps.runtimeState.isCancelling() || processExited
+            () => this.deps.runtimeState.isCancelling() || processExited,
+            runId
           )
           .then((result) => {
             if (result.completed && !processExited) {

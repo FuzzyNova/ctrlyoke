@@ -8,6 +8,7 @@ import { OsCredentialStore } from "../platform/OsCredentialStore";
 import { CliAdapter, type ResolvedCliConfig } from "../platform/CliAdapter";
 import { PromptFileParser } from "../core/PromptFileParser";
 import {
+  MissingSecretsError,
   getWorkflowSecretGrants,
   preflightWorkflowSecrets,
 } from "../utils/SecretResolver";
@@ -60,7 +61,7 @@ export interface SecretCommandDependencies {
   parseWorkflow?(filePath: string): Promise<PromptFile | null>;
   secretGrantsTrustStore?: Pick<
     SecretGrantsTrustStore,
-    "getUnallowedGrants" | "setDecisions"
+    "getDecision" | "getUnallowedGrants" | "setDecisions"
   >;
 }
 
@@ -209,11 +210,15 @@ export async function checkSecretsCommand(
       workflow,
       dependencies.platform,
       workspaceRoot,
-      dependencies.environment
+      dependencies.environment,
+      {
+        trustStore:
+          dependencies.secretGrantsTrustStore ?? secretGrantsTrustStore,
+      }
     );
   } catch (error) {
     io.writeErr(`Secret check failed: ${errorMessage(error)}`);
-    return isMissingSecretPreflightError(error) ? 1 : 2;
+    return error instanceof MissingSecretsError ? 1 : 2;
   }
 
   io.writeOut(
@@ -462,11 +467,4 @@ function redactOutput(message: string): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function isMissingSecretPreflightError(error: unknown): boolean {
-  return (
-    errorMessage(error).includes('Secret "') &&
-    errorMessage(error).includes(" is missing for scope ")
-  );
 }

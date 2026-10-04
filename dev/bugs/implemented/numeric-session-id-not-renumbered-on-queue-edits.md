@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli), reproduced against the compiled MCP server
 - **Area:** `src/core/orchestration/RunContinuationService.ts` (`appendStepsToRun` ~407-416, `removeStepAtRun` ~857, `reorderStepsWithOrder` ~988), dashboard insert/delete/drag-reorder paths, `ExecutionPreviewService.ts` (~805-818)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -44,3 +44,30 @@ dashboard mutation paths, and consider exposing `sessionId` in
 ## Decision
 
 Decided 2026-10-03 by Nathan: option (a), renumber on edit. One shared helper, called by every structural queue edit (MCP `append_step`/`remove_step`/`reorder_steps`, CLI `step`, dashboard insert/delete/drag-reorder), rewrites numeric `sessionId` references so they keep pointing at the same step. Apply the same rule to numeric `priorContext` references. Removing a step that another unstarted step references by number is **refused**, with an error naming the referencing step(s). Expose `sessionId` in `workflow_status`.
+
+## Implementation tracking
+
+Part 1 complete: `StepReferenceRenumbering` is used by `RunContinuationService`
+append/insert, remove, and reorder edits, which cover MCP and CLI queue
+mutations. Static `WorkingFileManager` append routes through that service;
+static insert, delete, and reorder use the helper. `workflow_status` now
+reports `sessionId` and `resumeSession` on each step, and its tool description
+mentions these fields. Helper tests cover insert-before-target, reorder,
+refusal to remove a referenced target, and renumbering after removing an
+unrelated step.
+
+Part 2 complete: resident dashboard insert, delete, and drag-reorder paths
+use `PromptQueue` and the shared helper. A refused delete is reported through
+the dashboard action-failure notification. The `$step:N` form is used in
+generated context/output handling, but prompt text is not parsed as a
+structured step reference, so arbitrary prompt text containing `$step:N` is
+intentionally not rewritten.
+
+Follow-up: all insertion paths, including dashboard Queue next / Run next,
+parallel-group member insertion, and MCP `parallelWithCurrent` admission, now
+use the same renumbering helper. Numeric references on `finalStep` are kept in
+sync too; deleting a queue step referenced by `finalStep` is refused. Removed
+targets clear `sessionId` on already-started ordinary steps, and the helper
+removes the property instead of leaving its old value behind. Regression
+coverage exercises service and resident queue mutation paths. MCP reorder
+validation now shares the service's reorderable-index calculation.

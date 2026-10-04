@@ -56,7 +56,7 @@ import type {
   PriorContextItem,
   PromptSections,
 } from "../../HarnessIntegration";
-import { refToPriorContext } from "../../HarnessIntegration";
+import { inlinePriorContextRefToPriorContext } from "../../../utils/PriorContextMerge";
 import type {
   CategorizedPromptPreview,
   CategorizedPromptSectionPreview,
@@ -410,7 +410,7 @@ export class CliPromptPreparer {
               resolvedPriorContext !== PRIOR_CONTEXT_KEYWORDS.NONE
                 ? [resolvedPriorContext]
                 : []),
-              ...inlineRefs.map(refToPriorContext),
+              ...inlineRefs.map(inlinePriorContextRefToPriorContext),
             ],
             allPrompts,
             workflowContext.groupStartBoundary ?? promptIndex

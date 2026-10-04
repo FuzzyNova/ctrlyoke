@@ -130,6 +130,44 @@ suite("WorkflowActivityTracker", () => {
     assert.deepStrictEqual(tracker.buildSummary([]).unseenFailures, []);
   });
 
+  test("forgetRun removes one deleted run or every failure in its lineage", () => {
+    for (const [id, workflowKey, runRef] of [
+      ["instance-a", "lineage-a", "run-1"],
+      ["instance-b", "lineage-b", "run-2"],
+      ["instance-c", "lineage-c", "run-3"],
+    ] as const) {
+      tracker.observe(
+        source(EXECUTION_STATES.RUNNING, {
+          id,
+          workflowKey: workflowKey as WorkflowKey,
+          runRef: runRef as RunRef,
+        })
+      );
+      tracker.observe(
+        source(EXECUTION_STATES.ERROR, {
+          id,
+          workflowKey: workflowKey as WorkflowKey,
+          runRef: runRef as RunRef,
+        })
+      );
+    }
+
+    assert.strictEqual(
+      tracker.forgetRun("lineage-a" as WorkflowKey, "run-1" as RunRef),
+      true
+    );
+    assert.deepStrictEqual(
+      tracker.buildSummary([]).unseenFailures.map((failure) => failure.runRef),
+      ["run-2", "run-3"]
+    );
+    assert.strictEqual(tracker.forgetRun("lineage-b" as WorkflowKey), true);
+    assert.deepStrictEqual(
+      tracker.buildSummary([]).unseenFailures.map((failure) => failure.runRef),
+      ["run-3"]
+    );
+    assert.strictEqual(tracker.forgetRun("lineage-b" as WorkflowKey), false);
+  });
+
   test("a completion shows briefly and then clears itself", async () => {
     tracker.observe(source(EXECUTION_STATES.RUNNING));
     assert.strictEqual(

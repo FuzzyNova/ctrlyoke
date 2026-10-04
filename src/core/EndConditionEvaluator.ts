@@ -32,10 +32,8 @@ import {
   ScriptProcessRunner,
   type ScriptProcessResult,
 } from "./orchestration/ScriptProcessRunner";
-import {
-  compareScriptOutput,
-  type ScriptComparisonConfig,
-} from "../utils/ScriptComparison";
+import type { ScriptComparisonConfig } from "../utils/ScriptComparison";
+import { compareScriptOutputAsync } from "../utils/ScriptComparisonAsync";
 import { sanitizeTerminalOutput } from "../utils/TerminalOutputSanitizer";
 import {
   containsShellSyntax,
@@ -70,6 +68,8 @@ export interface EvaluationResult {
   stderr: string; // Separate stderr from script
   result: string; // Same as stdout. Not the compared value — that is `actual`, which $endCondition:actual reads.
   error?: string;
+  /** A comparison-specific explanation, such as a guarded regex timeout. */
+  comparisonReason?: string;
   timeout?: boolean;
   cancelled?: boolean;
   duration: number;
@@ -79,6 +79,7 @@ export interface EvaluationResult {
 export interface EvaluationComparison {
   passed: boolean;
   actual: string;
+  comparisonReason?: string;
   stdout: string;
   stderr: string;
   result: string;
@@ -325,7 +326,7 @@ export class EndConditionEvaluator {
         };
       }
 
-      const comparison = this.evaluateSuccess(normalizedResult, condition);
+      const comparison = await this.evaluateSuccess(normalizedResult, condition);
 
       return {
         ...comparison,
@@ -357,7 +358,7 @@ export class EndConditionEvaluator {
    * Apply the same comparison rules used by evaluateCondition to output that
    * has already been collected by another transport, such as a PTY.
    */
-  evaluateResult(
+  async evaluateResult(
     result: {
       result: string;
       stdout?: string;
@@ -366,7 +367,7 @@ export class EndConditionEvaluator {
       success: boolean;
     },
     comparison: ScriptComparisonConfig
-  ): EvaluationComparison {
+  ): Promise<EvaluationComparison> {
     return this.evaluateSuccess(this.normalizeScriptOutput(result), comparison);
   }
 
@@ -958,7 +959,7 @@ export class EndConditionEvaluator {
    * no implicit clean-exit requirement layered onto a stdout or stderr
    * comparison: if the author asked about the text, the text is the condition.
    */
-  private evaluateSuccess(
+  private async evaluateSuccess(
     result: {
       result: string;
       stdout?: string;
@@ -967,13 +968,15 @@ export class EndConditionEvaluator {
       success: boolean;
     },
     comparison: ScriptComparisonConfig
-  ): EvaluationComparison {
+  ): Promise<EvaluationComparison> {
+    const comparisonResult = await compareScriptOutputAsync(comparison, {
+      stdout: result.stdout ?? result.result,
+      stderr: result.stderr,
+      exitCode: result.exitCode,
+    });
     return {
-      ...compareScriptOutput(comparison, {
-        stdout: result.stdout ?? result.result,
-        stderr: result.stderr,
-        exitCode: result.exitCode,
-      }),
+      ...comparisonResult,
+      comparisonReason: comparisonResult.reason,
       stdout: result.stdout ?? result.result,
       stderr: result.stderr ?? "",
       result: result.result,

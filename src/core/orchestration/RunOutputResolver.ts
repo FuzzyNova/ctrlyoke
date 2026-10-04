@@ -5,10 +5,7 @@ import type {
   ScriptRuntimeOutput,
   WorkflowStep,
 } from "../../types/CtrlYokeTypes";
-import {
-  isPreviousStepsPriorContext,
-  isScriptStep,
-} from "../../types/CtrlYokeTypes";
+import { isScriptStep } from "../../types/CtrlYokeTypes";
 import {
   FINAL_STEP_PHASES,
   getExecutionPhaseKeySuffix,
@@ -49,6 +46,10 @@ import { evaluateFileAccess } from "../../utils/FileAccessPolicy";
 import { Log } from "../../utils/Log";
 import { TimelineRecorder } from "./TimelineRecorder";
 import type { PriorContextItem } from "../HarnessIntegration";
+import {
+  deduplicatePriorContextItems,
+  mergePriorContextReferences,
+} from "../../utils/PriorContextMerge";
 
 /** Immutable definition and step selected for one persisted attempt. */
 export interface ResolvedAttemptDefinition {
@@ -969,55 +970,18 @@ export class RunOutputResolver {
     allPrompts: readonly WorkflowStep[],
     groupStartBoundary: number
   ): Promise<PriorContextItem[]> {
-    const queueIndices = new Set<number>();
-    const explicitQueueIndices = new Set<number>();
-    // "previous" and { previous: N } both select the last N outputs; several
-    // in one prompt ($previous with $previous:3) merge to the largest N.
-    let previousCount = 0;
-    let includeAllQueue = false;
-    let includeAllFinalSteps = false;
-    let includePreviousFinalStep = false;
-
-    for (const context of contexts) {
-      const requestedPrevious =
-        context === PRIOR_CONTEXT_KEYWORDS.PREVIOUS
-          ? 1
-          : isPreviousStepsPriorContext(context)
-            ? context.previous
-            : 0;
-      if (context === PRIOR_CONTEXT_KEYWORDS.ALL) {
-        includeAllQueue = true;
-        for (let index = 0; index < groupStartBoundary; index++) {
-          queueIndices.add(index);
-        }
-      } else if (requestedPrevious > 0) {
-        // Every earlier step is a candidate: which ones count toward N is only
-        // known once their outputs resolve (steps without output are skipped).
-        previousCount = Math.max(previousCount, requestedPrevious);
-        for (let index = 0; index < groupStartBoundary; index++) {
-          queueIndices.add(index);
-        }
-      } else if (context === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL) {
-        includeAllFinalSteps = true;
-      } else if (context === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS) {
-        includePreviousFinalStep = true;
-      } else if (Array.isArray(context)) {
-        for (const oneBasedIndex of context) {
-          const index = oneBasedIndex - 1;
-          if (index >= 0 && index < groupStartBoundary) {
-            queueIndices.add(index);
-            explicitQueueIndices.add(index);
-          }
-        }
-      }
-    }
+    // Steps with no output are skipped when selecting the most recent N, so
+    // previous selectors resolve every earlier candidate before selecting.
+    const merged = mergePriorContextReferences(contexts, groupStartBoundary);
+    const queueIndices = new Set(merged.queueIndices);
+    const explicitQueueIndices = new Set(merged.explicitQueueIndices);
 
     const targets: OutputExecutionTarget[] = [
       ...[...queueIndices].map((stepIndex) => ({
         kind: FINAL_STEP_PHASES.QUEUE,
         stepIndex,
       })),
-      ...(includeAllFinalSteps || includePreviousFinalStep
+      ...(merged.includeAllFinalSteps || merged.includePreviousFinalStep
         ? await this.getFinalStepTargets(manifestPath)
         : []),
     ];
@@ -1051,11 +1015,11 @@ export class RunOutputResolver {
           ? [{ index, name: step.name, prompt: step.prompt, text }]
           : [];
       });
-    const selectedQueueIndices = includeAllQueue
+    const selectedQueueIndices = merged.includeAllQueue
       ? new Set(queueIndices)
       : new Set(explicitQueueIndices);
-    if (previousCount > 0) {
-      for (const item of resolvedQueueItems.slice(-previousCount)) {
+    if (merged.previousCount > 0) {
+      for (const item of resolvedQueueItems.slice(-merged.previousCount)) {
         selectedQueueIndices.add(item.index);
       }
     }
@@ -1081,9 +1045,9 @@ export class RunOutputResolver {
             ]
           : [];
       });
-    const selectedFinalItems = includePreviousFinalStep
+    const selectedFinalItems = merged.includePreviousFinalStep
       ? finalItems.slice(-1)
-      : includeAllFinalSteps
+      : merged.includeAllFinalSteps
         ? finalItems
         : [];
     return deduplicatePriorContextItems([...queueItems, ...selectedFinalItems]);
@@ -1455,18 +1419,6 @@ function foldSettledAttempt(
     responseText: continued.responseText ?? existing.responseText,
     scriptOutput: continued.scriptOutput ?? existing.scriptOutput,
   };
-}
-
-function deduplicatePriorContextItems(
-  items: PriorContextItem[]
-): PriorContextItem[] {
-  const seen = new Set<string>();
-  return items.filter((item) => {
-    const key = `${item.type ?? "queue"}:${item.index}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }
 
 function resolveStep(

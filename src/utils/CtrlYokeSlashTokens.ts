@@ -2,7 +2,7 @@ import {
   CTRLYOKE_SLASH_TOKEN_KINDS,
   type CtrlYokeSlashTokenKind,
 } from "../types/DashboardConstants";
-import { maskFencedCodeBlocks } from "./FileReferenceParser";
+import { maskCodeRanges } from "./FileReferenceParser";
 import { NOT_AFTER_BOUNDARY } from "./ReferenceBoundary";
 
 // A name may contain `.`, `_`, and `-` internally but must start and end on an
@@ -64,14 +64,13 @@ export function extractCtrlYokeSlashToken(
 /**
  * Find every ctrlyoke slash reference in a prompt.
  *
- * Triple-backtick fenced blocks are masked first (see
- * `FileReferenceParser.maskFencedCodeBlocks`), so a `/skill:`/`/mcp:` example
- * inside a fenced code/log excerpt is never mistaken for a live force-attach
- * grant.
+ * Fenced code blocks and inline code spans are masked first (see
+ * `FileReferenceParser.maskCodeRanges`), so a `/skill:`/`/mcp:` example
+ * inside code is never mistaken for a live force-attach grant.
  */
 export function scanCtrlYokeSlashTokens(text: string): CtrlYokeSlashToken[] {
   const tokens: CtrlYokeSlashToken[] = [];
-  const maskedText = maskFencedCodeBlocks(text);
+  const maskedText = maskCodeRanges(text);
   TOKEN_PATTERN.lastIndex = 0;
 
   for (const match of maskedText.matchAll(TOKEN_PATTERN)) {

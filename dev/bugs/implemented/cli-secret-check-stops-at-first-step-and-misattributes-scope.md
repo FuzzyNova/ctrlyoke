@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli), reproduced with the built CLI in a scratch workspace
 - **Area:** `src/utils/SecretResolver.ts` (`preflightWorkflowSecrets`, ~428-480), `src/cli/SecretCommands.ts` (~205-214)
-- **Severity:** low (medium confidence that the current behaviour is unintended)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

@@ -20,6 +20,7 @@ import {
   ActiveParallelGroupRuntime,
   ParallelGroupDefinition,
   WorkflowTokenTotals,
+  WorkingFileRuntime,
   type WorkingFileWorktreeRuntimePatch,
   type RunRef,
   type WorkflowLineageCreationOptions,
@@ -106,6 +107,10 @@ import {
 } from "../utils/StepStatusDerivation";
 import { settleInterruptedRun } from "../utils/InterruptedRunSettlement";
 import { appendResponseText } from "../utils/ResponseTextJoin";
+import {
+  assertStepRemovalUnreferenced,
+  renumberStepReferences,
+} from "./StepReferenceRenumbering";
 
 /** Resolver-derived, in-memory execution cache restored for an active run. */
 export interface ResolvedRuntimeOutputCacheEntry {
@@ -223,14 +228,18 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
           : undefined,
       mergeDiskSteps: (
         diskSteps: WorkflowStep[],
-        parallelGroups?: import("../types/CtrlYokeTypes").ParallelGroupDefinition[]
-      ) => this.mergeDiskSteps(diskSteps, parallelGroups),
+        parallelGroups?: import("../types/CtrlYokeTypes").ParallelGroupDefinition[],
+        options?: { authoritativeRuntime?: boolean }
+      ) => this.mergeDiskSteps(diskSteps, parallelGroups, options),
       onDiskStepsMerged: (steps) => this.onDiskStepsMergedEmitter.fire(steps),
       emitStateChange: () => this.emitStateChange(),
       getFinalStepRuntime: () => this.getFinalStepRuntime(),
       getFinalStepExecutionMetadata: () =>
         this.workflowFile?.finalStep?._runtime,
       getPendingRewind: () => this.state.pendingRewind,
+      setPendingRewind: (pendingRewind) =>
+        this.setPendingRewindFromDisk(pendingRewind),
+      adoptDiskRuntime: (workingFile) => this.adoptDiskRuntime(workingFile),
       updateWorkflowProperty: (key: string, value: unknown) =>
         this.updateWorkflowProperty(key, value),
       getDefinitionRevision: () => this.state.definitionRevision,
@@ -1755,7 +1764,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    */
   private mergeDiskSteps(
     diskSteps: WorkflowStep[],
-    parallelGroups: import("../types/CtrlYokeTypes").ParallelGroupDefinition[] = []
+    parallelGroups: import("../types/CtrlYokeTypes").ParallelGroupDefinition[] = [],
+    options: { authoritativeRuntime?: boolean } = {}
   ): WorkflowStep[] {
     const diskTopology = normalizeParallelGroupTopology({
       steps: diskSteps,
@@ -1828,7 +1838,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       }
       const memoryRuntime = memoryMatch.step._runtime;
       const diskRuntime = diskStep._runtime;
-      const runtime = memoryRuntime ?? diskRuntime;
+      const runtime = options.authoritativeRuntime
+        ? diskRuntime
+        : (memoryRuntime ?? diskRuntime);
       return runtime ? { ...diskStep, _runtime: runtime } : diskStep;
     });
 
@@ -1845,7 +1857,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     const newResults: PromptResult[] = identifiedDiskSteps.map(
       (step, index) => {
         const memoryMatch = memoryMatchFor(step, index);
-        if (memoryMatch?.result) {
+        if (memoryMatch?.result && !options.authoritativeRuntime) {
           return {
             ...memoryMatch.result,
             prompt: isScriptStep(step) ? step.script : step.prompt,
@@ -1872,6 +1884,68 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     }
     this.state.results = newResults;
     return newStepsFromDisk;
+  }
+
+  private setPendingRewindFromDisk(
+    pendingRewind: WorkingFileRuntime["pendingRewind"]
+  ): void {
+    this.state.pendingRewind = pendingRewind
+      ? {
+          ...pendingRewind,
+          fromStepIndex: snapParallelGroupStartPosition(
+            {
+              steps: this.state.steps,
+              parallelGroups: this.state.parallelGroups,
+            },
+            pendingRewind.fromStepIndex
+          ),
+        }
+      : undefined;
+  }
+
+  private adoptDiskRuntime(workingFile: WorkingFile): void {
+    const runtime = workingFile._runtime;
+    const executionState = runtime?.executionState ?? EXECUTION_STATES.IDLE;
+    const currentIndex =
+      this.state.pendingRewind?.fromStepIndex ?? runtime?.currentIndex ?? 0;
+    this.state.currentIndex = currentIndex;
+    this.state.completedIndices = new Set(
+      this.state.steps.flatMap((step, index) =>
+        step._runtime?.completedAt !== undefined ? [String(index)] : []
+      )
+    );
+    if (
+      this.state.completedIndices.size === 0 &&
+      runtime?.currentIndex !== undefined &&
+      runtime.currentIndex > 0 &&
+      !this.state.steps.some(
+        (step) =>
+          step._runtime?.startedAt !== undefined ||
+          step._runtime?.completedAt !== undefined
+      )
+    ) {
+      this.state.completedIndices = new Set(
+        Array.from({ length: runtime.currentIndex }, (_, index) =>
+          String(index)
+        )
+      );
+    }
+    this.state.tokenTotals = runtime?.tokenTotals;
+    this.finalStepRuntime = runtime?.finalStep;
+    this.activeParallelGroupRuntime = runtime?.activeParallelGroup;
+    this.stateMachine.restore({
+      status: executionState,
+      stopped: executionState === EXECUTION_STATES.STOPPED,
+      startTime: runtime?.startTime,
+      pausedTime: runtime?.pausedTime,
+      totalPausedDuration: runtime?.totalPausedDuration ?? 0,
+      executionEndTime: runtime?.executionEndTime,
+    });
+    this.state.results = this.state.steps.map((step, index) => ({
+      prompt: isScriptStep(step) ? step.script : step.prompt,
+      status: this.getResultStatusFromRuntime(step, index, currentIndex),
+      timestamp: new Date(),
+    }));
   }
 
   /**
@@ -1922,6 +1996,11 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       );
       return -1;
     }
+  }
+
+  /** Adopt the current working-file definition and revision into this queue. */
+  public async resyncFromDisk(): Promise<void> {
+    await this.workingFileManager.resyncQueueFromDisk();
   }
 
   /**
@@ -1977,12 +2056,17 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         requestedIndex,
         { steps: identifiedSteps, parallelGroups }
       );
+      const renumbered = renumberStepReferences(
+        previousSteps,
+        identifiedTopology.steps,
+        this.workflowFile?.finalStep
+      );
       assertStartedStepPositionsPreserved(
         previousSteps,
         identifiedTopology.steps,
         "insert"
       );
-      this.state.steps = identifiedTopology.steps;
+      this.state.steps = renumbered.steps;
       this.state.parallelGroups = identifiedTopology.parallelGroups;
 
       // Create new results for the inserted steps
@@ -2005,6 +2089,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
             ...this.workflowFile,
             steps: [...this.state.steps],
             parallelGroups: this.state.parallelGroups,
+            ...(renumbered.finalStep
+              ? { finalStep: renumbered.finalStep }
+              : {}),
           }
         : this.workflowFile;
       this.emitStateChange();
@@ -2101,6 +2188,11 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       assertStepMutable(identifiedStep, operation);
 
       const nextTopology = transform(topology, identifiedStep);
+      const renumbered = renumberStepReferences(
+        previousSteps,
+        nextTopology.steps,
+        this.workflowFile?.finalStep
+      );
       assertStartedStepPositionsPreserved(
         previousSteps,
         nextTopology.steps,
@@ -2125,7 +2217,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         };
       }
 
-      this.state.steps = nextTopology.steps;
+      this.state.steps = renumbered.steps;
       this.state.parallelGroups = nextTopology.parallelGroups;
       this.state.results.splice(insertIndex, 0, {
         prompt: isScriptStep(identifiedStep)
@@ -2151,6 +2243,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
             ...this.workflowFile,
             steps: [...this.state.steps],
             parallelGroups: this.state.parallelGroups,
+            ...(renumbered.finalStep
+              ? { finalStep: renumbered.finalStep }
+              : {}),
           }
         : this.workflowFile;
       this.emitStateChange();
@@ -2217,7 +2312,12 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         nextTopology.steps,
         "insert"
       );
-      this.state.steps = nextTopology.steps;
+      const renumbered = renumberStepReferences(
+        previousSteps,
+        nextTopology.steps,
+        this.workflowFile?.finalStep
+      );
+      this.state.steps = renumbered.steps;
       this.state.parallelGroups = nextTopology.parallelGroups;
       this.state.results.splice(insertIndex, 0, {
         prompt: isScriptStep(identifiedStep)
@@ -2251,6 +2351,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
             ...this.workflowFile,
             steps: [...this.state.steps],
             parallelGroups: this.state.parallelGroups,
+            ...(renumbered.finalStep
+              ? { finalStep: renumbered.finalStep }
+              : {}),
           }
         : this.workflowFile;
       this.emitStateChange();
@@ -2899,6 +3002,12 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         unique
       );
       const previousSteps = this.state.steps;
+      const renumbered = renumberStepReferences(
+        previousSteps,
+        nextTopology.steps,
+        this.workflowFile?.finalStep
+      );
+      assertStepRemovalUnreferenced(renumbered, unique);
       if (this.isExecutionActive) {
         assertStartedStepPositionsPreserved(
           previousSteps,
@@ -2912,13 +3021,16 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       for (const index of [...unique].sort((a, b) => b - a)) {
         this.removeStepAt(index);
       }
-      this.state.steps = nextTopology.steps;
+      this.state.steps = renumbered.steps;
       this.state.parallelGroups = nextTopology.parallelGroups;
       this.workflowFile = this.workflowFile
         ? {
             ...this.workflowFile,
             steps: [...this.state.steps],
             parallelGroups: this.state.parallelGroups,
+            ...(renumbered.finalStep
+              ? { finalStep: renumbered.finalStep }
+              : {}),
           }
         : this.workflowFile;
 
@@ -3021,6 +3133,10 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         nextTopology.steps,
         "reorder"
       );
+      const renumbered = renumberStepReferences(
+        previousSteps,
+        nextTopology.steps
+      );
       const newPending = nextTopology.steps.slice(currentIndex);
       const newPendingResults = newPending.map((step) => {
         const sourceIndex = pendingPrompts.indexOf(step);
@@ -3029,7 +3145,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         }
         return pendingResults[sourceIndex];
       });
-      this.state.steps = nextTopology.steps;
+      this.state.steps = renumbered.steps;
       this.state.parallelGroups = nextTopology.parallelGroups;
       this.state.results = [...doneResults, ...newPendingResults];
       this.workflowFile = this.workflowFile

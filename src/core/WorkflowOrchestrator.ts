@@ -433,6 +433,8 @@ export class WorkflowOrchestrator {
             )?.runRef
           : undefined;
       },
+      forgetRunActivity: (workflowKey, runRef) =>
+        this.forgetRunActivity(workflowKey, runRef),
     });
   }
 
@@ -5096,6 +5098,13 @@ export class WorkflowOrchestrator {
     ));
   }
 
+  /** Forget status-bar failures whose run history was deleted or trashed. */
+  forgetRunActivity(workflowKey: WorkflowKey, runRef?: RunRef): void {
+    if (this.getWorkflowActivityTracker().forgetRun(workflowKey, runRef)) {
+      this.updateStatusBar();
+    }
+  }
+
   private observeWorkflowActivity(summary: WorkflowSummary): void {
     if (this.getWorkflowActivityTracker().observe(summary)) {
       this.updateStatusBar();
@@ -5123,14 +5132,17 @@ export class WorkflowOrchestrator {
     await this.openPanel();
     if (!failure) return;
     if (failure.workflowKey && failure.runRef) {
-      await this.runLifecycleService.switchClientToRunAddress(
-        {
-          workflowKey: failure.workflowKey,
-          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
-          runRef: failure.runRef,
-        },
-        this.PANEL_CLIENT_ID
-      );
+      const address = {
+        workflowKey: failure.workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: failure.runRef,
+      } as const;
+      if (await this.runLifecycleService.runAddressExists(address)) {
+        await this.runLifecycleService.switchClientToRunAddress(
+          address,
+          this.PANEL_CLIENT_ID
+        );
+      }
     }
     this.acknowledgeWorkflowView(failure.workflowId, null);
   }

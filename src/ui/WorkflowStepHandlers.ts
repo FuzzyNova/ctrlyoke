@@ -312,6 +312,11 @@ export class WorkflowStepHandlers {
       await this.mutationCoordinator.publishViewIdentity(ctx);
     } catch (error) {
       Log.error("[WorkflowStepHandlers] Failed to delete prompt:", error);
+      await this.mutationCoordinator.reportActionFailure(
+        ctx,
+        "delete prompt",
+        error
+      );
     }
   }
 

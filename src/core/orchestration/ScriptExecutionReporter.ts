@@ -445,7 +445,7 @@ export class ScriptExecutionReporter {
           : request.actionDetail,
       durationMs: result.duration,
       timedOut: result.timeout,
-      error: result.error,
+      error: result.error ?? result.comparisonReason,
     };
   }
 

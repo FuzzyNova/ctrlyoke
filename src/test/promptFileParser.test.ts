@@ -447,6 +447,66 @@ suite("PromptFileParser Tests", () => {
       }
     });
 
+    test(
+      "merges YAML step defaults and lets explicit step values override them",
+      async () => {
+        const { tempDir, filePath } = await writeWorkflow(
+          ".ctrlyoke.yaml",
+          [
+            "x-defaults: &defaults",
+            "  model: gpt-5",
+            "  name: default name",
+            "steps:",
+            "  - <<: *defaults",
+            "    name: explicit name",
+            "    prompt: merged step",
+          ].join("\n")
+        );
+
+        try {
+          const result = await parser.parsePromptFile(filePath);
+
+          assert.ok(result);
+          assert.strictEqual((result.steps?.[0] as PromptStep).model, "gpt-5");
+          assert.strictEqual(result.steps?.[0].name, "explicit name");
+          assert.strictEqual(
+            (result.steps?.[0] as PromptStep).prompt,
+            "merged step"
+          );
+        } finally {
+          await fs.rm(tempDir, { recursive: true, force: true });
+        }
+      }
+    );
+
+    test("merges a step from an anchored step with only a name override", async () => {
+      const { tempDir, filePath } = await writeWorkflow(
+        ".ctrlyoke.yaml",
+        [
+          "steps:",
+          "  - &s1",
+          "    prompt: anchored prompt",
+          "    model: gpt-5",
+          "  - <<: *s1",
+          "    name: copied step",
+        ].join("\n")
+      );
+
+      try {
+        const result = await parser.parsePromptFile(filePath);
+
+        assert.ok(result);
+        assert.strictEqual(
+          (result.steps?.[1] as PromptStep).prompt,
+          "anchored prompt"
+        );
+        assert.strictEqual((result.steps?.[1] as PromptStep).model, "gpt-5");
+        assert.strictEqual(result.steps?.[1].name, "copied step");
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
     const invalidCases: Array<{
       name: string;
       workflow: unknown;

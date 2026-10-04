@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (Claude)
 - **Area:** `src/utils/ScriptComparison.ts` (`compareRegex`)
-- **Severity:** medium
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

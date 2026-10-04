@@ -43,7 +43,7 @@ export function registerStepCommands(
   step
     .command("edit [file]")
     .description("Edit one pending step's prompt or configuration")
-    .requiredOption("--workflow <key>", "Workflow lineage key")
+    .requiredOption("--workflow <key>", "Workflow lineage key or exact name")
     .requiredOption(
       "--run <ref|runId>",
       "Target run reference or numeric run ID"
@@ -68,7 +68,7 @@ export function registerStepCommands(
   step
     .command("remove")
     .description("Remove one pending step")
-    .requiredOption("--workflow <key>", "Workflow lineage key")
+    .requiredOption("--workflow <key>", "Workflow lineage key or exact name")
     .requiredOption(
       "--run <ref|runId>",
       "Target run reference or numeric run ID"
@@ -87,7 +87,7 @@ export function registerStepCommands(
   step
     .command("reorder")
     .description("Reorder all pending steps")
-    .requiredOption("--workflow <key>", "Workflow lineage key")
+    .requiredOption("--workflow <key>", "Workflow lineage key or exact name")
     .requiredOption(
       "--run <ref|runId>",
       "Target run reference or numeric run ID"

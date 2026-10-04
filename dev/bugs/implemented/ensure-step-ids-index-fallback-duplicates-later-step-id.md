@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (claude-cli), reproduced with a tsx probe of the pure function. Not reproduced end to end.
 - **Area:** `src/core/StepIdentity.ts` (`ensureStepIds` ~92-122); callers with `fallbackSteps`: `PromptQueue.mergeDiskSteps` (~1753, ~1847), `PromptQueue.syncStepsForUndoRedo` (~2970), `WorkingFileManager.syncStepsForUndoRedoAtRun` (~1659)
-- **Severity:** low (low confidence that users hit it)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

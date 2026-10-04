@@ -138,6 +138,7 @@ function main() {
 
     const notifyData = {
       timestamp: Date.now(),
+      runId: process.env.CTRLYOKE_RUN_ID || undefined,
       sessionId,
       status: isStartEvent ? "started" : "completed",
       hookEvent,

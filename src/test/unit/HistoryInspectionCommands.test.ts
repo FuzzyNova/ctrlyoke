@@ -75,6 +75,7 @@ import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import { Log } from "../../utils/Log";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import {
+  resolveCliWorkflowKey,
   parseHistoryShowAttempt,
   parseHistoryShowStep,
 } from "../../cli/CliRunSelector";
@@ -114,6 +115,14 @@ class TestLineageRepository implements HistoryInspectionLineageRepository {
     workflowKey: WorkflowKey
   ): Promise<WorkflowLineageDescriptor | undefined> {
     return this.descriptors.get(workflowKey);
+  }
+
+  async listRunRefs(
+    _workspaceRoot: string,
+    workflowKey: WorkflowKey
+  ): Promise<RunRef[]> {
+    const latestRunRef = this.descriptors.get(workflowKey)?.latestRunRef;
+    return latestRunRef ? [latestRunRef] : [];
   }
 
   async readWorkflowDisplayName(
@@ -726,7 +735,7 @@ suite("CLI history inspection command handlers", () => {
               terminalStatus: "completed",
             },
           },
-          _runtime: { executionState: "paused" },
+          _runtime: { executionState: EXECUTION_STATES.PAUSED, currentIndex: 1 },
         })
       );
       const manager = new TestHistoryManager(
@@ -812,8 +821,13 @@ suite("CLI history inspection command handlers", () => {
           attempts: number;
           prompt: string;
           elapsedSeconds: number | null;
+          next?: true;
         }>;
-        finalStep: unknown;
+        finalStep: {
+          elapsedSeconds: number | null;
+          nextPass: number | null;
+          passes: Array<{ elapsedSeconds: number | null }>;
+        };
       };
       assert.strictEqual(value.runRef, runRef);
       assert.deepStrictEqual(
@@ -827,6 +841,7 @@ suite("CLI history inspection command handlers", () => {
         "Appended step with no definition snapshot"
       );
       assert.strictEqual(value.steps[1].state, "running");
+      assert.strictEqual(value.steps[1].next, true);
       assert.strictEqual(value.steps[1].attempts, 1);
       assert.strictEqual(value.steps[2].state, "pending");
       assert.strictEqual(value.steps[2].name, null);
@@ -839,7 +854,8 @@ suite("CLI history inspection command handlers", () => {
         state: "completed",
         harness: "claude-cli",
         model: "opus",
-        elapsedSeconds: null,
+        elapsedSeconds: 4.5,
+        nextPass: null,
         passes: [
           {
             selector: "final:1",
@@ -883,7 +899,120 @@ suite("CLI history inspection command handlers", () => {
         assert.match(row.slice(stateColumn), /^(completed|running|pending) /);
       }
       assert.match(rows[2], /^2 +— +pending/);
+      assert.match(rows[1], /running \(next\)/);
       assert.match(rows[3], /^final +review +completed .* 2 passes +Review/);
+
+      await fs.writeFile(
+        workingFile,
+        JSON.stringify({
+          steps: [{ prompt: "Queue" }],
+          finalStep: { name: "review", prompt: "Review" },
+          _runtime: {
+            executionState: EXECUTION_STATES.PAUSED,
+            currentIndex: 1,
+          },
+        })
+      );
+      const pendingIo = new TestIo();
+      await stepsHistoryCommand(
+        { workflow: key, json: true },
+        pendingIo,
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          manager,
+          new TestRunOutputResolver([], []),
+          undefined,
+          workspaceRoot
+        )
+      );
+      const pendingValue = JSON.parse(pendingIo.output[0]) as {
+        finalStep: { state: string; nextPass: number | null };
+      };
+      assert.strictEqual(pendingValue.finalStep.state, "pending");
+      assert.strictEqual(pendingValue.finalStep.nextPass, 1);
+      const pendingTextIo = new TestIo();
+      await stepsHistoryCommand(
+        { workflow: key },
+        pendingTextIo,
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          manager,
+          new TestRunOutputResolver([], []),
+          undefined,
+          workspaceRoot
+        )
+      );
+      assert.match(pendingTextIo.output[2], /pending \(Pass 1 next\)/);
+      assert.match(pendingTextIo.output[2], /0 passes, 1 next/);
+
+      await fs.writeFile(
+        workingFile,
+        JSON.stringify({
+          steps: [{ prompt: "Queue" }],
+          finalStep: {
+            name: "review",
+            prompt: "Review",
+            _runtime: { startedAt: 30_000 },
+          },
+          _runtime: {
+            executionState: EXECUTION_STATES.RUNNING,
+            currentIndex: 1,
+          },
+        })
+      );
+      const runningPassIo = new TestIo();
+      await stepsHistoryCommand(
+        { workflow: key, json: true },
+        runningPassIo,
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          manager,
+          new TestRunOutputResolver(
+            [],
+            [
+              lifecycleStarted(
+                { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 2 },
+                { timestampMs: 30_000 }
+              ),
+            ]
+          ),
+          undefined,
+          workspaceRoot
+        )
+      );
+      const runningPassValue = JSON.parse(runningPassIo.output[0]) as {
+        finalStep: {
+          state: string;
+          nextPass: number | null;
+          passes: Array<{ state: string }>;
+        };
+      };
+      assert.strictEqual(runningPassValue.finalStep.state, "running");
+      assert.strictEqual(runningPassValue.finalStep.nextPass, null);
+      assert.strictEqual(runningPassValue.finalStep.passes[0].state, "running");
+
+      const runningPassTextIo = new TestIo();
+      await stepsHistoryCommand(
+        { workflow: key },
+        runningPassTextIo,
+        dependencies(
+          new TestLineageRepository([key], new Map(), new Map()),
+          manager,
+          new TestRunOutputResolver(
+            [],
+            [
+              lifecycleStarted(
+                { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 2 },
+                { timestampMs: 30_000 }
+              ),
+            ]
+          ),
+          undefined,
+          workspaceRoot
+        )
+      );
+      assert.match(runningPassTextIo.output[2], /^final +review +running /);
+      assert.doesNotMatch(runningPassTextIo.output[2], /Pass 4 next/);
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
     }
@@ -1198,6 +1327,32 @@ suite("CLI history inspection command handlers", () => {
     assert.match(io.output[1], /completed/);
   });
 
+  test("caps history list names in text while preserving full JSON names", async () => {
+    const key = "release" as WorkflowKey;
+    const longName = "A".repeat(70);
+    const repository = new TestLineageRepository(
+      [key],
+      new Map([[key, descriptor(key)]]),
+      new Map([[key, longName]])
+    );
+    const dependenciesForList = dependencies(
+      repository,
+      new TestHistoryManager(new Map(), new Map())
+    );
+    const textIo = new TestIo();
+    await listHistoryCommand({}, textIo, dependenciesForList);
+    const nameCell = textIo.output[1].split(/\s{2,}/)[1];
+    assert.strictEqual(nameCell.length, 48);
+    assert.ok(nameCell.endsWith("…"));
+
+    const jsonIo = new TestIo();
+    await listHistoryCommand({ json: true }, jsonIo, dependenciesForList);
+    const [row] = JSON.parse(jsonIo.output[0]) as Array<{
+      workflowName: string;
+    }>;
+    assert.strictEqual(row.workflowName, longName);
+  });
+
   test("filters history list by latest state, shared since parsing, and limit", async () => {
     const keys = ["a", "b", "c"] as WorkflowKey[];
     const current = 1_700_000_000_000;
@@ -1398,6 +1553,114 @@ suite("CLI history inspection command handlers", () => {
 
     assert.deepStrictEqual(JSON.parse(io.output[0]), summaries);
     assert.deepStrictEqual(manager.runSummaryCalls, [key]);
+  });
+
+  test("an exact lineage key wins over another lineage's matching name", async () => {
+    const exactKey = "Release" as WorkflowKey;
+    const otherKey = "release-2026-09-20T12-00-00-000Z" as WorkflowKey;
+    const repository = new TestLineageRepository(
+      [exactKey, otherKey],
+      new Map([
+        [exactKey, descriptor(exactKey, { workflowName: "Other" })],
+        [otherKey, descriptor(otherKey, { workflowName: "Release" })],
+      ]),
+      new Map()
+    );
+    const errors: string[] = [];
+
+    assert.strictEqual(
+      await resolveCliWorkflowKey(
+        "/workspace",
+        repository,
+        "Release",
+        (message) => errors.push(message)
+      ),
+      exactKey
+    );
+    assert.deepStrictEqual(errors, []);
+  });
+
+  test("resolves a unique exact case-insensitive name with JSON stdout clean", async () => {
+    const key = "release-2026-09-20T12-00-00-000Z" as WorkflowKey;
+    const summary: RunSummary = {
+      workflowKey: key,
+      runRef: "run-2026-09-20T12-00-00-000Z" as RunRef,
+      runDirectory: "/workspace/run",
+      runId: 1,
+      startedAt: 1_700_000_000_000,
+      executionState: EXECUTION_STATES.COMPLETED,
+      definitionRevision: 1,
+      stepCount: 1,
+      hasMixedHarnesses: false,
+      hasMixedModels: false,
+    };
+    const manager = new TestHistoryManager(
+      new Map(),
+      new Map([[key, [summary]]])
+    );
+    const repository = new TestLineageRepository(
+      [key],
+      new Map([[key, descriptor(key, { workflowName: "Release Plan" })]]),
+      new Map()
+    );
+    const io = new TestIo();
+
+    await runsHistoryCommand(
+      { workflow: "rElEaSe PlAn", json: true },
+      io,
+      dependencies(repository, manager)
+    );
+
+    assert.deepStrictEqual(JSON.parse(io.output[0]), [summary]);
+    assert.deepStrictEqual(io.errors, [`Using lineage ${key}`]);
+    assert.deepStrictEqual(manager.runSummaryCalls, [key]);
+  });
+
+  test("rejects an ambiguous name with each key and latest run date", async () => {
+    const older = "release-2026-09-19T12-00-00-000Z" as WorkflowKey;
+    const newer = "release-2026-09-20T12-00-00-000Z" as WorkflowKey;
+    const repository = new TestLineageRepository(
+      [older, newer],
+      new Map([
+        [
+          older,
+          descriptor(older, {
+            workflowName: "Release",
+            latestRunRef: "run-2026-09-19T12-00-00-000Z" as RunRef,
+          }),
+        ],
+        [
+          newer,
+          descriptor(newer, {
+            workflowName: "release",
+            latestRunRef: "run-2026-09-20T12-00-00-000Z" as RunRef,
+          }),
+        ],
+      ]),
+      new Map()
+    );
+
+    await assert.rejects(
+      resolveCliWorkflowKey("/workspace", repository, "RELEASE", () => {}),
+      (error: Error) => {
+        assert.match(error.message, new RegExp(`${older}.*2026-09-19`));
+        assert.match(error.message, new RegExp(`${newer}.*2026-09-20`));
+        return true;
+      }
+    );
+  });
+
+  test("keeps the not-found error and suggests history list", async () => {
+    const key = "known" as WorkflowKey;
+    await assert.rejects(
+      resolveCliWorkflowKey(
+        "/workspace",
+        new TestLineageRepository([key], new Map(), new Map()),
+        "missing",
+        () => {}
+      ),
+      /Workflow lineage "missing" was not found\. Run `ctrlyoke history list` to find a lineage key\./
+    );
   });
 
   test("rejects an unknown workflow key", async () => {
@@ -2659,7 +2922,10 @@ suite("CLI history inspection command handlers", () => {
             new TestRunOutputResolver([])
           )
         ),
-        { message: 'Workflow lineage "missing" was not found.' }
+        {
+          message:
+            'Workflow lineage "missing" was not found. Run `ctrlyoke history list` to find a lineage key.',
+        }
       );
       await assert.rejects(
         command(

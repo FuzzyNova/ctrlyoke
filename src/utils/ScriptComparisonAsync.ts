@@ -1,0 +1,102 @@
+import * as path from "path";
+import { Worker } from "worker_threads";
+import { SCRIPT_OPERATORS } from "../types/DashboardConstants";
+import {
+  compareScriptOutputInline,
+  readComparisonSource,
+  resolveScriptComparison,
+  MAX_REGEX_INPUT_LENGTH,
+  type ScriptComparisonConfig,
+  type ScriptComparisonInput,
+  type ScriptComparisonResult,
+} from "./ScriptComparison";
+import { findExistingWorkerPath } from "./WorkerPath";
+
+/** Maximum time a long-output regex may occupy a worker thread. */
+export const REGEX_WORKER_TIMEOUT_MS = 2_000;
+
+function resolveRegexWorkerPath(): string {
+  const candidates = [
+    path.resolve(__dirname, "scriptRegexWorker.js"),
+    path.resolve(__dirname, "../scriptRegexWorker.js"),
+  ];
+  // Preserve the fallback path so Worker reports the existing missing-file
+  // error if neither build layout contains the worker.
+  return findExistingWorkerPath(candidates) ?? candidates[1];
+}
+
+interface RegexWorkerResult {
+  passed: boolean;
+  timedOut: boolean;
+  /** Set when the worker failed to produce a verdict at all. */
+  failure?: string;
+}
+
+function compareRegexInWorker(
+  actual: string,
+  pattern: string
+): Promise<RegexWorkerResult> {
+  return new Promise((resolve) => {
+    const worker = new Worker(resolveRegexWorkerPath(), {
+      workerData: { actual, pattern },
+    });
+    let settled = false;
+    const finish = (result: RegexWorkerResult) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      void worker.terminate();
+      resolve(result);
+    };
+    const timeout = setTimeout(
+      () => finish({ passed: false, timedOut: true }),
+      REGEX_WORKER_TIMEOUT_MS
+    );
+    worker.once("message", (passed: unknown) =>
+      finish({ passed: passed === true, timedOut: false })
+    );
+    worker.once("error", (error: Error) =>
+      finish({ passed: false, timedOut: false, failure: error.message })
+    );
+    worker.once("exit", (code: number) =>
+      finish({
+        passed: false,
+        timedOut: false,
+        failure: `regex worker exited with code ${code} before reporting a result`,
+      })
+    );
+  });
+}
+
+/** Compare output asynchronously, isolating long regex work from the host. */
+export async function compareScriptOutputAsync(
+  config: ScriptComparisonConfig,
+  input: ScriptComparisonInput
+): Promise<ScriptComparisonResult> {
+  const { compareSource, operator, expected } = resolveScriptComparison(config);
+  const actual = readComparisonSource(compareSource, input);
+  if (
+    operator !== SCRIPT_OPERATORS.MATCHES ||
+    expected === undefined ||
+    actual.length <= MAX_REGEX_INPUT_LENGTH
+  ) {
+    return compareScriptOutputInline(config, input);
+  }
+
+  const result = await compareRegexInWorker(actual, expected);
+  if (result.timedOut) {
+    return {
+      passed: false,
+      actual,
+      reason: `regex timed out after ${REGEX_WORKER_TIMEOUT_MS / 1000}s on ${actual.length} chars`,
+    };
+  }
+  if (result.failure !== undefined) {
+    return {
+      passed: false,
+      actual,
+      reason: `regex worker failed: ${result.failure}`,
+    };
+  }
+  return { passed: result.passed, actual };
+}

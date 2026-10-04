@@ -269,7 +269,7 @@ suite("CompatibilityAnalyzer", () => {
     const workflow: PromptFile = {
       steps: [
         { prompt: "Review @diagram.png and @notes.txt" },
-        { prompt: "Ignore ```\n@code.png\n```" },
+        { prompt: "Ignore this:\n```\n@code.png\n```" },
       ],
       finalStep: { prompt: "Review @final.webp" },
     };

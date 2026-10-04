@@ -81,6 +81,10 @@ import {
   PARALLEL_GROUP_INSERT_POSITIONS,
   type ParallelGroupInsertPlacement,
 } from "./ParallelGroupTopology";
+import {
+  assertStepRemovalUnreferenced,
+  renumberStepReferences,
+} from "./StepReferenceRenumbering";
 
 function normalizeWorkflowPropertyValue(key: string, value: unknown): unknown {
   return key === PROMPT_PROPERTIES.AGENT &&
@@ -508,11 +512,18 @@ export interface IWorkingFileQueueAccess {
   /** Merge disk steps into memory, returning newly added steps */
   mergeDiskSteps(
     diskSteps: WorkflowStep[],
-    parallelGroups?: ParallelGroupDefinition[]
+    parallelGroups?: ParallelGroupDefinition[],
+    options?: { authoritativeRuntime?: boolean }
   ): WorkflowStep[];
 
   /** Notify the execution owner that disk supplied new queue members. */
   onDiskStepsMerged?(steps: readonly WorkflowStep[]): void;
+
+  /** Adopt the rewind marker present in the working file. */
+  setPendingRewind?(pendingRewind: WorkingFileRuntime["pendingRewind"]): void;
+
+  /** Adopt the queue position and runtime state from an authoritative snapshot. */
+  adoptDiskRuntime?(workingFile: WorkingFile): void;
 
   /** Emit state change notification to listeners */
   emitStateChange(): void;
@@ -1379,6 +1390,11 @@ export class WorkingFileManager {
           requestedIndex,
           [ensureStepIds([...topology.steps, step]).at(-1)!]
         );
+        const renumbered = renumberStepReferences(
+          topology.steps,
+          nextTopology.steps,
+          source.finalStep
+        );
         const currentIndex = source._runtime?.currentIndex ?? 0;
         // Strict `<`, matching `PromptQueue.insertStepAfterIndex`: an insert at
         // `currentIndex` becomes the next step to run rather than being shifted
@@ -1388,7 +1404,10 @@ export class WorkingFileManager {
         return {
           workingFile: {
             ...source,
-            steps: nextTopology.steps,
+            steps: renumbered.steps,
+            ...(renumbered.finalStep
+              ? { finalStep: renumbered.finalStep }
+              : {}),
             parallelGroups: nextTopology.parallelGroups,
             _runtime: source._runtime
               ? { ...source._runtime, currentIndex: nextCurrentIndex }
@@ -1624,13 +1643,22 @@ export class WorkingFileManager {
           assertEditableDuringExecution(source, steps, index, "delete");
         }
         const nextTopology = deleteParallelGroupSteps(topology, unique);
+        const renumbered = renumberStepReferences(
+          topology.steps,
+          nextTopology.steps,
+          source.finalStep
+        );
+        assertStepRemovalUnreferenced(renumbered, unique);
         const currentIndex = source._runtime?.currentIndex ?? 0;
         const nextCurrentIndex =
           currentIndex - unique.filter((index) => index < currentIndex).length;
         return {
           workingFile: {
             ...source,
-            steps: nextTopology.steps,
+            steps: renumbered.steps,
+            ...(renumbered.finalStep
+              ? { finalStep: renumbered.finalStep }
+              : {}),
             parallelGroups: nextTopology.parallelGroups,
             _runtime: source._runtime
               ? { ...source._runtime, currentIndex: nextCurrentIndex }
@@ -1726,10 +1754,18 @@ export class WorkingFileManager {
             source._runtime?.executionState as ExecutionState
           )
         );
+        const renumbered = renumberStepReferences(
+          topology.steps,
+          nextTopology.steps,
+          source.finalStep
+        );
         return {
           workingFile: {
             ...source,
-            steps: nextTopology.steps,
+            steps: renumbered.steps,
+            ...(renumbered.finalStep
+              ? { finalStep: renumbered.finalStep }
+              : {}),
             parallelGroups: nextTopology.parallelGroups,
           },
           result: undefined,
@@ -2185,16 +2221,44 @@ export class WorkingFileManager {
    * definitions, order and topology, so memory-only edits are dropped while the
    * queue's runtime metadata survives.
    */
-  private resyncQueueFromDisk(workingFile: WorkingFile): void {
+  private resyncQueueFromWorkingFile(
+    workingFile: WorkingFile,
+    authoritativeRuntime = false
+  ): void {
     const newStepsFromDisk = this.queueAccess.mergeDiskSteps(
       workingFile.steps ?? [],
-      workingFile.parallelGroups
+      workingFile.parallelGroups,
+      { authoritativeRuntime }
     );
     this.queueAccess.setDefinitionRevision(workingFile.definitionRevision ?? 1);
+    this.queueAccess.setPendingRewind?.(workingFile._runtime?.pendingRewind);
+    if (authoritativeRuntime) {
+      this.queueAccess.adoptDiskRuntime?.(workingFile);
+    }
     if (newStepsFromDisk.length > 0) {
       this.queueAccess.onDiskStepsMerged?.(newStepsFromDisk);
     }
     this.queueAccess.emitStateChange();
+  }
+
+  /**
+   * Adopt the current working file snapshot in memory, including an intentional
+   * revision rollback such as discarding a pending rewind. Runtime writes use
+   * max(disk, memory), so they cannot perform this reconciliation themselves.
+   */
+  public async resyncQueueFromDisk(): Promise<void> {
+    const workingFilePath = this.queueAccess.getWorkingFilePath();
+    if (!workingFilePath) return;
+
+    const operation = this.operationQueue.then(async () => {
+      const workingFile = await this.readWorkingFile(workingFilePath);
+      this.resyncQueueFromWorkingFile(workingFile, true);
+    });
+    this.operationQueue = operation.then(
+      () => undefined,
+      () => undefined
+    );
+    await operation;
   }
 
   private async writeQueueState(options: {
@@ -2224,7 +2288,7 @@ export class WorkingFileManager {
         }
       } catch (error) {
         if (isDefinitionMutation) {
-          this.resyncQueueFromDisk(workingFile);
+          this.resyncQueueFromWorkingFile(workingFile);
         }
         throw error;
       }

@@ -171,7 +171,7 @@ export function registerHistoryCommands(
   history
     .command("steps")
     .description("Show a compact overview of a run's workflow steps")
-    .requiredOption("--workflow <key>", "Workflow lineage key")
+    .requiredOption("--workflow <key>", "Workflow lineage key or exact name")
     .option("--run <ref|runId>", "Target run (default: latest)")
     .option(
       "-d, --cwd <path>",
@@ -184,7 +184,7 @@ export function registerHistoryCommands(
   history
     .command("runs")
     .description("List runs within a workflow lineage")
-    .requiredOption("--workflow <key>", "Workflow lineage key")
+    .requiredOption("--workflow <key>", "Workflow lineage key or exact name")
     .option(
       "-d, --cwd <path>",
       "Working directory (default: current directory)"
@@ -195,7 +195,7 @@ export function registerHistoryCommands(
   history
     .command("show")
     .description("Print a run's recorded output")
-    .requiredOption("--workflow <key>", "Workflow lineage key")
+    .requiredOption("--workflow <key>", "Workflow lineage key or exact name")
     .option("--run <ref|runId>", "Target run (default: latest)")
     .option(
       "--step <selector>",
@@ -240,7 +240,7 @@ export function registerHistoryCommands(
       "-d, --cwd <path>",
       "Working directory (default: current directory)"
     )
-    .option("--workflow <key...>", "Restrict to workflow lineage keys")
+    .option("--workflow <key...>", "Workflow lineage key or exact name")
     .option(
       "--this-workflow",
       `Restrict to the workflow named by ${CTRLYOKE_ENV_VARS.WORKING_FILE}`

@@ -30,6 +30,25 @@ const WINDOWS_CHUNK_LENGTH = WINDOWS_MAX_BLOB_BYTES / 2;
 const WINDOWS_CHUNK_SEPARATOR = "#";
 const WINDOWS_CHUNK_COUNT_SUFFIX = `${WINDOWS_CHUNK_SEPARATOR}count`;
 
+/** Native command failures that mean the credential backend cannot be used. */
+const BACKEND_UNAVAILABLE_PATTERNS: Partial<
+  Record<NodeJS.Platform, readonly RegExp[]>
+> = {
+  linux: [
+    /Cannot autolaunch a dbus-daemon without a \$DISPLAY/i,
+    /Error spawning command line .*dbus-launch/i,
+    /org\.freedesktop\.secrets/i,
+    /Failed to connect to socket .*dbus/i,
+  ],
+  darwin: [
+    /User interaction is not allowed/i,
+    /Interaction is not allowed with the Security Server/i,
+    /errSecInteractionNotAllowed/i,
+    /(?:error\s*)?-25308\b/i,
+  ],
+  win32: [/Win32 error 1312\b/i],
+};
+
 const WINDOWS_CREDENTIAL_SCRIPT = `
 $ProgressPreference = 'SilentlyContinue'
 
@@ -72,7 +91,10 @@ $credential = [IntPtr]::Zero
 
 if ($operation -eq 'get') {
   if (-not [CtrlYokeCredentialManager]::CredRead($target, 1, 0, [ref]$credential)) {
-    exit 44
+    $lastError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+    if ($lastError -eq 1168) { exit 44 }
+    [Console]::Error.Write("CredRead failed with Win32 error $lastError.")
+    exit 45
   }
   try {
     $native = [Runtime.InteropServices.Marshal]::PtrToStructure(
@@ -123,7 +145,10 @@ if ($operation -eq 'store') {
 
 if ($operation -eq 'delete') {
   if (-not [CtrlYokeCredentialManager]::CredDelete($target, 1, 0)) {
-    exit 44
+    $lastError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+    if ($lastError -eq 1168) { exit 44 }
+    [Console]::Error.Write("CredDelete failed with Win32 error $lastError.")
+    exit 45
   }
   exit 0
 }
@@ -285,9 +310,12 @@ class MacOsCredentialBackend implements CredentialBackend {
       key,
       "-w",
     ]);
+    throwIfBackendUnavailable("darwin", result);
     return result.exitCode === 0
       ? withoutCommandNewline(result.stdout)
-      : undefined;
+      : isMissingCredential(result)
+        ? undefined
+        : throwCommandFailure("security", result);
   }
 
   async store(key: string, value: string): Promise<void> {
@@ -305,7 +333,8 @@ class MacOsCredentialBackend implements CredentialBackend {
         ],
         value
       ),
-      "security"
+      "security",
+      "darwin"
     );
   }
 
@@ -317,6 +346,7 @@ class MacOsCredentialBackend implements CredentialBackend {
       "-a",
       key,
     ]);
+    throwIfBackendUnavailable("darwin", result);
     if (result.exitCode !== 0 && !isMissingCredential(result)) {
       throw commandFailure("security", result);
     }
@@ -334,9 +364,12 @@ class LinuxCredentialBackend implements CredentialBackend {
       "account",
       key,
     ]);
+    throwIfBackendUnavailable("linux", result);
     return result.exitCode === 0
       ? withoutCommandNewline(result.stdout)
-      : undefined;
+      : result.stderr.trim() === ""
+        ? undefined
+        : throwCommandFailure("secret-tool", result);
   }
 
   async store(key: string, value: string): Promise<void> {
@@ -353,7 +386,8 @@ class LinuxCredentialBackend implements CredentialBackend {
         ],
         value
       ),
-      "secret-tool"
+      "secret-tool",
+      "linux"
     );
   }
 
@@ -365,6 +399,7 @@ class LinuxCredentialBackend implements CredentialBackend {
       "account",
       key,
     ]);
+    throwIfBackendUnavailable("linux", result);
     if (result.exitCode !== 0 && !isMissingCredential(result)) {
       throw commandFailure("secret-tool", result);
     }
@@ -494,6 +529,7 @@ class WindowsCredentialBackend implements CredentialBackend {
 
   private async readCredential(key: string): Promise<string | undefined> {
     const result = await this.execute("get", key);
+    throwIfBackendUnavailable("win32", result);
     return result.exitCode === 0
       ? Buffer.from(result.stdout, "base64").toString("utf8")
       : undefined;
@@ -502,12 +538,14 @@ class WindowsCredentialBackend implements CredentialBackend {
   private async writeCredential(key: string, value: string): Promise<void> {
     await requireSuccessfulCommand(
       this.execute("store", key, value),
-      "CredMan"
+      "CredMan",
+      "win32"
     );
   }
 
   private async deleteCredential(key: string): Promise<void> {
     const result = await this.execute("delete", key);
+    throwIfBackendUnavailable("win32", result);
     if (result.exitCode !== 0 && !isMissingCredential(result)) {
       throw commandFailure("CredMan", result);
     }
@@ -625,12 +663,34 @@ async function runCommand(
 
 async function requireSuccessfulCommand(
   resultPromise: Promise<CommandResult>,
-  command: string
+  command: string,
+  platform: NodeJS.Platform
 ): Promise<void> {
   const result = await resultPromise;
   if (result.exitCode !== 0) {
+    throwIfBackendUnavailable(platform, result);
     throw commandFailure(command, result);
   }
+}
+
+function throwIfBackendUnavailable(
+  platform: NodeJS.Platform,
+  result: CommandResult
+): void {
+  const patterns = BACKEND_UNAVAILABLE_PATTERNS[platform];
+  if (
+    result.exitCode !== 0 &&
+    patterns?.some((pattern) => pattern.test(result.stderr))
+  ) {
+    throw new SecretStoreUnavailableError(
+      platform,
+      commandFailure("credential-store", result)
+    );
+  }
+}
+
+function throwCommandFailure(command: string, result: CommandResult): never {
+  throw commandFailure(command, result);
 }
 
 function commandFailure(command: string, result: CommandResult): Error {

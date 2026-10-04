@@ -2,7 +2,14 @@
 
 - **Found:** 2026-10-03 by Claude (claude-cli), reviewing 08d87da41 (code reading only, not reproduced)
 - **Area:** `src/core/orchestration/RunContinuationService.ts` / `WorkflowLineageRepository` (`discardPendingRewind`), `src/core/PromptQueue.ts`, `src/core/WorkingFileManager.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
+
+## Follow-up
+
+Resident resync must adopt the restored snapshot's step runtimes and queue
+position before the next runtime write. Revision-conflict recovery shares the
+resync path, so it must reload the on-disk `pendingRewind` marker instead of
+clearing it while a continuation is still pending.
 
 ## Symptom
 

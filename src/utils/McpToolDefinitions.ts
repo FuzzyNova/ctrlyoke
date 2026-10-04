@@ -309,7 +309,7 @@ export const MCP_TOOL_DEFINITIONS: McpToolDefinition[] = [
   {
     name: MCP_WORKFLOW_STATUS_TOOL_NAME,
     description:
-      "See each workflow step's status: completed, failed, cancelled, skipped, running, or pending. Each step's prompt is shortened to its first line (promptTruncated marks a shortened one); call read_output with a step's index to read its full prompt.",
+      "See each workflow step's status: completed, failed, cancelled, skipped, running, or pending, and its sessionId/resumeSession settings. Each step's prompt is shortened to its first line (promptTruncated marks a shortened one); call read_output with a step's index to read its full prompt.",
     inputSchema: { type: "object", properties: {} },
   },
   {

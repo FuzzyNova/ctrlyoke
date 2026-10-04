@@ -94,7 +94,7 @@ steps:
 Inline skills are added to the step's `skills` instead of replacing them. Before
 the prompt is sent, the token is rewritten to a plain `skill: <name>` label so
 the harness never receives it as a slash command. A `/skill:` token inside a
-triple-backtick fenced block is ignored.
+fenced code block or inline code span is ignored.
 
 ## Agents & Skills settings
 

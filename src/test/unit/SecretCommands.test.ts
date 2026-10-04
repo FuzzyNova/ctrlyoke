@@ -308,14 +308,7 @@ suite("Secret command handlers", () => {
   test("returns success for resolvable workflows and non-zero for missing names with scope", async () => {
     const resolvableIo = new TestIo();
     const originalGetDecision = secretGrantsTrustStore.getDecision;
-    secretGrantsTrustStore.getDecision = (_workspaceIdentity, name) =>
-      name === "CI_TOKEN"
-        ? "allow"
-        : originalGetDecision.call(
-            secretGrantsTrustStore,
-            _workspaceIdentity,
-            name
-          );
+    secretGrantsTrustStore.getDecision = () => "allow";
     let resolvable: number;
     try {
       resolvable = await checkSecretsCommand(
@@ -335,19 +328,26 @@ suite("Secret command handlers", () => {
     assert.deepStrictEqual(resolvableIo.errors, []);
 
     const missingIo = new TestIo();
-    const missing = await checkSecretsCommand(
-      "workflow.ctrlyoke.yaml",
-      {},
-      workflowDependencies(new InMemorySecretStore(), {
-        steps: [
-          {
-            name: "deploy",
-            prompt: "Use !MISSING_TOKEN and !SECOND_MISSING_TOKEN",
-          },
-        ],
-      }),
-      missingIo
-    );
+    const originalMissingDecision = secretGrantsTrustStore.getDecision;
+    secretGrantsTrustStore.getDecision = () => "allow";
+    let missing: number;
+    try {
+      missing = await checkSecretsCommand(
+        "workflow.ctrlyoke.yaml",
+        {},
+        workflowDependencies(new InMemorySecretStore(), {
+          steps: [
+            {
+              name: "deploy",
+              prompt: "Use !MISSING_TOKEN and !SECOND_MISSING_TOKEN",
+            },
+          ],
+        }),
+        missingIo
+      );
+    } finally {
+      secretGrantsTrustStore.getDecision = originalMissingDecision;
+    }
     assert.strictEqual(missing, 1);
     assert.match(
       missingIo.errors.join("\n"),
@@ -359,6 +359,8 @@ suite("Secret command handlers", () => {
     configService.setCliOverlay({
       execution: { contextResolutionFailure: "warn" },
     });
+    const originalGetDecision = secretGrantsTrustStore.getDecision;
+    secretGrantsTrustStore.getDecision = () => "allow";
     try {
       const io = new TestIo();
       const result = await checkSecretsCommand(
@@ -373,7 +375,63 @@ suite("Secret command handlers", () => {
       assert.strictEqual(result, 1);
       assert.match(io.errors.join("\n"), /MISSING_TOKEN/);
     } finally {
+      secretGrantsTrustStore.getDecision = originalGetDecision;
       configService.setCliOverlay({});
+    }
+  });
+
+  test("checks every workflow secret with correct scopes before and after grant approval", async () => {
+    const tempRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-secret-check-trust-")
+    );
+    const workflow: PromptFile = {
+      secrets: ["A"],
+      steps: [
+        { name: "prompt step", prompt: "Use !B" },
+        { type: "script", name: "script step", script: "echo ok", secrets: ["C"] },
+      ],
+    };
+    try {
+      const trustStore = new SecretGrantsTrustStore(
+        path.join(tempRoot, "trust.json")
+      );
+      const dependencies = {
+        ...workflowDependencies(new InMemorySecretStore(), workflow, {}),
+        secretGrantsTrustStore: trustStore,
+      };
+
+      const beforeApprovalIo = new TestIo();
+      const beforeApproval = await checkSecretsCommand(
+        "workflow.ctrlyoke.yaml",
+        {},
+        dependencies,
+        beforeApprovalIo
+      );
+      const beforeApprovalError = beforeApprovalIo.errors.join("\n");
+      assert.strictEqual(beforeApproval, 2);
+      assert.match(beforeApprovalError, /Secret grant "A".*not been approved/);
+      assert.match(beforeApprovalError, /Secret grant "B".*not been approved/);
+      assert.match(beforeApprovalError, /Secret grant "C".*not been approved/);
+      assert.doesNotMatch(beforeApprovalError, /workflow scope/);
+      assert.match(beforeApprovalError, /Secret "A" is missing for scope "workflow"/);
+      assert.match(beforeApprovalError, /Secret "B" is missing for scope "prompt step"/);
+      assert.match(beforeApprovalError, /Secret "C" is missing for scope "script step"/);
+
+      await trustStore.setDecisions("/workspace", ["A", "B", "C"], "allow");
+      const afterApprovalIo = new TestIo();
+      const afterApproval = await checkSecretsCommand(
+        "workflow.ctrlyoke.yaml",
+        {},
+        dependencies,
+        afterApprovalIo
+      );
+      const afterApprovalError = afterApprovalIo.errors.join("\n");
+      assert.strictEqual(afterApproval, 1);
+      assert.match(afterApprovalError, /Secret "A" is missing for scope "workflow"/);
+      assert.match(afterApprovalError, /Secret "B" is missing for scope "prompt step"/);
+      assert.match(afterApprovalError, /Secret "C" is missing for scope "script step"/);
+    } finally {
+      await fs.rm(tempRoot, { recursive: true, force: true });
     }
   });
 

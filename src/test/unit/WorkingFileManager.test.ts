@@ -16,7 +16,11 @@ import type {
   WorkflowKey,
   WorkflowTokenTotals,
 } from "../../types/CtrlYokeTypes";
-import { EXECUTION_STATES, STEP_TYPES } from "../../types/DashboardConstants";
+import {
+  EXECUTION_STATES,
+  STEP_STATUS,
+  STEP_TYPES,
+} from "../../types/DashboardConstants";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import {
   clearRunSummaryCache,
@@ -1506,6 +1510,117 @@ suite("WorkingFileManager", () => {
         backed.definitionRevision,
         "clearing the flag is not a definition edit"
       );
+    });
+
+    test("resident queue keeps a discarded rewind snapshot and lower revision after a runtime write", async () => {
+      const { workflowKey, runRef, runFilePath } = await makeCompletedRun();
+      const residentQueue = new PromptQueue();
+      await residentQueue.restoreFromWorkingFile(runFilePath);
+
+      const rewind = await WorkingFileManager.beginPendingRewind(
+        tmpWorkspace,
+        workflowKey,
+        runRef,
+        1,
+        1,
+        2
+      );
+      residentQueue.applyPendingRewind(1, 1, rewind.definitionRevision, false);
+      assert.strictEqual(residentQueue.getState().definitionRevision, 2);
+      assert.ok(residentQueue.getState().pendingRewind);
+
+      const discarded = await WorkingFileManager.discardPendingRewind(
+        tmpWorkspace,
+        workflowKey,
+        runRef,
+        rewind.definitionRevision,
+        rewind.descriptorRevision
+      );
+      assert.strictEqual(discarded.discarded, true);
+
+      await residentQueue.resyncFromDisk();
+      assert.deepStrictEqual(
+        residentQueue
+          .getState()
+          .steps.map((step) => step._runtime?.completedAt),
+        [2, 4, 6]
+      );
+      assert.strictEqual(residentQueue.getState().currentIndex, 3);
+      assert.deepStrictEqual(
+        [...residentQueue.getState().completedIndices],
+        ["0", "1", "2"]
+      );
+      assert.deepStrictEqual(
+        residentQueue.getState().results.map((result) => result.status),
+        [STEP_STATUS.COMPLETED, STEP_STATUS.COMPLETED, STEP_STATUS.COMPLETED]
+      );
+      assert.strictEqual(
+        residentQueue.getRuntimeStateMachine().status,
+        EXECUTION_STATES.COMPLETED
+      );
+      await residentQueue.updateWorkingFile();
+
+      const persisted = JSON.parse(
+        await fs.readFile(runFilePath, "utf8")
+      ) as WorkingFile;
+      assert.strictEqual(persisted.definitionRevision, 1);
+      assert.deepStrictEqual(
+        persisted.steps?.map((step) =>
+          "prompt" in step
+            ? step.prompt
+            : "script" in step
+              ? step.script
+              : undefined
+        ),
+        ["prefix", "suffix", "tail"]
+      );
+      assert.strictEqual(persisted._runtime?.pendingRewind, undefined);
+      assert.strictEqual(persisted._runtime?.currentIndex, 3);
+      assert.deepStrictEqual(
+        persisted.steps?.map((step) => step._runtime?.completedAt),
+        [2, 4, 6]
+      );
+      assert.strictEqual(
+        persisted._runtime?.executionState,
+        EXECUTION_STATES.COMPLETED
+      );
+      assert.strictEqual(residentQueue.getState().definitionRevision, 1);
+      assert.strictEqual(residentQueue.getState().pendingRewind, undefined);
+    });
+
+    test("revision-conflict resync preserves the disk pending rewind", async () => {
+      const { workflowKey, runRef, runFilePath } = await makeCompletedRun();
+      const residentQueue = new PromptQueue();
+      await residentQueue.restoreFromWorkingFile(runFilePath);
+
+      const rewind = await WorkingFileManager.beginPendingRewind(
+        tmpWorkspace,
+        workflowKey,
+        runRef,
+        1,
+        1,
+        2
+      );
+      residentQueue.applyPendingRewind(1, 1, rewind.definitionRevision, false);
+      residentQueue.expectDefinitionRevision(1);
+      await assert.rejects(
+        residentQueue.updateWorkingFileProperties({ harness: "codex-cli" }),
+        /definition revision conflict/i
+      );
+
+      await residentQueue.updateWorkingFile();
+
+      const persisted = JSON.parse(
+        await fs.readFile(runFilePath, "utf8")
+      ) as WorkingFile;
+      assert.deepStrictEqual(persisted._runtime?.pendingRewind, {
+        fromStepIndex: 1,
+        baseDefinitionRevision: 1,
+      });
+      assert.deepStrictEqual(residentQueue.getState().pendingRewind, {
+        fromStepIndex: 1,
+        baseDefinitionRevision: 1,
+      });
     });
 
     test("requires confirmation before discarding edited suffix content", async () => {

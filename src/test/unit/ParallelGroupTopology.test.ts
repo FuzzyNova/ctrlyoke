@@ -538,6 +538,26 @@ suite("ParallelGroupTopology", () => {
       assert.match(result.parallelGroups[0].id, /^[0-9a-f-]{36}$/);
     });
 
+    // Explicit pendingGroups state the new grouping, so a drag out of a group
+    // is not rejected as "splitting" the old one.
+    test("drags a member out of a group when pendingGroups is explicit", () => {
+      const result = reorderParallelGroupPendingSteps(
+        topology(),
+        0,
+        [0, 2, 3, 4, 1],
+        [{ id: "g1", start: 1, end: 2, failFast: true }]
+      );
+      assert.deepStrictEqual(names(result), ["a", "c", "d", "e", "b"]);
+      assert.strictEqual(ranges(result), "g1:1-2");
+    });
+
+    test("rejects an order-only reorder that splits a group", () => {
+      assert.throws(
+        () => reorderParallelGroupPendingSteps(topology(), 0, [0, 2, 3, 4, 1]),
+        /split parallel group g1/
+      );
+    });
+
     test("ungroups an existing pending group when its range is omitted", () => {
       const result = reorderParallelGroupPendingSteps(
         topology(),

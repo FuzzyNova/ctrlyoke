@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { FallbackSecretStore } from "../../platform/FallbackSecretStore";
+import { OsCredentialStore } from "../../platform/OsCredentialStore";
 import {
   SecretStoreUnavailableError,
   type SecretStore,
@@ -117,6 +118,77 @@ suite("FallbackSecretStore", () => {
     const store = new FallbackSecretStore(primary, fallback);
 
     await assert.rejects(store.get("key"), /boom/);
+    assert.strictEqual(fallback.callCount, 0);
+  });
+
+  test("probes again after a transient probe failure", async () => {
+    const primary = new InMemorySecretStore();
+    let failNextProbe = true;
+    const flaky: SecretStore = {
+      get: (key) => primary.get(key),
+      store: (key, value) => primary.store(key, value),
+      delete: (key) => primary.delete(key),
+      keys: () => {
+        if (failNextProbe) {
+          failNextProbe = false;
+          return Promise.reject(new Error("prompt dismissed"));
+        }
+        return primary.keys();
+      },
+    };
+    const store = new FallbackSecretStore(flaky, new InMemorySecretStore());
+
+    await assert.rejects(store.get("key"), /prompt dismissed/);
+    await store.store("key", "value");
+    assert.strictEqual(await store.get("key"), "value");
+  });
+
+  test("retries the first failed write in fallback and notifies once", async () => {
+    let commandCount = 0;
+    const primary = new OsCredentialStore({
+      platform: "linux",
+      runCommand: async (_command, args) => {
+        commandCount++;
+        if (args[0] === "lookup") {
+          // No key-index item exists, so the read-only availability probe
+          // succeeds without writing to the keyring.
+          return { exitCode: 1, stdout: "", stderr: "" };
+        }
+        return {
+          exitCode: 1,
+          stdout: "",
+          stderr:
+            "secret-tool: Cannot autolaunch a dbus-daemon without a $DISPLAY for X11",
+        };
+      },
+    });
+    const fallback = new InMemorySecretStore();
+    const fallbackErrors: SecretStoreUnavailableError[] = [];
+    const store = new FallbackSecretStore(primary, fallback, (error) =>
+      fallbackErrors.push(error)
+    );
+
+    await store.store("license", "signed-license");
+    assert.strictEqual(await store.get("license"), "signed-license");
+    assert.strictEqual(commandCount, 2);
+    assert.strictEqual(fallback.callCount, 2);
+    assert.strictEqual(fallbackErrors.length, 1);
+  });
+
+  test("keeps a genuine missing secret on the primary store", async () => {
+    let commandCount = 0;
+    const primary = new OsCredentialStore({
+      platform: "linux",
+      runCommand: async () => {
+        commandCount++;
+        return { exitCode: 1, stdout: "", stderr: "" };
+      },
+    });
+    const fallback = new InMemorySecretStore();
+    const store = new FallbackSecretStore(primary, fallback);
+
+    assert.strictEqual(await store.get("missing"), undefined);
+    assert.strictEqual(commandCount, 2);
     assert.strictEqual(fallback.callCount, 0);
   });
 });

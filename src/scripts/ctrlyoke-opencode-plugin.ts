@@ -248,6 +248,7 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
         errorFile,
         JSON.stringify({
           hookEvent,
+          runId: RUN_ID,
           sessionId,
           status: "error",
           timestamp: Date.now(),
@@ -544,6 +545,7 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
                   stopFile,
                   JSON.stringify({
                     hookEvent: "Stop",
+                    runId: RUN_ID,
                     sessionId: sessionID,
                     status: "completed",
                     timestamp: Date.now(),

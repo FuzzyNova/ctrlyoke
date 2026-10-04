@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (Claude)
 - **Area:** `src/core/orchestration/RunContinuationService.ts` (`reorderStepsAtRun` ~887-956), `src/core/ParallelGroupTopology.ts` (~627-665), `src/mcp-server.ts` (`mutationResponse` ~1399-1413)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

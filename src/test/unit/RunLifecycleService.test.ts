@@ -67,6 +67,8 @@ class FakeInstance implements RunLifecycleInstancePort {
 
   clearPendingRewind(): void {}
 
+  async resyncWorkingFileFromDisk(): Promise<void> {}
+
   async beginPendingRewind(): Promise<{
     definitionRevision: number;
     descriptorRevision: number;
@@ -224,10 +226,37 @@ function createHost(
     buildWorkflowInstance: () => instance,
     replayWorkflowStateTo: async () => undefined,
     getExternalExecutionRunRef: () => undefined,
+    forgetRunActivity: () => undefined,
   };
 }
 
 suite("RunLifecycleService continuation validation", () => {
+  test("switching to a missing run keeps the current client view address", async () => {
+    const registry = new FakeRegistry();
+    const currentAddress: WorkflowViewAddress = {
+      workflowKey: "current-lineage" as WorkflowKey,
+      kind: "draft",
+    };
+    registry.viewAddresses.set("panel", currentAddress);
+    registry.viewSinks.set("panel", () => undefined);
+    const views = new FakeViews();
+    views.loadRunViewForClient = async () => {
+      const error = new Error("missing run") as NodeJS.ErrnoException;
+      error.code = "ENOENT";
+      throw error;
+    };
+    const service = new RunLifecycleService(
+      createHost(registry, views, new FakeLineageRepository(descriptor()))
+    );
+
+    await service.switchClientToRunAddress(
+      { workflowKey, kind: "run", runRef },
+      "panel"
+    );
+
+    assert.strictEqual(registry.viewAddresses.get("panel"), currentAddress);
+  });
+
   test("rejects an address that is no longer the client's viewed run", async () => {
     const registry = new FakeRegistry();
     const views = new FakeViews();

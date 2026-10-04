@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-03 by bug-hunt final step (claude-cli); traced by reading the code, not reproduced end to end
 - **Area:** `src/core/harness/shared/CliTransportCoordinator.ts` (`executeStandaloneInteractiveProcess`, ~139-245; completion monitor call ~196-201), called from `CliExecutionRunner.ts` (~494) outside VS Code
-- **Severity:** low (low confidence — needs two concurrent interactive runs on the same harness and workspace)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
@@ -34,3 +34,7 @@ first with two concurrent interactive runs to confirm.
 ## Decision
 
 Decided 2026-10-03 (obvious, no input needed): reproduce first. If it is confirmed, reuse the extension path's approach rather than adding a parallel mechanism. Before calling `monitorForCompletion`, resolve the session ID from the session-start notification scoped to this run's `CTRLYOKE_RUN_ID`, sharing that logic with the VS Code interactive path. If the session ID can't be learned, the monitor must filter Stop files by `CTRLYOKE_RUN_ID` and never accept an unscoped "any newer Stop file" match.
+
+## Follow-up
+
+Wildcard monitoring also scopes error notifications by run ID, and hook-written error files carry that ID. The standalone SessionStart wait uses the shared interactive startup timeout settings.

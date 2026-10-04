@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-01 by bug-hunt final step (claude-cli), reviewing 8f317f5cd (code reading only)
 - **Area:** `src/ui/webview-react/hooks/useAttachmentTokenCount.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

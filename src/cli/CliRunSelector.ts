@@ -1,5 +1,9 @@
 import * as fs from "node:fs/promises";
-import type { RunRef, WorkflowKey } from "../types/CtrlYokeTypes";
+import type {
+  RunRef,
+  WorkflowKey,
+  WorkflowLineageDescriptor,
+} from "../types/CtrlYokeTypes";
 import type { RunSummary } from "../types/WorkflowTimelineTypes";
 import { withFileLock } from "../utils/FileLockUtils";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
@@ -27,9 +31,75 @@ export interface CliRunSummaryProvider {
 }
 
 export function createWorkflowLineageNotFoundError(
-  workflowKey: WorkflowKey
+  workflowKey: string
 ): Error {
-  return new Error(`Workflow lineage "${workflowKey}" was not found.`);
+  return new Error(
+    `Workflow lineage "${workflowKey}" was not found. Run \`ctrlyoke history list\` to find a lineage key.`
+  );
+}
+
+export interface CliWorkflowLineageProvider {
+  listLineageKeys(workspaceRoot: string): Promise<WorkflowKey[]>;
+  listRunRefs(workspaceRoot: string, workflowKey: WorkflowKey): Promise<RunRef[]>;
+  tryReadDescriptor(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey
+  ): Promise<WorkflowLineageDescriptor | undefined>;
+}
+
+/** Resolve a lineage key or an exact, case-insensitive workflow display name. */
+export async function resolveCliWorkflowKey(
+  workspaceRoot: string,
+  lineageRepository: CliWorkflowLineageProvider,
+  value: string,
+  writeErr: (message: string) => void = (message) => console.error(message)
+): Promise<WorkflowKey> {
+  const keys = await lineageRepository.listLineageKeys(workspaceRoot);
+  if (keys.includes(value as WorkflowKey)) {
+    return value as WorkflowKey;
+  }
+
+  const normalizedName = value.toLowerCase();
+  const matches = (
+    await Promise.all(
+      keys.map(async (workflowKey) => ({
+        workflowKey,
+        descriptor: await lineageRepository.tryReadDescriptor(
+          workspaceRoot,
+          workflowKey
+        ),
+      }))
+    )
+  ).filter(
+    ({ descriptor }) =>
+      descriptor?.workflowName.toLowerCase() === normalizedName
+  );
+
+  if (matches.length === 1) {
+    const workflowKey = matches[0].workflowKey;
+    writeErr(`Using lineage ${workflowKey}`);
+    return workflowKey;
+  }
+  if (matches.length > 1) {
+    const candidates = await Promise.all(
+      matches.map(async ({ workflowKey }) => {
+        const latestRunRef = (
+          await lineageRepository.listRunRefs(workspaceRoot, workflowKey)
+        )[0];
+        const timestamp = latestRunRef
+          ? WorkflowPaths.parseRunRefTimestamp(latestRunRef)
+          : undefined;
+        const latestRunDate = timestamp
+          ? new Date(timestamp).toISOString().slice(0, 10)
+          : "no runs";
+        return `  ${workflowKey} (latest run: ${latestRunDate})`;
+      })
+    );
+    throw new Error(
+      `Workflow name "${value}" is ambiguous. Matching lineages:\n${candidates.join("\n")}`
+    );
+  }
+  throw createWorkflowLineageNotFoundError(value);
 }
 
 export async function resolveCliRunRef(

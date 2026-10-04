@@ -13,6 +13,7 @@ import { SecretStoreUnavailableError, type SecretStore } from "./SecretStore";
  */
 export class FallbackSecretStore implements SecretStore {
   private resolvedStore: Promise<SecretStore> | undefined;
+  private fallbackNotified = false;
 
   constructor(
     private readonly primary: SecretStore,
@@ -21,24 +22,29 @@ export class FallbackSecretStore implements SecretStore {
   ) {}
 
   async get(key: string): Promise<string | undefined> {
-    return (await this.resolveStore()).get(key);
+    return this.run((store) => store.get(key));
   }
 
   async store(key: string, value: string): Promise<void> {
-    await (await this.resolveStore()).store(key, value);
+    await this.run((store) => store.store(key, value));
   }
 
   async delete(key: string): Promise<void> {
-    await (await this.resolveStore()).delete(key);
+    await this.run((store) => store.delete(key));
   }
 
   async keys(): Promise<string[]> {
-    return (await this.resolveStore()).keys();
+    return this.run((store) => store.keys());
   }
 
   private resolveStore(): Promise<SecretStore> {
     if (!this.resolvedStore) {
-      this.resolvedStore = this.probe();
+      // A transient probe failure (e.g. a dismissed keychain prompt) must not
+      // poison every later call, so forget it and probe again next time.
+      this.resolvedStore = this.probe().catch((error: unknown) => {
+        this.resolvedStore = undefined;
+        throw error;
+      });
     }
     return this.resolvedStore;
   }
@@ -49,10 +55,35 @@ export class FallbackSecretStore implements SecretStore {
       return this.primary;
     } catch (error) {
       if (error instanceof SecretStoreUnavailableError) {
-        this.onFallback?.(error);
-        return this.fallback;
+        return this.switchToFallback(error);
       }
       throw error;
     }
+  }
+
+  private async run<T>(
+    operation: (store: SecretStore) => Thenable<T>
+  ): Promise<T> {
+    const store = await this.resolveStore();
+    try {
+      return await operation(store);
+    } catch (error) {
+      if (
+        store !== this.primary ||
+        !(error instanceof SecretStoreUnavailableError)
+      ) {
+        throw error;
+      }
+      return operation(await this.switchToFallback(error));
+    }
+  }
+
+  private switchToFallback(error: SecretStoreUnavailableError): SecretStore {
+    if (this.resolvedStore !== undefined && !this.fallbackNotified) {
+      this.fallbackNotified = true;
+      this.resolvedStore = Promise.resolve(this.fallback);
+      this.onFallback?.(error);
+    }
+    return this.fallback;
   }
 }

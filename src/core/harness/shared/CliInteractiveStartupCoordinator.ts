@@ -22,6 +22,36 @@ export interface CliInteractiveStartupTimeouts {
   lateStartRecoveryPollMs?: number;
 }
 
+export function getCliInteractiveStartupTimeouts(
+  startupTimeouts?: CliInteractiveStartupTimeouts
+): Required<CliInteractiveStartupTimeouts> {
+  const configuredSoftTimeoutMs =
+    startupTimeouts?.sessionStartSoftTimeoutMs ??
+    DEFAULT_SESSION_START_SOFT_TIMEOUT_MS;
+  const sessionStartSoftTimeoutMs = Math.max(1, configuredSoftTimeoutMs);
+  const configuredHardTimeoutMs =
+    startupTimeouts?.sessionStartHardTimeoutMs ??
+    DEFAULT_SESSION_START_HARD_TIMEOUT_MS;
+  const sessionStartHardTimeoutMs = Math.max(
+    sessionStartSoftTimeoutMs,
+    configuredHardTimeoutMs
+  );
+
+  return {
+    sessionStartSoftTimeoutMs,
+    sessionStartHardTimeoutMs,
+    sessionStartPollMs: Math.max(
+      1,
+      startupTimeouts?.sessionStartPollMs ?? DEFAULT_SESSION_START_POLL_MS
+    ),
+    lateStartRecoveryPollMs: Math.max(
+      1,
+      startupTimeouts?.lateStartRecoveryPollMs ??
+        DEFAULT_LATE_START_RECOVERY_POLL_MS
+    ),
+  };
+}
+
 export interface CliInteractiveStartupCoordinatorDeps {
   logParser: ILogParser;
   notificationMonitor: INotificationMonitor;
@@ -413,32 +443,7 @@ export class CliInteractiveStartupCoordinator {
   }
 
   private getStartupTimeouts(): Required<CliInteractiveStartupTimeouts> {
-    const configuredSoftTimeoutMs =
-      this.deps.startupTimeouts?.sessionStartSoftTimeoutMs ??
-      DEFAULT_SESSION_START_SOFT_TIMEOUT_MS;
-    const sessionStartSoftTimeoutMs = Math.max(1, configuredSoftTimeoutMs);
-    const configuredHardTimeoutMs =
-      this.deps.startupTimeouts?.sessionStartHardTimeoutMs ??
-      DEFAULT_SESSION_START_HARD_TIMEOUT_MS;
-    const sessionStartHardTimeoutMs = Math.max(
-      sessionStartSoftTimeoutMs,
-      configuredHardTimeoutMs
-    );
-
-    return {
-      sessionStartSoftTimeoutMs,
-      sessionStartHardTimeoutMs,
-      sessionStartPollMs: Math.max(
-        1,
-        this.deps.startupTimeouts?.sessionStartPollMs ??
-          DEFAULT_SESSION_START_POLL_MS
-      ),
-      lateStartRecoveryPollMs: Math.max(
-        1,
-        this.deps.startupTimeouts?.lateStartRecoveryPollMs ??
-          DEFAULT_LATE_START_RECOVERY_POLL_MS
-      ),
-    };
+    return getCliInteractiveStartupTimeouts(this.deps.startupTimeouts);
   }
 
   private async waitForInteractiveStartupOperation<T>(

@@ -11,7 +11,7 @@ import { PromptQueue } from "../../core/PromptQueue";
 import { RecordedTargetFailureError } from "../../core/RecordedTargetFailureError";
 import {
   MissingSecretError,
-  UnapprovedSecretGrantError,
+  UnapprovedSecretGrantsError,
 } from "../../utils/SecretResolver";
 import {
   EndConditionEvaluator,
@@ -2441,7 +2441,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
           const cause =
             error instanceof RecordedTargetFailureError ? error.cause : error;
           assert.ok(cause instanceof MissingSecretError);
-          assert.ok(!(cause instanceof UnapprovedSecretGrantError));
+          assert.ok(!(cause instanceof UnapprovedSecretGrantsError));
           assert.doesNotMatch(String(error), /has not been approved/u);
           return true;
         }

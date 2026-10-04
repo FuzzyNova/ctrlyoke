@@ -12,6 +12,7 @@ import {
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import { Log } from "../../utils/Log";
+import { findExistingWorkerPath } from "../../utils/WorkerPath";
 import { getFrozenRunHistoryLocation } from "../../utils/RunHistoryStoragePolicy";
 import {
   HISTORY_SEARCH_COUNT_STATES,
@@ -1142,7 +1143,7 @@ export class HistorySearchIndexService {
       path.join(__dirname, "..", "..", "historySearchRebuildWorker.js"),
       path.join(__dirname, "historySearchRebuildWorker.js"),
     ];
-    const workerPath = candidates.find((candidate) => fs.existsSync(candidate));
+    const workerPath = findExistingWorkerPath(candidates);
     if (!workerPath) {
       throw new Error(
         `Unable to locate compiled history search rebuild worker; checked ${candidates.join(", ")}`

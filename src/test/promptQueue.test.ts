@@ -13,6 +13,7 @@ import {
   STEP_STATUS,
   PROMPT_TERMINAL_STATUS,
   STEP_CLAIM_OUTCOMES,
+  QUEUE_POSITION,
 } from "../types/DashboardConstants";
 import {
   ParallelGroupDefinition,
@@ -692,6 +693,21 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(queue.getState().definitionRevision, revision);
     });
 
+    test("refuses deleting a step referenced by an unstarted step", async () => {
+      queue.loadPrompts(
+        createPromptFile([
+          { prompt: "target" },
+          { prompt: "follow-up", name: "follow-up", sessionId: 1 },
+        ])
+      );
+
+      await assert.rejects(
+        () => queue.deletePrompts([0]),
+        /Cannot remove step 1: referenced by Step 2 \("follow-up"\)/
+      );
+      assert.strictEqual(queue.getState().steps.length, 2);
+    });
+
     test("should not allow deleting the current prompt while pause is pending", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await startQueueExecution(queue);
@@ -748,6 +764,34 @@ suite("PromptQueue State Machine Tests", () => {
         assert.deepStrictEqual(
           state.steps.map((step) => step.color),
           ["#111111", "#222222", "#333333", "#444444", "#abcdef", "#555555"]
+        );
+      });
+
+      test("renumbers references when appending a parallel-group member", async () => {
+        queue.loadPrompts({
+          steps: [
+            { prompt: "member-a" },
+            { prompt: "member-b" },
+            { prompt: "target" },
+            { prompt: "reference", sessionId: 3, priorContext: [2, 3] },
+          ],
+          parallelGroups: [
+            { id: "group-1", startIndex: 0, endIndex: 1, failFast: false },
+          ],
+          finalStep: { prompt: "final", sessionId: 3, priorContext: [2, 3] },
+        });
+
+        await queue.appendParallelGroupMember("group-1", {
+          prompt: "member-c",
+        });
+
+        const reference = queue.getState().steps[4] as PromptStep;
+        assert.strictEqual(reference.sessionId, 4);
+        assert.deepStrictEqual(reference.priorContext, [2, 4]);
+        assert.strictEqual((queue as any).workflowFile.finalStep.sessionId, 4);
+        assert.deepStrictEqual(
+          (queue as any).workflowFile.finalStep.priorContext,
+          [2, 4]
         );
       });
 
@@ -1965,6 +2009,48 @@ suite("PromptQueue State Machine Tests", () => {
   });
 
   suite("insertStepAfterIndex", () => {
+    test("renumbers references on Queue next append including finalStep", async () => {
+      queue.loadPrompts({
+        steps: [
+          { prompt: "current" },
+          { prompt: "target" },
+          { prompt: "reference", sessionId: 2, priorContext: [1, 2] },
+        ],
+        finalStep: { prompt: "final", sessionId: 2, priorContext: [1, 2] },
+      });
+
+      await queue.appendSteps(
+        [{ prompt: "next" }],
+        "test",
+        QUEUE_POSITION.NEXT
+      );
+
+      const reference = queue.getState().steps[3] as PromptStep;
+      assert.strictEqual(reference.sessionId, 3);
+      assert.deepStrictEqual(reference.priorContext, [1, 3]);
+      assert.strictEqual((queue as any).workflowFile.finalStep.sessionId, 3);
+      assert.deepStrictEqual(
+        (queue as any).workflowFile.finalStep.priorContext,
+        [1, 3]
+      );
+    });
+
+    test("renumbers numeric step references when inserting before their target", async () => {
+      queue.loadPrompts(
+        createPromptFile([
+          { prompt: "before" },
+          { prompt: "target" },
+          { prompt: "reference", sessionId: 2, priorContext: [1, 2] },
+        ])
+      );
+
+      await queue.insertStepAfterIndex(0, { prompt: "inserted" });
+
+      const reference = queue.getState().steps[3] as PromptStep;
+      assert.strictEqual(reference.sessionId, 3);
+      assert.deepStrictEqual(reference.priorContext, [1, 3]);
+    });
+
     test("assigns fresh IDs to inserted and appended steps", async () => {
       queue.loadPrompts(createPromptFile([{ prompt: "original" }]));
       const originalId = queue.getState().steps[0]._runtime?.stepId;
@@ -2361,6 +2447,22 @@ suite("PromptQueue State Machine Tests", () => {
   });
 
   suite("reorderPendingPrompts", () => {
+    test("renumbers numeric step references when a referenced step is reordered", async () => {
+      queue.loadPrompts(
+        createPromptFile([
+          { prompt: "target" },
+          { prompt: "middle" },
+          { prompt: "reference", sessionId: 1, priorContext: [1, 2] },
+        ])
+      );
+
+      await queue.reorderPendingPrompts([1, 0, 2]);
+
+      const reference = queue.getState().steps[2] as PromptStep;
+      assert.strictEqual(reference.sessionId, 2);
+      assert.deepStrictEqual(reference.priorContext, [2, 1]);
+    });
+
     test("should keep done-prefix unchanged and reorder pending section", async () => {
       const steps: PromptStep[] = [
         { prompt: "p0" },

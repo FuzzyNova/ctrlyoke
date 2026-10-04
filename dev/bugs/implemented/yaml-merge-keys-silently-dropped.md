@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-02 by bug-hunt final step (Claude)
 - **Area:** `src/core/PromptFileParser.ts` (YAML and frontmatter loads use `yaml.CORE_SCHEMA`)
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 
