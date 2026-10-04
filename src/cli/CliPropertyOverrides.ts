@@ -1,5 +1,8 @@
 import type { PromptFile, ExecutionProperties } from "../types/CtrlYokeTypes";
-import type { HarnessId } from "../types/DashboardConstants";
+import {
+  EXECUTION_MODES,
+  type HarnessId,
+} from "../types/DashboardConstants";
 import type { CliExecutionOptions } from "./CliRunCommandDefinitions";
 
 /** Flag names reserved for the later --force phase. */
@@ -23,13 +26,31 @@ export interface CliPropertyOverrides {
 export function buildCliPropertyOverrides(
   options: Pick<
     CliExecutionOptions,
-    "harness" | "model" | "permissionMode" | "allowTool" | "denyTool"
+    | "harness"
+    | "model"
+    | "permissionMode"
+    | "allowTool"
+    | "denyTool"
+    | "headless"
+    | "interactive"
+    | "resumeSession"
+    | "sessionId"
   >,
   defaultHarness?: HarnessId
 ): CliPropertyOverrides {
   const workflow: Partial<ExecutionProperties> = {};
   if (options.harness) workflow.harness = options.harness as HarnessId;
   if (options.model) workflow.model = options.model;
+  if (options.headless) workflow.executionMode = EXECUTION_MODES.HEADLESS;
+  else if (options.interactive)
+    workflow.executionMode = EXECUTION_MODES.INTERACTIVE;
+  if (options.resumeSession !== undefined) {
+    workflow.resumeSession = options.resumeSession;
+  }
+  if (options.sessionId !== undefined) {
+    workflow.sessionId = options.sessionId;
+    workflow.resumeSession = true;
+  }
 
   if (
     options.permissionMode ||
@@ -82,6 +103,15 @@ export function applyCliPropertyOverrides(
   }
   if (modelWasProvided) {
     workflow.model = overrides.workflow.model;
+  }
+  if (overrides.workflow.executionMode !== undefined) {
+    workflow.executionMode = overrides.workflow.executionMode;
+  }
+  if (overrides.workflow.resumeSession !== undefined) {
+    workflow.resumeSession = overrides.workflow.resumeSession;
+  }
+  if (overrides.workflow.sessionId !== undefined) {
+    workflow.sessionId = overrides.workflow.sessionId;
   }
 
   const permissions = overrides.workflow.toolPermissions;

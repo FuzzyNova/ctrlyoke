@@ -546,7 +546,8 @@ export class WorkflowInstance
     ) => Promise<void>,
     runnerHostIdentity?: RunnerHostIdentity,
     /** Host file watcher for the working file; headless hosts poll instead. */
-    fileWatcherFactory?: FileWatcherFactory
+    fileWatcherFactory?: FileWatcherFactory,
+    private readonly workflowSessionIdFromOverride: boolean = false
   ) {
     const resolvedRunnerHostIdentity = runnerHostIdentity ?? {
       runner: isCli() ? RUNNER_IDS.CLI : RUNNER_IDS.VSCODE,
@@ -1928,6 +1929,7 @@ export class WorkflowInstance
       hostCanProvidePty: this.hostCanProvidePty,
       supportsConcurrentInteractiveSessions:
         this.supportsConcurrentInteractiveSessions,
+      workflowSessionIdFromOverride: this.workflowSessionIdFromOverride,
       get namedWorkspaceRoots() {
         return instance.executionWorkspace.namedWorkspaceRoots;
       },

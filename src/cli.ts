@@ -740,6 +740,16 @@ async function runCommand(
   options: RunOptions | RerunOptions | AppendOptions | ContinueOptions,
   operation: CliRunOperation = { kind: CLI_RUN_OPERATION_KINDS.RUN }
 ): Promise<void> {
+  if (
+    operation.kind === CLI_RUN_OPERATION_KINDS.RUN &&
+    options.sessionId !== undefined &&
+    options.resumeSession === false
+  ) {
+    console.error(
+      chalk.red("Error: --session-id cannot be used with --no-resume-session")
+    );
+    process.exit(2);
+  }
   if (options.harness !== undefined) {
     try {
       assertHarnessId(options.harness);
@@ -783,13 +793,12 @@ async function runCommand(
   // so that diagnostic messages never pollute the terminal output.
   Log.initializeCli(workingDir, options.verbose);
 
-  // Detect execution mode: explicit flags override TTY auto-detection
+  // Host capability is physical (TTYs); execution-mode flags are workflow overrides.
   const {
     executionMode,
     hostCanProvidePty,
     supportsConcurrentInteractiveSessions,
   } = resolveCliExecutionMode(
-    options,
     !!process.stdout.isTTY,
     !!process.stdin.isTTY
   );
@@ -802,8 +811,6 @@ async function runCommand(
     model: options.model,
     cwd: workingDir,
     vars: options.var || {},
-    sessionId: options.sessionId,
-    resumeSession: options.resumeSession,
     verbose: options.verbose ?? false,
     quiet: options.quiet ?? false,
     json: options.json ?? false,
@@ -849,22 +856,9 @@ async function runCommand(
       };
     }
   }
-  if (options.headless) {
-    overlay.defaults = {
-      ...overlay.defaults,
-      executionMode: EXECUTION_MODES.HEADLESS,
-    };
-  } else if (options.interactive) {
-    overlay.defaults = {
-      ...overlay.defaults,
-      executionMode: EXECUTION_MODES.INTERACTIVE,
-    };
-  } else {
-    // Write TTY-detected execution mode to the overlay so that
-    // ConfigurationUtils.getCliExecutionMode() always returns the effective value
-    // regardless of what the user's config file says.
-    overlay.defaults = { ...overlay.defaults, executionMode };
-  }
+  // Keep the TTY-derived mode at settings tier as the default. Explicit mode
+  // flags are applied to the workflow after it has loaded.
+  overlay.defaults = { ...overlay.defaults, executionMode };
   if (options.timeout !== undefined || options.scriptTimeout !== undefined) {
     overlay.execution = {
       ...(options.timeout !== undefined && {
@@ -1045,7 +1039,9 @@ async function runCommand(
     undefined,
     undefined,
     undefined,
-    cliRunnerHostIdentity
+    cliRunnerHostIdentity,
+    undefined,
+    options.sessionId !== undefined
   );
 
   // Stream output to the terminal as events arrive. Subscriptions go on the
@@ -1392,31 +1388,6 @@ async function runCommand(
         workingDir
       );
 
-      // Apply --resume / --new-session overrides to the first prompt before execution.
-      // getState() returns a shallow copy but prompts[] is the same array reference,
-      // so mutations to PromptStep objects propagate into the queue's internal state.
-      const queueState = instance.promptQueue.getState();
-      if (config.sessionId && queueState.steps.length > 0) {
-        const firstStep = queueState.steps[0];
-        if (!isScriptStep(firstStep)) {
-          firstStep.sessionId = config.sessionId;
-          firstStep.resumeSession = true;
-        }
-      } else if (config.resumeSession === false) {
-        for (const step of queueState.steps) {
-          if (!isScriptStep(step)) {
-            delete step.sessionId;
-            step.resumeSession = false;
-          }
-        }
-      } else if (config.resumeSession === true) {
-        for (const step of queueState.steps) {
-          if (!isScriptStep(step)) {
-            step.resumeSession = true;
-          }
-        }
-      }
-
       await instance.executeLoadedPromptFile();
     } else {
       await executeAddressedCliOperation(
@@ -1719,7 +1690,7 @@ async function dryRunCommand(
     mergeCliVarsIntoWorkflow(workflow, config.vars);
     assertSecretGrantsApproved(workflow, workingDir);
 
-    const previewWorkflow = applyDryRunSessionOverrides(workflow, config);
+    const previewWorkflow = workflow;
     collectWorkflowHarnesses(previewWorkflow, harness);
     const capabilityRegistry = createCliCapabilityRegistry();
     let capabilities;
@@ -1855,34 +1826,6 @@ function createCliCapabilityRegistry(): HarnessCapabilityRegistry {
     },
   });
   return registry;
-}
-
-function applyDryRunSessionOverrides(
-  workflow: PromptFile,
-  config: ResolvedCliConfig
-): PromptFile {
-  const steps = (workflow.steps ?? []).map((step) => ({ ...step }));
-  if (config.sessionId && steps.length > 0) {
-    const firstStep = steps[0];
-    if (!isScriptStep(firstStep)) {
-      firstStep.sessionId = config.sessionId;
-      firstStep.resumeSession = true;
-    }
-  } else if (config.resumeSession === false) {
-    for (const step of steps) {
-      if (!isScriptStep(step)) {
-        delete step.sessionId;
-        step.resumeSession = false;
-      }
-    }
-  } else if (config.resumeSession === true) {
-    for (const step of steps) {
-      if (!isScriptStep(step)) {
-        step.resumeSession = true;
-      }
-    }
-  }
-  return { ...workflow, steps };
 }
 
 async function resolveCliJsonOutputProjection(

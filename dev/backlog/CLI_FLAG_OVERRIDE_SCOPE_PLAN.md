@@ -1,6 +1,6 @@
 # CLI Flag Override Scope — flags set the workflow level; `--force` extends them to steps
 
-> **Status:** Phase 1 complete; phases 2–4 queued. Audited 2026-10-04 against `src/cli.ts`,
+> **Status:** Phases 1–2 complete; phases 3–4 queued. Audited 2026-10-04 against `src/cli.ts`,
 > `src/cli/CliRunCommandDefinitions.ts`, `src/cli/CliPropertyOverrides.ts`,
 > `src/cli/CliExecutionMode.ts`, `src/types/ExecutionPropertyResolver.ts` and
 > `PromptFileLoader.populateSettingsDefaults`. The `--harness` finding was confirmed with a
@@ -23,11 +23,11 @@ different tiers depending on the flag; this plan puts every one of them on the w
 | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `-m, --model`                                                               | Workflow (`CliPropertyOverrides`)                                                                                                 | **Yes.** Steps with their own `model` keep it.                                                       |
 | `-H, --harness`                                                             | Workflow (`CliPropertyOverrides`)                                                                                                 | **Fixed in phase 1.** Steps keep their own harness.                                                  |
-| `--interactive`                                                             | Settings tier (`overlay.defaults.executionMode`)                                                                                | **No.** A workflow-level `executionMode` beats the flag.                                             |
-| `--headless`                                                                | Settings tier, plus `hostCanProvidePty = false`, which clamps **every** step to headless in `resolveExecutionMode`              | **No.** Too strong: it overrides steps that ask for `interactive`.                                   |
+| `--interactive`                                                             | Workflow (`CliPropertyOverrides`)                                                                                                | **Fixed in phase 2.** Steps with their own `executionMode` keep it.                                  |
+| `--headless`                                                                | Workflow (`CliPropertyOverrides`); host PTY capability still follows TTYs                                                       | **Fixed in phase 2.** No-TTY hosts still clamp every step to headless.                               |
 | `--permission-mode`, `--allow-tool`, `--deny-tool`                          | Workflow (`CliPropertyOverrides`) for `run`                                                                                       | **Fixed in phase 1.** Fields merge independently; step values still win.                             |
-| `--resume-session` / `--no-resume-session`                                  | **Every step** (`cli.ts` mutates `step.resumeSession` on all steps; `--no-resume-session` also deletes each step's `sessionId`) | **No.** Too strong, and it destroys step-authored `sessionId`s.                                      |
-| `--session-id`                                                              | The first step only (`steps[0].sessionId` + `resumeSession`)                                                                    | **No.** Too narrow: later steps never see it (D3).                                                   |
+| `--resume-session` / `--no-resume-session`                                  | Workflow (`CliPropertyOverrides`)                                                                                                | **Fixed in phase 2.** Step values and step `sessionId`s remain intact.                               |
+| `--session-id`                                                              | Workflow `sessionId` + `resumeSession: true` (`CliPropertyOverrides`)                                                           | **Fixed in phase 2.** Steps inherit the literal ID unless they set their own.                        |
 | `--var`                                                                     | Workflow `vars` (CLI values win)                                                                                                | **Yes.** `vars` is workflow-only, so there is no step level.                                         |
 | `-t, --timeout`                                                             | Setting `execution.maxPromptTimeoutSec`                                                                                         | **Yes, trivially:** no workflow or step field exists.                                                |
 | `--script-timeout`                                                          | Setting `execution.scriptTimeoutSec`                                                                                            | Effectively yes: a script's own `timeoutSec` wins. There is no workflow-level field (D2).            |
@@ -223,7 +223,7 @@ from the help text.
      no production seam was needed. These stdout-based harnesses keep the process test
      independent of real session-log discovery. Unit coverage includes D4 and permission
      merges. `rerun`, `append` and `continue` retain their pre-phase behavior.
-2. **Execution mode and session flags (D3, D6, D8).** Lands after the interactive-output bug
+2. **Execution mode and session flags (D3, D6, D8).** Complete. Lands after the interactive-output bug
    fix. Tests:
    - TTY-forced runs with `--headless` keep a step's `interactive`; no-TTY runs still clamp
      and warn.
@@ -231,6 +231,9 @@ from the help text.
    - `--session-id` on a three-step sequential workflow resumes the given session for every
      step, except one that names its own `sessionId`.
    - A parallel group inheriting `--session-id` fails preflight with the flag-specific hint.
+   - **Landed:** workflow-scoped overrides are shared by real runs and dry-runs; TTY-only PTY
+     capability; no-TTY clamp diagnostics; literal workflow session IDs, retained step IDs,
+     contradictory flag usage error, and the parallel-session hint.
 3. **`--force`** (D1, D2, D5).
    - Covers parsing and validation, step application including parallel members, `finalStep`
      and script steps, and the D5 refusal.

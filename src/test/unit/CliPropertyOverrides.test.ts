@@ -5,7 +5,12 @@ import {
   buildCliPropertyOverrides,
 } from "../../cli/CliPropertyOverrides";
 import { HARNESS_IDS, PERMISSION_MODES } from "../../types/DashboardConstants";
-import type { PromptFile } from "../../types/CtrlYokeTypes";
+import {
+  resolveExecutionProperties,
+  resolveSessionId,
+} from "../../types/ExecutionPropertyResolver";
+import { resolveCliExecutionMode } from "../../cli/CliExecutionMode";
+import type { PromptFile, PromptStep } from "../../types/CtrlYokeTypes";
 
 suite("CLI property overrides", () => {
   test("builds workflow harness and model overrides", () => {
@@ -134,5 +139,121 @@ suite("CLI property overrides", () => {
     assert.deepStrictEqual(workflow.toolPermissions, {
       deniedTools: ["blocked"],
     });
+  });
+
+  test("applies session flags at workflow scope and preserves step session IDs", () => {
+    const workflow: PromptFile = {
+      steps: [
+        { prompt: "one" },
+        { prompt: "two", sessionId: "step-session" },
+        { prompt: "three" },
+      ],
+    };
+    applyCliPropertyOverrides(
+      workflow,
+      buildCliPropertyOverrides({
+        allowTool: [],
+        denyTool: [],
+        sessionId: "literal-42",
+      })
+    );
+
+    assert.strictEqual(workflow.sessionId, "literal-42");
+    assert.strictEqual(workflow.resumeSession, true);
+    const defaults = {
+      harness: HARNESS_IDS.COPILOT_CLI,
+      modelsByHarness: {},
+      additionalArgsByHarness: {},
+      executionMode: "headless" as const,
+      resumeSession: false,
+    };
+    assert.strictEqual(
+      resolveSessionId(
+        workflow.steps![0] as PromptStep,
+        workflow,
+        defaults
+      ).value,
+      "literal-42"
+    );
+    assert.strictEqual(
+      resolveSessionId(
+        workflow.steps![1] as PromptStep,
+        workflow,
+        defaults
+      ).value,
+      "step-session"
+    );
+    assert.strictEqual(
+      resolveSessionId(
+        workflow.steps![2] as PromptStep,
+        workflow,
+        defaults
+      ).value,
+      "literal-42"
+    );
+  });
+
+  test("--no-resume-session keeps step session IDs and explicit choices", () => {
+    const workflow: PromptFile = {
+      steps: [
+        { prompt: "one", sessionId: "keep-one" },
+        { prompt: "two", sessionId: "keep-two", resumeSession: true },
+      ],
+    };
+    applyCliPropertyOverrides(
+      workflow,
+      buildCliPropertyOverrides({
+        allowTool: [],
+        denyTool: [],
+        resumeSession: false,
+      })
+    );
+    assert.strictEqual(workflow.resumeSession, false);
+    assert.strictEqual(
+      (workflow.steps?.[0] as PromptStep).sessionId,
+      "keep-one"
+    );
+    assert.strictEqual(
+      (workflow.steps?.[1] as PromptStep).sessionId,
+      "keep-two"
+    );
+    assert.strictEqual(
+      (workflow.steps?.[1] as PromptStep).resumeSession,
+      true
+    );
+  });
+
+  test("execution mode flags override the workflow while steps retain precedence", () => {
+    const workflow: PromptFile = {
+      executionMode: "interactive",
+      steps: [{ prompt: "one", executionMode: "interactive" }],
+    };
+    applyCliPropertyOverrides(
+      workflow,
+      buildCliPropertyOverrides({
+        allowTool: [],
+        denyTool: [],
+        headless: true,
+      })
+    );
+    assert.strictEqual(workflow.executionMode, "headless");
+    assert.strictEqual(workflow.steps?.[0].executionMode, "interactive");
+
+    const tty = resolveCliExecutionMode(true, true);
+    const resolved = resolveExecutionProperties(
+      workflow.steps![0] as PromptStep,
+      workflow,
+      {
+        defaults: {
+          harness: HARNESS_IDS.COPILOT_CLI,
+          modelsByHarness: {},
+          additionalArgsByHarness: {},
+          executionMode: tty.executionMode,
+          resumeSession: false,
+        },
+        hostCanProvidePty: tty.hostCanProvidePty,
+      }
+    );
+    assert.strictEqual(resolved.properties.executionMode, "interactive");
   });
 });
