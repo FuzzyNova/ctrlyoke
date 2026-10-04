@@ -38,6 +38,7 @@ import {
 } from "@root/types/DashboardConstants";
 import { getLanguageFromPath } from "@utils/syntaxHighlighting";
 import { hasRenderableDiff, normalizeStructuredPatch } from "@utils/diffUtils";
+import { sameCliFilePath } from "@root/utils/CliEventVisibility";
 
 export const UNDO_FILE_CANDIDATE_TIERS = {
   TIER1: "tier1",
@@ -163,11 +164,7 @@ function resolveEventUndoInstruction(
  * workspace-relative snapshot paths (`manual-test/temp.txt`).
  */
 export function sameFilePath(a: string, b: string): boolean {
-  const na = a.replace(/\\/g, "/").toLowerCase();
-  const nb = b.replace(/\\/g, "/").toLowerCase();
-  if (na === nb) return true;
-  // One is absolute, the other is a relative suffix of the absolute path.
-  return na.endsWith("/" + nb) || nb.endsWith("/" + na);
+  return sameCliFilePath(a, b);
 }
 
 function normalizePath(path: string): string {

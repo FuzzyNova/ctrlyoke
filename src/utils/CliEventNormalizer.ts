@@ -299,6 +299,11 @@ function createPendingEvent(
   return undefined;
 }
 
+/** True when the event opens a slot that may be completed by a later event. */
+export function isOpenCliOperation(event: CliEvent): boolean {
+  return createPendingEvent(event, 0) !== undefined;
+}
+
 function removePending(pending: PendingEvent[], match: PendingEvent): void {
   const index = pending.indexOf(match);
   if (index >= 0) {
@@ -765,126 +770,179 @@ export interface NormalizedCliEvent {
   sourceIndex: number;
 }
 
+function eventsEqual(left: CliEvent, right: CliEvent): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
 /**
  * `normalizeCliEvents` plus the provenance needed to re-anchor each merged
  * event to where its operation started. Kept as the single implementation so
  * the pairing rules can never drift between the two entry points.
  */
+export class CliEventNormalizer {
+  private readonly output: CliEvent[] = [];
+  private readonly sourceIndexes: number[] = [];
+  private readonly pending: PendingEvent[] = [];
+  private readonly skillEventRewriter = new McpSkillEventRewriter();
+  private inputCount = 0;
+
+  append(events: readonly CliEvent[]): number[] {
+    const changedSlots = new Set<number>();
+    for (const originalEvent of events) {
+      const inputIndex = this.inputCount++;
+      const event = normalizeEventToolResult(
+        // Keep support for histories recorded before skill events were rewritten
+        // at the shared parsed-event boundary; the rewriter is idempotent.
+        this.skillEventRewriter.rewrite(cloneEvent(originalEvent))
+      );
+
+      if (
+        (event.type === CLI_EVENT_TYPES.TOOL_CALL ||
+          event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL) &&
+        (event.data as ToolCall | McpToolCallData).result
+      ) {
+        const toolCallId = getToolCallId(event);
+        if (toolCallId) {
+          const pendingMatch = [...this.pending]
+            .reverse()
+            .find(
+              (candidate) =>
+                candidate.type === event.type &&
+                candidate.toolCallId === toolCallId
+            );
+          const outputIndex =
+            pendingMatch?.index ??
+            findOutputIndexByToolCallIdAndType(this.output, event, toolCallId);
+          if (outputIndex !== undefined) {
+            this.replaceSlot(
+              outputIndex,
+              mergeInitiatedWithCompleted(this.output[outputIndex], event),
+              changedSlots
+            );
+            if (pendingMatch) {
+              removePending(this.pending, pendingMatch);
+            }
+            continue;
+          }
+        }
+      }
+
+      if (event.type === CLI_EVENT_TYPES.TOOL_RESULT) {
+        const resultData = event.data as ToolResultData;
+        const pendingMatch = findPendingForResult(
+          this.pending,
+          this.output,
+          resultData
+        );
+        if (pendingMatch) {
+          const merged = mergeInitiatedWithResult(
+            this.output[pendingMatch.index],
+            resultData.result
+          );
+          if (merged) {
+            this.replaceSlot(pendingMatch.index, merged, changedSlots);
+            if (pendingMatch.kind !== PENDING_KINDS.SEMANTIC) {
+              removePending(this.pending, pendingMatch);
+            }
+            continue;
+          }
+        }
+
+        const fallbackIndex = findOutputIndexForResultFallback(
+          this.output,
+          resultData
+        );
+        if (fallbackIndex !== undefined) {
+          const merged = mergeInitiatedWithResult(
+            this.output[fallbackIndex],
+            resultData.result
+          );
+          if (merged) {
+            this.replaceSlot(fallbackIndex, merged, changedSlots);
+            continue;
+          }
+        }
+
+        this.pushSlot(event, inputIndex, changedSlots);
+        continue;
+      }
+
+      if (isSemanticCompletionEvent(event)) {
+        const pendingMatch = findMatchingPendingForCompletion(
+          this.pending,
+          event
+        );
+        if (pendingMatch) {
+          this.replaceSlot(
+            pendingMatch.index,
+            mergeInitiatedWithCompleted(this.output[pendingMatch.index], event),
+            changedSlots
+          );
+          removePending(this.pending, pendingMatch);
+          continue;
+        }
+
+        const fallbackIndex = findOutputIndexForCompletionFallback(
+          this.output,
+          event
+        );
+        if (fallbackIndex !== undefined) {
+          this.replaceSlot(
+            fallbackIndex,
+            mergeInitiatedWithCompleted(this.output[fallbackIndex], event),
+            changedSlots
+          );
+          continue;
+        }
+      }
+
+      this.pushSlot(event, inputIndex, changedSlots);
+      const pendingEvent = createPendingEvent(event, this.output.length - 1);
+      if (pendingEvent) {
+        this.pending.push(pendingEvent);
+      }
+    }
+
+    return [...changedSlots].sort((left, right) => left - right);
+  }
+
+  snapshot(): NormalizedCliEvent[] {
+    return this.output.map((event, index) => ({
+      event,
+      sourceIndex: this.sourceIndexes[index],
+    }));
+  }
+
+  private pushSlot(
+    event: CliEvent,
+    sourceIndex: number,
+    changedSlots: Set<number>
+  ): void {
+    const slotIndex = this.output.length;
+    this.output.push(event);
+    this.sourceIndexes.push(sourceIndex);
+    changedSlots.add(slotIndex);
+  }
+
+  private replaceSlot(
+    index: number,
+    event: CliEvent,
+    changedSlots: Set<number>
+  ): void {
+    const previous = this.output[index];
+    if (!eventsEqual(previous, event)) {
+      this.output[index] = event;
+      changedSlots.add(index);
+    }
+  }
+}
+
 export function normalizeCliEventsWithSource(
   events: readonly CliEvent[]
 ): NormalizedCliEvent[] {
-  const output: CliEvent[] = [];
-  const sourceIndexes: number[] = [];
-  const pending: PendingEvent[] = [];
-  const skillEventRewriter = new McpSkillEventRewriter();
-
-  for (const [inputIndex, originalEvent] of events.entries()) {
-    const event = normalizeEventToolResult(
-      // Keep support for histories recorded before skill events were rewritten
-      // at the shared parsed-event boundary; the rewriter is idempotent.
-      skillEventRewriter.rewrite(cloneEvent(originalEvent))
-    );
-
-    if (
-      (event.type === CLI_EVENT_TYPES.TOOL_CALL ||
-        event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL) &&
-      (event.data as ToolCall | McpToolCallData).result
-    ) {
-      const toolCallId = getToolCallId(event);
-      if (toolCallId) {
-        const pendingMatch = [...pending]
-          .reverse()
-          .find(
-            (candidate) =>
-              candidate.type === event.type &&
-              candidate.toolCallId === toolCallId
-          );
-        const outputIndex =
-          pendingMatch?.index ??
-          findOutputIndexByToolCallIdAndType(output, event, toolCallId);
-        if (outputIndex !== undefined) {
-          output[outputIndex] = mergeInitiatedWithCompleted(
-            output[outputIndex],
-            event
-          );
-          if (pendingMatch) {
-            removePending(pending, pendingMatch);
-          }
-          continue;
-        }
-      }
-    }
-
-    if (event.type === CLI_EVENT_TYPES.TOOL_RESULT) {
-      const resultData = event.data as ToolResultData;
-      const pendingMatch = findPendingForResult(pending, output, resultData);
-      if (pendingMatch) {
-        const merged = mergeInitiatedWithResult(
-          output[pendingMatch.index],
-          resultData.result
-        );
-        if (merged) {
-          output[pendingMatch.index] = merged;
-          if (pendingMatch.kind !== PENDING_KINDS.SEMANTIC) {
-            removePending(pending, pendingMatch);
-          }
-          continue;
-        }
-      }
-
-      const fallbackIndex = findOutputIndexForResultFallback(
-        output,
-        resultData
-      );
-      if (fallbackIndex !== undefined) {
-        const merged = mergeInitiatedWithResult(
-          output[fallbackIndex],
-          resultData.result
-        );
-        if (merged) {
-          output[fallbackIndex] = merged;
-          continue;
-        }
-      }
-
-      output.push(event);
-      sourceIndexes.push(inputIndex);
-      continue;
-    }
-
-    if (isSemanticCompletionEvent(event)) {
-      const pendingMatch = findMatchingPendingForCompletion(pending, event);
-      if (pendingMatch) {
-        output[pendingMatch.index] = mergeInitiatedWithCompleted(
-          output[pendingMatch.index],
-          event
-        );
-        removePending(pending, pendingMatch);
-        continue;
-      }
-
-      const fallbackIndex = findOutputIndexForCompletionFallback(output, event);
-      if (fallbackIndex !== undefined) {
-        output[fallbackIndex] = mergeInitiatedWithCompleted(
-          output[fallbackIndex],
-          event
-        );
-        continue;
-      }
-    }
-
-    output.push(event);
-    sourceIndexes.push(inputIndex);
-    const pendingEvent = createPendingEvent(event, output.length - 1);
-    if (pendingEvent) {
-      pending.push(pendingEvent);
-    }
-  }
-
-  return output.map((event, index) => ({
-    event,
-    sourceIndex: sourceIndexes[index],
-  }));
+  const normalizer = new CliEventNormalizer();
+  normalizer.append(events);
+  return normalizer.snapshot();
 }
 
 export function normalizeCliEvents(events: readonly CliEvent[]): CliEvent[] {

@@ -13,9 +13,386 @@ import {
   MCP_CALL_VIA,
   OPERATION_STATUS,
 } from "../../types/DashboardConstants";
-import { normalizeCliEvents } from "../../utils/CliEventNormalizer";
+import {
+  CliEventNormalizer,
+  isOpenCliOperation,
+  normalizeCliEvents,
+  normalizeCliEventsWithSource,
+} from "../../utils/CliEventNormalizer";
 
 suite("CliEventNormalizer", () => {
+  test("incremental batches match the one-shot normalizer and report changed slots", () => {
+    const fixtures: CliEvent[][] = [
+      JSON.parse(`[{
+        "type":"${CLI_EVENT_TYPES.TOOL_CALL}","data":{"name":"wait","id":"call-1","parameters":{} }
+      },{
+        "type":"${CLI_EVENT_TYPES.TOOL_RESULT}","data":{"toolCallId":"call-1","result":{"success":true,"output":"done"}}
+      }]`) as CliEvent[],
+      [
+        {
+          type: CLI_EVENT_TYPES.BASH_COMMAND,
+          timestamp: 1,
+          data: {
+            command: "npm test",
+            status: OPERATION_STATUS.INITIATED,
+            toolCallId: "bash-1",
+          } as BashCommandData,
+        },
+        {
+          type: CLI_EVENT_TYPES.TOOL_RESULT,
+          timestamp: 2,
+          data: {
+            toolCallId: "bash-1",
+            result: { success: true, output: "passed" },
+          },
+        },
+      ],
+      [
+        {
+          type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+          timestamp: 1,
+          data: {
+            server: "ctrlyoke",
+            tool: "claim_paths",
+            toolCallId: "mcp-1",
+            parameters: { paths: ["a.ts"] },
+          } as McpToolCallData,
+        },
+        {
+          type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+          timestamp: 2,
+          data: {
+            server: "ctrlyoke",
+            tool: "claim_paths",
+            toolCallId: "mcp-1",
+            result: { success: true, output: "granted" },
+          } as McpToolCallData,
+        },
+      ],
+      [
+        {
+          type: CLI_EVENT_TYPES.FILE_EDIT,
+          timestamp: 1,
+          data: {
+            path: "src/example.ts",
+            toolCallId: "edit-1",
+            status: OPERATION_STATUS.INITIATED,
+          } as FileEditData,
+        },
+        {
+          type: CLI_EVENT_TYPES.FILE_EDIT,
+          timestamp: 2,
+          data: {
+            path: "C:/repo/src/example.ts",
+            toolCallId: "edit-1",
+            status: OPERATION_STATUS.COMPLETED,
+            structuredPatch: [],
+          } as FileEditData,
+        },
+      ],
+    ];
+
+    // Keep the incremental checks aligned with all focused pairing scenarios
+    // already covered by this suite, not only the simplest initiated/result
+    // pairs above.
+    fixtures.push(
+      [
+        {
+          type: CLI_EVENT_TYPES.TOOL_CALL,
+          data: {
+            name: "wait",
+            parameters: {},
+            id: "attached-result",
+            result: { success: true, output: [{ text: "done" }] },
+          } as unknown as ToolCall,
+        },
+      ],
+      [
+        {
+          type: CLI_EVENT_TYPES.BASH_COMMAND,
+          timestamp: 1,
+          data: {
+            command: "Get-ChildItem images\\screenshots",
+            status: OPERATION_STATUS.INITIATED,
+            toolCallId: "toolu_bash",
+          } as BashCommandData,
+        },
+        {
+          type: CLI_EVENT_TYPES.FILE_READ,
+          timestamp: 2,
+          data: {
+            path: "TRADEMARK_FILING_GUIDE.md",
+            status: OPERATION_STATUS.INITIATED,
+            toolCallId: "toolu_read",
+          },
+        },
+        {
+          type: CLI_EVENT_TYPES.TOOL_RESULT,
+          timestamp: 3,
+          data: {
+            toolCallId: "toolu_bash",
+            result: { success: true, output: "screenshot listing" },
+          },
+        },
+        {
+          type: CLI_EVENT_TYPES.TOOL_RESULT,
+          timestamp: 4,
+          data: {
+            toolCallId: "toolu_read",
+            result: { success: true, output: "# Trademark Filing Guide" },
+          },
+        },
+      ],
+      [
+        {
+          type: CLI_EVENT_TYPES.BASH_COMMAND,
+          data: {
+            command: "npm run typecheck",
+            status: OPERATION_STATUS.INITIATED,
+            toolCallId: "call_typecheck",
+          } as BashCommandData,
+        },
+        { type: CLI_EVENT_TYPES.WEB_SEARCH, data: { query: "vitest timeout" } },
+        {
+          type: CLI_EVENT_TYPES.BASH_COMMAND,
+          data: {
+            command: "npm run typecheck",
+            output: "no errors",
+            status: OPERATION_STATUS.COMPLETED,
+            toolCallId: "call_typecheck",
+          } as BashCommandData,
+        },
+        {
+          type: CLI_EVENT_TYPES.TOOL_RESULT,
+          data: {
+            toolCallId: "call_typecheck",
+            result: { success: true, output: "no errors" },
+          },
+        },
+      ],
+      [
+        {
+          type: CLI_EVENT_TYPES.BASH_COMMAND,
+          data: {
+            command: "npm test",
+            status: OPERATION_STATUS.INITIATED,
+            toolCallId: "call_a",
+          } as BashCommandData,
+        },
+        {
+          type: CLI_EVENT_TYPES.BASH_COMMAND,
+          data: {
+            command: "npm test",
+            status: OPERATION_STATUS.INITIATED,
+            toolCallId: "call_b",
+          } as BashCommandData,
+        },
+        {
+          type: CLI_EVENT_TYPES.BASH_COMMAND,
+          data: {
+            command: "npm test",
+            output: "a passed",
+            status: OPERATION_STATUS.COMPLETED,
+            toolCallId: "call_a",
+          } as BashCommandData,
+        },
+      ],
+      [
+        ...["PromptQueue.ts", "WorkflowExecutor.ts"].map(
+          (name, index): CliEvent => ({
+            type: CLI_EVENT_TYPES.FILE_EDIT,
+            timestamp: index + 1,
+            data: {
+              path: `src/core/${name}`,
+              status: OPERATION_STATUS.INITIATED,
+              toolCallId: "call_patch",
+            } as FileEditData,
+          })
+        ),
+        ...["PromptQueue.ts", "WorkflowExecutor.ts"].map(
+          (name, index): CliEvent => ({
+            type: CLI_EVENT_TYPES.FILE_EDIT,
+            timestamp: index + 3,
+            data: {
+              path: `C:/repo/src/core/${name}`,
+              status: OPERATION_STATUS.COMPLETED,
+              toolCallId: "call_patch",
+            } as FileEditData,
+          })
+        ),
+      ],
+      [
+        ...["call_a", "call_b"].map((toolCallId, index): CliEvent => ({
+          type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+          timestamp: index + 1,
+          data: {
+            server: "ctrlyoke",
+            tool: "claim_paths",
+            toolCallId,
+            parameters: { call: toolCallId },
+          } as McpToolCallData,
+        })),
+        ...["call_b", "call_a"].map((toolCallId, index): CliEvent => ({
+          type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+          timestamp: index + 3,
+          data: {
+            server: "ctrlyoke",
+            tool: "claim_paths",
+            toolCallId,
+            result: { success: true, output: `result ${toolCallId}` },
+          } as McpToolCallData,
+        })),
+      ],
+      [
+        {
+          type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+          timestamp: 1,
+          data: {
+            server: "ctrlyoke",
+            tool: "claim_paths",
+            toolCallId: "call_c",
+          } as McpToolCallData,
+        },
+        {
+          type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+          timestamp: 2,
+          data: {
+            server: "ctrlyoke",
+            tool: "claim_paths",
+            toolCallId: "call_c",
+            parameters: { paths: ["a.txt"] },
+            result: { success: true, output: "ok" },
+          } as McpToolCallData,
+        },
+      ],
+      [
+        {
+          type: CLI_EVENT_TYPES.BASH_COMMAND,
+          timestamp: 1,
+          data: {
+            command: 'node "C:\\repo\\out\\mcp-server.js" --tool post_note',
+            status: OPERATION_STATUS.INITIATED,
+            toolCallId: "skill_call_1",
+          } as BashCommandData,
+        },
+        {
+          type: CLI_EVENT_TYPES.BASH_COMMAND,
+          timestamp: 2,
+          data: {
+            command: 'node "C:\\repo\\out\\mcp-server.js" --tool post_note',
+            output: '{"success":true}',
+            status: OPERATION_STATUS.COMPLETED,
+            toolCallId: "skill_call_1",
+          } as BashCommandData,
+        },
+        {
+          type: CLI_EVENT_TYPES.TOOL_RESULT,
+          timestamp: 3,
+          data: {
+            toolCallId: "skill_call_1",
+            result: { success: true, output: '{"success":true}' },
+          },
+        },
+      ],
+      [
+        {
+          type: CLI_EVENT_TYPES.TOOL_CALL,
+          timestamp: 1,
+          data: {
+            name: "report_intent",
+            id: "known",
+            parameters: { a: 1 },
+          },
+        },
+        {
+          type: CLI_EVENT_TYPES.TOOL_CALL,
+          timestamp: 2,
+          data: {
+            name: "report_intent",
+            id: "unknown",
+            parameters: { a: 2 },
+            result: { success: true, output: "done" },
+          },
+        },
+      ]
+    );
+
+    const assertIncremental = (events: CliEvent[], batches: CliEvent[][]) => {
+      const normalizer = new CliEventNormalizer();
+      for (const batch of batches) {
+        const before = normalizer.snapshot();
+        const changedSlots = normalizer.append(batch);
+        const after = normalizer.snapshot();
+        const expectedChangedSlots = after.flatMap((entry, index) =>
+          before[index] == null ||
+          JSON.stringify(before[index]) !== JSON.stringify(entry)
+            ? [index]
+            : []
+        );
+        assert.deepStrictEqual(changedSlots, expectedChangedSlots);
+      }
+      assert.deepStrictEqual(
+        normalizer.snapshot(),
+        normalizeCliEventsWithSource(events)
+      );
+    };
+
+    for (const fixture of fixtures) {
+      for (let cut = 0; cut <= fixture.length; cut++) {
+        assertIncremental(fixture, [fixture.slice(0, cut), fixture.slice(cut)]);
+      }
+      assertIncremental(
+        fixture,
+        fixture.map((event) => [event])
+      );
+    }
+  });
+
+  test("identifies operations using the normalizer's open-event rules", () => {
+    const openEvents: CliEvent[] = [
+      {
+        type: CLI_EVENT_TYPES.BASH_COMMAND,
+        data: { command: "npm test", status: OPERATION_STATUS.INITIATED },
+      },
+      {
+        type: CLI_EVENT_TYPES.TOOL_CALL,
+        data: { name: "wait", parameters: {} },
+      },
+      {
+        type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+        data: { server: "ctrlyoke", tool: "workflow_status" },
+      },
+      { type: CLI_EVENT_TYPES.WEB_SEARCH, data: { query: "docs" } },
+    ];
+    const closedEvents: CliEvent[] = [
+      {
+        type: CLI_EVENT_TYPES.BASH_COMMAND,
+        data: { command: "npm test", status: OPERATION_STATUS.COMPLETED },
+      },
+      {
+        type: CLI_EVENT_TYPES.TOOL_CALL,
+        data: {
+          name: "wait",
+          parameters: {},
+          result: { success: true, output: "done" },
+        },
+      },
+      { type: CLI_EVENT_TYPES.TEXT, data: { text: "done" } },
+    ];
+
+    assert.deepStrictEqual(openEvents.map(isOpenCliOperation), [
+      true,
+      true,
+      true,
+      true,
+    ]);
+    assert.deepStrictEqual(closedEvents.map(isOpenCliOperation), [
+      false,
+      false,
+      false,
+    ]);
+  });
+
   test("normalizes structured tool-result output before merging it into a tool call", () => {
     const events = JSON.parse(`[
       {

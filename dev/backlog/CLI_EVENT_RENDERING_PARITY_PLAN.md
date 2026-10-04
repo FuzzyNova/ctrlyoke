@@ -20,6 +20,10 @@ run`, but not for `history show` replaying a dashboard run that was steered; see
 - **Phase 1 complete.** Added CLI user-steer rendering and exhaustive event handling,
   shared tool-result text and MCP label utilities, and failed tool/web-search detail
   rendering. No deviations from the phase scope.
+- **Phase 2 items 1–2 complete.** Added the incremental `CliEventNormalizer` and
+  `isOpenCliOperation`, then moved the superseded-Bash and duplicate-file-edit
+  visibility predicates into shared utilities. The dashboard still uses the
+  function-form normalizer and its output filtering is unchanged.
 
 ## Problem
 

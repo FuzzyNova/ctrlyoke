@@ -1,19 +1,21 @@
 import { normalizeCliEvents } from "@root/utils/CliEventNormalizer";
+import {
+  findSupersededInitiatedIndex,
+  shouldHideInitiatedFileEditDiff,
+} from "@root/utils/CliEventVisibility";
 import { expandFromRawCode } from "react-diff-view";
 import type { HunkData, ViewType } from "react-diff-view";
 import type {
   CliEvent,
   CliOutput as CliOutputType,
-  BashCommandData,
   FileEditData,
 } from "../types/cliEvents";
 import {
   CLI_EVENT_TYPES,
   FINAL_STEP_PHASES,
-  OPERATION_STATUS,
 } from "../types/messages";
 import type { WorkspaceSnapshot } from "@root/types/OutputHistoryTypes";
-import { resolveSnapshotFileMatch, sameFilePath } from "./promptUndo";
+import { resolveSnapshotFileMatch } from "./promptUndo";
 import {
   buildDiffRenderPlanFromStats,
   getRenderedDiffStats,
@@ -119,42 +121,12 @@ export function getVisibleStructuredEvents(
   const indicesToHideRow = new Set<number>();
 
   for (let i = 0; i < normalizedEvents.length; i++) {
-    const event = normalizedEvents[i];
-
-    if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
-      const data = event.data as FileEditData;
-      if (data.status === OPERATION_STATUS.INITIATED) {
-        for (let j = i + 1; j < normalizedEvents.length; j++) {
-          const next = normalizedEvents[j];
-          if (next.type !== CLI_EVENT_TYPES.FILE_EDIT) continue;
-          const nextData = next.data as FileEditData;
-          if (!nextData.path || !data.path) continue;
-          if (!sameFilePath(nextData.path, data.path)) continue;
-          if (nextData.status === OPERATION_STATUS.COMPLETED) {
-            indicesToHideDiff.add(i);
-          }
-          break;
-        }
-      }
+    if (shouldHideInitiatedFileEditDiff(normalizedEvents, i)) {
+      indicesToHideDiff.add(i);
     }
 
-    if (event.type === CLI_EVENT_TYPES.BASH_COMMAND) {
-      const data = event.data as BashCommandData;
-      if (data.status === OPERATION_STATUS.INITIATED && data.command) {
-        for (let j = i + 1; j < normalizedEvents.length; j++) {
-          const next = normalizedEvents[j];
-          if (next.type !== CLI_EVENT_TYPES.BASH_COMMAND) continue;
-          const nextData = next.data as BashCommandData;
-          if (nextData.command !== data.command) continue;
-          if (
-            nextData.status === OPERATION_STATUS.COMPLETED ||
-            nextData.status === OPERATION_STATUS.FAILED
-          ) {
-            indicesToHideRow.add(i);
-          }
-          break;
-        }
-      }
+    if (findSupersededInitiatedIndex(normalizedEvents, i) !== undefined) {
+      indicesToHideRow.add(i);
     }
   }
 
