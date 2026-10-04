@@ -3,6 +3,7 @@ import { hasStarted } from "../utils/StepStatusDerivation";
 
 export interface StepReferenceRenumberingResult {
   steps: WorkflowStep[];
+  finalStep?: WorkflowStep;
   refusals: string[];
 }
 
@@ -13,17 +14,21 @@ export interface StepReferenceRenumberingResult {
  */
 export function renumberStepReferences(
   oldSteps: readonly WorkflowStep[],
-  newSteps: readonly WorkflowStep[]
+  newSteps: readonly WorkflowStep[],
+  finalStep?: WorkflowStep
 ): StepReferenceRenumberingResult {
   const oldIndexById = buildStepIndex(oldSteps);
   const newIndexById = buildStepIndex(newSteps);
   const refusals: string[] = [];
 
-  const steps = newSteps.map((step) => {
+  const renumberStep = (
+    step: WorkflowStep,
+    isFinalStep = false
+  ): WorkflowStep => {
     if (isScriptStep(step)) return step;
     const stepId = step._runtime?.stepId;
     const oldIndex = findStepIndex(step, stepId, oldIndexById);
-    if (oldIndex === undefined) return step;
+    if (oldIndex === undefined && !isFinalStep) return step;
 
     let sessionId = step.sessionId;
     if (typeof sessionId === "number") {
@@ -33,8 +38,12 @@ export function renumberStepReferences(
         ? findStepIndex(target, targetId, newIndexById)
         : undefined;
       if (target && targetNewIndex === undefined) {
-        if (!hasStarted(step)) {
-          refusals.push(describeReferencingStep(step, oldIndex));
+        if (isFinalStep || !hasStarted(step)) {
+          refusals.push(
+            isFinalStep
+              ? "Final step"
+              : describeReferencingStep(step, oldIndex!)
+          );
         } else {
           sessionId = undefined;
         }
@@ -52,8 +61,12 @@ export function renumberStepReferences(
           ? findStepIndex(target, targetId, newIndexById)
           : undefined;
         if (target && targetNewIndex === undefined) {
-          if (!hasStarted(step)) {
-            refusals.push(describeReferencingStep(step, oldIndex));
+          if (isFinalStep || !hasStarted(step)) {
+            refusals.push(
+              isFinalStep
+                ? "Final step"
+                : describeReferencingStep(step, oldIndex!)
+            );
             return [reference];
           }
           return [];
@@ -62,14 +75,24 @@ export function renumberStepReferences(
       });
     }
 
+    const { sessionId: _oldSessionId, ...stepWithoutSessionId } = step;
     return {
-      ...step,
+      ...stepWithoutSessionId,
       ...(sessionId !== undefined ? { sessionId } : {}),
       ...(priorContext !== undefined ? { priorContext } : {}),
     } as WorkflowStep;
-  });
+  };
 
-  return { steps, refusals: [...new Set(refusals)] };
+  const steps = newSteps.map((step) => renumberStep(step));
+  const renumberedFinalStep = finalStep
+    ? renumberStep(finalStep, true)
+    : undefined;
+
+  return {
+    steps,
+    ...(renumberedFinalStep ? { finalStep: renumberedFinalStep } : {}),
+    refusals: [...new Set(refusals)],
+  };
 }
 
 interface StepIndex {

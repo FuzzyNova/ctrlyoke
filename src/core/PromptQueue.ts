@@ -1982,12 +1982,17 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         requestedIndex,
         { steps: identifiedSteps, parallelGroups }
       );
+      const renumbered = renumberStepReferences(
+        previousSteps,
+        identifiedTopology.steps,
+        this.workflowFile?.finalStep
+      );
       assertStartedStepPositionsPreserved(
         previousSteps,
         identifiedTopology.steps,
         "insert"
       );
-      this.state.steps = identifiedTopology.steps;
+      this.state.steps = renumbered.steps;
       this.state.parallelGroups = identifiedTopology.parallelGroups;
 
       // Create new results for the inserted steps
@@ -2010,6 +2015,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
             ...this.workflowFile,
             steps: [...this.state.steps],
             parallelGroups: this.state.parallelGroups,
+            ...(renumbered.finalStep
+              ? { finalStep: renumbered.finalStep }
+              : {}),
           }
         : this.workflowFile;
       this.emitStateChange();
@@ -2106,6 +2114,11 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       assertStepMutable(identifiedStep, operation);
 
       const nextTopology = transform(topology, identifiedStep);
+      const renumbered = renumberStepReferences(
+        previousSteps,
+        nextTopology.steps,
+        this.workflowFile?.finalStep
+      );
       assertStartedStepPositionsPreserved(
         previousSteps,
         nextTopology.steps,
@@ -2130,7 +2143,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         };
       }
 
-      this.state.steps = nextTopology.steps;
+      this.state.steps = renumbered.steps;
       this.state.parallelGroups = nextTopology.parallelGroups;
       this.state.results.splice(insertIndex, 0, {
         prompt: isScriptStep(identifiedStep)
@@ -2156,6 +2169,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
             ...this.workflowFile,
             steps: [...this.state.steps],
             parallelGroups: this.state.parallelGroups,
+            ...(renumbered.finalStep
+              ? { finalStep: renumbered.finalStep }
+              : {}),
           }
         : this.workflowFile;
       this.emitStateChange();
@@ -2224,7 +2240,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       );
       const renumbered = renumberStepReferences(
         previousSteps,
-        nextTopology.steps
+        nextTopology.steps,
+        this.workflowFile?.finalStep
       );
       this.state.steps = renumbered.steps;
       this.state.parallelGroups = nextTopology.parallelGroups;
@@ -2260,6 +2277,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
             ...this.workflowFile,
             steps: [...this.state.steps],
             parallelGroups: this.state.parallelGroups,
+            ...(renumbered.finalStep
+              ? { finalStep: renumbered.finalStep }
+              : {}),
           }
         : this.workflowFile;
       this.emitStateChange();
@@ -2803,7 +2823,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       );
       const renumbered = renumberStepReferences(
         previousSteps,
-        nextTopology.steps
+        nextTopology.steps,
+        this.workflowFile?.finalStep
       );
       if (renumbered.refusals.length > 0) {
         throw new Error(
@@ -2827,6 +2848,9 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
             ...this.workflowFile,
             steps: [...this.state.steps],
             parallelGroups: this.state.parallelGroups,
+            ...(renumbered.finalStep
+              ? { finalStep: renumbered.finalStep }
+              : {}),
           }
         : this.workflowFile;
 

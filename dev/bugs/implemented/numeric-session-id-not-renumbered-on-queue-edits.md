@@ -62,3 +62,12 @@ the dashboard action-failure notification. The `$step:N` form is used in
 generated context/output handling, but prompt text is not parsed as a
 structured step reference, so arbitrary prompt text containing `$step:N` is
 intentionally not rewritten.
+
+Follow-up: all insertion paths, including dashboard Queue next / Run next,
+parallel-group member insertion, and MCP `parallelWithCurrent` admission, now
+use the same renumbering helper. Numeric references on `finalStep` are kept in
+sync too; deleting a queue step referenced by `finalStep` is refused. Removed
+targets clear `sessionId` on already-started ordinary steps, and the helper
+removes the property instead of leaving its old value behind. Regression
+coverage exercises service and resident queue mutation paths. MCP reorder
+validation now shares the service's reorderable-index calculation.

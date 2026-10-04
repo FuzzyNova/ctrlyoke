@@ -69,10 +69,11 @@ import {
 } from "./core/orchestration/GlobalWorkflowStatusService";
 import {
   deriveStepStatusesFromRuntime,
-  hasInFlightStep,
-  hasStarted,
 } from "./utils/StepStatusDerivation";
-import { RunContinuationService } from "./core/orchestration/RunContinuationService";
+import {
+  getReorderableStepIndices,
+  RunContinuationService,
+} from "./core/orchestration/RunContinuationService";
 import {
   flattenParallelItems,
   type ResolvedParallelItem,
@@ -346,20 +347,7 @@ function requestedOrderMatchesCurrent(
   workingFile: WorkingFile,
   requestedOrder: number[]
 ): boolean {
-  const steps = workingFile.steps ?? [];
-  const currentIndex = workingFile._runtime?.currentIndex ?? 0;
-  const executionIsInFlight = hasInFlightStep(
-    workingFile._runtime?.executionState,
-    workingFile._runtime?.finalStep?.phase
-  );
-  const currentOrder = steps
-    .map((_, index) => index)
-    .filter(
-      (index) =>
-        index >= currentIndex &&
-        !(executionIsInFlight && index === currentIndex) &&
-        !hasStarted(steps[index])
-    );
+  const currentOrder = getReorderableStepIndices(workingFile);
   return (
     currentOrder.length === requestedOrder.length &&
     currentOrder.every((index, position) => index === requestedOrder[position])

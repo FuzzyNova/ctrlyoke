@@ -61,4 +61,35 @@ suite("StepReferenceRenumbering", () => {
     assert.strictEqual((result.steps[2] as PromptStep).sessionId, 2);
     assert.deepStrictEqual((result.steps[2] as PromptStep).priorContext, [1, 2]);
   });
+
+  test("clears a removed session target and renumbers final-step references", () => {
+    const oldSteps = ensureStepIds([
+      { prompt: "removed" },
+      { prompt: "target" },
+      { prompt: "started reference", sessionId: 1, _runtime: { startedAt: 1 } },
+    ] as WorkflowStep[]);
+    const finalStep = { prompt: "final", sessionId: 2, priorContext: [2] };
+
+    const result = renumberStepReferences(
+      oldSteps,
+      oldSteps.slice(1),
+      finalStep
+    );
+
+    assert.strictEqual("sessionId" in result.steps[1], false);
+    assert.strictEqual((result.finalStep as PromptStep).sessionId, 1);
+    assert.deepStrictEqual((result.finalStep as PromptStep).priorContext, [1]);
+    assert.deepStrictEqual(result.refusals, []);
+  });
+
+  test("refuses removal of a target referenced by finalStep", () => {
+    const oldSteps = ensureStepIds([{ prompt: "target" }]);
+
+    const result = renumberStepReferences(oldSteps, [], {
+      prompt: "final",
+      sessionId: 1,
+    });
+
+    assert.deepStrictEqual(result.refusals, ["Final step"]);
+  });
 });

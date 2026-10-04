@@ -1383,7 +1383,8 @@ export class WorkingFileManager {
         );
         const renumbered = renumberStepReferences(
           topology.steps,
-          nextTopology.steps
+          nextTopology.steps,
+          source.finalStep
         );
         const currentIndex = source._runtime?.currentIndex ?? 0;
         // Strict `<`, matching `PromptQueue.insertStepAfterIndex`: an insert at
@@ -1395,6 +1396,9 @@ export class WorkingFileManager {
           workingFile: {
             ...source,
             steps: renumbered.steps,
+            ...(renumbered.finalStep
+              ? { finalStep: renumbered.finalStep }
+              : {}),
             parallelGroups: nextTopology.parallelGroups,
             _runtime: source._runtime
               ? { ...source._runtime, currentIndex: nextCurrentIndex }
@@ -1560,7 +1564,8 @@ export class WorkingFileManager {
         const nextTopology = deleteParallelGroupStep(topology, index);
         const renumbered = renumberStepReferences(
           topology.steps,
-          nextTopology.steps
+          nextTopology.steps,
+          source.finalStep
         );
         if (renumbered.refusals.length > 0) {
           throw new Error(
@@ -1574,6 +1579,9 @@ export class WorkingFileManager {
           workingFile: {
             ...source,
             steps: renumbered.steps,
+            ...(renumbered.finalStep
+              ? { finalStep: renumbered.finalStep }
+              : {}),
             parallelGroups: nextTopology.parallelGroups,
             _runtime: source._runtime
               ? { ...source._runtime, currentIndex: nextCurrentIndex }
@@ -1628,12 +1636,16 @@ export class WorkingFileManager {
         );
         const renumbered = renumberStepReferences(
           topology.steps,
-          nextTopology.steps
+          nextTopology.steps,
+          source.finalStep
         );
         return {
           workingFile: {
             ...source,
             steps: renumbered.steps,
+            ...(renumbered.finalStep
+              ? { finalStep: renumbered.finalStep }
+              : {}),
             parallelGroups: nextTopology.parallelGroups,
           },
           result: undefined,

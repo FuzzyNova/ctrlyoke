@@ -143,6 +143,24 @@ export interface SelfOwnedUntrackedDiagnostic {
   decision: "preserve-non-mutating";
 }
 
+/** Return the pending queue indices that a reorder request may move. */
+export function getReorderableStepIndices(workingFile: WorkingFile): number[] {
+  const steps = workingFile.steps ?? [];
+  const currentIndex = workingFile._runtime?.currentIndex ?? 0;
+  const executionIsInFlight = hasInFlightStep(
+    workingFile._runtime?.executionState,
+    workingFile._runtime?.finalStep?.phase
+  );
+  return steps
+    .map((_, index) => index)
+    .filter(
+      (index) =>
+        index >= currentIndex &&
+        !(executionIsInFlight && index === currentIndex) &&
+        !hasStarted(steps[index])
+    );
+}
+
 /**
  * Node-only continuation transaction used by the extension, CLI, and MCP server.
  * It never binds an executor; callers that own execution do that separately.
@@ -417,7 +435,8 @@ export class RunContinuationService {
         );
         const renumbered = renumberStepReferences(
           sourceTopology.steps,
-          nextTopology.steps
+          nextTopology.steps,
+          source.finalStep
         );
         const incomingGroupIds = new Set(
           sanitizedIncomingTopology.parallelGroups.map((group) => group.id)
@@ -429,6 +448,9 @@ export class RunContinuationService {
           ...source,
           definitionRevision: sourceRevision + 1,
           steps: renumbered.steps,
+          ...(renumbered.finalStep
+            ? { finalStep: renumbered.finalStep }
+            : {}),
           parallelGroups: nextTopology.parallelGroups,
           _runtime: {
             currentIndex: source._runtime?.currentIndex ?? 0,
@@ -628,6 +650,12 @@ export class RunContinuationService {
           }
         }
 
+        const renumbered = renumberStepReferences(
+          sourceTopology.steps,
+          nextTopology.steps,
+          source.finalStep
+        );
+
         const joinedGroup = nextTopology.parallelGroups.find(
           (group) => group.id === joinedGroupId
         );
@@ -643,7 +671,10 @@ export class RunContinuationService {
         const workingFile: WorkingFile = {
           ...source,
           definitionRevision: sourceRevision + 1,
-          steps: nextTopology.steps,
+          steps: renumbered.steps,
+          ...(renumbered.finalStep
+            ? { finalStep: renumbered.finalStep }
+            : {}),
           parallelGroups: nextTopology.parallelGroups,
           _runtime: {
             ...source._runtime!,
@@ -862,7 +893,8 @@ export class RunContinuationService {
         const nextTopology = deleteParallelGroupStep(topology, index);
         const renumbered = renumberStepReferences(
           topology.steps,
-          nextTopology.steps
+          nextTopology.steps,
+          source.finalStep
         );
         if (renumbered.refusals.length > 0) {
           throw new Error(
@@ -881,6 +913,9 @@ export class RunContinuationService {
           workingFile: {
             ...source,
             steps: renumbered.steps,
+            ...(renumbered.finalStep
+              ? { finalStep: renumbered.finalStep }
+              : {}),
             parallelGroups: nextTopology.parallelGroups,
             _runtime: source._runtime
               ? {
@@ -917,18 +952,16 @@ export class RunContinuationService {
         if (absoluteOrder.some((index) => !Number.isInteger(index))) {
           throw new Error("Reorder indices must be integers");
         }
+        const fixedIndices = new Set<number>();
+        const movableIndices = getReorderableStepIndices(source);
         const executionIsInFlight = hasInFlightStep(
           source._runtime?.executionState,
           source._runtime?.finalStep?.phase
         );
-        const fixedIndices = new Set<number>();
-        const movableIndices: number[] = [];
         for (let index = currentIndex; index < topology.steps.length; index++) {
           const isRunningHead = executionIsInFlight && index === currentIndex;
           if (isRunningHead || hasStarted(topology.steps[index])) {
             fixedIndices.add(index);
-          } else {
-            movableIndices.push(index);
           }
         }
 
@@ -1017,12 +1050,16 @@ export class RunContinuationService {
         );
         const renumbered = renumberStepReferences(
           topology.steps,
-          nextTopology.steps
+          nextTopology.steps,
+          source.finalStep
         );
         return {
           workingFile: {
             ...source,
             steps: renumbered.steps,
+            ...(renumbered.finalStep
+              ? { finalStep: renumbered.finalStep }
+              : {}),
             parallelGroups: nextTopology.parallelGroups,
           },
           result: undefined,

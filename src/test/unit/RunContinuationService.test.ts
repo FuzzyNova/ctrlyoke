@@ -19,7 +19,9 @@ import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import type {
   RunRef,
   RunnerHostIdentity,
+  PromptStep,
   WorkflowKey,
+  WorkflowStep,
   WorkingFile,
 } from "../../types/CtrlYokeTypes";
 
@@ -518,6 +520,15 @@ suite("RunContinuationService topology append transaction", () => {
     const source = JSON.parse(
       await fs.readFile(runPath, "utf8")
     ) as WorkingFile;
+    source.steps![3] = {
+      ...source.steps![3],
+      sessionId: 5,
+    } as WorkflowStep;
+    source.finalStep = {
+      prompt: "final",
+      sessionId: 5,
+      priorContext: [4, 5],
+    };
     source._runtime = {
       ...source._runtime,
       currentIndex: 1,
@@ -552,6 +563,18 @@ suite("RunContinuationService topology append transaction", () => {
       { id: "active", startIndex: 1, endIndex: 4, failFast: true },
       { id: "later", startIndex: 5, endIndex: 6, failFast: false },
     ]);
+    assert.strictEqual(
+      (joined.workingFile.steps?.[5] as PromptStep).sessionId,
+      7
+    );
+    assert.strictEqual(
+      (joined.workingFile.finalStep as PromptStep).sessionId,
+      7
+    );
+    assert.deepStrictEqual(
+      (joined.workingFile.finalStep as PromptStep).priorContext,
+      [6, 7]
+    );
     assert.strictEqual(joined.definitionRevision, 2);
 
     const closing = JSON.parse(
