@@ -1119,11 +1119,27 @@ async function runCommand(
         parallelGroups.clear();
         renderedFinalStepLabels.clear();
         pendingScriptStatusMessages.clear();
+        CliTerminalFormatter.disposeEventStreams();
       });
     };
 
     instance.onPromptStart((data) =>
       outputGate.write(() => {
+        if (data.cliCommand === undefined) {
+          const queueTarget: CliOutputTarget = {
+            stepIndex: data.stepIndex,
+            stepName: data.stepName,
+            key: `queue:${data.stepIndex}`,
+          };
+          CliTerminalFormatter.replaceEventStreamByKey(
+            queueTarget.key!,
+            queueTarget
+          );
+          CliTerminalFormatter.replaceEventStreamByKey(
+            `final:${data.stepIndex}`,
+            { ...queueTarget, key: `final:${data.stepIndex}` }
+          );
+        }
         if (data.cliCommand !== undefined) {
           CliTerminalFormatter.renderPromptHeader(data);
           return;

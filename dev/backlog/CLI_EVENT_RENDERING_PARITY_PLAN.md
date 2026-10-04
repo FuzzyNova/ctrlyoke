@@ -24,6 +24,10 @@ run`, but not for `history show` replaying a dashboard run that was steered; see
   `isOpenCliOperation`, then moved the superseded-Bash and duplicate-file-edit
   visibility predicates into shared utilities. The dashboard still uses the
   function-form normalizer and its output filtering is unchanged.
+- **Phase 2 item 3 complete.** Added the per-target `CliEventStream` used by live
+  output and history replay, including incremental Bash/file-edit pairing,
+  compact header re-emission across interleaved output, and normalized-slot
+  `--max-events` limits. Item 4 remains queued for the next change.
 
 ## Problem
 

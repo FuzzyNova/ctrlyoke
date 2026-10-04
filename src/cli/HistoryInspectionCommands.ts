@@ -1757,13 +1757,13 @@ function renderHistoryAttempt(
     }
   } else if (output?.structured?.events?.length) {
     const events = output.structured.events;
-    totalEvents = events.length;
-    omittedEvents =
-      maxEvents === undefined ? 0 : Math.max(0, events.length - maxEvents);
-    CliTerminalFormatter.renderEvents(
-      omittedEvents > 0 ? events.slice(0, maxEvents) : events,
-      target
+    totalEvents = CliTerminalFormatter.renderHistoryEvents(
+      events,
+      target,
+      maxEvents
     );
+    omittedEvents =
+      maxEvents === undefined ? 0 : Math.max(0, totalEvents - maxEvents);
   } else if (projection.includeResponse && output?.response) {
     CliTerminalFormatter.renderStreamingChunk(output.response, target);
   }
@@ -1785,10 +1785,10 @@ function renderHistoryAttempt(
     io.writeOut(`… more output (use --cursor ${page.nextCursor})`);
   }
   if (omittedEvents > 0) {
-    // --cursor pages characters, not events, so the way to see the rest of
-    // the events is a larger event budget.
+    // --cursor pages characters, not slots, so the way to see the rest is a
+    // larger normalized-slot budget.
     io.writeOut(
-      `… ${omittedEvents} more events (use --max-events ${totalEvents} to show all)`
+      `… ${omittedEvents} more event blocks (use --max-events ${totalEvents} to show all)`
     );
   }
 }

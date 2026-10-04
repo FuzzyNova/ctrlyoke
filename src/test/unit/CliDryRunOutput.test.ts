@@ -201,10 +201,12 @@ CliTerminalFormatter.flushStreamingBuffer();`
       1
     );
     assert.ok(output.includes("[2 recall-info]"));
-    assert.ok(output.indexOf("[2 recall-info]") < output.indexOf("User message"));
+    assert.ok(
+      output.indexOf("[2 recall-info]") < output.indexOf("User message")
+    );
     assert.ok(output.indexOf("User message") < output.indexOf("Orange."));
     assert.ok(output.includes("[2 recall-info] Orange."));
-    assert.strictEqual((output.match(/\[2 recall-info\]/g) ?? []).length, 2);
+    assert.strictEqual((output.match(/\[2 recall-info\]/g) ?? []).length, 3);
   });
 
   test("renders status messages on a new line after streamed text", () => {
@@ -232,6 +234,86 @@ CliTerminalFormatter.renderStatusMessage("Attempt completed", "info");`
     assert.ok(output.includes("MCP: queue.append"));
     assert.ok(output.includes('{"prompt":"terminal parameter output"}'));
     assert.ok(output.includes("⎿  terminal result output"));
+  });
+
+  test("streams a Bash command once across initiated and completed batches", () => {
+    const output = runFormatterScript(`
+const target = { stepIndex: 0, stepName: "build", key: "queue:0" };
+CliTerminalFormatter.renderEvents([{ type: CLI_EVENT_TYPES.BASH_COMMAND, data: {
+  status: OPERATION_STATUS.INITIATED, command: "echo hello"
+} }], target);
+CliTerminalFormatter.renderEvents([{ type: CLI_EVENT_TYPES.BASH_COMMAND, data: {
+  status: OPERATION_STATUS.COMPLETED, command: "echo hello", output: "hello\\n", exitCode: 0
+} }], target);
+`);
+
+    assert.strictEqual((output.match(/\$ echo hello/g) ?? []).length, 1);
+    assert.ok(output.includes("$ echo hello …"));
+    assert.ok(output.includes("hello\n"));
+  });
+
+  test("renders a same-batch Bash operation as one settled block", () => {
+    const output = runFormatterScript(`
+CliTerminalFormatter.renderEvents([
+  { type: CLI_EVENT_TYPES.BASH_COMMAND, data: { status: OPERATION_STATUS.INITIATED, command: "echo hello" } },
+  { type: CLI_EVENT_TYPES.BASH_COMMAND, data: { status: OPERATION_STATUS.COMPLETED, command: "echo hello", output: "hello\\n", exitCode: 0 } },
+], { stepIndex: 0, stepName: "build", key: "queue:0" });
+`);
+
+    assert.strictEqual((output.match(/\$ echo hello/g) ?? []).length, 1);
+    assert.ok(!output.includes("…"));
+  });
+
+  test("renders a superseded Bash completion as the initiated slot body", () => {
+    const output = runFormatterScript(`
+CliTerminalFormatter.renderEvents([
+  { type: CLI_EVENT_TYPES.BASH_COMMAND, data: { status: OPERATION_STATUS.INITIATED, command: "git status --short", toolCallId: "start" } },
+  { type: CLI_EVENT_TYPES.BASH_COMMAND, data: { status: OPERATION_STATUS.COMPLETED, command: "git status --short", output: "clean\\n", exitCode: 0, toolCallId: "finish" } },
+], { stepIndex: 0, stepName: "build", key: "queue:0" });
+`);
+
+    assert.strictEqual(
+      (output.match(/\$ git status --short/g) ?? []).length,
+      1
+    );
+    assert.ok(output.includes("$ git status --short …"));
+    assert.ok(output.includes("clean\n"));
+  });
+
+  test("re-emits the compact Bash header after another target prints", () => {
+    const output = runFormatterScript(`
+const first = { stepIndex: 0, stepName: "first", key: "queue:0" };
+const second = { stepIndex: 1, stepName: "second", key: "queue:1" };
+CliTerminalFormatter.renderEvents([{ type: CLI_EVENT_TYPES.BASH_COMMAND, data: {
+  status: OPERATION_STATUS.INITIATED, command: "echo first"
+} }], first);
+CliTerminalFormatter.renderEvents([{ type: CLI_EVENT_TYPES.FILE_DELETE, data: { path: "other.txt", success: true } }], second);
+CliTerminalFormatter.renderEvents([{ type: CLI_EVENT_TYPES.BASH_COMMAND, data: {
+  status: OPERATION_STATUS.COMPLETED, command: "echo first", output: "first\\n", exitCode: 0
+} }], first);
+`);
+
+    assert.strictEqual((output.match(/\$ echo first/g) ?? []).length, 2);
+    assert.ok(output.includes("[1 first] $ echo first"));
+  });
+
+  test("prints a late FILE_EDIT diff once after TOOL_RESULT settled its slot", () => {
+    const output = runFormatterScript(`
+const target = { stepIndex: 0, stepName: "edit", key: "queue:0" };
+CliTerminalFormatter.renderEvents([{ type: CLI_EVENT_TYPES.FILE_EDIT, data: {
+  status: OPERATION_STATUS.INITIATED, path: "notes.md"
+} }], target);
+CliTerminalFormatter.renderEvents([{ type: CLI_EVENT_TYPES.TOOL_RESULT, data: {
+  result: { success: true, output: "done" }
+} }], target);
+CliTerminalFormatter.renderEvents([{ type: CLI_EVENT_TYPES.FILE_EDIT, data: {
+  status: OPERATION_STATUS.COMPLETED, path: "notes.md",
+  structuredPatch: [{ oldStart: 1, newStart: 1, lines: ["-old", "+new"] }]
+} }], target);
+`);
+
+    assert.strictEqual((output.match(/\+ new/g) ?? []).length, 1);
+    assert.ok(output.includes("- old"));
   });
 
   test("renders ask-user-question prompts, options, and resolution", () => {
@@ -505,7 +587,9 @@ CliTerminalFormatter.renderEvent({ type: CLI_EVENT_TYPES.TOOL_RESULT, data: { re
       output.includes("… 10 more lines (see .ctrlyoke/.runs/…/events.jsonl)")
     );
     assert.ok(output.includes("x".repeat(150)));
-    assert.ok(output.includes("more characters (see .ctrlyoke/.runs/…/events.jsonl)"));
+    assert.ok(
+      output.includes("more characters (see .ctrlyoke/.runs/…/events.jsonl)")
+    );
   });
 
   test("prints errors from failed tool results and web searches", () => {

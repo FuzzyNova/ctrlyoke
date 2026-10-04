@@ -66,6 +66,7 @@ import { secretRedactionService } from "../utils/SecretRedactionService";
 import { formatFinalPassLabel } from "../utils/FinalStepLabels";
 import { getToolResultText } from "../utils/toolResultText";
 import { formatMcpToolLabel } from "../utils/formatMcpToolLabel";
+import { CliEventStream } from "./CliEventStream";
 
 /** Maximum diff lines shown before truncating with a "… N more" message. */
 const MAX_DIFF_LINES = 60;
@@ -326,7 +327,9 @@ function writeBoundedEventDetail(
   for (const line of displayedLines) {
     if (line.length > MAX_EVENT_DETAIL_LINE_LENGTH) {
       writeEventLine(
-        textColor(`${indentation}${line.slice(0, MAX_EVENT_DETAIL_LINE_LENGTH)}…`),
+        textColor(
+          `${indentation}${line.slice(0, MAX_EVENT_DETAIL_LINE_LENGTH)}…`
+        ),
         border
       );
       writeEventLine(
@@ -596,6 +599,11 @@ export class CliTerminalFormatter {
 
   private static _scriptStreaming = new Map<string, ScriptStreamingState>();
   private static _scriptHeaders = new Set<string>();
+  private static _eventStreams = new Map<string, CliEventStream>();
+  private static _lastPrintedStreamSlot?: {
+    targetKey: string;
+    slotIndex: number;
+  };
 
   private static targetKey(target?: CliOutputTarget): string {
     return target?.key ?? (target ? `queue:${target.stepIndex}` : "default");
@@ -612,6 +620,7 @@ export class CliTerminalFormatter {
   private static beginEventOutput(target?: CliOutputTarget): void {
     CliTerminalFormatter.flushStreamingBuffer(target);
     CliTerminalFormatter.writeTargetPrefix(target);
+    CliTerminalFormatter._lastPrintedStreamSlot = undefined;
   }
 
   /**
@@ -858,9 +867,192 @@ export class CliTerminalFormatter {
    * Renders an array of CLI events to stdout with chalk formatting.
    */
   static renderEvents(events: CliEvent[], target?: CliOutputTarget): void {
-    for (const event of events) {
-      CliTerminalFormatter.renderEvent(event, target);
+    const key = CliTerminalFormatter.targetKey(target);
+    let stream = CliTerminalFormatter._eventStreams.get(key);
+    if (!stream) {
+      stream = new CliEventStream(key, target);
+      CliTerminalFormatter._eventStreams.set(key, stream);
     }
+    stream.append(events);
+  }
+
+  static renderHistoryEvents(
+    events: CliEvent[],
+    target: CliOutputTarget,
+    maxSlots?: number
+  ): number {
+    const stream = new CliEventStream(
+      target.key ?? target.stepIndex.toString(),
+      target,
+      maxSlots
+    );
+    stream.append(events);
+    stream.finish();
+    return stream.slotCount;
+  }
+
+  static replaceEventStream(target?: CliOutputTarget): void {
+    const key = CliTerminalFormatter.targetKey(target);
+    CliTerminalFormatter._eventStreams.get(key)?.dispose();
+    CliTerminalFormatter._eventStreams.set(
+      key,
+      new CliEventStream(key, target)
+    );
+  }
+
+  static replaceEventStreamByKey(key: string, target?: CliOutputTarget): void {
+    CliTerminalFormatter._eventStreams.get(key)?.dispose();
+    CliTerminalFormatter._eventStreams.set(
+      key,
+      new CliEventStream(key, target)
+    );
+  }
+
+  static disposeEventStreams(): void {
+    for (const stream of CliTerminalFormatter._eventStreams.values()) {
+      stream.dispose();
+    }
+    CliTerminalFormatter._eventStreams.clear();
+    CliTerminalFormatter._lastPrintedStreamSlot = undefined;
+  }
+
+  /** Render the first, possibly still-running, half of a normalized slot. */
+  static renderStreamHeader(
+    event: CliEvent,
+    target: CliOutputTarget | undefined,
+    running: boolean,
+    targetKey: string,
+    slotIndex: number
+  ): void {
+    event = secretRedactionService.redactValue(event);
+    const data = event.data as unknown as Record<string, unknown>;
+    CliTerminalFormatter.beginEventOutput(target);
+    switch (event.type) {
+      case CLI_EVENT_TYPES.BASH_COMMAND:
+        console.log(
+          chalk.yellow(`$ ${String(data.command ?? "")}${running ? " …" : ""}`)
+        );
+        break;
+      case CLI_EVENT_TYPES.FILE_EDIT:
+        console.log(
+          chalk.cyan(`~ ${String(data.path ?? "")}${running ? " …" : ""}`)
+        );
+        break;
+      case CLI_EVENT_TYPES.FILE_WRITE:
+        console.log(
+          chalk.green(`+ ${String(data.path ?? "")}${running ? " …" : ""}`)
+        );
+        break;
+      case CLI_EVENT_TYPES.FILE_READ:
+        console.log(
+          chalk.dim(`~ ${String(data.path ?? "")}${running ? " …" : ""}`)
+        );
+        break;
+      case CLI_EVENT_TYPES.MCP_TOOL_CALL:
+        console.log(
+          chalk.magenta(
+            formatMcpToolLabel(
+              String(data.server ?? ""),
+              String(data.tool ?? "")
+            )
+          ) + (running ? " …" : "")
+        );
+        break;
+      case CLI_EVENT_TYPES.TOOL_CALL:
+        console.log(
+          chalk.yellow(`⚙ ${String(data.name ?? "")}${running ? " …" : ""}`)
+        );
+        break;
+      default:
+        CliTerminalFormatter.renderEvent(event, target);
+        return;
+    }
+    CliTerminalFormatter._lastPrintedStreamSlot = { targetKey, slotIndex };
+  }
+
+  static noteStreamSlot(targetKey: string, slotIndex: number): void {
+    CliTerminalFormatter._lastPrintedStreamSlot = { targetKey, slotIndex };
+  }
+
+  private static renderBashBody(
+    data: BashCommandData,
+    includeHeader: boolean
+  ): void {
+    if (includeHeader && data.command)
+      console.log(chalk.yellow("$ " + data.command));
+    if (data.output) {
+      process.stdout.write(data.output);
+      if (!data.output.endsWith("\n")) process.stdout.write("\n");
+    }
+    if (data.error) {
+      process.stdout.write(chalk.red(data.error));
+      if (!data.error.endsWith("\n")) process.stdout.write("\n");
+    }
+    if (data.exitCode !== undefined && data.exitCode !== 0) {
+      console.log(chalk.red("✗ exit " + data.exitCode));
+    } else if (data.exitCode === 0) {
+      console.log(chalk.green("✓"));
+    }
+    console.log();
+  }
+
+  private static renderFileEditBody(
+    data: FileEditData,
+    includeHeader: boolean
+  ): void {
+    if (data.status === OPERATION_STATUS.FAILED) {
+      const errDetail = data.error ? chalk.dim(" — " + data.error) : "";
+      console.log(chalk.red("✗ Edit failed: " + data.path) + errDetail);
+      console.log();
+    } else {
+      if (includeHeader) console.log(chalk.cyan("~ " + data.path));
+      renderDiffBlock(data);
+      console.log();
+    }
+  }
+
+  /** Render only a completion body; the call/header has already been printed. */
+  static renderStreamBody(
+    headerEvent: CliEvent,
+    completionEvent: CliEvent,
+    target: CliOutputTarget | undefined,
+    targetKey: string,
+    slotIndex: number
+  ): void {
+    if (
+      CliTerminalFormatter._lastPrintedStreamSlot?.targetKey !== targetKey ||
+      CliTerminalFormatter._lastPrintedStreamSlot.slotIndex !== slotIndex
+    ) {
+      const data = headerEvent.data as unknown as Record<string, unknown>;
+      CliTerminalFormatter.beginEventOutput(target);
+      if (headerEvent.type === CLI_EVENT_TYPES.BASH_COMMAND) {
+        console.log(chalk.yellow(`$ ${String(data.command ?? "")}`));
+      } else if (headerEvent.type === CLI_EVENT_TYPES.FILE_EDIT) {
+        console.log(chalk.cyan(`~ ${String(data.path ?? "")}`));
+      } else {
+        CliTerminalFormatter.renderStreamHeader(
+          headerEvent,
+          target,
+          false,
+          targetKey,
+          slotIndex
+        );
+      }
+    }
+    if (headerEvent.type === CLI_EVENT_TYPES.BASH_COMMAND) {
+      CliTerminalFormatter.renderBashBody(
+        completionEvent.data as BashCommandData,
+        false
+      );
+    } else if (headerEvent.type === CLI_EVENT_TYPES.FILE_EDIT) {
+      CliTerminalFormatter.renderFileEditBody(
+        completionEvent.data as FileEditData,
+        false
+      );
+    } else {
+      CliTerminalFormatter.renderEvent(completionEvent, target);
+    }
+    CliTerminalFormatter._lastPrintedStreamSlot = { targetKey, slotIndex };
   }
 
   static renderStreamingChunk(chunk: string, target?: CliOutputTarget): void {
@@ -877,6 +1069,7 @@ export class CliTerminalFormatter {
       CliTerminalFormatter.writeTargetPrefix(target);
     }
     process.stdout.write(chunk);
+    CliTerminalFormatter._lastPrintedStreamSlot = undefined;
     const state = CliTerminalFormatter._streaming.get(key);
     if (state) state.endsWithNewline = chunk.endsWith("\n");
   }
@@ -941,23 +1134,7 @@ export class CliTerminalFormatter {
       case CLI_EVENT_TYPES.BASH_COMMAND: {
         CliTerminalFormatter.beginEventOutput(target);
         const data = event.data as BashCommandData;
-        if (data.command) {
-          console.log(chalk.yellow("$ " + data.command));
-        }
-        if (data.output) {
-          process.stdout.write(data.output);
-          if (!data.output.endsWith("\n")) process.stdout.write("\n");
-        }
-        if (data.error) {
-          process.stdout.write(chalk.red(data.error));
-          if (!data.error.endsWith("\n")) process.stdout.write("\n");
-        }
-        if (data.exitCode !== undefined && data.exitCode !== 0) {
-          console.log(chalk.red("✗ exit " + data.exitCode));
-        } else if (data.exitCode === 0) {
-          console.log(chalk.green("✓"));
-        }
-        console.log();
+        CliTerminalFormatter.renderBashBody(data, true);
         break;
       }
 
@@ -968,13 +1145,9 @@ export class CliTerminalFormatter {
         if (data.status === OPERATION_STATUS.INITIATED) {
           console.log(chalk.dim("  ~ Editing " + data.path + "…"));
         } else if (data.status === OPERATION_STATUS.FAILED) {
-          const errDetail = data.error ? chalk.dim(" — " + data.error) : "";
-          console.log(chalk.red("✗ Edit failed: " + data.path) + errDetail);
-          console.log();
+          CliTerminalFormatter.renderFileEditBody(data, false);
         } else {
-          console.log(chalk.cyan("~ " + data.path));
-          renderDiffBlock(data);
-          console.log();
+          CliTerminalFormatter.renderFileEditBody(data, true);
         }
         break;
       }
@@ -1042,7 +1215,13 @@ export class CliTerminalFormatter {
           if (data.result) {
             const text = getToolResultText(data.result);
             const color = data.result.success ? chalk.dim : chalk.red;
-            writeBoundedEventDetail(text, MAX_EVENT_DETAIL_LINES, "  ⎿  ", color, color);
+            writeBoundedEventDetail(
+              text,
+              MAX_EVENT_DETAIL_LINES,
+              "  ⎿  ",
+              color,
+              color
+            );
           }
           console.log();
         }
@@ -1084,7 +1263,13 @@ export class CliTerminalFormatter {
           if (data.result) {
             const text = getToolResultText(data.result);
             const color = data.result.success ? chalk.dim : chalk.red;
-            writeBoundedEventDetail(text, MAX_EVENT_DETAIL_LINES, "  ⎿  ", color, color);
+            writeBoundedEventDetail(
+              text,
+              MAX_EVENT_DETAIL_LINES,
+              "  ⎿  ",
+              color,
+              color
+            );
           }
           console.log();
         }
@@ -1097,7 +1282,13 @@ export class CliTerminalFormatter {
           CliTerminalFormatter.beginEventOutput(target);
           const text = getToolResultText(data.result);
           const color = data.result.success ? chalk.dim : chalk.red;
-          writeBoundedEventDetail(text, MAX_EVENT_DETAIL_LINES, "  ⎿  ", color, color);
+          writeBoundedEventDetail(
+            text,
+            MAX_EVENT_DETAIL_LINES,
+            "  ⎿  ",
+            color,
+            color
+          );
         }
         break;
       }
@@ -1266,6 +1457,7 @@ export class CliTerminalFormatter {
    * then with cliCommand (show the harness command being run).
    */
   static renderPromptHeader(data: CliPromptHeaderData): void {
+    CliTerminalFormatter._lastPrintedStreamSlot = undefined;
     const {
       stepIndex,
       stepName,
@@ -1344,6 +1536,7 @@ export class CliTerminalFormatter {
    * using severity-appropriate chalk colour.
    */
   static renderStatusMessage(message: string, severity: string): void {
+    CliTerminalFormatter._lastPrintedStreamSlot = undefined;
     CliTerminalFormatter.flushStreamingBuffer();
     if (severity === STATUS_MESSAGE_SEVERITY.ERROR) {
       // Red left border mirrors border-l-severity-error in the webview
@@ -1362,6 +1555,7 @@ export class CliTerminalFormatter {
    * after a prompt completes, mirroring the stats section of the webview's CliOutput component.
    */
   static renderStats(data: PromptCompleteData): void {
+    CliTerminalFormatter._lastPrintedStreamSlot = undefined;
     const parts: string[] = [];
 
     if (data.tokens) {

@@ -388,6 +388,15 @@ function findOutputIndexForCompletionFallback(
     if (candidate.type !== event.type) {
       continue;
     }
+    const candidateToolCallId = getToolCallId(candidate);
+    const eventToolCallId = getToolCallId(event);
+    if (
+      candidateToolCallId &&
+      eventToolCallId &&
+      candidateToolCallId !== eventToolCallId
+    ) {
+      continue;
+    }
     const candidateKey = getEventKey(candidate);
     if (key && candidateKey) {
       // Only match an INITIATED event. A COMPLETED event at the same path is a

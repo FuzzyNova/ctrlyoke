@@ -2849,13 +2849,14 @@ suite("CLI history inspection command handlers", () => {
     );
   });
 
-  test("points the --max-events hint at a larger event budget", async () => {
+  test("counts normalized slots for the --max-events hint", async () => {
     const key = "release" as WorkflowKey;
     const io = new TestIo();
-    const originalEvents = CliTerminalFormatter.renderEvents;
+    const originalEvents = CliTerminalFormatter.renderHistoryEvents;
     const rendered: number[] = [];
-    CliTerminalFormatter.renderEvents = ((events) => {
-      rendered.push(events.length);
+    CliTerminalFormatter.renderHistoryEvents = ((events, _target, maxSlots) => {
+      rendered.push(maxSlots ?? events.length);
+      return 3;
     }) as typeof originalEvents;
     try {
       await showHistoryCommand(
@@ -2884,11 +2885,11 @@ suite("CLI history inspection command handlers", () => {
         )
       );
     } finally {
-      CliTerminalFormatter.renderEvents = originalEvents;
+      CliTerminalFormatter.renderHistoryEvents = originalEvents;
     }
     assert.deepStrictEqual(rendered, [1]);
     assert.deepStrictEqual(io.output, [
-      "… 2 more events (use --max-events 3 to show all)",
+      "… 2 more event blocks (use --max-events 3 to show all)",
     ]);
   });
 
