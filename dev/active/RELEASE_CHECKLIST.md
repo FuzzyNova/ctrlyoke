@@ -547,6 +547,7 @@ You can't create the LS webhook without a target URL, and the Netlify function's
      DataRep's renewal questionnaire and renew or upgrade without a coverage gap.
      Revisit the tier earlier when approaching 1,000 relevant people or whenever
      processing changes materially.
+- [ ] Publish the refund policy decided in [`REFUND_POLICY.md`](../backlog/REFUND_POLICY.md): Pro gets a 30-day money-back guarantee, and Enterprise stays non-refundable under the existing terms. Add the pricing FAQ, docs, and LS product copy, fix the partial-refund webhook bug, and add the live-mode webhook events. Lemon Squeezy has no auto-refund setting, so each refund is approved by hand.
 - [ ] Publish `ctrlyoke.dev/terms` plain-language summary (the legal page itself is already live rendering `LICENSE.md` directly).
 - [x] Keep public GitHub Issues for community reports; `support@ctrlyoke.dev` stays private for Pro/Enterprise support (both already exist — verified as the intended steady state, not a pending action).
 
