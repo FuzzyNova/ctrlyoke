@@ -14,6 +14,7 @@ import {
 import type { ChoiceRequest, UserInteractionPort } from "./UserInteractionPort";
 import { NullUserInteractionPort } from "./UserInteractionPort";
 import { Log } from "../utils/Log";
+import { WORKFLOW_YAML_SCHEMA } from "../core/WorkflowYamlSchema";
 
 /**
  * An already-resolved absolute path to open, plus enough shape to pick the
@@ -351,7 +352,10 @@ async function readWorkflowTrustState(
   if (extension === ".md") return undefined;
   try {
     const raw = await fs.readFile(sourcePath, "utf8");
-    const parsed = extension === ".json" ? JSON.parse(raw) : yaml.load(raw);
+    const parsed =
+      extension === ".json"
+        ? JSON.parse(raw)
+        : yaml.load(raw, { schema: WORKFLOW_YAML_SCHEMA });
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return undefined;
     }
@@ -382,7 +386,10 @@ async function writeWorkflowTrustState(
 ): Promise<void> {
   const extension = path.extname(sourcePath).toLowerCase();
   const raw = await fs.readFile(sourcePath, "utf8");
-  const parsed = extension === ".json" ? JSON.parse(raw) : yaml.load(raw);
+  const parsed =
+    extension === ".json"
+      ? JSON.parse(raw)
+      : yaml.load(raw, { schema: WORKFLOW_YAML_SCHEMA });
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error("The active workflow file has an invalid root object.");
   }

@@ -33,6 +33,30 @@ suite("StepIdentity", () => {
     assert.doesNotThrow(() => validateUniqueStepIds(steps));
   });
 
+  test("does not assign an earlier fallback ID already used by a later step", () => {
+    const originalA: PromptStep = {
+      prompt: "A",
+      _runtime: { stepId: "step-a" },
+    };
+    const originalB: PromptStep = {
+      prompt: "B",
+      _runtime: { stepId: "step-b" },
+    };
+
+    const steps = ensureStepIds(
+      [{ prompt: "new" }, originalA, originalB],
+      [originalA, originalB]
+    );
+
+    assert.deepStrictEqual(steps.slice(1), [originalA, originalB]);
+    assert.notStrictEqual(steps[0]._runtime?.stepId, "step-a");
+    assert.strictEqual(
+      new Set(steps.map((step) => step._runtime?.stepId)).size,
+      3
+    );
+    assert.doesNotThrow(() => validateUniqueStepIds(steps));
+  });
+
   test("rejects duplicate IDs within one run", () => {
     assert.throws(
       () =>

@@ -59,6 +59,7 @@ import {
   type NewerSchemaError,
 } from "../utils/PersistedSchemaGuard";
 import { migrateToCurrent } from "../utils/FormatMigrations";
+import { WORKFLOW_YAML_SCHEMA } from "./WorkflowYamlSchema";
 
 type ParallelValidationProperties = Pick<
   PromptFile,
@@ -171,7 +172,7 @@ export class PromptFileParser {
         try {
           parsed = yaml.load(content, {
             filename: filePath,
-            schema: yaml.CORE_SCHEMA,
+            schema: WORKFLOW_YAML_SCHEMA,
             json: false, // Use YAML semantics, not JSON compatibility mode
           });
         } catch (yamlError: any) {
@@ -576,7 +577,7 @@ export class PromptFileParser {
         const frontmatter = frontmatterText.trim()
           ? yaml.load(frontmatterText, {
               filename: filePath,
-              schema: yaml.CORE_SCHEMA,
+              schema: WORKFLOW_YAML_SCHEMA,
             })
           : {};
         if (

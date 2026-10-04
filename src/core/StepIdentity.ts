@@ -94,11 +94,17 @@ export function ensureStepIds(
   fallbackSteps?: readonly WorkflowStep[]
 ): WorkflowStep[] {
   validateUniqueStepIds(steps);
-  const usedIds = new Set<string>();
+  const usedIds = new Set<string>(
+    steps
+      .map((step) => step._runtime?.stepId)
+      .filter(
+        (stepId): stepId is string =>
+          stepId !== undefined && stepId.length > 0
+      )
+  );
   const identified = steps.map((step, index) => {
     const existingId = step._runtime?.stepId;
     if (existingId !== undefined && existingId.length > 0) {
-      usedIds.add(existingId);
       return step;
     }
 
