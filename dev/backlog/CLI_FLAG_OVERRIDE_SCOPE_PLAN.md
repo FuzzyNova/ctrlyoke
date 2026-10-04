@@ -110,6 +110,10 @@ the workflow's harness while keeping its `model` produces mismatches; the audit 
 harness at some scope and `--model` was not given for that scope, the override clears the
 `model` at that same scope. Resolution then falls back to `defaults.models[<new harness>]`.
 
+- "Replaces" means the effective harness at that scope changes. At workflow level, compare
+  the flag with `workflow.harness ?? defaults.harness`, because an authored workflow `model`
+  with no workflow `harness` was written for the settings default. `-H` naming the harness
+  already in effect clears nothing.
 - Workflow level: `-H codex-cli` alone clears the workflow `model`.
 - With `--force harness`: each forced step's `model` is cleared too, unless
   `--force model` supplies one.
@@ -167,9 +171,12 @@ mutates the loaded `PromptFile` and returns the notices from D4.
   `history show`, `rerun` and the dashboard see what actually ran. The authored file is never
   touched.
 - **What it replaces.** It replaces the scattered handling in `cli.ts`: the
-  `overlay.defaults.harness`/`executionMode` writes, `applyCliToolPermissionOptions`, the
+  `overlay.defaults.harness`/`executionMode` writes, the
+  `overlay.defaults.models[config.harness]` write for `--model` (a second, settings-tier copy
+  of the flag, keyed by a harness that may not be the one that runs), the dry-run
+  `modelsByHarness` overlay that mirrors it, `applyCliToolPermissionOptions`, the
   `updateWorkflowProperty("model")` call, and the `--session-id`/resume-session step
-  mutations.
+  mutations (both the real-run copy in `cli.ts` and `applyDryRunSessionOverrides`).
 - **What stays.** `explicitHarness` no longer needs to reach
   `executeLoadedPromptFile`, because the workflow now carries it. `--timeout` and
   `--script-timeout` stay settings-overlay values.
@@ -185,9 +192,11 @@ rule).
 - `append --harness` keeps its meaning of "harness for the appended steps". Appended steps
   are the thing being authored, so it is a step-level flag by design and not subject to the
   rule.
-- Execution flags (`--headless`, permissions, resume) on `rerun`, `append` and `continue`
-  use the same function on that run's working copy. They affect only work that has not run
-  yet.
+- The execution flags `rerun`, `append` and `continue` share with `run`
+  (`addExecutionOptions`: `--headless`/`--interactive` and the permission flags) use the
+  same function on that run's working copy. They affect only work that has not run yet. The
+  session flags (`--session-id`, `--[no-]resume-session`) exist only on `run`; this plan does
+  not add them to the other commands.
 - `continue` still rejects `--harness`/`--model`.
 
 **D11 — Help text states the scope.** Each property flag's description ends with
@@ -204,7 +213,12 @@ from the help text.
    - Adds the D4 model clearing.
    - Tests: a fake-harness real run asserts the spawned harness for a workflow-set harness, a
      step-set harness, and no harness. Dry-run and the header agree with the real run in each
-     case.
+     case. No fake-harness fixture exists yet: `src/test/integration/helpers/cliProcess.ts`
+     runs the real `out/cli.js`, but existing CLI integration tests only use script steps, and
+     there is no env override for a harness executable. Build the fixture as a stub executable
+     on a test-only `PATH` (e.g. `claude.cmd`/`codex.cmd` on Windows plus a POSIX twin) that
+     records its own name and exits. If the launcher resolver cannot be pointed at a stub
+     without a production seam, add the smallest test-only seam and say so in this doc.
 2. **Execution mode and session flags (D3, D6, D8).** Lands after the interactive-output bug
    fix. Tests:
    - TTY-forced runs with `--headless` keep a step's `interactive`; no-TTY runs still clamp
