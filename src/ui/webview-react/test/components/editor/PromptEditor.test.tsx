@@ -145,7 +145,9 @@ describe("PromptEditor bulk mode draft isolation", () => {
     expect(useEditorStore.getState().promptText).toBe(promptTextBefore);
     expect(useEditorStore.getState().pendingEdits).toEqual(pendingEditsBefore);
     const editorElement = container.querySelector(".cm-editor");
-    expect(EditorView.findFromDOM(editorElement as HTMLElement)?.state.doc.toString()).toBe("");
+    expect(
+      EditorView.findFromDOM(editorElement as HTMLElement)?.state.doc.toString()
+    ).toBe("");
   });
 });
 
@@ -180,10 +182,12 @@ describe("PromptEditor prior-context parallel-group boundary", () => {
         { id: "group-1", startIndex: 2, endIndex: 4, failFast: false },
       ],
     });
-    useEditorStore.getState().selectPrompt(
-      { kind: FINAL_STEP_PHASES.QUEUE, index: 4 },
-      { prompt: "$previous:3" }
-    );
+    useEditorStore
+      .getState()
+      .selectPrompt(
+        { kind: FINAL_STEP_PHASES.QUEUE, index: 4 },
+        { prompt: "$previous:3" }
+      );
 
     const { container } = render(<PromptEditor />);
     const priorContextChip = await waitFor(() => {
@@ -223,10 +227,12 @@ describe("PromptEditor prior-context parallel-group boundary", () => {
         { id: "group-1", startIndex: 1, endIndex: 2, failFast: false },
       ],
     });
-    useEditorStore.getState().selectPrompt(
-      { kind: FINAL_STEP_PHASES.QUEUE, index: 4 },
-      { prompt: "$previous:3" }
-    );
+    useEditorStore
+      .getState()
+      .selectPrompt(
+        { kind: FINAL_STEP_PHASES.QUEUE, index: 4 },
+        { prompt: "$previous:3" }
+      );
 
     const { container } = render(<PromptEditor />);
     const chip = container.querySelector<HTMLElement>(
@@ -456,7 +462,9 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
 
   it("uses UPDATE_STEP_COLOR for a color-only bulk patch", async () => {
     const user = userEvent.setup();
-    useWorkflowStore.setState({ steps: [{ prompt: "one" }, { prompt: "two" }] });
+    useWorkflowStore.setState({
+      steps: [{ prompt: "one" }, { prompt: "two" }],
+    });
     useEditorStore.setState({
       multiSelection: { indices: [0, 1], anchorIndex: 0 },
       bulkPatch: { color: "#abcdef" },
@@ -475,21 +483,31 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
     render(<PromptEditor isBulkMode canBulkUpdate />);
     await user.click(screen.getByRole("button", { name: "Update" }));
 
-    const messages = postMessageSpy.mock.calls.map(([message]) => message as Record<string, unknown>);
-    expect(messages.find((message) => message.type === MESSAGE_TYPES.UPDATE_STEP_COLOR)).toMatchObject({
+    const messages = postMessageSpy.mock.calls.map(
+      ([message]) => message as Record<string, unknown>
+    );
+    expect(
+      messages.find(
+        (message) => message.type === MESSAGE_TYPES.UPDATE_STEP_COLOR
+      )
+    ).toMatchObject({
       type: MESSAGE_TYPES.UPDATE_STEP_COLOR,
       indices: [0, 1],
       color: "#abcdef",
     });
-    expect(messages.some((message) => message.type === MESSAGE_TYPES.UPDATE_STEPS)).toBe(false);
+    expect(
+      messages.some((message) => message.type === MESSAGE_TYPES.UPDATE_STEPS)
+    ).toBe(false);
   });
 
   it("uses UPDATE_STEPS for an enabled bulk patch", async () => {
     const user = userEvent.setup();
-    useWorkflowStore.setState({ steps: [{ prompt: "one" }, { prompt: "two" }] });
+    useWorkflowStore.setState({
+      steps: [{ prompt: "one" }, { prompt: "two" }],
+    });
     useEditorStore.setState({
       multiSelection: { indices: [0, 1], anchorIndex: 0 },
-      bulkPatch: { enabled: false },
+      bulkPatch: { enabled: false, harness: undefined, model: "gpt-5" },
       isDirty: true,
     });
     useUiStore.setState({
@@ -511,8 +529,8 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
     expect(message).toMatchObject({
       type: MESSAGE_TYPES.UPDATE_STEPS,
       indices: [0, 1],
-      properties: { enabled: false },
-      clearProperties: [],
+      properties: { enabled: false, model: "gpt-5" },
+      clearProperties: ["harness"],
     });
   });
 
@@ -625,8 +643,7 @@ describe("PromptEditor — Run in New Workflow", () => {
     await userEvent.setup().click(screen.getByRole("button", { name: "Run" }));
 
     const properties = findExecutePromptMessage()?.properties as
-      | Record<string, unknown>
-      | undefined;
+      Record<string, unknown> | undefined;
     expect(properties).toMatchObject({ type: STEP_TYPES.SCRIPT });
     expect(properties).not.toHaveProperty("harness");
     expect(properties).not.toHaveProperty("resumeSession");

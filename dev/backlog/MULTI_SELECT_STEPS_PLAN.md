@@ -634,9 +634,13 @@ which is cheap once the predicate exists. Clicks there stay single-select in v1.
      Delete action and run/queue actions are unavailable in bulk mode.
    - Tri-state property mapping is shared with single-step updates. Prompt property
      pickers and drawer pages remain gated for phase 4.
-4. **Bulk prompt properties.**
+4. **Bulk prompt properties** (completed 2026-10-03).
    - The harness cascade helper, harness-dependent gating, and drawer page gating.
    - MIXED rendering and the "(mixed)" option in the drawer and footer pickers.
+   - Drawer option-list audit: model, additional args, skills, agents, and tool
+     permission options depend on the effective harness and are gated when selected
+     prompts differ and no harness patch exists. Prior context, MCP servers, hooks,
+     and secrets use workflow/global or workspace options and are not harness-scoped.
 5. **Bulk reorder.**
    - Block-move pure helpers and bulk Move Up/Down.
    - Multi-drag in the live preview, with no parallel groups.

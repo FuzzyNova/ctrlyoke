@@ -1,5 +1,11 @@
 import React from "react";
-import { useEditorStore } from "../../store/editorStore";
+import {
+  useEditorStore,
+  getBulkDisplayValue,
+  MIXED_VALUE,
+  BULK_MIXED_OPTION,
+} from "../../store/editorStore";
+import { useWorkflowStore } from "../../store/workflowStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
 import {
@@ -26,22 +32,35 @@ interface PermissionsQuickPickerProps {
   isNarrow: boolean;
   showLabel: boolean;
   disabled?: boolean;
+  disabledReason?: string;
 }
 
 export const PermissionsQuickPicker: React.FC<PermissionsQuickPickerProps> = ({
   isNarrow,
   showLabel: _showLabel,
   disabled = false,
+  disabledReason,
 }) => {
   const properties = useEditorStore((s) => s.properties);
   const setProperty = useEditorStore((s) => s.setProperty);
+  const multiSelection = useEditorStore((s) => s.multiSelection);
+  const bulkPatch = useEditorStore((s) => s.bulkPatch);
+  const clearBulkPatchField = useEditorStore((s) => s.clearBulkPatchField);
+  const steps = useWorkflowStore((s) => s.steps);
+  const permissionsValue = multiSelection
+    ? getBulkDisplayValue(
+        { multiSelection, bulkPatch },
+        steps,
+        "toolPermissions"
+      )
+    : properties.toolPermissions;
   const workflowProperties = useSettingsStore((s) => s.workflowProperties);
   const globalSettings = useSettingsStore((s) => s.globalSettings);
   const footerOpenPicker = useUiStore((s) => s.footerOpenPicker);
   const setFooterOpenPicker = useUiStore((s) => s.setFooterOpenPicker);
 
   const isOpen = footerOpenPicker === FOOTER_PICKERS.PERMISSIONS;
-  const isOverride = properties.toolPermissions !== undefined;
+  const isOverride = permissionsValue !== undefined;
 
   const wfPerms = workflowProperties.toolPermissions;
   const inheritedMode =
@@ -51,23 +70,28 @@ export const PermissionsQuickPicker: React.FC<PermissionsQuickPickerProps> = ({
         globalSettings.toolPermissions.mode ??
         PERMISSION_MODES.ALLOW_ALL);
   const overrideMode =
-    properties.toolPermissions === undefined
+    permissionsValue === MIXED_VALUE
       ? undefined
-      : properties.toolPermissions === null
-        ? PERMISSION_MODES.NONE
-        : ((properties.toolPermissions as ToolPermissionsOverride).mode ??
-          PERMISSION_MODES.ALLOW_ALL);
+      : permissionsValue === undefined
+        ? undefined
+        : permissionsValue === null
+          ? PERMISSION_MODES.NONE
+          : ((permissionsValue as ToolPermissionsOverride).mode ??
+            PERMISSION_MODES.ALLOW_ALL);
   const visual = getPermissionModeVisual(overrideMode ?? inheritedMode);
 
   const resolvedModeLabel =
     PERMISSION_MODE_OPTIONS_META[inheritedMode as PermissionMode]?.label ??
     "None";
 
-  const valueLabel = !isOverride
-    ? resolvedModeLabel
-    : ((overrideMode
-        ? PERMISSION_MODE_OPTIONS_META[overrideMode]?.label
-        : undefined) ?? "None");
+  const valueLabel =
+    permissionsValue === MIXED_VALUE
+      ? "(mixed)"
+      : !isOverride
+        ? resolvedModeLabel
+        : ((overrideMode
+            ? PERMISSION_MODE_OPTIONS_META[overrideMode]?.label
+            : undefined) ?? "None");
 
   const defaultLabel = buildPermissionsDefaultLabel(
     workflowProperties.toolPermissions,
@@ -95,18 +119,23 @@ export const PermissionsQuickPicker: React.FC<PermissionsQuickPickerProps> = ({
       heading="Permissions"
       popupMinWidth="220px"
       disabled={disabled}
+      disabledReason={disabledReason}
     >
       <CustomSelect
         schemaPath="toolPermissions.mode"
         value={
-          properties.toolPermissions === undefined
-            ? INHERIT_DEFAULT_OPTION
-            : properties.toolPermissions === null
-              ? PERMISSION_MODES.NONE
-              : (properties.toolPermissions.mode ?? PERMISSION_MODES.ALLOW_ALL)
+          permissionsValue === MIXED_VALUE
+            ? BULK_MIXED_OPTION
+            : permissionsValue === undefined
+              ? INHERIT_DEFAULT_OPTION
+              : permissionsValue === null
+                ? PERMISSION_MODES.NONE
+                : (permissionsValue.mode ?? PERMISSION_MODES.ALLOW_ALL)
         }
         onChange={(v) => {
-          if (v === INHERIT_DEFAULT_OPTION) {
+          if (v === BULK_MIXED_OPTION) {
+            clearBulkPatchField("toolPermissions");
+          } else if (v === INHERIT_DEFAULT_OPTION) {
             setProperty("toolPermissions", undefined);
           } else {
             const current =
@@ -120,6 +149,9 @@ export const PermissionsQuickPicker: React.FC<PermissionsQuickPickerProps> = ({
           setFooterOpenPicker(null);
         }}
         options={[
+          ...(permissionsValue === MIXED_VALUE
+            ? [{ value: BULK_MIXED_OPTION, label: "(mixed)" }]
+            : []),
           {
             value: INHERIT_DEFAULT_OPTION,
             label: defaultLabel,

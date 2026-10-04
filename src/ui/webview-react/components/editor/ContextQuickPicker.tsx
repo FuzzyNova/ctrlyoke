@@ -20,12 +20,14 @@ interface ContextQuickPickerProps {
   isNarrow: boolean;
   showLabel: boolean;
   disabled?: boolean;
+  disabledReason?: string;
 }
 
 export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
   isNarrow,
   showLabel,
   disabled = false,
+  disabledReason,
 }) => {
   const properties = useEditorStore((s) => s.properties);
   const setProperty = useEditorStore((s) => s.setProperty);
@@ -122,6 +124,7 @@ export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
       heading="Context"
       popupMinWidth="260px"
       disabled={disabled}
+      disabledReason={disabledReason}
     >
       <div className="flex flex-col gap-3 p-3">
         {/* Resume Session section */}

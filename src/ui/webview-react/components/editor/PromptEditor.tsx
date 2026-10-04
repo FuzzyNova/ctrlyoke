@@ -82,6 +82,9 @@ interface PromptEditorProps {
   bulkPlaceholder?: string;
   canBulkUpdate?: boolean;
   bulkUpdateDisabledReason?: string;
+  canBulkEditPromptProperties?: boolean;
+  bulkPropertyDisabledReason?: string;
+  bulkHarnessOptionsDisabled?: boolean;
   externalReadOnlyLabel?: string;
   /** Supplies the header action without moving its state out of the editor. */
   onPromptFileActionChange?: (action: PromptFileAction | null) => void;
@@ -138,6 +141,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   bulkPlaceholder,
   canBulkUpdate = true,
   bulkUpdateDisabledReason,
+  canBulkEditPromptProperties = false,
+  bulkPropertyDisabledReason,
+  bulkHarnessOptionsDisabled = false,
   externalReadOnlyLabel,
   onPromptFileActionChange,
 }) => {
@@ -1028,7 +1034,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         });
       } else {
         const propertyKeys = new Set(
-          keys.filter((key) => key !== PROMPT_PROPERTIES.ENABLED) as Array<keyof PropertyValues>
+          keys.filter((key) => key !== PROMPT_PROPERTIES.ENABLED) as Array<
+            keyof PropertyValues
+          >
         );
         const update = buildPropertyUpdateValues(bulkPatch, {
           includeNullsForDefaults: true,
@@ -1408,7 +1416,10 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           <CodeMirrorEditor
             value={isBulkMode ? "" : promptText}
             onChange={isBulkMode ? ignoreBulkEditorChange : handleTextChange}
-            placeholder={bulkPlaceholder ?? (isFinalStep ? EDITOR_PLACEHOLDER_TEXT.FINAL_PROMPT : undefined)}
+            placeholder={
+              bulkPlaceholder ??
+              (isFinalStep ? EDITOR_PLACEHOLDER_TEXT.FINAL_PROMPT : undefined)
+            }
             affUri={affUri}
             dicUri={dicUri}
             readOnly={isExternallyManaged || isBulkMode}
@@ -1435,27 +1446,29 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       {/* Script step fields (script mode only) */}
       {isScriptMode && (
         <div className="flex flex-col flex-1 min-h-0 overflow-auto px-3 py-3 bg-editor-bg">
-          {!isBulkMode && <ScriptConditionEditor
-            variant="scriptStep"
-            schemaPath="steps[]"
-            value={{
-              script: scriptCommand,
-              timeoutSec: scriptTimeoutSec,
-              onPass: scriptOnPass,
-              onFail: scriptOnFail,
-              compareSource: scriptCompareSource,
-              operator: scriptOperator,
-              expected: scriptExpected,
-              ignoreCase: scriptIgnoreCase,
-              env: scriptEnv,
-              executionMode: scriptExecutionMode,
-              shell: scriptShell,
-            }}
-            onChange={handleScriptChange}
-            scriptLabel="Script command"
-            disabled={isExternallyManaged}
-            idPrefix="script-step"
-          />}
+          {!isBulkMode && (
+            <ScriptConditionEditor
+              variant="scriptStep"
+              schemaPath="steps[]"
+              value={{
+                script: scriptCommand,
+                timeoutSec: scriptTimeoutSec,
+                onPass: scriptOnPass,
+                onFail: scriptOnFail,
+                compareSource: scriptCompareSource,
+                operator: scriptOperator,
+                expected: scriptExpected,
+                ignoreCase: scriptIgnoreCase,
+                env: scriptEnv,
+                executionMode: scriptExecutionMode,
+                shell: scriptShell,
+              }}
+              onChange={handleScriptChange}
+              scriptLabel="Script command"
+              disabled={isExternallyManaged}
+              idPrefix="script-step"
+            />
+          )}
           <div className="mt-4 space-y-4 rounded border border-panel-border p-3">
             {globalSettings.stepColorMode !== STEP_COLOR_MODES.NONE && (
               <StepColorField idPrefix="script-step" />
@@ -1558,6 +1571,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         isBulkMode={isBulkMode}
         canBulkUpdate={canBulkUpdate && Object.keys(bulkPatch).length > 0}
         bulkUpdateDisabledReason={bulkUpdateDisabledReason}
+        canBulkEditPromptProperties={canBulkEditPromptProperties}
+        bulkPropertyDisabledReason={bulkPropertyDisabledReason}
+        bulkHarnessOptionsDisabled={bulkHarnessOptionsDisabled}
         isFinalStepMode={selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP}
         isPromptCompleted={isPromptCompleted}
         isPromptBeingSent={isPromptBeingSent}

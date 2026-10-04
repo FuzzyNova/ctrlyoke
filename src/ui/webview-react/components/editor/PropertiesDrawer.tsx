@@ -27,6 +27,7 @@ import {
   PROPERTY_EDITOR_MODES,
   STEP_COLOR_MODES,
   STEP_TYPES,
+  STEP_STATUS,
   type ExecutionMode,
 } from "../../../../types/DashboardConstants";
 import {
@@ -94,6 +95,14 @@ import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
 import { Icon } from "../shared/Icon";
+import {
+  getBulkDisplayValue,
+  MIXED_VALUE,
+  BULK_MIXED_OPTION,
+} from "../../store/editorStore";
+import { BULK_EDITABLE_PROMPT_STEP_KEYS } from "@root/types/DashboardConstants";
+import { getSelectionCapabilities } from "../../utils/stepCapabilities";
+import { buildHarnessChangeCascade } from "../../utils/harnessChangeCascade";
 
 interface PropertiesDrawerProps {
   isOpen: boolean;
@@ -123,6 +132,11 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   const {
     properties,
     setProperty,
+    setHarnessCascade,
+    clearBulkPatchField,
+    clearBulkCascadeCompanions,
+    multiSelection,
+    bulkPatch,
     setEndCondition,
     clearEndCondition,
     selectedPromptIndex,
@@ -137,6 +151,73 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     getModelsForHarness,
   } = useSettingsStore();
   const steps = useWorkflowStore((s) => s.steps);
+  const { currentStep, executionState, parallelGroups } = useWorkflowStore();
+  const selectionCapabilities = multiSelection
+    ? getSelectionCapabilities(multiSelection.indices, steps, {
+        currentStep,
+        executionState,
+        totalSteps: steps.length,
+        parallelGroups,
+      })
+    : null;
+  const bulkEditable = new Set<string>(BULK_EDITABLE_PROMPT_STEP_KEYS);
+  const bulkEditDisabledReason = multiSelection
+    ? selectionCapabilities?.canEditPromptProperties
+      ? undefined
+      : multiSelection.indices.some(
+            (index) =>
+              index < currentStep ||
+              steps[index]?._runtime?.completedAt !== undefined ||
+              steps[index]?.status === STEP_STATUS.RUNNING ||
+              steps[index]?.status === STEP_STATUS.SENT
+          )
+        ? "Cannot edit properties for completed or running steps. Remove them from the selection to edit properties."
+        : "Select only prompt steps to edit prompt properties."
+    : undefined;
+  const fieldDisabled = (key: keyof typeof properties) =>
+    Boolean(
+      multiSelection &&
+      (!bulkEditable.has(key) ||
+        !selectionCapabilities?.canEditPromptProperties)
+    );
+  const displayedProperties = multiSelection
+    ? (Object.fromEntries(
+        Object.keys(properties).map((key) => [
+          key,
+          (() => {
+            const value = getBulkDisplayValue(
+              { multiSelection, bulkPatch },
+              steps,
+              key as keyof typeof properties
+            );
+            return value === MIXED_VALUE &&
+              !["harness", "model", "agent", "additionalArgs"].includes(key)
+              ? undefined
+              : value;
+          })(),
+        ])
+      ) as unknown as typeof properties)
+    : properties;
+  const selectedEffectiveHarnesses =
+    multiSelection?.indices.map((index) => {
+      const step = steps[index];
+      return (
+        (step as { harness?: string } | undefined)?.harness ??
+        workflowProperties.harness ??
+        globalSettings.harness
+      );
+    }) ?? [];
+  const harnessesDiffer = selectedEffectiveHarnesses.some(
+    (harness) => harness !== selectedEffectiveHarnesses[0]
+  );
+  const harnessScopedOptionsDisabled = Boolean(
+    multiSelection &&
+    harnessesDiffer &&
+    !Object.prototype.hasOwnProperty.call(bulkPatch, "harness")
+  );
+  const harnessScopedTooltip = harnessScopedOptionsDisabled
+    ? "Set a harness to change the model for all selected prompts."
+    : undefined;
   const hasEditorContent = useEditorStore((s) =>
     s.stepType === STEP_TYPES.SCRIPT
       ? s.scriptCommand.trim().length > 0
@@ -240,10 +321,10 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   // recent session with the same harness", accounting for prompt-level
   // overrides falling back to the resolved workflow/global values.
   const effectiveResumeSessionForHint =
-    properties.resumeSession ?? resolvedResumeSession;
+    displayedProperties.resumeSession ?? resolvedResumeSession;
   const effectiveSessionIdForHint =
-    properties.sessionId !== undefined
-      ? properties.sessionId
+    displayedProperties.sessionId !== undefined
+      ? displayedProperties.sessionId
       : resolvedSessionId;
   const showAutoResumeHint =
     effectiveResumeSessionForHint === true &&
@@ -257,12 +338,12 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       : `Inherit (${RESUME_SESSION_OPTIONS_META[resolvedResumeSession ? RESUME_SESSION_SELECTIONS.YES : RESUME_SESSION_SELECTIONS.NO].label})`;
 
   // Session ID display in prompt-level drawer
-  const isSessionIdDefault = properties.resumeSession === undefined;
+  const isSessionIdDefault = displayedProperties.resumeSession === undefined;
   const isSessionIdActive =
-    properties.resumeSession === true &&
-    properties.sessionId !== SESSION_ID_SENTINELS.FINAL_STEP;
+    displayedProperties.resumeSession === true &&
+    displayedProperties.sessionId !== SESSION_ID_SENTINELS.FINAL_STEP;
   const sessionIdDisplayValue = isSessionIdActive
-    ? (properties.sessionId ?? "")
+    ? (displayedProperties.sessionId ?? "")
     : isSessionIdDefault &&
         resolvedResumeSession &&
         resolvedSessionId !== SESSION_ID_SENTINELS.FINAL_STEP
@@ -272,23 +353,28 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     ? undefined
     : isSessionIdDefault
       ? "Using workflow-level Resume Session setting. Select Yes to override."
-      : properties.resumeSession === true &&
-          properties.sessionId === SESSION_ID_SENTINELS.FINAL_STEP
+      : displayedProperties.resumeSession === true &&
+          displayedProperties.sessionId === SESSION_ID_SENTINELS.FINAL_STEP
         ? "Using Final Step Session — no explicit Session ID needed"
         : "Set Resume Session to Yes to specify a Session ID";
 
   // Additional Args display mode
   const additionalArgsMode =
-    properties.additionalArgs === undefined
-      ? INHERIT_DEFAULT_OPTION
-      : properties.additionalArgs === null
-        ? NONE_OPTION
-        : PROPERTY_EDITOR_MODES.CUSTOM;
+    (displayedProperties.additionalArgs as unknown) === MIXED_VALUE
+      ? BULK_MIXED_OPTION
+      : displayedProperties.additionalArgs === undefined
+        ? INHERIT_DEFAULT_OPTION
+        : displayedProperties.additionalArgs === null
+          ? NONE_OPTION
+          : PROPERTY_EDITOR_MODES.CUSTOM;
   const isAdditionalArgsActive =
     additionalArgsMode === PROPERTY_EDITOR_MODES.CUSTOM;
+  const additionalArgsDisabled =
+    fieldDisabled(PROMPT_PROPERTIES.ADDITIONAL_ARGS) ||
+    harnessScopedOptionsDisabled;
   const additionalArgsDisplayValue = isAdditionalArgsActive
-    ? typeof properties.additionalArgs === "string"
-      ? properties.additionalArgs
+    ? typeof displayedProperties.additionalArgs === "string"
+      ? displayedProperties.additionalArgs
       : ""
     : additionalArgsMode === INHERIT_DEFAULT_OPTION
       ? (resolvedAdditionalArgs ?? "")
@@ -350,14 +436,15 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   };
   // Resolved permission mode (prompt → workflow fallback) used for tab icon styling
   const resolvedPermMode =
-    properties.toolPermissions === undefined
+    displayedProperties.toolPermissions === undefined
       ? workflowProperties.toolPermissions === null
         ? PERMISSION_MODES.NONE
         : (workflowProperties.toolPermissions?.mode ??
           PERMISSION_MODES.ALLOW_ALL)
-      : properties.toolPermissions === null
+      : displayedProperties.toolPermissions === null
         ? PERMISSION_MODES.NONE
-        : (properties.toolPermissions.mode ?? PERMISSION_MODES.ALLOW_ALL);
+        : (displayedProperties.toolPermissions.mode ??
+          PERMISSION_MODES.ALLOW_ALL);
 
   // ── Hooks page derived values ───────────────────────────────────────────
   const resolvedHooks = useMemo(() => {
@@ -376,14 +463,27 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   )})`;
 
   // Get models for current harness
-  const currentHarness = (properties.harness ??
-    workflowProperties.harness ??
-    globalSettings.harness) as HarnessId;
+  const currentHarness = (
+    (displayedProperties.harness as unknown) === MIXED_VALUE
+      ? resolvedHarness
+      : (displayedProperties.harness ??
+        workflowProperties.harness ??
+        globalSettings.harness)
+  ) as HarnessId;
   const models = getModelsForHarness(currentHarness);
   const modelNamespace = modelNamespaceForHarness(currentHarness);
-  const modelWarn = modelWarning(properties.model, currentHarness, models);
-  const agentWarn = agentWarning(properties.agent, availableAgents);
-  const skillsWarn = skillsWarning(properties.skills, availableSkills);
+  const modelWarn =
+    (displayedProperties.model as unknown) === MIXED_VALUE
+      ? null
+      : modelWarning(displayedProperties.model, currentHarness, models);
+  const agentWarn =
+    (displayedProperties.agent as unknown) === MIXED_VALUE
+      ? null
+      : agentWarning(displayedProperties.agent, availableAgents);
+  const skillsWarn =
+    (displayedProperties.skills as unknown) === MIXED_VALUE
+      ? null
+      : skillsWarning(displayedProperties.skills, availableSkills);
 
   // Preview of what auto-resume would do for this prompt, shown when the
   // Session ID field is blank (see showAutoResumeHint above).
@@ -396,37 +496,31 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
 
   // Handle harness change - also set model and additionalArgs to global defaults for the new harness
   const handleHarnessChange = (newHarness: string) => {
-    if (newHarness === INHERIT_DEFAULT_OPTION) {
-      setProperty(PROMPT_PROPERTIES.HARNESS, undefined);
-      setProperty(PROMPT_PROPERTIES.MODEL, undefined);
-      setProperty(PROMPT_PROPERTIES.ADDITIONAL_ARGS, undefined);
+    if (newHarness === BULK_MIXED_OPTION) {
+      clearBulkPatchField(PROMPT_PROPERTIES.HARNESS);
+      clearBulkCascadeCompanions();
     } else {
-      setProperty(PROMPT_PROPERTIES.HARNESS, newHarness);
-      const defaultModel = globalSettings.harnessDefaultModels[newHarness];
-      setProperty(PROMPT_PROPERTIES.MODEL, defaultModel || undefined);
-      const defaultArgs =
-        globalSettings.harnessDefaultAdditionalArgs[newHarness];
-      setProperty(PROMPT_PROPERTIES.ADDITIONAL_ARGS, defaultArgs || null);
+      setHarnessCascade(buildHarnessChangeCascade(newHarness, globalSettings));
     }
   };
 
   // ── Condition mode derivations ──────────────────────────────────────────────
   const endConditionMode =
-    properties.endCondition === undefined
+    displayedProperties.endCondition === undefined
       ? PROPERTY_EDITOR_MODES.INHERIT
-      : properties.endCondition === null
+      : displayedProperties.endCondition === null
         ? NONE_OPTION
         : PROPERTY_EDITOR_MODES.CUSTOM;
 
   const preConditionMode =
-    properties.preCondition === undefined
+    displayedProperties.preCondition === undefined
       ? PROPERTY_EDITOR_MODES.INHERIT
-      : properties.preCondition === null
+      : displayedProperties.preCondition === null
         ? NONE_OPTION
         : PROPERTY_EDITOR_MODES.CUSTOM;
 
   const errorBehaviorMode =
-    properties.errorBehavior === undefined
+    displayedProperties.errorBehavior === undefined
       ? PROPERTY_EDITOR_MODES.INHERIT
       : PROPERTY_EDITOR_MODES.CUSTOM;
 
@@ -561,8 +655,17 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   id="prop-harness"
                   schemaPath="harness"
                   triggerAriaLabel="Harness"
-                  value={properties.harness ?? INHERIT_DEFAULT_OPTION}
+                  value={
+                    (displayedProperties.harness as unknown) === MIXED_VALUE
+                      ? BULK_MIXED_OPTION
+                      : (displayedProperties.harness ?? INHERIT_DEFAULT_OPTION)
+                  }
                   onChange={handleHarnessChange}
+                  disabled={Boolean(
+                    multiSelection &&
+                    !selectionCapabilities?.canEditPromptProperties
+                  )}
+                  triggerTitle={bulkEditDisabledReason}
                   showDefault={true}
                   defaultLabel={defaultHarnessLabel}
                   defaultHarnessId={resolvedHarness}
@@ -595,14 +698,24 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   id="prop-model"
                   schemaPath="model"
                   triggerAriaLabel="Model"
-                  value={properties.model ?? INHERIT_DEFAULT_OPTION}
-                  onChange={(v) =>
-                    setProperty(
-                      PROMPT_PROPERTIES.MODEL,
-                      v === INHERIT_DEFAULT_OPTION ? undefined : v
-                    )
+                  value={
+                    (displayedProperties.model as unknown) === MIXED_VALUE
+                      ? BULK_MIXED_OPTION
+                      : (displayedProperties.model ?? INHERIT_DEFAULT_OPTION)
                   }
+                  onChange={(v) => {
+                    if (v === BULK_MIXED_OPTION)
+                      clearBulkPatchField(PROMPT_PROPERTIES.MODEL);
+                    else
+                      setProperty(
+                        PROMPT_PROPERTIES.MODEL,
+                        v === INHERIT_DEFAULT_OPTION ? undefined : v
+                      );
+                  }}
                   options={[
+                    ...((displayedProperties.model as unknown) === MIXED_VALUE
+                      ? [{ value: BULK_MIXED_OPTION, label: "(mixed)" }]
+                      : []),
                     {
                       value: INHERIT_DEFAULT_OPTION,
                       label: defaultModelLabel,
@@ -629,6 +742,11 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   }
                   nonHideableValues={[INHERIT_DEFAULT_OPTION, ""]}
                   warning={modelWarn ?? undefined}
+                  disabled={
+                    fieldDisabled(PROMPT_PROPERTIES.MODEL) ||
+                    harnessScopedOptionsDisabled
+                  }
+                  triggerTitle={harnessScopedTooltip ?? bulkEditDisabledReason}
                 />
               </div>
             </DrawerRow>
@@ -648,14 +766,18 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   schemaPath="agent"
                   triggerAriaLabel="Agent"
                   value={
-                    properties.agent === undefined
-                      ? INHERIT_DEFAULT_OPTION
-                      : properties.agent === null
-                        ? NONE_OPTION
-                        : properties.agent
+                    (displayedProperties.agent as unknown) === MIXED_VALUE
+                      ? BULK_MIXED_OPTION
+                      : displayedProperties.agent === undefined
+                        ? INHERIT_DEFAULT_OPTION
+                        : displayedProperties.agent === null
+                          ? NONE_OPTION
+                          : displayedProperties.agent
                   }
                   onChange={(v) => {
-                    if (v === INHERIT_DEFAULT_OPTION) {
+                    if (v === BULK_MIXED_OPTION) {
+                      clearBulkPatchField(PROMPT_PROPERTIES.AGENT);
+                    } else if (v === INHERIT_DEFAULT_OPTION) {
                       setProperty(PROMPT_PROPERTIES.AGENT, undefined);
                     } else if (v === NONE_OPTION) {
                       setProperty(PROMPT_PROPERTIES.AGENT, null);
@@ -664,6 +786,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     }
                   }}
                   options={[
+                    ...((displayedProperties.agent as unknown) === MIXED_VALUE
+                      ? [{ value: BULK_MIXED_OPTION, label: "(mixed)" }]
+                      : []),
                     ...toSelectOptions(
                       AGENT_SELECTION_OPTIONS_META,
                       "agent"
@@ -688,6 +813,11 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   }
                   nonHideableValues={[INHERIT_DEFAULT_OPTION]}
                   warning={agentWarn ?? undefined}
+                  disabled={
+                    fieldDisabled(PROMPT_PROPERTIES.AGENT) ||
+                    harnessScopedOptionsDisabled
+                  }
+                  triggerTitle={harnessScopedTooltip ?? bulkEditDisabledReason}
                 />
               </div>
 
@@ -703,7 +833,12 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   id="prop-skills"
                   schemaPath="skills"
                   triggerAriaLabel="Skills"
-                  value={properties.skills as string[] | null | undefined}
+                  value={
+                    (displayedProperties.skills as unknown) === MIXED_VALUE
+                      ? undefined
+                      : (displayedProperties.skills as
+                          string[] | null | undefined)
+                  }
                   onChange={(v) => setProperty(PROMPT_PROPERTIES.SKILLS, v)}
                   availableSkills={availableSkills.map((s) => ({
                     name: s.name,
@@ -711,6 +846,19 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   }))}
                   defaultLabel={defaultSkillsLabel}
                   warning={skillsWarn ?? undefined}
+                  disabled={
+                    fieldDisabled(PROMPT_PROPERTIES.SKILLS) ||
+                    harnessScopedOptionsDisabled
+                  }
+                  disabledReason={
+                    harnessScopedTooltip ?? bulkEditDisabledReason
+                  }
+                  mixed={
+                    (displayedProperties.skills as unknown) === MIXED_VALUE
+                  }
+                  onSelectMixed={() =>
+                    clearBulkPatchField(PROMPT_PROPERTIES.SKILLS)
+                  }
                 />
               </div>
             </DrawerRow>
@@ -731,15 +879,17 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   triggerAriaLabel="Additional Args"
                   value={additionalArgsMode}
                   onChange={(v) => {
-                    if (v === INHERIT_DEFAULT_OPTION) {
+                    if (v === BULK_MIXED_OPTION) {
+                      clearBulkPatchField(PROMPT_PROPERTIES.ADDITIONAL_ARGS);
+                    } else if (v === INHERIT_DEFAULT_OPTION) {
                       setProperty(PROMPT_PROPERTIES.ADDITIONAL_ARGS, undefined);
                     } else if (v === NONE_OPTION) {
                       setProperty(PROMPT_PROPERTIES.ADDITIONAL_ARGS, null);
                     } else {
                       setProperty(
                         PROMPT_PROPERTIES.ADDITIONAL_ARGS,
-                        typeof properties.additionalArgs === "string"
-                          ? properties.additionalArgs
+                        typeof displayedProperties.additionalArgs === "string"
+                          ? displayedProperties.additionalArgs
                           : ""
                       );
                     }
@@ -747,21 +897,37 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   options={toSelectOptions(
                     ADDITIONAL_ARGS_SELECTION_OPTIONS_META,
                     "additionalArgs"
-                  ).map((option) =>
-                    option.value === INHERIT_DEFAULT_OPTION
-                      ? { ...option, label: defaultAdditionalArgsLabel }
-                      : option
-                  )}
+                  )
+                    .map((option) =>
+                      option.value === INHERIT_DEFAULT_OPTION
+                        ? { ...option, label: defaultAdditionalArgsLabel }
+                        : option
+                    )
+                    .concat(
+                      (displayedProperties.additionalArgs as unknown) ===
+                        MIXED_VALUE
+                        ? [{ value: BULK_MIXED_OPTION, label: "(mixed)" }]
+                        : []
+                    )}
+                  disabled={
+                    fieldDisabled(PROMPT_PROPERTIES.ADDITIONAL_ARGS) ||
+                    harnessScopedOptionsDisabled
+                  }
+                  triggerTitle={harnessScopedTooltip ?? bulkEditDisabledReason}
                 />
                 {/* Narrow mode: input always below the dropdown */}
                 {isNarrow && (
                   <div
                     className={
-                      isAdditionalArgsActive
+                      isAdditionalArgsActive && !additionalArgsDisabled
                         ? ""
                         : "opacity-50 pointer-events-none"
                     }
-                    title={additionalArgsTooltip}
+                    title={
+                      harnessScopedTooltip ??
+                      bulkEditDisabledReason ??
+                      additionalArgsTooltip
+                    }
                   >
                     <AdditionalArgsEditor
                       id="prop-additional-args"
@@ -780,11 +946,15 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               {!isNarrow && (
                 <div
                   className={`flex flex-col justify-end ${
-                    isAdditionalArgsActive
+                    isAdditionalArgsActive && !additionalArgsDisabled
                       ? ""
                       : "opacity-50 pointer-events-none"
                   }`}
-                  title={additionalArgsTooltip}
+                  title={
+                    harnessScopedTooltip ??
+                    bulkEditDisabledReason ??
+                    additionalArgsTooltip
+                  }
                 >
                   <AdditionalArgsEditor
                     id="prop-additional-args-wide"
@@ -813,7 +983,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   id="prop-execution-mode"
                   schemaPath="executionMode"
                   triggerAriaLabel="Execution Mode"
-                  value={properties.executionMode ?? INHERIT_DEFAULT_OPTION}
+                  value={
+                    displayedProperties.executionMode ?? INHERIT_DEFAULT_OPTION
+                  }
                   onChange={(v) =>
                     setProperty(
                       PROMPT_PROPERTIES.EXECUTION_MODE,
@@ -833,6 +1005,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       "executionMode"
                     ),
                   ]}
+                  disabled={fieldDisabled(PROMPT_PROPERTIES.EXECUTION_MODE)}
+                  triggerTitle={bulkEditDisabledReason}
                 />
               </div>
               {globalSettings.stepColorMode !== STEP_COLOR_MODES.NONE && (
@@ -859,20 +1033,20 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   schemaPath="resumeSession"
                   triggerAriaLabel="Resume Session"
                   value={
-                    properties.resumeSession === undefined
+                    displayedProperties.resumeSession === undefined
                       ? INHERIT_DEFAULT_OPTION
-                      : properties.sessionId ===
+                      : displayedProperties.sessionId ===
                             SESSION_ID_SENTINELS.FINAL_STEP &&
-                          properties.resumeSession
+                          displayedProperties.resumeSession
                         ? SESSION_ID_SENTINELS.FINAL_STEP
-                        : properties.resumeSession
+                        : displayedProperties.resumeSession
                           ? RESUME_SESSION_SELECTIONS.YES
                           : RESUME_SESSION_SELECTIONS.NO
                   }
                   onChange={(v) => {
                     const next = resumeSessionSelection(
                       v,
-                      properties.sessionId
+                      displayedProperties.sessionId
                     );
                     setProperty(
                       PROMPT_PROPERTIES.RESUME_SESSION,
@@ -880,6 +1054,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     );
                     setProperty(PROMPT_PROPERTIES.SESSION_ID, next.sessionId);
                   }}
+                  disabled={Boolean(multiSelection)}
+                  triggerTitle={bulkEditDisabledReason}
                   options={[
                     ...getResumeSessionOptions(defaultResumeSessionLabel),
                   ]}
@@ -895,6 +1071,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     type="text"
                     id="prop-session-id"
                     value={sessionIdDisplayValue}
+                    disabled={Boolean(multiSelection)}
                     onChange={(e) =>
                       setProperty(PROMPT_PROPERTIES.SESSION_ID, e.target.value)
                     }
@@ -924,12 +1101,14 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 <PriorContextSelect
                   id="prop-prior-context"
                   schemaPath="priorContext"
-                  value={properties.priorContext}
+                  value={displayedProperties.priorContext}
                   onChange={(v) =>
                     setProperty(PROMPT_PROPERTIES.PRIOR_CONTEXT, v)
                   }
                   showDefault
                   defaultLabel={defaultPriorContextLabel}
+                  disabled={fieldDisabled(PROMPT_PROPERTIES.PRIOR_CONTEXT)}
+                  disabledReason={bulkEditDisabledReason}
                 />
               </div>
             </DrawerRow>
@@ -984,6 +1163,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   preConditionInheritLabel,
                   "preCondition"
                 )}
+                disabled={Boolean(multiSelection)}
+                triggerTitle={bulkEditDisabledReason}
               />
               <AnimatedSection
                 visible={preConditionMode === PROPERTY_EDITOR_MODES.CUSTOM}
@@ -993,7 +1174,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     variant={PROMPT_PROPERTIES.PRE_CONDITION}
                     schemaPath="preCondition"
                     value={
-                      properties.preCondition as
+                      displayedProperties.preCondition as
                         ScriptConditionValue | null | undefined
                     }
                     onChange={(updated) =>
@@ -1003,7 +1184,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       )
                     }
                     narrow={isNarrow}
-                    disabled={false}
+                    disabled={Boolean(multiSelection)}
                     idPrefix="prop-pre"
                   />
                 </div>
@@ -1037,6 +1218,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   endConditionInheritLabel,
                   "endCondition"
                 )}
+                disabled={Boolean(multiSelection)}
+                triggerTitle={bulkEditDisabledReason}
               />
               <AnimatedSection
                 visible={endConditionMode === PROPERTY_EDITOR_MODES.CUSTOM}
@@ -1047,7 +1230,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     schemaPath="endCondition"
                     hasPreCondition={hasPreCondition}
                     value={
-                      properties.endCondition as
+                      displayedProperties.endCondition as
                         ScriptConditionValue | null | undefined
                     }
                     onChange={(updated) =>
@@ -1056,7 +1239,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       )
                     }
                     narrow={isNarrow}
-                    disabled={false}
+                    disabled={Boolean(multiSelection)}
                     idPrefix="prop-end"
                   />
                 </div>
@@ -1087,6 +1270,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   }
                 }}
                 options={errorBehaviorOptions}
+                disabled={fieldDisabled(PROMPT_PROPERTIES.ERROR_BEHAVIOR)}
+                triggerTitle={bulkEditDisabledReason}
               />
               <AnimatedSection
                 visible={errorBehaviorMode === PROPERTY_EDITOR_MODES.CUSTOM}
@@ -1094,11 +1279,11 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
                   <ErrorBehaviorEditor
                     schemaPath="errorBehavior"
-                    value={properties.errorBehavior}
+                    value={displayedProperties.errorBehavior}
                     onChange={(updated) =>
                       setProperty(PROMPT_PROPERTIES.ERROR_BEHAVIOR, updated)
                     }
-                    disabled={false}
+                    disabled={fieldDisabled(PROMPT_PROPERTIES.ERROR_BEHAVIOR)}
                     idPrefix="prop-error"
                   />
                 </div>
@@ -1115,7 +1300,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
             </p>
             <McpServersEditor
               controlId="prop-mcp-servers"
-              value={properties.mcpServers as McpServersValue}
+              value={displayedProperties.mcpServers as McpServersValue}
               onChange={(v) => setProperty(PROMPT_PROPERTIES.MCP_SERVERS, v)}
               defaultLabel={defaultMcpServersLabel}
               inheritedValue={resolvedMcpServers as McpServersValue}
@@ -1142,11 +1327,11 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   schemaPath="toolPermissions.mode"
                   triggerAriaLabel="Tool Permission Mode"
                   value={
-                    properties.toolPermissions === undefined
+                    displayedProperties.toolPermissions === undefined
                       ? INHERIT_DEFAULT_OPTION
-                      : properties.toolPermissions === null
+                      : displayedProperties.toolPermissions === null
                         ? PERMISSION_MODES.NONE
-                        : (properties.toolPermissions.mode ??
+                        : (displayedProperties.toolPermissions.mode ??
                           PERMISSION_MODES.ALLOW_ALL)
                   }
                   onChange={(v) => {
@@ -1157,7 +1342,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       );
                     } else {
                       const current =
-                        (properties.toolPermissions as
+                        (displayedProperties.toolPermissions as
                           ToolPermissionsOverride | undefined) || {};
                       setProperty(PROMPT_PROPERTIES.TOOL_PERMISSIONS, {
                         ...current,
@@ -1178,13 +1363,18 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   ]}
                   warning={modeDiagnostics[0]?.message}
                   warningId="prop-permission-mode-diagnostic"
+                  disabled={
+                    fieldDisabled(PROMPT_PROPERTIES.TOOL_PERMISSIONS) ||
+                    harnessScopedOptionsDisabled
+                  }
+                  triggerTitle={harnessScopedTooltip ?? bulkEditDisabledReason}
                 />
               </div>
 
               {/* Secrets — workflow grants plus locked inline !NAME references */}
               <div className="flex flex-col gap-1 mt-2">
                 <SecretGrantsEditor
-                  value={properties.secrets}
+                  value={displayedProperties.secrets}
                   inheritedValue={resolvedSecrets}
                   inlineSecretNames={inlineSecretNames}
                   onChange={(secrets) =>
@@ -1198,11 +1388,17 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               {/* Allowed / Denied Tools textareas — always visible, disabled by mode */}
               {(() => {
                 const effectivePermMode = resolvedPermMode;
-                const isInheriting = properties.toolPermissions === undefined;
+                const isInheriting =
+                  displayedProperties.toolPermissions === undefined;
                 const allowedDisabled =
-                  isInheriting || effectivePermMode !== PERMISSION_MODES.CUSTOM;
+                  isInheriting ||
+                  effectivePermMode !== PERMISSION_MODES.CUSTOM ||
+                  fieldDisabled(PROMPT_PROPERTIES.TOOL_PERMISSIONS) ||
+                  harnessScopedOptionsDisabled;
                 const deniedDisabled =
                   isInheriting ||
+                  fieldDisabled(PROMPT_PROPERTIES.TOOL_PERMISSIONS) ||
+                  harnessScopedOptionsDisabled ||
                   effectivePermMode ===
                     PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL ||
                   effectivePermMode === PERMISSION_MODES.NONE;
@@ -1225,13 +1421,13 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                           id="prop-allowed-tools"
                           value={(
                             (
-                              properties.toolPermissions as
+                              displayedProperties.toolPermissions as
                                 ToolPermissionsOverride | undefined
                             )?.allowedTools ?? []
                           ).join("\n")}
                           onChange={(e) => {
                             const current =
-                              (properties.toolPermissions as
+                              (displayedProperties.toolPermissions as
                                 ToolPermissionsOverride | undefined) || {};
                             setProperty(PROMPT_PROPERTIES.TOOL_PERMISSIONS, {
                               ...current,
@@ -1239,6 +1435,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                             });
                           }}
                           disabled={allowedDisabled}
+                          title={harnessScopedTooltip ?? bulkEditDisabledReason}
                           aria-describedby={
                             allowedDiagnostics.length > 0
                               ? "prop-allowed-tools-diagnostic"
@@ -1275,13 +1472,13 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                           id="prop-denied-tools"
                           value={(
                             (
-                              properties.toolPermissions as
+                              displayedProperties.toolPermissions as
                                 ToolPermissionsOverride | undefined
                             )?.deniedTools ?? []
                           ).join("\n")}
                           onChange={(e) => {
                             const current =
-                              (properties.toolPermissions as
+                              (displayedProperties.toolPermissions as
                                 ToolPermissionsOverride | undefined) || {};
                             setProperty(PROMPT_PROPERTIES.TOOL_PERMISSIONS, {
                               ...current,
@@ -1289,6 +1486,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                             });
                           }}
                           disabled={deniedDisabled}
+                          title={harnessScopedTooltip ?? bulkEditDisabledReason}
                           aria-describedby={
                             deniedDiagnostics.length > 0
                               ? "prop-denied-tools-diagnostic"
@@ -1327,7 +1525,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
             </p>
             <HooksEditor
               schemaPath="hooks"
-              value={properties.hooks}
+              value={displayedProperties.hooks}
               onChange={(v) => setProperty(PROMPT_PROPERTIES.HOOKS, v)}
               inheritedValue={resolvedHooks}
               diagnostics={hookDiagnostics}

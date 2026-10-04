@@ -24,6 +24,9 @@ interface EditorFooterProps {
   isBulkMode?: boolean;
   canBulkUpdate?: boolean;
   bulkUpdateDisabledReason?: string;
+  canBulkEditPromptProperties?: boolean;
+  bulkPropertyDisabledReason?: string;
+  bulkHarnessOptionsDisabled?: boolean;
   isPromptCompleted: boolean;
   /** True when the selected prompt's status is SENT or RUNNING (prevents Update) */
   isPromptBeingSent: boolean;
@@ -74,6 +77,9 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
   isBulkMode = false,
   canBulkUpdate = false,
   bulkUpdateDisabledReason,
+  canBulkEditPromptProperties = false,
+  bulkPropertyDisabledReason,
+  bulkHarnessOptionsDisabled = false,
   isPromptCompleted,
   isPromptBeingSent,
   isPromptActivelyRunning,
@@ -166,22 +172,56 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               <HarnessQuickPicker
                 isNarrow={isMediumWidth}
                 showLabel={!isMediumWidth}
-                disabled={isExternallyManaged || isBulkMode}
+                disabled={
+                  isExternallyManaged ||
+                  (isBulkMode && !canBulkEditPromptProperties)
+                }
+                disabledReason={bulkPropertyDisabledReason}
               />
               <ModelQuickPicker
                 isNarrow={isMediumWidth}
                 showLabel={!isMediumWidth}
-                disabled={isExternallyManaged || isBulkMode}
+                disabled={
+                  isExternallyManaged ||
+                  (isBulkMode &&
+                    (!canBulkEditPromptProperties ||
+                      bulkHarnessOptionsDisabled))
+                }
+                disabledReason={
+                  bulkHarnessOptionsDisabled
+                    ? "Set a harness to change the model for all selected prompts."
+                    : bulkPropertyDisabledReason
+                }
               />
               <AgentQuickPicker
                 isNarrow={isMediumWidth}
                 showLabel={!isMediumWidth}
-                disabled={isExternallyManaged || isBulkMode}
+                disabled={
+                  isExternallyManaged ||
+                  (isBulkMode &&
+                    (!canBulkEditPromptProperties ||
+                      bulkHarnessOptionsDisabled))
+                }
+                disabledReason={
+                  bulkHarnessOptionsDisabled
+                    ? "Set a harness to change the model for all selected prompts."
+                    : bulkPropertyDisabledReason
+                }
               />
               <SkillsQuickPicker
                 isNarrow={isMediumWidth}
                 showLabel={!isMediumWidth}
-                disabled={isExternallyManaged || isBulkMode}
+                disabled={
+                  isExternallyManaged ||
+                  (isBulkMode &&
+                    (!canBulkEditPromptProperties ||
+                      bulkHarnessOptionsDisabled))
+                }
+                disabledReason={
+                  bulkHarnessOptionsDisabled
+                    ? "Set a harness to change the model for all selected prompts."
+                    : bulkPropertyDisabledReason
+                }
               />
             </div>
             {!(isEditMode && isSmallWidth) && (
@@ -189,12 +229,26 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                 <PermissionsQuickPicker
                   isNarrow={isMediumWidth}
                   showLabel={!isMediumWidth}
-                  disabled={isExternallyManaged || isBulkMode}
+                  disabled={
+                    isExternallyManaged ||
+                    (isBulkMode &&
+                      (!canBulkEditPromptProperties ||
+                        bulkHarnessOptionsDisabled))
+                  }
+                  disabledReason={
+                    bulkHarnessOptionsDisabled
+                      ? "Set a harness to change the model for all selected prompts."
+                      : bulkPropertyDisabledReason
+                  }
                 />
                 <ContextQuickPicker
                   isNarrow={isMediumWidth}
                   showLabel={!isMediumWidth}
                   disabled={isExternallyManaged || isBulkMode}
+                  disabledReason={
+                    bulkPropertyDisabledReason ??
+                    "Resume Session cannot be edited for multiple steps."
+                  }
                 />
               </div>
             )}
@@ -247,18 +301,22 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-update border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onUpdate}
-              disabled={isExternallyManaged || (isBulkMode ? !canBulkUpdate : !hasContent || isPromptBeingSent)}
+              disabled={
+                isExternallyManaged ||
+                (isBulkMode ? !canBulkUpdate : !hasContent || isPromptBeingSent)
+              }
               aria-label="Update"
               title={
                 isExternallyManaged
                   ? (externalReadOnlyLabel ?? "Read-only — external run")
                   : isBulkMode && !canBulkUpdate
-                    ? (bulkUpdateDisabledReason ?? "Make an editable change before updating")
-                  : isPromptBeingSent
-                    ? "Cannot update a prompt that is currently being sent"
-                    : isPromptCompleted
-                      ? "Update prompt and reset execution to this step"
-                      : "Update prompt in queue"
+                    ? (bulkUpdateDisabledReason ??
+                      "Make an editable change before updating")
+                    : isPromptBeingSent
+                      ? "Cannot update a prompt that is currently being sent"
+                      : isPromptCompleted
+                        ? "Update prompt and reset execution to this step"
+                        : "Update prompt in queue"
               }
             >
               <Icon name="check" />
@@ -268,18 +326,20 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-delete border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-terminal-ansiRed text-terminal-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onDelete}
-              disabled={isExternallyManaged || isBulkMode || isPromptActivelyRunning}
+              disabled={
+                isExternallyManaged || isBulkMode || isPromptActivelyRunning
+              }
               aria-label={isFinalStepMode ? "Disable" : "Delete"}
               title={
                 isExternallyManaged
                   ? (externalReadOnlyLabel ?? "Read-only — external run")
-                    : isBulkMode
-                      ? "Delete steps from the context menu"
+                  : isBulkMode
+                    ? "Delete steps from the context menu"
                     : isFinalStepMode
-                    ? "Disable final step"
-                    : isPromptActivelyRunning
-                      ? "Cannot delete a prompt that is currently running"
-                      : "Delete prompt from queue"
+                      ? "Disable final step"
+                      : isPromptActivelyRunning
+                        ? "Cannot delete a prompt that is currently running"
+                        : "Delete prompt from queue"
               }
             >
               <Icon name="trash" />

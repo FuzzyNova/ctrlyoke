@@ -812,6 +812,46 @@ describe("bulk edit patch", () => {
     expect(store().isDirty).toBe(false);
   });
 
+  it("drops a mixed field and only reverts cascade-written companions", () => {
+    useEditorStore.setState({
+      multiSelection: { indices: [0, 1], anchorIndex: 0 },
+      bulkPatch: {
+        harness: "claude-cli",
+        model: "claude-sonnet",
+        additionalArgs: "--fast",
+      },
+      bulkCascadeCompanions: ["model", "additionalArgs"],
+    });
+    store().clearBulkPatchField("harness");
+    store().clearBulkCascadeCompanions();
+    expect(store().bulkPatch).toEqual({});
+
+    store().setHarnessCascade({
+      harness: "codex-cli",
+      model: "gpt-5",
+      additionalArgs: "--fast",
+    });
+    store().setHarnessCascade({
+      harness: "claude-cli",
+      model: "claude-opus-4",
+      additionalArgs: null,
+    });
+    expect(store().bulkPatch).toEqual({});
+
+    store().setHarnessCascade({
+      harness: "codex-cli",
+      model: "gpt-5",
+      additionalArgs: "--fast",
+    });
+    store().setProperty("model", "separately-chosen");
+    store().setHarnessCascade({
+      harness: "claude-cli",
+      model: "claude-opus-4",
+      additionalArgs: null,
+    });
+    expect(store().bulkPatch).toEqual({ model: "separately-chosen" });
+  });
+
   it("keeps the patch when the selection changes and discards it when cleared", () => {
     store().setProperty("color", "#abcdef");
     store().extendMultiSelectionByRange(2);

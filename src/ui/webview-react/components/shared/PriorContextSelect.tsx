@@ -37,6 +37,8 @@ interface PriorContextSelectProps {
    * schema has no run-address form (a run belongs to one workspace).
    */
   allowRunAddress?: boolean;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 export type KeywordMode = keyof typeof PRIOR_CONTEXT_SELECT_OPTIONS_META;
@@ -74,6 +76,8 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   dropdownMaxHeight = "60vh",
   schemaPath = "priorContext",
   allowRunAddress = true,
+  disabled = false,
+  disabledReason,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const reactId = useId();
@@ -288,9 +292,14 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
           ref={buttonRef}
           id={id}
           type="button"
+          disabled={disabled}
           onClick={() => setIsOpen((prev) => !prev)}
           aria-label={schemaAriaLabel(buttonLabel, schemaPath, triggerValue)}
-          title={schemaTitle(schemaPath, triggerValue)}
+          title={
+            disabled && disabledReason
+              ? disabledReason
+              : schemaTitle(schemaPath, triggerValue)
+          }
           aria-expanded={isOpen}
           aria-haspopup="listbox"
           aria-controls={listboxId}

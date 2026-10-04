@@ -27,6 +27,7 @@ import {
 } from "@utils/harnessUsageDisplay";
 import { Icon } from "./Icon";
 import { schemaAriaLabel, schemaTitle } from "@utils/schemaPropertyLabels";
+import { BULK_MIXED_OPTION } from "@store/editorStore";
 import { HARNESS_OPTIONS_META } from "@root/types/SchemaUiMetadata";
 
 // ─── Display names (official product names) ──────────────────────────────────
@@ -254,6 +255,7 @@ export interface HarnessDropdownProps {
   dropdownMaxHeight?: string;
   /** When true, renders the list inline without a trigger button. Used in FooterQuickPicker. */
   inline?: boolean;
+  disabled?: boolean;
 }
 
 export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
@@ -273,6 +275,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
   defaultHarnessId,
   dropdownMaxHeight = "60vh",
   inline = false,
+  disabled = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const reactId = useId();
@@ -400,6 +403,18 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
 
   const scrollableList = (
     <div className="overflow-y-auto min-h-0 flex-1">
+      {value === BULK_MIXED_OPTION && (
+        <div className="flex items-center">
+          <button
+            type="button"
+            onClick={() => handleSelect(BULK_MIXED_OPTION)}
+            aria-label="(mixed), harness"
+            className="flex-1 px-2 py-1.5 text-xs text-left bg-dropdown-selected-bg"
+          >
+            (mixed)
+          </button>
+        </div>
+      )}
       {/* "Default" sentinel (PropertiesDrawer / FooterQuickPicker) */}
       {showDefault && (
         <div
@@ -447,16 +462,20 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
 
   // ── Trigger + dropdown mode ───────────────────────────────────────────────
   const triggerLabel =
-    value === INHERIT_DEFAULT_OPTION
-      ? (defaultLabel ?? "Default")
-      : (HARNESS_DISPLAY_NAMES[value as HarnessId] ?? value);
+    value === BULK_MIXED_OPTION
+      ? "(mixed)"
+      : value === INHERIT_DEFAULT_OPTION
+        ? (defaultLabel ?? "Default")
+        : (HARNESS_DISPLAY_NAMES[value as HarnessId] ?? value);
 
   const triggerStatus =
     showStatus && value !== INHERIT_DEFAULT_OPTION && harnessStatus
       ? harnessStatus[value as HarnessId]
       : undefined;
   const triggerSchemaValue =
-    value === INHERIT_DEFAULT_OPTION ? { omit: true as const } : value;
+    value === INHERIT_DEFAULT_OPTION || value === BULK_MIXED_OPTION
+      ? { omit: true as const }
+      : value;
   const unavailableHint =
     !triggerStatus?.available &&
     triggerStatus?.status !== HARNESS_STATUS_STRINGS.CHECKING
@@ -471,6 +490,8 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
           ref={buttonRef}
           id={id}
           type="button"
+          disabled={disabled}
+          aria-disabled={disabled}
           onClick={() =>
             setIsOpen((prev) => {
               if (prev) setShowHidden(false);
@@ -485,15 +506,21 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
             schemaPath,
             triggerSchemaValue
           )}
-          title={schemaTitle(
-            schemaPath,
-            triggerSchemaValue,
-            triggerTitle ?? unavailableHint
-          )}
+          title={
+            disabled && triggerTitle
+              ? triggerTitle
+              : schemaTitle(
+                  schemaPath,
+                  triggerSchemaValue,
+                  triggerTitle ?? unavailableHint
+                )
+          }
           className="cy-select-trigger cy-dropdown-row flex-1 min-w-0"
         >
           <span className="flex items-center gap-1.5 min-w-0">
-            {value === INHERIT_DEFAULT_OPTION ? (
+            {value === BULK_MIXED_OPTION ? (
+              <span className="truncate">(mixed)</span>
+            ) : value === INHERIT_DEFAULT_OPTION ? (
               defaultSentinelContent
             ) : (
               <>

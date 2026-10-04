@@ -94,18 +94,37 @@ export interface PropertyValues {
 /** Returned by bulk display selectors when selected steps have unlike values. */
 export const MIXED_VALUE: unique symbol = Symbol("editor-bulk-mixed");
 export type MixedValue = typeof MIXED_VALUE;
+export const BULK_MIXED_OPTION = "__bulk_mixed__";
 
 function valuesEqual(left: unknown, right: unknown): boolean {
   if (Object.is(left, right)) return true;
-  if (left === null || right === null || typeof left !== "object" || typeof right !== "object") return false;
+  if (
+    left === null ||
+    right === null ||
+    typeof left !== "object" ||
+    typeof right !== "object"
+  )
+    return false;
   if (Array.isArray(left) || Array.isArray(right)) {
-    return Array.isArray(left) && Array.isArray(right) && left.length === right.length && left.every((value, index) => valuesEqual(value, right[index]));
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((value, index) => valuesEqual(value, right[index]))
+    );
   }
   const leftRecord = left as Record<string, unknown>;
   const rightRecord = right as Record<string, unknown>;
   const leftKeys = Object.keys(leftRecord).sort();
   const rightKeys = Object.keys(rightRecord).sort();
-  return leftKeys.length === rightKeys.length && leftKeys.every((key, index) => key === rightKeys[index] && valuesEqual(leftRecord[key], rightRecord[key]));
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every(
+      (key, index) =>
+        key === rightKeys[index] &&
+        valuesEqual(leftRecord[key], rightRecord[key])
+    )
+  );
 }
 
 function originalBulkValue(
@@ -142,7 +161,9 @@ export function getBulkDisplayValue(
   const original = originalBulkValue(first, key);
   return indices.every((index) => {
     const step = steps[index];
-    return step !== undefined && valuesEqual(originalBulkValue(step, key), original);
+    return (
+      step !== undefined && valuesEqual(originalBulkValue(step, key), original)
+    );
   })
     ? original
     : MIXED_VALUE;
@@ -231,6 +252,8 @@ interface EditorState {
   multiSelection: { indices: number[]; anchorIndex: number } | null;
   /** Sparse, shared edits staged while a multi-selection is active. */
   bulkPatch: Partial<PropertyValues & { enabled: boolean }>;
+  /** Companion fields last written by the harness cascade, for reverting it. */
+  bulkCascadeCompanions: Array<"model" | "additionalArgs">;
   selectedPromptIndex: number | null; // null = new prompt mode, number = editing existing
   originalPromptData: WorkflowStep | null; // For Cancel/revert functionality
   savedNewPromptState: SavedNewStepState | null; // Saved state when switching to edit mode
@@ -406,6 +429,8 @@ interface EditorActions {
     value: PropertyValues[K]
   ) => void;
   setProperties: (properties: Partial<PropertyValues>) => void;
+  setHarnessCascade: (properties: Partial<PropertyValues>) => void;
+  clearBulkCascadeCompanions: () => void;
   clearBulkPatchField: (key: keyof PropertyValues | "enabled") => void;
   resetProperties: () => void;
 
@@ -471,6 +496,7 @@ const initialState: EditorState = {
   selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
   multiSelection: null,
   bulkPatch: {},
+  bulkCascadeCompanions: [],
   selectedPromptIndex: null,
   originalPromptData: null,
   savedNewPromptState: null,
@@ -538,6 +564,7 @@ export const useEditorStore = create<
         set({
           multiSelection: null,
           bulkPatch: {},
+          bulkCascadeCompanions: [],
           selectionTarget: {
             kind: FINAL_STEP_PHASES.QUEUE,
             index: resolvedIndex,
@@ -560,6 +587,7 @@ export const useEditorStore = create<
       set({
         multiSelection: null,
         bulkPatch: {},
+        bulkCascadeCompanions: [],
         selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
         selectedPromptIndex: null,
         originalPromptData: null,
@@ -578,6 +606,7 @@ export const useEditorStore = create<
         set({
           multiSelection: null,
           bulkPatch: {},
+          bulkCascadeCompanions: [],
           selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
@@ -605,6 +634,7 @@ export const useEditorStore = create<
         set({
           multiSelection: null,
           bulkPatch: {},
+          bulkCascadeCompanions: [],
           selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
@@ -705,6 +735,7 @@ export const useEditorStore = create<
       set({
         multiSelection: null,
         bulkPatch: {},
+        bulkCascadeCompanions: [],
         selectionTarget: newTarget,
         selectedPromptIndex: isFinalStepTarget ? null : index,
         originalPromptData: promptData,
@@ -784,6 +815,7 @@ export const useEditorStore = create<
       set({
         multiSelection: null,
         bulkPatch: {},
+        bulkCascadeCompanions: [],
         selectionTarget: newTarget,
         selectedPromptIndex: isFinalStepTarget ? null : index,
         originalPromptData: promptData,
@@ -900,6 +932,7 @@ export const useEditorStore = create<
       set({
         multiSelection: null,
         bulkPatch: {},
+        bulkCascadeCompanions: [],
         selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
         selectedPromptIndex: null,
         originalPromptData: null,
@@ -916,6 +949,7 @@ export const useEditorStore = create<
         set({
           multiSelection: null,
           bulkPatch: {},
+          bulkCascadeCompanions: [],
           selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
@@ -943,6 +977,7 @@ export const useEditorStore = create<
         set({
           multiSelection: null,
           bulkPatch: {},
+          bulkCascadeCompanions: [],
           selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
@@ -985,7 +1020,12 @@ export const useEditorStore = create<
         const step = useWorkflowStore.getState().steps[indices[0]];
         if (step) get().selectPrompt(indices[0], step);
       }
-      set({ multiSelection: null, bulkPatch: {}, isDirty: false });
+      set({
+        multiSelection: null,
+        bulkPatch: {},
+        bulkCascadeCompanions: [],
+        isDirty: false,
+      });
       return;
     }
     if (state.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
@@ -1005,7 +1045,12 @@ export const useEditorStore = create<
     const indices = toggleStepIndex(baseIndices, index, steps.length);
     const selection = collapseStepSelection({ indices, anchorIndex: index });
     if (!selection) {
-      set({ multiSelection: null, bulkPatch: {}, isDirty: false });
+      set({
+        multiSelection: null,
+        bulkPatch: {},
+        bulkCascadeCompanions: [],
+        isDirty: false,
+      });
       if (indices.length === 1) {
         const step = steps[indices[0]];
         if (step) get().selectPrompt(indices[0], step);
@@ -1045,7 +1090,12 @@ export const useEditorStore = create<
         const step = steps[indices[0]];
         if (step) get().selectPrompt(indices[0], step);
       }
-      set({ multiSelection: null, bulkPatch: {}, isDirty: false });
+      set({
+        multiSelection: null,
+        bulkPatch: {},
+        bulkCascadeCompanions: [],
+        isDirty: false,
+      });
       return;
     }
     if (state.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
@@ -1063,7 +1113,12 @@ export const useEditorStore = create<
         const step = useWorkflowStore.getState().steps[0];
         if (step) get().selectPrompt(0, step);
       }
-      set({ multiSelection: null, bulkPatch: {}, isDirty: false });
+      set({
+        multiSelection: null,
+        bulkPatch: {},
+        bulkCascadeCompanions: [],
+        isDirty: false,
+      });
       return;
     }
     if (state.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
@@ -1076,6 +1131,7 @@ export const useEditorStore = create<
     set((state) => ({
       multiSelection: null,
       bulkPatch: {},
+      bulkCascadeCompanions: [],
       isDirty:
         state.selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT
           ? isNewStepDraftDirty(captureNewStepDraft(state))
@@ -1207,7 +1263,9 @@ export const useEditorStore = create<
     set((state) => {
       const normalizedValue =
         key === PROMPT_PROPERTIES.ERROR_BEHAVIOR
-          ? normalizePromptErrorBehavior(value as PropertyValues["errorBehavior"])
+          ? normalizePromptErrorBehavior(
+              value as PropertyValues["errorBehavior"]
+            )
           : value;
       if (state.multiSelection) {
         const steps = useWorkflowStore.getState().steps;
@@ -1217,14 +1275,45 @@ export const useEditorStore = create<
           key
         );
         const bulkPatch = { ...state.bulkPatch };
-        if (original !== MIXED_VALUE && valuesEqual(original, normalizedValue)) {
+        let bulkCascadeCompanions = state.bulkCascadeCompanions;
+        if (
+          original !== MIXED_VALUE &&
+          valuesEqual(original, normalizedValue)
+        ) {
           delete bulkPatch[key];
+          if (key === PROMPT_PROPERTIES.HARNESS) {
+            bulkCascadeCompanions = bulkCascadeCompanions.filter(
+              (companion) => {
+                if (
+                  Object.prototype.hasOwnProperty.call(bulkPatch, companion)
+                ) {
+                  delete bulkPatch[companion];
+                }
+                return false;
+              }
+            );
+          }
         } else {
           Object.assign(bulkPatch, { [key]: normalizedValue });
+          if (
+            key === PROMPT_PROPERTIES.MODEL ||
+            key === PROMPT_PROPERTIES.ADDITIONAL_ARGS
+          ) {
+            bulkCascadeCompanions = bulkCascadeCompanions.filter(
+              (companion) => companion !== key
+            );
+          }
         }
-        return { bulkPatch, isDirty: Object.keys(bulkPatch).length > 0 };
+        return {
+          bulkPatch,
+          bulkCascadeCompanions,
+          isDirty: Object.keys(bulkPatch).length > 0,
+        };
       }
-      const properties: PropertyValues = { ...state.properties, [key]: normalizedValue };
+      const properties: PropertyValues = {
+        ...state.properties,
+        [key]: normalizedValue,
+      };
       return {
         properties,
         replyContext: replyContextAfterPropertyChange(
@@ -1248,11 +1337,75 @@ export const useEditorStore = create<
       };
     }),
 
+  setHarnessCascade: (propertyUpdates) =>
+    set((state) => {
+      if (!state.multiSelection) {
+        const properties = { ...state.properties, ...propertyUpdates };
+        return {
+          properties,
+          replyContext: replyContextAfterPropertyChange(
+            state.replyContext,
+            properties
+          ),
+          isDirty: true,
+        };
+      }
+      const bulkPatch = { ...state.bulkPatch };
+      const originalHarness = getBulkDisplayValue(
+        { ...state, bulkPatch: {} },
+        useWorkflowStore.getState().steps,
+        "harness"
+      );
+      if (
+        originalHarness !== MIXED_VALUE &&
+        propertyUpdates.harness === originalHarness
+      ) {
+        delete bulkPatch.harness;
+        for (const key of state.bulkCascadeCompanions) delete bulkPatch[key];
+        return {
+          bulkPatch,
+          bulkCascadeCompanions: [],
+          isDirty: Object.keys(bulkPatch).length > 0,
+        };
+      }
+      Object.assign(bulkPatch, propertyUpdates);
+      const companions = ["model", "additionalArgs"] as const;
+      const bulkCascadeCompanions = companions.filter((key) =>
+        Object.prototype.hasOwnProperty.call(propertyUpdates, key)
+      );
+      return {
+        bulkPatch,
+        bulkCascadeCompanions,
+        isDirty: Object.keys(bulkPatch).length > 0,
+      };
+    }),
+
+  clearBulkCascadeCompanions: () =>
+    set((state) => {
+      const bulkPatch = { ...state.bulkPatch };
+      for (const key of state.bulkCascadeCompanions) delete bulkPatch[key];
+      return {
+        bulkPatch,
+        bulkCascadeCompanions: [],
+        isDirty: Object.keys(bulkPatch).length > 0,
+      };
+    }),
+
   clearBulkPatchField: (key) =>
     set((state) => {
       const bulkPatch = { ...state.bulkPatch };
       delete bulkPatch[key];
-      return { bulkPatch, isDirty: Object.keys(bulkPatch).length > 0 };
+      let bulkCascadeCompanions = state.bulkCascadeCompanions;
+      if (key === PROMPT_PROPERTIES.HARNESS) {
+        for (const companion of bulkCascadeCompanions)
+          delete bulkPatch[companion];
+        bulkCascadeCompanions = [];
+      }
+      return {
+        bulkPatch,
+        bulkCascadeCompanions,
+        isDirty: Object.keys(bulkPatch).length > 0,
+      };
     }),
 
   resetProperties: () =>
@@ -1537,6 +1690,7 @@ export const useEditorStore = create<
       selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
       multiSelection: null,
       bulkPatch: {},
+      bulkCascadeCompanions: [],
       selectedPromptIndex: null,
       originalPromptData: null,
       savedNewPromptState: null,
@@ -1567,6 +1721,7 @@ export const useEditorStore = create<
     set({
       multiSelection: null,
       bulkPatch: {},
+      bulkCascadeCompanions: [],
       pendingEdits: {},
       stepType: STEP_TYPES.PROMPT,
       stepEnabled: true,

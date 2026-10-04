@@ -1,6 +1,12 @@
 import { INHERIT_DEFAULT_OPTION } from "@root/types/DashboardConstants";
 import React from "react";
-import { useEditorStore } from "../../store/editorStore";
+import {
+  useEditorStore,
+  getBulkDisplayValue,
+  MIXED_VALUE,
+  BULK_MIXED_OPTION,
+} from "../../store/editorStore";
+import { useWorkflowStore } from "../../store/workflowStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
 import { type HarnessId } from "../../types/messages";
@@ -14,14 +20,23 @@ interface ModelQuickPickerProps {
   isNarrow: boolean;
   showLabel: boolean;
   disabled?: boolean;
+  disabledReason?: string;
 }
 
 export const ModelQuickPicker: React.FC<ModelQuickPickerProps> = ({
   isNarrow,
   showLabel,
   disabled = false,
+  disabledReason,
 }) => {
   const properties = useEditorStore((s) => s.properties);
+  const multiSelection = useEditorStore((s) => s.multiSelection);
+  const bulkPatch = useEditorStore((s) => s.bulkPatch);
+  const clearBulkPatchField = useEditorStore((s) => s.clearBulkPatchField);
+  const steps = useWorkflowStore((s) => s.steps);
+  const modelValue = multiSelection
+    ? getBulkDisplayValue({ multiSelection, bulkPatch }, steps, "model")
+    : properties.model;
   const setProperty = useEditorStore((s) => s.setProperty);
   const globalSettings = useSettingsStore((s) => s.globalSettings);
   const workflowProperties = useSettingsStore((s) => s.workflowProperties);
@@ -49,10 +64,12 @@ export const ModelQuickPicker: React.FC<ModelQuickPickerProps> = ({
     resolvedModelValue;
   const defaultModelLabel = `Inherit (${resolvedModelLabel || "None"})`;
 
-  const valueLabel = properties.model
-    ? (models.find((m) => m.value === properties.model)?.label ??
-      properties.model)
-    : resolvedModelLabel || "None";
+  const valueLabel =
+    modelValue === MIXED_VALUE
+      ? "(mixed)"
+      : modelValue
+        ? (models.find((m) => m.value === modelValue)?.label ?? modelValue)
+        : resolvedModelLabel || "None";
 
   return (
     <FooterQuickPicker
@@ -73,15 +90,25 @@ export const ModelQuickPicker: React.FC<ModelQuickPickerProps> = ({
       heading="Model"
       popupMinWidth="220px"
       disabled={disabled}
+      disabledReason={disabledReason}
     >
       <CustomSelect
-        value={properties.model ?? INHERIT_DEFAULT_OPTION}
+        value={
+          modelValue === MIXED_VALUE
+            ? BULK_MIXED_OPTION
+            : (modelValue ?? INHERIT_DEFAULT_OPTION)
+        }
         onChange={(v) => {
-          setProperty("model", v === INHERIT_DEFAULT_OPTION ? undefined : v);
+          if (v === BULK_MIXED_OPTION) clearBulkPatchField("model");
+          else
+            setProperty("model", v === INHERIT_DEFAULT_OPTION ? undefined : v);
           setFooterOpenPicker(null);
         }}
         schemaPath="model"
         options={[
+          ...(modelValue === MIXED_VALUE
+            ? [{ value: BULK_MIXED_OPTION, label: "(mixed)" }]
+            : []),
           { value: INHERIT_DEFAULT_OPTION, label: defaultModelLabel },
           ...(models.length === 0
             ? [{ value: "", label: "Loading models...", disabled: true }]
