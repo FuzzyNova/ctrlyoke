@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-03 by Claude (claude-cli), reviewing 08d87da41 (code reading only, not reproduced)
 - **Area:** `src/core/orchestration/RunContinuationService.ts` / `WorkflowLineageRepository` (`discardPendingRewind`), `src/core/PromptQueue.ts`, `src/core/WorkingFileManager.ts`
-- **Severity:** low
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

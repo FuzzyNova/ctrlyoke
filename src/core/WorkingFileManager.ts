@@ -513,6 +513,9 @@ export interface IWorkingFileQueueAccess {
   /** Notify the execution owner that disk supplied new queue members. */
   onDiskStepsMerged?(steps: readonly WorkflowStep[]): void;
 
+  /** Clear a durable rewind marker after adopting an authoritative disk snapshot. */
+  clearPendingRewind?(): void;
+
   /** Emit state change notification to listeners */
   emitStateChange(): void;
 
@@ -2086,16 +2089,37 @@ export class WorkingFileManager {
    * definitions, order and topology, so memory-only edits are dropped while the
    * queue's runtime metadata survives.
    */
-  private resyncQueueFromDisk(workingFile: WorkingFile): void {
+  private resyncQueueFromWorkingFile(workingFile: WorkingFile): void {
     const newStepsFromDisk = this.queueAccess.mergeDiskSteps(
       workingFile.steps ?? [],
       workingFile.parallelGroups
     );
     this.queueAccess.setDefinitionRevision(workingFile.definitionRevision ?? 1);
+    this.queueAccess.clearPendingRewind?.();
     if (newStepsFromDisk.length > 0) {
       this.queueAccess.onDiskStepsMerged?.(newStepsFromDisk);
     }
     this.queueAccess.emitStateChange();
+  }
+
+  /**
+   * Adopt the current working file snapshot in memory, including an intentional
+   * revision rollback such as discarding a pending rewind. Runtime writes use
+   * max(disk, memory), so they cannot perform this reconciliation themselves.
+   */
+  public async resyncQueueFromDisk(): Promise<void> {
+    const workingFilePath = this.queueAccess.getWorkingFilePath();
+    if (!workingFilePath) return;
+
+    const operation = this.operationQueue.then(async () => {
+      const workingFile = await this.readWorkingFile(workingFilePath);
+      this.resyncQueueFromWorkingFile(workingFile);
+    });
+    this.operationQueue = operation.then(
+      () => undefined,
+      () => undefined
+    );
+    await operation;
   }
 
   private async writeQueueState(options: {
@@ -2125,7 +2149,7 @@ export class WorkingFileManager {
         }
       } catch (error) {
         if (isDefinitionMutation) {
-          this.resyncQueueFromDisk(workingFile);
+          this.resyncQueueFromWorkingFile(workingFile);
         }
         throw error;
       }

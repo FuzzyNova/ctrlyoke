@@ -1511,6 +1511,54 @@ suite("WorkingFileManager", () => {
       );
     });
 
+    test("resident queue keeps a discarded rewind snapshot and lower revision after a runtime write", async () => {
+      const { workflowKey, runRef, runFilePath } = await makeCompletedRun();
+      const residentQueue = new PromptQueue();
+      await residentQueue.restoreFromWorkingFile(runFilePath);
+
+      const rewind = await WorkingFileManager.beginPendingRewind(
+        tmpWorkspace,
+        workflowKey,
+        runRef,
+        1,
+        1,
+        2
+      );
+      residentQueue.applyPendingRewind(1, 1, rewind.definitionRevision, false);
+      assert.strictEqual(residentQueue.getState().definitionRevision, 2);
+      assert.ok(residentQueue.getState().pendingRewind);
+
+      const discarded = await WorkingFileManager.discardPendingRewind(
+        tmpWorkspace,
+        workflowKey,
+        runRef,
+        rewind.definitionRevision,
+        rewind.descriptorRevision
+      );
+      assert.strictEqual(discarded.discarded, true);
+
+      await residentQueue.resyncFromDisk();
+      await residentQueue.updateWorkingFile();
+
+      const persisted = JSON.parse(
+        await fs.readFile(runFilePath, "utf8")
+      ) as WorkingFile;
+      assert.strictEqual(persisted.definitionRevision, 1);
+      assert.deepStrictEqual(
+        persisted.steps?.map((step) =>
+          "prompt" in step
+            ? step.prompt
+            : "script" in step
+              ? step.script
+              : undefined
+        ),
+        ["prefix", "suffix", "tail"]
+      );
+      assert.strictEqual(persisted._runtime?.pendingRewind, undefined);
+      assert.strictEqual(residentQueue.getState().definitionRevision, 1);
+      assert.strictEqual(residentQueue.getState().pendingRewind, undefined);
+    });
+
     test("requires confirmation before discarding edited suffix content", async () => {
       const { workflowKey, runRef, runFilePath } = await makeCompletedRun();
       await WorkingFileManager.beginPendingRewind(

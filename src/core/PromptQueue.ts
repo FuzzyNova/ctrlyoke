@@ -230,6 +230,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       getFinalStepExecutionMetadata: () =>
         this.workflowFile?.finalStep?._runtime,
       getPendingRewind: () => this.state.pendingRewind,
+      clearPendingRewind: () => this.clearPendingRewind(),
       updateWorkflowProperty: (key: string, value: unknown) =>
         this.updateWorkflowProperty(key, value),
       getDefinitionRevision: () => this.state.definitionRevision,
@@ -1921,6 +1922,11 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       );
       return -1;
     }
+  }
+
+  /** Adopt the current working-file definition and revision into this queue. */
+  public async resyncFromDisk(): Promise<void> {
+    await this.workingFileManager.resyncQueueFromDisk();
   }
 
   /**

@@ -62,6 +62,7 @@ export interface RunLifecycleInstancePort {
   getExecutionRunRef(): RunRef | undefined;
   ownsRunnerLock(): boolean;
   clearPendingRewind(): void;
+  resyncWorkingFileFromDisk(): Promise<void>;
   beginPendingRewind(
     workflowKey: WorkflowKey,
     runRef: RunRef,
@@ -994,6 +995,12 @@ export class RunLifecycleService {
       this.host.getLineageRepository()
     );
     if (!result.discarded) return result;
+    for (const instance of this.findResidentInstancesForRun(
+      address.workflowKey,
+      address.runRef
+    )) {
+      await instance.resyncWorkingFileFromDisk();
+    }
     if (invalidate) {
       await this.host.views.invalidateRunViews(
         address.workflowKey,

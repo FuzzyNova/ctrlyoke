@@ -67,6 +67,8 @@ class FakeInstance implements RunLifecycleInstancePort {
 
   clearPendingRewind(): void {}
 
+  async resyncWorkingFileFromDisk(): Promise<void> {}
+
   async beginPendingRewind(): Promise<{
     definitionRevision: number;
     descriptorRevision: number;

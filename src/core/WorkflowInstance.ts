@@ -2604,6 +2604,12 @@ export class WorkflowInstance
     this.promptQueue.clearPendingRewind();
   }
 
+  /** Reconcile this resident instance with its current on-disk run snapshot. */
+  async resyncWorkingFileFromDisk(): Promise<void> {
+    await this.promptQueue.resyncFromDisk();
+    this.syncCurrentPromptFileFromQueue();
+  }
+
   async updateWorkflowName(workflowName: string): Promise<void> {
     if (!this.promptQueue) {
       throw new Error("No active queue");

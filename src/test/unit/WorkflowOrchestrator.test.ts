@@ -5076,6 +5076,18 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         run.workflowKey,
         run.runRef
       );
+      let residentResyncs = 0;
+      const resident = {
+        id: "resident-run-instance",
+        getQueueState: () => ({
+          workflowKey: run.workflowKey,
+          runRef: run.runRef,
+        }),
+        resyncWorkingFileFromDisk: async () => {
+          residentResyncs += 1;
+        },
+      };
+      internal.instances.set(resident.id, resident);
       let invalidation: unknown[] | undefined;
       internal.invalidateRunViews = async (...args: unknown[]) => {
         invalidation = args;
@@ -5090,6 +5102,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
       );
 
       assert.strictEqual(discarded.discarded, true);
+      assert.strictEqual(residentResyncs, 1);
       assert.deepStrictEqual(invalidation, [
         run.workflowKey,
         run.runRef,
