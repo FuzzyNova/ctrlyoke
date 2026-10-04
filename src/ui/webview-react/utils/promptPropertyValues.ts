@@ -17,7 +17,12 @@ export function buildPropertyUpdateValues(
     enabled?: boolean;
   } = {}
 ): PropertyUpdateValues {
-  const { includeNullsForDefaults = false, promptText = "", keys, enabled } = options;
+  const {
+    includeNullsForDefaults = false,
+    promptText = "",
+    keys,
+    enabled,
+  } = options;
   const result: Record<string, unknown> = {};
   const clearProperties: string[] = [];
   const has = (key: keyof PropertyValues) => !keys || keys.has(key);
@@ -25,7 +30,19 @@ export function buildPropertyUpdateValues(
     if (includeNullsForDefaults) clearProperties.push(key);
   };
 
-  for (const key of ["harness", "model", "executionMode", "color", "resumeSession", "mcpServers", "hooks", "priorContext", "errorBehavior", "preCondition", "toolPermissions"] as const) {
+  for (const key of [
+    "harness",
+    "model",
+    "executionMode",
+    "color",
+    "resumeSession",
+    "mcpServers",
+    "hooks",
+    "priorContext",
+    "errorBehavior",
+    "preCondition",
+    "toolPermissions",
+  ] as const) {
     if (!has(key)) continue;
     const value = values[key];
     if (value !== undefined) result[key] = value;
@@ -33,14 +50,17 @@ export function buildPropertyUpdateValues(
   }
   if (has("agent")) {
     const value = values.agent;
-    if (value === null || (typeof value === "string" && value)) result.agent = value;
+    if (value === null || (typeof value === "string" && value))
+      result.agent = value;
     else inherit("agent");
   }
   if (has("sessionId")) {
     const value = values.sessionId;
     if (value?.trim()) {
       const trimmed = value.trim();
-      result.sessionId = /^\d+$/.test(trimmed) ? parseInt(trimmed, 10) : trimmed;
+      result.sessionId = /^\d+$/.test(trimmed)
+        ? parseInt(trimmed, 10)
+        : trimmed;
     } else inherit("sessionId");
   }
   if (has("skills")) {
@@ -53,7 +73,9 @@ export function buildPropertyUpdateValues(
     const value = values.secrets;
     if (value === null) result.secrets = null;
     else if (Array.isArray(value)) {
-      const inlineNames = parseSecretReferences(promptText).map(({ name }) => name);
+      const inlineNames = parseSecretReferences(promptText).map(
+        ({ name }) => name
+      );
       const explicit = filterExplicitSecretGrants(value, inlineNames);
       result.secrets = explicit.length ? explicit : null;
     } else inherit("secrets");

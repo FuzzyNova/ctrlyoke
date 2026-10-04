@@ -37,13 +37,27 @@ describe("CodeMirrorEditor bulk placeholders", () => {
   ])("reconfigures placeholder without replacing EditorView: %s", (text) => {
     const onChange = vi.fn();
     const { container, rerender } = render(
-      <CodeMirrorEditor value="" onChange={onChange} placeholder="first" affUri="" dicUri="" />
+      <CodeMirrorEditor
+        value=""
+        onChange={onChange}
+        placeholder="first"
+        affUri=""
+        dicUri=""
+      />
     );
     const editor = container.querySelector(".cm-editor");
     expect(editor).not.toBeNull();
     const view = EditorView.findFromDOM(editor as HTMLElement);
 
-    rerender(<CodeMirrorEditor value="" onChange={onChange} placeholder={text} affUri="" dicUri="" />);
+    rerender(
+      <CodeMirrorEditor
+        value=""
+        onChange={onChange}
+        placeholder={text}
+        affUri=""
+        dicUri=""
+      />
+    );
 
     expect(EditorView.findFromDOM(editor as HTMLElement)).toBe(view);
     expect(container.querySelector(".cm-placeholder")?.textContent).toBe(text);
@@ -255,7 +269,9 @@ describe("CodeMirrorEditor prior-context references", () => {
       forceLinting(view);
       await new Promise((resolve) => setTimeout(resolve, 350));
       const diagnostics: unknown[] = [];
-      forEachDiagnostic(view.state, (diagnostic) => diagnostics.push(diagnostic));
+      forEachDiagnostic(view.state, (diagnostic) =>
+        diagnostics.push(diagnostic)
+      );
 
       expect(view.dom.querySelector(".cm-atomic-ref")).toBeNull();
       expect(diagnostics).toEqual([]);

@@ -2,12 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useEditorStore } from "../../store/editorStore";
 import { useUiStore } from "../../store/uiStore";
 import { useWorkflowStore } from "../../store/workflowStore";
-import {
-  getSelectionCapabilities,
-  getStepCapabilities,
-  getStepCapabilityDisabledReason,
-} from "../../utils/stepCapabilities";
-import { executionOwnsCurrentStep } from "../../utils/status";
+import { useBulkSelectionGates } from "../../hooks/useBulkSelectionGates";
 import { getBulkDisplayValue, MIXED_VALUE } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useElementTier } from "../../hooks/useElementNarrow";
@@ -32,6 +27,7 @@ import {
   STEP_TYPES,
   EDITOR_PLACEHOLDER_TEXT,
   PROMPT_PROPERTIES,
+  BULK_EDIT_DISABLED_REASONS,
 } from "@root/types/DashboardConstants";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { getExternalReadOnlyLabel } from "@utils/externalRunner";
@@ -86,9 +82,8 @@ const EditorSectionInner: React.FC = () => {
     bulkPatch,
   } = useEditorStore();
   const { editorCollapsed, toggleEditorCollapse } = useUiStore();
-  const { steps, currentStep, executionState, parallelGroups } =
-    useWorkflowStore();
-  const { globalSettings, workflowProperties } = useSettingsStore();
+  const steps = useWorkflowStore((s) => s.steps);
+  const { globalSettings } = useSettingsStore();
   const vscode = useVsCodeApi();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
@@ -97,21 +92,11 @@ const EditorSectionInner: React.FC = () => {
   const externalReadOnlyLabel = getExternalReadOnlyLabel(activeExternalOwner);
 
   const isEditMode = selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT;
+  const bulkGates = useBulkSelectionGates();
   const isBulkMode = multiSelection !== null;
-  const selectedIndices = multiSelection?.indices ?? [];
-  const capabilityContext = {
-    currentStep,
-    executionState,
-    isExternallyManaged,
-    isExecutionTargetLocked:
-      executionOwnsCurrentStep(executionState, null) &&
-      selectedIndices.includes(currentStep),
-    totalSteps: steps.length,
-    parallelGroups,
-  };
-  const bulkCapabilities = isBulkMode
-    ? getSelectionCapabilities(selectedIndices, steps, capabilityContext)
-    : null;
+  const selectedIndices = bulkGates.indices;
+  const bulkCapabilities = bulkGates.capabilities;
+  const bulkHasLocked = bulkGates.hasLockedStep;
   const bulkEnabled = isBulkMode
     ? getBulkDisplayValue(
         { multiSelection, bulkPatch },
@@ -119,15 +104,6 @@ const EditorSectionInner: React.FC = () => {
         PROMPT_PROPERTIES.ENABLED
       )
     : stepEnabled;
-  const bulkHasLocked =
-    isBulkMode &&
-    selectedIndices.some((index) => {
-      const step = steps[index];
-      return (
-        !step ||
-        !getStepCapabilities(step, index, capabilityContext).canToggleEnabled
-      );
-    });
   const bulkUpdateAllowed =
     isBulkMode &&
     Object.keys(bulkPatch).length > 0 &&
@@ -139,26 +115,12 @@ const EditorSectionInner: React.FC = () => {
           : Boolean(bulkCapabilities?.canEditPromptProperties)
     );
   const bulkUpdateDisabledReason = bulkHasLocked
-    ? "Cannot edit properties for completed or running steps. Remove them from the selection to edit properties."
-    : "Make an editable change before updating";
+    ? BULK_EDIT_DISABLED_REASONS.LOCKED_STEPS
+    : BULK_EDIT_DISABLED_REASONS.NO_EDITABLE_CHANGE;
   const bulkPromptPropertyDisabledReason =
-    !bulkCapabilities?.canEditPromptProperties
-      ? bulkHasLocked
-        ? "Cannot edit properties for completed or running steps. Remove them from the selection to edit properties."
-        : "Select only prompt steps to edit prompt properties."
-      : undefined;
-  const effectiveSelectedHarnesses = selectedIndices.map(
-    (index) =>
-      (steps[index] as { harness?: string } | undefined)?.harness ??
-      workflowProperties.harness ??
-      globalSettings.harness
-  );
+    bulkGates.promptPropertyDisabledReason;
   const bulkHarnessOptionsDisabled =
-    isBulkMode &&
-    !Object.prototype.hasOwnProperty.call(bulkPatch, "harness") &&
-    effectiveSelectedHarnesses.some(
-      (harness) => harness !== effectiveSelectedHarnesses[0]
-    );
+    bulkGates.harnessScopedDisabledReason !== undefined;
   const promptsSelected =
     isBulkMode &&
     selectedIndices.every((index) => steps[index]?.type !== STEP_TYPES.SCRIPT);
@@ -170,23 +132,7 @@ const EditorSectionInner: React.FC = () => {
         ? EDITOR_PLACEHOLDER_TEXT.BULK_PROMPTS(selectedIndices.length)
         : EDITOR_PLACEHOLDER_TEXT.BULK_STEPS(selectedIndices.length);
   const enabledMixed = bulkEnabled === MIXED_VALUE;
-  const bulkToggleDisabledReason = !bulkCapabilities?.canToggleEnabled
-    ? (getStepCapabilityDisabledReason(
-        capabilityContext,
-        "toggle",
-        selectedIndices.find((index) => {
-          const step = steps[index];
-          return (
-            !step ||
-            !getStepCapabilities(step, index, capabilityContext)
-              .canToggleEnabled
-          );
-        }) ??
-          selectedIndices[0] ??
-          -1,
-        steps[selectedIndices[0]]
-      ) ?? "Cannot change these steps")
-    : undefined;
+  const bulkToggleDisabledReason = bulkGates.toggleDisabledReason;
   const totalPrompts = steps.length;
   const [promptFileAction, setPromptFileAction] =
     useState<PromptFileAction | null>(null);

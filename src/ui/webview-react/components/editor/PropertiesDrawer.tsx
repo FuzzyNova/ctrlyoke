@@ -27,7 +27,6 @@ import {
   PROPERTY_EDITOR_MODES,
   STEP_COLOR_MODES,
   STEP_TYPES,
-  STEP_STATUS,
   type ExecutionMode,
 } from "../../../../types/DashboardConstants";
 import {
@@ -101,7 +100,15 @@ import {
   BULK_MIXED_OPTION,
 } from "../../store/editorStore";
 import { BULK_EDITABLE_PROMPT_STEP_KEYS } from "@root/types/DashboardConstants";
-import { getSelectionCapabilities } from "../../utils/stepCapabilities";
+import { useBulkSelectionGates } from "../../hooks/useBulkSelectionGates";
+
+/** Drawer fields whose own controls render a "(mixed)" state; others show inherit. */
+const MIXED_AWARE_DRAWER_KEYS: ReadonlySet<string> = new Set([
+  PROMPT_PROPERTIES.HARNESS,
+  PROMPT_PROPERTIES.MODEL,
+  PROMPT_PROPERTIES.AGENT,
+  PROMPT_PROPERTIES.ADDITIONAL_ARGS,
+]);
 import { buildHarnessChangeCascade } from "../../utils/harnessChangeCascade";
 
 interface PropertiesDrawerProps {
@@ -151,29 +158,10 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     getModelsForHarness,
   } = useSettingsStore();
   const steps = useWorkflowStore((s) => s.steps);
-  const { currentStep, executionState, parallelGroups } = useWorkflowStore();
-  const selectionCapabilities = multiSelection
-    ? getSelectionCapabilities(multiSelection.indices, steps, {
-        currentStep,
-        executionState,
-        totalSteps: steps.length,
-        parallelGroups,
-      })
-    : null;
+  const bulkGates = useBulkSelectionGates();
+  const selectionCapabilities = bulkGates.capabilities;
   const bulkEditable = new Set<string>(BULK_EDITABLE_PROMPT_STEP_KEYS);
-  const bulkEditDisabledReason = multiSelection
-    ? selectionCapabilities?.canEditPromptProperties
-      ? undefined
-      : multiSelection.indices.some(
-            (index) =>
-              index < currentStep ||
-              steps[index]?._runtime?.completedAt !== undefined ||
-              steps[index]?.status === STEP_STATUS.RUNNING ||
-              steps[index]?.status === STEP_STATUS.SENT
-          )
-        ? "Cannot edit properties for completed or running steps. Remove them from the selection to edit properties."
-        : "Select only prompt steps to edit prompt properties."
-    : undefined;
+  const bulkEditDisabledReason = bulkGates.promptPropertyDisabledReason;
   const fieldDisabled = (key: keyof typeof properties) =>
     Boolean(
       multiSelection &&
@@ -182,42 +170,23 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     );
   const displayedProperties = multiSelection
     ? (Object.fromEntries(
-        Object.keys(properties).map((key) => [
-          key,
-          (() => {
-            const value = getBulkDisplayValue(
-              { multiSelection, bulkPatch },
-              steps,
-              key as keyof typeof properties
-            );
-            return value === MIXED_VALUE &&
-              !["harness", "model", "agent", "additionalArgs"].includes(key)
+        Object.keys(properties).map((key) => {
+          const value = getBulkDisplayValue(
+            { multiSelection, bulkPatch },
+            steps,
+            key as keyof typeof properties
+          );
+          return [
+            key,
+            value === MIXED_VALUE && !MIXED_AWARE_DRAWER_KEYS.has(key)
               ? undefined
-              : value;
-          })(),
-        ])
+              : value,
+          ];
+        })
       ) as unknown as typeof properties)
     : properties;
-  const selectedEffectiveHarnesses =
-    multiSelection?.indices.map((index) => {
-      const step = steps[index];
-      return (
-        (step as { harness?: string } | undefined)?.harness ??
-        workflowProperties.harness ??
-        globalSettings.harness
-      );
-    }) ?? [];
-  const harnessesDiffer = selectedEffectiveHarnesses.some(
-    (harness) => harness !== selectedEffectiveHarnesses[0]
-  );
-  const harnessScopedOptionsDisabled = Boolean(
-    multiSelection &&
-    harnessesDiffer &&
-    !Object.prototype.hasOwnProperty.call(bulkPatch, "harness")
-  );
-  const harnessScopedTooltip = harnessScopedOptionsDisabled
-    ? "Set a harness to change the model for all selected prompts."
-    : undefined;
+  const harnessScopedTooltip = bulkGates.harnessScopedDisabledReason;
+  const harnessScopedOptionsDisabled = harnessScopedTooltip !== undefined;
   const hasEditorContent = useEditorStore((s) =>
     s.stepType === STEP_TYPES.SCRIPT
       ? s.scriptCommand.trim().length > 0

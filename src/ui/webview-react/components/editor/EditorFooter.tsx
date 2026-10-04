@@ -11,7 +11,10 @@ import type { DrawerPage } from "../../types/drawerPages";
 import type { HarnessId } from "../../types/messages";
 import type { TabIconOverride } from "../shared/tabBadgeUtils";
 import { useEditorStore } from "../../store/editorStore";
-import { STEP_TYPES } from "@root/types/DashboardConstants";
+import {
+  BULK_EDIT_DISABLED_REASONS,
+  STEP_TYPES,
+} from "@root/types/DashboardConstants";
 import { Icon } from "../shared/Icon";
 import { SplitButton } from "../shared/SplitButton";
 import type { RunDispatchTarget } from "../../hooks/useRunDispatchTargets";
@@ -122,6 +125,15 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
   );
   const stepType = useEditorStore((s) => s.stepType);
   const isScriptMode = stepType === STEP_TYPES.SCRIPT;
+  // Model, agent, skills and permissions all draw their options from the
+  // effective harness, so they share one gate.
+  const harnessScopedPickerDisabled =
+    isExternallyManaged ||
+    (isBulkMode &&
+      (!canBulkEditPromptProperties || bulkHarnessOptionsDisabled));
+  const harnessScopedPickerDisabledReason = bulkHarnessOptionsDisabled
+    ? BULK_EDIT_DISABLED_REASONS.HARNESS_REQUIRED
+    : bulkPropertyDisabledReason;
 
   return (
     <div
@@ -181,47 +193,20 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               <ModelQuickPicker
                 isNarrow={isMediumWidth}
                 showLabel={!isMediumWidth}
-                disabled={
-                  isExternallyManaged ||
-                  (isBulkMode &&
-                    (!canBulkEditPromptProperties ||
-                      bulkHarnessOptionsDisabled))
-                }
-                disabledReason={
-                  bulkHarnessOptionsDisabled
-                    ? "Set a harness to change the model for all selected prompts."
-                    : bulkPropertyDisabledReason
-                }
+                disabled={harnessScopedPickerDisabled}
+                disabledReason={harnessScopedPickerDisabledReason}
               />
               <AgentQuickPicker
                 isNarrow={isMediumWidth}
                 showLabel={!isMediumWidth}
-                disabled={
-                  isExternallyManaged ||
-                  (isBulkMode &&
-                    (!canBulkEditPromptProperties ||
-                      bulkHarnessOptionsDisabled))
-                }
-                disabledReason={
-                  bulkHarnessOptionsDisabled
-                    ? "Set a harness to change the model for all selected prompts."
-                    : bulkPropertyDisabledReason
-                }
+                disabled={harnessScopedPickerDisabled}
+                disabledReason={harnessScopedPickerDisabledReason}
               />
               <SkillsQuickPicker
                 isNarrow={isMediumWidth}
                 showLabel={!isMediumWidth}
-                disabled={
-                  isExternallyManaged ||
-                  (isBulkMode &&
-                    (!canBulkEditPromptProperties ||
-                      bulkHarnessOptionsDisabled))
-                }
-                disabledReason={
-                  bulkHarnessOptionsDisabled
-                    ? "Set a harness to change the model for all selected prompts."
-                    : bulkPropertyDisabledReason
-                }
+                disabled={harnessScopedPickerDisabled}
+                disabledReason={harnessScopedPickerDisabledReason}
               />
             </div>
             {!(isEditMode && isSmallWidth) && (
@@ -229,17 +214,8 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                 <PermissionsQuickPicker
                   isNarrow={isMediumWidth}
                   showLabel={!isMediumWidth}
-                  disabled={
-                    isExternallyManaged ||
-                    (isBulkMode &&
-                      (!canBulkEditPromptProperties ||
-                        bulkHarnessOptionsDisabled))
-                  }
-                  disabledReason={
-                    bulkHarnessOptionsDisabled
-                      ? "Set a harness to change the model for all selected prompts."
-                      : bulkPropertyDisabledReason
-                  }
+                  disabled={harnessScopedPickerDisabled}
+                  disabledReason={harnessScopedPickerDisabledReason}
                 />
                 <ContextQuickPicker
                   isNarrow={isMediumWidth}

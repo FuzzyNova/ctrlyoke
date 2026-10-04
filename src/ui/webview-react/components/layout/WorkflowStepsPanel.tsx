@@ -16,6 +16,7 @@ import { useElementNarrow } from "../../hooks/useElementNarrow";
 import {
   usePromptStatus,
   useStepClickHandler,
+  useStepCapabilityContext,
   useStepContextMenu,
   useFinalStepContextMenu,
   useLatestStepOutput,
@@ -1089,20 +1090,13 @@ const WorkflowStepsPanelInner: React.FC<{
   const multiSelectionForDrag = useEditorStore(
     (state) => state.multiSelection?.indices ?? EMPTY_STEP_INDICES
   );
+  const multiSelectionCapabilityContext = useStepCapabilityContext(
+    multiSelectionForDrag
+  );
   const multiSelectionCapabilities = getSelectionCapabilities(
     multiSelectionForDrag,
     steps,
-    {
-      currentStep,
-      executionState,
-      pendingRewindBoundary: pendingRewind?.fromStepIndex,
-      isExternallyManaged: isExternallyManaged || isLineageReadOnly,
-      isExecutionTargetLocked:
-        executionOwnsCurrentStep(executionState, finalStepPhase) &&
-        multiSelectionForDrag.includes(currentStep),
-      totalSteps: steps.length,
-      parallelGroups,
-    }
+    multiSelectionCapabilityContext
   );
   const multiDragAllowed =
     canReorder &&

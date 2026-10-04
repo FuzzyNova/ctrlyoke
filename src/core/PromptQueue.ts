@@ -2864,11 +2864,12 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
   }
 
   /**
-   * Delete a prompt from the queue
-   * @param index - Prompt index (0-based)
-   * @throws Error if index is out of range, or (while executing) if the step is
-   *   the running step or an already-completed step — only the pending tail after
-   *   the running step is deletable mid-run.
+   * Delete one or more steps from the queue as a single atomic mutation.
+   * @param indices - Unique step indices (0-based); every index is validated
+   *   before anything changes, so one bad index rejects the whole batch.
+   * @throws Error if any index is out of range or duplicated, or (while
+   *   executing) if any step is the running step or an already-completed step —
+   *   only the pending tail after the running step is deletable mid-run.
    */
   public async deletePrompts(indices: number[]): Promise<void> {
     // Mutation and write run as one serialized operation, so no other

@@ -2386,6 +2386,16 @@ export const EDITOR_PLACEHOLDER_TEXT = {
     `${count} steps selected — cannot edit properties for completed or running steps. Remove them from the selection to edit properties. Color can still be changed.`,
 } as const;
 
+/** Tooltips for controls disabled by a multi-step selection's capabilities. */
+export const BULK_EDIT_DISABLED_REASONS = {
+  LOCKED_STEPS:
+    "Cannot edit properties for completed or running steps. Remove them from the selection to edit properties.",
+  PROMPTS_ONLY: "Select only prompt steps to edit prompt properties.",
+  HARNESS_REQUIRED:
+    "Set a harness to change the model for all selected prompts.",
+  NO_EDITABLE_CHANGE: "Make an editable change before updating",
+} as const;
+
 // ============================================================================
 // IMAGE PASTE - Shared contract for clipboard-image paste support
 // Single-sourced so the webview paste handler (pre-check) and the extension

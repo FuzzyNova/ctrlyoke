@@ -1,4 +1,5 @@
 import {
+  BULK_EDIT_DISABLED_REASONS,
   EXECUTION_STATES,
   STEP_TYPES,
   type ExecutionState,
@@ -15,13 +16,13 @@ export interface StepCapabilities {
   canEditPromptProperties: boolean;
 }
 
-const STEP_CAPABILITY_ACTIONS = {
+export const STEP_CAPABILITY_ACTIONS = {
   EDIT: "edit",
   DELETE: "delete",
   REORDER: "reorder",
   TOGGLE: "toggle",
 } as const;
-type StepCapabilityAction =
+export type StepCapabilityAction =
   (typeof STEP_CAPABILITY_ACTIONS)[keyof typeof STEP_CAPABILITY_ACTIONS];
 
 export interface StepCapabilityContext {
@@ -178,4 +179,36 @@ export function getStepCapabilityDisabledReason(
       : "Cannot change steps while workflow is cancelling";
   }
   return undefined;
+}
+
+/** First selected index whose own capabilities deny `key`, if any. */
+export function findSelectedIndexLacking(
+  indices: readonly number[],
+  steps: readonly WorkflowStep[],
+  ctx: StepCapabilityContext,
+  key: keyof StepCapabilities
+): number | undefined {
+  return indices.find((index) => {
+    const step = steps[index];
+    return !step || !getStepCapabilities(step, index, ctx)[key];
+  });
+}
+
+/**
+ * Why a multi-selection cannot have its prompt properties edited, or
+ * undefined when it can. Locked steps win over the prompts-only rule because
+ * removing them is the fix the user needs first.
+ */
+export function getBulkPromptPropertyDisabledReason(
+  indices: readonly number[],
+  steps: readonly WorkflowStep[],
+  ctx: StepCapabilityContext
+): string | undefined {
+  if (getSelectionCapabilities(indices, steps, ctx).canEditPromptProperties) {
+    return undefined;
+  }
+  return findSelectedIndexLacking(indices, steps, ctx, "canToggleEnabled") !==
+    undefined
+    ? BULK_EDIT_DISABLED_REASONS.LOCKED_STEPS
+    : BULK_EDIT_DISABLED_REASONS.PROMPTS_ONLY;
 }

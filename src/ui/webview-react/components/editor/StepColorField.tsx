@@ -1,6 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { PROMPT_PROPERTIES, STEP_TYPES } from "@root/types/DashboardConstants";
-import { getBulkDisplayValue, MIXED_VALUE, useEditorStore } from "../../store/editorStore";
+import {
+  getBulkDisplayValue,
+  MIXED_VALUE,
+  useEditorStore,
+} from "../../store/editorStore";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { getInheritedStepColor } from "../../utils/stepColor";
@@ -19,8 +23,15 @@ interface StepColorInputState {
 }
 
 export function useStepColorInput(): StepColorInputState {
-  const { properties, setProperty, stepType, selectedPromptIndex, multiSelection, bulkPatch, clearBulkPatchField } =
-    useEditorStore();
+  const {
+    properties,
+    setProperty,
+    stepType,
+    selectedPromptIndex,
+    multiSelection,
+    bulkPatch,
+    clearBulkPatchField,
+  } = useEditorStore();
   const { steps } = useWorkflowStore();
   const { globalSettings, getEffectiveHarness } = useSettingsStore();
   const inheritedColor = getInheritedStepColor(
@@ -37,7 +48,9 @@ export function useStepColorInput(): StepColorInputState {
   const hasOverride = multiSelection
     ? Object.prototype.hasOwnProperty.call(bulkPatch, "color")
     : properties.color !== undefined;
-  const [color, setColorState] = useState(effectiveDisplayColor ?? inheritedColor);
+  const [color, setColorState] = useState(
+    effectiveDisplayColor ?? inheritedColor
+  );
   // Tracks whether the user actually changed the value since the last
   // commit/reset, so closing the picker untouched doesn't turn an inherited
   // color into an explicit override of the same value.
@@ -116,7 +129,10 @@ export const StepColorField: React.FC<StepColorFieldProps> = ({ idPrefix }) => {
           <div
             aria-hidden="true"
             className="absolute inset-0 rounded border border-input-border"
-            style={{ background: "repeating-linear-gradient(135deg, #808080 0 6px, #d0d0d0 6px 12px)" }}
+            style={{
+              background:
+                "repeating-linear-gradient(135deg, #808080 0 6px, #d0d0d0 6px 12px)",
+            }}
           />
         )}
         <input
@@ -145,7 +161,11 @@ export const StepColorField: React.FC<StepColorFieldProps> = ({ idPrefix }) => {
         />
       </div>
       <p className="text-xs text-description-fg">
-        {mixed ? "Mixed colors" : hasOverride ? `Override: ${color}` : `Inherited: ${inheritedColor}`}
+        {mixed
+          ? "Mixed colors"
+          : hasOverride
+            ? `Override: ${color}`
+            : `Inherited: ${inheritedColor}`}
       </p>
     </div>
   );

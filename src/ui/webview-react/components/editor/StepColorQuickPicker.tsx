@@ -13,12 +13,18 @@ export const StepColorQuickPicker: React.FC<StepColorQuickPickerProps> = ({
   const { color, setColor, commit, hasOverride, mixed } = useStepColorInput();
 
   return (
-    <span className="relative h-5 w-5 flex-shrink-0" title={mixed ? "Selected steps have mixed colors" : undefined}>
+    <span
+      className="relative h-5 w-5 flex-shrink-0"
+      title={mixed ? "Selected steps have mixed colors" : undefined}
+    >
       {mixed && (
         <span
           aria-hidden="true"
           className="absolute inset-0 rounded border border-input-border"
-          style={{ background: "repeating-linear-gradient(135deg, #808080 0 3px, #d0d0d0 3px 6px)" }}
+          style={{
+            background:
+              "repeating-linear-gradient(135deg, #808080 0 3px, #d0d0d0 3px 6px)",
+          }}
         />
       )}
       <input

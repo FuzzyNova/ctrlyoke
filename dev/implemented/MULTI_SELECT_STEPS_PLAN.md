@@ -2,6 +2,14 @@
 
 **Status: v1 complete (2026-10-03).**
 
+> Review note (2026-10-03): the bulk editor header, footer pickers, drawer and
+> multi-drag each built their own capability context, and some left out the
+> pending-rewind boundary, the read-only lineage flags or the executing-target
+> lock. They now all go through `useStepCapabilityContext` /
+> `useBulkSelectionGates` (`hooks/useBulkSelectionGates.ts`). The disabled-reason
+> tooltips are single-sourced in `BULK_EDIT_DISABLED_REASONS`
+> (`DashboardConstants.ts`).
+
 ## Goal
 
 Let the user select more than one step in `WorkflowStepsPanel` and act on all of them

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  BULK_EDIT_DISABLED_REASONS,
   EXECUTION_STATES,
   PROMPT_TERMINAL_STATUS,
   STEP_TYPES,
@@ -7,6 +8,8 @@ import {
 import type { ParallelGroupDefinition } from "@root/types/CtrlYokeTypes";
 import type { WorkflowStep } from "@store/workflowStore";
 import {
+  findSelectedIndexLacking,
+  getBulkPromptPropertyDisabledReason,
   getSelectionCapabilities,
   getStepCapabilities,
   isStepExecutionLocked,
@@ -112,5 +115,47 @@ describe("stepCapabilities", () => {
         parallelGroups: groups,
       }).canReorder
     ).toBe(false);
+  });
+
+  it("explains why bulk prompt properties are unavailable", () => {
+    const completed = completedPrompt();
+    expect(
+      getBulkPromptPropertyDisabledReason(
+        [0, 1],
+        [prompt, prompt],
+        defaultContext
+      )
+    ).toBeUndefined();
+    expect(
+      getBulkPromptPropertyDisabledReason(
+        [0, 1],
+        [prompt, script],
+        defaultContext
+      )
+    ).toBe(BULK_EDIT_DISABLED_REASONS.PROMPTS_ONLY);
+    // Locked steps take precedence over the prompts-only rule.
+    expect(
+      getBulkPromptPropertyDisabledReason(
+        [0, 1],
+        [completed, script],
+        defaultContext
+      )
+    ).toBe(BULK_EDIT_DISABLED_REASONS.LOCKED_STEPS);
+    expect(
+      findSelectedIndexLacking(
+        [0, 1],
+        [prompt, completed],
+        defaultContext,
+        "canDelete"
+      )
+    ).toBe(1);
+    expect(
+      findSelectedIndexLacking(
+        [0, 1],
+        [completed, prompt],
+        defaultContext,
+        "canEditColor"
+      )
+    ).toBeUndefined();
   });
 });
