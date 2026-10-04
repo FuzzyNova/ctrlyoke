@@ -148,6 +148,7 @@ function main() {
         if (notifyFile) {
           const notifyData = {
             timestamp: Date.now(),
+            runId: process.env.CTRLYOKE_RUN_ID || undefined,
             sessionId,
             status: "started",
             hookEvent: "PreInvocation",
@@ -188,6 +189,7 @@ function main() {
       const notifyFile = buildNotifyFilePath(notifyDir, sessionId, false);
       const notifyData = {
         timestamp: Date.now(),
+        runId: process.env.CTRLYOKE_RUN_ID || undefined,
         sessionId,
         status: "completed",
         hookEvent: "Stop",

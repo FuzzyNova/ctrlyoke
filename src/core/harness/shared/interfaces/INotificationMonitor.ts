@@ -105,7 +105,8 @@ export interface INotificationMonitor {
     config: NotificationConfig,
     sessionId: string | undefined,
     startTime: Date,
-    onCancel?: () => boolean
+    onCancel?: () => boolean,
+    runId?: string
   ): Promise<NotificationResult>;
 
   /**
@@ -249,7 +250,8 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
    * or detect a harness failure via {sessionId}-error.json.
    *
    * When sessionId is provided: polls {sessionId}-stop.json directly.
-   * When sessionId is undefined (wildcard): scans for any *-stop.json newer than startTime.
+   * When sessionId is undefined, scans newer Stop files. If runId is provided,
+   * a file must carry the same runId to keep standalone runs isolated.
    *
    * Deletes the stop file when completion is confirmed.
    */
@@ -257,7 +259,8 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
     config: NotificationConfig,
     sessionId: string | undefined,
     startTime: Date,
-    onCancel?: () => boolean
+    onCancel?: () => boolean,
+    runId?: string
   ): Promise<NotificationResult> {
     const pollMs = config.pollMs || 500;
 
@@ -377,7 +380,8 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
 
               if (
                 data?.hookEvent === NOTIFICATION_HOOK_EVENTS.STOP &&
-                data?.status === STEP_STATUS.COMPLETED
+                data?.status === STEP_STATUS.COMPLETED &&
+                (!runId || data?.runId === runId)
               ) {
                 Log.info(
                   `[NotificationMonitorBase] Completion detected via Stop hook (file: ${file})`

@@ -544,6 +544,7 @@ export const CtrlYokeHook = async (hookContext: OpenCodePluginInput) => {
                   stopFile,
                   JSON.stringify({
                     hookEvent: "Stop",
+                    runId: RUN_ID,
                     sessionId: sessionID,
                     status: "completed",
                     timestamp: Date.now(),

@@ -334,6 +334,10 @@ suite("notification hook scripts", () => {
         (await readJsonFiles(notifyDir)).sort(),
         [lifecycleCase.startFile, lifecycleCase.stopFile].sort()
       );
+      assert.strictEqual(
+        (await readArtifact(notifyDir, lifecycleCase.stopFile)).runId,
+        env.CTRLYOKE_RUN_ID
+      );
     }
 
     const decisionScript = path.join(tempDirectory, "decision-hook.js");

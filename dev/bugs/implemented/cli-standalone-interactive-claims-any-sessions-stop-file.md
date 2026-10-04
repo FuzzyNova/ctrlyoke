@@ -2,7 +2,7 @@
 
 - **Found:** 2026-10-03 by bug-hunt final step (claude-cli); traced by reading the code, not reproduced end to end
 - **Area:** `src/core/harness/shared/CliTransportCoordinator.ts` (`executeStandaloneInteractiveProcess`, ~139-245; completion monitor call ~196-201), called from `CliExecutionRunner.ts` (~494) outside VS Code
-- **Severity:** low (low confidence — needs two concurrent interactive runs on the same harness and workspace)
+- **Resolution:** fixed in this commit
 
 ## Symptom
 

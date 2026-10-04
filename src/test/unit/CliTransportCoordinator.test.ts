@@ -18,7 +18,10 @@ import {
   TERMINAL_END_REASONS,
   type TerminalEndReason,
 } from "../../types/DashboardConstants";
-import type { NotificationResult } from "../../core/harness/shared/interfaces/INotificationMonitor";
+import type {
+  NotificationConfig,
+  NotificationResult,
+} from "../../core/harness/shared/interfaces/INotificationMonitor";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import {
   REDACTION_MARKER,
@@ -1319,6 +1322,82 @@ line two`,
     }
     assert.strictEqual(disposedProcess, true);
     assert.strictEqual(responseCompleted, "Interactive session ended");
+  });
+
+  test("resolves the standalone run's session ID before monitoring completion", async () => {
+    let waitedRunId: string | undefined;
+    let monitoredSessionId: string | undefined;
+    let monitoredRunId: string | undefined;
+    const coordinator = new CliTransportCoordinator({
+      provider: {
+        config: {
+          name: "test-cli",
+          displayName: "Test CLI",
+          terminalName: "Test",
+          installHint: "",
+          shouldStreamHeadlessOutput: false,
+          usesInteractiveNotificationMonitor: true,
+        },
+        notificationMonitor: {
+          supportsSessionIdInFilename: true,
+          supportsSessionStart: true,
+          waitForSessionStart: async (
+            _config: NotificationConfig,
+            _startTime: Date,
+            runId?: string
+          ) => {
+            waitedRunId = runId;
+            return {
+              completed: true,
+              data: { sessionId: "session-for-this-run" },
+            };
+          },
+          monitorForCompletion: async (
+            _config: NotificationConfig,
+            sessionId: string | undefined,
+            _start: Date,
+            _cancel?: () => boolean,
+            runId?: string
+          ) => {
+            monitoredSessionId = sessionId;
+            monitoredRunId = runId;
+            return { completed: false };
+          },
+          extractSessionId: (data: { sessionId?: string }) => data.sessionId,
+          buildHookConfig: () => ({ type: "none" as const }),
+          getNotificationDirectory: () => process.cwd(),
+        },
+        buildInteractiveArgs: (_baseArgs: string[], promptText: string) => [
+          promptText,
+        ],
+      } as unknown as ICliProvider,
+      processManager: {
+        spawnInteractive: async () => ({
+          exitCode: 0,
+          terminatedByManager: false,
+        }),
+      } as unknown as CliProcessManager,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: createHeadlessHostCallbacks(),
+    });
+
+    const result = await coordinator.executeStandaloneInteractiveProcess(
+      [],
+      "prompt",
+      [],
+      undefined,
+      undefined,
+      { CTRLYOKE_RUN_ID: "run-standalone" }
+    );
+
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(waitedRunId, "run-standalone");
+    assert.strictEqual(monitoredSessionId, "session-for-this-run");
+    assert.strictEqual(monitoredRunId, "run-standalone");
   });
 
   suite("standalone interactive exit", () => {
