@@ -472,6 +472,21 @@ async function main() {
     logLevel: "silent",
   });
 
+  // Long-output regexes run in a separate isolate. Keep this as a sibling of
+  // the extension, CLI, and MCP bundles so each can resolve it from `out/`.
+  const scriptRegexWorkerCtx = await esbuild.context({
+    entryPoints: ["src/utils/ScriptRegexWorker.ts"],
+    bundle: true,
+    format: "cjs",
+    minify: production,
+    sourcemap: !production,
+    sourcesContent: false,
+    platform: "node",
+    target: "node22",
+    outfile: "out/scriptRegexWorker.js",
+    logLevel: "silent",
+  });
+
   // Build standalone CLI binary
   const packageJson = JSON.parse(
     fs.readFileSync(path.join(__dirname, "package.json"), "utf-8")
@@ -514,6 +529,7 @@ async function main() {
     await mcpCtx.watch();
     await historySearchRebuildWorkerCtx.watch();
     await historySearchMatcherWorkerCtx.watch();
+    await scriptRegexWorkerCtx.watch();
     await cliCtx.watch();
   } else {
     await webviewScriptsCtx.rebuild();
@@ -523,6 +539,7 @@ async function main() {
     await mcpCtx.rebuild();
     await historySearchRebuildWorkerCtx.rebuild();
     await historySearchMatcherWorkerCtx.rebuild();
+    await scriptRegexWorkerCtx.rebuild();
     await cliCtx.rebuild();
     await webviewScriptsCtx.dispose();
     await ctx.dispose();
@@ -531,6 +548,7 @@ async function main() {
     await mcpCtx.dispose();
     await historySearchRebuildWorkerCtx.dispose();
     await historySearchMatcherWorkerCtx.dispose();
+    await scriptRegexWorkerCtx.dispose();
     await cliCtx.dispose();
   }
 }

@@ -2,7 +2,7 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
   MAX_REGEX_INPUT_LENGTH,
-  compareScriptOutput,
+  compareScriptOutputInline as compareScriptOutput,
   describeComparison,
   describeIncompleteComparison,
   formatComparison,
@@ -11,6 +11,10 @@ import {
   resolveReportedScriptProperties,
   resolveScriptComparison,
 } from "../../utils/ScriptComparison";
+import {
+  compareScriptOutputAsync,
+  REGEX_WORKER_TIMEOUT_MS,
+} from "../../utils/ScriptComparisonAsync";
 import {
   COMPARE_SOURCES,
   DEFAULT_COMPARE_SOURCE,
@@ -210,13 +214,48 @@ suite("ScriptComparison", () => {
       );
     });
 
-    test("a regex runs against a bounded slice of the output", () => {
-      const huge = `${"a".repeat(MAX_REGEX_INPUT_LENGTH)}needle`;
-      assert.strictEqual(
-        stdout("needle", SCRIPT_OPERATORS.MATCHES)(huge),
-        false,
-        "output past the cap is not matched, so a pathological pattern cannot be fed unbounded input"
+    test("a long regex sees the full output including a trailing test summary", async () => {
+      const log = `${"build output line\n".repeat(9_000)}3000 passing (12s)`;
+      assert.ok(log.length > MAX_REGEX_INPUT_LENGTH);
+      const result = await compareScriptOutputAsync(
+        {
+          compareSource: COMPARE_SOURCES.STDOUT,
+          operator: SCRIPT_OPERATORS.MATCHES,
+          expected: "[0-9]+ passing",
+        },
+        ok(log)
       );
+      assert.strictEqual(result.passed, true);
+    });
+
+    test("a catastrophic regex times out with a clear comparison reason", async () => {
+      const actual = `${"a".repeat(MAX_REGEX_INPUT_LENGTH + 1)}!`;
+      const result = await compareScriptOutputAsync(
+        {
+          compareSource: COMPARE_SOURCES.STDOUT,
+          operator: SCRIPT_OPERATORS.MATCHES,
+          expected: "(a+)+$",
+        },
+        ok(actual)
+      );
+      assert.strictEqual(result.passed, false);
+      assert.strictEqual(
+        result.reason,
+        `regex timed out after ${REGEX_WORKER_TIMEOUT_MS / 1000}s on ${actual.length} chars`
+      );
+    });
+
+    test("short regex input stays on the inline comparison path", async () => {
+      const result = await compareScriptOutputAsync(
+        {
+          compareSource: COMPARE_SOURCES.STDOUT,
+          operator: SCRIPT_OPERATORS.MATCHES,
+          expected: "needle$",
+        },
+        ok("short needle")
+      );
+      assert.strictEqual(result.passed, true);
+      assert.strictEqual(result.reason, undefined);
     });
 
     test("isEmpty and isNotEmpty ignore `expected`", () => {

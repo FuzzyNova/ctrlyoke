@@ -15,10 +15,8 @@ import {
 } from "../types/SchemaUiMetadata";
 
 /**
- * Longest `actual` a regex is run against. A `matches` pattern is authored by the
- * user, but the text it runs against is model-influenced script output, and a
- * pathological backtrack would hang the extension host (worse than a script
- * timeout, which at least has a deadline). Truncating bounds the input instead.
+ * Maximum text length evaluated inline. Longer inputs use an isolated worker
+ * with a deadline so regex backtracking cannot hang the host.
  */
 export const MAX_REGEX_INPUT_LENGTH = 100_000;
 
@@ -53,6 +51,8 @@ export interface ScriptComparisonResult {
   passed: boolean;
   /** The trimmed value taken from `compareSource` and compared. */
   actual: string;
+  /** Present when a guarded comparison could not finish. */
+  reason?: string;
 }
 
 /** Fill in the defaults so every consumer reads the same resolved triple. */
@@ -185,7 +185,7 @@ function compareRegex(actual: string, pattern: string): boolean {
  * `compareSource`: that is the zero-config default, not a special case, because
  * the defaults resolve to `exitCode` / `eq` / `"0"`.
  */
-export function compareScriptOutput(
+export function compareScriptOutputInline(
   config: ScriptComparisonConfig,
   input: ScriptComparisonInput
 ): ScriptComparisonResult {

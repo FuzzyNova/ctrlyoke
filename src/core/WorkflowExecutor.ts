@@ -2667,7 +2667,7 @@ export class WorkflowExecutor {
         }
 
         const exitCode = ptyExitCode ?? 1;
-        const comparison = this.endConditionEvaluator.evaluateResult(
+        const comparison = await this.endConditionEvaluator.evaluateResult(
           {
             result: outputChunks.join(""),
             stdout: outputChunks.join(""),

@@ -4167,7 +4167,7 @@ export class WorkflowInstance
                 onOutput,
                 windowsVerbatimArguments: invocation.windowsVerbatimArguments,
               });
-              const comparison = this.endConditionEvaluator.evaluateResult(
+              const comparison = await this.endConditionEvaluator.evaluateResult(
                 {
                   result: processResult.result,
                   stdout: processResult.stdout,

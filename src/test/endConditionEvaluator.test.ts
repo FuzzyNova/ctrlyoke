@@ -65,8 +65,8 @@ suite("EndConditionEvaluator Tests", () => {
     ] as const;
 
     for (const { operator, expected } of cases) {
-      test(`sanitizes CRLF and ANSI output for ${operator}`, () => {
-        const result = evaluator.evaluateResult(
+      test(`sanitizes CRLF and ANSI output for ${operator}`, async () => {
+        const result = await evaluator.evaluateResult(
           {
             result: rawOutput,
             stdout: rawOutput,

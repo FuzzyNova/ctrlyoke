@@ -295,7 +295,10 @@ export class EndConditionHandler {
           maxRetries > 0
             ? `End condition failed after ${retryCount} retries.`
             : "End condition validation failed.";
-        const failureReason = `${headline}\n\nExpected: ${expected}\nActual: ${actual}\n\nScript output:\n${evaluationResult.stdout.substring(0, 200)}`;
+        const comparisonReason = evaluationResult.comparisonReason
+          ? `${evaluationResult.comparisonReason}\n\n`
+          : "";
+        const failureReason = `${headline}\n\n${comparisonReason}Expected: ${expected}\nActual: ${actual}\n\nScript output:\n${evaluationResult.stdout.substring(0, 200)}`;
 
         Log.error(
           `[EndConditionHandler] End condition failed after ${retryCount} retries (max: ${maxRetries})`
