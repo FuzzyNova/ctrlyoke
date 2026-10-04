@@ -136,8 +136,10 @@ ctrlyoke secret check workflows/deploy.ctrlyoke.yaml   # fails fast if a name is
 ctrlyoke run workflows/deploy.ctrlyoke.yaml --headless --json
 ```
 
-`secret check` exits `1` when a declared name can't be resolved, so it can run before the
-expensive part of the job.
+`secret check` exits `1` when the only problem is a missing environment or managed
+secret value. It exits `2` for unapproved grants or other configuration errors
+(and reports missing values too when both problems exist), so it can run before
+the expensive part of the job.
 
 ## Harness sign-in
 

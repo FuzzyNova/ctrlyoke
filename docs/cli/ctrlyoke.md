@@ -389,8 +389,11 @@ ctrlyoke run deploy.ctrlyoke.yaml --headless
 
 `secret check <file>` performs the same declared-secret preflight as `run`
 without starting a harness. It exits `1` when a declared name cannot resolve
-(and reports the name and resolution scope) and `2` when the file cannot be
-loaded. Unlike `run`, which only warns about a missing secret unless
+(and reports every name with its workflow or step scope), `2` for unapproved
+secret grants or other configuration and usage errors, and `0` when all
+declared names resolve. Unapproved grants are reported at workflow scope; if
+any missing values are also present, both problems are shown and the command
+exits `2`. Unlike `run`, which only warns about a missing secret unless
 `execution.contextResolutionFailure` is `fail`, `secret check` always fails on
 one.
 

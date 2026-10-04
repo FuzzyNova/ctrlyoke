@@ -11,6 +11,8 @@ import {
 import { EndConditionEvaluator } from "../../core/EndConditionEvaluator";
 import {
   MissingSecretError,
+  MissingSecretsError,
+  UnapprovedSecretGrantsError,
   findSecretInterpolationsInPrompt,
   expandSecretInterpolations,
   assertSecretGrantTrust,
@@ -735,7 +737,9 @@ suite("SecretResolver", () => {
           { TRUSTED_TOKEN: "resolved" },
           { failOnMissing: false, trustStore }
         ),
-        /Secret "TRUSTED_TOKEN" is missing for scope "deploy"/
+        (error: unknown) =>
+          error instanceof UnapprovedSecretGrantsError &&
+          /Secret grant "TRUSTED_TOKEN".*workflow scope/.test(error.message)
       );
     });
 
@@ -765,7 +769,7 @@ suite("SecretResolver", () => {
           { TRUSTED_TOKEN: "resolved" },
           { trustStore }
         ),
-        /Secret "TRUSTED_TOKEN" is missing for scope "deploy"/
+        /Secret grant "TRUSTED_TOKEN".*workflow scope/
       );
     });
 
@@ -794,7 +798,7 @@ suite("SecretResolver", () => {
           { trustStore: allowAllTrustStore }
         ),
         (error: unknown) =>
-          error instanceof Error &&
+          error instanceof MissingSecretsError &&
           /Secret "TRUSTED_TOKEN" is missing for scope "deploy"/.test(
             error.message
           ) &&
