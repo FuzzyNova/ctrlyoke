@@ -39,3 +39,8 @@ those events for every target, and builds each `CliOutputTarget` through one
 The completion event carries the attempt's `PromptAttemptStats`, so the CLI prints the stats
 line from it for finalStep passes too; before, it printed stats only from the queue-only
 `onPromptComplete`, and a finalStep pass never showed tokens, session, or elapsed time.
+
+The retry summary (`↻ step: N attempts · … total`) was queue-only for the same reason. Its
+tally now lives in `CliAttemptTally`, keyed by the output-stream key and fed by the same two
+target events (the start event carries `attemptIndex`), so a retried finalStep pass gets its
+own summary line.

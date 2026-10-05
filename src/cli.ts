@@ -38,7 +38,6 @@ import type {
   RunnerHostIdentity,
 } from "./types/CtrlYokeTypes";
 import { projectWorktreeRuntime } from "./types/CtrlYokeTypes";
-import type { TokenStats } from "./types/WebviewMessageTypes";
 import type { CompatibilityDiagnostic } from "./types/CompatibilityTypes";
 import {
   isScriptStep,
@@ -60,6 +59,7 @@ import type { QueueState } from "./types/CtrlYokeTypes";
 import type { OutputExecutionTarget } from "./types/OutputHistoryTypes";
 import { CliTerminalOutputGate } from "./cli/CliTerminalOutputGate";
 import { inheritedTerminalOwnership } from "./utils/InheritedTerminalOwnership";
+import { CliAttemptTally } from "./cli/CliAttemptTally";
 import {
   CliTerminalFormatter,
   type CliOutputTarget,
@@ -565,15 +565,6 @@ interface CliParallelGroupState {
   failed: Set<number>;
 }
 
-interface CliAttemptState {
-  stepName: string;
-  attemptCount: number;
-  totalElapsed: number;
-  tokenStats: TokenStats[];
-  retried: boolean;
-  activeAttemptCompleted: boolean;
-}
-
 /**
  * The workflow-level harness and model a run reports in its header and
  * `--json` result, using the precedence execution applies: an explicit
@@ -655,7 +646,7 @@ function getCliOutputStepName(
 function toCliOutputTarget(
   target: OutputExecutionTarget,
   stepName: string
-): CliOutputTarget {
+): CliOutputTarget & { key: string } {
   return target.kind === FINAL_STEP_PHASES.QUEUE
     ? {
         stepIndex: target.stepIndex,
@@ -1053,7 +1044,7 @@ async function runCommand(
     // has already reached this terminal, while preserving unrelated statuses.
     const pendingScriptStatusMessages = new Map<string, number>();
     const parallelGroups = new Map<string, CliParallelGroupState>();
-    const attempts = new Map<number, CliAttemptState>();
+    const attempts = new CliAttemptTally();
     const renderedFinalStepLabels = new Set<number>();
     let released = false;
 
@@ -1127,15 +1118,13 @@ async function runCommand(
       }
       released = true;
       outputGate.write(() => {
-        for (const attempt of attempts.values()) {
-          if (attempt.retried) {
-            CliTerminalFormatter.renderAttemptGroupSummary(
-              attempt.stepName,
-              attempt.attemptCount,
-              attempt.totalElapsed,
-              attempt.tokenStats
-            );
-          }
+        for (const attempt of attempts.retriedGroups()) {
+          CliTerminalFormatter.renderAttemptGroupSummary(
+            attempt.stepName,
+            attempt.attemptCount,
+            attempt.totalElapsed,
+            attempt.tokenStats
+          );
         }
         attempts.clear();
         parallelGroups.clear();
@@ -1147,18 +1136,25 @@ async function runCommand(
 
     // Every attempt, queue step or finalStep pass, streams into a fresh
     // stream; the stream outlives completion so follow-up activity pairs.
-    instance.onTargetAttemptStart((target) =>
-      outputGate.write(() =>
-        CliTerminalFormatter.replaceEventStream(
-          toCliOutputTarget(target, getCliOutputStepName(instance, target))
-        )
-      )
+    // Retry tallies cover every target, keyed like its output stream.
+    instance.onTargetAttemptStart(({ target, attemptIndex }) =>
+      outputGate.write(() => {
+        const outputTarget = toCliOutputTarget(
+          target,
+          getCliOutputStepName(instance, target)
+        );
+        CliTerminalFormatter.replaceEventStream(outputTarget);
+        attempts.start(outputTarget.key, outputTarget.stepName, attemptIndex);
+      })
     );
     instance.onTargetAttemptComplete(({ target, stats }) =>
       outputGate.write(() => {
-        CliTerminalFormatter.finishEventStream(
-          toCliOutputTarget(target, getCliOutputStepName(instance, target))
+        const outputTarget = toCliOutputTarget(
+          target,
+          getCliOutputStepName(instance, target)
         );
+        attempts.complete(outputTarget.key, stats);
+        CliTerminalFormatter.finishEventStream(outputTarget);
         CliTerminalFormatter.renderStats(stats);
       })
     );
@@ -1168,23 +1164,6 @@ async function runCommand(
           CliTerminalFormatter.renderPromptHeader(data);
           return;
         }
-
-        const attempt = attempts.get(data.stepIndex) ?? {
-          stepName: data.stepName,
-          attemptCount: 0,
-          totalElapsed: 0,
-          tokenStats: [],
-          retried: false,
-          activeAttemptCompleted: false,
-        };
-        attempt.stepName = data.stepName;
-        attempt.attemptCount = Math.max(
-          attempt.attemptCount,
-          data.attemptIndex + 1
-        );
-        attempt.retried ||= data.attemptIndex > 0;
-        attempt.activeAttemptCompleted = false;
-        attempts.set(data.stepIndex, attempt);
 
         const state = getParallelGroup(data.parallelGroupId);
         if (!state) {
@@ -1283,12 +1262,6 @@ async function runCommand(
     );
     instance.onPromptComplete((data) =>
       outputGate.write(() => {
-        const attempt = attempts.get(data.stepIndex);
-        if (attempt && !attempt.activeAttemptCompleted) {
-          attempt.totalElapsed += data.elapsed ?? 0;
-          if (data.tokens) attempt.tokenStats.push(data.tokens);
-          attempt.activeAttemptCompleted = true;
-        }
         const state = getParallelGroup(data.parallelGroupId);
         if (state?.started.has(data.stepIndex)) {
           if (!state.failed.has(data.stepIndex)) {

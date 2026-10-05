@@ -191,6 +191,7 @@ import {
   type PromptStartData,
   type PromptCompleteData,
   type TargetAttemptCompleteData,
+  type TargetAttemptStartData,
 } from "./OutputCaptureBuffer";
 import { WorkflowStateMachine } from "./WorkflowStateMachine";
 import type { ExternalRunWatchInstance } from "./orchestration/ExternalRunWatchCoordinator";
@@ -211,6 +212,7 @@ export type {
   PromptStartData,
   PromptCompleteData,
   TargetAttemptCompleteData,
+  TargetAttemptStartData,
 } from "./OutputCaptureBuffer";
 
 /**
@@ -503,7 +505,7 @@ export class WorkflowInstance
   public readonly onPromptStart = this._promptStartEmitter.event;
 
   private readonly _targetAttemptStartEmitter =
-    new TypedEmitter<OutputExecutionTarget>();
+    new TypedEmitter<TargetAttemptStartData>();
   /**
    * Fires once when any prompt attempt begins, queue step or finalStep pass,
    * ahead of that attempt's output. Unlike `onPromptStart`, it covers
@@ -726,8 +728,8 @@ export class WorkflowInstance
 
     const bufferCallbacks: OutputCaptureCallbacks = {
       onPromptStart: (data) => this._promptStartEmitter.fire(data),
-      onTargetAttemptStart: (target) =>
-        this._targetAttemptStartEmitter.fire(target),
+      onTargetAttemptStart: (data) =>
+        this._targetAttemptStartEmitter.fire(data),
       onTargetAttemptComplete: (data) =>
         this._targetAttemptCompleteEmitter.fire({
           ...data,

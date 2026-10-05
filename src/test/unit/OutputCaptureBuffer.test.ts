@@ -49,8 +49,8 @@ function makeCallbacks(overrides?: Partial<OutputCaptureCallbacks>): {
   const callbacks: OutputCaptureCallbacks = {
     onPromptStart: (data) => promptStarts.push(data),
     onPromptComplete: (data) => promptCompletes.push(data),
-    onTargetAttemptStart: (target) =>
-      attemptEvents.push(`start ${describeTarget(target)}`),
+    onTargetAttemptStart: ({ target, attemptIndex }) =>
+      attemptEvents.push(`start ${describeTarget(target)} #${attemptIndex}`),
     onTargetAttemptComplete: ({ target, stats }) =>
       attemptEvents.push(
         `complete ${describeTarget(target)} ${stats.elapsed ?? "-"}s`
@@ -135,11 +135,11 @@ suite("OutputCaptureBuffer", () => {
     }
 
     assert.deepStrictEqual(attemptEvents, [
-      "start queue:1",
+      "start queue:1 #0",
       "complete queue:1 3s",
-      "start final:0",
+      "start final:0 #0",
       "complete final:0 10s",
-      "start final:0",
+      "start final:0 #1",
       "complete final:0 11s",
     ]);
   });

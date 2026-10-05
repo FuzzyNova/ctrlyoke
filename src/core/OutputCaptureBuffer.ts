@@ -53,6 +53,12 @@ export interface PromptCompleteData extends PromptAttemptStats {
   parallelGroupId?: string;
 }
 
+/** Data carried when any attempt, queue step or finalStep pass, begins. */
+export interface TargetAttemptStartData {
+  target: OutputExecutionTarget;
+  attemptIndex: number;
+}
+
 /** Data carried when any attempt, queue step or finalStep pass, completes. */
 export interface TargetAttemptCompleteData {
   target: OutputExecutionTarget;
@@ -119,7 +125,7 @@ export interface OutputCaptureCallbacks {
    * Fires once when any prompt attempt begins, queue step or finalStep pass,
    * ahead of that attempt's output. `onPromptStart` covers queue steps only.
    */
-  onTargetAttemptStart: (target: OutputExecutionTarget) => void;
+  onTargetAttemptStart: (data: TargetAttemptStartData) => void;
   /** Fires when any prompt attempt's completed output is captured. */
   onTargetAttemptComplete: (data: TargetAttemptCompleteData) => void;
   onStatusMessage: (
@@ -238,8 +244,8 @@ export class OutputCaptureBuffer {
     );
     if (cliCommand === undefined) {
       this.callbacks.onTargetAttemptStart({
-        kind: FINAL_STEP_PHASES.QUEUE,
-        stepIndex,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
+        attemptIndex,
       });
     }
     this.stepOutputBuffer.set(stepIndex, {
@@ -373,8 +379,8 @@ export class OutputCaptureBuffer {
     );
     if (cliCommand === undefined) {
       this.callbacks.onTargetAttemptStart({
-        kind: FINAL_STEP_PHASES.FINAL_STEP,
-        loopIndex,
+        target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex },
+        attemptIndex,
       });
     }
     this.finalStepOutputBuffer.set(loopIndex, {
