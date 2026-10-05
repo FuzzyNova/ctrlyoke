@@ -157,6 +157,9 @@ Each item: what to capture, what prep it needs, where it's used.
 - **Use:** landing "Pro callout" section (`Code from anywhere`) — currently text/checklist only, no
   imagery at all; also `docs/pro/index.md`.
 - **Dimensions:** category C — see "Target dimensions" above.
+- **Status:** the motion version exists — `images/screenshots/ctrlyoke-take-control-1080p.mp4` (see
+  #7), already on the landing page. A still composite is only needed for docs or other places a video
+  doesn't fit; a frame from that clip may do.
 
 ### 4. `StatsUsageSection.tsx` — usage/stats page
 
@@ -194,7 +197,9 @@ Each item: what to capture, what prep it needs, where it's used.
 ### 7. Built-in mobile editor section, plus the QR-scan/PWA-install walkthrough (iOS & Android)
 
 - **What:** three related pieces, all captured on a real device, never an emulator (see Prep):
-  - **The editor GIF:** editing a prompt on a phone-width viewport — on-screen keyboard, touch-friendly
+  - **The editor GIF:** the _prompt_ editor (`CodeMirrorEditor.tsx`), not the workspace viewer's file
+    editor — that one is #10's edit-and-commit clip, captured in the same phone session. Editing a
+    prompt on a phone-width viewport — on-screen keyboard, touch-friendly
     completions, the visual-viewport-aware tooltip repositioning (`CodeMirrorEditor.tsx`'s
     `keyboardTooltipSpace`/`repositionTooltips` handling exists specifically for this). iPhone is fine
     for this one; it's not platform-specific.
@@ -212,12 +217,26 @@ Each item: what to capture, what prep it needs, where it's used.
       things).
     - **Short clips (a few seconds each)** only where motion is the point: the QR scan → camera →
       Safari hand-off, and the take-control payoff (also the landing-page candidate).
-    - Pull the stills from the existing full recording (Resolve: Color page → right-click viewer →
-      Grab Still, export from the Gallery) rather than re-shooting; an iPhone screen recording is at
-      native resolution (~1170px wide), which clears category H's floor. Keep the full recording as the
-      source master.
-    - Check every still and clip for personal details before publishing: certificate name, device name,
-      and the server URL/IP.
+    - Check every still and clip for personal details before publishing: device name, phone
+      identifiers on Settings → General → About (serial, IMEI, EID, ICCID, Wi-Fi/Bluetooth addresses),
+      account rows, and notifications. The private LAN IP is fine, and a URL/QR token is fine once the
+      token has been regenerated after recording.
+    - **Status — certificate/trust/install stills: done.** Edited in Resolve with a transparent iPhone
+      frame overlay (screen recording masked to rounded corners in Fusion), exported as a PNG sequence
+      with alpha, then:
+      - `images/screenshots/ios-pwa-setup-01-…-17-*-750x1532.png` — 17 numbered stills from "Download
+        certificate" in ctrlyoke through the home-screen icon. Transparent outside the phone, so they
+        sit on light and dark docs themes. Shown at ~375 CSS px wide (set `width="375"` when slotting;
+        VitePress doesn't resize). Annotation (box/arrow on the item to tap) is still to do.
+      - `images/screenshots/ios-pwa-setup-390x796.webp` — the whole 59s walkthrough as an animated WebP
+        with alpha (15 fps, 3.2 MB; over the 2 MB budget, acceptable as an optional overview beside the
+        stills, or split per phase if it needs to shrink).
+      - The full-resolution PNG sequence stays outside the repo as the source master.
+    - **Status — QR scan + take-control clip: done**, as
+      `images/screenshots/ctrlyoke-take-control-1080p.mp4` (1920x1016, 36s, already used on the
+      landing page): desktop VS Code and the phone side by side, scanning the QR code with the camera,
+      then driving the running workflow from the phone. As a desktop-plus-phone composite it also
+      covers much of #3 in motion form.
   - **The Android install recording:** the same flow's Chrome equivalent — scan the QR code → the URL
     opens in Chrome → tap Chrome's install affordance (this varies: an address-bar install icon, the ⋮
     menu's "Install app" / "Add to Home screen" item, or a custom in-app install banner, depending on
@@ -245,9 +264,13 @@ Each item: what to capture, what prep it needs, where it's used.
 - **Use:** the editor GIF pairs with #3 (the desktop/mobile composite) as a new landing "mobile"
   section. The iOS and Android install recordings are primarily documentation —
   `docs/pro/mobile-setup.md`'s iOS and Android sections respectively — and a trimmed clip of either is
-  a strong Pro-callout candidate on landing too. Edit in DaVinci Resolve (free); it has no GIF
-  export, so export MP4 and convert with ffmpeg. iPhone screen recordings are variable frame rate —
-  convert to constant frame rate (HandBrake/ffmpeg) first if Resolve drifts audio or stutters.
+  a strong Pro-callout candidate on landing too.
+- **Editing pipeline (as used for the iOS set):** iPhone recordings are HEVC and variable frame rate;
+  free Resolve on Windows can't decode HEVC (audio-only on the timeline), so first convert to H.264
+  constant 30 fps with ffmpeg. Edit in DaVinci Resolve (free) with a custom timeline resolution fitted
+  to the phone frame. MP4 can't carry transparency and Resolve has no GIF/WebP export, so render a PNG
+  sequence with Export Alpha, then use ffmpeg for animated WebP (alpha, all current browsers) and for
+  the stills. Avoid GIF for anything with rounded transparent corners (1-bit alpha, jagged edges).
 
 ### 8. YAML snippets for template marketing
 
@@ -287,6 +310,21 @@ Each item: what to capture, what prep it needs, where it's used.
 - **Dimensions:** two sets, both needed — category G (wide desktop browser) for the landing/general-docs
   use, and category H (real iPhone, mobile Safari or the installed PWA) for the PWA-setup docs and the
   mobile section. Neither is a VS Code sidebar capture — see "Window size" in Capture setup.
+- **Status:** wide desktop stills done — `workspace-viewer-explorer-1600x1000.png` and
+  `workspace-viewer-search-1600x1000.png`. Still to capture: the Source Control + diff still and the
+  iPhone set.
+- **Plus a phone clip: edit a file and commit it** (~10–15s, category H motion, animated WebP with
+  alpha like #7's). The motion version of the iPhone set, and a stronger "real IDE on your phone"
+  demo than any still: Explorer → open a file and change a line (`WorkspaceFileEditor`) → save →
+  Source Control → tap the file (on mobile the diff opens full-screen with a Back button) → Back →
+  **+** to stage → type a commit message → commit → the new commit appears in the history graph.
+  - Commit in the `demo-app` project, never the ctrlyoke repo — the commit is real. Keep the message
+    clean; it's on screen.
+  - Make the edit small and legible at phone size (a typo in a string, a changed constant).
+  - Skip pushing: it would expose the remote, and the commit already makes the point.
+  - Optional touch: if the file contains an `@file` reference, tapping it jumps to that file.
+  - Record it in the same phone session as #7's prompt-editor GIF and cut both clips from that one
+    recording.
 
 ### 11. Undo changes dialog
 
