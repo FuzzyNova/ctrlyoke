@@ -233,7 +233,7 @@ export const WorkflowRowLayout: React.FC<WorkflowRowLayoutProps> = ({
         {worktree && (
           <span className="flex w-4 flex-shrink-0 items-center justify-center">
             <Icon
-              name="source-control"
+              name="worktree-compact"
               title={worktreeTitle}
               aria-label={worktreeTitle}
             />

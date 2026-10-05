@@ -205,9 +205,9 @@ describe("RunningWorkflowItem", () => {
     );
 
     const terminal = screen.getByLabelText("Terminal session is still running");
-    const branch = container.querySelector(".codicon-source-control")!;
+    const branch = container.querySelector(".codicon-worktree-compact")!;
     expect(terminal).toBeInTheDocument();
-    expect(branch).toHaveClass("codicon-source-control");
+    expect(branch).toHaveClass("codicon-worktree-compact");
     expect(branch).toHaveAttribute(
       "title",
       "Branch: feature/auth\nWorktree: C:/worktrees/feature-auth"

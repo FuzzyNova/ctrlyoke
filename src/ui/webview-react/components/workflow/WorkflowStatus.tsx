@@ -1685,7 +1685,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                   title={worktreeIndicator.title}
                   aria-label={worktreeIndicator.title}
                 >
-                  <Icon name="source-control" className="text-sm" />
+                  <Icon name="worktree-compact" className="text-sm" />
                 </span>
               )}
 

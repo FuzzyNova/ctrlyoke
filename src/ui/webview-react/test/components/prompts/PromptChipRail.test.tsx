@@ -264,7 +264,7 @@ describe("PromptChipRail", () => {
 
     const groupWrapper = screen.getByTestId(`chip-parallel-group-${group.id}`);
     expect(
-      groupWrapper.querySelector(".codicon-worktree-compact")
+      groupWrapper.querySelector(".codicon-type-hierarchy-sub")
     ).not.toBeNull();
     expect(
       within(groupWrapper).getByRole("button", { name: "Prompt 1" })

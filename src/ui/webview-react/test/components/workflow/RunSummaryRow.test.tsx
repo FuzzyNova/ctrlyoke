@@ -274,7 +274,7 @@ describe("RunSummaryRow", () => {
       />
     );
 
-    const branch = container.querySelector(".codicon-source-control")!;
+    const branch = container.querySelector(".codicon-worktree-compact")!;
     expect(branch).toHaveAttribute(
       "title",
       "Branch: feature/auth\nWorktree: C:/worktrees/feature-auth"

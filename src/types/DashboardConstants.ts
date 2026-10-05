@@ -2828,6 +2828,14 @@ export const GIT_CHANGE_KINDS = {
   STASH: "stash",
 } as const;
 
+/** Codicon for each `~` git reference kind, shared by its completion item and chip. */
+export const GIT_REFERENCE_ICONS = {
+  [GIT_CHANGE_KINDS.COMMIT]: "git-commit",
+  [GIT_CHANGE_KINDS.DIFF]: "git-branch-changes",
+  [GIT_CHANGE_KINDS.STAGED]: "git-branch-staged-changes",
+  [GIT_CHANGE_KINDS.STASH]: "git-stash",
+} as const satisfies Record<GitChangeKind, string>;
+
 // ============================================================================
 // SCM FILE KINDS - Git source-control file status values
 // ============================================================================

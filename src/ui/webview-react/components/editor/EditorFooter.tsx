@@ -394,7 +394,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                     : !hasContent
                       ? "Enter a prompt first"
                       : runInParallelTarget.title,
-                  icon: <Icon name="worktree-compact" />,
+                  icon: <Icon name="type-hierarchy-sub" />,
                 },
                 {
                   label: "",

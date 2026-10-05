@@ -36,12 +36,12 @@ export const ALL_TABS = [
   {
     id: GLOBAL_SETTINGS_TABS.WORKTREES,
     label: "Worktrees",
-    icon: "codicon-source-control",
+    icon: "codicon-worktree-compact",
   },
   {
     id: GLOBAL_SETTINGS_TABS.COORDINATION,
     label: "Coordination",
-    icon: "codicon-person-voice",
+    icon: "codicon-organization",
   },
   // Output
   {

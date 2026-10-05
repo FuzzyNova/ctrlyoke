@@ -571,7 +571,7 @@ describe("WorkflowStatus — loaded state", () => {
     expect(screen.queryByText(EXECUTION_STATES.IDLE)).not.toBeInTheDocument();
   });
 
-  it("shows the worktree source-control indicator with its mode and branch in the wide header", () => {
+  it("shows the worktree indicator with its mode and branch in the wide header", () => {
     const getBoundingClientRect = vi
       .spyOn(HTMLElement.prototype, "getBoundingClientRect")
       .mockReturnValue({ width: 500 } as DOMRect);
@@ -589,7 +589,7 @@ describe("WorkflowStatus — loaded state", () => {
       "Named worktree: feature/status"
     );
     expect(
-      indicator.querySelector(".codicon-source-control")
+      indicator.querySelector(".codicon-worktree-compact")
     ).toBeInTheDocument();
     getBoundingClientRect.mockRestore();
   });

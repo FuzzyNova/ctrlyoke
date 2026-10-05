@@ -286,7 +286,7 @@ describe("WorkflowList recent row worktree", () => {
       />
     );
 
-    const branch = document.querySelector(".codicon-source-control")!;
+    const branch = document.querySelector(".codicon-worktree-compact")!;
     expect(branch).toHaveAttribute(
       "title",
       "Branch: feature/auth\nWorktree: C:/worktrees/feature-auth"

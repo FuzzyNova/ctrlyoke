@@ -92,7 +92,7 @@ describe("WorkflowRowLayout", () => {
     const icons = meta.querySelectorAll(".codicon");
     expect(icons).toHaveLength(2);
     expect(icons[0]).toHaveClass("codicon-terminal");
-    expect(icons[1]).toHaveClass("codicon-source-control");
+    expect(icons[1]).toHaveClass("codicon-worktree-compact");
     expect(icons[1]).toHaveAttribute(
       "title",
       "Branch: feature/auth\nWorktree: C:/worktrees/feature-auth"

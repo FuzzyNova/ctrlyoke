@@ -95,7 +95,7 @@ export const WorkspaceWorktreeOwnershipBanner: React.FC<{
   ownership: WorkspaceWorktreeOwnership;
 }> = ({ ownership }) => (
   <div className="flex items-center gap-1 px-3 py-1.5 text-[length:var(--cy-output-font-size-sm)] text-description-fg bg-editor-bg border-b border-widget-border">
-    <Icon name="source-control" />
+    <Icon name="worktree-compact" />
     <span>
       This is branch <code className="font-mono">{ownership.branchName}</code>,
       owned by <code className="font-mono">{ownership.sourceCheckoutRoot}</code>

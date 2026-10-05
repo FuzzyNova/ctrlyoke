@@ -274,7 +274,7 @@ export const ParallelGroupPanel: React.FC<ParallelGroupPanelProps> = ({
         <ExecutingStepHighlight testId="parallel-group-executing-highlight" />
       )}
       <header className="flex flex-wrap items-center gap-2 border-b border-panel-border px-2 py-1.5 text-xs">
-        <Icon name="worktree-compact" className="text-description-fg" />
+        <Icon name="type-hierarchy-sub" className="text-description-fg" />
         <span className="font-semibold">
           Parallel steps {group.startIndex + 1}–{group.endIndex + 1}
         </span>

@@ -563,7 +563,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
   };
 
   // A parallel group's chips get one thin bordered wrapper with a
-  // worktree-compact header, in place of the individual indication a
+  // type-hierarchy-sub header, in place of the individual indication a
   // standalone chip's identity bar already gives — mirroring
   // `ParallelGroupPanel`'s treatment in the full panel. Its running
   // highlight surrounds the whole wrapper instead of any one member (each
@@ -597,7 +597,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({
           title={`Parallel steps ${group.startIndex + 1}–${group.endIndex + 1}`}
         >
           <Icon
-            name="worktree-compact"
+            name="type-hierarchy-sub"
             className="text-xxs text-description-fg"
           />
         </div>

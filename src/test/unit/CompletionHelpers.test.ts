@@ -27,6 +27,7 @@ import {
   toVSCodeCompletionItem,
 } from "../../completions/CompletionHelpers";
 import {
+  GIT_CHANGE_KINDS,
   RETRY_PROMPT_PLACEHOLDERS,
   SCRIPT_OUTPUT_SOURCES,
   VSCODE_COMMANDS,
@@ -83,6 +84,24 @@ suite("CompletionHelpers git change completions", function () {
 
     assert.strictEqual(commitItems.length, 1);
     assert.match(commitItems[0].filterText ?? "", new RegExp(hash.slice(0, 8)));
+  });
+
+  test("gives each git reference kind the icon its chip renders with", async () => {
+    await fs.writeFile(path.join(workspaceRoot, "initial.txt"), "changed\n");
+    runGit(["stash"]);
+    const hash = runGit(["rev-parse", "HEAD"]);
+
+    const items = await getGitChangeCompletions(workspaceRoot, "");
+    const iconFor = (insertText: string) =>
+      items.find((item) => item.insertText === insertText)?.icon;
+
+    assert.strictEqual(iconFor(GIT_CHANGE_KINDS.DIFF), "git-branch-changes");
+    assert.strictEqual(
+      iconFor(GIT_CHANGE_KINDS.STAGED),
+      "git-branch-staged-changes"
+    );
+    assert.strictEqual(iconFor(`${GIT_CHANGE_KINDS.STASH}:0`), "git-stash");
+    assert.strictEqual(iconFor(hash), "git-commit");
   });
 
   test("keeps recent commits available when filtering by author", async () => {

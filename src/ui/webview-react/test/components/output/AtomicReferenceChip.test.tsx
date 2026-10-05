@@ -68,12 +68,10 @@ describe("AtomicReferenceChip", () => {
       "Thing",
       "Go to Thing in src/file.ts:10-20",
     ],
-    [
-      "~0123456789abcdef",
-      "source-control",
-      "0123456",
-      "Open git 0123456789abcdef",
-    ],
+    ["~0123456789abcdef", "git-commit", "0123456", "Open git 0123456789abcdef"],
+    ["~diff", "git-branch-changes", "diff", "Open git diff"],
+    ["~staged", "git-branch-staged-changes", "staged", "Open git staged"],
+    ["~stash:2", "git-stash", "stash 2", "Open git stash:2"],
   ])(
     "describes %s with its icon, label, title, and accessible name",
     (token, icon, label, ariaLabel) => {

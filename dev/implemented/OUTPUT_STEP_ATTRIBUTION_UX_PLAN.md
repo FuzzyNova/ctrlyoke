@@ -439,7 +439,7 @@ Worth adding on top of the rail if the rail alone tests too subtle in a narrow p
 codicon shape either way so prompt-vs-script survives a low-contrast hue.
 
 - **`ParallelGroupPanel.tsx`** is the other natural surface and the previous revision missed it —
-  it already draws a bordered `<section>` per group with a `codicon-worktree-compact` header. Its
+  it already draws a bordered `<section>` per group with a `codicon-type-hierarchy-sub` header. Its
   member rows are `WorkflowStep`s, so they inherit the icon colour for free; consider whether the
   group header should show the member swatches as a legend.
 - **`OutputMinimap` pills — do _not_ use these.** The previous revision called the minimap "arguably

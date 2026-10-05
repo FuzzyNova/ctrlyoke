@@ -247,7 +247,7 @@ const COMPLETION_KIND_ICONS: Record<number, string> = {
   14: "symbol-snippet", // Snippet
   15: "symbol-color", // Color
   16: "symbol-file", // File
-  17: "source-control", // Reference — git (~) completions
+  17: "source-control", // Reference — branch completions (~ git refs set their own icon)
   18: "folder", // Folder
   19: "symbol-enum-member", // EnumMember
   20: "symbol-constant", // Constant

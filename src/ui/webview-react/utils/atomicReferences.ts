@@ -18,6 +18,7 @@ import {
 import {
   ATOMIC_REFERENCE_KINDS,
   GIT_CHANGE_KINDS,
+  GIT_REFERENCE_ICONS,
   PRIOR_CONTEXT_REFERENCE_KINDS,
   RETRY_PROMPT_PLACEHOLDERS,
   SCRIPT_OUTPUT_SOURCES,
@@ -369,7 +370,14 @@ export const SYMBOL_ICON_COLORS: Record<string, string> = {
   "symbol-type-parameter":
     "var(--vscode-symbolIcon-typeParameterForeground, #cccccc)",
   "list-selection": CHART_ACCENT_COLORS.purple,
+  // Git: `source-control` for branch completions, the rest per ~ reference kind.
   "source-control": CHART_ACCENT_COLORS.green,
+  ...Object.fromEntries(
+    Object.values(GIT_REFERENCE_ICONS).map((icon) => [
+      icon,
+      CHART_ACCENT_COLORS.green,
+    ])
+  ),
   book: CHART_ACCENT_COLORS.red,
   shield: CHART_ACCENT_COLORS.blue,
   checklist: CHART_ACCENT_COLORS.green,
@@ -411,6 +419,16 @@ export function gitReferenceLabel(gitRef: string): string {
   const stash = gitRef.match(/^stash:(\d+)$/);
   if (stash) return `stash ${stash[1]}`;
   return gitRef.slice(0, 7);
+}
+
+// Codicon for a ~git reference, matching its completion item's icon.
+export function gitReferenceIcon(gitRef: string): string {
+  if (gitRef === GIT_CHANGE_KINDS.DIFF || gitRef === GIT_CHANGE_KINDS.STAGED) {
+    return GIT_REFERENCE_ICONS[gitRef];
+  }
+  return gitRef.startsWith(`${GIT_CHANGE_KINDS.STASH}:`)
+    ? GIT_REFERENCE_ICONS[GIT_CHANGE_KINDS.STASH]
+    : GIT_REFERENCE_ICONS[GIT_CHANGE_KINDS.COMMIT];
 }
 
 /** An inline prior-context ref located in editor/document text. */
@@ -618,7 +636,7 @@ function describeContextReferenceChip(
     case ATOMIC_REFERENCE_KINDS.GIT:
       if (ref.gitRef) attrs["data-git-ref"] = ref.gitRef;
       return {
-        icon: "source-control",
+        icon: gitReferenceIcon(ref.gitRef ?? ""),
         label: gitReferenceLabel(ref.gitRef ?? ""),
         title,
         attrs,
