@@ -3057,6 +3057,53 @@ suite("CopilotLogParser", () => {
       }
     });
 
+    test("should read usage_info events attached to the invoke_agent span (Copilot 1.0.92+)", async () => {
+      const otelLines = [
+        {
+          type: "span",
+          name: "chat gpt-6-luna",
+          attributes: {
+            "gen_ai.usage.input_tokens": 15412,
+            "gen_ai.usage.output_tokens": 20,
+          },
+        },
+        {
+          type: "span",
+          name: "chat gpt-6-luna",
+          attributes: {
+            "gen_ai.usage.input_tokens": 18491,
+            "gen_ai.usage.output_tokens": 30,
+          },
+        },
+        {
+          type: "span",
+          name: "invoke_agent",
+          // Aggregate of the chat spans above; must not be double-counted.
+          attributes: { "gen_ai.usage.input_tokens": 33903 },
+          events: [
+            { name: "github.copilot.user.message", attributes: {} },
+            usageInfoEvent(17319, 272000),
+            usageInfoEvent(20411, 272000),
+          ],
+        },
+      ];
+      const filePath = createTempJsonlFile(otelLines);
+
+      try {
+        parser.setOtelFilePath(filePath);
+        const result = await parser.pollOtelContextWindow();
+
+        assert.deepStrictEqual(result, { used: 20411, size: 272000 });
+        const final = parser.getFinalOtelUsage();
+        assert.strictEqual(final?.inputTokens, 33903);
+        assert.strictEqual(final?.outputTokens, 50);
+        assert.strictEqual(final?.contextWindowUsedTokens, 20411);
+        assert.strictEqual(final?.contextWindowSize, 272000);
+      } finally {
+        cleanupTempFile(filePath);
+      }
+    });
+
     test("should accumulate cache-read and cache-write attributes per chat span", async () => {
       const otelLines = [
         {

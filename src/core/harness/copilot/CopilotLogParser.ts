@@ -244,8 +244,10 @@ export class CopilotLogParser extends BaseLogParser {
   // (`copilot help monitoring`): setting COPILOT_OTEL_ENABLED + COPILOT_OTEL_FILE_EXPORTER_PATH
   // makes Copilot write one JSON line per span/metric to that file, incrementally, DURING
   // execution (confirmed empirically — lines appear mid-run, not just at process exit).
-  // Each `chat <model>` span carries billing token attributes plus a nested
-  // `github.copilot.session.usage_info` event. That event reports both the current context
+  // Each `chat <model>` span carries billing token attributes; each model call also emits a
+  // `github.copilot.session.usage_info` span event (nested in the chat span on older versions,
+  // in the enclosing `invoke_agent` span on 1.0.92+, which is only written when the user turn
+  // ends — so interactive updates arrive per turn, not per model call). That event reports both the current context
   // fill and the exact effective token limit after Copilot resolves `--context` or its
   // persisted tier; input-token usage alone is not a reliable substitute for either value.
   //
@@ -376,8 +378,13 @@ export class CopilotLogParser extends BaseLogParser {
     let contextUpdated = false;
 
     for (const line of lines) {
+      if (line.type !== COPILOT_OTEL_ENTRY_TYPE_SPAN) {
+        continue;
+      }
+      // Billing tokens come only from `chat <model>` spans: the enclosing
+      // `invoke_agent` span carries its own aggregate token attributes, which
+      // would double-count.
       if (
-        line.type === COPILOT_OTEL_ENTRY_TYPE_SPAN &&
         typeof line.name === "string" &&
         line.name.startsWith(COPILOT_OTEL_CHAT_SPAN_PREFIX) &&
         line.attributes
@@ -407,30 +414,34 @@ export class CopilotLogParser extends BaseLogParser {
         if (typeof cacheWrite === "number") {
           this.otelCumulativeCacheWriteTokens += cacheWrite;
         }
+      }
 
-        const spanEvents = Array.isArray(line.events) ? line.events : [];
-        for (const spanEvent of spanEvents) {
-          if (
-            !spanEvent ||
-            typeof spanEvent !== "object" ||
-            spanEvent.name !== COPILOT_OTEL_USAGE_INFO_EVENT ||
-            !spanEvent.attributes
-          ) {
-            continue;
-          }
-          const used =
-            spanEvent.attributes[COPILOT_OTEL_CURRENT_TOKENS_ATTRIBUTE];
-          const size = spanEvent.attributes[COPILOT_OTEL_TOKEN_LIMIT_ATTRIBUTE];
-          if (
-            typeof used === "number" &&
-            used >= 0 &&
-            typeof size === "number" &&
-            size > 0
-          ) {
-            this.otelContextWindowUsedTokens = used;
-            this.otelContextWindowSize = size;
-            contextUpdated = true;
-          }
+      // Context usage events are read from any span: older Copilot versions
+      // nested them in each `chat <model>` span, while 1.0.92+ attaches every
+      // turn's event to the enclosing `invoke_agent` span instead. Events are
+      // emitted in order, so the last one is the current fill.
+      const spanEvents = Array.isArray(line.events) ? line.events : [];
+      for (const spanEvent of spanEvents) {
+        if (
+          !spanEvent ||
+          typeof spanEvent !== "object" ||
+          spanEvent.name !== COPILOT_OTEL_USAGE_INFO_EVENT ||
+          !spanEvent.attributes
+        ) {
+          continue;
+        }
+        const used =
+          spanEvent.attributes[COPILOT_OTEL_CURRENT_TOKENS_ATTRIBUTE];
+        const size = spanEvent.attributes[COPILOT_OTEL_TOKEN_LIMIT_ATTRIBUTE];
+        if (
+          typeof used === "number" &&
+          used >= 0 &&
+          typeof size === "number" &&
+          size > 0
+        ) {
+          this.otelContextWindowUsedTokens = used;
+          this.otelContextWindowSize = size;
+          contextUpdated = true;
         }
       }
     }
