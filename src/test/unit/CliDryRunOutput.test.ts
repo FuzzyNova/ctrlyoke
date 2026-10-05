@@ -382,6 +382,27 @@ CliTerminalFormatter.finishEventStream(target);
     assert.strictEqual((output.match(/\(no diff recorded\)/g) ?? []).length, 1);
   });
 
+  test("a retried finalStep pass does not pair its output with the failed attempt's open command", () => {
+    const output = runFormatterScript(`
+const target = { stepIndex: 0, stepName: "Final pass 1", key: "final:0" };
+const bash = (status, toolCallId, output) => ({ type: CLI_EVENT_TYPES.BASH_COMMAND, data: {
+  status, command: "npm test", toolCallId, ...(output ? { output, exitCode: 0 } : {})
+} });
+CliTerminalFormatter.replaceEventStream(target);
+CliTerminalFormatter.renderEvents([bash(OPERATION_STATUS.INITIATED, "t1")], target);
+CliTerminalFormatter.finishEventStream(target);
+CliTerminalFormatter.replaceEventStream(target);
+CliTerminalFormatter.renderEvents([{ type: CLI_EVENT_TYPES.TEXT, data: { text: "retrying\\n" } }], target);
+CliTerminalFormatter.renderEvents([bash(OPERATION_STATUS.INITIATED, "t2")], target);
+CliTerminalFormatter.renderEvents([bash(OPERATION_STATUS.COMPLETED, "t2", "retry ok\\n")], target);
+`);
+
+    // A shared stream treats the retry as superseding the first attempt's
+    // open command and re-emits that command's header above the body.
+    assert.strictEqual((output.match(/\$ npm test/g) ?? []).length, 2);
+    assert.match(output, /\$ npm test …\nretry ok/);
+  });
+
   test("prints a Bash body once when a duplicate completion merges into a settled slot", () => {
     const output = runFormatterScript(`
 const target = { stepIndex: 0, stepName: "build", key: "queue:0" };

@@ -11,6 +11,7 @@ import {
   type StatusMessageSeverity,
 } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
+import type { OutputExecutionTarget } from "../types/OutputHistoryTypes";
 import { normalizeCliEvents } from "../utils/CliEventNormalizer";
 import { Log } from "../utils/Log";
 import { noteMemoryActivity } from "../utils/MemoryDiagnostics";
@@ -36,16 +37,35 @@ export interface PromptStartData {
   workingDirectory?: string;
 }
 
-/** Data carried by onPromptComplete after each prompt fully finishes (post session-ID extraction). */
-export interface PromptCompleteData {
-  stepIndex: number;
-  stepName: string;
-  parallelGroupId?: string;
+/** Per-attempt statistics shown after a prompt attempt completes. */
+export interface PromptAttemptStats {
   tokens?: TokenStats;
   sessionId?: string;
   harness?: HarnessId;
   elapsed?: number; // seconds
   showCostEstimates?: boolean;
+}
+
+/** Data carried by onPromptComplete after each prompt fully finishes (post session-ID extraction). */
+export interface PromptCompleteData extends PromptAttemptStats {
+  stepIndex: number;
+  stepName: string;
+  parallelGroupId?: string;
+}
+
+/** Data carried when any attempt, queue step or finalStep pass, completes. */
+export interface TargetAttemptCompleteData {
+  target: OutputExecutionTarget;
+  stats: PromptAttemptStats;
+}
+
+function getAttemptStats(output: any): PromptAttemptStats {
+  return {
+    tokens: output.tokens,
+    sessionId: output.structured?.metadata?.sessionId,
+    harness: output.structured?.metadata?.harness,
+    elapsed: output.elapsed,
+  };
 }
 
 interface StepOutputBufferEntry {
@@ -95,6 +115,13 @@ interface StatusMessageEntry {
 export interface OutputCaptureCallbacks {
   onPromptStart: (data: PromptStartData) => void;
   onPromptComplete: (data: PromptCompleteData) => void;
+  /**
+   * Fires once when any prompt attempt begins, queue step or finalStep pass,
+   * ahead of that attempt's output. `onPromptStart` covers queue steps only.
+   */
+  onTargetAttemptStart: (target: OutputExecutionTarget) => void;
+  /** Fires when any prompt attempt's completed output is captured. */
+  onTargetAttemptComplete: (data: TargetAttemptCompleteData) => void;
   onStatusMessage: (
     stepIndex: number,
     message: string,
@@ -209,6 +236,12 @@ export class OutputCaptureBuffer {
       attemptIndex,
       runIndex
     );
+    if (cliCommand === undefined) {
+      this.callbacks.onTargetAttemptStart({
+        kind: FINAL_STEP_PHASES.QUEUE,
+        stepIndex,
+      });
+    }
     this.stepOutputBuffer.set(stepIndex, {
       prompt,
       cliCommand,
@@ -279,17 +312,19 @@ export class OutputCaptureBuffer {
     // the durable source for this step's context-window stat from here on.
     this.stepOutputBuffer.delete(stepIndex);
     this.contextWindowBuffer.delete(stepIndex);
-    // Fire prompt-complete event so standalone CLI can render per-step stats.
+    const stats = getAttemptStats(output);
+    // Fire prompt-complete event so standalone CLI can track queue attempts.
     this.callbacks.onPromptComplete({
       stepIndex,
       stepName:
         this.callbacks.getWorkflowStep(stepIndex)?.name?.trim() ||
         `Step ${stepIndex + 1}`,
       parallelGroupId: this.callbacks.getParallelGroupId(stepIndex),
-      tokens: output.tokens,
-      sessionId: output.structured?.metadata?.sessionId,
-      harness: output.structured?.metadata?.harness,
-      elapsed: output.elapsed,
+      ...stats,
+    });
+    this.callbacks.onTargetAttemptComplete({
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
+      stats,
     });
   }
 
@@ -336,6 +371,12 @@ export class OutputCaptureBuffer {
       attemptIndex,
       runIndex
     );
+    if (cliCommand === undefined) {
+      this.callbacks.onTargetAttemptStart({
+        kind: FINAL_STEP_PHASES.FINAL_STEP,
+        loopIndex,
+      });
+    }
     this.finalStepOutputBuffer.set(loopIndex, {
       prompt,
       cliCommand,
@@ -372,6 +413,10 @@ export class OutputCaptureBuffer {
       this.finalStepCompletedOutputs.set(loopIndex, { outputs: [output] });
     }
     this.finalStepOutputBuffer.delete(loopIndex);
+    this.callbacks.onTargetAttemptComplete({
+      target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex },
+      stats: getAttemptStats(output),
+    });
   }
 
   getFinalStepBufferedOutput(loopIndex: number): CliOutput | undefined {

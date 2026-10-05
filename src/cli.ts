@@ -651,6 +651,24 @@ function getCliOutputStepName(
     : formatFinalPassLabel(target.loopIndex + 1);
 }
 
+/** The terminal output target for an execution target's attempt. */
+function toCliOutputTarget(
+  target: OutputExecutionTarget,
+  stepName: string
+): CliOutputTarget {
+  return target.kind === FINAL_STEP_PHASES.QUEUE
+    ? {
+        stepIndex: target.stepIndex,
+        stepName,
+        key: `queue:${target.stepIndex}`,
+      }
+    : {
+        stepIndex: target.loopIndex,
+        stepName,
+        key: `final:${target.loopIndex}`,
+      };
+}
+
 interface ValidateCommandOptions {
   harness?: string;
   allInstalledHarnesses?: boolean;
@@ -1127,17 +1145,25 @@ async function runCommand(
       });
     };
 
+    // Every attempt, queue step or finalStep pass, streams into a fresh
+    // stream; the stream outlives completion so follow-up activity pairs.
+    instance.onTargetAttemptStart((target) =>
+      outputGate.write(() =>
+        CliTerminalFormatter.replaceEventStream(
+          toCliOutputTarget(target, getCliOutputStepName(instance, target))
+        )
+      )
+    );
+    instance.onTargetAttemptComplete(({ target, stats }) =>
+      outputGate.write(() => {
+        CliTerminalFormatter.finishEventStream(
+          toCliOutputTarget(target, getCliOutputStepName(instance, target))
+        );
+        CliTerminalFormatter.renderStats(stats);
+      })
+    );
     instance.onPromptStart((data) =>
       outputGate.write(() => {
-        if (data.cliCommand === undefined) {
-          // onPromptStart fires only for queue steps; a finalStep pass streams
-          // under its own `final:<loopIndex>` key and so starts a fresh stream.
-          CliTerminalFormatter.replaceEventStream({
-            stepIndex: data.stepIndex,
-            stepName: data.stepName,
-            key: `queue:${data.stepIndex}`,
-          });
-        }
         if (data.cliCommand !== undefined) {
           CliTerminalFormatter.renderPromptHeader(data);
           return;
@@ -1192,17 +1218,13 @@ async function runCommand(
             (pendingScriptStatusMessages.get(statusSummary) ?? 0) + 1
           );
         }
-        CliTerminalFormatter.renderScriptOutput(data.output, {
-          stepIndex:
-            data.target.kind === FINAL_STEP_PHASES.QUEUE
-              ? data.target.stepIndex
-              : data.target.loopIndex,
-          stepName: getCliOutputStepName(instance, data.target),
-          key:
-            data.target.kind === FINAL_STEP_PHASES.QUEUE
-              ? `queue:${data.target.stepIndex}`
-              : `final:${data.target.loopIndex}`,
-        });
+        CliTerminalFormatter.renderScriptOutput(
+          data.output,
+          toCliOutputTarget(
+            data.target,
+            getCliOutputStepName(instance, data.target)
+          )
+        );
       })
     );
     instance.onTargetStreamingEvents((data) => {
@@ -1211,17 +1233,10 @@ async function runCommand(
       }
       outputGate.write(() => {
         renderFinalStepLabel(data.target);
-        CliTerminalFormatter.renderEvents(data.events, {
-          stepIndex:
-            data.target.kind === FINAL_STEP_PHASES.QUEUE
-              ? data.target.stepIndex
-              : data.target.loopIndex,
-          stepName: data.stepName,
-          key:
-            data.target.kind === FINAL_STEP_PHASES.QUEUE
-              ? `queue:${data.target.stepIndex}`
-              : `final:${data.target.loopIndex}`,
-        } satisfies CliOutputTarget);
+        CliTerminalFormatter.renderEvents(
+          data.events,
+          toCliOutputTarget(data.target, data.stepName)
+        );
       });
     });
     instance.onTargetStreamingChunk((data) => {
@@ -1230,17 +1245,10 @@ async function runCommand(
       }
       outputGate.write(() => {
         renderFinalStepLabel(data.target);
-        CliTerminalFormatter.renderStreamingChunk(data.chunk, {
-          stepIndex:
-            data.target.kind === FINAL_STEP_PHASES.QUEUE
-              ? data.target.stepIndex
-              : data.target.loopIndex,
-          stepName: data.stepName,
-          key:
-            data.target.kind === FINAL_STEP_PHASES.QUEUE
-              ? `queue:${data.target.stepIndex}`
-              : `final:${data.target.loopIndex}`,
-        } satisfies CliOutputTarget);
+        CliTerminalFormatter.renderStreamingChunk(
+          data.chunk,
+          toCliOutputTarget(data.target, data.stepName)
+        );
       });
     });
     instance.onWorkflowStatusMessage((data) =>
@@ -1288,11 +1296,6 @@ async function runCommand(
             renderParallelGroupProgress(state);
           }
         }
-        CliTerminalFormatter.finishEventStream({
-          stepIndex: data.stepIndex,
-          stepName: data.stepName,
-        });
-        CliTerminalFormatter.renderStats(data);
       })
     );
   }

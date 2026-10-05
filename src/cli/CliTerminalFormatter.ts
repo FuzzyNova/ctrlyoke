@@ -47,7 +47,7 @@ import type { CliOutput, TokenStats } from "../types/WebviewMessageTypes";
 import { formatVerdictSummary } from "../core/orchestration/ScriptExecutionReporter";
 import { formatComparison } from "../utils/ScriptComparison";
 import type {
-  PromptCompleteData,
+  PromptAttemptStats,
   PromptStartData,
 } from "../core/WorkflowInstance";
 import type {
@@ -1777,7 +1777,7 @@ export class CliTerminalFormatter {
    * Renders per-prompt statistics (tokens, session ID, elapsed time) to stdout
    * after a prompt completes, mirroring the stats section of the webview's CliOutput component.
    */
-  static renderStats(data: PromptCompleteData): void {
+  static renderStats(data: PromptAttemptStats): void {
     CliTerminalFormatter._lastPrintedStreamSlot = undefined;
     const parts: string[] = [];
 

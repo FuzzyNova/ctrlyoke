@@ -5,10 +5,12 @@ import {
   type OutputCaptureCallbacks,
   type PromptStartData,
   type PromptCompleteData,
+  type TargetAttemptCompleteData,
 } from "../../core/OutputCaptureBuffer";
 import { EXECUTION_STATES } from "../../types/CtrlYokeTypes";
 import { FINAL_STEP_PHASES } from "../../types/DashboardConstants";
 import type { IDashboardSink } from "../../types/IDashboardSink";
+import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
 import type { CliEvent } from "../../types/WebviewMessageTypes";
 import type { PromptStep } from "../../types/CtrlYokeTypes";
 
@@ -24,6 +26,7 @@ function makeCallbacks(overrides?: Partial<OutputCaptureCallbacks>): {
   callbacks: OutputCaptureCallbacks;
   promptStarts: PromptStartData[];
   promptCompletes: PromptCompleteData[];
+  attemptEvents: string[];
   statusMessages: Array<{
     stepIndex: number;
     message: string;
@@ -32,6 +35,11 @@ function makeCallbacks(overrides?: Partial<OutputCaptureCallbacks>): {
 } {
   const promptStarts: PromptStartData[] = [];
   const promptCompletes: PromptCompleteData[] = [];
+  const attemptEvents: string[] = [];
+  const describeTarget = (target: OutputExecutionTarget): string =>
+    target.kind === FINAL_STEP_PHASES.QUEUE
+      ? `queue:${target.stepIndex}`
+      : `final:${target.loopIndex}`;
   const statusMessages: Array<{
     stepIndex: number;
     message: string;
@@ -41,6 +49,12 @@ function makeCallbacks(overrides?: Partial<OutputCaptureCallbacks>): {
   const callbacks: OutputCaptureCallbacks = {
     onPromptStart: (data) => promptStarts.push(data),
     onPromptComplete: (data) => promptCompletes.push(data),
+    onTargetAttemptStart: (target) =>
+      attemptEvents.push(`start ${describeTarget(target)}`),
+    onTargetAttemptComplete: ({ target, stats }) =>
+      attemptEvents.push(
+        `complete ${describeTarget(target)} ${stats.elapsed ?? "-"}s`
+      ),
     onStatusMessage: (stepIndex, message, severity) =>
       statusMessages.push({ stepIndex, message, severity }),
     getWorkflowStep: () => undefined,
@@ -48,7 +62,13 @@ function makeCallbacks(overrides?: Partial<OutputCaptureCallbacks>): {
     getTotalSteps: () => 3,
     ...overrides,
   };
-  return { callbacks, promptStarts, promptCompletes, statusMessages };
+  return {
+    callbacks,
+    promptStarts,
+    promptCompletes,
+    attemptEvents,
+    statusMessages,
+  };
 }
 
 /** Minimal mock dashboard sink that records calls. */
@@ -79,6 +99,79 @@ function makeDashboardSink(): {
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 suite("OutputCaptureBuffer", () => {
+  test("reports each attempt's start and completion for queue steps and finalStep passes", () => {
+    const { callbacks, attemptEvents } = makeCallbacks();
+    const buffer = new OutputCaptureBuffer("tag", callbacks);
+
+    buffer.captureOutputInit(1, "p", undefined, undefined, "/w", 1, 0, false);
+    buffer.captureOutputInit(1, "p", "claude -p", false, "/w", 1, 0, false);
+    buffer.captureCompletedOutput(1, { attemptIndex: 0, elapsed: 3 });
+    // A retry of the same finalStep pass is a new attempt of the same target.
+    for (const attemptIndex of [0, 1]) {
+      buffer.captureFinalStepOutputInit(
+        0,
+        "f",
+        undefined,
+        undefined,
+        "/w",
+        2,
+        attemptIndex,
+        false
+      );
+      buffer.captureFinalStepOutputInit(
+        0,
+        "f",
+        "codex exec",
+        false,
+        "/w",
+        2,
+        attemptIndex,
+        false
+      );
+      buffer.captureFinalStepCompletedOutput(0, {
+        attemptIndex,
+        elapsed: 10 + attemptIndex,
+      });
+    }
+
+    assert.deepStrictEqual(attemptEvents, [
+      "start queue:1",
+      "complete queue:1 3s",
+      "start final:0",
+      "complete final:0 10s",
+      "start final:0",
+      "complete final:0 11s",
+    ]);
+  });
+
+  test("carries a finalStep attempt's stats on its completion", () => {
+    const completions: TargetAttemptCompleteData[] = [];
+    const { callbacks, promptCompletes } = makeCallbacks({
+      onTargetAttemptComplete: (data) => completions.push(data),
+    });
+    const buffer = new OutputCaptureBuffer("tag", callbacks);
+
+    buffer.captureFinalStepCompletedOutput(2, {
+      elapsed: 12,
+      tokens: { prompt: 7, completion: 2 },
+      structured: { metadata: { sessionId: "s-final", harness: "codex-cli" } },
+    });
+
+    assert.deepStrictEqual(completions, [
+      {
+        target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 2 },
+        stats: {
+          tokens: { prompt: 7, completion: 2 },
+          sessionId: "s-final",
+          harness: "codex-cli",
+          elapsed: 12,
+        },
+      },
+    ]);
+    // onPromptComplete stays queue-only; its per-step tallies key on stepIndex.
+    assert.strictEqual(promptCompletes.length, 0);
+  });
+
   test("includes the command working directory in prompt-start data", () => {
     const { callbacks, promptStarts } = makeCallbacks();
     const buffer = new OutputCaptureBuffer("tag", callbacks);

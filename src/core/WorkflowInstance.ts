@@ -190,6 +190,7 @@ import {
   type OutputCaptureCallbacks,
   type PromptStartData,
   type PromptCompleteData,
+  type TargetAttemptCompleteData,
 } from "./OutputCaptureBuffer";
 import { WorkflowStateMachine } from "./WorkflowStateMachine";
 import type { ExternalRunWatchInstance } from "./orchestration/ExternalRunWatchCoordinator";
@@ -206,8 +207,10 @@ import {
 import { getShellInvocationError } from "../utils/ShellCatalog";
 import { getTargetStreamingStepName } from "../utils/TargetStreamingStepName";
 export type {
+  PromptAttemptStats,
   PromptStartData,
   PromptCompleteData,
+  TargetAttemptCompleteData,
 } from "./OutputCaptureBuffer";
 
 /**
@@ -499,6 +502,24 @@ export class WorkflowInstance
    */
   public readonly onPromptStart = this._promptStartEmitter.event;
 
+  private readonly _targetAttemptStartEmitter =
+    new TypedEmitter<OutputExecutionTarget>();
+  /**
+   * Fires once when any prompt attempt begins, queue step or finalStep pass,
+   * ahead of that attempt's output. Unlike `onPromptStart`, it covers
+   * finalStep passes, so a pass retry is observable.
+   */
+  public readonly onTargetAttemptStart = this._targetAttemptStartEmitter.event;
+
+  private readonly _targetAttemptCompleteEmitter =
+    new TypedEmitter<TargetAttemptCompleteData>();
+  /**
+   * Fires when any prompt attempt's completed output is captured, after
+   * `onPromptComplete` for a queue step, with the attempt's statistics.
+   */
+  public readonly onTargetAttemptComplete =
+    this._targetAttemptCompleteEmitter.event;
+
   private readonly _workflowStatusMessageEmitter = new TypedEmitter<{
     stepIndex: number;
     message: string;
@@ -705,6 +726,16 @@ export class WorkflowInstance
 
     const bufferCallbacks: OutputCaptureCallbacks = {
       onPromptStart: (data) => this._promptStartEmitter.fire(data),
+      onTargetAttemptStart: (target) =>
+        this._targetAttemptStartEmitter.fire(target),
+      onTargetAttemptComplete: (data) =>
+        this._targetAttemptCompleteEmitter.fire({
+          ...data,
+          stats: {
+            ...data.stats,
+            showCostEstimates: ConfigurationUtils.shouldShowCostEstimates(),
+          },
+        }),
       onPromptComplete: (data) =>
         this._promptCompleteEmitter.fire({
           ...data,
