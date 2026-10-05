@@ -198,6 +198,15 @@ export const PROMPT_INPUT_CAVEAT_CODES = {
   NO_NATIVE_IMAGE_ATTACHMENT: "promptInputs.noNativeImageAttachment",
 } as const;
 
+export const HOOK_CAVEAT_CODES = {
+  /** The harness has no native event ctrlyoke can translate the hook to. */
+  NO_NATIVE_EVENT: "hooks.noNativeEvent",
+  /** The harness can miss the main session's creation event (OpenCode #14808). */
+  MAIN_SESSION_START_UNRELIABLE: "hooks.mainSessionStartUnreliable",
+  /** The hook fires, but the harness's decision-response contract is unverified. */
+  UNVERIFIED_DECISION_CONTRACT: "hooks.unverifiedDecisionContract",
+} as const;
+
 export type PermissionCaveatCode =
   (typeof PERMISSION_CAVEAT_CODES)[keyof typeof PERMISSION_CAVEAT_CODES];
 
@@ -206,6 +215,9 @@ export type McpCaveatCode =
 
 export type PromptInputCaveatCode =
   (typeof PROMPT_INPUT_CAVEAT_CODES)[keyof typeof PROMPT_INPUT_CAVEAT_CODES];
+
+export type HookCaveatCode =
+  (typeof HOOK_CAVEAT_CODES)[keyof typeof HOOK_CAVEAT_CODES];
 
 /**
  * Resolve a declaration's `caveatCode` into a trailing "because ..." clause.
@@ -224,6 +236,12 @@ export function getCompatibilityCaveatMessage(
       return "because this harness exposes no documented per-server tool filtering mechanism";
     case PROMPT_INPUT_CAVEAT_CODES.NO_NATIVE_IMAGE_ATTACHMENT:
       return "because this harness has no verified native image-attachment path in the ctrlyoke CLI adapter";
+    case HOOK_CAVEAT_CODES.NO_NATIVE_EVENT:
+      return "because this harness exposes no native event ctrlyoke can map it to";
+    case HOOK_CAVEAT_CODES.MAIN_SESSION_START_UNRELIABLE:
+      return "because this harness can start the main session before its plugin is listening, so the hook may not fire for it";
+    case HOOK_CAVEAT_CODES.UNVERIFIED_DECISION_CONTRACT:
+      return "because the hook fires but this harness's allow/deny response contract is unverified, so a returned decision may be ignored";
     default:
       return undefined;
   }
@@ -303,9 +321,13 @@ export function getCompatibilityDiagnosticMessage(
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_TRANSLATION_LOSSY:
       return `${capabilityLabel} include rules that are only partially represented by the ${harness} harness.`;
     case COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNSUPPORTED:
-      return `The ${harness} harness does not support the ${hookEventLabel(context.capability)} hook event.`;
+      return withCaveat(
+        `The ${harness} harness does not support the ${hookEventLabel(context.capability)} hook event`
+      );
     case COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_PARTIAL:
-      return `The ${hookEventLabel(context.capability)} hook event is only partially supported by the ${harness} harness.`;
+      return withCaveat(
+        `The ${hookEventLabel(context.capability)} hook event is only partially supported by the ${harness} harness`
+      );
     case COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNVERIFIED:
       return `Support for the ${hookEventLabel(context.capability)} hook event is unverified for the installed ${harness} version.`;
     default:

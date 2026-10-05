@@ -6,7 +6,10 @@ import {
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
-import type { CapabilityDeclaration } from "../../../types/CompatibilityTypes";
+import {
+  HOOK_CAVEAT_CODES,
+  type CapabilityDeclaration,
+} from "../../../types/CompatibilityTypes";
 import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
@@ -57,6 +60,7 @@ export class AntigravityNotificationMonitor
     return {
       fidelity: CAPABILITY_FIDELITIES.UNSUPPORTED,
       mechanism: CAPABILITY_MECHANISMS.NONE,
+      caveatCode: HOOK_CAVEAT_CODES.NO_NATIVE_EVENT,
       verification: {
         kind: "manual",
         reference:

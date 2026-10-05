@@ -1,25 +1,123 @@
+---
+description: "Which workflow capabilities each harness supports, generated from the harness compatibility registry."
+editLink: false
+aside: false
+---
+
 <!-- AUTO-GENERATED — run `npm run generate-compatibility-docs` to update -->
 
 # Harness compatibility
 
 ctrlyoke keeps one workflow model across six CLI harnesses, but some workflow
 features are translated differently or are not enforced by every harness. This
-page is generated from the adapter-owned compatibility registry. It records
-the declared fidelity, mechanism, evidence, version scope, and the shared
-caveat/remediation prose used by compatibility diagnostics.
+page is generated from the adapter-owned compatibility registry, the same
+declarations that drive the dashboard's compatibility warnings.
+
+## Compatibility matrix
+
+✅ supported · ◐ partially supported · ❌ not supported · a superscript number links to the note that explains the limit.
+
+| Capability | [Copilot](/harnesses/copilot-cli)<br>`copilot-cli` | [Claude Code](/harnesses/claude-cli)<br>`claude-cli` | [Codex](/harnesses/codex-cli)<br>`codex-cli` | [OpenCode](/harnesses/opencode-cli)<br>`opencode-cli` | [Qwen Code](/harnesses/qwen-cli)<br>`qwen-cli` | [Antigravity](/harnesses/antigravity-cli)<br>`antigravity-cli` |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: |
+| **Permissions** |  |  |  |  |  |  |
+| Allowed Tools | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-1">1</a></sup> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-2">2</a></sup> |
+| Denied Tools | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-1">1</a></sup> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-2">2</a></sup> |
+| Mode | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Partially supported">◐</span><sup><a href="#note-3">3</a></sup> |
+| **Prompt Inputs** |  |  |  |  |  |  |
+| Images | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-4">4</a></sup> | <span title="Not supported">❌</span><sup><a href="#note-4">4</a></sup> |
+| **Hooks** |  |  |  |  |  |  |
+| Error | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-5">5</a></sup> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-5">5</a></sup> | <span title="Not supported">❌</span><sup><a href="#note-5">5</a></sup> |
+| Notification | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-5">5</a></sup> | <span title="Not supported">❌</span><sup><a href="#note-5">5</a></sup> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-5">5</a></sup> |
+| Permission Request | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Partially supported">◐</span><sup><a href="#note-6">6</a></sup> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-5">5</a></sup> |
+| Post Tool Use | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> |
+| Pre Tool Use | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> |
+| Session Start | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Partially supported">◐</span><sup><a href="#note-7">7</a></sup> | <span title="Supported">✅</span> | <span title="Supported">✅</span> |
+| Stop | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> |
+| User Prompt Submit | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-5">5</a></sup> |
+| **MCP** |  |  |  |  |  |  |
+| Per Server Tool Filtering | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Supported">✅</span> | <span title="Not supported">❌</span><sup><a href="#note-8">8</a></sup> |
+
+### Notes
+
+<a id="note-1"></a>**1.** Not supported because this harness uses sandbox/approval modes instead of individual tool patterns. _What to do:_ Remove the rule or select a harness that enforces individual tool patterns.<br>
+Applies to **Codex**: Allowed Tools, Denied Tools.
+
+<a id="note-2"></a>**2.** Not supported because this harness uses coarse permission modes instead of individual tool patterns. _What to do:_ Remove the rule or select a harness that enforces individual tool patterns.<br>
+Applies to **Antigravity**: Allowed Tools, Denied Tools.
+
+<a id="note-3"></a>**3.** Partially supported because this harness uses coarse permission modes instead of individual tool patterns. _What to do:_ Use a harness with exact permission-mode support when the distinction matters.<br>
+Applies to **Antigravity**: Mode.
+
+<a id="note-4"></a>**4.** Not supported because this harness has no verified native image-attachment path in the ctrlyoke CLI adapter. _What to do:_ Remove the image reference or select a harness with verified native image-input support.<br>
+Applies to **Qwen Code**: Images · **Antigravity**: Images.
+
+<a id="note-5"></a>**5.** Not supported because this harness exposes no native event ctrlyoke can map it to. _What to do:_ Remove the affected hook event or select a harness with verified support for it.<br>
+Applies to **Codex**: Error, Notification · **OpenCode**: Notification · **Qwen Code**: Error · **Antigravity**: Error, Notification, Permission Request, User Prompt Submit.
+
+<a id="note-6"></a>**6.** Partially supported because the hook fires but this harness's allow/deny response contract is unverified, so a returned decision may be ignored. _What to do:_ Remove the affected hook event or select a harness with verified support for it.<br>
+Applies to **OpenCode**: Permission Request.
+
+<a id="note-7"></a>**7.** Partially supported because this harness can start the main session before its plugin is listening, so the hook may not fire for it. _What to do:_ Remove the affected hook event or select a harness with verified support for it.<br>
+Applies to **OpenCode**: Session Start.
+
+<a id="note-8"></a>**8.** Not supported because this harness exposes no documented per-server tool filtering mechanism. _What to do:_ Remove the server filter or select a harness with verified per-server MCP filtering.<br>
+Applies to **Antigravity**: Per Server Tool Filtering.
 
 ## How to read the matrix
 
-- **Exact** means the adapter's declared behavior matches the workflow
-  contract for the capability.
-- **Partial** means the adapter translates only part of the workflow value.
-- **Unsupported** means the adapter does not enforce or attach that capability.
-- **Evidence / verification scope** identifies the evidence kind, its basis,
-  the covered harness versions, and the source used for the claim. Installed
-  versions outside the listed ranges are shown as unverified by the dashboard.
-- Caveats explain known architectural limits. Remediations are shared with
-  author-time and preflight diagnostics; simplify the value or choose a
-  harness with the required fidelity when a row is not exact.
+- **Supported** means the adapter's behavior matches the workflow contract for
+  the capability.
+- **Partially supported** means the adapter translates or delivers only part
+  of the workflow value.
+- **Not supported** means the adapter does not enforce or attach that
+  capability.
+- The notes share their wording with author-time and preflight diagnostics.
+  Simplify the value, or choose a harness that supports it, when a cell is
+  not ✅.
+
+## Verified versions
+
+Each claim is backed by evidence for a harness version range. Installed
+versions outside these ranges are shown as unverified by the dashboard.
+
+| Domain | Copilot | Claude Code | Codex | OpenCode | Qwen Code | Antigravity |
+| --- | --- | --- | --- | --- | --- | --- |
+| Permissions | >=0.0.384 ([manual](https://github.com/FuzzyNova/ctrlyoke/blob/main/dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping)) | >=2.1.17 ([manual](https://github.com/FuzzyNova/ctrlyoke/blob/main/dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping)) | >=0.146.0 ([manual](https://github.com/FuzzyNova/ctrlyoke/blob/main/dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md#codex-partial-support-investigation)) | >=1.18.10 ([behavioral-test](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/test/harness/inline-config.harness.test.ts)) | >=0.20.1 ([behavioral-test](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/test/harness/inline-config.harness.test.ts)) | >=1.1.12 ([manual](https://github.com/FuzzyNova/ctrlyoke/blob/main/dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md#antigravity)) |
+| Prompt Inputs | >=0.0.384 ([manual](https://docs.github.com/en/copilot/github-copilot-in-the-cli/using-github-copilot-in-the-cli#adding-files-to-your-prompt)) | >=2.1.17 ([manual](https://support.claude.com/en/articles/14554922-claude-code-user-faq)) | >=0.146.0 ([manual](https://developers.openai.com/codex/cli/reference/)) | >=1.18.10 ([manual](https://dev.opencode.ai/docs/cli/)) | — | — |
+| Hooks | >=0.0.384 ([manual](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/copilot/CopilotNotificationMonitor.ts)) | >=2.0.76 ([manual](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/claude/ClaudeNotificationMonitor.ts)) | >=0.146.0 ([manual](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/codex/CodexNotificationMonitor.ts)) | >=1.1.48 ([manual](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/scripts/ctrlyoke-opencode-plugin.ts))<br>>=1.18.10 ([manual](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/opencode/OpenCodeNotificationMonitor.ts)) | >=0.20.1 ([manual](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/qwen/QwenNotificationMonitor.ts)) | >=1.1.12 ([manual](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/antigravity/AntigravityNotificationMonitor.ts)) |
+| MCP | >=0.0.384 ([manual](https://github.com/FuzzyNova/ctrlyoke/blob/main/dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping)) | >=2.1.17 ([manual](https://github.com/FuzzyNova/ctrlyoke/blob/main/dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping)) | >=0.146.0 ([manual](https://github.com/FuzzyNova/ctrlyoke/blob/main/dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md#codex-partial-support-investigation)) | >=1.18.10 ([behavioral-test](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/test/harness/inline-config.harness.test.ts)) | >=0.20.1 ([behavioral-test](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/test/harness/inline-config.harness.test.ts)) | >=1.1.12 ([manual](https://github.com/FuzzyNova/ctrlyoke/blob/main/dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md#antigravity)) |
+
+::: details How each harness implements these capabilities
+
+- **native**: the harness supports the workflow value directly.
+- **translated-cli**: ctrlyoke translates the value into the harness's CLI
+  flags or inline configuration for each run.
+- **workspace-config**: ctrlyoke writes the harness's workspace configuration
+  (for example its hooks file) for the run.
+- **mixed**: a combination of the mechanisms above.
+- **none**: there is no mechanism; the capability is not supported.
+
+| Capability | Copilot | Claude Code | Codex | OpenCode | Qwen Code | Antigravity |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: |
+| **Permissions** |  |  |  |  |  |  |
+| Allowed Tools | native | translated-cli | none | translated-cli | translated-cli | none |
+| Denied Tools | native | translated-cli | none | translated-cli | translated-cli | none |
+| Mode | native | native | native | translated-cli | translated-cli | native |
+| **Prompt Inputs** |  |  |  |  |  |  |
+| Images | native | native | native | native | none | none |
+| **Hooks** |  |  |  |  |  |  |
+| Error | workspace-config | workspace-config | none | native | none | none |
+| Notification | workspace-config | workspace-config | none | none | workspace-config | none |
+| Permission Request | workspace-config | workspace-config | translated-cli | native | workspace-config | none |
+| Post Tool Use | workspace-config | workspace-config | translated-cli | native | workspace-config | workspace-config |
+| Pre Tool Use | workspace-config | workspace-config | translated-cli | native | workspace-config | workspace-config |
+| Session Start | workspace-config | workspace-config | translated-cli | native | workspace-config | workspace-config |
+| Stop | workspace-config | workspace-config | translated-cli | native | workspace-config | workspace-config |
+| User Prompt Submit | workspace-config | workspace-config | translated-cli | native | workspace-config | none |
+| **MCP** |  |  |  |  |  |  |
+| Per Server Tool Filtering | translated-cli | translated-cli | native | translated-cli | translated-cli | none |
+
+:::
 
 ## Portable workflow attachments and native discovery
 
@@ -37,92 +135,9 @@ vary by harness. It does not determine whether a workflow's `agent` or
 mechanism. See [Agents and skills](/workflows/agents-and-skills) for both
 paths.
 
-Uniform workflow features are intentionally absent from the table: execution
+Uniform workflow features are intentionally absent from the matrix: execution
 mode, sessions, MCP server injection, usage, workflow agents, and workflow
 skills are shared ctrlyoke behavior rather than conditional harness claims.
-
-## Compatibility matrix
-
-| Harness | ID | Domain | Capability | Fidelity | Mechanism | Evidence / verification scope | Caveat | Remediation |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| GitHub Copilot CLI | copilot-cli | Permissions | Allowed Tools | exact | native | manual; cli-version; >=0.0.384; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping) | — | — |
-| GitHub Copilot CLI | copilot-cli | Permissions | Denied Tools | exact | native | manual; cli-version; >=0.0.384; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping) | — | — |
-| GitHub Copilot CLI | copilot-cli | Permissions | Mode | exact | native | manual; cli-version; >=0.0.384; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping) | — | — |
-| GitHub Copilot CLI | copilot-cli | Prompt Inputs | Images | exact | native | manual; cli-version; >=0.0.384; [evidence](https://docs.github.com/en/copilot/github-copilot-in-the-cli/using-github-copilot-in-the-cli#adding-files-to-your-prompt) | — | — |
-| GitHub Copilot CLI | copilot-cli | Hooks | Error | exact | workspace-config | manual; cli-version; >=0.0.384; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/copilot/CopilotNotificationMonitor.ts) | — | — |
-| GitHub Copilot CLI | copilot-cli | Hooks | Notification | exact | workspace-config | manual; cli-version; >=0.0.384; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/copilot/CopilotNotificationMonitor.ts) | — | — |
-| GitHub Copilot CLI | copilot-cli | Hooks | Permission Request | exact | workspace-config | manual; cli-version; >=0.0.384; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/copilot/CopilotNotificationMonitor.ts) | — | — |
-| GitHub Copilot CLI | copilot-cli | Hooks | Post Tool Use | exact | workspace-config | manual; cli-version; >=0.0.384; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/copilot/CopilotNotificationMonitor.ts) | — | — |
-| GitHub Copilot CLI | copilot-cli | Hooks | Pre Tool Use | exact | workspace-config | manual; cli-version; >=0.0.384; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/copilot/CopilotNotificationMonitor.ts) | — | — |
-| GitHub Copilot CLI | copilot-cli | Hooks | Session Start | exact | workspace-config | manual; cli-version; >=0.0.384; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/copilot/CopilotNotificationMonitor.ts) | — | — |
-| GitHub Copilot CLI | copilot-cli | Hooks | Stop | exact | workspace-config | manual; cli-version; >=0.0.384; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/copilot/CopilotNotificationMonitor.ts) | — | — |
-| GitHub Copilot CLI | copilot-cli | Hooks | User Prompt Submit | exact | workspace-config | manual; cli-version; >=0.0.384; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/copilot/CopilotNotificationMonitor.ts) | — | — |
-| GitHub Copilot CLI | copilot-cli | MCP | Per Server Tool Filtering | exact | translated-cli | manual; cli-version; >=0.0.384; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping) | — | — |
-| Claude Code CLI | claude-cli | Permissions | Allowed Tools | exact | translated-cli | manual; cli-version; >=2.1.17; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping) | — | — |
-| Claude Code CLI | claude-cli | Permissions | Denied Tools | exact | translated-cli | manual; cli-version; >=2.1.17; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping) | — | — |
-| Claude Code CLI | claude-cli | Permissions | Mode | exact | native | manual; cli-version; >=2.1.17; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping) | — | — |
-| Claude Code CLI | claude-cli | Prompt Inputs | Images | exact | native | manual; cli-version; >=2.1.17; [evidence](https://support.claude.com/en/articles/14554922-claude-code-user-faq) | — | — |
-| Claude Code CLI | claude-cli | Hooks | Error | exact | workspace-config | manual; cli-version; >=2.0.76; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/claude/ClaudeNotificationMonitor.ts) | — | — |
-| Claude Code CLI | claude-cli | Hooks | Notification | exact | workspace-config | manual; cli-version; >=2.0.76; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/claude/ClaudeNotificationMonitor.ts) | — | — |
-| Claude Code CLI | claude-cli | Hooks | Permission Request | exact | workspace-config | manual; cli-version; >=2.0.76; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/claude/ClaudeNotificationMonitor.ts) | — | — |
-| Claude Code CLI | claude-cli | Hooks | Post Tool Use | exact | workspace-config | manual; cli-version; >=2.0.76; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/claude/ClaudeNotificationMonitor.ts) | — | — |
-| Claude Code CLI | claude-cli | Hooks | Pre Tool Use | exact | workspace-config | manual; cli-version; >=2.0.76; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/claude/ClaudeNotificationMonitor.ts) | — | — |
-| Claude Code CLI | claude-cli | Hooks | Session Start | exact | workspace-config | manual; cli-version; >=2.0.76; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/claude/ClaudeNotificationMonitor.ts) | — | — |
-| Claude Code CLI | claude-cli | Hooks | Stop | exact | workspace-config | manual; cli-version; >=2.0.76; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/claude/ClaudeNotificationMonitor.ts) | — | — |
-| Claude Code CLI | claude-cli | Hooks | User Prompt Submit | exact | workspace-config | manual; cli-version; >=2.0.76; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/claude/ClaudeNotificationMonitor.ts) | — | — |
-| Claude Code CLI | claude-cli | MCP | Per Server Tool Filtering | exact | translated-cli | manual; cli-version; >=2.1.17; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping) | — | — |
-| Codex CLI | codex-cli | Permissions | Allowed Tools | unsupported | none | manual; cli-version; >=0.146.0; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md#codex-partial-support-investigation) | because this harness uses sandbox/approval modes instead of individual tool patterns | Remove the rule or select a harness that enforces individual tool patterns. |
-| Codex CLI | codex-cli | Permissions | Denied Tools | unsupported | none | manual; cli-version; >=0.146.0; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md#codex-partial-support-investigation) | because this harness uses sandbox/approval modes instead of individual tool patterns | Remove the rule or select a harness that enforces individual tool patterns. |
-| Codex CLI | codex-cli | Permissions | Mode | exact | native | manual; cli-version; >=0.146.0; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md#codex-partial-support-investigation) | — | — |
-| Codex CLI | codex-cli | Prompt Inputs | Images | exact | native | manual; cli-version; >=0.146.0; [evidence](https://developers.openai.com/codex/cli/reference/) | — | — |
-| Codex CLI | codex-cli | Hooks | Error | unsupported | none | manual; cli-version; >=0.146.0; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/codex/CodexNotificationMonitor.ts) | — | Remove the affected hook event or select a harness with verified support for it. |
-| Codex CLI | codex-cli | Hooks | Notification | unsupported | none | manual; cli-version; >=0.146.0; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/codex/CodexNotificationMonitor.ts) | — | Remove the affected hook event or select a harness with verified support for it. |
-| Codex CLI | codex-cli | Hooks | Permission Request | exact | translated-cli | manual; cli-version; >=0.146.0; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/codex/CodexNotificationMonitor.ts) | — | — |
-| Codex CLI | codex-cli | Hooks | Post Tool Use | exact | translated-cli | manual; cli-version; >=0.146.0; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/codex/CodexNotificationMonitor.ts) | — | — |
-| Codex CLI | codex-cli | Hooks | Pre Tool Use | exact | translated-cli | manual; cli-version; >=0.146.0; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/codex/CodexNotificationMonitor.ts) | — | — |
-| Codex CLI | codex-cli | Hooks | Session Start | exact | translated-cli | manual; cli-version; >=0.146.0; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/codex/CodexNotificationMonitor.ts) | — | — |
-| Codex CLI | codex-cli | Hooks | Stop | exact | translated-cli | manual; cli-version; >=0.146.0; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/codex/CodexNotificationMonitor.ts) | — | — |
-| Codex CLI | codex-cli | Hooks | User Prompt Submit | exact | translated-cli | manual; cli-version; >=0.146.0; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/codex/CodexNotificationMonitor.ts) | — | — |
-| Codex CLI | codex-cli | MCP | Per Server Tool Filtering | exact | native | manual; cli-version; >=0.146.0; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md#codex-partial-support-investigation) | — | — |
-| OpenCode CLI | opencode-cli | Permissions | Allowed Tools | exact | translated-cli | behavioral-test; cli-version; >=1.18.10; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/test/harness/inline-config.harness.test.ts) | — | — |
-| OpenCode CLI | opencode-cli | Permissions | Denied Tools | exact | translated-cli | behavioral-test; cli-version; >=1.18.10; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/test/harness/inline-config.harness.test.ts) | — | — |
-| OpenCode CLI | opencode-cli | Permissions | Mode | exact | translated-cli | behavioral-test; cli-version; >=1.18.10; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/test/harness/inline-config.harness.test.ts) | — | — |
-| OpenCode CLI | opencode-cli | Prompt Inputs | Images | exact | native | manual; cli-version; >=1.18.10; [evidence](https://dev.opencode.ai/docs/cli/) | — | — |
-| OpenCode CLI | opencode-cli | Hooks | Error | exact | native | manual; cli-version; >=1.1.48; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/scripts/ctrlyoke-opencode-plugin.ts) | — | — |
-| OpenCode CLI | opencode-cli | Hooks | Notification | unsupported | none | manual; cli-version; >=1.18.10; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/opencode/OpenCodeNotificationMonitor.ts) | — | Remove the affected hook event or select a harness with verified support for it. |
-| OpenCode CLI | opencode-cli | Hooks | Permission Request | partial | native | manual; cli-version; >=1.1.48; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/scripts/ctrlyoke-opencode-plugin.ts) | — | Remove the affected hook event or select a harness with verified support for it. |
-| OpenCode CLI | opencode-cli | Hooks | Post Tool Use | exact | native | manual; cli-version; >=1.1.48; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/scripts/ctrlyoke-opencode-plugin.ts) | — | — |
-| OpenCode CLI | opencode-cli | Hooks | Pre Tool Use | exact | native | manual; cli-version; >=1.1.48; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/scripts/ctrlyoke-opencode-plugin.ts) | — | — |
-| OpenCode CLI | opencode-cli | Hooks | Session Start | partial | native | manual; cli-version; >=1.1.48; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/scripts/ctrlyoke-opencode-plugin.ts) | — | Remove the affected hook event or select a harness with verified support for it. |
-| OpenCode CLI | opencode-cli | Hooks | Stop | exact | native | manual; cli-version; >=1.1.48; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/scripts/ctrlyoke-opencode-plugin.ts) | — | — |
-| OpenCode CLI | opencode-cli | Hooks | User Prompt Submit | exact | native | manual; cli-version; >=1.1.48; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/scripts/ctrlyoke-opencode-plugin.ts) | — | — |
-| OpenCode CLI | opencode-cli | MCP | Per Server Tool Filtering | exact | translated-cli | behavioral-test; cli-version; >=1.18.10; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/test/harness/inline-config.harness.test.ts) | — | — |
-| Qwen Code CLI | qwen-cli | Permissions | Allowed Tools | exact | translated-cli | behavioral-test; cli-version; >=0.20.1; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/test/harness/inline-config.harness.test.ts) | — | — |
-| Qwen Code CLI | qwen-cli | Permissions | Denied Tools | exact | translated-cli | behavioral-test; cli-version; >=0.20.1; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/test/harness/inline-config.harness.test.ts) | — | — |
-| Qwen Code CLI | qwen-cli | Permissions | Mode | exact | translated-cli | behavioral-test; cli-version; >=0.20.1; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/test/harness/inline-config.harness.test.ts) | — | — |
-| Qwen Code CLI | qwen-cli | Prompt Inputs | Images | unsupported | none | No version-scoped evidence recorded | because this harness has no verified native image-attachment path in the ctrlyoke CLI adapter | Remove the image reference or select a harness with verified native image-input support. |
-| Qwen Code CLI | qwen-cli | Hooks | Error | unsupported | none | manual; cli-version; >=0.20.1; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/qwen/QwenNotificationMonitor.ts) | — | Remove the affected hook event or select a harness with verified support for it. |
-| Qwen Code CLI | qwen-cli | Hooks | Notification | exact | workspace-config | manual; cli-version; >=0.20.1; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/qwen/QwenNotificationMonitor.ts) | — | — |
-| Qwen Code CLI | qwen-cli | Hooks | Permission Request | exact | workspace-config | manual; cli-version; >=0.20.1; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/qwen/QwenNotificationMonitor.ts) | — | — |
-| Qwen Code CLI | qwen-cli | Hooks | Post Tool Use | exact | workspace-config | manual; cli-version; >=0.20.1; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/qwen/QwenNotificationMonitor.ts) | — | — |
-| Qwen Code CLI | qwen-cli | Hooks | Pre Tool Use | exact | workspace-config | manual; cli-version; >=0.20.1; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/qwen/QwenNotificationMonitor.ts) | — | — |
-| Qwen Code CLI | qwen-cli | Hooks | Session Start | exact | workspace-config | manual; cli-version; >=0.20.1; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/qwen/QwenNotificationMonitor.ts) | — | — |
-| Qwen Code CLI | qwen-cli | Hooks | Stop | exact | workspace-config | manual; cli-version; >=0.20.1; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/qwen/QwenNotificationMonitor.ts) | — | — |
-| Qwen Code CLI | qwen-cli | Hooks | User Prompt Submit | exact | workspace-config | manual; cli-version; >=0.20.1; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/qwen/QwenNotificationMonitor.ts) | — | — |
-| Qwen Code CLI | qwen-cli | MCP | Per Server Tool Filtering | exact | translated-cli | behavioral-test; cli-version; >=0.20.1; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/test/harness/inline-config.harness.test.ts) | — | — |
-| Antigravity CLI | antigravity-cli | Permissions | Allowed Tools | unsupported | none | manual; cli-version; >=1.1.12; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md#antigravity) | because this harness uses coarse permission modes instead of individual tool patterns | Remove the rule or select a harness that enforces individual tool patterns. |
-| Antigravity CLI | antigravity-cli | Permissions | Denied Tools | unsupported | none | manual; cli-version; >=1.1.12; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md#antigravity) | because this harness uses coarse permission modes instead of individual tool patterns | Remove the rule or select a harness that enforces individual tool patterns. |
-| Antigravity CLI | antigravity-cli | Permissions | Mode | partial | native | manual; cli-version; >=1.1.12; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md#antigravity) | because this harness uses coarse permission modes instead of individual tool patterns | Use a harness with exact permission-mode support when the distinction matters. |
-| Antigravity CLI | antigravity-cli | Prompt Inputs | Images | unsupported | none | No version-scoped evidence recorded | because this harness has no verified native image-attachment path in the ctrlyoke CLI adapter | Remove the image reference or select a harness with verified native image-input support. |
-| Antigravity CLI | antigravity-cli | Hooks | Error | unsupported | none | manual; cli-version; >=1.1.12; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/antigravity/AntigravityNotificationMonitor.ts) | — | Remove the affected hook event or select a harness with verified support for it. |
-| Antigravity CLI | antigravity-cli | Hooks | Notification | unsupported | none | manual; cli-version; >=1.1.12; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/antigravity/AntigravityNotificationMonitor.ts) | — | Remove the affected hook event or select a harness with verified support for it. |
-| Antigravity CLI | antigravity-cli | Hooks | Permission Request | unsupported | none | manual; cli-version; >=1.1.12; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/antigravity/AntigravityNotificationMonitor.ts) | — | Remove the affected hook event or select a harness with verified support for it. |
-| Antigravity CLI | antigravity-cli | Hooks | Post Tool Use | exact | workspace-config | manual; cli-version; >=1.1.12; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/antigravity/AntigravityNotificationMonitor.ts) | — | — |
-| Antigravity CLI | antigravity-cli | Hooks | Pre Tool Use | exact | workspace-config | manual; cli-version; >=1.1.12; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/antigravity/AntigravityNotificationMonitor.ts) | — | — |
-| Antigravity CLI | antigravity-cli | Hooks | Session Start | exact | workspace-config | manual; cli-version; >=1.1.12; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/antigravity/AntigravityNotificationMonitor.ts) | — | — |
-| Antigravity CLI | antigravity-cli | Hooks | Stop | exact | workspace-config | manual; cli-version; >=1.1.12; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/antigravity/AntigravityNotificationMonitor.ts) | — | — |
-| Antigravity CLI | antigravity-cli | Hooks | User Prompt Submit | unsupported | none | manual; cli-version; >=1.1.12; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/src/core/harness/antigravity/AntigravityNotificationMonitor.ts) | — | Remove the affected hook event or select a harness with verified support for it. |
-| Antigravity CLI | antigravity-cli | MCP | Per Server Tool Filtering | unsupported | none | manual; cli-version; >=1.1.12; [source](https://github.com/FuzzyNova/ctrlyoke/blob/main/dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md#antigravity) | because this harness exposes no documented per-server tool filtering mechanism | Remove the server filter or select a harness with verified per-server MCP filtering. |
 
 _This page is generated. Run `npm run check:compatibility-docs` to verify that
 the checked-in page still matches the registry declarations._

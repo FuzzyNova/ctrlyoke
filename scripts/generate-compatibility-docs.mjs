@@ -26,6 +26,14 @@ const COMPILED_REGISTRY_PATH = resolve(
 const require = createRequire(import.meta.url);
 const CHECK_MODE = process.argv.includes("--check");
 
+// `aside: false` drops the right-hand outline so the seven-column matrix gets
+// the full content width.
+const FRONTMATTER = `---
+description: "Which workflow capabilities each harness supports, generated from the harness compatibility registry."
+editLink: false
+aside: false
+---`;
+
 const GENERATED_HEADER =
   "<!-- AUTO-GENERATED — run `npm run generate-compatibility-docs` to update -->";
 
@@ -81,6 +89,18 @@ export function loadDocumentationFacts() {
   }
 }
 
+/**
+ * The compiled compatibility prose helpers plus the fidelity constants the
+ * matrix keys its symbols on.
+ */
+export function loadCompatibilityTypes() {
+  return {
+    ...require(resolve(ROOT_DIR, "out/types/CompatibilityTypes.js")),
+    fidelities: require(resolve(ROOT_DIR, "out/types/DashboardConstants.js"))
+      .CAPABILITY_FIDELITIES,
+  };
+}
+
 function isCapabilityDeclaration(value) {
   return (
     value !== null &&
@@ -115,83 +135,316 @@ function formatLabel(value) {
 
 function formatReference(reference) {
   if (/^https?:\/\//.test(reference)) {
-    return `[evidence](${reference})`;
+    return reference;
   }
-  return `[source](https://github.com/FuzzyNova/ctrlyoke/blob/main/${reference})`;
-}
-
-function formatEvidence(declaration) {
-  const verification = declaration.verification;
-  if (!verification) {
-    return "No version-scoped evidence recorded";
-  }
-  const versions = verification.verifiedVersions.join(", ");
-  return `${verification.kind}; ${verification.basis}; ${versions}; ${formatReference(verification.reference)}`;
+  return `https://github.com/FuzzyNova/ctrlyoke/blob/main/${reference}`;
 }
 
 function escapeCell(value) {
   return String(value).replaceAll("|", "\\|").replaceAll("\n", "<br>");
 }
 
-function buildRows(facts, compatibilityTypes) {
-  return facts.harnesses.flatMap(({ harnessId, displayName, capabilities }) =>
-    facts.enabledDomains.flatMap((domain) =>
-      collectLeaves(capabilities[domain]).map(({ capability, declaration }) => {
-        const caveat = compatibilityTypes.getCompatibilityCaveatMessage(
-          declaration.caveatCode
-        );
-        const remediation =
-          compatibilityTypes.getCompatibilityDeclarationRemediation(
-            domain,
-            capability,
-            declaration
-          );
-        return [
-          displayName,
-          harnessId,
-          formatLabel(domain),
+function tableRow(cells) {
+  return `| ${cells.map(escapeCell).join(" | ")} |`;
+}
+
+function tableDivider(columnCount, divider) {
+  return `| --- | ${Array(columnCount).fill(divider).join(" | ")} |`;
+}
+
+/** "GitHub Copilot CLI" → "Copilot": every harness here is a CLI. */
+function shortHarnessName(displayName) {
+  return displayName.replace(/^GitHub\s+/, "").replace(/\s+CLI$/, "");
+}
+
+function harnessHeader({ harnessId, displayName }) {
+  return `[${shortHarnessName(displayName)}](/harnesses/${harnessId})<br>\`${harnessId}\``;
+}
+
+/**
+ * Ordered union of capability leaves for one domain across every harness, so
+ * a capability one harness omits still gets a row (rendered as a gap).
+ */
+function collectDomainCapabilities(facts, domain) {
+  const capabilities = [];
+  for (const harness of facts.harnesses) {
+    for (const { capability } of collectLeaves(harness.capabilities[domain])) {
+      if (!capabilities.includes(capability)) {
+        capabilities.push(capability);
+      }
+    }
+  }
+  return capabilities;
+}
+
+function getDeclaration(harness, domain, capability) {
+  return capability
+    .split(".")
+    .reduce((node, key) => node?.[key], harness.capabilities[domain]);
+}
+
+function cellKey(harness, domain, capability) {
+  return `${harness.harnessId}|${domain}|${capability}`;
+}
+
+function fidelityPresentation(fidelities) {
+  return {
+    [fidelities.EXACT]: { symbol: "✅", status: "Supported" },
+    [fidelities.PARTIAL]: { symbol: "◐", status: "Partially supported" },
+    [fidelities.UNSUPPORTED]: { symbol: "❌", status: "Not supported" },
+  };
+}
+
+function presentFidelity(presentation, fidelity) {
+  const entry = presentation[fidelity];
+  if (!entry) {
+    throw new Error(`No matrix symbol for capability fidelity "${fidelity}".`);
+  }
+  return entry;
+}
+
+/** Visit every declared matrix cell in display order. */
+function forEachCell(facts, visit) {
+  for (const domain of facts.enabledDomains) {
+    for (const capability of collectDomainCapabilities(facts, domain)) {
+      for (const harness of facts.harnesses) {
+        const declaration = getDeclaration(harness, domain, capability);
+        if (declaration) {
+          visit({ harness, domain, capability, declaration });
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Assign one footnote per distinct explanation, numbered in matrix order, so
+ * identical caveat/remediation prose is printed once with every
+ * harness/capability it applies to listed under it.
+ */
+function buildNotes(facts, compatibilityTypes, presentation) {
+  const notes = [];
+  const noteByCell = new Map();
+  forEachCell(facts, ({ harness, domain, capability, declaration }) => {
+    if (declaration.fidelity === compatibilityTypes.fidelities.EXACT) {
+      return;
+    }
+    const caveat = compatibilityTypes.getCompatibilityCaveatMessage(
+      declaration.caveatCode
+    );
+    const remediation =
+      compatibilityTypes.getCompatibilityDeclarationRemediation(
+        domain,
+        capability,
+        declaration
+      );
+    const { status } = presentFidelity(presentation, declaration.fidelity);
+    // Caveats are "because …" clauses written to complete a sentence.
+    const explanation = caveat ? `${status} ${caveat}.` : `${status}.`;
+    const key = `${explanation}\n${remediation ?? ""}`;
+    let note = notes.find((candidate) => candidate.key === key);
+    if (!note) {
+      note = {
+        key,
+        number: notes.length + 1,
+        explanation,
+        remediation,
+        appliesTo: new Map(),
+      };
+      notes.push(note);
+    }
+    const harnessName = shortHarnessName(harness.displayName);
+    note.appliesTo.set(harnessName, [
+      ...(note.appliesTo.get(harnessName) ?? []),
+      formatLabel(capability),
+    ]);
+    noteByCell.set(cellKey(harness, domain, capability), note);
+  });
+  return { notes, noteByCell };
+}
+
+function noteAnchor(note) {
+  return `note-${note.number}`;
+}
+
+/** Capability rows grouped under bold domain rows, one column per harness. */
+function buildPivotTable(facts, firstColumnHeader, harnessHeaders, renderCell) {
+  const lines = [
+    tableRow([firstColumnHeader, ...harnessHeaders]),
+    tableDivider(facts.harnesses.length, ":-:"),
+  ];
+  for (const domain of facts.enabledDomains) {
+    lines.push(
+      tableRow([`**${formatLabel(domain)}**`, ...facts.harnesses.map(() => "")])
+    );
+    for (const capability of collectDomainCapabilities(facts, domain)) {
+      lines.push(
+        tableRow([
           formatLabel(capability),
-          declaration.fidelity,
-          declaration.mechanism,
-          formatEvidence(declaration),
-          caveat ?? "—",
-          remediation ?? "—",
-        ].map(escapeCell);
-      })
-    )
+          ...facts.harnesses.map((harness) => {
+            const declaration = getDeclaration(harness, domain, capability);
+            return declaration
+              ? renderCell(harness, domain, capability, declaration)
+              : "—";
+          }),
+        ])
+      );
+    }
+  }
+  return lines.join("\n");
+}
+
+function buildMatrix(facts, presentation, noteByCell) {
+  return buildPivotTable(
+    facts,
+    "Capability",
+    facts.harnesses.map(harnessHeader),
+    (harness, domain, capability, declaration) => {
+      const { symbol, status } = presentFidelity(
+        presentation,
+        declaration.fidelity
+      );
+      const note = noteByCell.get(cellKey(harness, domain, capability));
+      const marker = note
+        ? `<sup><a href="#${noteAnchor(note)}">${note.number}</a></sup>`
+        : "";
+      return `<span title="${status}">${symbol}</span>${marker}`;
+    }
   );
 }
 
-export function buildCompatibilityDocumentation(facts, compatibilityTypes) {
-  const rows = buildRows(facts, compatibilityTypes);
-  const table = [
-    "| Harness | ID | Domain | Capability | Fidelity | Mechanism | Evidence / verification scope | Caveat | Remediation |",
-    "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
-    ...rows.map((row) => `| ${row.join(" | ")} |`),
-  ].join("\n");
+function buildMechanismTable(facts) {
+  return buildPivotTable(
+    facts,
+    "Capability",
+    facts.harnesses.map(({ displayName }) => shortHarnessName(displayName)),
+    (_harness, _domain, _capability, declaration) => declaration.mechanism
+  );
+}
 
-  return `${GENERATED_HEADER}
+function buildNotesSection(facts, notes) {
+  const harnessOrder = facts.harnesses.map(({ displayName }) =>
+    shortHarnessName(displayName)
+  );
+  return notes
+    .map((note) => {
+      const appliesTo = [...note.appliesTo]
+        .sort(
+          ([left], [right]) =>
+            harnessOrder.indexOf(left) - harnessOrder.indexOf(right)
+        )
+        .map(
+          ([harnessName, labels]) => `**${harnessName}**: ${labels.join(", ")}`
+        )
+        .join(" · ");
+      const remediation = note.remediation
+        ? ` _What to do:_ ${note.remediation}`
+        : "";
+      return `<a id="${noteAnchor(note)}"></a>**${note.number}.** ${note.explanation}${remediation}<br>\nApplies to ${appliesTo}.`;
+    })
+    .join("\n\n");
+}
+
+/** Distinct "version range (evidence)" claims one harness makes in a domain. */
+function formatDomainEvidence(harness, domain) {
+  const claims = [];
+  for (const { declaration } of collectLeaves(harness.capabilities[domain])) {
+    const verification = declaration.verification;
+    if (!verification) {
+      continue;
+    }
+    const claim = `${verification.verifiedVersions.join(", ")} ([${verification.kind}](${formatReference(verification.reference)}))`;
+    if (!claims.includes(claim)) {
+      claims.push(claim);
+    }
+  }
+  return claims.length > 0 ? claims.join("<br>") : "—";
+}
+
+function buildVersionTable(facts) {
+  return [
+    tableRow([
+      "Domain",
+      ...facts.harnesses.map(({ displayName }) =>
+        shortHarnessName(displayName)
+      ),
+    ]),
+    tableDivider(facts.harnesses.length, "---"),
+    ...facts.enabledDomains.map((domain) =>
+      tableRow([
+        formatLabel(domain),
+        ...facts.harnesses.map((harness) =>
+          formatDomainEvidence(harness, domain)
+        ),
+      ])
+    ),
+  ].join("\n");
+}
+
+export function buildCompatibilityDocumentation(facts, compatibilityTypes) {
+  const presentation = fidelityPresentation(compatibilityTypes.fidelities);
+  const { notes, noteByCell } = buildNotes(
+    facts,
+    compatibilityTypes,
+    presentation
+  );
+  const legend = Object.values(presentation)
+    .map(({ symbol, status }) => `${symbol} ${status.toLowerCase()}`)
+    .join(" · ");
+
+  return `${FRONTMATTER}
+
+${GENERATED_HEADER}
 
 # Harness compatibility
 
 ctrlyoke keeps one workflow model across six CLI harnesses, but some workflow
 features are translated differently or are not enforced by every harness. This
-page is generated from the adapter-owned compatibility registry. It records
-the declared fidelity, mechanism, evidence, version scope, and the shared
-caveat/remediation prose used by compatibility diagnostics.
+page is generated from the adapter-owned compatibility registry, the same
+declarations that drive the dashboard's compatibility warnings.
+
+## Compatibility matrix
+
+${legend} · a superscript number links to the note that explains the limit.
+
+${buildMatrix(facts, presentation, noteByCell)}
+
+### Notes
+
+${buildNotesSection(facts, notes)}
 
 ## How to read the matrix
 
-- **Exact** means the adapter's declared behavior matches the workflow
-  contract for the capability.
-- **Partial** means the adapter translates only part of the workflow value.
-- **Unsupported** means the adapter does not enforce or attach that capability.
-- **Evidence / verification scope** identifies the evidence kind, its basis,
-  the covered harness versions, and the source used for the claim. Installed
-  versions outside the listed ranges are shown as unverified by the dashboard.
-- Caveats explain known architectural limits. Remediations are shared with
-  author-time and preflight diagnostics; simplify the value or choose a
-  harness with the required fidelity when a row is not exact.
+- **Supported** means the adapter's behavior matches the workflow contract for
+  the capability.
+- **Partially supported** means the adapter translates or delivers only part
+  of the workflow value.
+- **Not supported** means the adapter does not enforce or attach that
+  capability.
+- The notes share their wording with author-time and preflight diagnostics.
+  Simplify the value, or choose a harness that supports it, when a cell is
+  not ✅.
+
+## Verified versions
+
+Each claim is backed by evidence for a harness version range. Installed
+versions outside these ranges are shown as unverified by the dashboard.
+
+${buildVersionTable(facts)}
+
+::: details How each harness implements these capabilities
+
+- **native**: the harness supports the workflow value directly.
+- **translated-cli**: ctrlyoke translates the value into the harness's CLI
+  flags or inline configuration for each run.
+- **workspace-config**: ctrlyoke writes the harness's workspace configuration
+  (for example its hooks file) for the run.
+- **mixed**: a combination of the mechanisms above.
+- **none**: there is no mechanism; the capability is not supported.
+
+${buildMechanismTable(facts)}
+
+:::
 
 ## Portable workflow attachments and native discovery
 
@@ -209,13 +462,9 @@ vary by harness. It does not determine whether a workflow's \`agent\` or
 mechanism. See [Agents and skills](/workflows/agents-and-skills) for both
 paths.
 
-Uniform workflow features are intentionally absent from the table: execution
+Uniform workflow features are intentionally absent from the matrix: execution
 mode, sessions, MCP server injection, usage, workflow agents, and workflow
 skills are shared ctrlyoke behavior rather than conditional harness claims.
-
-## Compatibility matrix
-
-${table}
 
 _This page is generated. Run \`npm run check:compatibility-docs\` to verify that
 the checked-in page still matches the registry declarations._
@@ -224,10 +473,10 @@ the checked-in page still matches the registry declarations._
 
 function main() {
   const facts = loadDocumentationFacts();
-  const compatibilityTypes = require(
-    resolve(ROOT_DIR, "out/types/CompatibilityTypes.js")
+  const generated = buildCompatibilityDocumentation(
+    facts,
+    loadCompatibilityTypes()
   );
-  const generated = buildCompatibilityDocumentation(facts, compatibilityTypes);
 
   if (CHECK_MODE) {
     const existing = readFileSync(OUTPUT_PATH, "utf8");
